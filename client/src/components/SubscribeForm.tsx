@@ -111,7 +111,7 @@ export default function SubscribeForm({
             id={`${idPrefix}-email`}
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value.trim())}
             placeholder="you@example.com"
             required
             autoComplete="email"
