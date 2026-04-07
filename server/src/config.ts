@@ -104,6 +104,8 @@ export const config = {
     assess: parseInt(process.env.CONCURRENCY_ASSESS || "10", 10),
     select: parseInt(process.env.CONCURRENCY_SELECT || "10", 10),
     reclassify: parseInt(process.env.CONCURRENCY_RECLASSIFY || "10", 10),
+    // CPU-heavy: each concurrent crawl runs JSDOM parsing (pure-JS DOM construction),
+    // which saturates CPU. On 0.5 vCPU, keep crawlFeeds * crawlArticles <= 2.
     crawlFeeds: parseInt(process.env.CONCURRENCY_CRAWL_FEEDS || "3", 10),
     crawlArticles: parseInt(process.env.CONCURRENCY_CRAWL_ARTICLES || "3", 10),
   },

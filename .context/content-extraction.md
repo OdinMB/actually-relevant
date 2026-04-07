@@ -52,6 +52,10 @@ The crawler passes a `shouldAbort` callback (tied to the `skipAll` flag) through
 
 HTTP responses from page fetches, RSS feeds, and external API calls (Diffbot, PipFeed) are capped at 5 MB (`maxContentLength`) to prevent OOM on pathological responses. JSDOM DOM objects are explicitly released via `dom.window.close()` in a `finally` block after Readability extraction, as JSDOM windows hold timers, event listeners, and expanded DOM trees that are not reliably garbage collected without explicit cleanup. Outbound webhook and email service (Plunk) responses are capped at 1 MB. The Bluesky og:image fetch uses `AbortSignal.timeout(10_000)` to prevent hanging. Favicon fetches use streaming reads with per-chunk size checks to avoid allocating large buffers for unexpected responses.
 
+### CPU Budget
+
+JSDOM + Readability parsing is the most CPU-intensive operation in the server. JSDOM constructs a full DOM in pure JavaScript, which saturates a CPU core for the duration of each parse. The effective CPU parallelism is `crawlFeeds * crawlArticles` (worst case: all articles hit tier 2 simultaneously). On a 0.5 vCPU instance, keep this product at 2 or below to avoid 100% CPU spikes that trigger Render restarts. Recommended production values: `CONCURRENCY_CRAWL_FEEDS=1, CONCURRENCY_CRAWL_ARTICLES=2` (or `2/1`). Analysis jobs (pre-assess, assess, select) are I/O-bound (waiting on OpenAI) and don't meaningfully compete for CPU.
+
 ## Crawl Flow
 
 ```
@@ -64,7 +68,7 @@ RSS Feed → Parse items (max config.crawl.rssItemLimit, default 20)
          → Update feed's lastCrawledAt
 ```
 
-Feeds are crawled in parallel (up to `config.concurrency.crawlFeeds`, default 5). Article extraction within each feed also runs in parallel (up to `config.concurrency.crawlArticles`, default 3). All HTTP requests (RSS parsing, page fetching, PipFeed API) use `withRetry()` from `server/src/lib/retry.ts` (3 attempts with exponential backoff).
+Feeds are crawled in parallel (up to `config.concurrency.crawlFeeds`, default 3). Article extraction within each feed also runs in parallel (up to `config.concurrency.crawlArticles`, default 3). All HTTP requests (RSS parsing, page fetching, PipFeed API) use `withRetry()` from `server/src/lib/retry.ts` (3 attempts with exponential backoff).
 
 ### Deduplication
 
