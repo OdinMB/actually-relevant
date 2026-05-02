@@ -14,6 +14,7 @@ import { getTitleLabel, getHeadline } from '../lib/title-label'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildWebSiteSchema, buildOrganizationSchema } from '../lib/structured-data'
 import SupportBanner from '../components/SupportBanner'
+import NewsletterBanner from '../components/NewsletterBanner'
 import { usePositivity } from '../contexts/PositivityContext'
 import { mixHomepageStories, pickHero } from '../lib/mix-stories'
 
@@ -305,6 +306,12 @@ export default function HomePage() {
             )
           }).reduce<React.ReactNode[]>((acc, section, idx) => {
             acc.push(section)
+            // Insert newsletter banner after the 1st issue section (Human Development)
+            if (idx === 0) {
+              acc.push(
+                <NewsletterBanner key="newsletter-banner" />
+              )
+            }
             // Insert support banner after the 2nd issue section
             if (idx === 1) {
               acc.push(
