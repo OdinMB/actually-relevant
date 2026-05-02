@@ -264,7 +264,7 @@ function PublicLayoutInner() {
                 className="inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-2 py-1 text-neutral-500 hover:text-brand-700"
               >
                 <NewsletterIcon className="w-4 h-4 shrink-0" />
-                Subscribe
+                Newsletter
               </button>
             </div>
 
@@ -448,7 +448,7 @@ function PublicLayoutInner() {
                   className="flex items-center gap-2 py-2.5 text-sm font-bold text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                 >
                   <NewsletterIcon className="w-3.5 h-3.5 shrink-0" />
-                  Subscribe
+                  Newsletter
                 </button>
                 <a
                   href={KOFI_URL}
