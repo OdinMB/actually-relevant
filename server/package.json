@@ -38,7 +38,7 @@
     "@napi-rs/canvas": "^0.1.89",
     "@prisma/client": "^6.0.0",
     "archiver": "^7.0.1",
-    "axios": "^1.13.4",
+    "axios": "^1.15.2",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
