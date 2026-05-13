@@ -19,7 +19,7 @@
   "dependencies": {
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
-    "@scalar/api-reference-react": "^0.8.52",
+    "@scalar/api-reference-react": "^0.8.70",
     "@tanstack/react-query": "^5.90.20",
     "date-fns": "^4.1.0",
     "react": "^18.3.1",
