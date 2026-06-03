@@ -76,8 +76,17 @@ export const publicApi = {
   sources: () =>
     request<{ byRegion: Record<string, string[]>; byIssue: Record<string, string[]>; totalCount: number }>('/sources'),
 
-  subscribe: (data: { email: string; firstName?: string }) =>
+  subscribe: (data: { email: string; firstName?: string; website?: string; formToken?: string }) =>
     request<{ success: boolean; message: string }>('/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+
+  getSubscribeToken: () => request<{ token: string }>('/subscribe/token'),
+
+  confirmSubscription: (data: { token: string; email: string }) =>
+    request<{ success: boolean; reason?: string }>('/subscribe/confirm', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),

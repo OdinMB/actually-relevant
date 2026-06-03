@@ -23,6 +23,8 @@ export default function SubscribeForm({
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [website, setWebsite] = useState('') // honeypot — humans never fill this
+  const [formToken, setFormToken] = useState<string | null>(null)
   const firstInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -31,9 +33,31 @@ export default function SubscribeForm({
     }
   }, [autoFocus])
 
+  // Fetch the anti-bot form token on mount. Submission is disabled until it loads.
+  useEffect(() => {
+    let cancelled = false
+    async function loadToken() {
+      // Try up to twice; if both fail, the token stays null and submit stays
+      // disabled (the API is unreachable anyway).
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const { token } = await publicApi.getSubscribeToken()
+          if (!cancelled) setFormToken(token)
+          return
+        } catch {
+          // retry once
+        }
+      }
+    }
+    loadToken()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim()) return
+    if (!email.trim() || !formToken) return
 
     setStatus('loading')
     setErrorMessage('')
@@ -41,6 +65,8 @@ export default function SubscribeForm({
       const result = await publicApi.subscribe({
         email: email.trim(),
         ...(firstName.trim() ? { firstName: firstName.trim() } : {}),
+        ...(website ? { website } : {}),
+        formToken,
       })
       if (!result.success) {
         setStatus('error')
@@ -120,6 +146,19 @@ export default function SubscribeForm({
           />
         </div>
 
+        {/* Honeypot — hidden from humans */}
+        <div aria-hidden="true" className="absolute -left-[9999px] -top-[9999px]">
+          <label htmlFor={`${idPrefix}-website`}>Website</label>
+          <input
+            id={`${idPrefix}-website`}
+            type="text"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </div>
+
         {status === 'error' && (
           <p id={`${idPrefix}-error`} className="text-sm text-red-600" role="alert">
             {errorMessage}
@@ -128,7 +167,7 @@ export default function SubscribeForm({
 
         <button
           type="submit"
-          disabled={status === 'loading'}
+          disabled={status === 'loading' || !formToken}
           className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {status === 'loading' ? 'Subscribing...' : 'Subscribe'}
