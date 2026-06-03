@@ -6,14 +6,35 @@ import { createLogger } from '../lib/logger.js'
 
 const log = createLogger('subscribe')
 
-const CLIENT_URL = process.env.CLIENT_URL || 'https://actuallyrelevant.news'
-const API_URL = process.env.API_URL || 'https://actually-relevant-api.onrender.com'
-
 export class EmailValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'EmailValidationError'
   }
+}
+
+/** Thrown when email verification could not run (Plunk unavailable). We fail closed. */
+export class EmailVerificationUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'EmailVerificationUnavailableError'
+  }
+}
+
+/**
+ * Strip URLs and markup from a submitted first name. Subscription-bombing
+ * campaigns put attacker URLs in the name so the confirmation email looks like
+ * their ad; this neutralizes that and keeps the greeting plain text.
+ */
+export function sanitizeFirstName(name: string): string {
+  return name
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/www\.\S+/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/[<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100)
 }
 
 interface SubscribeParams {
@@ -34,13 +55,13 @@ export async function subscribe({ email, firstName }: SubscribeParams) {
     return
   }
 
-  // Verify email via Plunk (graceful degradation — skip if API fails)
+  // Verify email via Plunk. Fail closed: if the API is unavailable we reject
+  // rather than proceed, so a Plunk outage can't admit unverified addresses.
+  // (Safe for real users: the confirmation email also goes through Plunk, so an
+  // outage already blocks legitimate signups either way.)
   try {
     const result = await plunk.verifyEmail(email)
-    if (!result.valid) {
-      throw new EmailValidationError('Please enter a valid email address.')
-    }
-    if (!result.domainExists) {
+    if (!result.valid || !result.domainExists) {
       throw new EmailValidationError('Please enter a valid email address.')
     }
     if (result.isDisposable) {
@@ -48,8 +69,13 @@ export async function subscribe({ email, firstName }: SubscribeParams) {
     }
   } catch (err) {
     if (err instanceof EmailValidationError) throw err
-    log.warn({ err, email }, 'email verification failed, skipping check')
+    log.warn({ err, email }, 'email verification unavailable, rejecting (fail-closed)')
+    throw new EmailVerificationUnavailableError(
+      'Email verification is temporarily unavailable. Please try again in a few minutes.',
+    )
   }
+
+  const cleanFirstName = firstName ? sanitizeFirstName(firstName) : ''
 
   // Delete any existing unconfirmed pending subscriptions for this email.
   // This handles the re-subscribe case: user gets a fresh token and a new
@@ -58,32 +84,21 @@ export async function subscribe({ email, firstName }: SubscribeParams) {
     where: { email, confirmedAt: null },
   })
 
-  // Create contact in Plunk (subscribed: false until confirmed)
-  let plunkContactId: string | null = null
-  try {
-    const contact = await plunk.createContact({
-      email,
-      subscribed: false,
-      data: { ...(firstName ? { firstName } : {}), pendingConfirmation: true },
-    })
-    plunkContactId = contact.id
-  } catch (err) {
-    log.warn({ err, email }, 'failed to create Plunk contact, proceeding with subscription')
-  }
-
-  // Store pending subscription
+  // Store pending subscription. No Plunk contact is created yet — unconfirmed
+  // bots never enter the Plunk contact list. The contact is created on confirm.
   await prisma.pendingSubscription.create({
     data: {
       email,
       token,
-      plunkContactId,
       expiresAt,
     },
   })
 
-  // Send confirmation email
-  const confirmUrl = `${API_URL}/api/subscribe/confirm?token=${token}&email=${encodeURIComponent(email)}`
-  const greeting = firstName ? `Hi ${firstName},` : 'Hi,'
+  // Send confirmation email. The link points at the client confirmation page
+  // (not a state-changing GET), so email security scanners that prefetch links
+  // cannot auto-confirm — confirmation requires a POST from the page button.
+  const confirmUrl = `${config.clientUrl}/subscribed?${new URLSearchParams({ token, email }).toString()}`
+  const greeting = cleanFirstName ? `Hi ${cleanFirstName},` : 'Hi,'
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -143,29 +158,26 @@ export async function confirmSubscription(token: string, email: string) {
   }
 
   if (pending.confirmedAt) {
-    return // Already confirmed
+    return // Already confirmed — idempotent
   }
 
   if (new Date() > pending.expiresAt) {
     throw new Error('Confirmation link has expired')
   }
 
-  // Update Plunk contact to subscribed
-  if (pending.plunkContactId) {
-    try {
-      await plunk.updateContact(pending.plunkContactId, {
-        subscribed: true,
-        data: { pendingConfirmation: false },
-      })
-    } catch (err) {
-      log.warn({ err, email }, 'failed to update Plunk contact, marking as confirmed anyway')
-    }
+  // Create the Plunk contact now (subscribed: true). Only confirmed humans ever
+  // reach Plunk. Graceful: if Plunk fails, still mark confirmed locally.
+  let plunkContactId: string | null = pending.plunkContactId
+  try {
+    const contact = await plunk.createContact({ email, subscribed: true })
+    plunkContactId = contact.id
+  } catch (err) {
+    log.warn({ err, email }, 'failed to create Plunk contact on confirm, marking confirmed anyway')
   }
 
-  // Mark as confirmed
   await prisma.pendingSubscription.update({
     where: { id: pending.id },
-    data: { confirmedAt: new Date() },
+    data: { confirmedAt: new Date(), plunkContactId },
   })
 
   log.info({ email }, 'subscription confirmed')

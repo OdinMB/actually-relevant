@@ -1,6 +1,8 @@
 export const config = {
   /** Canonical public URL for the site — used in social media posts, RSS feeds, sitemaps, etc. */
   siteUrl: process.env.SITE_URL || 'https://actuallyrelevant.news',
+  /** Public client (frontend) URL — used to build links the visitor clicks, e.g. the subscription confirmation page. */
+  clientUrl: process.env.CLIENT_URL || 'https://actuallyrelevant.news',
   llm: {
     models: {
       small: {
@@ -123,11 +125,26 @@ export const config = {
       process.env.SUBSCRIBE_TOKEN_EXPIRY_HOURS || "24",
       10
     ),
+    // Burst limiter: requests per short window per IP.
     rateLimitWindowMs: parseInt(
       process.env.SUBSCRIBE_RATE_LIMIT_WINDOW_MS || String(60 * 1000),
       10
     ),
     rateLimitMax: parseInt(process.env.SUBSCRIBE_RATE_LIMIT_MAX || "3", 10),
+    // Sustained limiter: caps signups per IP over a long window (blunts rotating-burst bots).
+    rateLimitDailyWindowMs: parseInt(
+      process.env.SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS || String(24 * 60 * 60 * 1000),
+      10
+    ),
+    rateLimitDailyMax: parseInt(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_MAX || "20", 10),
+    // Form-token anti-bot gate. Min fill time trips instant submitters; max age bounds replay.
+    minFormFillMs: parseInt(process.env.SUBSCRIBE_MIN_FORM_FILL_MS || "1500", 10),
+    formTokenMaxAgeMs: parseInt(
+      process.env.SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS || String(30 * 60 * 1000),
+      10
+    ),
+    // HMAC key for form tokens. Dedicated secret, falling back to JWT_SECRET so it works out of the box.
+    formTokenSecret: process.env.FORM_TOKEN_SECRET || process.env.JWT_SECRET || "",
   },
   relatedStories: {
     displayCount: 4,
