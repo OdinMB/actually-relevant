@@ -17,13 +17,11 @@ const mockSubscribe = vi.hoisted(() => vi.fn())
 const mockConfirm = vi.hoisted(() => vi.fn())
 
 class EmailValidationError extends Error {}
-class EmailVerificationUnavailableError extends Error {}
 
 vi.mock('../../services/subscribe.js', () => ({
   subscribe: (...args: any[]) => mockSubscribe(...args),
   confirmSubscription: (...args: any[]) => mockConfirm(...args),
   EmailValidationError,
-  EmailVerificationUnavailableError,
 }))
 
 const mockPrisma = vi.hoisted(() => ({ $disconnect: vi.fn() }))
@@ -113,18 +111,6 @@ describe('Public Subscribe API', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(false)
       expect(res.body.message).toMatch(/valid email/i)
-    })
-
-    it('returns success:false when verification is unavailable', async () => {
-      mockSubscribe.mockRejectedValue(new EmailVerificationUnavailableError('temporarily unavailable'))
-
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token' })
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(false)
-      expect(res.body.message).toMatch(/unavailable/i)
     })
 
     it('returns 400 for an invalid email format', async () => {

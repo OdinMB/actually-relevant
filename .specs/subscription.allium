@@ -8,11 +8,12 @@
 -- handles email delivery and contact management.
 --
 -- Bot-hardened: the signup is gated by a honeypot and a server-issued
--- form token before any side effect, email verification fails CLOSED,
--- the Plunk contact is created only on confirmation (so unconfirmed
--- bots never enter the email platform), and confirmation requires an
--- explicit POST (a bare GET never mutates state, so link-prefetching
--- email scanners cannot auto-confirm).
+-- form token before any side effect, email verification is best-effort
+-- (a verify-API failure does not block signups), the Plunk contact is
+-- created only on confirmation (so unconfirmed bots never enter the
+-- email platform), and confirmation requires an explicit POST (a bare
+-- GET never mutates state, so link-prefetching email scanners cannot
+-- auto-confirm).
 --
 -- Visitors are unauthenticated public users, distinct from the
 -- admin User entity in authentication.allium.
@@ -73,11 +74,12 @@ value FormToken {
 --   2. domain_exists: DNS MX record exists for the domain
 --   3. is_disposable: rejects throwaway email services
 --
--- FAIL-CLOSED: if the Plunk API is unreachable, the subscription is
--- REJECTED, not allowed through. (This reverses the earlier
--- graceful-degradation behavior. It costs real users nothing because
--- the confirmation email also depends on Plunk, so a Plunk outage
--- already blocks legitimate signups.)
+-- Best-effort (graceful degradation): if the Plunk verify API errors
+-- (e.g. it is unavailable or returns 403), the check is skipped and the
+-- subscription proceeds. Bots are already stopped by the honeypot +
+-- form-token gate that runs before this, and double opt-in is the
+-- backstop. Only an explicit validation failure (bad format, no MX, or
+-- disposable) rejects the subscription.
 
 value EmailVerifyResult {
     valid: Boolean
@@ -112,38 +114,36 @@ rule Subscribe {
 rule ValidateAndCreateSubscription {
     when: ValidateAndCreateSubscription(email, first_name?)
 
-    -- Email validation via Plunk API (fail-closed).
+    -- Email validation via Plunk (best-effort / graceful degradation).
     let verify_result = try_verify_email(email)   -- EmailVerifyResult or unavailable
 
-    -- On API unavailability, reject — do not proceed.
-    if verify_result = unavailable:
-        ensures: EmailVerificationUnavailable(email)
-
+    -- Reject only on an explicit validation failure. If verify is
+    -- unavailable, skip the checks and proceed.
     if verify_result is EmailVerifyResult:
         requires: verify_result.valid
         requires: verify_result.domain_exists
         requires: not verify_result.is_disposable
 
-        -- Delete any existing unconfirmed pending subscriptions for this
-        -- email (re-subscribe case: a fresh token and confirmation email).
-        let stale = PendingSubscriptions
-            where email = email and not is_confirmed
-        for entry in stale:
-            ensures: not exists entry
+    -- Delete any existing unconfirmed pending subscriptions for this
+    -- email (re-subscribe case: a fresh token and confirmation email).
+    let stale = PendingSubscriptions
+        where email = email and not is_confirmed
+    for entry in stale:
+        ensures: not exists entry
 
-        -- No Plunk contact is created here — unconfirmed signups (including
-        -- bots) never enter the email platform. Only a local pending row.
-        let token = random_uuid()
-        ensures: PendingSubscription.created(
-            email: email,
-            token: token,
-            plunk_contact_id: null,
-            expires_at: now + config.confirm_token_expiry_hours.hours
-        )
+    -- No Plunk contact is created here — unconfirmed signups (including
+    -- bots) never enter the email platform. Only a local pending row.
+    let token = random_uuid()
+    ensures: PendingSubscription.created(
+        email: email,
+        token: token,
+        plunk_contact_id: null,
+        expires_at: now + config.confirm_token_expiry_hours.hours
+    )
 
-        -- Confirmation email. The greeting uses a sanitized first name
-        -- (URLs and markup stripped); first_name is NOT written to Plunk.
-        ensures: ConfirmationEmailSent(email, token, sanitize(first_name))
+    -- Confirmation email. The greeting uses a sanitized first name
+    -- (URLs and markup stripped); first_name is NOT written to Plunk.
+    ensures: ConfirmationEmailSent(email, token, sanitize(first_name))
 }
 
 -- ─── Confirm ──────────────────────────────────────────────────────

@@ -19,8 +19,7 @@ const mockPlunk = {
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./plunk.js', () => mockPlunk)
 
-const { subscribe, confirmSubscription, EmailValidationError, EmailVerificationUnavailableError } =
-  await import('./subscribe.js')
+const { subscribe, confirmSubscription, EmailValidationError } = await import('./subscribe.js')
 
 describe('subscribe service', () => {
   beforeEach(() => {
@@ -82,15 +81,14 @@ describe('subscribe service', () => {
       await expect(subscribe({ email: 'temp@mailinator.com' })).rejects.toThrow(EmailValidationError)
     })
 
-    it('fails closed when the Plunk verify API is unavailable', async () => {
-      mockPlunk.verifyEmail.mockRejectedValue(new Error('Plunk API down'))
+    it('skips verification gracefully and still subscribes when the verify API errors', async () => {
+      // Plunk /v1/verify returns 403 in production; a verify failure must NOT block signups.
+      mockPlunk.verifyEmail.mockRejectedValue(new Error('Request failed with status code 403'))
 
-      await expect(subscribe({ email: 'test@example.com' })).rejects.toThrow(
-        EmailVerificationUnavailableError,
-      )
-      // No confirmation email is sent and no pending row is created on a verify outage.
-      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
-      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      await subscribe({ email: 'test@example.com' })
+
+      expect(mockPrisma.pendingSubscription.create).toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).toHaveBeenCalled()
     })
   })
 

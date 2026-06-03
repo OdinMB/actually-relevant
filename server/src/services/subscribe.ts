@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import axios from 'axios'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import * as plunk from './plunk.js'
@@ -10,14 +11,6 @@ export class EmailValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'EmailValidationError'
-  }
-}
-
-/** Thrown when email verification could not run (Plunk unavailable). We fail closed. */
-export class EmailVerificationUnavailableError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'EmailVerificationUnavailableError'
   }
 }
 
@@ -55,10 +48,11 @@ export async function subscribe({ email, firstName }: SubscribeParams) {
     return
   }
 
-  // Verify email via Plunk. Fail closed: if the API is unavailable we reject
-  // rather than proceed, so a Plunk outage can't admit unverified addresses.
-  // (Safe for real users: the confirmation email also goes through Plunk, so an
-  // outage already blocks legitimate signups either way.)
+  // Email validation via Plunk. Best-effort: if the verify API errors (e.g. it is
+  // unavailable or returns 403), log and proceed rather than blocking signups —
+  // the honeypot + form-token gate above already stops bots, and double opt-in is
+  // the backstop. Only an explicit validation failure (bad/disposable address)
+  // rejects the subscription.
   try {
     const result = await plunk.verifyEmail(email)
     if (!result.valid || !result.domainExists) {
@@ -69,10 +63,14 @@ export async function subscribe({ email, firstName }: SubscribeParams) {
     }
   } catch (err) {
     if (err instanceof EmailValidationError) throw err
-    log.warn({ err, email }, 'email verification unavailable, rejecting (fail-closed)')
-    throw new EmailVerificationUnavailableError(
-      'Email verification is temporarily unavailable. Please try again in a few minutes.',
-    )
+    // Surface Plunk's actual response so a verify failure is diagnosable (the
+    // axios message alone only says "status code 403"). Plunk's docs list only
+    // 400/401 for verify, so a 403 likely means plan/quota gating or an edge
+    // block — either way, verification is best-effort and we proceed.
+    const detail = axios.isAxiosError(err)
+      ? { status: err.response?.status, plunkResponse: err.response?.data }
+      : {}
+    log.warn({ err, ...detail, email }, 'email verification failed, skipping check')
   }
 
   const cleanFirstName = firstName ? sanitizeFirstName(firstName) : ''

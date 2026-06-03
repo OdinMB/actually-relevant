@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { config } from '../../config.js'
 import { validateBody } from '../../middleware/validate.js'
 import * as subscribeService from '../../services/subscribe.js'
-import { EmailValidationError, EmailVerificationUnavailableError } from '../../services/subscribe.js'
+import { EmailValidationError } from '../../services/subscribe.js'
 import { issueFormToken, verifyFormToken } from '../../lib/formToken.js'
 import { createLogger } from '../../lib/logger.js'
 
@@ -80,7 +80,7 @@ router.post('/', subscribeLimiter, subscribeDailyLimiter, validateBody(subscribe
     await subscribeService.subscribe({ email, firstName })
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
   } catch (err) {
-    if (err instanceof EmailValidationError || err instanceof EmailVerificationUnavailableError) {
+    if (err instanceof EmailValidationError) {
       res.json({ success: false, message: err.message })
       return
     }
