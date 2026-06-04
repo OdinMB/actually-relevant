@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { publicApi } from '../lib/api'
-import { BRAND } from '../config'
+import { BRAND, SUBSCRIPTIONS_ENABLED } from '../config'
 
 interface SubscribeFormProps {
   /** Called after successful submission (e.g. to close a modal) */
@@ -35,6 +35,7 @@ export default function SubscribeForm({
 
   // Fetch the anti-bot form token on mount. Submission is disabled until it loads.
   useEffect(() => {
+    if (!SUBSCRIPTIONS_ENABLED) return
     let cancelled = false
     async function loadToken() {
       // Try up to twice; if both fail, the token stays null and submit stays
@@ -78,6 +79,30 @@ export default function SubscribeForm({
       setStatus('error')
       setErrorMessage('Something went wrong. Please try again.')
     }
+  }
+
+  if (!SUBSCRIPTIONS_ENABLED) {
+    return (
+      <div className="text-center py-4" role="status">
+        <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-amber-50 flex items-center justify-center">
+          <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h2 id={`${idPrefix}-title`} className="text-xl font-bold text-neutral-900 mb-2">Signups are paused</h2>
+        <p className="text-neutral-600 text-sm mb-6">
+          New newsletter registrations are temporarily disabled. We expect to have them back up again soon — thanks for your patience.
+        </p>
+        {onSuccess && (
+          <button
+            onClick={onSuccess}
+            className="px-6 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+          >
+            Got it
+          </button>
+        )}
+      </div>
+    )
   }
 
   if (status === 'success') {

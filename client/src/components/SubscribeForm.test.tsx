@@ -13,6 +13,12 @@ vi.mock('../lib/api', () => ({
   },
 }))
 
+// These tests cover the form when signups are enabled.
+vi.mock('../config', () => ({
+  BRAND: { claim: 'News that matters to humanity.', claimSupport: 'Curated with care by AI.' },
+  SUBSCRIPTIONS_ENABLED: true,
+}))
+
 /** Render and wait until the form token has loaded (submit is disabled until then). */
 async function renderReady() {
   render(<SubscribeForm idPrefix="test" />)
