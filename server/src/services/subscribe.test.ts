@@ -19,7 +19,8 @@ const mockPlunk = {
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./plunk.js', () => mockPlunk)
 
-const { subscribe, confirmSubscription, EmailValidationError } = await import('./subscribe.js')
+const { subscribe, confirmSubscription, EmailValidationError, ConfirmationEmailError } =
+  await import('./subscribe.js')
 
 describe('subscribe service', () => {
   beforeEach(() => {
@@ -62,6 +63,12 @@ describe('subscribe service', () => {
       await subscribe({ email: 'test@example.com' })
 
       expect(callOrder).toEqual(['verify', 'send'])
+    })
+
+    it('throws ConfirmationEmailError when the confirmation email fails to send', async () => {
+      mockPlunk.sendTransactional.mockRejectedValue(new Error('Request failed with status code 403'))
+
+      await expect(subscribe({ email: 'test@example.com' })).rejects.toThrow(ConfirmationEmailError)
     })
   })
 

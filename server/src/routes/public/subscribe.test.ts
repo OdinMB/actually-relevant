@@ -17,11 +17,13 @@ const mockSubscribe = vi.hoisted(() => vi.fn())
 const mockConfirm = vi.hoisted(() => vi.fn())
 
 class EmailValidationError extends Error {}
+class ConfirmationEmailError extends Error {}
 
 vi.mock('../../services/subscribe.js', () => ({
   subscribe: (...args: any[]) => mockSubscribe(...args),
   confirmSubscription: (...args: any[]) => mockConfirm(...args),
   EmailValidationError,
+  ConfirmationEmailError,
 }))
 
 const mockPrisma = vi.hoisted(() => ({ $disconnect: vi.fn() }))
@@ -111,6 +113,31 @@ describe('Public Subscribe API', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(false)
       expect(res.body.message).toMatch(/valid email/i)
+    })
+
+    it('reports a send failure honestly instead of a false "check your email"', async () => {
+      mockSubscribe.mockRejectedValue(
+        new ConfirmationEmailError("We couldn't send the confirmation email right now. Please try again in a few minutes."),
+      )
+
+      const res = await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'user@example.com', formToken: 'valid-token' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(false)
+      expect(res.body.message).toMatch(/try again/i)
+    })
+
+    it('returns success:false on an unexpected error', async () => {
+      mockSubscribe.mockRejectedValue(new Error('db down'))
+
+      const res = await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'user@example.com', formToken: 'valid-token' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(false)
     })
 
     it('returns 400 for an invalid email format', async () => {

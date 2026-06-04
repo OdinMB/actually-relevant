@@ -14,6 +14,14 @@ export class EmailValidationError extends Error {
   }
 }
 
+/** Thrown when the confirmation email could not be sent (e.g. the ESP is down or disabled). */
+export class ConfirmationEmailError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ConfirmationEmailError'
+  }
+}
+
 /**
  * Strip URLs and markup from a submitted first name. Subscription-bombing
  * campaigns put attacker URLs in the name so the confirmation email looks like
@@ -142,7 +150,9 @@ export async function subscribe({ email, firstName }: SubscribeParams) {
     log.info({ email }, 'confirmation email sent')
   } catch (err) {
     log.error({ err, email }, 'failed to send confirmation email')
-    throw new Error('Failed to send confirmation email')
+    throw new ConfirmationEmailError(
+      "We couldn't send the confirmation email right now. Please try again in a few minutes.",
+    )
   }
 }
 

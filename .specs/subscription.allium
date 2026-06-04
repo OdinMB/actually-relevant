@@ -186,7 +186,9 @@ surface SubscribeForm {
         always sent. Client-side: validate email format before submitting.
         The server-side gate (honeypot empty + valid form token) and the Plunk
         verify check are the authoritative validations. On success, tell the
-        visitor to check their inbox; on a validation error, show it inline."
+        visitor to check their inbox; on a validation error or a failure to send
+        the confirmation email, show the error inline rather than claiming the
+        email was sent."
 }
 
 surface ConfirmationPage {

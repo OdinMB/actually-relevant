@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { config } from '../../config.js'
 import { validateBody } from '../../middleware/validate.js'
 import * as subscribeService from '../../services/subscribe.js'
-import { EmailValidationError } from '../../services/subscribe.js'
+import { EmailValidationError, ConfirmationEmailError } from '../../services/subscribe.js'
 import { issueFormToken, verifyFormToken } from '../../lib/formToken.js'
 import { createLogger } from '../../lib/logger.js'
 
@@ -80,13 +80,15 @@ router.post('/', subscribeLimiter, subscribeDailyLimiter, validateBody(subscribe
     await subscribeService.subscribe({ email, firstName })
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
   } catch (err) {
-    if (err instanceof EmailValidationError) {
+    // Surface real failures to the visitor rather than falsely claiming the email
+    // was sent. (An already-confirmed email returns success earlier via early return,
+    // so this path can't leak subscription status — these are genuine errors.)
+    if (err instanceof EmailValidationError || err instanceof ConfirmationEmailError) {
       res.json({ success: false, message: err.message })
       return
     }
     log.error({ err }, 'subscribe error')
-    // Still return success to avoid leaking whether an email exists
-    res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
+    res.json({ success: false, message: 'Something went wrong. Please try again.' })
   }
 })
 
