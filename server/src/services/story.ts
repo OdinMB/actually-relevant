@@ -411,21 +411,37 @@ export async function bulkUpdateStatus(ids: string[], status: string) {
     await ensureEmbeddings(ids)
 
     const now = new Date()
+    let publishedCount = 0
     await prisma.$transaction(async (tx) => {
-      for (const [storyId, slug] of slugMap.entries()) {
-        await tx.story.update({ where: { id: storyId }, data: { slug } })
+      // Assign all slugs in a single statement. A per-story update loop here costs
+      // one DB round-trip per story, which blows past the transaction timeout once
+      // the `selected` backlog grows. Every new slug is unique by construction
+      // (see generateUniqueSlugs), so a batched UPDATE can't violate the constraint.
+      if (slugMap.size > 0) {
+        const slugRows = [...slugMap.entries()].map(
+          ([storyId, slug]) => Prisma.sql`(${storyId}::text, ${slug}::text)`,
+        )
+        await tx.$executeRaw`
+          UPDATE stories AS s
+          SET slug = v.slug
+          FROM (VALUES ${Prisma.join(slugRows)}) AS v(id, slug)
+          WHERE s.id = v.id
+        `
       }
-      await tx.story.updateMany({
+      const alreadyDated = await tx.story.updateMany({
         where: { id: { in: ids }, datePublished: { not: null } },
         data: { status: status as StoryStatus },
       })
-      await tx.story.updateMany({
+      const newlyDated = await tx.story.updateMany({
         where: { id: { in: ids }, datePublished: null },
         data: { status: status as StoryStatus, datePublished: now },
       })
-    })
+      // Report rows actually transitioned, not ids.length — an id may have been
+      // deleted between selection and publish and should not be counted.
+      publishedCount = alreadyDated.count + newlyDated.count
+    }, { timeout: config.database.transactionTimeoutMs })
 
-    return { count: ids.length }
+    return { count: publishedCount }
   }
   return prisma.story.updateMany({
     where: { id: { in: ids } },

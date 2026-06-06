@@ -37,6 +37,7 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
   },
   $disconnect: vi.fn(),
+  $executeRaw: vi.fn(),
   $transaction: vi.fn((args: any) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
 }))
 
@@ -352,6 +353,37 @@ describe('Admin Stories API', () => {
         })
       expect(res.status).toBe(200)
       expect(res.body.updated).toBe(3)
+      // No stories needed slugs, so the batched slug update is skipped.
+      expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
+    })
+
+    it('assigns slugs for unslugged stories in a single batched statement', async () => {
+      // findMany #1: stories needing slugs; findMany #2 (inside generateUniqueSlugs): existing slugs
+      mockPrisma.story.findMany.mockResolvedValueOnce([
+        { id: '00000000-0000-0000-0000-000000000001', title: 'First Story', sourceTitle: 'src-1' },
+        { id: '00000000-0000-0000-0000-000000000002', title: 'Second Story', sourceTitle: 'src-2' },
+      ])
+      mockPrisma.story.findMany.mockResolvedValueOnce([])
+      mockPrisma.story.updateMany.mockResolvedValueOnce({ count: 0 })
+      mockPrisma.story.updateMany.mockResolvedValueOnce({ count: 2 })
+
+      const res = await request(app)
+        .post('/api/admin/stories/bulk-status')
+        .set(authHeader())
+        .send({
+          ids: [
+            '00000000-0000-0000-0000-000000000001',
+            '00000000-0000-0000-0000-000000000002',
+          ],
+          status: 'published',
+        })
+
+      expect(res.status).toBe(200)
+      expect(res.body.updated).toBe(2)
+      // Slugs for both stories are written in one statement, not one per story.
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
+      // Per-story tx.story.update must not be used for slugs (that was the timeout source).
+      expect(mockPrisma.story.update).not.toHaveBeenCalled()
     })
 
     it('rejects empty ids array', async () => {

@@ -3,6 +3,13 @@ export const config = {
   siteUrl: process.env.SITE_URL || 'https://actuallyrelevant.news',
   /** Public client (frontend) URL — used to build links the visitor clicks, e.g. the subscription confirmation page. */
   clientUrl: process.env.CLIENT_URL || 'https://actuallyrelevant.news',
+  database: {
+    // Interactive-transaction execution timeout. Prisma's default is 5000ms, which the
+    // bulk publish path exceeded on the remote DB when the `selected` backlog was large.
+    // 15s is generous headroom for the (now single-statement) slug + status writes while
+    // still failing fast rather than pinning a connection from the small pool for too long.
+    transactionTimeoutMs: parseInt(process.env.DB_TRANSACTION_TIMEOUT_MS || "15000", 10),
+  },
   llm: {
     models: {
       small: {
