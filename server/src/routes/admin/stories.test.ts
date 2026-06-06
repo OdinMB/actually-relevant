@@ -38,6 +38,7 @@ const mockPrisma = vi.hoisted(() => ({
   },
   $disconnect: vi.fn(),
   $executeRaw: vi.fn(),
+  $queryRaw: vi.fn().mockResolvedValue([]),
   $transaction: vi.fn((args: any) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
 }))
 
@@ -322,6 +323,8 @@ describe('Admin Stories API', () => {
         .set(authHeader())
         .send({ status: 'published' })
       expect(res.status).toBe(200)
+      // Single-story publish assigns its slug under the same advisory lock.
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1)
     })
 
     it('rejects invalid status', async () => {
@@ -353,6 +356,8 @@ describe('Admin Stories API', () => {
         })
       expect(res.status).toBe(200)
       expect(res.body.updated).toBe(3)
+      // Publishers serialize on the advisory lock before touching slugs.
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1)
       // No stories needed slugs, so the batched slug update is skipped.
       expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
     })
@@ -380,6 +385,8 @@ describe('Admin Stories API', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.updated).toBe(2)
+      // Slug read + write happen under the advisory lock acquired first in the tx.
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1)
       // Slugs for both stories are written in one statement, not one per story.
       expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
       // Per-story tx.story.update must not be used for slugs (that was the timeout source).
@@ -500,6 +507,8 @@ describe('Admin Stories API', () => {
         .post('/api/admin/stories/story-1/publish')
         .set(authHeader())
       expect(res.status).toBe(200)
+      // Single-story publish assigns its slug under the same advisory lock.
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1)
     })
 
     it('returns 404 for unknown story', async () => {

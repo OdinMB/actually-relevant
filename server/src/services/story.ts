@@ -39,13 +39,39 @@ const SORT_MAP: Record<string, Prisma.StoryOrderByWithRelationInput> = {
   title_desc: { title: 'desc' },
 }
 
-export async function generateUniqueSlug(title: string, excludeId?: string): Promise<string> {
+// Application-defined key for the transaction-scoped advisory lock that serializes
+// slug assignment across all concurrent publishers (see withSlugLock).
+const SLUG_ASSIGNMENT_LOCK_KEY = 247_834_001
+
+/**
+ * Run `fn` inside a transaction holding the slug-assignment advisory lock. Every code
+ * path that auto-generates a slug must go through here: slug assignment is a
+ * read-modify-write over the global (unique) slug namespace, so without serialization
+ * two concurrent publishers can pick the same slug for different stories and one fails
+ * with P2002. The lock is always acquired BEFORE any row write, so no advisory⇄row lock
+ * cycle can form; it auto-releases on commit/rollback. Holders only do fast set-based
+ * work, so contention blocks briefly in practice.
+ */
+async function withSlugLock<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${SLUG_ASSIGNMENT_LOCK_KEY}::bigint)`
+    return fn(tx)
+  }, { timeout: config.database.transactionTimeoutMs })
+}
+
+export async function generateUniqueSlug(
+  title: string,
+  excludeId?: string,
+  client: Prisma.TransactionClient = prisma,
+): Promise<string> {
   const base = slugify(title)
   let candidate = base
   let suffix = 2
 
   while (true) {
-    const existing = await prisma.story.findFirst({
+    const existing = await client.story.findFirst({
       where: {
         slug: candidate,
         ...(excludeId ? { id: { not: excludeId } } : {}),
@@ -282,15 +308,18 @@ export async function getExistingUrls(urls: string[]): Promise<Set<string>> {
   return new Set(existing.map(s => s.sourceUrl))
 }
 
-async function preparePublishData(id: string): Promise<Record<string, any>> {
-  const story = await prisma.story.findUnique({
+async function preparePublishData(
+  id: string,
+  client: Prisma.TransactionClient = prisma,
+): Promise<Record<string, any>> {
+  const story = await client.story.findUnique({
     where: { id },
     select: { datePublished: true, slug: true, title: true, sourceTitle: true },
   })
   if (!story) return {}
   const data: Record<string, any> = {}
   if (!story.datePublished) data.datePublished = new Date()
-  if (!story.slug) data.slug = await generateUniqueSlug(story.title || story.sourceTitle, id)
+  if (!story.slug) data.slug = await generateUniqueSlug(story.title || story.sourceTitle, id, client)
   return data
 }
 
@@ -305,15 +334,14 @@ export async function updateStory(id: string, data: Record<string, any>): Promis
   if (updateData.datePublished !== undefined) {
     updateData.datePublished = updateData.datePublished ? new Date(updateData.datePublished) : null
   }
-  // Auto-set datePublished and slug when status changes to published
-  if (updateData.status === 'published' && updateData.datePublished === undefined) {
-    const publishData = await preparePublishData(id)
-    if (!updateData.slug && publishData.slug) updateData.slug = publishData.slug
-    if (publishData.datePublished) updateData.datePublished = publishData.datePublished
-  }
+  // When a status→published transition needs an auto-generated slug, the slug
+  // read-modify-write must run under the shared slug lock (deferred to runWrite below).
+  const needsPublishPrep = updateData.status === 'published' && updateData.datePublished === undefined
 
-  // Check if this edit requires embedding regeneration
+  // Check if this edit requires embedding regeneration. The embedding is generated via
+  // a slow external call BEFORE any transaction, then persisted alongside the update.
   const hasRelevantChange = EMBEDDING_RELEVANT_FIELDS.some((f) => f in updateData)
+  let embeddingData: Awaited<ReturnType<typeof generateEmbeddingForContent>> = null
   if (hasRelevantChange) {
     // Single DB read to check status and get embedding content
     const currentStory = await fetchStoryForEmbedding(id)
@@ -330,32 +358,52 @@ export async function updateStory(id: string, data: Record<string, any>): Promis
         ...(updateData.summary !== undefined ? { summary: updateData.summary } : {}),
       }
 
-      const embeddingData = await generateEmbeddingForContent(merged)
-
-      return prisma.$transaction(async (tx) => {
-        const story = await tx.story.update({ where: { id }, data: updateData })
-        if (embeddingData) {
-          await saveEmbeddingTx(tx, id, embeddingData.embedding, embeddingData.hash)
-        }
-        return story
-      })
+      embeddingData = await generateEmbeddingForContent(merged)
     }
   }
 
-  return prisma.story.update({ where: { id }, data: updateData })
+  // A plain update suffices only when we neither auto-assign a slug nor persist an embedding.
+  if (!needsPublishPrep && !embeddingData) {
+    return prisma.story.update({ where: { id }, data: updateData })
+  }
+
+  // Otherwise write transactionally. Acquire the slug lock only when auto-assigning a slug.
+  const runWrite = async (tx: Prisma.TransactionClient): Promise<Story> => {
+    if (needsPublishPrep) {
+      const publishData = await preparePublishData(id, tx)
+      if (!updateData.slug && publishData.slug) updateData.slug = publishData.slug
+      if (publishData.datePublished) updateData.datePublished = publishData.datePublished
+    }
+    const story = await tx.story.update({ where: { id }, data: updateData })
+    if (embeddingData) {
+      await saveEmbeddingTx(tx, id, embeddingData.embedding, embeddingData.hash)
+    }
+    return story
+  }
+
+  return needsPublishPrep
+    ? withSlugLock(runWrite)
+    : prisma.$transaction(runWrite)
 }
 
 export async function updateStoryStatus(id: string, status: string): Promise<Story> {
-  const data: Record<string, any> = { status: status as StoryStatus }
   if (status === 'published') {
-    Object.assign(data, await preparePublishData(id))
+    // ensureEmbedding makes slow external calls, so it stays OUTSIDE the lock/tx.
     await ensureEmbedding(id)
+    // Slug auto-assignment + write run under the shared slug lock (see withSlugLock).
+    return withSlugLock(async (tx) => {
+      const data = { status: status as StoryStatus, ...(await preparePublishData(id, tx)) }
+      return tx.story.update({ where: { id }, data })
+    })
   }
-  return prisma.story.update({ where: { id }, data })
+  return prisma.story.update({ where: { id }, data: { status: status as StoryStatus } })
 }
 
 export async function generateUniqueSlugs(
   stories: { id: string; title: string | null; sourceTitle: string }[],
+  // Pass the transaction client when generating under an advisory lock so the
+  // existing-slug read and the slug write see a consistent namespace.
+  client: Prisma.TransactionClient = prisma,
 ): Promise<Map<string, string>> {
   if (stories.length === 0) return new Map()
 
@@ -367,7 +415,7 @@ export async function generateUniqueSlugs(
 
   // Find all existing slugs that could conflict (matching any base pattern)
   const uniqueBases = [...new Set(baseSlugs.map(s => s.base))]
-  const existingStories = await prisma.story.findMany({
+  const existingStories = await client.story.findMany({
     where: {
       slug: { not: null },
       id: { notIn: stories.map(s => s.id) },
@@ -399,20 +447,21 @@ export async function generateUniqueSlugs(
 
 export async function bulkUpdateStatus(ids: string[], status: string) {
   if (status === 'published') {
-    // Batch-generate slugs for stories that don't have them yet
-    const storiesNeedingSlugs = await prisma.story.findMany({
-      where: { id: { in: ids }, slug: null },
-      select: { id: true, title: true, sourceTitle: true },
-    })
-
-    const slugMap = await generateUniqueSlugs(storiesNeedingSlugs)
-
-    // Ensure all stories have embeddings (no-op for already-embedded stories)
+    // Ensure all stories have embeddings (no-op for already-embedded stories).
+    // This makes slow external calls, so it stays OUTSIDE the transaction.
     await ensureEmbeddings(ids)
 
     const now = new Date()
-    let publishedCount = 0
-    await prisma.$transaction(async (tx) => {
+    // The slug read-modify-write and the status flip run under the shared slug lock so
+    // concurrent publishers can't assign the same slug to different stories (P2002).
+    const publishedCount = await withSlugLock(async (tx) => {
+      // Batch-generate slugs for stories that don't have one yet.
+      const storiesNeedingSlugs = await tx.story.findMany({
+        where: { id: { in: ids }, slug: null },
+        select: { id: true, title: true, sourceTitle: true },
+      })
+      const slugMap = await generateUniqueSlugs(storiesNeedingSlugs, tx)
+
       // Assign all slugs in a single statement. A per-story update loop here costs
       // one DB round-trip per story, which blows past the transaction timeout once
       // the `selected` backlog grows. Every new slug is unique by construction
@@ -438,8 +487,8 @@ export async function bulkUpdateStatus(ids: string[], status: string) {
       })
       // Report rows actually transitioned, not ids.length — an id may have been
       // deleted between selection and publish and should not be counted.
-      publishedCount = alreadyDated.count + newlyDated.count
-    }, { timeout: config.database.transactionTimeoutMs })
+      return alreadyDated.count + newlyDated.count
+    })
 
     return { count: publishedCount }
   }
@@ -948,14 +997,18 @@ export async function getStoriesByStatus(
 }
 
 export async function publishStory(id: string): Promise<Story> {
-  const publishData = await preparePublishData(id)
+  // ensureEmbedding makes slow external calls, so it stays OUTSIDE the lock/tx.
   await ensureEmbedding(id)
-  return prisma.story.update({
-    where: { id },
-    data: {
-      status: StoryStatus.published,
-      ...publishData,
-    },
+  // Slug auto-assignment + write run under the shared slug lock (see withSlugLock).
+  return withSlugLock(async (tx) => {
+    const publishData = await preparePublishData(id, tx)
+    return tx.story.update({
+      where: { id },
+      data: {
+        status: StoryStatus.published,
+        ...publishData,
+      },
+    })
   })
 }
 
