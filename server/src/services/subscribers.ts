@@ -78,12 +78,20 @@ function dedupeDbRows(rows: DbSubscriber[]): Map<string, DbSubscriber> {
   return byEmail
 }
 
+/** Sort order for the Plunk-authoritative list: subscribed, then unsubscribed, then absent. */
+function plunkSortRank(status: PlunkStatus | null): number {
+  if (status === 'subscribed') return 0
+  if (status === 'unsubscribed') return 1
+  return 2
+}
+
 /**
  * Pure reconciliation of DB subscribers against Plunk contacts, keyed by lowercased
- * email. Rows are the meaningful set (in our DB OR subscribed in Plunk); Plunk
- * contacts that are unsubscribed and have no local row are collapsed into
- * `plunkCounts.unsubscribedNotInDb` rather than listed. When `plunkAvailable` is
- * false the Plunk side is treated as unknown (no per-row status, no mismatches).
+ * email. Every DB row and every Plunk contact is listed (Plunk is the authoritative
+ * overview); unsubscribed Plunk contacts with no local row are also tallied in
+ * `plunkCounts.unsubscribedNotInDb`. Rows are sorted subscribed-first, then
+ * unsubscribed, then absent-from-Plunk. When `plunkAvailable` is false the Plunk
+ * side is treated as unknown (no per-row status, no mismatches).
  */
 export function reconcile(
   dbSubscribers: DbSubscriber[],
@@ -134,29 +142,35 @@ export function reconcile(
     })
   }
 
-  // Plunk-only contacts: subscribed → a mismatch row; unsubscribed → collapsed count.
+  // Plunk-only contacts (no local row) are all listed — Plunk is the
+  // authoritative overview. A subscribed contact with no local row is real
+  // drift; an unsubscribed one (never-confirmed) is expected, but still tallied.
   if (plunkAvailable) {
     for (const [key, contact] of plunkByEmail) {
       if (dbByEmail.has(key)) continue
-      if (contact.subscribed) {
-        mismatches++
-        rows.push({
-          email: contact.email,
-          dbStatus: null,
-          dbConfirmedAt: null,
-          dbCreatedAt: null,
-          plunkStatus: 'subscribed',
-          plunkContactId: contact.id,
-          mismatch: true,
-        })
-      } else {
-        plunkCounts.unsubscribedNotInDb++
-      }
+      if (!contact.subscribed) plunkCounts.unsubscribedNotInDb++
+      const mismatch = contact.subscribed
+      if (mismatch) mismatches++
+      rows.push({
+        email: contact.email,
+        dbStatus: null,
+        dbConfirmedAt: null,
+        dbCreatedAt: null,
+        plunkStatus: contact.subscribed ? 'subscribed' : 'unsubscribed',
+        plunkContactId: contact.id,
+        mismatch,
+      })
     }
   }
 
-  // Surface drift first, then alphabetical — deterministic for a stable table.
-  rows.sort((a, b) => (a.mismatch !== b.mismatch ? (a.mismatch ? -1 : 1) : a.email.localeCompare(b.email)))
+  // Plunk-authoritative order: subscribed first, then unsubscribed, then rows
+  // absent from Plunk; within a group, drift first, then email.
+  rows.sort((a, b) => {
+    const rank = plunkSortRank(a.plunkStatus) - plunkSortRank(b.plunkStatus)
+    if (rank !== 0) return rank
+    if (a.mismatch !== b.mismatch) return a.mismatch ? -1 : 1
+    return a.email.localeCompare(b.email)
+  })
 
   return { rows, db, plunkCounts, mismatches }
 }

@@ -60,11 +60,22 @@ describe('reconcile', () => {
     expect(row.mismatch).toBe(true)
   })
 
-  it('collapses unsubscribed-in-Plunk-with-no-DB-row (never-confirmed bot) into a count, not a row', () => {
+  it('lists an unsubscribed-in-Plunk-with-no-DB-row contact (and still counts it) without flagging drift', () => {
     const r = reconcile([], [plunkContact('bot@x.com', false)], true)
-    expect(rowFor(r.rows, 'bot@x.com')).toBeUndefined()
-    expect(r.rows).toHaveLength(0)
+    const row = rowFor(r.rows, 'bot@x.com')!
+    expect(row.plunkStatus).toBe('unsubscribed')
+    expect(row.dbStatus).toBeNull()
+    expect(row.mismatch).toBe(false)
     expect(r.plunkCounts.unsubscribedNotInDb).toBe(1)
+  })
+
+  it('sorts subscribed-in-Plunk first, then unsubscribed, then rows absent from Plunk', () => {
+    const r = reconcile(
+      [dbRow('dbonly@x.com', D('2026-02-01T00:00:00Z'))], // confirmed locally, absent from Plunk
+      [plunkContact('sub@x.com', true), plunkContact('unsub@x.com', false)],
+      true,
+    )
+    expect(r.rows.map((row) => row.email)).toEqual(['sub@x.com', 'unsub@x.com', 'dbonly@x.com'])
   })
 
   it('dedupes duplicate DB rows for one email, preferring the confirmed row', () => {

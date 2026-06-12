@@ -47,6 +47,7 @@ describe('SubscribersPage', () => {
     expect(await screen.findByText('alice@example.com')).toBeInTheDocument()
     expect(screen.getByText('bob@example.com')).toBeInTheDocument()
     expect(screen.getByText('drift')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /export csv/i })).toBeInTheDocument()
   })
 
   it('shows a "Plunk unavailable" notice when Plunk could not be read', async () => {
@@ -71,5 +72,6 @@ describe('SubscribersPage', () => {
     renderPage()
 
     expect(await screen.findByText('No subscribers yet')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /export csv/i })).not.toBeInTheDocument()
   })
 })
