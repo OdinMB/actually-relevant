@@ -26,6 +26,8 @@ const {
   updateContact,
   sendTransactional,
   verifyEmail,
+  listContacts,
+  parseContactsResponse,
 } = await import('./plunk.js')
 
 describe('Plunk API client', () => {
@@ -127,6 +129,68 @@ describe('Plunk API client', () => {
         to: 'test@example.com',
         subject: 'Confirm',
       }))
+    })
+  })
+
+  describe('parseContactsResponse', () => {
+    it('reads the next-api shape (array under "data", "cursor" pagination)', () => {
+      const page = parseContactsResponse({
+        data: [{ id: 'c1', email: 'a@x.com', subscribed: true }],
+        cursor: 'nx',
+        hasMore: true,
+        total: 5,
+      })
+      expect(page.items).toHaveLength(1)
+      expect(page.items[0].email).toBe('a@x.com')
+      expect(page.nextCursor).toBe('nx')
+      expect(page.hasMore).toBe(true)
+      expect(page.total).toBe(5)
+    })
+
+    it('handles a bare array response', () => {
+      const page = parseContactsResponse([{ id: 'c1', email: 'a@x.com', subscribed: false }])
+      expect(page.items).toHaveLength(1)
+      expect(page.nextCursor).toBeNull()
+      expect(page.hasMore).toBe(false)
+      expect(page.total).toBe(1)
+    })
+
+    it('infers hasMore from a cursor when the flag is absent', () => {
+      expect(parseContactsResponse({ data: [], cursor: 'more' }).hasMore).toBe(true)
+    })
+
+    it('falls back to items/contacts keys and defaults total to the array length', () => {
+      expect(parseContactsResponse({ items: [{ email: 'a@x.com' }] }).total).toBe(1)
+      expect(parseContactsResponse({ contacts: [{ email: 'a@x.com' }, { email: 'b@x.com' }] }).items).toHaveLength(2)
+    })
+
+    it('returns an empty page for an unrecognized shape', () => {
+      const page = parseContactsResponse({ weird: true })
+      expect(page.items).toEqual([])
+      expect(page.hasMore).toBe(false)
+    })
+  })
+
+  describe('listContacts', () => {
+    it('requests /contacts with the limit and parses the next-api shape', async () => {
+      mockAxiosInstance.get.mockResolvedValue({
+        data: { data: [{ id: 'c1', email: 'a@x.com', subscribed: true }], cursor: 'nx', hasMore: true, total: 9 },
+      })
+
+      const page = await listContacts(undefined, 50)
+
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/contacts', { params: { limit: 50 } })
+      expect(page.items).toHaveLength(1)
+      expect(page.nextCursor).toBe('nx')
+      expect(page.total).toBe(9)
+    })
+
+    it('passes the cursor param when paginating', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { data: [], cursor: null, hasMore: false, total: 0 } })
+
+      await listContacts('cur123', 100)
+
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/contacts', { params: { limit: 100, cursor: 'cur123' } })
     })
   })
 })

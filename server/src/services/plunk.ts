@@ -175,13 +175,56 @@ export async function deleteContact(id: string): Promise<void> {
   )
 }
 
+/**
+ * Normalize Plunk's list-contacts response into a typed page. The hosted "next"
+ * API (next-api.useplunk.com) returns `{ data: [...], cursor, hasMore, total }`;
+ * other/older surfaces return a bare array or `{ items }`/`{ contacts }`. Read
+ * all of them, tolerating missing pagination fields.
+ */
+export function parseContactsResponse(
+  body: unknown,
+): { items: Contact[]; nextCursor: string | null; hasMore: boolean; total: number } {
+  if (Array.isArray(body)) {
+    return { items: body as Contact[], nextCursor: null, hasMore: false, total: body.length }
+  }
+  const b = (body ?? {}) as {
+    data?: unknown
+    items?: unknown
+    contacts?: unknown
+    cursor?: unknown
+    nextCursor?: unknown
+    hasMore?: unknown
+    total?: unknown
+  }
+  const array = [b.data, b.items, b.contacts].find(Array.isArray)
+  const items = (array ?? []) as Contact[]
+  const nextCursor =
+    typeof b.cursor === 'string' ? b.cursor : typeof b.nextCursor === 'string' ? b.nextCursor : null
+  const hasMore = typeof b.hasMore === 'boolean' ? b.hasMore : Boolean(nextCursor)
+  const total = typeof b.total === 'number' ? b.total : items.length
+  return { items, nextCursor, hasMore, total }
+}
+
 export async function listContacts(cursor?: string, limit = 50): Promise<{ items: Contact[]; nextCursor: string | null; hasMore: boolean; total: number }> {
   return withRetry(
     async () => {
       const params: Record<string, string | number> = { limit }
       if (cursor) params.cursor = cursor
-      const { data } = await client.get('/contacts', { params })
-      return data
+      const { data: body } = await client.get('/contacts', { params })
+      // If the response carried no recognizable contact array, the Plunk shape
+      // likely changed — surface it instead of silently returning nothing.
+      const hasKnownArray =
+        Array.isArray(body) ||
+        Array.isArray(body?.data) ||
+        Array.isArray(body?.items) ||
+        Array.isArray(body?.contacts)
+      if (!hasKnownArray) {
+        log.warn(
+          { shape: body && typeof body === 'object' ? Object.keys(body) : typeof body },
+          'listContacts: unrecognized Plunk response shape; extracted no contacts',
+        )
+      }
+      return parseContactsResponse(body)
     },
     { retries: 3, retryOn: isRetryableError },
   )
