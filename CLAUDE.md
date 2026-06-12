@@ -43,11 +43,15 @@ Use `--prefix` for all npm commands:
 ```bash
 npm run dev --prefix client           # Start client dev server
 npm run build --prefix client         # Build (includes prerendering)
+npm run typecheck --prefix client     # Type-check client (tsc --noEmit; fast, no prerender)
 npm run test --prefix client -- --run # Run client tests
 npm run dev --prefix server           # Start server with hot reload
 npm run build --prefix server         # Build server
+npm run typecheck --prefix server     # Type-check server (tsc --noEmit)
 npm run test --prefix server          # Run server tests
 ```
+
+**Type-checking:** use `npm run typecheck --prefix <client|server>`. It's the canonical TS check and runs without a permission prompt. Do **not** invoke `tsc` via `node .../node_modules/typescript/bin/tsc` or bare `tsc` -- those are not allowlisted and force a confirmation.
 
 ### Database
 
