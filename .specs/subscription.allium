@@ -9,11 +9,16 @@
 --
 -- Bot-hardened: the signup is gated by a honeypot and a server-issued
 -- form token before any side effect, email verification is best-effort
--- (a verify-API failure does not block signups), the Plunk contact is
--- created only on confirmation (so unconfirmed bots never enter the
--- email platform), and confirmation requires an explicit POST (a bare
--- GET never mutates state, so link-prefetching email scanners cannot
--- auto-confirm).
+-- (a verify-API failure does not block signups), and confirmation
+-- requires an explicit POST (a bare GET never mutates state, so
+-- link-prefetching email scanners cannot auto-confirm).
+--
+-- Plunk contacts: sending the confirmation email creates a Plunk contact
+-- for the address (subscribed: false) — Plunk creates a contact for every
+-- transactional recipient, so unconfirmed signups DO leave an unsubscribed
+-- contact behind. Confirmation upserts that contact to subscribed: true.
+-- Never-confirmed (bot) contacts are removed out-of-band by a cleanup job;
+-- see ValidateAndCreateSubscription below.
 --
 -- Visitors are unauthenticated public users, distinct from the
 -- admin User entity in authentication.allium.
@@ -131,8 +136,12 @@ rule ValidateAndCreateSubscription {
     for entry in stale:
         ensures: not exists entry
 
-    -- No Plunk contact is created here — unconfirmed signups (including
-    -- bots) never enter the email platform. Only a local pending row.
+    -- A local pending row is created with no plunk_contact_id. The
+    -- ConfirmationEmailSent side effect below, however, creates a Plunk
+    -- contact (subscribed: false) for this address — Plunk creates a contact
+    -- for every transactional recipient. Never-confirmed contacts are purged
+    -- out-of-band by the cleanup-plunk-contacts job (unsubscribed + no
+    -- confirmed local row + older than the cleanup age threshold).
     let token = random_uuid()
     ensures: PendingSubscription.created(
         email: email,
@@ -158,10 +167,11 @@ rule ConfirmSubscription {
     if not pending.is_confirmed:
         requires: not pending.is_expired
 
-        -- The Plunk contact is created NOW (subscribed: true). Only confirmed
-        -- humans ever reach the email platform. Graceful: if Plunk fails,
-        -- still mark confirmed locally (plunk_contact_id stays null).
-        let contact = try_create_plunk_contact(email, subscribed: true)
+        -- The Plunk contact (created earlier as subscribed: false by the
+        -- confirmation email's send) is upserted to subscribed: true now.
+        -- Graceful: if Plunk fails, still mark confirmed locally
+        -- (plunk_contact_id stays null).
+        let contact = try_upsert_plunk_contact(email, subscribed: true)
         ensures: pending.plunk_contact_id = contact?.id
         ensures: pending.confirmed_at = now
 }

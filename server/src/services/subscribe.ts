@@ -90,8 +90,13 @@ export async function subscribe({ email, firstName }: SubscribeParams) {
     where: { email, confirmedAt: null },
   })
 
-  // Store pending subscription. No Plunk contact is created yet — unconfirmed
-  // bots never enter the Plunk contact list. The contact is created on confirm.
+  // Store the pending subscription; its plunkContactId stays null for now.
+  // NOTE: sending the confirmation email below DOES create a Plunk contact for
+  // this address — Plunk creates a contact for every /v1/send recipient
+  // (subscribed:false by default). So unconfirmed signups (including bots that
+  // clear the gate) leave an *unsubscribed* Plunk contact behind; the
+  // cleanup-plunk-contacts script purges the never-confirmed ones. On confirm,
+  // that contact is upserted to subscribed:true.
   await prisma.pendingSubscription.create({
     data: {
       email,
@@ -173,8 +178,10 @@ export async function confirmSubscription(token: string, email: string) {
     throw new Error('Confirmation link has expired')
   }
 
-  // Create the Plunk contact now (subscribed: true). Only confirmed humans ever
-  // reach Plunk. Graceful: if Plunk fails, still mark confirmed locally.
+  // Upsert the Plunk contact to subscribed:true. The contact already exists —
+  // the confirmation email's send created it as unsubscribed — so the
+  // create-contact call updates it to subscribed (Plunk upserts on email).
+  // Graceful: if Plunk fails, still mark confirmed locally.
   let plunkContactId: string | null = pending.plunkContactId
   try {
     const contact = await plunk.createContact({ email, subscribed: true })

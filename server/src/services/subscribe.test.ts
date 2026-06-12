@@ -34,8 +34,11 @@ describe('subscribe service', () => {
     mockPlunk.verifyEmail.mockResolvedValue({ valid: true, domainExists: true, isDisposable: false })
   })
 
-  describe('subscribe() — deferred contact creation', () => {
-    it('does NOT create a Plunk contact during signup', async () => {
+  describe('subscribe() — no explicit createContact at signup', () => {
+    // subscribe() never calls createContact itself. (A Plunk contact is still
+    // created as a side effect of the confirmation email's send — Plunk creates
+    // one for every /v1/send recipient — but that is not asserted here.)
+    it('does not call createContact during signup (only sends the confirmation email)', async () => {
       await subscribe({ email: 'test@example.com' })
 
       expect(mockPlunk.createContact).not.toHaveBeenCalled()
