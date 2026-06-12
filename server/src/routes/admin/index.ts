@@ -5,6 +5,7 @@ import feedRouter from './feeds.js'
 import storyRouter from './stories.js'
 import jobRouter from './jobs.js'
 import newsletterRouter from './newsletters.js'
+import subscriberRouter from './subscribers.js'
 import podcastRouter from './podcasts.js'
 import userRouter from './users.js'
 import clusterRouter from './clusters.js'
@@ -22,6 +23,7 @@ router.use('/feeds', feedRouter)
 router.use('/stories', storyRouter)
 router.use('/jobs', jobRouter)
 router.use('/newsletters', newsletterRouter)
+router.use('/subscribers', subscriberRouter)
 router.use('/podcasts', podcastRouter)
 router.use('/users', userRouter)
 router.use('/clusters', clusterRouter)

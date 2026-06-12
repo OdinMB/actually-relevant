@@ -1,6 +1,6 @@
 # Admin Dashboard
 
-The admin dashboard is a React SPA at `/admin/*` with 9 pages, JWT-based auth with httpOnly refresh cookies, and TanStack Query for data fetching.
+The admin dashboard is a React SPA at `/admin/*` with 10 pages, JWT-based auth with httpOnly refresh cookies, and TanStack Query for data fetching.
 
 ## Architecture
 
@@ -26,6 +26,7 @@ The admin dashboard is a React SPA at `/admin/*` with 9 pages, JWT-based auth wi
   /admin/issues/:id/edit → IssueEditPage
   /admin/newsletters  → NewslettersPage
   /admin/newsletters/:id → NewsletterDetailPage
+  /admin/subscribers  → SubscribersPage (read-only: local DB vs Plunk reconciliation)
   /admin/podcasts     → PodcastsPage
   /admin/podcasts/:id → PodcastDetailPage
   /admin/jobs         → JobsPage (auto-refreshes every 10s)
@@ -42,6 +43,7 @@ The admin dashboard is a React SPA at `/admin/*` with 9 pages, JWT-based auth wi
 - **Cron editing** is inline in the jobs table with save/cancel
 - **Issue slug** auto-generates from name in create mode
 - **Issue hierarchy** supports one level of nesting (parent/child). Issues table shows children indented under parents. Edit form has optional parent selector and static content editors (evaluation criteria, sources, make-a-difference links). Feed selector shows hierarchical issue dropdown.
+- **Subscribers page** is read-only: `GET /api/admin/subscribers` (service `subscribers.ts`) reads all `PendingSubscription` rows and all Plunk contacts, dedupes the DB side by email, and reconciles by lowercased email into summary counts + a table (DB status vs Plunk status, with "drift" rows). Plunk is best-effort — if it's unavailable (`PROJECT_DISABLED`) or the bounded fetch only partially completes, the page still renders the DB side with a notice. Unsubscribed Plunk contacts with no local row (never-confirmed bots) are collapsed into a count, not listed.
 
 ## File Locations
 

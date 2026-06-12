@@ -38,6 +38,35 @@ export interface FeedQualityMetrics {
   extractionMethods: Record<string, number>
 }
 
+export type SubscriberDbStatus = 'confirmed' | 'pending'
+export type SubscriberPlunkStatus = 'subscribed' | 'unsubscribed'
+
+export interface SubscriberRow {
+  email: string
+  dbStatus: SubscriberDbStatus | null
+  dbConfirmedAt: string | null
+  dbCreatedAt: string | null
+  plunkStatus: SubscriberPlunkStatus | null
+  plunkContactId: string | null
+  mismatch: boolean
+}
+
+export interface SubscriberReconciliation {
+  db: { total: number; confirmed: number; pending: number }
+  plunk: {
+    available: boolean
+    partial: boolean
+    truncated: boolean
+    total: number | null
+    subscribed: number | null
+    unsubscribed: number | null
+    unsubscribedNotInDb: number | null
+    error: string | null
+  }
+  mismatches: number
+  rows: SubscriberRow[]
+}
+
 const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api'
 const ADMIN_BASE = `${API_BASE}/admin`
 const AUTH_BASE = `${API_BASE}/auth`
@@ -416,6 +445,11 @@ export const adminApi = {
         method: 'PUT',
         body: JSON.stringify({ password }),
       }),
+  },
+
+  // Subscribers (read-only: local DB vs Plunk reconciliation)
+  subscribers: {
+    list: () => request<SubscriberReconciliation>('/subscribers'),
   },
 }
 

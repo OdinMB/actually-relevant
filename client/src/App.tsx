@@ -41,6 +41,7 @@ const IssuesPage = lazy(() => import('./pages/admin/IssuesPage'))
 const IssueEditPage = lazy(() => import('./pages/admin/IssueEditPage'))
 const NewslettersPage = lazy(() => import('./pages/admin/NewslettersPage'))
 const NewsletterDetailPage = lazy(() => import('./pages/admin/NewsletterDetailPage'))
+const SubscribersPage = lazy(() => import('./pages/admin/SubscribersPage'))
 const PodcastsPage = lazy(() => import('./pages/admin/PodcastsPage'))
 const PodcastDetailPage = lazy(() => import('./pages/admin/PodcastDetailPage'))
 const JobsPage = lazy(() => import('./pages/admin/JobsPage'))
@@ -149,6 +150,7 @@ export default function App() {
         <Route path="issues/:id/edit" element={<IssueEditPage />} />
         <Route path="newsletters" element={<NewslettersPage />} />
         <Route path="newsletters/:id" element={<NewsletterDetailPage />} />
+        <Route path="subscribers" element={<SubscribersPage />} />
         <Route path="podcasts" element={<PodcastsPage />} />
         <Route path="podcasts/:id" element={<PodcastDetailPage />} />
         <Route path="jobs" element={<JobsPage />} />
