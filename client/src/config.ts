@@ -8,9 +8,9 @@ export const GITHUB_REPO_URL = 'https://github.com/OdinMB/actually-relevant'
 export const GITHUB_LICENSE_URL = `${GITHUB_REPO_URL}/blob/main/LICENSE`
 
 /**
- * Newsletter signups are temporarily disabled while the email provider (Plunk)
- * account is suspended. The subscribe form shows a "paused" notice instead of
- * accepting registrations. Flip back to `true` and redeploy the client once
- * sending is restored.
+ * Kill-switch for newsletter signups. When `false`, the subscribe form shows a
+ * "paused" notice instead of accepting registrations — used while the email
+ * provider (Plunk) account is suspended. Flip to `false` and redeploy the client
+ * to pause; flip back to `true` once sending is restored.
  */
-export const SUBSCRIPTIONS_ENABLED = false
+export const SUBSCRIPTIONS_ENABLED = true
