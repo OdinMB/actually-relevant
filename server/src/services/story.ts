@@ -56,7 +56,11 @@ async function withSlugLock<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${SLUG_ASSIGNMENT_LOCK_KEY}::bigint)`
+    // Use $executeRaw, not $queryRaw: pg_advisory_xact_lock() returns Postgres `void`,
+    // and $queryRaw tries to deserialize the result column and throws P2010
+    // ("Failed to deserialize column of type 'void'"). $executeRaw runs the statement
+    // (acquiring the lock) and returns a row count, deserializing nothing.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SLUG_ASSIGNMENT_LOCK_KEY}::bigint)`
     return fn(tx)
   }, { timeout: config.database.transactionTimeoutMs })
 }
@@ -445,51 +449,69 @@ export async function generateUniqueSlugs(
   return result
 }
 
+/**
+ * Publish a single bounded chunk of stories: ensure embeddings exist, then flip
+ * status to `published` (assigning slugs as needed) under the shared slug lock.
+ * Returns the number of rows actually transitioned. Kept small on purpose — see
+ * bulkUpdateStatus for why publishing is chunked.
+ */
+async function publishChunk(ids: string[]): Promise<number> {
+  // Ensure all stories have embeddings (no-op for already-embedded stories).
+  // This makes slow external calls, so it stays OUTSIDE the transaction.
+  await ensureEmbeddings(ids)
+
+  const now = new Date()
+  // The slug read-modify-write and the status flip run under the shared slug lock so
+  // concurrent publishers can't assign the same slug to different stories (P2002).
+  return withSlugLock(async (tx) => {
+    // Batch-generate slugs for stories that don't have one yet.
+    const storiesNeedingSlugs = await tx.story.findMany({
+      where: { id: { in: ids }, slug: null },
+      select: { id: true, title: true, sourceTitle: true },
+    })
+    const slugMap = await generateUniqueSlugs(storiesNeedingSlugs, tx)
+
+    // Assign all slugs in a single statement. A per-story update loop here costs
+    // one DB round-trip per story, which blows past the transaction timeout once
+    // the chunk grows. Every new slug is unique by construction
+    // (see generateUniqueSlugs), so a batched UPDATE can't violate the constraint.
+    if (slugMap.size > 0) {
+      const slugRows = [...slugMap.entries()].map(
+        ([storyId, slug]) => Prisma.sql`(${storyId}::text, ${slug}::text)`,
+      )
+      await tx.$executeRaw`
+        UPDATE stories AS s
+        SET slug = v.slug
+        FROM (VALUES ${Prisma.join(slugRows)}) AS v(id, slug)
+        WHERE s.id = v.id
+      `
+    }
+    const alreadyDated = await tx.story.updateMany({
+      where: { id: { in: ids }, datePublished: { not: null } },
+      data: { status: StoryStatus.published },
+    })
+    const newlyDated = await tx.story.updateMany({
+      where: { id: { in: ids }, datePublished: null },
+      data: { status: StoryStatus.published, datePublished: now },
+    })
+    // Report rows actually transitioned, not ids.length — an id may have been
+    // deleted between selection and publish and should not be counted.
+    return alreadyDated.count + newlyDated.count
+  })
+}
+
 export async function bulkUpdateStatus(ids: string[], status: string) {
   if (status === 'published') {
-    // Ensure all stories have embeddings (no-op for already-embedded stories).
-    // This makes slow external calls, so it stays OUTSIDE the transaction.
-    await ensureEmbeddings(ids)
-
-    const now = new Date()
-    // The slug read-modify-write and the status flip run under the shared slug lock so
-    // concurrent publishers can't assign the same slug to different stories (P2002).
-    const publishedCount = await withSlugLock(async (tx) => {
-      // Batch-generate slugs for stories that don't have one yet.
-      const storiesNeedingSlugs = await tx.story.findMany({
-        where: { id: { in: ids }, slug: null },
-        select: { id: true, title: true, sourceTitle: true },
-      })
-      const slugMap = await generateUniqueSlugs(storiesNeedingSlugs, tx)
-
-      // Assign all slugs in a single statement. A per-story update loop here costs
-      // one DB round-trip per story, which blows past the transaction timeout once
-      // the `selected` backlog grows. Every new slug is unique by construction
-      // (see generateUniqueSlugs), so a batched UPDATE can't violate the constraint.
-      if (slugMap.size > 0) {
-        const slugRows = [...slugMap.entries()].map(
-          ([storyId, slug]) => Prisma.sql`(${storyId}::text, ${slug}::text)`,
-        )
-        await tx.$executeRaw`
-          UPDATE stories AS s
-          SET slug = v.slug
-          FROM (VALUES ${Prisma.join(slugRows)}) AS v(id, slug)
-          WHERE s.id = v.id
-        `
-      }
-      const alreadyDated = await tx.story.updateMany({
-        where: { id: { in: ids }, datePublished: { not: null } },
-        data: { status: status as StoryStatus },
-      })
-      const newlyDated = await tx.story.updateMany({
-        where: { id: { in: ids }, datePublished: null },
-        data: { status: status as StoryStatus, datePublished: now },
-      })
-      // Report rows actually transitioned, not ids.length — an id may have been
-      // deleted between selection and publish and should not be counted.
-      return alreadyDated.count + newlyDated.count
-    })
-
+    // Publish in bounded chunks so the per-chunk embedding fetch/accumulation and the
+    // slug-locked transaction stay small no matter how large the `selected` backlog
+    // (or an admin bulk selection) is — this is what keeps the publish job within
+    // Render's memory limit and under the transaction timeout. Each chunk commits
+    // independently: a failure on a later chunk leaves earlier chunks published, and
+    // the next run resumes from the remaining `selected` stories.
+    let publishedCount = 0
+    for (let i = 0; i < ids.length; i += config.publish.chunkSize) {
+      publishedCount += await publishChunk(ids.slice(i, i + config.publish.chunkSize))
+    }
     return { count: publishedCount }
   }
   return prisma.story.updateMany({

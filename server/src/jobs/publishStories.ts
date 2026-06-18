@@ -14,6 +14,8 @@ export async function runPublishStories(): Promise<void> {
 
   log.info({ storyCount: ids.length }, 'publishing stories')
 
+  // bulkUpdateStatus publishes in bounded chunks (config.publish.chunkSize), so even a
+  // large `selected` backlog is processed within Render's memory limit and the tx timeout.
   const result = await bulkUpdateStatus(ids, 'published')
 
   log.info({ published: result.count }, 'publish job finished')

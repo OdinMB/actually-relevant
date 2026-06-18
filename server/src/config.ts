@@ -43,6 +43,12 @@ export const config = {
     relevanceMin: parseInt(process.env.SELECT_RELEVANCE_MIN || "5", 10),
     modelTier: "large" as const,
   },
+  publish: {
+    // Bulk publish processes the `selected` backlog in chunks of this size so the
+    // per-chunk embedding fetch and slug-locked transaction stay bounded — a large
+    // backlog publishes over several bounded passes rather than one unbounded one.
+    chunkSize: parseInt(process.env.PUBLISH_CHUNK_SIZE || "100", 10),
+  },
   embedding: {
     model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
     // Changing dimensions requires a DB migration to alter the vector(1536) column and rebuild the index

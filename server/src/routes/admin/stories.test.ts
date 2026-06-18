@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
 import { authHeader, sampleStory, sampleFeed, sampleIssue, TEST_API_KEY } from '../../test/helpers.js'
+import { config } from '../../config.js'
 
 vi.mock('express-rate-limit', () => ({
   default: () => (_req: any, _res: any, next: any) => next(),
@@ -323,8 +324,10 @@ describe('Admin Stories API', () => {
         .set(authHeader())
         .send({ status: 'published' })
       expect(res.status).toBe(200)
-      // Single-story publish assigns its slug under the same advisory lock.
-      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1)
+      // Single-story publish acquires the slug advisory lock via $executeRaw (the lock
+      // function returns void, which $queryRaw cannot deserialize). Existing slug → no
+      // slug write, so $executeRaw is the lock only.
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
     })
 
     it('rejects invalid status', async () => {
@@ -356,10 +359,9 @@ describe('Admin Stories API', () => {
         })
       expect(res.status).toBe(200)
       expect(res.body.updated).toBe(3)
-      // Publishers serialize on the advisory lock before touching slugs.
-      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1)
-      // No stories needed slugs, so the batched slug update is skipped.
-      expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
+      // Publishers serialize on the advisory lock (acquired via $executeRaw) before
+      // touching slugs. No stories needed slugs, so $executeRaw is the lock only.
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
     })
 
     it('assigns slugs for unslugged stories in a single batched statement', async () => {
@@ -385,10 +387,10 @@ describe('Admin Stories API', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.updated).toBe(2)
-      // Slug read + write happen under the advisory lock acquired first in the tx.
-      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1)
-      // Slugs for both stories are written in one statement, not one per story.
-      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
+      // Two $executeRaw calls: the advisory lock acquired first in the tx, then the
+      // single batched slug UPDATE. Slugs for both stories are written in that one
+      // statement (not one per story) — a per-story loop would be lock + 2 = 3 calls.
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(2)
       // Per-story tx.story.update must not be used for slugs (that was the timeout source).
       expect(mockPrisma.story.update).not.toHaveBeenCalled()
     })
@@ -399,6 +401,38 @@ describe('Admin Stories API', () => {
         .set(authHeader())
         .send({ ids: [], status: 'published' })
       expect(res.status).toBe(400)
+    })
+
+    it('publishes a large set in bounded chunks', async () => {
+      // chunkSize + 1 ids => exactly two chunks (a full one and a remainder of 1).
+      const total = config.publish.chunkSize + 1
+      const ids = Array.from({ length: total }, (_, i) =>
+        `00000000-0000-0000-0000-${String(i + 1).padStart(12, '0')}`)
+      mockPrisma.story.findMany.mockResolvedValue([]) // no stories need slugs
+      // Two updateMany calls per chunk (already-dated, newly-dated), in order across
+      // both chunks: chunk 1 → 60 + 40 = 100, chunk 2 → 1 + 0 = 1. The summed total
+      // (101) proves counts accumulate across chunks, not just the last one.
+      mockPrisma.story.updateMany
+        .mockResolvedValue({ count: 0 })
+        .mockResolvedValueOnce({ count: 60 })
+        .mockResolvedValueOnce({ count: 40 })
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 })
+
+      const res = await request(app)
+        .post('/api/admin/stories/bulk-status')
+        .set(authHeader())
+        .send({ ids, status: 'published' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.updated).toBe(101)
+      // Each chunk gets its own embedding pass and its own slug-locked transaction,
+      // so memory and transaction size stay bounded regardless of backlog size.
+      expect(mockEnsureEmbeddings).toHaveBeenCalledTimes(2)
+      expect(mockEnsureEmbeddings.mock.calls[0][0]).toHaveLength(config.publish.chunkSize)
+      expect(mockEnsureEmbeddings.mock.calls[1][0]).toHaveLength(1)
+      // One advisory lock ($executeRaw) per chunk; no slugs needed so no slug UPDATE.
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -507,8 +541,9 @@ describe('Admin Stories API', () => {
         .post('/api/admin/stories/story-1/publish')
         .set(authHeader())
       expect(res.status).toBe(200)
-      // Single-story publish assigns its slug under the same advisory lock.
-      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1)
+      // Single-story publish acquires the slug advisory lock via $executeRaw. Existing
+      // slug → no slug write, so $executeRaw is the lock only.
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
     })
 
     it('returns 404 for unknown story', async () => {
