@@ -17,11 +17,12 @@ config {
     http_timeout_ms: Integer = 15000
     rss_item_limit: Integer = 50
     min_content_length: Integer = 200
-    max_response_bytes: Integer = 5242880             -- 5 MB
+    max_response_bytes: Integer = 5242880             -- 5 MB (HTTP fetch cap)
+    max_parse_bytes: Integer = 2097152                -- 2 MB; larger HTML skips local parse
     local_fail_threshold: Integer = 3
     total_fail_threshold: Integer = 5
-    crawl_concurrency_feeds: Integer = 3
-    crawl_concurrency_articles: Integer = 5
+    crawl_concurrency_feeds: Integer = 2
+    crawl_concurrency_articles: Integer = 1
     api_base_delay_ms: Integer = 500
     api_backoff_ms: Integer = 30000
     api_max_delay_ms: Integer = 30000
@@ -153,6 +154,9 @@ rule ExtractAndCreate {
     --
     -- Local extraction (tiers 1-2) is skipped when the adaptive skip
     -- flag is set (too many consecutive local failures for this feed).
+    -- It is also skipped when the fetched HTML exceeds max_parse_bytes:
+    -- a multi-MB string expands ~10-20x as a DOM, so such pages go
+    -- straight to the API tier to bound per-parse memory.
     -- API calls (tier 3) go through the ApiThrottle which serializes
     -- calls and adapts pacing on 429 responses.
 
@@ -201,5 +205,8 @@ rule CrawlSingleUrl {
 -- determine whether extraction succeeds or fails.
 --
 -- - HTTP responses are capped at max_response_bytes (5 MB)
+-- - Pages whose HTML exceeds max_parse_bytes (2 MB) skip local tiers
+--   (selector + Readability) and defer to the API tier, bounding the
+--   per-parse DOM memory that counts against the instance RSS limit
 -- - JSDOM windows are explicitly closed after Readability extraction
 -- - Redirect chains are validated against an allowlist (isAllowedUrl)

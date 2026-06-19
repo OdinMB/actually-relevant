@@ -4,7 +4,7 @@ import { Badge } from '../ui/Badge'
 type Variant = 'dot' | 'badge'
 
 interface JobStatusBadgeProps {
-  job: Pick<JobRun, 'running' | 'enabled' | 'lastError' | 'lastCompletedAt'>
+  job: Pick<JobRun, 'running' | 'enabled' | 'lastError' | 'lastCompletedAt' | 'lastStartedAt'>
   variant?: Variant
 }
 
@@ -14,6 +14,13 @@ function getStatus(job: JobStatusBadgeProps['job']): StatusInfo {
   if (!job.enabled) return { label: 'Disabled', color: 'gray' }
   if (job.running) return { label: 'Running', color: 'yellow' }
   if (job.lastError) return { label: 'Error', color: 'red' }
+  // A run that started but never recorded completion (lastStartedAt newer than
+  // lastCompletedAt, or no completion at all) while not currently running means the
+  // process died mid-run — e.g. an OOM kill, which bypasses the lastError and
+  // lastCompletedAt writes and would otherwise still read as a stale "OK".
+  if (job.lastStartedAt && (!job.lastCompletedAt || job.lastStartedAt > job.lastCompletedAt)) {
+    return { label: 'Incomplete', color: 'red' }
+  }
   if (job.lastCompletedAt) return { label: 'OK', color: 'green' }
   return { label: 'Never run', color: 'gray' }
 }

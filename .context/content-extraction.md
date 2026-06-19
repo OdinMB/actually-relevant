@@ -34,7 +34,7 @@ All API calls go through a shared `ApiThrottle` that serializes requests and han
 
 ### Local Extraction Skip
 
-When consecutive articles in a feed all fail local extraction (tiers 1+2), the crawler skips local extraction for remaining articles (controlled by `config.crawl.localFailThreshold`, default 3). This avoids wasting time on HTTP 403s from sites that block scrapers. The counter increments both when extraction succeeds via API (local failed but API worked) and when extraction fails entirely (local + API both failed). The counter resets when any article succeeds via a local method. With the default concurrency of 3, the first batch always attempts local extraction; the threshold takes effect for subsequent articles.
+When consecutive articles in a feed all fail local extraction (tiers 1+2), the crawler skips local extraction for remaining articles (controlled by `config.crawl.localFailThreshold`, default 3). This avoids wasting time on HTTP 403s from sites that block scrapers. The counter increments both when extraction succeeds via API (local failed but API worked) and when extraction fails entirely (local + API both failed). The counter resets when any article succeeds via a local method. With the default `crawlArticles` of 1, articles are processed sequentially, so the threshold takes effect as soon as `localFailThreshold` consecutive failures occur.
 
 ### Total Failure Bail-Out
 
@@ -50,11 +50,11 @@ The crawler passes a `shouldAbort` callback (tied to the `skipAll` flag) through
 
 ## Resource Limits
 
-HTTP responses from page fetches, RSS feeds, and external API calls (Diffbot, PipFeed) are capped at 5 MB (`maxContentLength`) to prevent OOM on pathological responses. JSDOM DOM objects are explicitly released via `dom.window.close()` in a `finally` block after Readability extraction, as JSDOM windows hold timers, event listeners, and expanded DOM trees that are not reliably garbage collected without explicit cleanup. Outbound webhook and email service (Plunk) responses are capped at 1 MB. The Bluesky og:image fetch uses `AbortSignal.timeout(10_000)` to prevent hanging. Favicon fetches use streaming reads with per-chunk size checks to avoid allocating large buffers for unexpected responses.
+HTTP responses from page fetches, RSS feeds, and external API calls (Diffbot, PipFeed) are capped at 5 MB (`maxContentLength`) to prevent OOM on pathological responses. Pages whose fetched HTML exceeds `config.crawl.maxParseBytes` (default 2 MB, env `MAX_PARSE_BYTES`) skip local parsing (tiers 1+2) and fall straight through to the API tier: a multi-MB HTML string expands ~10-20x as a DOM, and that allocation counts against Render's ~512 MiB RSS limit — which `--max-old-space-size=384` does **not** bound (it caps only the V8 heap) — so a single oversized page can OOM the crawl even at low concurrency. JSDOM DOM objects are explicitly released via `dom.window.close()` in a `finally` block after Readability extraction, as JSDOM windows hold timers, event listeners, and expanded DOM trees that are not reliably garbage collected without explicit cleanup. Outbound webhook and email service (Plunk) responses are capped at 1 MB. The Bluesky og:image fetch uses `AbortSignal.timeout(10_000)` to prevent hanging. Favicon fetches use streaming reads with per-chunk size checks to avoid allocating large buffers for unexpected responses.
 
-### CPU Budget
+### CPU & Memory Budget
 
-JSDOM + Readability parsing is the most CPU-intensive operation in the server. JSDOM constructs a full DOM in pure JavaScript, which saturates a CPU core for the duration of each parse. The effective CPU parallelism is `crawlFeeds * crawlArticles` (worst case: all articles hit tier 2 simultaneously). On a 0.5 vCPU instance, keep this product at 2 or below to avoid 100% CPU spikes that trigger Render restarts. Recommended production values: `CONCURRENCY_CRAWL_FEEDS=1, CONCURRENCY_CRAWL_ARTICLES=2` (or `2/1`). Analysis jobs (pre-assess, assess, select) are I/O-bound (waiting on OpenAI) and don't meaningfully compete for CPU.
+JSDOM + Readability parsing is the most expensive operation in the server, on two axes. **CPU:** JSDOM constructs a full DOM in pure JavaScript, saturating a CPU core for the duration of each parse. **Memory:** the resulting DOM plus JSDOM's native/CSSOM allocations count against Render's ~512 MiB RSS limit — which `--max-old-space-size=384` does *not* bound (it caps only the V8 heap), so the process can be OOM-killed with heap well under 384 MB. The effective parallelism is `crawlFeeds * crawlArticles` (worst case: all articles hit tier 2 simultaneously). On a 0.5 vCPU / 512 MiB instance, keep this product at 2 or below — that bounds CPU; the per-parse `maxParseBytes` guard bounds memory. The shipped defaults are `crawlFeeds=2, crawlArticles=1` (product 2), and production sets the same via `CONCURRENCY_CRAWL_FEEDS`/`CONCURRENCY_CRAWL_ARTICLES`. If memory still spikes, drop to product 1 (`CONCURRENCY_CRAWL_FEEDS=1`) so only one parse runs at a time, and/or lower `MAX_PARSE_BYTES`. Analysis jobs (pre-assess, assess, select) are I/O-bound (waiting on OpenAI) and don't meaningfully compete for CPU.
 
 ## Crawl Flow
 
@@ -68,7 +68,7 @@ RSS Feed → Parse items (max config.crawl.rssItemLimit, default 20)
          → Update feed's lastCrawledAt
 ```
 
-Feeds are crawled in parallel (up to `config.concurrency.crawlFeeds`, default 3). Article extraction within each feed also runs in parallel (up to `config.concurrency.crawlArticles`, default 3). All HTTP requests (RSS parsing, page fetching, PipFeed API) use `withRetry()` from `server/src/lib/retry.ts` (3 attempts with exponential backoff).
+Feeds are crawled in parallel (up to `config.concurrency.crawlFeeds`, default 2). Article extraction within each feed runs up to `config.concurrency.crawlArticles` at a time (default 1, i.e. sequential). See the CPU & Memory Budget section for why these defaults are intentionally low. All HTTP requests (RSS parsing, page fetching, PipFeed API) use `withRetry()` from `server/src/lib/retry.ts` (3 attempts with exponential backoff).
 
 ### Deduplication
 

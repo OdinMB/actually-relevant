@@ -397,6 +397,56 @@ describe('API extraction limits', () => {
 
 })
 
+describe('maxParseBytes guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.PIPFEED_API_KEY
+    delete process.env.DIFFBOT_TOKEN
+    _resetApiState()
+  })
+
+  it('skips local parse for oversized pages and defers to the API tier', async () => {
+    process.env.DIFFBOT_TOKEN = 'test-token'
+    const hugeHtml = '<html><body>' + 'x'.repeat(2 * 1024 * 1024 + 1) + '</body></html>'
+    mockAxiosGet
+      .mockResolvedValueOnce({ data: hugeHtml })            // page fetch (oversized)
+      .mockResolvedValueOnce({                              // Diffbot API
+        data: { objects: [{ title: 'API Title', text: LONG_TEXT, date: '2024-01-01' }] },
+      })
+    // Even though readability would succeed, it must never be invoked for oversized pages.
+    mockReadabilityParse.mockReturnValue({ title: 'Should not be used', textContent: LONG_TEXT })
+
+    const result = await extractContent('https://example.com/article', { htmlSelector: 'article' })
+
+    expect(result).not.toBeNull()
+    expect(result!.method).toBe('diffbot')
+    expect(mockReadabilityParse).not.toHaveBeenCalled()
+  })
+
+  it('returns null for oversized pages when no API key is configured', async () => {
+    const hugeHtml = 'x'.repeat(2 * 1024 * 1024 + 1)
+    mockAxiosGet.mockResolvedValue({ data: hugeHtml })
+    mockReadabilityParse.mockReturnValue({ title: 'Should not be used', textContent: LONG_TEXT })
+
+    const result = await extractContent('https://example.com/article')
+
+    expect(result).toBeNull()
+    expect(mockReadabilityParse).not.toHaveBeenCalled()
+  })
+
+  it('still parses pages at or below maxParseBytes locally', async () => {
+    const html = `<html><body><p>${'word '.repeat(100)}</p></body></html>`
+    mockAxiosGet.mockResolvedValue({ data: html })
+    mockReadabilityParse.mockReturnValue({ title: 'Local Title', textContent: LONG_TEXT })
+
+    const result = await extractContent('https://example.com/article')
+
+    expect(result).not.toBeNull()
+    expect(result!.method).toBe('readability')
+    expect(mockReadabilityParse).toHaveBeenCalled()
+  })
+})
+
 describe('ApiThrottle', () => {
   it('doubles delay on 429 and reduces on success', async () => {
     const throttle = new ApiThrottle(0, 0, 1000) // no base delay, no backoff wait, 1s max

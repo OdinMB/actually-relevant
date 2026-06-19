@@ -61,6 +61,12 @@ export const config = {
     rssItemLimit: parseInt(process.env.RSS_ITEM_LIMIT || "30", 10),
     httpTimeoutMs: parseInt(process.env.HTTP_TIMEOUT_MS || "10000", 10),
     minContentLength: parseInt(process.env.MIN_CONTENT_LENGTH || "300", 10),
+    // Skip local JSDOM/cheerio parsing for pages larger than this (bytes) and defer
+    // to the API extraction tier. A multi-MB HTML string expands ~10-20x as a DOM,
+    // and that native memory counts against Render's RSS limit — so a single huge
+    // page can OOM the crawl regardless of concurrency. The HTTP fetch is separately
+    // capped at 5 MB; this bounds what we hand to the parser. Default 2 MB.
+    maxParseBytes: parseInt(process.env.MAX_PARSE_BYTES || String(2 * 1024 * 1024), 10),
     staleAfterEmptyCrawls: parseInt(
       process.env.STALE_AFTER_EMPTY_CRAWLS || "5",
       10
@@ -119,10 +125,14 @@ export const config = {
     assess: parseInt(process.env.CONCURRENCY_ASSESS || "10", 10),
     select: parseInt(process.env.CONCURRENCY_SELECT || "10", 10),
     reclassify: parseInt(process.env.CONCURRENCY_RECLASSIFY || "10", 10),
-    // CPU-heavy: each concurrent crawl runs JSDOM parsing (pure-JS DOM construction),
-    // which saturates CPU. On 0.5 vCPU, keep crawlFeeds * crawlArticles <= 2.
-    crawlFeeds: parseInt(process.env.CONCURRENCY_CRAWL_FEEDS || "3", 10),
-    crawlArticles: parseInt(process.env.CONCURRENCY_CRAWL_ARTICLES || "3", 10),
+    // Heavy: each concurrent crawl runs a JSDOM parse, which both saturates the
+    // 0.5 vCPU AND allocates native/CSSOM memory counted against Render's ~512 MiB
+    // RSS limit (NOT the V8 heap that --max-old-space-size bounds). Peak concurrent
+    // parses = crawlFeeds * crawlArticles; keep it <= 2. Production runs 2 x 1 and
+    // the defaults mirror that. The extractor's maxParseBytes guard bounds each
+    // parse's peak so a single oversized page can't blow RSS on its own.
+    crawlFeeds: parseInt(process.env.CONCURRENCY_CRAWL_FEEDS || "2", 10),
+    crawlArticles: parseInt(process.env.CONCURRENCY_CRAWL_ARTICLES || "1", 10),
   },
   plunk: {
     secretKey: process.env.PLUNK_SECRET_KEY || "",

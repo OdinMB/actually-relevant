@@ -302,8 +302,18 @@ export async function extractContent(
   if (!options?.skipLocalExtraction) {
     const html = await fetchPage(url)
 
+    // Pages above maxParseBytes are skipped for local parsing: building a JSDOM/cheerio
+    // DOM from a multi-megabyte string expands ~10-20x and spikes native memory (counted
+    // against Render's RSS limit), which can OOM the crawl. Defer these to the API tier,
+    // which extracts server-side without loading the DOM into our heap.
+    const htmlBytes = html != null ? Buffer.byteLength(html, 'utf8') : 0
+    const tooLargeToParse = htmlBytes > config.crawl.maxParseBytes
+    if (tooLargeToParse) {
+      log.warn({ url, htmlBytes, maxParseBytes: config.crawl.maxParseBytes }, 'page exceeds maxParseBytes; skipping local parse, deferring to API tier')
+    }
+
     // Tier 1: CSS selector extraction
-    if (html && options?.htmlSelector) {
+    if (html && !tooLargeToParse && options?.htmlSelector) {
       const result = extractBySelector(html, options.htmlSelector)
       if (result) {
         log.info({ url, method: result.method, contentLength: result.content.length }, 'extraction succeeded')
@@ -312,7 +322,7 @@ export async function extractContent(
     }
 
     // Tier 2: Readability extraction
-    if (html) {
+    if (html && !tooLargeToParse) {
       const readabilityResult = extractByReadability(html, url)
       if (readabilityResult) {
         log.info({ url, method: readabilityResult.method, contentLength: readabilityResult.content.length }, 'extraction succeeded')

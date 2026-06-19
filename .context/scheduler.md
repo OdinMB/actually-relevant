@@ -18,7 +18,7 @@ On server startup, `initScheduler()`:
 
 **Overdue detection**: On startup, the scheduler compares each job's `lastCompletedAt` against its cron interval. Jobs that missed their window (e.g., server was down) run immediately.
 
-**Error tracking**: Each job run updates `lastStartedAt`, `lastCompletedAt`, and `lastError` in the database. Failed jobs don't block subsequent runs.
+**Error tracking**: Each job run updates `lastStartedAt` at start, then `lastCompletedAt` (and `lastError` on failure) when it finishes — both the success and caught-error paths write `lastCompletedAt`. Failed jobs don't block subsequent runs. A **hard kill** (OOM, SIGKILL) bypasses the finish writes, leaving `lastStartedAt` newer than `lastCompletedAt`; the admin Jobs table surfaces that as an **Incomplete** (red) status rather than a stale **OK**, so a crashed run is visible (see `JobStatusBadge.tsx`).
 
 **Failure notifications**: When a job fails, `notifyJobFailure()` sends a POST to the URL in the `WEBHOOK_URL` environment variable (if set) with the job name, error message, and timestamp. See `server/src/lib/notify.ts`.
 
