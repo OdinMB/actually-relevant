@@ -56,11 +56,11 @@ Re-runs issue classification and emotion tagging without changing ratings or sta
 
 ### 1. Pre-assessment (Batch)
 
-Screens multiple stories per LLM call (~10 per batch, fewer for Chinese text). In a single call, the LLM classifies each story into the most relevant issue, assigns a conservative rating (1-10), and assigns an emotion tag. Uses the medium model with medium reasoning effort. All stories are batched together regardless of issue — pre-assessment uses only the generic rating scale (1-10 impact criteria), not issue-specific guidelines. Falls back to `story.feed.issueId` if the LLM returns an invalid issue slug.
+Screens multiple stories per LLM call (`config.preassess.batchSize`, 10 per batch). The caller cuts batches by count; `formatArticlesBlock()` renders every story it receives, so nothing is dropped between batching and the prompt. In a single call, the LLM classifies each story into the most relevant issue, assigns a conservative rating (1-10), and assigns an emotion tag. Uses the medium model with medium reasoning effort. All stories are batched together regardless of issue — pre-assessment uses only the generic rating scale (1-10 impact criteria), not issue-specific guidelines. Falls back to `story.feed.issueId` if the LLM returns an invalid issue slug.
 
 **Zod schema**: `preAssessResultSchema` — array of `{ articleId, issueSlug, rating, emotionTag }`
 
-**Threshold**: Only stories rated >= 3 proceed to full assessment.
+**Threshold**: Only stories rated >= `config.assess.fullAssessmentThreshold` (5) proceed to full assessment; an issue's `minPreRating` overrides it for that issue.
 
 **Precedence**: Downstream code (assessStory, podcast, RSS feeds) uses `story.issue ?? story.feed.issue`.
 

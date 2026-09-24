@@ -78,27 +78,20 @@ export function formatIssuesBlock(issues: IssueForPrompt[]): string {
 }
 
 /**
- * Format an array of stories as the `<ARTICLES>` prompt block,
- * using capacity tracking to handle Chinese-character articles.
+ * Format an array of stories as the `<ARTICLES>` prompt block.
+ * Renders every story it is given: the caller controls batch size
+ * (`config.preassess.batchSize`), so anything dropped here would silently
+ * go unclassified.
  */
 export function formatArticlesBlock(
   stories: StoryForPrompt[],
-  batchSize = config.preassess.batchSize,
   contentMaxLength = config.preassess.contentMaxLength,
 ): string {
   let block = '<ARTICLES>'
-  let capacity = batchSize
   for (const story of stories) {
-    if (containsChineseCharacters(story.content)) {
-      capacity -= 1.5
-    } else {
-      capacity -= 1
-    }
-    if (capacity > 0) {
-      block += `\n\n-----\nArticle ID: ${story.id}`
-      block += `\nTitle: ${story.title}`
-      block += `\n${story.content.substring(0, contentMaxLength)} ...`
-    }
+    block += `\n\n-----\nArticle ID: ${story.id}`
+    block += `\nTitle: ${story.title}`
+    block += `\n${story.content.substring(0, contentMaxLength)} ...`
   }
   block += '\n</ARTICLES>'
   return block
