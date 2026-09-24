@@ -17,7 +17,7 @@ fetched → pre_analyzed → analyzed → selected → published
 | Status | Set By | Meaning |
 |--------|--------|---------|
 | `fetched` | Crawler | Content extracted from RSS feed. Ready for LLM screening. |
-| `pre_analyzed` | Pre-assess job | Batch LLM screening assigned a conservative rating (1-10) and emotion tag. |
+| `pre_analyzed` | Pre-assess job | Batch LLM screening assigned a screening rating (1-10) and emotion tag. |
 | `analyzed` | Assess job | Full LLM analysis complete: detailed factors, ratings, summary, blurb, etc. |
 | `selected` | Select job | LLM chose this story for publication from the analyzed pool. |
 | `published` | Admin action | Live on the public site. |
@@ -93,7 +93,7 @@ Stories carry both crawled data and AI-generated analysis:
 **Platform data**: `title` (AI-generated, nullable), `slug` (generated on publish), `datePublished` (set on first publish)
 
 **Pre-assessment fields** (set during batch LLM screening):
-- `relevancePre` — conservative rating (1-10), immutable after set
+- `relevancePre` — screening rating (1-10) on the generic impact scale, immutable after set
 - `emotionTag` — one of: uplifting, frustrating, scary, calm
 
 **Full assessment fields** (set during in-depth LLM analysis):
