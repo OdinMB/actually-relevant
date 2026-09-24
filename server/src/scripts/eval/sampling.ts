@@ -74,6 +74,37 @@ export function stratifiedPick<T>(
   return { picked, shortfalls }
 }
 
+export type Half = 'calibration' | 'holdout'
+
+const SPLIT_SALT = 'recalibration-split'
+const splitHash = (key: string) => createHash('md5').update(key + SPLIT_SALT).digest('hex')
+
+/**
+ * Deterministic calibration/holdout split, so prompt tuning never sees the
+ * items its result is judged on. Within each stratum (sorted), items in hash
+ * order alternate between the halves, and the alternation carries over from
+ * one stratum to the next, so the totals differ by at most one. The hash uses
+ * its own salt, independent of the order the fixtures were sampled in; each
+ * half keeps the input order.
+ */
+export function splitHalves<T>(items: T[], key: (t: T) => string, stratum: (t: T) => string = () => ''): Record<Half, T[]> {
+  const strata = new Map<string, T[]>()
+  for (const t of items) {
+    const name = stratum(t)
+    strata.set(name, [...(strata.get(name) ?? []), t])
+  }
+  const calibration = new Set<T>()
+  let turn = 0
+  for (const name of [...strata.keys()].sort()) {
+    const ordered = [...(strata.get(name) ?? [])].sort((a, b) => (splitHash(key(a)) < splitHash(key(b)) ? -1 : 1))
+    for (const t of ordered) if (turn++ % 2 === 0) calibration.add(t)
+  }
+  return {
+    calibration: items.filter(t => calibration.has(t)),
+    holdout: items.filter(t => !calibration.has(t)),
+  }
+}
+
 export interface DatedStory {
   id: string
   dateCrawled: Date

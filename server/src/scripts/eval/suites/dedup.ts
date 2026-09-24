@@ -1,9 +1,9 @@
 /**
  * Dedup-confirmation suite. Ground truth: a pair's label is the unanimous
  * verdict of the three arms; where they disagree, two strong judges assess the
- * whole set with the unchanged production prompt, and pairs the judges split
- * on are excluded. Existing clusters were created by gpt-5-nano, so they are
- * reported only as a secondary signal.
+ * whole set with the same prompt, and pairs the judges split on are excluded
+ * (`labelDedupSets`). Existing clusters were created by gpt-5-nano, so they
+ * are reported only as a secondary signal.
  */
 import { buildDedupPrompt } from '../../../prompts/dedup.js'
 import { dedupConfirmationSchema, type DedupConfirmation } from '../../../schemas/llm.js'
@@ -12,22 +12,30 @@ import { TARGETS } from '../fixtures.js'
 import { arm, armKey, estimateCallUsd } from '../models.js'
 import { pct, rate } from '../checks.js'
 import { pickLowestPassing } from '../decide.js'
-import type { Arm, CallRecord, Decision, Suite } from '../types.js'
+import type { Arm, CallRecord, Decision, Suite, SuiteContext } from '../types.js'
+import { buildPhase1DedupPrompt } from './dedupPhase1Prompt.js'
 import { limited, metricRow, parsedOf, runArms, statsFor } from './shared.js'
 
-const BASELINE = arm('gpt-5-nano', 'medium')
+export const DEDUP_BASELINE = arm('gpt-5-nano', 'medium')
+const BASELINE = DEDUP_BASELINE
 const CANDIDATES = [arm('gpt-6-luna', 'low'), arm('gpt-6-luna', 'medium')]
 const ARMS = [BASELINE, ...CANDIDATES]
 const JUDGES = [arm('gpt-5.2', 'high'), arm('gpt-6-sol', 'high')]
 const SCHEMA = 'dedup'
-const BASE_OUTPUT_TOKENS = 2000
+export const DEDUP_OUTPUT_TOKENS = 2000
 /** Dry-run assumption for the share of sets the judges must see (plan: 15-40%). */
 const ASSUMED_DISPUTED_SHARE = 0.3
 
 const sets = (fx: Fixtures, limit?: number) => limited(fx.dedup, limit)
-const promptFor = (s: DedupSet) => buildDedupPrompt(s.source, s.candidates.map(c => ({ id: c.id, title: c.title, summary: c.summary })))
 
-type Vote = boolean | null
+export type DedupPrompt = (s: DedupSet) => string
+const candidatesOf = (s: DedupSet) => s.candidates.map(c => ({ id: c.id, title: c.title, summary: c.summary }))
+/** The current production prompt. */
+export const dedupPrompt: DedupPrompt = s => buildDedupPrompt(s.source, candidatesOf(s))
+/** The frozen prompt phase 1 labelled the set with (see dedupPhase1Prompt.ts). */
+export const phase1DedupPrompt: DedupPrompt = s => buildPhase1DedupPrompt(s.source, candidatesOf(s))
+
+export type Vote = boolean | null
 export type PairLabel = 'dup' | 'not' | 'disputed' | 'contested'
 
 export function votesFrom(parsed: DedupConfirmation | null, candidateCount: number): { votes: Vote[]; outOfRange: number } {
@@ -117,13 +125,14 @@ export function decideDedup(metrics: Record<string, DedupArmMetrics>, baseline: 
 }
 
 async function judgeDisputed(
-  ctx: Parameters<Suite['run']>[1],
+  ctx: SuiteContext,
   all: DedupSet[],
   armVotes: Vote[][][],
+  prompt: DedupPrompt,
 ): Promise<{ labels: PairLabel[][]; judgeRecords: Map<string, CallRecord<DedupConfirmation>[]> }> {
   const disputed = all.map((_, s) => isDisputed(armVotes[s]))
   const judged = all.filter((_, s) => disputed[s])
-  const judgeRecords = await runArms(ctx, JUDGES, judged, SCHEMA, dedupConfirmationSchema, promptFor)
+  const judgeRecords = await runArms(ctx, JUDGES, judged, SCHEMA, dedupConfirmationSchema, prompt)
   let j = 0
   const labels = all.map((set, s) => {
     if (!disputed[s]) return labelSet(armVotes[s])
@@ -136,6 +145,29 @@ async function judgeDisputed(
 
 function votesByArm(all: DedupSet[], records: Map<string, CallRecord<DedupConfirmation>[]>, a: Arm) {
   return all.map((set, s) => votesFrom(parsedOf(records.get(armKey(a))?.[s]), set.candidates.length))
+}
+
+export interface LabelledSets {
+  labels: PairLabel[][]
+  /** Each consensus arm's votes per set, by arm key. */
+  perArm: Map<string, ReturnType<typeof votesFrom>[]>
+  armRecords: Map<string, CallRecord<DedupConfirmation>[]>
+  judgeRecords: Map<string, CallRecord<DedupConfirmation>[]>
+  disputedSets: number
+}
+
+/**
+ * Ground truth for `all`: the consensus of the three arms on `prompt`, with
+ * disputed sets judged on the same prompt. eval:models labels with the
+ * current prompt; the recalibration passes the frozen phase-1 prompt through a
+ * cache-only context, so its labelled set is exactly phase 1's.
+ */
+export async function labelDedupSets(ctx: SuiteContext, all: DedupSet[], prompt: DedupPrompt): Promise<LabelledSets> {
+  const armRecords = await runArms(ctx, ARMS, all, SCHEMA, dedupConfirmationSchema, prompt)
+  const perArm = new Map(ARMS.map(a => [armKey(a), votesByArm(all, armRecords, a)]))
+  const armVotes = all.map((_, s) => ARMS.map(a => perArm.get(armKey(a))?.[s].votes ?? []))
+  const { labels, judgeRecords } = await judgeDisputed(ctx, all, armVotes, prompt)
+  return { labels, perArm, armRecords, judgeRecords, disputedSets: all.filter((_, s) => isDisputed(armVotes[s])).length }
 }
 
 export const dedupSuite: Suite = {
@@ -151,18 +183,15 @@ export const dedupSuite: Suite = {
     ]
   },
   plan(fx, limit) {
-    return sets(fx, limit).flatMap(s => ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: promptFor(s), baseOutputTokens: BASE_OUTPUT_TOKENS })))
+    return sets(fx, limit).flatMap(s => ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: dedupPrompt(s), baseOutputTokens: DEDUP_OUTPUT_TOKENS })))
   },
   extraEstimateUsd(fx, limit) {
-    const perSet = (s: DedupSet) => JUDGES.reduce((sum, a) => sum + estimateCallUsd({ arm: a, schemaName: SCHEMA, prompt: promptFor(s), baseOutputTokens: BASE_OUTPUT_TOKENS }), 0)
+    const perSet = (s: DedupSet) => JUDGES.reduce((sum, a) => sum + estimateCallUsd({ arm: a, schemaName: SCHEMA, prompt: dedupPrompt(s), baseOutputTokens: DEDUP_OUTPUT_TOKENS }), 0)
     return sets(fx, limit).reduce((sum, s) => sum + perSet(s), 0) * ASSUMED_DISPUTED_SHARE
   },
   async run(fx, ctx) {
     const all = sets(fx, ctx.limit)
-    const records = await runArms(ctx, ARMS, all, SCHEMA, dedupConfirmationSchema, promptFor)
-    const perArm = new Map(ARMS.map(a => [armKey(a), votesByArm(all, records, a)]))
-    const armVotes = all.map((_, s) => ARMS.map(a => perArm.get(armKey(a))?.[s].votes ?? []))
-    const { labels, judgeRecords } = await judgeDisputed(ctx, all, armVotes)
+    const { labels, perArm, armRecords: records, judgeRecords, disputedSets } = await labelDedupSets(ctx, all, dedupPrompt)
     const baseVotes = perArm.get(armKey(BASELINE)) ?? []
 
     const metrics: Record<string, DedupArmMetrics> = Object.fromEntries(ARMS.map(a => {
@@ -180,7 +209,6 @@ export const dedupSuite: Suite = {
       }]
     }))
     const flatLabels = labels.flat()
-    const disputedSets = all.filter((_, s) => isDisputed(armVotes[s])).length
     return {
       callSites: [{
         id: 'dedup',

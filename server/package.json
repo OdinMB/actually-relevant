@@ -32,7 +32,8 @@
     "migration:backfill-emotion-tag:test": "tsx src/scripts/migrations/backfill-emotion-tag.ts --test",
     "migration:backfill-embeddings": "tsx src/scripts/migrations/backfill-embeddings.ts",
     "migration:backfill-embeddings:test": "tsx src/scripts/migrations/backfill-embeddings.ts --test",
-    "eval:models": "tsx src/scripts/eval/run.ts"
+    "eval:models": "tsx src/scripts/eval/run.ts",
+    "eval:recalibrate": "tsx src/scripts/eval/recalibrate.ts"
   },
   "dependencies": {
     "@atproto/api": "^0.18.20",

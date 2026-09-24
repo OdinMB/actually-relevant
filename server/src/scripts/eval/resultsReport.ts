@@ -6,6 +6,7 @@ import { REASONING_EFFORTS, type ReasoningEffort } from '../../config.js'
 import { effortOf } from './decide.js'
 import type { Fixtures } from './fixtures.js'
 import { MODELS } from './models.js'
+import type { DeliverableSummary } from './ratingFiles.js'
 import type { ExcludedDraft } from './ratingSets.js'
 import type { ArmStats, CallSiteId, CallSiteResult, SuiteName, SuiteResult } from './types.js'
 
@@ -143,7 +144,7 @@ export interface ReportInput {
   budgetUsd: number
   ledgerUsd: number
   thisRunUsd: number
-  rating: { sets: { id: string; items: number }[]; excluded: ExcludedDraft[]; validationErrors: string[] }
+  rating: DeliverableSummary
 }
 
 function exclusionLines(excluded: ExcludedDraft[]): string[] {
@@ -279,6 +280,7 @@ export function renderResults(input: ReportInput): string {
     '',
     ...(awaiting.length > 0 ? awaiting.map(s => `- ${s.title}: set \`actually-relevant-${s.ratingSet}\``) : ['- none (the taste suites did not run)']),
     ...input.rating.sets.map(s => `  - \`${s.id}\`: ${s.items} items`),
+    ...(input.rating.written ? [] : ['', '`rating-sets.json` already existed in this folder, so this run left it and `rating-key.json` as they were; the sets listed are what it would have written.']),
     ...exclusionLines(input.rating.excluded),
     ...(input.rating.validationErrors.length > 0 ? ['', '**Deliverable validation failed:**', ...input.rating.validationErrors.map(e => `- ${e}`)] : []),
     '',

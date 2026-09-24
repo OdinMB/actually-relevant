@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stratifiedPick, buildSelectionGroups } from './sampling.js'
+import { stratifiedPick, buildSelectionGroups, splitHalves } from './sampling.js'
 
 interface Item { id: string; lang: string; han: boolean }
 
@@ -37,6 +37,34 @@ describe('stratifiedPick', () => {
   it('is deterministic', () => {
     const opts = { total: 7, quotas: [], spreadBy: (t: Item) => t.lang }
     expect(stratifiedPick(pool, opts).picked).toEqual(stratifiedPick(pool, opts).picked)
+  })
+})
+
+describe('splitHalves', () => {
+  const byId = (t: Item) => t.id
+
+  it('puts every item in exactly one half, keeping fixture order', () => {
+    const { calibration, holdout } = splitHalves(pool, byId)
+    expect([...calibration, ...holdout].map(byId).sort()).toEqual(pool.map(byId).sort())
+    expect(calibration.filter(t => holdout.includes(t))).toEqual([])
+    const order = (half: Item[]) => half.map(t => pool.indexOf(t))
+    expect(order(calibration)).toEqual([...order(calibration)].sort((a, b) => a - b))
+    expect(order(holdout)).toEqual([...order(holdout)].sort((a, b) => a - b))
+  })
+
+  it('halves each stratum, so the halves differ in size by at most one overall', () => {
+    const { calibration, holdout } = splitHalves(pool, byId, t => t.lang)
+    for (const lang of ['en', 'zh', 'de']) {
+      expect(calibration.filter(t => t.lang === lang)).toHaveLength(pool.filter(t => t.lang === lang).length / 2)
+    }
+    const odd = splitHalves(pool.slice(0, 13), byId, t => t.lang)
+    expect(Math.abs(odd.calibration.length - odd.holdout.length)).toBeLessThanOrEqual(1)
+  })
+
+  it('assigns by item key, not by input order', () => {
+    const forward = splitHalves(pool, byId, t => t.lang)
+    const reversed = splitHalves([...pool].reverse(), byId, t => t.lang)
+    expect(reversed.calibration.map(byId).sort()).toEqual(forward.calibration.map(byId).sort())
   })
 })
 

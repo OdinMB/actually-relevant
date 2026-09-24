@@ -20,17 +20,20 @@ const BASELINE = arm('gpt-5-mini', 'medium')
 const CANDIDATES = [arm('gpt-6-luna', 'medium'), arm('gpt-6-luna', 'low')]
 const ARMS = [BASELINE, ...CANDIDATES]
 const SCHEMA = 'preassess'
-const BASE_OUTPUT_TOKENS = 2500
+export const PREASSESS_OUTPUT_TOKENS = 2500
 const GATE = config.assess.fullAssessmentThreshold
 
-function batches(fx: Fixtures, limit?: number): PreassessItem[][] {
+/** Production-sized batches, in fixture order. */
+export function batchStories(stories: PreassessItem[]): PreassessItem[][] {
   const size = config.preassess.batchSize
   const out: PreassessItem[][] = []
-  for (let i = 0; i < fx.preassess.length; i += size) out.push(fx.preassess.slice(i, i + size))
-  return limited(out, limit)
+  for (let i = 0; i < stories.length; i += size) out.push(stories.slice(i, i + size))
+  return out
 }
 
-function promptFor(batch: PreassessItem[], issues: IssueForPrompt[]): string {
+const batches = (fx: Fixtures, limit?: number) => limited(batchStories(fx.preassess), limit)
+
+export function preassessPrompt(batch: PreassessItem[], issues: IssueForPrompt[]): string {
   return buildPreassessPrompt(batch.map(s => ({ id: s.id, title: s.title, content: s.content })), issues)
 }
 
@@ -151,11 +154,11 @@ export const preassessSuite: Suite = {
   },
   plan(fx, limit) {
     return batches(fx, limit).flatMap(b =>
-      ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: promptFor(b, fx.issues), baseOutputTokens: BASE_OUTPUT_TOKENS })))
+      ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: preassessPrompt(b, fx.issues), baseOutputTokens: PREASSESS_OUTPUT_TOKENS })))
   },
   async run(fx, ctx) {
     const bs = batches(fx, ctx.limit)
-    const records = await runArms(ctx, ARMS, bs, SCHEMA, preAssessResultSchema, b => promptFor(b, fx.issues))
+    const records = await runArms(ctx, ARMS, bs, SCHEMA, preAssessResultSchema, b => preassessPrompt(b, fx.issues))
     const metrics = Object.fromEntries([...records].map(([k, recs]) => [k, scorePreassess(bs, recs, fx.issues)]))
     const stats = statsFor(records)
     return {

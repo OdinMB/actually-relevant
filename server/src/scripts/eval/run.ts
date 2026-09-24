@@ -6,8 +6,9 @@
  *
  * Reads the database through a Postgres-enforced read-only session, calls
  * prompt builders and the production client factory directly, and writes
- * results.md, rating-sets.json and rating-key.json into --out. Never prints
- * env values or the database URL. See .context/model-eval.md.
+ * results.md into --out, plus rating-sets.json and rating-key.json when that
+ * folder has none yet. Never prints env values or the database URL.
+ * See .context/model-eval.md.
  */
 import 'dotenv/config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -17,7 +18,7 @@ import { loadFixtures, type Fixtures } from './fixtures.js'
 import { classifyDb, openReadOnlyDb, readOnlyStatus } from './readOnlyDb.js'
 import { armKey, createEvalContext, estimateCallUsd, type EvalContext } from './models.js'
 import { parseOptions, type EvalOptions } from './options.js'
-import { buildRatingDeliverable, validateRatingDeliverable } from './ratingSets.js'
+import { writeRatingDeliverable } from './ratingFiles.js'
 import { renderResults, type ReportInput } from './resultsReport.js'
 import type { Suite, SuiteResult } from './types.js'
 import { preassessSuite } from './suites/preassess.js'
@@ -101,17 +102,6 @@ function markIncomplete(result: SuiteResult): SuiteResult {
   return result
 }
 
-function writeDeliverable(out: string, results: ReportInput['suites']): ReportInput['rating'] {
-  const drafts = results.flatMap(r => r.result?.ratingItems ?? [])
-  const { sets, key, excluded } = buildRatingDeliverable(drafts)
-  const setsFile = join(out, 'rating-sets.json')
-  const keyFile = join(out, 'rating-key.json')
-  writeFileSync(setsFile, JSON.stringify(sets, null, 2))
-  writeFileSync(keyFile, JSON.stringify(key, null, 2))
-  const validationErrors = validateRatingDeliverable(JSON.parse(readFileSync(setsFile, 'utf8')), JSON.parse(readFileSync(keyFile, 'utf8')))
-  return { sets: sets.sets.map(s => ({ id: s.id, items: s.items.length })), excluded, validationErrors }
-}
-
 async function main(): Promise<void> {
   const opts = parseOptions(process.argv.slice(2))
   const out = resolve(opts.out)
@@ -165,7 +155,7 @@ async function main(): Promise<void> {
     console.log(`${s.name}: done; this run ${usd(ctx.spentThisRunUsd())}, ledger ${usd(ctx.spentUsd())}, live calls ${ctx.liveCalls()}`)
   }
 
-  const rating = writeDeliverable(out, results)
+  const rating = writeRatingDeliverable(out, results.flatMap(r => r.result?.ratingItems ?? []))
   const report = renderResults({
     generatedAt: new Date().toISOString(),
     fixtures: fx,
@@ -177,7 +167,7 @@ async function main(): Promise<void> {
     rating,
   })
   writeFileSync(join(out, 'results.md'), report)
-  console.log(`wrote ${join(out, 'results.md')}, rating-sets.json, rating-key.json`)
+  console.log(`wrote ${join(out, 'results.md')}${rating.written ? ', rating-sets.json, rating-key.json' : '; the existing rating deliverable was left as it was'}`)
   if (rating.validationErrors.length > 0) {
     console.error(`rating deliverable failed validation:\n${rating.validationErrors.map(e => `  - ${e}`).join('\n')}`)
     process.exitCode = 1

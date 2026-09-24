@@ -28,7 +28,7 @@ The run needs `DATABASE_URL` reachable (the local Postgres service must be runni
 ## Outputs (in `--out`)
 
 - `results.md` — per call site: arms, outcome counts (ok / parse failure / empty-or-declined / truncated / error / budget-skipped), p50/p95 latency, mean input/cached/output/reasoning tokens, $/call and $/month at the inventory volumes, quality metrics, the automated verdict; then the per-tier Phase 2 recommendation, current-vs-proposed monthly cost, "Is gpt-5.2 better in any way?", fixture shortfalls, prices (gpt-5.2 marked unverified) and spend. A "Fabricated-number spot check" section is left for a person to fill.
-- `rating-sets.json` / `rating-key.json` — the owner's blind-rating sets (full assessments 12, social posts 10, newsletter intros 4, podcast script 1, story selection 5 at most). The key maps each item's labels to `model@effort`. **No model name may appear anywhere in `rating-sets.json`, item context included** (owner's decision, 2026-09-24; terms in `blinding.ts`: the eval model IDs, `Luna`, `Sol`, `nano`, and anything starting `gpt`, `ChatGPT` or `OpenAI`). Single-story items whose story or output mentions one are dropped at build time; multi-story fixtures (selection groups, newsletters, the podcast) drop such stories before any prompt is built, so no arm sees them. The written files are re-validated and a failure exits non-zero.
+- `rating-sets.json` / `rating-key.json` — the owner's blind-rating sets (full assessments 12, social posts 10, newsletter intros 4, podcast script 1, story selection 5 at most). The key maps each item's labels to `model@effort`. **Written only when the folder has none yet** (`ratingFiles.ts`): the owner rates from this file with a local tool (which keeps its own `ratings.json`, never touched here), so a re-run or a partial run leaves an existing deliverable alone. To regenerate one set, use the recalibration's `rating-set` step, which swaps in a versioned set (`…-v2`, new item IDs) and leaves every other set byte for byte. **No model name may appear anywhere in `rating-sets.json`, item context included** (owner's decision, 2026-09-24; terms in `blinding.ts`: the eval model IDs, `Luna`, `Sol`, `nano`, and anything starting `gpt`, `ChatGPT` or `OpenAI`). Single-story items whose story or output mentions one are dropped at build time; multi-story fixtures (selection groups, newsletters, the podcast) drop such stories before any prompt is built, so no arm sees them. The written files are re-validated and a failure exits non-zero.
 - `.cache/fixtures.json` — the sampled inputs, reused so prompts (and cache keys) stay stable while the DB changes.
 - `.cache/calls.jsonl` — response cache **and** spend ledger, keyed by `sha256(model@effort + schema + prompt)`. Re-runs and resumes never pay twice; errors are not cached so they retry.
 
@@ -47,6 +47,32 @@ The run needs `DATABASE_URL` reachable (the local Postgres service must be runni
 - **Windows are anchored on the data.** "Last N days" windows count back from the newest assessed crawl date, so a stale local DB copy still yields fixtures (the dry run warns when the anchor is over 14 days old). The fixed crawl floor is not anchored; see `--floor`.
 - **Adaptations are reported.** When the data is thin, `fixtures.ts` records what it changed in `adaptations` (moved floor, extra nearest-neighbour dedup sources filling missing cluster-member slots, the synthetic social-pick scan, blinding removals with the terms that matched), and `results.md` lists them under Fixtures.
 - **Prompt-input shaping is mirrored, not shared.** `fixtures.ts` re-creates each service's DB-row → prompt-input mapping (commented with the production function it mirrors). Both arms always get the identical prompt, so drift from production cannot bias a comparison, but it can make the eval less representative. If shaping in a service changes, update the mirror.
+
+## Phase-2 recalibration (`eval:recalibrate`)
+
+Checks the recalibrated rating prompts (pre-assessment and full assessment) and the tightened dedup prompt on gpt-6-luna against the owner's acceptance rules (2026-09-24), on the phase-1 sample cached in `--out`. It needs no database and never resamples: the split and the labelled dedup set are defined on those fixtures.
+
+```bash
+npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --half calibration --dry-run      # estimates + labelled-set preflight
+npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --half calibration --budget 5.9    # iterate here only
+npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --half holdout --budget 5.9        # report once the prompt is final
+npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --steps rating-set --budget 5.9    # full-assessment set v2
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--half` | `calibration`, `holdout` or `all` (default). Tune prompts on `calibration` only; the holdout is the result. |
+| `--steps` | Comma list of `preassess, assess, dedup, rating-set` (default: the three checks). `rating-set` runs only when named and refuses `--limit`. |
+| `--effort` / `--dedup-effort` | gpt-6-luna effort for the rating checks and the rating set (default `medium`) / for dedup (default `low`) |
+| `--budget` | Cap on the **ledger total** for the folder, as in eval:models. The ledger already holds phase 1's $2.96, so pass the ledger plus this run's allowance. |
+| `--limit`, `--dry-run`, `--concurrency`, `--floor` | As in eval:models; `--floor` is only checked against the cached fixtures |
+
+- **What is judged against what** (`recalibration.ts`): ratings against the stored production values (the archive the site must stay comparable with): mean offset within ±0.25 on both stages, share at or above 5 within 5 points of stored, published stories passing the pre-assessment gate ≥ 75%, issue and emotion agreement not below phase-1 Luna@medium (74.0%, 70.3%; 71.6% is reported as the aim), full-assessment format checks not below phase-1 gpt-5-mini. Dedup: no more wrong merges than gpt-5-nano and a recall at least 15 points above nano's, on the same labelled pairs.
+- **The split** (`splitHalves` in `sampling.ts`) alternates items in a salted hash order within strata (published × stored gate; stored split × language; dedup set kind), so the halves are balanced and fixed across runs.
+- **The labelled dedup set is phase 1's.** Labels come from `labelDedupSets` run with the frozen phase-1 prompt (`suites/dedupPhase1Prompt.ts`) through a cache-only context, so they cost nothing and cannot drift as the production prompt changes; gpt-5-nano's phase-1 verdicts on the same pairs are the reference. Never edit the frozen prompt. eval:models still labels with the current prompt.
+- **Versioned schema names.** The cache key holds the schema name, not the schema, so these checks call with `versionedSchemaName` (`name#<hash of the JSON schema>`): editing only a Zod `.describe()` is never answered from the old cache. eval:models keeps plain names so phase-1 entries stay reachable.
+- **The rating set** runs gpt-5-mini@medium and Luna@`--effort` on every fixture story with the recalibrated prompt, then `replaceRatingSetFiles` swaps `actually-relevant-full-assessment` for `…-v2`. It refuses files not in the harness's own JSON format (so re-serializing cannot change other sets) and an empty set.
+- Output: `recalibration-<half>.md` in `--out` (criteria table per check, wrong-merge and missed-duplicate titles, $/call and $/month). Stored phase-1 numbers in `results.md` are not rewritten.
 
 ## Adding a suite or arm
 
@@ -68,6 +94,11 @@ The run needs `DATABASE_URL` reachable (the local Postgres service must be runni
 | `server/src/scripts/eval/checks.ts` | Output-quality checks and statistics |
 | `server/src/scripts/eval/decide.ts` | Noise-floor bar and lowest-passing-effort rule |
 | `server/src/scripts/eval/suites/` | One suite per call site (large tier groups its four) |
-| `server/src/scripts/eval/ratingSets.ts` | Blind-rating deliverable and its validation |
+| `server/src/scripts/eval/ratingSets.ts` | Blind-rating deliverable, versioned set replacement and validation (pure) |
+| `server/src/scripts/eval/ratingFiles.ts` | The deliverable on disk: write-once, and the byte-preserving swap of one set |
+| `server/src/scripts/eval/recalibrate.ts` | `eval:recalibrate` CLI orchestration |
+| `server/src/scripts/eval/recalibration.ts` | Owner's acceptance rules, phase-1 reference numbers, the calibration/holdout sample |
+| `server/src/scripts/eval/recalibrationChecks.ts` | The recalibration steps (pre-assess, assess, dedup, rating set) |
+| `server/src/scripts/eval/recalibrationReport.ts` | `recalibration-<half>.md` |
 | `server/src/scripts/eval/blinding.ts` | Model-name terms and the story filter behind the blinding rule |
 | `server/src/scripts/eval/resultsReport.ts` | `results.md`, volumes, tier recommendation |

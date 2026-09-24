@@ -2,7 +2,9 @@
  * The owner's blind-rating deliverable: turns drafted items into the exact
  * `rating-sets.json` / `rating-key.json` shape, with per-set caps,
  * deterministic item picking and label order, and a model-name check that
- * covers every string in the file (see blinding.ts).
+ * covers every string in the file (see blinding.ts). A regenerated set gets a
+ * version suffix and replaces its predecessor without touching other sets.
+ * Pure: reading and writing the files is ratingFiles.ts.
  */
 import { createHash } from 'node:crypto'
 import { findModelNames } from './blinding.js'
@@ -131,7 +133,17 @@ const SET_SPECS: Record<RatingSetSlug, SetSpec> = {
 
 const SET_ORDER = Object.keys(RATING_BUDGET) as RatingSetSlug[]
 
-export const setIdFor = (slug: RatingSetSlug) => `${PROJECT}-${slug}`
+/**
+ * `actually-relevant-<slug>` for the first version of a set, `…-<slug>-v2`
+ * after it is regenerated. A new version gets new item IDs, so ratings the
+ * owner already gave the old items can never attach to different content.
+ */
+export const setIdFor = (slug: RatingSetSlug, version = 1) => (version === 1 ? `${PROJECT}-${slug}` : `${PROJECT}-${slug}-v${version}`)
+
+/** The set a (possibly versioned) set ID belongs to. */
+export function slugOfSetId(id: string): RatingSetSlug | undefined {
+  return SET_ORDER.find(slug => id === setIdFor(slug) || new RegExp(`^${setIdFor(slug)}-v[2-9]\\d*$`).test(id))
+}
 
 // ---------------------------------------------------------------------------
 // Build
@@ -148,30 +160,68 @@ function labelled(itemId: string, options: RatingItemDraft['options']): { option
   return { options: out, key }
 }
 
-export function buildRatingDeliverable(drafts: RatingItemDraft[]): { sets: RatingSetsFile; key: RatingKey; excluded: ExcludedDraft[] } {
+export interface BuiltSet {
+  /** Null when no draft survived blinding. */
+  set: RatingSet | null
+  key: RatingKey
+  excluded: ExcludedDraft[]
+}
+
+/** One set from the drafts for `slug`: blinding, capped deterministic pick, labelled options. */
+export function buildRatingSet(drafts: RatingItemDraft[], slug: RatingSetSlug, version = 1): BuiltSet {
   const key: RatingKey = {}
   const excluded: ExcludedDraft[] = []
-  const sets: RatingSet[] = []
-  for (const slug of SET_ORDER) {
-    const clean = drafts.filter(d => {
-      if (d.set !== slug) return false
-      const inContext = findModelNames(d.context_md)
-      const inOptions = [...new Set(d.options.flatMap(o => findModelNames(o.content_md)))]
-      if (inContext.length > 0) excluded.push({ set: slug, key: d.key, where: 'context', terms: inContext })
-      else if (inOptions.length > 0) excluded.push({ set: slug, key: d.key, where: 'option', terms: inOptions })
-      return inContext.length === 0 && inOptions.length === 0
-    })
-    const spec = SET_SPECS[slug]
-    const setId = setIdFor(slug)
-    const items = spec.pick(clean, RATING_BUDGET[slug]).map((d, i) => {
-      const id = `${setId}-${String(i + 1).padStart(2, '0')}`
-      const { options, key: itemKey } = labelled(id, d.options)
-      key[id] = itemKey
-      return { id, context_md: d.context_md, options }
-    })
-    if (items.length > 0) sets.push({ id: setId, title: spec.title, instructions: spec.instructions, items })
+  const clean = drafts.filter(d => {
+    if (d.set !== slug) return false
+    const inContext = findModelNames(d.context_md)
+    const inOptions = [...new Set(d.options.flatMap(o => findModelNames(o.content_md)))]
+    if (inContext.length > 0) excluded.push({ set: slug, key: d.key, where: 'context', terms: inContext })
+    else if (inOptions.length > 0) excluded.push({ set: slug, key: d.key, where: 'option', terms: inOptions })
+    return inContext.length === 0 && inOptions.length === 0
+  })
+  const spec = SET_SPECS[slug]
+  const setId = setIdFor(slug, version)
+  const items = spec.pick(clean, RATING_BUDGET[slug]).map((d, i) => {
+    const id = `${setId}-${String(i + 1).padStart(2, '0')}`
+    const { options, key: itemKey } = labelled(id, d.options)
+    key[id] = itemKey
+    return { id, context_md: d.context_md, options }
+  })
+  return { set: items.length > 0 ? { id: setId, title: spec.title, instructions: spec.instructions, items } : null, key, excluded }
+}
+
+export function buildRatingDeliverable(drafts: RatingItemDraft[]): { sets: RatingSetsFile; key: RatingKey; excluded: ExcludedDraft[] } {
+  const built = SET_ORDER.map(slug => buildRatingSet(drafts, slug))
+  return {
+    sets: { project: PROJECT, sets: built.flatMap(b => (b.set ? [b.set] : [])) },
+    key: Object.assign({}, ...built.map(b => b.key)) as RatingKey,
+    excluded: built.flatMap(b => b.excluded),
   }
-  return { sets: { project: PROJECT, sets }, key, excluded }
+}
+
+/**
+ * `file` and `key` with the set for `slug` (any version) swapped for
+ * `replacement`, in the same position. Every other set is the same object and
+ * every other key entry keeps its value and order, so re-serializing leaves
+ * their bytes unchanged. The replacement's key entries take the old set's place.
+ */
+export function replaceRatingSet(
+  file: RatingSetsFile,
+  key: RatingKey,
+  slug: RatingSetSlug,
+  replacement: { set: RatingSet; key: RatingKey },
+): { file: RatingSetsFile; key: RatingKey } {
+  const index = file.sets.findIndex(s => slugOfSetId(s.id) === slug)
+  const oldIds = new Set(index >= 0 ? file.sets[index].items.map(i => i.id) : [])
+  const sets = index >= 0 ? file.sets.map((s, i) => (i === index ? replacement.set : s)) : [...file.sets, replacement.set]
+  const entries = Object.entries(key)
+  const kept = entries.filter(([id]) => !oldIds.has(id))
+  const first = entries.findIndex(([id]) => oldIds.has(id))
+  const at = first >= 0 ? first : kept.length
+  return {
+    file: { ...file, sets },
+    key: Object.fromEntries([...kept.slice(0, at), ...Object.entries(replacement.key), ...kept.slice(at)]),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +277,7 @@ function validateItem(item: unknown, index: number, setId: string, key: unknown,
 function validateSet(set: unknown, index: number, key: unknown, errors: string[]): string[] {
   const path = `sets[${index}]`
   if (!exactKeys(set, ['id', 'title', 'instructions', 'items'], path, errors)) return []
-  const slug = SET_ORDER.find(s => setIdFor(s) === set.id)
+  const slug = slugOfSetId(String(set.id))
   if (!slug) errors.push(`${path}: unknown set id ${String(set.id)}`)
   for (const field of ['id', 'title', 'instructions'] as const) {
     const value = set[field]
@@ -253,6 +303,10 @@ export function validateRatingDeliverable(sets: unknown, key: unknown): string[]
   if (sets.project !== PROJECT) errors.push(`project is ${String(sets.project)}`)
   if (!Array.isArray(sets.sets)) return [...errors, 'sets is not an array']
   const ids = sets.sets.flatMap((s, i) => validateSet(s, i, key, errors))
+  const slugs = sets.sets.map(s => (isRecord(s) ? slugOfSetId(String(s.id)) : undefined)).filter(Boolean)
+  for (const slug of new Set(slugs)) {
+    if (slugs.filter(s => s === slug).length > 1) errors.push(`more than one version of the ${slug} set`)
+  }
   if (!isRecord(key)) return [...errors, 'rating-key.json is not an object']
   for (const id of Object.keys(key)) if (!ids.includes(id)) errors.push(`rating-key.json: ${id} is not an item`)
   return errors

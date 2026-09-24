@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { HumanMessage, type AIMessage } from '@langchain/core/messages'
+import { toJsonSchema } from '@langchain/core/utils/json_schema'
 import type { z } from 'zod'
 import type { ReasoningEffort } from '../../config.js'
 import { Semaphore } from '../../lib/semaphore.js'
@@ -99,6 +100,18 @@ export function estimateCallUsd(call: PlannedCall): number {
 
 export function cacheKey(a: Arm, schemaName: string, prompt: string): string {
   return createHash('sha256').update(`${armKey(a)}\n${schemaName}\n${prompt}`).digest('hex')
+}
+
+/**
+ * `name#<fingerprint of the JSON schema sent to the API>`. The cache key holds
+ * the schema *name* only, so a call site whose Zod descriptions are being
+ * tuned must use this name: otherwise an edit to a `.describe()` alone would
+ * be served the answer to the old schema. eval:models keeps plain names, so
+ * its phase-1 ledger entries stay reachable.
+ */
+export function versionedSchemaName(name: string, schema: z.ZodType): string {
+  const fingerprint = createHash('sha256').update(JSON.stringify(toJsonSchema(schema))).digest('hex').slice(0, 8)
+  return `${name}#${fingerprint}`
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { costOf, classifyOutcome, estimateInputTokens, estimateCallUsd, arm, cacheKey, createEvalContext } from './models.js'
+import { costOf, classifyOutcome, estimateInputTokens, estimateCallUsd, arm, cacheKey, createEvalContext, versionedSchemaName } from './models.js'
 import type { CallRecord } from './types.js'
 
 const M = 1_000_000
@@ -89,6 +89,25 @@ describe('createEvalContext', () => {
   it('refuses any uncached call in an offline (dry) run', async () => {
     const ctx = createEvalContext({ cacheFile: tempLedger(), budgetUsd: 10, concurrency: 1, offline: true })
     await expect(ctx.call(luna, 's', schema, 'prompt')).rejects.toThrow(/offline/)
+  })
+})
+
+describe('versionedSchemaName', () => {
+  const rating = (text: string) => z.object({ rating: z.number().int().describe(text) })
+
+  it('is stable for the same schema', () => {
+    expect(versionedSchemaName('assess', rating('Rating 1-10'))).toBe(versionedSchemaName('assess', rating('Rating 1-10')))
+  })
+
+  it('changes when only a field description changes, so an edited schema never reads a stale cache entry', () => {
+    const before = versionedSchemaName('assess', rating('Conservative rating 1-10'))
+    const after = versionedSchemaName('assess', rating('Rating 1-10'))
+    expect(after).not.toBe(before)
+    expect(cacheKey(arm('gpt-6-luna', 'medium'), after, 'p')).not.toBe(cacheKey(arm('gpt-6-luna', 'medium'), before, 'p'))
+  })
+
+  it('keeps the base name readable in the ledger', () => {
+    expect(versionedSchemaName('dedup', rating('x'))).toMatch(/^dedup#[0-9a-f]{8}$/)
   })
 })
 

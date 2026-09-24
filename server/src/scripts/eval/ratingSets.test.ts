@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildRatingDeliverable, validateRatingDeliverable, RATING_BUDGET, type RatingSetsFile } from './ratingSets.js'
+import { buildRatingDeliverable, buildRatingSet, replaceRatingSet, validateRatingDeliverable, RATING_BUDGET, type RatingSetsFile } from './ratingSets.js'
 import type { RatingItemDraft, RatingSetSlug } from './types.js'
 
 const BASE = 'gpt-5-mini@medium'
@@ -97,6 +97,57 @@ describe('buildRatingDeliverable', () => {
   })
 })
 
+describe('buildRatingSet', () => {
+  it('suffixes the set id and every item id with the version', () => {
+    const { set, key } = buildRatingSet(many('full-assessment', 2), 'full-assessment', 2)
+    expect(set?.id).toBe('actually-relevant-full-assessment-v2')
+    expect(set?.items.map(i => i.id)).toEqual(['actually-relevant-full-assessment-v2-01', 'actually-relevant-full-assessment-v2-02'])
+    expect(Object.keys(key)).toEqual(set?.items.map(i => i.id))
+  })
+
+  it('returns no set when nothing survives blinding', () => {
+    const story = draft('full-assessment', 'ai', {}, undefined, 'ChatGPT story')
+    expect(buildRatingSet([story], 'full-assessment', 2).set).toBeNull()
+  })
+})
+
+describe('replaceRatingSet', () => {
+  const original = () => {
+    const built = buildRatingDeliverable([...many('full-assessment', 3), ...many('newsletter-intro', 2), ...many('podcast-script', 1)])
+    return JSON.parse(JSON.stringify(built)) as typeof built
+  }
+  const v2 = buildRatingSet(many('full-assessment', 4).map(d => ({ ...d, key: `new-${d.key}` })), 'full-assessment', 2)
+
+  it('swaps the set in place and leaves every other set untouched', () => {
+    const { sets, key } = original()
+    const replaced = replaceRatingSet(sets, key, 'full-assessment', { set: v2.set!, key: v2.key })
+    expect(replaced.file.sets.map(s => s.id)).toEqual([
+      'actually-relevant-full-assessment-v2', 'actually-relevant-newsletter-intro', 'actually-relevant-podcast-script',
+    ])
+    expect(replaced.file.sets[1]).toBe(sets.sets[1])
+    expect(replaced.file.sets[2]).toBe(sets.sets[2])
+  })
+
+  it('replaces the answer-key entries of the old set only, keeping the others in order', () => {
+    const { sets, key } = original()
+    const replaced = replaceRatingSet(sets, key, 'full-assessment', { set: v2.set!, key: v2.key })
+    const ids = Object.keys(replaced.key)
+    expect(ids.filter(id => id.startsWith('actually-relevant-full-assessment-0'))).toEqual([])
+    expect(ids.slice(0, 4)).toEqual(Object.keys(v2.key))
+    const others = (k: Record<string, unknown>) => Object.keys(k).filter(id => !id.includes('full-assessment'))
+    expect(others(replaced.key)).toEqual(others(key))
+    for (const id of others(key)) expect(replaced.key[id]).toEqual(key[id])
+  })
+
+  it('replaces an earlier version of the same set again on a re-run', () => {
+    const { sets, key } = original()
+    const once = replaceRatingSet(sets, key, 'full-assessment', { set: v2.set!, key: v2.key })
+    const twice = replaceRatingSet(once.file, once.key, 'full-assessment', { set: v2.set!, key: v2.key })
+    expect(twice.file.sets.filter(s => s.id.includes('full-assessment'))).toHaveLength(1)
+    expect(validateRatingDeliverable(JSON.parse(JSON.stringify(twice.file)), twice.key)).toEqual([])
+  })
+})
+
 describe('validateRatingDeliverable', () => {
   const valid = () => {
     const built = buildRatingDeliverable([...many('newsletter-intro', 2), ...many('podcast-script', 1)])
@@ -154,6 +205,15 @@ describe('validateRatingDeliverable', () => {
     const errors = validateRatingDeliverable(sets, key).join('\n')
     expect(errors).toMatch(/model name in title/)
     expect(errors).toMatch(/leak/)
+  })
+
+  it('accepts a versioned set and rejects two versions of the same set', () => {
+    const { sets, key } = valid()
+    const v2 = buildRatingSet(many('newsletter-intro', 1), 'newsletter-intro', 2)
+    const swapped = replaceRatingSet(sets, key, 'newsletter-intro', { set: v2.set!, key: v2.key })
+    expect(validateRatingDeliverable(JSON.parse(JSON.stringify(swapped.file)), swapped.key)).toEqual([])
+    const both = { ...swapped.file, sets: [...swapped.file.sets, sets.sets[0]] }
+    expect(validateRatingDeliverable(both, { ...swapped.key, ...key }).join('\n')).toMatch(/more than one version/)
   })
 
   it('rejects a model name in an item context', () => {

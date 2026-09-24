@@ -20,11 +20,11 @@ const BASELINE = arm('gpt-5-mini', 'medium')
 const CANDIDATES = [arm('gpt-6-luna', 'medium'), arm('gpt-6-luna', 'high')]
 const ARMS = [BASELINE, ...CANDIDATES]
 const SCHEMA = 'assess'
-const BASE_OUTPUT_TOKENS = 3500
+export const ASSESS_OUTPUT_TOKENS = 3500
 const SPLIT = config.selection.relevanceMin
 
 const items = (fx: Fixtures, limit?: number) => limited(fx.assess, limit)
-const promptFor = (s: AssessItem) => buildAssessPrompt(s.title, s.content, s.publisher, s.url, s.guidelines)
+export const assessPrompt = (s: AssessItem) => buildAssessPrompt(s.title, s.content, s.publisher, s.url, s.guidelines)
 
 interface RatingComparison {
   mad: number | null
@@ -147,20 +147,25 @@ function contextFor(s: AssessItem): string {
   return [`**${s.title}**`, `Publisher: ${s.publisher}`, `URL: ${s.url}`, '', 'Article text as the model saw it:', '', blockquote(s.content)].join('\n')
 }
 
-function ratingDrafts(stories: AssessItem[], records: Map<string, CallRecord<AssessResult>[]>, candidate: string): RatingItemDraft[] {
-  const base = records.get(armKey(BASELINE)) ?? []
-  const cand = records.get(candidate) ?? []
+interface ArmOutputs {
+  arm: string
+  /** One record per story, in story order. */
+  records: CallRecord<AssessResult>[]
+}
+
+/** Full-assessment rating drafts for the stories both arms assessed. */
+export function assessRatingDrafts(stories: AssessItem[], baseline: ArmOutputs, candidate: ArmOutputs): RatingItemDraft[] {
   return stories.flatMap((s, i) => {
-    const a = parsedOf(base[i])
-    const b = parsedOf(cand[i])
+    const a = parsedOf(baseline.records[i])
+    const b = parsedOf(candidate.records[i])
     if (!a || !b) return []
     return [{
       set: 'full-assessment' as const,
       key: s.id,
       context_md: contextFor(s),
       options: [
-        { arm: armKey(BASELINE), content_md: renderAssessment(a) },
-        { arm: candidate, content_md: renderAssessment(b) },
+        { arm: baseline.arm, content_md: renderAssessment(a) },
+        { arm: candidate.arm, content_md: renderAssessment(b) },
       ],
       tags: {
         differ: a.conservativeRating !== b.conservativeRating,
@@ -185,11 +190,11 @@ export const assessSuite: Suite = {
     ]
   },
   plan(fx, limit) {
-    return items(fx, limit).flatMap(s => ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: promptFor(s), baseOutputTokens: BASE_OUTPUT_TOKENS })))
+    return items(fx, limit).flatMap(s => ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: assessPrompt(s), baseOutputTokens: ASSESS_OUTPUT_TOKENS })))
   },
   async run(fx, ctx) {
     const stories = items(fx, ctx.limit)
-    const records = await runArms(ctx, ARMS, stories, SCHEMA, assessResultSchema, promptFor)
+    const records = await runArms(ctx, ARMS, stories, SCHEMA, assessResultSchema, assessPrompt)
     const baseRecs = records.get(armKey(BASELINE)) ?? []
     const metrics = Object.fromEntries([...records].map(([k, recs]) => [k, scoreAssess(stories, recs, baseRecs)]))
     const decision = decideAssess(metrics, armKey(BASELINE), CANDIDATES.map(armKey))
@@ -226,7 +231,7 @@ export const assessSuite: Suite = {
           ...(flagged.length > 0 ? flagged.map(f => `- ${f}`) : ['- none']),
         ],
       }],
-      ratingItems: ratingDrafts(stories, records, tasteArm),
+      ratingItems: assessRatingDrafts(stories, { arm: armKey(BASELINE), records: baseRecs }, { arm: tasteArm, records: records.get(tasteArm) ?? [] }),
       notes: [],
     }
   },
