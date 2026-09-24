@@ -35,6 +35,8 @@ describe('scoreDedupArm', () => {
     expect(m.fpRate).toBeCloseTo(0.5)
     expect(m.recall).toBeCloseTo(0.5)
     expect(m.labelledPairs).toBe(4)
+    expect(m.falsePositives).toBe(1)
+    expect(m.missedDuplicates).toBe(1)
   })
 
   it('treats a missing verdict as not a duplicate, like production', () => {
@@ -44,7 +46,7 @@ describe('scoreDedupArm', () => {
 })
 
 describe('decideDedup', () => {
-  const nano: DedupArmMetrics = { fpRate: 0.05, recall: 0.9, labelledPairs: 100, missing: 0, outOfRange: 0, failures: 0, agreementWithBaseline: 1, clusterAgreement: 0.8 }
+  const nano: DedupArmMetrics = { fpRate: 0.05, recall: 0.9, labelledPairs: 100, falsePositives: 5, missedDuplicates: 1, missing: 0, outOfRange: 0, failures: 0, agreementWithBaseline: 1, clusterAgreement: 0.8 }
 
   it('picks the lowest effort whose FP rate is not worse and recall within 5 points', () => {
     const d = decideDedup({

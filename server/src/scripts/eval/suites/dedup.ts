@@ -62,6 +62,10 @@ export interface DedupArmMetrics {
   fpRate: number | null
   recall: number | null
   labelledPairs: number
+  /** Labelled-distinct pairs this arm called duplicates (a production auto-reject each). */
+  falsePositives: number
+  /** Labelled-duplicate pairs this arm missed. */
+  missedDuplicates: number
   missing: number
   outOfRange: number
   failures: number
@@ -70,7 +74,7 @@ export interface DedupArmMetrics {
 }
 
 /** FP rate and recall over labelled pairs only; a missing verdict counts as "not a duplicate" (production behaviour). */
-export function scoreDedupArm(votes: Vote[][], labels: PairLabel[][]): Pick<DedupArmMetrics, 'fpRate' | 'recall' | 'labelledPairs'> {
+export function scoreDedupArm(votes: Vote[][], labels: PairLabel[][]): Pick<DedupArmMetrics, 'fpRate' | 'recall' | 'labelledPairs' | 'falsePositives' | 'missedDuplicates'> {
   let fp = 0
   let tn = 0
   let tp = 0
@@ -90,6 +94,8 @@ export function scoreDedupArm(votes: Vote[][], labels: PairLabel[][]): Pick<Dedu
     fpRate: fp + tn === 0 ? null : fp / (fp + tn),
     recall: tp + fn === 0 ? null : tp / (tp + fn),
     labelledPairs: fp + tn + tp + fn,
+    falsePositives: fp,
+    missedDuplicates: fn,
   }
 }
 
@@ -185,6 +191,8 @@ export const dedupSuite: Suite = {
         metrics: [
           metricRow('False-positive rate (labelled pairs)', metrics, m => m.fpRate, pct, 'lower'),
           metricRow('Recall (labelled pairs)', metrics, m => m.recall, pct, 'higher'),
+          metricRow('False positives (pairs; each an auto-reject in production)', metrics, m => m.falsePositives, v => String(v ?? 0)),
+          metricRow('Missed duplicates (pairs)', metrics, m => m.missedDuplicates, v => String(v ?? 0)),
           metricRow('Pair agreement with nano', metrics, m => m.agreementWithBaseline, pct),
           metricRow('Agreement with existing clusters (secondary)', metrics, m => m.clusterAgreement, pct),
           metricRow('Candidates without a verdict', metrics, m => m.missing, v => String(v ?? 0), 'lower'),

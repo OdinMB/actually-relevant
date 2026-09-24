@@ -11,7 +11,7 @@ import type { IssueForPrompt } from '../../../prompts/shared.js'
 import type { Fixtures, PreassessItem } from '../fixtures.js'
 import { TARGETS } from '../fixtures.js'
 import { arm, armKey } from '../models.js'
-import { failureCount, findJunk, pct, rate } from '../checks.js'
+import { failureCount, findJunk, mean, num, pct, rate } from '../checks.js'
 import { effectiveBar, pickLowestPassing } from '../decide.js'
 import type { CallRecord, Decision, Suite } from '../types.js'
 import { limited, metricRow, parsedOf, runArms, statsFor } from './shared.js'
@@ -47,6 +47,11 @@ export interface PreassessArmMetrics {
   invalidSlugs: number
   failures: number
   junk: string[]
+  /** Mean (returned − stored) pre-rating: calibration, information only. */
+  meanShift: number | null
+  /** Pass rate and published-story recall if the gate were one point lower (information only). */
+  passRateOneLower: number | null
+  publishedRecallOneLower: number | null
 }
 
 export function scorePreassess(
@@ -91,6 +96,9 @@ export function scorePreassess(
     invalidSlugs: pairs.filter(p => !slugs.has(p.out.issueSlug)).length,
     failures: records.filter(r => r.outcome !== 'ok' && r.outcome !== 'skipped').length,
     junk,
+    meanShift: mean(pairs.map(p => p.out.rating - p.item.stored.rating)),
+    passRateOneLower: rate(pairs.map(p => p.out.rating >= GATE - 1)),
+    publishedRecallOneLower: rate(published.map(p => p.out.rating >= GATE - 1)),
   }
 }
 
@@ -165,6 +173,9 @@ export const preassessSuite: Suite = {
           metricRow('Published stories passing the gate', metrics, m => m.publishedRecall, pct, 'higher'),
           metricRow(`≥${GATE} pass rate`, metrics, m => m.passRate, pct),
           metricRow(`Stored ≥${GATE} pass rate (same stories)`, metrics, m => m.storedPassRate, pct),
+          metricRow('Mean pre-rating shift vs stored (calibration)', metrics, m => m.meanShift, v => num(v)),
+          metricRow(`≥${GATE - 1} pass rate (gate one point lower)`, metrics, m => m.passRateOneLower, pct),
+          metricRow(`Published stories passing at ≥${GATE - 1}`, metrics, m => m.publishedRecallOneLower, pct),
           metricRow('Omitted articles', metrics, m => m.omitted, v => String(v ?? 0), 'lower'),
           metricRow('Unknown article IDs', metrics, m => m.unknownIds, v => String(v ?? 0), 'lower'),
           metricRow('Invalid issue slugs', metrics, m => m.invalidSlugs, v => String(v ?? 0), 'lower'),

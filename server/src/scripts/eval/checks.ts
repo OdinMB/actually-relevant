@@ -177,7 +177,16 @@ const SCALE: Record<string, number> = {
   thousand: 1e3,
 }
 
-const NUMBER_RE = /(?<![\p{L}\d])([$€£¥]\s?)?(\d[\d,.]*\d|\d)(?:\s*(%)|\s*(percent|per cent|trillion|billion|million|thousand|bn|tn|mn)\b)?/giu
+/**
+ * A number, optionally with currency, percent or a scale word. Thousands may be
+ * grouped with commas, dots, or (French/South African style) a space, no-break
+ * space or narrow no-break space: "147 000".
+ */
+const NUMBER_RE = /(?<![\p{L}\d])([$€£¥]\s?)?(\d{1,3}(?:[   ]\d{3})+(?!\d)|\d[\d,.]*\d|\d)(?:\s*(%)|\s*(percent|per cent|trillion|billion|million|thousand|bn|tn|mn)\b)?/giu
+const GROUP_SPACE = /[   ]/g
+/** Spelled-out English counts before a scale word: "two million", "a billion". */
+const WORD_NUMBER_RE = /\b(a|one|two|three|four|five|six|seven|eight|nine|ten)\s+(trillion|billion|million|thousand)\b/giu
+const WORD_VALUES: Record<string, number> = { a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
 
 interface NumberToken {
   raw: string
@@ -200,10 +209,14 @@ function tokenize(text: string): NumberToken[] {
   const tokens: NumberToken[] = []
   for (const m of text.matchAll(NUMBER_RE)) {
     const [raw, currency, digits, percent, scaleWord] = m
-    const base = readNumber(digits.replace(/[.,]$/, ''))
+    const base = readNumber(digits.replace(GROUP_SPACE, '').replace(/[.,]$/, ''))
     const scale = scaleWord ? SCALE[scaleWord.toLowerCase()] ?? 1 : 1
     const values = scale === 1 ? base : [...base.map(v => v * scale), ...base]
     tokens.push({ raw: raw.trim(), values, marked: Boolean(currency || percent || scaleWord) })
+  }
+  for (const [raw, word, scaleWord] of text.matchAll(WORD_NUMBER_RE)) {
+    const n = WORD_VALUES[word.toLowerCase()]
+    tokens.push({ raw, values: [n * SCALE[scaleWord.toLowerCase()], n], marked: true })
   }
   return tokens
 }

@@ -44,6 +44,9 @@ export interface AssessArmMetrics {
   unsupported: { storyId: string; numbers: string[] }[]
   junk: string[]
   failures: number
+  /** Share of this arm's ratings at or above the selection threshold, and the stored share (information only). */
+  atLeastSplit: number | null
+  storedAtLeastSplit: number | null
 }
 
 function compareRatings(pairs: [number, number][]): RatingComparison {
@@ -72,6 +75,8 @@ export function scoreAssess(stories: AssessItem[], records: CallRecord<AssessRes
     unsupported: unsupported.filter(u => u.numbers.length > 0),
     junk: ok.flatMap(o => findJunk(o.a)),
     failures: records.filter(r => r.outcome !== 'ok' && r.outcome !== 'skipped').length,
+    atLeastSplit: rate(ok.map(o => o.a.conservativeRating >= SPLIT)),
+    storedAtLeastSplit: rate(ok.map(o => o.s.stored.rating >= SPLIT)),
   }
 }
 
@@ -205,6 +210,9 @@ export const assessSuite: Suite = {
           metricRow(`≥${SPLIT} split agreement vs gpt-5-mini rerun`, metrics, m => m.vsBaseline.splitAgreement, pct, 'higher'),
           metricRow('Rating MAD vs stored', metrics, m => m.vsStored.mad, v => num(v), 'lower'),
           metricRow(`≥${SPLIT} split agreement vs stored`, metrics, m => m.vsStored.splitAgreement, pct, 'higher'),
+          metricRow('Rating shift vs stored (calibration)', metrics, m => m.vsStored.shift, v => num(v)),
+          metricRow(`Rated ≥${SPLIT} (selection threshold)`, metrics, m => m.atLeastSplit, pct),
+          metricRow(`Stored rating ≥${SPLIT} (same stories)`, metrics, m => m.storedAtLeastSplit, pct),
           metricRow('Unsupported numbers per output', metrics, m => m.unsupportedPerOutput, v => num(v), 'lower'),
           metricRow('Foreign-script junk fields', metrics, m => m.junk.length, v => String(v ?? 0), 'lower'),
           metricRow('Failed calls', metrics, m => m.failures, v => String(v ?? 0), 'lower'),

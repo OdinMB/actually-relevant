@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { decideAssess, type AssessArmMetrics } from './assess.js'
+import { decideAssess, scoreAssess, type AssessArmMetrics } from './assess.js'
 import { ASSESS_FORMAT_CHECKS, type AssessFormatCheck } from '../checks.js'
+import type { AssessItem } from '../fixtures.js'
+import type { CallRecord } from '../types.js'
+import type { AssessResult } from '../../../schemas/llm.js'
 
 const format = (v: number) => Object.fromEntries(ASSESS_FORMAT_CHECKS.map(k => [k, v])) as Record<AssessFormatCheck, number>
 
@@ -13,7 +16,32 @@ const base: AssessArmMetrics = {
   unsupported: [],
   junk: [],
   failures: 0,
+  atLeastSplit: 0.4,
+  storedAtLeastSplit: 0.4,
 }
+
+describe('scoreAssess calibration', () => {
+  const story = (id: string, rating: number): AssessItem => ({
+    id, title: id, content: '', publisher: 'P', url: 'u', guidelines: { factors: '', antifactors: '', ratings: '' }, language: 'en', han: false, stored: { rating },
+  })
+  const rec = (rating: number): CallRecord<AssessResult> => ({
+    key: 'k', arm: 'm@medium', schema: 'assess', outcome: 'ok', content: '{}', finishReason: 'stop',
+    usage: { input: 0, cached: 0, output: 0, reasoning: 0 }, costUsd: 0, latencyMs: 0, at: '',
+    parsed: {
+      titleLabel: 'Label', relevanceTitle: 'Title', summary: 's', quote: 'q', quoteAttribution: 'a', factors: [], limitingFactors: [],
+      relevanceCalculation: [], conservativeRating: rating, relevanceSummary: 'r', marketingBlurb: 'b', publicationDate: '2026-01-01 00:00:00',
+    } as unknown as AssessResult,
+  })
+
+  it('reports the share of stories this arm and the stored values rate at or above the split', () => {
+    const stories = [story('a', 6), story('b', 5), story('c', 3)]
+    const records = [rec(5), rec(4), rec(3)]
+    const m = scoreAssess(stories, records, records)
+    expect(m.atLeastSplit).toBeCloseTo(1 / 3)
+    expect(m.storedAtLeastSplit).toBeCloseTo(2 / 3)
+    expect(m.vsStored.shift).toBeCloseTo(-2 / 3)
+  })
+})
 
 const candidate: AssessArmMetrics = { ...base, vsBaseline: { mad: 0.7, shift: 0.1, splitAgreement: 0.88, n: 50 } }
 
