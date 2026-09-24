@@ -1,6 +1,6 @@
-# Prompt Design (GPT-5 Optimized)
+# Prompt Design (GPT-5/GPT-6 reasoning models)
 
-Prompts are optimized for GPT-5/5.2 reasoning models based on OpenAI's official prompting guides. Read this before modifying any prompt in `server/src/prompts/`.
+Prompts are written for OpenAI's reasoning models following the GPT-5 and GPT-5.2 prompting guides, and since phase 2 of the GPT-6 migration (2026-09-24) they are tuned for the defaults gpt-6-luna and gpt-6-sol (`.context/llm-analysis.md`). The structure below carries over; the calibration lessons further down are Luna-specific. Read this before modifying any prompt in `server/src/prompts/`.
 
 ## Structure
 
@@ -14,7 +14,7 @@ Each prompt follows Role + Goal + Constraints:
 
 **Declarative over procedural.** Content requirements describe *what* the output should contain, not step-by-step procedures. The model's internal reasoning determines the analysis path. Do not add procedural instructions like "First do X, then do Y."
 
-**No legacy CoT triggers.** GPT-5 reasoning models handle chain-of-thought internally. Never add:
+**No legacy CoT triggers.** GPT-5 and GPT-6 reasoning models handle chain-of-thought internally. Never add:
 - "Think step by step"
 - "Take a deep breath"
 - "Follow this prompt exactly as written"
@@ -34,7 +34,7 @@ These waste reasoning tokens and can degrade performance.
 
 **Schema carries format guidance.** Markdown formatting, field structure, and enum definitions belong in the Zod `.describe()` annotations in `server/src/schemas/llm.ts`, not duplicated in prompts. If format instructions appear in both places, the model may waste reasoning tokens reconciling contradictions.
 
-**No contradictions.** GPT-5 models spend reasoning tokens trying to reconcile conflicting instructions rather than ignoring one. If the schema says one thing and the prompt says another, fix the conflict.
+**No contradictions.** Reasoning models spend reasoning tokens trying to reconcile conflicting instructions rather than ignoring one. If the schema says one thing and the prompt says another, fix the conflict.
 
 **Rating wording is calibration.** Directional words in a rating instruction ("conservative", "verify it truly meets", "large reductions are justified") shift a model's whole rating distribution, and models differ in how literally they take them: gpt-6-luna rated about 0.6 lower than gpt-5-mini on the same wording. Keep the schema `.describe()` in step with the prompt, and never change rating wording without an `eval:recalibrate` run (`.context/model-eval.md`): a site whose ratings drift is no longer comparable with its archive. What the Luna recalibration (2026-09-24) showed:
 - Neutral anchors ("the level whose description it matches best") closed most of the mean gap but left Luna's pre-assessments piled at 4. The share passing the ≥5 gate only moved when the 5-6 anchor text itself changed, so check the share at the threshold, not only the mean.

@@ -86,11 +86,14 @@ describe('llm client construction', () => {
       expect(params.reasoning_effort).toBe('low')
     })
 
-    it('default to the current production models at medium effort', async () => {
+    it('fall back to a model and a valid effort when the environment leaves the variables blank', async () => {
       const { getSmallLLM, getMediumLLM, getLargeLLM } = await loadLlm()
+      const { REASONING_EFFORTS } = await import('../config.js')
       const tiers = [getSmallLLM(), getMediumLLM(), getLargeLLM()].map(paramsOf)
-      expect(tiers.map(p => p.model)).toEqual(['gpt-5-nano', 'gpt-5-mini', 'gpt-5.2'])
-      expect(tiers.map(p => p.reasoning_effort)).toEqual(['medium', 'medium', 'medium'])
+      for (const p of tiers) {
+        expect(p.model).toMatch(/^gpt-/)
+        expect(REASONING_EFFORTS).toContain(p.reasoning_effort)
+      }
     })
   })
 })

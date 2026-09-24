@@ -72,7 +72,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Prefer file tools over bash** -- Use Read, Write, Edit, Glob, Grep instead of cat, sed, grep, find.
 - **Server config** -- All tunable constants centralized in `server/src/config.ts` with env var overrides.
 - **Logging** -- Use `createLogger('module')` from `server/src/lib/logger.ts`. Never `console.log` in application code (scripts exempt). See `.context/logging.md`.
-- **Prompts** -- Read `.context/prompting.md` before modifying any prompt in `server/src/prompts/`. GPT-5 conventions (declarative constraints, XML scaffolding).
+- **Prompts** -- Read `.context/prompting.md` before modifying any prompt in `server/src/prompts/`. Reasoning-model conventions (declarative constraints, XML scaffolding); prompts are tuned for the GPT-6 defaults, so check a rating, dedup, social-post or selection prompt change with `eval:recalibrate` (`.context/model-eval.md`).
 - **Retry logic** -- External HTTP and LLM calls must use `withRetry()` from `server/src/lib/retry.ts`.
 - **American English** -- All UI text uses American English spelling ("analyzed" not "analysed").
 - **Em dashes** -- One per paragraph max in user-facing copy.
@@ -97,7 +97,6 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Prisma client out of sync**: TS errors for `clusterId`, `storyCluster`, etc. are pre-existing. Fix: `npm run db:generate --prefix server`.
 - **clusters.test.ts**: Pre-existing failure (`html-encoding-sniffer` ESM compat). Not code-related.
 - **Windows vitest teardown**: `kill EPERM` errors are normal on Windows.
-- **GPT-6 prompt recalibration is unshipped (until phase 2)**: `main` carries rating and dedup prompts tuned for gpt-6-luna while production still runs gpt-5-mini/nano. Do not push or deploy `main` except together with the phase-2 model switch; see `.context/llm-analysis.md`. Remove this line once phase 2 ships.
 
 ## UI & Testing Patterns
 
@@ -128,9 +127,9 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 |------|-------|
 | `story-pipeline.md` | Status transitions, jobs, admin endpoints, slugs, field reference |
 | `content-extraction.md` | 3-tier extraction chain, crawl flow, resource limits, adding feeds |
-| `llm-analysis.md` | Model tiers, prompt directory, schema-driven format, analysis stages |
-| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration |
-| `prompting.md` | GPT-5 prompt conventions (read before modifying prompts) |
+| `llm-analysis.md` | Model tiers (GPT-6 defaults; prompts and models change together), prompt directory, schema-driven format, analysis stages |
+| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks |
+| `prompting.md` | Prompt conventions for the GPT-5/GPT-6 reasoning models and calibration lessons (read before modifying prompts) |
 | `scheduler.md` | Job registry, overlap prevention, concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
 | `newsletter-podcast.md` | Create-assign-generate workflow, templates, carousel |

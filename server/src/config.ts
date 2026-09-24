@@ -29,17 +29,21 @@ export const config = {
     transactionTimeoutMs: parseInt(process.env.DB_TRANSACTION_TIMEOUT_MS || "15000", 10),
   },
   llm: {
+    // GPT-6 defaults from the 2026-09-24 model eval (.context/model-eval.md). The
+    // rating, dedup, social, assessment and selection prompts are tuned for these
+    // models: overriding a tier back to a gpt-5 model without the matching prompts
+    // shifts ratings and dedup (.context/llm-analysis.md).
     models: {
       small: {
-        name: process.env.OPENAI_MODEL_SMALL || "gpt-5-nano",
-        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_SMALL, "medium", "OPENAI_EFFORT_SMALL"),
+        name: process.env.OPENAI_MODEL_SMALL || "gpt-6-luna",
+        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_SMALL, "low", "OPENAI_EFFORT_SMALL"),
       },
       medium: {
-        name: process.env.OPENAI_MODEL_MEDIUM || "gpt-5-mini",
+        name: process.env.OPENAI_MODEL_MEDIUM || "gpt-6-luna",
         reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_MEDIUM, "medium", "OPENAI_EFFORT_MEDIUM"),
       },
       large: {
-        name: process.env.OPENAI_MODEL_LARGE || "gpt-5.2",
+        name: process.env.OPENAI_MODEL_LARGE || "gpt-6-sol",
         reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_LARGE, "medium", "OPENAI_EFFORT_LARGE"),
       },
     },

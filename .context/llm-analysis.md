@@ -8,27 +8,31 @@ Configuration is centralized in `server/src/config.ts`. Three model tiers are av
 
 | Tier | Default Model | Reasoning Effort | Used By |
 |------|--------------|-----------------|---------|
-| Small | `gpt-5-nano` | `medium` | Dedup confirmation, related-stories re-rank, reclassification and emotion-only tagging |
-| Medium | `gpt-5-mini` | `medium` | Pre-assessment, full assessment, social story pick, social post text |
-| Large | `gpt-5.2` | `medium` | Editorial selection, newsletter selection and intro, podcast script |
+| Small | `gpt-6-luna` | `low` | Dedup confirmation, related-stories re-rank, reclassification and emotion-only tagging |
+| Medium | `gpt-6-luna` | `medium` | Pre-assessment, full assessment, social story pick, social post text |
+| Large | `gpt-6-sol` | `medium` | Editorial selection, newsletter selection and intro, podcast script |
+
+These are the owner's GPT-6 choices of 2026-09-24, from the model eval and blind ratings (`DOCS/2026-09-24_gpt6-eval/results.md`, gitignored). Until then the tiers ran gpt-5-nano, gpt-5-mini and gpt-5.2, all at `medium`; gpt-5-mini/nano's dated snapshots shut down on 2026-12-11. Small and medium are the same model now, so the effort is what tells them apart.
 
 Environment variables:
 - `OPENAI_MODEL_SMALL` / `OPENAI_MODEL_MEDIUM` / `OPENAI_MODEL_LARGE` — defaults as in the table
-- `OPENAI_EFFORT_SMALL` / `OPENAI_EFFORT_MEDIUM` / `OPENAI_EFFORT_LARGE` — reasoning effort per tier, default `medium`. One of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; any other value throws at startup. Each model accepts a subset: GPT-6 rejects `minimal`, gpt-5-mini/nano reject `none`, and `createChatModel` throws for those pairs.
+- `OPENAI_EFFORT_SMALL` / `OPENAI_EFFORT_MEDIUM` / `OPENAI_EFFORT_LARGE` — reasoning effort per tier, defaults as in the table. One of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; any other value throws at startup. Each model accepts a subset: GPT-6 rejects `minimal`, gpt-5-mini/nano reject `none`, and `createChatModel` throws for those pairs.
 - `LLM_DELAY_MS` — rate limit delay between calls (default 500ms)
+
+A set variable beats the default, so a stale `OPENAI_MODEL_*` or `OPENAI_EFFORT_*` on the host silently keeps the old model. Leave them unset unless you mean to override.
 
 Every chat client is built by `createChatModel()` in `server/src/services/llm.ts`: the tier getters, the backfill scripts in `scripts/migrations/`, and the eval harness. Do not construct `ChatOpenAI` elsewhere.
 
 Before changing a tier's model or effort, run the model eval harness (`.context/model-eval.md`); it compares candidates against today's models on stored data without writing to the database.
 
-### Prompts recalibrated for GPT-6 ship with the switch, not before
+### Prompts and models change together
 
-Prompts are shared by whichever model runs them. For the GPT-6 migration the rating prompts were recalibrated so gpt-6-luna's 1-10 ratings line up with the stored archive (Luna rated about 0.6 lower than gpt-5-mini on the old wording):
+Prompts are shared by whichever model runs them, and the current ones are tuned for the GPT-6 defaults. Pointing a tier back at a gpt-5 model with an env var keeps these prompts, which shifts that model's output (below). A rollback therefore restores the old code (prompts) and the old models together: redeploy the previous commit with no `OPENAI_MODEL_*` / `OPENAI_EFFORT_*` overrides, since its own defaults are the gpt-5 models. For the GPT-6 migration the rating prompts were recalibrated so gpt-6-luna's 1-10 ratings line up with the stored archive (Luna rated about 0.6 lower than gpt-5-mini on the old wording):
 - **Pre-assessment** (`prompts/preassess.ts`): the 5-6 anchor also covers broad change in the important systems of a single country or region; the model rates the development or risk rather than the article's format, counts people exposed to a risk it changes, and, since this rating is only a screen, takes the higher of two adjacent levels. A closing line keeps the issue choice independent of the rating.
 - **Full assessment** (`prompts/assess.ts`): the base rating is the best-matching level of the issue's criteria, generic limiting factors apply only where they clearly fit and in proportion, and "final rating" replaces "conservative rating". The marketing blurb asks for 25-30 words, never over 230 characters.
 - **Dedup** (`prompts/dedup.ts`): different developments of one ongoing story are not duplicates.
 
-These changes are tuned for Luna and would shift gpt-5-mini and gpt-5-nano: on the new wording gpt-5-mini's full-assessment ratings rose by about 0.3 and 54% instead of 36% of the eval stories reached 5. So **they ship together with the phase-2 model switch, never ahead of it**: do not deploy them while production still runs gpt-5-mini/nano. The ≥5 gate and the per-issue `promptRatings` criteria (the scale readers see) are unchanged. Acceptance is checked with `eval:recalibrate` (`.context/model-eval.md`).
+These changes are tuned for Luna and would shift gpt-5-mini and gpt-5-nano: on the new wording gpt-5-mini's full-assessment ratings rose by about 0.3 and 54% instead of 36% of the eval stories reached 5. The ≥5 gate and the per-issue `promptRatings` criteria (the scale readers see) are unchanged. The social-post, full-assessment published-text and selection-date changes shipped in the same switch (below and in `bluesky.md` / `mastodon.md`). Acceptance is checked with `eval:recalibrate` (`.context/model-eval.md`).
 
 ### GPT-6 and LangChain
 
