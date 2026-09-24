@@ -23,7 +23,12 @@ Before changing a tier's model or effort, run the model eval harness (`.context/
 
 ### Prompts recalibrated for GPT-6 ship with the switch, not before
 
-Prompts are shared by whichever model runs them. For the GPT-6 migration the rating prompts (pre-assessment scale, full-assessment calculation and final rating) were recalibrated so gpt-6-luna's 1-10 ratings line up with the stored archive: Luna rated about 0.6 lower than gpt-5-mini on the old wording. The dedup prompt was tightened so different developments of one ongoing story are not merged. These changes are tuned for Luna and would shift gpt-5-mini and gpt-5-nano, so **they ship together with the phase-2 model switch, never ahead of it**: do not deploy them while production still runs gpt-5-mini/nano. The scale itself (what a 5 means to readers, the ≥5 gate) and the per-issue `promptRatings` criteria are unchanged. Acceptance is checked with `eval:recalibrate` (`.context/model-eval.md`).
+Prompts are shared by whichever model runs them. For the GPT-6 migration the rating prompts were recalibrated so gpt-6-luna's 1-10 ratings line up with the stored archive (Luna rated about 0.6 lower than gpt-5-mini on the old wording):
+- **Pre-assessment** (`prompts/preassess.ts`): the 5-6 anchor also covers broad change in the important systems of a single country or region; the model rates the development or risk rather than the article's format, counts people exposed to a risk it changes, and, since this rating is only a screen, takes the higher of two adjacent levels. A closing line keeps the issue choice independent of the rating.
+- **Full assessment** (`prompts/assess.ts`): the base rating is the best-matching level of the issue's criteria, generic limiting factors apply only where they clearly fit and in proportion, and "final rating" replaces "conservative rating". The marketing blurb asks for 25-30 words, never over 230 characters.
+- **Dedup** (`prompts/dedup.ts`): different developments of one ongoing story are not duplicates.
+
+These changes are tuned for Luna and would shift gpt-5-mini and gpt-5-nano: on the new wording gpt-5-mini's full-assessment ratings rose by about 0.3 and 54% instead of 36% of the eval stories reached 5. So **they ship together with the phase-2 model switch, never ahead of it**: do not deploy them while production still runs gpt-5-mini/nano. The ≥5 gate and the per-issue `promptRatings` criteria (the scale readers see) are unchanged. Acceptance is checked with `eval:recalibrate` (`.context/model-eval.md`).
 
 ### GPT-6 and LangChain
 

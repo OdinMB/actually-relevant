@@ -141,7 +141,7 @@ Examples (read label + title together as one unit):
   Problems: repeats 'climate finance' from label, vague hedge ('could reshape')
   Good: 'World Bank to double green loans by 2030'
 
-Marketing blurb (at most 230 characters including spaces; aim for about 200)
+Marketing blurb (25-30 words, and never more than 230 characters including spaces)
 A condensed version of the summary and relevance analysis that can be used on social media and in newsletters.
 Some variation of "[Publisher] reports [key point]. [Relevance summary]."
 </ANALYSIS_REQUIREMENTS>

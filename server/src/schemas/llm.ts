@@ -126,7 +126,7 @@ export const assessResultSchema = z.object({
   marketingBlurb: z
     .string()
     .describe(
-      "Plain text, at most 230 characters including spaces, summarizing the key point of the original article and the relevance analysis."
+      "Plain text, 25-30 words and never more than 230 characters including spaces, summarizing the key point of the original article and the relevance analysis."
     ),
 });
 

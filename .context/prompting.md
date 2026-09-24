@@ -36,7 +36,10 @@ These waste reasoning tokens and can degrade performance.
 
 **No contradictions.** GPT-5 models spend reasoning tokens trying to reconcile conflicting instructions rather than ignoring one. If the schema says one thing and the prompt says another, fix the conflict.
 
-**Rating wording is calibration.** Directional words in a rating instruction ("conservative", "verify it truly meets", "large reductions are justified") shift a model's whole rating distribution, and models differ in how literally they take them: gpt-6-luna rated about 0.6 lower than gpt-5-mini on the same wording. Prefer neutral anchors ("the level whose description it matches best"), keep the schema `.describe()` in step with the prompt, and never change rating wording without an `eval:recalibrate` run (`.context/model-eval.md`): a site whose ratings drift is no longer comparable with its archive.
+**Rating wording is calibration.** Directional words in a rating instruction ("conservative", "verify it truly meets", "large reductions are justified") shift a model's whole rating distribution, and models differ in how literally they take them: gpt-6-luna rated about 0.6 lower than gpt-5-mini on the same wording. Keep the schema `.describe()` in step with the prompt, and never change rating wording without an `eval:recalibrate` run (`.context/model-eval.md`): a site whose ratings drift is no longer comparable with its archive. What the Luna recalibration (2026-09-24) showed:
+- Neutral anchors ("the level whose description it matches best") closed most of the mean gap but left Luna's pre-assessments piled at 4. The share passing the ≥5 gate only moved when the 5-6 anchor text itself changed, so check the share at the threshold, not only the mean.
+- Rating instructions can leak into the other fields of the same call: wording about who is affected appeared to pull issue choices toward human development (about 4 points less issue agreement over three runs each). Say explicitly that the issue follows the subject, not the rating.
+- One run moves agreement rates by about ±3 points on 150 stories with no prompt change. Compare wordings on repeated samples, not on a single run.
 
 ## What to Keep in Prompts
 
