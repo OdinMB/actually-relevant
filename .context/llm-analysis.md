@@ -23,7 +23,7 @@ A set variable beats the default, so a stale `OPENAI_MODEL_*` or `OPENAI_EFFORT_
 
 Every chat client is built by `createChatModel()` in `server/src/services/llm.ts`: the tier getters, the backfill scripts in `scripts/migrations/`, and the eval harness. Do not construct `ChatOpenAI` elsewhere.
 
-Before changing a tier's model or effort, run the model eval harness (`.context/model-eval.md`); it compares candidates against today's models on stored data without writing to the database.
+Before changing a tier's model or effort, run the model eval harness (`.context/model-eval.md`); it compares candidates against each suite's baseline arm on stored data without writing to the database. Those baselines are still the pre-switch gpt-5 models, so rebase them onto today's defaults first (`.context/model-eval.md`).
 
 ### Prompts and models change together
 
@@ -113,7 +113,7 @@ These are injected into prompt templates as `<FACTORS>`, `<TOPIC-SPECIFIC LIMITI
 
 To change prompts: edit the relevant file in `server/src/prompts/`. To change output format: update both the prompt AND the Zod schema in `server/src/schemas/llm.ts`. The schema `.describe()` annotations directly affect LLM output format.
 
-See `.context/prompting.md` for GPT-5 prompt design principles that must be followed when modifying prompts.
+See `.context/prompting.md` for the GPT-5/GPT-6 reasoning-model prompt design principles that must be followed when modifying prompts.
 
 ## Key Files
 
