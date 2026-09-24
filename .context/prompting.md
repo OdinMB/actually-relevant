@@ -7,7 +7,7 @@ Prompts are optimized for GPT-5/5.2 reasoning models based on OpenAI's official 
 Each prompt follows Role + Goal + Constraints:
 
 1. `<ROLE>` — Who the model is (e.g., relevance analyst, editorial curator)
-2. `<GOAL>` — What to produce, with key constraints inline (e.g., conservatism threshold)
+2. `<GOAL>` — What to produce, with key constraints inline (e.g., the fields a rating depends on)
 3. Constraint sections — XML-tagged blocks for guidelines, requirements, criteria
 
 ## Key Principles
@@ -35,6 +35,8 @@ These waste reasoning tokens and can degrade performance.
 **Schema carries format guidance.** Markdown formatting, field structure, and enum definitions belong in the Zod `.describe()` annotations in `server/src/schemas/llm.ts`, not duplicated in prompts. If format instructions appear in both places, the model may waste reasoning tokens reconciling contradictions.
 
 **No contradictions.** GPT-5 models spend reasoning tokens trying to reconcile conflicting instructions rather than ignoring one. If the schema says one thing and the prompt says another, fix the conflict.
+
+**Rating wording is calibration.** Directional words in a rating instruction ("conservative", "verify it truly meets", "large reductions are justified") shift a model's whole rating distribution, and models differ in how literally they take them: gpt-6-luna rated about 0.6 lower than gpt-5-mini on the same wording. Prefer neutral anchors ("the level whose description it matches best"), keep the schema `.describe()` in step with the prompt, and never change rating wording without an `eval:recalibrate` run (`.context/model-eval.md`): a site whose ratings drift is no longer comparable with its archive.
 
 ## What to Keep in Prompts
 

@@ -25,6 +25,8 @@ ${formatIssuesBlock(issues)}
 5-6: Moderate impact; affects 100+ million people or leads to broad, significant change in important systems.
 7-8: Major impact; affects over 1 billion people, shifts global systems, or slightly alters humanity's long-term prospects.
 9-10: Exceptional impact; transforms the lives of 3+ billion people or fundamentally changes humanity's future.
+
+Judge the reach the development plausibly has, drawing on your knowledge beyond the article; the article does not need to state how many people are affected. When an article fits two adjacent levels, choose the one whose description it matches best rather than the lower one.
 </RATING GUIDELINES>
 
 ${EMOTION_TAGS_PROMPT_BLOCK}

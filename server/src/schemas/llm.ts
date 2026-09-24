@@ -18,7 +18,7 @@ export const preAssessItemSchema = z.object({
     .min(1)
     .max(10)
     .describe(
-      "Conservative relevance rating 1-10 as per the <RATING GUIDELINES>."
+      "Relevance rating 1-10 as per the <RATING GUIDELINES>."
     ),
   emotionTag: EMOTION_TAG_SCHEMA,
 });
@@ -92,7 +92,7 @@ export const assessResultSchema = z.object({
     .min(1)
     .max(10)
     .describe(
-      "Conservative relevance rating 1-10 based on the relevance calculation"
+      "Final relevance rating 1-10: the result of the relevance calculation"
     ),
   relevanceSummary: z
     .string()
@@ -126,7 +126,7 @@ export const assessResultSchema = z.object({
   marketingBlurb: z
     .string()
     .describe(
-      "Plain text, up to 230 characters, summarizing the key point of the original article and the relevance analysis."
+      "Plain text, at most 230 characters including spaces, summarizing the key point of the original article and the relevance analysis."
     ),
 });
 
@@ -246,7 +246,7 @@ export type RelatedStoriesResult = z.infer<typeof relatedStoriesResultSchema>;
 export const dedupConfirmationSchema = z.object({
   assessments: z.array(z.object({
     candidateNumber: z.number().int().describe("The candidate number from the input list"),
-    isDuplicate: z.boolean().describe("True ONLY if this candidate reports on the exact same specific event as the source. False if they merely share the same topic, conflict, or field."),
+    isDuplicate: z.boolean().describe("True ONLY if this candidate reports on the exact same specific event as the source. False if they merely share the same topic, conflict, ongoing story, or field."),
     reason: z.string().describe("Brief explanation identifying the specific event in each article and why they are or are not the same event"),
   })).describe("One entry per candidate in the input list"),
 });

@@ -21,6 +21,10 @@ Every chat client is built by `createChatModel()` in `server/src/services/llm.ts
 
 Before changing a tier's model or effort, run the model eval harness (`.context/model-eval.md`); it compares candidates against today's models on stored data without writing to the database.
 
+### Prompts recalibrated for GPT-6 ship with the switch, not before
+
+Prompts are shared by whichever model runs them. For the GPT-6 migration the rating prompts (pre-assessment scale, full-assessment calculation and final rating) were recalibrated so gpt-6-luna's 1-10 ratings line up with the stored archive: Luna rated about 0.6 lower than gpt-5-mini on the old wording. The dedup prompt was tightened so different developments of one ongoing story are not merged. These changes are tuned for Luna and would shift gpt-5-mini and gpt-5-nano, so **they ship together with the phase-2 model switch, never ahead of it**: do not deploy them while production still runs gpt-5-mini/nano. The scale itself (what a 5 means to readers, the ≥5 gate) and the per-issue `promptRatings` criteria are unchanged. Acceptance is checked with `eval:recalibrate` (`.context/model-eval.md`).
+
 ### GPT-6 and LangChain
 
 `@langchain/openai` forwards its `reasoning: { effort }` option only for model IDs it recognises as reasoning models (`o*`, `gpt-5*`), and silently drops it for `gpt-6-*`. `createChatModel` therefore sends effort as `modelKwargs: { reasoning_effort }`, which reaches every Chat Completions request. Never set `temperature`, `topP` or `maxTokens` on these clients: GPT-6 rejects sampling parameters above effort `none`, and LangChain would send `max_tokens` for `gpt-6-*`. Never use `method: 'functionCalling'` or bound tools either: GPT-6 Chat Completions function calling works only at effort `none`. The default `withStructuredOutput` method (`response_format` json_schema) is fine.
@@ -63,7 +67,7 @@ Re-runs issue classification and emotion tagging without changing ratings or sta
 
 ### 1. Pre-assessment (Batch)
 
-Screens multiple stories per LLM call (`config.preassess.batchSize`, 10 per batch). The caller cuts batches by count; `formatArticlesBlock()` renders every story it receives, so nothing is dropped between batching and the prompt. In a single call, the LLM classifies each story into the most relevant issue, assigns a conservative rating (1-10), and assigns an emotion tag. Uses the medium model with medium reasoning effort. All stories are batched together regardless of issue — pre-assessment uses only the generic rating scale (1-10 impact criteria), not issue-specific guidelines. Falls back to `story.feed.issueId` if the LLM returns an invalid issue slug.
+Screens multiple stories per LLM call (`config.preassess.batchSize`, 10 per batch). The caller cuts batches by count; `formatArticlesBlock()` renders every story it receives, so nothing is dropped between batching and the prompt. In a single call, the LLM classifies each story into the most relevant issue, assigns a relevance rating (1-10) on the generic impact scale, and assigns an emotion tag. Uses the medium model with medium reasoning effort. All stories are batched together regardless of issue — pre-assessment uses only the generic rating scale (1-10 impact criteria), not issue-specific guidelines. Falls back to `story.feed.issueId` if the LLM returns an invalid issue slug.
 
 **Zod schema**: `preAssessResultSchema` — array of `{ articleId, issueSlug, rating, emotionTag }`
 

@@ -9,7 +9,7 @@ Detects and clusters stories that cover the same event across different feeds. P
 Two-stage detection triggered after story assessment:
 
 1. **Embedding pre-filter:** Find the top N nearest stories by cosine distance (pgvector `<=>` operator) within a configurable time window. No similarity threshold -- just the closest N.
-2. **LLM confirmation:** A nano model (`gpt-5-nano`) evaluates whether candidates cover the *same specific event* (not just the same broad topic). Returns structured assessments per candidate.
+2. **LLM confirmation:** A nano model (`gpt-5-nano`) evaluates whether candidates cover the *same specific event* (not just the same broad topic, nor a different development of the same ongoing story). Returns structured assessments per candidate.
 
 ## Cluster Model
 

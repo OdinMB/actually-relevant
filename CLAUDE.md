@@ -97,6 +97,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Prisma client out of sync**: TS errors for `clusterId`, `storyCluster`, etc. are pre-existing. Fix: `npm run db:generate --prefix server`.
 - **clusters.test.ts**: Pre-existing failure (`html-encoding-sniffer` ESM compat). Not code-related.
 - **Windows vitest teardown**: `kill EPERM` errors are normal on Windows.
+- **GPT-6 prompt recalibration is unshipped (until phase 2)**: `main` carries rating and dedup prompts tuned for gpt-6-luna while production still runs gpt-5-mini/nano. Do not push or deploy `main` except together with the phase-2 model switch; see `.context/llm-analysis.md`. Remove this line once phase 2 ships.
 
 ## UI & Testing Patterns
 
@@ -128,7 +129,7 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 | `story-pipeline.md` | Status transitions, jobs, admin endpoints, slugs, field reference |
 | `content-extraction.md` | 3-tier extraction chain, crawl flow, resource limits, adding feeds |
 | `llm-analysis.md` | Model tiers, prompt directory, schema-driven format, analysis stages |
-| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier) |
+| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration |
 | `prompting.md` | GPT-5 prompt conventions (read before modifying prompts) |
 | `scheduler.md` | Job registry, overlap prevention, concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
