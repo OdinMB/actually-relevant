@@ -89,7 +89,7 @@ const format = (over: Partial<Record<AssessFormatCheck, number>> = {}) =>
 const assess = (over: Partial<AssessArmMetrics> = {}): AssessArmMetrics => ({
   ok: 25, format: format(), vsBaseline: { mad: null, shift: null, splitAgreement: null, n: 0 },
   vsStored: { mad: 0.7, shift: 0.1, splitAgreement: 0.8, n: 25 }, unsupportedPerOutput: 0.1, unsupported: [], junk: [], failures: 0,
-  atLeastSplit: 0.44, storedAtLeastSplit: 0.46, ...over,
+  atLeastSplit: 0.44, storedAtLeastSplit: 0.46, metaCommentary: [], ...over,
 })
 
 describe('assessCriteria', () => {
@@ -103,6 +103,11 @@ describe('assessCriteria', () => {
 
   it('fails an offset or a share rated 5+ outside tolerance', () => {
     expect(failing(assessCriteria(assess({ vsStored: { mad: 1, shift: -0.6, splitAgreement: 0.7, n: 25 }, atLeastSplit: 0.2 })))).toHaveLength(2)
+  })
+
+  it('fails as soon as one output talks about its input in published text', () => {
+    const one = [{ storyId: 'a1', fields: ['limitingFactors[0]: "The article"'] }]
+    expect(failing(assessCriteria(assess({ metaCommentary: one })))).toEqual(['Outputs with meta-commentary about the input'])
   })
 })
 

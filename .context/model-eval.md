@@ -62,17 +62,19 @@ npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval -
 | Flag | Meaning |
 |------|---------|
 | `--half` | `calibration`, `holdout` or `all` (default). Tune prompts on `calibration` only; the holdout is the result. |
-| `--steps` | Comma list of `preassess, assess, dedup, rating-set` (default: the three checks). `rating-set` runs only when named and refuses `--limit`. |
-| `--effort` / `--dedup-effort` | gpt-6-luna effort for the rating checks and the rating set (default `medium`) / for dedup (default `low`). Another effort writes its own report (`recalibration-<half>-effort-high.md`), so it never overwrites the report of record. |
+| `--steps` | Comma list of `preassess, assess, dedup, rating-set, social-post` (default: the three checks). `rating-set` and the ship checks run only when named; `rating-set` refuses `--limit`. |
+| `--effort` / `--dedup-effort` | gpt-6-luna effort for the rating checks, the rating set and social posts (default `medium`) / for dedup (default `low`). |
 | `--budget` | Cap on the **ledger total** for the folder, as in eval:models. The ledger already holds phase 1's $2.96, so pass the ledger plus this run's allowance. |
 | `--limit`, `--dry-run`, `--concurrency`, `--floor` | As in eval:models; `--floor` is only checked against the cached fixtures |
 
-- **What is judged against what** (`recalibration.ts`): ratings against the stored production values (the archive the site must stay comparable with): mean offset within ±0.25 on both stages, share at or above 5 within 5 points of stored, published stories passing the pre-assessment gate ≥ 75%, issue and emotion agreement not below phase-1 Luna@medium (74.0%, 70.3%; 71.6% is reported as the aim), full-assessment format checks not below phase-1 gpt-5-mini. Dedup: no more wrong merges than gpt-5-nano and a recall at least 15 points above nano's, on the same labelled pairs.
+- **What is judged against what** (`recalibration.ts`): ratings against the stored production values (the archive the site must stay comparable with): mean offset within ±0.25 on both stages, share at or above 5 within 5 points of stored, published stories passing the pre-assessment gate ≥ 75%, issue and emotion agreement not below phase-1 Luna@medium (74.0%, 70.3%; 71.6% is reported as the aim), full-assessment format checks not below phase-1 gpt-5-mini, and no full assessment whose published fields talk about the input ("the article does not quantify…", "the supplied excerpt"; `metaCommentary.ts`, which skips the verbatim quote). Dedup: no more wrong merges than gpt-5-nano and a recall at least 15 points above nano's, on the same labelled pairs.
+- **The report name says what ran.** `recalibration-<half>.md` is the report of record: default steps at the default efforts. Another effort, step list or `--limit` adds tags (`recalibration-holdout-effort-high.md`, `recalibration-all-assess-social-post.md`, `…-limit-3.md`), so a trial never overwrites it. Re-running the same command does overwrite its own file: rename a report first if you need it as a before/after reference.
+- **Ship checks** (`shipChecks.ts`, rules in `shipRules.ts`) cover the other prompt changes that ship with the phase-2 switch, on the whole cached sample whatever `--half` says. `social-post`: Luna at `--effort` drafts every cached Bluesky and Mastodon post; every draft must name the story's main actor or a key number (`storyAnchors.ts`: a capitalised word the story uses mid-sentence, an acronym other than topic ones like AI or HIV, or a number the story states), stay within the limit and state no number the story lacks. Names the story never mentions are listed for the embellishment spot check but do not fail it; the report lists every draft for that read.
 - **The split** (`splitHalves` in `sampling.ts`) alternates items in a salted hash order within strata (published × stored gate; stored split × language; dedup set kind), so the halves are balanced and fixed across runs.
 - **The labelled dedup set is phase 1's.** Labels come from `labelDedupSets` run with the frozen phase-1 prompt (`suites/dedupPhase1Prompt.ts`) through a cache-only context, so they cost nothing and cannot drift as the production prompt changes; gpt-5-nano's phase-1 verdicts on the same pairs are the reference. Never edit the frozen prompt. eval:models still labels with the current prompt.
 - **Versioned schema names.** The cache key holds the schema name, not the schema, so these checks call with `versionedSchemaName` (`name#<hash of the JSON schema>`): editing only a Zod `.describe()` is never answered from the old cache. eval:models keeps plain names so phase-1 entries stay reachable.
 - **The rating set** runs gpt-5-mini@medium and Luna@`--effort` on every fixture story with the recalibrated prompt, then `replaceRatingSetFiles` swaps `actually-relevant-full-assessment` for `…-v2`. It refuses files not in the harness's own JSON format (so re-serializing cannot change other sets) and an empty set.
-- Output: `recalibration-<half>.md` in `--out` (criteria table per check, wrong-merge and missed-duplicate titles, $/call and $/month). Stored phase-1 numbers in `results.md` are not rewritten.
+- Output: `recalibration-<half>[-tags].md` in `--out` (criteria table per check, wrong-merge and missed-duplicate titles, meta-commentary hits, every social draft, $/call and $/month). Stored phase-1 numbers in `results.md` are not rewritten.
 - **The halves are small for the full assessment.** On 25 stories, gpt-5-mini's own phase-1 rerun sits 0.52 below stored on the calibration half and 0.24 above it on the holdout, so the ±0.25 offset bar is inside the noise there. The 2026-09-24 run therefore aimed the full assessment at parity with the gpt-5-mini rerun on the calibration half, not at that half's stored mean. Pre-assessment halves (150 stories) do not have this problem (mini rerun +0.05 / -0.01).
 - **Both halves are now spent.** The 2026-09-24 recalibration tuned on the calibration half and reported the holdout (results in `DOCS/2026-09-24_gpt6-eval/results.md`, "Recalibration"). A further wording change needs a fresh sample to be judged on.
 
@@ -94,6 +96,9 @@ npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval -
 | `server/src/scripts/eval/sampling.ts` | Deterministic stratified picking and selection groups |
 | `server/src/scripts/eval/models.ts` | Price table, metered/cached/budget-guarded calls |
 | `server/src/scripts/eval/checks.ts` | Output-quality checks and statistics |
+| `server/src/scripts/eval/numbers.ts` | Reading numbers in text; numbers an output states that its source lacks |
+| `server/src/scripts/eval/metaCommentary.ts` | Published text that talks about the input |
+| `server/src/scripts/eval/storyAnchors.ts` | The story's names and numbers a social post repeats, and names it adds |
 | `server/src/scripts/eval/decide.ts` | Noise-floor bar and lowest-passing-effort rule |
 | `server/src/scripts/eval/suites/` | One suite per call site (large tier groups its four) |
 | `server/src/scripts/eval/ratingSets.ts` | Blind-rating deliverable, versioned set replacement and validation (pure) |
@@ -101,6 +106,8 @@ npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval -
 | `server/src/scripts/eval/recalibrate.ts` | `eval:recalibrate` CLI orchestration |
 | `server/src/scripts/eval/recalibration.ts` | Owner's acceptance rules, phase-1 reference numbers, the calibration/holdout sample |
 | `server/src/scripts/eval/recalibrationChecks.ts` | The recalibration steps (pre-assess, assess, dedup, rating set) |
-| `server/src/scripts/eval/recalibrationReport.ts` | `recalibration-<half>.md` |
+| `server/src/scripts/eval/recalibrationReport.ts` | `recalibration-<half>[-tags].md` and its name |
+| `server/src/scripts/eval/shipRules.ts` | Owner's rules for the phase-2 ship checks (pure) |
+| `server/src/scripts/eval/shipChecks.ts` | The ship-check steps (`social-post`) |
 | `server/src/scripts/eval/blinding.ts` | Model-name terms and the story filter behind the blinding rule |
 | `server/src/scripts/eval/resultsReport.ts` | `results.md`, volumes, tier recommendation |

@@ -10,8 +10,10 @@ import type { AssessItem, Fixtures } from '../fixtures.js'
 import { TARGETS } from '../fixtures.js'
 import { arm, armKey } from '../models.js'
 import {
-  ASSESS_FORMAT_CHECKS, checkAssessFormat, findJunk, findUnsupportedNumbers, mean, num, pct, rate, type AssessFormatCheck,
+  ASSESS_FORMAT_CHECKS, checkAssessFormat, findJunk, mean, num, pct, rate, type AssessFormatCheck,
 } from '../checks.js'
+import { findAssessMetaCommentary } from '../metaCommentary.js'
+import { findUnsupportedNumbers } from '../numbers.js'
 import { effectiveBar, pickLowestPassing } from '../decide.js'
 import type { CallRecord, Decision, RatingItemDraft, Suite } from '../types.js'
 import { blockquote, limited, metricRow, parsedOf, runArms, statsFor } from './shared.js'
@@ -47,6 +49,8 @@ export interface AssessArmMetrics {
   /** Share of this arm's ratings at or above the selection threshold, and the stored share (information only). */
   atLeastSplit: number | null
   storedAtLeastSplit: number | null
+  /** Outputs whose published fields talk about the input ("the article does not quantify…"), with the offending fields. */
+  metaCommentary: { storyId: string; fields: string[] }[]
 }
 
 function compareRatings(pairs: [number, number][]): RatingComparison {
@@ -77,6 +81,7 @@ export function scoreAssess(stories: AssessItem[], records: CallRecord<AssessRes
     failures: records.filter(r => r.outcome !== 'ok' && r.outcome !== 'skipped').length,
     atLeastSplit: rate(ok.map(o => o.a.conservativeRating >= SPLIT)),
     storedAtLeastSplit: rate(ok.map(o => o.s.stored.rating >= SPLIT)),
+    metaCommentary: ok.map(o => ({ storyId: o.s.id, fields: findAssessMetaCommentary(o.a) })).filter(m => m.fields.length > 0),
   }
 }
 
@@ -219,6 +224,7 @@ export const assessSuite: Suite = {
           metricRow(`Rated ≥${SPLIT} (selection threshold)`, metrics, m => m.atLeastSplit, pct),
           metricRow(`Stored rating ≥${SPLIT} (same stories)`, metrics, m => m.storedAtLeastSplit, pct),
           metricRow('Unsupported numbers per output', metrics, m => m.unsupportedPerOutput, v => num(v), 'lower'),
+          metricRow('Outputs with meta-commentary about the input', metrics, m => m.metaCommentary.length, v => String(v ?? 0), 'lower'),
           metricRow('Foreign-script junk fields', metrics, m => m.junk.length, v => String(v ?? 0), 'lower'),
           metricRow('Failed calls', metrics, m => m.failures, v => String(v ?? 0), 'lower'),
         ],

@@ -97,10 +97,14 @@ export function parseOptions(argv: string[]): EvalOptions {
 // eval:recalibrate
 // ---------------------------------------------------------------------------
 
-export const RECALIBRATION_STEPS = ['preassess', 'assess', 'dedup', 'rating-set'] as const
+export const RECALIBRATION_STEPS = ['preassess', 'assess', 'dedup', 'rating-set', 'social-post'] as const
 export type RecalibrationStep = (typeof RECALIBRATION_STEPS)[number]
-/** The rating set pays for gpt-5-mini and rewrites the owner's file, so it runs only when named. */
-const DEFAULT_STEPS: RecalibrationStep[] = ['preassess', 'assess', 'dedup']
+/**
+ * The recalibration's own checks. The rating set pays for gpt-5-mini and
+ * rewrites the owner's file, and the phase-2 ship checks (social post) test
+ * other prompts, so those run only when named.
+ */
+export const RECALIBRATION_DEFAULT_STEPS: readonly RecalibrationStep[] = ['preassess', 'assess', 'dedup']
 const HALVES = ['calibration', 'holdout', 'all'] as const
 /** The efforts the owner's acceptance is judged at: Luna@medium for the ratings, Luna@low for dedup. */
 export const RECALIBRATION_DEFAULT_EFFORT: ReasoningEffort = 'medium'
@@ -143,7 +147,7 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
   if (!values.out) throw new Error('--out is required')
   const half = HALVES.find(h => h === (values.half ?? 'all'))
   if (!half) throw new Error(`--half must be one of ${HALVES.join(', ')}`)
-  const steps = listOf('--steps', values.steps, RECALIBRATION_STEPS, DEFAULT_STEPS)
+  const steps = listOf('--steps', values.steps, RECALIBRATION_STEPS, RECALIBRATION_DEFAULT_STEPS)
   const limit = positiveInt('--limit', values.limit)
   if (limit !== undefined && steps.includes('rating-set')) {
     throw new Error('--limit cannot be combined with the rating-set step: a partial set would replace the full one in the owner\'s file')

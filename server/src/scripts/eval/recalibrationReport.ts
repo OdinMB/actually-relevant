@@ -3,22 +3,32 @@
  * criteria with value, bar and result, the evidence behind them, and what the
  * tested arm costs per call and per month.
  */
-import type { ReasoningEffort } from '../../config.js'
 import type { Fixtures } from './fixtures.js'
-import { RECALIBRATION_DEFAULT_DEDUP_EFFORT, RECALIBRATION_DEFAULT_EFFORT } from './options.js'
+import {
+  RECALIBRATION_DEFAULT_DEDUP_EFFORT, RECALIBRATION_DEFAULT_EFFORT, RECALIBRATION_DEFAULT_STEPS, type RecalibrationOptions,
+} from './options.js'
 import { accepted, type Criterion } from './recalibration.js'
 import type { StepSection } from './recalibrationChecks.js'
 import type { Half } from './sampling.js'
 
+export type ReportNameInput = Pick<RecalibrationOptions, 'half' | 'effort' | 'dedupEffort' | 'steps' | 'limit'>
+
+const isDefaultStepSet = (steps: readonly string[]) =>
+  steps.length === RECALIBRATION_DEFAULT_STEPS.length && RECALIBRATION_DEFAULT_STEPS.every(s => steps.includes(s))
+
 /**
- * `recalibration-<half>.md` at the efforts the acceptance is judged at. Any
- * other effort writes its own file (`recalibration-holdout-effort-high.md`),
- * so trying one never overwrites the report of record.
+ * `recalibration-<half>.md` for the default checks at the efforts the
+ * acceptance is judged at. Another effort, another step list or a `--limit`
+ * run writes its own file (`recalibration-holdout-effort-high.md`,
+ * `recalibration-all-assess-social-post.md`, `…-limit-3.md`), so a trial
+ * never overwrites the report of record.
  */
-export function recalibrationReportName(half: Half | 'all', effort: ReasoningEffort, dedupEffort: ReasoningEffort): string {
+export function recalibrationReportName({ half, effort, dedupEffort, steps, limit }: ReportNameInput): string {
   const tags = [
     ...(effort !== RECALIBRATION_DEFAULT_EFFORT ? [`effort-${effort}`] : []),
     ...(dedupEffort !== RECALIBRATION_DEFAULT_DEDUP_EFFORT ? [`dedup-${dedupEffort}`] : []),
+    ...(isDefaultStepSet(steps) ? [] : steps),
+    ...(limit != null ? [`limit-${limit}`] : []),
   ]
   return `recalibration-${[half, ...tags].join('-')}.md`
 }

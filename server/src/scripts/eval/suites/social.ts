@@ -18,7 +18,7 @@ const BASELINE = arm('gpt-5-mini', 'medium')
 const CANDIDATE = arm('gpt-6-luna', 'medium')
 const ARMS = [BASELINE, CANDIDATE]
 const PICK_TOKENS = 1500
-const POST_TOKENS = 1500
+export const POST_TOKENS = 1500
 
 const days = (fx: Fixtures, limit?: number) => limited(fx.socialPick, limit)
 const posts = (fx: Fixtures, limit?: number) => {
@@ -29,7 +29,7 @@ const posts = (fx: Fixtures, limit?: number) => {
   ]
 }
 const pickPrompt = (d: SocialPickDay) => buildBlueskyPickBestPrompt(d.candidates)
-const postPrompt = (p: SocialPostItem) => (p.platform === 'bluesky' ? buildBlueskyPostPrompt(p.story) : buildMastodonPostPrompt(p.story))
+export const postPrompt = (p: SocialPostItem) => (p.platform === 'bluesky' ? buildBlueskyPostPrompt(p.story) : buildMastodonPostPrompt(p.story))
 const postSchemaName = (p: SocialPostItem) => `${p.platform}-post`
 
 // ---------------------------------------------------------------------------

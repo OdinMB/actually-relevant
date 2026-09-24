@@ -110,6 +110,13 @@ export function assessCriteria(m: AssessArmMetrics): Criterion[] {
     offset('Mean rating offset vs stored', m.vsStored.shift),
     shareNearStored(`Share rated ≥${SPLIT}`, m.atLeastSplit, m.storedAtLeastSplit),
     ...ASSESS_FORMAT_CHECKS.map(k => atLeast(`Format: ${k}`, m.format[k], PHASE1_MINI_FORMAT[k], 'gpt-5-mini, phase 1')),
+    {
+      name: 'Outputs with meta-commentary about the input',
+      value: `${m.metaCommentary.length} of ${m.ok}`,
+      bar: '0 (owner, phase 2)',
+      pass: m.ok > 0 && m.metaCommentary.length === 0,
+      required: true,
+    },
   ]
 }
 

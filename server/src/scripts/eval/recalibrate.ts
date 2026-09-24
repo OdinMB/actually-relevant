@@ -1,27 +1,32 @@
 /**
  * Phase-2 prompt recalibration check (GPT-6 migration): runs the current
  * rating and dedup prompts on gpt-6-luna and judges them against the owner's
- * acceptance rules, on the phase-1 sample cached in --out.
+ * acceptance rules, on the phase-1 sample cached in --out. The ship checks
+ * (shipChecks.ts) test the other prompt changes that ship with the switch.
  *
  *   npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --half calibration --dry-run
  *   npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --half calibration --budget 5.9
  *   npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --steps rating-set --budget 5.9
+ *   npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --steps assess,social-post --budget 4.9
  *
  * Needs no database: it reads the cached fixtures and never resamples,
  * because the calibration/holdout split and the labelled dedup set are
- * defined on them. Writes recalibration-<half>.md into --out; the rating-set
- * step also swaps the full-assessment set in rating-sets.json. Never prints
- * env values. See .context/model-eval.md.
+ * defined on them. Writes recalibration-<half>[-tags].md into --out; the
+ * rating-set step also swaps the full-assessment set in rating-sets.json.
+ * Never prints env values. See .context/model-eval.md.
  */
 import 'dotenv/config'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Fixtures } from './fixtures.js'
 import { createEvalContext, estimateCallUsd } from './models.js'
-import { parseRecalibrationOptions } from './options.js'
+import { parseRecalibrationOptions, type RecalibrationStep } from './options.js'
 import { sampleFor } from './recalibration.js'
-import { RECALIBRATION_STEP_DEFS, type StepSection } from './recalibrationChecks.js'
+import { RECALIBRATION_STEP_DEFS, type RecalibrationStepDef, type StepSection } from './recalibrationChecks.js'
 import { recalibrationReportName, renderRecalibration, verdict } from './recalibrationReport.js'
+import { SHIP_STEP_DEFS } from './shipChecks.js'
+
+const STEP_DEFS: Record<RecalibrationStep, RecalibrationStepDef> = { ...RECALIBRATION_STEP_DEFS, ...SHIP_STEP_DEFS }
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 
@@ -44,7 +49,7 @@ async function main(): Promise<void> {
   const ctx = createEvalContext({ cacheFile, budgetUsd: opts.budget, concurrency: opts.concurrency, limit: opts.limit, offline: opts.dryRun })
   // Cache-only: phase 1's labelled dedup set is read from the ledger and never paid for again.
   const phase1 = createEvalContext({ cacheFile, budgetUsd: 0, concurrency: opts.concurrency, offline: true })
-  const steps = opts.steps.map(s => RECALIBRATION_STEP_DEFS[s])
+  const steps = opts.steps.map(s => STEP_DEFS[s])
 
   console.log(`fixtures: phase-1 sample from ${fx.createdAt} (floor ${fx.floor}); half: ${opts.half}`)
   for (const s of steps) if (s.preflight) console.log(`${s.name}: ${await s.preflight(input, phase1)}`)
@@ -84,7 +89,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const file = join(out, recalibrationReportName(opts.half, opts.effort, opts.dedupEffort))
+  const file = join(out, recalibrationReportName(opts))
   writeFileSync(file, renderRecalibration({
     generatedAt: new Date().toISOString(),
     half: opts.half,

@@ -18,19 +18,26 @@ const base: AssessArmMetrics = {
   failures: 0,
   atLeastSplit: 0.4,
   storedAtLeastSplit: 0.4,
+  metaCommentary: [],
 }
 
 describe('scoreAssess calibration', () => {
   const story = (id: string, rating: number): AssessItem => ({
     id, title: id, content: '', publisher: 'P', url: 'u', guidelines: { factors: '', antifactors: '', ratings: '' }, language: 'en', han: false, stored: { rating },
   })
-  const rec = (rating: number): CallRecord<AssessResult> => ({
+  const rec = (rating: number, limitingFactors: string[] = []): CallRecord<AssessResult> => ({
     key: 'k', arm: 'm@medium', schema: 'assess', outcome: 'ok', content: '{}', finishReason: 'stop',
     usage: { input: 0, cached: 0, output: 0, reasoning: 0 }, costUsd: 0, latencyMs: 0, at: '',
     parsed: {
-      titleLabel: 'Label', relevanceTitle: 'Title', summary: 's', quote: 'q', quoteAttribution: 'a', factors: [], limitingFactors: [],
+      titleLabel: 'Label', relevanceTitle: 'Title', summary: 's', quote: 'q', quoteAttribution: 'a', factors: [], limitingFactors,
       relevanceCalculation: [], conservativeRating: rating, relevanceSummary: 'r', marketingBlurb: 'b', publicationDate: '2026-01-01 00:00:00',
     } as unknown as AssessResult,
+  })
+
+  it('lists the stories whose published fields talk about the input', () => {
+    const stories = [story('a', 6), story('b', 5)]
+    const m = scoreAssess(stories, [rec(5), rec(4, ['- **Reach:** The article does not quantify it.'])], [])
+    expect(m.metaCommentary).toEqual([{ storyId: 'b', fields: ['limitingFactors[0]: "The article"'] }])
   })
 
   it('reports the share of stories this arm and the stored values rate at or above the split', () => {

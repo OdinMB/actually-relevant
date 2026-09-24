@@ -65,11 +65,12 @@ export interface RecalibrationStepDef {
   run(input: StepInput, ctx: SuiteContext, phase1: SuiteContext): Promise<StepSection>
 }
 
-function monthlyAt(site: CallSiteId, stats: ArmStats): { low: number; high: number } {
+export function monthlyAt(site: CallSiteId, stats: ArmStats): { low: number; high: number } {
   return { low: stats.meanCostUsd * VOLUMES[site].low, high: stats.meanCostUsd * VOLUMES[site].high }
 }
 
-async function runOne<I, T>(ctx: SuiteContext, a: Arm, items: I[], schemaName: string, schema: z.ZodType<T>, prompt: (i: I) => string): Promise<CallRecord<T>[]> {
+/** One arm over every item. */
+export async function runOne<I, T>(ctx: SuiteContext, a: Arm, items: I[], schemaName: string, schema: z.ZodType<T>, prompt: (i: I) => string): Promise<CallRecord<T>[]> {
   return (await runArms(ctx, [a], items, schemaName, schema, prompt)).get(armKey(a)) ?? []
 }
 
@@ -130,6 +131,7 @@ const assessStep: RecalibrationStepDef = {
         `Rating MAD vs stored ${num(m.vsStored.mad)}; ≥5 split agreement with stored ${pct(m.vsStored.splitAgreement)} (n=${m.vsStored.n}).`,
         `Parsed ${m.ok}; failed calls ${m.failures}; unsupported numbers per output ${num(m.unsupportedPerOutput)}; foreign-script junk ${m.junk.length}.`,
         ...m.unsupported.map(u => `- unsupported numbers, story ${u.storyId}: ${u.numbers.join(', ')}`),
+        ...m.metaCommentary.map(x => `- meta-commentary, story ${x.storyId}: ${x.fields.join('; ')}`),
       ],
       stats: [stats],
       monthly: monthlyAt('assess', stats),
@@ -203,9 +205,10 @@ const ratingSetStep: RecalibrationStepDef = {
   },
 }
 
-export const RECALIBRATION_STEP_DEFS: Record<RecalibrationStep, RecalibrationStepDef> = {
+/** The recalibration's own steps. The phase-2 ship checks live in shipChecks.ts; recalibrate.ts joins both. */
+export const RECALIBRATION_STEP_DEFS = {
   preassess: preassessStep,
   assess: assessStep,
   dedup: dedupStep,
   'rating-set': ratingSetStep,
-}
+} satisfies Partial<Record<RecalibrationStep, RecalibrationStepDef>>
