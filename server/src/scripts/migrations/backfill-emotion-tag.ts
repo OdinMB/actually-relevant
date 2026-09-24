@@ -10,13 +10,14 @@
  *   npm run migration:backfill-emotion-tag --prefix server -- --override  # override mode (re-processes all published)
  */
 
+import 'dotenv/config'
 import { PrismaClient, EmotionTag } from '@prisma/client'
-import { ChatOpenAI } from '@langchain/openai'
 import { HumanMessage } from '@langchain/core/messages'
 import { z } from 'zod'
 import { Semaphore } from '../../lib/semaphore.js'
 import { config } from '../../config.js'
 import { EMOTION_TAGS_PROMPT_BLOCK, formatArticlesBlock } from '../../prompts/shared.js'
+import { getSmallLLM } from '../../services/llm.js'
 
 const TEST_MODE = process.argv.includes('--test')
 const OVERRIDE_MODE = process.argv.includes('--override')
@@ -24,11 +25,6 @@ const CONCURRENCY = 5
 const BATCH_SIZE = config.preassess.batchSize // 10
 
 const prisma = new PrismaClient()
-const llm = new ChatOpenAI({
-  model: config.llm.models.small.name,
-  reasoning: { effort: config.llm.models.small.reasoningEffort },
-  maxRetries: 3,
-})
 
 const emotionTagSchema = z.enum(['uplifting', 'frustrating', 'scary', 'calm'])
 
@@ -42,7 +38,7 @@ const resultSchema = z.object({
   ),
 })
 
-const structuredLlm = llm.withStructuredOutput(resultSchema)
+const structuredLlm = getSmallLLM().withStructuredOutput(resultSchema)
 const semaphore = new Semaphore(CONCURRENCY)
 
 function buildPrompt(

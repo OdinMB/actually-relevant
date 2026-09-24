@@ -7,12 +7,13 @@
  *   npm run migration:backfill-relevance-summary --prefix server -- --override  # override mode (re-processes all)
  */
 
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
-import { ChatOpenAI } from '@langchain/openai'
 import { HumanMessage } from '@langchain/core/messages'
 import { Semaphore } from '../../lib/semaphore.js'
 import { extractRelevanceSummarySchema } from '../../schemas/llm.js'
 import { config } from '../../config.js'
+import { getMediumLLM } from '../../services/llm.js'
 
 const TEST_MODE = process.argv.includes('--test')
 const OVERRIDE_MODE = process.argv.includes('--override')
@@ -20,12 +21,7 @@ const CONCURRENCY = 20
 const BATCH_SIZE = 100
 
 const prisma = new PrismaClient()
-const llm = new ChatOpenAI({
-  model: config.llm.models.medium.name,
-  reasoning: { effort: config.llm.models.medium.reasoningEffort },
-  maxRetries: 3,
-})
-const structuredLlm = llm.withStructuredOutput(extractRelevanceSummarySchema)
+const structuredLlm = getMediumLLM().withStructuredOutput(extractRelevanceSummarySchema)
 const semaphore = new Semaphore(CONCURRENCY)
 
 async function processSingle(story: {

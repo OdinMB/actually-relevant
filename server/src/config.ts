@@ -1,3 +1,21 @@
+/** Every `reasoning_effort` value an OpenAI model accepts; each model accepts a subset (see createChatModel). */
+export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
+
+/**
+ * Parse a reasoning-effort env value. Unset or empty → fallback; anything
+ * outside REASONING_EFFORTS throws at startup, because a typo would otherwise
+ * reach the API and fail every call on that tier.
+ */
+export function parseEffort(value: string | undefined, fallback: ReasoningEffort, varName: string): ReasoningEffort {
+  if (value === undefined || value === '') return fallback
+  const effort = REASONING_EFFORTS.find(e => e === value)
+  if (!effort) {
+    throw new Error(`${varName}="${value}" is not a reasoning effort; expected one of ${REASONING_EFFORTS.join(', ')}`)
+  }
+  return effort
+}
+
 export const config = {
   /** Canonical public URL for the site — used in social media posts, RSS feeds, sitemaps, etc. */
   siteUrl: process.env.SITE_URL || 'https://actuallyrelevant.news',
@@ -14,15 +32,15 @@ export const config = {
     models: {
       small: {
         name: process.env.OPENAI_MODEL_SMALL || "gpt-5-nano",
-        reasoningEffort: "medium" as const,
+        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_SMALL, "medium", "OPENAI_EFFORT_SMALL"),
       },
       medium: {
         name: process.env.OPENAI_MODEL_MEDIUM || "gpt-5-mini",
-        reasoningEffort: "medium" as const,
+        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_MEDIUM, "medium", "OPENAI_EFFORT_MEDIUM"),
       },
       large: {
         name: process.env.OPENAI_MODEL_LARGE || "gpt-5.2",
-        reasoningEffort: "medium" as const,
+        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_LARGE, "medium", "OPENAI_EFFORT_LARGE"),
       },
     },
     delayMs: parseInt(process.env.LLM_DELAY_MS || "500", 10),

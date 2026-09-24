@@ -8,15 +8,20 @@ Configuration is centralized in `server/src/config.ts`. Three model tiers are av
 
 | Tier | Default Model | Reasoning Effort | Used By |
 |------|--------------|-----------------|---------|
-| Small | `gpt-5-nano` | `medium` | Reclassification (issue + emotion only) |
-| Medium | `gpt-5-mini` | `medium` | Pre-assessment (includes issue assignment) |
-| Large | `gpt-5.2` | `medium` | Full assessment, selection, podcast script |
+| Small | `gpt-5-nano` | `medium` | Dedup confirmation, related-stories re-rank, reclassification and emotion-only tagging |
+| Medium | `gpt-5-mini` | `medium` | Pre-assessment, full assessment, social story pick, social post text |
+| Large | `gpt-5.2` | `medium` | Editorial selection, newsletter selection and intro, podcast script |
 
 Environment variables:
-- `OPENAI_MODEL_SMALL` — default `gpt-5-nano`
-- `OPENAI_MODEL_MEDIUM` — default `gpt-5-mini`
-- `OPENAI_MODEL_LARGE` — default `gpt-5.2`
-- `LLM_DELAY_MS` — rate limit delay between calls (default 1000ms)
+- `OPENAI_MODEL_SMALL` / `OPENAI_MODEL_MEDIUM` / `OPENAI_MODEL_LARGE` — defaults as in the table
+- `OPENAI_EFFORT_SMALL` / `OPENAI_EFFORT_MEDIUM` / `OPENAI_EFFORT_LARGE` — reasoning effort per tier, default `medium`. One of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; any other value throws at startup. Each model accepts a subset: GPT-6 rejects `minimal`, gpt-5-mini/nano reject `none`, and `createChatModel` throws for those pairs.
+- `LLM_DELAY_MS` — rate limit delay between calls (default 500ms)
+
+Every chat client is built by `createChatModel()` in `server/src/services/llm.ts`: the tier getters, the backfill scripts in `scripts/migrations/`, and the eval harness. Do not construct `ChatOpenAI` elsewhere.
+
+### GPT-6 and LangChain
+
+`@langchain/openai` forwards its `reasoning: { effort }` option only for model IDs it recognises as reasoning models (`o*`, `gpt-5*`), and silently drops it for `gpt-6-*`. `createChatModel` therefore sends effort as `modelKwargs: { reasoning_effort }`, which reaches every Chat Completions request. Never set `temperature`, `topP` or `maxTokens` on these clients: GPT-6 rejects sampling parameters above effort `none`, and LangChain would send `max_tokens` for `gpt-6-*`. Never use `method: 'functionCalling'` or bound tools either: GPT-6 Chat Completions function calling works only at effort `none`. The default `withStructuredOutput` method (`response_format` json_schema) is fine.
 
 ## Prompts Directory
 
@@ -66,7 +71,7 @@ Screens multiple stories per LLM call (`config.preassess.batchSize`, 10 per batc
 
 ### 2. Full Assessment (Individual)
 
-Detailed analysis of a single story. Produces structured fields covering relevance factors, limiting factors, ratings, summary, title, and marketing blurb. Uses the large model with medium reasoning effort.
+Detailed analysis of a single story. Produces structured fields covering relevance factors, limiting factors, ratings, summary, title, and marketing blurb. Uses the medium tier (`config.assess.modelTier`).
 
 **Zod schema**: `assessResultSchema` — the largest schema, with detailed `.describe()` annotations guiding Markdown format for analytical fields.
 
@@ -95,8 +100,8 @@ See `.context/prompting.md` for GPT-5 prompt design principles that must be foll
 
 | File | Role |
 |------|------|
-| `server/src/config.ts` | Centralized config: model names, reasoning effort, rate limits, batch sizes |
-| `server/src/services/llm.ts` | LLM client: `getSmallLLM()`, `getMediumLLM()`, `getLargeLLM()`, rate limiting |
+| `server/src/config.ts` | Centralized config: model names, reasoning effort (`parseEffort`), rate limits, batch sizes |
+| `server/src/services/llm.ts` | LLM client: `createChatModel()`, `getSmallLLM()`, `getMediumLLM()`, `getLargeLLM()`, rate limiting |
 | `server/src/prompts/` | Prompt builders (shared, preassess, assess, select, podcast) |
 | `server/src/services/analysis.ts` | Orchestration: runBatchClassification, preAssessStories, reclassifyStories, assessStory, selectStories |
 | `server/src/schemas/llm.ts` | Zod schemas with `.describe()` format guidance for all LLM output |
