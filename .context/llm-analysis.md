@@ -19,6 +19,8 @@ Environment variables:
 
 Every chat client is built by `createChatModel()` in `server/src/services/llm.ts`: the tier getters, the backfill scripts in `scripts/migrations/`, and the eval harness. Do not construct `ChatOpenAI` elsewhere.
 
+Before changing a tier's model or effort, run the model eval harness (`.context/model-eval.md`); it compares candidates against today's models on stored data without writing to the database.
+
 ### GPT-6 and LangChain
 
 `@langchain/openai` forwards its `reasoning: { effort }` option only for model IDs it recognises as reasoning models (`o*`, `gpt-5*`), and silently drops it for `gpt-6-*`. `createChatModel` therefore sends effort as `modelKwargs: { reasoning_effort }`, which reaches every Chat Completions request. Never set `temperature`, `topP` or `maxTokens` on these clients: GPT-6 rejects sampling parameters above effort `none`, and LangChain would send `max_tokens` for `gpt-6-*`. Never use `method: 'functionCalling'` or bound tools either: GPT-6 Chat Completions function calling works only at effort `none`. The default `withStructuredOutput` method (`response_format` json_schema) is fine.

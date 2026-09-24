@@ -63,8 +63,9 @@ export function assemblePostText(parts: {
 
 /**
  * Calculate max chars for the LLM editorial text given the metadata line and both URLs.
+ * Exported for the model-eval harness, which must compute the same limit.
  */
-function calcMaxBlurbChars(parts: {
+export function calcMaxBlurbChars(parts: {
   issueName: string | null
   emotionTag: string | null
   publisherName: string

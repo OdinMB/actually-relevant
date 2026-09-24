@@ -128,6 +128,7 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 | `story-pipeline.md` | Status transitions, jobs, admin endpoints, slugs, field reference |
 | `content-extraction.md` | 3-tier extraction chain, crawl flow, resource limits, adding feeds |
 | `llm-analysis.md` | Model tiers, prompt directory, schema-driven format, analysis stages |
+| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier) |
 | `prompting.md` | GPT-5 prompt conventions (read before modifying prompts) |
 | `scheduler.md` | Job registry, overlap prevention, concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |

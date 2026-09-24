@@ -85,7 +85,7 @@ export function formatIssuesBlock(issues: IssueForPrompt[]): string {
  */
 export function formatArticlesBlock(
   stories: StoryForPrompt[],
-  contentMaxLength = config.preassess.contentMaxLength,
+  contentMaxLength: number = config.preassess.contentMaxLength,
 ): string {
   let block = '<ARTICLES>'
   for (const story of stories) {

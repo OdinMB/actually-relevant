@@ -13,6 +13,11 @@ async function loadConfig() {
   return import('../config.js')
 }
 
+/** The Chat Completions request parameters (the declared type is a Responses/Completions union). */
+function paramsOf(llm: ChatOpenAI): Record<string, unknown> {
+  return { ...llm.invocationParams() }
+}
+
 const TIER_ENV_VARS = [
   'OPENAI_MODEL_SMALL', 'OPENAI_MODEL_MEDIUM', 'OPENAI_MODEL_LARGE',
   'OPENAI_EFFORT_SMALL', 'OPENAI_EFFORT_MEDIUM', 'OPENAI_EFFORT_LARGE',
@@ -31,7 +36,7 @@ describe('llm client construction', () => {
   describe('createChatModel', () => {
     it('sends reasoning effort for gpt-6 IDs and no sampling or token-limit params', async () => {
       const { createChatModel } = await loadLlm()
-      const params = createChatModel({ name: 'gpt-6-luna', reasoningEffort: 'low' }).invocationParams()
+      const params = paramsOf(createChatModel({ name: 'gpt-6-luna', reasoningEffort: 'low' }))
       expect(params.reasoning_effort).toBe('low')
       expect(params.temperature).toBeUndefined()
       expect(params.top_p).toBeUndefined()
@@ -41,7 +46,7 @@ describe('llm client construction', () => {
 
     it('keeps the same request for gpt-5 models', async () => {
       const { createChatModel } = await loadLlm()
-      const params = createChatModel({ name: 'gpt-5-mini', reasoningEffort: 'medium' }).invocationParams()
+      const params = paramsOf(createChatModel({ name: 'gpt-5-mini', reasoningEffort: 'medium' }))
       expect(params.model).toBe('gpt-5-mini')
       expect(params.reasoning_effort).toBe('medium')
       expect(params.temperature).toBeUndefined()
@@ -51,7 +56,7 @@ describe('llm client construction', () => {
     it('keeps the effort on the structured-output path (withConfig rebuilds the model)', async () => {
       const { createChatModel } = await loadLlm()
       const rebuilt = createChatModel({ name: 'gpt-6-luna', reasoningEffort: 'low' }).withConfig({}) as ChatOpenAI
-      expect(rebuilt.invocationParams().reasoning_effort).toBe('low')
+      expect(paramsOf(rebuilt).reasoning_effort).toBe('low')
     })
 
     it('rejects minimal effort on gpt-6 models', async () => {
@@ -76,14 +81,14 @@ describe('llm client construction', () => {
       vi.stubEnv('OPENAI_MODEL_SMALL', 'gpt-6-luna')
       vi.stubEnv('OPENAI_EFFORT_SMALL', 'low')
       const { getSmallLLM } = await loadLlm()
-      const params = getSmallLLM().invocationParams()
+      const params = paramsOf(getSmallLLM())
       expect(params.model).toBe('gpt-6-luna')
       expect(params.reasoning_effort).toBe('low')
     })
 
     it('default to the current production models at medium effort', async () => {
       const { getSmallLLM, getMediumLLM, getLargeLLM } = await loadLlm()
-      const tiers = [getSmallLLM(), getMediumLLM(), getLargeLLM()].map(llm => llm.invocationParams())
+      const tiers = [getSmallLLM(), getMediumLLM(), getLargeLLM()].map(paramsOf)
       expect(tiers.map(p => p.model)).toEqual(['gpt-5-nano', 'gpt-5-mini', 'gpt-5.2'])
       expect(tiers.map(p => p.reasoning_effort)).toEqual(['medium', 'medium', 'medium'])
     })
