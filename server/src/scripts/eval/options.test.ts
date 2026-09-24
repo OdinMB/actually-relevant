@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseOptions, DEFAULT_BUDGET_USD, SUITE_NAMES } from './options.js'
+import { parseOptions, DEFAULT_BUDGET_USD, DEFAULT_FLOOR, SUITE_NAMES } from './options.js'
 
 describe('parseOptions', () => {
   it('requires --out', () => {
@@ -21,6 +21,16 @@ describe('parseOptions', () => {
   it('rejects unknown suites and non-positive limits', () => {
     expect(() => parseOptions(['--out', 'x', '--suites', 'related,bogus'])).toThrow(/bogus/)
     expect(() => parseOptions(['--out', 'x', '--limit', '0'])).toThrow(/--limit/)
+  })
+
+  it('defaults the crawl floor and accepts an earlier one', () => {
+    expect(parseOptions(['--out', 'x']).floor).toBe(DEFAULT_FLOOR)
+    expect(parseOptions(['--out', 'x', '--floor', '2026-02-01']).floor).toBe('2026-02-01')
+  })
+
+  it('rejects a malformed crawl floor', () => {
+    expect(() => parseOptions(['--out', 'x', '--floor', '2026-2-1'])).toThrow(/--floor/)
+    expect(() => parseOptions(['--out', 'x', '--floor', '2026-13-40'])).toThrow(/--floor/)
   })
 
   it('parses a smoke-run command line', () => {

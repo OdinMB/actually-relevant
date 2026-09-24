@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildRatingDeliverable, validateRatingDeliverable, findLeaks, RATING_BUDGET, type RatingSetsFile } from './ratingSets.js'
+import { buildRatingDeliverable, validateRatingDeliverable, RATING_BUDGET, type RatingSetsFile } from './ratingSets.js'
 import type { RatingItemDraft, RatingSetSlug } from './types.js'
 
 const BASE = 'gpt-5-mini@medium'
@@ -57,16 +57,19 @@ describe('buildRatingDeliverable', () => {
     }
   })
 
-  it('excludes an item whose option names a model absent from its context', () => {
+  it('excludes an item whose option names a model', () => {
     const leaky = draft('newsletter-intro', 'leak', {}, ['As a GPT-6 Luna model, I think', 'Fine text'])
     const { sets, excluded } = buildRatingDeliverable([leaky, draft('newsletter-intro', 'ok')])
-    expect(excluded.map(e => e.key)).toEqual(['leak'])
+    expect(excluded).toEqual([{ set: 'newsletter-intro', key: 'leak', where: 'option', terms: ['Luna', 'gpt'] }])
     expect(sets.sets[0].items).toHaveLength(1)
   })
 
-  it('keeps an item when the context itself mentions the term', () => {
-    const d = draft('newsletter-intro', 'sol', {}, ['El sol brilla', 'Other'], 'Artículo: el sol y la energía')
-    expect(buildRatingDeliverable([d]).excluded).toEqual([])
+  it('excludes an item whose story mentions a model name, even when the options do not (owner rule)', () => {
+    const story = draft('full-assessment', 'ai-story', {}, ['Analysis one', 'Analysis two'], 'OpenAI released GPT-6 this week.')
+    const { sets, key, excluded } = buildRatingDeliverable([story, draft('full-assessment', 'ok')])
+    expect(excluded).toEqual([{ set: 'full-assessment', key: 'ai-story', where: 'context', terms: ['gpt', 'OpenAI'] }])
+    expect(sets.sets[0].items.map(i => i.context_md)).toEqual(['Context'])
+    expect(Object.keys(key)).toHaveLength(1)
   })
 
   it('takes only differing selection groups, most different first, fewer than 5 when fewer differ', () => {
@@ -91,14 +94,6 @@ describe('buildRatingDeliverable', () => {
     expect(picked.filter(d => d.tags.nonEnglish).length).toBeGreaterThanOrEqual(3)
     // All 8 drafts with differing ratings are preferred over the rest.
     expect(picked.filter(d => d.tags.differ)).toHaveLength(8)
-  })
-})
-
-describe('findLeaks', () => {
-  it('is case-insensitive and word-bounded', () => {
-    expect(findLeaks('the GPT-5.2 model')).toContain('gpt-5.2')
-    expect(findLeaks('nanotechnology and solar')).toEqual([])
-    expect(findLeaks('Luna wrote this')).toEqual(['Luna'])
   })
 })
 
@@ -159,5 +154,11 @@ describe('validateRatingDeliverable', () => {
     const errors = validateRatingDeliverable(sets, key).join('\n')
     expect(errors).toMatch(/model name in title/)
     expect(errors).toMatch(/leak/)
+  })
+
+  it('rejects a model name in an item context', () => {
+    const { sets, key } = valid()
+    sets.sets[0].items[0].context_md = 'Artículo: el sol y la energía'
+    expect(validateRatingDeliverable(sets, key).join('\n')).toMatch(/context_md: model name leak \(Sol\)/)
   })
 })

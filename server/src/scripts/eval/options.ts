@@ -9,6 +9,12 @@ export const SUITE_NAMES: SuiteName[] = ['preassess', 'assess', 'dedup', 'relate
 export const DEFAULT_BUDGET_USD = 18
 /** This project's API spend cap for the eval. */
 export const MAX_BUDGET_USD = 20
+/**
+ * Stories crawled before this date predate the current prompts and issue set.
+ * `--floor` moves it earlier when the database copy is older than that (the
+ * report states the floor used).
+ */
+export const DEFAULT_FLOOR = '2026-03-01'
 
 export interface EvalOptions {
   out: string
@@ -20,6 +26,8 @@ export interface EvalOptions {
   budget: number
   concurrency: number
   refreshFixtures: boolean
+  /** Earliest crawl date (UTC, `YYYY-MM-DD`) for the stored-data suites. */
+  floor: string
 }
 
 function positiveInt(flag: string, value: string | undefined, fallback?: number): number | undefined {
@@ -42,6 +50,7 @@ export function parseOptions(argv: string[]): EvalOptions {
       budget: { type: 'string' },
       concurrency: { type: 'string' },
       'refresh-fixtures': { type: 'boolean', default: false },
+      floor: { type: 'string' },
     },
   })
   if (!values.out) throw new Error('--out is required')
@@ -52,6 +61,10 @@ export function parseOptions(argv: string[]): EvalOptions {
   if (!Number.isFinite(budget) || budget <= 0 || budget > MAX_BUDGET_USD) {
     throw new Error(`--budget must be between 0 and ${MAX_BUDGET_USD} (USD)`)
   }
+  const floor = values.floor ?? DEFAULT_FLOOR
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(floor) || Number.isNaN(Date.parse(`${floor}T00:00:00Z`))) {
+    throw new Error('--floor must be a date in YYYY-MM-DD form')
+  }
   return {
     out: values.out,
     suites: SUITE_NAMES.filter(n => suites.includes(n)),
@@ -61,5 +74,6 @@ export function parseOptions(argv: string[]): EvalOptions {
     budget,
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
     refreshFixtures: values['refresh-fixtures'] ?? false,
+    floor,
   }
 }

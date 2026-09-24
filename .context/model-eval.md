@@ -21,13 +21,14 @@ npm run eval:models --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval       
 | `--budget` | USD stop for live calls (default 18; values above 20, this project's cap, are refused) |
 | `--concurrency` | Parallel calls (default 4; the related-stories suite always runs one at a time for latency) |
 | `--refresh-fixtures` | Resample fixtures instead of reusing `.cache/fixtures.json` |
+| `--floor YYYY-MM-DD` | Earliest crawl date for the pre-assess, assess, dedup and social-post samples (default 2026-03-01, when the current prompts and issue set were in place). Move it earlier only for a database copy older than that; the report states the floor. Cached fixtures with a different floor are resampled, so pass the same `--floor` on every run against one output folder. |
 
 The run needs `DATABASE_URL` reachable (the local Postgres service must be running) except for `--api-check`. It prints only `local`/`remote` for the database and `present`/`missing` for `OPENAI_API_KEY`, never values.
 
 ## Outputs (in `--out`)
 
 - `results.md` — per call site: arms, outcome counts (ok / parse failure / empty-or-declined / truncated / error / budget-skipped), p50/p95 latency, mean input/cached/output/reasoning tokens, $/call and $/month at the inventory volumes, quality metrics, the automated verdict; then the per-tier Phase 2 recommendation, current-vs-proposed monthly cost, "Is gpt-5.2 better in any way?", fixture shortfalls, prices (gpt-5.2 marked unverified) and spend. A "Fabricated-number spot check" section is left for a person to fill.
-- `rating-sets.json` / `rating-key.json` — the owner's blind-rating sets (full assessments 12, social posts 10, newsletter intros 4, podcast script 1, story selection 5 at most). The key maps each item's labels to `model@effort`. No model name may appear in set titles, instructions, item IDs or options unless the item's context contains it; leaking drafts are dropped at build time and the written files are re-validated (a failure exits non-zero).
+- `rating-sets.json` / `rating-key.json` — the owner's blind-rating sets (full assessments 12, social posts 10, newsletter intros 4, podcast script 1, story selection 5 at most). The key maps each item's labels to `model@effort`. **No model name may appear anywhere in `rating-sets.json`, item context included** (owner's decision, 2026-09-24; terms in `blinding.ts`: the eval model IDs, `Luna`, `Sol`, `nano`, and anything starting `gpt`, `ChatGPT` or `OpenAI`). Single-story items whose story or output mentions one are dropped at build time; multi-story fixtures (selection groups, newsletters, the podcast) drop such stories before any prompt is built, so no arm sees them. The written files are re-validated and a failure exits non-zero.
 - `.cache/fixtures.json` — the sampled inputs, reused so prompts (and cache keys) stay stable while the DB changes.
 - `.cache/calls.jsonl` — response cache **and** spend ledger, keyed by `sha256(model@effort + schema + prompt)`. Re-runs and resumes never pay twice; errors are not cached so they retry.
 
@@ -43,7 +44,8 @@ The run needs `DATABASE_URL` reachable (the local Postgres service must be runni
 - **Baselines are rerun.** Every suite reruns today's model on the same prompts. Agreement with stored production values is reported for the rerun too: that is the noise floor. An absolute "≥" bar is relaxed to the noise floor minus 5 points only when the baseline rerun itself misses it.
 - **Winner** per call site is the lowest-effort candidate that passes every automated check. The per-tier recommendation takes the highest of those efforts across the tier's call sites (small: dedup, related, pre-assess; medium: pre-assess, assess, social pick) and flags any site not tested at that effort.
 - **Dedup labels** come from arm consensus; sets where the arms disagree go to two judges (gpt-5.2@high, gpt-6-sol@high) with the unchanged prompt, and pairs the judges split on are excluded. Existing clusters were made by gpt-5-nano, so agreement with them is secondary.
-- **Windows are anchored on the data.** "Last N days" windows count back from the newest assessed crawl date, so a stale local DB copy still yields fixtures (the dry run warns when the anchor is over 14 days old).
+- **Windows are anchored on the data.** "Last N days" windows count back from the newest assessed crawl date, so a stale local DB copy still yields fixtures (the dry run warns when the anchor is over 14 days old). The fixed crawl floor is not anchored; see `--floor`.
+- **Adaptations are reported.** When the data is thin, `fixtures.ts` records what it changed in `adaptations` (moved floor, extra nearest-neighbour dedup sources filling missing cluster-member slots, the synthetic social-pick scan, blinding removals with the terms that matched), and `results.md` lists them under Fixtures.
 - **Prompt-input shaping is mirrored, not shared.** `fixtures.ts` re-creates each service's DB-row → prompt-input mapping (commented with the production function it mirrors). Both arms always get the identical prompt, so drift from production cannot bias a comparison, but it can make the eval less representative. If shaping in a service changes, update the mirror.
 
 ## Adding a suite or arm
@@ -67,4 +69,5 @@ The run needs `DATABASE_URL` reachable (the local Postgres service must be runni
 | `server/src/scripts/eval/decide.ts` | Noise-floor bar and lowest-passing-effort rule |
 | `server/src/scripts/eval/suites/` | One suite per call site (large tier groups its four) |
 | `server/src/scripts/eval/ratingSets.ts` | Blind-rating deliverable and its validation |
+| `server/src/scripts/eval/blinding.ts` | Model-name terms and the story filter behind the blinding rule |
 | `server/src/scripts/eval/resultsReport.ts` | `results.md`, volumes, tier recommendation |

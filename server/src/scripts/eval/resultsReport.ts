@@ -90,23 +90,45 @@ function proposedArm(site: CallSiteResult): { arm: string; flagged: boolean } {
 }
 
 const usd = (v: number) => `$${v < 1 ? v.toFixed(3) : v.toFixed(2)}`
+/** Per-call costs are often fractions of a cent. */
+const usdPerCall = (v: number) => `$${v < 0.01 ? v.toFixed(5) : v.toFixed(4)}`
 const range = (r: { low: number; high: number } | null) => (r ? `${usd(r.low)}–${usd(r.high)}` : 'n/a')
 
 // ---------------------------------------------------------------------------
 // "Is gpt-5.2 better in any way?"
 // ---------------------------------------------------------------------------
 
-/** Every directional metric on which the baseline strictly beats the (first) candidate. */
+/** Every directional metric, latency percentile and $/call on which arm `a` strictly beats arm `b`. */
+function armWins(site: CallSiteResult, a: string, b: string): string[] {
+  const model = (arm: string) => arm.split('@')[0]
+  const fromMetrics = site.metrics.flatMap(row => {
+    const x = row.raw[a]
+    const y = row.raw[b]
+    if (!row.better || x == null || y == null) return []
+    const wins = row.better === 'higher' ? x > y : x < y
+    return wins ? [`${site.id}: ${row.name} (${model(a)} ${row.values[a]} vs ${model(b)} ${row.values[b]})`] : []
+  })
+  const sa = site.stats.find(s => s.arm === a && s.calls > 0)
+  const sb = site.stats.find(s => s.arm === b && s.calls > 0)
+  const ms = (v: number) => `${v} ms`
+  const fromStats = !sa || !sb ? [] : [
+    { label: 'median latency', x: sa.latencyP50, y: sb.latencyP50, fmt: ms },
+    { label: '95th-percentile latency', x: sa.latencyP95, y: sb.latencyP95, fmt: ms },
+    { label: 'cost per call', x: sa.meanCostUsd, y: sb.meanCostUsd, fmt: (v: number) => `$${v.toFixed(4)}` },
+  ].flatMap(c => (c.x != null && c.y != null && c.x < c.y ? [`${site.id}: ${c.label} (${model(a)} ${c.fmt(c.x)} vs ${model(b)} ${c.fmt(c.y)})`] : []))
+  return [...fromMetrics, ...fromStats]
+}
+
+/** Where the baseline rerun strictly beats the (first) candidate. */
 export function baselineWins(site: CallSiteResult): string[] {
   const cand = site.candidates[0]
-  if (!cand) return []
-  return site.metrics.flatMap(row => {
-    const b = row.raw[site.baseline]
-    const c = row.raw[cand]
-    if (!row.better || b == null || c == null) return []
-    const wins = row.better === 'higher' ? b > c : b < c
-    return wins ? [`${site.id}: ${row.name} (${site.baseline.split('@')[0]} ${row.values[site.baseline]} vs ${cand.split('@')[0]} ${row.values[cand]})`] : []
-  })
+  return cand ? armWins(site, site.baseline, cand) : []
+}
+
+/** Where the (first) candidate strictly beats the baseline rerun. */
+export function candidateWins(site: CallSiteResult): string[] {
+  const cand = site.candidates[0]
+  return cand ? armWins(site, cand, site.baseline) : []
 }
 
 // ---------------------------------------------------------------------------
@@ -115,13 +137,26 @@ export function baselineWins(site: CallSiteResult): string[] {
 
 export interface ReportInput {
   generatedAt: string
-  fixtures: Pick<Fixtures, 'anchor' | 'dbClass' | 'readOnlyMode' | 'createdAt' | 'shortfalls'>
+  fixtures: Pick<Fixtures, 'anchor' | 'floor' | 'dbClass' | 'readOnlyMode' | 'createdAt' | 'shortfalls' | 'adaptations'>
   suites: { name: SuiteName; result: SuiteResult | null; skipped?: string }[]
   limit?: number
   budgetUsd: number
   ledgerUsd: number
   thisRunUsd: number
   rating: { sets: { id: string; items: number }[]; excluded: ExcludedDraft[]; validationErrors: string[] }
+}
+
+function exclusionLines(excluded: ExcludedDraft[]): string[] {
+  const list = (where: ExcludedDraft['where']) => excluded
+    .filter(e => e.where === where)
+    .map(e => `${e.set}/${e.key} (${e.terms.join(', ')})`)
+    .join('; ')
+  const story = excluded.filter(e => e.where === 'context').length
+  const option = excluded.filter(e => e.where === 'option').length
+  return [
+    ...(story > 0 ? ['', `${story} drafted items were left out because the story itself mentions a model name (owner's blinding rule): ${list('context')}.`] : []),
+    ...(option > 0 ? ['', `${option} drafted items were left out because a model output named a model: ${list('option')}.`] : []),
+  ]
 }
 
 function statsTable(stats: ArmStats[], site: CallSiteResult): string[] {
@@ -132,7 +167,7 @@ function statsTable(stats: ArmStats[], site: CallSiteResult): string[] {
     // Judges and other helper arms never run in production, so they get no monthly figure.
     const production = s.arm === site.baseline || site.candidates.includes(s.arm)
     const month = production ? range(monthlyCost(site, s.arm)) : 'n/a (eval only)'
-    return `| ${s.arm} | ${s.calls} | ${o.ok} | ${o.parse_failure} | ${o.empty} | ${o.truncated} | ${o.error} | ${o.skipped} | ${s.latencyP50 ?? 'n/a'} | ${s.latencyP95 ?? 'n/a'} | ${Math.round(u.input)} | ${Math.round(u.cached)} | ${Math.round(u.output)} | ${Math.round(u.reasoning)} | ${usd(s.meanCostUsd)} | ${month} |`
+    return `| ${s.arm} | ${s.calls} | ${o.ok} | ${o.parse_failure} | ${o.empty} | ${o.truncated} | ${o.error} | ${o.skipped} | ${s.latencyP50 ?? 'n/a'} | ${s.latencyP95 ?? 'n/a'} | ${Math.round(u.input)} | ${Math.round(u.cached)} | ${Math.round(u.output)} | ${Math.round(u.reasoning)} | ${usdPerCall(s.meanCostUsd)} | ${month} |`
   })
   return [head, `|${'---|'.repeat(16)}`, ...rows]
 }
@@ -189,13 +224,21 @@ function largeTierSection(sites: CallSiteResult[]): string[] {
   const large = sites.filter(s => LARGE_SITES.includes(s.id))
   if (large.length === 0) return ['The large-tier suite did not run.']
   const wins = large.flatMap(baselineWins)
+  const solWins = large.flatMap(candidateWins)
   const cost = (arm: string) => large.reduce((acc, s) => {
     const m = monthlyCost(s, arm)
     return m ? { low: acc.low + m.low, high: acc.high + m.high } : acc
   }, { low: 0, high: 0 })
   return [
-    'Automated metrics on which the gpt-5.2 rerun beats gpt-6-sol:',
-    ...(wins.length > 0 ? wins.map(w => `- ${w}`) : ['- none']),
+    wins.length === 0
+      ? '**Not on any automated measure.** On every compliance, failure, rule-violation, latency and cost measure, gpt-6-sol is equal to or better than the gpt-5.2 rerun.'
+      : `**Yes, on ${wins.length} automated measure${wins.length === 1 ? '' : 's'}:**`,
+    ...wins.map(w => `- ${w}`),
+    '',
+    'Where gpt-6-sol beats the gpt-5.2 rerun:',
+    ...(solWins.length > 0 ? solWins.map(w => `- ${w}`) : ['- none']),
+    '',
+    'Measures not listed are ties. Cost per call uses the unverified gpt-5.2 price.',
     '',
     `Monthly cost of the four large-tier call sites: gpt-5.2 ${range(cost('gpt-5.2@medium'))} vs gpt-6-sol ${range(cost(SOL))} (gpt-5.2 price unverified).`,
     'Taste is not measured here: the owner rates the selection groups where the two disagree most, the intros and the podcast script.',
@@ -212,7 +255,8 @@ export function renderResults(input: ReportInput): string {
     '# GPT-6 model eval: actually-relevant',
     '',
     `Generated ${input.generatedAt}. Database: ${input.fixtures.dbClass}, read-only (${input.fixtures.readOnlyMode} mode). ` +
-      `Fixtures sampled ${input.fixtures.createdAt}, anchored on the newest assessed crawl date ${input.fixtures.anchor.slice(0, 10)}.`,
+      `Fixtures sampled ${input.fixtures.createdAt}, anchored on the newest assessed crawl date ${input.fixtures.anchor.slice(0, 10)}, ` +
+      `with stored-data samples crawled on or after ${input.fixtures.floor}.`,
     ...(input.limit != null ? ['', `**Partial run:** at most ${input.limit} fixture items per suite (\`--limit\`). Verdicts from a partial run are not evidence.`] : []),
     '',
     '## Recommendation for Phase 2',
@@ -235,9 +279,7 @@ export function renderResults(input: ReportInput): string {
     '',
     ...(awaiting.length > 0 ? awaiting.map(s => `- ${s.title}: set \`actually-relevant-${s.ratingSet}\``) : ['- none (the taste suites did not run)']),
     ...input.rating.sets.map(s => `  - \`${s.id}\`: ${s.items} items`),
-    ...(input.rating.excluded.length > 0
-      ? ['', `${input.rating.excluded.length} drafted items were left out because an option named a model: ${input.rating.excluded.map(e => `${e.set}/${e.key} (${e.terms.join(', ')})`).join('; ')}.`]
-      : []),
+    ...exclusionLines(input.rating.excluded),
     ...(input.rating.validationErrors.length > 0 ? ['', '**Deliverable validation failed:**', ...input.rating.validationErrors.map(e => `- ${e}`)] : []),
     '',
     'This project has no image call sites, so there is no `images/` folder.',
@@ -255,6 +297,9 @@ export function renderResults(input: ReportInput): string {
     '',
     ...(input.fixtures.shortfalls.length > 0 ? ['Shortfalls against the targets (reported, not padded):', ...input.fixtures.shortfalls.map(s => `- ${s}`)] : ['All fixture targets met.']),
     '',
+    ...(input.fixtures.adaptations.length > 0
+      ? ['Sample adaptations for this database and for blinding:', ...input.fixtures.adaptations.map(s => `- ${s}`), '']
+      : []),
     '## Prices (USD per 1M tokens)',
     '',
     '| Model | Input | Cached | Output | Cache write | Source |',

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { recommendTierSettings, monthlyCost, baselineWins, VOLUMES } from './resultsReport.js'
+import { recommendTierSettings, monthlyCost, baselineWins, candidateWins, VOLUMES } from './resultsReport.js'
 import type { ArmStats, CallSiteId, CallSiteResult, Decision, MetricRow } from './types.js'
 
 function stats(arm: string, meanCostUsd: number): ArmStats {
@@ -73,5 +73,16 @@ describe('baselineWins', () => {
       { name: 'info', values: { b: '1', c: '2' }, raw: { b: 1, c: 2 } },
     ]
     expect(baselineWins(site('selection', [], { baseline: 'b', candidates: ['c'], metrics: rows }))).toEqual(['selection: exact (b 100% vs c 90%)'])
+  })
+
+  it('also counts lower latency and lower cost per call as wins', () => {
+    const fast = { ...stats('b', 0.01), latencyP50: 900, latencyP95: 2000 }
+    const slow = { ...stats('c', 0.02), latencyP50: 1500, latencyP95: 1800 }
+    const s = site('podcast', [], { baseline: 'b', candidates: ['c'], stats: [fast, slow] })
+    expect(baselineWins(s)).toEqual([
+      'podcast: median latency (b 900 ms vs c 1500 ms)',
+      'podcast: cost per call (b $0.0100 vs c $0.0200)',
+    ])
+    expect(candidateWins(s)).toEqual(['podcast: 95th-percentile latency (c 1800 ms vs b 2000 ms)'])
   })
 })

@@ -17,6 +17,8 @@ import type { StoryForNewsletterIntro } from '../../prompts/newsletter-intro.js'
 import type { StoryForPodcast } from '../../prompts/podcast.js'
 import { calcMaxBlurbChars as blueskyMaxChars } from '../../services/bluesky.js'
 import { calcMaxBlurbChars as mastodonMaxChars } from '../../services/mastodon.js'
+import { mentionsModelName, tallyTerms, withoutModelNames } from './blinding.js'
+import { DEFAULT_FLOOR } from './options.js'
 import type { Db, ReadOnlyDb } from './readOnlyDb.js'
 import { buildSelectionGroups, byEvalHash, stratifiedPick } from './sampling.js'
 
@@ -112,6 +114,8 @@ export interface Fixtures {
   createdAt: string
   /** max(date_crawled) of assessed stories; every "last N days" window counts back from here. */
   anchor: string
+  /** Earliest crawl date (`YYYY-MM-DD`) for pre-assess, assess, dedup and social-post samples. */
+  floor: string
   dbClass: 'local' | 'remote'
   readOnlyMode: 'session' | 'transaction'
   issues: IssueForPrompt[]
@@ -126,6 +130,8 @@ export interface Fixtures {
   newsletters: NewsletterItem[]
   podcast: PodcastItem | null
   shortfalls: string[]
+  /** Deviations from the planned sample made for this database, and stories removed for blinding. */
+  adaptations: string[]
 }
 
 export const TARGETS = {
@@ -135,13 +141,13 @@ export const TARGETS = {
   related: { total: 30 },
   socialPick: { days: 10 },
   socialPost: { perPlatform: 10 },
-  selection: { groups: 20, minPerDay: 8, poolDays: 90 },
+  selection: { groups: 20, minPerDay: 8, poolDays: 90, minAfterBlinding: 4 },
   newsletters: { count: 4 },
   podcastFallbackDays: 7,
+  /** Synthetic social-pick windows scan this many days back from the anchor for days with ≥2 candidates. */
+  socialPickScanDays: 45,
 } as const
 
-/** Stories crawled before this date predate the current prompts and issue set. */
-const FLOOR = new Date('2026-03-01T00:00:00Z')
 /** CJK Unified Ideographs, U+4E00 to U+9FFF (Postgres regex bracket range). */
 const HAN_RE = `[${String.fromCharCode(0x4e00)}-${String.fromCharCode(0x9fff)}]`
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -162,7 +168,7 @@ async function loadIssues(db: Db): Promise<IssueForPrompt[]> {
   return db.issue.findMany({ select: { slug: true, name: true, description: true }, orderBy: { slug: 'asc' } })
 }
 
-async function loadPreassess(db: Db, shortfalls: string[]): Promise<PreassessItem[]> {
+async function loadPreassess(db: Db, floor: Date, shortfalls: string[]): Promise<PreassessItem[]> {
   const chars = Prisma.raw(String(config.preassess.contentMaxLength))
   const pool = await db.$queryRaw<{ id: string; language: string; status: string; han: boolean }[]>`
     SELECT s.id, f.language, s.status::text AS status,
@@ -170,7 +176,7 @@ async function loadPreassess(db: Db, shortfalls: string[]): Promise<PreassessIte
     FROM stories s
     JOIN feeds f ON f.id = s.feed_id
     JOIN issues i ON i.id = s.issue_id
-    WHERE s.relevance_pre IS NOT NULL AND s.emotion_tag IS NOT NULL AND s.date_crawled >= ${FLOOR}
+    WHERE s.relevance_pre IS NOT NULL AND s.emotion_tag IS NOT NULL AND s.date_crawled >= ${floor}
     ORDER BY md5(s.id || 'gpt6-eval')`
   const t = TARGETS.preassess
   const { picked, shortfalls: missing } = stratifiedPick(pool, {
@@ -203,14 +209,14 @@ async function loadPreassess(db: Db, shortfalls: string[]): Promise<PreassessIte
   })
 }
 
-async function loadAssess(db: Db, shortfalls: string[]): Promise<AssessItem[]> {
+async function loadAssess(db: Db, floor: Date, shortfalls: string[]): Promise<AssessItem[]> {
   const chars = Prisma.raw(String(config.assess.contentMaxLength))
   const pool = await db.$queryRaw<{ id: string; language: string; relevance: number; issue_id: string; han: boolean }[]>`
     SELECT s.id, f.language, s.relevance, COALESCE(s.issue_id, f.issue_id) AS issue_id,
            (substring(s.source_content, 1, ${chars}) ~ ${HAN_RE}) AS han
     FROM stories s
     JOIN feeds f ON f.id = s.feed_id
-    WHERE s.relevance IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${FLOOR}
+    WHERE s.relevance IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${floor}
     ORDER BY md5(s.id || 'gpt6-eval')`
   const t = TARGETS.assess
   const { picked, shortfalls: missing } = stratifiedPick(pool, {
@@ -252,13 +258,13 @@ async function loadAssess(db: Db, shortfalls: string[]): Promise<AssessItem[]> {
   })
 }
 
-async function loadDedup(db: Db, shortfalls: string[]): Promise<DedupSet[]> {
+async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations: string[]): Promise<DedupSet[]> {
   const t = TARGETS.dedup
   const clustered = await db.$queryRaw<{ id: string }[]>`
     SELECT id FROM (
       SELECT DISTINCT ON (s.cluster_id) s.id, md5(s.id || 'gpt6-eval') AS h
       FROM stories s
-      WHERE s.cluster_id IS NOT NULL AND s.embedding IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${FLOOR}
+      WHERE s.cluster_id IS NOT NULL AND s.embedding IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${floor}
       ORDER BY s.cluster_id, md5(s.id || 'gpt6-eval')
     ) one_per_cluster
     ORDER BY h
@@ -267,7 +273,7 @@ async function loadDedup(db: Db, shortfalls: string[]): Promise<DedupSet[]> {
     SELECT src.id, nn.distance
     FROM (
       SELECT s.id, s.embedding, s.date_crawled FROM stories s
-      WHERE s.cluster_id IS NULL AND s.embedding IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${FLOOR}
+      WHERE s.cluster_id IS NULL AND s.embedding IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${floor}
       ORDER BY md5(s.id || 'gpt6-eval')
       LIMIT 400
     ) src
@@ -280,7 +286,14 @@ async function loadDedup(db: Db, shortfalls: string[]): Promise<DedupSet[]> {
       LIMIT 1
     ) nn
     ORDER BY md5(src.id || 'gpt6-eval')`
-  const hardNegatives = [...nearest].sort((a, b) => a.distance - b.distance).slice(0, t.hardNegatives)
+  // Cluster members are there to supply likely duplicates. When the copy has few
+  // clusters (dedup started late in its history), the closest unclustered
+  // neighbours are the next-best source of them, so they fill the missing slots.
+  const extraNearest = Math.max(0, t.clusterMembers - clustered.length)
+  if (extraNearest > 0) {
+    adaptations.push(`dedup: only ${clustered.length} of ${t.clusterMembers} cluster-member sources exist, so up to ${extraNearest} more closest-neighbour (unclustered) sources fill their slots`)
+  }
+  const hardNegatives = [...nearest].sort((a, b) => a.distance - b.distance).slice(0, t.hardNegatives + extraNearest)
   const hardIds = new Set(hardNegatives.map(h => h.id))
   const random = nearest.filter(n => !hardIds.has(n.id)).slice(0, t.random)
 
@@ -363,7 +376,7 @@ const pickSelect = {
   relevance: true, emotionTag: true, datePublished: true, issue: { select: { name: true } },
 } as const
 
-async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[]): Promise<{ days: SocialPickDay[]; synthetic: boolean }> {
+async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[], adaptations: string[]): Promise<{ days: SocialPickDay[]; synthetic: boolean }> {
   const until = new Date(anchor.getTime() + DAY_MS)
   const posts = await db.$queryRaw<{ platform: string; story_id: string; published_at: Date }[]>`
     SELECT 'bluesky' AS platform, story_id, published_at FROM bluesky_posts
@@ -377,19 +390,23 @@ async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[]): Promi
     if (!firstPostPerDay.has(day)) firstPostPerDay.set(day, { storyId: p.story_id, at: p.published_at })
   }
   const synthetic = firstPostPerDay.size === 0
+  // Newest first; the loop below keeps the first TARGETS.socialPick.days windows with ≥2 candidates.
   const windows = synthetic
-    ? Array.from({ length: TARGETS.socialPick.days }, (_, i) => {
+    ? Array.from({ length: TARGETS.socialPickScanDays }, (_, i) => {
         const at = new Date(anchor.getTime() - i * DAY_MS)
         at.setUTCHours(11, 30, 0, 0) // the social_auto_post cron default
         return { day: at.toISOString().slice(0, 10), storyId: null as string | null, at }
       })
     : [...firstPostPerDay.entries()]
         .sort(([a], [b]) => (a < b ? 1 : -1))
-        .slice(0, TARGETS.socialPick.days)
         .map(([day, p]) => ({ day, storyId: p.storyId as string | null, at: p.at }))
+  if (synthetic) {
+    adaptations.push(`social pick: no stored posts, so synthetic 11:30 UTC windows were scanned up to ${TARGETS.socialPickScanDays} days back from the anchor for days with at least 2 candidates`)
+  }
 
   const days: SocialPickDay[] = []
   for (const w of windows) {
+    if (days.length >= TARGETS.socialPick.days) break
     const since = new Date(w.at.getTime() - config.socialAutoPost.lookbackHours * 60 * 60 * 1000)
     // Mirrors socialMedia.ts findAutoPostCandidates at time w.at: a story is a candidate
     // unless it was already posted to both channels before that moment.
@@ -425,12 +442,12 @@ async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[]): Promi
   return { days, synthetic }
 }
 
-async function loadSocialPost(db: Db, shortfalls: string[]): Promise<SocialPostItem[]> {
+async function loadSocialPost(db: Db, floor: Date, shortfalls: string[]): Promise<SocialPostItem[]> {
   const n = TARGETS.socialPost.perPlatform
   const ids = await db.$queryRaw<{ id: string }[]>`
     SELECT s.id FROM stories s
     WHERE s.status = 'published' AND s.title IS NOT NULL AND s.summary IS NOT NULL AND s.slug IS NOT NULL
-      AND s.date_crawled >= ${FLOOR}
+      AND s.date_crawled >= ${floor}
     ORDER BY md5(s.id || 'gpt6-eval')
     LIMIT ${2 * n}`
   const rows = await db.story.findMany({
@@ -460,7 +477,7 @@ async function loadSocialPost(db: Db, shortfalls: string[]): Promise<SocialPostI
   return items
 }
 
-async function loadSelection(db: Db, anchor: Date, shortfalls: string[]): Promise<SelectionGroup[]> {
+async function loadSelection(db: Db, anchor: Date, shortfalls: string[], adaptations: string[]): Promise<SelectionGroup[]> {
   const t = TARGETS.selection
   const since = new Date(anchor.getTime() - t.poolDays * DAY_MS)
   // Eligible like analysis.ts selectStories: relevance ≥ relevanceMin, primary or unclustered.
@@ -473,11 +490,12 @@ async function loadSelection(db: Db, anchor: Date, shortfalls: string[]): Promis
       AND (s.cluster_id IS NULL OR sc.primary_story_id = s.id)
       AND s.title IS NOT NULL
       AND s.date_crawled > ${since} AND s.date_crawled <= ${anchor}`
+  // Every group in hash order; the target count is taken after blinding below.
   const drafts = buildSelectionGroups(pool.map(p => ({ id: p.id, dateCrawled: p.date_crawled })), {
     minPerDay: t.minPerDay,
     maxGroupSize: config.selection.maxGroupSize,
     ratio: config.selection.ratio,
-    count: t.groups,
+    count: Number.MAX_SAFE_INTEGER,
   })
   const statusById = new Map(pool.map(p => [p.id, p.status]))
   const rows = await db.story.findMany({
@@ -485,16 +503,36 @@ async function loadSelection(db: Db, anchor: Date, shortfalls: string[]): Promis
     select: { id: true, title: true, summary: true, relevanceReasons: true, antifactors: true, relevanceCalculation: true, emotionTag: true, relevance: true },
   })
   const byId = new Map(rows.map(r => [r.id, r]))
-  const groups = drafts.map(d => ({
-    id: d.id,
-    day: d.day,
-    toSelect: d.toSelect,
-    stories: d.storyIds.flatMap(id => {
+  const removedFromUsed: unknown[] = []
+  let groupsDropped = 0
+  const groups = drafts.flatMap(d => {
+    const all = d.storyIds.flatMap(id => {
       const r = byId.get(id)
       return r ? [{ ...r, emotionTag: r.emotionTag as string | null }] : []
-    }),
-    storedPicked: d.storyIds.filter(id => ['selected', 'published'].includes(statusById.get(id) ?? '')),
-  }))
+    })
+    // Owner's blinding rule: a story that mentions a model name is removed before any
+    // prompt is built, so no arm sees it and no rating item shows it.
+    const blinded = withoutModelNames(all)
+    if (blinded.kept.length < t.minAfterBlinding) {
+      groupsDropped++
+      return []
+    }
+    const keptIds = blinded.kept.map(s => s.id)
+    return [{
+      id: d.id,
+      day: d.day,
+      toSelect: Math.ceil(blinded.kept.length * config.selection.ratio),
+      stories: blinded.kept,
+      storedPicked: keptIds.filter(id => ['selected', 'published'].includes(statusById.get(id) ?? '')),
+      removed: blinded.removed,
+    }]
+  }).slice(0, t.groups).map(({ removed: r, ...g }) => {
+    removedFromUsed.push(...r)
+    return g
+  })
+  if (removedFromUsed.length > 0 || groupsDropped > 0) {
+    adaptations.push(`selection: ${removedFromUsed.length} stories that mention a model name (${tallyTerms(removedFromUsed)}) were removed from the ${groups.length} groups used, so no arm saw them (owner's blinding rule; pick count recomputed as ceil(n × ${config.selection.ratio})); ${groupsDropped} groups fell below ${t.minAfterBlinding} stories and were dropped`)
+  }
   if (groups.length < t.groups) shortfalls.push(`selection: ${groups.length} of ${t.groups} groups`)
   return groups
 }
@@ -511,7 +549,7 @@ function topLevelIssue(issue: IssueRef | null | undefined): { name: string; slug
   return issue.parentId && issue.parent ? issue.parent : { name: issue.name, slug: issue.slug }
 }
 
-async function loadNewsletters(db: Db, shortfalls: string[]): Promise<NewsletterItem[]> {
+async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string[]): Promise<NewsletterItem[]> {
   const newsletters = await db.newsletter.findMany({
     where: { storyIds: { isEmpty: false }, selectedStoryIds: { isEmpty: false } },
     orderBy: { createdAt: 'desc' },
@@ -519,14 +557,19 @@ async function loadNewsletters(db: Db, shortfalls: string[]): Promise<Newsletter
     select: { id: true, title: true, storyIds: true, selectedStoryIds: true },
   })
   const items: NewsletterItem[] = []
+  const removed: unknown[] = []
   for (const n of newsletters) {
-    const stories = await db.story.findMany({
+    const rows = await db.story.findMany({
       where: { id: { in: n.storyIds } },
       select: {
         id: true, title: true, sourceTitle: true, summary: true, marketingBlurb: true, emotionTag: true,
         issue: { select: issueRefSelect }, feed: { select: { issue: { select: issueRefSelect } } },
       },
     })
+    // Owner's blinding rule: stories that mention a model name leave the longlist and the intro input.
+    const shown = (s: (typeof rows)[number]) => [s.title, s.sourceTitle, s.summary, s.marketingBlurb]
+    const stories = rows.filter(s => !mentionsModelName(shown(s)))
+    removed.push(...rows.filter(s => mentionsModelName(shown(s))).map(shown))
     const byId = new Map(stories.map(s => [s.id, s]))
     const ordered = n.storyIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))
     // Mirrors newsletter.ts selectStoriesForNewsletter.
@@ -552,7 +595,7 @@ async function loadNewsletters(db: Db, shortfalls: string[]): Promise<Newsletter
       longlist,
       issueNames: [...new Set(longlist.map(s => s.issueName))].sort(),
       storiesPerIssue: config.newsletter.storiesPerIssue,
-      storedSelected: n.selectedStoryIds,
+      storedSelected: n.selectedStoryIds.filter(id => byId.has(id)),
       intro: {
         stories: withIssue.map(({ s, issue }) => ({
           title: s.title || s.sourceTitle,
@@ -565,11 +608,12 @@ async function loadNewsletters(db: Db, shortfalls: string[]): Promise<Newsletter
       },
     })
   }
+  if (removed.length > 0) adaptations.push(`newsletters: ${removed.length} longlist stories that mention a model name (${tallyTerms(removed)}) were removed before prompting (owner's blinding rule)`)
   if (items.length < TARGETS.newsletters.count) shortfalls.push(`newsletters: ${items.length} of ${TARGETS.newsletters.count}`)
   return items
 }
 
-async function loadPodcast(db: Db, anchor: Date, shortfalls: string[]): Promise<PodcastItem | null> {
+async function loadPodcast(db: Db, anchor: Date, shortfalls: string[], adaptations: string[]): Promise<PodcastItem | null> {
   const podcast = await db.podcast.findFirst({
     where: { storyIds: { isEmpty: false } },
     orderBy: { createdAt: 'desc' },
@@ -587,7 +631,18 @@ async function loadPodcast(db: Db, anchor: Date, shortfalls: string[]): Promise<
     },
     orderBy: { dateCrawled: 'desc' },
   })
-  if (stories.length === 0) {
+  const shaped = stories.map(s => ({
+    category: s.issue?.name || s.feed?.issue?.name || 'General',
+    title: s.title || s.sourceTitle,
+    summary: s.summary || '',
+    publisher: s.feed?.title || 'Unknown',
+    relevanceReasons: s.relevanceReasons || '',
+    antifactors: s.antifactors || '',
+  }))
+  // Owner's blinding rule: stories that mention a model name are left out of the script input.
+  const { kept, removed } = withoutModelNames(shaped)
+  if (removed.length > 0) adaptations.push(`podcast: ${removed.length} of ${shaped.length} stories that mention a model name (${tallyTerms(removed)}) were removed before prompting (owner's blinding rule)`)
+  if (kept.length === 0) {
     shortfalls.push('podcast: no stories')
     return null
   }
@@ -595,36 +650,38 @@ async function loadPodcast(db: Db, anchor: Date, shortfalls: string[]): Promise<
   return {
     id: podcast?.id ?? 'recent-stories',
     source: podcast ? 'podcast' : 'recent-stories',
-    stories: stories.map(s => ({
-      category: s.issue?.name || s.feed?.issue?.name || 'General',
-      title: s.title || s.sourceTitle,
-      summary: s.summary || '',
-      publisher: s.feed?.title || 'Unknown',
-      relevanceReasons: s.relevanceReasons || '',
-      antifactors: s.antifactors || '',
-    })),
+    stories: kept,
   }
 }
 
-/** Sample every suite's inputs in one read-only pass. */
-export async function loadFixtures(db: ReadOnlyDb): Promise<Fixtures> {
+/**
+ * Sample every suite's inputs in one read-only pass. `floor` (`YYYY-MM-DD`,
+ * UTC) is the earliest crawl date for the stored-data suites.
+ */
+export async function loadFixtures(db: ReadOnlyDb, floorDay: string): Promise<Fixtures> {
+  const floor = new Date(`${floorDay}T00:00:00Z`)
   return db.read(async q => {
     const shortfalls: string[] = []
+    const adaptations: string[] = []
     const anchor = await loadAnchor(q)
+    if (floorDay !== DEFAULT_FLOOR) {
+      adaptations.push(`crawl floor moved from ${DEFAULT_FLOOR} to ${floorDay} for pre-assess, assess, dedup and social-post samples (newest assessed crawl in this database: ${anchor.toISOString().slice(0, 10)})`)
+    }
     const issues = await loadIssues(q)
-    const preassess = await loadPreassess(q, shortfalls)
-    const assess = await loadAssess(q, shortfalls)
-    const dedup = await loadDedup(q, shortfalls)
+    const preassess = await loadPreassess(q, floor, shortfalls)
+    const assess = await loadAssess(q, floor, shortfalls)
+    const dedup = await loadDedup(q, floor, shortfalls, adaptations)
     const related = byEvalHash(await loadRelated(q, shortfalls), r => r.id)
-    const social = await loadSocialPick(q, anchor, shortfalls)
-    const socialPost = await loadSocialPost(q, shortfalls)
-    const selection = await loadSelection(q, anchor, shortfalls)
-    const newsletters = await loadNewsletters(q, shortfalls)
-    const podcast = await loadPodcast(q, anchor, shortfalls)
+    const social = await loadSocialPick(q, anchor, shortfalls, adaptations)
+    const socialPost = await loadSocialPost(q, floor, shortfalls)
+    const selection = await loadSelection(q, anchor, shortfalls, adaptations)
+    const newsletters = await loadNewsletters(q, shortfalls, adaptations)
+    const podcast = await loadPodcast(q, anchor, shortfalls, adaptations)
     return {
       version: 1 as const,
       createdAt: new Date().toISOString(),
       anchor: anchor.toISOString(),
+      floor: floorDay,
       dbClass: db.dbClass,
       readOnlyMode: db.mode,
       issues,
@@ -639,6 +696,7 @@ export async function loadFixtures(db: ReadOnlyDb): Promise<Fixtures> {
       newsletters,
       podcast,
       shortfalls,
+      adaptations,
     }
   })
 }

@@ -35,14 +35,17 @@ async function getFixtures(opts: EvalOptions, cacheDir: string): Promise<Fixture
   const file = join(cacheDir, 'fixtures.json')
   if (existsSync(file) && !opts.refreshFixtures) {
     const fx = JSON.parse(readFileSync(file, 'utf8')) as Fixtures
-    console.log(`fixtures: cached from ${fx.createdAt} (database ${fx.dbClass}, read-only ${fx.readOnlyMode} mode); pass --refresh-fixtures to resample`)
-    return fx
+    if (fx.floor === opts.floor) {
+      console.log(`fixtures: cached from ${fx.createdAt} (database ${fx.dbClass}, read-only ${fx.readOnlyMode} mode, floor ${fx.floor}); pass --refresh-fixtures to resample`)
+      return fx
+    }
+    console.log(`fixtures: cached with floor ${fx.floor ?? 'unrecorded'}, requested ${opts.floor}; resampling`)
   }
   console.log(`database: ${classifyDb(process.env.DATABASE_URL ?? '')}`)
   const db = await openReadOnlyDb()
   try {
     console.log(`read-only session: ${await readOnlyStatus(db)} (${db.mode} mode)`)
-    const fx = await loadFixtures(db)
+    const fx = await loadFixtures(db, opts.floor)
     writeFileSync(file, JSON.stringify(fx, null, 1))
     return fx
   } finally {
@@ -52,10 +55,11 @@ async function getFixtures(opts: EvalOptions, cacheDir: string): Promise<Fixture
 
 function printFixtures(fx: Fixtures, suites: Suite[], limit?: number): void {
   const ageDays = (Date.now() - Date.parse(fx.anchor)) / 86_400_000
-  console.log(`fixture anchor (newest assessed crawl): ${fx.anchor.slice(0, 10)}`)
+  console.log(`fixture anchor (newest assessed crawl): ${fx.anchor.slice(0, 10)}; crawl floor: ${fx.floor}`)
   if (ageDays > STALE_AFTER_DAYS) console.log(`warning: the anchor is ${Math.floor(ageDays)} days old; this database copy looks stale`)
   for (const s of suites) for (const line of s.describe(fx, limit)) console.log(`  ${line}`)
   if (fx.shortfalls.length > 0) console.log(`shortfalls:\n${fx.shortfalls.map(s => `  - ${s}`).join('\n')}`)
+  if (fx.adaptations.length > 0) console.log(`adaptations:\n${fx.adaptations.map(s => `  - ${s}`).join('\n')}`)
 }
 
 function estimate(suites: Suite[], fx: Fixtures, ctx: EvalContext, limit?: number): Map<string, number> {

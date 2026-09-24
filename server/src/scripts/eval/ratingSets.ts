@@ -1,10 +1,11 @@
 /**
  * The owner's blind-rating deliverable: turns drafted items into the exact
  * `rating-sets.json` / `rating-key.json` shape, with per-set caps,
- * deterministic item picking and label order, and a model-name leak check.
+ * deterministic item picking and label order, and a model-name check that
+ * covers every string in the file (see blinding.ts).
  */
 import { createHash } from 'node:crypto'
-import { MODELS } from './models.js'
+import { findModelNames } from './blinding.js'
 import type { RatingItemDraft, RatingSetSlug } from './types.js'
 
 export const PROJECT = 'actually-relevant'
@@ -48,30 +49,9 @@ export type RatingKey = Record<string, Record<string, string>>
 export interface ExcludedDraft {
   set: RatingSetSlug
   key: string
+  /** `context`: the story itself mentions a model name (owner's rule); `option`: a model output does. */
+  where: 'context' | 'option'
   terms: string[]
-}
-
-// ---------------------------------------------------------------------------
-// Leak check
-// ---------------------------------------------------------------------------
-
-export const FORBIDDEN_TERMS: string[] = [...Object.keys(MODELS), 'gpt-', 'Luna', 'Sol', 'nano']
-
-function termRegex(term: string): RegExp {
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const tail = /\w$/.test(term) ? '(?![A-Za-z0-9_])' : ''
-  return new RegExp(`(?<![A-Za-z0-9_])${escaped}${tail}`, 'i')
-}
-
-/** Model IDs or family words in `text` (case-insensitive, word-bounded). */
-export function findLeaks(text: string, terms: string[] = FORBIDDEN_TERMS): string[] {
-  return terms.filter(t => termRegex(t).test(text))
-}
-
-/** Leaks in an option that the item's context does not itself contain (news may mention GPT models; "sol" is Spanish). */
-function optionLeaks(content: string, context: string): string[] {
-  const allowed = new Set(findLeaks(context))
-  return findLeaks(content).filter(t => !allowed.has(t))
 }
 
 // ---------------------------------------------------------------------------
@@ -175,9 +155,11 @@ export function buildRatingDeliverable(drafts: RatingItemDraft[]): { sets: Ratin
   for (const slug of SET_ORDER) {
     const clean = drafts.filter(d => {
       if (d.set !== slug) return false
-      const terms = [...new Set(d.options.flatMap(o => optionLeaks(o.content_md, d.context_md)))]
-      if (terms.length > 0) excluded.push({ set: slug, key: d.key, terms })
-      return terms.length === 0
+      const inContext = findModelNames(d.context_md)
+      const inOptions = [...new Set(d.options.flatMap(o => findModelNames(o.content_md)))]
+      if (inContext.length > 0) excluded.push({ set: slug, key: d.key, where: 'context', terms: inContext })
+      else if (inOptions.length > 0) excluded.push({ set: slug, key: d.key, where: 'option', terms: inOptions })
+      return inContext.length === 0 && inOptions.length === 0
     })
     const spec = SET_SPECS[slug]
     const setId = setIdFor(slug)
@@ -209,12 +191,12 @@ function exactKeys(v: unknown, keys: string[], path: string, errors: string[]): 
   return true
 }
 
-function validateOption(o: unknown, path: string, context: string, errors: string[]): string | null {
+function validateOption(o: unknown, path: string, errors: string[]): string | null {
   if (!exactKeys(o, ['label', 'type', 'content_md'], path, errors)) return null
   if (o.type !== 'text' && o.type !== 'image') errors.push(`${path}: type ${String(o.type)}`)
   if (typeof o.content_md !== 'string' || o.content_md.trim() === '') errors.push(`${path}: empty content_md`)
   else {
-    const leaks = optionLeaks(o.content_md, context)
+    const leaks = findModelNames(o.content_md)
     if (leaks.length > 0) errors.push(`${path}: model name leak (${leaks.join(', ')})`)
   }
   return typeof o.label === 'string' ? o.label : null
@@ -225,13 +207,16 @@ function validateItem(item: unknown, index: number, setId: string, key: unknown,
   if (!exactKeys(item, ['id', 'context_md', 'options'], path, errors)) return null
   const expectedId = `${setId}-${String(index + 1).padStart(2, '0')}`
   if (item.id !== expectedId) errors.push(`${path}: id ${String(item.id)} (expected ${expectedId})`)
-  const context = typeof item.context_md === 'string' ? item.context_md : ''
   if (typeof item.context_md !== 'string') errors.push(`${path}: context_md is not a string`)
+  else {
+    const leaks = findModelNames(item.context_md)
+    if (leaks.length > 0) errors.push(`${path}.context_md: model name leak (${leaks.join(', ')})`)
+  }
   if (!Array.isArray(item.options) || item.options.length < 2 || item.options.length > 4) {
     errors.push(`${path}: needs 2-4 options`)
     return typeof item.id === 'string' ? item.id : null
   }
-  const labels = item.options.map((o, j) => validateOption(o, `${path}.options[${j}]`, context, errors))
+  const labels = item.options.map((o, j) => validateOption(o, `${path}.options[${j}]`, errors))
   if (new Set(labels).size !== labels.length) errors.push(`${path}: duplicate labels`)
   const entry = isRecord(key) && typeof item.id === 'string' ? key[item.id] : undefined
   if (!isRecord(entry)) errors.push(`${path}: missing from the answer key`)
@@ -247,7 +232,7 @@ function validateSet(set: unknown, index: number, key: unknown, errors: string[]
   for (const field of ['id', 'title', 'instructions'] as const) {
     const value = set[field]
     if (typeof value !== 'string' || value.trim() === '') errors.push(`${path}: empty ${field}`)
-    else if (findLeaks(value).length > 0) errors.push(`${path}: model name in ${field}`)
+    else if (findModelNames(value).length > 0) errors.push(`${path}: model name in ${field}`)
   }
   if (!Array.isArray(set.items)) {
     errors.push(`${path}: items is not an array`)
@@ -256,7 +241,7 @@ function validateSet(set: unknown, index: number, key: unknown, errors: string[]
   if (slug && set.items.length > RATING_BUDGET[slug]) errors.push(`${path}: ${set.items.length} items > cap ${RATING_BUDGET[slug]}`)
   return set.items.flatMap((item, j) => {
     const id = validateItem(item, j, String(set.id), key, errors)
-    if (id && findLeaks(id).length > 0) errors.push(`${path}.items[${j}]: model name in id`)
+    if (id && findModelNames(id).length > 0) errors.push(`${path}.items[${j}]: model name in id`)
     return id ? [id] : []
   })
 }
