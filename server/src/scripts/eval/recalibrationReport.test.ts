@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { Criterion } from './recalibration.js'
 import type { StepSection } from './recalibrationChecks.js'
-import { renderRecalibration, type RecalibrationReportInput } from './recalibrationReport.js'
+import { recalibrationReportName, renderRecalibration, type RecalibrationReportInput } from './recalibrationReport.js'
 
 const criterion = (name: string, pass: boolean, required = true): Criterion => ({ name, value: 'v', bar: 'b', pass, required })
 const section = (criteria: Criterion[]): StepSection => ({
@@ -22,6 +22,13 @@ describe('renderRecalibration', () => {
   it('names the required criteria a section fails', () => {
     const md = renderRecalibration(input([section([criterion('offset', false), criterion('share', false), criterion('issue', true)])]))
     expect(md).toMatch(/not accepted \(fails: offset, share\)/)
+  })
+
+  it('names the report by half, and gives a non-default effort its own file', () => {
+    expect(recalibrationReportName('holdout', 'medium', 'low')).toBe('recalibration-holdout.md')
+    expect(recalibrationReportName('holdout', 'high', 'low')).toBe('recalibration-holdout-effort-high.md')
+    expect(recalibrationReportName('calibration', 'medium', 'medium')).toBe('recalibration-calibration-dedup-medium.md')
+    expect(recalibrationReportName('all', 'high', 'medium')).toBe('recalibration-all-effort-high-dedup-medium.md')
   })
 
   it('says a partial run is not evidence and lists skipped steps', () => {

@@ -102,6 +102,9 @@ export type RecalibrationStep = (typeof RECALIBRATION_STEPS)[number]
 /** The rating set pays for gpt-5-mini and rewrites the owner's file, so it runs only when named. */
 const DEFAULT_STEPS: RecalibrationStep[] = ['preassess', 'assess', 'dedup']
 const HALVES = ['calibration', 'holdout', 'all'] as const
+/** The efforts the owner's acceptance is judged at: Luna@medium for the ratings, Luna@low for dedup. */
+export const RECALIBRATION_DEFAULT_EFFORT: ReasoningEffort = 'medium'
+export const RECALIBRATION_DEFAULT_DEDUP_EFFORT: ReasoningEffort = 'low'
 
 export interface RecalibrationOptions {
   out: string
@@ -149,8 +152,8 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
     out: values.out,
     half,
     steps,
-    effort: parseEffort(values.effort, 'medium', '--effort'),
-    dedupEffort: parseEffort(values['dedup-effort'], 'low', '--dedup-effort'),
+    effort: parseEffort(values.effort, RECALIBRATION_DEFAULT_EFFORT, '--effort'),
+    dedupEffort: parseEffort(values['dedup-effort'], RECALIBRATION_DEFAULT_DEDUP_EFFORT, '--dedup-effort'),
     limit,
     dryRun: values['dry-run'] ?? false,
     budget: budgetOf(values.budget),

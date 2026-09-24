@@ -63,7 +63,7 @@ npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval -
 |------|---------|
 | `--half` | `calibration`, `holdout` or `all` (default). Tune prompts on `calibration` only; the holdout is the result. |
 | `--steps` | Comma list of `preassess, assess, dedup, rating-set` (default: the three checks). `rating-set` runs only when named and refuses `--limit`. |
-| `--effort` / `--dedup-effort` | gpt-6-luna effort for the rating checks and the rating set (default `medium`) / for dedup (default `low`) |
+| `--effort` / `--dedup-effort` | gpt-6-luna effort for the rating checks and the rating set (default `medium`) / for dedup (default `low`). Another effort writes its own report (`recalibration-<half>-effort-high.md`), so it never overwrites the report of record. |
 | `--budget` | Cap on the **ledger total** for the folder, as in eval:models. The ledger already holds phase 1's $2.96, so pass the ledger plus this run's allowance. |
 | `--limit`, `--dry-run`, `--concurrency`, `--floor` | As in eval:models; `--floor` is only checked against the cached fixtures |
 
@@ -73,6 +73,8 @@ npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval -
 - **Versioned schema names.** The cache key holds the schema name, not the schema, so these checks call with `versionedSchemaName` (`name#<hash of the JSON schema>`): editing only a Zod `.describe()` is never answered from the old cache. eval:models keeps plain names so phase-1 entries stay reachable.
 - **The rating set** runs gpt-5-mini@medium and Luna@`--effort` on every fixture story with the recalibrated prompt, then `replaceRatingSetFiles` swaps `actually-relevant-full-assessment` for `…-v2`. It refuses files not in the harness's own JSON format (so re-serializing cannot change other sets) and an empty set.
 - Output: `recalibration-<half>.md` in `--out` (criteria table per check, wrong-merge and missed-duplicate titles, $/call and $/month). Stored phase-1 numbers in `results.md` are not rewritten.
+- **The halves are small for the full assessment.** On 25 stories, gpt-5-mini's own phase-1 rerun sits 0.52 below stored on the calibration half and 0.24 above it on the holdout, so the ±0.25 offset bar is inside the noise there. The 2026-09-24 run therefore aimed the full assessment at parity with the gpt-5-mini rerun on the calibration half, not at that half's stored mean. Pre-assessment halves (150 stories) do not have this problem (mini rerun +0.05 / -0.01).
+- **Both halves are now spent.** The 2026-09-24 recalibration tuned on the calibration half and reported the holdout (results in `DOCS/2026-09-24_gpt6-eval/results.md`, "Recalibration"). A further wording change needs a fresh sample to be judged on.
 
 ## Adding a suite or arm
 

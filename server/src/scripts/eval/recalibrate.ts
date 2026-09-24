@@ -21,7 +21,7 @@ import { createEvalContext, estimateCallUsd } from './models.js'
 import { parseRecalibrationOptions } from './options.js'
 import { sampleFor } from './recalibration.js'
 import { RECALIBRATION_STEP_DEFS, type StepSection } from './recalibrationChecks.js'
-import { renderRecalibration, verdict } from './recalibrationReport.js'
+import { recalibrationReportName, renderRecalibration, verdict } from './recalibrationReport.js'
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 
@@ -84,7 +84,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const file = join(out, `recalibration-${opts.half}.md`)
+  const file = join(out, recalibrationReportName(opts.half, opts.effort, opts.dedupEffort))
   writeFileSync(file, renderRecalibration({
     generatedAt: new Date().toISOString(),
     half: opts.half,
