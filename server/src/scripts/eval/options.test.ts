@@ -57,7 +57,7 @@ describe('parseRecalibrationOptions', () => {
 
   it('runs the phase-2 ship checks only when named', () => {
     expect(parseRecalibrationOptions(['--out', 'x']).steps).toEqual(['preassess', 'assess', 'dedup'])
-    expect(parseRecalibrationOptions(['--out', 'x', '--steps', 'social-post,assess']).steps).toEqual(['assess', 'social-post'])
+    expect(parseRecalibrationOptions(['--out', 'x', '--steps', 'selection,assess,social-post']).steps).toEqual(['assess', 'social-post', 'selection'])
   })
 
   it('refuses a partial (--limit) rating set, which would replace the owner\'s set with a stub', () => {

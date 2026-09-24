@@ -376,4 +376,21 @@ describe('selectStories', () => {
     const result = await selectStories(['nonexistent'])
     expect(result).toEqual({ selected: [], rejected: [] })
   })
+
+  it('shows the model when each candidate\'s source was published', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([
+      sampleStory({ id: 'story-1', status: 'analyzed', sourceDatePublished: new Date('2023-05-01T08:00:00Z') }),
+      sampleStory({ id: 'story-2', status: 'analyzed', sourceDatePublished: null }),
+    ])
+    mockPrisma.story.updateMany.mockResolvedValue({ count: 1 })
+    const invoke = vi.fn().mockResolvedValue({ selectedIds: ['story-2'] })
+    mockGetLargeLLM.mockReturnValue({ withStructuredOutput: () => ({ invoke }) })
+
+    await selectStories(['story-1', 'story-2'])
+
+    const prompt = String(invoke.mock.calls[0][0][0].content)
+    const block = (id: string) => prompt.split('<ARTICLE>').find(b => b.includes(`<ID>${id}</ID>`)) ?? ''
+    expect(block('story-1')).toContain('<Published>2023-05-01</Published>')
+    expect(block('story-2')).toContain('<Published>unknown</Published>')
+  })
 })

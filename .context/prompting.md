@@ -41,6 +41,8 @@ These waste reasoning tokens and can degrade performance.
 - Rating instructions can leak into the other fields of the same call: wording about who is affected appeared to pull issue choices toward human development (about 4 points less issue agreement over three runs each). Say explicitly that the issue follows the subject, not the rating.
 - One run moves agreement rates by about ±3 points on 150 stories with no prompt change. Compare wordings on repeated samples, not on a single run.
 
+**Published fields never talk about the input.** Models write about the text they were given ("the article does not quantify…", "the supplied excerpt") unless the prompt says the fields are published as written and shows Bad/Good pairs. A prohibition on one field does not carry over to the others: gpt-6-luna did it in 29 of 50 full assessments with only the relevance-summary rule, 5 with a general rule, 2 with the rule plus examples (2026-09-24). Rewording the factor and limiting-factor schema descriptions at the same time coincided with a 0.08 lower mean rating (one run each, so not conclusive) and was reverted: treat text next to the rating fields as calibration too.
+
 ## What to Keep in Prompts
 
 - Content quality guidance (good/bad examples for summaries, titles, quotes)

@@ -500,15 +500,19 @@ async function loadSelection(db: Db, anchor: Date, shortfalls: string[], adaptat
   const statusById = new Map(pool.map(p => [p.id, p.status]))
   const rows = await db.story.findMany({
     where: { id: { in: drafts.flatMap(d => d.storyIds) } },
-    select: { id: true, title: true, summary: true, relevanceReasons: true, antifactors: true, relevanceCalculation: true, emotionTag: true, relevance: true },
+    select: {
+      id: true, title: true, summary: true, relevanceReasons: true, antifactors: true, relevanceCalculation: true, emotionTag: true, relevance: true,
+      sourceDatePublished: true,
+    },
   })
   const byId = new Map(rows.map(r => [r.id, r]))
   const removedFromUsed: unknown[] = []
   let groupsDropped = 0
   const groups = drafts.flatMap(d => {
+    // Mirrors analysis.ts selectStories.
     const all = d.storyIds.flatMap(id => {
       const r = byId.get(id)
-      return r ? [{ ...r, emotionTag: r.emotionTag as string | null }] : []
+      return r ? [{ ...r, emotionTag: r.emotionTag as string | null, sourceDatePublished: r.sourceDatePublished?.toISOString() ?? null }] : []
     })
     // Owner's blinding rule: a story that mentions a model name is removed before any
     // prompt is built, so no arm sees it and no rating item shows it.

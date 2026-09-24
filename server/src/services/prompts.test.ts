@@ -161,6 +161,7 @@ describe('buildSelectPrompt', () => {
       antifactors: 'Limiting factor 1',
       relevanceCalculation: 'Key factor: 6',
       emotionTag: 'uplifting',
+      sourceDatePublished: '2026-02-07T09:15:00.000Z',
     },
     {
       id: 'story-2',
@@ -170,11 +171,13 @@ describe('buildSelectPrompt', () => {
       antifactors: 'Limiting factor A',
       relevanceCalculation: 'Key factor: 4',
       emotionTag: 'frustrating',
+      sourceDatePublished: null,
     },
   ]
+  const today = '2026-02-08T11:30:00.000Z'
 
   it('includes article XML blocks', () => {
-    const prompt = buildSelectPrompt(stories, 1)
+    const prompt = buildSelectPrompt(stories, 1, today)
     expect(prompt).toContain('<ARTICLE>')
     expect(prompt).toContain('<ID>story-1</ID>')
     expect(prompt).toContain('<Title>AI Progress</Title>')
@@ -182,12 +185,19 @@ describe('buildSelectPrompt', () => {
   })
 
   it('includes selection count in goal', () => {
-    const prompt = buildSelectPrompt(stories, 1)
+    const prompt = buildSelectPrompt(stories, 1, today)
     expect(prompt).toContain('1 articles from the 2 candidates')
   })
 
+  it('shows today and each candidate\'s publication day, or unknown when there is none', () => {
+    const prompt = buildSelectPrompt(stories, 1, today)
+    expect(prompt).toContain('2026-02-08')
+    expect(prompt).toContain('<Published>2026-02-07</Published>')
+    expect(prompt).toContain('<Published>unknown</Published>')
+  })
+
   it('uses XML scaffolding structure', () => {
-    const prompt = buildSelectPrompt(stories, 1)
+    const prompt = buildSelectPrompt(stories, 1, today)
     expect(prompt).toContain('<ROLE>')
     expect(prompt).toContain('<GOAL>')
     expect(prompt).toContain('<SELECTION_CRITERIA>')
@@ -202,8 +212,9 @@ describe('buildSelectPrompt', () => {
       antifactors: null,
       relevanceCalculation: null,
       emotionTag: null,
+      sourceDatePublished: null,
     }]
-    const prompt = buildSelectPrompt(storiesWithSpecial, 1)
+    const prompt = buildSelectPrompt(storiesWithSpecial, 1, today)
     expect(prompt).toContain('&amp;')
     expect(prompt).toContain('&lt;special&gt;')
   })

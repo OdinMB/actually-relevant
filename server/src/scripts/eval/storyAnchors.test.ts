@@ -25,6 +25,12 @@ describe('findStoryAnchors', () => {
     expect(findStoryAnchors('A $600 billion promise.', story)).toEqual([])
   })
 
+  it('reads dotted acronyms such as U.S. as one name, in either spelling', () => {
+    const pentagon = 'U.S. military turns to tech firms\nThe U.S. Department of Defense has shifted to commercial partnerships.'
+    expect(findStoryAnchors('The U.S. military is betting on vendors.', pentagon)).toEqual(['US'])
+    expect(findStoryAnchors('The US military is betting on vendors.', pentagon)).toEqual(['US'])
+  })
+
   it('does not count topic acronyms as actors', () => {
     const tech = 'The lab said its AI model helps HIV and COVID-19 research at Google.'
     expect(findStoryAnchors('Faster AI could speed up HIV and COVID-19 work.', tech)).toEqual([])

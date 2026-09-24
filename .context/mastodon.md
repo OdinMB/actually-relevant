@@ -27,7 +27,7 @@ The client (`server/src/lib/mastodon.ts`) creates a REST API client using the `m
 
 Each Mastodon post consists of:
 
-1. **Editorial text** — LLM-generated hook (similar to Bluesky but with different constraints)
+1. **Editorial text** — LLM-generated post that stands on its own (the preview card below it is the source article's, not our summary): what happened, naming the main actor or one key number, then why it matters
 2. **Metadata line** — `Issue | Emotion | found on Publisher`
 3. **Source URL** — Original article URL (appears first so Mastodon generates a link preview card from the original article's og: tags, giving readers context)
 4. **Story URL** — Link to the Actually Relevant story page (secondary link, no card preview)
@@ -152,7 +152,7 @@ All under `/api/admin/mastodon/` (require auth):
 
 One prompt in `server/src/prompts/mastodon.ts`:
 
-**`buildMastodonPostPrompt`** — Generates a short editorial hook for Mastodon. Similar to Bluesky but allows hashtags and targets Mastodon's higher character limit. The LLM receives the story title, summary, and relevanceSummary. Max chars are dynamically calculated based on remaining space. Output: `mastodonPostTextSchema` (editorial text).
+**`buildMastodonPostPrompt`** — Generates a short editorial post for Mastodon. Unlike Bluesky's hook, it must stand on its own, because Mastodon's preview card shows the source article's og: data rather than our summary: it says what happened and who it is about, names the main actor or one key number, and uses only names, numbers and claims from the story (owner's decision, 2026-09-24). It allows hashtags and targets Mastodon's higher character limit. The LLM receives the story title, summary, and relevanceSummary. Max chars are dynamically calculated based on remaining space. Output: `mastodonPostTextSchema` (editorial text).
 
 Story picking reuses `pickBestStoryForSocial()` from the shared service, which uses the Bluesky pick-best prompt (criteria are universal).
 

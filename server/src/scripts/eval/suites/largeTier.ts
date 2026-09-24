@@ -32,7 +32,8 @@ const groups = (fx: Fixtures, limit?: number) => limited(fx.selection, limit)
 const newsletters = (fx: Fixtures, limit?: number) => limited(fx.newsletters, limit)
 const podcasts = (fx: Fixtures, limit?: number): PodcastItem[] => (fx.podcast && (limit == null || limit > 0) ? [fx.podcast] : [])
 
-const selectPrompt = (g: SelectionGroup) => buildSelectPrompt(g.stories, g.toSelect)
+/** Today is the group's crawl day, when production would have run the selection. */
+const selectPrompt = (g: SelectionGroup) => buildSelectPrompt(g.stories, g.toSelect, g.day)
 const newsletterPrompt = (n: NewsletterItem) => buildNewsletterSelectPrompt(n.longlist, n.storiesPerIssue, n.issueNames)
 const introPrompt = (n: NewsletterItem) => buildNewsletterIntroPrompt(n.intro.stories, n.intro.issueNames, n.intro.style)
 const podcastPrompt = (p: PodcastItem) => buildPodcastPrompt(p.stories)
@@ -68,7 +69,8 @@ export interface SelectionArmMetrics {
   upliftingShare: number | null
 }
 
-function scoreSelection(gs: SelectionGroup[], recs: CallRecord<SelectResult>[], other: CallRecord<SelectResult>[]): SelectionArmMetrics {
+/** `other` is the arm compared against for overlap (the other arm, or phase 1's picks in the ship check). */
+export function scoreSelection(gs: SelectionGroup[], recs: CallRecord<SelectResult>[], other: CallRecord<SelectResult>[]): SelectionArmMetrics {
   const per = gs.map((g, i) => {
     const ids = g.stories.map(s => s.id)
     const parsed = parsedOf(recs[i])

@@ -46,7 +46,7 @@ Exception: if an early-stage technology, product, meeting, or call to action is 
 </GENERIC_LIMITING_FACTORS>
 
 <ANALYSIS_REQUIREMENTS>
-The output schema defines all required fields and their formats. The following requirements clarify content expectations:
+The output schema defines all required fields and their formats. The following requirements clarify content expectations. Every field is about the development itself, never about the article that reports it (see <GUIDELINES>).
 
 Publication date
 - Format: YYYY-MM-DD 00:00:00. Use 1970-01-01 00:00:00 if unknown.
@@ -150,7 +150,12 @@ Some variation of "[Publisher] reports [key point]. [Relevance summary]."
 - Write for a smart 16-year-old, not an expert. Avoid jargon, insider terms, and acronyms unless they're household names. Replace technical terms with plain words.
 - Quantify affected people on a logarithmic scale: 'millions', 'tens of millions', 'hundreds of millions', 'billions'.
 - Include concrete numbers when available (people affected, dollar amounts, percentages). A number often beats an adjective.
-- Draw on your knowledge beyond what is written in the article.
+- Draw on your knowledge beyond what is written in the article. Where the article leaves a detail open, give what you know or leave the detail out, without pointing out the gap.
+- Every field except the key quote and its attribution is published as written, so write about the development itself, never about the text you were given. Do not mention the article, the excerpt or the supplied text, what it says, describes or highlights, or what it does not say, quantify or show.
+  Bad: 'The article says more than 900 buildings remain without heat.' Good: 'More than 900 buildings remain without heat.'
+  Bad: 'The article describes a growing field of suppliers.' Good: 'A growing field of suppliers competes for the contracts.'
+  Bad: 'The article gives no evidence about effects on future attacks.' Good: 'Its effect on future attacks is unclear.'
+  Attributing a claim to a named source or the publisher ("according to Reuters") is fine.
 - Always respond in English, no matter the language of the article.
 </GUIDELINES>
 `;

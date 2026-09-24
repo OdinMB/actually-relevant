@@ -84,11 +84,15 @@ Screens multiple stories per LLM call (`config.preassess.batchSize`, 10 per batc
 
 Detailed analysis of a single story. Produces structured fields covering relevance factors, limiting factors, ratings, summary, title, and marketing blurb. Uses the medium tier (`config.assess.modelTier`).
 
+Every field except the key quote and its attribution is published as written, so the prompt forbids text about the input ("the article says…", "the supplied excerpt does not quantify…") and gives Bad/Good pairs. gpt-6-luna did this in 29 of 50 eval outputs on a bare "do not refer to the article" (relevance summary only); the general rule with examples brought it to 2 of 50 (2026-09-24, `eval:recalibrate` meta-commentary criterion).
+
 **Zod schema**: `assessResultSchema` — the largest schema, with detailed `.describe()` annotations guiding Markdown format for analytical fields.
 
 ### 3. Selection (Batch)
 
 Takes all recently analyzed stories, formats them as XML with their AI metadata, and asks the LLM to select the top 50% by comparing articles directly. Uses the large model (important final curation step) with medium reasoning effort.
+
+Each candidate shows its source's publication day (`story.sourceDatePublished`, from the feed or page; `unknown` when neither gave one) and the prompt gives today's date, so a stale item (a years-old report re-crawled today) can be recognised. The model is told to prefer recent developments and that recency never changes how many it selects. `buildSelectPrompt(stories, toSelect, today)` takes today explicitly so tests and the eval can fix it.
 
 **Zod schema**: `selectResultSchema` — `{ selectedIds: string[] }`
 

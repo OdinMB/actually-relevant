@@ -51,7 +51,7 @@ entity Story {
 
     -- Pre-assessment fields
     issue: Issue?
-    relevance_pre: Integer?                              -- 1-10 conservative
+    relevance_pre: Integer?                              -- 1-10 screening rating
     emotion_tag: uplifting | frustrating | scary | calm | null
 
     -- Full assessment fields
@@ -97,7 +97,7 @@ rule PreAssess {
     when: PreAssessJobRuns(story)
     -- Polls for stories where status = fetched.
 
-    -- LLM assigns issue + conservative rating + emotion
+    -- LLM assigns issue + screening rating + emotion
     ensures: story.issue = LLM.classify_issue(story) ?? story.feed.issue
     ensures: story.relevance_pre = LLM.pre_rate(story)
     ensures: story.emotion_tag = LLM.tag_emotion(story)

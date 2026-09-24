@@ -4,9 +4,10 @@ import { z } from 'zod'
 
 export const mastodonPostTextSchema = z.object({
   postText: z.string().describe(
-    'Short, informal editorial hook for Mastodon. Give readers a reason to care — ' +
-    'why this matters, what it means, or a conversational intro that hooks attention. ' +
-    'Do NOT summarize the story or repeat the title. ' +
+    'Short, informal editorial post for Mastodon that stands on its own: what happened, ' +
+    'naming the story\'s main actor or one key number, and why it matters. ' +
+    'Use only names, numbers and claims from the story. ' +
+    'Do NOT repeat the title. ' +
     'Do NOT include any URLs or links (they are added automatically). ' +
     'Write in a warm, conversational voice like a knowledgeable friend. Avoid clickbait. ' +
     'You may include 1-2 relevant hashtags at the end if they add value.'

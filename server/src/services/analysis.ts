@@ -390,8 +390,10 @@ export async function selectStories(storyIds: string[]): Promise<{ selected: str
       antifactors: s.antifactors,
       relevanceCalculation: s.relevanceCalculation,
       emotionTag: s.emotionTag,
+      sourceDatePublished: s.sourceDatePublished?.toISOString() ?? null,
     })),
     toSelect,
+    new Date().toISOString(),
   )
 
   await rateLimitDelay()

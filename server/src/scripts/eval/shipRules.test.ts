@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import type { SocialPostItem } from './fixtures.js'
+import type { SelectionGroup, SelectionStory, SocialPostItem } from './fixtures.js'
 import type { Criterion } from './recalibration.js'
-import { checkShipPost, socialPostCriteria } from './shipRules.js'
+import {
+  checkShipPost, datedForReplay, selectionCriteria, socialPostCriteria, STALE_DATE, staleProbeId, staleProbesKept,
+} from './shipRules.js'
+import type { SelectionArmMetrics } from './suites/largeTier.js'
 
 const item = (platform: SocialPostItem['platform'] = 'mastodon'): SocialPostItem => ({
   id: 's1',
@@ -59,5 +62,46 @@ describe('socialPostCriteria', () => {
     const criteria = socialPostCriteria([added], 0)
     expect(failing(criteria)).toEqual([])
     expect(criteria.find(c => c.name.startsWith('Drafts naming'))?.value).toBe('1 of 1')
+  })
+})
+
+const story = (id: string, sourceDatePublished?: string | null): SelectionStory => ({
+  id, title: id, summary: '', relevanceReasons: null, antifactors: null, relevanceCalculation: null, emotionTag: null, relevance: 6,
+  // Fixtures cached before the date field existed carry no key at all.
+  ...(sourceDatePublished === undefined ? {} : { sourceDatePublished }),
+} as SelectionStory)
+const group = (storedPicked: string[]): SelectionGroup => ({
+  id: 'g1', day: '2026-02-05', toSelect: 2,
+  stories: [story('a'), story('b', '2026-02-04T08:00:00.000Z'), story('c', null), story('d')],
+  storedPicked,
+})
+
+describe('stale-date probe', () => {
+  it('probes the first candidate production selected, and none when it selected nothing', () => {
+    expect(staleProbeId(group(['c', 'b']))).toBe('b')
+    expect(staleProbeId(group([]))).toBeNull()
+  })
+
+  it('keeps fixture dates (unknown included), dates stories cached without one by crawl day, and re-dates only the probe', () => {
+    const g = group(['d'])
+    const dated = datedForReplay(g, staleProbeId(g))
+    expect(dated.stories.map(s => s.sourceDatePublished)).toEqual(['2026-02-05T00:00:00.000Z', '2026-02-04T08:00:00.000Z', null, STALE_DATE])
+    expect(g.stories[3].sourceDatePublished).toBeUndefined()
+  })
+
+  it('counts the probes a pick list kept, over the groups that had one', () => {
+    expect(staleProbesKept(['a', null, 'c', 'd'], [['a', 'b'], ['x'], null, ['e']])).toEqual({ kept: 1, probed: 2 })
+  })
+})
+
+describe('selectionCriteria', () => {
+  const metrics = (over: Partial<SelectionArmMetrics> = {}): SelectionArmMetrics => ({
+    exactCount: 1, invalidIds: 0, declined: 0, failures: 0, jaccardStored: 0.5, jaccardOther: 0.6, upliftingShare: 0.2, ...over,
+  })
+
+  it('requires the exact count in every group, with no invalid IDs, declines or failures', () => {
+    expect(failing(selectionCriteria(metrics()))).toEqual([])
+    expect(failing(selectionCriteria(metrics({ exactCount: 14 / 15 })))).toEqual(['Exact count, valid unique IDs'])
+    expect(failing(selectionCriteria(metrics({ exactCount: null, declined: 1 })))).toEqual(['Exact count, valid unique IDs', 'Declined or empty responses'])
   })
 })

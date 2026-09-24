@@ -6,6 +6,7 @@ export const blueskyPostTextSchema = z.object({
   postText: z.string().describe(
     'Short, informal editorial hook for Bluesky. Give readers a reason to care — ' +
     'why this matters, what it means, or a conversational intro that hooks attention. ' +
+    'Name the story\'s main actor or one key number, using only names, numbers and claims from the story. ' +
     'Do NOT summarize the story or repeat the title. ' +
     'Do NOT include any URLs, links, or hashtags. ' +
     'Write in a warm, conversational voice like a knowledgeable friend. Avoid clickbait.'

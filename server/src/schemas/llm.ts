@@ -56,7 +56,8 @@ export const assessResultSchema = z.object({
     .describe(
       "Plain text summary of the article, 40-70 words. " +
         "Use plain language a general audience can understand. " +
-        "Avoid redundancy with the title."
+        "Avoid redundancy with the title. " +
+        "Tell the development itself ('The WHO cut its budget…'), not what the article says ('The article reports…')."
     ),
   factors: z
     .array(z.string())

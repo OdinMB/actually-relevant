@@ -18,6 +18,12 @@ const bareWord = (w: string) => w.replace(/['’]s$/u, '').replace(/['’-]+$/u,
 const notAnActor = (w: string) => NOT_ACTORS.has(w.split('-')[0])
 const capitalised = (w: string) => w.length >= 2 && /^\p{Lu}/u.test(w) && !notAnActor(w)
 
+/**
+ * "U.S." and "U.N." read as "US." and "UN.": one acronym, and the dot that may
+ * also end the sentence is kept.
+ */
+const undotAcronyms = (text: string) => text.replace(/\b(?:\p{Lu}\.){2,}/gu, m => `${m.replace(/\./g, '')}.`)
+
 /** Whether the word at `index` opens a sentence, a line or the text (after any quote or bracket). */
 function opensSentence(text: string, index: number): boolean {
   const before = text.slice(0, index).replace(/["'“‘([ \t]+$/u, '')
@@ -46,7 +52,9 @@ const partOfName = (text: string, t: NumberToken) => /\p{L}-$/u.test(text.slice(
  * Numbers count only when the story states them, so an embellished figure is
  * no anchor.
  */
-export function findStoryAnchors(post: string, story: string): string[] {
+export function findStoryAnchors(rawPost: string, rawStory: string): string[] {
+  const post = undotAcronyms(rawPost)
+  const story = undotAcronyms(rawStory)
   const names = storyNames(story)
   const sourceValues = readNumbers(story).flatMap(t => t.values)
   const found = [
@@ -63,8 +71,9 @@ export function findStoryAnchors(post: string, story: string): string[] {
  * post sentence and hashtags are skipped, since those are capitalised for
  * other reasons.
  */
-export function findUnstatedNames(post: string, story: string): string[] {
-  const known = story.toLowerCase()
+export function findUnstatedNames(rawPost: string, story: string): string[] {
+  const post = undotAcronyms(rawPost)
+  const known = undotAcronyms(story).toLowerCase()
   const added = [...post.matchAll(WORD_RE)].flatMap(m => {
     const at = m.index ?? 0
     const word = bareWord(m[0])

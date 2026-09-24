@@ -19,7 +19,7 @@ The client (`server/src/lib/bluesky.ts`) creates a session on first use, caches 
 
 Each Bluesky post consists of:
 
-1. **Editorial text** — LLM-generated hook drawing from the relevanceSummary (not a summary of the article); this is the first thing readers see
+1. **Editorial text** — LLM-generated hook drawing from the relevanceSummary (not a summary of the article) that names the story's main actor or one key number; this is the first thing readers see
 2. **Metadata line** — `Issue | Emotion | found on Publisher` where Publisher links to the source article; emotion is capitalized
 3. **Link card embed** — rich preview of the Actually Relevant story page (`titleLabel: title`, summary)
 
@@ -134,7 +134,7 @@ All under `/api/admin/bluesky/` (require auth):
 
 Two prompts in `server/src/prompts/bluesky.ts`:
 
-1. **`buildBlueskyPostPrompt`** — Generates a short editorial hook (not a summary). The LLM receives the story title, summary, and relevanceSummary as context, with instructions to write a "why you should care" angle. Max chars are dynamically calculated based on remaining space after title and metadata lines. Output: `blueskyPostTextSchema` (editorial text).
+1. **`buildBlueskyPostPrompt`** — Generates a short editorial hook (not a summary). The LLM receives the story title, summary, and relevanceSummary as context, with instructions to write a "why you should care" angle that names the story's main actor (organization, country, person) or one key number, using only names, numbers and claims from the story (owner's decision, 2026-09-24: gpt-6-luna's hooks were often generic). Max chars are dynamically calculated based on remaining space after title and metadata lines. Output: `blueskyPostTextSchema` (editorial text). `eval:recalibrate --steps social-post` checks both platforms' drafts (`.context/model-eval.md`).
 
 2. **`buildBlueskyPickBestPrompt`** — Picks the most engagement-worthy story from a set. Receives each candidate's summary and relevanceSummary (as "Why it matters") alongside metadata. Considers timeliness, emotional appeal, broad relevance, shareability, and uniqueness. Output: `blueskyPickBestSchema` (storyId + reasoning).
 
