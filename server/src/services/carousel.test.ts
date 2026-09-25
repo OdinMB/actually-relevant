@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { existsSync, unlinkSync, mkdirSync } from 'fs'
-import { rm } from 'fs/promises'
+import { rm, readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { createStoryImage, generateCarouselZip, type CarouselStory } from './carousel.js'
+import { createStoryImage, generateCarouselPdf, generateCarouselZip, type CarouselStory } from './carousel.js'
+import { IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
 
 const sampleStory: CarouselStory = {
   title: 'Major AI breakthrough in quantum computing research',
@@ -40,6 +41,36 @@ describe('createStoryImage', () => {
     const buffer = createStoryImage(story)
     expect(buffer).toBeInstanceOf(Buffer)
     expect(buffer.length).toBeGreaterThan(0)
+  })
+
+  it('marks the image as AI-generated in embedded XMP', () => {
+    const buffer = createStoryImage(sampleStory)
+    expect(buffer.includes(`DigitalSourceType="${IPTC_TRAINED_ALGORITHMIC_MEDIA}"`)).toBe(true)
+  })
+})
+
+describe('generateCarouselPdf', () => {
+  const outputDir = join(tmpdir(), `test_carousel_pdf_${Date.now()}`)
+
+  afterEach(async () => {
+    try {
+      if (existsSync(outputDir)) await rm(outputDir, { recursive: true })
+    } catch {
+      // ignore cleanup errors
+    }
+  })
+
+  it('marks the PDF as AI-generated in its XMP metadata stream', async () => {
+    mkdirSync(outputDir, { recursive: true })
+    const imagePath = join(outputDir, 'slide.png')
+    await writeFile(imagePath, createStoryImage(sampleStory))
+    const pdfPath = join(outputDir, 'carousel.pdf')
+
+    await generateCarouselPdf([imagePath], pdfPath)
+
+    const pdf = await readFile(pdfPath)
+    expect(pdf.includes('/Type /Metadata')).toBe(true)
+    expect(pdf.includes(`DigitalSourceType="${IPTC_TRAINED_ALGORITHMIC_MEDIA}"`)).toBe(true)
   })
 })
 

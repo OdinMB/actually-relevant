@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { z } from 'zod'
 import { sampleStory, sampleFeed, sampleIssue } from '../test/helpers.js'
+import { assessResultSchema } from '../schemas/llm.js'
+import { AI_GENERATED_STORY_FIELDS } from '../lib/aiProvenance.js'
 
 const mockPrisma = vi.hoisted(() => ({
   story: {
@@ -47,6 +50,7 @@ vi.mock('./dedup.js', () => ({
 }))
 
 const { preAssessStories, reclassifyStories, assessStory, selectStories } = await import('./analysis.js')
+const { PUBLIC_STORY_SELECT } = await import('./story.js')
 
 function storyWithRelations(overrides: Record<string, any> = {}) {
   return {
@@ -329,6 +333,46 @@ describe('assessStory', () => {
     await new Promise(resolve => setTimeout(resolve, 10))
 
     expect(mockDetectAndCluster).toHaveBeenCalledWith('story-1')
+  })
+})
+
+describe('AI-generated field registry', () => {
+  const SENTINEL = 'AI-OUTPUT-SENTINEL'
+
+  /** A model response with recognisable text in every field of the live assess schema. */
+  function sentinelResponse(): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(assessResultSchema.shape).map(([key, field]) => {
+      if (field instanceof z.ZodString) return [key, `${SENTINEL} ${key}`]
+      if (field instanceof z.ZodArray) return [key, [`${SENTINEL} ${key}`]]
+      if (field instanceof z.ZodNumber) return [key, 5]
+      throw new Error(`sentinelResponse: add a case for the schema type of "${key}"`)
+    }))
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDetectAndCluster.mockResolvedValue({ clusterId: null, newCluster: false, memberCount: 0, rejectedIds: [] })
+  })
+
+  it('declares exactly the model-written story fields that the public API serves', async () => {
+    mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1' }))
+    mockPrisma.story.update.mockResolvedValue({})
+    mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1], hash: 'h1' })
+    mockGetMediumLLM.mockReturnValue({
+      withStructuredOutput: () => ({ invoke: vi.fn().mockResolvedValue(sentinelResponse()) }),
+    })
+
+    await assessStory('story-1')
+
+    const written = mockPrisma.story.update.mock.calls[0][0].data as Record<string, unknown>
+    const modelWritten = Object.keys(written).filter(
+      (key) => typeof written[key] === 'string' && (written[key] as string).includes(SENTINEL),
+    )
+    const publicFields = new Set(Object.keys(PUBLIC_STORY_SELECT))
+    const modelWrittenAndServed = modelWritten.filter((key) => publicFields.has(key))
+
+    expect(modelWrittenAndServed.length).toBeGreaterThan(0)
+    expect([...modelWrittenAndServed].sort()).toEqual([...AI_GENERATED_STORY_FIELDS].sort())
   })
 })
 

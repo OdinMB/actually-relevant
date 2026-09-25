@@ -40,6 +40,7 @@ vi.mock('../../lib/cache.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
+const { aiGeneratedMarker } = await import('../../lib/aiProvenance.js')
 
 const mockIssue = {
   id: 'issue-1',
@@ -130,6 +131,21 @@ describe('Homepage API', () => {
         expect(Array.isArray(entry.uplifting)).toBe(true)
         expect(Array.isArray(entry.calm)).toBe(true)
         expect(Array.isArray(entry.negative)).toBe(true)
+      }
+    })
+
+    it('marks the AI-generated fields of every story in every bucket', async () => {
+      mockPrisma.issue.findMany.mockResolvedValue([mockIssue])
+      mockPrisma.story.findMany.mockResolvedValue([mockStory])
+
+      const res = await request(app).get('/api/homepage')
+      const expected = JSON.parse(JSON.stringify(aiGeneratedMarker(mockStory)))
+      const buckets = Object.values(res.body.storiesByIssue) as Record<string, { aiGenerated?: unknown }[]>[]
+      const stories = buckets.flatMap((b) => [...b.uplifting, ...b.calm, ...b.negative])
+
+      expect(stories.length).toBeGreaterThan(0)
+      for (const story of stories) {
+        expect(story.aiGenerated).toEqual(expected)
       }
     })
 

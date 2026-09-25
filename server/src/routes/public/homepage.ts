@@ -3,6 +3,7 @@ import * as storyService from '../../services/story.js'
 import * as issueService from '../../services/issue.js'
 import { TTLCache, cached } from '../../lib/cache.js'
 import { createLogger } from '../../lib/logger.js'
+import { withAiGeneratedMarker, type AiStoryText } from '../../lib/aiProvenance.js'
 
 const router = Router()
 const log = createLogger('public:homepage')
@@ -19,6 +20,26 @@ const HOMEPAGE_ISSUE_SLUGS = [
   'science-technology',
 ]
 
+interface EmotionBuckets<S> {
+  uplifting: S[]
+  calm: S[]
+  negative: S[]
+}
+
+/** Add the machine-readable aiGenerated marker to every story in every emotion bucket. */
+function markBuckets<S extends AiStoryText>(storiesByIssue: Record<string, EmotionBuckets<S>>) {
+  return Object.fromEntries(
+    Object.entries(storiesByIssue).map(([slug, { uplifting, calm, negative }]) => [
+      slug,
+      {
+        uplifting: uplifting.map(withAiGeneratedMarker),
+        calm: calm.map(withAiGeneratedMarker),
+        negative: negative.map(withAiGeneratedMarker),
+      },
+    ]),
+  )
+}
+
 router.get('/', async (req, res) => {
   try {
     const data = await cached(homepageCache, 'homepage-data', async () => {
@@ -30,7 +51,7 @@ router.get('/', async (req, res) => {
 
       return {
         issues,
-        storiesByIssue: storyData.storiesByIssue,
+        storiesByIssue: markBuckets(storyData.storiesByIssue),
       }
     })
 

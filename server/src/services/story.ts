@@ -626,7 +626,8 @@ export async function getStoryStats() {
 
 // Public endpoints — limited fields, only published stories
 
-const PUBLIC_STORY_SELECT = {
+/** Fields the public API serves. The public routes add the aiGenerated marker (lib/aiProvenance.ts). */
+export const PUBLIC_STORY_SELECT = {
   id: true,
   slug: true,
   sourceUrl: true,
@@ -1155,7 +1156,7 @@ export async function getHomepageData(issueSlugs: string[], storiesPerIssue = 7)
 
   const issueResults = await Promise.all(storiesPromises)
 
-  const storiesByIssue: Record<string, { uplifting: unknown[]; calm: unknown[]; negative: unknown[] }> = {}
+  const storiesByIssue: Record<string, Omit<(typeof issueResults)[number], 'slug'>> = {}
   for (const { slug, uplifting, calm, negative } of issueResults) {
     storiesByIssue[slug] = { uplifting, calm, negative }
   }

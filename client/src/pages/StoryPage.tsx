@@ -24,15 +24,18 @@ function AnalysisSection({
   title,
   text,
   accentColor,
+  aiField,
 }: {
   title: string
   text: string
   accentColor: string
+  /** API field name of the AI-generated text, for the machine-readable marker */
+  aiField: string
 }) {
   const points = parsePoints(text)
 
   return (
-    <section className="mb-10">
+    <section className="mb-10" data-ai-generated={aiField}>
       {/* Ruled heading with colored dot — larger text */}
       <div className="ruled-heading mb-6 !text-sm !tracking-wider">
         <span className="flex items-center gap-2">
@@ -173,11 +176,12 @@ export default function StoryPage() {
               </Link>
             </div>
 
-            {/* Title */}
+            {/* Title. data-ai-generated marks AI-written text by API field name (.context/ai-transparency.md). */}
             {titleLabel && (
-              <span className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3">{titleLabel}</span>
+              <span className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3" data-ai-generated="titleLabel">{titleLabel}</span>
             )}
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-5 leading-tight">
+            {/* Without an AI title the headline falls back to the source's own, which is not AI text */}
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-5 leading-tight" data-ai-generated={story.title ? 'title' : undefined}>
               {headline}
             </h1>
 
@@ -239,7 +243,7 @@ export default function StoryPage() {
         <div className="page-section !pt-0">
           {/* Summary */}
           {story.summary && (
-            <section className="mb-10">
+            <section className="mb-10" data-ai-generated="summary">
               <div
                 className="prose drop-cap"
                 style={{ '--drop-cap-color': colors.hex } as React.CSSProperties}
@@ -251,7 +255,7 @@ export default function StoryPage() {
 
           {/* Key quote — editorial pull-quote style */}
           {story.quote && (
-            <div className="py-6 md:py-8 text-center max-w-2xl mx-auto mb-10">
+            <div className="py-6 md:py-8 text-center max-w-2xl mx-auto mb-10" data-ai-generated="quote quoteAttribution">
               <div className="relative">
                 <span
                   aria-hidden="true"
@@ -279,6 +283,7 @@ export default function StoryPage() {
               title="Why This Matters"
               text={story.relevanceReasons}
               accentColor={colors.hex}
+              aiField="relevanceReasons"
             />
           )}
 
@@ -288,6 +293,7 @@ export default function StoryPage() {
               title="Caveats"
               text={story.antifactors}
               accentColor={shiftHex(colors.hex, -0.25)}
+              aiField="antifactors"
             />
           )}
 

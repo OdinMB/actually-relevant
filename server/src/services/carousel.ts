@@ -4,6 +4,7 @@ import archiver from 'archiver'
 import { createWriteStream, mkdirSync, unlinkSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { aiGeneratedXmpDescription, aiGeneratedXmpPacket, embedXmpInPng } from '../lib/xmp.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ASSETS_DIR = join(__dirname, '..', '..', 'assets')
@@ -123,7 +124,8 @@ export function createStoryImage(story: CarouselStory): Buffer {
   ctx.font = '14px InterRegular, Arial, sans-serif'
   ctx.fillText('actuallyrelevant.news', WIDTH - PADDING / 2 - 170, HEIGHT - PADDING / 2 - 10)
 
-  return canvas.toBuffer('image/png')
+  // The slide renders AI-written headline and summary text: mark the file as AI-generated.
+  return embedXmpInPng(canvas.toBuffer('image/png'), aiGeneratedXmpPacket())
 }
 
 export async function generateCarouselZip(
@@ -147,7 +149,7 @@ export async function generateCarouselZip(
 
   // Generate PDF
   const pdfPath = join(outputDir, 'carousel_images.pdf')
-  await generatePdf(imagePaths, pdfPath)
+  await generateCarouselPdf(imagePaths, pdfPath)
 
   // Create ZIP
   const zipPath = join(outputDir, 'carousel_images.zip')
@@ -162,13 +164,27 @@ export async function generateCarouselZip(
   return zipPath
 }
 
-function generatePdf(imagePaths: string[], outputPath: string): Promise<void> {
+/**
+ * Document info marking the PDF as AI-generated. Names the application, never the
+ * admin who exported it (AI Act Guidelines ¶94: no creator identity in the marks).
+ */
+const AI_PDF_INFO = {
+  Creator: 'Actually Relevant',
+  Producer: 'Actually Relevant',
+  Subject: 'AI-generated',
+  Keywords: 'AI-generated, trainedAlgorithmicMedia',
+}
+
+export function generateCarouselPdf(imagePaths: string[], outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       layout: 'landscape',
       size: [HEIGHT, WIDTH], // PDFKit uses [width, height] but landscape flips them
       margin: 0,
       autoFirstPage: false,
+      // PDFKit writes the XMP metadata stream only for PDF 1.4 and later
+      pdfVersion: '1.4',
+      info: AI_PDF_INFO,
     })
 
     const stream = createWriteStream(outputPath)
@@ -179,6 +195,7 @@ function generatePdf(imagePaths: string[], outputPath: string): Promise<void> {
       doc.image(imagePath, 0, 0, { width: WIDTH, height: HEIGHT })
     }
 
+    doc.appendXML(aiGeneratedXmpDescription())
     doc.end()
     stream.on('finish', resolve)
     stream.on('error', reject)

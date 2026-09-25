@@ -23,6 +23,8 @@ All routes are registered in both `App.tsx` and `routes.ts` (for sitemap generat
 - `GET /api/issues` — All issues (id, name, slug, description only)
 - `GET /api/issues/:slug` — Single issue by slug
 
+Every story object the public JSON routes return (`/api/stories`, `/api/stories/:slug`, `/api/stories/:slug/related`, `/api/homepage`) carries a machine-readable `aiGenerated` marker, added in the route with `withAiGeneratedMarker()` (`server/src/lib/aiProvenance.ts`). A new public route that returns stories must add it too; the compliance record (`.context/ai-transparency.md`) relies on it.
+
 API client: `client/src/lib/api.ts` (exports `publicApi` and `API_BASE`)
 Hooks: `usePublicStories.ts`, `usePublicIssues.ts`
 

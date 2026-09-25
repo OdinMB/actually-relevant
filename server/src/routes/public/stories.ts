@@ -5,6 +5,7 @@ import { searchLimiter } from '../../middleware/rateLimit.js'
 import { publicStoryQuerySchema } from '../../schemas/story.js'
 import { createLogger } from '../../lib/logger.js'
 import { config } from '../../config.js'
+import { withAiGeneratedMarker } from '../../lib/aiProvenance.js'
 
 const router = Router()
 const log = createLogger('public:stories')
@@ -27,7 +28,7 @@ router.get('/', (req, res, next) => {
       emotionTags,
     })
     res.set('Cache-Control', 'public, max-age=60')
-    res.json(result)
+    res.json({ ...result, data: result.data.map(withAiGeneratedMarker) })
   } catch (err) {
     log.error({ err }, 'failed to fetch stories')
     res.status(500).json({ error: 'Failed to fetch stories' })
@@ -50,7 +51,7 @@ router.get('/:slug/related', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 4, 10)
     const stories = await storyService.getRelatedStories(req.params.slug, limit)
     res.set('Cache-Control', `public, max-age=${config.relatedStories.httpCacheSeconds}`)
-    res.json(stories)
+    res.json(stories.map(withAiGeneratedMarker))
   } catch (err) {
     log.error({ err, slug: req.params.slug }, 'failed to fetch related stories')
     res.status(500).json({ error: 'Failed to fetch related stories' })
@@ -72,7 +73,7 @@ router.get('/:slug', async (req, res) => {
       return
     }
     res.set('Cache-Control', 'public, max-age=60')
-    res.json(story)
+    res.json(withAiGeneratedMarker(story))
   } catch (err) {
     log.error({ err, slug: req.params.slug }, 'failed to fetch story')
     res.status(500).json({ error: 'Failed to fetch story' })

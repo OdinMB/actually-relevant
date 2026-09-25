@@ -12,6 +12,7 @@ const mockPrisma = vi.hoisted(() => ({
     findFirst: vi.fn(),
     count: vi.fn(),
   },
+  $queryRaw: vi.fn(),
   $disconnect: vi.fn(),
 }))
 
@@ -25,6 +26,12 @@ vi.mock('../../services/crawler.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
+const { aiGeneratedMarker } = await import('../../lib/aiProvenance.js')
+
+/** The marker as JSON serializes it: the route must attach exactly this. */
+function expectedMarker(story: Parameters<typeof aiGeneratedMarker>[0]) {
+  return JSON.parse(JSON.stringify(aiGeneratedMarker(story)))
+}
 
 const publicStory = {
   id: 'story-1',
@@ -117,6 +124,37 @@ describe('Public Stories API', () => {
       expect(res.body.data[0].relevanceCalculation).toBeUndefined()
       expect(res.body.data[0].sourceContent).toBeUndefined()
     })
+
+    it('marks the AI-generated fields of each listed story', async () => {
+      mockPrisma.story.findMany.mockResolvedValue([publicStory])
+      mockPrisma.story.count.mockResolvedValue(1)
+
+      const res = await request(app).get('/api/stories')
+      expect(res.body.data[0].aiGenerated).toEqual(expectedMarker(publicStory))
+    })
+
+    it('marks the AI-generated fields of search results', async () => {
+      mockPrisma.story.findMany.mockResolvedValue([publicStory])
+
+      const res = await request(app).get('/api/stories?search=Published')
+      expect(res.status).toBe(200)
+      expect(res.body.data[0].aiGenerated).toEqual(expectedMarker(publicStory))
+    })
+  })
+
+  describe('GET /api/stories/:slug/related', () => {
+    it('marks the AI-generated fields of related stories', async () => {
+      // Source story, then a candidate pool small enough to skip the LLM re-rank
+      mockPrisma.$queryRaw
+        .mockResolvedValueOnce([{ id: 'source', title: 'Source', title_label: null }])
+        .mockResolvedValueOnce([{ id: 'story-1', title: 'Published Article', title_label: null }])
+      mockPrisma.story.findMany.mockResolvedValue([publicStory])
+
+      const res = await request(app).get('/api/stories/source-slug/related')
+      expect(res.status).toBe(200)
+      expect(res.body).toHaveLength(1)
+      expect(res.body[0].aiGenerated).toEqual(expectedMarker(publicStory))
+    })
   })
 
   describe('GET /api/stories/:id', () => {
@@ -127,6 +165,13 @@ describe('Public Stories API', () => {
       expect(res.status).toBe(200)
       expect(res.body.title).toBe('Published Article')
       expect(res.body.feed).toBeDefined()
+    })
+
+    it('marks the AI-generated fields of the story', async () => {
+      mockPrisma.story.findFirst.mockResolvedValue(publicStory)
+
+      const res = await request(app).get('/api/stories/story-1')
+      expect(res.body.aiGenerated).toEqual(expectedMarker(publicStory))
     })
 
     it('returns 404 for non-published story', async () => {
