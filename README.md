@@ -88,7 +88,7 @@ This project requires **three services** on Render: a managed PostgreSQL databas
 | **Start Command** | `npm start` |
 | **Health Check Path** | `/health` |
 
-The build generates the Prisma client, applies any pending database migrations, and compiles TypeScript. Migrations run automatically on every deploy via `prisma migrate deploy`, which is a no-op when there are no pending migrations.
+The build generates the Prisma client, applies any pending database migrations, and compiles TypeScript with the lockfile's compiler. Migrations run automatically on every deploy via `prisma migrate deploy`, which is a no-op when there are no pending migrations. Keep `--include=dev`: `NODE_ENV=production` makes a plain `npm install` skip devDependencies, which include the Prisma CLI and TypeScript (see `.context/deployment.md`).
 
 **Environment Variables:**
 
@@ -118,7 +118,7 @@ The build generates the Prisma client, applies any pending database migrations, 
 | **Build Command** | `npm install && npm run build` |
 | **Publish Directory** | `dist` |
 
-The build type-checks, bundles with Vite, and prerenders public routes using Puppeteer. Render's build environment includes Chromium, so prerendering works without extra setup.
+The `build` script installs devDependencies itself (`npm install --include=dev`, see `.context/deployment.md`), then type-checks, bundles with Vite, and prerenders public routes using Puppeteer. Render's build environment includes Chromium, so prerendering works without extra setup.
 
 **Rewrite rules:** Add these rewrites in the Render dashboard **in this exact order** (Render evaluates rules top-to-bottom, first match wins):
 
@@ -155,7 +155,7 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
 actually-relevant/
 ├── client/          # React frontend
 │   ├── src/         # Source code
-│   ├── scripts/     # Build scripts (sitemap, images)
+│   ├── scripts/     # Build scripts (devDependency install, sitemap, images)
 │   ├── dist/        # Built output (gitignored)
 │   └── package.json
 ├── server/          # Express backend
@@ -190,6 +190,7 @@ Check the build logs. Common issues:
 - Missing `Root Directory` setting on Render
 - Node version mismatch — add `engines` to package.json if needed
 - Missing `npx prisma generate` before server build
+- Backend build command without `--include=dev` (the Prisma CLI and TypeScript are devDependencies)
 
 ### API Calls Fail (CORS Error)
 1. Verify `FRONTEND_URL` is set correctly on the backend

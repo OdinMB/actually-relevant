@@ -42,7 +42,7 @@ Use `--prefix` for all npm commands:
 
 ```bash
 npm run dev --prefix client           # Start client dev server
-npm run build --prefix client         # Build (includes prerendering)
+npm run build --prefix client         # Build (installs devDeps first, includes prerendering)
 npm run typecheck --prefix client     # Type-check client (tsc --noEmit; fast, no prerender)
 npm run test --prefix client -- --run # Run client tests
 npm run dev --prefix server           # Start server with hot reload
@@ -144,6 +144,7 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 | `images.md` | WebP optimization, size presets, CLI commands |
 | `logging.md` | Pino config, error serialization, structured data, log levels |
 | `database-migrations.md` | SQL-first migration workflow, allowed/banned commands |
+| `deployment.md` | Render services; why builds install devDependencies and pin `tsc` (read before touching build scripts) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic, post format |
 | `client/.context/skeletons.md` | Skeleton components for loading states (prevents CLS) |

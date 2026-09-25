@@ -11,8 +11,10 @@ Prisma's `migrate dev` command causes persistent issues on Windows: DLL engine f
 On Render (Linux), none of the Windows DLL-locking issues apply. Migrations run automatically during the build step:
 
 ```
-npm install && npx prisma generate && npx prisma migrate deploy && npm run build
+npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
 ```
+
+`--include=dev` is required: the service runs with `NODE_ENV=production`, and the Prisma CLI and TypeScript are devDependencies (see `deployment.md`).
 
 `prisma migrate deploy` applies pending migrations from `server/prisma/migrations/` without generating new ones or prompting. It's a no-op when there are nothing pending. If a migration fails, the build fails and Render does not start the new version.
 
