@@ -1,4 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { existsSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
+import { config } from '../config.js'
+
+/** The client's static files, served at the site root (config.siteUrl). */
+const CLIENT_PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'client', 'public')
 
 const mockPrisma = vi.hoisted(() => ({
   story: {
@@ -295,6 +302,32 @@ describe('publishPost', () => {
     const result = await publishPost('post-1')
     expect(result.status).toBe('published')
     expect(mockBlueskyClient.createPost).toHaveBeenCalled()
+  })
+
+  it('points the link-card thumbnail at an image the client actually ships', async () => {
+    mockPrisma.blueskyPost.findUnique.mockResolvedValue({
+      id: 'post-1',
+      status: 'draft',
+      postText: 'Great post',
+      story: {
+        slug: 'test-story',
+        title: 'Test',
+        sourceTitle: 'Original',
+        sourceUrl: 'https://example.com',
+        marketingBlurb: 'Blurb',
+        summary: 'Summary',
+        feed: { title: 'Feed', displayTitle: 'Feed Name' },
+      },
+    })
+    mockBlueskyClient.createPost.mockResolvedValue({ uri: 'at://did/post/1', cid: 'cid123' })
+    mockPrisma.blueskyPost.update.mockResolvedValue({ id: 'post-1', status: 'published' })
+
+    await publishPost('post-1')
+
+    const linkCard = mockBlueskyClient.createPost.mock.calls[0][1] as { thumbUrl?: string }
+    expect(linkCard.thumbUrl?.startsWith(config.siteUrl)).toBe(true)
+    const servedPath = linkCard.thumbUrl!.slice(config.siteUrl.length)
+    expect(existsSync(join(CLIENT_PUBLIC_DIR, servedPath))).toBe(true)
   })
 
   it('marks as failed on API error', async () => {

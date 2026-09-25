@@ -29,7 +29,7 @@ Bluesky posts are limited to 300 graphemes. The LLM text max chars are calculate
 
 Bluesky does **not** auto-fetch og: metadata from URLs. The link card (title, description, thumbnail) is constructed at publish time in `publishPost()` (`server/src/services/bluesky.ts`). The thumbnail image is fetched from a hardcoded URL, uploaded as a blob to Bluesky, and attached to the embed.
 
-**Current behavior:** All posts use the global `/og-image.png`. When per-story og:images are implemented, `publishPost()` must be updated to use the story-specific og:image URL instead. See also `.context/seo.md`.
+**Current behavior:** All posts use the global `/images/og-image.png` (served from `client/public/images/`; `bluesky.test.ts` checks the file exists). When per-story og:images are implemented, `publishPost()` must be updated to use the story-specific og:image URL instead. See also `.context/seo.md`.
 
 ## Flows
 

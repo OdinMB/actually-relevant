@@ -315,9 +315,8 @@ export async function publishPost(postId: string) {
     description: story.marketingBlurb || story.summary || '',
   }
 
-  // Use og:image from our site if available
-  const ogImageUrl = `${config.siteUrl}/og-image.png`
-  linkCard.thumbUrl = ogImageUrl
+  // Global og:image, served from client/public/images (the same file as the site's og:image meta)
+  linkCard.thumbUrl = `${config.siteUrl}/images/og-image.png`
 
   try {
     const result = await createPost(post.postText, linkCard, publisherName, publisherUrl)
