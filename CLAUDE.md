@@ -17,6 +17,7 @@ actually-relevant/
 ├── client/          # React frontend (Vite + TypeScript + Tailwind)
 ├── server/          # Express backend (Prisma + LangChain + OpenAI)
 ├── shared/          # Shared types and constants
+├── scripts/         # Build helper shared by client and server
 ├── .specs/          # Behavioral specs (allium) -- what the system guarantees
 ├── .context/        # Implementation reference -- how it's built and operated
 ├── .plans/          # Active development plans
@@ -46,7 +47,7 @@ npm run build --prefix client         # Build (installs devDeps first, includes 
 npm run typecheck --prefix client     # Type-check client (tsc --noEmit; fast, no prerender)
 npm run test --prefix client -- --run # Run client tests
 npm run dev --prefix server           # Start server with hot reload
-npm run build --prefix server         # Build server
+npm run build --prefix server         # Build server (installs devDeps first)
 npm run typecheck --prefix server     # Type-check server (tsc --noEmit)
 npm run test --prefix server          # Run server tests
 ```

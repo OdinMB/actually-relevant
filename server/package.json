@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "node node_modules/typescript/bin/tsc --version && node node_modules/typescript/bin/tsc",
+    "build": "node ../scripts/install-dev-deps.mjs && node node_modules/typescript/bin/tsc --version && node node_modules/typescript/bin/tsc",
     "typecheck": "tsc --noEmit",
     "start": "node --max-old-space-size=384 dist/index.js",
     "test": "vitest run",

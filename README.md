@@ -88,7 +88,7 @@ This project requires **three services** on Render: a managed PostgreSQL databas
 | **Start Command** | `npm start` |
 | **Health Check Path** | `/health` |
 
-The build generates the Prisma client, applies any pending database migrations, and compiles TypeScript with the lockfile's compiler. Migrations run automatically on every deploy via `prisma migrate deploy`, which is a no-op when there are no pending migrations. Keep `--include=dev`: `NODE_ENV=production` makes a plain `npm install` skip devDependencies, which include the Prisma CLI and TypeScript (see `.context/deployment.md`).
+The build generates the Prisma client, applies any pending database migrations, and compiles TypeScript. Migrations run automatically on every deploy via `prisma migrate deploy`, which is a no-op when there are no pending migrations. `NODE_ENV=production` makes a plain `npm install` skip devDependencies, so the command installs them with `--include=dev`, and the `build` script installs them again itself and compiles with the lockfile's TypeScript (see `.context/deployment.md`).
 
 **Environment Variables:**
 
@@ -155,7 +155,7 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
 actually-relevant/
 ├── client/          # React frontend
 │   ├── src/         # Source code
-│   ├── scripts/     # Build scripts (devDependency install, sitemap, images)
+│   ├── scripts/     # Build scripts (sitemap, images)
 │   ├── dist/        # Built output (gitignored)
 │   └── package.json
 ├── server/          # Express backend
@@ -164,6 +164,7 @@ actually-relevant/
 │   ├── dist/        # Built output (gitignored)
 │   └── package.json
 ├── shared/          # Shared types and constants
+├── scripts/         # Build helper shared by client and server (devDependency install)
 ├── .context/        # Implementation documentation (17 files)
 ├── .specs/          # Behavioral specifications (Allium)
 ├── CONTRIBUTING.md  # Contribution guidelines
@@ -190,7 +191,6 @@ Check the build logs. Common issues:
 - Missing `Root Directory` setting on Render
 - Node version mismatch — add `engines` to package.json if needed
 - Missing `npx prisma generate` before server build
-- Backend build command without `--include=dev` (the Prisma CLI and TypeScript are devDependencies)
 
 ### API Calls Fail (CORS Error)
 1. Verify `FRONTEND_URL` is set correctly on the backend

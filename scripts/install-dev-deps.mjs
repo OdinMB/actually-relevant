@@ -1,13 +1,15 @@
-// First step of `npm run build`: install devDependencies even where the
-// environment omits them (NODE_ENV=production). TypeScript, Vite and the
-// prerenderer are devDependencies, so without this the build would fail or
-// run whatever `tsc` is on PATH. See .context/deployment.md.
+// First step of `npm run build` in client/ and server/: install the package's
+// devDependencies even where the environment omits them (NODE_ENV=production).
+// TypeScript, its type packages, Vite and the prerenderer are devDependencies,
+// so without this the build fails or runs whatever `tsc` is on PATH. Installs
+// into the working directory, which npm sets to the package running the
+// script. See .context/deployment.md.
 import { spawnSync } from 'node:child_process'
 
 // `npm run build --prefix client` exports npm_config_prefix=<client dir> to
 // the script. A nested npm takes that as its global prefix too, and on Windows
 // a bare `npm install` whose global and local prefix match turns into
-// `npm install .`, adding the client to its own dependencies. Drop the
+// `npm install .`, adding the package to its own dependencies. Drop the
 // variable so the install finds the project from the working directory alone.
 const env = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'npm_config_prefix'),
