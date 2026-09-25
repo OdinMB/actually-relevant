@@ -10,6 +10,7 @@ import type { StoryForBlueskyPost, StoryForBlueskyPick } from '../prompts/index.
 import { blueskyPostTextSchema, blueskyPickBestSchema } from '../schemas/bluesky.js'
 import type { AuthorFeedResult } from '../lib/bluesky.js'
 import { TTLCache, cached } from '../lib/cache.js'
+import { buildMetaLine } from './socialPostFormat.js'
 
 const log = createLogger('bluesky-service')
 
@@ -26,27 +27,9 @@ export function invalidateFeedCache(): void {
 // Draft generation
 // ---------------------------------------------------------------------------
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
 /** Build the title line: "titleLabel: title" or just "title" */
 function buildTitleLine(titleLabel: string, title: string): string {
   return titleLabel ? `${titleLabel}: ${title}` : title
-}
-
-/** Build the metadata line: "Issue | Emotion | found on Publisher" */
-function buildMetaLine(parts: {
-  issueName: string | null
-  emotionTag: string | null
-  publisherName: string
-}): string {
-  const segments = [
-    parts.issueName,
-    parts.emotionTag ? capitalize(parts.emotionTag) : null,
-    `found on ${parts.publisherName}`,
-  ].filter(Boolean)
-  return segments.join(' | ')
 }
 
 /**

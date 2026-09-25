@@ -11,6 +11,7 @@ import SubscribeProvider, {
 import FeedbackProvider from "../components/FeedbackProvider";
 import { PositivityProvider } from "../contexts/PositivityContext";
 import { MoodDialPanel } from "../components/PositivitySlider";
+import SiteAiNotice from "../components/ai/SiteAiNotice";
 const KOFI_URL = "https://ko-fi.com/odinmb";
 const BLUESKY_URL = "https://bsky.app/profile/actuallyrelevant.bsky.social";
 const MASTODON_URL = "https://mastodon.social/@actuallyrelevant";
@@ -540,6 +541,8 @@ function PublicLayoutInner() {
       <CategoryColorStrip className="lg:hidden" />
 
       <main id="main-content" className="flex-1">
+        {/* First thing in <main>, so the skip link lands on the AI notice, not past it (AI Act Art. 50(5)) */}
+        <SiteAiNotice />
         <Outlet />
       </main>
 

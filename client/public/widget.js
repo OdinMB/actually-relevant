@@ -9,10 +9,14 @@
     issue: script.getAttribute('data-issue') || '',
     theme: script.getAttribute('data-theme') === 'dark' ? 'dark' : 'light',
     title: script.getAttribute('data-title') || 'Actually Relevant',
+    customTitle: script.getAttribute('data-title') || '',
   }
 
   var API_BASE = 'https://api.actuallyrelevant.news/api'
   var SITE_URL = 'https://actuallyrelevant.news'
+  // The widget puts AI-written headlines on other people's sites, so its header always says so
+  // (AI Act Art. 50(4)); a custom data-title is shown above it, never instead of it.
+  var AI_HEADER = 'AI-generated headlines from Actually Relevant'
 
   // Create container with shadow DOM for style isolation
   var container = document.createElement('div')
@@ -33,6 +37,10 @@
     '.ar-header { padding: 12px 16px; border-bottom: 1px solid ' + border + '; display: flex; align-items: center; gap: 8px; }',
     '.ar-header-icon { width: 14px; height: 14px; color:' + accent + '; }',
     '.ar-header-title { font-weight: 600; font-size: 13px; letter-spacing: 0.025em; }',
+    '.ar-header-text { display: flex; flex-direction: column; gap: 2px; }',
+    '.ar-header-note { font-size: 12px; color:' + textMuted + '; }',
+    '.ar-header-ai { display: inline-flex; align-items: center; gap: 6px; }',
+    '.ar-badge { display: inline-block; border: 1px solid currentColor; border-radius: 3px; padding: 1px 4px; font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: 0.025em; }',
     '.ar-list { list-style: none; margin: 0; padding: 0; }',
     '.ar-item { padding: 10px 16px; border-bottom: 1px solid ' + border + '; }',
     '.ar-item:last-child { border-bottom: none; }',
@@ -99,8 +107,13 @@
       }
       var html = '<div class="ar-header">'
       html += '<svg class="ar-header-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
-      html += '<span class="ar-header-title">' + escapeHtml(config.title) + '</span>'
-      html += '</div>'
+      html += '<div class="ar-header-text">'
+      if (config.customTitle) {
+        html += '<span class="ar-header-title">' + escapeHtml(config.customTitle) + '</span>'
+      }
+      html += '<span class="ar-header-ai ' + (config.customTitle ? 'ar-header-note' : 'ar-header-title') + '">'
+      html += '<span class="ar-badge" aria-hidden="true">AI</span>' + AI_HEADER + '</span>'
+      html += '</div></div>'
       html += '<ul class="ar-list">'
       stories.forEach(function (story) {
         var storyTitle = story.title || story.sourceTitle

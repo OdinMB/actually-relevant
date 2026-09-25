@@ -28,7 +28,7 @@ The client (`server/src/lib/mastodon.ts`) creates a REST API client using the `m
 Each Mastodon post consists of:
 
 1. **Editorial text** — LLM-generated post that stands on its own (the preview card below it is the source article's, not our summary): what happened, naming the main actor or one key number, then why it matters
-2. **Metadata line** — `Issue | Emotion | found on Publisher`
+2. **Metadata line** — `Issue | Emotion | found on Publisher | AI-generated` (`buildMetaLine()` in `services/socialPostFormat.ts`, shared with Bluesky; the last segment is the AI label)
 3. **Source URL** — Original article URL (appears first so Mastodon generates a link preview card from the original article's og: tags, giving readers context)
 4. **Story URL** — Link to the Actually Relevant story page (secondary link, no card preview)
 
@@ -163,6 +163,8 @@ Story picking reuses `pickBestStoryForSocial()` from the shared service, which u
 | `server/src/lib/mastodon.ts` | Mastodon REST API client (status CRUD, metrics) |
 | `server/src/services/mastodon.ts` | Service layer (draft generation, publishing, metrics, feed) |
 | `server/src/services/socialMedia.ts` | Shared social media logic (candidate finding, story picking) |
+| `server/src/services/socialPostFormat.ts` | Shared metadata line (`buildMetaLine`), including the `AI-generated` label |
+| `server/src/services/socialBotProfile.ts` | Bot bio and bot-flag updates for both accounts, applied only by `scripts/set-social-bot-profile.ts` (owner-run; see `.context/ai-transparency.md` §7) |
 | `server/src/schemas/mastodon.ts` | Zod schemas for LLM output and API validation |
 | `server/src/prompts/mastodon.ts` | LLM prompt builder for post text |
 | `server/src/routes/admin/mastodon.ts` | Admin API routes |

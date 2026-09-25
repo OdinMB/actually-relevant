@@ -4,10 +4,11 @@ import type { PublicStory } from '@shared/types'
 import { getCategoryColor, hexToRgba } from '../lib/category-colors'
 import { getCategoryPattern } from '../lib/category-patterns'
 import { formatDate } from '../lib/format'
-import { getTitleLabel, getHeadline } from '../lib/title-label'
+import { getHeadline } from '../lib/title-label'
 import { isRead } from '../lib/reading-history'
 import FeedFavicon from './FeedFavicon'
 import BookmarkButton from './BookmarkButton'
+import StoryTitleLabel from './StoryTitleLabel'
 
 interface StoryCardProps {
   story: PublicStory
@@ -65,9 +66,7 @@ export default function StoryCard({ story, variant = 'featured' }: StoryCardProp
                 to={`/stories/${story.slug}`}
                 className="block flex-1 min-w-0 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
               >
-                {getTitleLabel(story) && (
-                  <span className="block text-xs font-bold uppercase tracking-wider text-neutral-500 mb-1">{getTitleLabel(story)}</span>
-                )}
+                <StoryTitleLabel story={story} className="mb-1" />
                 <h3 className="text-2xl md:text-3xl font-bold text-neutral-900 mb-2 group-hover:text-brand-800 transition-colors">
                   {getHeadline(story)}
                 </h3>
@@ -103,9 +102,7 @@ export default function StoryCard({ story, variant = 'featured' }: StoryCardProp
               to={`/stories/${story.slug}`}
               className="block flex-1 min-w-0 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
             >
-              {getTitleLabel(story) && (
-                <span className="block text-xs font-bold uppercase tracking-wider text-neutral-500 mb-1">{getTitleLabel(story)}</span>
-              )}
+              <StoryTitleLabel story={story} className="mb-1" />
               <h3 className={`text-3xl md:text-4xl font-bold text-neutral-900 mb-2 group-hover:text-brand-800 transition-colors leading-tight ${readClass}`}>
                 {getHeadline(story)}
               </h3>
@@ -136,9 +133,7 @@ export default function StoryCard({ story, variant = 'featured' }: StoryCardProp
               to={`/stories/${story.slug}`}
               className="block flex-1 min-w-0 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
             >
-              {getTitleLabel(story) && (
-                <span className="block text-xs font-bold uppercase tracking-wider text-neutral-500 mb-1">{getTitleLabel(story)}</span>
-              )}
+              <StoryTitleLabel story={story} className="mb-1" />
               <h3 className="text-lg font-bold text-neutral-900 mb-2 group-hover:text-brand-800 transition-colors leading-snug">
                 {getHeadline(story)}
               </h3>
@@ -168,9 +163,7 @@ export default function StoryCard({ story, variant = 'featured' }: StoryCardProp
             to={`/stories/${story.slug}`}
             className="block focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
           >
-            {getTitleLabel(story) && (
-              <span className="block text-xs font-bold uppercase tracking-wider text-neutral-500 mb-0.5">{getTitleLabel(story)}</span>
-            )}
+            <StoryTitleLabel story={story} className="mb-0.5" />
             <h3 className={`text-base font-bold text-neutral-900 mb-1.5 group-hover:text-brand-800 transition-colors leading-snug ${readClass}`}>
               {getHeadline(story)}
             </h3>

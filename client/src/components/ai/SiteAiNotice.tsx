@@ -3,9 +3,9 @@ import AiBadge from './AiBadge'
 import { AI_DISCLOSURE_COPY } from './aiDisclosureCopy'
 
 /**
- * Site-wide AI notice for the top of every public page, above the content, so it is
- * seen at first exposure (AI Act Art. 50(5)). It has no dismiss control on purpose:
- * how often it shows is part of the owner's copy decision. Unmounted pending copy review.
+ * Site-wide AI notice at the top of every public page, above the content, so it is
+ * seen at first exposure (AI Act Art. 50(5)). Mounted in PublicLayout inside <main>,
+ * so the skip link lands on it rather than past it. No dismiss control, on purpose.
  */
 export default function SiteAiNotice({ className = '' }: { className?: string }) {
   return (

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AI_DISCLOSURE_COPY } from './ai/aiDisclosureCopy'
 
 interface ShareButtonsProps {
   url: string
@@ -11,11 +12,13 @@ const btnClass =
 
 export default function ShareButtons({ url, title, description }: ShareButtonsProps) {
   const [copied, setCopied] = useState(false)
+  // The prefill becomes the visitor's own post text, so it says that the blurb is AI-written
+  const shareText = `${description} ${AI_DISCLOSURE_COPY.shareSuffix}`
 
   // Try native Web Share API on supported devices
   async function handleNativeShare() {
     try {
-      await navigator.share({ title, text: description, url })
+      await navigator.share({ title, text: shareText, url })
     } catch {
       // User cancelled or API not available — ignore
     }
@@ -30,7 +33,7 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
 
   const encodedUrl = encodeURIComponent(url)
   const encodedTitle = encodeURIComponent(title)
-  const encodedDesc = encodeURIComponent(description)
+  const encodedDesc = encodeURIComponent(shareText)
 
   const supportsShare = typeof navigator !== 'undefined' && !!navigator.share
 

@@ -5,35 +5,25 @@ import { axe } from 'vitest-axe'
 import AiBadge from './AiBadge'
 import AiLabel from './AiLabel'
 import SiteAiNotice from './SiteAiNotice'
-import { AI_DISCLOSURE_COPY } from './aiDisclosureCopy'
-
-/** Text a screen reader announces: all text except subtrees hidden with aria-hidden. */
-function announcedText(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
-  if (node instanceof Element && node.getAttribute('aria-hidden') === 'true') return ''
-  return Array.from(node.childNodes).map(announcedText).join('')
-}
-
-function normalized(text: string): string {
-  return text.replace(/\s+/g, ' ').trim()
-}
+import { quoteAttributionLine } from './aiDisclosureCopy'
+import { announcedText } from '../../test/stories'
 
 describe('AiBadge', () => {
-  it('announces its full accessible name instead of the visible abbreviation', () => {
+  it('shows "AI" and announces "AI-generated" instead of the abbreviation', () => {
     const { container } = render(<AiBadge />)
-    expect(normalized(announcedText(container))).toBe(AI_DISCLOSURE_COPY.badgeAccessibleName)
+    expect(container.textContent).toContain('AI')
+    expect(announcedText(container)).toBe('AI-generated')
+  })
+
+  it('announces a custom accessible name, such as "Selected by AI" on quotes', () => {
+    const { container } = render(<AiBadge accessibleName="Selected by AI" />)
+    expect(announcedText(container)).toBe('Selected by AI')
   })
 
   it('announces nothing when decorative, because visible text next to it already says it', () => {
     const { container } = render(<AiBadge decorative />)
-    expect(normalized(announcedText(container))).toBe('')
-  })
-
-  it('shows the abbreviation visually in both modes', () => {
-    const { container: standalone } = render(<AiBadge />)
-    const { container: decorative } = render(<AiBadge decorative />)
-    expect(standalone.textContent).toContain(AI_DISCLOSURE_COPY.badgeText)
-    expect(decorative.textContent).toContain(AI_DISCLOSURE_COPY.badgeText)
+    expect(container.textContent).toBe('AI')
+    expect(announcedText(container)).toBe('')
   })
 
   it('has no accessibility violations', async () => {
@@ -43,13 +33,14 @@ describe('AiBadge', () => {
 })
 
 describe('AiLabel', () => {
-  it('announces the label once, not the badge and the label', () => {
-    const { container } = render(<AiLabel />)
-    expect(normalized(announcedText(container))).toBe(AI_DISCLOSURE_COPY.labelText)
+  it('shows the badge and the label text, and announces the text once', () => {
+    const { container } = render(<AiLabel text="AI-generated summary and analysis" />)
+    expect(container.textContent).toBe('AIAI-generated summary and analysis')
+    expect(announcedText(container)).toBe('AI-generated summary and analysis')
   })
 
   it('has no accessibility violations', async () => {
-    const { container } = render(<AiLabel />)
+    const { container } = render(<AiLabel text="AI-generated summary and analysis" />)
     expect(await axe(container)).toHaveNoViolations()
   })
 })
@@ -63,29 +54,29 @@ describe('SiteAiNotice', () => {
     )
   }
 
-  it('is exposed to assistive technology as a note', () => {
+  it('is a note exposed to assistive technology, with the approved text and the explainer link', () => {
     renderNotice()
     const note = screen.getByRole('note')
     expect(note.closest('[aria-hidden="true"]')).toBeNull()
-  })
-
-  it('announces the notice and the explainer link, without the decorative badge', () => {
-    renderNotice()
-    expect(normalized(announcedText(screen.getByRole('note')))).toBe(
-      `${AI_DISCLOSURE_COPY.siteNotice} ${AI_DISCLOSURE_COPY.siteNoticeLinkText}`,
-    )
-  })
-
-  it('links to the explainer page', () => {
-    renderNotice()
-    expect(screen.getByRole('link', { name: AI_DISCLOSURE_COPY.siteNoticeLinkText })).toHaveAttribute(
-      'href',
-      AI_DISCLOSURE_COPY.siteNoticeLinkHref,
-    )
+    expect(note.textContent).toBe('AIWritten and curated with care by AI. How it works')
+    expect(announcedText(note)).toBe('Written and curated with care by AI. How it works')
+    expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology')
   })
 
   it('has no accessibility violations', async () => {
     const { container } = renderNotice()
     expect(await axe(container)).toHaveNoViolations()
+  })
+})
+
+describe('quoteAttributionLine', () => {
+  it('follows the attribution with the AI selection note', () => {
+    expect(quoteAttributionLine('Dr. Jane Doe, WHO')).toBe(
+      '— Dr. Jane Doe, WHO · selected and potentially translated by AI',
+    )
+  })
+
+  it('shows the note on its own when a quote has no attribution', () => {
+    expect(quoteAttributionLine(null)).toBe('Selected and potentially translated by AI')
   })
 })

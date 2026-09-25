@@ -10,7 +10,9 @@ import { getCategoryColor } from '../lib/category-colors'
 import { getCategoryPattern } from '../lib/category-patterns'
 import { parsePoints, stripMarkdown, stripPrefix, limitSentences } from '../lib/parse-points'
 import { formatDate } from '../lib/format'
-import { getTitleLabel, getHeadline } from '../lib/title-label'
+import { getHeadline } from '../lib/title-label'
+import StoryTitleLabel from '../components/StoryTitleLabel'
+import { quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildWebSiteSchema, buildOrganizationSchema } from '../lib/structured-data'
 import SupportBanner from '../components/SupportBanner'
@@ -31,9 +33,7 @@ function HeroSection({ story }: { story: PublicStory }) {
     <section className="hero-section">
       {Pattern && <Pattern opacity={0.2} />}
       <div className="hero-section-inner">
-        {getTitleLabel(story) && (
-          <span className="block text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">{getTitleLabel(story)}</span>
-        )}
+        <StoryTitleLabel story={story} className="mb-2" />
         <h1 className="text-3xl md:text-5xl font-bold font-nexa text-neutral-900 mb-4 leading-tight">
           <Link
             to={`/stories/${story.slug}`}
@@ -66,9 +66,7 @@ function HeroSection({ story }: { story: PublicStory }) {
             <p className="text-lg md:text-xl text-neutral-700 leading-relaxed">
               &ldquo;{story.quote}&rdquo;
             </p>
-            {story.quoteAttribution && (
-              <p className="text-xs text-neutral-500 mt-1">&mdash; {story.quoteAttribution}</p>
-            )}
+            <p className="text-xs text-neutral-500 mt-1">{quoteAttributionLine(story.quoteAttribution)}</p>
           </blockquote>
         ) : story.summary ? (
           <p className="text-lg text-neutral-600 leading-relaxed max-w-2xl">

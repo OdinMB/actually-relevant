@@ -9,6 +9,7 @@ import type { StoryForMastodonPost } from '../prompts/index.js'
 import { mastodonPostTextSchema } from '../schemas/mastodon.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import type { AccountStatusesResult } from '../lib/mastodon.js'
+import { buildMetaLine } from './socialPostFormat.js'
 
 const log = createLogger('mastodon-service')
 
@@ -23,24 +24,6 @@ export function invalidateFeedCache(): void {
 // ---------------------------------------------------------------------------
 // Text assembly helpers
 // ---------------------------------------------------------------------------
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
-/** Build the metadata line: "Issue | Emotion | found on Publisher" */
-function buildMetaLine(parts: {
-  issueName: string | null
-  emotionTag: string | null
-  publisherName: string
-}): string {
-  const segments = [
-    parts.issueName,
-    parts.emotionTag ? capitalize(parts.emotionTag) : null,
-    `found on ${parts.publisherName}`,
-  ].filter(Boolean)
-  return segments.join(' | ')
-}
 
 /**
  * Assemble the structured post text from parts.

@@ -2,6 +2,12 @@ import 'zod-openapi/extend'
 import { z } from 'zod'
 import { createDocument } from 'zod-openapi'
 import { AI_GENERATED_STORY_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from './aiProvenance.js'
+import { OPENAPI_AI_FIELD_PREFIX, OPENAPI_REPUBLISHER_NOTE } from './aiLabelCopy.js'
+
+/** Description of a field in AI_GENERATED_STORY_FIELDS: the "AI-generated." label, then the details. */
+function aiField(details: string): string {
+  return `${OPENAPI_AI_FIELD_PREFIX}${details}`
+}
 
 // --- Reusable schemas ---
 
@@ -47,10 +53,10 @@ const publicStorySchema = z.object({
     example: 'Major climate breakthrough announced',
   }),
   title: z.string().nullable().openapi({
-    description: 'Headline written by an AI model.',
+    description: aiField('Headline written by an AI model.'),
     example: 'Scientists announce major climate breakthrough',
   }),
-  titleLabel: z.string().nullable().openapi({ description: 'Short topic label written by an AI model.', example: 'Climate' }),
+  titleLabel: z.string().nullable().openapi({ description: aiField('Short topic label written by an AI model.'), example: 'Climate' }),
   dateCrawled: z.string().datetime(),
   datePublished: z.string().datetime().nullable(),
   status: z.enum(['published']),
@@ -65,20 +71,20 @@ const publicStorySchema = z.object({
     description: 'Emotional tone assigned by an AI model.',
   }),
   summary: z.string().nullable().openapi({
-    description: 'Summary written by an AI model.',
+    description: aiField('Summary written by an AI model.'),
     example: 'Researchers have developed a new carbon capture method...',
   }),
   quote: z.string().nullable().openapi({
-    description: 'Key quote selected from the source article by an AI model, which translates it to English when the source is in another language.',
+    description: aiField('Key quote selected from the source article by an AI model, which translates it to English when the source is in another language.'),
   }),
-  quoteAttribution: z.string().nullable().openapi({ description: 'Attribution of the quote, written by an AI model.' }),
-  marketingBlurb: z.string().nullable().openapi({ description: 'Short teaser written by an AI model.' }),
+  quoteAttribution: z.string().nullable().openapi({ description: aiField('Attribution of the quote, written by an AI model.') }),
+  marketingBlurb: z.string().nullable().openapi({ description: aiField('Short teaser written by an AI model.') }),
   relevanceReasons: z.string().nullable().openapi({
-    description: 'Reasons the story matters, written by an AI model as Markdown bullet points, one per line.',
+    description: aiField('Reasons the story matters, written by an AI model as Markdown bullet points, one per line.'),
   }),
-  relevanceSummary: z.string().nullable().openapi({ description: 'Short relevance summary written by an AI model.' }),
+  relevanceSummary: z.string().nullable().openapi({ description: aiField('Short relevance summary written by an AI model.') }),
   antifactors: z.string().nullable().openapi({
-    description: 'Caveats written by an AI model as Markdown bullet points, one per line.',
+    description: aiField('Caveats written by an AI model as Markdown bullet points, one per line.'),
   }),
   issue: issueRefSchema.nullable(),
   feed: feedRefSchema,
@@ -144,7 +150,8 @@ export function getOpenAPIDocument(): any {
       version: '0.1.0',
       description:
         'Public API for Actually Relevant — an AI-curated news platform that evaluates article relevance to humanity. ' +
-        'Access published stories, issues, homepage data, and RSS feeds. No authentication required.',
+        'Access published stories, issues, homepage data, and RSS feeds. No authentication required.\n\n' +
+        OPENAPI_REPUBLISHER_NOTE,
       contact: {
         name: 'Actually Relevant',
         url: 'https://actuallyrelevant.news',

@@ -33,6 +33,7 @@ Converts the markdown content into a responsive HTML email and saves it to the n
 
 Template structure:
 - **Header** — Logo, tagline, four-color category strip (amber/teal/red/indigo), newsletter title (uppercase, bold)
+- **AI label** — directly under the week title, before any AI text: "**AI-generated:** AI selected the stories in this issue and wrote the intro, headlines, and summaries." (`NEWSLETTER_TOP_LABEL` in `server/src/lib/aiLabelCopy.ts`)
 - **Intro** — Editorial intro paragraph(s) if present
 - **Issue sections** — Centered category headers with colored dot and decorative lines
 - **Story blocks** — Title (linked), publisher favicon + name + "original article" / "relevance analysis" links, body text or blockquote
@@ -43,8 +44,9 @@ Template structure:
 ### Carousel images (`POST /api/admin/newsletters/:id/carousel`)
 
 Generates a downloadable ZIP containing:
-- One 1200x675 PNG per story (category header, title, publisher, date, summary)
+- One 1200x675 PNG per story (category header, title, publisher, date, summary; footer "actuallyrelevant.news · AI-generated" drawn into the pixels)
 - A PDF with all images as landscape pages
+- `post-text.txt` — the post text line ("The headlines and summaries in these slides are AI-generated.") and one alt text per slide file, each starting "AI-generated summary: ". The carousel is posted by hand, so this file is how the labels reach the post (`buildCarouselPostText()`)
 
 Uses `@napi-rs/canvas` for image generation, `pdfkit` for PDF, `archiver` for ZIP.
 
@@ -84,7 +86,7 @@ The prompt instructs the LLM to write a podcast script with:
 - Sections by category (existential risk subcategories grouped)
 - Outro (feedback request, thanks)
 
-After the LLM script, a story list with links is appended.
+`assemblePodcastScript()` prepends a fixed spoken first line, "This is an AI-generated voice." (`PODCAST_OPENER`), and appends the story list with links. The AI notice is set in code rather than asked of the model, so it cannot be dropped by a generation; don't move it back into the prompt.
 
 ## API Endpoints
 

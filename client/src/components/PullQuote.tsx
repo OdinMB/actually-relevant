@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { PublicStory } from '@shared/types'
+import AiBadge from './ai/AiBadge'
+import { AI_DISCLOSURE_COPY } from './ai/aiDisclosureCopy'
 
 type PullQuoteVariant = 'centered' | 'highlight'
 
@@ -19,8 +21,10 @@ export default function PullQuote({ story, variant = 'centered' }: PullQuoteProp
 
   const hasPersonAttribution = story.quoteAttribution && story.quoteAttribution !== 'Original article'
 
+  // AI picked (and may have translated) a real person's words, so the badge says "Selected by AI"
   const attribution = (
     <footer className="mt-3 text-sm text-neutral-500">
+      <AiBadge accessibleName={AI_DISCLOSURE_COPY.quoteBadgeAccessibleName} className="mr-1 align-middle" />{' '}
       &mdash;{' '}
       {hasPersonAttribution ? (
         <>
@@ -43,6 +47,8 @@ export default function PullQuote({ story, variant = 'centered' }: PullQuoteProp
           </Link>
         </>
       )}
+      {' · '}
+      {AI_DISCLOSURE_COPY.quoteNote}
     </footer>
   )
 

@@ -49,7 +49,7 @@ vi.mock('../prompts/index.js', () => ({
   buildBlueskyPickBestPrompt: vi.fn(() => 'pick prompt'),
 }))
 
-const { assemblePostText, generateDraft, pickBestStory, updateDraft, deletePostRecord, publishPost, updateMetrics, listPosts, getFeed, invalidateFeedCache } =
+const { assemblePostText, calcMaxBlurbChars, generateDraft, pickBestStory, updateDraft, deletePostRecord, publishPost, updateMetrics, listPosts, getFeed, invalidateFeedCache } =
   await import('./bluesky.js')
 
 describe('assemblePostText', () => {
@@ -60,7 +60,24 @@ describe('assemblePostText', () => {
       emotionTag: 'uplifting',
       publisherName: 'Nature',
     })
-    expect(result).toBe('A great discovery.\nClimate | Uplifting | found on Nature')
+    expect(result).toBe('A great discovery.\nClimate | Uplifting | found on Nature | AI-generated')
+  })
+
+  it('ends the metadata line with the AI label even when issue and emotion are missing', () => {
+    const result = assemblePostText({ blurb: 'Blurb.', issueName: null, emotionTag: null, publisherName: 'Reuters' })
+    expect(result.split('\n')[1]).toBe('found on Reuters | AI-generated')
+  })
+
+  it('stays within 300 graphemes when the blurb uses its full limit, with the AI label included', () => {
+    const parts = {
+      issueName: 'Science & Technology',
+      emotionTag: 'frustrating',
+      publisherName: 'The International Journal of Very Long Publisher Names and Reports',
+    }
+    const blurb = 'x'.repeat(calcMaxBlurbChars(parts))
+    const text = assemblePostText({ blurb, ...parts })
+    expect([...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(text)].length).toBeLessThanOrEqual(300)
+    expect(text.endsWith(' | AI-generated')).toBe(true)
   })
 
   it('capitalizes emotion tag', () => {
@@ -147,7 +164,7 @@ describe('generateDraft', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           storyId: 'story-1',
-          postText: 'A compelling editorial hook.\nTechnology | Uplifting | found on Example',
+          postText: 'A compelling editorial hook.\nTechnology | Uplifting | found on Example | AI-generated',
           status: 'draft',
         }),
       }),

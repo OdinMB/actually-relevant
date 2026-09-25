@@ -57,6 +57,36 @@ describe('StoryPage', () => {
     expect(heading.closest('[data-ai-generated]')).toBeNull()
   })
 
+  it('labels the story as AI-generated in the metadata row under the headline, as plain text', () => {
+    renderStory(story)
+    const label = screen.getByText('AI-generated summary and analysis')
+    expect(label.closest('a')).toBeNull()
+    // The "AI" badge next to it is visible but not announced twice
+    expect(label.previousElementSibling?.getAttribute('aria-hidden')).toBe('true')
+    expect(label.previousElementSibling?.textContent).toBe('AI')
+    const headline = screen.getByRole('heading', { level: 1 })
+    expect(headline.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // ...and above the AI summary
+    expect(label.compareDocumentPosition(screen.getByText(AI_TEXT.summary)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('follows the label with a separate "How it works" link to the methodology page', () => {
+    renderStory(story)
+    expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology')
+  })
+
+  it('follows the quote attribution with the AI selection note', () => {
+    renderStory(story)
+    expect(
+      screen.getByText(`— ${AI_TEXT.quoteAttribution} · selected and potentially translated by AI`),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the AI selection note under a quote that has no attribution', () => {
+    renderStory({ ...story, quoteAttribution: null })
+    expect(screen.getByText('Selected and potentially translated by AI')).toBeInTheDocument()
+  })
+
   it('marks every rendered AI-generated field with a machine-readable data attribute', () => {
     renderStory(story)
 

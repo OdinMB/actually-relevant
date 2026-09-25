@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { JSDOM } from 'jsdom'
 
 // Mock prisma before importing the module
 const mockPrisma = vi.hoisted(() => ({
@@ -95,6 +96,30 @@ describe('generateHtmlContent', () => {
     expect(introIndex).toBeGreaterThan(-1)
     expect(storyIndex).toBeGreaterThan(-1)
     expect(introIndex).toBeLessThan(storyIndex)
+  })
+
+  it('labels the issue as AI-generated directly under the week title, and keeps the bottom line', async () => {
+    const content = [
+      'An intro written by AI.',
+      '',
+      '---',
+      '',
+      storyBlock({ title: 'First story', publisher: 'Nature', url: 'https://example.com/first', body: 'Summary.' }),
+    ].join('\n')
+
+    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
+    const html = await generateHtmlContent('nl-1')
+    const doc = new JSDOM(html).window.document
+
+    const title = [...doc.querySelectorAll('p')].find((p) => p.textContent === baseNewsletter.title)
+    const label = title?.nextElementSibling
+    expect(label?.textContent).toBe(
+      'AI-generated: AI selected the stories in this issue and wrote the intro, headlines, and summaries.',
+    )
+    expect(label?.querySelector('strong')?.textContent).toBe('AI-generated:')
+    // Seen before any AI text: the intro and the stories come after it
+    expect(html.indexOf('AI-generated:')).toBeLessThan(html.indexOf('An intro written by AI.'))
+    expect(html).toContain('Curated and written with care by AI')
   })
 
   it('renders blockquote with quote and attribution', async () => {

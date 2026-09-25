@@ -12,6 +12,8 @@ import BookmarkButton from '../components/BookmarkButton'
 import ShareButtons from '../components/ShareButtons'
 import RelatedStories from '../components/RelatedStories'
 import AlsoCoveredBy from '../components/AlsoCoveredBy'
+import AiLabel from '../components/ai/AiLabel'
+import { AI_DISCLOSURE_COPY, quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { StoryPageSkeleton } from '../components/skeletons'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildArticleSchema, buildBreadcrumbSchema } from '../lib/structured-data'
@@ -213,12 +215,16 @@ export default function StoryPage() {
                 <span className="sr-only"> (opens in new tab)</span>
               </a>
               <span className="text-neutral-300">|</span>
-              <Link
-                to="/methodology"
-                className="text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
-              >
-                AI-generated
-              </Link>
+              {/* AI label as plain text, so it doesn't read as one more navigation link */}
+              <span className="inline-flex flex-wrap items-center gap-x-2">
+                <AiLabel text={AI_DISCLOSURE_COPY.storyLabel} />
+                <Link
+                  to={AI_DISCLOSURE_COPY.siteNoticeLinkHref}
+                  className="text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
+                >
+                  {AI_DISCLOSURE_COPY.siteNoticeLinkText}
+                </Link>
+              </span>
               {story.slug && (
                 <>
                   <span className="text-neutral-300">|</span>
@@ -270,9 +276,7 @@ export default function StoryPage() {
                     {story.quote}
                   </p>
                 </blockquote>
-                {story.quoteAttribution && (
-                  <p className="text-sm text-neutral-500 mt-3">&mdash; {story.quoteAttribution}</p>
-                )}
+                <p className="text-sm text-neutral-500 mt-3">{quoteAttributionLine(story.quoteAttribution)}</p>
               </div>
             </div>
           )}

@@ -6,6 +6,7 @@ import { paginate } from '../lib/paginate.js'
 import { getLargeLLM, rateLimitDelay } from './llm.js'
 import { buildPodcastPrompt } from '../prompts/index.js'
 import { podcastScriptSchema } from '../schemas/llm.js'
+import { PODCAST_OPENER } from '../lib/aiLabelCopy.js'
 
 interface PodcastFilters {
   status?: string
@@ -98,18 +99,32 @@ export async function generateScript(podcastId: string) {
   const structuredLlm = llm.withStructuredOutput(podcastScriptSchema)
   const response = await structuredLlm.invoke([new HumanMessage(prompt)])
 
-  // Append story list with links (matching PHP format)
-  let script = response.script
-  script += '\n\n---\n\nLast week, our RelevanceAI evaluated hundreds of news items from around the world. These are the most relevant for humanity:\n\n'
-  for (const story of stories) {
-    const publisher = story.feed?.title || 'Unknown'
-    script += `- ${story.title || story.sourceTitle}\n`
-    script += `${publisher} | AI analysis\n`
-    script += `${story.sourceUrl}\n`
-  }
+  const script = assemblePodcastScript(
+    response.script,
+    stories.map(s => ({ title: s.title || s.sourceTitle, publisher: s.feed?.title || 'Unknown', sourceUrl: s.sourceUrl })),
+  )
 
   return prisma.podcast.update({
     where: { id: podcastId },
     data: { script },
   })
+}
+
+/**
+ * The script as the TTS voice reads it: a fixed spoken AI notice as the first line (set in
+ * code, so it doesn't depend on the model following the prompt), the generated script, then
+ * the story list with links (matching the PHP format).
+ */
+export function assemblePodcastScript(
+  generated: string,
+  stories: { title: string; publisher: string; sourceUrl: string }[],
+): string {
+  let script = `${PODCAST_OPENER}\n\n${generated.trim()}`
+  script += '\n\n---\n\nLast week, our RelevanceAI evaluated hundreds of news items from around the world. These are the most relevant for humanity:\n\n'
+  for (const story of stories) {
+    script += `- ${story.title}\n`
+    script += `${story.publisher} | AI analysis\n`
+    script += `${story.sourceUrl}\n`
+  }
+  return script
 }

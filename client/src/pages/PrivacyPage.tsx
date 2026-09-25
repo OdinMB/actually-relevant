@@ -30,8 +30,9 @@ export default function PrivacyPage() {
         <div className="prose max-w-none">
           <p>
             We do not use cookies, tracking pixels, Google Analytics,
-            advertising scripts, or any other invasive data collection. When you
-            visit this site as a reader, nothing is stored on your device.
+            advertising scripts, or any other invasive data collection. Your
+            browser keeps your dial position, saved stories, and reading history
+            on your device, and they never leave it.
           </p>
 
           <h2 className="section-heading mt-10">What We Collect</h2>
@@ -136,11 +137,11 @@ export default function PrivacyPage() {
             or any other browser storage mechanism for public visitors.
           </p>
           <p>
-            The only data stored on your device is your{" "}
-            <strong>positivity slider preference</strong> (a single number
-            between 0 and 100), saved in localStorage so the slider stays where
-            you left it between visits. This value never leaves your browser and
-            is not sent to our servers.
+            Your <strong>dial position</strong> (a single number between 0 and
+            100), your <strong>saved stories</strong>, and your{" "}
+            <strong>reading history</strong> are saved in localStorage, so they
+            stay where you left them between visits. They never leave your
+            browser.
           </p>
           <p>
             Our administrative interface, which is not accessible to the public,
@@ -226,6 +227,12 @@ export default function PrivacyPage() {
               </tbody>
             </table>
           </div>
+          <p className="mt-4">
+            When you search, we send your query to OpenAI to match it with
+            stories. OpenAI processes it on our behalf, which may involve a
+            transfer to the USA. We also use OpenAI models to analyze news
+            articles, which involves no visitor data.
+          </p>
           <p className="mt-4">
             All fonts used on this site are self-hosted. We do not load fonts,
             scripts, or other resources from external CDNs like Google, meaning

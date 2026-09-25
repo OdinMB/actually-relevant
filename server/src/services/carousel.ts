@@ -5,6 +5,7 @@ import { createWriteStream, mkdirSync, unlinkSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { aiGeneratedXmpDescription, aiGeneratedXmpPacket, embedXmpInPng } from '../lib/xmp.js'
+import { CAROUSEL_COPY } from '../lib/aiLabelCopy.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ASSETS_DIR = join(__dirname, '..', '..', 'assets')
@@ -119,10 +120,13 @@ export function createStoryImage(story: CarouselStory): Buffer {
     currentY += 30
   }
 
-  // Logo placeholder (bottom-right)
-  ctx.fillStyle = '#9ca3af'
+  // Footer (bottom-right): the site and the AI label, drawn into the pixels so the label travels
+  // with the image when it is posted or reshared (AI Act Art. 50(4)). Right-aligned so the longer
+  // text stays on the slide; the same gray as the category line, for contrast on white.
+  ctx.fillStyle = '#6b7280'
   ctx.font = '14px InterRegular, Arial, sans-serif'
-  ctx.fillText('actuallyrelevant.news', WIDTH - PADDING / 2 - 170, HEIGHT - PADDING / 2 - 10)
+  ctx.textAlign = 'right'
+  ctx.fillText(CAROUSEL_COPY.slideFooter, WIDTH - PADDING, HEIGHT - PADDING / 2 - 10)
 
   // The slide renders AI-written headline and summary text: mark the file as AI-generated.
   return embedXmpInPng(canvas.toBuffer('image/png'), aiGeneratedXmpPacket())
@@ -135,14 +139,13 @@ export async function generateCarouselZip(
   mkdirSync(outputDir, { recursive: true })
 
   const imagePaths: string[] = []
+  const filenames = stories.map(slideFilename)
+  const fs = await import('fs/promises')
 
   // Generate PNG images
   for (let i = 0; i < stories.length; i++) {
-    const story = stories[i]
-    const buffer = createStoryImage(story)
-    const filename = `${String(i + 1).padStart(2, '0')}_${story.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.png`
-    const filepath = join(outputDir, filename)
-    const fs = await import('fs/promises')
+    const buffer = createStoryImage(stories[i])
+    const filepath = join(outputDir, filenames[i])
     await fs.writeFile(filepath, buffer)
     imagePaths.push(filepath)
   }
@@ -151,17 +154,39 @@ export async function generateCarouselZip(
   const pdfPath = join(outputDir, 'carousel_images.pdf')
   await generateCarouselPdf(imagePaths, pdfPath)
 
+  // The slides are posted by hand, so the ZIP carries the AI-labeled post text and alt texts
+  const postTextPath = join(outputDir, CAROUSEL_POST_TEXT_FILE)
+  await fs.writeFile(postTextPath, buildCarouselPostText(stories, filenames), 'utf8')
+
   // Create ZIP
   const zipPath = join(outputDir, 'carousel_images.zip')
-  await createZip([...imagePaths, pdfPath], zipPath)
+  await createZip([...imagePaths, pdfPath, postTextPath], zipPath)
 
-  // Clean up individual images and PDF
-  for (const imagePath of imagePaths) {
-    try { unlinkSync(imagePath) } catch { /* ignore */ }
+  // Clean up individual images, PDF and post text
+  for (const filePath of [...imagePaths, pdfPath, postTextPath]) {
+    try { unlinkSync(filePath) } catch { /* ignore */ }
   }
-  try { unlinkSync(pdfPath) } catch { /* ignore */ }
 
   return zipPath
+}
+
+function slideFilename(story: CarouselStory, index: number): string {
+  return `${String(index + 1).padStart(2, '0')}_${story.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.png`
+}
+
+/** Name of the text file in the carousel ZIP that holds the post text and the alt texts. */
+export const CAROUSEL_POST_TEXT_FILE = 'post-text.txt'
+
+/** Alt text of one slide: the AI label prefix, then the headline and summary it shows. */
+export function slideAltText(story: CarouselStory): string {
+  const title = /[.!?]$/.test(story.title) ? story.title : `${story.title}.`
+  return `${CAROUSEL_COPY.altTextPrefix}${title} ${story.summary}`.trim()
+}
+
+/** Post text line and one alt text per slide file, for whoever posts the carousel by hand. */
+export function buildCarouselPostText(stories: CarouselStory[], filenames: string[]): string {
+  const altTexts = stories.map((story, i) => `${filenames[i]}\n${slideAltText(story)}`)
+  return ['Post text:', CAROUSEL_COPY.postText, '', 'Alt text:', altTexts.join('\n\n'), ''].join('\n')
 }
 
 /**

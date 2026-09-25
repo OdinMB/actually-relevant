@@ -46,8 +46,9 @@ vi.mock('./socialMedia.js', () => ({
   pickBestStoryForSocial: vi.fn().mockResolvedValue({ storyId: 'story-1', reasoning: 'Good story' }),
 }))
 
-const { assemblePostText, generateDraft, updateDraft, deletePostRecord, publishPost, updateMetrics, listPosts, getFeed, invalidateFeedCache } =
+const { assemblePostText, calcMaxBlurbChars, generateDraft, updateDraft, deletePostRecord, publishPost, updateMetrics, listPosts, getFeed, invalidateFeedCache } =
   await import('./mastodon.js')
+const { config } = await import('../config.js')
 
 describe('assemblePostText', () => {
   it('assembles editorial text, metadata, source URL, and story URL', () => {
@@ -60,8 +61,22 @@ describe('assemblePostText', () => {
       storyUrl: 'https://actuallyrelevant.com/stories/great-discovery',
     })
     expect(result).toBe(
-      'A great discovery.\nClimate | Uplifting | found on Nature\nhttps://nature.com/articles/great-discovery\nhttps://actuallyrelevant.com/stories/great-discovery',
+      'A great discovery.\nClimate | Uplifting | found on Nature | AI-generated\nhttps://nature.com/articles/great-discovery\nhttps://actuallyrelevant.com/stories/great-discovery',
     )
+  })
+
+  it('stays within the character limit when the blurb uses its full limit, with the AI label included', () => {
+    const parts = {
+      issueName: 'Science & Technology',
+      emotionTag: 'frustrating',
+      publisherName: 'The International Journal of Very Long Publisher Names and Reports',
+      sourceUrl: `https://example.com/${'a'.repeat(120)}`,
+      storyUrl: `https://actuallyrelevant.news/stories/${'b'.repeat(80)}`,
+    }
+    const blurb = 'x'.repeat(calcMaxBlurbChars(parts))
+    const text = assemblePostText({ blurb, ...parts })
+    expect(text.length).toBeLessThanOrEqual(config.mastodon.charLimit)
+    expect(text.split('\n')[1].endsWith(' | AI-generated')).toBe(true)
   })
 
   it('capitalizes emotion tag', () => {

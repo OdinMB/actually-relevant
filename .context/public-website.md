@@ -35,7 +35,7 @@ Public RSS 2.0 feeds are available without authentication:
 - `GET /api/feed` — Global feed of the 50 most recent published stories
 - `GET /api/feed/:issueSlug` — Per-issue feed (e.g., `/api/feed/human-development`)
 
-Feed items include: title, link to story page, AI-generated summary, publish date, and issue category. Responses use `Content-Type: application/rss+xml` with a 15-minute cache (`Cache-Control: public, max-age=900`).
+Feed items include: title, link to story page, AI-generated summary prefixed "[AI-generated] ", publish date, and issue category. The channel description is fixed copy that says AI writes and curates the feed (`rssChannelDescription()` in `server/src/lib/aiLabelCopy.ts`; per-issue feeds no longer use the issue's own description). RSS readers never see the site's labels, so keep the item prefix when changing the feed. Responses use `Content-Type: application/rss+xml` with a 15-minute cache (`Cache-Control: public, max-age=900`).
 
 **Discoverability:**
 - Global RSS autodiscovery `<link>` tag is added via Helmet in `PublicLayout.tsx`
@@ -69,6 +69,8 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 
 ## Shared Components
 
+- `SiteAiNotice` — AI notice as the first child of `<main>` in `PublicLayout`, so every public page shows it above the content and the skip link lands on it
+- `StoryTitleLabel` — "AI" badge plus title label above every card and hero headline; new story listings should render headlines through `StoryCard` or this component so they carry the badge (`.context/ai-transparency.md`)
 - `StoryCard` — Story card with title, rating, summary (used on homepage + issue pages)
 - `RatingDisplay` — Relevance rating with color coding
 - `Pagination` — Page navigation with ellipsis

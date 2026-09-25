@@ -91,13 +91,17 @@ rule GenerateContent {
 
 -- Step 4: Render HTML — converts markdown content into a
 -- table-based email template with colored issue dots, favicon
--- images, and branded header/footer.
+-- images, and branded header/footer. Directly under the week title,
+-- before any AI text, every issue carries the AI label (AI Act
+-- Art. 50(4)); the footer sign-off stays as well.
 rule GenerateHtml {
     when: AdminGeneratesHtml(newsletter)
     requires: newsletter.content != null
 
     let html = render_email_template(newsletter)
     ensures: newsletter.html = html
+    ensures: html.shows_directly_under(newsletter.title,
+        "AI-generated: AI selected the stories in this issue and wrote the intro, headlines, and summaries.")
 }
 
 -- Step 5a: Send test — creates a Plunk campaign targeted at the
@@ -185,14 +189,17 @@ rule AssignPodcastStories {
     ensures: podcast.story_ids = recent -> id
 }
 
--- Step 2: Generate script — LLM writes a podcast script from the
--- assigned stories, followed by a formatted story list with links.
+-- Step 2: Generate script — a fixed spoken AI notice, then the LLM's
+-- podcast script for the assigned stories, then a formatted story list
+-- with links. The notice is set by code, not asked of the model, so no
+-- generation can drop it.
 rule GenerateScript {
     when: AdminGeneratesScript(podcast)
     requires: podcast.story_ids.count > 0
 
-    let script = LLM.generate_podcast_script(podcast.story_ids)
-    ensures: podcast.script = script
+    let generated = LLM.generate_podcast_script(podcast.story_ids)
+    ensures: podcast.script =
+        "This is an AI-generated voice.\n\n" + generated + story_list(podcast.story_ids)
 }
 
 -- ─── Issue Ordering ──────────────────────────────────────────────

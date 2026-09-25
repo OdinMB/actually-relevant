@@ -27,7 +27,6 @@ Please write a script with the following elements:
 - Intro
 -- Welcome the listeners to the 'Actually Relevant Podcast'.
 -- Explain that Actually Relevant evaluated hundreds of stories this week on how important they are for humanity. The podcast highlights the most relevant ones.
--- Introduce yourself in a light-hearted way as an AI-generated voice.
 
 - Sections (one for each category). In each section:
 -- Transition to the new category.

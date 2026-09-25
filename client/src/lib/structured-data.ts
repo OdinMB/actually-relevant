@@ -33,6 +33,8 @@ export function buildArticleSchema(story: PublicStory) {
       url: SEO.siteUrl,
     },
     publisher,
+    // The page that explains that AI writes and selects the story text
+    publishingPrinciples: `${SEO.siteUrl}/methodology`,
     mainEntityOfPage: `${SEO.siteUrl}/stories/${story.slug}`,
     image: SEO.ogImage,
     articleSection: issueName,

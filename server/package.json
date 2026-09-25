@@ -21,6 +21,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "cleanup:plunk-contacts": "tsx src/scripts/cleanup-plunk-contacts.ts",
     "cleanup:plunk-contacts:apply": "tsx src/scripts/cleanup-plunk-contacts.ts --apply",
+    "social:bot-profile": "tsx src/scripts/set-social-bot-profile.ts",
+    "social:bot-profile:apply": "tsx src/scripts/set-social-bot-profile.ts --apply",
     "db:populate-issue-content": "tsx src/scripts/migrate/populate-issue-content.ts",
     "migration:backfill-title-label": "tsx src/scripts/migrations/backfill-title-label.ts",
     "migration:backfill-title-label:test": "tsx src/scripts/migrations/backfill-title-label.ts --test",

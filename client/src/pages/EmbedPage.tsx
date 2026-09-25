@@ -3,6 +3,8 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { publicApi } from '../lib/api'
 import { formatRelativeTime } from '../lib/constants'
+import AiLabel from '../components/ai/AiLabel'
+import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 
 export default function EmbedPage() {
   const [params] = useSearchParams()
@@ -53,6 +55,10 @@ export default function EmbedPage() {
       className={`font-sans text-sm leading-relaxed ${isDark ? 'bg-neutral-900 text-neutral-200' : 'bg-white text-neutral-700'}`}
     >
       <h1 className="sr-only">Actually Relevant Stories</h1>
+      {/* AI label at the top of the embed, which shows AI headlines on other people's sites (AI Act Art. 50(4)) */}
+      <p className={`px-4 py-2 border-b text-[12px] ${isDark ? 'border-neutral-700 text-neutral-300' : 'border-neutral-200 text-neutral-600'}`}>
+        <AiLabel text={AI_DISCLOSURE_COPY.embedHeader} />
+      </p>
       {isLoading && (
         <div className={`px-4 py-8 text-center text-[13px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
           Loading...

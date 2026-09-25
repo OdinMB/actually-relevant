@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { config } from '../../config.js'
 import { createLogger } from '../../lib/logger.js'
 import { TTLCache, cached } from '../../lib/cache.js'
+import { RSS_ITEM_PREFIX, rssChannelDescription } from '../../lib/aiLabelCopy.js'
 import { Feed } from 'feed'
 import * as storyService from '../../services/story.js'
 import * as issueService from '../../services/issue.js'
@@ -10,6 +11,8 @@ const router = Router()
 const log = createLogger('feed')
 
 const feedCache = new TTLCache<string>(config.feed.cacheMaxAge * 1000)
+
+type FeedStory = Awaited<ReturnType<typeof storyService.getPublishedStories>>['data'][number]
 
 function getSiteUrl(): string {
   return config.siteUrl
@@ -30,6 +33,24 @@ function buildFeed(options: { title: string; description: string; feedPath: stri
   })
 }
 
+/**
+ * Add one item per story. RSS readers never show the website's labels, so every item
+ * description carries its own AI label (AI Act Art. 50(4)).
+ */
+function addStoryItems(feed: Feed, stories: FeedStory[]) {
+  const siteUrl = getSiteUrl()
+  for (const story of stories) {
+    feed.addItem({
+      title: story.title || story.sourceTitle,
+      id: story.id,
+      link: `${siteUrl}/stories/${story.slug || story.id}`,
+      description: story.summary ? `${RSS_ITEM_PREFIX}${story.summary}` : undefined,
+      date: story.datePublished ? new Date(story.datePublished) : new Date(story.dateCrawled),
+      category: [{ name: (story.issue ?? story.feed?.issue)?.name || 'General' }],
+    })
+  }
+}
+
 function setRssHeaders(res: import('express').Response) {
   res.set('Content-Type', 'application/rss+xml; charset=utf-8')
   res.set('Cache-Control', `public, max-age=${config.feed.cacheMaxAge}`)
@@ -40,24 +61,13 @@ router.get('/', async (_req, res) => {
   try {
     const xml = await cached(feedCache, 'feed:global', async () => {
       const result = await storyService.getPublishedStories({ page: 1, pageSize: config.feed.size })
-      const siteUrl = getSiteUrl()
 
       const feed = buildFeed({
         title: 'Actually Relevant',
-        description: 'AI-curated news that matters. Stories most relevant to humanity\u2019s future.',
+        description: rssChannelDescription(),
         feedPath: '/api/feed',
       })
-
-      for (const story of result.data) {
-        feed.addItem({
-          title: story.title || story.sourceTitle,
-          id: story.id,
-          link: `${siteUrl}/stories/${story.slug || story.id}`,
-          description: story.summary || undefined,
-          date: story.datePublished ? new Date(story.datePublished) : new Date(story.dateCrawled),
-          category: [{ name: (story.issue ?? story.feed?.issue)?.name || 'General' }],
-        })
-      }
+      addStoryItems(feed, result.data)
 
       return feed.rss2()
     })
@@ -86,24 +96,13 @@ router.get('/:issueSlug', async (req, res) => {
         pageSize: config.feed.size,
         issueSlug,
       })
-      const siteUrl = getSiteUrl()
 
       const feed = buildFeed({
         title: `Actually Relevant — ${issue.name}`,
-        description: issue.description || `Stories about ${issue.name} curated by Actually Relevant.`,
+        description: rssChannelDescription(issue.name),
         feedPath: `/api/feed/${issueSlug}`,
       })
-
-      for (const story of result.data) {
-        feed.addItem({
-          title: story.title || story.sourceTitle,
-          id: story.id,
-          link: `${siteUrl}/stories/${story.slug || story.id}`,
-          description: story.summary || undefined,
-          date: story.datePublished ? new Date(story.datePublished) : new Date(story.dateCrawled),
-          category: [{ name: (story.issue ?? story.feed?.issue)?.name || 'General' }],
-        })
-      }
+      addStoryItems(feed, result.data)
 
       return feed.rss2()
     })
