@@ -543,13 +543,10 @@ function PublicLayoutInner() {
         <Outlet />
       </main>
 
-      {/* Editorial sign-off */}
-      <div
-        className="bg-neutral-50 border-t border-neutral-200 py-10 md:py-14 text-center"
-        aria-hidden="true"
-      >
+      {/* Editorial sign-off. The AI statement stays readable by screen readers (AI Act Art. 50(5)); only the ornament is hidden. */}
+      <div className="bg-neutral-50 border-t border-neutral-200 py-10 md:py-14 text-center">
         <div className="max-w-md mx-auto px-4">
-          <div className="flex items-center justify-center gap-4 mb-4">
+          <div className="flex items-center justify-center gap-4 mb-4" aria-hidden="true">
             <span className="flex-1 border-t border-neutral-200" />
             <span className="text-brand-300 text-sm">&#9670;</span>
             <span className="flex-1 border-t border-neutral-200" />
