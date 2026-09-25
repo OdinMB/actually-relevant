@@ -75,6 +75,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Logging** -- Use `createLogger('module')` from `server/src/lib/logger.ts`. Never `console.log` in application code (scripts exempt). See `.context/logging.md`.
 - **Prompts** -- Read `.context/prompting.md` before modifying any prompt in `server/src/prompts/`. Reasoning-model conventions (declarative constraints, XML scaffolding); prompts are tuned for the GPT-6 defaults, so check a rating, dedup, social-post or selection prompt change with `eval:recalibrate` (`.context/model-eval.md`).
 - **Retry logic** -- External HTTP and LLM calls must use `withRetry()` from `server/src/lib/retry.ts`.
+- **AI transparency (EU AI Act)** -- Changing an AI feature, model, AI label, model-written story field or export pipeline? Update `.context/ai-transparency.md` in the same change. It is the compliance record: feature inventory with model ids, the machine-readable markers, and the owner decisions still open (visible AI label copy is under owner review, so don't mount labels or change that copy).
 - **American English** -- All UI text uses American English spelling ("analyzed" not "analysed").
 - **Em dashes** -- One per paragraph max in user-facing copy.
 - **Completed plans as context** -- `.plans/completed/` has 70+ plans. Search by topic before asking the user.
@@ -148,6 +149,7 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 | `deployment.md` | Render services; why builds install devDependencies and pin `tsc` (read before touching build scripts) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic, post format |
+| `ai-transparency.md` | EU AI Act Art. 50 record: AI inventory, labels, machine-readable markers, text-watermark gap, open owner decisions |
 | `client/.context/skeletons.md` | Skeleton components for loading states (prevents CLS) |
 
 ## Memory

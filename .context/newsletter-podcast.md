@@ -48,6 +48,8 @@ Generates a downloadable ZIP containing:
 
 Uses `@napi-rs/canvas` for image generation, `pdfkit` for PDF, `archiver` for ZIP.
 
+The slides render AI-written text, so both formats are marked as AI-generated in unsigned metadata (`server/src/lib/xmp.ts`): each PNG gets an XMP `iTXt` chunk with the IPTC `DigitalSourceType` `trainedAlgorithmicMedia`, and the PDF gets the same XMP plus Info fields naming the application (never the admin who exported it). The XMP stream needs `pdfVersion: '1.4'` or later; PDFKit omits it for its 1.3 default. Keep the marks when changing the layout; details in `.context/ai-transparency.md`.
+
 Category-specific header colors/images are mapped by keyword matching on the category name (human, planet, science, general, existential).
 
 ### Asset files
@@ -71,9 +73,9 @@ Handler: `server/src/jobs/generateNewsletter.ts`. Registered in `server/src/jobs
 
 ### Script generation (`POST /api/admin/podcasts/:id/generate`)
 
-LLM-generated using `getSmallLLM()` with `podcastScriptSchema` (Zod structured output).
+LLM-generated using `getLargeLLM()` (the `large` tier, `gpt-6-sol` by default) with `podcastScriptSchema` (Zod structured output).
 
-The prompt (`buildPodcastPrompt` in `prompts.ts`) formats each story as an XML `<STORY>` block with:
+The prompt (`buildPodcastPrompt` in `prompts/podcast.ts`) formats each story as an XML `<STORY>` block with:
 - Category, title, summary, publisher
 - Relevance reasons and limiting factors as bullet points
 
@@ -123,7 +125,7 @@ After the LLM script, a story list with links is appended.
 | `server/src/schemas/llm.ts` | `podcastScriptSchema`, `newsletterIntroSchema` for LLM structured output |
 | `server/src/prompts/newsletter-intro.ts` | `buildNewsletterIntroPrompt` for editorial intro generation |
 | `server/src/prompts/newsletter-select.ts` | `buildNewsletterSelectPrompt` for story selection |
-| `server/src/services/prompts.ts` | `buildPodcastPrompt` for podcast script generation |
+| `server/src/prompts/podcast.ts` | `buildPodcastPrompt` for podcast script generation |
 | `server/src/jobs/generateNewsletter.ts` | Automated weekly newsletter generation cron job |
 
 ## Modifying
@@ -131,7 +133,7 @@ After the LLM script, a story list with links is appended.
 - **To change newsletter format:** Edit the template loop in `newsletter.ts:generateContent()` and the HTML parser in `generateHtmlContent()`
 - **To change newsletter intro prompt:** Edit `buildNewsletterIntroPrompt()` in `prompts/newsletter-intro.ts`
 - **To change newsletter intro output structure:** Update `newsletterIntroSchema` in `schemas/llm.ts` AND the prompt
-- **To change podcast prompt:** Edit `buildPodcastPrompt()` in `prompts.ts`
+- **To change podcast prompt:** Edit `buildPodcastPrompt()` in `prompts/podcast.ts`
 - **To change podcast output structure:** Update `podcastScriptSchema` in `schemas/llm.ts` AND the prompt
 - **To add new carousel image layouts:** Edit `createStoryImage()` in `carousel.ts`
 - **To use real branded assets:** Replace placeholder files in `server/assets/images/` and `server/assets/fonts/`
