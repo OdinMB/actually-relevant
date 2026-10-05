@@ -34,13 +34,13 @@ Code: `server/src/scripts/db-prepare/` (`index.ts` orchestrates; `gate.ts` and `
    npm run db:migrate:create --prefix server -- --name migration_name
    ```
 
-   This is `prisma migrate dev --create-only`: it replays the migrations into a shadow database to diff against the schema, writes `server/prisma/migrations/<timestamp>_migration_name/migration.sql`, and does **not** apply it or regenerate the client. If it fails, print the SQL instead and create the folder and file by hand with the file tools. Since `db:prepare` keeps the local database at the last committed migration, diffing it against the schema gives the new migration's SQL, with no shadow database:
+   This is `prisma migrate dev --create-only`: it replays the migrations into a shadow database to diff against the schema, writes `server/prisma/migrations/<timestamp>_migration_name/migration.sql`, and does **not** apply it or regenerate the client. If it fails, print the SQL instead and create the folder and file by hand with the file tools. Since `db:prepare` keeps the local database at the last committed migration, diffing it against the schema gives the new migration's SQL, with no shadow database (read-only):
 
    ```bash
-   cd server && node node_modules/prisma/build/index.js migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script
+   npm run db:migrate:diff --prefix server
    ```
 
-3. **Review the generated SQL before committing it.** The committed migrations and `schema.prisma` have drifted (as of 2026-10-05), so a new migration also picks up unrelated statements. The dangerous one is `DROP INDEX "stories_embedding_idx"`: that pgvector index was created by raw SQL in `20260206120000_add_embedding_fields` and Prisma cannot represent it, so always delete that line. Other drift (newsletter_sends defaults, two missing indexes, a `feeds_url_key` rename) is safe but belongs in its own migration, not hidden in an unrelated one.
+3. **Review the generated SQL before committing it, and delete `DROP INDEX "stories_embedding_idx";`.** Both `db:migrate:create` and `db:migrate:diff` always emit that line, even with no schema change: the pgvector HNSW index was created by raw SQL in `20260206120000_add_embedding_fields`, and Prisma 6 cannot represent an index on an `Unsupported("vector(1536)")` column, so it treats it as unknown and proposes dropping it. Committing it would turn every vector search into a sequential scan. `server/src/test/migrations.test.ts` fails if any migration drops the index without re-creating it in the same migration (comments are ignored, so a migration may mention it). Apart from that line, a migrate diff from a fully migrated database is empty: the earlier drift (newsletter_sends defaults, two missing indexes, the `feeds_url_key` rename) was reconciled by `20261005120000_reconcile_schema_drift`. Anything else in a fresh diff is drift, and belongs in its own migration, not hidden in an unrelated one.
 4. Restart the dev server (or run `npm run db:prepare --prefix server`): the migration is applied and the client regenerated. If a dev server is already running, stop it first, or the regenerate hits the DLL lock.
 5. Commit the migration folder with the schema change. Production applies it on the next deploy.
 
@@ -66,6 +66,7 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 
 **Considerations:**
 
+- **A migration is atomic, but a failure still blocks deploys.** Prisma 6 sends the whole `migration.sql` as one simple query, which PostgreSQL runs as one implicit transaction, so a failing statement rolls back the entire file (and `CREATE INDEX CONCURRENTLY` cannot be used). Don't add explicit `BEGIN;`/`COMMIT;`: a failure inside one hides the real error behind "current transaction is aborted" (prisma/prisma#15295). Prisma records the migration as started in a separate statement first, so even a fully rolled-back failure leaves a failed row and the next deploy stops with P3009 until `migrate resolve --rolled-back <name>`. Write migrations that cannot fail on existing data (backfill before `SET NOT NULL`, check uniqueness before a unique index). Prisma 7 sends statements one at a time, so re-check this before upgrading.
 - **No automatic rollback.** Prisma doesn't generate down migrations. Destructive DDL (drop column/table) should be deployed in two phases: remove code references first, drop the column in a later deploy.
 - **Advisory lock contention.** Overlapping deploys will compete for a Postgres advisory lock. One will wait — shouldn't deadlock, but avoid triggering manual deploys while an auto-deploy is in progress.
 - **Migration ordering.** Concurrent branches adding migrations will apply in timestamp order. Avoid touching the same table in conflicting ways across branches.
@@ -78,6 +79,7 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 | `npm run db:prepare --prefix server` | Apply pending migrations and regenerate the client if the schema changed (local DB only; runs automatically before `dev`) |
 | `npm run db:migrate:create --prefix server -- --name <name>` | Generate migration SQL without applying |
 | `npm run db:migrate:status --prefix server` | Check which migrations are pending/applied |
+| `npm run db:migrate:diff --prefix server` | Print the SQL from the database to the schema, read-only (expected: only the `stories_embedding_idx` drop) |
 | `npm run db:migrate:resolve --prefix server -- --rolled-back <name>` | Mark a failed migration as rolled back |
 | `npm run db:migrate:deploy --prefix server` | Apply pending migrations to whatever `DATABASE_URL` points at (no local guard) |
 | `npm run db:generate --prefix server` | Regenerate the Prisma client (**dev server stopped**) |
@@ -117,8 +119,10 @@ and start the dev server again.
 To see what SQL would bring the database in line with the current schema (read-only):
 
 ```bash
-cd server && node node_modules/prisma/build/index.js migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script
+npm run db:migrate:diff --prefix server
 ```
+
+On a fully migrated database the only expected output is `DROP INDEX "stories_embedding_idx";` (see "Authoring a Migration", step 3). Never apply that line; anything else is real drift.
 
 ### Server Starts Against the Wrong Database
 

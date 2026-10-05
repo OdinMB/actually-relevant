@@ -38,7 +38,7 @@ entity NewsletterSend {
     status: sent | scheduled | sending
     html_content: String
     sent_at: Timestamp?
-    stats: String?                                     -- JSON from Plunk API
+    stats: String                                      -- JSON from Plunk API; "{}" until first refreshed
 }
 
 -- ─── Newsletter Workflow ─────────────────────────────────────────

@@ -17,6 +17,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:resolve": "prisma migrate resolve",
     "db:migrate:status": "prisma migrate status",
+    "db:migrate:diff": "prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script",
     "db:generate": "prisma generate",
     "db:prepare": "tsx src/scripts/db-prepare/index.ts",
     "db:studio": "prisma studio",

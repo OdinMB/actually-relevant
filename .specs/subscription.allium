@@ -43,7 +43,7 @@ external entity PlunkContact {
 
 entity PendingSubscription {
     email: String
-    token: String                                      -- UUID, single-use
+    token: String                                      -- UUID, single-use, unique
     plunk_contact_id: String?                          -- null until confirmed
     expires_at: Timestamp
     confirmed_at: Timestamp?

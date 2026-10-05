@@ -10,7 +10,7 @@
 
 ## Implementation Issues
 
-- **Schema drift between committed migrations and `schema.prisma`** (found with `migrate diff`, read-only, on the fully migrated Docker DB). The next `db:migrate:create` will include: `DROP INDEX "stories_embedding_idx"` (the pgvector index from raw SQL in `20260206120000_add_embedding_fields`; Prisma cannot model it, so this line must always be deleted), `newsletter_sends.html_content DROP DEFAULT`, `newsletter_sends.stats SET NOT NULL / SET DEFAULT '{}'`, new indexes `newsletter_sends_plunk_campaign_id_idx` and unique `pending_subscriptions_token_key`, and `feeds_url_key` renamed to `feeds_rss_url_key`. Production may or may not have these (manual pgAdmin runs could have applied them there); check before writing a reconciling migration. Documented in `.context/database-migrations.md`.
+- **Resolved 2026-10-05** by `20261005120000_reconcile_schema_drift` (plan: `.plans/completed/2026-10-05_reconcile-schema-drift-migration.md`). Production matched the Docker DB; the migration applies everything below except the index drop, and `server/src/test/migrations.test.ts` now fails on any migration that drops `stories_embedding_idx`. Original note: **Schema drift between committed migrations and `schema.prisma`** (found with `migrate diff`, read-only, on the fully migrated Docker DB). The next `db:migrate:create` will include: `DROP INDEX "stories_embedding_idx"` (the pgvector index from raw SQL in `20260206120000_add_embedding_fields`; Prisma cannot model it, so this line must always be deleted), `newsletter_sends.html_content DROP DEFAULT`, `newsletter_sends.stats SET NOT NULL / SET DEFAULT '{}'`, new indexes `newsletter_sends_plunk_campaign_id_idx` and unique `pending_subscriptions_token_key`, and `feeds_url_key` renamed to `feeds_rss_url_key`. Production may or may not have these (manual pgAdmin runs could have applied them there); check before writing a reconciling migration. Documented in `.context/database-migrations.md`.
 - `db:migrate:create` (`migrate dev --create-only`) against the Docker DB was **not** exercised end to end, to avoid creating a migration; the container user is a superuser (`rolsuper`, `rolcreatedb` both true), so shadow-database creation should work.
 - The locked-client (EPERM) path was verified only by unit test on the classifier, not by a real lock.
 - The guard-can-fail proof was done for the gate (removing the remote branch turned `gate.test.ts` red). A second mutation (forcing `checkLocalDatabase` to always say local) was refused by the permission classifier and not run; the `localDatabase.test.ts` remote cases assert that directly.
@@ -24,14 +24,13 @@
 
 ## Suggested Follow-Up Work
 
-- Variable templates are dotted (`server/.env.sample`, `client/.env.sample`); they could not be read or updated to mention `SKIP_DB_PREPARE` or the Docker `DATABASE_URL`. Renaming to `env.example` (AGT-007) would make them maintainable by agents.
-- Write a migration that reconciles the drift above (keeping the embedding index), after checking production.
-- Optional: a `db:migrate:diff` npm script for the fallback command documented in `.context/database-migrations.md`.
+- Variable templates are dotted (`server/.env.sample`, `client/.env.sample`); they could not be read or updated to mention `SKIP_DB_PREPARE` or the Docker `DATABASE_URL`. Renaming to `env.example` (AGT-007) would make them maintainable by agents. Still open: copied to `BACKLOG.md`.
+- Done 2026-10-05: the reconciling migration (keeping the embedding index) and the `db:migrate:diff` npm script.
+- Done before 2026-10-05: `server/package.json` now declares `dotenv` `^16.6.1`.
 
 ## Landing Queue
 
-- Nothing pushed or committed: the coordinator commits. Add to `server/package.json` scripts:
-  `"predev": "tsx src/scripts/db-prepare/index.ts",` and `"db:prepare": "tsx src/scripts/db-prepare/index.ts",`
+- Committed locally on `main` (9372ce1, with the `predev` and `db:prepare` scripts); not pushed.
 
 ## Mod code and load settings written
 
