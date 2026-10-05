@@ -41,6 +41,7 @@ The client uses `React.lazy()` to split code and reduce initial bundle size. Hom
 - **Admin-only npm packages** (`@headlessui/react`, `@heroicons/react`): Automatically code-split via lazy loading.
 - **Error boundary:** `ChunkErrorBoundary` and `LazyPage` wrapper handle chunk load failures with reload button.
 - **Preloading:** `LoginPage` calls `preloadAdminChunks()` on mount.
+- **Heavy widgets inside a public page** get their own `React.lazy()` chunk inside the page, with a skeleton fallback. The prerenderer snapshots 100ms after start (`render-complete` in `main.tsx`), so a page chunk that bundles a multi-MB library is captured as a spinner. Mount the lazy widget only after the page's first commit (a `useEffect`-set flag, plain skeleton until then): if it suspends in the page's first render, React throttles revealing the nested fallback and the snapshot still shows the route spinner. Example: `DevelopersPage` lazy-loads `components/developers/ApiReference.tsx` (Scalar).
 
 ## Accessibility (WCAG 2.2 AA)
 

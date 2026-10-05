@@ -29,6 +29,8 @@ All skeletons are in `client/src/components/skeletons/`:
 | `StoryPageSkeleton` | Full story article page |
 | `IssueAccordionSkeleton` | IssuesPage accordion items |
 | `SearchResultsSkeleton` | SearchPage results grid |
+| `RelatedStoriesSkeleton` | StoryPage related stories section |
+| `ApiReferenceSkeleton` | DevelopersPage, while the lazy Scalar reference chunk loads |
 
 ## Usage Pattern
 
@@ -99,6 +101,7 @@ All public pages with dynamic data:
 - **IssuesPage** — IssueAccordionSkeleton
 - **StoryPage** — StoryPageSkeleton
 - **SearchPage** — SearchResultsSkeleton
+- **DevelopersPage** — ApiReferenceSkeleton (Suspense fallback for a lazy chunk, not a data load)
 
 ## Related Files
 
