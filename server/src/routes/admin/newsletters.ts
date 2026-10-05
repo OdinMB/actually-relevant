@@ -179,6 +179,10 @@ router.post('/:id/send-test', async (req, res) => {
     const send = await newsletterService.sendTest(req.params.id)
     res.json(send)
   } catch (err: any) {
+    if (err instanceof newsletterService.TestSegmentNotConfiguredError) {
+      res.status(409).json({ error: err.message })
+      return
+    }
     if (err.message === 'Newsletter not found') {
       res.status(404).json({ error: err.message })
       return

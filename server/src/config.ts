@@ -120,6 +120,20 @@ export const config = {
     ),
     selectModelTier: "large" as const,
     contentModelTier: "large" as const,
+    // Weekly job guard: a built automatic issue newer than this blocks the next run
+    // (stops a Sunday catch-up from producing a second issue six days later).
+    minDaysBetweenIssues: 6,
+    // An unbuilt automatic draft for this week older than this is a run that was
+    // killed mid-pipeline; the next run deletes it and rebuilds.
+    abandonedDraftMinutes: 30,
+  },
+  scheduler: {
+    // Boot retry when initScheduler fails (e.g. database down at restart):
+    // delay starts at initRetryBaseMs and doubles up to initRetryMaxMs, forever.
+    initRetryBaseMs: 5_000,
+    initRetryMaxMs: 5 * 60_000,
+    // One notifyJobFailure alert after this many failed attempts.
+    initAlertAfterAttempts: 3,
   },
   feed: {
     size: parseInt(process.env.RSS_FEED_SIZE || "50", 10),

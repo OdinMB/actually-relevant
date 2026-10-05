@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockSchedule = vi.hoisted(() => vi.fn(() => ({ stop: vi.fn() })))
 const mockValidate = vi.hoisted(() => vi.fn(() => true))
@@ -19,20 +19,172 @@ vi.mock('node-cron', () => ({
   },
 }))
 
+const mockNotifyJobFailure = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
+vi.mock('../lib/notify.js', () => ({ notifyJobFailure: mockNotifyJobFailure }))
 vi.mock('./crawlFeeds.js', () => ({ runCrawlFeeds: vi.fn() }))
 vi.mock('./preassessStories.js', () => ({ runPreassessStories: vi.fn() }))
 vi.mock('./assessStories.js', () => ({ runAssessStories: vi.fn() }))
 vi.mock('./selectStories.js', () => ({ runSelectStories: vi.fn() }))
 
-const { initScheduler, stopScheduler, estimateCronIntervalMs } = await import('./scheduler.js')
+const { initScheduler, startScheduler, stopScheduler, runJob, runningJobs, estimateCronIntervalMs } =
+  await import('./scheduler.js')
+const { config } = await import('../config.js')
+
+const enabledCrawlJob = {
+  jobName: 'crawl_feeds',
+  enabled: true,
+  cronExpression: '0 */6 * * *',
+  lastCompletedAt: new Date(),
+  lastStartedAt: null,
+}
 
 describe('scheduler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockValidate.mockReturnValue(true)
     mockSchedule.mockReturnValue({ stop: vi.fn() })
+    mockNotifyJobFailure.mockResolvedValue(undefined)
+    mockPrisma.jobRun.update.mockReset().mockResolvedValue({})
+    mockPrisma.jobRun.findMany.mockReset()
     stopScheduler()
+    runningJobs.clear()
+  })
+
+  describe('runJob never rejects', () => {
+    it('does not run the handler when the start write fails, and clears and alerts', async () => {
+      mockPrisma.jobRun.update.mockRejectedValue(new Error('db down'))
+      const handler = vi.fn().mockResolvedValue(undefined)
+
+      await expect(runJob('crawl_feeds', handler)).resolves.toBeUndefined()
+
+      expect(handler).not.toHaveBeenCalled()
+      expect(runningJobs.has('crawl_feeds')).toBe(false)
+      expect(mockNotifyJobFailure).toHaveBeenCalledWith('crawl_feeds', expect.stringContaining('db down'))
+    })
+
+    it('resolves when the handler throws and the error-path write also fails', async () => {
+      mockPrisma.jobRun.update
+        .mockResolvedValueOnce({}) // start write
+        .mockRejectedValueOnce(new Error('db gone')) // error-path write
+      const handler = vi.fn().mockRejectedValue(new Error('handler boom'))
+
+      await expect(runJob('crawl_feeds', handler)).resolves.toBeUndefined()
+
+      expect(runningJobs.has('crawl_feeds')).toBe(false)
+      expect(mockNotifyJobFailure).toHaveBeenCalledWith('crawl_feeds', 'handler boom')
+    })
+
+    it('treats a failed completion write as a job failure', async () => {
+      mockPrisma.jobRun.update
+        .mockResolvedValueOnce({}) // start write
+        .mockRejectedValueOnce(new Error('completion write failed'))
+        .mockResolvedValueOnce({}) // error-path write
+      const handler = vi.fn().mockResolvedValue(undefined)
+
+      await expect(runJob('crawl_feeds', handler)).resolves.toBeUndefined()
+
+      expect(handler).toHaveBeenCalledTimes(1)
+      expect(runningJobs.has('crawl_feeds')).toBe(false)
+      expect(mockNotifyJobFailure).toHaveBeenCalledWith('crawl_feeds', 'completion write failed')
+    })
+
+    it('a cron tick while every write fails produces no unhandled rejection', async () => {
+      mockPrisma.jobRun.findMany.mockResolvedValue([enabledCrawlJob])
+      await initScheduler()
+      const tick = (mockSchedule.mock.calls[0] as unknown as [string, () => void])[1]
+
+      mockPrisma.jobRun.update.mockRejectedValue(new Error('db down'))
+      const onUnhandled = vi.fn()
+      process.on('unhandledRejection', onUnhandled)
+      try {
+        tick()
+        // Let the launched promise chain and any rejection-tracking settle
+        await new Promise(resolve => setTimeout(resolve, 20))
+      } finally {
+        process.off('unhandledRejection', onUnhandled)
+      }
+
+      expect(onUnhandled).not.toHaveBeenCalled()
+      expect(runningJobs.has('crawl_feeds')).toBe(false)
+      expect(mockNotifyJobFailure).toHaveBeenCalledWith('crawl_feeds', expect.stringContaining('db down'))
+    })
+  })
+
+  describe('startScheduler', () => {
+    const { initRetryBaseMs, initAlertAfterAttempts } = config.scheduler
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      stopScheduler()
+      vi.useRealTimers()
+    })
+
+    it('retries with doubling delays until initScheduler succeeds, registering once', async () => {
+      mockPrisma.jobRun.findMany
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockResolvedValue([enabledCrawlJob])
+
+      startScheduler()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(1)
+
+      // First retry after the base delay
+      await vi.advanceTimersByTimeAsync(initRetryBaseMs - 1)
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(2)
+
+      // Second retry after double the base delay
+      await vi.advanceTimersByTimeAsync(initRetryBaseMs * 2 - 1)
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(3)
+
+      expect(mockSchedule).toHaveBeenCalledTimes(1)
+
+      // No further attempts after success
+      await vi.advanceTimersByTimeAsync(config.scheduler.initRetryMaxMs * 2)
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(3)
+    })
+
+    it('alerts exactly once, at the attempt threshold', async () => {
+      mockPrisma.jobRun.findMany.mockRejectedValue(new Error('db down'))
+
+      startScheduler()
+      await vi.advanceTimersByTimeAsync(0)
+      // Step through the attempts below the threshold, one retry delay at a time
+      for (let attempt = 1; attempt < initAlertAfterAttempts; attempt++) {
+        expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(attempt)
+        expect(mockNotifyJobFailure).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(initRetryBaseMs * 2 ** (attempt - 1))
+      }
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(initAlertAfterAttempts)
+      expect(mockNotifyJobFailure).toHaveBeenCalledTimes(1)
+      expect(mockNotifyJobFailure).toHaveBeenCalledWith('scheduler', expect.stringContaining('db down'))
+
+      // Many more failed attempts: no further alerts
+      await vi.advanceTimersByTimeAsync(config.scheduler.initRetryMaxMs * 5)
+      expect(mockPrisma.jobRun.findMany.mock.calls.length).toBeGreaterThan(initAlertAfterAttempts + 2)
+      expect(mockNotifyJobFailure).toHaveBeenCalledTimes(1)
+    })
+
+    it('stopScheduler during the retry wait prevents any later attempt', async () => {
+      mockPrisma.jobRun.findMany.mockRejectedValue(new Error('db down'))
+
+      startScheduler()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(1)
+
+      stopScheduler()
+      await vi.advanceTimersByTimeAsync(config.scheduler.initRetryMaxMs * 3)
+      expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('initScheduler', () => {

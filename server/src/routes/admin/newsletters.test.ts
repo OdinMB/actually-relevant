@@ -42,6 +42,7 @@ vi.mock('../../lib/retry.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
+const { config } = await import('../../config.js')
 
 describe('Admin Newsletters API', () => {
   beforeEach(() => {
@@ -233,6 +234,22 @@ describe('Admin Newsletters API', () => {
         .post('/api/admin/newsletters/newsletter-1/generate')
         .set(authHeader())
       expect(res.status).toBe(400)
+    })
+  })
+
+  describe('POST /api/admin/newsletters/:id/send-test', () => {
+    it('returns 409 with the reason when no test segment is configured', async () => {
+      const original = config.plunk.testSegmentId
+      config.plunk.testSegmentId = ''
+      try {
+        const res = await request(app)
+          .post('/api/admin/newsletters/newsletter-1/send-test')
+          .set(authHeader())
+        expect(res.status).toBe(409)
+        expect(res.body.error).toEqual(expect.any(String))
+      } finally {
+        config.plunk.testSegmentId = original
+      }
     })
   })
 })

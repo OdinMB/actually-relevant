@@ -67,8 +67,9 @@ export async function getNewsletterById(id: string) {
   return prisma.newsletter.findUnique({ where: { id } })
 }
 
-export async function createNewsletter(data: { title: string }) {
-  return prisma.newsletter.create({ data: { title: data.title } })
+/** `weekKey` is set only by the generate_newsletter job (its weekly guard keys on it). */
+export async function createNewsletter(data: { title: string; weekKey?: string }) {
+  return prisma.newsletter.create({ data: { title: data.title, weekKey: data.weekKey } })
 }
 
 export async function updateNewsletter(id: string, data: Prisma.NewsletterUpdateInput) {
@@ -606,7 +607,22 @@ export async function getNewsletterSends(newsletterId: string) {
   })
 }
 
+/** A test send was refused because no test segment is configured (never falls back to all subscribers). */
+export class TestSegmentNotConfiguredError extends Error {
+  constructor() {
+    super('Test send refused: PLUNK_TEST_SEGMENT_ID is not set, and a test email is never sent to all subscribers')
+    this.name = 'TestSegmentNotConfiguredError'
+  }
+}
+
 export async function sendTest(newsletterId: string) {
+  const segmentId = config.plunk.testSegmentId
+  if (!segmentId) {
+    const err = new TestSegmentNotConfiguredError()
+    log.error({ newsletterId }, err.message)
+    throw err
+  }
+
   const newsletter = await prisma.newsletter.findUniqueOrThrow({ where: { id: newsletterId } })
   if (!newsletter.html) throw new Error('No HTML content — generate HTML first')
   const html = newsletter.html
@@ -616,8 +632,8 @@ export async function sendTest(newsletterId: string) {
     name: `[TEST] ${newsletter.title}`,
     subject: `[TEST] ${newsletter.title}`,
     body: html,
-    audienceType: config.plunk.testSegmentId ? 'SEGMENT' : 'ALL',
-    segmentId: config.plunk.testSegmentId || undefined,
+    audienceType: 'SEGMENT',
+    segmentId,
   })
 
   await plunk.sendCampaign(campaign.id)

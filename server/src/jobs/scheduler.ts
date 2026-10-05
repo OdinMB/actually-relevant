@@ -2,6 +2,7 @@ import cron from 'node-cron'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
 import { notifyJobFailure } from '../lib/notify.js'
+import { config } from '../config.js'
 import { JOB_HANDLERS } from './handlers.js'
 
 const log = createLogger('scheduler')
@@ -32,16 +33,14 @@ export async function initScheduler(): Promise<void> {
     }
 
     // Register cron job
-    const task = cron.schedule(job.cronExpression, () => {
-      runJob(job.jobName, handler)
-    })
+    const task = cron.schedule(job.cronExpression, () => launchJob(job.jobName, handler))
     tasksByName.set(job.jobName, task)
     log.info({ jobName: job.jobName, cronExpression: job.cronExpression }, 'registered')
 
     // Check if overdue
     if (isOverdue(job)) {
       log.info({ jobName: job.jobName }, 'overdue, running now')
-      runJob(job.jobName, handler)
+      launchJob(job.jobName, handler)
     }
   }
 
@@ -141,6 +140,11 @@ function countDaysInDowExpr(expr: string): number | null {
   return days.size
 }
 
+/**
+ * Run a job with bookkeeping. Always resolves: a failure of the handler or of
+ * any bookkeeping write is logged, recorded where possible, and alerted, and
+ * the running mark is always removed.
+ */
 async function runJob(jobName: string, handler: () => Promise<void>): Promise<void> {
   if (runningJobs.has(jobName)) {
     log.warn({ jobName }, 'already running, skipping')
@@ -150,12 +154,11 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
   runningJobs.add(jobName)
   log.info({ jobName }, 'started')
 
-  await prisma.jobRun.update({
-    where: { jobName },
-    data: { lastStartedAt: new Date(), lastError: null },
-  })
-
   try {
+    await prisma.jobRun.update({
+      where: { jobName },
+      data: { lastStartedAt: new Date(), lastError: null },
+    })
     await handler()
     await prisma.jobRun.update({
       where: { jobName },
@@ -170,14 +173,30 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
       if (pe.meta) errorMsg += ` | Prisma ${pe.code}: ${JSON.stringify(pe.meta)}`
     }
     log.error({ jobName, err }, 'job failed')
-    await prisma.jobRun.update({
-      where: { jobName },
-      data: { lastError: errorMsg, lastCompletedAt: new Date() },
-    })
+    await recordFailure(jobName, errorMsg)
     notifyJobFailure(jobName, errorMsg).catch(() => {})
   } finally {
     runningJobs.delete(jobName)
   }
+}
+
+/** Write the failure to the job row; a failed write is logged, never thrown. */
+async function recordFailure(jobName: string, errorMsg: string): Promise<void> {
+  try {
+    await prisma.jobRun.update({
+      where: { jobName },
+      data: { lastError: errorMsg, lastCompletedAt: new Date() },
+    })
+  } catch (err) {
+    log.error({ jobName, err }, 'failed to record job failure')
+  }
+}
+
+/** Fire-and-forget trigger used by cron ticks and boot catch-up. */
+function launchJob(jobName: string, handler: () => Promise<void>): void {
+  runJob(jobName, handler).catch(err => {
+    log.error({ jobName, err }, 'job launcher caught unexpected rejection')
+  })
 }
 
 // Exported for manual trigger via admin API and testing
@@ -202,14 +221,66 @@ export async function reloadJob(jobName: string): Promise<void> {
     return
   }
 
-  const task = cron.schedule(job.cronExpression, () => {
-    runJob(jobName, handler)
-  })
+  const task = cron.schedule(job.cronExpression, () => launchJob(jobName, handler))
   tasksByName.set(jobName, task)
   log.info({ jobName, cronExpression: job.cronExpression }, 'reloaded')
 }
 
+// Boot retry state (startScheduler / stopScheduler)
+let initRetryTimer: NodeJS.Timeout | null = null
+let schedulerStopped = false
+
+/**
+ * Start the scheduler, retrying with backoff while initScheduler fails (e.g.
+ * the database is down at boot). Retries forever; alerts once after
+ * config.scheduler.initAlertAfterAttempts failed attempts.
+ */
+export function startScheduler(): void {
+  schedulerStopped = false
+  void attemptStart(1, false)
+}
+
+async function attemptStart(attempt: number, alerted: boolean): Promise<void> {
+  initRetryTimer = null
+  if (schedulerStopped) return
+
+  try {
+    await initScheduler()
+    // A shutdown that arrived while this attempt was in flight wins
+    if (schedulerStopped) {
+      stopScheduler()
+      return
+    }
+    if (alerted) log.info({ attempt }, 'scheduler started after earlier failures')
+    return
+  } catch (err) {
+    const { initRetryBaseMs, initRetryMaxMs, initAlertAfterAttempts } = config.scheduler
+    const delayMs = Math.min(initRetryBaseMs * 2 ** (attempt - 1), initRetryMaxMs)
+    log.error({ err, attempt, retryInMs: delayMs }, 'scheduler initialization failed, retrying')
+
+    let nowAlerted = alerted
+    if (!alerted && attempt >= initAlertAfterAttempts) {
+      nowAlerted = true
+      const reason = err instanceof Error ? err.message : String(err)
+      const retryMinutes = Math.round(initRetryMaxMs / 60_000)
+      notifyJobFailure(
+        'scheduler',
+        `scheduler could not start: ${reason}; retrying (backoff up to every ${retryMinutes} min)`,
+      ).catch(() => {})
+    }
+
+    if (schedulerStopped) return
+    initRetryTimer = setTimeout(() => void attemptStart(attempt + 1, nowAlerted), delayMs)
+    initRetryTimer.unref()
+  }
+}
+
 export function stopScheduler(): void {
+  schedulerStopped = true
+  if (initRetryTimer) {
+    clearTimeout(initRetryTimer)
+    initRetryTimer = null
+  }
   for (const task of tasksByName.values()) {
     task.stop()
   }

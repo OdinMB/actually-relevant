@@ -1,6 +1,6 @@
 import prisma from './lib/prisma.js'
 import { createLogger } from './lib/logger.js'
-import { initScheduler, stopScheduler } from './jobs/scheduler.js'
+import { startScheduler, stopScheduler } from './jobs/scheduler.js'
 import { cleanupExpiredTokens } from './services/auth.js'
 import { taskRegistry } from './lib/taskRegistry.js'
 import app from './app.js'
@@ -18,9 +18,8 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 const server = app.listen(PORT, () => {
   log.info({ port: PORT }, 'server started')
 
-  Promise.resolve().then(() => initScheduler()).catch(err => {
-    log.error({ err }, 'scheduler initialization failed')
-  })
+  // Retries with backoff while the database is unavailable; alerts once (scheduler.ts)
+  startScheduler()
 })
 
 const tokenCleanupTimer = setInterval(async () => {

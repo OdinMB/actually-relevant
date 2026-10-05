@@ -19,6 +19,9 @@ use "./authentication.allium" as auth
 
 config {
     overdue_multiplier: Integer = 2
+    init_retry_base: Duration = 5.seconds            -- boot retry delay, doubles per attempt
+    init_retry_max: Duration = 5.minutes             -- cap on the boot retry delay
+    init_alert_after_attempts: Integer = 3           -- one alert after this many failed starts
     task_cleanup_interval: Duration = 1.minute
     task_completed_ttl: Duration = 10.minutes
     task_max_errors: Integer = 20
@@ -56,16 +59,16 @@ external entity RunningJobSet {
 --   "*/N" in hour field → every N hours
 --   "H1,H2,H3" in hour field → 24 / count(hours) hours
 --   Single digit in hour field → daily (24 hours)
+--   Anything else ("*", ranges) → no estimate, so never overdue
 --
--- Day-of-week restrictions (e.g. "0 9 * * 1-5" for weekdays)
--- are NOT factored into the interval estimate. The overdue check
--- uses a 2x multiplier which provides sufficient headroom for
--- weekend gaps in weekday-only schedules (max gap ~63h for a
--- Friday→Monday schedule, vs 2x24h=48h threshold, but the
--- multiplier applies to estimated interval not absolute time).
--- This is a deliberate simplification: the heuristic is "good
--- enough" for triggering overdue runs without needing a full
--- cron expression evaluator.
+-- The hour-based estimate is then multiplied by 7 ÷ (days per week
+-- in the day-of-week field), so "0 4 * * 6" estimates 168h and
+-- "0 9 * * 1-5" estimates 24h × 7/5. The day-of-week field
+-- understands "*" (every day), a single day (0 and 7 are both
+-- Sunday), ranges, wrap-around ranges ("5-2" = Fri..Tue) and
+-- comma lists. An unrecognized pattern (e.g. "*/2") falls back
+-- to a multiplier of 1. This is a heuristic, not a full cron
+-- evaluator: it is good enough for triggering overdue runs.
 
 -- On startup, all enabled jobs are registered with node-cron.
 -- Overdue jobs (haven't run in 2x their expected interval) are
@@ -77,6 +80,23 @@ rule InitScheduler {
         ensures: RegisterCronJob(job)
         if job.is_overdue:
             ensures: RunJobFromScheduler(job)
+}
+
+-- If reading the job rows fails at startup (database unavailable),
+-- the scheduler retries InitScheduler on a backoff that starts at
+-- init_retry_base and doubles up to init_retry_max, forever, until
+-- it succeeds. After init_alert_after_attempts failed attempts it
+-- sends one NotifyJobFailure("scheduler", ...) and no further alerts.
+-- Stopping the scheduler (shutdown) cancels a pending retry. A
+-- retry never registers a job twice: the only failing step comes
+-- before any registration.
+rule InitSchedulerFails {
+    when: InitSchedulerFails(attempt, error)
+
+    ensures: RetryInitSchedulerAfter(
+        min(config.init_retry_base * 2 ^ (attempt - 1), config.init_retry_max))
+    if attempt = config.init_alert_after_attempts:
+        ensures: NotifyJobFailure("scheduler", error)
 }
 
 -- Overlap prevention: if a job is already running when its cron
@@ -105,6 +125,9 @@ rule RunJobFromScheduler {
 }
 
 -- Shared execution logic for all trigger paths.
+-- The handler is invoked only after the start write succeeds; a
+-- failed start write is a job failure (JobFails), so the handler
+-- never runs and the job is not left marked as running.
 rule ExecuteJob {
     when: ExecuteJob(job)
 
@@ -121,6 +144,10 @@ rule JobSucceeds {
     ensures: RunningJobSet.remove(job.job_name)
 }
 
+-- Fires when the handler throws, or when any bookkeeping write
+-- (start or completion) fails. Writing the failure to the row is
+-- best effort: if that write fails too, it is logged and the rest
+-- still happens.
 rule JobFails {
     when: JobHandlerFails(job, error)
 
@@ -129,6 +156,11 @@ rule JobFails {
     ensures: RunningJobSet.remove(job.job_name)
     ensures: NotifyJobFailure(job.job_name, error)
 }
+
+-- Invariant: running a job never crashes the process. Every trigger
+-- path (cron tick, boot catch-up, admin manual run) ends with the
+-- job removed from RunningJobSet, whatever the handler or the
+-- database does, and no rejection escapes the scheduler.
 
 -- Admin can update a job's cron expression or enabled state.
 -- Changes take effect on the next schedule cycle (hot reload).

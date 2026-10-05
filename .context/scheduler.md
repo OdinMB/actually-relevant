@@ -6,11 +6,13 @@ The scheduler runs jobs in-process using `node-cron`, with configuration and run
 
 ## How It Works
 
-On server startup, `initScheduler()`:
+On server startup, `index.ts` calls `startScheduler()`, which runs `initScheduler()`:
 1. Loads all job definitions from the `job_runs` table
 2. For each enabled job with a valid cron expression, registers a cron task
 3. Checks for overdue jobs (last run + interval < now) and runs them immediately
 4. Logs which jobs were registered, skipped, or triggered
+
+**Boot retry**: if step 1 fails (database down at restart), `startScheduler()` retries on an unref'd timer — 5 s doubling to a 5 min cap, forever (`config.scheduler`). After 3 failed attempts it sends one `notifyJobFailure('scheduler', …)`, and logs at info level when it finally starts. `stopScheduler()` cancels a pending retry. Without this the web service would look healthy while no job ran until the next deploy.
 
 ## Reliability Features
 
@@ -18,11 +20,11 @@ On server startup, `initScheduler()`:
 
 **Overdue detection**: On startup, the scheduler compares each job's `lastCompletedAt` against its cron interval. Jobs that missed their window (e.g., server was down) run immediately.
 
-**Error tracking**: Each job run updates `lastStartedAt` at start, then `lastCompletedAt` (and `lastError` on failure) when it finishes — both the success and caught-error paths write `lastCompletedAt`. Failed jobs don't block subsequent runs. A **hard kill** (OOM, SIGKILL) bypasses the finish writes, leaving `lastStartedAt` newer than `lastCompletedAt`; the admin Jobs table surfaces that as an **Incomplete** (red) status rather than a stale **OK**, so a crashed run is visible (see `JobStatusBadge.tsx`).
+**Error tracking**: Each job run updates `lastStartedAt` at start, then `lastCompletedAt` (and `lastError` on failure) when it finishes — both the success and caught-error paths write `lastCompletedAt`. Failed jobs don't block subsequent runs. `runJob` never rejects: a failed start or completion write counts as a job failure (a failed start write means the handler never runs), a failed error-path write is logged (`failed to record job failure`), and the job always leaves `runningJobs`. Cron ticks and boot catch-up go through `launchJob`, which adds a defensive `.catch`. A rejection escaping here used to crash the process (Node exits on unhandled rejections); there is deliberately no process-wide `unhandledRejection` handler, so any other escape still crashes visibly. A **hard kill** (OOM, SIGKILL) bypasses the finish writes, leaving `lastStartedAt` newer than `lastCompletedAt`; the admin Jobs table surfaces that as an **Incomplete** (red) status rather than a stale **OK**, so a crashed run is visible (see `JobStatusBadge.tsx`).
 
 **Failure notifications**: When a job fails, `notifyJobFailure()` sends a POST to the URL in the `WEBHOOK_URL` environment variable (if set) with the job name, error message, and timestamp. See `server/src/lib/notify.ts`.
 
-**Hot reload**: When a job's cron expression or enabled flag is updated via the admin API (`PUT /api/admin/jobs/:jobName`), the scheduler automatically reloads — stopping all current cron tasks and re-registering from the database. No server restart needed.
+**Hot reload**: When a job's cron expression or enabled flag is updated via the admin API (`PUT /api/admin/jobs/:jobName`), the scheduler reloads only that job (`reloadJob`) — stopping its cron task and re-registering it from the database. It does not run an overdue check. No server restart needed.
 
 **Manual triggers**: Every job can be triggered via `POST /api/admin/jobs/:jobName/run`, which runs the job in the background regardless of schedule.
 
@@ -73,9 +75,9 @@ The Semaphore utility is at `server/src/lib/semaphore.ts`.
 
 | File | Role |
 |------|------|
-| `server/src/jobs/scheduler.ts` | Core scheduler: init, cron registration, overlap prevention, hot reload |
+| `server/src/jobs/scheduler.ts` | Core scheduler: init and boot retry, cron registration, overlap prevention, hot reload |
 | `server/src/jobs/handlers.ts` | Shared `JOB_HANDLERS` map (job name → handler function) |
-| `server/src/jobs/jobService.ts` | Service layer for job CRUD and manual triggering |
+| `server/src/services/job.ts` | Job list with running state, and job updates (manual triggering is in `routes/admin/jobs.ts`) |
 | `server/src/lib/notify.ts` | Webhook notification for job failures |
 | `server/src/jobs/crawlFeeds.ts` | RSS crawl job handler |
 | `server/src/jobs/preassessStories.ts` | Pre-assessment job handler |

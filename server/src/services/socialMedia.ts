@@ -9,13 +9,32 @@ import { blueskyPickBestSchema } from '../schemas/bluesky.js'
 
 const log = createLogger('social-media')
 
+export type SocialChannelName = 'bluesky' | 'mastodon'
+
+/** Story ids (among `storyIds`) that already have a post on the channel, in any status. */
+async function storiesWithPost(channel: SocialChannelName, storyIds: string[]): Promise<Set<string>> {
+  const where = { storyId: { in: storyIds } }
+  const select = { storyId: true }
+  const rows = channel === 'bluesky'
+    ? await prisma.blueskyPost.findMany({ where, select })
+    : await prisma.mastodonPost.findMany({ where, select })
+  return new Set(rows.map((p: { storyId: string }) => p.storyId))
+}
+
 /**
  * Find recently published stories that are candidates for social media posting.
- * Excludes stories already posted to ALL enabled channels.
+ * A story is a candidate when at least one of the given (enabled) channels has
+ * no post for it in any status. Any existing post counts — draft and failed
+ * included — because generateDraft refuses a story that already has a post.
  *
  * @returns Array of candidate story IDs
  */
-export async function findAutoPostCandidates(lookbackHours: number): Promise<string[]> {
+export async function findAutoPostCandidates(
+  lookbackHours: number,
+  channels: SocialChannelName[],
+): Promise<string[]> {
+  if (channels.length === 0) return []
+
   const since = new Date()
   since.setHours(since.getHours() - lookbackHours)
 
@@ -34,25 +53,11 @@ export async function findAutoPostCandidates(lookbackHours: number): Promise<str
 
   const storyIds = publishedStories.map((s) => s.id)
 
-  // Find stories already posted to Bluesky
-  const blueskyPosted = await prisma.blueskyPost.findMany({
-    where: { storyId: { in: storyIds }, status: 'published' },
-    select: { storyId: true },
-  })
+  // Only the enabled channels' tables: a disabled channel never posts, so its
+  // missing rows must not keep an already-posted story a candidate.
+  const postedSets = await Promise.all(channels.map((c) => storiesWithPost(c, storyIds)))
 
-  // Find stories already posted to Mastodon
-  const mastodonPosted = await prisma.mastodonPost.findMany({
-    where: { storyId: { in: storyIds }, status: 'published' },
-    select: { storyId: true },
-  })
-
-  const blueskySet = new Set(blueskyPosted.map((p: { storyId: string }) => p.storyId))
-  const mastodonSet = new Set(mastodonPosted.map((p: { storyId: string }) => p.storyId))
-
-  // A story is a candidate if it hasn't been posted to at least one enabled channel
-  const candidates = storyIds.filter((id) => !blueskySet.has(id) || !mastodonSet.has(id))
-
-  return candidates
+  return storyIds.filter((id) => postedSets.some((posted) => !posted.has(id)))
 }
 
 /**

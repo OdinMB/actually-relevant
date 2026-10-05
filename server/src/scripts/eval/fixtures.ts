@@ -408,8 +408,10 @@ async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[], adapta
   for (const w of windows) {
     if (days.length >= TARGETS.socialPick.days) break
     const since = new Date(w.at.getTime() - config.socialAutoPost.lookbackHours * 60 * 60 * 1000)
-    // Mirrors socialMedia.ts findAutoPostCandidates at time w.at: a story is a candidate
-    // unless it was already posted to both channels before that moment.
+    // Approximates socialMedia.ts findAutoPostCandidates at time w.at, assuming both channels
+    // enabled and counting published posts only (the live filter counts posts in any status on
+    // the enabled channels): a story is a candidate unless it was already posted to both
+    // channels before that moment. Kept as is so frozen fixtures stay comparable.
     const stories = await db.story.findMany({
       where: { status: 'published', datePublished: { gte: since, lte: w.at }, title: { not: null }, summary: { not: null }, slug: { not: null } },
       select: pickSelect,

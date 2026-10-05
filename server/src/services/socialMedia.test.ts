@@ -35,7 +35,36 @@ describe('findAutoPostCandidates', () => {
   it('returns empty when no published stories', async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
 
-    const result = await findAutoPostCandidates(25)
+    const result = await findAutoPostCandidates(25, ['bluesky', 'mastodon'])
+    expect(result).toEqual([])
+  })
+
+  it('with only Bluesky enabled, excludes a story already on Bluesky and never queries Mastodon', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 'story-1' }, { id: 'story-2' }])
+    mockPrisma.blueskyPost.findMany.mockResolvedValue([{ storyId: 'story-1' }])
+
+    const result = await findAutoPostCandidates(25, ['bluesky'])
+
+    expect(result).toEqual(['story-2'])
+    expect(mockPrisma.mastodonPost.findMany).not.toHaveBeenCalled()
+  })
+
+  it('counts a post in any status (draft, failed) as already posted', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 'story-1' }])
+    mockPrisma.blueskyPost.findMany.mockResolvedValue([{ storyId: 'story-1' }])
+
+    const result = await findAutoPostCandidates(25, ['bluesky'])
+
+    expect(result).toEqual([])
+    const where = mockPrisma.blueskyPost.findMany.mock.calls[0][0].where
+    expect(where).not.toHaveProperty('status')
+  })
+
+  it('returns nothing when no channel is enabled', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 'story-1' }])
+
+    const result = await findAutoPostCandidates(25, [])
+
     expect(result).toEqual([])
   })
 
@@ -52,7 +81,7 @@ describe('findAutoPostCandidates', () => {
       { storyId: 'story-2' },
     ])
 
-    const result = await findAutoPostCandidates(25)
+    const result = await findAutoPostCandidates(25, ['bluesky', 'mastodon'])
 
     // story-1 not on Mastodon, story-2 not on Bluesky, story-3 not on either
     expect(result).toContain('story-1')
@@ -73,7 +102,7 @@ describe('findAutoPostCandidates', () => {
       { storyId: 'story-1' },
     ])
 
-    const result = await findAutoPostCandidates(25)
+    const result = await findAutoPostCandidates(25, ['bluesky', 'mastodon'])
 
     // story-1 posted to both — excluded; story-2 only on Bluesky — included
     expect(result).not.toContain('story-1')

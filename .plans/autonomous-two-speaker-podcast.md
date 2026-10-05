@@ -93,7 +93,7 @@ Two axes on the existing `Podcast` row, never conflated:
 
 `runWeeklyEpisode` blocks the episode (`blockedAt`, `blockedReason`) on a non-retryable error (`PodcastBlockedError`: credits, cap, kill switch flipped mid-run, configuration missing, dialogue invalid after its one regeneration) or when automatic failures reach `PODCAST_MAX_ATTEMPTS_PER_WEEK` (default 3). Only automatic runs count attempts; the admin "Resume" clears `blockedAt` and resets `attempts`. A row whose `dryRun` flag is true while the config is no longer dry-run is reset to `created` with `dryRun = false` and regenerated, so a dry run in production cannot occupy the week (correctness review 6). The migration seeds both job rows with `last_completed_at = now()`, so neither runs at boot just because it never completed; `seed-jobs.ts` (fresh dev databases) leaves it null, which the window makes harmless.
 
-The generic scheduler weaknesses (per-process overlap guard, `lastCompletedAt` written on failure, boot run for never-completed jobs, the first `jobRun.update` outside the `try`) stay for the other jobs and go to follow-up work: fixing them changes boot behaviour of every job, which is out of proportion here. The strongest-end-state architect proposed a DB claim in `runJob` for all jobs in this change; it is recorded as follow-up because the podcast's own lease and ledger already make it safe.
+The generic scheduler weaknesses (per-process overlap guard, `lastCompletedAt` written on failure, boot run for never-completed jobs) stay for the other jobs and go to follow-up work: fixing them changes boot behaviour of every job, which is out of proportion here. (The first `jobRun.update` outside the `try` was fixed separately by the scheduler hardening of 2026-10-06, which also made `runJob` never reject and added a boot retry for `initScheduler`.) The strongest-end-state architect proposed a DB claim in `runJob` for all jobs in this change; it is recorded as follow-up because the podcast's own lease and ledger already make it safe.
 
 **Publish** (ADR-0006). `publishEpisode(id)` requires `stage = ready`, the row's `dryRun = false`, `PODCAST_ENABLED`; it sets `status = published`, `publishedAt` (first time only), clears `unpublishedAt`, and invalidates the feed cache. `unpublishEpisode(id)` always works, kill switch or not, and sets `unpublishedAt`. The feed and `/api/podcast` keep serving published episodes when the kill switch is off. An episode that has ever been published (`publishedAt` set) can never be regenerated or deleted (its GUID and enclosure must not change); it can be unpublished.
 
@@ -217,7 +217,7 @@ Each phase ships on its own; the risky unknowns are retired first and the owner 
 | `server/src/services/podcastDialogue.ts` | New, pure. *Responsibility:* dialogue rules and transformations without I/O. *Exports:* `validateDialogue`, `assembleSpokenTurns`, `chunkTurns`, `renderScript`, `buildTranscriptVtt`. |
 | `server/src/services/podcastScript.ts` | New. *Responsibility:* the two LLM calls and the show notes. *Exports:* `selectEpisodeStories`, `writeEpisodeScript`. `getLLMByTier`, `rateLimitDelay`, `withRetry` (3), `includeRaw` with explicit `parsed: null` handling, usage logged. |
 | `server/src/services/podcastPipeline.ts` | New. *Responsibility:* the stage machine and its lease. *Exports:* `advanceEpisode`, `resetEpisode`, `releaseHeldLeases` (for shutdown). Phase 1 runs `created → scripted`. |
-| `server/src/services/podcastWeekly.ts` | New. *Responsibility:* this week's episode and its retry and block policy. *Exports:* `runWeeklyEpisode`, `isoWeekKey`. (`getWeekTitle` in `generateNewsletter.ts` stays as is; the two ISO-week helpers are a few lines each and serve different formats.) |
+| `server/src/services/podcastWeekly.ts` | New. *Responsibility:* this week's episode and its retry and block policy. *Exports:* `runWeeklyEpisode`, `isoWeekKey`. (`generateNewsletter.ts` now exports `getWeekKey`, which returns the same `YYYY-Www` format, computed from the date's local calendar day; reuse it or keep a UTC helper here, and say which.) |
 | `server/src/services/podcast.ts` | Remove `assignStories`, `generateScript`, `assemblePodcastScript`; keep CRUD; `getPodcasts` selects list columns only and filters by `stage`. |
 | `server/src/lib/aiLabelCopy.ts` | `PODCAST_OPENER` becomes the owner-approved sentence (decision 4). |
 | `server/src/index.ts` | The SIGTERM/SIGINT handler calls `releaseHeldLeases()`. |
@@ -290,7 +290,7 @@ Each phase ships on its own; the risky unknowns are retired first and the owner 
 | `.specs/newsletter-and-podcast.allium` | Remove the podcast section; a pointer to `podcast.allium`. |
 | `.context/podcast.md` | New: pipeline, stages, modules, chunking, audio, storage paths, feed, page, admin actions, alerts, caps, dry run, environment variables, owner setup, troubleshooting. Cross-reference header to the spec. |
 | `.context/newsletter-podcast.md` | Remove the podcast sections and endpoints; a pointer to `podcast.md`. |
-| `.context/scheduler.md` | Both jobs in the registry with their window and attempt behaviour; the stale `jobService.ts` reference corrected to `server/src/services/job.ts` (the table is edited anyway). |
+| `.context/scheduler.md` | Both jobs in the registry with their window and attempt behaviour. (The stale `jobService.ts` reference was already corrected by the scheduler hardening of 2026-10-06.) |
 | `.context/llm-analysis.md` | The podcast select and script calls and tiers; ElevenLabs `eleven_v4` pinned, its retirement tracked like OpenAI's. |
 | `.context/model-eval.md` | The podcast call site, `checkDialogue`, the `podcast` recalibrate step, and the listening test before enabling the job. |
 | `.context/ai-transparency.md` | Phase 1: row 8's script and the new opener. Phase 2: audio (ElevenLabs `eleven_v4`), the ID3 marks (50(2) interim, unsigned), "No AI-generated audio exists" removed, §4 watermark reliance with the S7 result. Phase 3: publication to our feed, Bunny and `/podcast`; written lines in show and episode descriptions; `podcast:txt`; the page label; q3 answered and removed from §11; the privacy row. The owner listens before manual publication, but the record does not rely on the human-review exception, because publishing becomes automatic. |
@@ -323,7 +323,7 @@ Server tests are co-located with `vi.hoisted` mocks; ElevenLabs and Bunny are mo
 
 ## Out of Scope
 
-- Generic scheduler fixes (DB-level job claim, retry of failed runs, no boot run for never-completed jobs, the first `jobRun.update` outside the `try`); follow-up.
+- Generic scheduler fixes (DB-level job claim, retry of failed runs, no boot run for never-completed jobs); follow-up, now in `BACKLOG.md`. The first `jobRun.update` outside the `try` was fixed by the scheduler hardening of 2026-10-06.
 - Exact transcript timings via `/text-to-dialogue/with-timestamps`; per-episode web pages; pronunciation dictionaries.
 - Turn-level dialogue editing, "Regenerate audio", uploading a hand-made MP3, an episode hold flag beyond `unpublishedAt`.
 - Intro or outro music; per-episode artwork; YouTube; download statistics beyond Bunny's counts.

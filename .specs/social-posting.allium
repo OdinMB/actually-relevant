@@ -78,15 +78,20 @@ rule FindCandidates {
     let enabled_channels = ChannelConfig where is_active
     requires: enabled_channels.count > 0
 
-    -- A story is a candidate if it hasn't been posted to
-    -- at least one enabled channel.
+    -- A story is a candidate if at least one ENABLED channel has no
+    -- post for it in any status. Only enabled channels count: a
+    -- disabled channel never posts, so its missing rows must not keep
+    -- an already-posted story a candidate. Any status counts (draft
+    -- and failed included) because GenerateDraft refuses a story that
+    -- already has a post on the channel; otherwise a picked story
+    -- would post nothing while the job reports success.
     let candidates = Story
         where status = published
         and date_published >= now - config.lookback_hours.hours
         and title != null and summary != null and slug != null
         and enabled_channels.any(ch =>
             not exists SocialPost where story = this
-                and channel = ch.name and status = published
+                and channel = ch.name
         )
 
     if candidates.count > 0:
@@ -101,10 +106,10 @@ rule PickBestStory {
     -- shareability, uniqueness.
     let pick = LLM.pick_best_for_social(candidates)
 
+    -- Same any-status test as FindCandidates (GenerateDraft refuses any).
     for channel in channels:
         if not exists SocialPost
-            where story = pick and channel = channel.name
-                and status = published:
+            where story = pick and channel = channel.name:
             ensures: GenerateDraft(pick, channel)
 }
 

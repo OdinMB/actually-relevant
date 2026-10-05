@@ -6,7 +6,7 @@ const mockPrisma = vi.hoisted(() => ({
   $disconnect: vi.fn().mockResolvedValue(undefined),
 }))
 
-const mockInitScheduler = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const mockStartScheduler = vi.hoisted(() => vi.fn())
 const mockStopScheduler = vi.hoisted(() => vi.fn())
 
 const mockGetProcessingStoryIds = vi.hoisted(() => vi.fn().mockReturnValue([]))
@@ -35,7 +35,7 @@ vi.mock('./lib/logger.js', () => ({
   }),
 }))
 vi.mock('./jobs/scheduler.js', () => ({
-  initScheduler: mockInitScheduler,
+  startScheduler: mockStartScheduler,
   stopScheduler: mockStopScheduler,
 }))
 vi.mock('./lib/taskRegistry.js', () => ({

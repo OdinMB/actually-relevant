@@ -38,7 +38,7 @@ Mastodon posts are limited to 500 characters (configurable via `MASTODON_CHAR_LI
 
 To avoid duplicating story selection and post generation across channels, shared logic lives in `server/src/services/socialMedia.ts`:
 
-- **`findAutoPostCandidates(lookbackHours)`** — Finds published stories not yet posted to ALL enabled channels. A story posted to Bluesky but not Mastodon is still a candidate.
+- **`findAutoPostCandidates(lookbackHours, channels)`** — Finds published stories with no post, in any status, on at least one **enabled** channel (only the enabled channels' tables are queried). With both enabled, a story posted to Bluesky but not Mastodon is still a candidate; with only Bluesky enabled, it is not. Draft and failed posts count as posted because `generateDraft` refuses any story that already has a post on the channel.
 - **`pickBestStoryForSocial(storyIds)`** — Platform-agnostic LLM picker, reuses the Bluesky pick-best prompt (criteria are universal: timeliness, emotional appeal, shareability).
 
 The unified `social_auto_post` job (`server/src/jobs/socialAutoPost.ts`) uses a channel adapter pattern: it finds candidates once, picks a best story once, then iterates over enabled channels to generate and publish posts. Each channel has its own text generation (different constraints) and publishing logic.

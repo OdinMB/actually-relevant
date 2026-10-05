@@ -3,6 +3,7 @@ import { createLogger } from '../lib/logger.js'
 import { isBlueskyConfigured } from '../lib/bluesky.js'
 import { isMastodonConfigured } from '../lib/mastodon.js'
 import { findAutoPostCandidates, pickBestStoryForSocial } from '../services/socialMedia.js'
+import type { SocialChannelName } from '../services/socialMedia.js'
 import {
   generateDraft as generateBlueskyDraft,
   publishPost as publishBlueskyPost,
@@ -16,10 +17,10 @@ import prisma from '../lib/prisma.js'
 const log = createLogger('social_auto_post')
 
 interface ChannelConfig {
-  name: string
+  name: SocialChannelName
   enabled: boolean
   configured: boolean
-  /** Check if this story already has a post on this channel. */
+  /** Check if this story already has a post on this channel, in any status (generateDraft refuses any). */
   hasPost: (storyId: string) => Promise<boolean>
   generateDraft: (storyId: string) => Promise<{ id: string }>
   publishPost: (postId: string) => Promise<unknown>
@@ -34,9 +35,7 @@ function getEnabledChannels(): ChannelConfig[] {
       enabled: true,
       configured: true,
       hasPost: async (storyId) => {
-        const existing = await prisma.blueskyPost.findFirst({
-          where: { storyId, status: 'published' },
-        })
+        const existing = await prisma.blueskyPost.findFirst({ where: { storyId } })
         return existing !== null
       },
       generateDraft: async (storyId) => generateBlueskyDraft(storyId),
@@ -50,9 +49,7 @@ function getEnabledChannels(): ChannelConfig[] {
       enabled: true,
       configured: true,
       hasPost: async (storyId) => {
-        const existing = await prisma.mastodonPost.findFirst({
-          where: { storyId, status: 'published' },
-        })
+        const existing = await prisma.mastodonPost.findFirst({ where: { storyId } })
         return existing !== null
       },
       generateDraft: async (storyId) => generateMastodonDraft(storyId),
@@ -74,9 +71,9 @@ export async function runSocialAutoPost(): Promise<void> {
 
   log.info({ channels: channels.map((c) => c.name) }, 'enabled channels')
 
-  // Find candidates across all channels
+  // Find candidates across the enabled channels only
   const lookbackHours = config.socialAutoPost.lookbackHours
-  const candidates = await findAutoPostCandidates(lookbackHours)
+  const candidates = await findAutoPostCandidates(lookbackHours, channels.map((c) => c.name))
 
   if (candidates.length === 0) {
     log.info('no candidate stories found for social posting')

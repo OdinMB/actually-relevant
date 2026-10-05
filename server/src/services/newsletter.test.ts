@@ -1,11 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { JSDOM } from 'jsdom'
 
 // Mock prisma before importing the module
 const mockPrisma = vi.hoisted(() => ({
   newsletter: {
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     update: vi.fn(),
+  },
+  newsletterSend: {
+    create: vi.fn(),
   },
   story: {
     findMany: vi.fn(),
@@ -13,7 +17,13 @@ const mockPrisma = vi.hoisted(() => ({
   $disconnect: vi.fn(),
 }))
 
+const mockPlunk = vi.hoisted(() => ({
+  createCampaign: vi.fn(),
+  sendCampaign: vi.fn(),
+}))
+
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
+vi.mock('./plunk.js', () => mockPlunk)
 vi.mock('./llm.js', () => ({
   getLLMByTier: vi.fn(() => ({
     withStructuredOutput: vi.fn(() => ({
@@ -26,7 +36,43 @@ vi.mock('../lib/retry.js', () => ({
   withRetry: vi.fn((fn: () => Promise<any>) => fn()),
 }))
 
-const { generateHtmlContent } = await import('./newsletter.js')
+const { generateHtmlContent, sendTest, TestSegmentNotConfiguredError } = await import('./newsletter.js')
+const { config } = await import('../config.js')
+
+describe('sendTest', () => {
+  const originalSegment = config.plunk.testSegmentId
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.newsletter.findUniqueOrThrow.mockResolvedValue({ id: 'nl-1', title: 'Week 7, 2026', html: '<p>hi</p>' })
+    mockPlunk.createCampaign.mockResolvedValue({ id: 'camp-1' })
+    mockPlunk.sendCampaign.mockResolvedValue(undefined)
+    mockPrisma.newsletterSend.create.mockResolvedValue({ id: 'send-1' })
+  })
+
+  afterEach(() => {
+    config.plunk.testSegmentId = originalSegment
+  })
+
+  it('refuses without a test segment and never calls Plunk', async () => {
+    config.plunk.testSegmentId = ''
+
+    await expect(sendTest('nl-1')).rejects.toBeInstanceOf(TestSegmentNotConfiguredError)
+
+    expect(mockPlunk.createCampaign).not.toHaveBeenCalled()
+    expect(mockPlunk.sendCampaign).not.toHaveBeenCalled()
+  })
+
+  it('targets only the configured test segment', async () => {
+    config.plunk.testSegmentId = 'seg-test'
+
+    await sendTest('nl-1')
+
+    expect(mockPlunk.createCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-test' }),
+    )
+  })
+})
 
 describe('generateHtmlContent', () => {
   beforeEach(() => {

@@ -14,7 +14,9 @@ config {
     stories_per_issue: Integer = 3
     select_model_tier: String = "medium"
     content_model_tier: String = "large"
-    test_segment_id: String? = null
+    test_segment_id: String? = null                    -- PLUNK_TEST_SEGMENT_ID; test sends refuse without it
+    min_days_between_issues: Integer = 6               -- weekly job: spacing between automatic issues
+    abandoned_draft_minutes: Integer = 30              -- weekly job: unbuilt draft older than this was killed
 }
 
 -- ─── Newsletter ──────────────────────────────────────────────────
@@ -26,6 +28,10 @@ entity Newsletter {
     selected_story_ids: List<String>                   -- shortlist (LLM-selected)
     content: String?                                   -- markdown with issue headers
     html: String?                                      -- rendered email template
+    week_key: String?                                  -- ISO week "YYYY-Www"; set only by the weekly job
+
+    -- Derived
+    is_built: html != null and html != ""              -- the issue exists once its HTML does
 
     -- Relationships
     sends: NewsletterSend with newsletter = this
@@ -105,16 +111,20 @@ rule GenerateHtml {
 }
 
 -- Step 5a: Send test — creates a Plunk campaign targeted at the
--- test segment (or all subscribers if no segment configured).
+-- test segment only. Without a configured test segment the send is
+-- refused (logged, and an error the job alerts on / the admin route
+-- answers with 409); it never falls back to all subscribers
+-- (owner decision 2026-10-06).
 rule SendTest {
     when: AdminSendsTest(newsletter)
+    requires: config.test_segment_id != null
     requires: newsletter.html != null
 
     let campaign = create_plunk_campaign(
         name: "[TEST] " + newsletter.title,
         subject: "[TEST] " + newsletter.title,
         body: newsletter.html,
-        audience: config.test_segment_id ?? "ALL"
+        audience: SEGMENT(config.test_segment_id)
     )
 
     ensures: NewsletterSend.created(
@@ -160,6 +170,54 @@ rule RefreshSendStats {
 
     let stats = get_plunk_campaign_stats(send.plunk_campaign_id)
     ensures: send.stats = stats
+}
+
+-- ─── Automatic weekly issue (generate_newsletter job) ────────────
+-- Distilled from: server/src/jobs/generateNewsletter.ts
+--
+-- Only rows the job created (week_key != null) take part in its
+-- guards, so a newsletter an admin made by hand is never blocked on
+-- or deleted. Overlap within one process is prevented by the
+-- scheduler's RunningJobSet; there is no unique constraint on
+-- week_key (deferred), so two processes can still race.
+rule GenerateWeeklyIssue {
+    when: GenerateNewsletterJobRuns()
+
+    let recent = pipeline/Stories
+        where status = published
+        and date_crawled >= now - config.story_assignment_days.days
+    requires: recent.count > 0
+
+    let week = iso_week_key(now)                       -- e.g. "2026-W07"
+
+    -- Guard 1: one built issue per ISO week, and at least
+    -- min_days_between_issues between automatic issues (so a Sunday
+    -- catch-up does not produce a second issue six days later).
+    requires: not exists Newsletter
+        where week_key != null and is_built
+        and (week_key = week
+             or created_at >= now - config.min_days_between_issues.days)
+
+    -- Guard 2: this week's unbuilt draft, updated recently, means
+    -- another run is building it right now.
+    requires: not exists Newsletter
+        where week_key = week and not is_built
+        and updated_at >= now - config.abandoned_draft_minutes.minutes
+
+    -- Guard 3: an older unbuilt draft is a run killed mid-pipeline:
+    -- delete it and rebuild.
+    for stale in Newsletters where week_key = week and not is_built:
+        ensures: not exists stale
+
+    -- Assign → select → content → HTML; any failure in these steps
+    -- deletes the new draft and fails the job (alert).
+    let issue = Newsletter.created(title: "Week N, YYYY", week_key: week)
+    ensures: BuildIssue(issue)
+
+    -- The test send comes after the build: if it fails (Plunk outage,
+    -- or SendTest refusing without a test segment) the built issue is
+    -- kept, the job fails and alerts, and later runs that week skip.
+    ensures: SendTest(issue)
 }
 
 -- ─── Carousel ────────────────────────────────────────────────────

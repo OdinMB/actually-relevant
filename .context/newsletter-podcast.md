@@ -65,9 +65,12 @@ Located in `server/assets/`:
 The `generate_newsletter` job (default: Saturday 4am, `0 4 * * 6`) chains the full pipeline automatically:
 
 1. Pre-checks for recent published stories (last 7 days); skips silently if none
-2. Guards against duplicate titles (skips if "Week N, YYYY" already exists)
-3. Creates newsletter, assigns stories, runs LLM selection, generates content + HTML, sends test email
-4. On mid-pipeline failure: deletes the partially-built newsletter and re-throws to the scheduler
+2. Weekly guard, keyed by `newsletters.week_key` (ISO week `YYYY-Www`, set only by this job, so hand-made newsletters are never touched). An issue counts as **built** once its HTML exists. Skips if a built automatic issue has this week's key or was created within `config.newsletter.minDaysBetweenIssues` (6 days), so a Sunday catch-up (previous ISO week) doesn't produce a second issue the next Saturday
+3. This week's unbuilt automatic draft: skips if it was updated within `abandonedDraftMinutes` (30, another run is building it); otherwise it is a run killed mid-pipeline, so it is deleted (warning logged) and the run proceeds
+4. Creates the newsletter with title and `weekKey`, assigns stories, runs LLM selection, generates content + HTML. On failure in these steps: deletes the draft and re-throws to the scheduler
+5. Sends the test email **after** that cleanup step: if it fails, the built issue is kept (resend from the admin; later runs that week skip) and the error still fails the job, so the scheduler alerts
+
+**Test sends need `PLUNK_TEST_SEGMENT_ID`.** Without it, `sendTest` refuses before any Plunk call (`TestSegmentNotConfiguredError`; the admin `send-test` route answers 409), and the Saturday job fails and alerts every week. It never falls back to all subscribers (owner decision 2026-10-06).
 
 Handler: `server/src/jobs/generateNewsletter.ts`. Registered in `server/src/jobs/handlers.ts`.
 

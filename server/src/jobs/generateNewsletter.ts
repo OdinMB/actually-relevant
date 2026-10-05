@@ -13,13 +13,64 @@ import {
 
 const log = createLogger('generate_newsletter')
 
-/** Compute ISO week number and return title like "Week 7, 2026" */
-export function getWeekTitle(date: Date): string {
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** ISO-8601 week-numbering year and week of the given date's calendar day. */
+function isoWeek(date: Date): { year: number; week: number } {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
-  return `Week ${weekNo}, ${d.getUTCFullYear()}`
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / DAY_MS + 1) / 7)
+  return { year: d.getUTCFullYear(), week }
+}
+
+/** Compute ISO week number and return title like "Week 7, 2026" */
+export function getWeekTitle(date: Date): string {
+  const { year, week } = isoWeek(date)
+  return `Week ${week}, ${year}`
+}
+
+/** ISO week key like "2026-W07": identifies the automatic issue of that week. */
+export function getWeekKey(date: Date): string {
+  const { year, week } = isoWeek(date)
+  return `${year}-W${String(week).padStart(2, '0')}`
+}
+
+/**
+ * Decide whether this week's automatic issue may be built now. Only rows the job
+ * created (weekKey set) are considered; "built" means the HTML exists.
+ * Deletes this week's unbuilt draft when it is old enough to be a killed run.
+ */
+async function checkWeeklySlot(now: Date, weekKey: string): Promise<'proceed' | 'skip'> {
+  const recentSince = new Date(now.getTime() - config.newsletter.minDaysBetweenIssues * DAY_MS)
+  const built = await prisma.newsletter.findFirst({
+    where: {
+      weekKey: { not: null },
+      html: { not: '' },
+      OR: [{ weekKey }, { createdAt: { gte: recentSince } }],
+    },
+    select: { id: true, weekKey: true },
+  })
+  if (built) {
+    log.info({ weekKey, newsletterId: built.id, builtWeekKey: built.weekKey }, 'issue already built this week or too recently, skipping')
+    return 'skip'
+  }
+
+  const draft = await prisma.newsletter.findFirst({
+    where: { weekKey, html: '' },
+    select: { id: true, updatedAt: true },
+  })
+  if (!draft) return 'proceed'
+
+  const ageMs = now.getTime() - draft.updatedAt.getTime()
+  if (ageMs < config.newsletter.abandonedDraftMinutes * 60 * 1000) {
+    log.info({ weekKey, newsletterId: draft.id }, 'this week\'s issue is being built by another run, skipping')
+    return 'skip'
+  }
+
+  log.warn({ weekKey, newsletterId: draft.id, ageMs }, 'deleting abandoned unbuilt draft from a killed run')
+  await prisma.newsletter.delete({ where: { id: draft.id } })
+  return 'proceed'
 }
 
 export async function runGenerateNewsletter(): Promise<void> {
@@ -27,7 +78,7 @@ export async function runGenerateNewsletter(): Promise<void> {
   const count = await prisma.story.count({
     where: {
       status: StoryStatus.published,
-      dateCrawled: { gte: new Date(Date.now() - config.content.storyAssignmentDays * 24 * 60 * 60 * 1000) },
+      dateCrawled: { gte: new Date(Date.now() - config.content.storyAssignmentDays * DAY_MS) },
     },
   })
 
@@ -36,18 +87,15 @@ export async function runGenerateNewsletter(): Promise<void> {
     return
   }
 
-  const title = getWeekTitle(new Date())
+  const now = new Date()
+  const title = getWeekTitle(now)
+  const weekKey = getWeekKey(now)
 
-  // Skip if a newsletter with this title already exists (e.g. from a previous partial run)
-  const existing = await prisma.newsletter.findFirst({ where: { title } })
-  if (existing) {
-    log.info({ title, newsletterId: existing.id }, 'newsletter already exists for this week, skipping')
-    return
-  }
+  if (await checkWeeklySlot(now, weekKey) === 'skip') return
 
-  log.info({ title, recentStoryCount: count }, 'starting newsletter generation')
+  log.info({ title, weekKey, recentStoryCount: count }, 'starting newsletter generation')
 
-  const newsletter = await createNewsletter({ title })
+  const newsletter = await createNewsletter({ title, weekKey })
   log.info({ newsletterId: newsletter.id }, 'newsletter created')
 
   try {
@@ -62,12 +110,14 @@ export async function runGenerateNewsletter(): Promise<void> {
 
     await generateHtmlContent(newsletter.id)
     log.info({ newsletterId: newsletter.id }, 'HTML generated')
-
-    await sendTest(newsletter.id)
-    log.info({ newsletterId: newsletter.id }, 'test email sent')
   } catch (err) {
     log.error({ newsletterId: newsletter.id, err }, 'pipeline failed, cleaning up')
     await prisma.newsletter.delete({ where: { id: newsletter.id } }).catch(() => {})
     throw err
   }
+
+  // Outside the cleanup: a failed test send keeps the built issue (the admin can
+  // resend) and still fails the job so runJob alerts.
+  await sendTest(newsletter.id)
+  log.info({ newsletterId: newsletter.id }, 'test email sent')
 }

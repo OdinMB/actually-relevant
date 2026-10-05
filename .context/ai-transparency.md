@@ -138,7 +138,7 @@ A solo operator (the project owner) runs every AI feature. Model behavior, limit
 | `widget.js` loads stories from `https://api.actuallyrelevant.news/api`, which did not resolve on 2026-09-25 (the Render host `actually-relevant-api.onrender.com` did). If the host is gone, embedders see "Could not load stories" and never the AI header | C4 | owner | — |
 | Privacy notice: add the OpenAI contracting entity and the transfer basis to the new OpenAI paragraph (5.5) | F-2 | owner | now |
 | Optional: vendor the EU "AI" icon SVG (Commission icon page) and use it in `AiBadge`; today the badge is the text "AI" | S2 M1.2 | owner | — |
-| Is `PLUNK_TEST_SEGMENT_ID` set in production? If unset, the Saturday "[TEST]" issue goes to all subscribers (q1). It now carries the top label either way | C3, C4 | owner | now |
+| Confirm `PLUNK_TEST_SEGMENT_ID` is set in production (q1). Since 2026-10-06 an unset segment refuses the "[TEST]" send and alerts, never falling back to all subscribers (owner decision); if it is unset, the Saturday test email fails and alerts every week. The issue carries the top label either way | C3, C4 | owner | now |
 | Is the podcast voiced or published, with which TTS and where (q3)? | B5, B6, A6, C8 | owner | — |
 | Are the carousel files still posted, and where (q4)? | B7, C7 | owner | — |
 | Production values of `OPENAI_MODEL_*`, `OPENAI_EFFORT_*`, `EMBEDDING_MODEL`; is `OPENAI_BASE_URL` set (q5)? | record | owner | — |
