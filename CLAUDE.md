@@ -143,7 +143,7 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 | `embeddings.md` | Trigger points, hybrid RRF search, backfill script |
 | `ui-conventions.md` | SEO checklist, CSS classes, bundle splitting, accessibility, spelling |
 | `accessibility.md` | Full WCAG 2.2 AA patterns, ARIA, forms, testing checklist |
-| `seo.md` | Sitemap, Render rewrites, robots.txt, route registration |
+| `seo.md` | Sitemap, Render rewrites, robots.txt, route registration, head-tag defaults (`DefaultSeo` + `data-rh` fallbacks in `index.html`) |
 | `images.md` | WebP optimization, size presets, CLI commands |
 | `logging.md` | Pino config, error serialization, structured data, log levels |
 | `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands |

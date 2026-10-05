@@ -11,8 +11,8 @@ function htmlTransformPlugin(): Plugin {
   return {
     name: 'html-transform',
     transformIndexHtml(html) {
-      // Inject brand description
-      html = html.replace('__BRAND_DESCRIPTION__', `${BRAND.claim} ${BRAND.claimSupport}`)
+      // Inject brand description (meta description and og:description)
+      html = html.replaceAll('__BRAND_DESCRIPTION__', `${BRAND.claim} ${BRAND.claimSupport}`)
 
       // Inject preconnect for cross-origin API
       const apiUrl = process.env.VITE_API_URL

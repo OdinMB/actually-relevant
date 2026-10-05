@@ -5,6 +5,7 @@ import HomePage from './pages/HomePage'
 import NotFoundPage from './pages/NotFoundPage'
 import { LoadingSpinner } from './components/ui/LoadingSpinner'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary'
+import { DefaultSeo } from './lib/seo'
 
 // Public pages — lazy-loaded to reduce homepage bundle size
 // Puppeteer prerenderer waits for chunks to load, so prerendering still works
@@ -85,6 +86,9 @@ function LazyPage({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <>
+    {/* Site-wide head defaults; pages override them with their own Helmet tags */}
+    <DefaultSeo />
     <Routes>
       {/* Public routes — homepage static, others lazy-loaded */}
       <Route element={<PublicLayout />}>
@@ -166,5 +170,6 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
+    </>
   )
 }

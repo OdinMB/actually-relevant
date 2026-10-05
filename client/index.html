@@ -9,21 +9,27 @@
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#661845" />
-    <meta name="description" content="__BRAND_DESCRIPTION__" />
     <meta name="author" content="Actually Relevant" />
     <title>Actually Relevant - News That Matters to Humanity</title>
-    <!-- Open Graph / Social sharing (fallback - overridden by Helmet on each page) -->
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Actually Relevant" />
-    <meta property="og:title" content="Actually Relevant - News That Matters to Humanity" />
-    <meta property="og:description" content="News that matters to humanity. Actually Relevant uses AI to surface the most impactful stories from around the world, focusing on existential risks, climate, human development, and breakthrough science." />
-    <meta property="og:url" content="https://actuallyrelevant.news/" />
-    <meta property="og:image" content="https://actuallyrelevant.news/images/og-image.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="article:author" content="Actually Relevant" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://actuallyrelevant.news/images/og-image.png" />
+    <!--
+      Pre-JS fallback for description / Open Graph / Twitter tags.
+      data-rh="true" hands them to react-helmet-async: on its first commit it
+      removes them and writes DefaultSeo (src/lib/seo.tsx) merged with the
+      page's own tags, so no page ends up with two of any. Keep these in sync
+      with DefaultSeo, and mark any tag added here that a page may also set.
+    -->
+    <meta data-rh="true" name="description" content="__BRAND_DESCRIPTION__" />
+    <meta data-rh="true" property="og:type" content="website" />
+    <meta data-rh="true" property="og:site_name" content="Actually Relevant" />
+    <meta data-rh="true" property="og:title" content="Actually Relevant - News That Matters to Humanity" />
+    <meta data-rh="true" property="og:description" content="__BRAND_DESCRIPTION__" />
+    <meta data-rh="true" property="og:url" content="https://actuallyrelevant.news/" />
+    <meta data-rh="true" property="og:image" content="https://actuallyrelevant.news/images/og-image.png" />
+    <meta data-rh="true" property="og:image:width" content="1200" />
+    <meta data-rh="true" property="og:image:height" content="630" />
+    <meta data-rh="true" property="article:author" content="Actually Relevant" />
+    <meta data-rh="true" name="twitter:card" content="summary_large_image" />
+    <meta data-rh="true" name="twitter:image" content="https://actuallyrelevant.news/images/og-image.png" />
     <!-- Preload critical fonts -->
     <link
       rel="preload"
