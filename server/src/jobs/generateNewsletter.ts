@@ -42,7 +42,7 @@ export function getWeekKey(date: Date): string {
  * Deletes this week's unbuilt draft when it is old enough to be a killed run.
  */
 async function checkWeeklySlot(now: Date, weekKey: string): Promise<'proceed' | 'skip'> {
-  const recentSince = new Date(now.getTime() - config.newsletter.minDaysBetweenIssues * DAY_MS)
+  const recentSince = new Date(now.getTime() - config.newsletter.minHoursBetweenIssues * 60 * 60 * 1000)
   const built = await prisma.newsletter.findFirst({
     where: {
       weekKey: { not: null },

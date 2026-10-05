@@ -120,9 +120,11 @@ export const config = {
     ),
     selectModelTier: "large" as const,
     contentModelTier: "large" as const,
-    // Weekly job guard: a built automatic issue newer than this blocks the next run
-    // (stops a Sunday catch-up from producing a second issue six days later).
-    minDaysBetweenIssues: 6,
+    // Weekly job guard: a built automatic issue newer than this blocks the next run.
+    // 156 h (6.5 days) covers a Sunday catch-up as early as 00:00 (148 h before the
+    // next Saturday 04:00 cron) yet lets a Saturday run started up to 16:00 (>= 156 h
+    // before the next one, e.g. a 12:00 retry at 160 h) not block next week's issue.
+    minHoursBetweenIssues: 156,
     // An unbuilt automatic draft for this week older than this is a run that was
     // killed mid-pipeline; the next run deletes it and rebuilds.
     abandonedDraftMinutes: 30,

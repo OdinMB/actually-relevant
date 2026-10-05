@@ -15,7 +15,7 @@ config {
     select_model_tier: String = "medium"
     content_model_tier: String = "large"
     test_segment_id: String? = null                    -- PLUNK_TEST_SEGMENT_ID; test sends refuse without it
-    min_days_between_issues: Integer = 6               -- weekly job: spacing between automatic issues
+    min_hours_between_issues: Integer = 156            -- weekly job: spacing between automatic issues (6.5 days)
     abandoned_draft_minutes: Integer = 30              -- weekly job: unbuilt draft older than this was killed
 }
 
@@ -191,12 +191,14 @@ rule GenerateWeeklyIssue {
     let week = iso_week_key(now)                       -- e.g. "2026-W07"
 
     -- Guard 1: one built issue per ISO week, and at least
-    -- min_days_between_issues between automatic issues (so a Sunday
-    -- catch-up does not produce a second issue six days later).
+    -- min_hours_between_issues (156 h, 6.5 days) between automatic
+    -- issues, so a Sunday catch-up, even at 00:00, does not produce a
+    -- second issue the next Saturday 04:00 (148 h later), while a
+    -- Saturday run started up to 16:00 does not block the next week.
     requires: not exists Newsletter
         where week_key != null and is_built
         and (week_key = week
-             or created_at >= now - config.min_days_between_issues.days)
+             or created_at >= now - config.min_hours_between_issues.hours)
 
     -- Guard 2: this week's unbuilt draft, updated recently, means
     -- another run is building it right now.

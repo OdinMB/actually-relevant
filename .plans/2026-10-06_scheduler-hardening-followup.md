@@ -5,7 +5,7 @@ Plan: `.plans/completed/2026-10-06_scheduler-hardening.md`
 ## Controversial Decisions
 
 - **Social candidates count a post in any status** (draft, failed) as "already posted", not only published ones. This goes slightly past the literal scope: without it a story with a draft or failed post on the only enabled channel would still be picked, and `generateDraft` would refuse it, so the job would post nothing and report success. No behaviour is lost, because a failed post's story was never retried automatically anyway. Veto by restoring `status: 'published'` in `storiesWithPost` and `hasPost`.
-- **6-day spacing also applies to a manual admin run of `generate_newsletter`.** Running the job by hand midweek after a Saturday issue now skips (within 6 days of a built automatic issue), where it used to build a new "Week N+1" issue. An admin can still create a newsletter by hand from the Newsletters page.
+- **6.5-day (156 h) spacing also applies to a manual admin run of `generate_newsletter`.** Running the job by hand midweek after a Saturday issue now skips (within 156 h of a built automatic issue), where it used to build a new "Week N+1" issue. An admin can still create a newsletter by hand from the Newsletters page.
 - **No process-level `unhandledRejection` handler** (plan's choice, kept): any rejection that still escapes crashes visibly and Render restarts.
 - **`getWeekKey` uses the date's local calendar day**, like `getWeekTitle`, rather than UTC, so title and key always agree. Identical on Render (UTC).
 - **Shared `Newsletter` type** in `shared/types/index.ts` was not given `weekKey`: the client does not use it. The admin API now returns it as an extra field.

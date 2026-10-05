@@ -142,7 +142,7 @@ describe('runGenerateNewsletter', () => {
     expect(mockCreateNewsletter).not.toHaveBeenCalled()
   })
 
-  it('skips on the Saturday after a Sunday catch-up (built six days earlier, previous ISO week)', async () => {
+  it('skips on the Saturday after a Sunday catch-up (built about six days earlier, previous ISO week)', async () => {
     // Sunday 2026-02-15 belongs to ISO week 7
     const sunday = new Date('2026-02-15T10:00:00Z')
     rows = [row({ weekKey: getWeekKey(sunday), createdAt: sunday })]
@@ -150,6 +150,24 @@ describe('runGenerateNewsletter', () => {
     await runGenerateNewsletter()
 
     expect(mockCreateNewsletter).not.toHaveBeenCalled()
+  })
+
+  it('skips on the Saturday after a Sunday 00:30 catch-up (147.5 h earlier)', async () => {
+    const earlySunday = new Date('2026-02-15T00:30:00Z')
+    rows = [row({ weekKey: getWeekKey(earlySunday), createdAt: earlySunday })]
+
+    await runGenerateNewsletter()
+
+    expect(mockCreateNewsletter).not.toHaveBeenCalled()
+  })
+
+  it('proceeds when the previous Saturday\'s issue was built late, at 12:00 (160 h earlier)', async () => {
+    const lateSaturday = new Date('2026-02-14T12:00:00Z')
+    rows = [row({ weekKey: getWeekKey(lateSaturday), createdAt: lateSaturday })]
+
+    await runGenerateNewsletter()
+
+    expect(mockCreateNewsletter).toHaveBeenCalledTimes(1)
   })
 
   it('proceeds when the last built automatic issue is seven days old', async () => {
