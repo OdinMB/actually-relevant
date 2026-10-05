@@ -19,7 +19,7 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
 ### Prerequisites
 
 - Node.js 18+ and npm
-- PostgreSQL 15+ (with pgvector extension)
+- Docker (for the local PostgreSQL + pgvector database)
 - OpenAI API key
 
 ### Setup
@@ -36,28 +36,22 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
    cd ../server && npm install
    ```
 
-3. Set up the database:
+3. Start the database (PostgreSQL 17 + pgvector on `localhost:5433`, database `actually_relevant_dev`):
    ```bash
-   # Create the database
-   createdb actually_relevant
-
-   # Enable pgvector extension (connect to DB first)
-   psql actually_relevant -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+   docker compose up -d
    ```
 
 4. Configure environment variables:
    ```bash
    # Create server/.env with at minimum these required variables:
    # DATABASE_URL, OPENAI_API_KEY, JWT_SECRET, FRONTEND_URL
+   # DATABASE_URL for the Docker database:
+   #   postgresql://<user>:<password>@localhost:5433/actually_relevant_dev
+   #   (user and password are in docker-compose.yml)
    # See server/src/config.ts for all available settings and their defaults.
    ```
 
-5. Run database migrations:
-   ```bash
-   cd server && npx prisma migrate dev
-   ```
-
-6. Start development servers:
+5. Start development servers:
    ```bash
    # Terminal 1 — Frontend (localhost:5173)
    cd client && npm run dev
@@ -65,6 +59,8 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
    # Terminal 2 — Backend (localhost:3001)
    cd server && npm run dev
    ```
+
+   Starting the backend first applies any pending migrations and regenerates the Prisma client if the schema changed (`npm run db:prepare`, also runnable on its own). It only does this when `DATABASE_URL` points at this machine (`localhost`, `127.0.0.1` or `::1`); for any other host it warns and skips. Set `SKIP_DB_PREPARE=1` to skip it. A failing migration stops the backend from starting. See [`.context/database-migrations.md`](.context/database-migrations.md).
 
 ## Deploying to Render.com
 

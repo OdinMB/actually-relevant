@@ -57,14 +57,15 @@ npm run test --prefix server          # Run server tests
 ### Database
 
 ```bash
-npm run db:migrate --prefix server    # Run Prisma migrations
-npm run db:generate --prefix server   # Generate Prisma client
+npm run db:migrate:create --prefix server -- --name <name>  # Write migration SQL, don't apply
+npm run db:prepare --prefix server    # Apply migrations + regenerate client if schema changed (local DB only)
 npm run db:studio --prefix server     # Open Prisma Studio
 ```
 
-**IMPORTANT database rules:**
-- **Never use `npx prisma` directly** -- always use `npm run db:*` with `--prefix server`. Direct `npx prisma` skips `.env` and fails.
-- **Never run `prisma migrate dev`** -- generate SQL manually, user runs it in pgAdmin. See `.context/database-migrations.md`.
+**IMPORTANT database rules** (full workflow: `.context/database-migrations.md`):
+- **Migrations apply automatically on server dev start** -- `predev` runs `db:prepare`, which only touches a local `DATABASE_URL` (Docker DB on `localhost:5433`). Author with `db:migrate:create`, review the SQL (delete any `DROP INDEX "stories_embedding_idx"`), then restart the dev server.
+- **Never use `npx prisma` directly** -- use `npm run db:*` with `--prefix server`.
+- **Never apply with `prisma migrate dev` / `npm run db:migrate`** -- DLL locks on Windows. `--create-only` is fine.
 - **Never pass `--no-engine` to `prisma generate`** -- breaks all direct PostgreSQL queries.
 - **`db:generate` requires the dev server to be stopped** -- `prisma generate` replaces a DLL that is locked while the server runs. Ask user to stop first.
 
@@ -145,7 +146,7 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 | `seo.md` | Sitemap, Render rewrites, robots.txt, route registration |
 | `images.md` | WebP optimization, size presets, CLI commands |
 | `logging.md` | Pino config, error serialization, structured data, log levels |
-| `database-migrations.md` | SQL-first migration workflow, allowed/banned commands |
+| `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands |
 | `deployment.md` | Render services; why builds install devDependencies and pin `tsc` (read before touching build scripts) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic, post format |
