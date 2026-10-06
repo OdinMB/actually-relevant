@@ -23,15 +23,16 @@ All of this is in `updateCrawlStatus()` in `server/src/services/feed.ts`. Every 
 | At least one story created | now | 0 | 0 / now |
 | Every new item failed extraction (total failure) | unchanged, so the feed is retried next run; on the 3rd consecutive total failure (`MAX_CONSECUTIVE_FAILURES`) it is forced to now and the counter resets, to break the retry loop | +1 (or reset at 3) | unchanged |
 | RSS had items but all were duplicates (nothing new) | now | 0 | unchanged |
-| RSS returned zero items (not 304) | now (the crawler reports this as `hadSuccess: true`, so errors are cleared) | 0 | +1 / unchanged |
+| Reachable RSS returned zero items (not 304) | now (the crawler reports this as `hadSuccess: true`, so errors are cleared) | 0 | +1 / unchanged |
+| RSS could not be fetched or parsed (`fetchFailed`) | unchanged, so retried next run; forced to now on the 3rd consecutive failure, as for a total failure. Sets "RSS fetch failed: …" as the error | +1 (or reset at 3) | +1 / unchanged |
 | 304 Not Modified | now | 0 | unchanged; errors untouched. A 304 is not an empty crawl. |
-| `crawlFeed` throws (in `crawlAllDueFeeds`) | treated as a total failure with "RSS fetch failed: …" | +1 | unchanged |
+| `crawlFeed` throws for another reason (in `crawlAllDueFeeds`) | treated as a total failure with "RSS fetch failed: …" | +1 | +1 / unchanged |
 
-`parseFeed()` never throws. A network or parse error returns zero items and so lands in the "zero items" row: an unreachable feed looks like an empty one, and its earlier error is cleared.
+An unreachable or broken feed is a recorded error, never an empty crawl: `crawlFeed()` catches `parseFeed()`'s error and passes `fetchFailed: true` (`content-extraction.md`, "Conditional RSS Requests"). It still counts toward `consecutiveEmptyCrawls`, so a feed that keeps failing also reaches the stale warning.
 
 ## Stale-Feed Warning
 
-In the feed table, a feed with `consecutiveEmptyCrawls >= 3` shows an "N empty" warning icon. Its tooltip says "No new articles in last N crawls" and gives the last success time, to flag stale or misconfigured feeds (`client/src/components/admin/FeedTable.tsx`, threshold hard-coded). `config.crawl.staleAfterEmptyCrawls` (default 5) exists but is not used by this UI.
+A feed is stale once `consecutiveEmptyCrawls >= config.crawl.staleAfterEmptyCrawls` (default 5, env `STALE_AFTER_EMPTY_CRAWLS`; `isFeedStale()` in `feed.ts`). The admin feed endpoints return a computed `isStale` on every feed, so the client holds no copy of the threshold. In the feed table, a stale feed shows an "N empty" warning icon whose tooltip says "No new articles in last N crawls" and gives the last success time (`client/src/components/admin/FeedTable.tsx`).
 
 ## Quality Metrics
 

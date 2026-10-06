@@ -29,6 +29,11 @@ export interface ParseFeedResult {
   cacheHeaders: FeedCacheHeaders
 }
 
+/**
+ * Fetch and parse an RSS feed. Throws when the feed cannot be fetched (after
+ * retries) or parsed, so the caller can record it as a crawl error rather than
+ * mistaking an unreachable feed for an empty one.
+ */
 export async function parseFeed(feedUrl: string, cacheHeaders?: FeedCacheHeaders): Promise<ParseFeedResult> {
   try {
     const headers: Record<string, string> = {}
@@ -86,7 +91,7 @@ export async function parseFeed(feedUrl: string, cacheHeaders?: FeedCacheHeaders
       },
     }
   } catch (err) {
-    log.error({ feedUrl, reason: summarizeError(err) }, 'failed to parse feed')
-    return { items: [], notModified: false, cacheHeaders: {} }
+    log.error({ feedUrl, reason: summarizeError(err) }, 'failed to fetch or parse feed')
+    throw err
   }
 }

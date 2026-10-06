@@ -7,22 +7,34 @@ interface FeedFilters {
   active?: boolean
 }
 
+/** A feed is stale once its consecutive empty crawls reach `config.crawl.staleAfterEmptyCrawls`. */
+export function isFeedStale(consecutiveEmptyCrawls: number): boolean {
+  return consecutiveEmptyCrawls >= config.crawl.staleAfterEmptyCrawls
+}
+
+/** Adds `isStale`, so the admin UI shows the stale warning without its own copy of the threshold. */
+function withStaleFlag<T extends { consecutiveEmptyCrawls: number }>(feed: T): T & { isStale: boolean } {
+  return { ...feed, isStale: isFeedStale(feed.consecutiveEmptyCrawls) }
+}
+
 export async function getFeeds(filters?: FeedFilters) {
   const where: Prisma.FeedWhereInput = {}
   if (filters?.issueId) where.issueId = filters.issueId
   if (filters?.active !== undefined) where.active = filters.active
-  return prisma.feed.findMany({
+  const feeds = await prisma.feed.findMany({
     where,
     include: { issue: true },
     orderBy: { title: 'asc' },
   })
+  return feeds.map(withStaleFlag)
 }
 
 export async function getFeedById(id: string) {
-  return prisma.feed.findUnique({
+  const feed = await prisma.feed.findUnique({
     where: { id },
     include: { issue: true },
   })
+  return feed ? withStaleFlag(feed) : null
 }
 
 export async function createFeed(data: {
@@ -35,13 +47,13 @@ export async function createFeed(data: {
   issueId: string
   crawlIntervalHours?: number
   htmlSelector?: string
-}): Promise<Feed> {
+}): Promise<Feed & { isStale: boolean }> {
   // Verify issue exists
   const issue = await prisma.issue.findUnique({ where: { id: data.issueId } })
   if (!issue) {
     throw new Error('Issue not found')
   }
-  return prisma.feed.create({ data })
+  return withStaleFlag(await prisma.feed.create({ data }))
 }
 
 export async function updateFeed(id: string, data: Partial<{
@@ -55,14 +67,14 @@ export async function updateFeed(id: string, data: Partial<{
   crawlIntervalHours: number
   htmlSelector: string | null
   active: boolean
-}>): Promise<Feed> {
+}>): Promise<Feed & { isStale: boolean }> {
   if (data.issueId) {
     const issue = await prisma.issue.findUnique({ where: { id: data.issueId } })
     if (!issue) {
       throw new Error('Issue not found')
     }
   }
-  return prisma.feed.update({ where: { id }, data })
+  return withStaleFlag(await prisma.feed.update({ where: { id }, data }))
 }
 
 export async function getDueFeeds() {
@@ -90,6 +102,8 @@ export interface CrawlOutcome {
   rssItemCount: number
   crawlResult?: string
   notModified?: boolean
+  /** The RSS feed could not be fetched or parsed: a failed crawl, retried next run. */
+  fetchFailed?: boolean
 }
 
 export async function updateCrawlStatus(id: string, outcome: CrawlOutcome): Promise<void> {
@@ -100,8 +114,8 @@ export async function updateCrawlStatus(id: string, outcome: CrawlOutcome): Prom
   // - Yes if at least one article succeeded
   // - Yes if no new items existed (normal "nothing new" scenario)
   // - Yes if consecutive failures exceeded max (prevent infinite retry)
-  // - No if all new articles failed extraction
-  const isTotalFailure = !hadSuccess && newItemCount > 0
+  // - No if all new articles failed extraction, or the RSS feed could not be fetched
+  const isTotalFailure = !hadSuccess && (newItemCount > 0 || outcome.fetchFailed === true)
 
   const data: Record<string, unknown> = {
     lastCrawlResult: outcome.crawlResult || null,
@@ -134,7 +148,8 @@ export async function updateCrawlStatus(id: string, outcome: CrawlOutcome): Prom
     data.consecutiveFailedCrawls = 0
   }
 
-  // Health metrics: track empty crawls (RSS returned zero items).
+  // Health metrics: track empty crawls (RSS returned zero items, or could not be
+  // fetched — both count toward the stale warning).
   // 304 Not Modified is not an empty crawl — it means the feed is using caching correctly.
   if (rssItemCount === 0 && !outcome.notModified) {
     data.consecutiveEmptyCrawls = { increment: 1 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
 import { authHeader, sampleFeed, sampleIssue, TEST_API_KEY } from '../../test/helpers.js'
+import { config } from '../../config.js'
 
 vi.mock('express-rate-limit', () => ({
   default: () => (_req: any, _res: any, next: any) => next(),
@@ -58,6 +59,23 @@ describe('Admin Feeds API', () => {
         .set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(2)
+    })
+
+    it('flags feeds as stale from the configured number of empty crawls', async () => {
+      const threshold = config.crawl.staleAfterEmptyCrawls
+      mockPrisma.feed.findMany.mockResolvedValue([
+        { ...sampleFeed({ id: 'fresh', consecutiveEmptyCrawls: threshold - 1 }), issue: sampleIssue() },
+        { ...sampleFeed({ id: 'stale', consecutiveEmptyCrawls: threshold }), issue: sampleIssue() },
+      ])
+
+      const res = await request(app)
+        .get('/api/admin/feeds')
+        .set(authHeader())
+      expect(res.status).toBe(200)
+      expect(res.body.map((f: { id: string; isStale: boolean }) => [f.id, f.isStale])).toEqual([
+        ['fresh', false],
+        ['stale', true],
+      ])
     })
 
     it('filters by issueId', async () => {

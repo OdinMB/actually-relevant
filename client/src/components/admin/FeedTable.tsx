@@ -79,7 +79,7 @@ export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDe
                         : feed.lastCrawlError}
                     </span>
                   )}
-                  {feed.consecutiveEmptyCrawls >= 3 && (
+                  {feed.isStale && (
                     <span
                       title={`No new articles in last ${feed.consecutiveEmptyCrawls} crawls${feed.lastSuccessfulCrawlAt ? ` (last success: ${formatDateWithTime(feed.lastSuccessfulCrawlAt)})` : ''}`}
                       aria-label={`No new articles in last ${feed.consecutiveEmptyCrawls} crawls`}

@@ -131,6 +131,8 @@ export interface Feed {
   lastCrawlErrorAt: string | null
   consecutiveFailedCrawls: number
   consecutiveEmptyCrawls: number
+  /** Server-computed: consecutiveEmptyCrawls has reached the configured stale threshold. */
+  isStale: boolean
   lastSuccessfulCrawlAt: string | null
   lastEtag: string | null
   lastModified: string | null

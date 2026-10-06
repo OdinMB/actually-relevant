@@ -1,4 +1,4 @@
-import { parseFeed } from './rssParser.js'
+import { parseFeed, type ParseFeedResult } from './rssParser.js'
 import { extractContent } from './extractor.js'
 import { getExistingUrls, createStory } from './story.js'
 import { getFeedById, getDueFeeds, updateCrawlStatus, updateFeedCacheHeaders } from './feed.js'
@@ -6,6 +6,7 @@ import { createLogger } from '../lib/logger.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { config } from '../config.js'
 import { normalizeUrl } from '../utils/urlNormalization.js'
+import { summarizeError } from '../utils/errors.js'
 
 const log = createLogger('crawler')
 
@@ -30,11 +31,27 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
     errors: 0,
   }
 
-  // Parse RSS feed with conditional headers
-  const rssResult = await parseFeed(feed.rssUrl, {
-    etag: feed.lastEtag,
-    lastModified: feed.lastModified,
-  })
+  // Parse RSS feed with conditional headers. A fetch or parse failure is a crawl
+  // error, recorded on the feed, never an empty crawl that would clear the last error.
+  let rssResult: ParseFeedResult
+  try {
+    rssResult = await parseFeed(feed.rssUrl, {
+      etag: feed.lastEtag,
+      lastModified: feed.lastModified,
+    })
+  } catch (err) {
+    result.errors = 1
+    result.errorMessage = `RSS fetch failed: ${summarizeError(err)}`
+    await updateCrawlStatus(feedId, {
+      hadSuccess: false,
+      fetchFailed: true,
+      errorMessage: result.errorMessage,
+      newItemCount: 0,
+      rssItemCount: 0,
+      crawlResult: result.errorMessage,
+    })
+    return result
+  }
 
   // Persist cache headers if returned
   if (rssResult.cacheHeaders.etag || rssResult.cacheHeaders.lastModified) {

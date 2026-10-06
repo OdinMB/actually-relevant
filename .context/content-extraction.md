@@ -74,6 +74,8 @@ Feeds are crawled in parallel (up to `config.concurrency.crawlFeeds`, default 2)
 
 The RSS fetch sends the feed's stored `lastEtag` as `If-None-Match` and `lastModified` as `If-Modified-Since` (`server/src/services/rssParser.ts`). When the response carries an ETag or Last-Modified header, both values are written back to the feed (`updateFeedCacheHeaders()` in `server/src/services/feed.ts`). A `304 Not Modified` ends the crawl right away with zero new stories and is recorded as `lastCrawlResult = '304 not modified'`; how it affects the feed's counters is in `feed-management.md`. RSS fetches follow at most 3 redirects and accept only status 200 or 304. Items without a link are dropped, and an item with no title gets "Untitled".
 
+`parseFeed()` throws when the feed cannot be fetched (after `withRetry()`'s attempts) or parsed. `crawlFeed()` catches it and records a crawl error, "RSS fetch failed: <reason>" (`summarizeError()`, e.g. `HTTP 503`), returning `errors: 1` without touching cache headers. One failing feed never aborts the others in `crawlAllDueFeeds()`. A reachable feed with zero items is still an empty crawl, not an error; the counters for both are in `feed-management.md`.
+
 ### Story Fields from the RSS Fallback
 
 When the extractor returns no title or publish date, the story uses the RSS item's title and `isoDate`/`pubDate` instead (`crawlFeed()` in `server/src/services/crawler.ts`). Every new story is created in `fetched` status, with `crawlMethod` set to the tier that succeeded.

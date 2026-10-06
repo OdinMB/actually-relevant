@@ -69,6 +69,27 @@ describe('crawlFeed', () => {
     }))
   })
 
+  it('records an RSS fetch or parse failure as a crawl error, not an empty feed', async () => {
+    mockGetFeedById.mockResolvedValue(sampleFeed)
+    mockParseFeed.mockRejectedValue(new Error('connect ECONNREFUSED'))
+
+    const result = await crawlFeed('feed-1')
+
+    expect(result.newStories).toBe(0)
+    expect(result.errors).toBe(1)
+    expect(result.errorMessage).toContain('RSS fetch failed')
+    expect(result.errorMessage).toContain('ECONNREFUSED')
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledTimes(1)
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
+      hadSuccess: false,
+      fetchFailed: true,
+      rssItemCount: 0,
+      errorMessage: expect.stringContaining('ECONNREFUSED'),
+    }))
+    expect(mockUpdateFeedCacheHeaders).not.toHaveBeenCalled()
+    expect(mockExtractContent).not.toHaveBeenCalled()
+  })
+
   it('handles 304 not modified response (preserves existing errors)', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
     mockParseFeed.mockResolvedValue(rssResult([], { notModified: true }))
@@ -504,6 +525,28 @@ describe('crawlAllDueFeeds', () => {
 
     expect(results).toHaveLength(2)
     expect(mockGetDueFeeds).toHaveBeenCalled()
+  })
+
+  it('keeps crawling other feeds when one feed cannot be fetched', async () => {
+    mockGetDueFeeds.mockResolvedValue([
+      { id: 'feed-down', title: 'Down Feed' },
+      { id: 'feed-up', title: 'Up Feed' },
+    ])
+    mockGetFeedById.mockImplementation(async (id: string) => ({ ...sampleFeed, id, rssUrl: `https://example.com/${id}` }))
+    mockParseFeed.mockImplementation(async (url: string) => {
+      if (url.endsWith('feed-down')) throw new Error('Request failed with status code 503')
+      return rssResult([])
+    })
+
+    const results = await crawlAllDueFeeds()
+
+    expect(results).toHaveLength(2)
+    const down = results.find(r => r.feedId === 'feed-down')
+    const up = results.find(r => r.feedId === 'feed-up')
+    expect(down?.errors).toBe(1)
+    expect(up?.errors).toBe(0)
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-down', expect.objectContaining({ fetchFailed: true }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-up', expect.objectContaining({ hadSuccess: true, rssItemCount: 0 }))
   })
 
   it('handles individual feed crawl failures gracefully', async () => {

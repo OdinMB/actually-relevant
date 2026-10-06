@@ -104,12 +104,17 @@ describe('parseFeed', () => {
     expect(result.items[0].title).toBe('Untitled')
   })
 
-  it('returns empty result on error', async () => {
+  it('throws when the feed cannot be fetched, so it is not mistaken for an empty feed', async () => {
     mockAxiosGet.mockRejectedValue(new Error('Network error'))
 
-    const result = await parseFeed('https://bad-url.com/rss')
-    expect(result.items).toEqual([])
-    expect(result.notModified).toBe(false)
+    await expect(parseFeed('https://bad-url.com/rss')).rejects.toThrow('Network error')
+  })
+
+  it('throws when the feed cannot be parsed', async () => {
+    mockAxiosGet.mockResolvedValue(axiosResponse('<html>not a feed</html>'))
+    mockParseString.mockRejectedValue(new Error('Non-whitespace before first tag'))
+
+    await expect(parseFeed('https://example.com/rss')).rejects.toThrow('Non-whitespace before first tag')
   })
 
   it('returns notModified true on 304 response', async () => {
