@@ -16,9 +16,9 @@ Download the official AGPL v3 text and prepend the copyright notice from `licens
 
 Copy content from `contributing-draft.md` (lines 3-79, excluding the HTML comment on line 1).
 
-### 3. Create `server/.env.sample` (new file)
+### 3. Extend `server/env.example` (exists since 2026-10-06, renamed from `.env.sample`)
 
-Copy the fenced block from `env-sample-draft.md` (lines 8-301).
+Merge the fenced block from `env-sample-draft.md` (lines 8-301) into it, keeping the variables already documented there (local Docker `DATABASE_URL`, `SKIP_DB_PREPARE`, `WEBHOOK_URL`, the podcast section).
 
 ### 4. Update `README.md`
 

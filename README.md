@@ -43,11 +43,11 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
 
 4. Configure environment variables:
    ```bash
-   # Create server/.env with at minimum these required variables:
-   # DATABASE_URL, OPENAI_API_KEY, JWT_SECRET, FRONTEND_URL
-   # DATABASE_URL for the Docker database:
-   #   postgresql://<user>:<password>@localhost:5433/actually_relevant_dev
-   #   (user and password are in docker-compose.yml)
+   cp server/env.example server/.env   # then fill in the values
+   cp client/env.example client/.env
+   # Required at minimum: DATABASE_URL, OPENAI_API_KEY, JWT_SECRET, FRONTEND_URL.
+   # The template's DATABASE_URL already points at the Docker database
+   #   (postgresql://ardev:...@localhost:5433/actually_relevant_dev, see docker-compose.yml).
    # See server/src/config.ts for all available settings and their defaults.
    ```
 
