@@ -7,6 +7,7 @@
  * Free commands (no ElevenLabs credits):
  *   check                      key present?, GET /v1/models (dialogue-capable models), GET /v1/user/subscription
  *   voices                     list the account's and ElevenLabs' voices, flag the Default voices expiring 2026-12-31
+ *   voice-info --ids A,B       GET /v1/voices/{id} per id: category, owner, sharing status, notice period, disable date
  *   dialogue                   write the fixed ~5,000-character test dialogue with the large LLM tier from this
  *                              week's published stories in the local DB (costs cents of OpenAI, no ElevenLabs)
  *   chunks                     print how the dialogue is chunked (<= 1,800 characters, turn boundaries)
@@ -494,6 +495,58 @@ async function commandVoices(): Promise<void> {
   }
 }
 
+/** Free: who owns a voice and can it be withdrawn? GET /v1/voices/{id} (voices_read) plus the Voice Library entry. */
+async function commandVoiceInfo(): Promise<void> {
+  const ids = (arg('ids') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  if (!ids.length) throw new Error('--ids needs one or more voice ids: A,B')
+  const out: Record<string, unknown> = {}
+  for (const id of ids) {
+    const row: Record<string, unknown> = { voice_id: id }
+    try {
+      const v = await getJson<Record<string, unknown>>(`/v1/voices/${encodeURIComponent(id)}?with_settings=false`)
+      const sharing = (v.sharing ?? null) as Record<string, unknown> | null
+      Object.assign(row, {
+        name: v.name, category: v.category, is_owner: v.is_owner, is_legacy: v.is_legacy, is_mixed: v.is_mixed,
+        permission_on_resource: v.permission_on_resource, created_at_unix: v.created_at_unix,
+        favorited_at_unix: v.favorited_at_unix, safety_control: v.safety_control, voice_verification: v.voice_verification,
+        sharing: sharing && {
+          status: sharing.status, category: sharing.category, public_owner_id: sharing.public_owner_id,
+          original_voice_id: sharing.original_voice_id, notice_period: sharing.notice_period,
+          disable_at_unix: sharing.disable_at_unix, disable_at: typeof sharing.disable_at_unix === 'number' ? new Date(sharing.disable_at_unix * 1000).toISOString() : null,
+          voice_mixing_allowed: sharing.voice_mixing_allowed, featured: sharing.featured, financial_rewards_enabled: sharing.financial_rewards_enabled,
+          free_users_allowed: sharing.free_users_allowed, rate: sharing.rate, live_moderation_enabled: sharing.live_moderation_enabled,
+          whitelisted_emails: Array.isArray(sharing.whitelisted_emails) ? `${(sharing.whitelisted_emails as unknown[]).length} entries` : sharing.whitelisted_emails,
+          moderation_check: sharing.moderation_check, reader_app_enabled: sharing.reader_app_enabled,
+        },
+        top_level_keys: Object.keys(v),
+        sharing_keys: sharing ? Object.keys(sharing) : null,
+      })
+    } catch (err) {
+      row.voiceEndpointError = axios.isAxiosError(err) ? `HTTP ${err.response?.status}: ${JSON.stringify(err.response?.data)?.slice(0, 300)}` : String(err)
+    }
+    out[id] = row
+  }
+  // Library context from the last `voices` run: the entry itself and the other voices of the same public owner.
+  const libFile = path.join(OUT_DIR, 'voices-library.json')
+  if (fs.existsSync(libFile)) {
+    const lib = JSON.parse(fs.readFileSync(libFile, 'utf8')) as Record<string, unknown>[]
+    for (const id of ids) {
+      const entry = lib.find((v) => v.voice_id === id)
+      if (!entry) continue
+      const owner = entry.public_owner_id
+      const siblings = lib.filter((v) => v.public_owner_id === owner)
+      ;(out[id] as Record<string, unknown>).library = {
+        name: entry.name, category: entry.category, public_owner_id: owner, notice_period_days: entry.notice_period,
+        date: typeof entry.date_unix === 'number' ? new Date(entry.date_unix * 1000).toISOString() : null,
+        cloned_by_count: entry.cloned_by_count, rate: entry.rate, fiat_rate: entry.fiat_rate,
+        same_owner_voices: siblings.map((s) => `${s.name} (${s.category}, notice ${s.notice_period})`),
+      }
+    }
+  }
+  writeJson(path.join(OUT_DIR, 'voice-info.json'), out)
+  console.log(JSON.stringify(out, null, 2))
+}
+
 async function commandChunks(): Promise<void> {
   const d = loadDialogue()
   const chunks = chunkTurns(d.segments)
@@ -687,6 +740,7 @@ async function main(): Promise<void> {
   switch (command) {
     case 'check': return commandCheck()
     case 'voices': return commandVoices()
+    case 'voice-info': return commandVoiceInfo()
     case 'dialogue': return commandDialogue()
     case 'chunks': return commandChunks()
     case 'ledger': return commandLedger()
@@ -696,7 +750,7 @@ async function main(): Promise<void> {
     case 'join': return commandJoin()
     case 'spike-ffmpeg': return commandSpikeFfmpeg()
     default:
-      console.log('Usage: npm run podcast:spike --prefix server -- <check|voices|dialogue|chunks|ledger|s3|s1|s6|join|spike-ffmpeg> [options]')
+      console.log('Usage: npm run podcast:spike --prefix server -- <check|voices|voice-info|dialogue|chunks|ledger|s3|s1|s6|join|spike-ffmpeg> [options]')
       process.exit(1)
   }
 }
