@@ -5,6 +5,7 @@
  */
 import { config } from '../config.js'
 import { PODCAST_OPENER } from '../lib/aiLabelCopy.js'
+import type { PodcastCharBudget } from '../prompts/podcast.js'
 import { PODCAST_AUDIO_TAGS, type PodcastDialogue } from '../schemas/llm.js'
 
 export type Speaker = 'HOST_A' | 'HOST_B'
@@ -38,10 +39,13 @@ export const PODCAST_SIGN_OFF = "That's it for this week. Tell us what you think
 
 const CODE_TURN_CHARS = PODCAST_OPENER.length + PODCAST_SIGN_OFF.length
 
-/** The characters the model's own turns may take, so the whole episode stays inside the band. */
-export function dialogueCharBudget(): { min: number; max: number } {
+/**
+ * The characters the model's own turns may take, so the whole episode stays inside the band, and
+ * the length the prompt asks them for.
+ */
+export function dialogueCharBudget(): PodcastCharBudget {
   const [lo, hi] = config.podcast.spokenCharBand
-  return { min: lo - CODE_TURN_CHARS, max: hi - CODE_TURN_CHARS }
+  return { min: lo - CODE_TURN_CHARS, max: hi - CODE_TURN_CHARS, aim: config.podcast.spokenCharAim - CODE_TURN_CHARS }
 }
 
 /** The episode as it is spoken: the opener, the model's segments, the sign-off. */

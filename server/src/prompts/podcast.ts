@@ -20,13 +20,16 @@ const CHARS_PER_WORD = 6
 /** A typical spoken turn (one or two sentences), for turning a segment's length into a turn count. */
 const CHARS_PER_TURN = 140
 
+/** Characters of the model's own turns: the accepted range, and the length the prompt asks for. */
 export interface PodcastCharBudget {
   min: number
   max: number
+  /** Below the middle on purpose: the model overshoots what it is asked for (config.podcast.spokenCharAim). */
+  aim: number
 }
 
 export interface PodcastLengthTargets {
-  /** Total characters of the model's turns to ask for: the band's middle, never its top. */
+  /** Total characters of the model's turns to ask for: the budget's aim, rounded to a hundred. */
   aim: number
   perStory: number
   words: number
@@ -35,13 +38,13 @@ export interface PodcastLengthTargets {
 }
 
 /**
- * The lengths the prompt states, all derived from one aim at the middle of the band, so the
- * model's overshoot has room before the top. Reasoning models count characters poorly, so a
- * per-story target, a turn count and a word equivalent restate the aim in units they handle better.
- * Asking for less than the middle does not shorten gpt-6-sol's drafts (`.context/prompting.md`).
+ * The lengths the prompt states, all derived from the budget's one aim, which sits below the band's
+ * middle so that the model's overshoot (about 20% for gpt-6-sol) still lands inside the band.
+ * Reasoning models count characters poorly, so a per-story target, a turn count and a word
+ * equivalent restate the aim in units they handle better (`.context/prompting.md`).
  */
 export function podcastLengthTargets(budget: PodcastCharBudget, storyCount: number): PodcastLengthTargets {
-  const aim = Math.round((budget.min + budget.max) / 2 / 100) * 100
+  const aim = Math.round(budget.aim / 100) * 100
   const perStory = Math.round((aim - INTRO_OUTRO_CHARS) / Math.max(storyCount, 1) / 50) * 50
   return {
     aim,

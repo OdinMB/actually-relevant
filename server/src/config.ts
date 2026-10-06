@@ -140,8 +140,12 @@ export const config = {
     scriptModelTier: "large" as const,
     // Spoken characters of the whole episode, code-added opener and sign-off and audio tags included.
     // Also the per-episode TTS ceiling. Top raised to 6200 (about 6.5 minutes; owner, 2026-10-06)
-    // because gpt-6-sol writes about 5,200-5,900 whatever length the prompt states.
+    // to fit how long gpt-6-sol writes. Validation only; the prompt states spokenCharAim.
     spokenCharBand: [4200, 6200] as const,
+    // The whole-episode length the prompt states (about 4,700 for the model's own turns), set below
+    // the band's middle on purpose: gpt-6-sol writes about 20% over its stated aim, so aiming at the
+    // middle (5,000 own) overshot the top in 2 of 3 drafts (.context/prompting.md).
+    spokenCharAim: 4900,
     maxTurnChars: 400,
     maxTagsPerTurn: 2,
     maxTitleChars: 80,

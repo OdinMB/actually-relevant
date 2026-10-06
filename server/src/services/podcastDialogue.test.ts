@@ -242,6 +242,11 @@ describe('dialogueCharBudget', () => {
     const code = PODCAST_OPENER.length + PODCAST_SIGN_OFF.length
     expect([min + code, max + code]).toEqual(config.podcast.spokenCharBand)
   })
+
+  it('asks the model\'s own turns for the episode aim less the code-added turns', () => {
+    const code = PODCAST_OPENER.length + PODCAST_SIGN_OFF.length
+    expect(dialogueCharBudget().aim + code).toBe(config.podcast.spokenCharAim)
+  })
 })
 
 describe('renderScript', () => {

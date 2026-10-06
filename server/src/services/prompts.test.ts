@@ -234,7 +234,7 @@ describe('buildPodcastPrompt', () => {
       limitingFactors: 'Early stage technology',
     },
   ]
-  const budget = { min: 4000, max: 5400 }
+  const budget = { min: 4000, max: 5400, aim: 4500 }
 
   it('escapes story text and marks it as untrusted input', () => {
     const prompt = buildPodcastPrompt(stories, budget)
@@ -252,10 +252,14 @@ describe('buildPodcastPrompt', () => {
 describe('podcastLengthTargets', () => {
   // The model's own budget as production derives it from the spoken band.
   const budget = dialogueCharBudget()
-  const mid = (budget.min + budget.max) / 2
 
-  it('aims at the middle of the band, not its top', () => {
-    for (const n of [4, 5]) expect(Math.abs(podcastLengthTargets(budget, n).aim - mid)).toBeLessThanOrEqual(100)
+  it('states the budget\'s aim, rounded to a hundred, not the band\'s middle', () => {
+    const t = podcastLengthTargets({ min: 4000, max: 6000, aim: 4660 }, 5)
+    expect(t.aim).toBe(4700)
+  })
+
+  it('aims below the middle of the band, leaving the model room to overshoot', () => {
+    for (const n of [4, 5]) expect(podcastLengthTargets(budget, n).aim).toBeLessThan((budget.min + budget.max) / 2)
   })
 
   it('states the per-story target and the word count for the same length as the aim', () => {
