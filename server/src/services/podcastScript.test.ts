@@ -88,17 +88,21 @@ describe('writeEpisodeScript', () => {
     episodeTitle: 'Four stories',
     episodeSummary: 'Two sentences. Plain ones.',
     segments: [
-      { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_B', text: 'Welcome to Actually Relevant, with the stories rated most relevant this week.' }] },
-      ...[1, 2, 3, 4].map(n => ({
-        kind: 'story' as const,
-        storyRef: n,
-        turns: [
-          { speaker: 'HOST_A' as const, text: `Bridge number ${n}: this story connects to the one before it in a clear way.` },
-          { speaker: 'HOST_B' as const, text: longText(`b${n}`) },
-          { speaker: 'HOST_A' as const, text: longText(`a${n}`) },
-          { speaker: 'HOST_B' as const, text: longText(`c${n}`) },
-        ],
-      })),
+      { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'Welcome to Actually Relevant, with the stories rated most relevant this week. First up, Headline 1.' }] },
+      ...[1, 2, 3, 4].map(n => {
+        // After the HOST_A opener and intro, the first story opens with HOST_B.
+        const [x, y] = n === 1 ? ['HOST_B' as const, 'HOST_A' as const] : ['HOST_A' as const, 'HOST_B' as const]
+        return {
+          kind: 'story' as const,
+          storyRef: n,
+          turns: [
+            { speaker: x, text: `Bridge number ${n}: this story connects to the one before it in a clear way.` },
+            { speaker: y, text: longText(`b${n}`) },
+            { speaker: x, text: longText(`a${n}`) },
+            { speaker: y, text: longText(`c${n}`) },
+          ],
+        }
+      }),
       { kind: 'outro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'From the first story to the last, that was a week worth hearing about.' }, { speaker: 'HOST_B', text: 'Thanks for listening.' }] },
     ],
   }

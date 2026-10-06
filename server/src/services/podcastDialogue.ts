@@ -85,6 +85,19 @@ function label(segment: PodcastDialogue['segments'][number], index: number): str
   return segment.kind === 'story' ? `segment ${index + 1} (story ${segment.storyRef})` : `segment ${index + 1} (${segment.kind})`
 }
 
+/**
+ * The intro is one HOST_A welcome that leads into the first story (owner, 2026-10-06). With the
+ * HOST_A opener before it, the first story segment then has to open with HOST_B, which the
+ * speaker-run rule enforces.
+ */
+function introErrors(intro: PodcastDialogue['segments'][number] | undefined): string[] {
+  if (intro?.kind !== 'intro') return []
+  const errors: string[] = []
+  if (intro.turns.length > 1) errors.push(`the intro has ${intro.turns.length} turns; it must be one turn, a HOST_A welcome that leads into the first story`)
+  if (intro.turns.some(t => t.speaker !== 'HOST_A')) errors.push('the intro must be spoken by HOST_A only; HOST_B first speaks in the first story segment')
+  return errors
+}
+
 function structureErrors(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): string[] {
   const segs = dialogue.segments
   const errors: string[] = []
@@ -96,6 +109,8 @@ function structureErrors(dialogue: PodcastDialogue, stories: DialogueStoryRef[])
     if (s.kind !== 'story' && s.storyRef !== null) errors.push(`${label(s, i)}: storyRef must be null`)
     if (s.turns.length === 0) errors.push(`${label(s, i)}: has no turns`)
   })
+
+  errors.push(...introErrors(segs[0]))
 
   const known = new Set(stories.map(s => s.ref))
   const covered = segs.filter(s => s.kind === 'story').map(s => s.storyRef)

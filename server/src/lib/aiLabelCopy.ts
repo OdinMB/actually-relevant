@@ -39,15 +39,15 @@ export function socialBotBio(sourceCount: number): string {
 
 /**
  * Spoken first turn of every podcast episode (HOST_A), added in code before the model's dialogue.
- * Approved by the owner on 2026-10-05 (autonomous two-speaker podcast, decision 4).
+ * Approved by the owner on 2026-10-06 (after the Phase 1 review), replacing the 2026-10-05 wording.
  */
-export const PODCAST_OPENER = "This episode was written and voiced by AI, based on our AI analysis of this week's news."
+export const PODCAST_OPENER = "Everything you're about to hear was written and voiced by AI from this week's news."
 
 /**
  * First line of every episode's show notes (and, from publication on, its feed description).
- * Approved by the owner on 2026-10-06 (two-speaker podcast plan, open question 1).
+ * Approved by the owner on 2026-10-06 (after the Phase 1 review), replacing the earlier 2026-10-06 wording.
  */
-export const PODCAST_EPISODE_AI_LINE = "AI-generated: This episode was written and voiced by AI, based on our AI analysis of this week's news."
+export const PODCAST_EPISODE_AI_LINE = "AI-generated: Everything in this episode was written and voiced by AI from this week's news. People built and oversee the system but don't write or edit individual episodes."
 
 /** Carousel: pixel footer on every slide, the post text line, and the alt-text prefix. */
 export const CAROUSEL_COPY = {

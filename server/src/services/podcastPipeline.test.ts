@@ -14,12 +14,13 @@ vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastScript.js', () => mockScript)
 
 const { advanceEpisode, resetEpisode, releaseHeldLeases, LeaseLostError } = await import('./podcastPipeline.js')
+const { PODCAST_OPENER } = await import('../lib/aiLabelCopy.js')
 
 const snapshot = (ref: number) => ({ ref, id: `story-${ref}`, title: `T${ref}`, publisher: 'P', sourceUrl: 'https://x.example', slug: `t${ref}`, issue: 'I' })
 const dialogue = {
   episodeTitle: 'Episode title',
   episodeSummary: 'Summary.',
-  segments: [{ kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_B', text: 'Welcome.' }] }],
+  segments: [{ kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'Welcome.' }] }],
 }
 
 function episode(stage: string, overrides: Record<string, unknown> = {}) {
@@ -59,7 +60,7 @@ describe('advanceEpisode', () => {
       storyIds: ['story-1', 'story-2', 'story-3', 'story-4'], scriptModelId: 'gpt-6-sol', lastError: null,
     })
     expect(stageWrite.data.episodeStories).toEqual([1, 2, 3, 4].map(snapshot))
-    expect(stageWrite.data.script).toMatch(/^HOST A: This episode was written and voiced by AI/)
+    expect(stageWrite.data.script.startsWith(`HOST A: ${PODCAST_OPENER}`)).toBe(true)
     const [release] = writesWith('leaseOwner')
     expect(release).toEqual({ where: { id: 'pod-1', leaseOwner: stageWrite.where.leaseOwner }, data: { leaseOwner: null, leaseUntil: null } })
   })

@@ -23,31 +23,33 @@ function filler(chars: number, seed: string): string {
 }
 
 const bridges = [
-  'Our first story starts in a courtroom in Nairobi, where air quality became a legal question.',
+  'A court in Nairobi turning air quality into a legal question is a bigger deal than it sounds.',
   'From clean air to public health: a vaccine rollout reached ten more countries this week.',
   'Health is one kind of shared resource; the deep ocean floor is another, and a new treaty covers it.',
   'The last story moves from the seabed to computer chips, where new export rules now apply.',
 ]
 
+/** The intro's HOST_A turn leads into the first story, so story 1 opens with HOST_B picking it up. */
 function storySegment(ref: number, overrides: Partial<Segment> = {}): Segment {
+  const [first, second]: Turn['speaker'][] = ref === 1 ? ['HOST_B', 'HOST_A'] : ['HOST_A', 'HOST_B']
   const turns: Turn[] = [
-    { speaker: 'HOST_A', text: bridges[ref - 1] },
-    { speaker: 'HOST_B', text: filler(340, `story ${ref} first`) },
-    { speaker: 'HOST_A', text: filler(340, `story ${ref} second`) },
-    { speaker: 'HOST_B', text: filler(330, `story ${ref} third`) },
+    { speaker: first, text: bridges[ref - 1] },
+    { speaker: second, text: filler(340, `story ${ref} first`) },
+    { speaker: first, text: filler(340, `story ${ref} second`) },
+    { speaker: second, text: filler(330, `story ${ref} third`) },
   ]
   return { kind: 'story', storyRef: ref, turns, ...overrides }
 }
+
+const INTRO_TEXT = 'Welcome to Actually Relevant, the stories rated most relevant for humanity this week. '
+  + 'We start in Nairobi, where a court has ordered the city to publish its air quality data, The Guardian reports.'
 
 function goodDialogue(): PodcastDialogue {
   return {
     episodeTitle: 'Clean air, vaccines and the deep sea',
     episodeSummary: 'Four stories from this week. Each one matters beyond its headline.',
     segments: [
-      { kind: 'intro', storyRef: null, turns: [
-        { speaker: 'HOST_B', text: 'Welcome to Actually Relevant, the stories rated most relevant for humanity this week.' },
-        { speaker: 'HOST_A', text: 'We have four of them today, from courts to chips.' },
-      ] },
+      { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: INTRO_TEXT }] },
       storySegment(1),
       storySegment(2),
       storySegment(3),
@@ -100,13 +102,24 @@ describe('validateDialogue', () => {
     expect(validateDialogue(noOutro, stories).valid).toBe(false)
   })
 
-  it('rejects the same speaker three times in a row, counting the code-added opener', () => {
+  it('rejects a first story segment that opens with HOST_A: opener, intro and that turn are three in a row', () => {
     const d = goodDialogue()
+    const story1 = d.segments[1]
+    const aFirst: Segment = { ...story1, turns: story1.turns.map(t => ({ ...t, speaker: t.speaker === 'HOST_A' ? 'HOST_B' as const : 'HOST_A' as const })) }
+    expect(errorsOf(withSegment(d, 1, aFirst)).join(' ')).toMatch(/three times in a row/)
+  })
+
+  it('rejects an intro with more than one turn', () => {
     const intro: Segment = { kind: 'intro', storyRef: null, turns: [
-      { speaker: 'HOST_A', text: 'Welcome to Actually Relevant, the stories rated most relevant this week.' },
-      { speaker: 'HOST_A', text: 'We have four of them today, from courts to chips.' },
+      { speaker: 'HOST_A', text: INTRO_TEXT },
+      { speaker: 'HOST_B', text: 'We will look at what changed, why it matters, and where the evidence leaves room for doubt.' },
     ] }
-    expect(errorsOf(withSegment(d, 0, intro)).join(' ')).toMatch(/three|row/i)
+    expect(errorsOf(withSegment(goodDialogue(), 0, intro)).join(' ')).toMatch(/intro.*one turn/)
+  })
+
+  it('rejects an intro spoken by HOST_B', () => {
+    const intro: Segment = { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_B', text: INTRO_TEXT }] }
+    expect(errorsOf(withSegment(goodDialogue(), 0, intro)).join(' ')).toMatch(/intro.*HOST_A/)
   })
 
   it('rejects a spoken total below or above the band, counting the opener, the sign-off and tags', () => {
@@ -223,7 +236,7 @@ describe('renderScript', () => {
     const lines = script.split('\n')
     expect(lines[0]).toBe(`HOST A: ${PODCAST_OPENER}`)
     expect(lines[1]).toBe('')
-    expect(lines[2]).toMatch(/^HOST B: Welcome/)
+    expect(lines[2]).toMatch(/^HOST A: Welcome/)
     expect(lines.at(-1)).toBe(`HOST A: ${PODCAST_SIGN_OFF}`)
   })
 })

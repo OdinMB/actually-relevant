@@ -158,8 +158,8 @@ describe('checkDialogue', () => {
     episodeTitle: 'Reefs',
     episodeSummary: 'One. Two.',
     segments: [
-      { kind: 'intro' as const, storyRef: null, turns: [{ speaker: 'HOST_B' as const, text: 'Welcome back.' }] },
-      { kind: 'story' as const, storyRef: 1, turns: [{ speaker: 'HOST_A' as const, text: '[calm] The Guardian reports that reefs are recovering across the whole Pacific region after many years of strict fishing bans.' }] },
+      { kind: 'intro' as const, storyRef: null, turns: [{ speaker: 'HOST_A' as const, text: 'Welcome back.' }] },
+      { kind: 'story' as const, storyRef: 1, turns: [{ speaker: 'HOST_B' as const, text: '[calm] The Guardian reports that reefs are recovering across the whole Pacific region after many years of strict fishing bans.' }] },
       { kind: 'outro' as const, storyRef: null, turns: [{ speaker: 'HOST_B' as const, text: 'From the reefs back to you: thanks.' }] },
     ],
   }

@@ -102,9 +102,9 @@ invariant StageWritesAreFenced {
 invariant EpisodeOpensWithAiDisclosure {
     for p in Podcasts where p.stage != legacy and p.dialogue != null:
         p.spoken_episode.first = Turn(HOST_A,
-            "This episode was written and voiced by AI, based on our AI analysis of this week's news.")
+            "Everything you're about to hear was written and voiced by AI from this week's news.")
         p.show_notes.starts_with(
-            "AI-generated: This episode was written and voiced by AI, based on our AI analysis of this week's news.")
+            "AI-generated: Everything in this episode was written and voiced by AI from this week's news. People built and oversee the system but don't write or edit individual episodes.")
 }
 
 -- ─── Weekly episode ──────────────────────────────────────────────
@@ -205,6 +205,12 @@ rule DialogueIsValid {
 
     requires: dialogue.segments.first.kind = intro and dialogue.segments.last.kind = outro
     requires: every story in stories is covered by exactly one story segment
+    -- The intro is one HOST_A welcome leading straight into the first
+    -- story; HOST_B does not speak in it.
+    requires: dialogue.segments.first.turns.count = 1
+        and dialogue.segments.first.turns.first.speaker = HOST_A
+    -- With the HOST_A opener and intro, this makes the first story
+    -- segment open with HOST_B.
     requires: no speaker has more than 2 consecutive turns in spoken_episode
     requires: spoken_episode.chars between config.spoken_char_band_min and config.spoken_char_band_max
     requires: every turn.text.length <= config.max_turn_chars
@@ -214,7 +220,8 @@ rule DialogueIsValid {
     requires: dialogue.episode_title is non-empty and at most config.max_title_chars long
     requires: neither dialogue.episode_title nor dialogue.episode_summary contains a URL or markdown
     -- Segues: chunks are voiced per segment, so each segment carries
-    -- its own bridge.
+    -- its own bridge. The intro is the first story's bridge; the first
+    -- story segment's opening turn is HOST_B picking it up.
     requires: every segment after the intro opens with a turn of at
         least config.min_bridge_chars characters that is not the headline
     requires: no two consecutive story segments open with the same first five words

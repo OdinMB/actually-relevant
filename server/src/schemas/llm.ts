@@ -191,7 +191,8 @@ const podcastSegmentSchema = z.object({
   kind: z
     .enum(["intro", "story", "outro"])
     .describe(
-      "One intro first, then one story segment per story in the given order, then one short outro last."
+      "One intro first, then one story segment per story in the given order, then one short outro last. " +
+        "The intro is exactly one HOST_A turn that welcomes listeners and leads straight into the first story; HOST_B does not speak in the intro."
     ),
   storyRef: z
     .number()
@@ -202,9 +203,10 @@ const podcastSegmentSchema = z.object({
     .array(podcastTurnSchema)
     .describe(
       "The turns of this segment. " +
-        "In every story segment, the first turn opens with a spoken bridge from the segment before " +
-        "(the intro for the first story) that connects or contrasts it with this story and leads into it; " +
-        `the bridge turn is at least ${config.podcast.minBridgeChars} characters and is not just the headline. ` +
+        "The first story segment opens with HOST_B picking up the story the intro led into. " +
+        "In every later story segment, the first turn opens with a spoken bridge from the story before " +
+        "that connects or contrasts it with this story and leads into it. " +
+        `Every story segment's first turn is at least ${config.podcast.minBridgeChars} characters and is not just the headline. ` +
         "The outro's first turn bridges back from the last story."
     ),
 });
