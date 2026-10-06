@@ -43,6 +43,8 @@ These waste reasoning tokens and can degrade performance.
 
 **Published fields never talk about the input.** Models write about the text they were given ("the article does not quantify…", "the supplied excerpt") unless the prompt says the fields are published as written and shows Bad/Good pairs. A prohibition on one field does not carry over to the others: gpt-6-luna did it in 29 of 50 full assessments with only the relevance-summary rule, 5 with a general rule, 2 with the rule plus examples (2026-09-24). Rewording the factor and limiting-factor schema descriptions at the same time coincided with a 0.08 lower mean rating (one run each, so not conclusive) and was reverted: treat text next to the rating fields as calibration too.
 
+**A stated length is not a lever on gpt-6-sol.** The podcast dialogue (`prompts/podcast.ts`) asks for the middle of its spoken band, with a per-story target, a turn count and a word equivalent derived from the same aim (`podcastLengthTargets`). On the eval sample (2026-10-06) Sol wrote 5,192 to 5,917 characters when asked for 4,700, and 5,399 and 5,707 when asked for 4,100: it writes about 5,500 whatever the number, so 3 of 6 first drafts landed in the 4,022–5,422 band. Lowering the stated target does not fix an overshoot; production's one regeneration with the length error does the rest. Keep the stated aim at the band's middle rather than compensating for an overshoot that does not scale with it.
+
 ## What to Keep in Prompts
 
 - Content quality guidance (good/bad examples for summaries, titles, quotes)

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildPreassessPrompt, buildReclassifyPrompt, buildAssessPrompt, buildSelectPrompt, buildPodcastPrompt, buildNewsletterIntroPrompt, pickIntroStyle } from '../prompts/index.js'
+import { podcastLengthTargets } from '../prompts/podcast.js'
+import { dialogueCharBudget } from './podcastDialogue.js'
 
 const guidelines = {
   factors: 'Technology advancement\nScientific discovery',
@@ -244,6 +246,43 @@ describe('buildPodcastPrompt', () => {
   it('adds the previous draft\'s problems only on a regeneration', () => {
     expect(buildPodcastPrompt(stories, budget)).not.toContain('<PREVIOUS_DRAFT_PROBLEMS>')
     expect(buildPodcastPrompt(stories, budget, ['story 1 is covered 0 times'])).toContain('- story 1 is covered 0 times')
+  })
+})
+
+describe('podcastLengthTargets', () => {
+  // The model's own budget as production derives it from the spoken band.
+  const budget = dialogueCharBudget()
+  const mid = (budget.min + budget.max) / 2
+
+  it('aims at the middle of the band, not its top', () => {
+    for (const n of [4, 5]) expect(Math.abs(podcastLengthTargets(budget, n).aim - mid)).toBeLessThanOrEqual(100)
+  })
+
+  it('states the per-story target and the word count for the same length as the aim', () => {
+    for (const n of [4, 5]) {
+      const t = podcastLengthTargets(budget, n)
+      // The per-story targets plus the intro and outro add back up to about the aim.
+      expect(Math.abs(t.perStory * n + t.introOutro - t.aim)).toBeLessThanOrEqual(50 * n)
+      expect(Math.abs(t.words * 6 - t.aim)).toBeLessThanOrEqual(300)
+    }
+  })
+
+  it('gives fewer turns per segment when more stories share the budget', () => {
+    expect(podcastLengthTargets(budget, 5).turnsPerStory).toBeLessThan(podcastLengthTargets(budget, 3).turnsPerStory)
+  })
+
+  it('keeps at least four turns per segment however many stories there are', () => {
+    expect(podcastLengthTargets(budget, 12).turnsPerStory).toBe(4)
+  })
+
+  it('treats no stories as one rather than dividing by zero', () => {
+    expect(podcastLengthTargets(budget, 0)).toEqual(podcastLengthTargets(budget, 1))
+  })
+
+  it('never states a target the band would reject', () => {
+    const t = podcastLengthTargets(budget, 5)
+    expect(t.aim).toBeGreaterThan(budget.min)
+    expect(t.aim).toBeLessThan(budget.max)
   })
 })
 
