@@ -166,6 +166,31 @@ export const config = {
     // S2 measured a promotional rate; re-measure one call after 2026-10-12.
     monthlyTtsCharCap: 32000,
     ownerEmail: "contact@actuallyrelevant.news",
+    // Audio (phase 2). ElevenLabs returns CBR MP3 at this format; the episode is re-encoded at the bitrate.
+    ttsOutputFormat: "mp3_44100_128",
+    ttsSeed: 412026,
+    // previous_text / future_text context per side between chunks (ElevenLabs' limit).
+    continuityChars: 100,
+    audioBitrateKbps: 128,
+    loudnessLufs: -16,
+    // Dry-run stub voice: silence as long as the characters would take to speak (~6,200 chars ≈ 6.5 min).
+    stubCharsPerSecond: 16,
+    // Public base URL of the Bunny pull zone (custom hostname, S4). Uploads use a fresh file name per
+    // render: the CDN caches a deleted file for up to 30 days, so a path is never reused.
+    audioBaseUrl: "https://audio.actuallyrelevant.news",
+    showTitle: "Actually Relevant",
+  },
+  elevenlabs: {
+    apiKey: process.env.ELEVENLABS_API_KEY || "",
+    baseUrl: "https://api.elevenlabs.io",
+    timeoutMs: 120_000,
+    maxResponseBytes: 20 * 1024 * 1024,
+  },
+  bunny: {
+    storageZone: process.env.BUNNY_STORAGE_ZONE || "",
+    storagePassword: process.env.BUNNY_STORAGE_PASSWORD || "",
+    storageHost: "storage.bunnycdn.com",
+    timeoutMs: 60_000,
   },
   scheduler: {
     // Boot retry when initScheduler fails (e.g. database down at restart):

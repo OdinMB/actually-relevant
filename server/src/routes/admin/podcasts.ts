@@ -2,6 +2,9 @@ import { Router } from 'express'
 import { createLogger } from '../../lib/logger.js'
 import * as podcastService from '../../services/podcast.js'
 import { findOrCreateWeekEpisode, resumeEpisode, runWeeklyEpisode } from '../../services/podcastWeekly.js'
+import { resetEpisode } from '../../services/podcastPipeline.js'
+import { monthToDateChars, PodcastRefusedError } from '../../services/podcastGuards.js'
+import { config } from '../../config.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
 import { updatePodcastSchema, podcastQuerySchema } from '../../schemas/podcast.js'
@@ -34,6 +37,16 @@ router.post('/weekly', expensiveOpLimiter, async (_req, res) => {
   } catch (err) {
     log.error({ err }, 'failed to start the weekly podcast')
     res.status(500).json({ error: "Failed to start this week's episode" })
+  }
+})
+
+/** TTS characters reserved this UTC month against the monthly cap. */
+router.get('/usage', async (_req, res) => {
+  try {
+    res.json({ monthToDateChars: await monthToDateChars(), monthlyCap: config.podcast.monthlyTtsCharCap })
+  } catch (err) {
+    log.error({ err }, 'failed to read podcast TTS usage')
+    res.status(500).json({ error: 'Failed to read podcast usage' })
   }
 })
 
@@ -85,11 +98,38 @@ router.put('/:id', validateBody(updatePodcastSchema), async (req, res) => {
   }
 })
 
+/** Back to `created` (script, audio and chunks cleared), then write and voice a new episode in the background. */
+router.post('/:id/regenerate', expensiveOpLimiter, async (req, res) => {
+  try {
+    if (!(await podcastService.getPodcastById(req.params.id))) {
+      res.status(404).json({ error: 'Podcast not found' })
+      return
+    }
+    await resetEpisode(req.params.id, { dryRun: config.podcast.dryRun })
+    res.status(202).json(await podcastService.getPodcastById(req.params.id))
+    inBackground(resumeEpisode(req.params.id), 'podcast regenerate', req.params.id)
+  } catch (err) {
+    if (err instanceof PodcastRefusedError) {
+      res.status(409).json({ error: err.message })
+      return
+    }
+    log.error({ err }, 'failed to regenerate podcast')
+    res.status(500).json({ error: 'Failed to regenerate podcast' })
+  }
+})
+
 router.delete('/:id', async (req, res) => {
   try {
-    await podcastService.deletePodcast(req.params.id)
+    if (!(await podcastService.deletePodcast(req.params.id))) {
+      res.status(404).json({ error: 'Podcast not found' })
+      return
+    }
     res.status(204).send()
   } catch (err: any) {
+    if (err instanceof PodcastRefusedError) {
+      res.status(409).json({ error: err.message })
+      return
+    }
     if (err.code === 'P2025') {
       res.status(404).json({ error: 'Podcast not found' })
       return

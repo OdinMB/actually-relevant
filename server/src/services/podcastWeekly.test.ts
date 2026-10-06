@@ -9,8 +9,17 @@ const mockPipeline = vi.hoisted(() => ({
   LeaseLostError: class LeaseLostError extends Error {},
 }))
 
+const mockGuards = vi.hoisted(() => ({
+  assertPodcastRunnable: vi.fn(),
+  episodeTtsChars: vi.fn(async () => 5400),
+  monthToDateChars: vi.fn(async () => 10_800),
+}))
+const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn() }))
+
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastPipeline.js', () => mockPipeline)
+vi.mock('./podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('./podcastGuards.js')>()), ...mockGuards }))
+vi.mock('../lib/notify.js', () => mockNotify)
 // Production settings: a row left over from a dry run must not occupy the week.
 vi.mock('../config.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../config.js')>()
@@ -18,7 +27,7 @@ vi.mock('../config.js', async importOriginal => {
 })
 
 const { isoWeekKey, runWeeklyEpisode, resumeEpisode, findOrCreateWeekEpisode } = await import('./podcastWeekly.js')
-const { PodcastBlockedError } = await import('./podcastGuards.js')
+const { PodcastBlockedError, PodcastStoppedError } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-10T06:00:00Z') // Saturday of 2026-W41
 
@@ -127,6 +136,41 @@ describe('runWeeklyEpisode', () => {
     expect((await runWeeklyEpisode({ trigger: 'admin', now: NOW })).outcome).toBe('retry-later')
     expect(mockPrisma.podcast.update).toHaveBeenCalledWith({ where: { id: 'pod-1' }, data: { blockedAt: null, blockedReason: null, attempts: 0 } })
     expect(mockPrisma.podcast.update).not.toHaveBeenCalledWith(expect.objectContaining({ data: { attempts: { increment: 1 } } }))
+  })
+
+  it('stops quietly when the job is disabled mid-run: no attempt, no block', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ stage: 'scripted' }))
+    mockPipeline.advanceEpisode.mockRejectedValueOnce(new PodcastStoppedError('generate_podcast'))
+    expect((await runWeeklyEpisode({ trigger: 'cron', now: NOW })).outcome).toBe('stopped')
+    expect(mockPrisma.podcast.update).not.toHaveBeenCalled()
+  })
+
+  it('blocks before any work when the configuration is incomplete', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row())
+    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => { throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY') })
+    const result = await runWeeklyEpisode({ trigger: 'cron', now: NOW })
+    expect(result).toMatchObject({ outcome: 'blocked', reason: expect.stringContaining('ELEVENLABS_API_KEY') })
+    expect(mockGuards.assertPodcastRunnable).toHaveBeenCalledWith({ trigger: 'cron', dryRun: false })
+    expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
+  })
+
+  it('sends the ready notice with duration and characters when the episode becomes ready', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ stage: 'voiced' }))
+    mockPipeline.advanceEpisode.mockResolvedValueOnce({ status: 'done', stage: 'ready' })
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ stage: 'ready', title: 'The week in water', durationSec: 342 }))
+    await runWeeklyEpisode({ trigger: 'cron', now: NOW })
+    const [title, message] = mockNotify.notifyEvent.mock.calls[0]
+    expect(title).toBe('Podcast episode ready')
+    expect(message).toContain('The week in water')
+    expect(message).toContain('5:42')
+    expect(message).toContain('5400')
+    expect(message).toContain('/admin/podcasts/pod-1')
+  })
+
+  it('sends no notice for a run that stops short of ready', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row())
+    await runWeeklyEpisode({ trigger: 'admin', now: NOW })
+    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
   })
 
   it('resets a dry-run row before advancing when the config is live', async () => {

@@ -8,6 +8,7 @@ import type {
   NewsletterSend,
   Podcast,
   PodcastListItem,
+  PodcastUsage,
   JobRun,
   User,
   StoryFilters,
@@ -346,6 +347,9 @@ export const adminApi = {
     /** Starts (or resumes) this week's episode; the work continues in the background (202). */
     startWeekly: () => request<Podcast>('/podcasts/weekly', { method: 'POST' }),
     resume: (id: string) => request<Podcast>(`/podcasts/${id}/resume`, { method: 'POST' }),
+    /** Back to a new script; writing and voicing continue in the background (202). 409 once published. */
+    regenerate: (id: string) => request<Podcast>(`/podcasts/${id}/regenerate`, { method: 'POST' }),
+    usage: () => request<PodcastUsage>('/podcasts/usage'),
   },
 
   // Jobs

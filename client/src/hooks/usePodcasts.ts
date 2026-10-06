@@ -73,3 +73,19 @@ export function useResumePodcast() {
     onSuccess: store,
   })
 }
+
+export function useRegeneratePodcast() {
+  const store = useStoreEpisode()
+  return useMutation({
+    mutationFn: (id: string) => adminApi.podcasts.regenerate(id),
+    onSuccess: store,
+  })
+}
+
+/** TTS characters this month against the cap. */
+export function usePodcastUsage() {
+  return useQuery({
+    queryKey: ['podcast-usage'],
+    queryFn: () => adminApi.podcasts.usage(),
+  })
+}

@@ -3,20 +3,28 @@ import type { Podcast } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
-import { useUpdatePodcast, useResumePodcast } from '../../hooks/usePodcasts'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { useUpdatePodcast, useResumePodcast, useRegeneratePodcast } from '../../hooks/usePodcasts'
 import { useToast } from '../ui/Toast'
 import { formatDate } from '../../lib/constants'
 import { AssignedStoriesList } from './AssignedStoriesList'
+import { PodcastAudioSection } from './PodcastAudioSection'
 import { PodcastStageBadge } from './PodcastStageBadge'
 
 interface PodcastDetailProps {
   podcast: Podcast
 }
 
-/** Resume continues an episode that is waiting: blocked, failed, or not yet scripted. */
+/** Resume continues an episode that is waiting: blocked, failed, or not finished yet. */
 export function canResume(podcast: Podcast): boolean {
   if (podcast.stage === 'legacy' || podcast.inProgress) return false
   return podcast.blockedAt != null || podcast.lastError != null || podcast.stage === 'created'
+}
+
+/** Regenerate writes a new script (and audio) for an episode that has one, never once it was published. */
+export function canRegenerate(podcast: Podcast): boolean {
+  if (podcast.stage === 'legacy' || podcast.stage === 'created' || podcast.inProgress) return false
+  return podcast.status !== 'published'
 }
 
 function TextBlock({ title, text, empty }: { title: string; text: string; empty: string }) {
@@ -37,7 +45,17 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
 
   const update = useUpdatePodcast()
   const resume = useResumePodcast()
+  const regenerate = useRegeneratePodcast()
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false)
   const legacy = podcast.stage === 'legacy'
+
+  const handleRegenerate = () => {
+    regenerate.mutate(podcast.id, {
+      onSuccess: () => toast('success', 'Regenerating: a new script is being written'),
+      onError: () => toast('error', 'Failed to regenerate'),
+      onSettled: () => setConfirmRegenerate(false),
+    })
+  }
 
   const handleSaveTitle = async () => {
     try {
@@ -85,16 +103,25 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
         <p className="text-sm text-neutral-600">Automatic attempts this week: {podcast.attempts}</p>
       )}
 
-      {canResume(podcast) && (
+      {(canResume(podcast) || canRegenerate(podcast)) && (
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => resume.mutate(podcast.id, {
-            onSuccess: () => toast('success', 'Resumed: the script is being written'),
-            onError: () => toast('error', 'Failed to resume'),
-          })} loading={resume.isPending}>
-            Resume
-          </Button>
+          {canResume(podcast) && (
+            <Button size="sm" onClick={() => resume.mutate(podcast.id, {
+              onSuccess: () => toast('success', 'Resumed: the episode continues from its stage'),
+              onError: () => toast('error', 'Failed to resume'),
+            })} loading={resume.isPending}>
+              Resume
+            </Button>
+          )}
+          {canRegenerate(podcast) && (
+            <Button size="sm" variant="secondary" onClick={() => setConfirmRegenerate(true)}>
+              Regenerate script
+            </Button>
+          )}
         </div>
       )}
+
+      {!legacy && <PodcastAudioSection podcast={podcast} />}
 
       {legacy ? (
         <>
@@ -119,6 +146,17 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
           <TextBlock title="Show notes" text={podcast.showNotes} empty="No show notes yet." />
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmRegenerate}
+        onClose={() => setConfirmRegenerate(false)}
+        onConfirm={handleRegenerate}
+        title="Regenerate this episode?"
+        description="The script, show notes and audio are discarded, and a new episode is written and voiced. Voicing it again counts against this month's TTS characters."
+        variant="danger"
+        confirmLabel="Regenerate"
+        loading={regenerate.isPending}
+      />
     </div>
   )
 }

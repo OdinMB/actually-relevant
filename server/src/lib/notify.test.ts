@@ -5,7 +5,7 @@ vi.mock('axios', () => ({
   default: { post: mockAxiosPost },
 }))
 
-const { notifyJobFailure } = await import('./notify.js')
+const { notifyJobFailure, notifyEvent } = await import('./notify.js')
 
 describe('notifyJobFailure', () => {
   const originalEnv = process.env.WEBHOOK_URL
@@ -62,5 +62,35 @@ describe('notifyJobFailure', () => {
     mockAxiosPost.mockRejectedValue(new Error('network error'))
 
     await expect(notifyJobFailure('crawl_feeds', 'oops')).resolves.toBeUndefined()
+  })
+})
+
+describe('notifyEvent', () => {
+  const originalEnv = process.env.WEBHOOK_URL
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.WEBHOOK_URL
+  })
+
+  afterEach(() => {
+    if (originalEnv !== undefined) process.env.WEBHOOK_URL = originalEnv
+    else delete process.env.WEBHOOK_URL
+  })
+
+  it('is silent without WEBHOOK_URL', async () => {
+    await notifyEvent('Podcast episode ready', 'details')
+    expect(mockAxiosPost).not.toHaveBeenCalled()
+  })
+
+  it('posts the title and message', async () => {
+    process.env.WEBHOOK_URL = 'https://hooks.example.com/webhook'
+    mockAxiosPost.mockResolvedValue({ status: 200 })
+    await notifyEvent('Podcast episode ready', 'Week 41, 5:42')
+    expect(mockAxiosPost).toHaveBeenCalledWith(
+      'https://hooks.example.com/webhook',
+      expect.objectContaining({ title: 'Podcast episode ready', message: 'Week 41, 5:42', content: '**Podcast episode ready**\nWeek 41, 5:42', timestamp: expect.any(String) }),
+      { timeout: 5000, maxContentLength: 1 * 1024 * 1024 },
+    )
   })
 })

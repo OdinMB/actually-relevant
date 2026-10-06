@@ -23,6 +23,8 @@ A set variable beats the default, so a stale `OPENAI_MODEL_*` or `OPENAI_EFFORT_
 
 Every chat client is built by `createChatModel()` in `server/src/services/llm.ts`: the tier getters, the backfill scripts in `scripts/migrations/`, and the eval harness. Do not construct `ChatOpenAI` elsewhere.
 
+**Text to speech (podcast).** Not an OpenAI tier: the podcast audio is voiced by ElevenLabs `eleven_v4` through Text to Dialogue, pinned as `config.podcast.ttsModelId` with the voice ids beside it, called only from `server/src/lib/elevenlabs.ts` (`.context/podcast.md`). Track its retirement like an OpenAI model's: a model change re-voices the listening test before the job is enabled again, and changes the record in `.context/ai-transparency.md` (row 11).
+
 Before changing a tier's model or effort, run the model eval harness (`.context/model-eval.md`); it compares candidates against each suite's baseline arm on stored data without writing to the database. Those baselines are still the pre-switch gpt-5 models, so rebase them onto today's defaults first (`.context/model-eval.md`).
 
 ### Prompts and models change together

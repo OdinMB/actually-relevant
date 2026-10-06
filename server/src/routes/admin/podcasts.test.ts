@@ -14,6 +14,7 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
     count: vi.fn(),
   },
+  podcastTtsUsage: { aggregate: vi.fn() },
   $disconnect: vi.fn(),
 }))
 const mockWeekly = vi.hoisted(() => ({
@@ -21,9 +22,13 @@ const mockWeekly = vi.hoisted(() => ({
   runWeeklyEpisode: vi.fn(),
   resumeEpisode: vi.fn(),
 }))
+const mockPipeline = vi.hoisted(() => ({ resetEpisode: vi.fn() }))
+const mockBunny = vi.hoisted(() => ({ deleteObject: vi.fn(), putObject: vi.fn(), isBunnyConfigured: vi.fn(), publicUrl: vi.fn() }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/podcastWeekly.js', () => mockWeekly)
+vi.mock('../../services/podcastPipeline.js', () => mockPipeline)
+vi.mock('../../lib/bunnyStorage.js', () => mockBunny)
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
   crawlAllDueFeeds: vi.fn(),
@@ -33,12 +38,15 @@ vi.mock('../../services/crawler.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
+const { PodcastRefusedError } = await import('../../services/podcastGuards.js')
 
 describe('Admin Podcasts API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockWeekly.runWeeklyEpisode.mockResolvedValue({ outcome: 'done', podcastId: 'podcast-1' })
     mockWeekly.resumeEpisode.mockResolvedValue({ outcome: 'done', podcastId: 'podcast-1' })
+    mockPrisma.podcastTtsUsage.aggregate.mockResolvedValue({ _sum: { chars: 5400 } })
+    mockBunny.deleteObject.mockResolvedValue(undefined)
   })
 
   describe('GET /api/admin/podcasts', () => {
@@ -160,15 +168,82 @@ describe('Admin Podcasts API', () => {
     })
   })
 
+  describe('GET /api/admin/podcasts/usage', () => {
+    it('returns the month to date and the cap', async () => {
+      const res = await request(app).get('/api/admin/podcasts/usage').set(authHeader())
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ monthToDateChars: 5400, monthlyCap: expect.any(Number) })
+    })
+
+    it('requires auth', async () => {
+      const res = await request(app).get('/api/admin/podcasts/usage')
+      expect(res.status).toBe(401)
+    })
+  })
+
+  describe('POST /api/admin/podcasts/:id/regenerate', () => {
+    it('requires auth', async () => {
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/regenerate')
+      expect(res.status).toBe(401)
+      expect(mockPipeline.resetEpisode).not.toHaveBeenCalled()
+    })
+
+    it('resets the episode, answers 202, then writes a new one in the background', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready' }))
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/regenerate').set(authHeader())
+      expect(res.status).toBe(202)
+      expect(mockPipeline.resetEpisode).toHaveBeenCalledWith('podcast-1', { dryRun: expect.any(Boolean) })
+      expect(mockWeekly.resumeEpisode).toHaveBeenCalledWith('podcast-1')
+    })
+
+    it('answers 409 when the episode was published or is in progress', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready', status: 'published' }))
+      mockPipeline.resetEpisode.mockRejectedValueOnce(new PodcastRefusedError('a published episode cannot be regenerated'))
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/regenerate').set(authHeader())
+      expect(res.status).toBe(409)
+      expect(mockWeekly.resumeEpisode).not.toHaveBeenCalled()
+    })
+
+    it('returns 404 for an unknown podcast', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(null)
+      const res = await request(app).post('/api/admin/podcasts/unknown/regenerate').set(authHeader())
+      expect(res.status).toBe(404)
+      expect(mockPipeline.resetEpisode).not.toHaveBeenCalled()
+    })
+  })
+
   describe('DELETE /api/admin/podcasts/:id', () => {
-    it('deletes a podcast', async () => {
+    it('deletes an unpublished podcast and its stored audio', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready', audioPath: 'episodes/a.mp3', transcriptPath: 'episodes/a.vtt' }))
+      mockPrisma.podcast.delete.mockResolvedValue(samplePodcast())
+      const res = await request(app).delete('/api/admin/podcasts/podcast-1').set(authHeader())
+      expect(res.status).toBe(204)
+      expect(mockBunny.deleteObject.mock.calls.map(c => c[0])).toEqual(['episodes/a.mp3', 'episodes/a.vtt'])
+    })
+
+    it('refuses a published episode with 409', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready', status: 'published' }))
+      const res = await request(app).delete('/api/admin/podcasts/podcast-1').set(authHeader())
+      expect(res.status).toBe(409)
+      expect(mockPrisma.podcast.delete).not.toHaveBeenCalled()
+    })
+
+    it('refuses an episode in progress with 409', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ leaseUntil: new Date(Date.now() + 60_000) }))
+      const res = await request(app).delete('/api/admin/podcasts/podcast-1').set(authHeader())
+      expect(res.status).toBe(409)
+      expect(mockPrisma.podcast.delete).not.toHaveBeenCalled()
+    })
+
+    it('deletes a published legacy row', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'legacy', status: 'published' }))
       mockPrisma.podcast.delete.mockResolvedValue(samplePodcast())
       const res = await request(app).delete('/api/admin/podcasts/podcast-1').set(authHeader())
       expect(res.status).toBe(204)
     })
 
     it('returns 404 for unknown podcast', async () => {
-      mockPrisma.podcast.delete.mockRejectedValue({ code: 'P2025' })
+      mockPrisma.podcast.findUnique.mockResolvedValue(null)
       const res = await request(app).delete('/api/admin/podcasts/unknown').set(authHeader())
       expect(res.status).toBe(404)
     })

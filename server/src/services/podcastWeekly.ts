@@ -7,13 +7,15 @@ import { ContentStatus, PodcastStage, type Podcast } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
+import { notifyEvent } from '../lib/notify.js'
 import { advanceEpisode, resetEpisode, LeaseLostError, type AdvanceTrigger } from './podcastPipeline.js'
-import { PodcastBlockedError } from './podcastGuards.js'
+import { assertPodcastRunnable, episodeTtsChars, monthToDateChars, PodcastBlockedError, PodcastStoppedError } from './podcastGuards.js'
 
 const log = createLogger('podcast-weekly')
 const DAY_MS = 24 * 60 * 60 * 1000
 
-export type WeeklyOutcome = 'done' | 'skipped' | 'retry-later' | 'blocked'
+/** `stopped`: the automatic run's job row was disabled mid-run; no attempt counted, no alert. */
+export type WeeklyOutcome = 'done' | 'skipped' | 'stopped' | 'retry-later' | 'blocked'
 
 export interface WeeklyResult {
   outcome: WeeklyOutcome
@@ -68,6 +70,27 @@ async function countAutomaticFailure(id: string, err: unknown): Promise<WeeklyOu
   return 'blocked'
 }
 
+const minutesSeconds = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
+
+/**
+ * The success notice when an episode reaches `ready`: a missing Saturday message is itself a
+ * signal. A notice that cannot be built is logged; it never fails the run.
+ */
+async function announceReady(id: string, now: Date): Promise<void> {
+  try {
+    const episode = await prisma.podcast.findUniqueOrThrow({ where: { id } })
+    const [episodeChars, monthChars] = await Promise.all([episodeTtsChars(id), monthToDateChars(now)])
+    const lines = [
+      `${episode.title}${episode.dryRun ? ' (dry run, silent stub voice)' : ''}`,
+      `Duration ${minutesSeconds(episode.durationSec ?? 0)}; TTS characters this episode ${episodeChars}, this month ${monthChars} of ${config.podcast.monthlyTtsCharCap}.`,
+      `Listen and publish: ${config.clientUrl}/admin/podcasts/${id}`,
+    ]
+    await notifyEvent('Podcast episode ready', lines.join('\n'))
+  } catch (err) {
+    log.warn({ err, podcastId: id }, 'could not send the podcast ready notice')
+  }
+}
+
 async function runEpisode(episode: Podcast, trigger: AdvanceTrigger, now: Date): Promise<WeeklyResult> {
   const id = episode.id
   const result = (outcome: WeeklyOutcome, reason?: string): WeeklyResult => {
@@ -84,12 +107,15 @@ async function runEpisode(episode: Podcast, trigger: AdvanceTrigger, now: Date):
   }
 
   try {
+    assertPodcastRunnable({ trigger, dryRun: config.podcast.dryRun })
     if (episode.dryRun && !config.podcast.dryRun) await resetEpisode(id, { dryRun: false })
     const advanced = await advanceEpisode(id, { trigger, now })
     if (advanced.status === 'busy') return result('skipped', 'in progress in another process')
+    if (advanced.stage === PodcastStage.ready) await announceReady(id, now)
     return result('done')
   } catch (err) {
     if (err instanceof LeaseLostError) return result('skipped', 'lost the lease to another process')
+    if (err instanceof PodcastStoppedError) return result('stopped', err.message)
     if (err instanceof PodcastBlockedError) {
       await block(id, err.message)
       return result('blocked', err.message)

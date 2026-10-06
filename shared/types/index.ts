@@ -252,6 +252,22 @@ export interface Podcast extends PodcastListItem {
   episodeStories: PodcastEpisodeStory[] | null
   blockedReason: string | null
   failedAt: string | null
+  /** TTS model that voiced the episode ("stub-silence" for a dry run) */
+  ttsModelId: string | null
+  /** Public CDN URLs of the MP3 and the VTT transcript, set at `ready` */
+  audioUrl: string | null
+  transcriptUrl: string | null
+  audioBytes: number | null
+  durationSec: number | null
+  readyAt: string | null
+  /** TTS characters spent on this episode, every re-voice included */
+  ttsChars: number
+}
+
+/** TTS characters reserved this UTC month against the monthly cap. */
+export interface PodcastUsage {
+  monthToDateChars: number
+  monthlyCap: number
 }
 
 export type BlueskyPostStatus = 'draft' | 'published' | 'failed'

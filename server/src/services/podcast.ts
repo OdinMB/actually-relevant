@@ -1,6 +1,8 @@
 import prisma from '../lib/prisma.js'
 import { type Prisma, ContentStatus, PodcastStage } from '@prisma/client'
 import { paginate } from '../lib/paginate.js'
+import { assertChangeable, episodeTtsChars } from './podcastGuards.js'
+import { deleteEpisodeObjects } from './podcastAudioStages.js'
 
 interface PodcastFilters {
   status?: string
@@ -55,15 +57,27 @@ export async function getPodcasts(filters: PodcastFilters) {
   })
 }
 
+/** One episode with `inProgress` and the TTS characters spent on it (`ttsChars`, every re-voice included). */
 export async function getPodcastById(id: string) {
   const row = await prisma.podcast.findUnique({ where: { id } })
-  return row ? withProgress(row) : null
+  if (!row) return null
+  return { ...withProgress(row), ttsChars: row.stage === PodcastStage.legacy ? 0 : await episodeTtsChars(id) }
 }
 
 export async function updatePodcastTitle(id: string, title: string) {
   return withProgress(await prisma.podcast.update({ where: { id }, data: { title } }))
 }
 
-export async function deletePodcast(id: string) {
+/**
+ * Delete an episode unless it was published or is in progress. Its voiced chunks go with it; its
+ * spend ledger rows stay (the monthly cap still counts them). Deleting an unpublished weekly
+ * episode frees its week key, so the week's next run makes a new one. False when there is no such episode.
+ */
+export async function deletePodcast(id: string): Promise<boolean> {
+  const episode = await prisma.podcast.findUnique({ where: { id } })
+  if (!episode) return false
+  assertChangeable(episode, 'deleted')
   await prisma.podcast.delete({ where: { id } })
+  await deleteEpisodeObjects(episode)
+  return true
 }

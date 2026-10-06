@@ -247,10 +247,52 @@ model Podcast {
   leaseOwner     String?       @map("lease_owner")
   leaseUntil     DateTime?     @map("lease_until")
   dryRun         Boolean       @default(false) @map("dry_run")
+  /// TTS model and voices the episode was voiced with (stored at `voiced`)
+  ttsModelId     String?       @map("tts_model_id")
+  voiceIds       Json?         @map("voice_ids")
+  /// Public CDN URLs and storage paths of the MP3 and the VTT transcript (stored at `ready`); a fresh file name per render
+  audioUrl       String?       @map("audio_url")
+  audioPath      String?       @map("audio_path")
+  transcriptUrl  String?       @map("transcript_url")
+  transcriptPath String?       @map("transcript_path")
+  audioBytes     Int?          @map("audio_bytes")
+  durationSec    Int?          @map("duration_sec")
+  readyAt        DateTime?     @map("ready_at")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
+  audioChunks PodcastAudioChunk[]
+  ttsUsage    PodcastTtsUsage[]
+
   @@map("podcasts")
+}
+
+/// One voiced TTS chunk of an episode, kept until the episode's MP3 is assembled and uploaded (`ready`)
+model PodcastAudioChunk {
+  id         String   @id @default(uuid())
+  podcastId  String   @map("podcast_id")
+  podcast    Podcast  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  index      Int
+  bytes      Bytes
+  requestId  String?  @map("request_id")
+  chars      Int
+  durationMs Int      @map("duration_ms")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([podcastId, index])
+  @@map("podcast_audio_chunks")
+}
+
+/// TTS spend ledger: one row per reserved TTS call, kept whatever the call's outcome and after the episode is deleted
+model PodcastTtsUsage {
+  id        String   @id @default(uuid())
+  podcastId String?  @map("podcast_id")
+  podcast   Podcast? @relation(fields: [podcastId], references: [id], onDelete: SetNull)
+  chars     Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("podcast_tts_usage")
 }
 
 model JobRun {
