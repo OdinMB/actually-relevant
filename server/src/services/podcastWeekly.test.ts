@@ -95,9 +95,21 @@ describe('runWeeklyEpisode', () => {
 
   it('on the cron trigger skips an interactive episode a person is reviewing', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ mode: 'interactive', stage: 'scripted' }))
-    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'skipped', reason: expect.stringMatching(/interactive/) })
+    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'skipped', reason: expect.stringMatching(/interactive/), waitingForPerson: true })
     expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
     expect(mockPrisma.podcast.update).not.toHaveBeenCalled()
+  })
+
+  it('reports a blocked interactive episode as waiting for its person, not as merely blocked', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ mode: 'interactive', stage: 'selected', blockedAt: new Date() }))
+    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'skipped', waitingForPerson: true })
+  })
+
+  it('does not mark other skips as waiting for a person', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ blockedAt: new Date() }))
+    expect((await runWeeklyEpisode({ trigger: 'cron', now: NOW })).waitingForPerson).toBeUndefined()
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ mode: 'interactive', stage: 'ready' }))
+    expect((await runWeeklyEpisode({ trigger: 'cron', now: NOW })).waitingForPerson).toBeUndefined()
   })
 
   it('skips an episode that is ready or published', async () => {

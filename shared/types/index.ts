@@ -46,6 +46,8 @@ export type JobName =
   | 'bluesky_update_metrics'
   | 'mastodon_update_metrics'
   | 'generate_newsletter'
+  | 'generate_podcast'
+  | 'publish_podcast'
 
 export type JobStatus = 'idle' | 'running' | 'failed'
 

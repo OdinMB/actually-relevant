@@ -1,6 +1,6 @@
 # Follow-up: two-speaker podcast, Phase 2b (interactive and automated modes)
 
-Plan: `.plans/autonomous-two-speaker-podcast.md` (Phase 2b marked done; the plan stays active for Phases 3-4).
+Plan: `.plans/completed/2026-10-06_autonomous-two-speaker-podcast.md` (every phase done; archived with Phase 4).
 
 ## Controversial Decisions
 
@@ -22,8 +22,8 @@ Plan: `.plans/autonomous-two-speaker-podcast.md` (Phase 2b marked done; the plan
 
 Both name only the agent: in force, not yet reviewed by a person. AGT-015 (switched on here, no profile) reaches neither, since the project uses no shared infrastructure and is not a component, so review is optional by the rule; the plan itself says Phase 2b awaits the owner's approval.
 
-- **ADR-0008** · Pause interactive episodes for review through a per-row mode, a selected stage and explicit admin rewinds. Choice: each episode has a mode, interactive runs stop after the stories are selected and after the script is written, a person edits only an episode at rest, and going back is an explicit admin rewind (a person's rewind makes the episode interactive; the cron skips interactive episodes). Plan: `.plans/autonomous-two-speaker-podcast.md`. Review optional.
-- **ADR-0009** · Track podcast runs from the episode lease in an app-level admin provider that drives a persistent, clickable toast. Choice: the admin routes claim the episode before answering, the server lists running episodes, and one provider in the admin layout polls that list and keeps a toast per episode until its outcome, surviving navigation and reloads. Plan: `.plans/autonomous-two-speaker-podcast.md`. Review optional.
+- **ADR-0008** · Pause interactive episodes for review through a per-row mode, a selected stage and explicit admin rewinds. Choice: each episode has a mode, interactive runs stop after the stories are selected and after the script is written, a person edits only an episode at rest, and going back is an explicit admin rewind (a person's rewind makes the episode interactive; the cron skips interactive episodes). Plan: `.plans/completed/2026-10-06_autonomous-two-speaker-podcast.md`. Review optional.
+- **ADR-0009** · Track podcast runs from the episode lease in an app-level admin provider that drives a persistent, clickable toast. Choice: the admin routes claim the episode before answering, the server lists running episodes, and one provider in the admin layout polls that list and keeps a toast per episode until its outcome, surviving navigation and reloads. Plan: `.plans/completed/2026-10-06_autonomous-two-speaker-podcast.md`. Review optional.
 
 ## Records to Refresh
 

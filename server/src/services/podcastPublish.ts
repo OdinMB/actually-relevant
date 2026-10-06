@@ -1,5 +1,5 @@
 /**
- * Moving episodes in and out of the feed (ADR-0006): publish, unpublish, the published episodes the
+ * Moving episodes in and out of the feed (ADR-0012): publish, unpublish, the published episodes the
  * feed and the public JSON list, and the automatic publish job's candidate. `status = published`
  * means listed; only this module changes it. Publishing needs a `ready`, non-dry-run episode; the
  * first publication date is kept for good (the episode is never regenerated or deleted after it);

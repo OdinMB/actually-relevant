@@ -1,6 +1,6 @@
 # Follow-up: two-speaker podcast, Phase 1 (script)
 
-Plan: `.plans/autonomous-two-speaker-podcast.md` (Phase 1 marked done; the plan stays active for Phases 2-4).
+Plan: `.plans/completed/2026-10-06_autonomous-two-speaker-podcast.md` (every phase done; archived with Phase 4).
 
 ## Controversial Decisions
 

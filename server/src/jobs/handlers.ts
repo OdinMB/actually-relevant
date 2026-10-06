@@ -7,6 +7,8 @@ import { runBlueskyUpdateMetrics } from './blueskyUpdateMetrics.js'
 import { runGenerateNewsletter } from './generateNewsletter.js'
 import { runSocialAutoPost } from './socialAutoPost.js'
 import { runMastodonUpdateMetrics } from './mastodonUpdateMetrics.js'
+import { runGeneratePodcast } from './generatePodcast.js'
+import { runPublishPodcast } from './publishPodcast.js'
 
 export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   crawl_feeds: runCrawlFeeds,
@@ -18,4 +20,7 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   bluesky_update_metrics: runBlueskyUpdateMetrics,
   generate_newsletter: runGenerateNewsletter,
   mastodon_update_metrics: runMastodonUpdateMetrics,
+  // Called with no argument: the handlers' `now` parameter is for tests.
+  generate_podcast: () => runGeneratePodcast(),
+  publish_podcast: () => runPublishPodcast(),
 }

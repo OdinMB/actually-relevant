@@ -4,6 +4,7 @@ import { startScheduler, stopScheduler } from './jobs/scheduler.js'
 import { cleanupExpiredTokens } from './services/auth.js'
 import { taskRegistry } from './lib/taskRegistry.js'
 import { releaseHeldLeases } from './services/podcastPipeline.js'
+import { checkPodcastConfigAtBoot } from './jobs/podcastBootCheck.js'
 import app from './app.js'
 
 const log = createLogger('server')
@@ -21,6 +22,8 @@ const server = app.listen(PORT, () => {
 
   // Retries with backoff while the database is unavailable; alerts once (scheduler.ts)
   startScheduler()
+  // Alerts at once when a podcast job is enabled but a setting is missing (never throws)
+  void checkPodcastConfigAtBoot()
 })
 
 const tokenCleanupTimer = setInterval(async () => {

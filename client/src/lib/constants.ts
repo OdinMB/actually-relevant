@@ -29,6 +29,8 @@ export const JOB_DISPLAY_NAMES: Record<JobName, string> = {
   bluesky_update_metrics: 'Bluesky Update Metrics',
   mastodon_update_metrics: 'Mastodon Update Metrics',
   generate_newsletter: 'Generate Newsletter',
+  generate_podcast: 'Generate Podcast',
+  publish_podcast: 'Publish Podcast',
 }
 
 /** Pipeline execution order for sorting jobs in the UI. */
@@ -42,6 +44,8 @@ export const JOB_PIPELINE_ORDER: JobName[] = [
   'bluesky_update_metrics',
   'mastodon_update_metrics',
   'generate_newsletter',
+  'generate_podcast',
+  'publish_podcast',
 ]
 
 const STATUS_LABELS: Partial<Record<string, string>> = {

@@ -1,6 +1,6 @@
 # Follow-up: two-speaker podcast, Phase 2 (audio and storage)
 
-Plan: `.plans/autonomous-two-speaker-podcast.md` (Phase 2 marked done; S4 and S5 outcomes recorded; the plan stays active for Phases 3-4).
+Plan: `.plans/completed/2026-10-06_autonomous-two-speaker-podcast.md` (every phase done; archived with Phase 4).
 
 ## Controversial Decisions
 

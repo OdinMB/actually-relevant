@@ -2,7 +2,7 @@
  * "This week's episode", the runs that advance an episode, and their retry and block policy. The
  * admin "Start this week's episode" only finds or creates the row; a person then starts it in a
  * mode, and `startAdminRun` + `resumeEpisode` run it under the lease the route claimed. The
- * generate_podcast job will call `runWeeklyEpisode({ trigger: 'cron' })`, which runs automated and
+ * generate_podcast job calls `runWeeklyEpisode({ trigger: 'cron' })`, which runs automated and
  * leaves an interactive episode to the person reviewing it. Only automatic runs count attempts;
  * an admin action clears a block.
  */
@@ -27,6 +27,8 @@ export interface WeeklyResult {
   outcome: WeeklyOutcome
   podcastId: string
   reason?: string
+  /** Skipped because a person runs the episode interactively: it waits for them, not for the job. */
+  waitingForPerson?: true
 }
 
 /**
@@ -112,17 +114,18 @@ async function runEpisode(episode: Podcast, { trigger, now, leaseHeld }: RunOpti
   }
 
   if (episode.status === ContentStatus.published || episode.stage === PodcastStage.ready) return result('skipped', 'already finished')
+  // The job never overrides a person mid-review, blocked or not: the episode waits for them.
+  if (trigger === 'cron' && episode.mode === 'interactive') {
+    return { ...result('skipped', 'interactive: the owner is reviewing it'), waitingForPerson: true }
+  }
   if (episode.blockedAt) {
     if (trigger === 'cron') return result('skipped', 'blocked')
     await clearBlock(id)
   } else if (trigger === 'admin' && episode.attempts > 0) {
     await clearBlock(id)
   }
-  if (trigger === 'cron') {
-    // The job never overrides a person mid-review; an episode nobody started runs automated.
-    if (episode.mode === 'interactive') return result('skipped', 'interactive: the owner is reviewing it')
-    if (episode.mode === null) await prisma.podcast.update({ where: { id }, data: { mode: 'automated' } })
-  }
+  // An episode nobody started runs automated on the cron trigger.
+  if (trigger === 'cron' && episode.mode === null) await prisma.podcast.update({ where: { id }, data: { mode: 'automated' } })
 
   try {
     assertPodcastRunnable({ trigger, dryRun: config.podcast.dryRun })

@@ -196,6 +196,9 @@ export const config = {
     listenLinks: [] as { name: string; url: string }[],
     // The automatic publish job (phase 4) only takes an episode that has been ready this long.
     autoPublishMinAgeHours: 24,
+    // generate_podcast's weekend window (UTC): Saturday from this hour through Sunday 23:59. Outside
+    // it the job does nothing, so a boot catch-up on a weekday never starts an episode (ADR-0011).
+    weekendWindowStartHourUtc: 5,
   },
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY || "",

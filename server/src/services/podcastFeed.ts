@@ -1,6 +1,6 @@
 /**
  * The podcast RSS document and its cache. Hand-built RSS 2.0 with the itunes, podcast (Podcasting
- * 2.0), atom and content namespaces (ADR-0001): the channel and every item carry
+ * 2.0), atom and content namespaces (ADR-0010): the channel and every item carry
  * `<podcast:txt purpose="ai-content">true</podcast:txt>`, every item description starts with the
  * episode's AI line, the GUID is the row id and the enclosure the CDN URL with its exact byte length.
  */

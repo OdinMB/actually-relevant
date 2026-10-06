@@ -47,12 +47,17 @@ That figure is then multiplied by 7 ÷ (days per week in the day-of-week field),
 | `bluesky_update_metrics` | `runBlueskyUpdateMetrics` | Configurable |
 | `mastodon_update_metrics` | `runMastodonUpdateMetrics` | Configurable |
 | `generate_newsletter` | `runGenerateNewsletter` | `0 4 * * 6` (Saturday 4am) |
+| `generate_podcast` | `runGeneratePodcast` | `0 6,10,14,18 * * 6,0` (weekend slots); seeded disabled |
+| `publish_podcast` | `runPublishPodcast` | `0 7 * * 1` (Monday 07:00); seeded disabled |
+
+**The podcast jobs** keep their retry policy in podcast code, not here (ADR-0011; `.context/podcast.md`, "Automation"). `generate_podcast` does nothing outside its UTC weekend window (Saturday 05:00 through Sunday 23:59), so a boot catch-up on a weekday, or a manual Run on one, never starts an episode. Inside it, each slot resumes the week's episode; failures are counted on the episode, and at 3 (or on an error a retry cannot fix) the episode is blocked and the run fails once, so `notifyJobFailure` alerts once and later slots skip. `publish_podcast` publishes only an episode that has been ready for 24 hours and re-reads its own row's `enabled` flag before publishing. Their migration seeds both rows with `last_completed_at` set, so neither runs at boot just for never having completed; `seed-jobs.ts` leaves it null on a fresh dev database, which the window makes harmless. At boot, when either row is enabled, `checkPodcastConfigAtBoot` (`index.ts`) reports missing podcast settings through `notifyEvent`.
 
 ## Adding a New Job
 
 1. Create handler in `server/src/jobs/yourJob.ts` exporting an `async function runYourJob(): Promise<void>`
 2. Register handler in `server/src/jobs/handlers.ts` by adding to the `JOB_HANDLERS` map
 3. Add a row to `job_runs` table (via migration or seed) with `jobName`, `cronExpression`, and `enabled`
+4. Add the name to `JobName` (`shared/types`), `JOB_NAMES` (`shared/constants`) and the admin's `JOB_DISPLAY_NAMES` and `JOB_PIPELINE_ORDER` (`client/src/lib/constants.ts`)
 
 ## Admin API
 
@@ -95,4 +100,5 @@ The Semaphore utility is at `server/src/lib/semaphore.ts`.
 | `server/src/jobs/blueskyUpdateMetrics.ts` | Bluesky metrics update job handler |
 | `server/src/jobs/mastodonUpdateMetrics.ts` | Mastodon metrics update job handler |
 | `server/src/jobs/generateNewsletter.ts` | Automated weekly newsletter generation job handler |
+| `server/src/jobs/generatePodcast.ts`, `publishPodcast.ts`, `podcastBootCheck.ts` | Weekly podcast episode and automatic publication handlers; the boot configuration check |
 | `server/src/routes/admin/jobs.ts` | Admin API for job management |
