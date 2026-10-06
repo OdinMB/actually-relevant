@@ -6,17 +6,19 @@ import { useToast } from '../ui/Toast'
 import { usePublishPodcast } from '../../hooks/usePodcasts'
 import { formatDate } from '../../lib/constants'
 
-export type PublishOption = 'publish' | 'republish' | 'unpublish' | 'dry-run'
+export type PublishOption = 'publish' | 'republish' | 'unpublish' | 'blocked'
 
-/** What a person can do about publication now; null unless the episode is ready and at rest. */
-export function publishOption(podcast: Pick<Podcast, 'stage' | 'inProgress' | 'status' | 'dryRun' | 'publishedAt'>): PublishOption | null {
-  if (podcast.stage !== 'ready' || podcast.inProgress) return null
+/**
+ * What a person can do about publication now. A listed episode can always be unpublished; otherwise
+ * the server's `publishBlockedReason` decides, so the page never guesses differently from the server.
+ */
+export function publishOption(podcast: Pick<Podcast, 'status' | 'publishedAt' | 'publishBlockedReason'>): PublishOption {
   if (podcast.status === 'published') return 'unpublish'
-  if (podcast.dryRun) return 'dry-run'
+  if (podcast.publishBlockedReason) return 'blocked'
   return podcast.publishedAt ? 'republish' : 'publish'
 }
 
-const CONFIRM: Record<Exclude<PublishOption, 'dry-run'>, { button: string; title: string; description: string; danger?: boolean }> = {
+const CONFIRM: Record<Exclude<PublishOption, 'blocked'>,{ button: string; title: string; description: string; danger?: boolean }> = {
   publish: {
     button: 'Publish',
     title: 'Publish this episode?',
@@ -39,16 +41,18 @@ const CONFIRM: Record<Exclude<PublishOption, 'dry-run'>, { button: string; title
   },
 }
 
-/** Publish, publish again or unpublish a ready episode, each behind a confirmation. */
+/**
+ * Publish, publish again or unpublish an episode, each behind a confirmation; where publishing is not
+ * possible, the reason in place of the button.
+ */
 export function PodcastPublishControls({ podcast }: { podcast: Podcast }) {
   const publish = usePublishPodcast()
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const option = publishOption(podcast)
-  if (!option) return null
 
-  if (option === 'dry-run') {
-    return <p className="text-sm text-neutral-700">This is a dry run with a silent stub voice, so it cannot be published.</p>
+  if (option === 'blocked') {
+    return <p className="text-sm text-neutral-700">Publishing is not possible now: {podcast.publishBlockedReason}.</p>
   }
 
   const copy = CONFIRM[option]

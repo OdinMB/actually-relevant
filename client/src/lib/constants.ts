@@ -33,6 +33,14 @@ export const JOB_DISPLAY_NAMES: Record<JobName, string> = {
   publish_podcast: 'Publish Podcast',
 }
 
+/**
+ * A job's name for people. A job the server knows but this build does not (a new job reaching an
+ * older admin bundle) is title-cased from its id rather than shown raw.
+ */
+export function jobDisplayName(jobName: string): string {
+  return (JOB_DISPLAY_NAMES as Partial<Record<string, string>>)[jobName] ?? formatStatus(jobName)
+}
+
 /** Pipeline execution order for sorting jobs in the UI. */
 export const JOB_PIPELINE_ORDER: JobName[] = [
   'crawl_feeds',

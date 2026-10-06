@@ -28,6 +28,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { ToastProvider } from '../components/ui/Toast'
 import { BackgroundTaskProvider } from '../hooks/useBackgroundTasks'
 import { PodcastProgressProvider } from '../hooks/usePodcastProgress'
+import { NewVersionBanner } from '../components/admin/NewVersionBanner'
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon, end: true },
@@ -198,6 +199,8 @@ export default function AdminLayout() {
             </button>
             <span className="ml-3 text-lg font-bold text-neutral-900">Admin</span>
           </div>
+
+          <NewVersionBanner />
 
           <main className="flex-1 overflow-y-auto p-4 lg:p-6">
             <Suspense fallback={

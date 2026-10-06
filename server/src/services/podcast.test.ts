@@ -66,6 +66,16 @@ describe('getPodcastById', () => {
     expect((await getPodcastById('p'))?.activity).toBeNull()
   })
 
+  it('says why the episode cannot be published, and nothing for a ready draft with audio', async () => {
+    const audio = { stage: 'ready', status: 'draft', dryRun: false, humanEdited: false, audioUrl: 'https://audio.example/e.mp3', audioBytes: 5_000_000 }
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ ...audio, mode: 'automated' }))
+    expect((await getPodcastById('p'))?.publishBlockedReason).toBeNull()
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ ...audio, leaseUntil: LIVE() }))
+    expect((await getPodcastById('p'))?.publishBlockedReason).toMatch(/run is working/)
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ ...audio, stage: 'scripted' }))
+    expect((await getPodcastById('p'))?.publishBlockedReason).toMatch(/at scripted/)
+  })
+
   it('estimates the characters a voicing of the stored script sends, and none without a script', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ stage: 'scripted', dialogue }))
     const total = episodeChunks({ id: 'p', dialogue } as never).flat().reduce((n, t) => n + t.text.length, 0)

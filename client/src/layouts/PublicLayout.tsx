@@ -46,7 +46,6 @@ const FOOTER_NAV = [
   { label: "Issues", href: "/issues" },
   { label: "Compare", href: "/compare" },
   { label: "News Fatigue", href: "/news-fatigue" },
-  { label: "Podcast", href: "/podcast" },
   { label: "Thank You", href: "/thank-you" },
 ];
 
@@ -97,6 +96,20 @@ function NewsletterIcon({ className }: { className?: string }) {
       aria-hidden="true"
     >
       <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" />
+    </svg>
+  );
+}
+
+function PodcastIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M8.25 4.5a3.75 3.75 0 1 1 7.5 0v8.25a3.75 3.75 0 1 1-7.5 0V4.5Z" />
+      <path d="M6 10.5a.75.75 0 0 1 .75.75v1.5a5.25 5.25 0 1 0 10.5 0v-1.5a.75.75 0 0 1 1.5 0v1.5a6.751 6.751 0 0 1-6 6.709v2.291h3a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1 0-1.5h3v-2.291a6.751 6.751 0 0 1-6-6.709v-1.5A.75.75 0 0 1 6 10.5Z" />
     </svg>
   );
 }
@@ -268,6 +281,13 @@ function PublicLayoutInner() {
                 <NewsletterIcon className="w-4 h-4 shrink-0" />
                 Newsletter
               </button>
+              <Link
+                to="/podcast"
+                className="inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-2 py-1 text-neutral-500 hover:text-brand-700"
+              >
+                <PodcastIcon className="w-4 h-4 shrink-0" />
+                Podcast
+              </Link>
             </div>
 
             {/* Mobile: search on left, menu on right — vertically centered on logo */}
@@ -452,6 +472,14 @@ function PublicLayoutInner() {
                   <NewsletterIcon className="w-3.5 h-3.5 shrink-0" />
                   Newsletter
                 </button>
+                <Link
+                  to="/podcast"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 py-2.5 text-sm font-bold text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                >
+                  <PodcastIcon className="w-3.5 h-3.5 shrink-0" />
+                  Podcast
+                </Link>
                 <a
                   href={KOFI_URL}
                   target="_blank"
@@ -660,6 +688,15 @@ function PublicLayoutInner() {
                   >
                     <img src="/images/optimized/icons/newsletter-thumb-w.webp" alt="" width={14} height={14} className="w-3.5 h-3.5 shrink-0 transition-[filter] group-hover:brightness-[10]" aria-hidden="true" />
                     Newsletter
+                  </Link>
+                </li>
+                <li className="flex items-center">
+                  <Link
+                    to="/podcast"
+                    className="inline-flex items-center gap-1.5 text-sm leading-5 text-neutral-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
+                  >
+                    <PodcastIcon className="w-3.5 h-3.5 shrink-0" />
+                    Podcast
                   </Link>
                 </li>
                 <li className="flex items-center">

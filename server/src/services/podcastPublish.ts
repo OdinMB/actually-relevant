@@ -30,6 +30,20 @@ export function publishRefusal(episode: Pick<Podcast, 'stage' | 'dryRun' | 'audi
 }
 
 /**
+ * Why the admin cannot publish the episode right now, shown in place of the Publish button so it is
+ * never missing without a reason; null when it can be published, and for a listed episode, which can
+ * always be unpublished. `inProgress` is a live lease: publishing would be refused until the run ends.
+ */
+export function publishBlockedReason(
+  episode: Pick<Podcast, 'status' | 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes' | 'humanEdited'>,
+  inProgress: boolean,
+): string | null {
+  if (episode.status === ContentStatus.published) return null
+  if (inProgress) return 'a run is working on the episode; publishing waits until it finishes'
+  return publishRefusal(episode)
+}
+
+/**
  * List the episode in the feed and on /podcast. Taken under the episode's lease, so it cannot race
  * a rewind. Sets `publishedAt` the first time only and clears a previous takedown.
  */

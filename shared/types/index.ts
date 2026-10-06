@@ -283,6 +283,8 @@ export interface Podcast extends PodcastListItem {
   activity: string | null
   /** Characters a full voicing of the current script sends to TTS; null before there is a script. */
   ttsCharsEstimate: number | null
+  /** Why the episode cannot be published now (the server's own refusal, or a run in progress); null when it can, and while it is listed. */
+  publishBlockedReason: string | null
   blockedReason: string | null
   failedAt: string | null
   /** TTS model that voiced the episode ("stub-silence" for a dry run) */

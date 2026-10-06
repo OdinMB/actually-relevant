@@ -34,8 +34,17 @@ export function makeDialogue(): PodcastDialogue {
   }
 }
 
-/** A scripted, interactive episode at rest; override what a test needs. */
+/**
+ * A scripted, interactive episode at rest; override what a test needs. Unless overridden,
+ * `publishBlockedReason` follows the server's rule roughly: null only for a ready, non-dry-run draft at rest.
+ */
 export function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
+  const podcast = baseEpisode(overrides)
+  const publishable = podcast.status === 'published' || (podcast.stage === 'ready' && !podcast.inProgress && !podcast.dryRun)
+  return { publishBlockedReason: publishable ? null : `not publishable at ${podcast.stage}`, ...podcast }
+}
+
+function baseEpisode(overrides: Partial<Podcast>): Omit<Podcast, 'publishBlockedReason'> & Partial<Pick<Podcast, 'publishBlockedReason'>> {
   return {
     id: 'pod-1',
     title: 'W41: Clean air and vaccines',

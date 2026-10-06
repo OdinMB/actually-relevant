@@ -25,16 +25,41 @@ beforeEach(() => {
 })
 
 describe('publishOption', () => {
-  it('offers publication only for a ready episode at rest, and never for a dry run', () => {
+  it('offers publication only when the server gives no reason against it', () => {
     expect(publishOption(ready)).toBe('publish')
-    expect(publishOption({ ...ready, stage: 'voiced' })).toBeNull()
-    expect(publishOption({ ...ready, inProgress: true })).toBeNull()
-    expect(publishOption({ ...ready, dryRun: true })).toBe('dry-run')
+    expect(publishOption({ ...ready, publishBlockedReason: 'the episode has no uploaded audio' })).toBe('blocked')
   })
 
   it('offers unpublish while listed, and publish again after a takedown', () => {
     expect(publishOption({ ...ready, status: 'published', publishedAt: '2026-10-12T07:00:00.000Z' })).toBe('unpublish')
     expect(publishOption({ ...ready, status: 'draft', publishedAt: '2026-10-12T07:00:00.000Z' })).toBe('republish')
+  })
+})
+
+describe('PodcastDetail publishing', () => {
+  it('offers an enabled Publish for an episode generated before review modes and publishing existed', () => {
+    // The production episode of 2026-10-06: automated mode, never edited, a ready draft with audio.
+    const phase2 = makePodcast({
+      stage: 'ready', mode: 'automated', awaitingReview: false, humanEdited: false, status: 'draft',
+      audioUrl: 'https://audio.example/e.mp3', audioBytes: 5_000_000, readyAt: '2026-10-06T10:00:00.000Z',
+      publishedAt: null, unpublishedAt: null, publishBlockedReason: null,
+    })
+    renderInAdmin(<PodcastDetail podcast={phase2} />)
+    expect((screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('shows the reason in place of Publish while a run works on the episode', () => {
+    const running = makePodcast({ stage: 'ready', inProgress: true, awaitingReview: false, publishBlockedReason: 'a run is working on the episode; publishing waits until it finishes' })
+    renderInAdmin(<PodcastDetail podcast={running} />)
+    expect(screen.getByRole('heading', { name: 'Next steps' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull()
+    expect(screen.getByText(/a run is working on the episode/)).toBeTruthy()
+  })
+
+  it('shows the reason in place of Publish before the episode is ready', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'scripted', publishBlockedReason: 'only a ready episode can be published; this one is at scripted' })} />)
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull()
+    expect(screen.getByText(/this one is at scripted/)).toBeTruthy()
   })
 })
 

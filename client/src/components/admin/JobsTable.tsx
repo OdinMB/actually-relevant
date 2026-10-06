@@ -8,7 +8,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import type { JobRun } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
 import { Button } from '../ui/Button'
-import { JOB_DISPLAY_NAMES, JOB_PIPELINE_ORDER } from '../../lib/constants'
+import { jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
 import { useUpdateJob, useRunJob } from '../../hooks/useJobs'
 import { useToast } from '../ui/Toast'
@@ -31,7 +31,7 @@ function RunningSpinner({ size = 'h-5 w-5' }: { size?: string }) {
 
 function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => void }) {
   return (
-    <EditPanel open onClose={onClose} title={JOB_DISPLAY_NAMES[job.jobName] || job.jobName}>
+    <EditPanel open onClose={onClose} title={jobDisplayName(job.jobName)}>
       <div className={PANEL_BODY}>
         {/* Status */}
         <div>
@@ -96,7 +96,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
 
   const handleRun = (jobName: string) => {
     runJob.mutate(jobName, {
-      onSuccess: () => toast('success', `${JOB_DISPLAY_NAMES[jobName as keyof typeof JOB_DISPLAY_NAMES] || jobName} triggered`),
+      onSuccess: () => toast('success', `${jobDisplayName(jobName)} triggered`),
       onError: () => toast('error', 'Failed to trigger job'),
     })
   }
@@ -128,7 +128,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
                     onClick={() => setSelectedJob(job.jobName)}
                     className="text-left hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                   >
-                    {JOB_DISPLAY_NAMES[job.jobName] || job.jobName}
+                    {jobDisplayName(job.jobName)}
                   </button>
                 </td>
                 <td className="px-3 py-2 hidden lg:table-cell">
@@ -161,7 +161,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
                     ) : (
                       <ActionIconButton
                         icon={PlayIcon}
-                        label={`Run ${JOB_DISPLAY_NAMES[job.jobName] || job.jobName}`}
+                        label={`Run ${jobDisplayName(job.jobName)}`}
                         onClick={() => handleRun(job.jobName)}
                         disabled={runJob.isPending && runJob.variables === job.jobName}
                       />
@@ -231,7 +231,7 @@ function EnabledToggle({ job }: { job: JobRun }) {
     updateJob.mutate(
       { jobName: job.jobName, data: { enabled: !job.enabled } },
       {
-        onSuccess: () => toast('success', `${JOB_DISPLAY_NAMES[job.jobName]} ${!job.enabled ? 'enabled' : 'disabled'}`),
+        onSuccess: () => toast('success', `${jobDisplayName(job.jobName)} ${!job.enabled ? 'enabled' : 'disabled'}`),
         onError: () => toast('error', 'Failed to update job'),
       },
     )
@@ -245,7 +245,7 @@ function EnabledToggle({ job }: { job: JobRun }) {
       }`}
       role="switch"
       aria-checked={job.enabled}
-      aria-label={`${job.enabled ? 'Disable' : 'Enable'} ${JOB_DISPLAY_NAMES[job.jobName]}`}
+      aria-label={`${job.enabled ? 'Disable' : 'Enable'} ${jobDisplayName(job.jobName)}`}
     >
       <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${job.enabled ? 'translate-x-[18px]' : 'translate-x-1'}`} />
     </button>

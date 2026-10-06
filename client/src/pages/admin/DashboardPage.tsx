@@ -10,7 +10,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { JobStatusBadge } from '../../components/admin/JobStatusBadge'
 import { ActionIconButton } from '../../components/ui/ActionIconButton'
-import { formatStatus, STATUS_VARIANTS, JOB_DISPLAY_NAMES, JOB_PIPELINE_ORDER } from '../../lib/constants'
+import { formatStatus, STATUS_VARIANTS, jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from '../../components/admin/TimeWithRelative'
 
 function StatsGrid({ stats }: { stats: Record<string, number> }) {
@@ -88,7 +88,7 @@ export default function DashboardPage() {
                   }).map(job => (
                     <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : ''}`}>
                       <td className="py-2 px-4 font-medium text-neutral-900">
-                        {JOB_DISPLAY_NAMES[job.jobName] || job.jobName}
+                        {jobDisplayName(job.jobName)}
                       </td>
                       <td className="py-2 px-4">
                         <JobStatusBadge job={job} variant="dot" />
@@ -118,7 +118,7 @@ export default function DashboardPage() {
                         ) : (
                           <ActionIconButton
                             icon={PlayIcon}
-                            label={`Run ${JOB_DISPLAY_NAMES[job.jobName] || job.jobName}`}
+                            label={`Run ${jobDisplayName(job.jobName)}`}
                             onClick={() => runJob.mutate(job.jobName)}
                             disabled={runJob.isPending && runJob.variables === job.jobName}
                           />

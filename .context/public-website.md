@@ -1,6 +1,6 @@
 # Public Website
 
-The public site uses `PublicLayout` with hardcoded navigation links to issue pages, methodology, and about; add new nav items in `NAV_LINKS` array in `PublicLayout.tsx`. This document covers routes, components, data flow, and static content structure.
+The public site uses `PublicLayout` with hardcoded navigation in `PublicLayout.tsx`: the issue bar (`ISSUE_LINKS`), the header's Saved, Newsletter and Podcast links (desktop right of the logo, and the same three in the mobile menu dialog), and the footer's Navigate (`FOOTER_NAV`), Connect (channels: Newsletter, Podcast, RSS and the rest, written out inline) and Issues columns. A new channel goes in both the header (desktop and mobile) and Connect; each link appears once in the footer. This document covers routes, components, data flow, and static content structure.
 
 ## Routes
 

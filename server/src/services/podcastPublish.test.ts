@@ -10,7 +10,7 @@ const mockFeed = vi.hoisted(() => ({ invalidateFeedCache: vi.fn() }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastFeed.js', () => mockFeed)
 
-const { publishEpisode, unpublishEpisode, getPublishedEpisodes, pickAutoPublishCandidate } = await import('./podcastPublish.js')
+const { publishEpisode, unpublishEpisode, getPublishedEpisodes, pickAutoPublishCandidate, publishBlockedReason } = await import('./podcastPublish.js')
 const { PodcastRefusedError, wasPublished } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-12T07:00:00Z') // Monday of 2026-W42
@@ -64,6 +64,32 @@ describe('publishEpisode', () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready({ publishedAt: first, unpublishedAt: new Date('2026-10-06') }))
     await publishEpisode('podcast-1', NOW)
     expect(writes()[0].publishedAt).toBe(first)
+  })
+})
+
+describe('publishBlockedReason', () => {
+  it('is null for a ready, voiced draft at rest, so the admin offers Publish', () => {
+    expect(publishBlockedReason(ready(), false)).toBeNull()
+  })
+
+  it('is null for an episode generated before the review modes and the publish columns existed', () => {
+    // A Phase 2 row after the later migrations: automated mode, never edited, a draft never published.
+    const phase2 = ready({ mode: 'automated', humanEdited: false, status: 'draft', publishedAt: null, unpublishedAt: null, readyAt: new Date('2026-10-06T10:00:00Z') })
+    expect(publishBlockedReason(phase2, false)).toBeNull()
+  })
+
+  it('names the run while a process holds the episode', () => {
+    expect(publishBlockedReason(ready(), true)).toMatch(/run is working/)
+  })
+
+  it('gives the same refusal the publish action would', () => {
+    expect(publishBlockedReason(ready({ stage: 'voiced' }), false)).toMatch(/at voiced/)
+    expect(publishBlockedReason(ready({ dryRun: true }), false)).toMatch(/dry-run/)
+    expect(publishBlockedReason(ready({ audioUrl: null }), false)).toMatch(/no uploaded audio/)
+  })
+
+  it('is null for a listed episode, which can always be unpublished', () => {
+    expect(publishBlockedReason(ready({ status: 'published', dryRun: true }), true)).toBeNull()
   })
 })
 

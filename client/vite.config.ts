@@ -29,7 +29,24 @@ function htmlTransformPlugin(): Plugin {
   }
 }
 
+// One id per build: compiled into the bundle and written to dist/version.json, so an open admin tab
+// can notice that a newer build is deployed (client/src/lib/buildVersion.ts).
+const BUILD_ID = Date.now().toString(36)
+
+function buildVersionPlugin(): Plugin {
+  return {
+    name: 'build-version',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ buildId: BUILD_ID }) })
+    },
+  }
+}
+
 export default defineConfig({
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
   resolve: {
     alias: {
       '@shared': path.resolve(__dirname, '../shared'),
@@ -37,6 +54,7 @@ export default defineConfig({
   },
   plugins: [
     htmlTransformPlugin(),
+    buildVersionPlugin(),
     react(),
     prerender({
       routes: routePaths,

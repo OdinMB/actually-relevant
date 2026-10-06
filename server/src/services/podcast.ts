@@ -11,6 +11,7 @@ import { assertChangeable, episodeTtsChars } from './podcastGuards.js'
 import { deleteEpisodeObjects, episodeChunks } from './podcastAudioStages.js'
 import { chunkChars } from './podcastChunks.js'
 import { pausesForReview } from './podcastPipeline.js'
+import { publishBlockedReason } from './podcastPublish.js'
 
 interface PodcastFilters {
   status?: string
@@ -96,7 +97,8 @@ export async function getPodcasts(filters: PodcastFilters) {
 /**
  * One episode with its derived state: `inProgress`, `awaitingReview`, the running `activity`, the
  * TTS characters spent on it (`ttsChars`, every re-voice included) and the characters a voicing of
- * the current script would send (`ttsCharsEstimate`, for the confirmation before any voicing).
+ * the current script would send (`ttsCharsEstimate`, for the confirmation before any voicing), and
+ * why it cannot be published now (`publishBlockedReason`, null when it can).
  */
 export async function getPodcastById(id: string) {
   const row = await prisma.podcast.findUnique({ where: { id } })
@@ -105,6 +107,7 @@ export async function getPodcastById(id: string) {
   return {
     ...view,
     activity: episodeActivity(view),
+    publishBlockedReason: publishBlockedReason(row, view.inProgress),
     ttsCharsEstimate: row.stage === PodcastStage.legacy ? null : ttsCharsEstimate(row),
     ttsChars: row.stage === PodcastStage.legacy ? 0 : await episodeTtsChars(id),
   }
