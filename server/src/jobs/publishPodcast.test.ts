@@ -28,6 +28,20 @@ describe('runPublishPodcast', () => {
     expect(mockNotify.notifyEvent.mock.calls[0][1]).toContain('W41: Water')
   })
 
+  it('does nothing on a day other than Monday (UTC), so a boot catch-up never publishes mid-week', async () => {
+    await expect(runPublishPodcast(new Date('2026-10-15T10:00:00Z'))).resolves.toBeUndefined() // Thursday
+    await runPublishPodcast(new Date('2026-10-11T23:59:00Z')) // Sunday, just before Monday UTC
+    expect(mockGuards.assertPodcastRunnable).not.toHaveBeenCalled()
+    expect(mockPublish.pickAutoPublishCandidate).not.toHaveBeenCalled()
+    expect(mockPublish.publishEpisode).not.toHaveBeenCalled()
+  })
+
+  it('runs on any hour of a UTC Monday', async () => {
+    const lateMonday = new Date('2026-10-12T23:30:00Z')
+    await runPublishPodcast(lateMonday)
+    expect(mockPublish.publishEpisode).toHaveBeenCalledWith('pod-1', lateMonday)
+  })
+
   it('does nothing without a candidate', async () => {
     mockPublish.pickAutoPublishCandidate.mockResolvedValueOnce(null)
     await runPublishPodcast(MONDAY)
