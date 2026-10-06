@@ -38,7 +38,9 @@
     "migration:backfill-embeddings": "tsx src/scripts/migrations/backfill-embeddings.ts",
     "migration:backfill-embeddings:test": "tsx src/scripts/migrations/backfill-embeddings.ts --test",
     "eval:models": "tsx src/scripts/eval/run.ts",
-    "eval:recalibrate": "tsx src/scripts/eval/recalibrate.ts"
+    "eval:recalibrate": "tsx src/scripts/eval/recalibrate.ts",
+    "podcast:spike": "tsx src/scripts/podcast-spike.ts",
+    "podcast:spike-ffmpeg": "tsx src/scripts/podcast-spike.ts spike-ffmpeg"
   },
   "dependencies": {
     "@atproto/api": "^0.18.20",
@@ -58,6 +60,7 @@
     "express-async-errors": "^3.1.1",
     "express-rate-limit": "^7.4.0",
     "feed": "^5.2.0",
+    "ffmpeg-static": "5.3.0",
     "helmet": "^8.1.0",
     "jsdom": "^27.4.0",
     "jsonwebtoken": "^9.0.3",
