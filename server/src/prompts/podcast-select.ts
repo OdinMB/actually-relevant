@@ -16,7 +16,7 @@ export function buildPodcastSelectPrompt(stories: StoryForPodcastSelect[], minSt
 <ID>${s.id}</ID>
 <ISSUE>${escapeXml(s.issue)}</ISSUE>
 <RELEVANCE>${s.relevance ?? 'unrated'}</RELEVANCE>
-<EMOTION>${escapeXml(s.emotionTag || 'calm')}</EMOTION>
+<EMOTION>${escapeXml(s.emotionTag || 'none')}</EMOTION>
 <TITLE>${escapeXml(s.title)}</TITLE>
 <SUMMARY>${escapeXml(s.summary)}</SUMMARY>
 </ARTICLE>`).join('\n')
@@ -30,8 +30,7 @@ Select ${minStories} or ${maxStories} stories from the articles below for this w
 </GOAL>
 
 <SELECTION_CRITERIA>
-- One story per issue. Select ${maxStories} stories only when one issue has two clearly outstanding stories; otherwise select ${minStories}.
-- When an issue has no suitable article, take the extra story from another issue.
+- Normally at most one story per issue. A second story from the same issue is allowed only when that issue has two clearly outstanding stories, or when another issue has no suitable article. Select ${maxStories} stories only in the first case; otherwise select ${minStories}.
 - Prefer stories with concrete, demonstrated real-world impact over announcements or speculation, and with broad scale and lasting consequences.
 - Prefer stories that work spoken: a clear actor and event that a listener can follow in about a minute, without tables of figures.
 - The stories complement each other: never two stories about the same event or angle.

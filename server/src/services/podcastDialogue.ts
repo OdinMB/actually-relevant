@@ -24,6 +24,8 @@ export interface SpokenSegment {
 export interface DialogueStoryRef {
   ref: number
   title: string
+  /** Display name; a publisher named like a domain ("Phys.org") is not a URL. */
+  publisher: string
 }
 
 export interface DialogueValidation {
@@ -68,6 +70,14 @@ const MARKDOWN_RE = /[*_#`]|^\s*[-•]\s/m
 const PREFIX_RE = /^\s*(?:host|speaker)(?:[\s_-]*[a-z0-9]+)?\s*:/i
 
 const stripTags = (text: string) => text.replace(TAG_RE, ' ').replace(/\s+/g, ' ').trim()
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** URL check that lets the episode's own publisher names through, since every story names its publisher. */
+function urlChecker(stories: DialogueStoryRef[]): (text: string) => boolean {
+  const names = stories.map(s => s.publisher.trim()).filter(p => p !== '').map(escapeRegExp)
+  const publisherRe = names.length > 0 ? new RegExp(names.join('|'), 'gi') : null
+  return text => URL_RE.test(publisherRe ? text.replace(publisherRe, ' ') : text)
+}
 const normalize = (text: string) => stripTags(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 const firstWords = (text: string, n: number) => normalize(text).split(' ').slice(0, n).join(' ')
 
@@ -99,7 +109,20 @@ function structureErrors(dialogue: PodcastDialogue, stories: DialogueStoryRef[])
   return errors
 }
 
-function turnErrors(dialogue: PodcastDialogue): string[] {
+function metadataErrors(dialogue: PodcastDialogue, hasUrl: (text: string) => boolean): string[] {
+  const max = config.podcast.maxTitleChars
+  const title = dialogue.episodeTitle.trim()
+  const errors: string[] = []
+  if (title === '') errors.push('the episode title is empty')
+  if (title.length > max) errors.push(`the episode title has ${title.length} characters, over the ${max}-character limit`)
+  for (const [name, text] of [['title', dialogue.episodeTitle], ['summary', dialogue.episodeSummary]] as const) {
+    if (hasUrl(text)) errors.push(`the episode ${name} contains a URL`)
+    if (MARKDOWN_RE.test(text)) errors.push(`the episode ${name} contains markdown`)
+  }
+  return errors
+}
+
+function turnErrors(dialogue: PodcastDialogue, hasUrl: (text: string) => boolean): string[] {
   const allowed = new Set<string>(PODCAST_AUDIO_TAGS)
   return dialogue.segments.flatMap((s, i) => s.turns.flatMap((t, j) => {
     const where = `${label(s, i)}, turn ${j + 1}`
@@ -109,7 +132,7 @@ function turnErrors(dialogue: PodcastDialogue): string[] {
       ...(t.text.length > config.podcast.maxTurnChars ? [`${where}: ${t.text.length} characters, over the ${config.podcast.maxTurnChars}-character limit`] : []),
       ...tags.filter(tag => !allowed.has(tag)).map(tag => `${where}: audio tag ${tag} is not allowed`),
       ...(tags.length > config.podcast.maxTagsPerTurn ? [`${where}: ${tags.length} audio tags, at most ${config.podcast.maxTagsPerTurn}`] : []),
-      ...(URL_RE.test(plain) ? [`${where}: contains a URL`] : []),
+      ...(hasUrl(plain) ?[`${where}: contains a URL`] : []),
       ...(MARKDOWN_RE.test(plain) ? [`${where}: contains markdown`] : []),
       ...(PREFIX_RE.test(plain) ? [`${where}: starts with a speaker prefix`] : []),
     ]
@@ -150,21 +173,30 @@ function speakerRunErrors(spoken: SpokenSegment[]): string[] {
   return []
 }
 
-function bandErrors(spoken: SpokenSegment[]): string[] {
+/**
+ * The band covers the whole spoken episode; the error speaks in the prompt's terms (the model's own
+ * turns against its budget), so the regeneration knows exactly how far to move.
+ */
+function bandErrors(spoken: SpokenSegment[], dialogue: PodcastDialogue): string[] {
   const [lo, hi] = config.podcast.spokenCharBand
   const total = spoken.flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
-  return total < lo || total > hi ? [`the episode has ${total} spoken characters (opener, sign-off and tags included); the band is ${lo} to ${hi}`] : []
+  if (total >= lo && total <= hi) return []
+  const own = dialogue.segments.flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
+  const { min, max } = dialogueCharBudget()
+  return [`your turns total ${own} spoken characters, audio tags included; they must total ${min} to ${max}`]
 }
 
 /** Every rule the dialogue must meet before it is stored; the errors are fed back on the one regeneration. */
 export function validateDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): DialogueValidation {
   const spoken = assembleSpokenSegments(dialogue)
+  const hasUrl = urlChecker(stories)
   const errors = [
+    ...metadataErrors(dialogue, hasUrl),
     ...structureErrors(dialogue, stories),
-    ...turnErrors(dialogue),
+    ...turnErrors(dialogue, hasUrl),
     ...segueErrors(dialogue, stories),
     ...speakerRunErrors(spoken),
-    ...bandErrors(spoken),
+    ...bandErrors(spoken, dialogue),
   ]
   return { valid: errors.length === 0, errors }
 }

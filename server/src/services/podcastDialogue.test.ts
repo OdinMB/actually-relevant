@@ -10,10 +10,10 @@ type Segment = PodcastDialogue['segments'][number]
 type Turn = Segment['turns'][number]
 
 const stories: DialogueStoryRef[] = [
-  { ref: 1, title: 'Court orders Nairobi to publish air data' },
-  { ref: 2, title: 'Malaria vaccine reaches ten more countries' },
-  { ref: 3, title: 'Treaty limits deep-sea mining permits' },
-  { ref: 4, title: 'New chip export rules take effect' },
+  { ref: 1, title: 'Court orders Nairobi to publish air data', publisher: 'The Guardian' },
+  { ref: 2, title: 'Malaria vaccine reaches ten more countries', publisher: 'Phys.org' },
+  { ref: 3, title: 'Treaty limits deep-sea mining permits', publisher: 'Reuters' },
+  { ref: 4, title: 'New chip export rules take effect', publisher: 'Vox.com' },
 ]
 
 /** Plain sentences of about `chars` characters, so the episode lands inside the band. */
@@ -117,6 +117,16 @@ describe('validateDialogue', () => {
     expect(errorsOf(long).join(' ')).toMatch(/spoken characters/)
   })
 
+  it('reports a band miss in the terms of the prompt: the model\'s own turns against its budget', () => {
+    const d = goodDialogue()
+    const short = { ...d, segments: d.segments.map(s => ({ ...s, turns: s.turns.slice(0, 1) })) }
+    const modelOnly = short.segments.flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
+    const { min, max } = dialogueCharBudget()
+    const message = errorsOf(short).find(e => /spoken characters/.test(e)) ?? ''
+    expect(message).toContain(String(modelOnly))
+    expect(message).toContain(`${min} to ${max}`)
+  })
+
   it('counts the code-added opener and sign-off in the band', () => {
     const d = goodDialogue()
     const total = assembleSpokenSegments(d).flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
@@ -143,6 +153,28 @@ describe('validateDialogue', () => {
     expect(errorsOf(withTurn(d, 1, 2, `${filler(300, 'url')} See https://example.com for more.`)).join(' ')).toMatch(/URL/)
     expect(errorsOf(withTurn(d, 1, 2, `${filler(300, 'md')} This is **important**.`)).join(' ')).toMatch(/markdown/i)
     expect(errorsOf(withTurn(d, 1, 2, `HOST B: ${filler(300, 'prefix')}`)).join(' ')).toMatch(/prefix/)
+  })
+
+  it('accepts an episode publisher whose name is a domain, but still rejects other domains', () => {
+    const d = goodDialogue()
+    expect(errorsOf(withTurn(d, 2, 1, `${filler(300, 'pub')} Phys.org reported it first.`))).toEqual([])
+    expect(errorsOf(withTurn(d, 4, 1, `${filler(300, 'pub')} According to vox.com, it applies now.`))).toEqual([])
+    expect(errorsOf(withTurn(d, 2, 1, `${filler(300, 'pub')} Read more at example.org today.`)).join(' ')).toMatch(/URL/)
+  })
+
+  it('rejects an empty or overlong episode title', () => {
+    expect(errorsOf({ ...goodDialogue(), episodeTitle: '  ' }).join(' ')).toMatch(/title/)
+    expect(errorsOf({ ...goodDialogue(), episodeTitle: 'x'.repeat(81) }).join(' ')).toMatch(/title/)
+  })
+
+  it('rejects URLs or markdown in the episode title and summary', () => {
+    expect(errorsOf({ ...goodDialogue(), episodeSummary: 'Four stories. More at example.com.' }).join(' ')).toMatch(/summary.*URL/)
+    expect(errorsOf({ ...goodDialogue(), episodeSummary: 'Four **big** stories. Each matters.' }).join(' ')).toMatch(/summary.*markdown/)
+    expect(errorsOf({ ...goodDialogue(), episodeTitle: '# Clean air' }).join(' ')).toMatch(/title.*markdown/)
+  })
+
+  it('accepts a publisher-domain name in the episode summary', () => {
+    expect(errorsOf({ ...goodDialogue(), episodeSummary: 'Four stories, from Phys.org to Reuters. Each matters.' })).toEqual([])
   })
 
   it('rejects a story segment whose bridge turn is too short', () => {

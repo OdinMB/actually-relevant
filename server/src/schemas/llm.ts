@@ -178,9 +178,12 @@ const podcastTurnSchema = z.object({
     .string()
     .describe(
       `One spoken turn in plain text, at most ${config.podcast.maxTurnChars} characters. ` +
-        "Short spoken sentences, mostly under 18 words. Numbers, units and acronyms written as they are spoken. " +
+        "Short spoken sentences, mostly under 18 words. " +
+        "Numbers, units and symbols written out as a listener hears them: \"$4.2bn\" becomes \"4.2 billion dollars\", " +
+        "\"km²\" becomes \"square kilometers\", \"CO2\" becomes \"carbon dioxide\"; acronyms read letter by letter stay as letters (\"UN\"). " +
         "No speaker names or prefixes, no URLs, no markdown, no stage directions. " +
-        `At most ${config.podcast.maxTagsPerTurn} audio tags, only from: ${PODCAST_AUDIO_TAGS.join(" ")}.`
+        `At most ${config.podcast.maxTagsPerTurn} audio tags, only from: ${PODCAST_AUDIO_TAGS.join(" ")}; ` +
+        "a tag goes at the start of the sentence it colors, and most turns have none."
     ),
 });
 
@@ -198,7 +201,7 @@ const podcastSegmentSchema = z.object({
   turns: z
     .array(podcastTurnSchema)
     .describe(
-      "The turns of this segment. The same speaker never speaks more than twice in a row. " +
+      "The turns of this segment. " +
         "In every story segment, the first turn opens with a spoken bridge from the segment before " +
         "(the intro for the first story) that connects or contrasts it with this story and leads into it; " +
         `the bridge turn is at least ${config.podcast.minBridgeChars} characters and is not just the headline. ` +
@@ -209,18 +212,23 @@ const podcastSegmentSchema = z.object({
 export const podcastDialogueSchema = z.object({
   episodeTitle: z
     .string()
-    .describe("Episode title in plain text, at most 80 characters, naming the week's main themes."),
+    .describe(`Episode title in plain text, at most ${config.podcast.maxTitleChars} characters, naming the week's main themes.`),
   episodeSummary: z
     .string()
     .describe("Two plain sentences describing the episode for a podcast app. No URLs, no markdown."),
-  segments: z.array(podcastSegmentSchema).describe("The whole conversation, in spoken order."),
+  segments: z
+    .array(podcastSegmentSchema)
+    .describe(
+      "The whole conversation, in spoken order. Across the whole conversation, segment boundaries included, " +
+        "the same speaker never speaks more than twice in a row."
+    ),
 });
 
 export const podcastSelectResultSchema = z.object({
   selectedIds: z
     .array(z.string())
     .describe(
-      "IDs of the selected stories, 4 or 5, in the order the episode should cover them."
+      `IDs of the selected stories, ${config.podcast.minStories} or ${config.podcast.maxStories}, in the order the episode should cover them.`
     ),
 });
 

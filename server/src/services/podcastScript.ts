@@ -133,7 +133,7 @@ export async function selectEpisodeStories(now: Date): Promise<SelectedStory[]> 
  */
 export async function writeEpisodeScript(stories: SelectedStory[]): Promise<EpisodeScript> {
   const tier = config.podcast.scriptModelTier
-  const refs = stories.map(s => ({ ref: s.snapshot.ref, title: s.snapshot.title }))
+  const refs = stories.map(s => ({ ref: s.snapshot.ref, title: s.snapshot.title, publisher: s.snapshot.publisher }))
   let problems: string[] = []
   for (let attempt = 1; attempt <= 2; attempt++) {
     const prompt = buildPodcastPrompt(stories.map(s => s.prompt), dialogueCharBudget(), problems)

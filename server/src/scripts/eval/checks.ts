@@ -161,7 +161,7 @@ export interface DialogueCheck {
   segues: { segment: string; opening: string }[]
 }
 
-export function checkDialogue(dialogue: PodcastDialogue, stories: (DialogueStoryRef & { publisher: string })[]): DialogueCheck {
+export function checkDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): DialogueCheck {
   const spoken = dialogue.segments.flatMap(s => s.turns).map(t => t.text.replace(/\[[^\]\n]*\]/g, ' ')).join(' ')
   const sentences = splitSentences(spoken.replace(/\s+/g, ' '))
   const distinct = [...new Set(stories.map(s => s.publisher).filter(p => p && p !== 'Unknown'))]

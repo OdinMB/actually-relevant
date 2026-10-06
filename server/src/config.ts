@@ -143,6 +143,7 @@ export const config = {
     spokenCharBand: [4200, 5600] as const,
     maxTurnChars: 400,
     maxTagsPerTurn: 2,
+    maxTitleChars: 80,
     // A segment's opening turn must carry a spoken bridge of at least this many characters.
     minBridgeChars: 40,
     // Automatic (cron) failures in one ISO week before the episode is blocked with an alert.

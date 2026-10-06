@@ -19,6 +19,7 @@ config {
     spoken_char_band_max: Integer = 5600
     max_turn_chars: Integer = 400
     max_tags_per_turn: Integer = 2
+    max_title_chars: Integer = 80
     min_bridge_chars: Integer = 40
     max_attempts_per_week: Integer = 3
     lease_duration: Duration = 30.minutes
@@ -209,6 +210,9 @@ rule DialogueIsValid {
     requires: every turn.text.length <= config.max_turn_chars
     requires: every audio tag is allowlisted, at most config.max_tags_per_turn per turn
     requires: no turn contains a URL, markdown or a speaker prefix
+        -- a publisher of this episode named like a domain is not a URL
+    requires: dialogue.episode_title is non-empty and at most config.max_title_chars long
+    requires: neither dialogue.episode_title nor dialogue.episode_summary contains a URL or markdown
     -- Segues: chunks are voiced per segment, so each segment carries
     -- its own bridge.
     requires: every segment after the intro opens with a turn of at
