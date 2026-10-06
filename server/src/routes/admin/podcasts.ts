@@ -90,10 +90,15 @@ router.get('/active', async (_req, res) => {
   }
 })
 
-/** TTS characters reserved this UTC month against the monthly cap. */
+/** TTS characters reserved this UTC month against the monthly cap, and a typical and the largest episode. */
 router.get('/usage', async (_req, res) => {
   try {
-    res.json({ monthToDateChars: await monthToDateChars(), monthlyCap: config.podcast.monthlyTtsCharCap })
+    res.json({
+      monthToDateChars: await monthToDateChars(),
+      monthlyCap: config.podcast.monthlyTtsCharCap,
+      typicalEpisodeChars: config.podcast.spokenCharAim,
+      maxEpisodeChars: config.podcast.spokenCharBand[1],
+    })
   } catch (err) {
     log.error({ err }, 'failed to read podcast TTS usage')
     res.status(500).json({ error: 'Failed to read podcast usage' })

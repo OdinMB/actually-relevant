@@ -289,10 +289,15 @@ describe('Admin Podcasts API', () => {
   })
 
   describe('GET /api/admin/podcasts/usage', () => {
-    it('returns the month to date and the cap', async () => {
+    it('returns the month to date, the cap and a typical episode for the cost confirmation', async () => {
       const res = await request(app).get('/api/admin/podcasts/usage').set(authHeader())
       expect(res.status).toBe(200)
-      expect(res.body).toEqual({ monthToDateChars: 5400, monthlyCap: expect.any(Number) })
+      expect(res.body).toEqual({
+        monthToDateChars: 5400,
+        monthlyCap: expect.any(Number),
+        typicalEpisodeChars: expect.any(Number),
+        maxEpisodeChars: expect.any(Number),
+      })
     })
 
     it('requires auth', async () => {

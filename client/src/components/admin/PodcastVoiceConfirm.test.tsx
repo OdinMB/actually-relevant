@@ -12,19 +12,29 @@ import { PodcastVoiceConfirm, voiceCostText } from './PodcastVoiceConfirm'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockApi.usage.mockResolvedValue({ monthToDateChars: 10800, monthlyCap: 32000 })
+  mockApi.usage.mockResolvedValue(USAGE)
   mockApi.active.mockResolvedValue([])
 })
 
+const USAGE = { monthToDateChars: 10800, monthlyCap: 32000, typicalEpisodeChars: 4900, maxEpisodeChars: 6200 }
+
 describe('voiceCostText', () => {
   it('states the estimate, the credits at one per character, and the month against the cap', () => {
-    const text = voiceCostText(makePodcast({ ttsCharsEstimate: 5432 }), { monthToDateChars: 10800, monthlyCap: 32000 })
+    const text = voiceCostText(makePodcast({ ttsCharsEstimate: 5432 }), USAGE)
     expect(text).toContain('5,432 characters')
     expect(text).toContain('5,432 credits')
     expect(text).toContain('10,800 of 32,000')
   })
 
-  it('says no credits are spent in a dry run, and when the length is not known yet', () => {
+  it('without a script yet, states a typical episode and its ceiling instead of the script', () => {
+    const text = voiceCostText(makePodcast({ ttsCharsEstimate: null }), USAGE)
+    expect(text).toContain('4,900 characters')
+    expect(text).toContain('4,900 credits')
+    expect(text).toContain('6,200')
+    expect(text).toContain('10,800 of 32,000')
+  })
+
+  it('says no credits are spent in a dry run, and when no figure is known yet', () => {
     expect(voiceCostText(makePodcast({ dryRun: true }), undefined)).toMatch(/no credits/)
     expect(voiceCostText(makePodcast({ ttsCharsEstimate: null }), undefined)).toMatch(/not known/)
   })

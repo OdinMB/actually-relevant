@@ -38,6 +38,17 @@ export function nextAction(podcast: Podcast): NextAction | null {
   return 'resume'
 }
 
+/**
+ * Whether continuing would reach the paid voicing: from the script on in any mode, and before it
+ * when the run is automated (the mode given now, or the stored one). An interactive run before the
+ * script stops at the next review, so it spends nothing on TTS.
+ */
+export function runVoices(podcast: Pick<Podcast, 'stage' | 'mode'>, mode?: PodcastMode): boolean {
+  if (podcast.stage === 'scripted') return true
+  const before = podcast.stage === 'created' || podcast.stage === 'selected'
+  return before && (mode ?? podcast.mode) === 'automated'
+}
+
 const MODE_LABEL: Record<PodcastMode, string> = { interactive: 'Interactive: review after each step', automated: 'Fully automated' }
 
 function StepMarker({ state, index }: { state: StepState; index: number }) {
@@ -72,8 +83,9 @@ export function PodcastStageStepper({ podcast, pendingEdits = false }: PodcastSt
     onSettled: () => setVoiceConfirm(null),
   })
 
-  /** Continuing from `scripted` voices the episode, so it asks first. */
-  const runOrConfirm = (title: string, mode?: PodcastMode) => (podcast.stage === 'scripted' ? setVoiceConfirm({ mode, title }) : run(mode))
+  /** A run that will voice the episode asks first, with its cost (owner, 2026-10-06). */
+  const runOrConfirm = (title: string, mode?: PodcastMode) => (runVoices(podcast, mode) ? setVoiceConfirm({ mode, title }) : run(mode))
+  const writesFirst = podcast.stage !== 'scripted'
 
   const startOver = () => rewind.mutate({ id: podcast.id, to: 'created', advance: true }, {
     onError: err => toast('error', err instanceof Error ? err.message : 'Failed to start over'),
@@ -108,7 +120,7 @@ export function PodcastStageStepper({ podcast, pendingEdits = false }: PodcastSt
           <p className="text-sm text-neutral-700">How should this episode be made?</p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => run('interactive')} loading={busy}>Interactive (review each step)</Button>
-            <Button variant="secondary" onClick={() => run('automated')} loading={busy}>Fully automated</Button>
+            <Button variant="secondary" onClick={() => runOrConfirm('Write and voice the whole episode?', 'automated')} loading={busy}>Fully automated</Button>
           </div>
           <p className="text-xs text-neutral-500">Interactive stops after the stories are chosen and after the script is written, so you can change them. Fully automated selects, writes, voices and assembles in one go.</p>
         </div>
@@ -120,7 +132,7 @@ export function PodcastStageStepper({ podcast, pendingEdits = false }: PodcastSt
             {action === 'approve-stories' ? (
               <>
                 <Button onClick={() => run()} loading={busy} disabled={pendingEdits}>Approve stories and write the script</Button>
-                <Button variant="secondary" onClick={() => run('automated')} disabled={busy || pendingEdits}>Finish automatically</Button>
+                <Button variant="secondary" onClick={() => runOrConfirm('Write the script and voice it without review?', 'automated')} disabled={busy || pendingEdits}>Finish automatically</Button>
               </>
             ) : (
               <Button onClick={() => runOrConfirm('Approve the script and voice it?')} loading={busy} disabled={pendingEdits}>Approve script and voice it</Button>
@@ -131,7 +143,7 @@ export function PodcastStageStepper({ podcast, pendingEdits = false }: PodcastSt
       )}
 
       {action === 'resume' && (
-        <Button onClick={() => runOrConfirm('Resume and voice the episode?')} loading={busy}>Resume</Button>
+        <Button onClick={() => runOrConfirm(writesFirst ? 'Resume, then write and voice the episode?' : 'Resume and voice the episode?')} loading={busy}>Resume</Button>
       )}
 
       {canStartOver && (
@@ -145,7 +157,7 @@ export function PodcastStageStepper({ podcast, pendingEdits = false }: PodcastSt
           open
           podcast={podcast}
           title={voiceConfirm.title}
-          confirmLabel="Voice it"
+          confirmLabel={writesFirst ? 'Write and voice it' : 'Voice it'}
           loading={resume.isPending}
           onClose={() => setVoiceConfirm(null)}
           onConfirm={() => run(voiceConfirm.mode)}

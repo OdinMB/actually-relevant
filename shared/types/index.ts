@@ -293,10 +293,16 @@ export interface Podcast extends PodcastListItem {
   ttsChars: number
 }
 
-/** TTS characters reserved this UTC month against the monthly cap. */
+/**
+ * TTS characters reserved this UTC month against the monthly cap, and the size of a typical episode
+ * (the length the script prompt aims at) and of the largest valid one, for the cost confirmation
+ * before a run that writes and voices an episode not scripted yet.
+ */
 export interface PodcastUsage {
   monthToDateChars: number
   monthlyCap: number
+  typicalEpisodeChars: number
+  maxEpisodeChars: number
 }
 
 /** A story of the week's pool, as the story picker lists it. */

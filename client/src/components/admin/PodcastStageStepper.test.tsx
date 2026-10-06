@@ -8,11 +8,11 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
   adminApi: { podcasts: mockApi },
 }))
 
-import { PodcastStageStepper, nextAction, stepStates } from './PodcastStageStepper'
+import { PodcastStageStepper, nextAction, stepStates, runVoices } from './PodcastStageStepper'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockApi.usage.mockResolvedValue({ monthToDateChars: 10800, monthlyCap: 32000 })
+  mockApi.usage.mockResolvedValue({ monthToDateChars: 10800, monthlyCap: 32000, typicalEpisodeChars: 4900, maxEpisodeChars: 6200 })
   mockApi.active.mockResolvedValue([])
   mockApi.resume.mockResolvedValue(makePodcast({ inProgress: true }))
   mockApi.get.mockResolvedValue(makePodcast())
@@ -35,6 +35,23 @@ describe('nextAction', () => {
     expect(nextAction(makePodcast({ stage: 'ready' }))).toBeNull()
     expect(nextAction(makePodcast({ status: 'published' }))).toBeNull()
     expect(nextAction(makePodcast({ stage: 'legacy' }))).toBeNull()
+  })
+})
+
+describe('runVoices', () => {
+  it('is true from the script on, whatever the mode', () => {
+    expect(runVoices(makePodcast({ stage: 'scripted', mode: 'interactive' }))).toBe(true)
+  })
+
+  it('is true for an automated run from created or selected, given or stored', () => {
+    expect(runVoices(makePodcast({ stage: 'created', mode: null }), 'automated')).toBe(true)
+    expect(runVoices(makePodcast({ stage: 'selected', mode: 'interactive' }), 'automated')).toBe(true)
+    expect(runVoices(makePodcast({ stage: 'selected', mode: 'automated' }))).toBe(true)
+  })
+
+  it('is false for an interactive run before the script, which stops at the next review', () => {
+    expect(runVoices(makePodcast({ stage: 'created', mode: null }), 'interactive')).toBe(false)
+    expect(runVoices(makePodcast({ stage: 'selected', mode: 'interactive' }))).toBe(false)
   })
 })
 
@@ -72,6 +89,23 @@ describe('PodcastStageStepper', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(mockApi.resume).not.toHaveBeenCalled()
+  })
+
+  it('asks for the typical cost before a fully automated start, and sends nothing on cancel', async () => {
+    renderInAdmin(<PodcastStageStepper podcast={makePodcast({ stage: 'created', mode: null, awaitingReview: false, ttsCharsEstimate: null })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Fully automated' }))
+    expect(await screen.findByText(/10,800 of 32,000/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mockApi.resume).not.toHaveBeenCalled()
+  })
+
+  it('asks before finishing automatically, then runs in automated mode', async () => {
+    renderInAdmin(<PodcastStageStepper podcast={makePodcast({ stage: 'selected', ttsCharsEstimate: null })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Finish automatically' }))
+    await screen.findByRole('dialog')
+    expect(mockApi.resume).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Write and voice it' }))
+    await waitFor(() => expect(mockApi.resume).toHaveBeenCalledWith('pod-1', 'automated'))
   })
 
   it('keeps approval disabled while the page holds unsaved edits', () => {
