@@ -97,6 +97,8 @@ interface LedgerEntry {
   creditsUsedBefore?: number
   creditsUsedAfter?: number
   creditsDelta?: number
+  /** The `character-cost` response header: what ElevenLabs says it billed for this call. */
+  characterCost?: number | null
   requestId?: string | null
   responseHeaderNames?: string[]
   httpStatus?: number
@@ -143,14 +145,14 @@ function readLedger(): LedgerEntry[] {
   return JSON.parse(fs.readFileSync(LEDGER_FILE, 'utf8')) as LedgerEntry[]
 }
 
-/** Credits counted against the budget for one call: the larger of characters sent and the measured delta. */
+/** Credits counted against the budget for one call: the largest of characters sent, the measured delta and the billed cost header. */
 function counted(e: LedgerEntry): number {
-  return Math.max(e.chars, e.creditsDelta ?? 0)
+  return Math.max(e.chars, e.creditsDelta ?? 0, e.characterCost ?? 0)
 }
 
 function creditsPerChar(ledger: LedgerEntry[]): number {
-  const ratios = ledger.filter((e) => e.status === 'ok' && e.creditsDelta != null && e.chars > 0)
-    .map((e) => (e.creditsDelta as number) / e.chars)
+  const ratios = ledger.filter((e) => e.status === 'ok' && e.chars > 0)
+    .map((e) => Math.max(e.creditsDelta ?? 0, e.characterCost ?? 0) / e.chars)
   return Math.max(1, ...ratios)
 }
 
@@ -228,10 +230,13 @@ async function paidDialogue(label: string, body: DialogueRequest, file: string):
   const after = await subscription()
   const headerNames = Object.keys(res.headers)
   const requestId = (res.headers['request-id'] ?? res.headers['x-request-id'] ?? res.headers['history-item-id'] ?? null) as string | null
+  const costHeader = Number(res.headers['character-cost'])
+  const characterCost = Number.isFinite(costHeader) && res.headers['character-cost'] != null ? costHeader : null
   Object.assign(entry, {
     status: 'ok',
     creditsUsedAfter: after.character_count,
     creditsDelta: after.character_count - before.character_count,
+    characterCost,
     requestId,
     responseHeaderNames: headerNames,
     httpStatus: res.status,
@@ -240,7 +245,7 @@ async function paidDialogue(label: string, body: DialogueRequest, file: string):
   } satisfies Partial<LedgerEntry>)
   writeJson(LEDGER_FILE, ledger)
   const total = ledger.reduce((n, e) => n + counted(e), 0)
-  console.log(`  ${label}: ${chars} chars, subscription character_count ${before.character_count} -> ${after.character_count} (delta ${entry.creditsDelta}), request id ${requestId ?? 'none'}, ${entry.bytes} bytes. Counted total ${total}/${CREDIT_BUDGET}.`)
+  console.log(`  ${label}: ${chars} chars, subscription character_count ${before.character_count} -> ${after.character_count} (delta ${entry.creditsDelta}), character-cost header ${characterCost ?? 'none'}, request id ${requestId ?? 'none'}, ${entry.bytes} bytes. Counted total ${total}/${CREDIT_BUDGET}.`)
   return { requestId }
 }
 
@@ -469,7 +474,10 @@ async function commandVoices(): Promise<void> {
 
   // ElevenLabs-owned voices in the Voice Library (the new perpetual ones are published there).
   const lib: Record<string, unknown>[] = []
-  for (const q of ['narrator', 'news', 'anchor', 'podcast', 'informative', 'calm']) {
+  // Generic terms plus the names of ElevenLabs' perpetual replacement voices (the term searches miss most of them).
+  const replacementNames = ['Darian', 'Talia', 'Elara', 'Baxter', 'Eldrin', 'Kellan', 'Elowen', 'Kaelen', 'Lawrence', 'Alicia',
+    'Maisie', 'Warren', 'Jade', 'Eddie', 'Caleb', 'Sawyer', 'Finley', 'Florence', 'Wyatt']
+  for (const q of ['narrator', 'news', 'anchor', 'podcast', 'informative', 'calm', ...replacementNames]) {
     try {
       const page = await getJson<{ voices: Record<string, unknown>[] }>(`/v1/shared-voices?page_size=100&language=en&search=${q}&featured=false`)
       lib.push(...page.voices)
@@ -479,6 +487,11 @@ async function commandVoices(): Promise<void> {
   writeJson(path.join(OUT_DIR, 'voices-library.json'), dedup)
   const elevenOwned = dedup.filter((v) => String(v.public_owner_id ?? '').length > 0 && /elevenlabs/i.test(String(v.category ?? '') + String(v.description ?? '') + String((v as { owner?: string }).owner ?? '')))
   console.log(`Library voices found: ${dedup.length}; owner-hint ElevenLabs: ${elevenOwned.length}`)
+  const named = dedup.filter((v) => replacementNames.includes(String(v.name).split(/[\s-]/)[0]))
+  console.log('Replacement-name matches (voice_id | name | owner prefix | gender | accent | cloned_by_count):')
+  for (const v of named) {
+    console.log(`${v.voice_id} | ${v.name} | ${String(v.public_owner_id ?? '').slice(0, 8)} | ${v.gender} | ${v.accent} | ${v.cloned_by_count}`)
+  }
 }
 
 async function commandChunks(): Promise<void> {
@@ -490,7 +503,7 @@ async function commandChunks(): Promise<void> {
 
 function commandLedger(): void {
   const ledger = readLedger()
-  for (const e of ledger) console.log(`${e.at} ${e.label.padEnd(28)} ${String(e.chars).padStart(5)} chars  delta ${String(e.creditsDelta ?? '?').padStart(5)}  ${e.status}`)
+  for (const e of ledger) console.log(`${e.at} ${e.label.padEnd(28)} ${String(e.chars).padStart(5)} chars  delta ${String(e.creditsDelta ?? '?').padStart(5)}  cost ${String(e.characterCost ?? '?').padStart(5)}  ${e.status}`)
   console.log(`Counted total: ${ledger.reduce((n, e) => n + counted(e), 0)} / ${CREDIT_BUDGET}; credits per character (max seen): ${creditsPerChar(ledger).toFixed(3)}`)
 }
 
