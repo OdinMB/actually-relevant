@@ -16,7 +16,7 @@ config {
     min_stories: Integer = 4
     max_stories: Integer = 5
     spoken_char_band_min: Integer = 4200               -- whole episode, code-added turns and tags included
-    spoken_char_band_max: Integer = 5600
+    spoken_char_band_max: Integer = 6200               -- about 6.5 minutes (owner, 2026-10-06)
     max_turn_chars: Integer = 400
     max_tags_per_turn: Integer = 2
     max_title_chars: Integer = 80

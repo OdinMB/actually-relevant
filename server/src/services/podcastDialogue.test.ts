@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { config } from '../config.js'
 import { PODCAST_OPENER } from '../lib/aiLabelCopy.js'
 import type { PodcastDialogue } from '../schemas/llm.js'
 import {
@@ -239,8 +240,7 @@ describe('dialogueCharBudget', () => {
   it('leaves room for the code-added turns inside the band', () => {
     const { min, max } = dialogueCharBudget()
     const code = PODCAST_OPENER.length + PODCAST_SIGN_OFF.length
-    expect(min + code).toBe(4200)
-    expect(max + code).toBe(5600)
+    expect([min + code, max + code]).toEqual(config.podcast.spokenCharBand)
   })
 })
 

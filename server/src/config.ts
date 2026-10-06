@@ -139,8 +139,9 @@ export const config = {
     selectModelTier: "large" as const,
     scriptModelTier: "large" as const,
     // Spoken characters of the whole episode, code-added opener and sign-off and audio tags included.
-    // Also the per-episode TTS ceiling.
-    spokenCharBand: [4200, 5600] as const,
+    // Also the per-episode TTS ceiling. Top raised to 6200 (about 6.5 minutes; owner, 2026-10-06)
+    // because gpt-6-sol writes about 5,200-5,900 whatever length the prompt states.
+    spokenCharBand: [4200, 6200] as const,
     maxTurnChars: 400,
     maxTagsPerTurn: 2,
     maxTitleChars: 80,
@@ -157,8 +158,9 @@ export const config = {
     continuityMode: "text" as const,
     segmentPauseMs: 700,
     chunkMaxChars: 1800,
-    // Provisional: S2 measured a promotional rate; re-measure one call after 2026-10-12.
-    monthlyTtsCharCap: 28000,
+    // About 4.3 episodes at ~5,500 plus one full re-voice (owner, 2026-10-06). Provisional:
+    // S2 measured a promotional rate; re-measure one call after 2026-10-12.
+    monthlyTtsCharCap: 32000,
     ownerEmail: "contact@actuallyrelevant.news",
   },
   scheduler: {
