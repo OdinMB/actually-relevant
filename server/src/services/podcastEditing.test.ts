@@ -5,6 +5,7 @@ import type { PodcastDialogue } from '../schemas/llm.js'
 const mockPrisma = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
   podcast: { findUniqueOrThrow: vi.fn(), updateMany: vi.fn() },
+  podcastAudioChunk: { deleteMany: vi.fn() },
 }))
 const mockPool = vi.hoisted(() => ({ loadEpisodePool: vi.fn() }))
 
@@ -39,6 +40,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockPrisma.$executeRaw.mockResolvedValue(1)
   mockPrisma.podcast.updateMany.mockResolvedValue({ count: 1 })
+  mockPrisma.podcastAudioChunk.deleteMany.mockResolvedValue({ count: 0 })
   mockPool.loadEpisodePool.mockResolvedValue(POOL)
 })
 
@@ -127,6 +129,22 @@ describe('saveEpisodeScript', () => {
     await saveEpisodeScript('pod-1', asEdit(goodDialogue()))
     expect(writes()[0].humanEdited).toBe(false)
     expect(writes()[0].showNotes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE)
+  })
+
+  it('discards the audio chunks a failed voicing left behind when a spoken turn changed', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(scripted({ lastError: 'chunk 3 failed' }))
+    await saveEpisodeScript('pod-1', asEdit(withTurn(goodDialogue(), 1, 0, 'A rewritten line for the first story.')))
+    expect(mockPrisma.podcastAudioChunk.deleteMany).toHaveBeenCalledWith({ where: { podcastId: 'pod-1' } })
+    expect(mockPrisma.podcastAudioChunk.deleteMany.mock.invocationCallOrder[0])
+      .toBeGreaterThan(mockPrisma.podcast.updateMany.mock.invocationCallOrder[0])
+  })
+
+  it('keeps the stored chunks when only the summary changed or nothing did', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(scripted())
+    await saveEpisodeScript('pod-1', { ...asEdit(goodDialogue()), episodeSummary: 'A new summary.' })
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(scripted())
+    await saveEpisodeScript('pod-1', asEdit(goodDialogue()))
+    expect(mockPrisma.podcastAudioChunk.deleteMany).not.toHaveBeenCalled()
   })
 })
 

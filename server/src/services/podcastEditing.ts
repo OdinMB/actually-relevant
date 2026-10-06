@@ -2,9 +2,11 @@
  * A person's changes to an episode at rest: its stories (at `selected`), its script text and
  * summary (at `scripted`), its title and the "edited by a person" flag. Each change is written
  * under the episode's lease, so it cannot race a run; it ticks `humanEdited` when the stories or
- * the words changed, and rebuilds the show notes whenever their inputs change.
+ * the words changed, and rebuilds the show notes whenever their inputs change. A change to the
+ * spoken words discards any audio chunks a failed voicing stored, so a resume voices the new text.
  */
 import type { Podcast, PodcastStage } from '@prisma/client'
+import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import type { PodcastDialogue } from '../schemas/llm.js'
 import { applyTurnEdits, assembleSpokenSegments, renderScript, textChanged, validateDialogue, type DialogueTextEdit } from './podcastDialogue.js'
@@ -109,13 +111,19 @@ export async function saveEpisodeScript(id: string, edit: DialogueTextEdit): Pro
     if (!validation.valid) throw new PodcastEditRejectedError(validation.errors, validation.warnings)
 
     const humanEdited = episode.humanEdited || textChanged(stored, applied.dialogue)
+    const script = renderScript(assembleSpokenSegments(applied.dialogue))
     await update({
       dialogue: applied.dialogue,
       episodeSummary: applied.dialogue.episodeSummary,
-      script: renderScript(assembleSpokenSegments(applied.dialogue)),
+      script,
       showNotes: buildShowNotes(applied.dialogue.episodeSummary, snapshots, humanEdited),
       humanEdited,
     })
+    // A failed voicing leaves its chunks stored, and a resume skips every stored index: once the
+    // spoken words change, those chunks voice the old text, so they go.
+    if (script !== renderScript(assembleSpokenSegments(stored))) {
+      await prisma.podcastAudioChunk.deleteMany({ where: { podcastId: id } })
+    }
     return { warnings: validation.warnings }
   }, 'edited')
 }
