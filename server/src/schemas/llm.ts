@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { config } from "../config.js";
 import { EMOTION_TAG_SCHEMA_DESCRIPTION } from "../prompts/shared.js";
 
 const EMOTION_TAG_SCHEMA = z
@@ -156,10 +157,71 @@ export const newsletterIntroSchema = z.object({
     ),
 });
 
-export const podcastScriptSchema = z.object({
-  script: z
+/** Audio tags the dialogue may use (ElevenLabs eleven_v4; billed as characters, Phase 0 S3). */
+export const PODCAST_AUDIO_TAGS = [
+  "[calm]",
+  "[thoughtful]",
+  "[serious]",
+  "[warmly]",
+  "[curious]",
+  "[short pause]",
+] as const;
+
+const podcastTurnSchema = z.object({
+  speaker: z
+    .enum(["HOST_A", "HOST_B"])
+    .describe(
+      "HOST_A frames each story: what happened, where, who reported it. " +
+        "HOST_B explains why it matters for humanity and names the caveats and limits."
+    ),
+  text: z
     .string()
-    .describe("Full podcast script text ready for text-to-speech"),
+    .describe(
+      `One spoken turn in plain text, at most ${config.podcast.maxTurnChars} characters. ` +
+        "Short spoken sentences, mostly under 18 words. Numbers, units and acronyms written as they are spoken. " +
+        "No speaker names or prefixes, no URLs, no markdown, no stage directions. " +
+        `At most ${config.podcast.maxTagsPerTurn} audio tags, only from: ${PODCAST_AUDIO_TAGS.join(" ")}.`
+    ),
+});
+
+const podcastSegmentSchema = z.object({
+  kind: z
+    .enum(["intro", "story", "outro"])
+    .describe(
+      "One intro first, then one story segment per story in the given order, then one short outro last."
+    ),
+  storyRef: z
+    .number()
+    .int()
+    .nullable()
+    .describe("The story's ref for a story segment; null for the intro and the outro."),
+  turns: z
+    .array(podcastTurnSchema)
+    .describe(
+      "The turns of this segment. The same speaker never speaks more than twice in a row. " +
+        "In every story segment, the first turn opens with a spoken bridge from the segment before " +
+        "(the intro for the first story) that connects or contrasts it with this story and leads into it; " +
+        `the bridge turn is at least ${config.podcast.minBridgeChars} characters and is not just the headline. ` +
+        "The outro's first turn bridges back from the last story."
+    ),
+});
+
+export const podcastDialogueSchema = z.object({
+  episodeTitle: z
+    .string()
+    .describe("Episode title in plain text, at most 80 characters, naming the week's main themes."),
+  episodeSummary: z
+    .string()
+    .describe("Two plain sentences describing the episode for a podcast app. No URLs, no markdown."),
+  segments: z.array(podcastSegmentSchema).describe("The whole conversation, in spoken order."),
+});
+
+export const podcastSelectResultSchema = z.object({
+  selectedIds: z
+    .array(z.string())
+    .describe(
+      "IDs of the selected stories, 4 or 5, in the order the episode should cover them."
+    ),
 });
 
 export const reclassifyItemSchema = z.object({
@@ -262,4 +324,5 @@ export type NewsletterSelectResult = z.infer<
   typeof newsletterSelectResultSchema
 >;
 export type NewsletterIntro = z.infer<typeof newsletterIntroSchema>;
-export type PodcastScript = z.infer<typeof podcastScriptSchema>;
+export type PodcastDialogue = z.infer<typeof podcastDialogueSchema>;
+export type PodcastSelectResult = z.infer<typeof podcastSelectResultSchema>;

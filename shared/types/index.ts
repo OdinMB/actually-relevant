@@ -210,14 +210,46 @@ export interface PendingSubscription {
 }
 
 
-export interface Podcast {
+/** Production progress of an episode (forward-only); publication is the separate `status`. */
+export type PodcastStage = 'legacy' | 'created' | 'scripted' | 'voiced' | 'ready'
+
+/** A story as the episode froze it when the script was written. */
+export interface PodcastEpisodeStory {
+  ref: number
   id: string
   title: string
-  script: string
-  storyIds: string[]
+  publisher: string
+  sourceUrl: string
+  slug: string | null
+  issue: string
+}
+
+/** The admin list's columns (no dialogue, script or show notes). */
+export interface PodcastListItem {
+  id: string
+  title: string
   status: 'draft' | 'published'
+  stage: PodcastStage
+  weekKey: string | null
+  storyIds: string[]
+  attempts: number
+  blockedAt: string | null
+  lastError: string | null
+  dryRun: boolean
+  /** A process is working on the episode right now (live lease). */
+  inProgress: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface Podcast extends PodcastListItem {
+  /** Legacy rows: the hand-voiced script. Two-speaker rows: the rendered dialogue ("HOST A: ..."). */
+  script: string
+  episodeSummary: string
+  showNotes: string
+  episodeStories: PodcastEpisodeStory[] | null
+  blockedReason: string | null
+  failedAt: string | null
 }
 
 export type BlueskyPostStatus = 'draft' | 'published' | 'failed'

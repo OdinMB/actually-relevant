@@ -3,6 +3,7 @@ import { createLogger } from './lib/logger.js'
 import { startScheduler, stopScheduler } from './jobs/scheduler.js'
 import { cleanupExpiredTokens } from './services/auth.js'
 import { taskRegistry } from './lib/taskRegistry.js'
+import { releaseHeldLeases } from './services/podcastPipeline.js'
 import app from './app.js'
 
 const log = createLogger('server')
@@ -68,7 +69,15 @@ export async function shutdown(): Promise<void> {
   // 4. Clean up task registry
   taskRegistry.destroy()
 
-  // 5. Disconnect database
+  // 5. Hand back podcast leases, so the next process can resume an episode at once
+  try {
+    const released = await releaseHeldLeases()
+    if (released > 0) log.info({ released }, 'released podcast leases')
+  } catch (err) {
+    log.error({ err }, 'failed to release podcast leases')
+  }
+
+  // 6. Disconnect database
   await prisma.$disconnect()
 
   log.info('graceful shutdown complete')

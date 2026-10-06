@@ -45,6 +45,8 @@ vi.mock('./lib/taskRegistry.js', () => ({
   },
 }))
 vi.mock('./app.js', () => ({ default: mockApp }))
+const mockReleaseHeldLeases = vi.hoisted(() => vi.fn().mockResolvedValue(0))
+vi.mock('./services/podcastPipeline.js', () => ({ releaseHeldLeases: mockReleaseHeldLeases }))
 
 // Import after mocks are set up
 const indexModule = await import('./index.js')
@@ -86,6 +88,7 @@ describe('server index', () => {
         cb()
       })
       mockTaskRegistryDestroy.mockImplementation(() => { callOrder.push('taskRegistryDestroy') })
+      mockReleaseHeldLeases.mockImplementation(async () => { callOrder.push('releasePodcastLeases'); return 0 })
       mockPrisma.$disconnect.mockImplementation(async () => { callOrder.push('prismaDisconnect') })
 
       const shutdownPromise = indexModule.shutdown()
@@ -96,8 +99,17 @@ describe('server index', () => {
         'stopScheduler',
         'serverClose',
         'taskRegistryDestroy',
+        'releasePodcastLeases',
         'prismaDisconnect',
       ])
+    })
+
+    it('still disconnects when releasing the podcast leases fails', async () => {
+      mockReleaseHeldLeases.mockRejectedValueOnce(new Error('db gone'))
+      const shutdownPromise = indexModule.shutdown()
+      await vi.advanceTimersByTimeAsync(1000)
+      await shutdownPromise
+      expect(mockPrisma.$disconnect).toHaveBeenCalledTimes(1)
     })
 
     it('prevents double-shutdown (second call is a no-op)', async () => {

@@ -1,7 +1,7 @@
 ---
 plan-id: autonomous-two-speaker-podcast
 title: Autonomous weekly two-speaker podcast, self-hosted on Bunny with our own feed
-status: approved
+status: in-progress
 created: 2026-10-05
 author: claude-code (AI)
 repo: OdinMB/actually-relevant
@@ -17,11 +17,7 @@ decisions:
     status: proposed
     context: Two-speaker audio needs a dialogue TTS; the official SDK brings its own retries, which would double-bill, and a dependency for two endpoints.
     decision: Call POST /v1/text-to-dialogue with model_id pinned to eleven_v4 (and GET /v1/user/subscription) via axios from server/src/lib/elevenlabs.ts, chunked at turn boundaries, never retrying on quota, auth or other 4xx errors.
-  - id: ADR-0003
-    title: Produce episodes as a persisted stage machine on the Podcast row, fenced by a DB lease, with TTS chunks kept in Postgres until upload
-    status: proposed
-    context: Production spans billed TTS calls, runs in-process on an ephemeral Render instance, and zero-downtime deploys overlap two processes.
-    decision: Podcast gets a forward-only stage (created, scripted, voiced, ready), a lease (leaseOwner, leaseUntil) claimed with the database clock and checked on every stage write, error and block fields that never overwrite the stage, and a podcast_audio_chunks bytea table emptied once the final MP3 is uploaded.
+  - ref: .context/decisions/0003-podcast-stage-machine-and-lease.md
   - id: ADR-0004
     title: Retry the weekly episode by repeating weekend cron slots, guarded in the podcast code, instead of changing the shared scheduler
     status: proposed
@@ -174,6 +170,16 @@ Each phase ships on its own; the risky unknowns are retired first and the owner 
 | S7 | Does Starter v4 API output carry a watermark that survives our re-encode? | Run the MP3 through ElevenLabs' AI Speech Classifier before and after ffmpeg. | Recorded in `.context/ai-transparency.md` §4; no code change either way. **Open** (manual web check by the owner; no API). Needed for Phase 2's transparency record. |
 
 **Phase 1 — Two-speaker script.** Value: a much better script in the admin that the owner can voice by hand at once. Migration 1, dialogue and selection schemas and prompts, validation, show notes, the stage machine and lease up to `scripted`, `runWeeklyEpisode` for the admin trigger, admin "Start this week's episode", stage display, eval and test updates, spec and context for the script, the new opener.
+
+**Phase 1: DONE (2026-10-06, agent implementation).** ADR-0003 is promoted to the decision log (`.context/decisions/0003-podcast-stage-machine-and-lease.md`), its title shortened to fit the schema's 120 characters; its chunk table follows in Phase 2. Where the code departs from the Phase 1 table (the agent's choices; the owner may change any):
+- `chunkTurns` and `buildTranscriptVtt` are not built yet: nothing in Phase 1 voices or times audio, so they move to Phase 2 with their tests. `podcastDialogue.ts` exports `assembleSpokenSegments` (spoken segments with the opener and sign-off) instead of `assembleSpokenTurns`, because chunking needs the segment boundaries.
+- The `elevenlabs`/`bunny` credential blocks are not in `config.ts` yet (Phase 2, with the clients that read them); `config.podcast` holds the Phase 0 outcomes and the Phase 1 constants. Phase 3 adds `audioBaseUrl`, `artworkUrl`, feed and listen-link constants, Phase 4 `weekendWindow` and `autoPublishMinAgeHours`.
+- `podcastGuards.ts` exists with `PodcastBlockedError` only; the dialogue's second failure needs it in Phase 1.
+- `PODCAST_EPISODE_AI_LINE` (owner-approved, open question 1) is added in Phase 1, because the show notes start with it.
+- The rendered script is stored in the existing `script` column at `scripted`, so the admin reads it without a view mapping.
+- `isoWeekKey` is a UTC helper in `podcastWeekly.ts`, not the newsletter job's `getWeekKey` (local calendar day, and a service must not import from `jobs/`).
+- The admin trigger (Start and Resume) clears a block and the week's attempts before it advances, so "Start this week's episode" on a blocked week works like Resume.
+- The eval fixture's podcast pool is now the week's published stories (ids, relevance, top-level issue), mirroring `podcastScript.ts`; fixtures cached earlier still load (`suites/podcast.ts` fills ids by position).
 
 **Phase 2 — Audio and storage.** Value: a finished MP3 in the admin player, on our CDN, not public. Migration 2, `lib/elevenlabs.ts`, `lib/podcastAudio.ts`, `lib/bunnyStorage.ts`, `podcastGuards.ts`, stages `voiced` and `ready`, configuration check, cap, dry run, block and resume, regenerate, delete guards, notices. Delete the spike script.
 

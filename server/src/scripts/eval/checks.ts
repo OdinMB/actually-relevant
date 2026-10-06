@@ -1,7 +1,8 @@
 /**
  * Pure output-quality and statistics helpers for the model eval.
  */
-import type { AssessResult } from '../../schemas/llm.js'
+import type { AssessResult, PodcastDialogue } from '../../schemas/llm.js'
+import { validateDialogue, type DialogueStoryRef } from '../../services/podcastDialogue.js'
 import type { ArmStats, CallOutcome, CallRecord, TokenUsage } from './types.js'
 
 // ---------------------------------------------------------------------------
@@ -150,19 +151,27 @@ export function checkIntro(text: string): IntroCheck {
 
 export const introViolations = (c: IntroCheck) => Object.values(c).filter(Boolean).length
 
-export interface PodcastCheck {
+export interface DialogueCheck {
+  /** Production validation verdicts (validateDialogue): coverage, band, bridges, tags, markup. */
+  errors: string[]
+  /** Eval-only: share of spoken sentences over 18 words (the prompt asks for mostly under 18). */
   longSentenceShare: number | null
   publisherCoverage: number | null
-  markup: boolean
+  /** Each segment's opening turn after the intro, so a reviewer sees whether the bridges connect or read as templates. */
+  segues: { segment: string; opening: string }[]
 }
 
-export function checkPodcast(script: string, publishers: string[]): PodcastCheck {
-  const sentences = splitSentences(script.replace(/\n+/g, ' '))
-  const distinct = [...new Set(publishers.filter(p => p && p !== 'Unknown'))]
+export function checkDialogue(dialogue: PodcastDialogue, stories: (DialogueStoryRef & { publisher: string })[]): DialogueCheck {
+  const spoken = dialogue.segments.flatMap(s => s.turns).map(t => t.text.replace(/\[[^\]\n]*\]/g, ' ')).join(' ')
+  const sentences = splitSentences(spoken.replace(/\s+/g, ' '))
+  const distinct = [...new Set(stories.map(s => s.publisher).filter(p => p && p !== 'Unknown'))]
   return {
-    longSentenceShare: rate(sentences.map(s => countWords(s) > 12)),
-    publisherCoverage: rate(distinct.map(p => script.toLowerCase().includes(p.toLowerCase()))),
-    markup: /[*_#`]|\[[^\]]*\]|^\s*(?:intro|outro|section|host)\s*[:\-–]/im.test(script),
+    errors: validateDialogue(dialogue, stories).errors,
+    longSentenceShare: rate(sentences.map(s => countWords(s) > 18)),
+    publisherCoverage: rate(distinct.map(p => spoken.toLowerCase().includes(p.toLowerCase()))),
+    segues: dialogue.segments
+      .filter(s => s.kind !== 'intro' && s.turns.length > 0)
+      .map(s => ({ segment: s.kind === 'story' ? `story ${s.storyRef}` : s.kind, opening: s.turns[0].text })),
   }
 }
 

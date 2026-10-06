@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../lib/admin-api'
 import type { Podcast } from '@shared/types'
 
+/** How often an episode is re-read while a process works on it. */
+export const PODCAST_POLL_MS = 5000
+
 export function usePodcasts(params?: { status?: string }) {
   return useQuery({
     queryKey: ['podcasts', params],
@@ -9,28 +12,34 @@ export function usePodcasts(params?: { status?: string }) {
   })
 }
 
+/** Re-read only while a process works on the episode. */
+export function podcastRefetchInterval(podcast: Podcast | undefined): number | false {
+  return podcast?.inProgress ? PODCAST_POLL_MS : false
+}
+
+/** Polls only while the episode is in progress, so the stage and errors appear without a reload. */
 export function usePodcast(id: string) {
   return useQuery({
     queryKey: ['podcast', id],
     queryFn: () => adminApi.podcasts.get(id),
     enabled: !!id,
+    refetchInterval: query => podcastRefetchInterval(query.state.data),
   })
 }
 
-export function useCreatePodcast() {
+function useStoreEpisode() {
   const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (data: { title: string }) => adminApi.podcasts.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['podcasts'] })
-    },
-  })
+  return (podcast: Podcast) => {
+    // The background run takes the lease a moment after the 202; show it as in progress so polling starts.
+    queryClient.setQueryData(['podcast', podcast.id], { ...podcast, inProgress: true })
+    queryClient.invalidateQueries({ queryKey: ['podcasts'] })
+  }
 }
 
 export function useUpdatePodcast() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Podcast> }) =>
+    mutationFn: ({ id, data }: { id: string; data: { title: string } }) =>
       adminApi.podcasts.update(id, data),
     onSuccess: (podcast) => {
       queryClient.setQueryData(['podcast', podcast.id], podcast)
@@ -49,24 +58,18 @@ export function useDeletePodcast() {
   })
 }
 
-export function useAssignPodcastStories() {
-  const queryClient = useQueryClient()
+export function useStartWeeklyPodcast() {
+  const store = useStoreEpisode()
   return useMutation({
-    mutationFn: (id: string) => adminApi.podcasts.assign(id),
-    onSuccess: (podcast) => {
-      queryClient.setQueryData(['podcast', podcast.id], podcast)
-      queryClient.invalidateQueries({ queryKey: ['podcasts'] })
-    },
+    mutationFn: () => adminApi.podcasts.startWeekly(),
+    onSuccess: store,
   })
 }
 
-export function useGeneratePodcast() {
-  const queryClient = useQueryClient()
+export function useResumePodcast() {
+  const store = useStoreEpisode()
   return useMutation({
-    mutationFn: (id: string) => adminApi.podcasts.generate(id),
-    onSuccess: (podcast) => {
-      queryClient.setQueryData(['podcast', podcast.id], podcast)
-      queryClient.invalidateQueries({ queryKey: ['podcasts'] })
-    },
+    mutationFn: (id: string) => adminApi.podcasts.resume(id),
+    onSuccess: store,
   })
 }

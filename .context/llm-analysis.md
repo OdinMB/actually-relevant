@@ -10,7 +10,7 @@ Configuration is centralized in `server/src/config.ts`. Three model tiers are av
 |------|--------------|-----------------|---------|
 | Small | `gpt-6-luna` | `low` | Dedup confirmation, related-stories re-rank, reclassification and emotion-only tagging |
 | Medium | `gpt-6-luna` | `medium` | Pre-assessment, full assessment, social story pick, social post text |
-| Large | `gpt-6-sol` | `medium` | Editorial selection, newsletter selection and intro, podcast script |
+| Large | `gpt-6-sol` | `medium` | Editorial selection, newsletter selection and intro, podcast story selection and two-speaker dialogue (`config.podcast.selectModelTier` / `scriptModelTier`; `.context/podcast.md`) |
 
 These are the owner's GPT-6 choices of 2026-09-24, from the model eval and blind ratings (`DOCS/2026-09-24_gpt6-eval/results.md`, gitignored). Until then the tiers ran gpt-5-nano, gpt-5-mini and gpt-5.2, all at `medium`; gpt-5-mini/nano's dated snapshots shut down on 2026-12-11. Small and medium are the same model now, so the effort is what tells them apart.
 
@@ -44,12 +44,13 @@ Prompt templates live in `server/src/prompts/`:
 
 | File | Contents |
 |------|----------|
-| `shared.ts` | `Guidelines` interface, `buildGuidelinesXml()`, `escapeXml()`, `containsChineseCharacters()` |
+| `shared.ts` | `Guidelines` interface, `buildGuidelinesXml()`, `escapeXml()` (re-exported from `lib/xml.ts`), `containsChineseCharacters()` |
 | `preassess.ts` | `buildPreassessPrompt()` — batch screening + issue classification |
 | `reclassify.ts` | `buildReclassifyPrompt()` — issue + emotion reclassification (no rating) |
 | `assess.ts` | `buildAssessPrompt()` — full analysis |
 | `select.ts` | `buildSelectPrompt()` — editorial curation |
-| `podcast.ts` | `buildPodcastPrompt()` — podcast script generation |
+| `podcast.ts` | `buildPodcastPrompt()` — the weekly two-speaker dialogue (segue rule, untrusted `<STORIES>`) |
+| `podcast-select.ts` | `buildPodcastSelectPrompt()` — the week's 4-5 stories for audio |
 | `index.ts` | Barrel re-exports all builders and types |
 
 ## Schema-Driven Format Guidance

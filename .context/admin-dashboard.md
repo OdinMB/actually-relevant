@@ -38,7 +38,8 @@ The admin dashboard is a React SPA at `/admin/*` with 10 pages, JWT-based auth w
 - **Story filters** persist in URL search params via `useSearchParams()`
 - **Bulk actions** use selection state (resets on filter/page change) with confirmation dialogs
 - **Bulk LLM operations** (preassess, assess, select) run as background tasks via `useBackgroundTasks()` — dialog closes immediately, progress toasts persist across navigation, query invalidation fires on completion
-- **LLM operations** (newsletter/podcast generation) show persistent loading state with "may take a minute" message
+- **LLM operations** (newsletter generation) show persistent loading state with "may take a minute" message
+- **Podcast episodes** run server-side in the background: the start and Resume routes answer 202, and the detail page polls every 5 s only while the episode's lease is live (`inProgress`); see `.context/podcast.md`
 - **Carousel ZIP download** uses `response.blob()` + `URL.createObjectURL` + auto-click download
 - **Cron editing** is inline in the jobs table with save/cancel
 - **Issue slug** auto-generates from name in create mode

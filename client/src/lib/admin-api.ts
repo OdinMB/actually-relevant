@@ -7,6 +7,7 @@ import type {
   Newsletter,
   NewsletterSend,
   Podcast,
+  PodcastListItem,
   JobRun,
   User,
   StoryFilters,
@@ -336,16 +337,15 @@ export const adminApi = {
 
   // Podcasts
   podcasts: {
-    list: (params?: { status?: string }) =>
-      request<PaginatedResponse<Podcast>>(`/podcasts${toQueryString((params || {}) as Record<string, unknown>)}`),
+    list: (params?: { status?: string; stage?: string }) =>
+      request<PaginatedResponse<PodcastListItem>>(`/podcasts${toQueryString((params || {}) as Record<string, unknown>)}`),
     get: (id: string) => request<Podcast>(`/podcasts/${id}`),
-    create: (data: { title: string }) =>
-      request<Podcast>('/podcasts', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Podcast>) =>
+    update: (id: string, data: { title: string }) =>
       request<Podcast>(`/podcasts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/podcasts/${id}`, { method: 'DELETE' }),
-    assign: (id: string) => request<Podcast>(`/podcasts/${id}/assign`, { method: 'POST' }),
-    generate: (id: string) => request<Podcast>(`/podcasts/${id}/generate`, { method: 'POST' }),
+    /** Starts (or resumes) this week's episode; the work continues in the background (202). */
+    startWeekly: () => request<Podcast>('/podcasts/weekly', { method: 'POST' }),
+    resume: (id: string) => request<Podcast>(`/podcasts/${id}/resume`, { method: 'POST' }),
   },
 
   // Jobs

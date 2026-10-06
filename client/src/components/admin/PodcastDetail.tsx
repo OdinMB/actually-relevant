@@ -3,25 +3,41 @@ import type { Podcast } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
-import { Textarea } from '../ui/Textarea'
-import { useUpdatePodcast, useAssignPodcastStories, useGeneratePodcast } from '../../hooks/usePodcasts'
+import { useUpdatePodcast, useResumePodcast } from '../../hooks/usePodcasts'
 import { useToast } from '../ui/Toast'
+import { formatDate } from '../../lib/constants'
 import { AssignedStoriesList } from './AssignedStoriesList'
+import { PodcastStageBadge } from './PodcastStageBadge'
 
 interface PodcastDetailProps {
   podcast: Podcast
 }
 
+/** Resume continues an episode that is waiting: blocked, failed, or not yet scripted. */
+export function canResume(podcast: Podcast): boolean {
+  if (podcast.stage === 'legacy' || podcast.inProgress) return false
+  return podcast.blockedAt != null || podcast.lastError != null || podcast.stage === 'created'
+}
+
+function TextBlock({ title, text, empty }: { title: string; text: string; empty: string }) {
+  return (
+    <section className="bg-white rounded-lg border border-neutral-200 p-4">
+      <h3 className="text-sm font-semibold text-neutral-900 mb-3">{title}</h3>
+      <div className="text-sm text-neutral-700 whitespace-pre-wrap max-h-[32rem] overflow-y-auto">
+        {text || <span className="text-neutral-500 italic">{empty}</span>}
+      </div>
+    </section>
+  )
+}
+
 export function PodcastDetail({ podcast }: PodcastDetailProps) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [title, setTitle] = useState(podcast.title)
-  const [editingScript, setEditingScript] = useState(false)
-  const [script, setScript] = useState(podcast.script)
   const { toast } = useToast()
 
   const update = useUpdatePodcast()
-  const assign = useAssignPodcastStories()
-  const generate = useGeneratePodcast()
+  const resume = useResumePodcast()
+  const legacy = podcast.stage === 'legacy'
 
   const handleSaveTitle = async () => {
     try {
@@ -31,86 +47,78 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
     } catch { toast('error', 'Failed to update title') }
   }
 
-  const handleSaveScript = async () => {
-    try {
-      await update.mutateAsync({ id: podcast.id, data: { script } })
-      toast('success', 'Script updated')
-      setEditingScript(false)
-    } catch { toast('error', 'Failed to update script') }
-  }
-
-  const handlePublishToggle = async () => {
-    const newStatus = podcast.status === 'published' ? 'draft' : 'published'
-    try {
-      await update.mutateAsync({ id: podcast.id, data: { status: newStatus } })
-      toast('success', newStatus === 'published' ? 'Podcast published' : 'Podcast unpublished')
-    } catch { toast('error', 'Failed to update status') }
-  }
-
   return (
     <div className="max-w-3xl space-y-6">
-      {/* Title */}
-      <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {editingTitle ? (
           <div className="flex-1 flex gap-2">
-            <Input id="pod-title" value={title} onChange={e => setTitle(e.target.value)} className="flex-1" />
+            <Input id="pod-title" aria-label="Title" value={title} onChange={e => setTitle(e.target.value)} className="flex-1" />
             <Button size="sm" onClick={handleSaveTitle} loading={update.isPending}>Save</Button>
             <Button size="sm" variant="ghost" onClick={() => { setEditingTitle(false); setTitle(podcast.title) }}>Cancel</Button>
           </div>
         ) : (
           <>
+            <PodcastStageBadge podcast={podcast} />
             <Badge variant={podcast.status === 'published' ? 'green' : 'gray'}>
               {podcast.status === 'published' ? 'Published' : 'Draft'}
             </Badge>
+            {podcast.dryRun && <Badge variant="orange">Dry run</Badge>}
+            {podcast.weekKey && <span className="text-sm text-neutral-600">{podcast.weekKey}</span>}
             <Button variant="ghost" size="sm" onClick={() => setEditingTitle(true)}>Edit title</Button>
           </>
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" size="sm" onClick={() => assign.mutate(podcast.id, {
-          onSuccess: () => toast('success', 'Stories assigned'),
-          onError: () => toast('error', 'Failed to assign stories'),
-        })} loading={assign.isPending}>
-          Assign Stories
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => generate.mutate(podcast.id, {
-          onSuccess: () => toast('success', 'Script generated'),
-          onError: () => toast('error', 'Generation failed'),
-        })} loading={generate.isPending}>
-          {generate.isPending ? 'Generating... (this may take a minute)' : 'Generate Script'}
-        </Button>
-        <Button variant={podcast.status === 'published' ? 'ghost' : 'primary'} size="sm" onClick={handlePublishToggle} loading={update.isPending}>
-          {podcast.status === 'published' ? 'Unpublish' : 'Publish'}
-        </Button>
-      </div>
-
-      {/* Assigned stories */}
-      <AssignedStoriesList label="Assigned stories" storyIds={podcast.storyIds} />
-
-      {/* Script */}
-      <div className="bg-white rounded-lg border border-neutral-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-neutral-900">Script</h3>
-          {!editingScript && (
-            <Button variant="ghost" size="sm" onClick={() => { setScript(podcast.script); setEditingScript(true) }}>Edit</Button>
-          )}
+      {podcast.blockedAt && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">Blocked since {formatDate(podcast.blockedAt)}</p>
+          <p className="mt-1">{podcast.blockedReason}</p>
         </div>
-        {editingScript ? (
-          <div className="space-y-3">
-            <Textarea id="pod-script" rows={20} value={script} onChange={e => setScript(e.target.value)} />
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleSaveScript} loading={update.isPending}>Save</Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditingScript(false)}>Cancel</Button>
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-neutral-700 whitespace-pre-wrap max-h-96 overflow-y-auto">
-            {podcast.script || <span className="text-neutral-400 italic">No script yet. Generate or edit manually.</span>}
-          </div>
-        )}
-      </div>
+      )}
+      {!podcast.blockedAt && podcast.lastError && (
+        <div role="status" className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900">
+          <p className="font-semibold">Last run failed{podcast.failedAt ? ` on ${formatDate(podcast.failedAt)}` : ''}</p>
+          <p className="mt-1">{podcast.lastError}</p>
+        </div>
+      )}
+      {podcast.attempts > 0 && (
+        <p className="text-sm text-neutral-600">Automatic attempts this week: {podcast.attempts}</p>
+      )}
+
+      {canResume(podcast) && (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => resume.mutate(podcast.id, {
+            onSuccess: () => toast('success', 'Resumed: the script is being written'),
+            onError: () => toast('error', 'Failed to resume'),
+          })} loading={resume.isPending}>
+            Resume
+          </Button>
+        </div>
+      )}
+
+      {legacy ? (
+        <>
+          <AssignedStoriesList label="Assigned stories" storyIds={podcast.storyIds} />
+          <TextBlock title="Script (legacy, read-only)" text={podcast.script} empty="No script." />
+        </>
+      ) : (
+        <>
+          {podcast.episodeStories && podcast.episodeStories.length > 0 && (
+            <section className="bg-white rounded-lg border border-neutral-200 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900 mb-3">Stories in this episode</h3>
+              <ol className="list-decimal pl-5 space-y-1 text-sm text-neutral-700">
+                {podcast.episodeStories.map(s => (
+                  <li key={s.ref}>
+                    {s.title} <span className="text-neutral-500">({s.publisher}, {s.issue})</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+          <TextBlock title="Script" text={podcast.script} empty={podcast.inProgress ? 'The script is being written.' : 'No script yet.'} />
+          <TextBlock title="Show notes" text={podcast.showNotes} empty="No show notes yet." />
+        </>
+      )}
     </div>
   )
 }

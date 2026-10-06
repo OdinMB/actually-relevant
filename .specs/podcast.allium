@@ -1,0 +1,247 @@
+-- podcast.allium
+-- Distilled from: server/src/services/{podcastWeekly,podcastPipeline,podcastScript,podcastDialogue,podcastGuards,podcast}.ts
+--
+-- The weekly two-speaker podcast. One episode per ISO week (UTC) is
+-- produced by a forward-only stage machine on the Podcast row; its
+-- publication is a separate axis (status). Phase 1 of the plan
+-- (.plans/autonomous-two-speaker-podcast.md) produces the script:
+-- stages created → scripted. Voicing, storage, publishing and the
+-- cron jobs extend this spec in their phases.
+
+use "./story-pipeline.allium" as pipeline
+use "./authentication.allium" as auth
+
+config {
+    story_pool_days: Integer = 7                       -- the newsletter's pool window
+    min_stories: Integer = 4
+    max_stories: Integer = 5
+    spoken_char_band_min: Integer = 4200               -- whole episode, code-added turns and tags included
+    spoken_char_band_max: Integer = 5600
+    max_turn_chars: Integer = 400
+    max_tags_per_turn: Integer = 2
+    min_bridge_chars: Integer = 40
+    max_attempts_per_week: Integer = 3
+    lease_duration: Duration = 30.minutes
+}
+
+-- ─── Entities ────────────────────────────────────────────────────
+
+entity Podcast {
+    title: String
+    status: draft | published                          -- publication (Prisma ContentStatus); unchanged by production
+    stage: legacy | created | scripted | voiced | ready
+    week_key: String?                                  -- ISO week in UTC "YYYY-Www"; unique; null for legacy rows
+    dialogue: Dialogue?
+    episode_stories: List<EpisodeStory>?               -- frozen at scripting
+    story_ids: List<String>                            -- = episode_stories -> id; story deletion strips ids here only
+    episode_summary: String
+    show_notes: String
+    script: String                                     -- legacy: hand-voiced script; otherwise render(spoken_episode)
+    dry_run: Boolean                                   -- set from the environment when the row is created
+    last_error: String?
+    failed_at: Timestamp?
+    attempts: Integer                                  -- automatic failures this week
+    blocked_at: Timestamp?
+    blocked_reason: String?
+    lease_owner: String?                               -- a per-process id
+    lease_until: Timestamp?                            -- database clock
+
+    -- Derived
+    in_progress: lease_until != null and lease_until > now
+    spoken_episode: [OPENER by HOST_A] + dialogue.segments + [SIGN_OFF by HOST_A]
+}
+
+value EpisodeStory {
+    ref: Integer                                       -- 1-based position; the dialogue's story_ref
+    id: String
+    title: String
+    publisher: String
+    source_url: String
+    slug: String?
+    issue: String                                      -- top-level issue name
+}
+
+value Dialogue {
+    episode_title: String
+    episode_summary: String
+    segments: List<Segment>                            -- intro, one story segment per story, outro
+}
+
+value Segment {
+    kind: intro | story | outro
+    story_ref: Integer?                                -- set for story segments only
+    turns: List<Turn>
+}
+
+value Turn {
+    speaker: HOST_A | HOST_B                           -- generic AI hosts, never modelled on a real person
+    text: String
+}
+
+-- ─── Invariants ──────────────────────────────────────────────────
+
+-- Production only moves forward: legacy rows never advance, and a
+-- failure never changes the stage (it sets last_error and failed_at).
+invariant StageIsForwardOnly {
+    for p in Podcasts:
+        p.stage transitions only created → scripted → voiced → ready
+        or back to created by ResetEpisode
+}
+
+-- Every stage write is fenced on the writer's lease: a process that
+-- lost its lease (expired after a pause, taken over) writes nothing.
+invariant StageWritesAreFenced {
+    for write in PodcastStageWrites:
+        write.requires(podcast.lease_owner = write.process)
+}
+
+-- The audible AI disclosure is the first spoken turn of every
+-- episode, added by code (never asked of the model), and the show
+-- notes begin with the written AI line.
+invariant EpisodeOpensWithAiDisclosure {
+    for p in Podcasts where p.stage != legacy and p.dialogue != null:
+        p.spoken_episode.first = Turn(HOST_A,
+            "This episode was written and voiced by AI, based on our AI analysis of this week's news.")
+        p.show_notes.starts_with(
+            "AI-generated: This episode was written and voiced by AI, based on our AI analysis of this week's news.")
+}
+
+-- ─── Weekly episode ──────────────────────────────────────────────
+
+-- One row per ISO week (UTC). A concurrent create loses on the unique
+-- week key and reads the winner's row.
+rule StartWeeklyEpisode {
+    when: AdminStartsWeeklyEpisode() or GeneratePodcastJobRuns()
+
+    let week = iso_week_key_utc(now)
+    let episode = Podcast where week_key = week
+        ?? Podcast.created(week_key: week, stage: created, dry_run: environment_is_dry_run)
+    ensures: RunEpisode(episode, trigger)
+}
+
+-- Admin actions are deliberate: they clear a block and the week's
+-- attempts first and are never capped. The cron trigger skips a
+-- blocked episode and counts its failures.
+rule RunEpisode {
+    when: RunEpisode(episode, trigger)
+
+    if episode.stage = ready or episode.status = published:
+        ensures: Skipped("already finished")
+    if episode.blocked_at != null and trigger = cron:
+        ensures: Skipped("blocked")
+    if trigger = admin:
+        ensures: episode.blocked_at = null and episode.attempts = 0
+
+    -- A row left over from a dry run never occupies a live week.
+    if episode.dry_run and not environment_is_dry_run:
+        ensures: ResetEpisode(episode, dry_run: false)
+
+    ensures: AdvanceEpisode(episode)
+
+    -- Outcomes of AdvanceEpisode:
+    --   lease held elsewhere or lost        → Skipped (no error recorded by this run)
+    --   non-retryable (PodcastBlocked)      → episode.blocked_at = now, blocked_reason = reason
+    --   other failure, cron trigger         → attempts + 1; at max_attempts_per_week → blocked
+    --   other failure, admin trigger        → retry later, nothing counted
+}
+
+rule ResumeEpisode {
+    when: AdminResumesEpisode(episode)
+    requires: episode.stage != legacy
+
+    ensures: episode.blocked_at = null
+    ensures: episode.blocked_reason = null
+    ensures: episode.attempts = 0
+    ensures: RunEpisode(episode, admin)
+}
+
+-- ─── Stage machine ───────────────────────────────────────────────
+
+-- The lease is claimed with the database clock and only when free or
+-- expired; it is renewed before every stage and released at the end,
+-- on failure, and for every row this process holds at shutdown.
+rule AdvanceEpisode {
+    when: AdvanceEpisode(episode)
+    requires: episode.lease_until = null or episode.lease_until < now
+    requires: episode.stage != legacy
+
+    ensures: episode.lease_owner = this_process
+    ensures: episode.lease_until = now + config.lease_duration
+    -- runs every remaining stage in order, persisting each before the next
+}
+
+-- created → scripted: select the stories, write and validate the
+-- dialogue, freeze the snapshot.
+rule WriteScript {
+    when: AdvanceEpisode(episode)
+    requires: episode.stage = created
+
+    let pool = pipeline/Stories
+        where status = published
+        and date_crawled >= now - config.story_pool_days.days
+    requires: pool.count >= config.min_stories
+
+    -- One story per top-level issue, a fifth only when an issue has two
+    -- clearly outstanding stories; ids outside the pool are dropped.
+    let picked = LLM.select_podcast_stories(pool).filter(id in pool).distinct.take(config.max_stories)
+    requires: picked.count >= config.min_stories
+
+    let dialogue = LLM.write_dialogue(picked)          -- story text is untrusted input
+    -- One regeneration with the problems listed; a second invalid or
+    -- unparsable answer blocks the episode. Never truncated or patched.
+    requires: DialogueIsValid(dialogue, picked)
+
+    ensures: episode.stage = scripted
+    ensures: episode.episode_stories = snapshot(picked)
+    ensures: episode.story_ids = picked -> id
+    ensures: episode.title = dialogue.episode_title
+    ensures: episode.last_error = null
+}
+
+-- What a dialogue must meet before it is stored.
+rule DialogueIsValid {
+    when: DialogueIsValid(dialogue, stories)
+
+    requires: dialogue.segments.first.kind = intro and dialogue.segments.last.kind = outro
+    requires: every story in stories is covered by exactly one story segment
+    requires: no speaker has more than 2 consecutive turns in spoken_episode
+    requires: spoken_episode.chars between config.spoken_char_band_min and config.spoken_char_band_max
+    requires: every turn.text.length <= config.max_turn_chars
+    requires: every audio tag is allowlisted, at most config.max_tags_per_turn per turn
+    requires: no turn contains a URL, markdown or a speaker prefix
+    -- Segues: chunks are voiced per segment, so each segment carries
+    -- its own bridge.
+    requires: every segment after the intro opens with a turn of at
+        least config.min_bridge_chars characters that is not the headline
+    requires: no two consecutive story segments open with the same first five words
+}
+
+rule ResetEpisode {
+    when: ResetEpisode(episode, dry_run)
+    requires: not episode.in_progress
+    requires: episode.stage != legacy
+
+    ensures: episode.stage = created
+    ensures: episode.dry_run = dry_run
+    ensures: episode.dialogue = null and episode.episode_stories = null
+    ensures: episode.script = "" and episode.show_notes = "" and episode.story_ids = []
+}
+
+-- ─── Surfaces ────────────────────────────────────────────────────
+
+surface PodcastAdmin {
+    facing admin: auth/Admin
+
+    provides:
+        AdminStartsWeeklyEpisode()                     -- answers at once; the work continues in the background
+        AdminResumesEpisode(episode)
+        AdminRenamesEpisode(episode, title)            -- the only field edited by hand
+
+    guarantee:
+        "Stage, status, script and dialogue are never edited by hand"
+
+    guidance:
+        "The admin shows the stage, 'in progress' while the lease is live
+        (polling only then), the block reason, the last error, the
+        rendered script and the show notes. Legacy rows are read-only."
+}

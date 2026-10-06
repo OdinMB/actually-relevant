@@ -120,7 +120,7 @@ Key dirs: `pm/state/` (business context), `pm/backlog/` (priorities), `pm/plans/
 
 Behavioral specifications defining domain rules, entities, and invariants in Allium. **Authoritative source for what the system guarantees.** See `.specs/README.md` for conventions.
 
-Covers: story-pipeline, crawl-and-extraction, authentication, scheduler (includes task queue), feed-management, newsletter-and-podcast, social-posting, search, dedup, subscription.
+Covers: story-pipeline, crawl-and-extraction, authentication, scheduler (includes task queue), feed-management, newsletter-and-podcast (newsletter only), podcast, social-posting, search, dedup, subscription.
 
 ## Context Files (`.context/`)
 
@@ -135,7 +135,9 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 | `prompting.md` | Prompt conventions for the GPT-5/GPT-6 reasoning models and calibration lessons (read before modifying prompts) |
 | `scheduler.md` | Job registry, overlap prevention, concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
-| `newsletter-podcast.md` | Create-assign-generate workflow, templates, carousel |
+| `newsletter-podcast.md` | Newsletter: create-assign-generate workflow, templates, carousel |
+| `decisions.md` | Architectural decision log: the index, with one file per decision in `.context/decisions/`; append-only history |
+| `podcast.md` | Weekly two-speaker podcast: stages, lease, weekly run and blocks, selection and dialogue rules (segues), admin endpoints |
 | `authentication.md` | JWT flow, cookie config, token rotation, roles |
 | `admin-dashboard.md` | TanStack Query patterns, URL-persisted filters, bulk actions |
 | `public-website.md` | Routes, positivity slider, RSS feeds, design system |

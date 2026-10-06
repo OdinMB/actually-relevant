@@ -1,4 +1,7 @@
 import { config } from '../config.js'
+import { escapeXml } from '../lib/xml.js'
+
+export { escapeXml }
 
 export interface Guidelines {
   factors: string
@@ -8,15 +11,6 @@ export interface Guidelines {
 
 export function buildGuidelinesXml(g: Guidelines): string {
   return `<FACTORS>\n${g.factors}\n</FACTORS>\n\n<TOPIC-SPECIFIC LIMITING FACTORS>\n${g.antifactors}\n</TOPIC-SPECIFIC LIMITING FACTORS>\n\n<CRITERIA>\n${g.ratings}\n</CRITERIA>`
-}
-
-export function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
 }
 
 export function containsChineseCharacters(str: string): boolean {

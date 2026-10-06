@@ -9,7 +9,7 @@ import {
   summarizeCalls,
   checkSocialPost,
   checkIntro,
-  checkPodcast,
+  checkDialogue,
 } from './checks.js'
 import type { AssessResult } from '../../schemas/llm.js'
 import type { CallRecord } from './types.js'
@@ -149,20 +149,38 @@ describe('checkIntro', () => {
   })
 })
 
-describe('checkPodcast', () => {
-  it('measures long sentences and publisher coverage', () => {
-    const c = checkPodcast(
-      'Welcome back. The Guardian reports that reefs are recovering across the whole Pacific region after years of fishing bans.',
-      ['The Guardian', 'Reuters'],
-    )
-    expect(c.longSentenceShare).toBeCloseTo(0.5)
+describe('checkDialogue', () => {
+  const stories = [
+    { ref: 1, title: 'Reefs recover in the Pacific', publisher: 'The Guardian' },
+    { ref: 2, title: 'Malaria vaccine expands', publisher: 'Reuters' },
+  ]
+  const dialogue = {
+    episodeTitle: 'Reefs',
+    episodeSummary: 'One. Two.',
+    segments: [
+      { kind: 'intro' as const, storyRef: null, turns: [{ speaker: 'HOST_B' as const, text: 'Welcome back.' }] },
+      { kind: 'story' as const, storyRef: 1, turns: [{ speaker: 'HOST_A' as const, text: '[calm] The Guardian reports that reefs are recovering across the whole Pacific region after many years of strict fishing bans.' }] },
+      { kind: 'outro' as const, storyRef: null, turns: [{ speaker: 'HOST_B' as const, text: 'From the reefs back to you: thanks.' }] },
+    ],
+  }
+
+  it('measures long sentences over 18 words and publisher coverage, without counting tags', () => {
+    const c = checkDialogue(dialogue, stories)
+    expect(c.longSentenceShare).toBeCloseTo(1 / 3)
     expect(c.publisherCoverage).toBeCloseTo(0.5)
-    expect(c.markup).toBe(false)
   })
 
-  it('flags stage directions and markdown', () => {
-    expect(checkPodcast('[MUSIC] Welcome.', []).markup).toBe(true)
-    expect(checkPodcast('## Intro\nWelcome.', []).markup).toBe(true)
+  it('carries the production validation verdicts', () => {
+    const c = checkDialogue(dialogue, stories)
+    expect(c.errors.some(e => /story 2/.test(e))).toBe(true)
+    expect(c.errors.some(e => /spoken characters/.test(e))).toBe(true)
+  })
+
+  it('lists each segment\'s opening turn for the segue report', () => {
+    expect(checkDialogue(dialogue, stories).segues).toEqual([
+      { segment: 'story 1', opening: dialogue.segments[1].turns[0].text },
+      { segment: 'outro', opening: 'From the reefs back to you: thanks.' },
+    ])
   })
 })
 

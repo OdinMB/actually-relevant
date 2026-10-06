@@ -14,7 +14,6 @@ import type { CandidateStory } from '../../prompts/related-stories.js'
 import type { StoryForSelect } from '../../prompts/select.js'
 import type { StoryForNewsletterSelect } from '../../prompts/newsletter-select.js'
 import type { StoryForNewsletterIntro } from '../../prompts/newsletter-intro.js'
-import type { StoryForPodcast } from '../../prompts/podcast.js'
 import { calcMaxBlurbChars as blueskyMaxChars } from '../../services/bluesky.js'
 import { calcMaxBlurbChars as mastodonMaxChars } from '../../services/mastodon.js'
 import { mentionsModelName, tallyTerms, withoutModelNames } from './blinding.js'
@@ -103,10 +102,27 @@ export interface NewsletterItem {
   intro: { stories: StoryForNewsletterIntro[]; issueNames: string[]; style: string }
 }
 
+/**
+ * One story of the podcast pool. Fixtures cached before the two-speaker podcast (2026-10-06) carry
+ * only the first six fields and their stories' own issue as `category`; suites/podcast.ts fills the rest.
+ */
+export interface PodcastFixtureStory {
+  category: string
+  title: string
+  summary: string
+  publisher: string
+  relevanceReasons: string
+  antifactors: string
+  id?: string
+  relevanceSummary?: string
+  relevance?: number | null
+  emotionTag?: string | null
+}
+
 export interface PodcastItem {
   id: string
   source: 'podcast' | 'recent-stories'
-  stories: StoryForPodcast[]
+  stories: PodcastFixtureStory[]
 }
 
 export interface Fixtures {
@@ -620,31 +636,32 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
 }
 
 async function loadPodcast(db: Db, anchor: Date, shortfalls: string[], adaptations: string[]): Promise<PodcastItem | null> {
-  const podcast = await db.podcast.findFirst({
-    where: { storyIds: { isEmpty: false } },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, storyIds: true },
-  })
-  const where: Prisma.StoryWhereInput = podcast
-    ? { id: { in: podcast.storyIds } }
-    : { status: { in: ['published', 'selected'] }, dateCrawled: { gte: new Date(anchor.getTime() - TARGETS.podcastFallbackDays * DAY_MS), lte: anchor } }
-  // Mirrors podcast.ts generateScript.
+  // Mirrors podcastScript.ts loadPool and toSelected: the week's published stories, most relevant first.
   const stories = await db.story.findMany({
-    where,
+    where: { status: 'published', dateCrawled: { gte: new Date(anchor.getTime() - TARGETS.podcastFallbackDays * DAY_MS), lte: anchor } },
     select: {
-      title: true, sourceTitle: true, summary: true, relevanceReasons: true, antifactors: true,
-      issue: { select: { name: true } }, feed: { select: { title: true, issue: { select: { name: true } } } },
+      id: true, title: true, sourceTitle: true, summary: true, relevanceSummary: true, relevanceReasons: true, antifactors: true,
+      relevance: true, emotionTag: true,
+      issue: { select: { name: true, parent: { select: { name: true } } } },
+      feed: { select: { title: true, displayTitle: true, issue: { select: { name: true, parent: { select: { name: true } } } } } },
     },
-    orderBy: { dateCrawled: 'desc' },
+    orderBy: [{ relevance: 'desc' }, { dateCrawled: 'desc' }],
   })
-  const shaped = stories.map(s => ({
-    category: s.issue?.name || s.feed?.issue?.name || 'General',
-    title: s.title || s.sourceTitle,
-    summary: s.summary || '',
-    publisher: s.feed?.title || 'Unknown',
-    relevanceReasons: s.relevanceReasons || '',
-    antifactors: s.antifactors || '',
-  }))
+  const shaped: PodcastFixtureStory[] = stories.map(s => {
+    const issue = s.issue ?? s.feed?.issue
+    return {
+      id: s.id,
+      category: issue?.parent?.name ?? issue?.name ?? 'General',
+      title: s.title || s.sourceTitle,
+      summary: s.summary || '',
+      publisher: s.feed?.displayTitle || s.feed?.title || 'Unknown',
+      relevanceReasons: s.relevanceReasons || '',
+      antifactors: s.antifactors || '',
+      relevanceSummary: s.relevanceSummary || '',
+      relevance: s.relevance,
+      emotionTag: s.emotionTag,
+    }
+  })
   // Owner's blinding rule: stories that mention a model name are left out of the script input.
   const { kept, removed } = withoutModelNames(shaped)
   if (removed.length > 0) adaptations.push(`podcast: ${removed.length} of ${shaped.length} stories that mention a model name (${tallyTerms(removed)}) were removed before prompting (owner's blinding rule)`)
@@ -652,12 +669,7 @@ async function loadPodcast(db: Db, anchor: Date, shortfalls: string[], adaptatio
     shortfalls.push('podcast: no stories')
     return null
   }
-  if (!podcast) shortfalls.push('podcast: no stored podcast; used the 7 days of published/selected stories before the anchor')
-  return {
-    id: podcast?.id ?? 'recent-stories',
-    source: podcast ? 'podcast' : 'recent-stories',
-    stories: kept,
-  }
+  return { id: 'recent-stories', source: 'recent-stories', stories: kept }
 }
 
 /**

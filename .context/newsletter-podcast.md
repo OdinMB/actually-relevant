@@ -1,15 +1,17 @@
-# Newsletter & Podcast Generation
+# Newsletter Generation
 
 > **Spec:** [`.specs/newsletter-and-podcast.allium`](../.specs/newsletter-and-podcast.allium) -- workflow rules (assign, select, generate, send), entity models, issue ordering. This file covers implementation details, templates, API endpoints, and modification guides.
 
+The weekly two-speaker podcast has its own file: `.context/podcast.md`.
+
 ## Overview
 
-Newsletters and podcasts are content formats generated from published/selected stories. Both follow a create-assign-generate workflow via admin API endpoints. Newsletters use template-based formatting; podcasts use LLM-generated scripts.
+Newsletters are generated from published stories through a create-assign-generate workflow via admin API endpoints, with template-based formatting.
 
 ## Workflow
 
-1. **Create** — `POST /api/admin/newsletters` or `/api/admin/podcasts` with a title
-2. **Assign stories** — `POST /:id/assign` auto-assigns recent published/selected stories (last 7 days)
+1. **Create** — `POST /api/admin/newsletters` with a title
+2. **Assign stories** — `POST /:id/assign` auto-assigns recently published stories (last 7 days)
 3. **Generate content** — `POST /:id/generate` produces the content
 4. **Edit** — `PUT /:id` to manually edit generated content
 5. **Publish** — `PUT /:id` with `status: 'published'`
@@ -74,26 +76,8 @@ The `generate_newsletter` job (default: Saturday 4am, `0 4 * * 6`) chains the fu
 
 Handler: `server/src/jobs/generateNewsletter.ts`. Registered in `server/src/jobs/handlers.ts`.
 
-## Podcast
-
-### Script generation (`POST /api/admin/podcasts/:id/generate`)
-
-LLM-generated using `getLargeLLM()` (the `large` tier, `gpt-6-sol` by default) with `podcastScriptSchema` (Zod structured output).
-
-The prompt (`buildPodcastPrompt` in `prompts/podcast.ts`) formats each story as an XML `<STORY>` block with:
-- Category, title, summary, publisher
-- Relevance reasons and limiting factors as bullet points
-
-The prompt instructs the LLM to write a podcast script with:
-- Intro (welcome to Actually Relevant Podcast)
-- Sections by category (existential risk subcategories grouped)
-- Outro (feedback request, thanks)
-
-`assemblePodcastScript()` prepends a fixed spoken first line, "This is an AI-generated voice." (`PODCAST_OPENER`), and appends the story list with links. The AI notice is set in code rather than asked of the model, so it cannot be dropped by a generation; don't move it back into the prompt.
-
 ## API Endpoints
 
-### Newsletters
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/admin/newsletters` | List (paginated, filterable by status) |
@@ -105,32 +89,17 @@ The prompt instructs the LLM to write a podcast script with:
 | POST | `/api/admin/newsletters/:id/generate` | Generate text content |
 | POST | `/api/admin/newsletters/:id/carousel` | Generate carousel ZIP (download) |
 
-### Podcasts
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/admin/podcasts` | List (paginated, filterable by status) |
-| POST | `/api/admin/podcasts` | Create |
-| GET | `/api/admin/podcasts/:id` | Get single |
-| PUT | `/api/admin/podcasts/:id` | Update |
-| DELETE | `/api/admin/podcasts/:id` | Delete |
-| POST | `/api/admin/podcasts/:id/assign` | Auto-assign recent stories |
-| POST | `/api/admin/podcasts/:id/generate` | Generate podcast script |
-
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `server/src/services/newsletter.ts` | Newsletter CRUD, story assignment, content generation, carousel orchestration |
-| `server/src/services/podcast.ts` | Podcast CRUD, story assignment, LLM script generation |
 | `server/src/services/carousel.ts` | Canvas image generation, PDF creation, ZIP bundling |
 | `server/src/routes/admin/newsletters.ts` | Newsletter admin API endpoints |
-| `server/src/routes/admin/podcasts.ts` | Podcast admin API endpoints |
 | `server/src/schemas/newsletter.ts` | Newsletter request validation schemas |
-| `server/src/schemas/podcast.ts` | Podcast request validation schemas |
-| `server/src/schemas/llm.ts` | `podcastScriptSchema`, `newsletterIntroSchema` for LLM structured output |
+| `server/src/schemas/llm.ts` | `newsletterSelectResultSchema`, `newsletterIntroSchema` for LLM structured output |
 | `server/src/prompts/newsletter-intro.ts` | `buildNewsletterIntroPrompt` for editorial intro generation |
 | `server/src/prompts/newsletter-select.ts` | `buildNewsletterSelectPrompt` for story selection |
-| `server/src/prompts/podcast.ts` | `buildPodcastPrompt` for podcast script generation |
 | `server/src/jobs/generateNewsletter.ts` | Automated weekly newsletter generation cron job |
 
 ## Modifying
@@ -138,7 +107,5 @@ The prompt instructs the LLM to write a podcast script with:
 - **To change newsletter format:** Edit the template loop in `newsletter.ts:generateContent()` and the HTML parser in `generateHtmlContent()`
 - **To change newsletter intro prompt:** Edit `buildNewsletterIntroPrompt()` in `prompts/newsletter-intro.ts`
 - **To change newsletter intro output structure:** Update `newsletterIntroSchema` in `schemas/llm.ts` AND the prompt
-- **To change podcast prompt:** Edit `buildPodcastPrompt()` in `prompts/podcast.ts`
-- **To change podcast output structure:** Update `podcastScriptSchema` in `schemas/llm.ts` AND the prompt
 - **To add new carousel image layouts:** Edit `createStoryImage()` in `carousel.ts`
 - **To use real branded assets:** Replace placeholder files in `server/assets/images/` and `server/assets/fonts/`

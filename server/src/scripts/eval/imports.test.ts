@@ -51,6 +51,8 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[]> = {
   'services/llm.js': ['createChatModel'],
   'services/bluesky.js': ['calcMaxBlurbChars'],
   'services/mastodon.js': ['calcMaxBlurbChars'],
+  // Pure dialogue rules (no I/O): the eval scores and renders with production's own validation.
+  'services/podcastDialogue.js': ['validateDialogue', 'DialogueStoryRef', 'assembleSpokenSegments', 'renderScript', 'dialogueCharBudget'],
 }
 
 describe('eval harness has no write path', () => {
@@ -66,7 +68,7 @@ describe('eval harness has no write path', () => {
     expect(offenders).toEqual([])
   })
 
-  it('imports only createChatModel and calcMaxBlurbChars from services', () => {
+  it('imports only createChatModel, calcMaxBlurbChars and the pure dialogue rules from services', () => {
     const offenders = files.flatMap(f => importsOf(f.text)
       .filter(i => i.specifier.includes('/services/'))
       .flatMap(i => {

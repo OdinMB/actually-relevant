@@ -1,10 +1,11 @@
-import type { Podcast } from '@shared/types'
+import type { PodcastListItem } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { formatDate } from '../../lib/constants'
+import { PodcastStageBadge } from './PodcastStageBadge'
 
 interface PodcastTableProps {
-  podcasts: Podcast[]
+  podcasts: PodcastListItem[]
   onView: (id: string) => void
   onDelete: (id: string) => void
 }
@@ -16,6 +17,8 @@ export function PodcastTable({ podcasts, onView, onDelete }: PodcastTableProps) 
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
             <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Title</th>
+            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Week</th>
+            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Stage</th>
             <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Status</th>
             <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Stories</th>
             <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Created</th>
@@ -30,6 +33,8 @@ export function PodcastTable({ podcasts, onView, onDelete }: PodcastTableProps) 
                   {pod.title}
                 </button>
               </td>
+              <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{pod.weekKey ?? '—'}</td>
+              <td className="px-3 py-2"><PodcastStageBadge podcast={pod} /></td>
               <td className="px-3 py-2">
                 <Badge variant={pod.status === 'published' ? 'green' : 'gray'}>
                   {pod.status === 'published' ? 'Published' : 'Draft'}

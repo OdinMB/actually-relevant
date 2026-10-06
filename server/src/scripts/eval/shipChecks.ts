@@ -5,6 +5,8 @@
  * - `social-post`: Bluesky and Mastodon post text on gpt-6-luna.
  * - `selection`: editorial selection on gpt-6-sol with publication dates,
  *   including one stale-dated candidate per group.
+ * - `podcast` (2026-10-06): the two-speaker podcast's selection and dialogue
+ *   prompts on gpt-6-sol, on the cached podcast pool.
  *
  * They run on the whole cached phase-1 sample (the calibration/holdout split
  * belongs to the rating recalibration) and only when named in `--steps`.
@@ -12,17 +14,20 @@
  */
 import { buildSelectPrompt } from '../../prompts/select.js'
 import { blueskyPostTextSchema } from '../../schemas/bluesky.js'
-import { selectResultSchema } from '../../schemas/llm.js'
+import { podcastDialogueSchema, podcastSelectResultSchema, selectResultSchema } from '../../schemas/llm.js'
 import { mastodonPostTextSchema } from '../../schemas/mastodon.js'
 import { pct, summarizeCalls } from './checks.js'
-import type { SelectionGroup, SocialPostItem } from './fixtures.js'
+import type { PodcastItem, SelectionGroup, SocialPostItem } from './fixtures.js'
 import { arm, armKey, versionedSchemaName } from './models.js'
 import type { RecalibrationStep } from './options.js'
 import { monthlyAt, runOne, type RecalibrationStepDef, type StepInput } from './recalibrationChecks.js'
 import {
-  checkShipPost, datedForReplay, selectionCriteria, socialPostCriteria, STALE_DATE, staleProbeId, staleProbesKept, type ShipPostCheck,
+  checkShipPost, datedForReplay, podcastCriteria, selectionCriteria, socialPostCriteria, STALE_DATE, staleProbeId, staleProbesKept, type ShipPostCheck,
 } from './shipRules.js'
 import { scoreSelection } from './suites/largeTier.js'
+import {
+  checkPodcastSelection, podcastEpisodeStories, podcastPool, podcastPrompt, podcastSelectPrompt, scoreDialogue,
+} from './suites/podcast.js'
 import { buildPhase1SelectPrompt } from './suites/selectPhase1Prompt.js'
 import { limited, parsedOf } from './suites/shared.js'
 import { POST_TOKENS, postPrompt } from './suites/social.js'
@@ -143,7 +148,60 @@ const selectionStep: RecalibrationStepDef = {
   },
 }
 
+// ---------------------------------------------------------------------------
+// Podcast (two-speaker dialogue)
+// ---------------------------------------------------------------------------
+
+const PODCAST_SCHEMA = versionedSchemaName('podcast', podcastDialogueSchema)
+const PODCAST_SELECT_SCHEMA = versionedSchemaName('podcast-select', podcastSelectResultSchema)
+/** The dialogue is about 5,000 characters of JSON plus reasoning; generous, for the budget gate. */
+const PODCAST_OUTPUT_TOKENS = 6000
+
+/** The cached podcast pool: not part of the rating calibration halves, so no fresh sample is needed. */
+const podcastItems = ({ fx }: StepInput): PodcastItem[] => (fx.podcast ? [fx.podcast] : [])
+
+const podcastStep: RecalibrationStepDef = {
+  name: 'podcast',
+  plan: input => podcastItems(input).flatMap(p => [
+    { arm: SOL, schemaName: PODCAST_SELECT_SCHEMA, prompt: podcastSelectPrompt(p), baseOutputTokens: SELECT_OUTPUT_TOKENS },
+    { arm: SOL, schemaName: PODCAST_SCHEMA, prompt: podcastPrompt(p), baseOutputTokens: PODCAST_OUTPUT_TOKENS },
+  ]),
+  async run(input, ctx) {
+    const items = podcastItems(input)
+    if (items.length === 0) throw new Error('the cached fixtures have no podcast pool')
+    const [selections, dialogues] = await Promise.all([
+      runOne(ctx, SOL, items, PODCAST_SELECT_SCHEMA, podcastSelectResultSchema, podcastSelectPrompt),
+      runOne(ctx, SOL, items, PODCAST_SCHEMA, podcastDialogueSchema, podcastPrompt),
+    ])
+    const p = items[0]
+    const dialogue = parsedOf(dialogues[0])
+    const selection = parsedOf(selections[0])
+    const dialogueCheck = dialogue ? scoreDialogue(p, dialogue) : null
+    const selectionCheck = selection ? checkPodcastSelection(p, selection) : null
+    const records = [...selections, ...dialogues]
+    const failed = records.filter(r => r.outcome !== 'ok' && r.outcome !== 'skipped').length
+    const stats = summarizeCalls(armKey(SOL), records)
+    const titleOf = new Map(podcastPool(p).map(s => [s.id, `${s.title} (${s.category})`]))
+    return {
+      title: 'Podcast selection and dialogue',
+      arm: armKey(SOL),
+      sample: `${p.stories.length} pool stories for the selection; the dialogue on a fixed pick of ${podcastEpisodeStories(p).length}`,
+      criteria: podcastCriteria(dialogueCheck, selectionCheck, failed),
+      details: [
+        ...(dialogueCheck?.errors.length ? ['Validation errors:', ...dialogueCheck.errors.map(e => `- ${e}`)] : []),
+        'Segue report (each segment\'s opening turn after the intro; check they connect rather than read as templates):',
+        ...(dialogueCheck?.segues.map(s => `- ${s.segment}: ${s.opening}`) ?? ['- no dialogue']),
+        'Selection:',
+        ...(selectionCheck?.picks.map(id => `- ${titleOf.get(id) ?? id}`) ?? ['- no selection']),
+      ],
+      stats: [stats],
+      monthly: monthlyAt('podcast', stats),
+    }
+  },
+}
+
 export const SHIP_STEP_DEFS = {
   'social-post': socialPostStep,
   selection: selectionStep,
+  podcast: podcastStep,
 } satisfies Partial<Record<RecalibrationStep, RecalibrationStepDef>>

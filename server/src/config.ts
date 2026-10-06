@@ -129,6 +129,37 @@ export const config = {
     // killed mid-pipeline; the next run deletes it and rebuilds.
     abandonedDraftMinutes: 30,
   },
+  // Weekly two-speaker podcast (.context/podcast.md). Constants changed in code, no environment
+  // overrides; on/off is the generate_podcast / publish_podcast job rows in the admin Jobs page.
+  podcast: {
+    // Derived, never set: dev always runs a dry run, production never does.
+    dryRun: process.env.NODE_ENV !== "production",
+    maxStories: 5,
+    minStories: 4,
+    selectModelTier: "large" as const,
+    scriptModelTier: "large" as const,
+    // Spoken characters of the whole episode, code-added opener and sign-off and audio tags included.
+    // Also the per-episode TTS ceiling.
+    spokenCharBand: [4200, 5600] as const,
+    maxTurnChars: 400,
+    maxTagsPerTurn: 2,
+    // A segment's opening turn must carry a spoken bridge of at least this many characters.
+    minBridgeChars: 40,
+    // Automatic (cron) failures in one ISO week before the episode is blocked with an alert.
+    maxAttemptsPerWeek: 3,
+    // Lease on the stage machine, renewed at every stage (database clock).
+    leaseMinutes: 30,
+    // Phase 0 outcomes (2026-10-06), used from the audio phase on.
+    voiceIdA: "gOupLcAkjEnguROwi4oS", // Darian – Warm Grounded Storyteller (HOST_A)
+    voiceIdB: "OZ0L6eISlOejga3XjDFt", // Talia – Warm Soft Guide (HOST_B)
+    ttsModelId: "eleven_v4",
+    continuityMode: "text" as const,
+    segmentPauseMs: 700,
+    chunkMaxChars: 1800,
+    // Provisional: S2 measured a promotional rate; re-measure one call after 2026-10-12.
+    monthlyTtsCharCap: 28000,
+    ownerEmail: "contact@actuallyrelevant.news",
+  },
   scheduler: {
     // Boot retry when initScheduler fails (e.g. database down at restart):
     // delay starts at initRetryBaseMs and doubles up to initRetryMaxMs, forever.

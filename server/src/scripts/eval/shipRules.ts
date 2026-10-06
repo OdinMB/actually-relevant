@@ -3,15 +3,18 @@
  * switch (decided 2026-09-24), apart from the rating recalibration in
  * recalibration.ts: a social post names the story's main actor or one key
  * number and stays faithful to the story; editorial selection still returns
- * exactly N picks now that candidates carry publication dates. Pure.
+ * exactly N picks now that candidates carry publication dates. The podcast
+ * step (2026-10-06) adds the two-speaker prompts' gate. Pure.
  */
+import { config } from '../../config.js'
 import type { StoryForBlueskyPost } from '../../prompts/bluesky.js'
-import { checkSocialPost, forbiddenContent, pct } from './checks.js'
+import { checkSocialPost, forbiddenContent, pct, type DialogueCheck } from './checks.js'
 import type { SelectionGroup, SocialPostItem } from './fixtures.js'
 import { findUnsupportedNumbers } from './numbers.js'
 import type { Criterion } from './recalibration.js'
 import { findStoryAnchors, findUnstatedNames } from './storyAnchors.js'
 import type { SelectionArmMetrics } from './suites/largeTier.js'
+import type { SelectionCheck } from './suites/podcast.js'
 
 // ---------------------------------------------------------------------------
 // Social post text
@@ -121,5 +124,48 @@ export function selectionCriteria(m: SelectionArmMetrics): Criterion[] {
     zero('Invalid IDs returned', m.invalidIds),
     zero('Declined or empty responses', m.declined),
     zero('Failed calls', m.failures),
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// Podcast (two-speaker dialogue, 2026-10-06)
+// ---------------------------------------------------------------------------
+
+/**
+ * The podcast prompts' gate: the dialogue passes production's own validation (every story covered,
+ * the spoken band, a bridge opening every segment after the intro, tags, no markup), and the
+ * selection returns 4-5 valid ids spread over the issues the pool offers.
+ */
+export function podcastCriteria(dialogue: DialogueCheck | null, selection: SelectionCheck | null, failedCalls: number): Criterion[] {
+  return [
+    {
+      name: 'Dialogue passes production validation (coverage, band, bridges, tags, markup)',
+      value: dialogue == null ? 'no dialogue' : `${dialogue.errors.length} errors`,
+      bar: '0 errors',
+      pass: dialogue != null && dialogue.errors.length === 0,
+      required: true,
+    },
+    {
+      name: 'Selection: 4-5 valid, distinct pool ids',
+      value: selection == null ? 'no selection' : `${selection.picks.length} valid, ${selection.invalidIds} invalid`,
+      bar: `${config.podcast.minStories}-${config.podcast.maxStories} valid, 0 invalid`,
+      pass: selection != null && selection.countOk && selection.invalidIds === 0,
+      required: true,
+    },
+    {
+      name: 'Selection: one story per issue where the pool allows',
+      value: selection == null ? 'no selection' : selection.distinctIssuesOk ? 'yes' : 'no',
+      bar: 'yes',
+      pass: selection?.distinctIssuesOk === true,
+      required: true,
+    },
+    {
+      name: 'Sentences over 18 words',
+      value: pct(dialogue?.longSentenceShare),
+      bar: 'mostly under 18 (prompt), not required',
+      pass: (dialogue?.longSentenceShare ?? 1) <= 0.2,
+      required: false,
+    },
+    { name: 'Failed calls', value: String(failedCalls), bar: '0', pass: failedCalls === 0, required: true },
   ]
 }

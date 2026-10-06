@@ -8,17 +8,17 @@
 import { buildSelectPrompt } from '../../../prompts/select.js'
 import { buildNewsletterSelectPrompt } from '../../../prompts/newsletter-select.js'
 import { buildNewsletterIntroPrompt } from '../../../prompts/newsletter-intro.js'
-import { buildPodcastPrompt } from '../../../prompts/podcast.js'
 import {
-  newsletterIntroSchema, newsletterSelectResultSchema, podcastScriptSchema, selectResultSchema,
-  type NewsletterIntro, type PodcastScript, type SelectResult,
+  newsletterIntroSchema, newsletterSelectResultSchema, podcastDialogueSchema, selectResultSchema,
+  type NewsletterIntro, type SelectResult,
 } from '../../../schemas/llm.js'
 import type { Fixtures, NewsletterItem, PodcastItem, SelectionGroup } from '../fixtures.js'
 import { TARGETS } from '../fixtures.js'
 import { arm, armKey } from '../models.js'
-import { checkIntro, checkPodcast, introViolations, jaccard, mean, num, pct, rate, type IntroCheck } from '../checks.js'
+import { checkIntro, introViolations, jaccard, mean, num, pct, rate, type IntroCheck } from '../checks.js'
 import { pickLowestPassing } from '../decide.js'
 import type { CallRecord, CallSiteResult, Decision, RatingItemDraft, Suite } from '../types.js'
+import { podcastEpisodeStories, podcastPrompt, renderDialogue, scorePodcast } from './podcast.js'
 import { limited, metricRow, parsedOf, runArms, statsFor } from './shared.js'
 
 const BASELINE = arm('gpt-5.2', 'medium')
@@ -36,7 +36,6 @@ const podcasts = (fx: Fixtures, limit?: number): PodcastItem[] => (fx.podcast &&
 const selectPrompt = (g: SelectionGroup) => buildSelectPrompt(g.stories, g.toSelect, g.day)
 const newsletterPrompt = (n: NewsletterItem) => buildNewsletterSelectPrompt(n.longlist, n.storiesPerIssue, n.issueNames)
 const introPrompt = (n: NewsletterItem) => buildNewsletterIntroPrompt(n.intro.stories, n.intro.issueNames, n.intro.style)
-const podcastPrompt = (p: PodcastItem) => buildPodcastPrompt(p.stories)
 
 const failuresOf = (recs: CallRecord[]) => recs.filter(r => r.outcome !== 'ok' && r.outcome !== 'skipped').length
 const count = (v: number | null) => String(v ?? 0)
@@ -191,26 +190,6 @@ function scoreIntro(recs: CallRecord<NewsletterIntro>[]): IntroArmMetrics {
   }
 }
 
-export interface PodcastArmMetrics {
-  longSentenceShare: number | null
-  publisherCoverage: number | null
-  markup: number
-  failures: number
-}
-
-function scorePodcast(ps: PodcastItem[], recs: CallRecord<PodcastScript>[]): PodcastArmMetrics {
-  const checks = ps.flatMap((p, i) => {
-    const script = parsedOf(recs[i])?.script
-    return script == null ? [] : [checkPodcast(script, p.stories.map(s => s.publisher))]
-  })
-  return {
-    longSentenceShare: mean(checks.flatMap(c => (c.longSentenceShare == null ? [] : [c.longSentenceShare]))),
-    publisherCoverage: mean(checks.flatMap(c => (c.publisherCoverage == null ? [] : [c.publisherCoverage]))),
-    markup: checks.filter(c => c.markup).length,
-    failures: failuresOf(recs),
-  }
-}
-
 /** Candidate must be no worse than the gpt-5.2 rerun on each listed "lower is better" count. */
 function noWorseThanBaseline(label: string, items: number, checks: { name: string; cand: number | null; base: number | null }[]): Decision {
   if (items === 0) return { verdict: { kind: 'none', reasons: [`${label}: no fixture items were evaluated`] }, passing: [] }
@@ -250,7 +229,7 @@ export const largeTierSuite: Suite = {
     return [
       `selection: ${groups(fx, limit).length} historical groups (target ${TARGETS.selection.groups})`,
       `newsletter selection and intro: ${newsletters(fx, limit).length} newsletters (target ${TARGETS.newsletters.count})`,
-      `podcast: ${fx.podcast ? `${fx.podcast.stories.length} stories (${fx.podcast.source})` : 'none'}`,
+      `podcast: ${fx.podcast ? `${podcastEpisodeStories(fx.podcast).length} of ${fx.podcast.stories.length} pool stories (${fx.podcast.source})` : 'none'}`,
     ]
   },
   plan(fx, limit) {
@@ -271,7 +250,7 @@ export const largeTierSuite: Suite = {
       runArms(ctx, ARMS, gs, 'select', selectResultSchema, selectPrompt),
       runArms(ctx, ARMS, ns, 'newsletter-select', newsletterSelectResultSchema, newsletterPrompt),
       runArms(ctx, ARMS, ns, 'newsletter-intro', newsletterIntroSchema, introPrompt),
-      runArms(ctx, ARMS, ps, 'podcast', podcastScriptSchema, podcastPrompt),
+      runArms(ctx, ARMS, ps, 'podcast', podcastDialogueSchema, podcastPrompt),
     ])
     const selM = {
       [BASE_KEY]: scoreSelection(gs, sel.get(BASE_KEY) ?? [], sel.get(CAND_KEY) ?? []),
@@ -335,17 +314,19 @@ export const largeTierSuite: Suite = {
       {
         id: 'podcast', title: 'Podcast script', baseline: BASE_KEY, candidates: [CAND_KEY], stats: statsFor(pod),
         metrics: [
-          metricRow('Sentences over 12 words', podM, m => m.longSentenceShare, pct, 'lower'),
+          metricRow('Dialogues failing validation', podM, m => m.invalid, count, 'lower'),
+          metricRow('Validation errors (total)', podM, m => m.validationErrors, count, 'lower'),
+          metricRow('Sentences over 18 words', podM, m => m.longSentenceShare, pct, 'lower'),
           metricRow('Publishers mentioned', podM, m => m.publisherCoverage, pct, 'higher'),
-          metricRow('Scripts with markup or stage directions', podM, m => m.markup, count, 'lower'),
           metricRow('Failed calls', podM, m => m.failures, count, 'lower'),
         ],
         decision: noWorseThanBaseline('podcast', ps.length, [
-          { name: 'share of sentences over 12 words', cand: podM[CAND_KEY]?.longSentenceShare ?? null, base: podM[BASE_KEY]?.longSentenceShare ?? null },
+          { name: 'dialogues failing validation', cand: podM[CAND_KEY]?.invalid ?? null, base: podM[BASE_KEY]?.invalid ?? null },
+          { name: 'share of sentences over 18 words', cand: podM[CAND_KEY]?.longSentenceShare ?? null, base: podM[BASE_KEY]?.longSentenceShare ?? null },
           { name: 'failed calls', cand: podM[CAND_KEY]?.failures ?? null, base: podM[BASE_KEY]?.failures ?? null },
         ]),
         ratingSet: 'podcast-script',
-        notes: fx.podcast?.source === 'recent-stories' ? ['No stored podcast had stories, so the fixture uses the week of published/selected stories before the anchor.'] : [],
+        notes: ['The dialogue covers a fixed pick from the week\'s published stories (the most relevant per issue, then by relevance); production picks with its own selection call.'],
       },
     ]
 
@@ -357,8 +338,8 @@ export const largeTierSuite: Suite = {
       })), intro, (t: NewsletterIntro) => t.intro),
       ...textDrafts('podcast-script', ps.map(p => ({
         key: p.id,
-        context_md: ['Stories to cover:', ...p.stories.map(s => `- ${s.category}: **${s.title}** (${s.publisher})`)].join('\n'),
-      })), pod, (t: PodcastScript) => t.script),
+        context_md: ['Stories to cover:', ...podcastEpisodeStories(p).map(s => `- ${s.issue}: **${s.title}** (${s.publisher})`)].join('\n'),
+      })), pod, renderDialogue),
     ]
     return { callSites: sites, ratingItems, notes: [] }
   },

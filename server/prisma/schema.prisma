@@ -210,14 +210,45 @@ model NewsletterSend {
   @@map("newsletter_sends")
 }
 
+/// Production progress of a podcast episode (forward-only; `legacy` = rows from before the two-speaker pipeline).
+/// Publication is the separate `status` axis.
+enum PodcastStage {
+  legacy
+  created
+  scripted
+  voiced
+  ready
+}
+
 model Podcast {
-  id        String        @id @default(uuid())
-  title     String
-  script    String        @default("")
-  storyIds  String[]      @map("story_ids")
-  status    ContentStatus @default(draft)
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
+  id             String        @id @default(uuid())
+  title          String
+  /// Legacy rows: the hand-voiced script. Two-speaker rows: the rendered dialogue ("HOST A: ...") for the admin.
+  script         String        @default("")
+  storyIds       String[]      @map("story_ids")
+  status         ContentStatus @default(draft)
+  /// ISO week in UTC (YYYY-Www) of the weekly episode; null for legacy rows
+  weekKey        String?       @unique @map("week_key")
+  stage          PodcastStage  @default(created)
+  /// The model's dialogue (segments of turns, storyRef = episodeStories[].ref)
+  dialogue       Json?
+  /// Snapshot of the episode's stories (ref, id, title, publisher, sourceUrl, slug, issue), frozen at scripting
+  episodeStories Json?         @map("episode_stories")
+  episodeSummary String        @default("") @map("episode_summary")
+  showNotes      String        @default("") @map("show_notes")
+  scriptModelId  String?       @map("script_model_id")
+  lastError      String?       @map("last_error")
+  failedAt       DateTime?     @map("failed_at")
+  /// Automatic (cron) failures this week; reset by an admin Resume
+  attempts       Int           @default(0)
+  blockedAt      DateTime?     @map("blocked_at")
+  blockedReason  String?       @map("blocked_reason")
+  /// Cross-process lease on the stage machine: owner = a per-process id, until = database clock
+  leaseOwner     String?       @map("lease_owner")
+  leaseUntil     DateTime?     @map("lease_until")
+  dryRun         Boolean       @default(false) @map("dry_run")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
   @@map("podcasts")
 }
