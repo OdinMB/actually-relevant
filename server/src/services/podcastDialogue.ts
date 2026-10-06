@@ -72,10 +72,15 @@ const PREFIX_RE = /^\s*(?:host|speaker)(?:[\s_-]*[a-z0-9]+)?\s*:/i
 const stripTags = (text: string) => text.replace(TAG_RE, ' ').replace(/\s+/g, ' ').trim()
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** URL check that lets the episode's own publisher names through, since every story names its publisher. */
+/**
+ * URL check that lets the episode's own publisher names through, since every story names its publisher.
+ * A name is let through only as a standalone token: not inside another word ("cap.com" for "AP") and
+ * not extended by a domain suffix or path ("reuters.com/world" for "Reuters"), so a spoken domain built
+ * from a publisher's name is still caught. A sentence-ending period after the name ("Vox.com.") is fine.
+ */
 function urlChecker(stories: DialogueStoryRef[]): (text: string) => boolean {
   const names = stories.map(s => s.publisher.trim()).filter(p => p !== '').map(escapeRegExp)
-  const publisherRe = names.length > 0 ? new RegExp(names.join('|'), 'gi') : null
+  const publisherRe = names.length > 0 ? new RegExp(`(?<![\\w.\\-/@])(?:${names.join('|')})(?![\\w\\-/@]|\\.\\w)`, 'gi') : null
   return text => URL_RE.test(publisherRe ? text.replace(publisherRe, ' ') : text)
 }
 const normalize = (text: string) => stripTags(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()

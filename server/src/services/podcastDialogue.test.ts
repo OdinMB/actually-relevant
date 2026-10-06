@@ -175,6 +175,20 @@ describe('validateDialogue', () => {
     expect(errorsOf(withTurn(d, 2, 1, `${filler(300, 'pub')} Read more at example.org today.`)).join(' ')).toMatch(/URL/)
   })
 
+  it('accepts a domain-named publisher at the end of a sentence', () => {
+    const d = goodDialogue()
+    expect(errorsOf(withTurn(d, 2, 1, `${filler(300, 'pub')} Phys.org reports the rollout is on schedule.`))).toEqual([])
+    expect(errorsOf(withTurn(d, 4, 1, `${filler(300, 'pub')} The rules apply now, according to Vox.com.`))).toEqual([])
+  })
+
+  it('still rejects a spoken domain that merely contains or extends a publisher name', () => {
+    const d = goodDialogue()
+    expect(errorsOf(withTurn(d, 3, 1, `${filler(300, 'pub')} Read it at reuters.com/world today.`)).join(' ')).toMatch(/URL/)
+    expect(errorsOf(withTurn(d, 4, 1, `${filler(300, 'pub')} Read it at vox.com/x today.`)).join(' ')).toMatch(/URL/)
+    const withAp = stories.map(s => (s.ref === 3 ? { ...s, publisher: 'AP' } : s))
+    expect(validateDialogue(withTurn(d, 3, 1, `${filler(300, 'pub')} Read it at cap.com today.`), withAp).errors.join(' ')).toMatch(/URL/)
+  })
+
   it('rejects an empty or overlong episode title', () => {
     expect(errorsOf({ ...goodDialogue(), episodeTitle: '  ' }).join(' ')).toMatch(/title/)
     expect(errorsOf({ ...goodDialogue(), episodeTitle: 'x'.repeat(81) }).join(' ')).toMatch(/title/)

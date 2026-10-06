@@ -59,6 +59,7 @@ HOST_A frames each story: what happened, where, and who reported it. HOST_B expl
 - The intro is the first story's bridge. Every later story segment opens by connecting its story to the one before: a spoken bridge that names or contrasts what came before and leads into this story. Vary the bridges; no templated "Next up" or "Moving on" lines.
 - Each story segment ends on a short line that lands the story before the next one begins.
 - The outro opens by bridging back from the last story.
+- Across the whole conversation, segment boundaries included, the same speaker never speaks more than twice in a row.
 - Tone follows the subject: calm and credible, never upbeat about harm.
 - No filler agreement ("Absolutely", "Great point", "Exactly").
 </CONSTRAINTS>
