@@ -117,9 +117,10 @@ describe('getPublishedEpisodes', () => {
 })
 
 describe('pickAutoPublishCandidate', () => {
-  it('asks for the newest never-published, never-unpublished, live ready episode of this or last ISO week that is a day old', async () => {
+  it('asks for the newest never-published, never-unpublished, live ready episode of this or last ISO week, ready since the evening before', async () => {
+    const saturdayMorning = new Date('2026-10-17T05:00:00Z') // 07:00 in Berlin, 2026-W42
     mockPrisma.podcast.findFirst.mockResolvedValueOnce(null)
-    expect(await pickAutoPublishCandidate(NOW)).toBeNull()
+    expect(await pickAutoPublishCandidate(saturdayMorning)).toBeNull()
     const query = mockPrisma.podcast.findFirst.mock.calls[0][0]
     expect(query.where).toMatchObject({
       stage: 'ready',
@@ -127,7 +128,7 @@ describe('pickAutoPublishCandidate', () => {
       status: { not: 'published' },
       publishedAt: null,
       unpublishedAt: null,
-      readyAt: { lte: new Date('2026-10-11T07:00:00Z') },
+      readyAt: { lte: new Date('2026-10-16T21:00:00Z') }, // 8 hours earlier: Friday 23:00 in Berlin
       weekKey: { in: ['2026-W42', '2026-W41'] },
     })
     expect(query.orderBy).toEqual({ readyAt: 'desc' })

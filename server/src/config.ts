@@ -194,11 +194,18 @@ export const config = {
     artworkUrl: "https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg",
     // Directory listings, set once the show is listed (owner step after the first publish).
     listenLinks: [] as { name: string; url: string }[],
-    // The automatic publish job (phase 4) only takes an episode that has been ready this long.
-    autoPublishMinAgeHours: 24,
-    // generate_podcast's weekend window (UTC): Saturday from this hour through Sunday 23:59. Outside
-    // it the job does nothing, so a boot catch-up on a weekday never starts an episode (ADR-0011).
-    weekendWindowStartHourUtc: 5,
+    // The automatic publish job only takes an episode that has been ready this long: one finished by
+    // Friday evening still goes out on Saturday morning, and the owner has the evening to listen.
+    autoPublishMinAgeHours: 8,
+    // publish_podcast runs on this zone's clock (cron 07:00 Saturday, and its Saturday-only guard),
+    // so it follows summer and winter time. Every other job runs on the server's clock (ADR-0013).
+    publishTimeZone: "Europe/Berlin",
+    // generate_podcast's window (UTC): Friday from 00:00 until this hour. Outside it the job does
+    // nothing, so a boot catch-up on another day never starts an episode (ADR-0013).
+    generateWindowEndHourUtc: 20,
+    // From this UTC hour on Friday (the last generation slot), an interactive episode still
+    // waiting for its person gets the one reminder.
+    reminderFromHourUtc: 18,
   },
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY || "",

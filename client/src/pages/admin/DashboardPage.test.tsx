@@ -29,6 +29,7 @@ vi.mock('../../lib/admin-api', () => ({
           lastError: null,
           enabled: true,
           cronExpression: '0 */6 * * *',
+          timeZone: null,
           createdAt: '2025-01-01T00:00:00Z',
           updatedAt: '2025-01-01T00:00:00Z',
         },

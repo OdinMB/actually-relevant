@@ -4,6 +4,7 @@ import { createLogger } from '../lib/logger.js'
 import { notifyJobFailure } from '../lib/notify.js'
 import { config } from '../config.js'
 import { JOB_HANDLERS } from './handlers.js'
+import { jobTimeZone } from './jobTimeZones.js'
 
 const log = createLogger('scheduler')
 
@@ -33,7 +34,7 @@ export async function initScheduler(): Promise<void> {
     }
 
     // Register cron job
-    const task = cron.schedule(job.cronExpression, () => launchJob(job.jobName, handler))
+    const task = scheduleJob(job.jobName, job.cronExpression, handler)
     tasksByName.set(job.jobName, task)
     log.info({ jobName: job.jobName, cronExpression: job.cronExpression }, 'registered')
 
@@ -192,6 +193,13 @@ async function recordFailure(jobName: string, errorMsg: string): Promise<void> {
   }
 }
 
+/** Register the job's cron task, on its fixed time zone's clock where it has one (jobTimeZones.ts). */
+function scheduleJob(jobName: string, cronExpression: string, handler: () => Promise<void>): cron.ScheduledTask {
+  const tick = () => launchJob(jobName, handler)
+  const timezone = jobTimeZone(jobName)
+  return timezone ? cron.schedule(cronExpression, tick, { timezone }) : cron.schedule(cronExpression, tick)
+}
+
 /** Fire-and-forget trigger used by cron ticks and boot catch-up. */
 function launchJob(jobName: string, handler: () => Promise<void>): void {
   runJob(jobName, handler).catch(err => {
@@ -221,7 +229,7 @@ export async function reloadJob(jobName: string): Promise<void> {
     return
   }
 
-  const task = cron.schedule(job.cronExpression, () => launchJob(jobName, handler))
+  const task = scheduleJob(jobName, job.cronExpression, handler)
   tasksByName.set(jobName, task)
   log.info({ jobName, cronExpression: job.cronExpression }, 'reloaded')
 }

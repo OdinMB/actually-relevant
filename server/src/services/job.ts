@@ -1,9 +1,10 @@
 import prisma from '../lib/prisma.js'
 import { runningJobs } from '../jobs/scheduler.js'
+import { jobTimeZone } from '../jobs/jobTimeZones.js'
 
 export async function getJobs() {
   const jobs = await prisma.jobRun.findMany({ orderBy: { jobName: 'asc' } })
-  return jobs.map(job => ({ ...job, running: runningJobs.has(job.jobName) }))
+  return jobs.map(job => ({ ...job, running: runningJobs.has(job.jobName), timeZone: jobTimeZone(job.jobName) }))
 }
 
 export async function updateJob(jobName: string, data: { cronExpression?: string; enabled?: boolean }) {

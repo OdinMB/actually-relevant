@@ -1,10 +1,11 @@
 /**
- * The publish_podcast cron entry (ADR-0012): publishes the episode `pickAutoPublishCandidate`
- * chooses (ready for at least a day, current or previous ISO week, never published or taken
- * down), on a UTC Monday only. Seeded disabled; enabling it in the admin Jobs page is how publishing goes automatic. It
- * re-reads its own row right before publishing, so disabling it during a run prevents the publish.
- * A refusal (for example an episode that is no longer ready) fails the run, so the
- * scheduler alerts.
+ * The publish_podcast cron entry (ADR-0013): publishes the episode `pickAutoPublishCandidate`
+ * chooses (ready for at least `autoPublishMinAgeHours`, current or previous ISO week, never
+ * published or taken down), on a Saturday in `config.podcast.publishTimeZone` only; the scheduler
+ * fires it at 07:00 on that zone's clock. Seeded disabled; enabling it in the admin Jobs page is
+ * how publishing goes automatic. It re-reads its own row right before publishing, so disabling it
+ * during a run prevents the publish. A refusal (for example an episode that is no longer ready)
+ * fails the run, so the scheduler alerts.
  */
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
@@ -16,13 +17,18 @@ const log = createLogger('publish_podcast')
 
 export const PUBLISH_PODCAST_JOB = 'publish_podcast'
 
-const MONDAY = 1
+const weekdayFormat = new Intl.DateTimeFormat('en-US', { timeZone: config.podcast.publishTimeZone, weekday: 'short' })
+
+/** Whether `now` falls on a Saturday by the calendar of `config.podcast.publishTimeZone`. */
+export function isPublishDay(now: Date): boolean {
+  return weekdayFormat.format(now) === 'Sat'
+}
 
 export async function runPublishPodcast(now: Date = new Date()): Promise<void> {
   // The scheduler's boot catch-up can launch this job on any day (an overdue or never-completed
-  // row); publishing is Monday-only (UTC), so outside it the run is a quiet no-op.
-  if (now.getUTCDay() !== MONDAY) {
-    log.info('not Monday (UTC), nothing to do')
+  // row); publishing is Saturday-only, so outside it the run is a quiet no-op.
+  if (!isPublishDay(now)) {
+    log.info({ timeZone: config.podcast.publishTimeZone }, 'not Saturday, nothing to do')
     return
   }
   assertPodcastRunnable({ trigger: 'cron', dryRun: config.podcast.dryRun })

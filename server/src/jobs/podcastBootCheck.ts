@@ -1,6 +1,6 @@
 /**
  * The podcast's configuration check at boot: when either podcast job row is enabled, a missing
- * setting is logged and announced through the webhook at once, rather than at the next weekend
+ * setting is logged and announced through the webhook at once, rather than at the next Friday
  * slot. A disabled podcast with no credentials stays silent. Never throws.
  */
 import prisma from '../lib/prisma.js'

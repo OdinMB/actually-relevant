@@ -1,7 +1,8 @@
 ---
 id: ADR-0012
 title: Keep publication (status) separate from production (stage) and make automatic publishing a job toggle
-status: accepted
+status: superseded
+superseded-by: ADR-0013
 date: 2026-10-06
 deciders: ["Odin Mühlenbein", "claude-code (AI)"]
 context-repo: OdinMB/actually-relevant

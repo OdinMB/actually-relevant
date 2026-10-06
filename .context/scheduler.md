@@ -6,7 +6,7 @@ The scheduler runs jobs in-process using `node-cron`, with configuration and run
 
 On server startup, `index.ts` calls `startScheduler()`, which runs `initScheduler()`:
 1. Loads all job definitions from the `job_runs` table
-2. For each enabled job with a valid cron expression, registers a cron task. A job is skipped (logged) if it is disabled, has no handler in `JOB_HANDLERS`, or has a cron expression that fails `cron.validate`.
+2. For each enabled job with a valid cron expression, registers a cron task. A job is skipped (logged) if it is disabled, has no handler in `JOB_HANDLERS`, or has a cron expression that fails `cron.validate`. The expression is read on the server's clock (UTC on Render), except for a job listed in `jobs/jobTimeZones.ts`, which is registered with node-cron's `timezone` option and read on that zone's clock, summer and winter time included. Today that is only `publish_podcast` (Europe/Berlin). `GET /api/admin/jobs` returns each job's `timeZone` (null for the server's clock), and the Jobs page shows it beside the schedule.
 3. Checks for overdue jobs (never completed, or more than 2× the estimated interval since `lastCompletedAt`; see Overdue detection) and runs them immediately
 4. Logs which jobs were registered, skipped, or triggered
 
@@ -47,10 +47,10 @@ That figure is then multiplied by 7 ÷ (days per week in the day-of-week field),
 | `bluesky_update_metrics` | `runBlueskyUpdateMetrics` | Configurable |
 | `mastodon_update_metrics` | `runMastodonUpdateMetrics` | Configurable |
 | `generate_newsletter` | `runGenerateNewsletter` | `0 4 * * 6` (Saturday 4am) |
-| `generate_podcast` | `runGeneratePodcast` | `0 6,10,14,18 * * 6,0` (weekend slots); seeded disabled |
-| `publish_podcast` | `runPublishPodcast` | `0 7 * * 1` (Monday 07:00); seeded disabled |
+| `generate_podcast` | `runGeneratePodcast` | `0 2,6,10,14,18 * * 5` (Friday slots, UTC); seeded disabled |
+| `publish_podcast` | `runPublishPodcast` | `0 7 * * 6` (Saturday 07:00 Europe/Berlin); seeded disabled |
 
-**The podcast jobs** keep their retry policy in podcast code, not here (ADR-0011; `.context/podcast.md`, "Automation"). `generate_podcast` does nothing outside its UTC weekend window (Saturday 05:00 through Sunday 23:59), so a boot catch-up on a weekday, or a manual Run on one, never starts an episode. Inside it, each slot resumes the week's episode; failures are counted on the episode, and at 3 (or on an error a retry cannot fix) the episode is blocked and the run fails once, so `notifyJobFailure` alerts once and later slots skip. `publish_podcast` does nothing on any day but a UTC Monday, publishes only an episode that has been ready for 24 hours, and re-reads its own row's `enabled` flag before publishing. Their migration seeds both rows with `last_completed_at` set, so neither runs at boot just for never having completed; that seed is more than two weeks old by the time the owner enables them, and `seed-jobs.ts` leaves it null on a fresh dev database, so a boot catch-up can still launch either job on any day: the weekend window and the Monday guard are what make that harmless. At boot, when either row is enabled, `checkPodcastConfigAtBoot` (`index.ts`) reports missing podcast settings through `notifyEvent`.
+**The podcast jobs** keep their retry policy in podcast code, not here (ADR-0013; `.context/podcast.md`, "Automation"). `generate_podcast` does nothing outside its UTC Friday window (00:00 until 20:00), so a boot catch-up on another day, or a manual Run then, never starts an episode. Inside it, each slot resumes the week's episode; failures are counted on the episode, and at 3 (or on an error a retry cannot fix) the episode is blocked and the run fails once, so `notifyJobFailure` alerts once and later slots skip. `publish_podcast` does nothing on any day that is not a Saturday in Berlin, publishes only an episode that has been ready for 8 hours, and re-reads its own row's `enabled` flag before publishing. Their migration seeds both rows with `last_completed_at` set, so neither runs at boot just for never having completed; that seed is more than two weeks old by the time the owner enables them, and `seed-jobs.ts` leaves it null on a fresh dev database, so a boot catch-up can still launch either job on any day: the Friday window and the Saturday guard are what make that harmless. At boot, when either row is enabled, `checkPodcastConfigAtBoot` (`index.ts`) reports missing podcast settings through `notifyEvent`.
 
 ## Adding a New Job
 
@@ -88,6 +88,7 @@ The Semaphore utility is at `server/src/lib/semaphore.ts`.
 |------|------|
 | `server/src/jobs/scheduler.ts` | Core scheduler: init and boot retry, cron registration, overlap prevention, hot reload |
 | `server/src/jobs/handlers.ts` | Shared `JOB_HANDLERS` map (job name → handler function) |
+| `server/src/jobs/jobTimeZones.ts` | The jobs whose cron expression is read on a fixed zone's clock (`jobTimeZone()`) |
 | `server/src/services/job.ts` | Job list with running state, and job updates (manual triggering is in `routes/admin/jobs.ts`) |
 | `server/src/lib/notify.ts` | Webhook notification for job failures |
 | `server/src/jobs/crawlFeeds.ts` | RSS crawl job handler |

@@ -1,9 +1,9 @@
 /**
- * The generate_podcast cron entry (ADR-0011). It fires at several weekend slots; inside the UTC
- * weekend window it runs this week's episode automated (podcastWeekly.ts holds the retry, attempt
+ * The generate_podcast cron entry (ADR-0013). It fires at several Friday slots; inside the UTC
+ * Friday window it runs this week's episode automated (podcastWeekly.ts holds the retry, attempt
  * cap and block policy, and sends the ready notice). A block throws, so the scheduler alerts once;
  * later slots skip the blocked episode. An episode a person runs interactively is left alone, and
- * on Sunday the owner gets one reminder that it is waiting for him.
+ * on Friday evening the owner gets one reminder that it is waiting for him.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
@@ -13,21 +13,18 @@ import { runWeeklyEpisode } from '../services/podcastWeekly.js'
 
 const log = createLogger('generate_podcast')
 
-const SATURDAY = 6
-const SUNDAY = 0
+const FRIDAY = 5
 
-/** Saturday from `weekendWindowStartHourUtc` through Sunday 23:59, in UTC whatever the server's zone. */
-export function inWeekendWindow(now: Date): boolean {
-  const day = now.getUTCDay()
-  if (day === SUNDAY) return true
-  return day === SATURDAY && now.getUTCHours() >= config.podcast.weekendWindowStartHourUtc
+/** Friday from 00:00 until `generateWindowEndHourUtc`, in UTC whatever the server's zone. */
+export function inGenerateWindow(now: Date): boolean {
+  return now.getUTCDay() === FRIDAY && now.getUTCHours() < config.podcast.generateWindowEndHourUtc
 }
 
 /**
  * Remind the owner that this week's interactive episode is waiting for him: once per episode (one
  * per ISO week), whichever slot or process gets there first. The conditional UPDATE is the claim,
  * so a notice is never sent twice; one whose post fails is not retried (at most once). While a
- * person's run holds the lease, a later slot reminds instead.
+ * person's run holds the lease there is no reminder: the person is at work on it.
  */
 async function remindWaitingEpisode(id: string, now: Date): Promise<void> {
   const episode = await prisma.podcast.findUnique({
@@ -50,11 +47,11 @@ async function remindWaitingEpisode(id: string, now: Date): Promise<void> {
 }
 
 export async function runGeneratePodcast(now: Date = new Date()): Promise<void> {
-  if (!inWeekendWindow(now)) {
-    log.info('outside the weekend window, nothing to do')
+  if (!inGenerateWindow(now)) {
+    log.info('outside the Friday window, nothing to do')
     return
   }
   const result = await runWeeklyEpisode({ trigger: 'cron', now })
   if (result.outcome === 'blocked') throw new Error(`podcast episode ${result.podcastId} blocked: ${result.reason ?? 'unknown reason'}`)
-  if (result.waitingForPerson && now.getUTCDay() === SUNDAY) await remindWaitingEpisode(result.podcastId, now)
+  if (result.waitingForPerson && now.getUTCHours() >= config.podcast.reminderFromHourUtc) await remindWaitingEpisode(result.podcastId, now)
 }

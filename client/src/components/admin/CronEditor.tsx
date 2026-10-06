@@ -56,7 +56,7 @@ export function CronEditor({ job, initialEditing = false, onSave, onCancel }: Cr
         className="text-left text-xs text-neutral-600 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
         title="Click to edit schedule"
       >
-        <span className="block">{cronToHuman(job.cronExpression)}</span>
+        <span className="block">{cronToHuman(job.cronExpression)}{job.timeZone && ` (${job.timeZone})`}</span>
         <span className="block font-mono text-neutral-400 text-[10px]">{job.cronExpression}</span>
       </button>
     )

@@ -50,16 +50,17 @@ async function main() {
       update: {},
       create: { jobName: 'generate_newsletter', cronExpression: '0 4 * * 6', enabled: false },
     }),
-    // Weekend slots (UTC on Render); the handler does nothing outside its weekend window
+    // Friday slots (UTC on Render); the handler does nothing outside its Friday window
     prisma.jobRun.upsert({
       where: { jobName: 'generate_podcast' },
       update: {},
-      create: { jobName: 'generate_podcast', cronExpression: '0 6,10,14,18 * * 6,0', enabled: false },
+      create: { jobName: 'generate_podcast', cronExpression: '0 2,6,10,14,18 * * 5', enabled: false },
     }),
+    // Saturday 07:00 on Berlin's clock (jobs/jobTimeZones.ts), summer and winter time alike
     prisma.jobRun.upsert({
       where: { jobName: 'publish_podcast' },
       update: {},
-      create: { jobName: 'publish_podcast', cronExpression: '0 7 * * 1', enabled: false },
+      create: { jobName: 'publish_podcast', cronExpression: '0 7 * * 6', enabled: false },
     }),
   ])
 

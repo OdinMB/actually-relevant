@@ -15,5 +15,6 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0008 · Pause interactive episodes for review through a per-row mode, a selected stage and explicit admin rewinds](decisions/0008-podcast-review-modes-and-rewinds.md)
 - [ADR-0009 · Track podcast runs from the episode lease in an app-level admin provider that drives a persistent, clickable toast](decisions/0009-podcast-run-progress-from-the-lease.md)
 - [ADR-0010 · Self-host podcast audio on Bunny Storage and CDN and serve the podcast feed from Express](decisions/0010-self-host-podcast-audio-and-feed.md)
-- [ADR-0011 · Retry the weekly episode at repeated weekend cron slots guarded in podcast code, not in the shared scheduler](decisions/0011-weekend-cron-slots-for-podcast-retries.md)
-- [ADR-0012 · Keep publication (status) separate from production (stage) and make automatic publishing a job toggle](decisions/0012-podcast-publication-separate-from-production.md)
+- [ADR-0011 · Retry the weekly episode at repeated weekend cron slots guarded in podcast code, not in the shared scheduler](decisions/0011-weekend-cron-slots-for-podcast-retries.md) — superseded by ADR-0013
+- [ADR-0012 · Keep publication (status) separate from production (stage) and make automatic publishing a job toggle](decisions/0012-podcast-publication-separate-from-production.md) — superseded by ADR-0013
+- [ADR-0013 · Generate the weekly episode at guarded Friday slots and auto-publish it Saturday 07:00 Berlin, apart from production](decisions/0013-friday-generation-saturday-berlin-publication.md)

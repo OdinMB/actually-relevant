@@ -1,5 +1,5 @@
 /**
- * Moving episodes in and out of the feed (ADR-0012): publish, unpublish, the published episodes the
+ * Moving episodes in and out of the feed (ADR-0013): publish, unpublish, the published episodes the
  * feed and the public JSON list, and the automatic publish job's candidate. `status = published`
  * means listed; only this module changes it. Publishing needs a `ready`, non-dry-run episode; the
  * first publication date is kept for good (the episode is never regenerated or deleted after it);
@@ -97,7 +97,7 @@ export async function getPublishedEpisodes(): Promise<PublishedEpisode[]> {
 /**
  * The episode the automatic publish job may publish: the newest `ready`, non-dry-run episode of the
  * current or the previous ISO week that was never published or taken down, and that has been ready
- * for at least `autoPublishMinAgeHours`, so the owner had a day to listen. Null when there is none.
+ * for at least `autoPublishMinAgeHours`, so the owner had the evening before to listen. Null when there is none.
  */
 export async function pickAutoPublishCandidate(now: Date = new Date()): Promise<Pick<Podcast, 'id' | 'title' | 'weekKey'> | null> {
   const readyBefore = new Date(now.getTime() - config.podcast.autoPublishMinAgeHours * HOUR_MS)

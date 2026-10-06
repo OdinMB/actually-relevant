@@ -527,6 +527,8 @@ export interface JobRun {
   enabled: boolean
   running: boolean
   cronExpression: string
+  /** IANA zone the cron expression is read in; null for the server's own clock. */
+  timeZone: string | null
   createdAt: string
   updatedAt: string
 }

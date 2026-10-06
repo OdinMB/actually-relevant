@@ -1,7 +1,8 @@
 ---
 id: ADR-0011
 title: Retry the weekly episode at repeated weekend cron slots guarded in podcast code, not in the shared scheduler
-status: accepted
+status: superseded
+superseded-by: ADR-0013
 date: 2026-10-06
 deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant

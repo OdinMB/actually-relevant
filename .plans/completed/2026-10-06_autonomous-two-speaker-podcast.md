@@ -15,6 +15,7 @@ decisions:
   - ref: .context/decisions/0012-podcast-publication-separate-from-production.md
   - ref: .context/decisions/0008-podcast-review-modes-and-rewinds.md
   - ref: .context/decisions/0009-podcast-run-progress-from-the-lease.md
+  - ref: .context/decisions/0013-friday-generation-saturday-berlin-publication.md
 type: feature
 complexity: complex
 ---
@@ -30,6 +31,8 @@ Owner decisions after Phase 2b (Odin Mühlenbein, 2026-10-06, given in the coord
 - **An interactive episode left unfinished** is left alone by the weekly automatic run, and the owner gets a reminder on Sunday that it is waiting. Implemented in Phase 4 (see there).
 - **Confirmed as designed:** segue rules are warnings on a person's edit; the cron uses automated mode; the "Edited by a person" checkbox behaves as in "Edited by a person" below.
 - **Approved later the same day** (relayed to the Phase 3 agent by its workflow, as above): the edited-episode AI line (open question 5; since confirmed in the owner's own words in session, 2026-10-06), and show artwork exists at `https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg` (3000x3000 JPEG built deterministically from the brand logo, not AI-generated), so the feed always emits `itunes:image`.
+
+Publication day (owner decision, Odin Mühlenbein, 2026-10-06, in his own words in session after the plan was implemented: "New podcast episodes should be published on Saturday morning European time by default."): recorded as ADR-0013, which supersedes ADR-0011 (weekend slots) and ADR-0012 (Monday publication; its separation of publication from production stands, restated in ADR-0013). The Saturday-morning publication is the owner's; the details are the agent's settlement, which the owner may change: `publish_podcast` at Saturday 07:00 on Europe/Berlin's clock (node-cron's `timezone` option for this one job, every other job on the server's UTC clock) with a Saturday-in-Berlin guard in place of the Monday one; the minimum time ready before auto-publish down from 24 to 8 hours; `generate_podcast` moved to Friday (slots 02, 06, 10, 14, 18 UTC, window Friday 00:00-20:00 UTC, retries and cap unchanged); the reminder about an unfinished interactive episode moved from Sunday to Friday evening (18:00 UTC, still once per episode). This replaces the plan's "Saturday-morning generation after the newsletter", "retries within the weekend" and "Sunday reminder" below, which describe the schedule as first built.
 
 Sequencing (owner, 2026-10-06): a separate scheduler/newsletter/social hardening change lands before Phase 0.
 

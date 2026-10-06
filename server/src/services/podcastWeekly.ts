@@ -33,7 +33,7 @@ export interface WeeklyResult {
 
 /**
  * ISO week of `date` in UTC (`YYYY-Www`). Not the newsletter job's `getWeekKey`, which reads the
- * server's local calendar day: the podcast's weekend window is defined in UTC.
+ * server's local calendar day: the podcast's Friday window is defined in UTC.
  */
 export function isoWeekKey(date: Date): string {
   const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
@@ -81,7 +81,7 @@ async function countAutomaticFailure(id: string, err: unknown): Promise<WeeklyOu
 const minutesSeconds = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 
 /**
- * The success notice when an episode reaches `ready`: a missing Saturday message is itself a
+ * The success notice when an episode reaches `ready`: a missing Friday message is itself a
  * signal. A notice that cannot be built is logged; it never fails the run.
  */
 async function announceReady(id: string, now: Date): Promise<void> {
