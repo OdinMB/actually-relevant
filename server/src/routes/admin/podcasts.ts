@@ -5,6 +5,7 @@ import { findOrCreateWeekEpisode, resumeEpisode, startAdminRun, type AdminRunReq
 import { rewindEpisode } from '../../services/podcastPipeline.js'
 import { getEpisodeStoryPool, replaceEpisodeStories, saveEpisodeScript, updateEpisodeMeta, PodcastEditRejectedError } from '../../services/podcastEditing.js'
 import { monthToDateChars, PodcastRefusedError } from '../../services/podcastGuards.js'
+import { publishEpisode, unpublishEpisode } from '../../services/podcastPublish.js'
 import { config } from '../../config.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
@@ -172,6 +173,30 @@ router.put('/:id/script', validateBody(podcastScriptEditSchema), async (req, res
     res.json({ podcast: await podcastService.getPodcastById(req.params.id), warnings })
   } catch (err) {
     sendFailure(res, err, 'save the script')
+  }
+})
+
+/** List a ready episode in the feed and on /podcast (409 unless ready, live and at rest). */
+router.post('/:id/publish', async (req, res) => {
+  try {
+    if (!(await findOr404(req.params.id, res))) return
+    await publishEpisode(req.params.id)
+    res.json(await podcastService.getPodcastById(req.params.id))
+  } catch (err) {
+    sendFailure(res, err, 'publish the podcast')
+  }
+})
+
+/** Take an episode out of the feed and off /podcast; always allowed, deletes nothing on the CDN. */
+router.post('/:id/unpublish', async (req, res) => {
+  try {
+    if (!(await unpublishEpisode(req.params.id))) {
+      res.status(404).json({ error: 'Podcast not found' })
+      return
+    }
+    res.json(await podcastService.getPodcastById(req.params.id))
+  } catch (err) {
+    sendFailure(res, err, 'unpublish the podcast')
   }
 })
 

@@ -111,6 +111,8 @@ export function samplePodcast(overrides: Record<string, any> = {}) {
     humanEdited: false,
     ttsSeed: null,
     storiesSelectedAt: null,
+    publishedAt: null,
+    unpublishedAt: null,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
     ...overrides,

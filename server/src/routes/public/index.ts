@@ -9,8 +9,13 @@ import homepageRouter from './homepage.js'
 import docsRouter from './docs.js'
 import sourcesRouter from './sources.js'
 import feedbackRouter from './feedback.js'
+import podcastRouter from './podcast.js'
 
 const router = Router()
+
+// Before the shared limiter: podcast directories poll the feed, possibly all from one proxy
+// address behind the /podcast.xml rewrite. The router rate-limits its JSON route itself.
+router.use('/podcast', podcastRouter)
 
 // Apply rate limiting to public API
 router.use(apiLimiter)

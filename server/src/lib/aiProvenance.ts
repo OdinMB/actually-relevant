@@ -1,7 +1,7 @@
 import { config } from '../config.js'
 
 /**
- * Machine-readable "AI-generated" markers for story text (EU AI Act Art. 50(2) interim
+ * Machine-readable "AI-generated" markers for story text and podcast episodes (EU AI Act Art. 50(2) interim
  * measure; see .context/ai-transparency.md). These are unsigned metadata: they are not the
  * watermark layer the Code of Practice expects for long text, and copied text loses them.
  */
@@ -50,3 +50,10 @@ export function aiGeneratedMarker(story: AiStoryText): AiGeneratedMarker {
 export function withAiGeneratedMarker<T extends AiStoryText>(story: T): T & { aiGenerated: AiGeneratedMarker } {
   return { ...story, aiGenerated: aiGeneratedMarker(story) }
 }
+
+/**
+ * Fields of a public podcast episode (`GET /api/podcast`) whose content an AI model generated: the
+ * written title and summary, and the voiced audio and its transcript. Every episode carries all of
+ * them, so the marker lists them all; openapi.test.ts checks each is described as AI-generated.
+ */
+export const AI_GENERATED_PODCAST_FIELDS = ['title', 'summary', 'audioUrl', 'transcriptUrl'] as const

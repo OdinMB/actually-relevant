@@ -1,6 +1,7 @@
 /**
  * A person's changes to an episode at rest: its stories (at `selected`), its script text and
- * summary (at `scripted`), its title and the "edited by a person" flag. Each change is written
+ * summary (at `scripted`), its title and the "edited by a person" flag (the one change a
+ * published episode still allows). Each change is written
  * under the episode's lease, so it cannot race a run; it ticks `humanEdited` when the stories or
  * the words changed, and rebuilds the show notes whenever their inputs change. A change to the
  * spoken words discards any audio chunks a failed voicing stored, so a resume voices the new text.
@@ -13,6 +14,7 @@ import { applyTurnEdits, assembleSpokenSegments, renderScript, textChanged, vali
 import { buildShowNotes, episodeSnapshots, loadEpisodePool, type EpisodeStory, type PoolEntry } from './podcastScript.js'
 import { withEpisodeLease } from './podcastPipeline.js'
 import { PodcastRefusedError, wasPublished } from './podcastGuards.js'
+import { invalidateFeedCache } from './podcastFeed.js'
 
 /** A person's change whose content breaks a rule (422): nothing was saved. */
 export class PodcastEditRejectedError extends Error {
@@ -134,14 +136,21 @@ export interface EpisodeMetaEdit {
 }
 
 /**
- * Change the title (once there is a script) or the "edited by a person" flag (at any stage before
- * publication). A title change never ticks the flag. The show notes follow the flag.
+ * Change the title (once there is a script, before publication) or the "edited by a person" flag
+ * (at any stage, also after publication: it only picks the AI line of the show notes and the feed
+ * description, never the audio or the GUID). A title change never ticks the flag. The show notes
+ * follow the flag, and an episode that was ever published has its feed rebuilt.
  */
 export async function updateEpisodeMeta(id: string, edit: EpisodeMetaEdit): Promise<void> {
+  let published = false
   await withEpisodeLease(id, async ({ episode, update }) => {
-    assertEditable(episode)
-    if (edit.title !== undefined && (episode.stage === 'created' || episode.stage === 'selected')) {
-      throw new PodcastRefusedError('the title can be changed once the script is written')
+    if (episode.stage === 'legacy') throw new PodcastRefusedError('a legacy episode cannot be edited')
+    published = wasPublished(episode)
+    if (edit.title !== undefined) {
+      if (published) throw new PodcastRefusedError('a published episode cannot have its title changed')
+      if (episode.stage === 'created' || episode.stage === 'selected') {
+        throw new PodcastRefusedError('the title can be changed once the script is written')
+      }
     }
     const flagChanged = edit.humanEdited !== undefined && edit.humanEdited !== episode.humanEdited
     const notes = flagChanged && episode.showNotes !== ''
@@ -149,4 +158,5 @@ export async function updateEpisodeMeta(id: string, edit: EpisodeMetaEdit): Prom
       : {}
     await update({ ...(edit.title !== undefined ? { title: edit.title } : {}), ...(edit.humanEdited !== undefined ? { humanEdited: edit.humanEdited } : {}), ...notes })
   }, 'edited')
+  if (published) invalidateFeedCache()
 }

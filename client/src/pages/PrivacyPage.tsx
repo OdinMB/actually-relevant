@@ -206,7 +206,7 @@ export default function PrivacyPage() {
                     .
                   </td>
                 </tr>
-                <tr>
+                <tr className="border-b border-neutral-100">
                   <td className="align-top py-2 pr-4">
                     <a
                       href="https://render.com/"
@@ -224,6 +224,44 @@ export default function PrivacyPage() {
                     infrastructure logs.
                   </td>
                 </tr>
+                <tr className="border-b border-neutral-100">
+                  <td className="align-top py-2 pr-4">
+                    <a
+                      href="https://bunny.net/"
+                      className="text-brand-700 hover:text-brand-800"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Bunny.net
+                    </a>
+                  </td>
+                  <td className="align-top py-2 pr-4">Podcast audio delivery</td>
+                  <td className="align-top py-2">
+                    IP address and user agent when you play or download a
+                    podcast episode, its transcript, or the show artwork,
+                    including through a podcast app. BunnyWay d.o.o. (Slovenia,
+                    EU) stores the files in Germany, delivers them from the
+                    server nearest to you, and processes this data on our
+                    behalf. IP addresses are anonymized in its logs.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="align-top py-2 pr-4">
+                    <a
+                      href="https://elevenlabs.io/"
+                      className="text-brand-700 hover:text-brand-800"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      ElevenLabs
+                    </a>
+                  </td>
+                  <td className="align-top py-2 pr-4">AI voices for the podcast</td>
+                  <td className="align-top py-2">
+                    No visitor data. We send only the episode script, which is
+                    written from published news.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -237,6 +275,8 @@ export default function PrivacyPage() {
             All fonts used on this site are self-hosted. We do not load fonts,
             scripts, or other resources from external CDNs like Google, meaning
             your IP address is not shared with third parties when you visit.
+            The one exception is podcast audio: on the podcast page, an episode
+            loads from Bunny.net only when you press play.
           </p>
 
           <h2 className="section-heading mt-10">Your Rights</h2>

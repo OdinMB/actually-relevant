@@ -14,3 +14,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0007 · Voice episodes with ElevenLabs eleven_v4 Text to Dialogue through a thin axios client](decisions/0007-elevenlabs-text-to-dialogue-client.md)
 - [ADR-0008 · Pause interactive episodes for review through a per-row mode, a selected stage and explicit admin rewinds](decisions/0008-podcast-review-modes-and-rewinds.md)
 - [ADR-0009 · Track podcast runs from the episode lease in an app-level admin provider that drives a persistent, clickable toast](decisions/0009-podcast-run-progress-from-the-lease.md)
+- [ADR-0010 · Self-host podcast audio on Bunny Storage and CDN and serve the podcast feed from Express](decisions/0010-self-host-podcast-audio-and-feed.md)

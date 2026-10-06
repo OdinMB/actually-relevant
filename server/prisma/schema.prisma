@@ -273,6 +273,10 @@ model Podcast {
   ttsSeed        Int?          @map("tts_seed")
   /// When the stories were selected: the end of the week's pool the model chose from, which the story picker lists too
   storiesSelectedAt DateTime?  @map("stories_selected_at")
+  /// First publication; once set the episode is never regenerated or deleted (its GUID and enclosure are permanent)
+  publishedAt    DateTime?     @map("published_at")
+  /// Last takedown; the automatic publish job never republishes an episode that has one
+  unpublishedAt  DateTime?     @map("unpublished_at")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 

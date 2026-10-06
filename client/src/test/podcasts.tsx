@@ -68,6 +68,8 @@ export function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     audioBytes: null,
     durationSec: null,
     readyAt: null,
+    publishedAt: null,
+    unpublishedAt: null,
     ttsChars: 0,
     ttsCharsEstimate: 5400,
     createdAt: '2026-10-10T06:00:00.000Z',

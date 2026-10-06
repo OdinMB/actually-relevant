@@ -21,6 +21,8 @@ export const AI_DISCLOSURE_COPY = {
   embedHeader: 'AI-generated headlines from Actually Relevant',
   /** Appended to the AI blurb that the share buttons prefill. */
   shareSuffix: '(AI summary via Actually Relevant)',
+  /** Label at the top of the /podcast page (owner-approved 2026-10-06, plan open question 1). */
+  podcastLabel: 'Written and voiced by AI.',
 } as const
 
 /** The attribution line under an AI-selected quote: "— {attribution} · {note}", or the note alone. */

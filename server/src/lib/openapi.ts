@@ -1,7 +1,7 @@
 import 'zod-openapi/extend'
 import { z } from 'zod'
 import { createDocument } from 'zod-openapi'
-import { AI_GENERATED_STORY_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from './aiProvenance.js'
+import { AI_GENERATED_PODCAST_FIELDS, AI_GENERATED_STORY_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from './aiProvenance.js'
 import { OPENAPI_AI_FIELD_PREFIX, OPENAPI_REPUBLISHER_NOTE } from './aiLabelCopy.js'
 
 /** Description of a field in AI_GENERATED_STORY_FIELDS: the "AI-generated." label, then the details. */
@@ -132,6 +132,44 @@ const homepageResponseSchema = z.object({
   issues: z.array(publicIssueSchema),
   storiesByIssue: z.record(z.string(), emotionBucketSchema),
 }).openapi({ ref: 'HomepageResponse' })
+
+const podcastEpisodeSchema = z.object({
+  id: z.string().uuid().openapi({ description: 'Stable episode id; also the feed item GUID.' }),
+  title: z.string().openapi({ description: aiField('Episode title written by an AI model (a person may have edited it).'), example: 'W41: Clean air and new vaccines' }),
+  aiLine: z.string().openapi({
+    description: 'Disclosure line that starts the episode description in the feed. Says the episode was written and voiced by AI, and whether a person edited it.',
+  }),
+  summary: z.string().openapi({ description: aiField('Episode summary written by an AI model (a person may have edited it).') }),
+  publishedAt: z.string().datetime(),
+  durationSec: z.number().int().nullable(),
+  audioUrl: z.string().url().openapi({
+    description: aiField('MP3 of the episode: a dialogue written by an AI model and spoken by two synthetic AI voices.'),
+    example: 'https://audio.actuallyrelevant.news/episodes/2026-W41-1a2b3c4d.mp3',
+  }),
+  audioBytes: z.number().int(),
+  transcriptUrl: z.string().url().nullable().openapi({ description: aiField('WebVTT transcript of the AI-written dialogue, with approximate timings.') }),
+  stories: z.array(z.object({
+    title: z.string().openapi({ description: aiField('Headline written by an AI model for the story page.') }),
+    publisher: z.string(),
+    sourceUrl: z.string().url(),
+    slug: z.string().nullable(),
+  })),
+  aiGenerated: z.object({
+    fields: z.array(z.enum(AI_GENERATED_PODCAST_FIELDS)),
+    digitalSourceType: z.literal(IPTC_TRAINED_ALGORITHMIC_MEDIA),
+  }).openapi({ description: 'Machine-readable marker of the AI-generated fields of this episode. Unsigned metadata, not a watermark.' }),
+}).openapi({ ref: 'PodcastEpisode' })
+
+const podcastResponseSchema = z.object({
+  show: z.object({
+    title: z.string().openapi({ example: 'Actually Relevant' }),
+    description: z.string().openapi({ description: 'Standing show description, including that the show is written and voiced by AI.' }),
+    feedUrl: z.string().url().openapi({ example: 'https://actuallyrelevant.news/podcast.xml' }),
+    artworkUrl: z.string().url().openapi({ description: 'Square show artwork (3000 px JPEG), made from the brand logo, not AI-generated.' }),
+    listenLinks: z.array(z.object({ name: z.string(), url: z.string().url() })),
+  }),
+  episodes: z.array(podcastEpisodeSchema),
+}).openapi({ ref: 'PodcastResponse' })
 
 const errorResponseSchema = z.object({
   error: z.string().openapi({ example: 'Not found' }),
@@ -361,6 +399,24 @@ export function getOpenAPIDocument(): any {
           },
         },
       },
+      '/api/podcast': {
+        get: {
+          operationId: 'getPodcast',
+          summary: 'Podcast show and episodes',
+          description:
+            'Returns the weekly podcast: show information (with the RSS feed URL for podcast apps) and every published episode, newest first. ' +
+            'Episodes are written and voiced by AI. The RSS feed itself is served at https://actuallyrelevant.news/podcast.xml.',
+          tags: ['Podcast'],
+          responses: {
+            '200': {
+              description: 'Show information and published episodes',
+              content: {
+                'application/json': { schema: podcastResponseSchema },
+              },
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {},
@@ -370,6 +426,7 @@ export function getOpenAPIDocument(): any {
       { name: 'Stories', description: 'Published story listing and detail' },
       { name: 'Issues', description: 'Issue categories and hierarchy' },
       { name: 'Feed', description: 'RSS 2.0 feeds' },
+      { name: 'Podcast', description: 'The weekly AI-written and AI-voiced podcast' },
     ],
   })
 }

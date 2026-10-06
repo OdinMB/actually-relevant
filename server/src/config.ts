@@ -179,6 +179,23 @@ export const config = {
     // render: the CDN caches a deleted file for up to 30 days, so a path is never reused.
     audioBaseUrl: "https://audio.actuallyrelevant.news",
     showTitle: "Actually Relevant",
+    // Publishing (phase 3). The feed's public URL is the Render rewrite of /podcast.xml to
+    // /api/podcast/feed.xml (.context/seo.md); the API host is not used for it.
+    feedPath: "/podcast.xml",
+    // podcast:guid, fixed for good: UUIDv5 (Podcasting 2.0 namespace ead4c236-…) of
+    // "actuallyrelevant.news/podcast.xml". Never change it, even if the feed moves.
+    feedGuid: "097a5224-a76e-5f98-98e0-151f653772ae",
+    showAuthor: "Actually Relevant",
+    // Apple Podcasts category (owner proposal, plan open question 2).
+    category: "News",
+    // Show artwork (itunes:image, required by Apple): 3000x3000 JPEG on Bunny under show/, built
+    // deterministically from the brand logo (not AI-generated). A new image gets a new file name,
+    // because the CDN caches the old one for up to 30 days.
+    artworkUrl: "https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg",
+    // Directory listings, set once the show is listed (owner step after the first publish).
+    listenLinks: [] as { name: string; url: string }[],
+    // The automatic publish job (phase 4) only takes an episode that has been ready this long.
+    autoPublishMinAgeHours: 24,
   },
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY || "",

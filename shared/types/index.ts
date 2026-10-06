@@ -246,6 +246,8 @@ export interface PodcastListItem {
   inProgress: boolean
   /** An interactive episode resting at `selected` or `scripted`, waiting for a person (no error, not blocked). */
   awaitingReview: boolean
+  /** First publication; once set the episode is never regenerated, re-edited or deleted, even after an unpublish. */
+  publishedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -289,6 +291,8 @@ export interface Podcast extends PodcastListItem {
   audioBytes: number | null
   durationSec: number | null
   readyAt: string | null
+  /** Last takedown; the automatic publish job never republishes such an episode. */
+  unpublishedAt: string | null
   /** TTS characters spent on this episode, every re-voice included */
   ttsChars: number
 }
@@ -334,6 +338,34 @@ export interface ActivePodcastRun {
   /** While voicing: chunks stored so far, and the episode's total. */
   chunksDone: number | null
   chunksTotal: number | null
+}
+
+/** A published episode on the public podcast page (`GET /api/podcast`). */
+export interface PublicPodcastEpisode {
+  id: string
+  title: string
+  /** Disclosure line: written and voiced by AI, and whether a person edited it. */
+  aiLine: string
+  summary: string
+  publishedAt: string
+  durationSec: number | null
+  audioUrl: string
+  audioBytes: number
+  transcriptUrl: string | null
+  stories: { title: string; publisher: string; sourceUrl: string; slug: string | null }[]
+  aiGenerated: { fields: string[]; digitalSourceType: string }
+}
+
+/** `GET /api/podcast`: the show and its published episodes, newest first. */
+export interface PublicPodcastResponse {
+  show: {
+    title: string
+    description: string
+    feedUrl: string
+    artworkUrl: string
+    listenLinks: { name: string; url: string }[]
+  }
+  episodes: PublicPodcastEpisode[]
 }
 
 /** A saved script edit: the episode and the segue warnings the person may keep. */

@@ -46,7 +46,7 @@ const allowedOrigins = [
 // Open CORS for public read-only endpoints (widget/embed API calls from any origin).
 // /api/subscribe/token is included: it's an anonymous, side-effect-free GET the
 // public signup form must fetch on render (the state-changing POSTs stay restricted below).
-const publicReadPaths = ['/api/stories', '/api/issues', '/api/homepage', '/api/feed', '/api/docs', '/api/subscribe/token']
+const publicReadPaths = ['/api/stories', '/api/issues', '/api/homepage', '/api/feed', '/api/docs', '/api/subscribe/token', '/api/podcast']
 app.use((req, res, next) => {
   if (publicReadPaths.some(p => req.path.startsWith(p))) {
     res.set('Access-Control-Allow-Origin', '*')

@@ -46,6 +46,18 @@ Served dynamically by the backend at `GET /api/sitemap.xml`. In production, a Re
 
 **Important:** No static `sitemap.xml` file should exist in `client/public/` — Render serves static files before applying rewrite rules.
 
+### Podcast feed rewrite
+
+The podcast's RSS feed is served the same way, at the canonical `https://actuallyrelevant.news/podcast.xml` (the URL submitted to Apple, Spotify and the other directories, so it must never change). The API host is not used.
+
+| Field | Value |
+|-------|-------|
+| Source | `/podcast.xml` |
+| Destination | `https://<backend-service>.onrender.com/api/podcast/feed.xml` |
+| Action | **Rewrite** |
+
+Same rules as the sitemap: above the SPA catch-all, and no static `podcast.xml` in `client/public/`. The `/podcast` page is an ordinary prerendered route (in both route lists below). Details: `.context/podcast.md`, "Publishing, feed and page".
+
 ### Configuration
 
 | Config Key | Env Var | Default | Description |

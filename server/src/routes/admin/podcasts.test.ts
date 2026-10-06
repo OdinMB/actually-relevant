@@ -31,12 +31,14 @@ const mockEditing = vi.hoisted(() => ({
   updateEpisodeMeta: vi.fn(),
 }))
 const mockBunny = vi.hoisted(() => ({ deleteObject: vi.fn(), putObject: vi.fn(), isBunnyConfigured: vi.fn(), publicUrl: vi.fn() }))
+const mockPublish = vi.hoisted(() => ({ publishEpisode: vi.fn(), unpublishEpisode: vi.fn() }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/podcastWeekly.js', () => mockWeekly)
 vi.mock('../../services/podcastPipeline.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastPipeline.js')>()), ...mockPipeline }))
 vi.mock('../../services/podcastEditing.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastEditing.js')>()), ...mockEditing }))
 vi.mock('../../lib/bunnyStorage.js', () => mockBunny)
+vi.mock('../../services/podcastPublish.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastPublish.js')>()), ...mockPublish }))
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
   crawlAllDueFeeds: vi.fn(),
@@ -340,6 +342,42 @@ describe('Admin Podcasts API', () => {
       mockPrisma.podcast.findUnique.mockResolvedValue(null)
       const res = await request(app).delete('/api/admin/podcasts/unknown').set(authHeader())
       expect(res.status).toBe(404)
+    })
+
+    it('refuses an episode that was published and then taken down', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready', status: 'draft', publishedAt: new Date(), unpublishedAt: new Date() }))
+      const res = await request(app).delete('/api/admin/podcasts/podcast-1').set(authHeader())
+      expect(res.status).toBe(409)
+      expect(mockPrisma.podcast.delete).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('POST /api/admin/podcasts/:id/publish and /unpublish', () => {
+    it('require auth', async () => {
+      expect((await request(app).post('/api/admin/podcasts/podcast-1/publish')).status).toBe(401)
+      expect((await request(app).post('/api/admin/podcasts/podcast-1/unpublish')).status).toBe(401)
+    })
+
+    it('publishes and returns the episode', async () => {
+      mockPublish.publishEpisode.mockResolvedValue(undefined)
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/publish').set(authHeader())
+      expect(res.status).toBe(200)
+      expect(mockPublish.publishEpisode).toHaveBeenCalledWith('podcast-1')
+      expect(res.body.id).toBe('podcast-1')
+    })
+
+    it('maps a publish refusal to 409', async () => {
+      mockPublish.publishEpisode.mockRejectedValue(new PodcastRefusedError('a dry-run episode (silent stub voice) cannot be published'))
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/publish').set(authHeader())
+      expect(res.status).toBe(409)
+      expect(res.body.error).toMatch(/dry-run/)
+    })
+
+    it('unpublishes, or answers 404 for an unknown episode', async () => {
+      mockPublish.unpublishEpisode.mockResolvedValueOnce(true)
+      expect((await request(app).post('/api/admin/podcasts/podcast-1/unpublish').set(authHeader())).status).toBe(200)
+      mockPublish.unpublishEpisode.mockResolvedValueOnce(false)
+      expect((await request(app).post('/api/admin/podcasts/unknown/unpublish').set(authHeader())).status).toBe(404)
     })
   })
 })

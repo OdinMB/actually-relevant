@@ -13,6 +13,7 @@ The public site uses `PublicLayout` with hardcoded navigation links to issue pag
 | `/about` | `AboutPage` | Mission and approach |
 | `/contact` | `ContactPage` | Email + bilingual imprint (EN/DE) |
 | `/newsletter` | `NewsletterPage` | Inline subscribe form (reuses `SubscribeForm`) |
+| `/podcast` | `PodcastPage` | Weekly AI podcast: AI label, feed link, listen links and episodes with `<audio preload="none">` on the CDN (`.context/podcast.md`) |
 
 All routes are registered in both `App.tsx` and `routes.ts` (for sitemap generation). Static routes (issues, methodology, about, contact) are prerendered at build time. Dynamic story routes are added to the sitemap via `generate-sitemap.ts`.
 
@@ -22,6 +23,8 @@ All routes are registered in both `App.tsx` and `routes.ts` (for sitemap generat
 - `GET /api/stories/:id` — Single published story
 - `GET /api/issues` — All issues (id, name, slug, description only)
 - `GET /api/issues/:slug` — Single issue by slug
+
+- `GET /api/podcast` — The podcast show and its published episodes (each with its AI line and an `aiGenerated` marker)
 
 Every story object the public JSON routes return (`/api/stories`, `/api/stories/:slug`, `/api/stories/:slug/related`, `/api/homepage`) carries a machine-readable `aiGenerated` marker, added in the route with `withAiGeneratedMarker()` (`server/src/lib/aiProvenance.ts`). A new public route that returns stories must add it too; the compliance record (`.context/ai-transparency.md`) relies on it.
 
@@ -36,6 +39,8 @@ Public RSS 2.0 feeds are available without authentication:
 - `GET /api/feed/:issueSlug` — Per-issue feed (e.g., `/api/feed/human-development`)
 
 Feed items include: title, link to story page, AI-generated summary prefixed "[AI-generated] ", publish date, and issue category. The channel description is fixed copy that says AI writes and curates the feed (`rssChannelDescription()` in `server/src/lib/aiLabelCopy.ts`; per-issue feeds no longer use the issue's own description). RSS readers never see the site's labels, so keep the item prefix when changing the feed. Responses use `Content-Type: application/rss+xml` with a 15-minute cache (`Cache-Control: public, max-age=900`).
+
+The podcast has its own hand-built feed (`GET /api/podcast/feed.xml`, public at `/podcast.xml` through a Render rewrite, mounted before the shared rate limiter); it is described in `.context/podcast.md`, "Publishing, feed and page".
 
 **Discoverability:**
 - Global RSS autodiscovery `<link>` tag is added via Helmet in `PublicLayout.tsx`

@@ -133,6 +133,16 @@ export function useSavePodcastScript() {
   })
 }
 
+/** Publish (list in the feed and on /podcast) or unpublish an episode. */
+export function usePublishPodcast() {
+  const store = useStoreEpisode()
+  return useMutation({
+    mutationFn: ({ id, publish }: { id: string; publish: boolean }) =>
+      publish ? adminApi.podcasts.publish(id) : adminApi.podcasts.unpublish(id),
+    onSuccess: store,
+  })
+}
+
 /** TTS characters this month against the cap. */
 export function usePodcastUsage() {
   return useQuery({

@@ -108,16 +108,20 @@ export async function assertBalanceCovers(chars: number): Promise<void> {
   }
 }
 
-/** Ever published, for this phase: a non-legacy row whose status is published. */
-export function wasPublished(episode: Pick<Podcast, 'stage' | 'status'>): boolean {
-  return episode.stage !== PodcastStage.legacy && episode.status === ContentStatus.published
+/**
+ * Ever published: a non-legacy row with a first publication date (or, for a row the publish
+ * migration did not backfill, a published status). Unpublishing does not undo it.
+ */
+export function wasPublished(episode: Pick<Podcast, 'stage' | 'status' | 'publishedAt'>): boolean {
+  if (episode.stage === PodcastStage.legacy) return false
+  return episode.publishedAt != null || episode.status === ContentStatus.published
 }
 
 /**
  * An episode that was published keeps its audio and GUID for good, and one a process is working
  * on must not change underneath it.
  */
-export function assertChangeable(episode: Pick<Podcast, 'stage' | 'status' | 'leaseUntil'>, action: string, now: Date = new Date()): void {
+export function assertChangeable(episode: Pick<Podcast, 'stage' | 'status' | 'publishedAt' | 'leaseUntil'>, action: string, now: Date = new Date()): void {
   if (wasPublished(episode)) throw new PodcastRefusedError(`a published episode cannot be ${action}`)
   if (episode.leaseUntil && episode.leaseUntil > now) throw new PodcastRefusedError(`the episode is in progress and cannot be ${action}`)
 }

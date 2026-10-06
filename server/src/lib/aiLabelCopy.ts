@@ -51,8 +51,7 @@ export const PODCAST_EPISODE_AI_LINE = "AI-generated: Everything in this episode
 
 /**
  * The same line for an episode a person reviewed and edited ("Edited by a person" ticked).
- * PENDING OWNER APPROVAL (plan open question 5, .context/ai-transparency.md §11): proposed
- * 2026-10-06, not yet approved. It must be approved before an edited episode is published.
+ * Approved by the owner (Odin Mühlenbein) on 2026-10-06 (plan open question 5).
  */
 export const PODCAST_EPISODE_AI_LINE_EDITED = "AI-generated: Everything in this episode was written and voiced by AI from this week's news. A person reviewed and edited this episode."
 
@@ -60,6 +59,13 @@ export const PODCAST_EPISODE_AI_LINE_EDITED = "AI-generated: Everything in this 
 export function podcastEpisodeAiLine(humanEdited: boolean): string {
   return humanEdited ? PODCAST_EPISODE_AI_LINE_EDITED : PODCAST_EPISODE_AI_LINE
 }
+
+/**
+ * The show's standing description (feed channel, iTunes summary, the public JSON and page).
+ * Approved by the owner on 2026-10-06 (plan open question 1).
+ */
+export const PODCAST_SHOW_DESCRIPTION =
+  "A weekly five-minute briefing on the news that matters most to humanity. Written and voiced by AI, based on Actually Relevant's AI analysis of the week's news."
 
 /** Carousel: pixel footer on every slide, the post text line, and the alt-text prefix. */
 export const CAROUSEL_COPY = {

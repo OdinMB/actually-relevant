@@ -121,11 +121,12 @@ The `build` script installs devDependencies itself (`npm install --include=dev`,
 | Source | Destination | Action |
 |--------|-------------|--------|
 | `/sitemap.xml` | `https://<backend-service>.onrender.com/api/sitemap.xml` | Rewrite |
+| `/podcast.xml` | `https://<backend-service>.onrender.com/api/podcast/feed.xml` | Rewrite |
 | `/*` | `/index.html` | Rewrite |
 
-**Order is critical:** The `/sitemap.xml` rule must appear *before* the catch-all `/*` rule. If reversed, the catch-all matches first and serves the SPA shell, resulting in a 404.
+**Order is critical:** The `/sitemap.xml` and `/podcast.xml` rules must appear *before* the catch-all `/*` rule. If reversed, the catch-all matches first and serves the SPA shell, resulting in a 404.
 
-The sitemap rewrite proxies requests to the backend, which generates the sitemap dynamically from published stories. No static `sitemap.xml` file should exist in `client/public/` — Render serves static files before applying rewrite rules.
+The sitemap rewrite proxies requests to the backend, which generates the sitemap dynamically from published stories. The podcast rewrite serves the podcast's RSS feed at its permanent public URL (`.context/podcast.md`). No static `sitemap.xml` or `podcast.xml` file should exist in `client/public/` — Render serves static files before applying rewrite rules.
 
 **Environment Variables:**
 
@@ -141,7 +142,7 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
    ```bash
    npx tsx src/scripts/create-admin.ts
    ```
-4. Add the `/sitemap.xml` rewrite rule to the static site (see Frontend section above)
+4. Add the `/sitemap.xml` and `/podcast.xml` rewrite rules to the static site (see Frontend section above)
 5. Verify the health endpoint: `curl https://<backend-url>/health`
 6. Verify the sitemap: `curl https://<frontend-url>/sitemap.xml`
 

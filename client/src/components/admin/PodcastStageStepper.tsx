@@ -6,6 +6,7 @@ import { LoadingSpinner } from '../ui/LoadingSpinner'
 import { useToast } from '../ui/Toast'
 import { useResumePodcast, useRewindPodcast } from '../../hooks/usePodcasts'
 import { PodcastVoiceConfirm } from './PodcastVoiceConfirm'
+import { wasPublished } from './podcastPublished'
 
 const STEPS: { stage: PodcastStage; label: string }[] = [
   { stage: 'selected', label: 'Select stories' },
@@ -32,7 +33,7 @@ export type NextAction = 'choose-mode' | 'approve-stories' | 'approve-script' | 
 
 /** What a person can do next at rest; null while a run works, once ready, published or legacy. */
 export function nextAction(podcast: Podcast): NextAction | null {
-  if (podcast.inProgress || podcast.stage === 'legacy' || podcast.stage === 'ready' || podcast.status === 'published') return null
+  if (podcast.inProgress || podcast.stage === 'legacy' || podcast.stage === 'ready' || wasPublished(podcast)) return null
   if (podcast.stage === 'created' && !podcast.mode) return 'choose-mode'
   if (podcast.awaitingReview) return podcast.stage === 'selected' ? 'approve-stories' : 'approve-script'
   return 'resume'
@@ -92,7 +93,7 @@ export function PodcastStageStepper({ podcast, pendingEdits = false }: PodcastSt
     onSettled: () => setConfirmStartOver(false),
   })
 
-  const canStartOver = !podcast.inProgress && podcast.status !== 'published' && podcast.stage !== 'created'
+  const canStartOver = !podcast.inProgress && !wasPublished(podcast) && podcast.stage !== 'created'
 
   return (
     <section aria-labelledby="podcast-steps-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-4">

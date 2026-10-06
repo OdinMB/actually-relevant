@@ -8,8 +8,10 @@ const mockPrisma = vi.hoisted(() => ({
   podcastAudioChunk: { deleteMany: vi.fn() },
 }))
 const mockPool = vi.hoisted(() => ({ loadEpisodePool: vi.fn() }))
+const mockFeed = vi.hoisted(() => ({ invalidateFeedCache: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
+vi.mock('./podcastFeed.js', () => mockFeed)
 vi.mock('./podcastScript.js', async importOriginal => ({ ...(await importOriginal<typeof import('./podcastScript.js')>()), ...mockPool }))
 
 const { replaceEpisodeStories, saveEpisodeScript, updateEpisodeMeta, getEpisodeStoryPool, PodcastEditRejectedError } = await import('./podcastEditing.js')
@@ -172,12 +174,28 @@ describe('updateEpisodeMeta', () => {
     expect(writes()[1].showNotes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE)
   })
 
-  it('refuses a published or legacy episode', async () => {
-    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'published' }))
-    await expect(updateEpisodeMeta('pod-1', { humanEdited: true })).rejects.toBeInstanceOf(PodcastRefusedError)
-    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('legacy'))
+  it('refuses a title change on an episode that was ever published, and any change on a legacy one', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'published', publishedAt: new Date() }))
     await expect(updateEpisodeMeta('pod-1', { title: 'x' })).rejects.toBeInstanceOf(PodcastRefusedError)
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'draft', publishedAt: new Date(), unpublishedAt: new Date() }))
+    await expect(updateEpisodeMeta('pod-1', { title: 'x' })).rejects.toBeInstanceOf(PodcastRefusedError)
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('legacy'))
+    await expect(updateEpisodeMeta('pod-1', { humanEdited: true })).rejects.toBeInstanceOf(PodcastRefusedError)
     expect(writes()).toHaveLength(0)
+    expect(mockFeed.invalidateFeedCache).not.toHaveBeenCalled()
+  })
+
+  it('toggles the flag on a published episode, rebuilds its show notes and its feed', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'published', publishedAt: new Date(), showNotes: 'old notes' }))
+    await updateEpisodeMeta('pod-1', { humanEdited: true })
+    expect(writes()[0].showNotes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE_EDITED)
+    expect(mockFeed.invalidateFeedCache).toHaveBeenCalledOnce()
+  })
+
+  it('leaves the feed alone for an episode that was never published', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { showNotes: 'old notes' }))
+    await updateEpisodeMeta('pod-1', { humanEdited: true })
+    expect(mockFeed.invalidateFeedCache).not.toHaveBeenCalled()
   })
 })
 

@@ -369,6 +369,10 @@ export const adminApi = {
     saveScript: (id: string, edit: PodcastScriptEdit) =>
       request<PodcastScriptSaveResult>(`/podcasts/${id}/script`, { method: 'PUT', body: JSON.stringify(edit) }),
     usage: () => request<PodcastUsage>('/podcasts/usage'),
+    /** List a ready, non-dry-run episode in the feed and on /podcast (409 otherwise). */
+    publish: (id: string) => request<Podcast>(`/podcasts/${id}/publish`, { method: 'POST' }),
+    /** Take an episode out of the feed and off /podcast; its files stay on the CDN. */
+    unpublish: (id: string) => request<Podcast>(`/podcasts/${id}/unpublish`, { method: 'POST' }),
   },
 
   // Jobs

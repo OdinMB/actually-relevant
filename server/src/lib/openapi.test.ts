@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { getOpenAPIDocument } from './openapi.js'
-import { AI_GENERATED_STORY_FIELDS } from './aiProvenance.js'
+import { AI_GENERATED_PODCAST_FIELDS, AI_GENERATED_STORY_FIELDS } from './aiProvenance.js'
 
 describe('getOpenAPIDocument', () => {
   const doc = getOpenAPIDocument()
@@ -21,6 +21,15 @@ describe('getOpenAPIDocument', () => {
       expect(description.startsWith('AI-generated. '), field).toBe(true)
       expect(description.length, field).toBeGreaterThan('AI-generated. '.length)
     }
+  })
+
+  it('labels every AI-generated field of a podcast episode and lists exactly those in its marker', () => {
+    const episode = schemas.PodcastEpisode
+    expect(episode.properties.aiGenerated.properties.fields.items.enum).toEqual([...AI_GENERATED_PODCAST_FIELDS])
+    for (const field of AI_GENERATED_PODCAST_FIELDS) {
+      expect(episode.properties[field].description.startsWith('AI-generated. '), field).toBe(true)
+    }
+    expect(doc.paths['/api/podcast'].get.responses['200']).toBeDefined()
   })
 
   it('asks republishers to label the AI text, in the API description', () => {

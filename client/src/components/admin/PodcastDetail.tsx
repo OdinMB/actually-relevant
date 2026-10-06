@@ -12,6 +12,7 @@ import { PodcastScriptEditor } from './PodcastScriptEditor'
 import { PodcastStageBadge } from './PodcastStageBadge'
 import { PodcastStageStepper } from './PodcastStageStepper'
 import { PodcastStoryPicker } from './PodcastStoryPicker'
+import { wasPublished } from './podcastPublished'
 
 interface PodcastDetailProps {
   podcast: Podcast
@@ -20,7 +21,7 @@ interface PodcastDetailProps {
 /** The title can be edited once the script exists (the script stage writes it), until publication. */
 export function canEditTitle(podcast: Podcast): boolean {
   const scripted = podcast.stage === 'scripted' || podcast.stage === 'voiced' || podcast.stage === 'ready'
-  return scripted && !podcast.inProgress && podcast.status !== 'published'
+  return scripted && !podcast.inProgress && !wasPublished(podcast)
 }
 
 /** The read-only script once there is one, or while it is being written. */
@@ -54,11 +55,14 @@ function EpisodeStoriesList({ podcast }: { podcast: Podcast }) {
   )
 }
 
-/** "Edited by a person": ticked by the server when a person changes the stories or the script; the person can change it. */
+/**
+ * "Edited by a person": ticked by the server when a person changes the stories or the script; the
+ * person can change it at any time, also after publication (it only picks the AI line).
+ */
 function HumanEditedToggle({ podcast }: { podcast: Podcast }) {
   const update = useUpdatePodcast()
   const { toast } = useToast()
-  const disabled = podcast.inProgress || podcast.status === 'published' || update.isPending
+  const disabled = podcast.inProgress || update.isPending
   return (
     <div className="flex items-start gap-2">
       <input
@@ -75,7 +79,7 @@ function HumanEditedToggle({ podcast }: { podcast: Podcast }) {
       <div>
         <label htmlFor="podcast-human-edited" className="text-sm font-medium text-neutral-800">Edited by a person</label>
         <p id="podcast-human-edited-help" className="text-xs text-neutral-600">
-          Ticked automatically when someone changes the stories or the script. It chooses the AI line in the show notes and, once publishing exists, the episode description.
+          Ticked automatically when someone changes the stories or the script. It chooses the AI line in the show notes and in the episode description in the podcast feed and on the podcast page.
         </p>
       </div>
     </div>
@@ -94,7 +98,7 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
   const { toast } = useToast()
   const update = useUpdatePodcast()
   const legacy = podcast.stage === 'legacy'
-  const atRest = !podcast.inProgress && podcast.status !== 'published'
+  const atRest = !podcast.inProgress && !wasPublished(podcast)
 
   const handleSaveTitle = async () => {
     try {
@@ -117,7 +121,7 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
           <>
             <PodcastStageBadge podcast={podcast} />
             <Badge variant={podcast.status === 'published' ? 'green' : 'gray'}>
-              {podcast.status === 'published' ? 'Published' : 'Draft'}
+              {podcast.status === 'published' ? 'Published' : podcast.publishedAt ? 'Unpublished' : 'Draft'}
             </Badge>
             {podcast.dryRun && <Badge variant="orange">Dry run</Badge>}
             {podcast.weekKey && <span className="text-sm text-neutral-600">{podcast.weekKey}</span>}

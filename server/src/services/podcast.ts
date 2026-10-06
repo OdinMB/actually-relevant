@@ -2,7 +2,7 @@
  * Reading and deleting podcast episodes for the admin: the list, one episode with its derived
  * state (in progress, what is running, waiting for review, the voicing estimate), the episodes a
  * process is working on right now, and delete with its guards. Changes go through the pipeline,
- * the weekly runs and `podcastEditing.ts`.
+ * the weekly runs, `podcastEditing.ts` and `podcastPublish.ts`.
  */
 import prisma from '../lib/prisma.js'
 import { type Prisma, type Podcast, ContentStatus, PodcastStage } from '@prisma/client'
@@ -33,6 +33,7 @@ const LIST_COLUMNS = {
   lastError: true,
   dryRun: true,
   leaseUntil: true,
+  publishedAt: true,
   createdAt: true,
   updatedAt: true,
 } as const
