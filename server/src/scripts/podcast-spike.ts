@@ -424,18 +424,23 @@ ${storiesXml}
 async function commandCheck(): Promise<void> {
   apiKey()
   console.log('ELEVENLABS_API_KEY: set')
-  const models = await getJson<Record<string, unknown>[]>('/v1/models')
-  const rows = models.map((m) => ({
-    model_id: m.model_id,
-    name: m.name,
-    can_do_text_to_speech: m.can_do_text_to_speech,
-    model_rates: m.model_rates,
-    maximum_text_length_per_request: m.maximum_text_length_per_request,
-    concurrency_group: m.concurrency_group,
-    other_flags: Object.fromEntries(Object.entries(m).filter(([k, v]) => typeof v === 'boolean' && k !== 'can_do_text_to_speech')),
-  }))
-  writeJson(path.join(OUT_DIR, 'models.json'), models)
-  console.log(JSON.stringify(rows.filter((r) => String(r.model_id).startsWith('eleven_v')), null, 2))
+  // Each free read is checked on its own, so one missing permission does not hide the others.
+  try {
+    const models = await getJson<Record<string, unknown>[]>('/v1/models')
+    const rows = models.map((m) => ({
+      model_id: m.model_id,
+      name: m.name,
+      can_do_text_to_speech: m.can_do_text_to_speech,
+      model_rates: m.model_rates,
+      maximum_text_length_per_request: m.maximum_text_length_per_request,
+      concurrency_group: m.concurrency_group,
+      other_flags: Object.fromEntries(Object.entries(m).filter(([k, v]) => typeof v === 'boolean' && k !== 'can_do_text_to_speech')),
+    }))
+    writeJson(path.join(OUT_DIR, 'models.json'), models)
+    console.log(JSON.stringify(rows.filter((r) => String(r.model_id).startsWith('eleven_v')), null, 2))
+  } catch (err) {
+    console.log(`GET /v1/models failed: ${axios.isAxiosError(err) ? JSON.stringify(err.response?.data ?? err.message) : String(err)}`)
+  }
   const sub = await subscription()
   const { tier, character_count, character_limit, next_character_count_reset_unix, status, can_extend_character_limit, allowed_to_extend_character_limit } = sub
   console.log('Subscription:', JSON.stringify({ tier, status, character_count, character_limit, remaining: character_limit - character_count, next_reset: next_character_count_reset_unix ? new Date(next_character_count_reset_unix * 1000).toISOString() : null, can_extend_character_limit, allowed_to_extend_character_limit }))
