@@ -1,14 +1,12 @@
 # Story Deduplication
 
-> **Spec:** [`.specs/dedup.allium`](../.specs/dedup.allium) -- detection rules, cluster formation, primary election, auto-rejection, admin operations, public redirect. This file covers implementation details, admin UI, configuration, and modification guides.
-
 Detects and clusters stories that cover the same event across different feeds. Prevents duplicate coverage from reaching the public site and shows "Also covered by" source attribution.
 
 ## How It Works
 
 Two-stage detection triggered after story assessment:
 
-1. **Embedding pre-filter:** Find the top N nearest stories by cosine distance (pgvector `<=>` operator) within a configurable time window. No similarity threshold -- just the closest N.
+1. **Embedding pre-filter:** Find the top `maxCandidates` (default 6) nearest stories by cosine distance (pgvector `<=>`). The search is limited to stories crawled within `timeWindowDays` (default 14). Only stories in `analyzed`, `selected` or `published` that have an embedding qualify. Each candidate must be either unclustered or the primary of its cluster, so non-primary members are never matched. There is no similarity threshold, just the closest N. Candidates without a title or summary are dropped. If no candidates remain, the LLM is not called (`findNearestCandidates()` in `server/src/services/dedup.ts`).
 2. **LLM confirmation:** The small-tier model (`gpt-6-luna` at low effort by default; gpt-5-nano until the 2026-09-24 switch) evaluates whether candidates cover the *same specific event* (not just the same broad topic, nor a different development of the same ongoing story). Returns structured assessments per candidate.
 
 ## Cluster Model
@@ -17,8 +15,28 @@ Stories are grouped into clusters via `story_clusters` table:
 
 - Each cluster has a designated **primary story** (the one shown to users)
 - Non-primary members are auto-rejected
-- Primary selection priority: admin override > published > highest relevance > first crawled
+- Automatic primary election (`updatePrimary()` in `dedup.ts`) orders members as follows:
+  1. Published stories win, because readers have already seen them.
+  2. Among published stories, the earliest `datePublished` wins.
+  3. Among unpublished stories, the highest `relevance` wins.
+  4. The tie-breaker is the earliest `dateCrawled`.
+
+  An admin can set the primary explicitly, either when creating a cluster or with set-primary. Any later re-election runs this ordering again and can override the admin's choice: after a new duplicate joins, after a member is removed, or after a merge.
 - A story can belong to at most one cluster
+
+### Auto-Rejection and Admin Operations
+
+**Auto-rejection** (`autoRejectNonPrimary()`) sets every member except the primary to `rejected`. Members already `rejected` or `trashed` are left alone. Published non-primaries are rejected only when `includePublished: true`. The automatic pipeline preserves them, and every admin cluster operation passes `true`.
+
+Admin operations (`server/src/services/cluster.ts`):
+
+- **Create** (`createManualCluster`): needs at least 2 stories, the designated primary must be one of them, and none may already be in a cluster (otherwise `ALREADY_CLUSTERED`, which becomes a 409). The admin's primary is used as given.
+- **Set primary** (`setClusterPrimary`): the story must already be a member of the cluster.
+- **Remove member** (`removeFromCluster`): the story must be a member. It leaves the cluster and, if `rejected`, goes back to `analyzed`. If one member or none remains, the cluster is dissolved. Otherwise the primary is re-elected.
+- **Merge** (`mergeClusters`): a cluster cannot be merged with itself. All source members move to the target, the source cluster is deleted, and the target's primary is re-elected.
+- **Dissolve** (`dissolveCluster`): every `rejected` member goes back to `analyzed`, all members are unlinked, and the cluster record is deleted.
+
+Every admin operation finishes by auto-rejecting with published stories included.
 
 ## Pipeline Position
 
@@ -30,13 +48,17 @@ After `assessStories()` completes, each newly analyzed story:
 1. Gets its embedding generated (via `generateStoryEmbedding`)
 2. Runs through `detectAndCluster()` which finds candidates, confirms duplicates via LLM, and creates/joins clusters
 
-## Multi-Cluster Collisions
+Dedup runs fire-and-forget after the assessment transaction commits (`assessStory()` in `server/src/services/analysis.ts`), so the embedding always exists by then. A dedup failure never rolls back or blocks the assessment. `DEDUP_ENABLED=false` skips it entirely. A cluster is formed or joined only when the LLM confirms at least one candidate as `isDuplicate`. Out-of-range candidate numbers in the LLM response are ignored.
 
-When confirmed duplicates belong to different existing clusters, the source story joins the cluster of the **newest duplicate** (by `dateCrawled`). Other clusters are not auto-merged — merging requires explicit admin action via the clusters page. A warning is logged when this occurs. Duplicates already in a different cluster stay where they are; only unclustered duplicates are added to the target cluster.
+## Cluster Formation
+
+If no confirmed duplicate is in a cluster yet, a new cluster is created with the source story and every confirmed duplicate as members. If any is clustered, the source joins the existing cluster as described below. In both cases the primary is then re-elected (`updatePrimary()`), and non-primary members are auto-rejected with published stories preserved (`autoRejectNonPrimary()` without `includePublished`).
+
+**Multi-cluster collisions:** when confirmed duplicates belong to different existing clusters, the source story joins the cluster of the **newest duplicate** (by `dateCrawled`). Other clusters are not auto-merged — merging requires explicit admin action via the clusters page. A warning is logged when this occurs. Duplicates already in a different cluster stay where they are; only unclustered duplicates are added to the target cluster.
 
 ## Selection Safety Net
 
-In `selectStories()`, before passing candidates to the LLM, non-primary cluster members are filtered out. This catches edge cases where dedup hasn't run or a story was manually un-rejected.
+In `selectStories()` (`server/src/services/analysis.ts`), before passing candidates to the LLM, non-primary cluster members are removed from the pool and set back to `rejected`. A story is eligible for selection only if it is unclustered or is its cluster's primary. This catches edge cases where dedup hasn't run or a story was manually un-rejected.
 
 ## Admin UI
 
@@ -110,7 +132,7 @@ In `server/src/config.ts` under `dedup`:
 - **Change candidate selection:** Edit `findNearestCandidates()` in `dedup.ts` -- adjust the SQL query, time window, or add distance thresholds
 - **Change LLM confirmation:** Edit prompt in `prompts/dedup.ts` and schema in `schemas/llm.ts`
 - **Change primary selection:** Edit `updatePrimary()` in `dedup.ts` -- modify the sort comparator
-- **Change auto-reject behavior:** Edit `autoRejectNonPrimary()` in `dedup.ts`. Accepts `{ includePublished?: boolean }` option -- automatic pipeline preserves published stories, but admin-initiated actions (manual cluster creation, set primary, merge) pass `includePublished: true` to reject published non-primary members.
+- **Change auto-reject behavior:** Edit `autoRejectNonPrimary()` in `dedup.ts`. Accepts `{ includePublished?: boolean }` option -- automatic pipeline preserves published stories, but admin-initiated actions (manual cluster creation, set primary, remove member, merge) pass `includePublished: true` to reject published non-primary members.
 - **Dissolve a cluster:** `dissolveCluster()` in `story.ts` -- restores rejected members to `analyzed`, removes all `clusterId` references, deletes the cluster record
 
 ## Public URL Redirect

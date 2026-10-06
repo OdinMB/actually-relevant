@@ -25,7 +25,7 @@ Merge the fenced block from `env-sample-draft.md` (lines 8-301) into it, keeping
 - Replace `<repository-url>` with `https://github.com/OdinMB/actually-relevant.git`
 - Add badges after the H1 heading
 - Add Contributing, Stewardship, and License sections before `## Troubleshooting`
-- Update Project Structure tree to include new files (LICENSE, CONTRIBUTING.md, .context/, .specs/)
+- Update Project Structure tree to include new files (LICENSE, CONTRIBUTING.md, .context/)
 
 ### 5. Update `.gitignore`
 

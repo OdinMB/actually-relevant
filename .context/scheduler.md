@@ -1,30 +1,36 @@
 # Job Scheduler
 
-> **Spec:** [`.specs/scheduler.allium`](../.specs/scheduler.allium) -- cron job entity, overlap prevention, overdue detection, hot reload, bulk task lifecycle. This file covers operational details, job registry, concurrency configuration, and admin API.
-
 The scheduler runs jobs in-process using `node-cron`, with configuration and run history stored in the `job_runs` database table. No external job queue infrastructure is needed.
 
 ## How It Works
 
 On server startup, `index.ts` calls `startScheduler()`, which runs `initScheduler()`:
 1. Loads all job definitions from the `job_runs` table
-2. For each enabled job with a valid cron expression, registers a cron task
-3. Checks for overdue jobs (last run + interval < now) and runs them immediately
+2. For each enabled job with a valid cron expression, registers a cron task. A job is skipped (logged) if it is disabled, has no handler in `JOB_HANDLERS`, or has a cron expression that fails `cron.validate`.
+3. Checks for overdue jobs (never completed, or more than 2× the estimated interval since `lastCompletedAt`; see Overdue detection) and runs them immediately
 4. Logs which jobs were registered, skipped, or triggered
 
 **Boot retry**: if step 1 fails (database down at restart), `startScheduler()` retries on an unref'd timer — 5 s doubling to a 5 min cap, forever (`config.scheduler`). After 3 failed attempts it sends one `notifyJobFailure('scheduler', …)`, and logs at info level when it finally starts. `stopScheduler()` cancels a pending retry. Without this the web service would look healthy while no job ran until the next deploy.
 
 ## Reliability Features
 
-**Overlap prevention**: Each job checks a running flag before executing. If a previous run is still in progress, the new invocation is skipped.
+**Overlap prevention**: Running state lives in memory only (`runningJobs`, a `Set<string>` in `server/src/jobs/scheduler.ts`), never in the database. `job_runs` stores only `lastStartedAt`, `lastCompletedAt` and `lastError`. Every trigger path goes through `runJob`: cron ticks, the boot catch-up and the admin manual run. If the job is already in `runningJobs`, the new run is skipped with a warning log, and nothing is queued. A manual run of a busy job still gets "triggered" back from the API but does nothing. Overlap is prevented within one process only.
 
-**Overdue detection**: On startup, the scheduler compares each job's `lastCompletedAt` against its cron interval. Jobs that missed their window (e.g., server was down) run immediately.
+**Overdue detection**: At startup, after a job is registered, it runs immediately if it never completed (`lastCompletedAt` is null), or if more than **2×** its estimated interval has passed since `lastCompletedAt` (`isOverdue`). The interval comes from `estimateCronIntervalMs`, a heuristic and not a full cron evaluator. It reads the hour field first:
+- `*/N` means N hours.
+- A comma list `H1,H2,…` means 24 ÷ (number of hours).
+- A single hour means 24 h.
+- Anything else (`*`, ranges) gives no estimate, so the job is **never** overdue.
+
+That figure is then multiplied by 7 ÷ (days per week in the day-of-week field), so `0 4 * * 6` comes out at 168 h and `0 9 * * 1-5` at 24 h × 7/5. The day-of-week parser understands `*`, single days (0 and 7 are both Sunday), ranges, wrap-around ranges (`5-2` = Fri to Tue) and comma lists. An unrecognized pattern (e.g. `*/2`) falls back to a multiplier of 1.
 
 **Error tracking**: Each job run updates `lastStartedAt` at start, then `lastCompletedAt` (and `lastError` on failure) when it finishes — both the success and caught-error paths write `lastCompletedAt`. Failed jobs don't block subsequent runs. `runJob` never rejects: a failed start or completion write counts as a job failure (a failed start write means the handler never runs), a failed error-path write is logged (`failed to record job failure`), and the job always leaves `runningJobs`. Cron ticks and boot catch-up go through `launchJob`, which adds a defensive `.catch`. A rejection escaping here used to crash the process (Node exits on unhandled rejections); there is deliberately no process-wide `unhandledRejection` handler, so any other escape still crashes visibly. A **hard kill** (OOM, SIGKILL) bypasses the finish writes, leaving `lastStartedAt` newer than `lastCompletedAt`; the admin Jobs table surfaces that as an **Incomplete** (red) status rather than a stale **OK**, so a crashed run is visible (see `JobStatusBadge.tsx`).
 
+**Run bookkeeping**: A run starts by adding the job to `runningJobs`, then writes `lastStartedAt = now` and clears `lastError`. The handler is called only after that write succeeds. On success the run writes `lastCompletedAt`. On failure it writes `lastError` and `lastCompletedAt` and calls `notifyJobFailure(jobName, error)`. Either way the job leaves `runningJobs` in a `finally`.
+
 **Failure notifications**: When a job fails, `notifyJobFailure()` sends a POST to the URL in the `WEBHOOK_URL` environment variable (if set) with the job name, error message, and timestamp. See `server/src/lib/notify.ts`.
 
-**Hot reload**: When a job's cron expression or enabled flag is updated via the admin API (`PUT /api/admin/jobs/:jobName`), the scheduler reloads only that job (`reloadJob`) — stopping its cron task and re-registering it from the database. It does not run an overdue check. No server restart needed.
+**Hot reload**: When a job's cron expression or enabled flag is updated via the admin API (`PUT /api/admin/jobs/:jobName`), the scheduler reloads only that job (`reloadJob`) — stopping its cron task and re-registering it from the database. It does not run an overdue check. No server restart needed. On reload, the job is registered again only if it is still enabled, has a handler in `JOB_HANDLERS`, and has an expression that passes `cron.validate`; otherwise it stays unregistered. `PUT /api/admin/jobs/:jobName` rejects an invalid cron expression with 400 before saving.
 
 **Manual triggers**: Every job can be triggered via `POST /api/admin/jobs/:jobName/run`, which runs the job in the background regardless of schedule.
 

@@ -8,7 +8,7 @@ AI-curated news platform that evaluates article relevance to humanity using LLM 
 
 **IMPORTANT**: Unless specified otherwise, follow the process outlined in the `/workflow` skill.
 
-**Allium specs in the workflow:** During the **Planning** step, read the relevant `.specs/*.allium` file(s) for any subsystem the task touches. The spec defines what the system guarantees; plans should respect those contracts or explicitly propose changes. During **Documentation**, if the implementation changed domain behavior (new rules, modified transitions, new entities), update the affected spec using the `/allium` skill. Context files only need updating when implementation details change.
+**Behavior is documented in `.context/`:** each subsystem's `.context/<topic>.md` states its rules and guarantees as well as how it is built. Read it while planning; when a change alters behavior, correct that file in the same change. Hard-to-reverse choices go in the ADR log (`.context/decisions.md`).
 
 ## Project Structure
 
@@ -18,8 +18,7 @@ actually-relevant/
 ├── server/          # Express backend (Prisma + LangChain + OpenAI)
 ├── shared/          # Shared types and constants
 ├── scripts/         # Build helper shared by client and server
-├── .specs/          # Behavioral specs (allium) -- what the system guarantees
-├── .context/        # Implementation reference -- how it's built and operated
+├── .context/        # Subsystem docs -- behavior, how it's built and operated; ADR log
 ├── .plans/          # Active development plans
 │   └── completed/   # Archive of all past plans (70+ files)
 ├── BACKLOG.md       # Deferred features
@@ -116,33 +115,29 @@ Separate git repo for marketing, research, strategy. **Never write, edit, or cre
 
 Key dirs: `pm/state/` (business context), `pm/backlog/` (priorities), `pm/plans/` (active/completed plans), `pm/references/` (research).
 
-## Spec Files (`.specs/`)
-
-Behavioral specifications defining domain rules, entities, and invariants in Allium. **Authoritative source for what the system guarantees.** See `.specs/README.md` for conventions.
-
-Covers: story-pipeline, crawl-and-extraction, authentication, scheduler (includes task queue), feed-management, newsletter-and-podcast (newsletter only), podcast, social-posting, search, dedup, subscription.
-
 ## Context Files (`.context/`)
 
-Implementation reference docs. **Read the relevant file before modifying a subsystem.** See `.context/README.md` for conventions. Files with a spec counterpart include a cross-reference header; the spec is authoritative.
+Subsystem docs: behavioral rules and implementation reference. **Read the relevant file before modifying a subsystem.** See `.context/README.md` for conventions.
 
 | File | Topic |
 |------|-------|
 | `story-pipeline.md` | Status transitions, jobs, admin endpoints, slugs, field reference |
-| `content-extraction.md` | 3-tier extraction chain, crawl flow, resource limits, adding feeds |
+| `content-extraction.md` | 3-tier extraction chain, crawl flow, conditional RSS, resource limits, adding feeds |
+| `feed-management.md` | Feed CRUD and soft delete, crawl due rule, crawl-health counters, quality metrics, favicons |
 | `llm-analysis.md` | Model tiers (GPT-6 defaults; prompts and models change together), prompt directory, schema-driven format, analysis stages |
 | `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks |
 | `prompting.md` | Prompt conventions for the GPT-5/GPT-6 reasoning models and calibration lessons (read before modifying prompts) |
 | `scheduler.md` | Job registry, overlap prevention, concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
-| `newsletter-podcast.md` | Newsletter: create-assign-generate workflow, templates, carousel |
+| `newsletter-podcast.md` | Newsletter: create-assign-select-generate workflow, issue ordering, templates, Plunk sending, carousel |
 | `decisions.md` | Architectural decision log: the index, with one file per decision in `.context/decisions/`; append-only history |
 | `podcast.md` | Weekly two-speaker podcast: stages, lease, weekly run and blocks, selection and dialogue rules (segues), admin endpoints |
-| `authentication.md` | JWT flow, cookie config, token rotation, roles |
+| `authentication.md` | JWT flow, cookie config, token rotation and reuse rules, roles |
+| `subscription.md` | Double opt-in newsletter signup, bot gate (honeypot + form token), Plunk, contact cleanup |
 | `admin-dashboard.md` | TanStack Query patterns, URL-persisted filters, bulk actions |
 | `public-website.md` | Routes, positivity slider, RSS feeds, design system |
-| `dedup.md` | Cluster model, pipeline integration, admin clusters page |
-| `embeddings.md` | Trigger points, hybrid RRF search, backfill script |
+| `dedup.md` | Cluster model, primary election, auto-reject, admin cluster operations, pipeline integration |
+| `embeddings.md` | Trigger points, hybrid RRF search, related stories and cache, backfill script |
 | `ui-conventions.md` | SEO checklist, CSS classes, bundle splitting, accessibility, spelling |
 | `accessibility.md` | Full WCAG 2.2 AA patterns, ARIA, forms, testing checklist |
 | `seo.md` | Sitemap, Render rewrites, robots.txt, route registration, head-tag defaults (`DefaultSeo` + `data-rh` fallbacks in `index.html`) |
@@ -151,7 +146,7 @@ Implementation reference docs. **Read the relevant file before modifying a subsy
 | `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands |
 | `deployment.md` | Render services; why builds install devDependencies and pin `tsc` (read before touching build scripts) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
-| `mastodon.md` | Static token auth, shared social logic, post format |
+| `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |
 | `ai-transparency.md` | EU AI Act Art. 50 record: AI inventory, labels, machine-readable markers, text-watermark gap, open owner decisions |
 | `client/.context/skeletons.md` | Skeleton components for loading states (prevents CLS) |
 

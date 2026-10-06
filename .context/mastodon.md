@@ -1,7 +1,5 @@
 # Mastodon Integration
 
-> **Spec:** [`.specs/social-posting.allium`](../.specs/social-posting.allium) -- channel sum type, story selection, draft generation, publishing, duplicate prevention (shared with Bluesky). This file covers Mastodon-specific implementation details, authentication, API endpoints, and configuration.
-
 ## Overview
 
 Automated and manual posting of stories to Mastodon via the REST API. Stories can be posted manually from the admin stories page (single or bulk with LLM selection) or automatically via the unified `social_auto_post` cron job. Each post includes LLM-generated text, a metadata line, and a story URL (Mastodon auto-generates link previews from og: tags).
@@ -38,10 +36,20 @@ Mastodon posts are limited to 500 characters (configurable via `MASTODON_CHAR_LI
 
 To avoid duplicating story selection and post generation across channels, shared logic lives in `server/src/services/socialMedia.ts`:
 
-- **`findAutoPostCandidates(lookbackHours, channels)`** — Finds published stories with no post, in any status, on at least one **enabled** channel (only the enabled channels' tables are queried). With both enabled, a story posted to Bluesky but not Mastodon is still a candidate; with only Bluesky enabled, it is not. Draft and failed posts count as posted because `generateDraft` refuses any story that already has a post on the channel.
+- **`findAutoPostCandidates(lookbackHours, channels)`** — Finds published stories with no post, in any status, on at least one **enabled** channel (only the enabled channels' tables are queried). With both enabled, a story posted to Bluesky but not Mastodon is still a candidate; with only Bluesky enabled, it is not. Draft and failed posts count as posted because `generateDraft` refuses any story that already has a post on the channel. A candidate is a story with `status = published`, published within the lookback window, and non-null `title`, `summary` and `slug`.
 - **`pickBestStoryForSocial(storyIds)`** — Platform-agnostic LLM picker, reuses the Bluesky pick-best prompt (criteria are universal: timeliness, emotional appeal, shareability).
 
 The unified `social_auto_post` job (`server/src/jobs/socialAutoPost.ts`) uses a channel adapter pattern: it finds candidates once, picks a best story once, then iterates over enabled channels to generate and publish posts. Each channel has its own text generation (different constraints) and publishing logic.
+
+A channel counts as enabled only when its `autoPost.enabled` flag is on **and** its credentials are configured (`isBlueskyConfigured()` / `isMastodonConfigured()` in `server/src/lib/`). With no enabled channel the job does nothing. After the single pick, the job drafts and posts only on the enabled channels that have no post for that story in any status. On a channel that already has one, it skips the story instead of failing.
+
+### Metadata Line
+
+`buildMetaLine()` (`services/socialPostFormat.ts`) joins `Issue | Emotion | found on Publisher | AI-generated` with ` | ` and leaves out any segment that is missing. Issue is the story's effective issue (`story.issue ?? story.feed.issue`). Emotion is the capitalized emotion tag. Publisher is the feed title. `AI-generated` is always the last segment. It is the post's own AI label (AI Act Art. 50(4)), because someone reading a single post never sees the account bio.
+
+### Post Lifecycle and Duplicate Prevention
+
+Each post table (`bluesky_posts`, `mastodon_posts`) holds at most one post per story, so a story gets one post per channel. This is enforced by a unique constraint on `storyId`. `generateDraft` checks first and throws "Story already has a {Channel} post", which the routes turn into a friendlier error. Posts go `draft` → `published` (sets `publishedAt`) or `draft` → `failed` (sets `error`). The auto-post job publishes straight after drafting. In the manual flow the admin edits the draft and then publishes it. Editing and publishing are allowed only on a `draft` ("Can only edit/publish draft posts"). Delete works in any status. To retry a failed post, the admin deletes it and generates a new draft.
 
 ## Flows
 

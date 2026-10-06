@@ -1,0 +1,67 @@
+# Feed Management
+
+Feed lifecycle, crawl scheduling and health tracking, quality metrics and favicons. Code: `server/src/services/feed.ts`, `server/src/services/favicon.ts`, `server/src/routes/admin/feeds.ts`. Crawling and extraction themselves are in `content-extraction.md`.
+
+## Creating and Updating Feeds
+
+Creating a feed requires `title`, `rssUrl` and an `issueId` that exists. An unknown issue fails with "Issue not found", and an update that changes `issueId` is checked the same way. New feeds start `active = true` with both failure counters at 0. `crawlIntervalHours` defaults to 24 in the schema and in Zod (`server/prisma/schema.prisma`, `server/src/schemas/feed.ts`); the admin form (`client/src/components/admin/FeedForm.tsx`) pre-fills 6. Optional fields: `url` (homepage), `displayTitle`, `language`, `region`, `htmlSelector`.
+
+## Deleting Feeds (Soft Delete)
+
+`deleteFeed()` only deactivates a feed that has any stories (`active = false`, returning `action: 'deactivated'`). This keeps the link between stories and their source feed, which attribution, newsletters and favicons depend on. A feed with no stories is deleted outright (`action: 'deleted'`).
+
+## When a Feed Is Due
+
+The crawl job (`crawlAllDueFeeds()`) takes the feeds that `getDueFeeds()` returns. A feed is due when it is active and either `lastCrawledAt` is null or `lastCrawledAt + crawlIntervalHours < now()`. The filter runs in SQL against each feed's own interval. Inactive feeds are never crawled on schedule.
+
+## Crawl Status and Health Counters
+
+All of this is in `updateCrawlStatus()` in `server/src/services/feed.ts`. Every outcome sets `lastCrawlResult`. Error fields change only on a new error (`lastCrawlError` and `lastCrawlErrorAt` are set) or a success (both cleared); any other outcome leaves the previous error visible.
+
+| Outcome | `lastCrawledAt` | `consecutiveFailedCrawls` | `consecutiveEmptyCrawls` / `lastSuccessfulCrawlAt` |
+|---|---|---|---|
+| At least one story created | now | 0 | 0 / now |
+| Every new item failed extraction (total failure) | unchanged, so the feed is retried next run; on the 3rd consecutive total failure (`MAX_CONSECUTIVE_FAILURES`) it is forced to now and the counter resets, to break the retry loop | +1 (or reset at 3) | unchanged |
+| RSS had items but all were duplicates (nothing new) | now | 0 | unchanged |
+| RSS returned zero items (not 304) | now (the crawler reports this as `hadSuccess: true`, so errors are cleared) | 0 | +1 / unchanged |
+| 304 Not Modified | now | 0 | unchanged; errors untouched. A 304 is not an empty crawl. |
+| `crawlFeed` throws (in `crawlAllDueFeeds`) | treated as a total failure with "RSS fetch failed: …" | +1 | unchanged |
+
+`parseFeed()` never throws. A network or parse error returns zero items and so lands in the "zero items" row: an unreachable feed looks like an empty one, and its earlier error is cleared.
+
+## Stale-Feed Warning
+
+In the feed table, a feed with `consecutiveEmptyCrawls >= 3` shows an "N empty" warning icon. Its tooltip says "No new articles in last N crawls" and gives the last success time, to flag stale or misconfigured feeds (`client/src/components/admin/FeedTable.tsx`, threshold hard-coded). `config.crawl.staleAfterEmptyCrawls` (default 5) exists but is not used by this UI.
+
+## Quality Metrics
+
+`GET /api/admin/feeds/quality` returns these per feed (`getAllFeedQualityMetrics()`):
+
+- `totalCrawled`: all stories in the feed, any status.
+- `publishedCount`: stories with status `published`.
+- `publishRate`: published ÷ total, rounded to 3 decimals, 0 when the feed has no stories.
+- `avgRelevance`: mean `relevance` of stories in `analyzed`, `selected` or `published` that have a rating, rounded to 1 decimal, otherwise null.
+- `extractionMethods`: `crawlMethod → count`, counting only stories with a `crawlMethod`.
+
+Feeds with no stories are included. Results are cached in process memory for `config.feedQuality.cacheMinutes` (10). The feed table shows the dominant method, and the edit panel shows the full percentage breakdown.
+
+## Favicons
+
+The favicon is stored at `client/public/images/feeds/<feedId>.png` (`FAVICON_DIR` overrides the folder). The fetched bytes are written as they are, without converting them to PNG, and the feed ID must be a UUID. The source host is the homepage `url` if set, otherwise the `rssUrl`. The fetcher tries that hostname first, then each shorter parent domain down to two labels (`feeder-prod.int.politico.com` → `int.politico.com` → `politico.com`). For each domain it tries, in order:
+
+1. The Google favicon API at 32 px. Responses of 400 bytes or less are treated as Google's generic globe and rejected.
+2. The homepage HTML (reading at most 2 MB): `<link rel*="icon">` entries are sorted by declared size closest to 32 px, and entries with no size go last.
+3. `/favicon.ico`.
+
+An accepted image must have an `image/*` content type, be non-empty and be at most 100,000 bytes. It is read in a stream that stops once it passes the limit, with a 10 s timeout. `POST /api/admin/feeds/:id/favicon` always refetches (`force = true`). `POST /api/admin/feeds/fetch-favicons` covers only active feeds, skips any feed that already has a favicon, runs 5 at a time, and returns succeeded, failed and skipped counts plus errors.
+
+## Key Files
+
+| File | Role |
+|------|------|
+| `server/src/services/feed.ts` | CRUD, due query, crawl status, quality metrics |
+| `server/src/services/favicon.ts` | Favicon discovery and storage |
+| `server/src/routes/admin/feeds.ts` | Admin feed endpoints |
+| `server/src/schemas/feed.ts` | Zod schemas and defaults |
+| `client/src/components/admin/FeedTable.tsx` | Feed table, stale warning, dominant extraction method |
+| `client/src/components/admin/FeedForm.tsx` | Create/edit form |

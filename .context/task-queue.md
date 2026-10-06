@@ -1,10 +1,8 @@
 # Server-Side Task Queue
 
-> **Spec:** [`.specs/scheduler.allium`](../.specs/scheduler.allium) (BulkTask section) -- task lifecycle, progress tracking, cleanup rules. This file covers implementation details, client/server architecture, polling, and concurrency configuration.
-
 ## Overview
 
-Bulk LLM operations (pre-assess, assess, select) run as background tasks on the server with concurrency control via `Semaphore`. The client submits a single request and polls for progress.
+Bulk LLM operations run as background tasks on the server with concurrency control via `Semaphore`. The client submits a single request and polls for progress. Task types (`BulkTaskType` in `shared/types/index.ts` and `server/src/lib/taskRegistry.ts`): `preassess`, `assess`, `select`, `reclassify` (issue reassignment) and `emotion` (emotion tagging only).
 
 ## Architecture
 
@@ -33,11 +31,13 @@ In-memory `Map<string, TaskState>` singleton. Tasks are ephemeral — created on
 - `clear()` — Testing utility to reset state
 - `destroy()` — Stops cleanup timer and clears all tasks
 
-Error messages are capped at 20 per task.
+### Task Lifecycle
+
+A task is created with status `running`, counters `completed = 0` and `failed = 0`, an empty `errors` list, its `storyIds` and `createdAt`. Each processed story adds one to `completed` or `failed`. A failure message is added to `errors` only while fewer than 20 are stored (`MAX_ERRORS`). When every item has been processed, `complete()` sets `completedAt`. The status becomes `failed` only if **every** item failed (`failed > 0 && completed === 0`); otherwise it becomes `completed`, including when only some items failed. A cleanup timer runs every 60 s (`CLEANUP_INTERVAL_MS`) and removes tasks whose `completedAt` is more than 10 minutes old (`COMPLETED_TTL_MS`). A task that never completes is never removed.
 
 ### Bulk Analysis Functions (`server/src/services/analysis.ts`)
 
-Three fire-and-forget wrappers that accept a `taskId` and update progress:
+Fire-and-forget wrappers (`bulkReclassify` and `bulkTagEmotions` follow the same pattern as the three below) that accept a `taskId` and update progress:
 
 - `bulkPreAssess(storyIds, taskId)` — Reuses existing `preAssessStories()` batching, updates progress after completion
 - `bulkAssess(storyIds, taskId)` — Runs each story through `assessStory()` gated by `Semaphore(config.concurrency.assess)`
@@ -50,10 +50,12 @@ Three fire-and-forget wrappers that accept a `taskId` and update progress:
 | `POST` | `/stories/bulk-preassess` | Submit bulk preassess. Returns `202 { taskId }`. |
 | `POST` | `/stories/bulk-assess` | Submit bulk assess. Returns `202 { taskId }`. |
 | `POST` | `/stories/bulk-select` | Submit bulk select. Returns `202 { taskId }`. |
+| `POST` | `/stories/bulk-reclassify` | Submit bulk issue reassignment. Returns `202 { taskId }`. |
+| `POST` | `/stories/bulk-tag-emotions` | Submit bulk emotion tagging. Returns `202 { taskId }`. |
 | `GET` | `/stories/tasks/:taskId` | Poll task progress. Returns `TaskStateResponse`. |
 | `GET` | `/stories/processing` | Get all story IDs currently being processed. |
 
-All bulk endpoints validate `{ storyIds: string[] }` via `bulkStoryIdsSchema` (1-500 UUIDs).
+All bulk endpoints validate `{ storyIds: string[] }` via `bulkStoryIdsSchema` (1-500 UUIDs). IDs already in a running task are dropped (`filterProcessingIds`) and returned as `skipped`; if none remain, the endpoint answers 409.
 
 ## Client Components
 
@@ -70,6 +72,8 @@ Methods: `bulkPreassess`, `bulkAssess`, `bulkSelect`, `taskStatus`, `processing`
 Both `launchTask` and `launchPolledTask` accept an optional `storyIds` parameter to populate `processingIds`.
 
 ### Story Table (`client/src/components/admin/StoryTable.tsx`)
+
+A story counts as "processing" when its ID belongs to any task whose status is `running`, across all tasks (`getProcessingStoryIds()`, `GET /stories/processing`). The client shows progress as (`completed` + `failed`) / `total`.
 
 Accepts `processingIds?: Set<string>`. When a story is processing:
 - Row gets a light brand-colored background
@@ -88,7 +92,7 @@ The client sends up to 500 IDs in a single request. The server gates LLM calls t
 ## Limitations
 
 - **In-memory only** — Tasks are lost on server restart. Client shows an error on next poll.
-- **No deduplication** — Submitting the same stories twice creates two tasks. Semaphore prevents LLM overload.
+- **Per-process deduplication only** — Stories already in a running task are skipped (see API Endpoints), but the check lives in this process's memory. Semaphore prevents LLM overload.
 - **No persistence** — Task history is not stored in the database.
 
 ## Key Files

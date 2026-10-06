@@ -161,8 +161,7 @@ actually-relevant/
 │   └── package.json
 ├── shared/          # Shared types and constants
 ├── scripts/         # Build helper shared by client and server (devDependency install)
-├── .context/        # Implementation documentation (17 files)
-├── .specs/          # Behavioral specifications (Allium)
+├── .context/        # Subsystem docs (behavior and implementation) and the decision log
 ├── CONTRIBUTING.md  # Contribution guidelines
 ├── LICENSE          # AGPL v3
 └── README.md        # This file

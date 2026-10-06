@@ -1,6 +1,6 @@
 # Podcast (weekly two-speaker episode)
 
-> **Spec:** [`.specs/podcast.allium`](../.specs/podcast.allium) -- stages, lease, weekly idempotency, block and attempt rules, dialogue validation, the AI opener. This file covers the implementation, endpoints and how to change it. The plan with the later phases (audio, Bunny storage, feed, automation): `.plans/autonomous-two-speaker-podcast.md` (archived to `.plans/completed/` once every phase is done).
+The plan with the later phases (audio, Bunny storage, feed, automation): `.plans/autonomous-two-speaker-podcast.md` (archived to `.plans/completed/` once every phase is done).
 
 ## Status
 
@@ -11,7 +11,9 @@ Phase 1 is built: the admin starts this week's episode, the pipeline selects 4-5
 - **`stage`** (production, forward-only): `legacy` (rows from before this pipeline; read-only, never advanced), `created`, `scripted`, then `voiced` and `ready` in later phases. A failure never moves the stage: it sets `lastError` and `failedAt`, and the next run resumes from the stage.
 - **`status`** (`ContentStatus`, shared with newsletters): publication. Nothing in Phase 1 changes it; `PUT /api/admin/podcasts/:id` accepts only `title` (`.strict()`, so `status` or `script` in the body is a 400).
 
-`weekKey` is the ISO week in **UTC** (`isoWeekKey()` in `podcastWeekly.ts`, not the newsletter job's local-time `getWeekKey`), unique, so a week has one episode and a concurrent create loses on P2002 and reads the winner's row.
+`weekKey` is the ISO week in **UTC** (`isoWeekKey()` in `podcastWeekly.ts`, not the newsletter job's local-time `getWeekKey`), unique, so a week has one episode and a concurrent create loses on P2002 and reads the winner's row. `weekKey` is null on legacy rows.
+
+The only way back down the stage axis is `resetEpisode(id, { dryRun })` (`podcastPipeline.ts`). It refuses a row whose lease is live (`inProgress`) or a legacy row. It sets `stage` to `created` and stores the given `dryRun`, then clears `dialogue`, `episodeStories`, `script`, `showNotes` and `storyIds` (`[]`). `runWeeklyEpisode` calls it to clear a dry-run row left over before running live.
 
 ## Modules
 
@@ -33,6 +35,8 @@ Settings: `config.podcast` in `server/src/config.ts` (no environment overrides).
 
 `advanceEpisode` claims the row with raw SQL on the database clock (`lease_until < now() AT TIME ZONE 'UTC'`; the column is `timestamp without time zone` holding UTC), renews it before every stage, and writes every stage with `updateMany({ where: { id, leaseOwner: me } })`, aborting with `LeaseLostError` when that matches nothing. Release is `WHERE lease_owner = me`, in `finally` and at shutdown. A second claimant gets `{ status: 'busy' }` and returns quietly. Chosen over `pg_try_advisory_lock` because Prisma's pool can run each query on another connection.
 
+`inProgress` on a row means `leaseUntil > now`, that is, the lease is still live. `advanceEpisode` runs every remaining stage in order and persists each stage before starting the next, so a crash resumes from the last stored stage. A run whose lease is taken over or expires mid-stage writes nothing further and ends as `skipped`, recording no `lastError` of its own.
+
 ## Weekly run and blocks
 
 `runWeeklyEpisode` outcomes: `done`, `skipped` (ready or published, blocked on the cron trigger, lease held elsewhere), `retry-later`, `blocked`. A `PodcastBlockedError` (Phase 1: the dialogue still invalid after its one regeneration) blocks at once. Other failures count as `attempts` only on the cron trigger and block at `maxAttemptsPerWeek` (3). The admin trigger never counts and clears a block and the attempts first, so **Start this week's episode** on a blocked week behaves like Resume. The cron job itself arrives in Phase 4.
@@ -40,12 +44,13 @@ Settings: `config.podcast` in `server/src/config.ts` (no environment overrides).
 ## Selection and dialogue
 
 - **Pool**: `published` stories crawled in the last `config.content.storyAssignmentDays` (7) days, most relevant first, the same window as the newsletter. Fewer than 4 → error before any call.
-- **Selection** (`large` tier): ids outside the pool and duplicates are dropped, at most 5 kept, fewer than 4 → error (retryable). The order the model returns is the episode order.
-- **Dialogue** (`large` tier, `withStructuredOutput(..., { includeRaw: true })`, usage logged): segments `intro`, one `story` per story in order (`storyRef` = 1-based ref), `outro`. An invalid or unparsable answer gets one regeneration with the problems listed in `<PREVIOUS_DRAFT_PROBLEMS>`; a second failure is a `PodcastBlockedError`. Never truncated or patched.
+- **Selection** (`large` tier): ids outside the pool and duplicates are dropped, at most 5 kept, fewer than 4 → error (retryable). The order the model returns is the episode order. The selection prompt (`podcast-select.ts`) asks for normally at most one story per top-level issue; a second from the same issue only when that issue has two clearly outstanding stories (then 5 stories) or another issue has no suitable article (then 4).
+- **Dialogue** (`large` tier, `withStructuredOutput(..., { includeRaw: true })`, usage logged): segments `intro`, one `story` per story in order (`storyRef` = 1-based ref), `outro`. An invalid or unparsable answer gets one regeneration with the problems listed in `<PREVIOUS_DRAFT_PROBLEMS>`; a second failure is a `PodcastBlockedError`. Never truncated or patched. Story text goes into the prompt as untrusted input (`<STORIES>`).
+- **Hosts**: the two speakers, `HOST_A` and `HOST_B`, are generic AI hosts and are never modelled on a real person.
 - **Validation** (`validateDialogue`): every story exactly once; intro first, outro last; the intro exactly one HOST_A turn that welcomes and leads straight into the first story (owner, 2026-10-06: HOST_B's line after the welcome was superfluous); no speaker three times in a row (the code-added opener and sign-off, both HOST_A, count, so the first story segment must open with HOST_B); 4,200-6,200 spoken characters including the opener, sign-off and tags (the top, about 6.5 minutes, was raised from 5,600 by the owner on 2026-10-06, because gpt-6-sol writes about 20% over the length it is asked for; the prompt asks for `config.podcast.spokenCharAim`, 4,900, deliberately below the band's middle, `podcastLengthTargets`, `.context/prompting.md`); turns ≤ 400 characters; tags only from `PODCAST_AUDIO_TAGS`, at most 2 per turn (they are billed as characters); no URLs, markdown or speaker prefixes (the episode's own publisher names are exempt from the URL check, so "Phys.org" passes); episode title non-empty and ≤ `maxTitleChars` (80), title and summary free of URLs and markdown. A band miss is fed back in the prompt's terms (the model's own turns against `dialogueCharBudget()`), not the whole-episode total.
 - **Segues** (owner, 2026-10-06): audio will be voiced one segment per TTS request, so every segment after the intro must open with its own bridge: a first turn of at least 40 characters that is not just the headline (for the first story, HOST_B picking up the story the intro led into), and no two consecutive story segments opening with the same first five words. Keep this rule in the prompt, the schema description and validation together.
 - **Snapshot**: `episodeStories` (ref, id, title, publisher, sourceUrl, slug, issue) is frozen at scripting; show notes and the later feed read it, never `storyIds`, so story deletion (which strips `storyIds`) cannot shift references.
-- **Stored at `scripted`**: `dialogue` (the model's segments), `episodeStories`, `storyIds`, `title` (= episode title), `episodeSummary`, `showNotes` (AI line first, then the summary, then each story with our analysis link and its source), `script` (the rendered spoken episode), `scriptModelId`.
+- **Stored at `scripted`**: `dialogue` (the model's segments), `episodeStories`, `storyIds`, `title` (= episode title), `episodeSummary`, `showNotes` (AI line first, then the summary, then each story with our analysis link and its source), `script` (the rendered spoken episode), `scriptModelId`. A successful scripting run also clears `lastError`.
 
 The opener and sign-off are code, not prompt: `PODCAST_OPENER` ("Everything you're about to hear was written and voiced by AI from this week's news.", owner-approved 2026-10-06) is the first spoken turn of every episode. Don't move it into the prompt. Changing its wording needs the owner (`.context/ai-transparency.md`).
 
@@ -60,7 +65,7 @@ The opener and sign-off are code, not prompt: `PODCAST_OPENER` ("Everything you'
 | PUT | `/api/admin/podcasts/:id` | Title only |
 | DELETE | `/api/admin/podcasts/:id` | Delete (Phase 2 adds guards) |
 
-Both POSTs sit behind `expensiveOpLimiter`. The UI (`PodcastsPage`, `PodcastDetail`, `PodcastStageBadge`): "Start this week's episode", a stage column, the stage badge with "In progress" and "Blocked", the block reason, the last error, attempts, a dry-run badge, Resume (blocked, failed or not yet scripted), the episode's stories, the read-only script and show notes. The detail polls every 5 s only while `inProgress`. Legacy rows show their old script read-only.
+Both POSTs sit behind `expensiveOpLimiter`. The UI (`PodcastsPage`, `PodcastDetail`, `PodcastStageBadge`): "Start this week's episode", a stage column, the stage badge with "In progress" and "Blocked", the block reason, the last error, attempts, a dry-run badge, Resume (blocked, failed or not yet scripted), the episode's stories, the read-only script and show notes. The detail polls every 5 s only while `inProgress`. Legacy rows show their old script read-only. The only field edited by hand is `title`; stage, status, script and dialogue are never edited by hand.
 
 ## Evaluating prompt changes
 

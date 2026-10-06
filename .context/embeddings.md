@@ -1,10 +1,8 @@
 # Semantic Search & Embeddings
 
-> **Spec:** [`.specs/search.allium`](../.specs/search.allium) -- hybrid RRF search, related stories with LRU cache, emotion filtering. This file covers embedding generation, database schema, backfill scripts, and configuration.
-
 ## Overview
 
-Stories get vector embeddings generated from their content (titleLabel + title + summary) using OpenAI's `text-embedding-3-small` model. These embeddings power hybrid semantic+text search on the public API.
+Stories get vector embeddings generated from their content (titleLabel + title + summary) using OpenAI's `text-embedding-3-small` model. These embeddings power hybrid semantic+text search and related stories on the public API.
 
 ## Embedding Generation
 
@@ -30,13 +28,28 @@ The publish step uses `ensureEmbedding()` / `ensureEmbeddings()` as a safety net
 
 ## Hybrid Search (RRF)
 
-When a search query is provided to `getPublishedStories`, the system runs **Reciprocal Rank Fusion** combining:
-- **Semantic search**: Top 50 results by cosine similarity (`embedding <=> query_vector`)
-- **Text search**: Top 50 results by ILIKE match on title/summary
+When `getPublishedStories` gets a `search` query (the `search` parameter of `GET /api/stories`, set from the stories list page), it switches from the normal chronological listing to **Reciprocal Rank Fusion** (`hybridSearch()` in `server/src/services/story.ts`). The two legs run in parallel, both limited to published stories and both honouring the optional `issueSlug` filter (an issue and its child issues, or the feed's issue when the story has none):
 
-RRF formula: `score = 1/(60 + semantic_rank) + 1/(60 + text_rank)`
+- **Semantic leg:** embeds the query, then takes the top `RRF_FETCH_LIMIT` (50) by cosine distance (`embedding <=> query_vector`). If the embedding or the query fails, this leg returns nothing and search falls back to text-only.
+- **Text leg:** a case-insensitive `contains` match on `title` or `summary`, ordered by `datePublished` desc then `dateCrawled` desc, top 50.
 
-Results appearing in only one search leg still get scored. If semantic search fails (e.g., API error), the system falls back to text-only search.
+RRF score: `score(d) = Σ 1/(RRF_K + rank)` with `RRF_K = 60` and 1-based ranks. A story found by both legs scores higher, and one found by only one leg still gets a score. Results are sorted by score descending and paginated (`page`, `pageSize`, default 25). The positivity slider does not apply to search.
+
+## Related Stories
+
+`GET /api/stories/:slug/related` (`getRelatedStories()` in `server/src/services/story.ts`):
+
+1. **Cache check:** a hit returns the cached IDs, sliced to `limit`.
+2. **Source check:** the source story must exist, be published and have an embedding. Otherwise the result is empty.
+3. **Candidate pool:** `displayCount × candidateMultiplier` (4 × 3 = 12) nearest published stories with embeddings by cosine distance, excluding the source.
+4. **Small pool:** if there are no more candidates than `displayCount`, the LLM is skipped and all candidates are returned in cosine order.
+5. **LLM re-rank:** otherwise the LLM picks the most editorially relevant candidates, using title label and title. Returned IDs not in the candidate pool are discarded. If the LLM call fails or no valid IDs come back, the top `displayCount` in cosine order are used instead.
+
+The result is always computed and cached for `displayCount` IDs, then sliced to the requested `limit`. The model tier is `relatedStories.modelTier` (`small`). Config is under `relatedStories` in `server/src/config.ts`: `displayCount` 4, `candidateMultiplier` 3, `cacheHours` 72, `httpCacheSeconds` 259200. Prompt: `server/src/prompts/related-stories.ts`. Schema: `relatedStoriesResultSchema` in `server/src/schemas/llm.ts`.
+
+### Cache
+
+An in-memory, per-process map in `story.ts`. The key is the source story's slug and the value is the ordered list of related story IDs. Each entry expires after `relatedStories.cacheHours` (72h). Expired entries are swept at most once an hour, on the next request. At `MAX_RELATED_CACHE_SIZE` (500) entries, the entry with the earliest expiry is evicted before a new slug is inserted. The cache is lost when the server restarts.
 
 ## Database
 
@@ -78,7 +91,8 @@ Uses raw SQL for fetching (bypasses Prisma type limitations), processes in batch
 | `server/src/services/embedding.ts` | Core embedding service (generate, hash, batch) |
 | `server/src/services/embedding.test.ts` | Unit tests |
 | `server/src/lib/vectors.ts` | Raw SQL embedding persistence (`saveEmbedding`, `saveEmbeddingTx`) |
-| `server/src/services/story.ts` | Lifecycle hooks + hybrid search |
+| `server/src/services/story.ts` | Lifecycle hooks, hybrid search, related stories and their cache |
+| `server/src/prompts/related-stories.ts` | Related-stories re-rank prompt |
 | `server/src/services/analysis.ts` | Assessment with atomic embedding save |
 | `server/src/scripts/migrations/backfill-embeddings.ts` | Backfill script |
 | `server/src/config.ts` | Embedding configuration |

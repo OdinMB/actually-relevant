@@ -59,7 +59,7 @@ Phase 0 outcomes (owner listening, 2026-10-06; findings in `DOCS/2026-10-06_podc
 - **Cap raised** (owner, 2026-10-06, with the longer band below): `monthlyTtsCharCap` 32,000, provisional as before: about 4.3 episodes at about 5,500 characters plus one full re-voice; the account carries rollover credits.
 - **Still open**: S4 (Bunny), S5 (ffmpeg on Render) and S7 (manual detector check). They gate Phase 2 (S4, S5, S7) and Phase 3 (S4's hostname decision before the first publish), not Phase 1.
 
-Episode length (owner, 2026-10-06): episodes may run up to about 6.5 minutes. The spoken-character band's top (whole episode, code-added turns and tags included) rises from 5,600 to 6,200; the bottom stays 4,200. Reason: gpt-6-sol writes about 5,200 to 5,900 spoken characters whatever target the prompt states (`.context/prompting.md`, "A stated length is not a lever on gpt-6-sol"; eval runs `DOCS/2026-10-06_podcast-eval-r1` to `-r5`), so half its first drafts missed the 5,600 top. The prompt keeps aiming at the band's middle (`podcastLengthTargets`, now about 5,200 for the whole episode), and prompt, validation and spec all read `config.podcast.spokenCharBand`. The monthly cap rises with it to 32,000 (see "Cap raised" above). Phase 2 plans no duration gate (duration is measured from the MP3's bytes and stored, never checked against a limit); if one is added, put it at about 7.5 minutes or more, since 6,200 characters voice to about 6.5 minutes and pauses and pace add to that.
+Episode length (owner, 2026-10-06): episodes may run up to about 6.5 minutes. The spoken-character band's top (whole episode, code-added turns and tags included) rises from 5,600 to 6,200; the bottom stays 4,200. Reason: gpt-6-sol writes about 5,200 to 5,900 spoken characters whatever target the prompt states (`.context/prompting.md`, "A stated length is not a lever on gpt-6-sol"; eval runs `DOCS/2026-10-06_podcast-eval-r1` to `-r5`), so half its first drafts missed the 5,600 top. The prompt keeps aiming at the band's middle (`podcastLengthTargets`, now about 5,200 for the whole episode), and prompt and validation read `config.podcast.spokenCharBand`. The monthly cap rises with it to 32,000 (see "Cap raised" above). Phase 2 plans no duration gate (duration is measured from the MP3's bytes and stored, never checked against a limit); if one is added, put it at about 7.5 minutes or more, since 6,200 characters voice to about 6.5 minutes and pauses and pace add to that.
 
 ## Problem
 
@@ -172,7 +172,7 @@ Each phase ships on its own; the risky unknowns are retired first and the owner 
 | S6 | Voices | List ElevenLabs-owned voices that are not among the default voices expiring 2026-12-31; render the fixture dialogue with three candidate pairs. | The owner picks a pair (open question 3); the ids go into `config.podcast.voiceIdA`/`voiceIdB` in `config.ts`. **Result (2026-10-06):** the owner prefers Darian + Talia ("just one opinion") → `voiceIdA: 'gOupLcAkjEnguROwi4oS'` (Darian), `voiceIdB: 'OZ0L6eISlOejga3XjDFt'` (Talia). Both are Voice Library voices of the owner that publishes ElevenLabs' replacement set, notice period 4,015 days, no disable date (see "Phase 0 outcomes" above). |
 | S7 | Does Starter v4 API output carry a watermark that survives our re-encode? | Run the MP3 through ElevenLabs' AI Speech Classifier before and after ffmpeg. | Recorded in `.context/ai-transparency.md` §4; no code change either way. **Open** (manual web check by the owner; no API). Needed for Phase 2's transparency record. |
 
-**Phase 1 — Two-speaker script.** Value: a much better script in the admin that the owner can voice by hand at once. Migration 1, dialogue and selection schemas and prompts, validation, show notes, the stage machine and lease up to `scripted`, `runWeeklyEpisode` for the admin trigger, admin "Start this week's episode", stage display, eval and test updates, spec and context for the script, the new opener.
+**Phase 1 — Two-speaker script.** Value: a much better script in the admin that the owner can voice by hand at once. Migration 1, dialogue and selection schemas and prompts, validation, show notes, the stage machine and lease up to `scripted`, `runWeeklyEpisode` for the admin trigger, admin "Start this week's episode", stage display, eval and test updates, context for the script, the new opener.
 
 **Phase 1: DONE (2026-10-06, agent implementation).** ADR-0003 is promoted to the decision log (`.context/decisions/0003-podcast-stage-machine-and-lease.md`), its title shortened to fit the schema's 120 characters; its chunk table follows in Phase 2. Where the code departs from the Phase 1 table (the agent's choices; the owner may change any):
 - `chunkTurns` and `buildTranscriptVtt` are not built yet: nothing in Phase 1 voices or times audio, so they move to Phase 2 with their tests. `podcastDialogue.ts` exports `assembleSpokenSegments` (spoken segments with the opener and sign-off) instead of `assembleSpokenTurns`, because chunking needs the segment boundaries.
@@ -321,9 +321,7 @@ Each phase ships on its own; the risky unknowns are retired first and the owner 
 
 | File | Change |
 |------|--------|
-| `.specs/podcast.allium` | New spec via `/allium`: `Podcast` with stage and status, forward-only stages, the fenced lease, weekly idempotency, the attempt cap and block rules, the spend reservation, on/off by the job rows' `enabled` flags (re-checked before every automatic TTS call and automatic publish; never gates admin actions, unpublish or the feed), dry run, the publish invariant, the auto-publish candidate rule, feed contents, the opener as first spoken turn. Extended in each phase. |
-| `.specs/newsletter-and-podcast.allium` | Remove the podcast section; a pointer to `podcast.allium`. |
-| `.context/podcast.md` | New: pipeline, stages, modules, chunking, audio, storage paths, feed, page, admin actions, alerts, caps, dry run, environment variables, owner setup, troubleshooting. Cross-reference header to the spec. |
+| `.context/podcast.md` | Update in each phase: the behavioural rules (`Podcast` stage and status, forward-only stages, the fenced lease, weekly idempotency, the attempt cap and block rules, the spend reservation, on/off by the job rows' `enabled` flags (re-checked before every automatic TTS call and automatic publish; never gates admin actions, unpublish or the feed), dry run, the publish invariant, the auto-publish candidate rule, feed contents, the opener as first spoken turn) plus pipeline, modules, chunking, audio, storage paths, feed, page, admin actions, alerts, caps, environment variables, owner setup, troubleshooting. |
 | `.context/newsletter-podcast.md` | Remove the podcast sections and endpoints; a pointer to `podcast.md`. |
 | `.context/scheduler.md` | Both jobs in the registry with their window and attempt behaviour. (The stale `jobService.ts` reference was already corrected by the scheduler hardening of 2026-10-06.) |
 | `.context/llm-analysis.md` | The podcast select and script calls and tiers; ElevenLabs `eleven_v4` pinned, its retirement tracked like OpenAI's. |
@@ -331,7 +329,7 @@ Each phase ships on its own; the risky unknowns are retired first and the owner 
 | `.context/ai-transparency.md` | Phase 1: row 8's script and the new opener. Phase 2: audio (ElevenLabs `eleven_v4`), the ID3 marks (50(2) interim, unsigned), "No AI-generated audio exists" removed, §4 watermark reliance with the S7 result. Phase 3: publication to our feed, Bunny and `/podcast`; written lines in show and episode descriptions; `podcast:txt`; the page label; q3 answered and removed from §11; the privacy row. The owner listens before manual publication, but the record does not rely on the human-review exception, because publishing becomes automatic. |
 | `.context/seo.md`, `README.md` | The `/podcast.xml` rewrite rule and the `/podcast` route. |
 | `.context/deployment.md` | `ffmpeg-static` downloads a binary at build; the new variables point to `podcast.md`. |
-| `CLAUDE.md` | The spec list adds `podcast`; the context table adds `podcast.md`. |
+| `CLAUDE.md` | The context table adds `podcast.md`. |
 
 ## Tests
 
@@ -362,5 +360,4 @@ Server tests are co-located with `vi.hoisted` mocks; ElevenLabs and Bunny are mo
 - Turn-level dialogue editing, "Regenerate audio", uploading a hand-made MP3, an episode hold flag beyond `unpublishedAt`.
 - Intro or outro music; per-episode artwork; YouTube; download statistics beyond Bunny's counts.
 - Migrating or redirecting the Buzzsprout back catalogue (owner decision: abandoned).
-- The newsletter spec drift (`select_model_tier`, `stories_per_issue`).
 - Splitting `Podcast`'s operational columns into a `PodcastRun` table (accepted debt; trigger named above).
