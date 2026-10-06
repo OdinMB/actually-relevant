@@ -13,7 +13,7 @@ import type { PodcastDialogue } from '../schemas/llm.js'
 import { applyTurnEdits, assembleSpokenSegments, renderScript, textChanged, validateDialogue, type DialogueTextEdit } from './podcastDialogue.js'
 import { buildShowNotes, episodeSnapshots, loadEpisodePool, type EpisodeStory, type PoolEntry } from './podcastScript.js'
 import { withEpisodeLease } from './podcastPipeline.js'
-import { PodcastRefusedError, wasPublished } from './podcastGuards.js'
+import { PodcastRefusedError, editedAiLineRefusal, wasPublished } from './podcastGuards.js'
 import { invalidateFeedCache } from './podcastFeed.js'
 
 /** A person's change whose content breaks a rule (422): nothing was saved. */
@@ -138,7 +138,8 @@ export interface EpisodeMetaEdit {
 /**
  * Change the title (once there is a script, before publication) or the "edited by a person" flag
  * (at any stage, also after publication: it only picks the AI line of the show notes and the feed
- * description, never the audio or the GUID). A title change never ticks the flag. The show notes
+ * description, never the audio or the GUID; ticking it on a listed episode waits for the owner's
+ * confirmation of the edited AI line, `editedAiLineRefusal`). A title change never ticks the flag. The show notes
  * follow the flag, and an episode that was ever published has its feed rebuilt.
  */
 export async function updateEpisodeMeta(id: string, edit: EpisodeMetaEdit): Promise<void> {
@@ -153,6 +154,10 @@ export async function updateEpisodeMeta(id: string, edit: EpisodeMetaEdit): Prom
       }
     }
     const flagChanged = edit.humanEdited !== undefined && edit.humanEdited !== episode.humanEdited
+    if (flagChanged && episode.status === 'published') {
+      const refusal = editedAiLineRefusal(edit.humanEdited!)
+      if (refusal) throw new PodcastRefusedError(refusal)
+    }
     const notes = flagChanged && episode.showNotes !== ''
       ? { showNotes: buildShowNotes(episode.episodeSummary, episodeSnapshots(episode), edit.humanEdited!) }
       : {}

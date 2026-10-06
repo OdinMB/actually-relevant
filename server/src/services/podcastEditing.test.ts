@@ -13,6 +13,8 @@ const mockFeed = vi.hoisted(() => ({ invalidateFeedCache: vi.fn() }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastFeed.js', () => mockFeed)
 vi.mock('./podcastScript.js', async importOriginal => ({ ...(await importOriginal<typeof import('./podcastScript.js')>()), ...mockPool }))
+// Pinned, so the tests do not change meaning when the owner confirms the edited AI line.
+vi.mock('../lib/aiLabelCopy.js', async importOriginal => ({ ...(await importOriginal<typeof import('../lib/aiLabelCopy.js')>()), PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED: false }))
 
 const { replaceEpisodeStories, saveEpisodeScript, updateEpisodeMeta, getEpisodeStoryPool, PodcastEditRejectedError } = await import('./podcastEditing.js')
 const { PodcastRefusedError } = await import('./podcastGuards.js')
@@ -186,10 +188,23 @@ describe('updateEpisodeMeta', () => {
   })
 
   it('toggles the flag on a published episode, rebuilds its show notes and its feed', async () => {
-    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'published', publishedAt: new Date(), showNotes: 'old notes' }))
-    await updateEpisodeMeta('pod-1', { humanEdited: true })
-    expect(writes()[0].showNotes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE_EDITED)
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'published', publishedAt: new Date(), humanEdited: true, showNotes: 'old notes' }))
+    await updateEpisodeMeta('pod-1', { humanEdited: false })
+    expect(writes()[0].showNotes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE)
     expect(mockFeed.invalidateFeedCache).toHaveBeenCalledOnce()
+  })
+
+  it('refuses ticking the flag on a listed episode while the edited AI line is unconfirmed', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'published', publishedAt: new Date(), showNotes: 'old notes' }))
+    await expect(updateEpisodeMeta('pod-1', { humanEdited: true })).rejects.toThrow(/Edited by a person/)
+    expect(writes()).toHaveLength(0)
+    expect(mockFeed.invalidateFeedCache).not.toHaveBeenCalled()
+  })
+
+  it('allows ticking the flag on an episode that was taken down (republishing is refused instead)', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'draft', publishedAt: new Date(), unpublishedAt: new Date(), showNotes: 'old notes' }))
+    await updateEpisodeMeta('pod-1', { humanEdited: true })
+    expect(writes()[0].humanEdited).toBe(true)
   })
 
   it('leaves the feed alone for an episode that was never published', async () => {

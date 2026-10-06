@@ -9,7 +9,7 @@ import { ContentStatus, PodcastStage, type Podcast } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { PodcastRefusedError } from './podcastGuards.js'
+import { PodcastRefusedError, editedAiLineRefusal } from './podcastGuards.js'
 import { withEpisodeLease } from './podcastPipeline.js'
 import { invalidateFeedCache } from './podcastFeed.js'
 import { episodeSnapshots } from './podcastScript.js'
@@ -22,11 +22,11 @@ const HOUR_MS = 60 * 60 * 1000
 const WEEK_MS = 7 * 24 * HOUR_MS
 
 /** Why an episode cannot be published, or null when it can. */
-export function publishRefusal(episode: Pick<Podcast, 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes'>): string | null {
+export function publishRefusal(episode: Pick<Podcast, 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes' | 'humanEdited'>): string | null {
   if (episode.stage !== PodcastStage.ready) return `only a ready episode can be published; this one is at ${episode.stage}`
   if (episode.dryRun) return 'a dry-run episode (silent stub voice) cannot be published'
   if (!episode.audioUrl || episode.audioBytes == null) return 'the episode has no uploaded audio'
-  return null
+  return editedAiLineRefusal(episode.humanEdited)
 }
 
 /**

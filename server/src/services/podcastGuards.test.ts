@@ -191,3 +191,14 @@ describe('assertChangeable', () => {
     expect(() => guards.assertChangeable({ stage: 'legacy', status: 'published', leaseUntil: null }, 'deleted', now)).not.toThrow()
   })
 })
+
+describe('editedAiLineRefusal', () => {
+  it('refuses an edited episode while the edited AI line awaits the owner\'s confirmation', () => {
+    expect(guards.editedAiLineRefusal(true, false)).toMatch(/Edited by a person/)
+  })
+
+  it('allows an unedited episode, and an edited one once the line is confirmed', () => {
+    expect(guards.editedAiLineRefusal(false, false)).toBeNull()
+    expect(guards.editedAiLineRefusal(true, true)).toBeNull()
+  })
+})

@@ -51,9 +51,17 @@ export const PODCAST_EPISODE_AI_LINE = "AI-generated: Everything in this episode
 
 /**
  * The same line for an episode a person reviewed and edited ("Edited by a person" ticked).
- * Approved by the owner (Odin Mühlenbein) on 2026-10-06 (plan open question 5).
+ * PENDING THE OWNER'S CONFIRMATION (plan open question 5, .context/ai-transparency.md §11): an
+ * approval was relayed to an agent by a workflow on 2026-10-06, not given in the owner's own words.
  */
 export const PODCAST_EPISODE_AI_LINE_EDITED = "AI-generated: Everything in this episode was written and voiced by AI from this week's news. A person reviewed and edited this episode."
+
+/**
+ * Whether the owner has confirmed `PODCAST_EPISODE_AI_LINE_EDITED` in his own words. While false, an
+ * episode marked "Edited by a person" is never listed (`editedAiLineRefusal` in podcastGuards.ts).
+ * Set it to true, with the date, only on the owner's own confirmation.
+ */
+export const PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED: boolean = false
 
 /** The episode's AI line: the edited wording when a person changed the stories or the script. */
 export function podcastEpisodeAiLine(humanEdited: boolean): string {

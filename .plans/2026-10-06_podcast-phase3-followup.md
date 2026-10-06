@@ -10,7 +10,7 @@ Run: Phase 3 of `.plans/autonomous-two-speaker-podcast.md`, resumed after a cras
 - **Republish keeps the first `publishedAt`**, so podcast apps keep the item's date; the alternative (a fresh date) would bump it to the top as if new.
 - **Feed extras beyond the plan:** RSS `<image>`, `itunes:title`, `itunes:episodeType`, `copyright`, `lastBuildDate`. All standard; Apple and Spotify accept them.
 - **Privacy wording** (draft, owner to review): Bunny row says "IP address and user agent when you play or download a podcast episode, its transcript, or the show artwork, including through a podcast app. BunnyWay d.o.o. (Slovenia, EU) stores the files in Germany, delivers them from the server nearest to you, and processes this data on our behalf. IP addresses are anonymized in its logs." ElevenLabs row: "No visitor data. We send only the episode script, which is written from published news." The self-hosting paragraph adds "The one exception is podcast audio: on the podcast page, an episode loads from Bunny.net only when you press play." The anonymization sentence relies on the pull-zone setting from the owner's Bunny setup; confirm it is on.
-- **No pending-approval warning built**: the edited AI line was approved (relayed) before shipping, so the crashed run's `PODCAST_EPISODE_AI_LINE_EDITED_APPROVED` flag and `aiLinePendingApproval` field were removed rather than set to true.
+- **Edited AI line held back until the owner confirms it** (Phase 3 compliance review fix): the relayed approval is not the owner's own words, so `PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED` (false) in `aiLabelCopy.ts` makes the server refuse (409) publishing an episode marked "Edited by a person" and ticking the flag on a listed one. Chosen over an admin-only warning because the Phase 4 auto-publish job would bypass a warning. The refusal reaches the admin as the publish error toast; no separate pre-warning in the UI.
 
 ## Decisions to Review
 
@@ -22,7 +22,7 @@ None: the repository keeps no `records` files (personal-data note, data inventor
 
 ## User Input Needed
 
-- **Owner approvals arrived relayed, not in the owner's own words in this session**: the edited-episode AI line and the artwork. I marked the line approved in `aiLabelCopy.ts`, `.context/ai-transparency.md` and the plan as relayed, but wrote no "Confirmed by" line. A session where the owner speaks should confirm.
+- **Owner approvals arrived relayed, not in the owner's own words in this session**: the edited-episode AI line and the artwork. The line is now recorded as pending in `aiLabelCopy.ts`, `.context/ai-transparency.md` (§3 row 8, §7, §11) and the plan. To confirm it: set `PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED` to true with the date and mark the record approved.
 - **Privacy notice wording** (above): owner review before deploy.
 
 ## DB Migrations
@@ -39,6 +39,8 @@ None: the repository keeps no `records` files (personal-data note, data inventor
 
 - `PodcastTable` (admin list) shows "Draft" for an unpublished episode; the detail page says "Unpublished". Cheap to align (it has `publishedAt` now).
 - After the first publish: validate the live feed and run the transparency record's §11 live checks.
+- Phase 4 auto-publish: while the edited AI line is unconfirmed, `pickAutoPublishCandidate` should skip `humanEdited` episodes (or the job reports the refusal), or the job would fail on such an episode each run.
+- Optional: show the "awaits the owner's confirmation" note beside the Publish button for an edited episode instead of only as the 409 toast.
 
 ## Mod code and load settings written
 

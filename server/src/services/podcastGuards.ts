@@ -8,6 +8,7 @@ import { ContentStatus, PodcastStage, type Podcast } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { ElevenLabsQuotaError, getRemainingCharacters, isElevenLabsConfigured } from '../lib/elevenlabs.js'
+import { PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED } from '../lib/aiLabelCopy.js'
 
 /** A failure that retrying will not fix: the episode is blocked until an admin Resume. */
 export class PodcastBlockedError extends Error {
@@ -115,6 +116,16 @@ export async function assertBalanceCovers(chars: number): Promise<void> {
 export function wasPublished(episode: Pick<Podcast, 'stage' | 'status' | 'publishedAt'>): boolean {
   if (episode.stage === PodcastStage.legacy) return false
   return episode.publishedAt != null || episode.status === ContentStatus.published
+}
+
+/**
+ * Why an episode with this "Edited by a person" flag may not be listed, or null when it may: the
+ * edited AI line goes public only once the owner has confirmed its wording. Publishing such an
+ * episode, and ticking the flag on a listed one, are refused until then.
+ */
+export function editedAiLineRefusal(humanEdited: boolean, confirmed: boolean = PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED): string | null {
+  if (!humanEdited || confirmed) return null
+  return 'an episode marked "Edited by a person" cannot be listed yet: its AI line awaits the owner\'s confirmation (PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED in server/src/lib/aiLabelCopy.ts)'
 }
 
 /**

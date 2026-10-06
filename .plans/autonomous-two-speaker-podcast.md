@@ -310,7 +310,7 @@ A new column `mode` (`PodcastMode`: `automated | interactive`, null until chosen
 2. **Show identity**: show title (proposal "Actually Relevant", a new feed), Apple category (proposal News), the artwork provided on 2026-10-06 (`show/artwork-2026-10.jpg`, from the brand logo, not AI-generated). Feed contact address decided by the owner on 2026-10-06: `contact@actuallyrelevant.news`.
 3. **Voices** — settled from the owner's preference on 2026-10-06 ("just one opinion", so he may still change it): Darian (HOST_A) + Talia (HOST_B).
 4. **Only if S2 says Starter does not cover it**: the Creator plan, or a shorter episode.
-5. **Edited-episode AI line (Phase 2b)** — APPROVED by the owner on 2026-10-06 (relayed): "AI-generated: Everything in this episode was written and voiced by AI from this week's news. A person reviewed and edited this episode."
+5. **Edited-episode AI line (Phase 2b)** — approval relayed by a workflow on 2026-10-06, still to be confirmed in the owner's own words; until then `PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED` stays false and an edited episode cannot be published (Phase 3 review fix): "AI-generated: Everything in this episode was written and voiced by AI from this week's news. A person reviewed and edited this episode."
 
 ## Changes
 
