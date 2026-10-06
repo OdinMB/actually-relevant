@@ -9,8 +9,9 @@ The admin dashboard is a React SPA at `/admin/*` with 10 pages, JWT-based auth w
 - **Data Fetching**: TanStack Query with 30s stale time, hooks in `hooks/use*.ts` per resource
 - **UI Components**: Headless UI + Tailwind in `components/ui/` (Button, Badge, Card, Pagination, etc.)
 - **Admin Components**: Resource-specific in `components/admin/` (tables, forms, detail views)
-- **Toast Notifications**: `ToastProvider` in AdminLayout, `useToast()` hook for success/error/progress messages
+- **Toast Notifications**: `ToastProvider` in AdminLayout, `useToast()` hook for success/error/progress messages. A progress toast never fades; `addProgressToast(id, message, { href })` and `updateToast(id, { href, sticky })` make a toast a router link to the page it is about (keyboard-reachable) and keep an outcome, typically an error, until it is dismissed. Existing callers pass neither.
 - **Background Tasks**: `BackgroundTaskProvider` in AdminLayout, `useBackgroundTasks()` hook for fire-and-forget async operations with progress tracking via persistent toasts
+- **Long server-side runs** (the pattern for work that outlives the request and the page): the route claims the work before it answers 202, the server lists what is running (`GET /api/admin/podcasts/active`), and an app-level provider in AdminLayout (`PodcastProgressProvider`) asks it on mount and on window focus, polls while it follows anything, and keeps one clickable toast per run until its outcome. The client never guesses when a run starts or ends, so the toast survives navigation and reattaches after a reload. See `.context/podcast.md`, "Progress".
 
 ## Route Structure
 
@@ -39,7 +40,7 @@ The admin dashboard is a React SPA at `/admin/*` with 10 pages, JWT-based auth w
 - **Bulk actions** use selection state (resets on filter/page change) with confirmation dialogs
 - **Bulk LLM operations** (preassess, assess, select) run as background tasks via `useBackgroundTasks()` — dialog closes immediately, progress toasts persist across navigation, query invalidation fires on completion
 - **LLM operations** (newsletter generation) show persistent loading state with "may take a minute" message
-- **Podcast episodes** run server-side in the background: the start and Resume routes answer 202, and the detail page polls every 5 s only while the episode's lease is live (`inProgress`); see `.context/podcast.md`
+- **Podcast episodes** run server-side in the background: Resume and a rewind that continues answer 202 once they hold the episode's lease, `usePodcastProgress().track(id)` follows the run, and the detail page polls every 5 s only while the lease is live (`inProgress`). A component that holds unsaved edits (story picker, script editor) reports it to the page, which keeps approval disabled until they are saved or discarded; see `.context/podcast.md`
 - **Carousel ZIP download** uses `response.blob()` + `URL.createObjectURL` + auto-click download
 - **Cron editing** is inline in the jobs table with save/cancel
 - **Issue slug** auto-generates from name in create mode

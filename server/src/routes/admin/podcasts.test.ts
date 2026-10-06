@@ -14,20 +14,28 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
     count: vi.fn(),
   },
+  podcastAudioChunk: { count: vi.fn() },
   podcastTtsUsage: { aggregate: vi.fn() },
   $disconnect: vi.fn(),
 }))
 const mockWeekly = vi.hoisted(() => ({
   findOrCreateWeekEpisode: vi.fn(),
-  runWeeklyEpisode: vi.fn(),
+  startAdminRun: vi.fn(),
   resumeEpisode: vi.fn(),
 }))
-const mockPipeline = vi.hoisted(() => ({ resetEpisode: vi.fn() }))
+const mockPipeline = vi.hoisted(() => ({ rewindEpisode: vi.fn() }))
+const mockEditing = vi.hoisted(() => ({
+  getEpisodeStoryPool: vi.fn(),
+  replaceEpisodeStories: vi.fn(),
+  saveEpisodeScript: vi.fn(),
+  updateEpisodeMeta: vi.fn(),
+}))
 const mockBunny = vi.hoisted(() => ({ deleteObject: vi.fn(), putObject: vi.fn(), isBunnyConfigured: vi.fn(), publicUrl: vi.fn() }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/podcastWeekly.js', () => mockWeekly)
-vi.mock('../../services/podcastPipeline.js', () => mockPipeline)
+vi.mock('../../services/podcastPipeline.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastPipeline.js')>()), ...mockPipeline }))
+vi.mock('../../services/podcastEditing.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastEditing.js')>()), ...mockEditing }))
 vi.mock('../../lib/bunnyStorage.js', () => mockBunny)
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
@@ -39,13 +47,15 @@ process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
 const { PodcastRefusedError } = await import('../../services/podcastGuards.js')
+const { PodcastEditRejectedError } = await import('../../services/podcastEditing.js')
 
 describe('Admin Podcasts API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockWeekly.runWeeklyEpisode.mockResolvedValue({ outcome: 'done', podcastId: 'podcast-1' })
+    mockWeekly.startAdminRun.mockResolvedValue(undefined)
     mockWeekly.resumeEpisode.mockResolvedValue({ outcome: 'done', podcastId: 'podcast-1' })
     mockPrisma.podcastTtsUsage.aggregate.mockResolvedValue({ _sum: { chars: 5400 } })
+    mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast())
     mockBunny.deleteObject.mockResolvedValue(undefined)
   })
 
@@ -55,23 +65,27 @@ describe('Admin Podcasts API', () => {
       expect(res.status).toBe(401)
     })
 
-    it('returns paginated podcasts with their progress flag', async () => {
-      mockPrisma.podcast.findMany.mockResolvedValue([samplePodcast(), samplePodcast({ id: 'podcast-2', leaseUntil: new Date(Date.now() + 60_000) })])
+    it('returns paginated podcasts with their progress and review flags', async () => {
+      mockPrisma.podcast.findMany.mockResolvedValue([
+        samplePodcast({ mode: 'interactive', stage: 'selected' }),
+        samplePodcast({ id: 'podcast-2', leaseUntil: new Date(Date.now() + 60_000) }),
+      ])
       mockPrisma.podcast.count.mockResolvedValue(2)
 
       const res = await request(app).get('/api/admin/podcasts').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.data.map((p: { inProgress: boolean }) => p.inProgress)).toEqual([false, true])
+      expect(res.body.data.map((p: { awaitingReview: boolean }) => p.awaitingReview)).toEqual([true, false])
       expect(res.body.total).toBe(2)
     })
 
-    it('filters by stage', async () => {
+    it('filters by stage, the new selected stage included', async () => {
       mockPrisma.podcast.findMany.mockResolvedValue([])
       mockPrisma.podcast.count.mockResolvedValue(0)
 
-      const res = await request(app).get('/api/admin/podcasts?stage=scripted').set(authHeader())
+      const res = await request(app).get('/api/admin/podcasts?stage=selected').set(authHeader())
       expect(res.status).toBe(200)
-      expect(mockPrisma.podcast.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { stage: 'scripted' } }))
+      expect(mockPrisma.podcast.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { stage: 'selected' } }))
     })
 
     it('rejects an unknown stage', async () => {
@@ -82,7 +96,6 @@ describe('Admin Podcasts API', () => {
 
   describe('GET /api/admin/podcasts/:id', () => {
     it('returns a single podcast', async () => {
-      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast())
       const res = await request(app).get('/api/admin/podcasts/podcast-1').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.title).toBe('Episode #1')
@@ -95,74 +108,181 @@ describe('Admin Podcasts API', () => {
     })
   })
 
+  describe('GET /api/admin/podcasts/active', () => {
+    it('is routed before /:id and lists the running episodes', async () => {
+      mockPrisma.podcast.findMany.mockResolvedValue([{ id: 'podcast-1', title: 'W41: x', stage: 'created', mode: 'interactive', dialogue: null }])
+      const res = await request(app).get('/api/admin/podcasts/active').set(authHeader())
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual([{ id: 'podcast-1', title: 'W41: x', stage: 'created', mode: 'interactive', activity: 'Selecting stories', chunksDone: null, chunksTotal: null }])
+      expect(mockPrisma.podcast.findUnique).not.toHaveBeenCalled()
+    })
+
+    it('requires auth', async () => {
+      expect((await request(app).get('/api/admin/podcasts/active')).status).toBe(401)
+    })
+  })
+
   describe('POST /api/admin/podcasts/weekly', () => {
     it('requires auth', async () => {
       const res = await request(app).post('/api/admin/podcasts/weekly')
       expect(res.status).toBe(401)
-      expect(mockWeekly.runWeeklyEpisode).not.toHaveBeenCalled()
+      expect(mockWeekly.findOrCreateWeekEpisode).not.toHaveBeenCalled()
     })
 
-    it('answers 202 with the week\'s row and starts the run in the background', async () => {
+    it('finds or creates the week\'s row and starts nothing', async () => {
       mockWeekly.findOrCreateWeekEpisode.mockResolvedValue(samplePodcast({ weekKey: '2026-W41' }))
       mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ weekKey: '2026-W41' }))
 
       const res = await request(app).post('/api/admin/podcasts/weekly').set(authHeader())
-      expect(res.status).toBe(202)
+      expect(res.status).toBe(200)
       expect(res.body.weekKey).toBe('2026-W41')
-      expect(mockWeekly.runWeeklyEpisode).toHaveBeenCalledWith({ trigger: 'admin' })
-    })
-
-    it('still answers when the background run fails', async () => {
-      mockWeekly.findOrCreateWeekEpisode.mockResolvedValue(samplePodcast())
-      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast())
-      mockWeekly.runWeeklyEpisode.mockRejectedValue(new Error('boom'))
-
-      const res = await request(app).post('/api/admin/podcasts/weekly').set(authHeader())
-      expect(res.status).toBe(202)
+      expect(mockWeekly.startAdminRun).not.toHaveBeenCalled()
+      expect(mockWeekly.resumeEpisode).not.toHaveBeenCalled()
     })
   })
 
   describe('POST /api/admin/podcasts/:id/resume', () => {
-    it('answers 202 and resumes the episode in the background', async () => {
-      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast())
+    it('claims the lease (with the given mode) before its 202, then runs in the background', async () => {
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/resume').set(authHeader()).send({ mode: 'interactive' })
+      expect(res.status).toBe(202)
+      expect(mockWeekly.startAdminRun).toHaveBeenCalledWith('podcast-1', { mode: 'interactive' })
+      expect(mockWeekly.startAdminRun.mock.invocationCallOrder[0]).toBeLessThan(mockWeekly.resumeEpisode.mock.invocationCallOrder[0])
+      expect(mockWeekly.resumeEpisode).toHaveBeenCalledWith('podcast-1')
+    })
+
+    it('accepts no body (continue in the episode\'s own mode)', async () => {
       const res = await request(app).post('/api/admin/podcasts/podcast-1/resume').set(authHeader())
       expect(res.status).toBe(202)
-      expect(mockWeekly.resumeEpisode).toHaveBeenCalledWith('podcast-1')
+      expect(mockWeekly.startAdminRun).toHaveBeenCalledWith('podcast-1', { mode: undefined })
+    })
+
+    it('answers 409 when the lease is held or no mode is chosen, and runs nothing', async () => {
+      mockWeekly.startAdminRun.mockRejectedValueOnce(new PodcastRefusedError('the episode is in progress'))
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/resume').set(authHeader())
+      expect(res.status).toBe(409)
+      expect(res.body.error).toMatch(/in progress/)
+      expect(mockWeekly.resumeEpisode).not.toHaveBeenCalled()
+    })
+
+    it('rejects an unknown mode', async () => {
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/resume').set(authHeader()).send({ mode: 'turbo' })
+      expect(res.status).toBe(400)
     })
 
     it('returns 404 for an unknown podcast', async () => {
       mockPrisma.podcast.findUnique.mockResolvedValue(null)
       const res = await request(app).post('/api/admin/podcasts/unknown/resume').set(authHeader())
       expect(res.status).toBe(404)
+      expect(mockWeekly.startAdminRun).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('POST /api/admin/podcasts/:id/rewind', () => {
+    it('requires auth', async () => {
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/rewind').send({ to: 'scripted', advance: true })
+      expect(res.status).toBe(401)
+    })
+
+    it('with advance claims the lease and rewinds before its 202, then continues in the background', async () => {
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/rewind').set(authHeader()).send({ to: 'scripted', advance: true })
+      expect(res.status).toBe(202)
+      expect(mockWeekly.startAdminRun).toHaveBeenCalledWith('podcast-1', { rewindTo: 'scripted' })
+      expect(mockWeekly.resumeEpisode).toHaveBeenCalledWith('podcast-1')
+    })
+
+    it('with advance answers 409 when the lease is held', async () => {
+      mockWeekly.startAdminRun.mockRejectedValueOnce(new PodcastRefusedError('the episode is in progress'))
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/rewind').set(authHeader()).send({ to: 'selected', advance: true })
+      expect(res.status).toBe(409)
       expect(mockWeekly.resumeEpisode).not.toHaveBeenCalled()
     })
 
-    it('refuses a legacy episode', async () => {
-      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'legacy' }))
-      const res = await request(app).post('/api/admin/podcasts/podcast-1/resume').set(authHeader())
-      expect(res.status).toBe(409)
+    it('without advance rewinds, makes the episode interactive and answers 200', async () => {
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/rewind').set(authHeader()).send({ to: 'scripted', advance: false })
+      expect(res.status).toBe(200)
+      expect(mockPipeline.rewindEpisode).toHaveBeenCalledWith('podcast-1', 'scripted', { dryRun: expect.any(Boolean), mode: 'interactive' })
       expect(mockWeekly.resumeEpisode).not.toHaveBeenCalled()
+    })
+
+    it('maps a refused rewind (published, wrong stage) to 409', async () => {
+      mockPipeline.rewindEpisode.mockRejectedValueOnce(new PodcastRefusedError('a published episode cannot be changed'))
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/rewind').set(authHeader()).send({ to: 'selected', advance: false })
+      expect(res.status).toBe(409)
+    })
+
+    it('rejects a target that is not a rewind stage', async () => {
+      const res = await request(app).post('/api/admin/podcasts/podcast-1/rewind').set(authHeader()).send({ to: 'ready', advance: true })
+      expect(res.status).toBe(400)
+    })
+  })
+
+  describe('story pool and stories', () => {
+    it('lists the pool for the episode', async () => {
+      mockEditing.getEpisodeStoryPool.mockResolvedValue({ stories: [], minStories: 4, maxStories: 5 })
+      const res = await request(app).get('/api/admin/podcasts/podcast-1/story-pool').set(authHeader())
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ stories: [], minStories: 4, maxStories: 5 })
+    })
+
+    it('saves the stories and maps content errors to 422 and state refusals to 409', async () => {
+      const ok = await request(app).put('/api/admin/podcasts/podcast-1/stories').set(authHeader()).send({ storyIds: ['a', 'b', 'c', 'd'] })
+      expect(ok.status).toBe(200)
+      expect(mockEditing.replaceEpisodeStories).toHaveBeenCalledWith('podcast-1', ['a', 'b', 'c', 'd'])
+
+      mockEditing.replaceEpisodeStories.mockRejectedValueOnce(new PodcastEditRejectedError(['an episode has 4 to 5 stories; 3 chosen']))
+      const content = await request(app).put('/api/admin/podcasts/podcast-1/stories').set(authHeader()).send({ storyIds: ['a', 'b', 'c'] })
+      expect(content.status).toBe(422)
+      expect(content.body.errors).toEqual(['an episode has 4 to 5 stories; 3 chosen'])
+
+      mockEditing.replaceEpisodeStories.mockRejectedValueOnce(new PodcastRefusedError('the episode is in progress and cannot be edited'))
+      const busy = await request(app).put('/api/admin/podcasts/podcast-1/stories').set(authHeader()).send({ storyIds: ['a', 'b', 'c', 'd'] })
+      expect(busy.status).toBe(409)
+    })
+  })
+
+  describe('PUT /api/admin/podcasts/:id/script', () => {
+    const edit = { episodeSummary: 'S', segments: [{ kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'Hi.' }] }] }
+
+    it('returns the episode and the warnings on a save', async () => {
+      mockEditing.saveEpisodeScript.mockResolvedValue({ warnings: ['segment 3 (story 2): the first turn must carry a spoken bridge'] })
+      const res = await request(app).put('/api/admin/podcasts/podcast-1/script').set(authHeader()).send(edit)
+      expect(res.status).toBe(200)
+      expect(res.body.warnings).toHaveLength(1)
+      expect(res.body.podcast.id).toBe('podcast-1')
+    })
+
+    it('maps content errors to 422 with the errors and warnings', async () => {
+      mockEditing.saveEpisodeScript.mockRejectedValueOnce(new PodcastEditRejectedError(['contains a URL'], ['short bridge']))
+      const res = await request(app).put('/api/admin/podcasts/podcast-1/script').set(authHeader()).send(edit)
+      expect(res.status).toBe(422)
+      expect(res.body).toMatchObject({ errors: ['contains a URL'], warnings: ['short bridge'] })
+    })
+
+    it('rejects an edit that changes a speaker to an unknown one', async () => {
+      const bad = { ...edit, segments: [{ ...edit.segments[0], turns: [{ speaker: 'HOST_C', text: 'Hi.' }] }] }
+      const res = await request(app).put('/api/admin/podcasts/podcast-1/script').set(authHeader()).send(bad)
+      expect(res.status).toBe(400)
+      expect(mockEditing.saveEpisodeScript).not.toHaveBeenCalled()
     })
   })
 
   describe('PUT /api/admin/podcasts/:id', () => {
-    it('updates the title', async () => {
-      mockPrisma.podcast.update.mockResolvedValue(samplePodcast({ title: 'Updated' }))
-      const res = await request(app).put('/api/admin/podcasts/podcast-1').set(authHeader()).send({ title: 'Updated' })
+    it('updates the title and the "edited by a person" flag', async () => {
+      const res = await request(app).put('/api/admin/podcasts/podcast-1').set(authHeader()).send({ title: 'Updated', humanEdited: true })
       expect(res.status).toBe(200)
-      expect(mockPrisma.podcast.update).toHaveBeenCalledWith({ where: { id: 'podcast-1' }, data: { title: 'Updated' } })
+      expect(mockEditing.updateEpisodeMeta).toHaveBeenCalledWith('podcast-1', { title: 'Updated', humanEdited: true })
     })
 
-    it('rejects status and script', async () => {
-      const status = await request(app).put('/api/admin/podcasts/podcast-1').set(authHeader()).send({ title: 'T', status: 'published' })
-      expect(status.status).toBe(400)
-      const script = await request(app).put('/api/admin/podcasts/podcast-1').set(authHeader()).send({ title: 'T', script: 'x' })
-      expect(script.status).toBe(400)
-      expect(mockPrisma.podcast.update).not.toHaveBeenCalled()
+    it('rejects status, script and an empty body', async () => {
+      for (const body of [{ title: 'T', status: 'published' }, { title: 'T', script: 'x' }, {}]) {
+        const res = await request(app).put('/api/admin/podcasts/podcast-1').set(authHeader()).send(body)
+        expect(res.status).toBe(400)
+      }
+      expect(mockEditing.updateEpisodeMeta).not.toHaveBeenCalled()
     })
 
     it('returns 404 for unknown podcast', async () => {
-      mockPrisma.podcast.update.mockRejectedValue({ code: 'P2025' })
+      mockPrisma.podcast.findUnique.mockResolvedValue(null)
       const res = await request(app).put('/api/admin/podcasts/unknown').set(authHeader()).send({ title: 'Test' })
       expect(res.status).toBe(404)
     })
@@ -178,37 +298,6 @@ describe('Admin Podcasts API', () => {
     it('requires auth', async () => {
       const res = await request(app).get('/api/admin/podcasts/usage')
       expect(res.status).toBe(401)
-    })
-  })
-
-  describe('POST /api/admin/podcasts/:id/regenerate', () => {
-    it('requires auth', async () => {
-      const res = await request(app).post('/api/admin/podcasts/podcast-1/regenerate')
-      expect(res.status).toBe(401)
-      expect(mockPipeline.resetEpisode).not.toHaveBeenCalled()
-    })
-
-    it('resets the episode, answers 202, then writes a new one in the background', async () => {
-      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready' }))
-      const res = await request(app).post('/api/admin/podcasts/podcast-1/regenerate').set(authHeader())
-      expect(res.status).toBe(202)
-      expect(mockPipeline.resetEpisode).toHaveBeenCalledWith('podcast-1', { dryRun: expect.any(Boolean) })
-      expect(mockWeekly.resumeEpisode).toHaveBeenCalledWith('podcast-1')
-    })
-
-    it('answers 409 when the episode was published or is in progress', async () => {
-      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready', status: 'published' }))
-      mockPipeline.resetEpisode.mockRejectedValueOnce(new PodcastRefusedError('a published episode cannot be regenerated'))
-      const res = await request(app).post('/api/admin/podcasts/podcast-1/regenerate').set(authHeader())
-      expect(res.status).toBe(409)
-      expect(mockWeekly.resumeEpisode).not.toHaveBeenCalled()
-    })
-
-    it('returns 404 for an unknown podcast', async () => {
-      mockPrisma.podcast.findUnique.mockResolvedValue(null)
-      const res = await request(app).post('/api/admin/podcasts/unknown/regenerate').set(authHeader())
-      expect(res.status).toBe(404)
-      expect(mockPipeline.resetEpisode).not.toHaveBeenCalled()
     })
   })
 

@@ -21,13 +21,13 @@ export default function PodcastsPage() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
+  /** Opens this week's episode (created on first use); it runs once a mode is chosen there. */
   const handleStartWeekly = async () => {
     try {
       const pod = await startWeekly.mutateAsync()
-      toast('success', "Started this week's episode")
       navigate(`/admin/podcasts/${pod.id}`)
     } catch {
-      toast('error', "Failed to start this week's episode")
+      toast('error', "Failed to open this week's episode")
     }
   }
 
@@ -77,7 +77,7 @@ export default function PodcastsPage() {
 
       {podcastsQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
       {podcastsQuery.error && <ErrorState message="Failed to load podcasts" onRetry={() => podcastsQuery.refetch()} />}
-      {podcastsQuery.data && podcastsQuery.data.data.length === 0 && <EmptyState title="No podcasts yet" description="Start this week's episode to write its script." />}
+      {podcastsQuery.data && podcastsQuery.data.data.length === 0 && <EmptyState title="No podcasts yet" description="Start this week's episode, then choose whether to review each step or let it run." />}
       {podcastsQuery.data && podcastsQuery.data.data.length > 0 && (
         <PodcastTable
           podcasts={podcastsQuery.data.data}

@@ -1,5 +1,6 @@
 /**
- * The weekly episode's two LLM calls (story selection, dialogue) and its show notes.
+ * The weekly episode's stories and words: the week's story pool and the episode's frozen story
+ * snapshots, the two LLM calls (story selection, dialogue), and the show notes.
  */
 import { HumanMessage } from '@langchain/core/messages'
 import type { z } from 'zod'
@@ -8,7 +9,7 @@ import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { withRetry } from '../lib/retry.js'
-import { PODCAST_EPISODE_AI_LINE } from '../lib/aiLabelCopy.js'
+import { podcastEpisodeAiLine } from '../lib/aiLabelCopy.js'
 import { buildPodcastPrompt, buildPodcastSelectPrompt, type StoryForPodcast } from '../prompts/index.js'
 import { podcastDialogueSchema, podcastSelectResultSchema, type PodcastDialogue } from '../schemas/llm.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
@@ -30,6 +31,12 @@ export type EpisodeStory = {
   sourceUrl: string
   slug: string | null
   issue: string
+}
+
+/** The episode's frozen stories; an episode past `created` always has them. */
+export function episodeSnapshots(episode: { id: string; episodeStories: unknown }): EpisodeStory[] {
+  if (!Array.isArray(episode.episodeStories)) throw new Error(`podcast ${episode.id} has no stories selected`)
+  return episode.episodeStories as EpisodeStory[]
 }
 
 export interface SelectedStory {
@@ -72,10 +79,17 @@ const storySelect = {
 
 type PoolStory = Awaited<ReturnType<typeof loadPool>>[number]
 
-/** The newsletter's pool: stories published from the last week's crawl, most relevant first. */
-function loadPool(now: Date) {
+/**
+ * The newsletter's pool: stories published from the week's crawl before `anchor`, most relevant
+ * first. The anchor is when the episode's stories were selected (`storiesSelectedAt`), so the
+ * model and the story picker read the same list whenever either reads it.
+ */
+function loadPool(anchor: Date) {
   return prisma.story.findMany({
-    where: { status: StoryStatus.published, dateCrawled: { gte: new Date(now.getTime() - config.content.storyAssignmentDays * DAY_MS) } },
+    where: {
+      status: StoryStatus.published,
+      dateCrawled: { gte: new Date(anchor.getTime() - config.content.storyAssignmentDays * DAY_MS), lte: anchor },
+    },
     select: storySelect,
     orderBy: [{ relevance: 'desc' }, { dateCrawled: 'desc' }],
   })
@@ -86,28 +100,65 @@ function topIssueName(s: PoolStory): string {
   return issue?.parent?.name ?? issue?.name ?? 'General'
 }
 
-function toSelected(s: PoolStory, ref: number): SelectedStory {
-  const title = s.title || s.sourceTitle
-  const publisher = s.feed?.displayTitle || s.feed?.title || 'Unknown'
-  const issue = topIssueName(s)
+const storyFacts = (s: PoolStory): Omit<EpisodeStory, 'ref'> => ({
+  id: s.id,
+  title: s.title || s.sourceTitle,
+  publisher: s.feed?.displayTitle || s.feed?.title || 'Unknown',
+  sourceUrl: s.sourceUrl,
+  slug: s.slug,
+  issue: topIssueName(s),
+})
+
+const snapshotOf = (s: PoolStory, ref: number): EpisodeStory => ({ ref, ...storyFacts(s) })
+
+/** The prompt material for a story, under the episode's frozen snapshot (its ref, title and publisher). */
+function promptFor(s: PoolStory, snapshot: EpisodeStory): StoryForPodcast {
   return {
-    snapshot: { ref, id: s.id, title, publisher, sourceUrl: s.sourceUrl, slug: s.slug, issue },
-    prompt: {
-      ref,
-      issue,
-      title,
-      publisher,
-      summary: s.summary || '',
-      whyItMatters: s.relevanceSummary || s.relevanceReasons || '',
-      limitingFactors: s.antifactors || '',
-    },
+    ref: snapshot.ref,
+    issue: snapshot.issue,
+    title: snapshot.title,
+    publisher: snapshot.publisher,
+    summary: s.summary || '',
+    whyItMatters: s.relevanceSummary || s.relevanceReasons || '',
+    limitingFactors: s.antifactors || '',
   }
 }
 
-/** The week's 4-5 stories for audio, in episode order. Fails closed under the minimum. */
-export async function selectEpisodeStories(now: Date): Promise<SelectedStory[]> {
+function toSelected(s: PoolStory, ref: number): SelectedStory {
+  const snapshot = snapshotOf(s, ref)
+  return { snapshot, prompt: promptFor(s, snapshot) }
+}
+
+/** A story of the week's pool as the story picker lists it, ready to become a snapshot. */
+export type PoolEntry = Omit<EpisodeStory, 'ref'> & { relevance: number | null }
+
+/** The pool the selection call chose from, for the story picker (same query, same order). */
+export async function loadEpisodePool(anchor: Date): Promise<PoolEntry[]> {
+  const pool = await loadPool(anchor)
+  return pool.map(s => ({ ...storyFacts(s), relevance: s.relevance }))
+}
+
+/**
+ * The prompt material of the episode's frozen stories, in snapshot order. A story that is no longer
+ * published fails the script stage (kept on the row), so a person changes the selection.
+ */
+export async function loadEpisodeStories(snapshots: EpisodeStory[]): Promise<SelectedStory[]> {
+  const rows = await prisma.story.findMany({
+    where: { id: { in: snapshots.map(s => s.id) }, status: StoryStatus.published },
+    select: storySelect,
+  })
+  const byId = new Map(rows.map(r => [r.id, r]))
+  return snapshots.map(snapshot => {
+    const story = byId.get(snapshot.id)
+    if (!story) throw new Error(`story "${snapshot.title}" is no longer published; change the selection`)
+    return { snapshot, prompt: promptFor(story, snapshot) }
+  })
+}
+
+/** The week's 4-5 stories for audio, in episode order, from the pool before `anchor`. Fails closed under the minimum. */
+export async function selectEpisodeStories(anchor: Date): Promise<SelectedStory[]> {
   const { minStories, maxStories, selectModelTier } = config.podcast
-  const pool = await loadPool(now)
+  const pool = await loadPool(anchor)
   if (pool.length < minStories) {
     throw new Error(`only ${pool.length} published stories this week; an episode needs ${minStories}`)
   }
@@ -150,12 +201,15 @@ export async function writeEpisodeScript(stories: SelectedStory[]): Promise<Epis
   throw new PodcastBlockedError(`the dialogue is still invalid after one regeneration: ${problems.join('; ')}`)
 }
 
-/** Plain-text show notes: the AI line first, the summary, then each story with our analysis and its source. */
-export function buildShowNotes(summary: string, stories: EpisodeStory[]): string {
+/**
+ * Plain-text show notes: the AI line first (the edited wording when a person changed the stories or
+ * the script), the summary, then each story with our analysis and its source.
+ */
+export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEdited: boolean): string {
   const items = stories.map(s => [
     `${s.ref}. ${s.title} (${s.publisher})`,
     ...(s.slug ? [`   Our AI analysis: ${config.siteUrl}/stories/${s.slug}`] : []),
     `   Source: ${s.sourceUrl}`,
   ].join('\n'))
-  return [PODCAST_EPISODE_AI_LINE, '', summary.trim(), '', 'Stories in this episode:', ...items].join('\n')
+  return [podcastEpisodeAiLine(humanEdited), '', summary.trim(), '', 'Stories in this episode:', ...items].join('\n')
 }

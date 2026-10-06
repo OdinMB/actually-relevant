@@ -215,9 +215,16 @@ model NewsletterSend {
 enum PodcastStage {
   legacy
   created
+  selected
   scripted
   voiced
   ready
+}
+
+/// How far a run goes: automated runs straight to `ready`; interactive stops after `selected` and `scripted` for review
+enum PodcastMode {
+  automated
+  interactive
 }
 
 model Podcast {
@@ -258,6 +265,14 @@ model Podcast {
   audioBytes     Int?          @map("audio_bytes")
   durationSec    Int?          @map("duration_sec")
   readyAt        DateTime?     @map("ready_at")
+  /// Null until a person (or the cron run) chooses how far runs go
+  mode           PodcastMode?
+  /// A person changed the stories or the script text; selects the episode's AI line
+  humanEdited    Boolean       @default(false) @map("human_edited")
+  /// TTS seed of the current render; null = config.podcast.ttsSeed. A fresh one per "Regenerate audio"
+  ttsSeed        Int?          @map("tts_seed")
+  /// When the stories were selected: the end of the week's pool the model chose from, which the story picker lists too
+  storiesSelectedAt DateTime?  @map("stories_selected_at")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 

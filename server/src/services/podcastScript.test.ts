@@ -10,9 +10,10 @@ vi.mock('./llm.js', () => ({
   rateLimitDelay: vi.fn().mockResolvedValue(undefined),
 }))
 
-const { selectEpisodeStories, writeEpisodeScript, buildShowNotes } = await import('./podcastScript.js')
+const { selectEpisodeStories, writeEpisodeScript, buildShowNotes, loadEpisodePool, loadEpisodeStories } = await import('./podcastScript.js')
 const { PodcastBlockedError } = await import('./podcastGuards.js')
-const { PODCAST_EPISODE_AI_LINE } = await import('../lib/aiLabelCopy.js')
+const { PODCAST_EPISODE_AI_LINE, PODCAST_EPISODE_AI_LINE_EDITED } = await import('../lib/aiLabelCopy.js')
+const { config } = await import('../config.js')
 
 function poolStory(n: number, issue = `Issue ${n}`) {
   return {
@@ -147,12 +148,49 @@ describe('buildShowNotes', () => {
   ]
 
   it('starts with the AI line and links our analysis and the source of each story', () => {
-    const notes = buildShowNotes('The summary.', stories)
+    const notes = buildShowNotes('The summary.', stories, false)
     expect(notes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE)
     expect(notes).toContain('The summary.')
     expect(notes).toContain('/stories/headline-1')
     expect(notes).toContain('https://news.example/1')
     expect(notes).toContain('https://news.example/2')
     expect(notes).not.toContain('/stories/null')
+  })
+
+  it('starts with the edited line when a person edited the episode', () => {
+    expect(buildShowNotes('The summary.', stories, true).split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE_EDITED)
+  })
+})
+
+describe('the story pool', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('is anchored on the given date: published stories crawled in the week before it', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([poolStory(1)])
+    const anchor = new Date('2026-10-10T06:00:00Z')
+    const pool = await loadEpisodePool(anchor)
+    const { where } = mockPrisma.story.findMany.mock.calls[0][0]
+    expect(where.status).toBe('published')
+    expect(where.dateCrawled.lte).toEqual(anchor)
+    expect(anchor.getTime() - where.dateCrawled.gte.getTime()).toBe(config.content.storyAssignmentDays * 24 * 60 * 60 * 1000)
+    expect(pool).toEqual([{ id: 'story-1', title: 'Headline 1', publisher: 'Publisher 1', sourceUrl: 'https://news.example/1', slug: 'headline-1', issue: 'Issue 1', relevance: 7 }])
+  })
+})
+
+describe('loadEpisodeStories', () => {
+  beforeEach(() => vi.clearAllMocks())
+  const snap = (ref: number, n: number) => ({ ref, id: `story-${n}`, title: `Frozen ${n}`, publisher: `Publisher ${n}`, sourceUrl: `https://news.example/${n}`, slug: `headline-${n}`, issue: `Issue ${n}` })
+
+  it('keeps the snapshot order and refs, with the prompt material read fresh', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([poolStory(1), poolStory(3)])
+    const loaded = await loadEpisodeStories([snap(1, 3), snap(2, 1)])
+    expect(loaded.map(s => s.snapshot.id)).toEqual(['story-3', 'story-1'])
+    expect(loaded.map(s => s.prompt.ref)).toEqual([1, 2])
+    expect(loaded[0].prompt).toMatchObject({ title: 'Frozen 3', whyItMatters: 'Why 3 matters' })
+  })
+
+  it('fails naming a story that is no longer published', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([poolStory(1)])
+    await expect(loadEpisodeStories([snap(1, 1), snap(2, 9)])).rejects.toThrow(/"Frozen 9" is no longer published/)
   })
 })

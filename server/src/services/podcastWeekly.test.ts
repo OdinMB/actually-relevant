@@ -5,7 +5,10 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 const mockPipeline = vi.hoisted(() => ({
   advanceEpisode: vi.fn(),
-  resetEpisode: vi.fn(),
+  rewindEpisode: vi.fn(),
+  claimEpisode: vi.fn(),
+  releaseEpisode: vi.fn(),
+  defaultEpisodeTitle: (weekKey: string | null) => `Actually Relevant, ${weekKey}`,
   LeaseLostError: class LeaseLostError extends Error {},
 }))
 
@@ -26,13 +29,13 @@ vi.mock('../config.js', async importOriginal => {
   return { ...actual, config: { ...actual.config, podcast: { ...actual.config.podcast, dryRun: false } } }
 })
 
-const { isoWeekKey, runWeeklyEpisode, resumeEpisode, findOrCreateWeekEpisode } = await import('./podcastWeekly.js')
-const { PodcastBlockedError, PodcastStoppedError } = await import('./podcastGuards.js')
+const { isoWeekKey, runWeeklyEpisode, resumeEpisode, startAdminRun, findOrCreateWeekEpisode } = await import('./podcastWeekly.js')
+const { PodcastBlockedError, PodcastStoppedError, PodcastRefusedError } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-10T06:00:00Z') // Saturday of 2026-W41
 
 function row(overrides: Record<string, unknown> = {}) {
-  return { id: 'pod-1', weekKey: '2026-W41', stage: 'created', status: 'draft', dryRun: false, blockedAt: null, attempts: 0, ...overrides }
+  return { id: 'pod-1', weekKey: '2026-W41', stage: 'created', status: 'draft', mode: 'automated', dryRun: false, blockedAt: null, attempts: 0, ...overrides }
 }
 
 describe('isoWeekKey', () => {
@@ -80,7 +83,21 @@ describe('runWeeklyEpisode', () => {
   it('advances the week\'s episode', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row())
     expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'done', podcastId: 'pod-1' })
-    expect(mockPipeline.advanceEpisode).toHaveBeenCalledWith('pod-1', { trigger: 'cron', now: NOW })
+    expect(mockPipeline.advanceEpisode).toHaveBeenCalledWith('pod-1', { trigger: 'cron', leaseHeld: false })
+  })
+
+  it('on the cron trigger runs an episode nobody started in automated mode', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ mode: null }))
+    expect((await runWeeklyEpisode({ trigger: 'cron', now: NOW })).outcome).toBe('done')
+    expect(mockPrisma.podcast.update).toHaveBeenCalledWith({ where: { id: 'pod-1' }, data: { mode: 'automated' } })
+    expect(mockPipeline.advanceEpisode.mock.invocationCallOrder[0]).toBeGreaterThan(mockPrisma.podcast.update.mock.invocationCallOrder[0])
+  })
+
+  it('on the cron trigger skips an interactive episode a person is reviewing', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ mode: 'interactive', stage: 'scripted' }))
+    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'skipped', reason: expect.stringMatching(/interactive/) })
+    expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
+    expect(mockPrisma.podcast.update).not.toHaveBeenCalled()
   })
 
   it('skips an episode that is ready or published', async () => {
@@ -176,8 +193,55 @@ describe('runWeeklyEpisode', () => {
   it('resets a dry-run row before advancing when the config is live', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ dryRun: true, stage: 'scripted' }))
     await runWeeklyEpisode({ trigger: 'cron', now: NOW })
-    expect(mockPipeline.resetEpisode).toHaveBeenCalledWith('pod-1', { dryRun: false })
+    expect(mockPipeline.rewindEpisode).toHaveBeenCalledWith('pod-1', 'created', { dryRun: false, leaseHeld: false })
     expect(mockPipeline.advanceEpisode).toHaveBeenCalled()
+  })
+})
+
+describe('startAdminRun', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPipeline.claimEpisode.mockResolvedValue(true)
+    mockPrisma.podcast.update.mockResolvedValue(row())
+  })
+
+  it('claims the lease, stores the given mode and clears a block, leaving the lease held', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ mode: null, blockedAt: new Date(), attempts: 3 }))
+    await startAdminRun('pod-1', { mode: 'interactive' })
+    expect(mockPipeline.claimEpisode).toHaveBeenCalledWith('pod-1')
+    expect(mockPrisma.podcast.update).toHaveBeenCalledWith({ where: { id: 'pod-1' }, data: { mode: 'interactive', blockedAt: null, blockedReason: null, attempts: 0 } })
+    expect(mockPipeline.releaseEpisode).not.toHaveBeenCalled()
+  })
+
+  it('refuses an episode without a mode when none is given, before claiming', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ mode: null }))
+    await expect(startAdminRun('pod-1')).rejects.toBeInstanceOf(PodcastRefusedError)
+    expect(mockPipeline.claimEpisode).not.toHaveBeenCalled()
+  })
+
+  it('refuses while a run holds the lease, and a legacy or finished episode', async () => {
+    mockPipeline.claimEpisode.mockResolvedValueOnce(false)
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row())
+    await expect(startAdminRun('pod-1')).rejects.toThrow(/in progress/)
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ stage: 'legacy' }))
+    await expect(startAdminRun('pod-1')).rejects.toBeInstanceOf(PodcastRefusedError)
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ stage: 'ready' }))
+    await expect(startAdminRun('pod-1')).rejects.toBeInstanceOf(PodcastRefusedError)
+    expect(mockPrisma.podcast.update).not.toHaveBeenCalled()
+  })
+
+  it('rewinds under the held lease and makes the episode interactive when no mode is given', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ stage: 'ready', mode: 'automated' }))
+    await startAdminRun('pod-1', { rewindTo: 'selected' })
+    expect(mockPipeline.rewindEpisode).toHaveBeenCalledWith('pod-1', 'selected', { dryRun: false, leaseHeld: true })
+    expect(mockPrisma.podcast.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ mode: 'interactive' }) }))
+  })
+
+  it('releases the lease when the rewind is refused', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ stage: 'scripted' }))
+    mockPipeline.rewindEpisode.mockRejectedValueOnce(new PodcastRefusedError('a published episode cannot be changed'))
+    await expect(startAdminRun('pod-1', { rewindTo: 'selected' })).rejects.toBeInstanceOf(PodcastRefusedError)
+    expect(mockPipeline.releaseEpisode).toHaveBeenCalledWith('pod-1')
   })
 })
 
@@ -188,10 +252,16 @@ describe('resumeEpisode', () => {
     mockPrisma.podcast.update.mockResolvedValue(row())
   })
 
-  it('clears the block and attempts, then advances that episode', async () => {
-    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ id: 'pod-7', blockedAt: new Date(), attempts: 3 }))
+  it('advances the episode under the held lease and releases it', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ id: 'pod-7', mode: 'interactive', stage: 'selected' }))
     expect((await resumeEpisode('pod-7')).outcome).toBe('done')
-    expect(mockPrisma.podcast.update).toHaveBeenCalledWith({ where: { id: 'pod-7' }, data: { blockedAt: null, blockedReason: null, attempts: 0 } })
-    expect(mockPipeline.advanceEpisode).toHaveBeenCalledWith('pod-7', expect.objectContaining({ trigger: 'admin' }))
+    expect(mockPipeline.advanceEpisode).toHaveBeenCalledWith('pod-7', { trigger: 'admin', leaseHeld: true })
+    expect(mockPipeline.releaseEpisode).toHaveBeenCalledWith('pod-7')
+  })
+
+  it('releases the lease on an early return', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ id: 'pod-7', stage: 'ready' }))
+    expect((await resumeEpisode('pod-7')).outcome).toBe('skipped')
+    expect(mockPipeline.releaseEpisode).toHaveBeenCalledWith('pod-7')
   })
 })

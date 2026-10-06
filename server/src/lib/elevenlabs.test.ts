@@ -37,15 +37,15 @@ const inputs = [{ text: 'Hello there.', voiceId: 'voice-a' }, { text: 'Hi.', voi
 describe('textToDialogue', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('sends the pinned model, seed and voices, with continuity only where given', async () => {
+  it('sends the pinned model, the given seed and the voices, with continuity only where given', async () => {
     mockAxios.post.mockResolvedValueOnce(audioResponse())
-    await textToDialogue({ inputs, futureText: 'Next up.' })
+    await textToDialogue({ inputs, seed: 98_765, futureText: 'Next up.' })
 
     const [url, body, opts] = mockAxios.post.mock.calls[0]
     expect(url).toBe(`${config.elevenlabs.baseUrl}/v1/text-to-dialogue?output_format=${config.podcast.ttsOutputFormat}`)
     expect(body).toEqual({
       model_id: config.podcast.ttsModelId,
-      seed: config.podcast.ttsSeed,
+      seed: 98_765,
       language_code: 'en',
       inputs: [{ text: 'Hello there.', voice_id: 'voice-a' }, { text: 'Hi.', voice_id: 'voice-b' }],
       future_text: 'Next up.',
@@ -57,14 +57,14 @@ describe('textToDialogue', () => {
 
   it('reads the request id and the billed character cost from the headers', async () => {
     mockAxios.post.mockResolvedValueOnce(audioResponse({ 'request-id': 'req-1', 'character-cost': '42' }))
-    const result = await textToDialogue({ inputs })
+    const result = await textToDialogue({ inputs, seed: 7 })
     expect(result).toMatchObject({ requestId: 'req-1', characterCost: 42, chars: 15 })
     expect(result.audio.toString()).toBe('ID3fake-mp3')
   })
 
   it('reports no cost when the header is missing', async () => {
     mockAxios.post.mockResolvedValueOnce(audioResponse())
-    expect((await textToDialogue({ inputs })).characterCost).toBeNull()
+    expect((await textToDialogue({ inputs, seed: 7 })).characterCost).toBeNull()
   })
 
   it.each([
@@ -73,31 +73,31 @@ describe('textToDialogue', () => {
     [429, { detail: { status: 'quota_exceeded' } }],
   ])('turns HTTP %i into ElevenLabsQuotaError without retrying', async (status, body) => {
     mockAxios.post.mockRejectedValueOnce(httpError(status, body))
-    await expect(textToDialogue({ inputs })).rejects.toBeInstanceOf(ElevenLabsQuotaError)
+    await expect(textToDialogue({ inputs, seed: 7 })).rejects.toBeInstanceOf(ElevenLabsQuotaError)
     expect(mockAxios.post).toHaveBeenCalledTimes(1)
   })
 
   it('does not retry another 4xx', async () => {
     mockAxios.post.mockRejectedValueOnce(httpError(422, { detail: 'bad input' }))
-    await expect(textToDialogue({ inputs })).rejects.toThrow('422')
+    await expect(textToDialogue({ inputs, seed: 7 })).rejects.toThrow('422')
     expect(mockAxios.post).toHaveBeenCalledTimes(1)
   })
 
   it('does not retry a timeout, which may have been billed', async () => {
     mockAxios.post.mockRejectedValueOnce(new AxiosError('timeout of 120000ms exceeded', 'ECONNABORTED'))
-    await expect(textToDialogue({ inputs })).rejects.toThrow('timeout')
+    await expect(textToDialogue({ inputs, seed: 7 })).rejects.toThrow('timeout')
     expect(mockAxios.post).toHaveBeenCalledTimes(1)
   })
 
   it('retries a 5xx once', async () => {
     mockAxios.post.mockRejectedValueOnce(httpError(503, { detail: 'busy' })).mockResolvedValueOnce(audioResponse())
-    await textToDialogue({ inputs })
+    await textToDialogue({ inputs, seed: 7 })
     expect(mockAxios.post).toHaveBeenCalledTimes(2)
   })
 
   it('gives up after the one retry', async () => {
     mockAxios.post.mockRejectedValue(httpError(500, {}))
-    await expect(textToDialogue({ inputs })).rejects.toThrow('500')
+    await expect(textToDialogue({ inputs, seed: 7 })).rejects.toThrow('500')
     expect(mockAxios.post).toHaveBeenCalledTimes(2)
   })
 })

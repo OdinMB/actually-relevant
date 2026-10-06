@@ -131,7 +131,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
 | `newsletter-podcast.md` | Newsletter: create-assign-select-generate workflow, issue ordering, templates, Plunk sending, carousel |
 | `decisions.md` | Architectural decision log: the index, with one file per decision in `.context/decisions/`; append-only history |
-| `podcast.md` | Weekly two-speaker podcast: stages, lease, weekly run and blocks, selection and dialogue rules (segues), ElevenLabs voicing, ffmpeg assembly, Bunny storage (never reuse a file name), spend cap, dry run, admin endpoints |
+| `podcast.md` | Weekly two-speaker podcast: stages, lease, weekly run and blocks, interactive/automated modes, a person's edits and rewinds, progress toast, selection and dialogue rules (segues), ElevenLabs voicing, ffmpeg assembly, Bunny storage (never reuse a file name), spend cap, dry run, admin endpoints |
 | `authentication.md` | JWT flow, cookie config, token rotation and reuse rules, roles |
 | `subscription.md` | Double opt-in newsletter signup, bot gate (honeypot + form token), Plunk, contact cleanup |
 | `admin-dashboard.md` | TanStack Query patterns, URL-persisted filters, bulk actions |

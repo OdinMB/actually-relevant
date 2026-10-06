@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../lib/admin-api'
-import type { Podcast } from '@shared/types'
+import type { Podcast, PodcastMode, PodcastScriptEdit } from '@shared/types'
+import { usePodcastProgress } from './usePodcastProgress'
 
 /** How often an episode is re-read while a process works on it. */
 export const PODCAST_POLL_MS = 5000
@@ -27,24 +28,34 @@ export function usePodcast(id: string) {
   })
 }
 
+/** Put a changed episode into the cache and refresh the list. */
 function useStoreEpisode() {
   const queryClient = useQueryClient()
   return (podcast: Podcast) => {
-    // The background run takes the lease a moment after the 202; show it as in progress so polling starts.
-    queryClient.setQueryData(['podcast', podcast.id], { ...podcast, inProgress: true })
+    queryClient.setQueryData(['podcast', podcast.id], podcast)
     queryClient.invalidateQueries({ queryKey: ['podcasts'] })
   }
 }
 
+/**
+ * For calls that start background work (202): the server claimed the lease before answering, so
+ * the stored episode is already in progress; the progress provider follows it from here on.
+ */
+function useStoreStartedEpisode() {
+  const store = useStoreEpisode()
+  const { track } = usePodcastProgress()
+  return (podcast: Podcast) => {
+    store(podcast)
+    track(podcast.id)
+  }
+}
+
 export function useUpdatePodcast() {
-  const queryClient = useQueryClient()
+  const store = useStoreEpisode()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { title: string } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { title?: string; humanEdited?: boolean } }) =>
       adminApi.podcasts.update(id, data),
-    onSuccess: (podcast) => {
-      queryClient.setQueryData(['podcast', podcast.id], podcast)
-      queryClient.invalidateQueries({ queryKey: ['podcasts'] })
-    },
+    onSuccess: store,
   })
 }
 
@@ -58,6 +69,7 @@ export function useDeletePodcast() {
   })
 }
 
+/** Finds or creates this week's episode (starts nothing). */
 export function useStartWeeklyPodcast() {
   const store = useStoreEpisode()
   return useMutation({
@@ -66,19 +78,58 @@ export function useStartWeeklyPodcast() {
   })
 }
 
+/** Start in a mode, approve a review stop, finish automatically, or resume after a failure. */
 export function useResumePodcast() {
-  const store = useStoreEpisode()
+  const started = useStoreStartedEpisode()
   return useMutation({
-    mutationFn: (id: string) => adminApi.podcasts.resume(id),
-    onSuccess: store,
+    mutationFn: ({ id, mode }: { id: string; mode?: PodcastMode }) => adminApi.podcasts.resume(id, mode),
+    onSuccess: started,
   })
 }
 
-export function useRegeneratePodcast() {
+export interface RewindRequest {
+  id: string
+  to: 'created' | 'selected' | 'scripted'
+  advance: boolean
+}
+
+/** Go back to an earlier stage; with `advance` the episode continues in the background. */
+export function useRewindPodcast() {
+  const store = useStoreEpisode()
+  const started = useStoreStartedEpisode()
+  return useMutation({
+    mutationFn: ({ id, to, advance }: RewindRequest) => adminApi.podcasts.rewind(id, to, advance),
+    onSuccess: (podcast, { advance }) => (advance ? started(podcast) : store(podcast)),
+  })
+}
+
+/** The week's story pool for the picker (only fetched while the picker is shown). */
+export function usePodcastStoryPool(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['podcast-story-pool', id],
+    queryFn: () => adminApi.podcasts.storyPool(id),
+    enabled,
+  })
+}
+
+export function useSavePodcastStories() {
+  const store = useStoreEpisode()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, storyIds }: { id: string; storyIds: string[] }) => adminApi.podcasts.saveStories(id, storyIds),
+    onSuccess: podcast => {
+      store(podcast)
+      queryClient.invalidateQueries({ queryKey: ['podcast-story-pool', podcast.id] })
+    },
+  })
+}
+
+/** Saves a script edit; a 422 rejects with an `ApiError` whose body carries `errors` and `warnings`. */
+export function useSavePodcastScript() {
   const store = useStoreEpisode()
   return useMutation({
-    mutationFn: (id: string) => adminApi.podcasts.regenerate(id),
-    onSuccess: store,
+    mutationFn: ({ id, edit }: { id: string; edit: PodcastScriptEdit }) => adminApi.podcasts.saveScript(id, edit),
+    onSuccess: ({ podcast }) => store(podcast),
   })
 }
 

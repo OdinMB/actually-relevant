@@ -49,6 +49,18 @@ export const PODCAST_OPENER = "Everything you're about to hear was written and v
  */
 export const PODCAST_EPISODE_AI_LINE = "AI-generated: Everything in this episode was written and voiced by AI from this week's news. People built and oversee the system but don't write or edit individual episodes."
 
+/**
+ * The same line for an episode a person reviewed and edited ("Edited by a person" ticked).
+ * PENDING OWNER APPROVAL (plan open question 5, .context/ai-transparency.md §11): proposed
+ * 2026-10-06, not yet approved. It must be approved before an edited episode is published.
+ */
+export const PODCAST_EPISODE_AI_LINE_EDITED = "AI-generated: Everything in this episode was written and voiced by AI from this week's news. A person reviewed and edited this episode."
+
+/** The episode's AI line: the edited wording when a person changed the stories or the script. */
+export function podcastEpisodeAiLine(humanEdited: boolean): string {
+  return humanEdited ? PODCAST_EPISODE_AI_LINE_EDITED : PODCAST_EPISODE_AI_LINE
+}
+
 /** Carousel: pixel footer on every slide, the post text line, and the alt-text prefix. */
 export const CAROUSEL_COPY = {
   slideFooter: 'actuallyrelevant.news · AI-generated',

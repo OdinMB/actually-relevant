@@ -1,15 +1,21 @@
 /**
- * "This week's episode" and its retry and block policy. The admin "Start this week's episode"
- * route calls `runWeeklyEpisode({ trigger: 'admin' })`; the generate_podcast job will call it
- * with `trigger: 'cron'`. Only automatic runs count attempts; an admin action clears a block.
+ * "This week's episode", the runs that advance an episode, and their retry and block policy. The
+ * admin "Start this week's episode" only finds or creates the row; a person then starts it in a
+ * mode, and `startAdminRun` + `resumeEpisode` run it under the lease the route claimed. The
+ * generate_podcast job will call `runWeeklyEpisode({ trigger: 'cron' })`, which runs automated and
+ * leaves an interactive episode to the person reviewing it. Only automatic runs count attempts;
+ * an admin action clears a block.
  */
-import { ContentStatus, PodcastStage, type Podcast } from '@prisma/client'
+import { ContentStatus, PodcastStage, type Podcast, type PodcastMode } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notifyEvent } from '../lib/notify.js'
-import { advanceEpisode, resetEpisode, LeaseLostError, type AdvanceTrigger } from './podcastPipeline.js'
-import { assertPodcastRunnable, episodeTtsChars, monthToDateChars, PodcastBlockedError, PodcastStoppedError } from './podcastGuards.js'
+import {
+  advanceEpisode, claimEpisode, defaultEpisodeTitle, releaseEpisode, rewindEpisode, LeaseLostError,
+  type AdvanceTrigger, type RewindTarget,
+} from './podcastPipeline.js'
+import { assertPodcastRunnable, episodeTtsChars, monthToDateChars, PodcastBlockedError, PodcastRefusedError, PodcastStoppedError } from './podcastGuards.js'
 
 const log = createLogger('podcast-weekly')
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -45,7 +51,7 @@ export async function findOrCreateWeekEpisode(now: Date = new Date()): Promise<P
   if (existing) return existing
   try {
     return await prisma.podcast.create({
-      data: { title: `Actually Relevant, ${weekKey}`, weekKey, stage: PodcastStage.created, dryRun: config.podcast.dryRun },
+      data: { title: defaultEpisodeTitle(weekKey), weekKey, stage: PodcastStage.created, dryRun: config.podcast.dryRun },
     })
   } catch (err) {
     if (!isUniqueViolation(err)) throw err
@@ -91,7 +97,14 @@ async function announceReady(id: string, now: Date): Promise<void> {
   }
 }
 
-async function runEpisode(episode: Podcast, trigger: AdvanceTrigger, now: Date): Promise<WeeklyResult> {
+interface RunOptions {
+  trigger: AdvanceTrigger
+  now: Date
+  /** The admin route claimed the lease before its 202; the run uses it instead of claiming. */
+  leaseHeld: boolean
+}
+
+async function runEpisode(episode: Podcast, { trigger, now, leaseHeld }: RunOptions): Promise<WeeklyResult> {
   const id = episode.id
   const result = (outcome: WeeklyOutcome, reason?: string): WeeklyResult => {
     log.info({ podcastId: id, trigger, outcome, reason }, 'podcast weekly run')
@@ -105,11 +118,16 @@ async function runEpisode(episode: Podcast, trigger: AdvanceTrigger, now: Date):
   } else if (trigger === 'admin' && episode.attempts > 0) {
     await clearBlock(id)
   }
+  if (trigger === 'cron') {
+    // The job never overrides a person mid-review; an episode nobody started runs automated.
+    if (episode.mode === 'interactive') return result('skipped', 'interactive: the owner is reviewing it')
+    if (episode.mode === null) await prisma.podcast.update({ where: { id }, data: { mode: 'automated' } })
+  }
 
   try {
     assertPodcastRunnable({ trigger, dryRun: config.podcast.dryRun })
-    if (episode.dryRun && !config.podcast.dryRun) await resetEpisode(id, { dryRun: false })
-    const advanced = await advanceEpisode(id, { trigger, now })
+    if (episode.dryRun && !config.podcast.dryRun) await rewindEpisode(id, 'created', { dryRun: false, leaseHeld })
+    const advanced = await advanceEpisode(id, { trigger, leaseHeld })
     if (advanced.status === 'busy') return result('skipped', 'in progress in another process')
     if (advanced.stage === PodcastStage.ready) await announceReady(id, now)
     return result('done')
@@ -126,17 +144,51 @@ async function runEpisode(episode: Podcast, trigger: AdvanceTrigger, now: Date):
   }
 }
 
-/** Find or create this ISO week's episode and advance it as far as it goes. */
+/** Find or create this ISO week's episode and advance it as far as its mode lets it go. */
 export async function runWeeklyEpisode(opts: { trigger: AdvanceTrigger; now?: Date }): Promise<WeeklyResult> {
   const now = opts.now ?? new Date()
-  return runEpisode(await findOrCreateWeekEpisode(now), opts.trigger, now)
+  return runEpisode(await findOrCreateWeekEpisode(now), { trigger: opts.trigger, now, leaseHeld: false })
 }
 
-/** Admin Resume: clear a block and the week's attempts, then advance that episode. */
+export interface AdminRunRequest {
+  /** Store this mode first (start, or "Finish automatically"); otherwise the episode's own. */
+  mode?: PodcastMode
+  /** Rewind to this stage first (Start over, Regenerate script, Regenerate audio). */
+  rewindTo?: RewindTarget
+}
+
+/**
+ * The synchronous half of an admin start, approve, resume or rewind-and-continue (ADR-0009):
+ * checks the episode can run, claims its lease, rewinds if asked, stores the mode and clears a
+ * block. The caller answers 202 and then runs `resumeEpisode` with the lease this leaves held.
+ * A rewind without a given mode makes the episode interactive: a person stepped in, so the run
+ * stops at the next review point instead of voicing unseen. Refusals are `PodcastRefusedError` (409).
+ */
+export async function startAdminRun(id: string, req: AdminRunRequest = {}): Promise<void> {
+  const episode = await prisma.podcast.findUniqueOrThrow({ where: { id } })
+  if (episode.stage === PodcastStage.legacy) throw new PodcastRefusedError('a legacy episode cannot be run')
+  const mode = req.mode ?? (req.rewindTo ? 'interactive' : episode.mode)
+  if (!mode) throw new PodcastRefusedError('choose interactive or fully automated first')
+  if (!req.rewindTo && episode.stage === PodcastStage.ready) throw new PodcastRefusedError('the episode is already ready')
+  if (!(await claimEpisode(id))) throw new PodcastRefusedError('the episode is in progress')
+  try {
+    if (req.rewindTo) await rewindEpisode(id, req.rewindTo, { dryRun: config.podcast.dryRun, leaseHeld: true })
+    await prisma.podcast.update({ where: { id }, data: { mode, blockedAt: null, blockedReason: null, attempts: 0 } })
+  } catch (err) {
+    await releaseEpisode(id)
+    throw err
+  }
+}
+
+/**
+ * The background half: advance the episode under the lease `startAdminRun` claimed, and release
+ * it whatever happens (an early return included).
+ */
 export async function resumeEpisode(id: string): Promise<WeeklyResult> {
-  const episode = await prisma.podcast.findUnique({ where: { id } })
-  if (!episode) throw new Error('Podcast not found')
-  if (episode.stage === PodcastStage.legacy) throw new Error('a legacy episode cannot be resumed')
-  await clearBlock(id)
-  return runEpisode({ ...episode, blockedAt: null, blockedReason: null, attempts: 0 }, 'admin', new Date())
+  try {
+    const episode = await prisma.podcast.findUniqueOrThrow({ where: { id } })
+    return await runEpisode(episode, { trigger: 'admin', now: new Date(), leaseHeld: true })
+  } finally {
+    await releaseEpisode(id)
+  }
 }

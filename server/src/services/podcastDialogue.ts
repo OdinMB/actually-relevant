@@ -1,7 +1,7 @@
 /**
  * Dialogue rules and transformations for the two-speaker podcast, without I/O: validation of the
  * model's dialogue (including the segue rule), the spoken episode with the code-added opener and
- * sign-off, and the admin script view.
+ * sign-off, the admin script view, and a person's text edits applied to the stored structure.
  */
 import { config } from '../config.js'
 import { PODCAST_OPENER } from '../lib/aiLabelCopy.js'
@@ -31,7 +31,19 @@ export interface DialogueStoryRef {
 
 export interface DialogueValidation {
   valid: boolean
+  /** Rules the dialogue breaks; any error keeps it from being stored. */
   errors: string[]
+  /** Rules a person's text may break deliberately (the segue rules); reported, never blocking. */
+  warnings: string[]
+}
+
+export interface ValidationOptions {
+  /**
+   * `person`: the segue rules become warnings, since a person may write a short bridge on purpose
+   * and hears the result before publishing. Every other rule protects TTS spend, chunking or the
+   * feed and stays an error. Default `model`.
+   */
+  authoredBy?: 'model' | 'person'
 }
 
 /** Spoken last turn of every episode (HOST_A), added in code after the model's outro. */
@@ -210,17 +222,78 @@ function bandErrors(spoken: SpokenSegment[], dialogue: PodcastDialogue): string[
   return [`your turns total ${own} spoken characters, audio tags included; they must total ${min} to ${max}`]
 }
 
-/** Every rule the dialogue must meet before it is stored; the errors are fed back on the one regeneration. */
-export function validateDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): DialogueValidation {
+/**
+ * Every rule the dialogue must meet before it is stored; the model's errors are fed back on the one
+ * regeneration. For a person's edit the segue rules are warnings (`ValidationOptions`).
+ */
+export function validateDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[], opts: ValidationOptions = {}): DialogueValidation {
   const spoken = assembleSpokenSegments(dialogue)
   const hasUrl = urlChecker(stories)
+  const segue = segueErrors(dialogue, stories)
+  const segueIsWarning = opts.authoredBy === 'person'
   const errors = [
     ...metadataErrors(dialogue, hasUrl),
     ...structureErrors(dialogue, stories),
     ...turnErrors(dialogue, hasUrl),
-    ...segueErrors(dialogue, stories),
+    ...(segueIsWarning ? [] : segue),
     ...speakerRunErrors(spoken),
     ...bandErrors(spoken, dialogue),
   ]
-  return { valid: errors.length === 0, errors }
+  return { valid: errors.length === 0, errors, warnings: segueIsWarning ? segue : [] }
+}
+
+// ---------------------------------------------------------------------------
+// A person's text edits
+// ---------------------------------------------------------------------------
+
+/**
+ * A person's edit of the script: the stored structure, sent back with new turn text and summary.
+ * Kinds, story refs and speakers are echoed, not edited, so an edit made against a script that has
+ * since changed (another tab, a regeneration) is refused instead of applied to the wrong turns.
+ */
+export interface DialogueTextEdit {
+  episodeSummary: string
+  segments: { kind: string; storyRef: number | null; turns: Turn[] }[]
+}
+
+export type TurnEditResult = { dialogue: PodcastDialogue; mismatches: [] } | { dialogue: null; mismatches: string[] }
+
+/** The structural differences between the stored dialogue and an edit; empty when only text changed. */
+function structureMismatches(dialogue: PodcastDialogue, edit: DialogueTextEdit): string[] {
+  if (edit.segments.length !== dialogue.segments.length) {
+    return [`the script has ${dialogue.segments.length} segments, the edit ${edit.segments.length}`]
+  }
+  return dialogue.segments.flatMap((segment, i) => {
+    const edited = edit.segments[i]
+    const where = label(segment, i)
+    if (edited.kind !== segment.kind || edited.storyRef !== segment.storyRef) return [`${where}: the segment's kind or story changed`]
+    if (edited.turns.length !== segment.turns.length) return [`${where}: has ${segment.turns.length} turns, the edit ${edited.turns.length}`]
+    return segment.turns.flatMap((turn, j) => (edited.turns[j].speaker === turn.speaker ? [] : [`${where}, turn ${j + 1}: the speaker changed`]))
+  })
+}
+
+/**
+ * The stored dialogue with the edit's turn text and summary, or the structural mismatches when the
+ * edit changes anything but text (segments, kinds, stories, turn counts or speakers).
+ */
+export function applyTurnEdits(dialogue: PodcastDialogue, edit: DialogueTextEdit): TurnEditResult {
+  const mismatches = structureMismatches(dialogue, edit)
+  if (mismatches.length > 0) return { dialogue: null, mismatches }
+  return {
+    dialogue: {
+      ...dialogue,
+      episodeSummary: edit.episodeSummary,
+      segments: dialogue.segments.map((segment, i) => ({
+        ...segment,
+        turns: segment.turns.map((turn, j) => ({ ...turn, text: edit.segments[i].turns[j].text })),
+      })),
+    },
+    mismatches: [],
+  }
+}
+
+/** Whether an edit changed any turn's text or the summary (a save of identical text changes nothing). */
+export function textChanged(before: PodcastDialogue, after: PodcastDialogue): boolean {
+  if (before.episodeSummary !== after.episodeSummary) return true
+  return before.segments.some((segment, i) => segment.turns.some((turn, j) => turn.text !== after.segments[i]?.turns[j]?.text))
 }

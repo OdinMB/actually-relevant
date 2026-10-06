@@ -27,6 +27,7 @@ import { useServerTime } from '../hooks/useJobs'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { ToastProvider } from '../components/ui/Toast'
 import { BackgroundTaskProvider } from '../hooks/useBackgroundTasks'
+import { PodcastProgressProvider } from '../hooks/usePodcastProgress'
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon, end: true },
@@ -159,6 +160,7 @@ export default function AdminLayout() {
 
   return (
     <ToastProvider>
+    <PodcastProgressProvider>
     <BackgroundTaskProvider>
       <div className="flex h-screen bg-neutral-50">
         {/* Desktop sidebar */}
@@ -210,6 +212,7 @@ export default function AdminLayout() {
         </div>
       </div>
     </BackgroundTaskProvider>
+    </PodcastProgressProvider>
     </ToastProvider>
   )
 }

@@ -1,13 +1,62 @@
+import { useState } from 'react'
 import type { Podcast } from '@shared/types'
-import { usePodcastUsage } from '../../hooks/usePodcasts'
+import { Button } from '../ui/Button'
+import { useToast } from '../ui/Toast'
+import { usePodcastUsage, useRewindPodcast } from '../../hooks/usePodcasts'
+import { PodcastVoiceConfirm } from './PodcastVoiceConfirm'
 
 function formatDuration(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 }
 
-/** The episode's audio as stored on the CDN, and the TTS characters it and the month have used. */
+type AudioAction = 'regenerate' | 'edit'
+
+const CONFIRM: Record<AudioAction, { title: string; confirmLabel: string; note: string }> = {
+  regenerate: {
+    title: 'Voice the episode again?',
+    confirmLabel: 'Regenerate audio',
+    note: 'The current audio is discarded and the same script is voiced again with a new take.',
+  },
+  edit: {
+    title: 'Edit the script?',
+    confirmLabel: 'Edit script',
+    note: 'The current audio is discarded. After your edits, approving the script voices it again.',
+  },
+}
+
+/** What a person does with a finished episode, until publishing arrives. */
+function NextSteps() {
+  return (
+    <div className="rounded-md border border-brand-100 bg-brand-50 p-3 text-sm text-neutral-800">
+      <h4 className="font-semibold text-neutral-900">Next steps</h4>
+      <ol className="list-decimal pl-5 mt-1 space-y-1">
+        <li>Listen to the episode above, including the transitions between stories.</li>
+        <li>If something sounds off, regenerate the audio for a new take, or edit the script and voice it again.</li>
+        <li>Publishing is not built yet. The next update adds Publish and Unpublish here, along with the podcast feed and page.</li>
+      </ol>
+    </div>
+  )
+}
+
+/**
+ * The episode's audio as stored on the CDN, the TTS characters it and the month have used, and,
+ * once it is ready, Regenerate audio, Edit script and the next steps.
+ */
 export function PodcastAudioSection({ podcast }: { podcast: Podcast }) {
   const usage = usePodcastUsage()
+  const rewind = useRewindPodcast()
+  const { toast } = useToast()
+  const [confirm, setConfirm] = useState<AudioAction | null>(null)
+  const ready = podcast.stage === 'ready'
+  const canChange = ready && !podcast.inProgress && podcast.status !== 'published'
+
+  const handleConfirm = () => {
+    if (!confirm) return
+    rewind.mutate({ id: podcast.id, to: 'scripted', advance: confirm === 'regenerate' }, {
+      onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
+      onSettled: () => setConfirm(null),
+    })
+  }
 
   return (
     <section aria-labelledby="podcast-audio-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-3">
@@ -35,6 +84,27 @@ export function PodcastAudioSection({ podcast }: { podcast: Podcast }) {
             : '…'}
         </dd>
       </dl>
+
+      {canChange && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setConfirm('regenerate')} disabled={rewind.isPending}>Regenerate audio</Button>
+            <Button size="sm" variant="secondary" onClick={() => setConfirm('edit')} disabled={rewind.isPending}>Edit script</Button>
+          </div>
+          <NextSteps />
+        </>
+      )}
+
+      {confirm && (
+        <PodcastVoiceConfirm
+          open
+          podcast={podcast}
+          {...CONFIRM[confirm]}
+          loading={rewind.isPending}
+          onClose={() => setConfirm(null)}
+          onConfirm={handleConfirm}
+        />
+      )}
     </section>
   )
 }

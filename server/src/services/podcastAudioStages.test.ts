@@ -78,6 +78,14 @@ describe('voiceEpisode', () => {
     expect(write).toMatchObject({ stage: 'voiced', ttsModelId: config.podcast.ttsModelId, voiceIds: { HOST_A: config.podcast.voiceIdA, HOST_B: config.podcast.voiceIdB } })
   })
 
+  it('voices every chunk with the episode\'s own seed, or the configured one when it has none', async () => {
+    await stages.voiceEpisode(episode({ ttsSeed: 4242 }), context())
+    expect(new Set(mockElevenLabs.textToDialogue.mock.calls.map(c => c[0].seed))).toEqual(new Set([4242]))
+    mockElevenLabs.textToDialogue.mockClear()
+    await stages.voiceEpisode(episode({ ttsSeed: null }), context())
+    expect(mockElevenLabs.textToDialogue.mock.calls[0][0].seed).toBe(config.podcast.ttsSeed)
+  })
+
   it('reserves each chunk\'s characters before its call, and checks the balance once for the rest', async () => {
     await stages.voiceEpisode(episode(), context())
     const total = CHUNKS.reduce((n, c) => n + c.reduce((m, t) => m + t.text.length, 0), 0)

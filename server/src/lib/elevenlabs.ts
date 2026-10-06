@@ -15,6 +15,8 @@ export interface DialogueInput {
 
 export interface DialogueRequest {
   inputs: DialogueInput[]
+  /** The render's seed: one seed for every chunk of a render, a fresh one per "Regenerate audio". */
+  seed: number
   /** Text spoken just before this request (continuity), at most `continuityChars`. */
   previousText?: string
   /** Text spoken just after this request (continuity), at most `continuityChars`. */
@@ -84,11 +86,11 @@ function headers(accept: string): Record<string, string> {
   return { 'xi-api-key': config.elevenlabs.apiKey, 'Content-Type': 'application/json', Accept: accept }
 }
 
-/** Voice one chunk of dialogue: POST /v1/text-to-dialogue with the pinned model and seed. */
+/** Voice one chunk of dialogue: POST /v1/text-to-dialogue with the pinned model and the given seed. */
 export async function textToDialogue(req: DialogueRequest): Promise<DialogueAudio> {
   const body = {
     model_id: config.podcast.ttsModelId,
-    seed: config.podcast.ttsSeed,
+    seed: req.seed,
     language_code: 'en',
     inputs: req.inputs.map(i => ({ text: i.text, voice_id: i.voiceId })),
     ...(req.previousText ? { previous_text: req.previousText } : {}),

@@ -9,7 +9,7 @@ import { PodcastStage, type Podcast } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { PODCAST_EPISODE_AI_LINE } from '../lib/aiLabelCopy.js'
+import { podcastEpisodeAiLine } from '../lib/aiLabelCopy.js'
 import { textToDialogue, ElevenLabsQuotaError } from '../lib/elevenlabs.js'
 import { assembleEpisodeMp3, cbrDurationMs, silentMp3 } from '../lib/podcastAudio.js'
 import { deleteObject, isBunnyConfigured, publicUrl, putObject } from '../lib/bunnyStorage.js'
@@ -62,13 +62,18 @@ export function episodeChunks(episode: Pick<Podcast, 'id' | 'dialogue'>): Chunk[
 
 const voiceFor = (speaker: 'HOST_A' | 'HOST_B') => (speaker === 'HOST_A' ? config.podcast.voiceIdA : config.podcast.voiceIdB)
 
+/** The render's seed: the episode's own after a "Regenerate audio", otherwise the configured one. */
+export const renderSeed = (episode: Pick<Podcast, 'ttsSeed'>): number => episode.ttsSeed ?? config.podcast.ttsSeed
+
 /** Voice one chunk with ElevenLabs, after reserving its characters against the monthly cap. */
-async function voiceLive(podcastId: string, chunks: Chunk[], index: number): Promise<Omit<VoicedChunk, 'index'>> {
+async function voiceLive(episode: Podcast, chunks: Chunk[], index: number): Promise<Omit<VoicedChunk, 'index'>> {
+  const podcastId = episode.id
   const chars = chunkChars(chunks[index])
   await reserveTtsChars(podcastId, chars)
   try {
     const result = await textToDialogue({
       inputs: chunks[index].map(t => ({ text: t.text, voiceId: voiceFor(t.speaker) })),
+      seed: renderSeed(episode),
       ...chunkContinuity(chunks, index, config.podcast.continuityChars),
     })
     log.info({ podcastId, chunk: index, chars, characterCost: result.characterCost, requestId: result.requestId }, 'podcast chunk voiced')
@@ -97,7 +102,7 @@ export async function voiceEpisode(episode: Podcast, ctx: AudioStageContext): Pr
   for (const index of pending) {
     await ctx.renewLease()
     if (ctx.trigger === 'cron') await assertJobEnabled(GENERATE_PODCAST_JOB)
-    const voiced = episode.dryRun ? await voiceStub(chunks, index) : await voiceLive(episode.id, chunks, index)
+    const voiced = episode.dryRun ? await voiceStub(chunks, index) : await voiceLive(episode, chunks, index)
     await ctx.storeChunk({ index, ...voiced })
   }
   return {
@@ -134,7 +139,7 @@ export async function finishEpisode(episode: Podcast, ctx: AudioStageContext): P
   }
 
   const pauseMs = config.podcast.segmentPauseMs
-  const tags = { title: episode.title, artist: config.podcast.showTitle, album: config.podcast.showTitle, comment: PODCAST_EPISODE_AI_LINE }
+  const tags = { title: episode.title, artist: config.podcast.showTitle, album: config.podcast.showTitle, comment: podcastEpisodeAiLine(episode.humanEdited) }
   const { buffer, durationSec } = await assembleEpisodeMp3(rows.map(r => Buffer.from(r.bytes)), tags, { pauseMs, loudnorm: !episode.dryRun })
   const vtt = buildTranscriptVtt(chunks, rows.map(r => r.durationMs), pauseMs)
 

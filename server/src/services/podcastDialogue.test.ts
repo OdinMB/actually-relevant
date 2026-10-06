@@ -3,74 +3,12 @@ import { config } from '../config.js'
 import { PODCAST_OPENER } from '../lib/aiLabelCopy.js'
 import type { PodcastDialogue } from '../schemas/llm.js'
 import {
-  assembleSpokenSegments, dialogueCharBudget, renderScript, validateDialogue, PODCAST_SIGN_OFF,
-  type DialogueStoryRef,
+  applyTurnEdits, assembleSpokenSegments, dialogueCharBudget, renderScript, textChanged, validateDialogue, PODCAST_SIGN_OFF,
+  type DialogueTextEdit,
 } from './podcastDialogue.js'
-
-type Segment = PodcastDialogue['segments'][number]
-type Turn = Segment['turns'][number]
-
-const stories: DialogueStoryRef[] = [
-  { ref: 1, title: 'Court orders Nairobi to publish air data', publisher: 'The Guardian' },
-  { ref: 2, title: 'Malaria vaccine reaches ten more countries', publisher: 'Phys.org' },
-  { ref: 3, title: 'Treaty limits deep-sea mining permits', publisher: 'Reuters' },
-  { ref: 4, title: 'New chip export rules take effect', publisher: 'Vox.com' },
-]
-
-/** Plain sentences of about `chars` characters, so the episode lands inside the band. */
-function filler(chars: number, seed: string): string {
-  const sentence = `The ${seed} detail matters because people can check it. `
-  return sentence.repeat(Math.ceil(chars / sentence.length)).slice(0, chars).trim()
-}
-
-const bridges = [
-  'A court in Nairobi turning air quality into a legal question is a bigger deal than it sounds.',
-  'From clean air to public health: a vaccine rollout reached ten more countries this week.',
-  'Health is one kind of shared resource; the deep ocean floor is another, and a new treaty covers it.',
-  'The last story moves from the seabed to computer chips, where new export rules now apply.',
-]
-
-/** The intro's HOST_A turn leads into the first story, so story 1 opens with HOST_B picking it up. */
-function storySegment(ref: number, overrides: Partial<Segment> = {}): Segment {
-  const [first, second]: Turn['speaker'][] = ref === 1 ? ['HOST_B', 'HOST_A'] : ['HOST_A', 'HOST_B']
-  const turns: Turn[] = [
-    { speaker: first, text: bridges[ref - 1] },
-    { speaker: second, text: filler(340, `story ${ref} first`) },
-    { speaker: first, text: filler(340, `story ${ref} second`) },
-    { speaker: second, text: filler(330, `story ${ref} third`) },
-  ]
-  return { kind: 'story', storyRef: ref, turns, ...overrides }
-}
-
-const INTRO_TEXT = 'Welcome to Actually Relevant, the stories rated most relevant for humanity this week. '
-  + 'We start in Nairobi, where a court has ordered the city to publish its air quality data, The Guardian reports.'
-
-function goodDialogue(): PodcastDialogue {
-  return {
-    episodeTitle: 'Clean air, vaccines and the deep sea',
-    episodeSummary: 'Four stories from this week. Each one matters beyond its headline.',
-    segments: [
-      { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: INTRO_TEXT }] },
-      storySegment(1),
-      storySegment(2),
-      storySegment(3),
-      storySegment(4),
-      { kind: 'outro', storyRef: null, turns: [
-        { speaker: 'HOST_A', text: 'From a courtroom in Nairobi to export rules for chips, that was the week in four stories.' },
-        { speaker: 'HOST_B', text: 'Thanks for spending a few minutes with us.' },
-      ] },
-    ],
-  }
-}
-
-function withSegment(d: PodcastDialogue, index: number, segment: Segment): PodcastDialogue {
-  return { ...d, segments: d.segments.map((s, i) => (i === index ? segment : s)) }
-}
-
-function withTurn(d: PodcastDialogue, segmentIndex: number, turnIndex: number, text: string): PodcastDialogue {
-  const seg = d.segments[segmentIndex]
-  return withSegment(d, segmentIndex, { ...seg, turns: seg.turns.map((t, i) => (i === turnIndex ? { ...t, text } : t)) })
-}
+import {
+  fixtureStories as stories, filler, goodDialogue, INTRO_TEXT, storySegment, withSegment, withTurn, type Segment,
+} from '../test/podcastFixtures.js'
 
 function errorsOf(d: PodcastDialogue): string[] {
   return validateDialogue(d, stories).errors
@@ -257,5 +195,72 @@ describe('renderScript', () => {
     expect(lines[1]).toBe('')
     expect(lines[2]).toMatch(/^HOST A: Welcome/)
     expect(lines.at(-1)).toBe(`HOST A: ${PODCAST_SIGN_OFF}`)
+  })
+})
+
+describe('validateDialogue for a person\'s edit', () => {
+  it('turns the two segue failures into warnings and still accepts the dialogue', () => {
+    const shortBridge = withTurn(goodDialogue(), 2, 0, 'And now, vaccines.')
+    const sameOpenings = withTurn(withTurn(shortBridge, 3, 0, 'Next up this week is a story about the deep ocean floor and a treaty.'), 4, 0, 'Next up this week is a story about export rules for computer chips.')
+
+    const asModel = validateDialogue(sameOpenings, stories)
+    expect(asModel.valid).toBe(false)
+    expect(asModel.warnings).toEqual([])
+
+    const asPerson = validateDialogue(sameOpenings, stories, { authoredBy: 'person' })
+    expect(asPerson.valid).toBe(true)
+    expect(asPerson.errors).toEqual([])
+    expect(asPerson.warnings.join(' ')).toMatch(/spoken bridge/)
+    expect(asPerson.warnings.join(' ')).toMatch(/same first five words/)
+  })
+
+  it('keeps every other rule an error for a person', () => {
+    const withUrl = withTurn(goodDialogue(), 2, 1, 'Read it at https://example.org today.')
+    const result = validateDialogue(withUrl, stories, { authoredBy: 'person' })
+    expect(result.valid).toBe(false)
+    expect(result.errors.join(' ')).toMatch(/URL/)
+
+    const tooShort = withSegment(goodDialogue(), 2, storySegment(2, { turns: storySegment(2).turns.map(t => ({ ...t, text: t.text.slice(0, 60) })) }))
+    expect(validateDialogue(tooShort, stories, { authoredBy: 'person' }).errors.join(' ')).toMatch(/spoken characters/)
+  })
+})
+
+describe('applyTurnEdits', () => {
+  const asEdit = (d: PodcastDialogue): DialogueTextEdit => ({
+    episodeSummary: d.episodeSummary,
+    segments: d.segments.map(s => ({ kind: s.kind, storyRef: s.storyRef, turns: s.turns.map(t => ({ speaker: t.speaker, text: t.text })) })),
+  })
+
+  it('applies new turn text and summary and keeps the structure', () => {
+    const stored = goodDialogue()
+    const edit = asEdit(withTurn(stored, 2, 1, 'A rewritten turn.'))
+    edit.episodeSummary = 'A new summary.'
+    const result = applyTurnEdits(stored, edit)
+    expect(result.mismatches).toEqual([])
+    expect(result.dialogue?.segments[2].turns[1]).toEqual({ speaker: stored.segments[2].turns[1].speaker, text: 'A rewritten turn.' })
+    expect(result.dialogue?.episodeSummary).toBe('A new summary.')
+    expect(result.dialogue?.episodeTitle).toBe(stored.episodeTitle)
+    expect(textChanged(stored, result.dialogue!)).toBe(true)
+    expect(textChanged(stored, applyTurnEdits(stored, asEdit(stored)).dialogue!)).toBe(false)
+  })
+
+  it('reports a changed speaker, turn count, segment kind or story, and applies nothing', () => {
+    const stored = goodDialogue()
+    const speaker = asEdit(stored)
+    speaker.segments[2].turns[0].speaker = speaker.segments[2].turns[0].speaker === 'HOST_A' ? 'HOST_B' : 'HOST_A'
+    const count = asEdit(stored)
+    count.segments[2].turns.pop()
+    const kind = asEdit(stored)
+    kind.segments[4].kind = 'outro'
+    const ref = asEdit(stored)
+    ref.segments[1].storyRef = 2
+    const segments = asEdit(stored)
+    segments.segments.pop()
+
+    for (const [edit, pattern] of [[speaker, /speaker/], [count, /turns/], [kind, /kind or story/], [ref, /kind or story/], [segments, /segments/]] as const) {
+      const result = applyTurnEdits(stored, edit)
+      expect(result.dialogue).toBeNull()
+      expect(result.mismatches.join(' ')).toMatch(pattern)
+    }
   })
 })

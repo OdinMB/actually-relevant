@@ -1,6 +1,18 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider, useToast } from './Toast'
+
+function LinkedConsumer() {
+  const { addProgressToast, updateToast } = useToast()
+  return (
+    <div>
+      <button onClick={() => addProgressToast('pod', 'Voicing 1/5', { href: '/admin/podcasts/pod-1' })}>start</button>
+      <button onClick={() => updateToast('pod', { type: 'error', message: 'Episode failed', sticky: true })}>fail</button>
+      <button onClick={() => updateToast('pod', { type: 'success', message: 'Episode ready' })}>succeed</button>
+    </div>
+  )
+}
 
 function TestConsumer() {
   const { toast, addProgressToast, updateToast, removeToast } = useToast()
@@ -95,6 +107,35 @@ describe('Toast', () => {
     const dismissBtn = screen.getByLabelText('Dismiss')
     fireEvent.click(dismissBtn)
     expect(screen.queryByText('Done!')).not.toBeInTheDocument()
+  })
+
+  it('keeps a sticky outcome until it is dismissed', () => {
+    vi.useFakeTimers()
+    render(<ToastProvider><LinkedConsumer /></ToastProvider>, { wrapper: MemoryRouter })
+    fireEvent.click(screen.getByText('start'))
+    fireEvent.click(screen.getByText('fail'))
+    act(() => { vi.advanceTimersByTime(10000) })
+    expect(screen.getByText('Episode failed')).toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it('renders a toast with an href as a link to that page, kept on update', () => {
+    render(<ToastProvider><LinkedConsumer /></ToastProvider>, { wrapper: MemoryRouter })
+    fireEvent.click(screen.getByText('start'))
+    expect(screen.getByRole('link', { name: 'Voicing 1/5' }).getAttribute('href')).toBe('/admin/podcasts/pod-1')
+    fireEvent.click(screen.getByText('fail'))
+    expect(screen.getByRole('link', { name: 'Episode failed' }).getAttribute('href')).toBe('/admin/podcasts/pod-1')
+  })
+
+  it('a progress toast restarted after an outcome is not dismissed by the outcome\'s timer', () => {
+    vi.useFakeTimers()
+    render(<ToastProvider><LinkedConsumer /></ToastProvider>, { wrapper: MemoryRouter })
+    fireEvent.click(screen.getByText('start'))
+    fireEvent.click(screen.getByText('succeed'))
+    fireEvent.click(screen.getByText('start'))
+    act(() => { vi.advanceTimersByTime(10000) })
+    expect(screen.getByText('Voicing 1/5')).toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('addProgressToast updates existing toast with same ID', () => {

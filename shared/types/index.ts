@@ -213,7 +213,10 @@ export interface PendingSubscription {
 
 
 /** Production progress of an episode (forward-only); publication is the separate `status`. */
-export type PodcastStage = 'legacy' | 'created' | 'scripted' | 'voiced' | 'ready'
+export type PodcastStage = 'legacy' | 'created' | 'selected' | 'scripted' | 'voiced' | 'ready'
+
+/** How far a run goes: `interactive` stops after `selected` and `scripted` for a person's review. Null until chosen. */
+export type PodcastMode = 'automated' | 'interactive'
 
 /** A story as the episode froze it when the script was written. */
 export interface PodcastEpisodeStory {
@@ -232,6 +235,7 @@ export interface PodcastListItem {
   title: string
   status: 'draft' | 'published'
   stage: PodcastStage
+  mode: PodcastMode | null
   weekKey: string | null
   storyIds: string[]
   attempts: number
@@ -240,16 +244,41 @@ export interface PodcastListItem {
   dryRun: boolean
   /** A process is working on the episode right now (live lease). */
   inProgress: boolean
+  /** An interactive episode resting at `selected` or `scripted`, waiting for a person (no error, not blocked). */
+  awaitingReview: boolean
   createdAt: string
   updatedAt: string
 }
 
+export type PodcastSpeaker = 'HOST_A' | 'HOST_B'
+
+/** The model's dialogue as stored (the opener and sign-off are added in code, outside it). */
+export interface PodcastDialogue {
+  episodeTitle: string
+  episodeSummary: string
+  segments: {
+    kind: 'intro' | 'story' | 'outro'
+    storyRef: number | null
+    turns: { speaker: PodcastSpeaker; text: string }[]
+  }[]
+}
+
+/** A person's script edit: the stored structure echoed back with new turn text and summary. */
+export type PodcastScriptEdit = Omit<PodcastDialogue, 'episodeTitle'>
+
 export interface Podcast extends PodcastListItem {
   /** Legacy rows: the hand-voiced script. Two-speaker rows: the rendered dialogue ("HOST A: ..."). */
   script: string
+  dialogue: PodcastDialogue | null
   episodeSummary: string
   showNotes: string
   episodeStories: PodcastEpisodeStory[] | null
+  /** A person changed the stories or the script; selects the episode's AI line. */
+  humanEdited: boolean
+  /** The step running now ("Voicing", ...); null at rest. */
+  activity: string | null
+  /** Characters a full voicing of the current script sends to TTS; null before there is a script. */
+  ttsCharsEstimate: number | null
   blockedReason: string | null
   failedAt: string | null
   /** TTS model that voiced the episode ("stub-silence" for a dry run) */
@@ -268,6 +297,43 @@ export interface Podcast extends PodcastListItem {
 export interface PodcastUsage {
   monthToDateChars: number
   monthlyCap: number
+}
+
+/** A story of the week's pool, as the story picker lists it. */
+export interface PodcastPoolStory {
+  id: string
+  title: string
+  publisher: string
+  sourceUrl: string
+  slug: string | null
+  issue: string
+  relevance: number | null
+  /** One of the episode's current stories. */
+  selected: boolean
+}
+
+export interface PodcastStoryPool {
+  stories: PodcastPoolStory[]
+  minStories: number
+  maxStories: number
+}
+
+/** An episode a process is working on right now (`GET /api/admin/podcasts/active`). */
+export interface ActivePodcastRun {
+  id: string
+  title: string
+  stage: PodcastStage
+  mode: PodcastMode | null
+  activity: string | null
+  /** While voicing: chunks stored so far, and the episode's total. */
+  chunksDone: number | null
+  chunksTotal: number | null
+}
+
+/** A saved script edit: the episode and the segue warnings the person may keep. */
+export interface PodcastScriptSaveResult {
+  podcast: Podcast
+  warnings: string[]
 }
 
 export type BlueskyPostStatus = 'draft' | 'published' | 'failed'

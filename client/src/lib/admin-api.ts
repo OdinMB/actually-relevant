@@ -6,8 +6,13 @@ import type {
   Issue,
   Newsletter,
   NewsletterSend,
+  ActivePodcastRun,
   Podcast,
   PodcastListItem,
+  PodcastMode,
+  PodcastScriptEdit,
+  PodcastScriptSaveResult,
+  PodcastStoryPool,
   PodcastUsage,
   JobRun,
   User,
@@ -77,6 +82,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** The error response's JSON body, for answers that carry details (e.g. a 422's `errors`). */
+    public body?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -159,7 +166,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }))
-    throw new ApiError(res.status, body.error || res.statusText)
+    throw new ApiError(res.status, body.error || res.statusText, body)
   }
 
   if (res.status === 204) return undefined as T
@@ -341,14 +348,26 @@ export const adminApi = {
     list: (params?: { status?: string; stage?: string }) =>
       request<PaginatedResponse<PodcastListItem>>(`/podcasts${toQueryString((params || {}) as Record<string, unknown>)}`),
     get: (id: string) => request<Podcast>(`/podcasts/${id}`),
-    update: (id: string, data: { title: string }) =>
+    /** The title and the "edited by a person" flag. */
+    update: (id: string, data: { title?: string; humanEdited?: boolean }) =>
       request<Podcast>(`/podcasts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/podcasts/${id}`, { method: 'DELETE' }),
-    /** Starts (or resumes) this week's episode; the work continues in the background (202). */
+    /** Finds or creates this week's episode; nothing runs until a mode is chosen on its page. */
     startWeekly: () => request<Podcast>('/podcasts/weekly', { method: 'POST' }),
-    resume: (id: string) => request<Podcast>(`/podcasts/${id}/resume`, { method: 'POST' }),
-    /** Back to a new script; writing and voicing continue in the background (202). 409 once published. */
-    regenerate: (id: string) => request<Podcast>(`/podcasts/${id}/regenerate`, { method: 'POST' }),
+    /** Episodes a process is working on right now. */
+    active: () => request<ActivePodcastRun[]>('/podcasts/active'),
+    /** Start (with a mode), approve, finish automatically or resume; the work continues in the background (202). */
+    resume: (id: string, mode?: PodcastMode) =>
+      request<Podcast>(`/podcasts/${id}/resume`, { method: 'POST', body: JSON.stringify(mode ? { mode } : {}) }),
+    /** Back to an earlier stage; with `advance` the episode continues in the background (202). 409 once published. */
+    rewind: (id: string, to: 'created' | 'selected' | 'scripted', advance: boolean) =>
+      request<Podcast>(`/podcasts/${id}/rewind`, { method: 'POST', body: JSON.stringify({ to, advance }) }),
+    storyPool: (id: string) => request<PodcastStoryPool>(`/podcasts/${id}/story-pool`),
+    saveStories: (id: string, storyIds: string[]) =>
+      request<Podcast>(`/podcasts/${id}/stories`, { method: 'PUT', body: JSON.stringify({ storyIds }) }),
+    /** 422 (`ApiError.body`: `{ errors, warnings }`) when the edit breaks a rule; nothing is saved then. */
+    saveScript: (id: string, edit: PodcastScriptEdit) =>
+      request<PodcastScriptSaveResult>(`/podcasts/${id}/script`, { method: 'PUT', body: JSON.stringify(edit) }),
     usage: () => request<PodcastUsage>('/podcasts/usage'),
   },
 

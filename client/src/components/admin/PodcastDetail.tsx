@@ -3,29 +3,29 @@ import type { Podcast } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
-import { ConfirmDialog } from '../ui/ConfirmDialog'
-import { useUpdatePodcast, useResumePodcast, useRegeneratePodcast } from '../../hooks/usePodcasts'
+import { useUpdatePodcast } from '../../hooks/usePodcasts'
 import { useToast } from '../ui/Toast'
 import { formatDate } from '../../lib/constants'
 import { AssignedStoriesList } from './AssignedStoriesList'
 import { PodcastAudioSection } from './PodcastAudioSection'
+import { PodcastScriptEditor } from './PodcastScriptEditor'
 import { PodcastStageBadge } from './PodcastStageBadge'
+import { PodcastStageStepper } from './PodcastStageStepper'
+import { PodcastStoryPicker } from './PodcastStoryPicker'
 
 interface PodcastDetailProps {
   podcast: Podcast
 }
 
-/** Resume continues an episode that is waiting: blocked, failed, or not finished yet. */
-export function canResume(podcast: Podcast): boolean {
-  if (podcast.stage === 'legacy' || podcast.inProgress) return false
-  return podcast.blockedAt != null || podcast.lastError != null || podcast.stage === 'created'
+/** The title can be edited once the script exists (the script stage writes it), until publication. */
+export function canEditTitle(podcast: Podcast): boolean {
+  const scripted = podcast.stage === 'scripted' || podcast.stage === 'voiced' || podcast.stage === 'ready'
+  return scripted && !podcast.inProgress && podcast.status !== 'published'
 }
 
-/** Regenerate writes a new script (and audio) for an episode that has one, never once it was published. */
-export function canRegenerate(podcast: Podcast): boolean {
-  if (podcast.stage === 'legacy' || podcast.stage === 'created' || podcast.inProgress) return false
-  return podcast.status !== 'published'
-}
+/** The read-only script once there is one, or while it is being written. */
+const scriptBlockShown = (podcast: Podcast) =>
+  podcast.stage !== 'created' && (podcast.stage !== 'selected' || podcast.inProgress)
 
 function TextBlock({ title, text, empty }: { title: string; text: string; empty: string }) {
   return (
@@ -38,31 +38,70 @@ function TextBlock({ title, text, empty }: { title: string; text: string; empty:
   )
 }
 
+function EpisodeStoriesList({ podcast }: { podcast: Podcast }) {
+  if (!podcast.episodeStories || podcast.episodeStories.length === 0) return null
+  return (
+    <section className="bg-white rounded-lg border border-neutral-200 p-4">
+      <h3 className="text-sm font-semibold text-neutral-900 mb-3">Stories in this episode</h3>
+      <ol className="list-decimal pl-5 space-y-1 text-sm text-neutral-700">
+        {podcast.episodeStories.map(s => (
+          <li key={s.ref}>
+            {s.title} <span className="text-neutral-500">({s.publisher}, {s.issue})</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+/** "Edited by a person": ticked by the server when a person changes the stories or the script; the person can change it. */
+function HumanEditedToggle({ podcast }: { podcast: Podcast }) {
+  const update = useUpdatePodcast()
+  const { toast } = useToast()
+  const disabled = podcast.inProgress || podcast.status === 'published' || update.isPending
+  return (
+    <div className="flex items-start gap-2">
+      <input
+        id="podcast-human-edited"
+        type="checkbox"
+        checked={podcast.humanEdited}
+        disabled={disabled}
+        onChange={e => update.mutate({ id: podcast.id, data: { humanEdited: e.target.checked } }, {
+          onError: err => toast('error', err instanceof Error ? err.message : 'Failed to update'),
+        })}
+        aria-describedby="podcast-human-edited-help"
+        className="mt-0.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+      />
+      <div>
+        <label htmlFor="podcast-human-edited" className="text-sm font-medium text-neutral-800">Edited by a person</label>
+        <p id="podcast-human-edited-help" className="text-xs text-neutral-600">
+          Ticked automatically when someone changes the stories or the script. It chooses the AI line in the show notes and, once publishing exists, the episode description.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The episode page: header (stage, status, title), the "edited by a person" flag, problems, the
+ * production steps, and below them the part for the stage: the story picker at `selected`, the
+ * script editor at `scripted`, the audio and next steps at `ready`.
+ */
 export function PodcastDetail({ podcast }: PodcastDetailProps) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [title, setTitle] = useState(podcast.title)
+  const [pendingEdits, setPendingEdits] = useState(false)
   const { toast } = useToast()
-
   const update = useUpdatePodcast()
-  const resume = useResumePodcast()
-  const regenerate = useRegeneratePodcast()
-  const [confirmRegenerate, setConfirmRegenerate] = useState(false)
   const legacy = podcast.stage === 'legacy'
-
-  const handleRegenerate = () => {
-    regenerate.mutate(podcast.id, {
-      onSuccess: () => toast('success', 'Regenerating: a new script is being written'),
-      onError: () => toast('error', 'Failed to regenerate'),
-      onSettled: () => setConfirmRegenerate(false),
-    })
-  }
+  const atRest = !podcast.inProgress && podcast.status !== 'published'
 
   const handleSaveTitle = async () => {
     try {
       await update.mutateAsync({ id: podcast.id, data: { title } })
       toast('success', 'Title updated')
       setEditingTitle(false)
-    } catch { toast('error', 'Failed to update title') }
+    } catch (err) { toast('error', err instanceof Error ? err.message : 'Failed to update title') }
   }
 
   return (
@@ -82,10 +121,14 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
             </Badge>
             {podcast.dryRun && <Badge variant="orange">Dry run</Badge>}
             {podcast.weekKey && <span className="text-sm text-neutral-600">{podcast.weekKey}</span>}
-            <Button variant="ghost" size="sm" onClick={() => setEditingTitle(true)}>Edit title</Button>
+            {canEditTitle(podcast) && (
+              <Button variant="ghost" size="sm" onClick={() => { setTitle(podcast.title); setEditingTitle(true) }}>Edit title</Button>
+            )}
           </>
         )}
       </div>
+
+      {!legacy && <HumanEditedToggle podcast={podcast} />}
 
       {podcast.blockedAt && (
         <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -103,26 +146,6 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
         <p className="text-sm text-neutral-600">Automatic attempts this week: {podcast.attempts}</p>
       )}
 
-      {(canResume(podcast) || canRegenerate(podcast)) && (
-        <div className="flex flex-wrap gap-2">
-          {canResume(podcast) && (
-            <Button size="sm" onClick={() => resume.mutate(podcast.id, {
-              onSuccess: () => toast('success', 'Resumed: the episode continues from its stage'),
-              onError: () => toast('error', 'Failed to resume'),
-            })} loading={resume.isPending}>
-              Resume
-            </Button>
-          )}
-          {canRegenerate(podcast) && (
-            <Button size="sm" variant="secondary" onClick={() => setConfirmRegenerate(true)}>
-              Regenerate script
-            </Button>
-          )}
-        </div>
-      )}
-
-      {!legacy && <PodcastAudioSection podcast={podcast} />}
-
       {legacy ? (
         <>
           <AssignedStoriesList label="Assigned stories" storyIds={podcast.storyIds} />
@@ -130,33 +153,19 @@ export function PodcastDetail({ podcast }: PodcastDetailProps) {
         </>
       ) : (
         <>
-          {podcast.episodeStories && podcast.episodeStories.length > 0 && (
-            <section className="bg-white rounded-lg border border-neutral-200 p-4">
-              <h3 className="text-sm font-semibold text-neutral-900 mb-3">Stories in this episode</h3>
-              <ol className="list-decimal pl-5 space-y-1 text-sm text-neutral-700">
-                {podcast.episodeStories.map(s => (
-                  <li key={s.ref}>
-                    {s.title} <span className="text-neutral-500">({s.publisher}, {s.issue})</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-          <TextBlock title="Script" text={podcast.script} empty={podcast.inProgress ? 'The script is being written.' : 'No script yet.'} />
+          <PodcastStageStepper podcast={podcast} pendingEdits={pendingEdits} />
+          {podcast.stage === 'selected' && atRest
+            ? <PodcastStoryPicker podcast={podcast} onDirtyChange={setPendingEdits} />
+            : <EpisodeStoriesList podcast={podcast} />}
+          {podcast.stage === 'scripted' && atRest && podcast.dialogue
+            ? <PodcastScriptEditor podcast={podcast} onDirtyChange={setPendingEdits} />
+            : scriptBlockShown(podcast) && (
+              <TextBlock title="Script" text={podcast.script} empty={podcast.inProgress ? 'The script is being written.' : 'No script yet.'} />
+            )}
+          <PodcastAudioSection podcast={podcast} />
           <TextBlock title="Show notes" text={podcast.showNotes} empty="No show notes yet." />
         </>
       )}
-
-      <ConfirmDialog
-        open={confirmRegenerate}
-        onClose={() => setConfirmRegenerate(false)}
-        onConfirm={handleRegenerate}
-        title="Regenerate this episode?"
-        description="The script, show notes and audio are discarded, and a new episode is written and voiced. Voicing it again counts against this month's TTS characters."
-        variant="danger"
-        confirmLabel="Regenerate"
-        loading={regenerate.isPending}
-      />
     </div>
   )
 }

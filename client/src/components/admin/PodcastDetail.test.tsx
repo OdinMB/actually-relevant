@@ -1,86 +1,35 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { Podcast } from '@shared/types'
-import { ToastProvider } from '../ui/Toast'
-import { PodcastDetail, canResume, canRegenerate } from './PodcastDetail'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { makePodcast, renderInAdmin } from '../../test/podcasts'
 
-vi.mock('../../lib/admin-api', () => ({
-  adminApi: { podcasts: { usage: vi.fn().mockResolvedValue({ monthToDateChars: 10800, monthlyCap: 32000 }) } },
+const mockApi = vi.hoisted(() => ({
+  usage: vi.fn(),
+  active: vi.fn(),
+  update: vi.fn(),
+  storyPool: vi.fn(),
 }))
+vi.mock('../../lib/admin-api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../lib/admin-api')>()),
+  adminApi: { podcasts: mockApi },
+}))
+
+import { PodcastDetail, canEditTitle } from './PodcastDetail'
 import { podcastRefetchInterval, PODCAST_POLL_MS } from '../../hooks/usePodcasts'
 
-function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
-  return {
-    id: 'pod-1',
-    title: 'Clean air and vaccines',
-    status: 'draft',
-    stage: 'scripted',
-    weekKey: '2026-W41',
-    storyIds: ['s1'],
-    attempts: 0,
-    blockedAt: null,
-    blockedReason: null,
-    lastError: null,
-    failedAt: null,
-    dryRun: false,
-    inProgress: false,
-    script: 'HOST A: Hello.',
-    episodeSummary: 'Summary.',
-    showNotes: 'AI-generated: notes',
-    episodeStories: [{ ref: 1, id: 's1', title: 'Air data ruling', publisher: 'Nation', sourceUrl: 'https://x.example', slug: 'air', issue: 'Planet' }],
-    ttsModelId: null,
-    audioUrl: null,
-    transcriptUrl: null,
-    audioBytes: null,
-    durationSec: null,
-    readyAt: null,
-    ttsChars: 0,
-    createdAt: '2026-10-10T06:00:00.000Z',
-    updatedAt: '2026-10-10T06:00:00.000Z',
-    ...overrides,
-  }
-}
-
-function renderDetail(podcast: Podcast) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <ToastProvider>
-          <PodcastDetail podcast={podcast} />
-        </ToastProvider>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-}
-
-describe('canResume', () => {
-  it('offers Resume for a blocked, failed or unscripted episode', () => {
-    expect(canResume(makePodcast({ blockedAt: '2026-10-10T07:00:00.000Z' }))).toBe(true)
-    expect(canResume(makePodcast({ lastError: 'timeout' }))).toBe(true)
-    expect(canResume(makePodcast({ stage: 'created' }))).toBe(true)
-  })
-
-  it('hides Resume while in progress, for legacy rows and for a scripted episode without trouble', () => {
-    expect(canResume(makePodcast({ stage: 'created', inProgress: true }))).toBe(false)
-    expect(canResume(makePodcast({ stage: 'legacy', lastError: 'x' }))).toBe(false)
-    expect(canResume(makePodcast())).toBe(false)
-  })
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockApi.usage.mockResolvedValue({ monthToDateChars: 10800, monthlyCap: 32000 })
+  mockApi.active.mockResolvedValue([])
+  mockApi.storyPool.mockResolvedValue({ stories: [], minStories: 4, maxStories: 5 })
 })
 
-describe('canRegenerate', () => {
-  it('offers Regenerate for an unpublished episode that has a script', () => {
-    expect(canRegenerate(makePodcast())).toBe(true)
-    expect(canRegenerate(makePodcast({ stage: 'ready' }))).toBe(true)
-  })
-
-  it('hides it once published, while in progress, before scripting and for legacy rows', () => {
-    expect(canRegenerate(makePodcast({ stage: 'ready', status: 'published' }))).toBe(false)
-    expect(canRegenerate(makePodcast({ inProgress: true }))).toBe(false)
-    expect(canRegenerate(makePodcast({ stage: 'created' }))).toBe(false)
-    expect(canRegenerate(makePodcast({ stage: 'legacy' }))).toBe(false)
+describe('canEditTitle', () => {
+  it('allows a title edit once there is a script, at rest, before publication', () => {
+    expect(canEditTitle(makePodcast())).toBe(true)
+    expect(canEditTitle(makePodcast({ stage: 'ready' }))).toBe(true)
+    expect(canEditTitle(makePodcast({ stage: 'selected' }))).toBe(false)
+    expect(canEditTitle(makePodcast({ inProgress: true }))).toBe(false)
+    expect(canEditTitle(makePodcast({ stage: 'ready', status: 'published' }))).toBe(false)
   })
 })
 
@@ -94,33 +43,46 @@ describe('podcastRefetchInterval', () => {
 
 describe('PodcastDetail', () => {
   it('shows a blocked episode\'s reason with a Resume button', () => {
-    renderDetail(makePodcast({ blockedAt: '2026-10-10T07:00:00.000Z', blockedReason: 'the dialogue is still invalid' }))
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ awaitingReview: false, blockedAt: '2026-10-10T07:00:00.000Z', blockedReason: 'the dialogue is still invalid' })} />)
     expect(screen.getByRole('alert').textContent).toContain('the dialogue is still invalid')
     expect(screen.getByRole('button', { name: 'Resume' })).toBeTruthy()
   })
 
-  it('shows the episode\'s stories, script and show notes read-only', () => {
-    renderDetail(makePodcast())
-    expect(screen.getByText('Air data ruling')).toBeTruthy()
-    expect(screen.getByText('HOST A: Hello.')).toBeTruthy()
-    expect(screen.getByText('AI-generated: notes')).toBeTruthy()
-    expect(screen.queryByRole('textbox')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+  it('opens the script editor for a scripted episode at rest', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    expect(screen.getByLabelText('Episode summary')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Approve script and voice it' })).toBeTruthy()
   })
 
-  it('plays a ready episode from its CDN URL and shows the characters billed', async () => {
+  it('shows the script read-only while a run works on the episode', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'voiced', inProgress: true, awaitingReview: false, activity: 'Assembling and uploading' })} />)
+    expect(screen.getByText('HOST A: Hello.')).toBeTruthy()
+    expect(screen.queryByLabelText('Episode summary')).toBeNull()
+  })
+
+  it('plays a ready episode from its CDN URL, shows the characters billed and the next steps', async () => {
     const audioUrl = 'https://audio.actuallyrelevant.news/episodes/2026-W41-abcd1234.mp3'
-    const { container } = renderDetail(makePodcast({ stage: 'ready', audioUrl, durationSec: 342, ttsChars: 5400 }))
+    const { container } = renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'ready', awaitingReview: false, audioUrl, durationSec: 342, ttsChars: 5400 })} />)
     const audio = container.querySelector('audio')
     expect(audio?.getAttribute('src')).toBe(audioUrl)
     expect(audio?.getAttribute('preload')).toBe('none')
     expect(screen.getByText('Duration 5:42')).toBeTruthy()
     expect(screen.getByText('5,400')).toBeTruthy()
     expect(await screen.findByText('10,800 of 32,000')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Next steps' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Regenerate audio' })).toBeTruthy()
   })
 
-  it('offers no Regenerate on a published episode', () => {
-    renderDetail(makePodcast({ stage: 'ready', status: 'published' }))
-    expect(screen.queryByRole('button', { name: 'Regenerate script' })).toBeNull()
+  it('offers no audio changes on a published episode', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'ready', status: 'published', awaitingReview: false })} />)
+    expect(screen.queryByRole('button', { name: 'Regenerate audio' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull()
+  })
+
+  it('sends the "edited by a person" flag when the box is changed', async () => {
+    mockApi.update.mockResolvedValue(makePodcast({ humanEdited: true }))
+    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    fireEvent.click(screen.getByLabelText('Edited by a person'))
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('pod-1', { humanEdited: true }))
   })
 })
