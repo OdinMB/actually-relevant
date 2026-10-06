@@ -3,7 +3,7 @@
  * chooses (ready for at least a day, current or previous ISO week, never published or taken
  * down), on a UTC Monday only. Seeded disabled; enabling it in the admin Jobs page is how publishing goes automatic. It
  * re-reads its own row right before publishing, so disabling it during a run prevents the publish.
- * A refusal (for example an edited episode whose AI line awaits the owner) fails the run, so the
+ * A refusal (for example an episode that is no longer ready) fails the run, so the
  * scheduler alerts.
  */
 import { config } from '../config.js'

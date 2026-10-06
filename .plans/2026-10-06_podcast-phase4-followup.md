@@ -25,7 +25,6 @@ None kept by `ashoka-engineering:records` in this repository. `.context/ai-trans
 
 - **Restart the server dev process** (stop it, then `npm run dev --prefix server`) so `predev` applies migration `20261006230000_podcast_jobs` and regenerates the Prisma client. The agent did not stop the servers or run `db:generate`.
 - **Switch automation on** (production, after deploy): Admin → Jobs → enable **Generate Podcast** (weekend slots Saturday and Sunday 06:00, 10:00, 14:00, 18:00 UTC). Listen and publish by hand for three or four weeks, then enable **Publish Podcast** (Monday 07:00 UTC). Before enabling, `ELEVENLABS_API_KEY`, `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD` and `WEBHOOK_URL` must be set on Render, or every run blocks (and the boot check posts "Podcast configuration incomplete").
-- **Confirm the edited AI line** before enabling Publish Podcast if you ever tick "Edited by a person"; otherwise the job alerts instead of publishing that episode.
 
 ## DB Migrations
 

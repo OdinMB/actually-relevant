@@ -121,7 +121,8 @@ export function wasPublished(episode: Pick<Podcast, 'stage' | 'status' | 'publis
 /**
  * Why an episode with this "Edited by a person" flag may not be listed, or null when it may: the
  * edited AI line goes public only once the owner has confirmed its wording. Publishing such an
- * episode, and ticking the flag on a listed one, are refused until then.
+ * episode, and ticking the flag on a listed one, are refused until then. Confirmed on 2026-10-06;
+ * the guard stays so that an unconfirmed wording change can set the flag back to false.
  */
 export function editedAiLineRefusal(humanEdited: boolean, confirmed: boolean = PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED): string | null {
   if (!humanEdited || confirmed) return null

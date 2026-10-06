@@ -138,8 +138,8 @@ export interface EpisodeMetaEdit {
 /**
  * Change the title (once there is a script, before publication) or the "edited by a person" flag
  * (at any stage, also after publication: it only picks the AI line of the show notes and the feed
- * description, never the audio or the GUID; ticking it on a listed episode waits for the owner's
- * confirmation of the edited AI line, `editedAiLineRefusal`). A title change never ticks the flag. The show notes
+ * description, never the audio or the GUID; ticking it on a listed episode is refused only while the
+ * edited AI line is unconfirmed, `editedAiLineRefusal`; it was confirmed on 2026-10-06). A title change never ticks the flag. The show notes
  * follow the flag, and an episode that was ever published has its feed rebuilt.
  */
 export async function updateEpisodeMeta(id: string, edit: EpisodeMetaEdit): Promise<void> {

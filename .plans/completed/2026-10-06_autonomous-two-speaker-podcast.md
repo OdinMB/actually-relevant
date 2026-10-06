@@ -29,7 +29,7 @@ Owner decisions after Phase 2b (Odin Mühlenbein, 2026-10-06, given in the coord
 - **Cost before an automated run** (implemented 2026-10-06): starting "Fully automated", "Finish automatically", or a Resume of an automated episode at `created` or `selected` first shows a confirm dialog with a typical cost: "writes and voices the episode: typically about N characters (at most M), about N credits at 1 credit per character; this month X of the cap". N is `config.podcast.spokenCharAim`, M the band's top, the rate the plan's 1 credit per character; month to date from the existing usage hook. The cron path never asks. See "Cost confirmation" under Phase 2b.
 - **An interactive episode left unfinished** is left alone by the weekly automatic run, and the owner gets a reminder on Sunday that it is waiting. Implemented in Phase 4 (see there).
 - **Confirmed as designed:** segue rules are warnings on a person's edit; the cron uses automated mode; the "Edited by a person" checkbox behaves as in "Edited by a person" below.
-- **Approved later the same day** (relayed to the Phase 3 agent by its workflow, as above): the edited-episode AI line (open question 5), and show artwork exists at `https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg` (3000x3000 JPEG built deterministically from the brand logo, not AI-generated), so the feed always emits `itunes:image`.
+- **Approved later the same day** (relayed to the Phase 3 agent by its workflow, as above): the edited-episode AI line (open question 5; since confirmed in the owner's own words in session, 2026-10-06), and show artwork exists at `https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg` (3000x3000 JPEG built deterministically from the brand logo, not AI-generated), so the feed always emits `itunes:image`.
 
 Sequencing (owner, 2026-10-06): a separate scheduler/newsletter/social hardening change lands before Phase 0.
 
@@ -310,7 +310,7 @@ A new column `mode` (`PodcastMode`: `automated | interactive`, null until chosen
 2. **Show identity**: show title (proposal "Actually Relevant", a new feed), Apple category (proposal News), the artwork provided on 2026-10-06 (`show/artwork-2026-10.jpg`, from the brand logo, not AI-generated). Feed contact address decided by the owner on 2026-10-06: `contact@actuallyrelevant.news`.
 3. **Voices** — settled from the owner's preference on 2026-10-06 ("just one opinion", so he may still change it): Darian (HOST_A) + Talia (HOST_B).
 4. **Only if S2 says Starter does not cover it**: the Creator plan, or a shorter episode.
-5. **Edited-episode AI line (Phase 2b)** — approval relayed by a workflow on 2026-10-06, still to be confirmed in the owner's own words; until then `PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED` stays false and an edited episode cannot be published (Phase 3 review fix): "AI-generated: Everything in this episode was written and voiced by AI from this week's news. A person reviewed and edited this episode."
+5. **Edited-episode AI line (Phase 2b)** — resolved: approved by Odin Mühlenbein in his own words in the coordinating session on 2026-10-06 ("Wording is approved."); `PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED` is now true, so an edited episode can be published: "AI-generated: Everything in this episode was written and voiced by AI from this week's news. A person reviewed and edited this episode."
 
 ## Changes
 

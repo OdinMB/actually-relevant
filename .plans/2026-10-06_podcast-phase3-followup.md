@@ -22,7 +22,7 @@ None: the repository keeps no `records` files (personal-data note, data inventor
 
 ## User Input Needed
 
-- **Owner approvals arrived relayed, not in the owner's own words in this session**: the edited-episode AI line and the artwork. The line is now recorded as pending in `aiLabelCopy.ts`, `.context/ai-transparency.md` (§3 row 8, §7, §11) and the plan. To confirm it: set `PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED` to true with the date and mark the record approved.
+- **The artwork's approval arrived relayed**, not in the owner's own words in this session.
 - **Privacy notice wording** (above): owner review before deploy.
 
 ## DB Migrations
@@ -40,7 +40,6 @@ None: the repository keeps no `records` files (personal-data note, data inventor
 - `PodcastTable` (admin list) shows "Draft" for an unpublished episode; the detail page says "Unpublished". Cheap to align (it has `publishedAt` now).
 - After the first publish: validate the live feed and run the transparency record's §11 live checks.
 - Phase 4 auto-publish: while the edited AI line is unconfirmed, `pickAutoPublishCandidate` should skip `humanEdited` episodes (or the job reports the refusal), or the job would fail on such an episode each run. *Phase 4 chose the second: the job fails and alerts on that refusal (see the Phase 4 follow-up).*
-- Optional: show the "awaits the owner's confirmation" note beside the Publish button for an edited episode instead of only as the 409 toast.
 
 ## Mod code and load settings written
 

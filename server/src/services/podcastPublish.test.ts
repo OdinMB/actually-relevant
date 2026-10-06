@@ -9,8 +9,6 @@ const mockFeed = vi.hoisted(() => ({ invalidateFeedCache: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastFeed.js', () => mockFeed)
-// Pinned, so the tests do not change meaning when the owner confirms the edited AI line.
-vi.mock('../lib/aiLabelCopy.js', async importOriginal => ({ ...(await importOriginal<typeof import('../lib/aiLabelCopy.js')>()), PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED: false }))
 
 const { publishEpisode, unpublishEpisode, getPublishedEpisodes, pickAutoPublishCandidate } = await import('./podcastPublish.js')
 const { PodcastRefusedError, wasPublished } = await import('./podcastGuards.js')
@@ -42,11 +40,11 @@ describe('publishEpisode', () => {
     expect(writes()).toHaveLength(0)
   })
 
-  it('refuses an episode edited by a person while its AI line is unconfirmed', async () => {
+  it('publishes an episode edited by a person', async () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready({ humanEdited: true }))
-    await expect(publishEpisode('podcast-1', NOW)).rejects.toThrow(/Edited by a person/)
-    expect(writes()).toHaveLength(0)
-    expect(mockFeed.invalidateFeedCache).not.toHaveBeenCalled()
+    await publishEpisode('podcast-1', NOW)
+    expect(writes()).toEqual([{ status: 'published', publishedAt: NOW, unpublishedAt: null }])
+    expect(mockFeed.invalidateFeedCache).toHaveBeenCalledOnce()
   })
 
   it('refuses an episode in progress (the lease is held elsewhere)', async () => {
