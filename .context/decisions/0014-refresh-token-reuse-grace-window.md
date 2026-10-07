@@ -3,7 +3,7 @@ id: ADR-0014
 title: Accept a just-rotated refresh token for 60 seconds instead of revoking its session, and rotate atomically
 status: accepted
 date: 2026-10-07
-deciders: ["claude-code (AI)"]
+deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant
 tags: ["authentication"]
 ---

@@ -3,7 +3,7 @@ id: ADR-0008
 title: Pause interactive episodes for review through a per-row mode, a selected stage and explicit admin rewinds
 status: accepted
 date: 2026-10-06
-deciders: ["claude-code (AI)"]
+deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant
 themes: ["ai-risk", "cost"]
 ---
