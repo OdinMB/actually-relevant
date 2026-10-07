@@ -1,6 +1,6 @@
 /**
  * Dialogue rules and transformations for the two-speaker podcast, without I/O: validation of the
- * model's dialogue (including the segue rule, and for a standalone episode the rule against dating
+ * model's dialogue (including the segue rule, the outro's no-sign-off rule, and for a standalone episode the rule against dating
  * stories relative to now), the spoken episode with the kind's code-added opener and sign-off, the
  * admin script view, and a person's text edits applied to the stored structure.
  */
@@ -35,7 +35,7 @@ export interface DialogueValidation {
   valid: boolean
   /** Rules the dialogue breaks; any error keeps it from being stored. */
   errors: string[]
-  /** Rules a person's text may break deliberately (the segue rules); reported, never blocking. */
+  /** Rules a person's text may break deliberately (the style rules); reported, never blocking. */
   warnings: string[]
 }
 
@@ -43,9 +43,10 @@ export interface ValidationOptions {
   /** The episode's kind: its spoken opener and sign-off, its length budget, and its wording rules. */
   kind: PodcastKind
   /**
-   * `person`: the segue rules become warnings, since a person may write a short bridge on purpose
-   * and hears the result before publishing. Every other rule protects TTS spend, chunking or the
-   * feed and stays an error. Default `model`.
+   * `person`: the style rules (the segue rules and the outro's no-sign-off rule) become warnings,
+   * since a person may write a short bridge or a closing line on purpose and hears the result
+   * before publishing. Every other rule protects TTS spend, chunking or the feed and stays an
+   * error. Default `model`.
    */
   authoredBy?: 'model' | 'person'
 }
@@ -199,6 +200,28 @@ function segueErrors(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): st
   return errors
 }
 
+/**
+ * A closing thank-you or sign-off: thanks to the listeners ("Thanks for listening", "Thank you,
+ * everyone") or a goodbye line. Thanks for something else ("thanks to that court") is not one.
+ */
+const CLOSING_RE = new RegExp([
+  String.raw`\b(?:thanks|thank you)(?: (?:so|very) much)?,? (?:for (?:listening|joining|tuning in|spending|being (?:here|with)|your time|having)|(?:to )?(?:you|everyone|all|listeners|folks)\b)`,
+  String.raw`\b(?:thanks|thank you)(?: (?:so|very) much)?[.!]`,
+  String.raw`\b(?:see you (?:next|soon|then)|until next time|good-?bye|bye for now|signing off)\b`,
+  String.raw`\bthat'?s (?:it|all) for (?:this|today|now)\b`,
+].join('|'), 'i')
+
+/**
+ * The outro never thanks listeners or signs off: code appends the kind's fixed sign-off, which
+ * already does, so a model-written one makes the episode say goodbye twice (owner, 2026-10-07).
+ */
+function closingErrors(dialogue: PodcastDialogue): string[] {
+  return dialogue.segments.flatMap((s, i) => (s.kind !== 'outro' ? [] : s.turns.flatMap((t, j) => {
+    const phrase = stripTags(t.text).match(CLOSING_RE)?.[0]
+    return phrase ? [`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the outro must not thank listeners or sign off, because code adds the sign-off after it`] : []
+  })))
+}
+
 function speakerRunErrors(spoken: SpokenSegment[]): string[] {
   const turns = spoken.flatMap(s => s.turns)
   for (let i = 2; i < turns.length; i++) {
@@ -245,23 +268,23 @@ function relativeTimeErrors(dialogue: PodcastDialogue, kind: PodcastKind): strin
 
 /**
  * Every rule the dialogue must meet before it is stored; the model's errors are fed back on the one
- * regeneration. For a person's edit the segue rules are warnings (`ValidationOptions`).
+ * regeneration. For a person's edit the style rules are warnings (`ValidationOptions`).
  */
 export function validateDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[], opts: ValidationOptions): DialogueValidation {
   const spoken = assembleSpokenSegments(dialogue, opts.kind)
   const hasUrl = urlChecker(stories)
-  const segue = segueErrors(dialogue, stories)
-  const segueIsWarning = opts.authoredBy === 'person'
+  const style = [...segueErrors(dialogue, stories), ...closingErrors(dialogue)]
+  const styleIsWarning = opts.authoredBy === 'person'
   const errors = [
     ...metadataErrors(dialogue, hasUrl),
     ...structureErrors(dialogue, stories),
     ...turnErrors(dialogue, hasUrl),
     ...relativeTimeErrors(dialogue, opts.kind),
-    ...(segueIsWarning ? [] : segue),
+    ...(styleIsWarning ? [] : style),
     ...speakerRunErrors(spoken),
     ...bandErrors(spoken, dialogue, opts.kind),
   ]
-  return { valid: errors.length === 0, errors, warnings: segueIsWarning ? segue : [] }
+  return { valid: errors.length === 0, errors, warnings: styleIsWarning ? style : [] }
 }
 
 // ---------------------------------------------------------------------------

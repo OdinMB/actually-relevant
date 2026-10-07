@@ -83,6 +83,17 @@ describe('PodcastStoryFinder', () => {
     expect(chosenTitles()).toEqual([])
   })
 
+  it('shows each result\'s relevance rating, and a dash where a story has none', async () => {
+    mockApi.storySearch.mockResolvedValue({
+      data: [{ ...candidate(1), relevance: 9 }, { ...candidate(2), relevance: null }], total: 2, page: 1, pageSize: 20, totalPages: 1, minStories: 4, maxStories: 5,
+    })
+    renderInAdmin(<PodcastStoryFinder podcast={makeStandalonePodcast()} />)
+    await screen.findByRole('button', { name: 'Add Story 1' })
+    const rows = within(screen.getByRole('list', { name: 'Matching stories' })).getAllByRole('listitem')
+    expect(rows[0].textContent).toMatch(/Rating 9/)
+    expect(rows[1].textContent).toMatch(/Rating —/)
+  })
+
   it('searches with the applied filters from the first page', async () => {
     renderInAdmin(<PodcastStoryFinder podcast={makeStandalonePodcast()} />)
     await screen.findByRole('button', { name: 'Add Story 1' })

@@ -90,13 +90,13 @@ export async function replaceEpisodeStories(id: string, storyIds: string[]): Pro
 }
 
 export interface ScriptSaveResult {
-  /** The segue rules a person's text breaks: shown, not blocking. */
+  /** The style rules (segues, the outro's no-sign-off rule) a person's text breaks: shown, not blocking. */
   warnings: string[]
 }
 
 /**
  * Save a person's edit of the script's turn text and summary (at `scripted`). The structure must
- * match the stored dialogue; the merged dialogue is validated as a person's text (segue rules are
+ * match the stored dialogue; the merged dialogue is validated as a person's text (style rules are
  * warnings, every other rule an error, `PodcastEditRejectedError` with nothing saved). Ticks
  * "edited by a person" when any text changed; rewrites the rendered script and the show notes.
  */

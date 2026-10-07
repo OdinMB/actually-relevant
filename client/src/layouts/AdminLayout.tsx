@@ -85,7 +85,7 @@ function ServerClock() {
   return (
     <div className="border-t border-neutral-200 px-6 py-2 text-center">
       <span className="font-mono tabular-nums text-xs text-neutral-500">{serverTime.time}</span>
-      <span className="ml-1 text-[10px] text-neutral-400">{serverTime.timezone}</span>
+      <span className="ml-1 text-[10px] text-neutral-500">{serverTime.timezone}</span>
     </div>
   )
 }
@@ -178,8 +178,8 @@ function AdminShell() {
 
         {/* Main content */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Mobile top bar */}
-          <div className="flex items-center border-b border-neutral-200 bg-white px-4 py-3 lg:hidden">
+          {/* Mobile top bar: a banner landmark, so its "Admin" label sits inside one (axe "region") */}
+          <header className="flex items-center border-b border-neutral-200 bg-white px-4 py-3 lg:hidden">
             <button
               onClick={() => setMobileOpen(true)}
               className="rounded-md p-2 text-neutral-500 hover:text-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
@@ -188,7 +188,7 @@ function AdminShell() {
               <Bars3Icon className="h-5 w-5" />
             </button>
             <span className="ml-3 text-lg font-bold text-neutral-900">Admin</span>
-          </div>
+          </header>
 
           <NewVersionBanner />
 

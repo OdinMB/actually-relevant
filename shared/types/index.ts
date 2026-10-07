@@ -403,7 +403,7 @@ export interface PublicPodcastResponse {
   episodes: PublicPodcastEpisode[]
 }
 
-/** A saved script edit: the episode and the segue warnings the person may keep. */
+/** A saved script edit: the episode and the style warnings (segues, outro sign-off) the person may keep. */
 export interface PodcastScriptSaveResult {
   podcast: Podcast
   warnings: string[]

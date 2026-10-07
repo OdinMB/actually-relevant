@@ -131,7 +131,7 @@ describe('writeEpisodeScript', () => {
           ],
         }
       }),
-      { kind: 'outro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'From the first story to the last, that was a week worth hearing about.' }, { speaker: 'HOST_B', text: 'Thanks for listening.' }] },
+      { kind: 'outro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'From the first story to the last, that was a week worth hearing about.' }, { speaker: 'HOST_B', text: 'Each one is worth a second look.' }] },
     ],
   }
   const invalid: PodcastDialogue = { ...valid, segments: valid.segments.filter(s => s.storyRef !== 4) }

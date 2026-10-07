@@ -158,6 +158,27 @@ describe('validateDialogue', () => {
     expect(errorsOf(withTurn(goodDialogue(), 5, 0, 'Bye.')).join(' ')).toMatch(/bridge/)
   })
 
+  it('rejects an outro that thanks listeners or signs off, since code appends the sign-off', () => {
+    const closings = [
+      'Thanks for listening to Actually Relevant.',
+      'Thank you so much for joining us today.',
+      'Thanks, everyone, and see you next week.',
+      'Until next time.',
+      "That's all for this episode.",
+      'Goodbye for now.',
+      'That is the picture. Thank you.',
+    ]
+    for (const text of closings) {
+      expect(errorsOf(withTurn(goodDialogue(), 5, 1, text)).join(' '), text).toMatch(/outro.*sign-off/)
+    }
+  })
+
+  it('accepts thanks that are not a closing to listeners, and closing words outside the outro', () => {
+    expect(errorsOf(withTurn(goodDialogue(), 5, 1, 'Thanks to that court, the data is finally public.'))).toEqual([])
+    expect(errorsOf(withTurn(goodDialogue(), 5, 1, 'Countries will have to take care that the rules hold.'))).toEqual([])
+    expect(errorsOf(withTurn(goodDialogue(), 2, 1, `${filler(300, 'thanks')} Thanks for listening, the minister told reporters.`))).toEqual([])
+  })
+
   it('rejects two consecutive story segments that open with the same first five words', () => {
     const d = goodDialogue()
     const templated = withTurn(
@@ -264,6 +285,13 @@ describe('validateDialogue for a person\'s edit', () => {
     expect(asPerson.errors).toEqual([])
     expect(asPerson.warnings.join(' ')).toMatch(/spoken bridge/)
     expect(asPerson.warnings.join(' ')).toMatch(/same first five words/)
+  })
+
+  it('turns a closing thank-you in the outro into a warning', () => {
+    const thanked = withTurn(goodDialogue(), 5, 1, 'Thanks for listening.')
+    const asPerson = validateDialogue(thanked, stories, { ...W, authoredBy: 'person' })
+    expect(asPerson.valid).toBe(true)
+    expect(asPerson.warnings.join(' ')).toMatch(/sign-off/)
   })
 
   it('keeps every other rule an error for a person', () => {

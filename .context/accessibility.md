@@ -56,6 +56,7 @@ This site targets WCAG 2.2 Level AA compliance.
 
 **Color Contrast**
 - Normal text: 4.5:1 minimum (use `text-brand-700` for links, not brand-600)
+- Grey text on white: `text-neutral-500` (4.7:1) is the lightest that passes; `text-neutral-400` (2.5:1) fails at any size, so never use it for text
 - Large text (18pt+ or 14pt+ bold): 3:1 minimum
 - UI components: 3:1 minimum
 
@@ -107,7 +108,7 @@ Before deploying new pages/components:
 |---------|----------|-------|
 | Skip link | `PublicLayout.tsx` | To be implemented |
 | Story filters | `StoryFilters.tsx` | To be implemented — use fieldset/legend |
-| Admin sidebar | `AdminLayout.tsx` | To be implemented — keyboard navigable |
+| Admin frame | `AdminLayout.tsx` | All text inside a landmark (axe "region"): desktop sidebar in `<aside>` with a labelled `<nav>`, mobile top bar a `<header>`, content in `<main>` |
 | Story list | `StoryList.tsx` | To be implemented — use semantic table or list |
 | Focus styles | All interactive elements | `focus-visible:ring-2` |
 

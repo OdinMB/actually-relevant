@@ -55,7 +55,7 @@ export function goodDialogue(): PodcastDialogue {
       storySegment(4),
       { kind: 'outro', storyRef: null, turns: [
         { speaker: 'HOST_A', text: 'From a courtroom in Nairobi to export rules for chips, that was the week in four stories.' },
-        { speaker: 'HOST_B', text: 'Thanks for spending a few minutes with us.' },
+        { speaker: 'HOST_B', text: 'Each one reaches further than its headline.' },
       ] },
     ],
   }

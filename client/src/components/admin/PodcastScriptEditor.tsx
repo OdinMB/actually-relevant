@@ -35,7 +35,7 @@ interface PodcastScriptEditorProps {
 
 /**
  * Editing the script at `scripted`: the text of each turn under its fixed speaker, and the
- * summary. A save is validated on the server: errors block it (nothing saved), segue warnings are
+ * summary. A save is validated on the server: errors block it (nothing saved), style warnings are
  * shown and may stay. Also Regenerate script, which discards it, and at a review stop Approve and
  * voice (waits until the edits are saved or discarded; asks for the cost first).
  */

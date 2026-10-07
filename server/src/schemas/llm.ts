@@ -207,7 +207,8 @@ const podcastSegmentSchema = z.object({
         "In every later story segment, the first turn opens with a spoken bridge from the story before " +
         "that connects or contrasts it with this story and leads into it. " +
         `Every story segment's first turn is at least ${config.podcast.minBridgeChars} characters and is not just the headline. ` +
-        "The outro's first turn bridges back from the last story."
+        "The outro's first turn bridges back from the last story. " +
+        "The outro does not thank listeners or say goodbye; code adds the sign-off after it."
     ),
 });
 

@@ -157,6 +157,7 @@ export function PodcastStoryFinder({ podcast, onDirtyChange }: PodcastStoryFinde
         <h3 className="text-sm font-medium text-neutral-800">
           Published stories{results.data ? ` (${results.data.total})` : ''}
         </h3>
+        <p className="text-xs text-neutral-500">Sorted by relevance rating, highest first, then by date found, newest first.</p>
         {results.isLoading && <div className="flex justify-center py-4"><LoadingSpinner /></div>}
         {results.error && <p role="alert" className="text-sm text-red-700">Failed to load the stories.</p>}
         {results.data && results.data.data.length === 0 && <p className="mt-1 text-sm italic text-neutral-500">No published stories match these filters.</p>}
@@ -165,6 +166,7 @@ export function PodcastStoryFinder({ podcast, onDirtyChange }: PodcastStoryFinde
             {results.data.data.map(s => (
               <li key={s.id} className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="flex-1 min-w-[12rem]"><StoryLine story={s} /></span>
+                <span className="text-xs font-medium text-neutral-700">Rating {s.relevance ?? '—'}</span>
                 <span className="text-xs text-neutral-500">{s.dateCrawled.slice(0, 10)}</span>
                 <Button
                   variant="secondary"

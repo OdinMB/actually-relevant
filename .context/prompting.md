@@ -47,6 +47,8 @@ These waste reasoning tokens and can degrade performance.
 
 **The podcast prompts carry a per-kind wording record** (`KIND_WORDING` at the top of `prompts/podcast.ts` and `podcast-select.ts`): the weekly text is unchanged, and the standalone variant never dates a story relative to now, since its stories may span weeks (validation enforces it, `.context/podcast.md`). Change a kind's wording in its record, keep the two kinds' structure the same, and run `eval:recalibrate --steps podcast` for a weekly change (the eval fixtures are weekly pools; a standalone change has no fixture, so read one dev dry run's script instead).
 
+**Tell the model what code adds, or it writes it too.** The podcast prompt said code adds a fixed sign-off after the outro, and gpt-6-sol still closed the outro with its own "Thanks for listening to Actually Relevant.", so every episode thanked listeners twice. Knowing what follows is not enough; the constraint has to say what the model's own text leaves out ("It does not thank listeners, say goodbye or sign off: the fixed sign-off that code adds after it already does"), with validation behind it (`closingErrors`, `.context/podcast.md`). With that constraint (2026-10-07, `DOCS/2026-10-07_podcast-eval-thanks`, one run on the cached sample) the outro ended on a thought about the stories, with no thank-you, and the dialogue passed validation first time inside the band. Apply the same pattern to any code-added text (the AI opener before the intro).
+
 ## What to Keep in Prompts
 
 - Content quality guidance (good/bad examples for summaries, titles, quotes)
