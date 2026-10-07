@@ -98,7 +98,7 @@ export default function PodcastTranscriptPage() {
           <AiBadge className="mr-2 align-middle" />{' '}
           {episode.title}
         </h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-neutral-600 text-center">
           <time dateTime={episode.publishedAt}>{formatEpisodeDate(episode.publishedAt)}</time>
           {duration && <> · {duration}</>}
         </p>
