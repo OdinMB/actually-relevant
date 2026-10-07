@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { Podcast, PodcastMode } from '@shared/types'
 import { Badge } from '../ui/Badge'
-import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { formatDate } from '../../lib/constants'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { AssignedStoriesList } from './AssignedStoriesList'
 import { PodcastActionBar } from './PodcastActionBar'
+import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 import { PodcastAudioTab } from './PodcastAudioTab'
 import { PodcastHumanEditedChip } from './PodcastHumanEditedChip'
 import { PodcastScriptTab, TextBlock } from './PodcastScriptTab'
@@ -128,15 +128,7 @@ export function PodcastDetail({ podcast }: { podcast: Podcast }) {
 
       <PodcastActionBar podcast={podcast} pendingEdits={pendingEdits} />
 
-      <ConfirmDialog
-        open={leave.asking}
-        onClose={leave.cancel}
-        onConfirm={leave.confirm}
-        title="Discard your unsaved changes?"
-        description="The changes in this tab have not been saved. Leaving discards them."
-        variant="danger"
-        confirmLabel="Discard changes"
-      />
+      <UnsavedChangesDialog leave={leave} description="The changes in this tab have not been saved. Leaving discards them." />
     </div>
   )
 }

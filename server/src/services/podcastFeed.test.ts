@@ -85,6 +85,14 @@ describe('buildPodcastFeedXml', () => {
     expect((item['content:encoded'] as string).match(/Our AI analysis/g)).toHaveLength(1)
   })
 
+  it("links each item to its episode's transcript page and the channel to the podcast page", () => {
+    const xml = buildPodcastFeedXml([episode(), episode({ id: 'e2' })], NOW)
+    const [first, second] = items(xml)
+    expect(first).toContain(`<link>${config.siteUrl}/podcast/3f1c2a9e-0000-4000-8000-000000000001/transcript</link>`)
+    expect(second).toContain(`<link>${config.siteUrl}/podcast/e2/transcript</link>`)
+    expect(channelOnly(xml)).toContain(`<title>${config.podcast.showTitle}</title><link>${config.siteUrl}/podcast</link>`)
+  })
+
   it('carries the transcript and duration when known, and leaves them out otherwise', () => {
     const [withBoth, without] = items(buildPodcastFeedXml([episode(), episode({ id: 'e2', transcriptUrl: null, durationSec: null })], NOW))
     expect(withBoth).toContain('<podcast:transcript url="https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.vtt" type="text/vtt" language="en"/>')

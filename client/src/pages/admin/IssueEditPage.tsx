@@ -10,6 +10,9 @@ import { Textarea } from '../../components/ui/Textarea'
 import { Select } from '../../components/ui/Select'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useToast } from '../../components/ui/Toast'
+import { UnsavedChangesDialog } from '../../components/admin/UnsavedChangesDialog'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import type { Issue } from '@shared/types'
 
 function slugify(text: string): string {
   return text
@@ -23,6 +26,38 @@ interface MakeADifferenceLink {
   url: string
 }
 
+const EMPTY_FORM = {
+  name: '',
+  slug: '',
+  description: '',
+  promptFactors: '',
+  promptAntifactors: '',
+  promptRatings: '',
+  parentId: null as string | null,
+  intro: '',
+  evaluationIntro: '',
+  evaluationCriteria: [] as string[],
+  makeADifference: [] as MakeADifferenceLink[],
+}
+
+type IssueForm = typeof EMPTY_FORM
+
+function formFromIssue(issue: Issue): IssueForm {
+  return {
+    name: issue.name,
+    slug: issue.slug,
+    description: issue.description,
+    promptFactors: issue.promptFactors,
+    promptAntifactors: issue.promptAntifactors,
+    promptRatings: issue.promptRatings,
+    parentId: issue.parentId,
+    intro: issue.intro || '',
+    evaluationIntro: issue.evaluationIntro || '',
+    evaluationCriteria: issue.evaluationCriteria || [],
+    makeADifference: issue.makeADifference || [],
+  }
+}
+
 export default function IssueEditPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -34,36 +69,17 @@ export default function IssueEditPage() {
   const createIssue = useCreateIssue()
   const updateIssue = useUpdateIssue()
 
-  const [form, setForm] = useState({
-    name: '',
-    slug: '',
-    description: '',
-    promptFactors: '',
-    promptAntifactors: '',
-    promptRatings: '',
-    parentId: null as string | null,
-    intro: '',
-    evaluationIntro: '',
-    evaluationCriteria: [] as string[],
-    makeADifference: [] as MakeADifferenceLink[],
-  })
+  const [form, setForm] = useState<IssueForm>(EMPTY_FORM)
+  // What the form was loaded with (or empty, for a new issue): edits are unsaved while they differ.
+  const [savedForm, setSavedForm] = useState<IssueForm>(EMPTY_FORM)
   const [slugManual, setSlugManual] = useState(false)
+  const leave = useUnsavedChangesGuard(JSON.stringify(form) !== JSON.stringify(savedForm))
 
   useEffect(() => {
     if (issueQuery.data) {
-      setForm({
-        name: issueQuery.data.name,
-        slug: issueQuery.data.slug,
-        description: issueQuery.data.description,
-        promptFactors: issueQuery.data.promptFactors,
-        promptAntifactors: issueQuery.data.promptAntifactors,
-        promptRatings: issueQuery.data.promptRatings,
-        parentId: issueQuery.data.parentId,
-        intro: issueQuery.data.intro || '',
-        evaluationIntro: issueQuery.data.evaluationIntro || '',
-        evaluationCriteria: issueQuery.data.evaluationCriteria || [],
-        makeADifference: issueQuery.data.makeADifference || [],
-      })
+      const loaded = formFromIssue(issueQuery.data)
+      setForm(loaded)
+      setSavedForm(loaded)
       setSlugManual(true)
     }
   }, [issueQuery.data])
@@ -96,6 +112,7 @@ export default function IssueEditPage() {
         await updateIssue.mutateAsync({ id: id!, data: form })
         toast('success', 'Issue updated')
       }
+      leave.markSaved()
       navigate('/admin/issues')
     } catch (err) {
       toast('error', err instanceof Error ? err.message : 'Failed to save issue')
@@ -305,6 +322,8 @@ export default function IssueEditPage() {
           <Button type="button" variant="secondary" onClick={() => navigate('/admin/issues')}>Cancel</Button>
         </div>
       </form>
+
+      <UnsavedChangesDialog leave={leave} />
     </>
   )
 }

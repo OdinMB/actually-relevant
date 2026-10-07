@@ -8,10 +8,12 @@ import { Select } from '../ui/Select'
 import { Button } from '../ui/Button'
 import { useUpdateStory, useDissolveCluster } from '../../hooks/useStories'
 import { useEditForm } from '../../hooks/useEditForm'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { formatStatus, formatDate } from '../../lib/constants'
 import { PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
 import { buildIssueOptions } from './StoryFiltersBar'
+import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 
 interface StoryEditFormProps {
   story: Story
@@ -75,8 +77,12 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
     }),
     successMessage: 'Story updated',
     entityName: 'story',
-    onSuccess: onDone,
+    onSuccess: () => {
+      leave.markSaved()
+      onDone()
+    },
   })
+  const leave = useUnsavedChangesGuard(isDirty)
 
   const fields = (
     <>
@@ -311,6 +317,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
       <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
         <div className={PANEL_BODY}>{fields}</div>
         <PanelFooter isPending={isPending} isDirty={isDirty} onCancel={onDone} />
+        <UnsavedChangesDialog leave={leave} />
       </form>
     )
   }
@@ -322,6 +329,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
         <Button type="submit" loading={isPending} disabled={!isDirty}>Save</Button>
         <Button type="button" variant="secondary" onClick={onDone}>Cancel</Button>
       </div>
+      <UnsavedChangesDialog leave={leave} />
     </form>
   )
 }

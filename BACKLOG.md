@@ -13,6 +13,9 @@
 - Podcast: re-tag the MP3's ID3 title after a title edit at `ready`
 - Podcast: periodic cleanup of orphaned Bunny objects under `episodes/` (an upload followed by a lost lease or a failed `ready` write leaves one)
 - Feed favicons: `server/src/services/favicon.ts` saves any `image/*` response unchanged as `<id>.png`, which is how seven ICO/BMP files arrived under `client/public/images/feeds/` (converted 2026-10-07); convert to PNG when saving
+- Root `errorElement` on the router: a branded error page instead of react-router's default "Unexpected Application Error" screen
+- Move imports from `react-router-dom` to `react-router` (about 60 files) before react-router v8 drops the re-export
+- Podcast: freeze the spoken opener and sign-off per episode before their wording next changes, so older transcript pages keep the words their audio used (today `publicTranscript` takes the current wording from `aiLabelCopy.ts`)
 
 - Library of static "always true" snippets in the four issue areas that are included randomly (per day) on the frontpage and issue pages
 - Compare: relevance stats against SPIEGEL, BBC, etc.

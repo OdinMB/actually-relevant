@@ -43,7 +43,8 @@ function itemXml(episode: PublishedEpisode, artworkUrl: string): string {
     el('itunes:title', episode.title),
     el('description', episodeDescriptionText(episode)),
     el('content:encoded', episodeDescriptionHtml(episode)),
-    el('link', `${config.siteUrl}/podcast`),
+    // The episode's own page (Apple asks for one per episode), not the show page the channel links.
+    el('link', `${config.siteUrl}/podcast/${encodeURIComponent(episode.id)}/transcript`),
     `<guid isPermaLink="false">${escapeXml(episode.id)}</guid>`,
     el('pubDate', episode.publishedAt.toUTCString()),
     `<enclosure url="${escapeXml(episode.audioUrl)}" length="${episode.audioBytes}" type="audio/mpeg"/>`,

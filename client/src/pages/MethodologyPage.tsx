@@ -5,6 +5,7 @@ import { SEO, CommonOgTags } from '../lib/seo'
 import { buildBreadcrumbSchema } from '../lib/structured-data'
 import StructuredData from '../components/StructuredData'
 import LandingCta from '../components/LandingCta'
+import ChevronIcon from '../components/icons/ChevronIcon'
 import { useSources } from '../hooks/useSources'
 import { getCategoryColor } from '../lib/category-colors'
 
@@ -38,14 +39,6 @@ const breadcrumb = buildBreadcrumbSchema([
   { name: 'Home', url: SEO.siteUrl },
   { name: 'Methodology', url: META.url },
 ])
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-    </svg>
-  )
-}
 
 export default function MethodologyPage() {
   const { data: sources, isLoading: sourcesLoading } = useSources()

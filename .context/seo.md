@@ -36,8 +36,10 @@ Served dynamically by the backend at `GET /api/sitemap.xml`. In production, a Re
 | Field | Value |
 |-------|-------|
 | Source | `/sitemap.xml` |
-| Destination | `https://<backend-service>.onrender.com/api/sitemap.xml` |
+| Destination | `https://api.actuallyrelevant.news/api/sitemap.xml` |
 | Action | **Rewrite** |
+
+Both rewrites (this one and the podcast feed's below) target the API's custom domain, `https://api.actuallyrelevant.news`, not the service's `*.onrender.com` host (the owner is changing them in the Render dashboard, 2026-10-07).
 
 **Critical — Rule Order:**
 - Render evaluates rewrite rules **top-to-bottom, first match wins**
@@ -48,12 +50,12 @@ Served dynamically by the backend at `GET /api/sitemap.xml`. In production, a Re
 
 ### Podcast feed rewrite
 
-The podcast's RSS feed is served the same way, at the canonical `https://actuallyrelevant.news/podcast.xml` (the URL submitted to Apple, Spotify and the other directories, so it must never change). The API host is not used.
+The podcast's RSS feed is served the same way, at the canonical `https://actuallyrelevant.news/podcast.xml` (the URL submitted to Apple, Spotify and the other directories, so it must never change). The public URL never names the API host; only the rewrite's destination does.
 
 | Field | Value |
 |-------|-------|
 | Source | `/podcast.xml` |
-| Destination | `https://<backend-service>.onrender.com/api/podcast/feed.xml` |
+| Destination | `https://api.actuallyrelevant.news/api/podcast/feed.xml` |
 | Action | **Rewrite** |
 
 Same rules as the sitemap: above the SPA catch-all, and no static `podcast.xml` in `client/public/`. The `/podcast` page is an ordinary prerendered route (in both route lists below). Each episode's transcript page, `/podcast/<id>/transcript`, is dynamic like a story page: not prerendered and not in either static list, but in the server sitemap; its Helmet sets title, description, canonical and `og:*`, and it carries `PodcastEpisode` and breadcrumb JSON-LD (`buildPodcastEpisodeSchema` in `client/src/lib/structured-data.ts`); its not-found state is `noindex`. Details: `.context/podcast.md`, "Publishing, feed and page".
