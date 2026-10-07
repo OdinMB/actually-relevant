@@ -119,7 +119,7 @@ export default function PodcastPage() {
 
       <div className="page-section py-16">
         <h1 className="page-title">Podcast</h1>
-        <p className="mt-4 text-center text-sm font-medium text-neutral-700">
+        <p className="mb-6 text-center text-sm font-medium text-neutral-700">
           <AiLabel text={AI_DISCLOSURE_COPY.podcastLabel} />
         </p>
         <p className="page-intro">

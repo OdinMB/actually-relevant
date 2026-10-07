@@ -575,22 +575,23 @@ function PublicLayoutInner() {
         <Outlet />
       </main>
 
-      {/* Editorial sign-off. The AI statement stays readable by screen readers (AI Act Art. 50(5)); only the ornament is hidden. */}
-      <div className="bg-neutral-50 border-t border-neutral-200 py-10 md:py-14 text-center">
-        <div className="max-w-md mx-auto px-4">
-          <div className="flex items-center justify-center gap-4 mb-4" aria-hidden="true">
-            <span className="flex-1 border-t border-neutral-200" />
-            <span className="text-brand-300 text-sm">&#9670;</span>
-            <span className="flex-1 border-t border-neutral-200" />
-          </div>
-          <p className="text-lg italic text-neutral-500 leading-relaxed">
-            {BRAND.claimSupport}
-          </p>
-        </div>
-      </div>
-
       {/* Footer */}
       <footer className="bg-neutral-900 text-neutral-300">
+        {/* Editorial sign-off, first in the footer so it sits inside a landmark (axe "region").
+            The AI statement stays readable by screen readers (AI Act Art. 50(5)); only the ornament is hidden. */}
+        <div className="bg-neutral-50 border-t border-neutral-200 py-10 md:py-14 text-center">
+          <div className="max-w-md mx-auto px-4">
+            <div className="flex items-center justify-center gap-4 mb-4" aria-hidden="true">
+              <span className="flex-1 border-t border-neutral-200" />
+              <span className="text-brand-300 text-sm">&#9670;</span>
+              <span className="flex-1 border-t border-neutral-200" />
+            </div>
+            <p className="text-lg italic text-neutral-500 leading-relaxed">
+              {BRAND.claimSupport}
+            </p>
+          </div>
+        </div>
+
         {/* Category color strip */}
         <CategoryColorStrip />
 

@@ -17,7 +17,7 @@ export default function SiteAiNotice({ className = '' }: { className?: string })
       {AI_DISCLOSURE_COPY.siteNotice}{' '}
       <Link
         to={AI_DISCLOSURE_COPY.siteNoticeLinkHref}
-        className="text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+        className="whitespace-nowrap text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
       >
         {AI_DISCLOSURE_COPY.siteNoticeLinkText}
       </Link>

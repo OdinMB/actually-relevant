@@ -48,4 +48,10 @@ describe('PublicLayout', () => {
     renderLayout()
     expect(screen.getByText('Curated with care by AI.')).toBeInTheDocument()
   })
+
+  it('places the bottom sign-off inside the footer landmark, so no page content sits outside a landmark', () => {
+    renderLayout()
+    const footer = screen.getByRole('contentinfo')
+    expect(footer).toContainElement(screen.getByText(BRAND.claimSupport))
+  })
 })
