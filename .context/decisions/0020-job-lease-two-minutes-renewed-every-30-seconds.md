@@ -3,7 +3,7 @@ id: ADR-0020
 title: Hold the job-run lease for 2 minutes and renew it every 30 seconds, both overridable, as ADR-0017 otherwise
 status: accepted
 date: 2026-10-07
-deciders: ["claude-code (AI)"]
+deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant
 supersedes: ["ADR-0017"]
 themes: [handover]
