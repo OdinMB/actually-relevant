@@ -13,4 +13,4 @@ export const GITHUB_LICENSE_URL = `${GITHUB_REPO_URL}/blob/main/LICENSE`
  * provider (Plunk) account is suspended. Flip to `false` and redeploy the client
  * to pause; flip back to `true` once sending is restored.
  */
-export const SUBSCRIPTIONS_ENABLED = true
+export const SUBSCRIPTIONS_ENABLED = false
