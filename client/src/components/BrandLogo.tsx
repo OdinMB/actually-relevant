@@ -28,13 +28,17 @@ export default function BrandLogo({ onClick }: { onClick?: () => void }) {
             className="h-14 md:h-16 aspect-[5/2]"
           />
         </picture>
-        {/* The line's badge; decorative, so the home link's name stays the logo and claim */}
-        <AiBadge decorative className="hidden md:inline-flex mr-1.5 text-neutral-600" />
-        <span className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-neutral-500 mt-1 md:mt-0">
+        {/* The line's badge; decorative, so the home link's name stays the logo and claim.
+            Lifted 1px: centered in the 16px line box it sits below the caps' center, which is
+            1px above the box's middle (descender room). */}
+        <AiBadge decorative className="hidden md:inline-flex md:-translate-y-px mr-1.5 text-neutral-600" />
+        {/* md+: leading-4 like the AI line, so both halves' line boxes are 16px and centering
+            puts claim and AI text on one baseline (16.5px left them a fractional pixel apart) */}
+        <span className="text-[10px] md:text-[11px] md:leading-4 uppercase tracking-[0.2em] text-neutral-500 mt-1 md:mt-0">
           {BRAND.claim.replace(/\.$/, "")}
         </span>
       </Link>
-      <span aria-hidden="true" className="hidden md:inline text-[11px] text-neutral-500 ml-1.5 mr-0.5">
+      <span aria-hidden="true" className="hidden md:inline text-[11px] leading-4 text-neutral-500 ml-1.5 mr-0.5">
         ·
       </span>
       {/* Site-wide AI notice at first exposure (AI Act Art. 50(5)); .context/ai-transparency.md */}

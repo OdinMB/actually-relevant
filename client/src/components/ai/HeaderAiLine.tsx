@@ -19,7 +19,8 @@ export default function HeaderAiLine({ onClick }: { onClick?: () => void }) {
     >
       <AiBadge decorative className="md:hidden" />
       <span>{AI_DISCLOSURE_COPY.headerAiLine}</span>
-      <span aria-hidden="true" className="tracking-normal">
+      {/* md+: lifted 1px so the chevron's center meets the caps' center on the shared line */}
+      <span aria-hidden="true" className="tracking-normal md:-translate-y-px">
         ›
       </span>
     </Link>
