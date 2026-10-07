@@ -11,7 +11,7 @@ import SubscribeProvider, {
 import FeedbackProvider from "../components/FeedbackProvider";
 import { PositivityProvider } from "../contexts/PositivityContext";
 import { MoodDialPanel } from "../components/PositivitySlider";
-import SiteAiNotice from "../components/ai/SiteAiNotice";
+import HeaderAiLine from "../components/ai/HeaderAiLine";
 const KOFI_URL = "https://ko-fi.com/odinmb";
 const BLUESKY_URL = "https://bsky.app/profile/actuallyrelevant.bsky.social";
 const MASTODON_URL = "https://mastodon.social/@actuallyrelevant";
@@ -55,24 +55,33 @@ const FOOTER_LEGAL = [
   { label: "No tracking", href: "/no-ads-no-tracking" },
 ];
 
+/** Logo and claim link home; the AI line under them is a sibling link to the explainer. */
 function BrandLogo({ onClick }: { onClick?: () => void }) {
   return (
-    <Link to="/" onClick={onClick} className="flex flex-col items-center shrink-0">
-      <picture>
-        <source
-          srcSet="/images/optimized/logo-text-horizontal-small-h.webp"
-          type="image/webp"
-        />
-        <img
-          src="/images/logo-text-horizontal.png"
-          alt="Actually Relevant"
-          className="h-14 md:h-16 aspect-[5/2]"
-        />
-      </picture>
-      <span className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-neutral-500 mt-1">
-        {BRAND.claim.replace(/\.$/, "")}
-      </span>
-    </Link>
+    <div className="flex flex-col items-center shrink-0">
+      <Link
+        to="/"
+        onClick={onClick}
+        className="flex flex-col items-center rounded focus-visible:ring-2 focus-visible:ring-brand-500"
+      >
+        <picture>
+          <source
+            srcSet="/images/optimized/logo-text-horizontal-small-h.webp"
+            type="image/webp"
+          />
+          <img
+            src="/images/logo-text-horizontal.png"
+            alt="Actually Relevant"
+            className="h-14 md:h-16 aspect-[5/2]"
+          />
+        </picture>
+        <span className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-neutral-500 mt-1">
+          {BRAND.claim.replace(/\.$/, "")}
+        </span>
+      </Link>
+      {/* Site-wide AI notice at first exposure (AI Act Art. 50(5)); .context/ai-transparency.md */}
+      <HeaderAiLine onClick={onClick} />
+    </div>
   );
 }
 
@@ -570,8 +579,6 @@ function PublicLayoutInner() {
       <CategoryColorStrip className="lg:hidden" />
 
       <main id="main-content" className="flex-1">
-        {/* First thing in <main>, so the skip link lands on the AI notice, not past it (AI Act Art. 50(5)) */}
-        <SiteAiNotice />
         <Outlet />
       </main>
 

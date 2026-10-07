@@ -5,7 +5,6 @@ import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import PublicLayout from './PublicLayout'
 import { BRAND } from '../config'
-import { announcedText } from '../test/stories'
 
 function renderLayout() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -34,14 +33,24 @@ describe('PublicLayout', () => {
     expect(statement.closest('[aria-hidden="true"]')).toBeNull()
   })
 
-  it('shows the AI notice as the first thing in <main>, above every page, where the skip link lands', () => {
+  it('shows the AI line in the header on every page, as its own link to the explainer, not inside the home link', () => {
     renderLayout()
-    const main = screen.getByRole('main')
-    const note = screen.getByRole('note')
-    expect(main.firstElementChild).toBe(note)
-    expect(announcedText(note)).toBe('Written and curated with care by AI. How it works')
-    expect(within(note).getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology')
-    expect(screen.getByRole('link', { name: 'Skip to content' })).toHaveAttribute('href', `#${main.id}`)
+    const header = screen.getByRole('banner')
+    const aiLine = within(header).getByRole('link', { name: 'Written and curated by AI: how it works' })
+    expect(aiLine).toHaveAttribute('href', '/methodology')
+    expect(aiLine.textContent).toContain('Written & curated by AI')
+    expect(aiLine.parentElement?.closest('a')).toBeNull()
+
+    const home = within(header).getByRole('link', { name: /Actually Relevant/ })
+    expect(home).toHaveAttribute('href', '/')
+    expect(home).toHaveTextContent(BRAND.claim.replace(/\.$/, ''))
+    expect(home).not.toContainElement(aiLine)
+  })
+
+  it('no longer puts an AI notice band at the top of <main>', () => {
+    renderLayout()
+    expect(screen.queryByRole('note')).toBeNull()
+    expect(within(screen.getByRole('main')).queryByText(/curated/i)).toBeNull()
   })
 
   it('keeps the bottom sign-off as it was', () => {

@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { axe } from 'vitest-axe'
 import AiBadge from './AiBadge'
 import AiLabel from './AiLabel'
-import SiteAiNotice from './SiteAiNotice'
+import HeaderAiLine from './HeaderAiLine'
 import { quoteAttributionLine } from './aiDisclosureCopy'
 import { announcedText } from '../../test/stories'
 
@@ -45,26 +45,32 @@ describe('AiLabel', () => {
   })
 })
 
-describe('SiteAiNotice', () => {
-  function renderNotice() {
+describe('HeaderAiLine', () => {
+  function renderLine(onClick?: () => void) {
     return render(
       <MemoryRouter>
-        <SiteAiNotice />
+        <HeaderAiLine onClick={onClick} />
       </MemoryRouter>,
     )
   }
 
-  it('is a note exposed to assistive technology, with the approved text and the explainer link', () => {
-    renderNotice()
-    const note = screen.getByRole('note')
-    expect(note.closest('[aria-hidden="true"]')).toBeNull()
-    expect(note.textContent).toBe('AIWritten and curated with care by AI. How it works')
-    expect(announcedText(note)).toBe('Written and curated with care by AI. How it works')
-    expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology')
+  it('is one link to the explainer showing the badge and the approved line, announced naturally', () => {
+    renderLine()
+    const link = screen.getByRole('link', { name: 'Written and curated by AI: how it works' })
+    expect(link).toHaveAttribute('href', '/methodology')
+    expect(link.closest('[aria-hidden="true"]')).toBeNull()
+    expect(link.textContent).toMatch(/^AIWritten & curated by AI/)
+  })
+
+  it('calls onClick when followed, so the mobile menu can close', () => {
+    const onClick = vi.fn()
+    renderLine(onClick)
+    fireEvent.click(screen.getByRole('link'))
+    expect(onClick).toHaveBeenCalledOnce()
   })
 
   it('has no accessibility violations', async () => {
-    const { container } = renderNotice()
+    const { container } = renderLine()
     expect(await axe(container)).toHaveNoViolations()
   })
 })

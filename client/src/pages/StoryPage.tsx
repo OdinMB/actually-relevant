@@ -219,10 +219,10 @@ export default function StoryPage() {
               <span className="inline-flex flex-wrap items-center gap-x-2">
                 <AiLabel text={AI_DISCLOSURE_COPY.storyLabel} />
                 <Link
-                  to={AI_DISCLOSURE_COPY.siteNoticeLinkHref}
+                  to={AI_DISCLOSURE_COPY.howItWorksHref}
                   className="text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
                 >
-                  {AI_DISCLOSURE_COPY.siteNoticeLinkText}
+                  {AI_DISCLOSURE_COPY.howItWorksLinkText}
                 </Link>
               </span>
               {story.slug && (

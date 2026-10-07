@@ -74,7 +74,7 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 
 ## Shared Components
 
-- `SiteAiNotice` — AI notice as the first child of `<main>` in `PublicLayout`, so every public page shows it above the content and the skip link lands on it
+- `HeaderAiLine` — site-wide AI notice: a micro-line under the header claim in `PublicLayout`'s `BrandLogo`, a sibling link to `/methodology` (never inside the home link); keep it no wider than the claim, or the header collides with the flanking nav at 1024 px (`.context/ai-transparency.md` §7)
 - `StoryTitleLabel` — "AI" badge plus title label above every card and hero headline; new story listings should render headlines through `StoryCard` or this component so they carry the badge (`.context/ai-transparency.md`)
 - `StoryCard` — Story card with title, rating, summary (used on homepage + issue pages)
 - `RatingDisplay` — Relevance rating with color coding

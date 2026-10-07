@@ -12,9 +12,16 @@ export const AI_DISCLOSURE_COPY = {
   quoteBadgeAccessibleName: 'Selected by AI',
   /** Follows the attribution of every AI-selected quote. */
   quoteNote: 'selected and potentially translated by AI',
-  siteNotice: 'Written and curated with care by AI.',
-  siteNoticeLinkText: 'How it works',
-  siteNoticeLinkHref: '/methodology',
+  /**
+   * Second micro-line under the header claim on every public page, linking to howItWorksHref
+   * (owner-approved 2026-10-07; replaced the band "Written and curated with care by AI.").
+   */
+  headerAiLine: 'Written & curated by AI',
+  /** What screen readers announce for the header AI line, which is a link to the explainer. */
+  headerAiLineAccessibleName: 'Written and curated by AI: how it works',
+  /** Link after the story page's AI label. */
+  howItWorksLinkText: 'How it works',
+  howItWorksHref: '/methodology',
   /** Label in the story page's metadata row. */
   storyLabel: 'AI-generated summary and analysis',
   /** Header of the /embed iframe (widget.js carries the same line). */

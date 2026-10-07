@@ -3,7 +3,7 @@ import { AI_DISCLOSURE_COPY } from './aiDisclosureCopy'
 interface AiBadgeProps {
   /**
    * Set when visible text next to the badge already says the content is AI-generated
-   * (AiLabel, SiteAiNotice), so screen readers don't announce it twice.
+   * (AiLabel, HeaderAiLine), so screen readers don't announce it twice.
    */
   decorative?: boolean
   /** What screen readers announce instead of the visible "AI". */
