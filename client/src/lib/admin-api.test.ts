@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { adminApi, ApiError, setAccessToken } from './admin-api'
+import { adminApi, ApiError } from './admin-api'
+import { setAccessToken, onSessionExpired } from './session'
 
 const mockFetch = vi.fn()
 
@@ -78,5 +79,47 @@ describe('adminApi', () => {
     const url = mockFetch.mock.calls[0][0] as string
     expect(url).not.toContain('status')
     expect(url).toContain('page=1')
+  })
+})
+
+describe('adminApi on an expired access token', () => {
+  it('refreshes the session and retries with the new token', async () => {
+    mockFetch
+      .mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401))
+      .mockReturnValueOnce(jsonResponse({ accessToken: 'fresh' }))
+      .mockReturnValueOnce(jsonResponse({ fetched: 5 }))
+
+    await adminApi.stories.stats()
+
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/admin/stories/stats'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer fresh' }),
+      }),
+    )
+  })
+
+  it('signals the end of the session when the refresh is rejected', async () => {
+    const expired = vi.fn()
+    const unsubscribe = onSessionExpired(expired)
+    mockFetch
+      .mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401))
+      .mockReturnValueOnce(jsonResponse({ error: 'Refresh token reuse detected' }, 401))
+
+    await expect(adminApi.stories.stats()).rejects.toBeInstanceOf(ApiError)
+    expect(expired).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
+  it('keeps the session when the server cannot answer the refresh', async () => {
+    const expired = vi.fn()
+    const unsubscribe = onSessionExpired(expired)
+    mockFetch
+      .mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401))
+      .mockReturnValue(jsonResponse({ error: 'Too many refresh attempts' }, 429))
+
+    await expect(adminApi.stories.stats()).rejects.toBeInstanceOf(ApiError)
+    expect(expired).not.toHaveBeenCalled()
+    unsubscribe()
   })
 })

@@ -3,7 +3,7 @@
 ## Code
 
 - Add link to /feedback to newsletter
-- Fix admin logout issue
+- Admin logout on every reload in browsers that block third-party cookies (Safari, Brave, strict modes): put the API on `api.actuallyrelevant.news`, then `AUTH_COOKIE_SAMESITE=strict` (owner steps: `.context/authentication.md`, "Cross-site cookie in production")
 - Page-specific og:title/og:description/og:url on /developers and /saved (they inherit the homepage's link preview); limit `article:author` to story pages
 - /developers: if the API reference chunk fails, the shared ChunkErrorBoundary fallback adds a second h1 and full-screen "Failed to load page"; give the boundary a `fallback` prop
 - `images:info` aborts on `client/public/images/feeds/29cded6e-b5ef-4053-bc5f-d2d10b7238b7.png`, which is really a Windows .ico: convert it to a real PNG, and make `client/scripts/images.mjs` skip an unreadable file instead of aborting the report

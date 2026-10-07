@@ -104,7 +104,7 @@ The build generates the Prisma client, applies any pending database migrations, 
 - **Cron jobs** run in-process via node-cron — no separate worker service is needed. Job configuration lives in the `job_runs` database table and is managed from the admin dashboard.
 - **Graceful shutdown** handles `SIGTERM` (sent by Render on deploy) by draining in-flight LLM tasks before disconnecting from the database.
 - **Reverse proxy** trust is configured (`trust proxy: 1`) for correct client IP detection behind Render's load balancer.
-- **Cross-origin cookies** use `sameSite: 'none'` + `secure: true` in production, which is required because the frontend and backend are on different Render origins. This is why `NODE_ENV=production` is mandatory.
+- **Cross-origin cookies** use `sameSite: 'none'` + `secure: true` in production, which is required while the frontend and backend are on different sites. This is why `NODE_ENV=production` is mandatory. Once the API is on the same site (e.g. `api.actuallyrelevant.news`), set `AUTH_COOKIE_SAMESITE=strict`; see `.context/authentication.md`.
 
 ### 3. Frontend (Static Site)
 

@@ -7,6 +7,7 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
     deleteMany: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   $disconnect: vi.fn(),
 }))
@@ -39,6 +40,7 @@ const {
   revokeAllUserTokens,
   cleanupExpiredTokens,
 } = await import('./auth.js')
+const { config } = await import('../config.js')
 
 describe('hashPassword / verifyPassword', () => {
   it('hashes and verifies a password', async () => {
@@ -135,16 +137,16 @@ describe('rotateRefreshToken', () => {
       user,
       expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     })
-    mockPrisma.refreshToken.update.mockResolvedValue({})
+    mockPrisma.refreshToken.updateMany.mockResolvedValue({ count: 1 })
     mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-2', token: 'new-token' })
 
     const result = await rotateRefreshToken('old-token')
     expect(result.accessToken).toBeDefined()
     expect(result.refreshToken).toBeDefined()
 
-    // Should soft-rotate (update with rotatedAt) instead of hard delete
-    expect(mockPrisma.refreshToken.update).toHaveBeenCalledWith({
-      where: { id: 'rt-1' },
+    // Soft-rotates atomically: only a row that is not yet rotated is claimed
+    expect(mockPrisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { id: 'rt-1', rotatedAt: null },
       data: { rotatedAt: expect.any(Date) },
     })
     expect(mockPrisma.refreshToken.delete).not.toHaveBeenCalled()
@@ -178,14 +180,14 @@ describe('rotateRefreshToken', () => {
     expect(mockPrisma.refreshToken.delete).toHaveBeenCalledWith({ where: { id: 'rt-1' } })
   })
 
-  it('detects reuse when token has rotatedAt set and revokes entire family', async () => {
+  it('detects reuse when token was rotated before the grace window and revokes entire family', async () => {
     const user = { id: 'user-1', email: 'a@b.com', role: 'admin' }
     mockPrisma.refreshToken.findUnique.mockResolvedValue({
       id: 'rt-1',
       token: 'reused-token',
       userId: 'user-1',
       familyId: 'family-abc',
-      rotatedAt: new Date(Date.now() - 5000), // already rotated
+      rotatedAt: new Date(Date.now() - config.auth.refreshReuseGraceMs - 1000),
       user,
       expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     })
@@ -203,7 +205,7 @@ describe('rotateRefreshToken', () => {
       token: 'reused-token',
       userId: 'user-1',
       familyId: 'family-abc',
-      rotatedAt: new Date(Date.now() - 5000),
+      rotatedAt: new Date(Date.now() - config.auth.refreshReuseGraceMs - 1000),
       user,
       expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     })
@@ -218,14 +220,90 @@ describe('rotateRefreshToken', () => {
     expect(mockPrisma.refreshToken.deleteMany).toHaveBeenCalledWith({
       where: { familyId: 'family-abc' },
     })
+    expect(mockPrisma.refreshToken.create).not.toHaveBeenCalled()
+  })
+
+  it('treats a token rotated within the grace window as a lost response, not theft', async () => {
+    const user = { id: 'user-1', email: 'a@b.com', role: 'admin' }
+    mockPrisma.refreshToken.findUnique.mockResolvedValue({
+      id: 'rt-1',
+      token: 'just-rotated',
+      userId: 'user-1',
+      familyId: 'family-abc',
+      rotatedAt: new Date(Date.now() - config.auth.refreshReuseGraceMs + 5000),
+      user,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+    })
+    mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-3', token: 'newer' })
+
+    const result = await rotateRefreshToken('just-rotated')
+
+    expect(result.accessToken).toBeDefined()
+    expect(result.refreshToken).toBeDefined()
+    expect(mockPrisma.refreshToken.deleteMany).not.toHaveBeenCalled()
+    expect(mockPrisma.refreshToken.updateMany).not.toHaveBeenCalled()
+    expect(mockPrisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'family-abc' }),
+    })
+  })
+
+  it('serves a request that lost the rotation race to a concurrent one from the same family', async () => {
+    const user = { id: 'user-1', email: 'a@b.com', role: 'admin' }
+    const row = {
+      id: 'rt-1',
+      token: 'raced',
+      userId: 'user-1',
+      familyId: 'family-abc',
+      rotatedAt: null as Date | null,
+      user,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+    }
+    mockPrisma.refreshToken.findUnique
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ ...row, rotatedAt: new Date() })
+    mockPrisma.refreshToken.updateMany.mockResolvedValue({ count: 0 })
+    mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-3', token: 'newer' })
+
+    const result = await rotateRefreshToken('raced')
+
+    expect(result.refreshToken).toBeDefined()
+    expect(mockPrisma.refreshToken.deleteMany).not.toHaveBeenCalled()
+    expect(mockPrisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'family-abc' }),
+    })
+  })
+
+  it('refuses a token that was revoked between its read and its rotation', async () => {
+    mockPrisma.refreshToken.findUnique
+      .mockResolvedValueOnce({
+        id: 'rt-1',
+        token: 'revoked-meanwhile',
+        userId: 'user-1',
+        familyId: 'family-abc',
+        rotatedAt: null,
+        user: { id: 'user-1', email: 'a@b.com', role: 'admin' },
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+      })
+      .mockResolvedValueOnce(null)
+    mockPrisma.refreshToken.updateMany.mockResolvedValue({ count: 0 })
+
+    await expect(rotateRefreshToken('revoked-meanwhile')).rejects.toThrow('Invalid refresh token')
+    expect(mockPrisma.refreshToken.create).not.toHaveBeenCalled()
   })
 })
 
 describe('revokeRefreshToken', () => {
-  it('deletes the token', async () => {
-    mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 1 })
+  it('ends the whole login session: deletes every token of the presented token\'s family', async () => {
+    mockPrisma.refreshToken.findUnique.mockResolvedValue({ id: 'rt-2', familyId: 'family-abc' })
+    mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 })
     await revokeRefreshToken('some-token')
-    expect(mockPrisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { token: 'some-token' } })
+    expect(mockPrisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { familyId: 'family-abc' } })
+  })
+
+  it('does nothing for an unknown token', async () => {
+    mockPrisma.refreshToken.findUnique.mockResolvedValue(null)
+    await revokeRefreshToken('unknown')
+    expect(mockPrisma.refreshToken.deleteMany).not.toHaveBeenCalled()
   })
 })
 

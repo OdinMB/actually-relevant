@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { randomBytes, randomUUID } from 'crypto'
 import prisma from '../lib/prisma.js'
+import { config } from '../config.js'
 
 const BCRYPT_ROUNDS = 12
 const ACCESS_TOKEN_EXPIRY = '15m'
@@ -66,27 +67,52 @@ export async function rotateRefreshToken(
     throw new Error('Refresh token expired')
   }
 
-  // Reuse detection: if this token was already rotated, revoke the entire family
   if (record.rotatedAt) {
-    await prisma.refreshToken.deleteMany({ where: { familyId: record.familyId } })
-    throw new Error('Refresh token reuse detected')
+    // Reuse detection: a token rotated long ago coming back is a sign of theft,
+    // so the whole login session (family) is revoked. Within the grace window it
+    // is a lost response or a second tab, and gets a fresh token in the family.
+    if (!isWithinReuseGrace(record.rotatedAt)) {
+      await prisma.refreshToken.deleteMany({ where: { familyId: record.familyId } })
+      throw new Error('Refresh token reuse detected')
+    }
+    return issueTokenPair(record.user, record.familyId)
   }
 
-  // Soft-rotate: mark old token as rotated instead of deleting
-  await prisma.refreshToken.update({
-    where: { id: record.id },
+  // Soft-rotate atomically: only one request can claim a not-yet-rotated row
+  const claimed = await prisma.refreshToken.updateMany({
+    where: { id: record.id, rotatedAt: null },
     data: { rotatedAt: new Date() },
   })
+  if (claimed.count === 0) {
+    // A concurrent request rotated or revoked it between our read and write
+    const current = await prisma.refreshToken.findUnique({ where: { id: record.id } })
+    if (!current?.rotatedAt || !isWithinReuseGrace(current.rotatedAt)) {
+      throw new Error('Invalid refresh token')
+    }
+  }
 
-  // Generate new pair with same familyId
-  const accessToken = generateAccessToken(record.user)
-  const refreshToken = await generateRefreshToken(record.user.id, record.familyId)
+  return issueTokenPair(record.user, record.familyId)
+}
 
+function isWithinReuseGrace(rotatedAt: Date): boolean {
+  return Date.now() - rotatedAt.getTime() <= config.auth.refreshReuseGraceMs
+}
+
+async function issueTokenPair(
+  user: { id: string; email: string; role: string },
+  familyId: string,
+): Promise<{ accessToken: string; refreshToken: string }> {
+  const accessToken = generateAccessToken(user)
+  const refreshToken = await generateRefreshToken(user.id, familyId)
   return { accessToken, refreshToken }
 }
 
 export async function revokeRefreshToken(token: string): Promise<void> {
-  await prisma.refreshToken.deleteMany({ where: { token } })
+  // Logout ends the whole login session, so a predecessor token still inside
+  // its reuse grace window cannot revive it.
+  const record = await prisma.refreshToken.findUnique({ where: { token } })
+  if (!record) return
+  await prisma.refreshToken.deleteMany({ where: { familyId: record.familyId } })
 }
 
 export async function revokeAllUserTokens(userId: string): Promise<void> {

@@ -1,5 +1,5 @@
-import { useState, useEffect, Suspense } from 'react'
-import { NavLink, Outlet, Navigate } from 'react-router-dom'
+import { useState, Suspense } from 'react'
+import { NavLink, Outlet } from 'react-router-dom'
 import { Dialog, DialogPanel } from '@headlessui/react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -29,6 +29,7 @@ import { ToastProvider } from '../components/ui/Toast'
 import { BackgroundTaskProvider } from '../hooks/useBackgroundTasks'
 import { PodcastProgressProvider } from '../hooks/usePodcastProgress'
 import { NewVersionBanner } from '../components/admin/NewVersionBanner'
+import { RequireSession } from '../components/admin/RequireSession'
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon, end: true },
@@ -138,26 +139,15 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export default function AdminLayout() {
-  const { isAuthenticated, isLoading, tryRestoreSession } = useAuth()
+  return (
+    <RequireSession>
+      <AdminShell />
+    </RequireSession>
+  )
+}
+
+function AdminShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
-
-  // Try to restore session when accessing admin routes directly
-  useEffect(() => {
-    tryRestoreSession()
-  }, [tryRestoreSession])
-
-  if (isLoading) {
-    return (
-      <main className="flex items-center justify-center min-h-screen">
-        <h1 className="sr-only">Loading</h1>
-        <LoadingSpinner size="lg" />
-      </main>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/admin/login" replace />
-  }
 
   return (
     <ToastProvider>

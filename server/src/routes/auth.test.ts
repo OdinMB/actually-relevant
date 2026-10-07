@@ -17,6 +17,7 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
     deleteMany: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   $disconnect: vi.fn(),
 }))
@@ -37,6 +38,12 @@ const testPasswordHash = '$2b$04$a7oe401dL9h9L7VNbNSZJObgY3lSlqg30AUD7GB1Tut7Mlk
 
 const { default: app } = await import('../app.js')
 const { generateAccessToken } = await import('../services/auth.js')
+
+function setCookieHeader(res: { headers: Record<string, unknown> }): string {
+  const cookies = res.headers['set-cookie']
+  if (Array.isArray(cookies)) return cookies.join('; ')
+  return typeof cookies === 'string' ? cookies : ''
+}
 
 describe('Auth Routes', () => {
   beforeEach(() => {
@@ -132,7 +139,7 @@ describe('Auth Routes', () => {
         user,
         expiresAt: new Date(Date.now() + 1000 * 60 * 60),
       })
-      mockPrisma.refreshToken.update.mockResolvedValue({})
+      mockPrisma.refreshToken.updateMany.mockResolvedValue({ count: 1 })
       mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-2', token: 'new-refresh' })
 
       const res = await request(app)
@@ -159,7 +166,7 @@ describe('Auth Routes', () => {
         token: 'reused-token',
         userId: 'user-1',
         familyId: 'family-abc',
-        rotatedAt: new Date(), // already rotated = reuse
+        rotatedAt: new Date(Date.now() - 60 * 60 * 1000), // rotated long ago = reuse
         user: { id: 'user-1', email: 'admin@test.com', role: 'admin' },
         expiresAt: new Date(Date.now() + 1000 * 60 * 60),
       })
@@ -171,6 +178,18 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(401)
       expect(res.body.error).toBe('Refresh token reuse detected')
+      expect(setCookieHeader(res)).toMatch(/refresh_token=;/)
+    })
+
+    it('keeps the cookie when the refresh fails for a server reason', async () => {
+      mockPrisma.refreshToken.findUnique.mockRejectedValue(new Error('connection reset'))
+
+      const res = await request(app)
+        .post('/api/auth/refresh')
+        .set('Cookie', 'refresh_token=valid-refresh')
+
+      expect(res.status).toBe(500)
+      expect(setCookieHeader(res)).not.toContain('refresh_token')
     })
   })
 

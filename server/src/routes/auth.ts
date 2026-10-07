@@ -14,6 +14,7 @@ import {
 } from '../services/auth.js'
 import { getUserById } from '../services/user.js'
 import { createLogger } from '../lib/logger.js'
+import { config, type CookieSameSite } from '../config.js'
 
 const log = createLogger('auth')
 
@@ -26,11 +27,16 @@ function isSecureEnv(): boolean {
   return process.env.NODE_ENV === 'production'
 }
 
+/** 'none' only while the API sits on a different site from the admin; see config.auth.cookieSameSite. */
+function cookieSameSite(): CookieSameSite {
+  return config.auth.cookieSameSite ?? (isSecureEnv() ? 'none' : 'strict')
+}
+
 function setRefreshCookie(res: any, token: string) {
   res.cookie(REFRESH_COOKIE, token, {
     httpOnly: true,
     secure: isSecureEnv(),
-    sameSite: isSecureEnv() ? 'none' as const : 'strict' as const,
+    sameSite: cookieSameSite(),
     maxAge: COOKIE_MAX_AGE,
     path: '/api/auth',
   })
@@ -40,10 +46,16 @@ function clearRefreshCookie(res: any) {
   res.clearCookie(REFRESH_COOKIE, {
     httpOnly: true,
     secure: isSecureEnv(),
-    sameSite: isSecureEnv() ? 'none' as const : 'strict' as const,
+    sameSite: cookieSameSite(),
     path: '/api/auth',
   })
 }
+
+const REJECTED_REFRESH_ERRORS = new Set([
+  'Invalid refresh token',
+  'Refresh token expired',
+  'Refresh token reuse detected',
+])
 
 router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) => {
   try {
@@ -87,8 +99,10 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     setRefreshCookie(res, result.refreshToken)
     res.json({ accessToken: result.accessToken })
   } catch (err) {
-    clearRefreshCookie(res)
-    if (err instanceof Error && (err.message === 'Invalid refresh token' || err.message === 'Refresh token expired' || err.message === 'Refresh token reuse detected')) {
+    // Clear the cookie only when the token itself was rejected. A server-side
+    // failure (DB hiccup, restart mid-deploy) keeps it, so the client can retry.
+    if (err instanceof Error && REJECTED_REFRESH_ERRORS.has(err.message)) {
+      clearRefreshCookie(res)
       res.status(401).json({ error: err.message })
       return
     }

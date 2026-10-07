@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { useAuth } from '../../lib/auth'
+import { postLoginPath } from '../../lib/authRedirect'
 import { Button } from '../../components/ui/Button'
 import { preloadAdminChunks } from '../../App'
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading, login, tryRestoreSession } = useAuth()
   const navigate = useNavigate()
+  // The admin page the person was sent here from, kept through login
+  const returnTo = postLoginPath(useLocation().state)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -22,7 +25,7 @@ export default function LoginPage() {
   if (isLoading) return null
 
   if (isAuthenticated) {
-    return <Navigate to="/admin" replace />
+    return <Navigate to={returnTo} replace />
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,7 +34,7 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       await login(email, password)
-      navigate('/admin', { replace: true })
+      navigate(returnTo, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {

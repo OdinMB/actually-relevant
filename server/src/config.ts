@@ -16,7 +16,38 @@ export function parseEffort(value: string | undefined, fallback: ReasoningEffort
   return effort
 }
 
+export const COOKIE_SAME_SITE_VALUES = ['strict', 'lax', 'none'] as const
+export type CookieSameSite = (typeof COOKIE_SAME_SITE_VALUES)[number]
+
+/**
+ * Parse a cookie SameSite override. Unset or empty → undefined (the caller's
+ * environment default applies); anything else outside the three values throws
+ * at startup, since a typo would silently break every admin session.
+ */
+export function parseSameSite(value: string | undefined, varName: string): CookieSameSite | undefined {
+  if (value === undefined || value === '') return undefined
+  const sameSite = COOKIE_SAME_SITE_VALUES.find(v => v === value.toLowerCase())
+  if (!sameSite) {
+    throw new Error(`${varName}="${value}" is not a SameSite value; expected one of ${COOKIE_SAME_SITE_VALUES.join(', ')}`)
+  }
+  return sameSite
+}
+
 export const config = {
+  auth: {
+    /**
+     * A refresh token presented again within this long after it was rotated is
+     * treated as a lost response (reload mid-refresh, two tabs, network drop) and
+     * gets a fresh token in the same family; later reuse still revokes the family.
+     */
+    refreshReuseGraceMs: parseInt(process.env.AUTH_REFRESH_REUSE_GRACE_MS || "60000", 10),
+    /**
+     * SameSite for the refresh cookie. Unset: 'none' in production (API on a
+     * different site from the admin), 'strict' in development. Set 'strict' once
+     * the API is served from the same site as the admin (see .context/authentication.md).
+     */
+    cookieSameSite: parseSameSite(process.env.AUTH_COOKIE_SAMESITE, 'AUTH_COOKIE_SAMESITE'),
+  },
   /** Canonical public URL for the site — used in social media posts, RSS feeds, sitemaps, etc. */
   siteUrl: process.env.SITE_URL || 'https://actuallyrelevant.news',
   /** Public client (frontend) URL — used to build links the visitor clicks, e.g. the subscription confirmation page. */

@@ -26,6 +26,7 @@ import type {
   MastodonPost,
   MastodonFeedResponse,
 } from '@shared/types'
+import { getAccessToken, setAccessToken, refreshSession, notifySessionExpired } from './session'
 
 export interface FeedbackItem {
   id: string
@@ -90,56 +91,21 @@ export class ApiError extends Error {
   }
 }
 
-// In-memory access token (not localStorage — XSS-safe)
-let accessToken: string | null = null
-
-export function setAccessToken(token: string | null) {
-  accessToken = token
-}
-
-export function getAccessToken(): string | null {
-  return accessToken
-}
-
 function getAuthHeaders(): HeadersInit {
+  const accessToken = getAccessToken()
   return {
     'Content-Type': 'application/json',
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   }
 }
 
-let isRefreshing = false
-let refreshPromise: Promise<string | null> | null = null
-
-async function refreshAccessToken(): Promise<string | null> {
-  if (isRefreshing && refreshPromise) return refreshPromise
-
-  isRefreshing = true
-  refreshPromise = (async () => {
-    try {
-      const res = await fetch(`${AUTH_BASE}/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-      if (!res.ok) return null
-      const data = await res.json()
-      accessToken = data.accessToken
-      return data.accessToken as string
-    } catch {
-      return null
-    } finally {
-      isRefreshing = false
-      refreshPromise = null
-    }
-  })()
-
-  return refreshPromise
-}
-
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = path.startsWith('/auth') ? `${API_BASE}${path}` : `${ADMIN_BASE}${path}`
-
-  let res = await fetch(url, {
+/**
+ * Fetch with the access token; on a 401, refresh the session once and retry.
+ * A refresh the server rejects ends the session (the auth context sends the
+ * person to login, keeping their URL); an unreachable server does not.
+ */
+async function fetchWithSession(url: string, options: RequestInit): Promise<Response> {
+  const send = () => fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
@@ -148,21 +114,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   })
 
-  // On 401, try refreshing the access token
-  if (res.status === 401) {
-    const newToken = await refreshAccessToken()
-    if (newToken) {
-      res = await fetch(url, {
-        ...options,
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${newToken}`,
-          ...(options.headers || {}),
-        },
-      })
-    }
-  }
+  const res = await send()
+  if (res.status !== 401) return res
+
+  const outcome = await refreshSession()
+  if (outcome.status === 'ok') return send()
+  if (outcome.status === 'unauthorized') notifySessionExpired()
+  return res
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const url = path.startsWith('/auth') ? `${API_BASE}${path}` : `${ADMIN_BASE}${path}`
+
+  const res = await fetchWithSession(url, options)
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }))
@@ -174,29 +138,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function requestBlob(path: string, options: RequestInit = {}): Promise<Blob> {
-  let res = await fetch(`${ADMIN_BASE}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      ...getAuthHeaders(),
-      ...(options.headers || {}),
-    },
-  })
-
-  // On 401, try refreshing the access token
-  if (res.status === 401) {
-    const newToken = await refreshAccessToken()
-    if (newToken) {
-      res = await fetch(`${ADMIN_BASE}${path}`, {
-        ...options,
-        credentials: 'include',
-        headers: {
-          Authorization: `Bearer ${newToken}`,
-          ...(options.headers || {}),
-        },
-      })
-    }
-  }
+  const res = await fetchWithSession(`${ADMIN_BASE}${path}`, options)
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }))
@@ -236,7 +178,7 @@ export const authApi = {
     }>
   },
 
-  refresh: refreshAccessToken,
+  refresh: refreshSession,
 
   logout: async () => {
     try {
@@ -247,7 +189,7 @@ export const authApi = {
     } catch {
       // Ignore network errors on logout
     }
-    accessToken = null
+    setAccessToken(null)
   },
 
   me: () => request<User>('/auth/me'),
@@ -478,14 +420,4 @@ export const adminApi = {
   subscribers: {
     list: () => request<SubscriberReconciliation>('/subscribers'),
   },
-}
-
-// Preserve access token across Vite HMR (dev only, tree-shaken in production)
-if (import.meta.hot) {
-  if (import.meta.hot.data?.accessToken) {
-    accessToken = import.meta.hot.data.accessToken
-  }
-  import.meta.hot.dispose((data) => {
-    data.accessToken = accessToken
-  })
 }
