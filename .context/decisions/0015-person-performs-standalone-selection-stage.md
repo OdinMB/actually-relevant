@@ -3,7 +3,7 @@ id: ADR-0015
 title: A person performs the selection stage of a standalone episode; the AI suggestion is advisory and writes nothing
 status: accepted
 date: 2026-10-07
-deciders: ["claude-code (AI)"]
+deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant
 themes: [ai-risk, cost]
 tags: ["podcast"]

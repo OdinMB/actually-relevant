@@ -3,7 +3,7 @@ id: ADR-0016
 title: Mark an episode's kind in an explicit kind column, weekly or standalone, with standalone rows never carrying a week key
 status: accepted
 date: 2026-10-07
-deciders: ["claude-code (AI)"]
+deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant
 themes: [ai-risk]
 tags: ["podcast"]

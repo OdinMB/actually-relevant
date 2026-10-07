@@ -82,8 +82,7 @@ export interface PodcastEpisodeCopy {
 /**
  * The episode copy by kind. Weekly: the owner-approved constants above, unchanged. Standalone (an
  * episode built by hand from any published stories, which may come from different weeks): the
- * wording the coordinator relayed on 2026-10-07 as the owner's decision. It goes public only once
- * `PODCAST_STANDALONE_COPY_CONFIRMED` is true.
+ * wording the owner approved on 2026-10-07 (`PODCAST_STANDALONE_COPY_CONFIRMED`).
  */
 export const PODCAST_EPISODE_COPY: Record<PodcastCopyKind, PodcastEpisodeCopy> = {
   weekly: {
@@ -103,9 +102,11 @@ export const PODCAST_EPISODE_COPY: Record<PodcastCopyKind, PodcastEpisodeCopy> =
 /**
  * Whether the owner has confirmed the standalone wording in `PODCAST_EPISODE_COPY.standalone` in his
  * own words. While false, a standalone episode is never voiced live (`voiceEpisode`) or listed
- * (`publishRefusal`); dry runs still work. Set to true only on the owner's own confirmation.
+ * (`publishRefusal`); dry runs still work. Set to true only on the owner's own confirmation:
+ * approved by Odin Mühlenbein in session, 2026-10-07. The guard stays so that an unconfirmed
+ * wording change can set the flag back to false.
  */
-export const PODCAST_STANDALONE_COPY_CONFIRMED: boolean = false
+export const PODCAST_STANDALONE_COPY_CONFIRMED: boolean = true
 
 /** The spoken opener of an episode of this kind. */
 export function podcastOpener(kind: PodcastCopyKind): string {

@@ -34,10 +34,11 @@ describe('publishEpisode', () => {
     expect(mockFeed.invalidateFeedCache).not.toHaveBeenCalled()
   })
 
-  it('refuses a standalone episode while its wording is unconfirmed, and saves nothing', async () => {
-    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready({ kind: 'standalone' }))
-    await expect(publishEpisode('podcast-1', NOW)).rejects.toThrow(/standalone/)
-    expect(writes()).toHaveLength(0)
+  it('publishes a ready standalone episode now that its wording is confirmed', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready({ kind: 'standalone', weekKey: null }))
+    await publishEpisode('podcast-1', NOW)
+    expect(writes()).toEqual([{ status: 'published', publishedAt: NOW, unpublishedAt: null }])
+    expect(mockFeed.invalidateFeedCache).toHaveBeenCalledOnce()
   })
 
   it('refuses a dry-run episode', async () => {
@@ -94,8 +95,12 @@ describe('publishBlockedReason', () => {
     expect(publishBlockedReason(ready({ audioUrl: null }), false)).toMatch(/no uploaded audio/)
   })
 
-  it('refuses a ready standalone episode while its wording is unconfirmed, and never a weekly one', () => {
-    expect(publishBlockedReason(ready({ kind: 'standalone' }), false)).toMatch(/standalone episode .* owner's confirmation/)
+  it('offers Publish for a ready standalone episode now that its wording is confirmed', () => {
+    expect(publishBlockedReason(ready({ kind: 'standalone', weekKey: null }), false)).toBeNull()
+  })
+
+  it('would refuse a standalone episode, and never a weekly one, if its wording were unconfirmed', () => {
+    expect(standaloneCopyRefusal('standalone', false)).toMatch(/standalone episode .* owner's confirmation/)
     expect(standaloneCopyRefusal('standalone', true)).toBeNull()
     expect(standaloneCopyRefusal('weekly', false)).toBeNull()
   })

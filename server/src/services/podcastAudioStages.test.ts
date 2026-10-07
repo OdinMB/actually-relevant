@@ -104,12 +104,15 @@ describe('voiceEpisode', () => {
     expect(ctx.storeChunk.mock.calls.map(c => c[0].index)).toEqual(CHUNKS.map((_, i) => i).slice(2))
   })
 
-  it('blocks the live voicing of a standalone episode before any spend while its wording is unconfirmed', async () => {
+  it('voices a standalone episode live now that its wording is confirmed, with the usual balance check and reservations', async () => {
     const standalone = episode({ kind: 'standalone', weekKey: null })
-    await expect(stages.voiceEpisode(standalone, context())).rejects.toBeInstanceOf(PodcastBlockedError)
-    expect(mockGuards.assertBalanceCovers).not.toHaveBeenCalled()
-    expect(mockGuards.reserveTtsChars).not.toHaveBeenCalled()
-    expect(mockElevenLabs.textToDialogue).not.toHaveBeenCalled()
+    const ctx = context()
+    const write = await stages.voiceEpisode(standalone, ctx)
+    const chunks = stages.episodeChunks({ id: 'pod-1', dialogue, kind: 'standalone' } as never)
+    expect(mockGuards.assertBalanceCovers).toHaveBeenCalledOnce()
+    expect(mockGuards.reserveTtsChars).toHaveBeenCalledTimes(chunks.length)
+    expect(mockElevenLabs.textToDialogue).toHaveBeenCalledTimes(chunks.length)
+    expect(write).toMatchObject({ stage: 'voiced' })
   })
 
   it('voices a standalone dry run with the stub, its standalone opener and sign-off in the chunks', async () => {

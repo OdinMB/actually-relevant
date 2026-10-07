@@ -132,7 +132,8 @@ export function editedAiLineRefusal(humanEdited: boolean, confirmed: boolean = P
 /**
  * Why an episode of this kind may not be voiced live or listed, or null when it may: a standalone
  * episode's opener and AI line go out only once the owner has confirmed their wording
- * (`PODCAST_STANDALONE_COPY_CONFIRMED`). A weekly episode is never refused here.
+ * (`PODCAST_STANDALONE_COPY_CONFIRMED`). A weekly episode is never refused here. Confirmed on
+ * 2026-10-07; the guard stays so that an unconfirmed wording change can set the flag back to false.
  */
 export function standaloneCopyRefusal(kind: PodcastKind, confirmed: boolean = PODCAST_STANDALONE_COPY_CONFIRMED): string | null {
   if (kind !== 'standalone' || confirmed) return null

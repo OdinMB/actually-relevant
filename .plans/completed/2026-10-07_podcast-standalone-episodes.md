@@ -15,6 +15,12 @@ complexity: complex
 
 # Standalone podcast episodes
 
+Confirmed by Odin Mühlenbein on 2026-10-07: every decision this plan states
+
+He also approved, in session on 2026-10-07, the four standalone strings in "Copy needing the
+owner's approval" as proposed (the opener "…from selected news stories.", both AI lines and the
+sign-off), and keeping "weekly" in the show description and the `/podcast` intro.
+
 Owner decisions this plan builds on (Odin Mühlenbein, 2026-10-07, in session): a **New podcast**
 button beside "Start this week's episode"; an episode not tied to a week, built from *any*
 published stories picked by hand with filters (date range, topic, text search) and an optional
