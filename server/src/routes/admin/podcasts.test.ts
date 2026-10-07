@@ -10,12 +10,15 @@ const mockPrisma = vi.hoisted(() => ({
   podcast: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     delete: vi.fn(),
     count: vi.fn(),
   },
   podcastAudioChunk: { count: vi.fn() },
   podcastTtsUsage: { aggregate: vi.fn() },
+  $executeRaw: vi.fn(),
   $disconnect: vi.fn(),
 }))
 const mockWeekly = vi.hoisted(() => ({
@@ -65,6 +68,9 @@ describe('Admin Podcasts API', () => {
     mockWeekly.resumeEpisode.mockResolvedValue({ outcome: 'done', podcastId: 'podcast-1' })
     mockPrisma.podcastTtsUsage.aggregate.mockResolvedValue({ _sum: { chars: 5400 } })
     mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast())
+    mockPrisma.podcast.findUniqueOrThrow.mockImplementation(() => mockPrisma.podcast.findUnique())
+    mockPrisma.podcast.updateMany.mockResolvedValue({ count: 1 })
+    mockPrisma.$executeRaw.mockResolvedValue(1)
     mockBunny.deleteObject.mockResolvedValue(undefined)
   })
 
@@ -380,11 +386,13 @@ describe('Admin Podcasts API', () => {
       expect(mockPrisma.podcast.delete).not.toHaveBeenCalled()
     })
 
-    it('refuses an episode in progress with 409', async () => {
-      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ leaseUntil: new Date(Date.now() + 60_000) }))
+    it('refuses with 409 while a run or a publish holds the episode, one that started after the page loaded included', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready', audioPath: 'episodes/a.mp3' }))
+      mockPrisma.$executeRaw.mockResolvedValue(0)
       const res = await request(app).delete('/api/admin/podcasts/podcast-1').set(authHeader())
       expect(res.status).toBe(409)
       expect(mockPrisma.podcast.delete).not.toHaveBeenCalled()
+      expect(mockBunny.deleteObject).not.toHaveBeenCalled()
     })
 
     it('deletes a published legacy row', async () => {
@@ -405,6 +413,15 @@ describe('Admin Podcasts API', () => {
       const res = await request(app).delete('/api/admin/podcasts/podcast-1').set(authHeader())
       expect(res.status).toBe(409)
       expect(mockPrisma.podcast.delete).not.toHaveBeenCalled()
+    })
+
+    it('refuses with 409 and keeps the audio when the episode was published before the lease was taken', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ stage: 'ready', audioPath: 'episodes/a.mp3' }))
+      mockPrisma.podcast.findUniqueOrThrow.mockResolvedValue(samplePodcast({ stage: 'ready', audioPath: 'episodes/a.mp3', status: 'published', publishedAt: new Date() }))
+      const res = await request(app).delete('/api/admin/podcasts/podcast-1').set(authHeader())
+      expect(res.status).toBe(409)
+      expect(mockPrisma.podcast.delete).not.toHaveBeenCalled()
+      expect(mockBunny.deleteObject).not.toHaveBeenCalled()
     })
   })
 

@@ -7,10 +7,10 @@
 import prisma from '../lib/prisma.js'
 import { type Prisma, type Podcast, ContentStatus, PodcastStage } from '@prisma/client'
 import { paginate } from '../lib/paginate.js'
-import { assertChangeable, episodeTtsChars } from './podcastGuards.js'
+import { PodcastRefusedError, episodeTtsChars, wasPublished } from './podcastGuards.js'
 import { deleteEpisodeObjects, episodeChunks } from './podcastAudioStages.js'
 import { chunkChars } from './podcastChunks.js'
-import { pausesForReview } from './podcastPipeline.js'
+import { pausesForReview, withEpisodeLease } from './podcastPipeline.js'
 import { publishBlockedReason } from './podcastPublish.js'
 
 interface PodcastFilters {
@@ -150,12 +150,18 @@ export async function getActiveEpisodes(now: Date = new Date()): Promise<ActiveE
  * Delete an episode unless it was published or is in progress. Its voiced chunks go with it; its
  * spend ledger rows stay (the monthly cap still counts them). Deleting an unpublished weekly
  * episode frees its week key, so the week's next run makes a new one. False when there is no such episode.
+ *
+ * The check and the delete run under the episode's lease, like publishing and every run, so a
+ * publish or a run that starts meanwhile cannot have its episode (and its listed audio) deleted
+ * underneath it: whichever claims the lease first wins, and the other is refused.
  */
 export async function deletePodcast(id: string): Promise<boolean> {
-  const episode = await prisma.podcast.findUnique({ where: { id } })
-  if (!episode) return false
-  assertChangeable(episode, 'deleted')
-  await prisma.podcast.delete({ where: { id } })
-  await deleteEpisodeObjects(episode)
+  if (!(await prisma.podcast.findUnique({ where: { id }, select: { id: true } }))) return false
+  const deleted = await withEpisodeLease(id, async ({ episode }) => {
+    if (wasPublished(episode)) throw new PodcastRefusedError('a published episode cannot be deleted')
+    await prisma.podcast.delete({ where: { id } })
+    return episode
+  }, 'deleted')
+  await deleteEpisodeObjects(deleted)
   return true
 }
