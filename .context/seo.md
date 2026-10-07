@@ -96,7 +96,7 @@ When adding a page, add sitemap metadata in **two places**:
 
 ## Head Tags: One of Each per Page
 
-`client/index.html` carries pre-JS fallbacks for description, `og:*`, `article:author` and `twitter:*`, each marked `data-rh="true"`. That marker makes react-helmet-async treat them as its own: on its first commit it removes them and writes the merged Helmet state. `DefaultSeo` (`client/src/lib/seo.tsx`), rendered once in `App.tsx` above `<Routes>`, supplies the same defaults as Helmet tags; a page's own tag with the same `name`/`property` wins (innermost Helmet instance). Result: prerendered and client-navigated pages get exactly one of each — the page's own, or the default.
+`client/index.html` carries pre-JS fallbacks for description, `og:*`, `article:author` and `twitter:*`, each marked `data-rh="true"`. That marker makes react-helmet-async treat them as its own: on its first commit it removes them and writes the merged Helmet state. `DefaultSeo` (`client/src/lib/seo.tsx`), rendered once by the root route of `App.tsx`'s `appRoutes`, above every page, supplies the same defaults as Helmet tags; a page's own tag with the same `name`/`property` wins (innermost Helmet instance). Result: prerendered and client-navigated pages get exactly one of each — the page's own, or the default.
 
 - Adding a head tag to `index.html` that a page might also set: mark it `data-rh="true"` and add it to `DefaultSeo`, or prerendered pages get it twice. `client/src/lib/seo.test.tsx` loads the real `index.html` and fails on any duplicate.
 - Unmarked template tags (`charset`, `viewport`, `theme-color`, `author`) are never touched by Helmet; don't set those from pages.

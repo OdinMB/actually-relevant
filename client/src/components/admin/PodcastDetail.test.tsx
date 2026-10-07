@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { act, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Link, useLocation } from 'react-router-dom'
 import { makePodcast, renderInAdmin } from '../../test/podcasts'
@@ -10,6 +10,7 @@ const mockApi = vi.hoisted(() => ({
   active: vi.fn(),
   update: vi.fn(),
   storyPool: vi.fn(),
+  delete: vi.fn(),
 }))
 vi.mock('../../lib/admin-api', async importOriginal => ({
   ...(await importOriginal<typeof import('../../lib/admin-api')>()),
@@ -130,12 +131,14 @@ describe('PodcastDetail unsaved changes', () => {
     expect((screen.getByLabelText('Episode summary') as HTMLTextAreaElement).value).toBe('Changed.')
   })
 
-  it('switches once the discard is confirmed', async () => {
-    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+  it('switches once the discard is confirmed, asking only once', async () => {
+    renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { route: '/admin/podcasts/pod-1' })
     fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
     fireEvent.click(tab('Stories'))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Discard changes' }))
     await waitFor(() => expect(tab('Stories').getAttribute('aria-selected')).toBe('true'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts/pod-1?tab=stories')
   })
 
   it('switches without asking when nothing is unsaved', () => {
@@ -153,6 +156,40 @@ describe('PodcastDetail unsaved changes', () => {
     expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts/pod-1')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Discard changes' }))
     await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts'))
+  })
+
+  it('holds the browser Back button while edits are unsaved, staying on cancel and leaving once confirmed', async () => {
+    const { router } = renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { history: ['/admin/podcasts', '/admin/podcasts/pod-1'] })
+    fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
+
+    await act(() => router.navigate(-1))
+    const dialog = await screen.findByRole('dialog')
+    expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts/pod-1')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts/pod-1')
+    expect((screen.getByLabelText('Episode summary') as HTMLTextAreaElement).value).toBe('Changed.')
+
+    await act(() => router.navigate(-1))
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Discard changes' }))
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts'))
+  })
+
+  it('lets Back through at once when nothing is unsaved', async () => {
+    const { router } = renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { history: ['/admin/podcasts', '/admin/podcasts/pod-1'] })
+    await act(() => router.navigate(-1))
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('leaves without asking after the episode is deleted, though its edits were unsaved', async () => {
+    mockApi.delete.mockResolvedValue(undefined)
+    renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { route: '/admin/podcasts/pod-1' })
+    fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
+    fireEvent.click(within(screen.getByRole('region', { name: 'Episode actions' })).getByRole('button', { name: 'Delete' }))
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 })
 

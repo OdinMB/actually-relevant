@@ -1,46 +1,42 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useBlocker } from 'react-router-dom'
+import type { BlockerFunction } from 'react-router-dom'
 
-/** The in-app path an ordinary left click on this anchor would open, or null when the browser should handle it. */
-export function internalLinkTarget(event: MouseEvent, origin: string): string | null {
-  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null
-  const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
-  if (!(anchor instanceof HTMLAnchorElement)) return null
-  if ((anchor.target && anchor.target !== '_self') || anchor.hasAttribute('download')) return null
-  const url = new URL(anchor.href, origin)
-  if (url.origin !== origin) return null
-  return url.pathname + url.search + url.hash
+/**
+ * Location state for a navigation that already discards the unsaved edits (e.g. after deleting the
+ * episode): `navigate(path, { state: LEAVE_UNSAVED })` passes the guard without asking.
+ */
+export const LEAVE_UNSAVED = { leaveUnsaved: true } as const
+
+function leavesUnsaved(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && (state as { leaveUnsaved?: unknown }).leaveUnsaved === true
 }
 
 /**
  * Asks before unsaved edits are thrown away. `guard(action)` runs the action at once when nothing
- * is unsaved, otherwise holds it until `confirm()`. While edits are unsaved, closing or reloading
- * the tab asks through the browser, and a click on an in-app link (sidebar, back link, toast) is
- * held the same way. The app uses `BrowserRouter`, where react-router's `useBlocker` is not
- * available, so the browser's own back button is not intercepted.
+ * is unsaved, otherwise holds it until `confirm()`. While edits are unsaved, any in-app navigation
+ * to another path is held the same way through react-router's `useBlocker`: link clicks,
+ * `navigate()` calls and the browser's Back/Forward. A change of the search alone on the same path
+ * passes (it is the page's own URL state, such as `?tab=`; tab switches go through `guard`), as does
+ * a navigation carrying `LEAVE_UNSAVED`. Closing or reloading the tab asks through the browser's own
+ * `beforeunload` prompt. `asking`, `confirm` and `cancel` drive one dialog for both kinds of hold.
  */
 export function useUnsavedChangesGuard(dirty: boolean) {
   const [pending, setPending] = useState<(() => void) | null>(null)
-  const navigate = useNavigate()
-  const location = useLocation()
-  const here = location.pathname + location.search + location.hash
+
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) =>
+      dirty && currentLocation.pathname !== nextLocation.pathname && !leavesUnsaved(nextLocation.state),
+    [dirty],
+  )
+  const blocker = useBlocker(shouldBlock)
 
   useEffect(() => {
     if (!dirty) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault() }
-    const onClick = (e: MouseEvent) => {
-      const to = internalLinkTarget(e, window.location.origin)
-      if (!to || to === here) return
-      e.preventDefault()
-      setPending(() => () => navigate(to))
-    }
     window.addEventListener('beforeunload', onBeforeUnload)
-    document.addEventListener('click', onClick, true)
-    return () => {
-      window.removeEventListener('beforeunload', onBeforeUnload)
-      document.removeEventListener('click', onClick, true)
-    }
-  }, [dirty, here, navigate])
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
 
   const guard = useCallback((action: () => void) => {
     if (dirty) setPending(() => action)
@@ -48,12 +44,19 @@ export function useUnsavedChangesGuard(dirty: boolean) {
   }, [dirty])
 
   const confirm = useCallback(() => {
+    if (blocker.state === 'blocked') {
+      blocker.proceed()
+      return
+    }
     const action = pending
     setPending(null)
     action?.()
-  }, [pending])
+  }, [blocker, pending])
 
-  const cancel = useCallback(() => setPending(null), [])
+  const cancel = useCallback(() => {
+    if (blocker.state === 'blocked') blocker.reset()
+    setPending(null)
+  }, [blocker])
 
-  return { guard, asking: pending !== null, confirm, cancel }
+  return { guard, asking: pending !== null || blocker.state === 'blocked', confirm, cancel }
 }

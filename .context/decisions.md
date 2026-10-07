@@ -22,3 +22,5 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0015 · A person performs the selection stage of a standalone episode; the AI suggestion is advisory and writes nothing](decisions/0015-person-performs-standalone-selection-stage.md)
 - [ADR-0016 · Mark an episode's kind in an explicit kind column, weekly or standalone, with standalone rows never carrying a week key](decisions/0016-podcast-kind-column.md)
 - [ADR-0017 · Fence every job run with a heartbeat-renewed lease on its job_runs row, claimed atomically on the database clock](decisions/0017-job-run-lease.md)
+- [ADR-0018 · Route the client through react-router 7's data router, built from a route tree App.tsx exports](decisions/0018-react-router-7-data-router.md)
+- [ADR-0019 · Name api.actuallyrelevant.news as the API's public host, keeping the onrender.com host answering](decisions/0019-api-host-api-actuallyrelevant-news.md)

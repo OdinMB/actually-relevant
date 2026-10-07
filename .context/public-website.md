@@ -17,7 +17,7 @@ Saved appears only once the visitor has saved a story, and goes when the last is
 | `/newsletter` | `NewsletterPage` | Inline subscribe form (reuses `SubscribeForm`) |
 | `/podcast` | `PodcastPage` | Weekly AI podcast: AI label, feed link, listen links and episodes with `<audio preload="none">` on the CDN (`.context/podcast.md`) |
 
-All routes are registered in both `App.tsx` and `routes.ts` (for sitemap generation). Static routes (issues, methodology, about, contact) are prerendered at build time. Dynamic story routes are added to the sitemap via `generate-sitemap.ts`.
+All routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `routes.ts` (for sitemap generation). Static routes (issues, methodology, about, contact) are prerendered at build time. Dynamic story routes are added to the sitemap via `generate-sitemap.ts`.
 
 ## Public API
 

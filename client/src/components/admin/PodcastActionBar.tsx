@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ReasonButton } from '../ui/ReasonButton'
 import { useToast } from '../ui/Toast'
 import { useDeletePodcast } from '../../hooks/usePodcasts'
+import { LEAVE_UNSAVED } from '../../hooks/useUnsavedChangesGuard'
 import { PodcastPublishControls } from './PodcastPublishControls'
 import { PodcastRunButton } from './PodcastRunButton'
 import { nextAction } from './podcastRun'
@@ -41,7 +42,8 @@ export function PodcastActionBar({ podcast, pendingEdits }: PodcastActionBarProp
   const handleDelete = () => del.mutate(podcast.id, {
     onSuccess: () => {
       toast('success', 'Podcast deleted')
-      navigate('/admin/podcasts')
+      // The episode is gone, and its unsaved edits with it: leave without the page's guard asking.
+      navigate('/admin/podcasts', { state: LEAVE_UNSAVED })
     },
     onError: err => toast('error', err instanceof Error ? err.message : 'Failed to delete'),
     onSettled: () => setConfirmDelete(false),

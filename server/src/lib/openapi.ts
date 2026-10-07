@@ -196,7 +196,7 @@ export function getOpenAPIDocument(): any {
       },
     },
     servers: [
-      { url: process.env.API_URL || 'https://actually-relevant-api.onrender.com', description: 'Production' },
+      { url: process.env.API_URL || 'https://api.actuallyrelevant.news', description: 'Production' },
     ],
     paths: {
       '/api/homepage': {

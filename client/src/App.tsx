@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { createRoutesFromElements, Outlet, Route } from 'react-router-dom'
+import type { RouteObject } from 'react-router-dom'
 import PublicLayout from './layouts/PublicLayout'
 import HomePage from './pages/HomePage'
 import NotFoundPage from './pages/NotFoundPage'
@@ -85,12 +86,23 @@ function LazyPage({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function App() {
+/** The root of every route: site-wide head defaults (pages override them with their own Helmet tags), then the matched route. */
+function RootLayout() {
   return (
     <>
-    {/* Site-wide head defaults; pages override them with their own Helmet tags */}
-    <DefaultSeo />
-    <Routes>
+      <DefaultSeo />
+      <Outlet />
+    </>
+  )
+}
+
+/**
+ * Every route of the app, for react-router's data router: `main.tsx` builds the browser router
+ * from it, tests a memory router. No route loaders and no route-level `lazy`, so the router is
+ * ready synchronously and the first render (and prerendering) happens as soon as it mounts.
+ */
+export const appRoutes: RouteObject[] = createRoutesFromElements(
+    <Route element={<RootLayout />}>
       {/* Public routes — homepage static, others lazy-loaded */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
@@ -171,7 +183,5 @@ export default function App() {
       <Route element={<PublicLayout />}>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
-    </Routes>
-    </>
-  )
-}
+    </Route>,
+)
