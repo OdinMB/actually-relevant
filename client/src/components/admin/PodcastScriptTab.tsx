@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import type { Podcast } from '@shared/types'
 import { PodcastScriptEditor } from './PodcastScriptEditor'
+import { PodcastStepRunButton } from './PodcastStepRunButton'
 import { atRestAndChangeable } from './podcastRun'
 
 /** A read-only text with a heading; the text box scrolls, so it takes keyboard focus (WCAG 2.1.1). */
@@ -23,18 +24,21 @@ export function TextBlock({ title, text, empty }: { title: string; text: string;
 
 interface PodcastScriptTabProps {
   podcast: Podcast
+  pendingEdits: boolean
   onDirtyChange: (dirty: boolean) => void
 }
 
 /**
- * The Script stage: the editor at `scripted` while it can still change (Save script, Regenerate
- * script, Approve and voice), otherwise the script read-only; the show notes below either way.
+ * The Script stage: Write script until there is one (disabled with its reason until the stories are
+ * chosen), the editor at `scripted` while it can still change (Save script, Regenerate script,
+ * Approve and voice), otherwise the script read-only; the show notes below either way.
  */
-export function PodcastScriptTab({ podcast, onDirtyChange }: PodcastScriptTabProps) {
+export function PodcastScriptTab({ podcast, pendingEdits, onDirtyChange }: PodcastScriptTabProps) {
   const editable = podcast.stage === 'scripted' && atRestAndChangeable(podcast) && !!podcast.dialogue
   const writing = podcast.inProgress && podcast.stage === 'selected'
   return (
     <div className="space-y-4">
+      <PodcastStepRunButton podcast={podcast} step="write-script" pendingEdits={pendingEdits}>Write script</PodcastStepRunButton>
       {editable
         ? <PodcastScriptEditor podcast={podcast} onDirtyChange={onDirtyChange} />
         : <TextBlock title="Script" text={podcast.script} empty={writing ? 'The script is being written.' : 'No script yet.'} />}

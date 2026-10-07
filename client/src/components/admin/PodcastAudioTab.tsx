@@ -3,6 +3,7 @@ import type { Podcast } from '@shared/types'
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
 import { usePodcastUsage, useRewindPodcast } from '../../hooks/usePodcasts'
+import { PodcastStepRunButton } from './PodcastStepRunButton'
 import { PodcastVoiceConfirm } from './PodcastVoiceConfirm'
 import { atRestAndChangeable } from './podcastRun'
 
@@ -47,16 +48,18 @@ function AudioStatus({ podcast }: { podcast: Podcast }) {
 
 interface PodcastAudioTabProps {
   podcast: Podcast
+  pendingEdits: boolean
   /** After Back to script: the page shows the Script tab. */
   onBackToScript: () => void
 }
 
 /**
- * The Audio stage: voicing progress or the episode's duration, the TTS characters it and the month
- * have used, and while a ready episode was never published Regenerate audio and Back to script,
- * both behind a confirmation (Regenerate with its cost). Playing and publishing live in the bar.
+ * The Audio stage: Voice script until the episode is voiced (with its cost; disabled with its reason
+ * until there is a script), voicing progress or the episode's duration, the TTS characters it and
+ * the month have used, and while a ready episode was never published Regenerate audio and Back to
+ * script, both behind a confirmation (Regenerate with its cost). Playing and publishing live in the bar.
  */
-export function PodcastAudioTab({ podcast, onBackToScript }: PodcastAudioTabProps) {
+export function PodcastAudioTab({ podcast, pendingEdits, onBackToScript }: PodcastAudioTabProps) {
   const usage = usePodcastUsage()
   const rewind = useRewindPodcast()
   const { toast } = useToast()
@@ -77,6 +80,9 @@ export function PodcastAudioTab({ podcast, onBackToScript }: PodcastAudioTabProp
     <section aria-labelledby="podcast-audio-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-3">
       <h2 id="podcast-audio-heading" className="text-sm font-semibold text-neutral-900">Audio</h2>
       <AudioStatus podcast={podcast} />
+      <PodcastStepRunButton podcast={podcast} step="voice-script" pendingEdits={pendingEdits} confirmTitle="Approve the script and voice it?">
+        Voice script
+      </PodcastStepRunButton>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm text-neutral-700">
         <dt className="text-neutral-500">TTS characters, this episode</dt>
         <dd>{podcast.ttsChars.toLocaleString('en-US')}</dd>

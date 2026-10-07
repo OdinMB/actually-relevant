@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -74,6 +75,25 @@ describe('PodcastDetail tabs', () => {
     fireEvent.click(tab('Audio'))
     expect(tab('Audio').getAttribute('aria-selected')).toBe('true')
     expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts/pod-1?tab=audio')
+  })
+
+  it('offers Write script on the Script tab at the stories review', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'selected', dialogue: null, script: '' })} />, { route: '/?tab=script' })
+    expect(tab('Script').getAttribute('aria-selected')).toBe('true')
+    expect((screen.getByRole('button', { name: 'Write script' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('drops ?tab= when a run starts, so the page shows the running stage', async () => {
+    function Episode() {
+      const [podcast, setPodcast] = useState(makePodcast())
+      const start = () => setPodcast(makePodcast({ inProgress: true, awaitingReview: false, activity: 'Voicing' }))
+      return <><button onClick={start}>Simulate run start</button><PodcastDetail podcast={podcast} /><Where /></>
+    }
+    renderInAdmin(<Episode />, { route: '/admin/podcasts/pod-1?tab=stories' })
+    expect(tab('Stories').getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Simulate run start' }))
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts/pod-1'))
+    expect(tab('Audio').getAttribute('aria-selected')).toBe('true')
   })
 
   it('while a run works: a spinner on the running tab, its activity announced, and no approval', () => {

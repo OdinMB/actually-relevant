@@ -324,6 +324,15 @@ model PodcastTtsUsage {
   @@map("podcast_tts_usage")
 }
 
+/// One row per ISO week whose Saturday publish slot found no weekly episode to publish: the claim that makes the missed-week alert go out once
+model PodcastMissedWeekAlert {
+  weekKey String   @id @map("week_key")
+  reason  String
+  sentAt  DateTime @default(now()) @map("sent_at")
+
+  @@map("podcast_missed_week_alerts")
+}
+
 model JobRun {
   id              String    @id @default(uuid())
   jobName         String    @unique @map("job_name")

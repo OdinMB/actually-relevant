@@ -119,8 +119,8 @@ export function PodcastDetail({ podcast }: { podcast: Podcast }) {
               onSelect={next => { if (next !== tab) leave.guard(() => setTab(next)) }}
               panels={{
                 stories: <PodcastStoriesTab podcast={podcast} pendingEdits={pendingEdits} onDirtyChange={setPendingEdits} />,
-                script: <PodcastScriptTab podcast={podcast} onDirtyChange={setPendingEdits} />,
-                audio: <PodcastAudioTab podcast={podcast} onBackToScript={() => setTab('script')} />,
+                script: <PodcastScriptTab podcast={podcast} pendingEdits={pendingEdits} onDirtyChange={setPendingEdits} />,
+                audio: <PodcastAudioTab podcast={podcast} pendingEdits={pendingEdits} onBackToScript={() => setTab('script')} />,
               }}
             />
           </>

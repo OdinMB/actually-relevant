@@ -191,7 +191,7 @@ export function PodcastStoryFinder({ podcast, onDirtyChange }: PodcastStoryFinde
       </div>
 
       <StoryDraftErrors errors={draft.errors} />
-      <StoryDraftFooter draft={draft} canSave={countOk} />
+      <StoryDraftFooter draft={draft} canSave={countOk} blockedHint={`Choose ${minStories}–${maxStories} stories to save`} />
     </section>
   )
 }

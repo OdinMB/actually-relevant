@@ -1,4 +1,4 @@
-import type { Podcast, PodcastMode } from '@shared/types'
+import type { Podcast, PodcastMode, PodcastStage } from '@shared/types'
 import { wasPublished } from './podcastPublished'
 
 export type NextAction = 'choose-stories' | 'choose-mode' | 'approve-stories' | 'approve-script' | 'resume'
@@ -25,6 +25,30 @@ export function runVoices(podcast: Pick<Podcast, 'stage' | 'mode'>, mode?: Podca
   if (podcast.stage === 'scripted') return true
   const before = podcast.stage === 'created' || podcast.stage === 'selected'
   return before && (mode ?? podcast.mode) === 'automated'
+}
+
+/** A tab's own run button: Write script on the Script tab, Voice script on the Audio tab. */
+export type StepRun = 'write-script' | 'voice-script'
+
+const STEP_RUN: Record<StepRun, { before: PodcastStage[]; at: PodcastStage; action: NextAction; notYet: string }> = {
+  'write-script': { before: ['created'], at: 'selected', action: 'approve-stories', notYet: 'Choose and save the stories first.' },
+  'voice-script': { before: ['created', 'selected'], at: 'scripted', action: 'approve-script', notYet: 'There is no script to voice yet.' },
+}
+
+/**
+ * Whether a tab's run button shows and why it is disabled: null (hidden) once its work exists, or on
+ * a published or legacy episode; otherwise `reason` is null when it can run now (the same run as the
+ * review approval) and says why not when it cannot.
+ */
+export function stepRunState(podcast: Podcast, step: StepRun, pendingEdits: boolean): { reason: string | null } | null {
+  const def = STEP_RUN[step]
+  const reachable = def.before.includes(podcast.stage) || podcast.stage === def.at
+  if (!reachable || wasPublished(podcast)) return null
+  if (podcast.inProgress) return { reason: 'A run is working on the episode.' }
+  if (podcast.stage !== def.at) return { reason: def.notYet }
+  if (pendingEdits) return { reason: 'Save or discard your changes first.' }
+  if (nextAction(podcast) !== def.action) return { reason: 'This episode is not waiting for review; Resume in the bar below continues it.' }
+  return { reason: null }
 }
 
 /** Changes that discard work (start over, change stories, regenerate, delete) are refused while a run works and once ever published. */

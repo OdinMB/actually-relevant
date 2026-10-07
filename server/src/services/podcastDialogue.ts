@@ -214,12 +214,25 @@ const CLOSING_RE = new RegExp([
 /**
  * The outro never thanks listeners or signs off: code appends the kind's fixed sign-off, which
  * already does, so a model-written one makes the episode say goodbye twice (owner, 2026-10-07).
+ * Only the closing is checked: the final turn, and the turn before it when the same speaker says
+ * both. The outro's first turn bridges back from the last story, which may itself be about thanks.
  */
 function closingErrors(dialogue: PodcastDialogue): string[] {
-  return dialogue.segments.flatMap((s, i) => (s.kind !== 'outro' ? [] : s.turns.flatMap((t, j) => {
-    const phrase = stripTags(t.text).match(CLOSING_RE)?.[0]
-    return phrase ? [`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the outro must not thank listeners or sign off, because code adds the sign-off after it`] : []
-  })))
+  return dialogue.segments.flatMap((s, i) => {
+    if (s.kind !== 'outro') return []
+    return closingTurnIndexes(s.turns).flatMap(j => {
+      const phrase = stripTags(s.turns[j].text).match(CLOSING_RE)?.[0]
+      return phrase ? [`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the outro must not thank listeners or sign off, because code adds the sign-off after it`] : []
+    })
+  })
+}
+
+/** The outro's closing turns: the last, and the one before it if the same speaker says it and it is not the bridge. */
+function closingTurnIndexes(turns: PodcastDialogue['segments'][number]['turns']): number[] {
+  const last = turns.length - 1
+  if (last < 0) return []
+  const before = last - 1
+  return before > 0 && turns[before].speaker === turns[last].speaker ? [before, last] : [last]
 }
 
 function speakerRunErrors(spoken: SpokenSegment[]): string[] {

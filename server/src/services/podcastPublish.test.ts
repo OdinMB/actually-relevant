@@ -90,9 +90,19 @@ describe('publishBlockedReason', () => {
   })
 
   it('gives the same refusal the publish action would', () => {
-    expect(publishBlockedReason(ready({ stage: 'voiced' }), false)).toMatch(/at voiced/)
+    expect(publishBlockedReason(ready({ stage: 'voiced' }), false)).toMatch(/still at the Audio step/)
     expect(publishBlockedReason(ready({ dryRun: true }), false)).toMatch(/dry-run/)
     expect(publishBlockedReason(ready({ audioUrl: null }), false)).toMatch(/no uploaded audio/)
+  })
+
+  it('names the step a person sees on the episode page, never the internal stage', () => {
+    expect(publishBlockedReason(ready({ stage: 'created' }), false)).toMatch(/still at the Stories step/)
+    expect(publishBlockedReason(ready({ stage: 'selected' }), false)).toMatch(/still at the Script step/)
+    expect(publishBlockedReason(ready({ stage: 'scripted' }), false)).toMatch(/still at the Audio step/)
+    expect(publishBlockedReason(ready({ stage: 'legacy' }), false)).toMatch(/legacy/)
+    for (const stage of ['created', 'selected', 'scripted', 'voiced'] as const) {
+      expect(publishBlockedReason(ready({ stage }), false)).not.toMatch(new RegExp(`\\b${stage}\\b`))
+    }
   })
 
   it('offers Publish for a ready standalone episode now that its wording is confirmed', () => {

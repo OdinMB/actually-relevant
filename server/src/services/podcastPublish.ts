@@ -23,9 +23,26 @@ const WEEK_MS = 7 * 24 * HOUR_MS
 
 type PublishFields = 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes' | 'humanEdited' | 'kind'
 
+/**
+ * The episode page's step (its tab) where an unfinished episode's work stands, for reasons a person
+ * reads: the page shows Stories, Script and Audio, never the internal stage names.
+ */
+const STEP_OF_STAGE: Record<Exclude<PodcastStage, 'legacy' | 'ready'>, string> = {
+  created: 'Stories',
+  selected: 'Script',
+  scripted: 'Audio',
+  voiced: 'Audio',
+}
+
+/** Why an episode that has not reached `ready` cannot be published yet, in the page's step names. */
+export function unfinishedReason(stage: Exclude<PodcastStage, 'ready'>): string {
+  if (stage === PodcastStage.legacy) return 'a legacy episode cannot be published'
+  return `the episode is not finished; it is still at the ${STEP_OF_STAGE[stage]} step`
+}
+
 /** Why an episode cannot be published, or null when it can. */
 export function publishRefusal(episode: Pick<Podcast, PublishFields>): string | null {
-  if (episode.stage !== PodcastStage.ready) return `only a ready episode can be published; this one is at ${episode.stage}`
+  if (episode.stage !== PodcastStage.ready) return unfinishedReason(episode.stage)
   if (episode.dryRun) return 'a dry-run episode (silent stub voice) cannot be published'
   if (!episode.audioUrl || episode.audioBytes == null) return 'the episode has no uploaded audio'
   return standaloneCopyRefusal(episode.kind) ?? editedAiLineRefusal(episode.humanEdited)

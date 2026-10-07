@@ -26,7 +26,8 @@ export interface StandaloneStoryFilters {
 /** A published story as the finder lists it, ready to become a snapshot. */
 export type StoryCandidate = Omit<EpisodeStory, 'ref'> & { relevance: number | null; dateCrawled: Date }
 
-const ORDER = [{ relevance: 'desc' as const }, { dateCrawled: 'desc' as const }]
+/** Most relevant first; Postgres sorts NULLs first on DESC, so unrated stories are put last explicitly. */
+const ORDER = [{ relevance: { sort: 'desc' as const, nulls: 'last' as const } }, { dateCrawled: 'desc' as const }]
 const candidateSelect = { ...storySelect, dateCrawled: true } as const
 
 const toCandidate = (s: PoolStory & { dateCrawled: Date }): StoryCandidate => ({ ...storyFacts(s), relevance: s.relevance, dateCrawled: s.dateCrawled })

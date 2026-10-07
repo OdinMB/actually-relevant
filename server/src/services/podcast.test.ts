@@ -73,7 +73,7 @@ describe('getPodcastById', () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ ...audio, leaseUntil: LIVE() }))
     expect((await getPodcastById('p'))?.publishBlockedReason).toMatch(/run is working/)
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ ...audio, stage: 'scripted' }))
-    expect((await getPodcastById('p'))?.publishBlockedReason).toMatch(/at scripted/)
+    expect((await getPodcastById('p'))?.publishBlockedReason).toMatch(/still at the Audio step/)
   })
 
   it('estimates the characters a voicing of the stored script sends, and none without a script', async () => {

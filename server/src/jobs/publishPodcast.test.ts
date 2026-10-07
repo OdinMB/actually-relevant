@@ -7,6 +7,8 @@ const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn() }))
 vi.mock('../services/podcastPublish.js', () => mockPublish)
 vi.mock('../services/podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('../services/podcastGuards.js')>()), ...mockGuards }))
 vi.mock('../lib/notify.js', () => mockNotify)
+const mockMissed = vi.hoisted(() => ({ alertMissedWeek: vi.fn() }))
+vi.mock('../services/podcastMissedWeek.js', () => mockMissed)
 
 const { runPublishPodcast, isPublishDay, PUBLISH_PODCAST_JOB } = await import('./publishPodcast.js')
 const { PodcastBlockedError, PodcastStoppedError, PodcastRefusedError } = await import('../services/podcastGuards.js')
@@ -69,11 +71,20 @@ describe('runPublishPodcast', () => {
     expect(mockPublish.publishEpisode).toHaveBeenCalledWith('pod-1', earlySaturday)
   })
 
-  it('does nothing without a candidate', async () => {
+  it('publishes nothing without a candidate and sends the missed-week alert', async () => {
     mockPublish.pickAutoPublishCandidate.mockResolvedValueOnce(null)
     await runPublishPodcast(SATURDAY)
     expect(mockPublish.publishEpisode).not.toHaveBeenCalled()
     expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockMissed.alertMissedWeek).toHaveBeenCalledWith(SATURDAY)
+  })
+
+  it('sends no missed-week alert while the job is disabled, nor on another day', async () => {
+    mockPublish.pickAutoPublishCandidate.mockResolvedValue(null)
+    mockGuards.assertJobEnabled.mockRejectedValueOnce(new PodcastStoppedError(PUBLISH_PODCAST_JOB))
+    await runPublishPodcast(SATURDAY)
+    await runPublishPodcast(new Date('2026-10-15T10:00:00Z')) // Thursday
+    expect(mockMissed.alertMissedWeek).not.toHaveBeenCalled()
   })
 
   it('re-checks its own job row right before publishing, after picking the candidate', async () => {

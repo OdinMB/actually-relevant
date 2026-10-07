@@ -102,7 +102,7 @@ export interface CrawlOutcome {
   rssItemCount: number
   crawlResult?: string
   notModified?: boolean
-  /** The RSS feed could not be fetched or parsed: a failed crawl, retried next run. */
+  /** The crawl failed as a whole (the RSS feed could not be fetched or parsed, or the crawl threw): retried next run. */
   fetchFailed?: boolean
 }
 

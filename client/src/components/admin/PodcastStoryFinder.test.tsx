@@ -58,9 +58,13 @@ describe('PodcastStoryFinder', () => {
   it('cannot save fewer stories than the minimum', async () => {
     renderInAdmin(<PodcastStoryFinder podcast={makeStandalonePodcast()} />)
     for (const n of [1, 2, 3]) fireEvent.click(await screen.findByRole('button', { name: `Add Story ${n}` }))
-    expect((screen.getByRole('button', { name: 'Save selection' }) as HTMLButtonElement).disabled).toBe(true)
+    const save = screen.getByRole('button', { name: 'Save selection' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    expect(save.getAttribute('aria-describedby')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Remove story 1' }))
     expect(chosenTitles()).toHaveLength(2)
+    for (const n of [1, 4, 5]) fireEvent.click(screen.getByRole('button', { name: `Add Story ${n}` }))
+    expect(save.getAttribute('aria-describedby')).toBeNull()
   })
 
   it('replaces the draft with the suggestion and marks it unsaved', async () => {

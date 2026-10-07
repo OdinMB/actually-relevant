@@ -561,6 +561,18 @@ describe('crawlAllDueFeeds', () => {
     expect(results[0].errors).toBe(1)
     expect(results[0].feedTitle).toBe('Bad Feed')
   })
+
+  it('records a crawl that throws as a failed crawl, without inventing a new item', async () => {
+    mockGetDueFeeds.mockResolvedValue([{ id: 'feed-bad', title: 'Bad Feed' }])
+    mockGetFeedById.mockResolvedValue(null)
+
+    const results = await crawlAllDueFeeds()
+
+    expect(results[0].errorMessage).toMatch(/^Crawl failed: /)
+    const outcome = mockUpdateCrawlStatus.mock.calls.find(c => c[0] === 'feed-bad')?.[1]
+    expect(outcome).toMatchObject({ hadSuccess: false, fetchFailed: true, newItemCount: 0 })
+    expect(outcome.errorMessage).toMatch(/^Crawl failed: /)
+  })
 })
 
 describe('crawlUrl', () => {

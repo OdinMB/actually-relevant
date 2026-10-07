@@ -13,7 +13,7 @@ export function TimeWithRelative({ dateStr }: TimeWithRelativeProps) {
   return (
     <span>
       {formatDateWithTime(dateStr, timeZone)}
-      <span className="block text-xs text-neutral-400">{formatRelativeTime(dateStr, timeZone)}</span>
+      <span className="block text-xs text-neutral-500">{formatRelativeTime(dateStr, timeZone)}</span>
     </span>
   )
 }

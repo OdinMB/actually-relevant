@@ -179,6 +179,20 @@ describe('validateDialogue', () => {
     expect(errorsOf(withTurn(goodDialogue(), 2, 1, `${filler(300, 'thanks')} Thanks for listening, the minister told reporters.`))).toEqual([])
   })
 
+  it('accepts gratitude in the outro bridge, which may echo the last story', () => {
+    const bridge = 'From a town that said thank you to everyone who rebuilt its school, to export rules for chips, that was the week in four stories.'
+    expect(errorsOf(withTurn(goodDialogue(), 5, 0, bridge))).toEqual([])
+  })
+
+  it('checks the second-to-last outro turn only when the same speaker closes with it', () => {
+    const d = goodDialogue()
+    const outro = d.segments[5]
+    const sameSpeaker: Segment = { ...outro, turns: [outro.turns[0], { speaker: 'HOST_B', text: 'Thanks for listening.' }, outro.turns[1]] }
+    expect(validateDialogue(withSegment(d, 5, sameSpeaker), stories, W).errors.join(' ')).toMatch(/turn 2.*sign-off/)
+    const otherSpeaker: Segment = { ...outro, turns: [outro.turns[0], { speaker: 'HOST_A', text: 'Thanks to that court, the data is public. Thanks for listening.' }, outro.turns[1]] }
+    expect(validateDialogue(withSegment(d, 5, otherSpeaker), stories, W).errors.join(' ')).not.toMatch(/sign-off/)
+  })
+
   it('rejects two consecutive story segments that open with the same first five words', () => {
     const d = goodDialogue()
     const templated = withTurn(

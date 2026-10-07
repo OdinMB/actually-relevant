@@ -65,6 +65,13 @@ describe('searchStandaloneStories', () => {
     expect(result).toMatchObject({ total: 41, page: 3, pageSize: 20, totalPages: 3, minStories: config.podcast.minStories, maxStories: config.podcast.maxStories })
     expect(result.data).toEqual([{ id: 'story-3', title: 'Headline 3', publisher: 'Publisher 3', sourceUrl: 'https://news.example/3', slug: 'headline-3', issue: 'Issue 3', relevance: 7, dateCrawled: CRAWLED }])
   })
+
+  it('lists the most relevant first with unrated stories last, then the newest', async () => {
+    mockPrisma.story.findMany.mockResolvedValueOnce([])
+    mockPrisma.story.count.mockResolvedValueOnce(0)
+    await searchStandaloneStories({})
+    expect(mockPrisma.story.findMany.mock.calls[0][0].orderBy).toEqual([{ relevance: { sort: 'desc', nulls: 'last' } }, { dateCrawled: 'desc' }])
+  })
 })
 
 describe('suggestStandaloneStories', () => {

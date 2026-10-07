@@ -26,7 +26,7 @@ All of this is in `updateCrawlStatus()` in `server/src/services/feed.ts`. Every 
 | Reachable RSS returned zero items (not 304) | now (the crawler reports this as `hadSuccess: true`, so errors are cleared) | 0 | +1 / unchanged |
 | RSS could not be fetched or parsed (`fetchFailed`) | unchanged, so retried next run; forced to now on the 3rd consecutive failure, as for a total failure. Sets "RSS fetch failed: …" as the error | +1 (or reset at 3) | +1 / unchanged |
 | 304 Not Modified | now | 0 | unchanged; errors untouched. A 304 is not an empty crawl. |
-| `crawlFeed` throws for another reason (in `crawlAllDueFeeds`) | treated as a total failure with "RSS fetch failed: …" | +1 | +1 / unchanged |
+| `crawlFeed` throws for another reason (in `crawlAllDueFeeds`: a missing feed, a database error) | passes `fetchFailed: true`, so handled exactly like the row above, but sets "Crawl failed: …" as the error, since the RSS fetch may not be what failed | +1 (or reset at 3) | +1 / unchanged |
 
 An unreachable or broken feed is a recorded error, never an empty crawl: `crawlFeed()` catches `parseFeed()`'s error and passes `fetchFailed: true` (`content-extraction.md`, "Conditional RSS Requests"). It still counts toward `consecutiveEmptyCrawls`, so a feed that keeps failing also reaches the stale warning.
 

@@ -197,9 +197,11 @@ export async function crawlAllDueFeeds(): Promise<CrawlResult[]> {
         return result
       } catch (err) {
         completed++
-        const errorMessage = `RSS fetch failed: ${err instanceof Error ? err.message : String(err)}`
+        // Not necessarily the RSS fetch (crawlFeed records that itself): any other throw, such as a
+        // missing feed or a database error, is a failed crawl and retried like one.
+        const errorMessage = `Crawl failed: ${err instanceof Error ? err.message : String(err)}`
         log.error({ feed: feed.title, err }, 'failed to crawl feed')
-        await updateCrawlStatus(feed.id, { hadSuccess: false, errorMessage, newItemCount: 1, rssItemCount: 0 }).catch(() => {})
+        await updateCrawlStatus(feed.id, { hadSuccess: false, errorMessage, newItemCount: 0, rssItemCount: 0, fetchFailed: true }).catch(() => {})
         return {
           feedId: feed.id,
           feedTitle: feed.title,
