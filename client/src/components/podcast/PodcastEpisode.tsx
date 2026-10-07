@@ -90,10 +90,9 @@ export default function PodcastEpisode({ episode }: { episode: PublicPodcastEpis
   return (
     <article aria-labelledby={headingId} className="border-t border-neutral-200 pt-6">
       <h3 id={headingId} className="text-xl font-semibold text-neutral-900">
-        <span className="inline-flex items-center gap-2">
-          <AiBadge />
-          <span>{episode.title}</span>
-        </span>
+        {/* Inline, not flex: a wrapped title flows back under the badge instead of indenting */}
+        <AiBadge className="mr-1 align-middle" />{' '}
+        {episode.title}
       </h3>
       <p className="mt-1 text-sm text-neutral-600">
         <time dateTime={episode.publishedAt}>{formatEpisodeDate(episode.publishedAt)}</time>
