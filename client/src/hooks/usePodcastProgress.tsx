@@ -12,10 +12,13 @@ const MAX_REASON_CHARS = 160
 const toastId = (id: string) => `podcast-${id}`
 export const podcastPath = (id: string) => `/admin/podcasts/${id}`
 
-/** The progress toast's text: the episode, the step, and the chunks while voicing. */
-export function progressMessage(run: ActivePodcastRun): string {
-  const chunks = run.chunksTotal ? ` ${run.chunksDone ?? 0}/${run.chunksTotal}` : ''
-  return `${run.title}: ${run.activity ?? 'Working'}${chunks}`
+/**
+ * The progress toast's text: the episode and the step as the message, announced when the step
+ * changes; the chunks while voicing as the detail, shown but not re-announced on every chunk.
+ */
+export function progressText(run: ActivePodcastRun): { message: string; detail?: string } {
+  const message = `${run.title}: ${run.activity ?? 'Working'}`
+  return run.chunksTotal ? { message, detail: ` ${run.chunksDone ?? 0}/${run.chunksTotal}` } : { message }
 }
 
 const STOP_MESSAGES: Partial<Record<Podcast['stage'], string>> = {
@@ -81,7 +84,8 @@ export function PodcastProgressProvider({ children }: { children: ReactNode }) {
       const running = new Map(runs.map(run => [run.id, run]))
       for (const run of runs) {
         if (!followed.current.has(run.id)) followed.current.set(run.id, sentAt)
-        addProgressToast(toastId(run.id), progressMessage(run), { href: podcastPath(run.id) })
+        const { message, detail } = progressText(run)
+        addProgressToast(toastId(run.id), message, { href: podcastPath(run.id), detail })
       }
       for (const [id, since] of [...followed.current]) {
         if (running.has(id) || since > sentAt) continue

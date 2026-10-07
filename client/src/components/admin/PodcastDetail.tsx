@@ -12,6 +12,7 @@ import { PodcastHumanEditedChip } from './PodcastHumanEditedChip'
 import { PodcastScriptTab, TextBlock } from './PodcastScriptTab'
 import { PodcastStageBadge } from './PodcastStageBadge'
 import { PodcastStageTabs } from './PodcastStageTabs'
+import { PodcastStatusBadge } from './PodcastStatusBadge'
 import { PodcastStoriesTab } from './PodcastStoriesTab'
 import { PodcastTitle } from './PodcastTitle'
 import { resolveTab } from './podcastTabs'
@@ -23,9 +24,7 @@ function StatusBadges({ podcast }: { podcast: Podcast }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <PodcastStageBadge podcast={podcast} />
-      <Badge variant={podcast.status === 'published' ? 'green' : 'gray'}>
-        {podcast.status === 'published' ? 'Published' : podcast.publishedAt ? 'Unpublished' : 'Draft'}
-      </Badge>
+      <PodcastStatusBadge podcast={podcast} />
       {podcast.dryRun && <Badge variant="orange">Dry run</Badge>}
       {podcast.mode && <Badge variant="gray">{MODE_LABEL[podcast.mode]}</Badge>}
       {podcast.stage !== 'legacy' && <PodcastHumanEditedChip podcast={podcast} />}

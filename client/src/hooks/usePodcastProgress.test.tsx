@@ -9,7 +9,7 @@ vi.mock('../lib/admin-api', async importOriginal => ({
   adminApi: { podcasts: mockApi },
 }))
 
-import { usePodcastProgress, progressMessage, runOutcome } from './usePodcastProgress'
+import { usePodcastProgress, progressText, runOutcome } from './usePodcastProgress'
 
 const run = (overrides: Partial<ActivePodcastRun> = {}): ActivePodcastRun => ({
   id: 'pod-1', title: 'W41: Clean air', stage: 'scripted', mode: 'interactive', activity: 'Voicing', chunksDone: 2, chunksTotal: 5, ...overrides,
@@ -28,10 +28,11 @@ beforeEach(() => {
   mockApi.active.mockResolvedValue([])
 })
 
-describe('progressMessage and runOutcome', () => {
-  it('name the step and, while voicing, the chunks', () => {
-    expect(progressMessage(run())).toBe('W41: Clean air: Voicing 2/5')
-    expect(progressMessage(run({ stage: 'created', activity: 'Selecting stories', chunksDone: null, chunksTotal: null }))).toBe('W41: Clean air: Selecting stories')
+describe('progressText and runOutcome', () => {
+  it('name the step as the message and, while voicing, the chunks as the unannounced detail', () => {
+    expect(progressText(run())).toEqual({ message: 'W41: Clean air: Voicing', detail: ' 2/5' })
+    expect(progressText(run({ chunksDone: 4 })).message).toBe(progressText(run()).message)
+    expect(progressText(run({ stage: 'created', activity: 'Selecting stories', chunksDone: null, chunksTotal: null }))).toEqual({ message: 'W41: Clean air: Selecting stories' })
   })
 
   it('turn a review stop or ready into a success, and a failure or block into a sticky error', () => {
@@ -55,11 +56,11 @@ describe('PodcastProgressProvider', () => {
     await waitFor(() => expect(mockApi.active).toHaveBeenCalled())
     mockApi.active.mockResolvedValue([run()])
     fireEvent.click(screen.getByText('track'))
-    expect(await screen.findByText('W41: Clean air: Voicing 2/5')).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'W41: Clean air: Voicing 2/5' })).toBeTruthy()
 
     mockApi.active.mockResolvedValue([run({ chunksDone: 4 })])
     refocus()
-    expect(await screen.findByText('W41: Clean air: Voicing 4/5')).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'W41: Clean air: Voicing 4/5' })).toBeTruthy()
 
     mockApi.active.mockResolvedValue([])
     mockApi.get.mockResolvedValue(makePodcast({ stage: 'ready', title: 'W41: Clean air' }))

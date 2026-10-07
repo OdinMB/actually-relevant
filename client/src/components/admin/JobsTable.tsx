@@ -12,6 +12,7 @@ import { jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
 import { useUpdateJob, useRunJob } from '../../hooks/useJobs'
 import { useToast } from '../ui/Toast'
+import { ApiError } from '../../lib/admin-api'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { EditPanel, PANEL_BODY, PANEL_FOOTER } from './EditPanel'
@@ -97,7 +98,8 @@ export function JobsTable({ jobs }: JobsTableProps) {
   const handleRun = (jobName: string) => {
     runJob.mutate(jobName, {
       onSuccess: () => toast('success', `${jobDisplayName(jobName)} triggered`),
-      onError: () => toast('error', 'Failed to trigger job'),
+      // 409 when a run is already under way: the server's answer says so.
+      onError: (err) => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
     })
   }
 
@@ -232,7 +234,8 @@ function EnabledToggle({ job }: { job: JobRun }) {
       { jobName: job.jobName, data: { enabled: !job.enabled } },
       {
         onSuccess: () => toast('success', `${jobDisplayName(job.jobName)} ${!job.enabled ? 'enabled' : 'disabled'}`),
-        onError: () => toast('error', 'Failed to update job'),
+        // 422 when enabling a job whose configuration is incomplete: the answer names what is missing.
+        onError: (err) => toast('error', err instanceof ApiError ? err.message : 'Failed to update job'),
       },
     )
   }

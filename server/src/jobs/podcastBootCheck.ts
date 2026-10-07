@@ -1,7 +1,9 @@
 /**
- * The podcast's configuration check at boot: when either podcast job row is enabled, a missing
- * setting is logged and announced through the webhook at once, rather than at the next Friday
- * slot. A disabled podcast with no credentials stays silent. Never throws.
+ * The podcast's configuration check outside a run. At boot: when either podcast job row is
+ * enabled, a missing setting is logged and announced through the webhook at once, rather than at
+ * the next Friday slot; a disabled podcast with no credentials stays silent, and the check never
+ * throws. On enabling a podcast job from the admin Jobs page, `jobEnableChecks.ts` asks
+ * `podcastConfigProblem` and refuses the change while a setting is missing.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
@@ -13,6 +15,20 @@ import { PUBLISH_PODCAST_JOB } from './publishPodcast.js'
 
 const log = createLogger('podcast-boot-check')
 
+/**
+ * The settings the automatic run would miss ("podcast configuration missing: …"), or null when it
+ * has everything. Checked as the automatic run checks, so the webhook URL is required too.
+ */
+export function podcastConfigProblem(): string | null {
+  try {
+    assertPodcastRunnable({ trigger: 'cron', dryRun: config.podcast.dryRun })
+    return null
+  } catch (err) {
+    if (err instanceof PodcastBlockedError) return err.message
+    throw err
+  }
+}
+
 export async function checkPodcastConfigAtBoot(): Promise<void> {
   try {
     const enabled = await prisma.jobRun.findMany({
@@ -20,13 +36,11 @@ export async function checkPodcastConfigAtBoot(): Promise<void> {
       select: { jobName: true },
     })
     if (enabled.length === 0) return
-    assertPodcastRunnable({ trigger: 'cron', dryRun: config.podcast.dryRun })
+    const problem = podcastConfigProblem()
+    if (!problem) return
+    log.error({ reason: problem }, 'podcast job enabled but its configuration is incomplete')
+    await notifyEvent('Podcast configuration incomplete', `${problem}. The enabled podcast jobs will block until it is set.`)
   } catch (err) {
-    if (!(err instanceof PodcastBlockedError)) {
-      log.error({ err }, 'podcast boot configuration check could not run')
-      return
-    }
-    log.error({ reason: err.message }, 'podcast job enabled but its configuration is incomplete')
-    await notifyEvent('Podcast configuration incomplete', `${err.message}. The enabled podcast jobs will block until it is set.`)
+    log.error({ err }, 'podcast boot configuration check could not run')
   }
 }

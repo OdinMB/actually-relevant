@@ -7,9 +7,14 @@ interface CreateContentDialogProps {
   open: boolean
   onClose: () => void
   onSubmit: (title: string) => Promise<void>
-  type: 'newsletter' | 'podcast'
+  type: ContentType
   loading?: boolean
 }
+
+/** Newsletters only: podcast episodes are created from the podcast page's own controls. */
+type ContentType = 'newsletter'
+
+const LABELS: Record<ContentType, string> = { newsletter: 'Newsletter' }
 
 export function CreateContentDialog({ open, onClose, onSubmit, type, loading }: CreateContentDialogProps) {
   const [title, setTitle] = useState('')
@@ -26,7 +31,7 @@ export function CreateContentDialog({ open, onClose, onSubmit, type, loading }: 
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="mx-auto max-w-sm w-full rounded-lg bg-white p-6 shadow-xl">
           <DialogTitle className="text-base font-semibold text-neutral-900 mb-4">
-            New {type === 'newsletter' ? 'Newsletter' : 'Podcast'}
+            New {LABELS[type]}
           </DialogTitle>
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input

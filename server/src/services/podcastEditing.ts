@@ -5,6 +5,7 @@
  * under the episode's lease, so it cannot race a run; it ticks `humanEdited` when the stories or
  * the words changed, and rebuilds the show notes whenever their inputs change. A change to the
  * spoken words discards any audio chunks a failed voicing stored, so a resume voices the new text.
+ * A saved story or script change also clears the failure a run left (`lastError`, `failedAt`).
  */
 import type { Podcast, PodcastStage } from '@prisma/client'
 import prisma from '../lib/prisma.js'
@@ -66,7 +67,13 @@ export function storyCountErrors(storyIds: string[]): string[] {
   return errors
 }
 
-const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every((id, i) => id === b[i])
+/**
+ * A person's saved change answers the failure a run left at this stage (the stories or the text it
+ * failed on are now theirs), so the page offers the review action again instead of "Resume".
+ */
+const FAILURE_CLEARED = { lastError: null, failedAt: null } as const
+
+const sameOrder =(a: string[], b: string[]) => a.length === b.length && a.every((id, i) => id === b[i])
 
 /**
  * Replace the episode's stories (at `selected`) with pool stories, in the given order, refs 1..n.
@@ -85,7 +92,7 @@ export async function replaceEpisodeStories(id: string, storyIds: string[]): Pro
       return { ref: i + 1, id: s.id, title: s.title, publisher: s.publisher, sourceUrl: s.sourceUrl, slug: s.slug, issue: s.issue }
     })
     const changed = !sameOrder(storyIds, episode.storyIds)
-    await update({ episodeStories: snapshots, storyIds, humanEdited: episode.humanEdited || changed })
+    await update({ episodeStories: snapshots, storyIds, humanEdited: episode.humanEdited || changed, ...FAILURE_CLEARED })
   }, 'edited')
 }
 
@@ -121,6 +128,7 @@ export async function saveEpisodeScript(id: string, edit: DialogueTextEdit): Pro
       script,
       showNotes: buildShowNotes(applied.dialogue.episodeSummary, snapshots, humanEdited, episode.kind),
       humanEdited,
+      ...FAILURE_CLEARED,
     })
     // A failed voicing leaves its chunks stored, and a resume skips every stored index: once the
     // spoken words change, those chunks voice the old text, so they go.

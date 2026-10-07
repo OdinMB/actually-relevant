@@ -27,7 +27,10 @@ vi.mock('../../services/crawler.js', () => ({
   crawlUrl: vi.fn(),
 }))
 const mockReloadJob = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
-vi.mock('../../jobs/scheduler.js', () => ({ runJob: mockRunJob, reloadJob: mockReloadJob, runningJobs: new Set() }))
+const mockIsJobRunning = vi.hoisted(() => vi.fn().mockReturnValue(false))
+const mockJobEnableRefusal = vi.hoisted(() => vi.fn().mockReturnValue(null))
+vi.mock('../../jobs/scheduler.js', () => ({ runJob: mockRunJob, reloadJob: mockReloadJob, isJobRunning: mockIsJobRunning, runningJobs: new Set() }))
+vi.mock('../../jobs/jobEnableChecks.js', () => ({ jobEnableRefusal: mockJobEnableRefusal }))
 vi.mock('../../jobs/crawlFeeds.js', () => ({ runCrawlFeeds: mockRunCrawlFeeds }))
 vi.mock('../../jobs/preassessStories.js', () => ({ runPreassessStories: mockRunPreassessStories }))
 vi.mock('../../jobs/assessStories.js', () => ({ runAssessStories: mockRunAssessStories }))
@@ -99,9 +102,43 @@ describe('Admin Jobs API', () => {
 
       expect(res.status).toBe(404)
     })
+
+    it('refuses to enable a job whose precondition fails, naming what is missing, and saves nothing', async () => {
+      mockJobEnableRefusal.mockReturnValueOnce('podcast configuration missing: ELEVENLABS_API_KEY')
+
+      const res = await request(app)
+        .put('/api/admin/jobs/generate_podcast')
+        .set(authHeader())
+        .send({ enabled: true })
+
+      expect(res.status).toBe(422)
+      expect(res.body.error).toContain('ELEVENLABS_API_KEY')
+      expect(mockJobEnableRefusal).toHaveBeenCalledWith('generate_podcast')
+      expect(mockPrisma.jobRun.update).not.toHaveBeenCalled()
+      expect(mockReloadJob).not.toHaveBeenCalled()
+    })
+
+    it('checks no precondition when a job is disabled or only rescheduled', async () => {
+      mockPrisma.jobRun.update.mockResolvedValue({ jobName: 'generate_podcast', enabled: false })
+      await request(app).put('/api/admin/jobs/generate_podcast').set(authHeader()).send({ enabled: false })
+      await request(app).put('/api/admin/jobs/generate_podcast').set(authHeader()).send({ cronExpression: '0 6 * * 5' })
+      expect(mockJobEnableRefusal).not.toHaveBeenCalled()
+    })
   })
 
   describe('POST /api/admin/jobs/:jobName/run', () => {
+    it('answers 409 and starts nothing while the job is already running', async () => {
+      mockIsJobRunning.mockReturnValueOnce(true)
+
+      const res = await request(app)
+        .post('/api/admin/jobs/crawl_feeds/run')
+        .set(authHeader())
+
+      expect(res.status).toBe(409)
+      expect(mockIsJobRunning).toHaveBeenCalledWith('crawl_feeds')
+      expect(mockRunJob).not.toHaveBeenCalled()
+    })
+
     it('triggers a known job', async () => {
       mockRunJob.mockResolvedValue(undefined)
 

@@ -147,7 +147,6 @@ Both use the `medium` model tier (configured separately as `postModelTier` and `
 | `server/src/schemas/bluesky.ts` | Zod schemas for LLM output and API validation |
 | `server/src/prompts/bluesky.ts` | LLM prompt builders |
 | `server/src/routes/admin/bluesky.ts` | Admin API routes |
-| `server/src/jobs/blueskyAutoPost.ts` | Legacy Bluesky-only auto-post (unused; replaced by `socialAutoPost.ts`) |
 | `server/src/jobs/socialAutoPost.ts` | Unified auto-post cron job for all channels |
 | `server/src/jobs/blueskyUpdateMetrics.ts` | Metrics polling cron job handler |
 | `server/src/config.ts` | Configuration (bluesky section) |

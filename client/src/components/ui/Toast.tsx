@@ -11,6 +11,11 @@ interface Toast {
   message: string
   /** In-app path the message links to (rendered as a router link). */
   href?: string
+  /**
+   * Shown after a progress toast's message but kept out of the live region, so a fast-changing
+   * count (e.g. voiced chunks) does not re-announce the toast; a change of `message` is announced.
+   */
+  detail?: string
 }
 
 export interface ToastUpdate {
@@ -24,7 +29,7 @@ export interface ToastUpdate {
 interface ToastContextValue {
   toast: (type: 'success' | 'error', message: string) => void
   /** A toast that stays while work runs (never auto-dismissed); same id updates it in place. */
-  addProgressToast: (id: string, message: string, opts?: { href?: string }) => void
+  addProgressToast: (id: string, message: string, opts?: { href?: string; detail?: string }) => void
   updateToast: (id: string, updates: ToastUpdate) => void
   removeToast: (id: string) => void
 }
@@ -43,6 +48,16 @@ function ToastIcon({ type }: { type: ToastType }) {
   if (type === 'success') return <CheckCircleIcon className="h-5 w-5 text-green-500 shrink-0" aria-hidden="true" />
   if (type === 'error') return <ExclamationCircleIcon className="h-5 w-5 text-red-500 shrink-0" aria-hidden="true" />
   return <ArrowPathIcon className="h-5 w-5 text-blue-500 shrink-0 animate-spin" aria-hidden="true" />
+}
+
+/** The message, then the detail hidden from assistive technology (so its changes go unannounced). */
+function ToastText({ toast }: { toast: Toast }) {
+  return (
+    <>
+      {toast.message}
+      {toast.detail && <span aria-hidden="true">{toast.detail}</span>}
+    </>
+  )
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -78,20 +93,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     startAutoDismiss(id)
   }, [startAutoDismiss])
 
-  const addProgressToast = useCallback((id: string, message: string, opts: { href?: string } = {}) => {
+  const addProgressToast = useCallback((id: string, message: string, opts: { href?: string; detail?: string } = {}) => {
     clearTimer(id)
     setToasts(prev => {
       if (prev.some(t => t.id === id)) {
-        return prev.map(t => t.id === id ? { ...t, type: 'progress' as const, message, href: opts.href ?? t.href } : t)
+        return prev.map(t => t.id === id ? { ...t, type: 'progress' as const, message, detail: opts.detail, href: opts.href ?? t.href } : t)
       }
-      return [...prev, { id, type: 'progress' as const, message, href: opts.href }]
+      return [...prev, { id, type: 'progress' as const, message, detail: opts.detail, href: opts.href }]
     })
   }, [clearTimer])
 
   const updateToast = useCallback((id: string, { sticky, ...updates }: ToastUpdate) => {
     setToasts(prev => prev.map(t => {
       if (t.id !== id) return t
-      return { ...t, ...updates }
+      const updated = { ...t, ...updates }
+      // An outcome is announced whole: a progress detail does not carry over into it.
+      return updates.type && updates.type !== 'progress' ? { ...updated, detail: undefined } : updated
     }))
     if (updates.type && updates.type !== 'progress') {
       if (sticky) clearTimer(id)
@@ -117,12 +134,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             {t.href ? (
               <Link
                 to={t.href}
+                // The link's name keeps the detail the live region leaves out.
+                aria-label={t.detail ? `${t.message}${t.detail}` : undefined}
                 className="underline underline-offset-2 hover:no-underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
-                {t.message}
+                <ToastText toast={t} />
               </Link>
             ) : (
-              <span>{t.message}</span>
+              <span><ToastText toast={t} /></span>
             )}
             <button
               onClick={() => removeToast(t.id)}

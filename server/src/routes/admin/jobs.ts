@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import { createLogger } from '../../lib/logger.js'
 import cron from 'node-cron'
-import { runJob, reloadJob } from '../../jobs/scheduler.js'
+import { runJob, reloadJob, isJobRunning } from '../../jobs/scheduler.js'
+import { jobEnableRefusal } from '../../jobs/jobEnableChecks.js'
 import { validateBody } from '../../middleware/validate.js'
 import { updateJobSchema } from '../../schemas/job.js'
 import { JOB_HANDLERS } from '../../jobs/handlers.js'
@@ -33,6 +34,13 @@ router.put('/:jobName', validateBody(updateJobSchema), async (req, res) => {
       res.status(400).json({ error: 'Invalid cron expression' })
       return
     }
+    if (req.body.enabled === true) {
+      const refusal = jobEnableRefusal(req.params.jobName)
+      if (refusal) {
+        res.status(422).json({ error: `Cannot enable ${req.params.jobName}: ${refusal}` })
+        return
+      }
+    }
 
     const job = await updateJob(req.params.jobName, req.body)
     await reloadJob(req.params.jobName)
@@ -51,6 +59,10 @@ router.post('/:jobName/run', async (req, res) => {
   const handler = JOB_HANDLERS[req.params.jobName]
   if (!handler) {
     res.status(404).json({ error: 'Job not found' })
+    return
+  }
+  if (isJobRunning(req.params.jobName)) {
+    res.status(409).json({ error: `Job ${req.params.jobName} is already running` })
     return
   }
 

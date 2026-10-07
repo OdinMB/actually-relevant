@@ -14,7 +14,7 @@ On server startup, `index.ts` calls `startScheduler()`, which runs `initSchedule
 
 ## Reliability Features
 
-**Overlap prevention**: Running state lives in memory only (`runningJobs`, a `Set<string>` in `server/src/jobs/scheduler.ts`), never in the database. `job_runs` stores only `lastStartedAt`, `lastCompletedAt` and `lastError`. Every trigger path goes through `runJob`: cron ticks, the boot catch-up and the admin manual run. If the job is already in `runningJobs`, the new run is skipped with a warning log, and nothing is queued. A manual run of a busy job still gets "triggered" back from the API but does nothing. Overlap is prevented within one process only.
+**Overlap prevention**: Running state lives in memory only (`runningJobs`, a `Set<string>` in `server/src/jobs/scheduler.ts`), never in the database. `job_runs` stores only `lastStartedAt`, `lastCompletedAt` and `lastError`. Every trigger path goes through `runJob`: cron ticks, the boot catch-up and the admin manual run. If the job is already in `runningJobs`, the new run is skipped with a warning log, and nothing is queued. The admin manual run asks first (`isJobRunning`) and answers 409 "already running" for a busy job, which the Jobs page shows as an error toast. Overlap is prevented within one process only.
 
 **Overdue detection**: At startup, after a job is registered, it runs immediately if it never completed (`lastCompletedAt` is null), or if more than **2×** its estimated interval has passed since `lastCompletedAt` (`isOverdue`). The interval comes from `estimateCronIntervalMs`, a heuristic and not a full cron evaluator. It reads the hour field first:
 - `*/N` means N hours.
@@ -32,7 +32,9 @@ That figure is then multiplied by 7 ÷ (days per week in the day-of-week field),
 
 **Hot reload**: When a job's cron expression or enabled flag is updated via the admin API (`PUT /api/admin/jobs/:jobName`), the scheduler reloads only that job (`reloadJob`) — stopping its cron task and re-registering it from the database. It does not run an overdue check. No server restart needed. On reload, the job is registered again only if it is still enabled, has a handler in `JOB_HANDLERS`, and has an expression that passes `cron.validate`; otherwise it stays unregistered. `PUT /api/admin/jobs/:jobName` rejects an invalid cron expression with 400 before saving.
 
-**Manual triggers**: Every job can be triggered via `POST /api/admin/jobs/:jobName/run`, which runs the job in the background regardless of schedule.
+**Enable checks**: a request that sets `enabled: true` first asks `jobEnableRefusal` (`jobs/jobEnableChecks.ts`), a map of job name to precondition. A job whose every run would block on a missing setting is refused with 422 and nothing is saved; the error names what is missing, and the Jobs page shows it in the error toast. Today only `generate_podcast` and `publish_podcast` have a check: the podcast configuration as the automatic run needs it (voices, `ELEVENLABS_API_KEY`, `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD` outside a dry run, i.e. in production, and `WEBHOOK_URL`). Disabling a job or changing only its schedule checks nothing.
+
+**Manual triggers**: Every job can be triggered via `POST /api/admin/jobs/:jobName/run`, which runs the job in the background regardless of schedule, or answers 409 while it is already running.
 
 ## Registered Jobs
 
@@ -50,7 +52,7 @@ That figure is then multiplied by 7 ÷ (days per week in the day-of-week field),
 | `generate_podcast` | `runGeneratePodcast` | `0 2,6,10,14,18 * * 5` (Friday slots, UTC); seeded disabled |
 | `publish_podcast` | `runPublishPodcast` | `0 7 * * 6` (Saturday 07:00 Europe/Berlin); seeded disabled |
 
-**The podcast jobs** keep their retry policy in podcast code, not here (ADR-0013; `.context/podcast.md`, "Automation"). `generate_podcast` does nothing outside its UTC Friday window (00:00 until 20:00), so a boot catch-up on another day, or a manual Run then, never starts an episode. Inside it, each slot resumes the week's episode; failures are counted on the episode, and at 3 (or on an error a retry cannot fix) the episode is blocked and the run fails once, so `notifyJobFailure` alerts once and later slots skip. `publish_podcast` does nothing on any day that is not a Saturday in Berlin, publishes only an episode that has been ready for 8 hours, and re-reads its own row's `enabled` flag before publishing. When it finds nothing to publish on its Saturday while enabled, it sends the missed-week alert through `notifyEvent` ("No podcast episode ready to publish this Saturday", with the reason), at most once per ISO week: the week is claimed in `podcast_missed_week_alerts` first, so a retry, a manual Run or a boot catch-up that day stays silent. Their migration seeds both rows with `last_completed_at` set, so neither runs at boot just for never having completed; that seed is more than two weeks old by the time the owner enables them, and `seed-jobs.ts` leaves it null on a fresh dev database, so a boot catch-up can still launch either job on any day: the Friday window and the Saturday guard are what make that harmless. At boot, when either row is enabled, `checkPodcastConfigAtBoot` (`index.ts`) reports missing podcast settings through `notifyEvent`.
+**The podcast jobs** keep their retry policy in podcast code, not here (ADR-0013; `.context/podcast.md`, "Automation"). `generate_podcast` does nothing outside its UTC Friday window (00:00 until 20:00), so a boot catch-up on another day, or a manual Run then, never starts an episode. Inside it, each slot resumes the week's episode; failures are counted on the episode, and at 3 (or on an error a retry cannot fix) the episode is blocked and the run fails once, so `notifyJobFailure` alerts once and later slots skip. `publish_podcast` does nothing on any day that is not a Saturday in Berlin, publishes only an episode that has been ready for 8 hours, and re-reads its own row's `enabled` flag before publishing. When it finds nothing to publish on its Saturday while enabled, it sends the missed-week alert through `notifyEvent` ("No podcast episode ready to publish this Saturday", with the reason), at most once per ISO week: the week is claimed in `podcast_missed_week_alerts` first, so a retry, a manual Run or a boot catch-up that day stays silent. Their migration seeds both rows with `last_completed_at` set, so neither runs at boot just for never having completed; that seed is more than two weeks old by the time the owner enables them, and `seed-jobs.ts` leaves it null on a fresh dev database, so a boot catch-up can still launch either job on any day: the Friday window and the Saturday guard are what make that harmless. At boot, when either row is enabled, `checkPodcastConfigAtBoot` (`index.ts`) reports missing podcast settings through `notifyEvent`; enabling either from the Jobs page is refused while a setting is missing (Enable checks, above).
 
 ## Adding a New Job
 
@@ -64,8 +66,8 @@ That figure is then multiplied by 7 ÷ (days per week in the day-of-week field),
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/admin/jobs` | List all jobs with status, last run times, errors |
-| `PUT /api/admin/jobs/:jobName` | Update cron expression or enabled flag |
-| `POST /api/admin/jobs/:jobName/run` | Manually trigger a job (runs in background) |
+| `PUT /api/admin/jobs/:jobName` | Update cron expression or enabled flag (422 when an enable check refuses) |
+| `POST /api/admin/jobs/:jobName/run` | Manually trigger a job (runs in background; 409 while it is running) |
 
 ## Concurrency
 
@@ -97,9 +99,9 @@ The Semaphore utility is at `server/src/lib/semaphore.ts`.
 | `server/src/jobs/selectStories.ts` | Selection job handler |
 | `server/src/jobs/publishStories.ts` | Publish job handler |
 | `server/src/jobs/socialAutoPost.ts` | Unified social media auto-post job handler |
-| `server/src/jobs/blueskyAutoPost.ts` | Legacy Bluesky-only auto-post (unused) |
 | `server/src/jobs/blueskyUpdateMetrics.ts` | Bluesky metrics update job handler |
 | `server/src/jobs/mastodonUpdateMetrics.ts` | Mastodon metrics update job handler |
 | `server/src/jobs/generateNewsletter.ts` | Automated weekly newsletter generation job handler |
-| `server/src/jobs/generatePodcast.ts`, `publishPodcast.ts`, `podcastBootCheck.ts` | Weekly podcast episode and automatic publication handlers; the boot configuration check |
+| `server/src/jobs/generatePodcast.ts`, `publishPodcast.ts`, `podcastBootCheck.ts` | Weekly podcast episode and automatic publication handlers; the podcast configuration check (at boot, and `podcastConfigProblem` for the enable check) |
+| `server/src/jobs/jobEnableChecks.ts` | Preconditions for enabling a job from the admin API (`jobEnableRefusal`) |
 | `server/src/routes/admin/jobs.ts` | Admin API for job management |

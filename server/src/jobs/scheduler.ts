@@ -207,8 +207,13 @@ function launchJob(jobName: string, handler: () => Promise<void>): void {
   })
 }
 
+/** Whether a run of the job is under way in this process (the admin run route answers 409 then). */
+function isJobRunning(jobName: string): boolean {
+  return runningJobs.has(jobName)
+}
+
 // Exported for manual trigger via admin API and testing
-export { runJob, runningJobs, estimateCronIntervalMs }
+export { runJob, runningJobs, isJobRunning, estimateCronIntervalMs }
 
 export async function reloadJob(jobName: string): Promise<void> {
   // Stop existing task if any

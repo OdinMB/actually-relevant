@@ -77,7 +77,7 @@ The `social_auto_post` job replaces per-channel auto-post jobs:
 2. Excludes stories posted to ALL enabled channels
 3. Uses LLM to pick the best candidate (one pick for all channels)
 4. For each enabled channel: generates platform-specific text and publishes
-5. Continues to next channel on failure (one channel failing doesn't block others)
+5. Continues to next channel on failure (one channel failing doesn't block others). When every channel it tried failed, the run fails, naming each channel's error, so the scheduler's job-failure alert fires; a run where at least one channel posted succeeds, with the other channels' errors logged. A channel skipped because it already has the story is not counted as a try.
 
 ### Metrics Polling
 

@@ -86,33 +86,45 @@ export async function runSocialAutoPost(): Promise<void> {
   const { storyId, reasoning } = await pickBestStoryForSocial(candidates)
   log.info({ storyId, reasoning }, 'best story selected for social media')
 
-  // Post to each enabled channel that hasn't posted this story yet
+  // Post to each enabled channel that hasn't posted this story yet. One channel's failure never
+  // blocks the others; the run fails (and the job-failure alert fires) only when every channel it
+  // tried failed. A channel that already has the story is not an attempt.
+  let attempts = 0
+  const failures: string[] = []
   for (const channel of channels) {
     try {
-      const alreadyPosted = await channel.hasPost(storyId)
-      if (alreadyPosted) {
-        log.info({ channel: channel.name, storyId }, 'story already posted to channel, skipping')
-        continue
-      }
-
-      log.info({ channel: channel.name, storyId }, 'generating draft')
-      const draft = await channel.generateDraft(storyId)
-
-      log.info({ channel: channel.name, postId: draft.id }, 'publishing')
-      await channel.publishPost(draft.id)
-
-      log.info({ channel: channel.name, storyId }, 'auto-post published successfully')
-
-      // Brief delay between channel publishes to be polite to APIs
-      const delayMs = 2000
-      if (delayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs))
-      }
+      if (await postToChannel(channel, storyId) === 'skipped') continue
+      attempts++
     } catch (err) {
+      attempts++
+      failures.push(`${channel.name}: ${err instanceof Error ? err.message : String(err)}`)
       log.error({ err, channel: channel.name, storyId }, 'auto-post failed for channel')
-      // Continue to next channel — don't let one failure block the others
     }
   }
 
+  if (attempts > 0 && failures.length === attempts) {
+    throw new Error(`social auto-post failed on every channel it tried (story ${storyId}): ${failures.join('; ')}`)
+  }
   log.info('social auto-post job complete')
+}
+
+/** Pause after a publish, to be polite to the next channel's API. */
+const PUBLISH_PAUSE_MS = 2000
+
+/** Draft and publish the story on one channel; `skipped` when the channel already has it. */
+async function postToChannel(channel: ChannelConfig, storyId: string): Promise<'posted' | 'skipped'> {
+  if (await channel.hasPost(storyId)) {
+    log.info({ channel: channel.name, storyId }, 'story already posted to channel, skipping')
+    return 'skipped'
+  }
+
+  log.info({ channel: channel.name, storyId }, 'generating draft')
+  const draft = await channel.generateDraft(storyId)
+
+  log.info({ channel: channel.name, postId: draft.id }, 'publishing')
+  await channel.publishPost(draft.id)
+
+  log.info({ channel: channel.name, storyId }, 'auto-post published successfully')
+  await new Promise((resolve) => setTimeout(resolve, PUBLISH_PAUSE_MS))
+  return 'posted'
 }

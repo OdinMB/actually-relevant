@@ -138,6 +138,41 @@ describe('Toast', () => {
     vi.useRealTimers()
   })
 
+  it('keeps a progress detail out of what the live region announces, but shows it and names the link with it', () => {
+    function DetailConsumer() {
+      const { addProgressToast, updateToast } = useToast()
+      return (
+        <div>
+          <button onClick={() => addProgressToast('pod', 'Ep: Voicing', { href: '/admin/podcasts/pod-1', detail: ' 1/5' })}>chunk-1</button>
+          <button onClick={() => addProgressToast('pod', 'Ep: Voicing', { href: '/admin/podcasts/pod-1', detail: ' 2/5' })}>chunk-2</button>
+          <button onClick={() => addProgressToast('pod', 'Ep: Assembling', { href: '/admin/podcasts/pod-1' })}>next-step</button>
+          <button onClick={() => updateToast('pod', { type: 'success', message: 'Ep: ready' })}>done</button>
+        </div>
+      )
+    }
+    const { container } = render(<ToastProvider><DetailConsumer /></ToastProvider>, { wrapper: MemoryRouter })
+    const region = container.querySelector('[aria-live="polite"]')!
+    /** The region's text as assistive technology reads it: aria-hidden content left out. */
+    const spoken = () => {
+      const copy = region.cloneNode(true) as Element
+      copy.querySelectorAll('[aria-hidden="true"]').forEach(n => n.remove())
+      return copy.textContent
+    }
+
+    fireEvent.click(screen.getByText('chunk-1'))
+    const first = spoken()
+    fireEvent.click(screen.getByText('chunk-2'))
+    expect(spoken()).toBe(first)
+    expect(region.textContent).toContain('2/5')
+    expect(screen.getByRole('link', { name: 'Ep: Voicing 2/5' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('next-step'))
+    expect(spoken()).toContain('Ep: Assembling')
+    fireEvent.click(screen.getByText('chunk-2'))
+    fireEvent.click(screen.getByText('done'))
+    expect(region.textContent).not.toContain('2/5')
+  })
+
   it('addProgressToast updates existing toast with same ID', () => {
     renderWithProvider()
     fireEvent.click(screen.getByText('progress'))

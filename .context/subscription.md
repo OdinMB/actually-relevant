@@ -25,7 +25,7 @@ Double opt-in newsletter signup. A visitor submits an email, receives a confirma
 2. **Idempotency.** If the email already has a *confirmed* `PendingSubscription`, return success without doing anything. Unconfirmed pending rows do not short-circuit.
 3. **Email verification via Plunk is best-effort.** Plunk's verify API checks valid format, an existing MX record for the domain, and whether the address is disposable. An explicit failure on any of the three rejects the signup. If the verify API errors (unavailable, 403), the check is skipped and the signup proceeds; the honeypot and form-token gate and double opt-in are the backstop. The server check is authoritative; the client only does a basic format regex.
 4. **Re-subscribe.** Delete any unconfirmed `PendingSubscription` rows for this email.
-5. Create a `PendingSubscription` with a single-use unique UUID `token`, `plunkContactId: null`, and `expiresAt = now + confirmTokenExpiryHours`.
+5. Create a `PendingSubscription` with a single-use unique UUID `token`, `plunkContactId: null`, and `expiresAt = now + confirmTokenExpiryHours`. Lookups by token use the `@unique` index; the table has no separate plain index on `token` (dropped as redundant in `20261007190000_drop_pending_subscription_token_index`).
 6. Send the confirmation email. The greeting uses the first name sanitized (URLs and markup stripped). The first name is **never** written to Plunk.
 
 **Plunk contact side effect:** Plunk creates a contact for every transactional recipient, so sending the confirmation email leaves a Plunk contact with `subscribed: false` even when the signup is never confirmed (see the cleanup script below).

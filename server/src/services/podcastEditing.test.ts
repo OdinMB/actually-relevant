@@ -83,6 +83,18 @@ describe('replaceEpisodeStories', () => {
     await replaceEpisodeStories('pod-1', ['s1', 's2', 's3', 's4'])
     expect(writes()[0].humanEdited).toBe(false)
   })
+
+  it('clears the failure a stage left, so the page offers the review action again', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('selected', { lastError: 'script failed', failedAt: new Date() }))
+    await replaceEpisodeStories('pod-1', ['s1', 's2', 's3', 's5'])
+    expect(writes()[0]).toMatchObject({ lastError: null, failedAt: null })
+  })
+
+  it('keeps the failure when the edit is refused', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('selected', { lastError: 'script failed', failedAt: new Date() }))
+    await expect(replaceEpisodeStories('pod-1', ['s1', 's2', 's3', 'elsewhere'])).rejects.toBeInstanceOf(PodcastEditRejectedError)
+    expect(writes()).toHaveLength(0)
+  })
 })
 
 describe('saveEpisodeScript', () => {
@@ -139,6 +151,12 @@ describe('saveEpisodeScript', () => {
     expect(mockPrisma.podcastAudioChunk.deleteMany).toHaveBeenCalledWith({ where: { podcastId: 'pod-1' } })
     expect(mockPrisma.podcastAudioChunk.deleteMany.mock.invocationCallOrder[0])
       .toBeGreaterThan(mockPrisma.podcast.updateMany.mock.invocationCallOrder[0])
+  })
+
+  it('clears the failure a voicing left, so the page offers the review action again', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(scripted({ lastError: 'chunk 3 failed', failedAt: new Date() }))
+    await saveEpisodeScript('pod-1', asEdit(goodDialogue()))
+    expect(writes()[0]).toMatchObject({ lastError: null, failedAt: null })
   })
 
   it('keeps the stored chunks when only the summary changed or nothing did', async () => {
