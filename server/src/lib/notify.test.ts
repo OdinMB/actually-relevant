@@ -5,7 +5,24 @@ vi.mock('axios', () => ({
   default: { post: mockAxiosPost },
 }))
 
-const { notifyJobFailure, notifyEvent } = await import('./notify.js')
+const { notifyJobFailure, notifyEvent, hasAlertChannel } = await import('./notify.js')
+
+describe('hasAlertChannel', () => {
+  const originalEnv = process.env.WEBHOOK_URL
+  afterEach(() => {
+    if (originalEnv !== undefined) process.env.WEBHOOK_URL = originalEnv
+    else delete process.env.WEBHOOK_URL
+  })
+
+  it('is true only when WEBHOOK_URL is set to something', () => {
+    delete process.env.WEBHOOK_URL
+    expect(hasAlertChannel()).toBe(false)
+    process.env.WEBHOOK_URL = ''
+    expect(hasAlertChannel()).toBe(false)
+    process.env.WEBHOOK_URL = 'https://hooks.example.com/webhook'
+    expect(hasAlertChannel()).toBe(true)
+  })
+})
 
 describe('notifyJobFailure', () => {
   const originalEnv = process.env.WEBHOOK_URL

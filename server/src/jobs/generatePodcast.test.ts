@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockWeekly = vi.hoisted(() => ({ runWeeklyEpisode: vi.fn() }))
-const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn() }))
+const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn(), hasAlertChannel: vi.fn() }))
 const mockPrisma = vi.hoisted(() => ({
   podcast: { findUnique: vi.fn() },
   $executeRaw: vi.fn(),
@@ -68,6 +68,18 @@ describe('runGeneratePodcast', () => {
       await expect(runGeneratePodcast(FRIDAY_1800)).resolves.toBeUndefined()
     }
     expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+  })
+
+  it('with an alert channel, skips a still-blocked episode quietly: the block was alerted once', async () => {
+    mockNotify.hasAlertChannel.mockReturnValue(true)
+    mockWeekly.runWeeklyEpisode.mockResolvedValueOnce({ outcome: 'skipped', podcastId: 'pod-1', reason: 'blocked', stillBlocked: 'monthly TTS cap reached' })
+    await expect(runGeneratePodcast(FRIDAY_1400)).resolves.toBeUndefined()
+  })
+
+  it('without an alert channel, fails again on a still-blocked episode, so the Jobs page keeps showing the error', async () => {
+    mockNotify.hasAlertChannel.mockReturnValue(false)
+    mockWeekly.runWeeklyEpisode.mockResolvedValueOnce({ outcome: 'skipped', podcastId: 'pod-1', reason: 'blocked', stillBlocked: 'monthly TTS cap reached' })
+    await expect(runGeneratePodcast(FRIDAY_1400)).rejects.toThrow(/still blocked: monthly TTS cap reached/)
   })
 
   it('does not remind before Friday evening about an episode waiting for its person', async () => {

@@ -14,11 +14,10 @@ describe('jobEnableRefusal', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('refuses either podcast job while the podcast configuration is incomplete, naming what is missing', () => {
-    mockGuards.assertPodcastRunnable.mockImplementation(() => { throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY, WEBHOOK_URL') })
+    mockGuards.assertPodcastRunnable.mockImplementation(() => { throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY, BUNNY_STORAGE_ZONE') })
     for (const job of [GENERATE_PODCAST_JOB, PUBLISH_PODCAST_JOB]) {
-      expect(jobEnableRefusal(job)).toContain('ELEVENLABS_API_KEY, WEBHOOK_URL')
+      expect(jobEnableRefusal(job)).toContain('ELEVENLABS_API_KEY, BUNNY_STORAGE_ZONE')
     }
-    expect(mockGuards.assertPodcastRunnable).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'cron' }))
   })
 
   it('allows a podcast job once the configuration is complete', () => {

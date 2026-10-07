@@ -2,13 +2,14 @@
  * The generate_podcast cron entry (ADR-0013). It fires at several Friday slots; inside the UTC
  * Friday window it runs this week's episode automated (podcastWeekly.ts holds the retry, attempt
  * cap and block policy, and sends the ready notice). A block throws, so the scheduler alerts once;
- * later slots skip the blocked episode. An episode a person runs interactively is left alone, and
+ * later slots skip the blocked episode, and fail again only where no alert channel is set, so the
+ * Jobs page keeps showing the error. An episode a person runs interactively is left alone, and
  * on Friday evening the owner gets one reminder that it is waiting for him.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { notifyEvent } from '../lib/notify.js'
+import { hasAlertChannel, notifyEvent } from '../lib/notify.js'
 import { runWeeklyEpisode } from '../services/podcastWeekly.js'
 
 const log = createLogger('generate_podcast')
@@ -53,5 +54,7 @@ export async function runGeneratePodcast(now: Date = new Date()): Promise<void> 
   }
   const result = await runWeeklyEpisode({ trigger: 'cron', now })
   if (result.outcome === 'blocked') throw new Error(`podcast episode ${result.podcastId} blocked: ${result.reason ?? 'unknown reason'}`)
+  // With no alert channel the Jobs page is the only alert, so a later slot keeps the error showing.
+  if (result.stillBlocked && !hasAlertChannel()) throw new Error(`podcast episode ${result.podcastId} still blocked: ${result.stillBlocked}`)
   if (result.waitingForPerson && now.getUTCHours() >= config.podcast.reminderFromHourUtc) await remindWaitingEpisode(result.podcastId, now)
 }

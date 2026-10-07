@@ -15,6 +15,7 @@
 - Root `errorElement` on the router: a branded error page instead of react-router's default "Unexpected Application Error" screen
 - Move imports from `react-router-dom` to `react-router` (about 60 files) before react-router v8 drops the re-export
 - Podcast: freeze the spoken opener and sign-off per episode before their wording next changes, so older transcript pages keep the words their audio used (today `publicTranscript` takes the current wording from `aiLabelCopy.ts`)
+- Alerts by email: send job failures and podcast notices through Plunk to an owner address when no WEBHOOK_URL is set (owner is reactivating the Plunk account)
 
 ## Podcast registration (owner)
 

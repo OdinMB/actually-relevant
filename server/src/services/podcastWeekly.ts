@@ -29,6 +29,8 @@ export interface WeeklyResult {
   reason?: string
   /** Skipped because a person runs the episode interactively: it waits for them, not for the job. */
   waitingForPerson?: true
+  /** Skipped on the cron trigger because an earlier run blocked the episode: the block's reason. */
+  stillBlocked?: string
 }
 
 /**
@@ -133,7 +135,7 @@ async function runEpisode(episode: Podcast, { trigger, now, leaseHeld }: RunOpti
     return { ...result('skipped', 'interactive: the owner is reviewing it'), waitingForPerson: true }
   }
   if (episode.blockedAt) {
-    if (trigger === 'cron') return result('skipped', 'blocked')
+    if (trigger === 'cron') return { ...result('skipped', 'blocked'), stillBlocked: episode.blockedReason ?? 'unknown reason' }
     await clearBlock(id)
   } else if (trigger === 'admin' && episode.attempts > 0) {
     await clearBlock(id)
@@ -142,7 +144,7 @@ async function runEpisode(episode: Podcast, { trigger, now, leaseHeld }: RunOpti
   if (trigger === 'cron' && episode.mode === null) await prisma.podcast.update({ where: { id }, data: { mode: 'automated' } })
 
   try {
-    assertPodcastRunnable({ trigger, dryRun: config.podcast.dryRun })
+    assertPodcastRunnable({ dryRun: config.podcast.dryRun })
     if (episode.dryRun && !config.podcast.dryRun) await leaveDryRun(episode, leaseHeld)
     const advanced = await advanceEpisode(id, { trigger, leaseHeld })
     if (advanced.status === 'busy') return result('skipped', 'in progress in another process')

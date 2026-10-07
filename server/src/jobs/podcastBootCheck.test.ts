@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockPrisma = vi.hoisted(() => ({ jobRun: { findMany: vi.fn() } }))
 const mockGuards = vi.hoisted(() => ({ assertPodcastRunnable: vi.fn() }))
-const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn() }))
+const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn(), hasAlertChannel: vi.fn() }))
+const mockLog = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
+vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLog }))
 vi.mock('../services/podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('../services/podcastGuards.js')>()), ...mockGuards }))
 vi.mock('../services/podcastAudioStages.js', () => ({ GENERATE_PODCAST_JOB: 'generate_podcast' }))
 vi.mock('../lib/notify.js', () => mockNotify)
@@ -13,15 +15,34 @@ const { checkPodcastConfigAtBoot } = await import('./podcastBootCheck.js')
 const { PodcastBlockedError } = await import('../services/podcastGuards.js')
 
 describe('checkPodcastConfigAtBoot', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockNotify.hasAlertChannel.mockReturnValue(true)
+  })
 
   it('stays silent while both podcast jobs are disabled, whatever is missing', async () => {
+    mockNotify.hasAlertChannel.mockReturnValue(false)
     mockPrisma.jobRun.findMany.mockResolvedValueOnce([])
     mockGuards.assertPodcastRunnable.mockImplementation(() => { throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY') })
     await checkPodcastConfigAtBoot()
     expect(mockGuards.assertPodcastRunnable).not.toHaveBeenCalled()
     expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockLog.warn).not.toHaveBeenCalled()
     mockGuards.assertPodcastRunnable.mockReset()
+  })
+
+  it('warns once when a podcast job is enabled and no alert channel is set', async () => {
+    mockNotify.hasAlertChannel.mockReturnValue(false)
+    mockPrisma.jobRun.findMany.mockResolvedValueOnce([{ jobName: 'generate_podcast' }, { jobName: 'publish_podcast' }])
+    await checkPodcastConfigAtBoot()
+    expect(mockLog.warn).toHaveBeenCalledTimes(1)
+    expect(mockLog.error).not.toHaveBeenCalled()
+  })
+
+  it('does not warn about the alert channel when one is set', async () => {
+    mockPrisma.jobRun.findMany.mockResolvedValueOnce([{ jobName: 'generate_podcast' }])
+    await checkPodcastConfigAtBoot()
+    expect(mockLog.warn).not.toHaveBeenCalled()
   })
 
   it('asks only about the podcast job rows that are enabled', async () => {
@@ -36,7 +57,6 @@ describe('checkPodcastConfigAtBoot', () => {
     mockPrisma.jobRun.findMany.mockResolvedValueOnce([{ jobName: 'generate_podcast' }])
     mockGuards.assertPodcastRunnable.mockImplementationOnce(() => { throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE') })
     await checkPodcastConfigAtBoot()
-    expect(mockGuards.assertPodcastRunnable).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'cron' }))
     expect(mockNotify.notifyEvent.mock.calls[0][1]).toContain('BUNNY_STORAGE_ZONE')
   })
 

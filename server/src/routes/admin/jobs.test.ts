@@ -49,6 +49,21 @@ describe('Admin Jobs API', () => {
     mockJobsWithLiveLease.mockResolvedValue(new Set())
   })
 
+  describe('GET /api/admin/jobs/alert-channel', () => {
+    it('reports whether an alert channel is set', async () => {
+      const saved = process.env.WEBHOOK_URL
+      try {
+        delete process.env.WEBHOOK_URL
+        expect((await request(app).get('/api/admin/jobs/alert-channel').set(authHeader())).body).toEqual({ configured: false })
+        process.env.WEBHOOK_URL = 'https://hooks.example.com/webhook'
+        expect((await request(app).get('/api/admin/jobs/alert-channel').set(authHeader())).body).toEqual({ configured: true })
+      } finally {
+        if (saved === undefined) delete process.env.WEBHOOK_URL
+        else process.env.WEBHOOK_URL = saved
+      }
+    })
+  })
+
   describe('GET /api/admin/jobs', () => {
     it('returns all jobs', async () => {
       const jobs = [

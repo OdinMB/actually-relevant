@@ -116,6 +116,12 @@ describe('assertPodcastRunnable', () => {
     else process.env.WEBHOOK_URL = savedWebhook
   })
 
+  it('does not need an alert channel: a run without WEBHOOK_URL is not blocked', () => {
+    Object.assign(config.bunny, { storageZone: 'zone', storagePassword: 'secret' })
+    delete process.env.WEBHOOK_URL
+    expect(missingOf({ dryRun: false })).toBe('')
+  })
+
   function missingOf(ctx: Parameters<typeof guards.assertPodcastRunnable>[0]): string {
     try {
       guards.assertPodcastRunnable(ctx)
@@ -126,24 +132,24 @@ describe('assertPodcastRunnable', () => {
     }
   }
 
-  it('names each missing credential on a live run, and the webhook on the automatic one', () => {
+  it('names each missing credential on a live run', () => {
     mockElevenLabs.isElevenLabsConfigured.mockReturnValue(false)
     Object.assign(config.bunny, { storageZone: '', storagePassword: '' })
     delete process.env.WEBHOOK_URL
-    const message = missingOf({ trigger: 'cron', dryRun: false })
-    for (const name of ['ELEVENLABS_API_KEY', 'BUNNY_STORAGE_ZONE', 'BUNNY_STORAGE_PASSWORD', 'WEBHOOK_URL']) expect(message).toContain(name)
-    expect(missingOf({ trigger: 'admin', dryRun: false })).not.toContain('WEBHOOK_URL')
+    const message = missingOf({ dryRun: false })
+    for (const name of ['ELEVENLABS_API_KEY', 'BUNNY_STORAGE_ZONE', 'BUNNY_STORAGE_PASSWORD']) expect(message).toContain(name)
+    expect(message).not.toContain('WEBHOOK_URL')
   })
 
   it('needs no credentials for a dry run', () => {
     mockElevenLabs.isElevenLabsConfigured.mockReturnValue(false)
     Object.assign(config.bunny, { storageZone: '', storagePassword: '' })
-    expect(missingOf({ trigger: 'admin', dryRun: true })).toBe('')
+    expect(missingOf({ dryRun: true })).toBe('')
   })
 
   it('names an empty voice id', () => {
     config.podcast.voiceIdB = ''
-    expect(missingOf({ trigger: 'admin', dryRun: true })).toContain('config.podcast.voiceIdB')
+    expect(missingOf({ dryRun: true })).toContain('config.podcast.voiceIdB')
   })
 })
 

@@ -38,6 +38,15 @@ export function useRunJob() {
   })
 }
 
+/** Whether the server sends job failures and podcast notices anywhere (WEBHOOK_URL set). */
+export function useAlertChannel() {
+  return useQuery({
+    queryKey: ['alertChannel'],
+    queryFn: () => adminApi.jobs.alertChannel(),
+    staleTime: 5 * 60_000,
+  })
+}
+
 /** Returns the server's IANA timezone string (e.g. "UTC", "America/New_York"). */
 export function useServerTimezone(): string {
   const query = useQuery({

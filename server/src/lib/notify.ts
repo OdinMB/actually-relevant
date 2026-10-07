@@ -3,6 +3,14 @@ import { createLogger } from './logger.js'
 
 const log = createLogger('notify')
 
+/**
+ * Whether failures and notices reach anyone outside the admin. Without WEBHOOK_URL they are only
+ * visible on the Jobs and Podcasts pages; nothing requires one.
+ */
+export function hasAlertChannel(): boolean {
+  return Boolean(process.env.WEBHOOK_URL)
+}
+
 /** Post to WEBHOOK_URL; silent without it, and a failed post is logged, never thrown. */
 async function postWebhook(payload: Record<string, unknown>, context: Record<string, unknown>): Promise<void> {
   const url = process.env.WEBHOOK_URL

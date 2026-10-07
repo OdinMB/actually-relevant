@@ -38,12 +38,14 @@ export class PodcastRefusedError extends Error {
 const TTS_RESERVATION_LOCK = 7_303_101
 
 export interface RunnableContext {
-  trigger: 'cron' | 'admin'
   /** A dry run voices with the silent stub, so it needs no ElevenLabs key. */
   dryRun: boolean
 }
 
-/** Names every missing setting the run needs; a missing setting is a block, not a retry. */
+/**
+ * Names every missing setting the run needs; a missing setting is a block, not a retry. An alert
+ * channel (WEBHOOK_URL) is not among them: without one, a block shows on the admin pages only.
+ */
 export function assertPodcastRunnable(ctx: RunnableContext): void {
   const missing: string[] = []
   if (!config.podcast.voiceIdA) missing.push('config.podcast.voiceIdA')
@@ -53,8 +55,6 @@ export function assertPodcastRunnable(ctx: RunnableContext): void {
     if (!config.bunny.storageZone) missing.push('BUNNY_STORAGE_ZONE')
     if (!config.bunny.storagePassword) missing.push('BUNNY_STORAGE_PASSWORD')
   }
-  // The automatic run reports through the webhook; without it a failure would go unnoticed.
-  if (ctx.trigger === 'cron' && !process.env.WEBHOOK_URL) missing.push('WEBHOOK_URL')
   if (missing.length > 0) throw new PodcastBlockedError(`podcast configuration missing: ${missing.join(', ')}`)
 }
 

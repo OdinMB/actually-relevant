@@ -120,9 +120,9 @@ describe('runWeeklyEpisode', () => {
     expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
   })
 
-  it('skips a blocked episode on the cron trigger', async () => {
-    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ blockedAt: new Date() }))
-    expect((await runWeeklyEpisode({ trigger: 'cron', now: NOW })).outcome).toBe('skipped')
+  it('skips a blocked episode on the cron trigger, passing on why it is blocked', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ blockedAt: new Date(), blockedReason: 'monthly TTS cap reached' }))
+    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'skipped', stillBlocked: 'monthly TTS cap reached' })
     expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
   })
 
@@ -179,7 +179,7 @@ describe('runWeeklyEpisode', () => {
     mockGuards.assertPodcastRunnable.mockImplementationOnce(() => { throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY') })
     const result = await runWeeklyEpisode({ trigger: 'cron', now: NOW })
     expect(result).toMatchObject({ outcome: 'blocked', reason: expect.stringContaining('ELEVENLABS_API_KEY') })
-    expect(mockGuards.assertPodcastRunnable).toHaveBeenCalledWith({ trigger: 'cron', dryRun: false })
+    expect(mockGuards.assertPodcastRunnable).toHaveBeenCalledWith({ dryRun: false })
     expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
   })
 

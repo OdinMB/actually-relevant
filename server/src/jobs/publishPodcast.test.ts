@@ -101,8 +101,8 @@ describe('runPublishPodcast', () => {
   })
 
   it('fails (so the scheduler alerts) when the configuration is incomplete, before looking for a candidate', async () => {
-    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => { throw new PodcastBlockedError('podcast configuration missing: WEBHOOK_URL') })
-    await expect(runPublishPodcast(SATURDAY)).rejects.toThrow(/WEBHOOK_URL/)
+    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => { throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE') })
+    await expect(runPublishPodcast(SATURDAY)).rejects.toThrow(/BUNNY_STORAGE_ZONE/)
     expect(mockPublish.pickAutoPublishCandidate).not.toHaveBeenCalled()
   })
 

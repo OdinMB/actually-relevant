@@ -336,6 +336,7 @@ export const adminApi = {
     run: (jobName: string) =>
       request<{ message: string }>(`/jobs/${jobName}/run`, { method: 'POST' }),
     serverTime: () => request<{ time: string; timezone: string }>('/jobs/server-time'),
+    alertChannel: () => request<{ configured: boolean }>('/jobs/alert-channel'),
   },
 
   // Clusters

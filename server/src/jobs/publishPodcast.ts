@@ -44,7 +44,7 @@ export async function runPublishPodcast(now: Date = new Date()): Promise<void> {
     log.info({ timeZone: config.podcast.publishTimeZone }, 'not Saturday, nothing to do')
     return
   }
-  assertPodcastRunnable({ trigger: 'cron', dryRun: config.podcast.dryRun })
+  assertPodcastRunnable({ dryRun: config.podcast.dryRun })
   const candidate = await pickAutoPublishCandidate(now)
   if (!(await stillEnabled())) {
     log.info({ podcastId: candidate?.id }, 'publish_podcast is disabled; not publishing and not alerting')
