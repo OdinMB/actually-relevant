@@ -3,7 +3,6 @@
 ## Code
 
 - Add link to /feedback to newsletter
-- Admin logout on every reload in browsers that block third-party cookies (Safari, Brave, strict modes); the API answers at `api.actuallyrelevant.news` since 2026-10-07. Owner steps left (`.context/authentication.md`, "Cross-site cookie in production"): set `VITE_API_URL=https://api.actuallyrelevant.news` on the static site and redeploy (everyone logs in once more); check `API_URL` on the API service (set it to the new host or unset it, so the OpenAPI docs name it); once the admin works on the new host, set `AUTH_COOKIE_SAMESITE=strict` on the API service
 - Page-specific og:title/og:description/og:url on /developers and /saved (they inherit the homepage's link preview); limit `article:author` to story pages
 - /developers: if the API reference chunk fails, the shared ChunkErrorBoundary fallback adds a second h1 and full-screen "Failed to load page"; give the boundary a `fallback` prop
 - Post-build check that prerendered pages contain real content (e.g. dist/developers has its h1, not the spinner), since unit tests can't see the prerender timing
@@ -16,6 +15,16 @@
 - Root `errorElement` on the router: a branded error page instead of react-router's default "Unexpected Application Error" screen
 - Move imports from `react-router-dom` to `react-router` (about 60 files) before react-router v8 drops the re-export
 - Podcast: freeze the spoken opener and sign-off per episode before their wording next changes, so older transcript pages keep the words their audio used (today `publicTranscript` takes the current wording from `aiLabelCopy.ts`)
+
+## Podcast registration (owner)
+
+Wait until the first episode has been generated automatically and successfully (`generate_podcast` enabled, Friday run), then submit the feed `https://actuallyrelevant.news/podcast.xml`. Afterwards, send the listing URLs so "Listen on…" links can go on `/podcast` (`config.podcast.listenLinks`).
+
+- Apple Podcasts: podcastsconnect.apple.com → "+" → New Show → "Add a show with an RSS feed"; review takes hours to days
+- Spotify: creators.spotify.com → "Add your podcast" → "Find an existing show" / "Somewhere else"; verification code goes to contact@actuallyrelevant.news
+- Podcast Index (podcastindex.org/add, no account) and Amazon Music for Podcasters (podcasters.amazon.com)
+
+## Ideas
 
 - Library of static "always true" snippets in the four issue areas that are included randomly (per day) on the frontpage and issue pages
 - Compare: relevance stats against SPIEGEL, BBC, etc.
