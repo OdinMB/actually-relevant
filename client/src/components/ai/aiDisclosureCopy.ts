@@ -13,7 +13,8 @@ export const AI_DISCLOSURE_COPY = {
   /** Follows the attribution of every AI-selected quote. */
   quoteNote: 'selected and potentially translated by AI',
   /**
-   * Second micro-line under the header claim on every public page, linking to howItWorksHref
+   * Header AI line on every public page: a second line under the claim on phones, the same
+   * line as the claim from md up. Links to howItWorksHref
    * (owner-approved 2026-10-07; replaced the band "Written and curated with care by AI.").
    */
   headerAiLine: 'Written & curated by AI',
