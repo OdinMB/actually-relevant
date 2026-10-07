@@ -18,7 +18,7 @@ function EpisodeStoriesList({ podcast }: { podcast: Podcast }) {
   }
   return (
     <section aria-labelledby="podcast-stories-heading" className="bg-white rounded-lg border border-neutral-200 p-4">
-      <h3 id="podcast-stories-heading" className="text-sm font-semibold text-neutral-900 mb-3">Stories in this episode</h3>
+      <h2 id="podcast-stories-heading" className="text-sm font-semibold text-neutral-900 mb-3">Stories in this episode</h2>
       <ol className="list-decimal pl-5 space-y-1 text-sm text-neutral-700">
         {podcast.episodeStories.map(s => (
           <li key={s.ref}>
@@ -33,7 +33,7 @@ function EpisodeStoriesList({ podcast }: { podcast: Podcast }) {
 function ModeChoice({ podcast }: { podcast: Podcast }) {
   return (
     <section aria-labelledby="podcast-mode-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-3">
-      <h3 id="podcast-mode-heading" className="text-sm font-semibold text-neutral-900">How should this episode be made?</h3>
+      <h2 id="podcast-mode-heading" className="text-sm font-semibold text-neutral-900">How should this episode be made?</h2>
       <div className="flex flex-wrap gap-2">
         <PodcastRunButton podcast={podcast} mode="interactive">Interactive (review each step)</PodcastRunButton>
         <PodcastRunButton podcast={podcast} mode="automated" variant="secondary" confirmTitle="Write and voice the whole episode?">Fully automated</PodcastRunButton>

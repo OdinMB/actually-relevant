@@ -44,7 +44,8 @@ function Problems({ podcast }: { podcast: Podcast }) {
           <p className="mt-1">{podcast.blockedReason}</p>
         </div>
       )}
-      {!podcast.blockedAt && podcast.lastError && (
+      {/* A run that works again (Resume) is past the last failure: its box would read as current. */}
+      {!podcast.blockedAt && !podcast.inProgress && podcast.lastError && (
         <div role="status" className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900">
           <p className="font-semibold">Last run failed{podcast.failedAt ? ` on ${formatDate(podcast.failedAt)}` : ''}</p>
           <p className="mt-1">{podcast.lastError}</p>

@@ -72,7 +72,7 @@ export function PodcastStoryPicker({ podcast, onDirtyChange }: PodcastStoryPicke
   return (
     <section aria-labelledby="podcast-stories-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-4">
       <div>
-        <h3 id="podcast-stories-heading" className="text-sm font-semibold text-neutral-900">Stories in this episode</h3>
+        <h2 id="podcast-stories-heading" className="text-sm font-semibold text-neutral-900">Stories in this episode</h2>
         <p className="text-xs text-neutral-600 mt-1">{minStories} to {maxStories} stories, in the order they are discussed. A swapped-in story takes the place of the one it replaces.</p>
       </div>
 

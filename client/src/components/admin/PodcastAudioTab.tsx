@@ -75,7 +75,7 @@ export function PodcastAudioTab({ podcast, onBackToScript }: PodcastAudioTabProp
 
   return (
     <section aria-labelledby="podcast-audio-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-3">
-      <h3 id="podcast-audio-heading" className="text-sm font-semibold text-neutral-900">Audio</h3>
+      <h2 id="podcast-audio-heading" className="text-sm font-semibold text-neutral-900">Audio</h2>
       <AudioStatus podcast={podcast} />
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm text-neutral-700">
         <dt className="text-neutral-500">TTS characters, this episode</dt>

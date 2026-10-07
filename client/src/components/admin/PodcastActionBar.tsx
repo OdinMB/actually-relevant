@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Podcast } from '@shared/types'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
@@ -33,6 +33,7 @@ export function PodcastActionBar({ podcast, pendingEdits }: PodcastActionBarProp
   const navigate = useNavigate()
   const { toast } = useToast()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const hintId = useId()
   const action = nextAction(podcast)
   const legacy = podcast.stage === 'legacy'
   const writesFirst = podcast.stage !== 'scripted'
@@ -50,18 +51,23 @@ export function PodcastActionBar({ podcast, pendingEdits }: PodcastActionBarProp
     <div
       role="region"
       aria-label="Episode actions"
-      className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-8 border-t border-neutral-200 bg-white/95 px-4 py-2 backdrop-blur lg:-mx-6 lg:-mb-6 lg:px-6"
+      // <main> scrolls and has padding, so a sticky bottom-0 would stop at its padding edge and
+      // let content scroll through the strip below; the negative offset pins it to the viewport.
+      className="sticky -bottom-4 z-10 -mx-4 -mb-4 mt-8 border-t border-neutral-200 bg-white/95 px-4 py-2 backdrop-blur lg:-bottom-6 lg:-mx-6 lg:-mb-6 lg:px-6"
     >
       <div className="flex min-h-[2.5rem] flex-wrap items-center gap-x-3 gap-y-2">
         {action === 'resume' && (
-          <PodcastRunButton podcast={podcast} confirmTitle={writesFirst ? 'Resume, then write and voice the episode?' : 'Resume and voice the episode?'}>
+          <PodcastRunButton podcast={podcast} confirmTitle={writesFirst ? 'Resume, then write and voice the episode?' : 'Resume and voice the episode?'} disabled={pendingEdits} aria-describedby={pendingEdits ? hintId : undefined}>
             Resume
           </PodcastRunButton>
         )}
         {action === 'approve-stories' && (
-          <PodcastRunButton podcast={podcast} mode="automated" variant="secondary" confirmTitle="Write the script and voice it without review?" disabled={pendingEdits}>
+          <PodcastRunButton podcast={podcast} mode="automated" variant="secondary" confirmTitle="Write the script and voice it without review?" disabled={pendingEdits} aria-describedby={pendingEdits ? hintId : undefined}>
             Finish automatically
           </PodcastRunButton>
+        )}
+        {pendingEdits && (action === 'resume' || action === 'approve-stories') && (
+          <span id={hintId} className="text-sm text-neutral-600">Save or discard your changes first.</span>
         )}
         {!legacy && <PodcastPublishControls podcast={podcast} />}
         <ReasonButton variant="ghost" reason={deleteBlockedReason(podcast)} onClick={() => setConfirmDelete(true)} className="text-red-700 hover:bg-red-50 hover:text-red-800">

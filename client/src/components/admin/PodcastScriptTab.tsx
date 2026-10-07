@@ -1,12 +1,20 @@
+import { useId } from 'react'
 import type { Podcast } from '@shared/types'
 import { PodcastScriptEditor } from './PodcastScriptEditor'
 import { atRestAndChangeable } from './podcastRun'
 
+/** A read-only text with a heading; the text box scrolls, so it takes keyboard focus (WCAG 2.1.1). */
 export function TextBlock({ title, text, empty }: { title: string; text: string; empty: string }) {
+  const headingId = useId()
   return (
     <section className="bg-white rounded-lg border border-neutral-200 p-4">
-      <h3 className="text-sm font-semibold text-neutral-900 mb-3">{title}</h3>
-      <div className="text-sm text-neutral-700 whitespace-pre-wrap max-h-[32rem] overflow-y-auto">
+      <h2 id={headingId} className="text-sm font-semibold text-neutral-900 mb-3">{title}</h2>
+      <div
+        role="region"
+        aria-labelledby={headingId}
+        tabIndex={0}
+        className="text-sm text-neutral-700 whitespace-pre-wrap max-h-[32rem] overflow-y-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      >
         {text || <span className="text-neutral-500 italic">{empty}</span>}
       </div>
     </section>

@@ -92,7 +92,7 @@ export function PodcastScriptEditor({ podcast, onDirtyChange }: PodcastScriptEdi
   return (
     <section aria-labelledby="podcast-script-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-4">
       <div>
-        <h3 id="podcast-script-heading" className="text-sm font-semibold text-neutral-900">Script</h3>
+        <h2 id="podcast-script-heading" className="text-sm font-semibold text-neutral-900">Script</h2>
         <p className="text-xs text-neutral-600 mt-1">
           Edit what each host says; who speaks stays as written. The spoken AI disclosure at the start and the sign-off are added automatically.
         </p>

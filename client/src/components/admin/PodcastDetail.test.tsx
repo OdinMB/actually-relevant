@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { Link, useLocation } from 'react-router-dom'
 import { makePodcast, renderInAdmin } from '../../test/podcasts'
 
@@ -141,12 +142,13 @@ describe('PodcastDetail title', () => {
     renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
     fireEvent.click(screen.getByRole('button', { name: 'Edit title' }))
     const field = screen.getByLabelText('Title')
-    fireEvent.change(field, { target: { value: 'W41: New' } })
-    fireEvent.submit(field.closest('form')!)
+    await userEvent.clear(field)
+    await userEvent.type(field, 'W41: New{Enter}')
     await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('pod-1', { title: 'W41: New' }))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit title' })))
   })
 
-  it('Escape cancels the edit without saving', () => {
+  it('Escape cancels the edit without saving and returns focus to the pencil', () => {
     renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
     fireEvent.click(screen.getByRole('button', { name: 'Edit title' }))
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Something else' } })
@@ -154,6 +156,7 @@ describe('PodcastDetail title', () => {
     expect(screen.queryByLabelText('Title')).toBeNull()
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('W41: Clean air and vaccines')
     expect(mockApi.update).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit title' }))
   })
 
   it('keeps the pencil inert, with its reason, on a published episode', () => {

@@ -94,6 +94,15 @@ describe('PodcastActionBar', () => {
     expect((screen.getByRole('button', { name: 'Finish automatically' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('keeps Resume disabled while the page holds unsaved edits, saying why', () => {
+    renderInAdmin(<PodcastActionBar podcast={makePodcast({ stage: 'selected', awaitingReview: false, lastError: 'too few stories' })} pendingEdits />)
+    const resume = screen.getByRole('button', { name: 'Resume' }) as HTMLButtonElement
+    expect(resume.disabled).toBe(true)
+    expect(describedBy(resume)).not.toBeNull()
+    fireEvent.click(resume)
+    expect(mockApi.resume).not.toHaveBeenCalled()
+  })
+
   it('offers neither Resume nor Finish automatically while a run works', () => {
     renderInAdmin(<PodcastActionBar podcast={makePodcast({ stage: 'selected', inProgress: true, awaitingReview: false })} pendingEdits={false} />)
     expect(screen.queryByRole('button', { name: /Resume|Finish automatically/ })).toBeNull()
