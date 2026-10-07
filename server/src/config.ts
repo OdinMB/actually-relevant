@@ -33,6 +33,36 @@ export function parseSameSite(value: string | undefined, varName: string): Cooki
   return sameSite
 }
 
+export interface JobLeaseTiming {
+  leaseSeconds: number
+  leaseRenewMs: number
+}
+
+function parsePositiveSeconds(value: string | undefined, fallback: number, varName: string): number {
+  if (value === undefined || value === '') return fallback
+  if (!/^\d+$/.test(value) || Number(value) <= 0) {
+    throw new Error(`${varName}="${value}" is not a positive whole number of seconds`)
+  }
+  return Number(value)
+}
+
+/**
+ * Parse the cross-instance job lease timing (ADR-0020). Defaults: a 2-minute lease renewed every
+ * 30 seconds. Throws at startup on a value that is not a positive whole number of seconds, or on a
+ * renewal interval longer than half the lease, which would leave a run fewer than two renewal
+ * chances before its lease runs out and let another process start the same job mid-run.
+ */
+export function parseJobLeaseTiming(leaseValue: string | undefined, renewValue: string | undefined): JobLeaseTiming {
+  const leaseSeconds = parsePositiveSeconds(leaseValue, 120, 'JOB_LEASE_SECONDS')
+  const renewSeconds = parsePositiveSeconds(renewValue, 30, 'JOB_LEASE_RENEW_SECONDS')
+  if (renewSeconds * 2 > leaseSeconds) {
+    throw new Error(
+      `JOB_LEASE_RENEW_SECONDS=${renewSeconds} must be at most half of JOB_LEASE_SECONDS=${leaseSeconds}`
+    )
+  }
+  return { leaseSeconds, leaseRenewMs: renewSeconds * 1000 }
+}
+
 export const config = {
   auth: {
     /**
@@ -269,10 +299,10 @@ export const config = {
     // SCHEDULER_ENABLED=false (or 0/no/off) schedules nothing in this process, e.g. a second
     // process against the production database; the admin Run button still works there.
     enabled: !['false', '0', 'no', 'off'].includes((process.env.SCHEDULER_ENABLED ?? '').trim().toLowerCase()),
-    // Cross-instance job lease (ADR-0017): held for leaseMinutes, renewed every leaseRenewMs while
-    // the handler runs, so a crashed holder blocks its job for at most leaseMinutes.
-    leaseMinutes: 10,
-    leaseRenewMs: 2 * 60_000,
+    // Cross-instance job lease (ADR-0017, timing ADR-0020): held for leaseSeconds, renewed every
+    // leaseRenewMs while the handler runs, so a crashed holder blocks its job for at most
+    // leaseSeconds. JOB_LEASE_SECONDS (default 120) and JOB_LEASE_RENEW_SECONDS (default 30).
+    ...parseJobLeaseTiming(process.env.JOB_LEASE_SECONDS, process.env.JOB_LEASE_RENEW_SECONDS),
   },
   feed: {
     size: parseInt(process.env.RSS_FEED_SIZE || "50", 10),

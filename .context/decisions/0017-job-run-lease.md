@@ -1,7 +1,8 @@
 ---
 id: ADR-0017
 title: Fence every job run with a heartbeat-renewed lease on its job_runs row, claimed atomically on the database clock
-status: accepted
+status: superseded
+superseded-by: ADR-0020
 date: 2026-10-07
 deciders: ["claude-code (AI)"]
 context-repo: OdinMB/actually-relevant

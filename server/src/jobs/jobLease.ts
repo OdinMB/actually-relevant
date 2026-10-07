@@ -25,7 +25,7 @@ export async function claimJobRun(jobName: string): Promise<'claimed' | 'held'> 
   const claimed = await prisma.$executeRaw`
     UPDATE "job_runs"
     SET "locked_by" = ${LEASE_HOLDER},
-        "locked_until" = (now() AT TIME ZONE 'UTC') + make_interval(mins => ${config.scheduler.leaseMinutes}::int),
+        "locked_until" = (now() AT TIME ZONE 'UTC') + make_interval(secs => ${config.scheduler.leaseSeconds}::int),
         "last_started_at" = (now() AT TIME ZONE 'UTC'),
         "last_error" = NULL,
         "updated_at" = (now() AT TIME ZONE 'UTC')
@@ -42,7 +42,7 @@ export async function claimJobRun(jobName: string): Promise<'claimed' | 'held'> 
 async function renewJobLease(jobName: string): Promise<boolean> {
   const renewed = await prisma.$executeRaw`
     UPDATE "job_runs"
-    SET "locked_until" = (now() AT TIME ZONE 'UTC') + make_interval(mins => ${config.scheduler.leaseMinutes}::int)
+    SET "locked_until" = (now() AT TIME ZONE 'UTC') + make_interval(secs => ${config.scheduler.leaseSeconds}::int)
     WHERE "job_name" = ${jobName} AND "locked_by" = ${LEASE_HOLDER}`
   return renewed > 0
 }

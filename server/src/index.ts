@@ -87,7 +87,7 @@ export async function shutdown(): Promise<void> {
   } catch (err) {
     log.error({ err }, 'failed to release podcast leases')
   }
-  // ... and job leases, so the next process can run those jobs at once rather than in leaseMinutes
+  // ... and job leases, so the next process can run those jobs at once rather than once the lease runs out
   try {
     const released = await releaseHeldJobLeases()
     if (released > 0) log.info({ released }, 'released job leases')

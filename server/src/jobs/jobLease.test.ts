@@ -39,6 +39,14 @@ describe('job lease', () => {
       expect(mockPrisma.jobRun.findUnique).not.toHaveBeenCalled()
     })
 
+    it('sets the lease to expire leaseSeconds from now on the database clock', async () => {
+      await claimJobRun('crawl_feeds')
+
+      const { sql, values } = rawCall(0)
+      expect(sql).toContain('"locked_until" = (now() AT TIME ZONE \'UTC\') + make_interval(secs =>')
+      expect(values).toContain(config.scheduler.leaseSeconds)
+    })
+
     it("reports 'held' when another process's lease is live", async () => {
       mockPrisma.$executeRaw.mockResolvedValueOnce(0)
       mockPrisma.jobRun.findUnique.mockResolvedValueOnce({ id: 'row-1' })
@@ -66,12 +74,30 @@ describe('job lease', () => {
       expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(3)
       const { sql, values } = rawCall(0)
       expect(sql).toContain('"locked_by" =')
-      expect(values).toEqual(expect.arrayContaining(['assess_stories', LEASE_HOLDER]))
+      expect(sql).toContain('make_interval(secs =>')
+      expect(values).toEqual(expect.arrayContaining(['assess_stories', LEASE_HOLDER, config.scheduler.leaseSeconds]))
 
       finish()
       await run
       await vi.advanceTimersByTimeAsync(config.scheduler.leaseRenewMs * 3)
       expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(3)
+    })
+
+    it('renews at every renewal tick and never earlier, so a lease gets several renewals before it can expire', async () => {
+      let finish: () => void = () => {}
+      const run = withJobLeaseHeartbeat('crawl_feeds', () => new Promise<void>(resolve => { finish = resolve }))
+
+      await vi.advanceTimersByTimeAsync(config.scheduler.leaseRenewMs - 1)
+      expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
+
+      // Within one lease period after the claim, every renewal tick has fired.
+      await vi.advanceTimersByTimeAsync(config.scheduler.leaseSeconds * 1000 - config.scheduler.leaseRenewMs)
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(Math.floor(config.scheduler.leaseSeconds * 1000 / config.scheduler.leaseRenewMs))
+
+      finish()
+      await run
     })
 
     it('warns once and stops renewing when the lease was lost, and the work still completes', async () => {
