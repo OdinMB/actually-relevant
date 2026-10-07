@@ -17,6 +17,7 @@ import { PodcastPublishControls, publishOption } from './PodcastPublishControls'
 import { PodcastDetail } from './PodcastDetail'
 
 const ready = makePodcast({ stage: 'ready', awaitingReview: false, audioUrl: 'https://audio.example/e.mp3' })
+const describedBy = (el: HTMLElement) => document.getElementById(el.getAttribute('aria-describedby') ?? '')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -45,21 +46,24 @@ describe('PodcastDetail publishing', () => {
       publishedAt: null, unpublishedAt: null, publishBlockedReason: null,
     })
     renderInAdmin(<PodcastDetail podcast={phase2} />)
-    expect((screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement).disabled).toBe(false)
+    const publish = screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement
+    expect(publish.disabled).toBe(false)
+    expect(publish.getAttribute('aria-disabled')).toBeNull()
   })
 
-  it('shows the reason in place of Publish while a run works on the episode', () => {
+  it('keeps Publish visible but inert, with the server\'s reason, while a run works on the episode', () => {
     const running = makePodcast({ stage: 'ready', inProgress: true, awaitingReview: false, publishBlockedReason: 'a run is working on the episode; publishing waits until it finishes' })
     renderInAdmin(<PodcastDetail podcast={running} />)
-    expect(screen.getByRole('heading', { name: 'Next steps' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull()
-    expect(screen.getByText(/a run is working on the episode/)).toBeTruthy()
+    const publish = screen.getByRole('button', { name: 'Publish' })
+    expect(publish.getAttribute('aria-disabled')).toBe('true')
+    expect(describedBy(publish)?.textContent).toContain('a run is working on the episode')
+    fireEvent.click(publish)
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('shows the reason in place of Publish before the episode is ready', () => {
+  it('gives the reason on Publish before the episode is ready', () => {
     renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'scripted', publishBlockedReason: 'only a ready episode can be published; this one is at scripted' })} />)
-    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull()
-    expect(screen.getByText(/this one is at scripted/)).toBeTruthy()
+    expect(describedBy(screen.getByRole('button', { name: 'Publish' }))?.textContent).toContain('this one is at scripted')
   })
 })
 
@@ -92,16 +96,15 @@ describe('PodcastPublishControls', () => {
 })
 
 describe('PodcastDetail after publication', () => {
-  it('offers no audio or script changes on an episode that was published and taken down', () => {
+  it('offers no audio, story or script changes on an episode that was published and taken down', () => {
     renderInAdmin(<PodcastDetail podcast={{ ...ready, status: 'draft', publishedAt: '2026-10-12T07:00:00.000Z' }} />)
     expect(screen.queryByRole('button', { name: 'Regenerate audio' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Edit title' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Edit title' }).getAttribute('aria-disabled')).toBe('true')
     expect(screen.getByRole('button', { name: 'Publish again' })).toBeTruthy()
-  })
-
-  it('keeps the "edited by a person" flag changeable on a published episode', () => {
-    renderInAdmin(<PodcastDetail podcast={{ ...ready, status: 'published', publishedAt: '2026-10-12T07:00:00.000Z' }} />)
-    expect((screen.getByLabelText('Edited by a person') as HTMLInputElement).disabled).toBe(false)
+    fireEvent.click(screen.getByRole('tab', { name: /^Stories/ }))
+    expect(screen.getByText('Air data ruling')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Start over|Change stories/ })).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: /^Script/ }))
+    expect(screen.queryByLabelText('Episode summary')).toBeNull()
   })
 })

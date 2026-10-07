@@ -6,12 +6,12 @@ import type { Podcast, PodcastDialogue } from '@shared/types'
 import { ToastProvider } from '../components/ui/Toast'
 import { PodcastProgressProvider } from '../hooks/usePodcastProgress'
 
-/** Render inside what the admin layout provides: queries, router, toasts and podcast progress. */
-export function renderInAdmin(ui: ReactElement) {
+/** Render inside what the admin layout provides: queries, router (at `route`), toasts and podcast progress. */
+export function renderInAdmin(ui: ReactElement, { route = '/' }: { route?: string } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[route]}>
         <ToastProvider>
           <PodcastProgressProvider>{ui}</PodcastProgressProvider>
         </ToastProvider>

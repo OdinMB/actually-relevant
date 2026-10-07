@@ -6,6 +6,7 @@ import { Textarea } from '../ui/Textarea'
 import { useToast } from '../ui/Toast'
 import { ApiError } from '../../lib/admin-api'
 import { useRewindPodcast, useSavePodcastScript } from '../../hooks/usePodcasts'
+import { PodcastRunButton } from './PodcastRunButton'
 
 const SPEAKER_LABEL = { HOST_A: 'Host A', HOST_B: 'Host B' } as const
 
@@ -27,8 +28,6 @@ interface Feedback {
   warnings: string[]
 }
 
-type Rewind = 'regenerate' | 'stories'
-
 interface PodcastScriptEditorProps {
   podcast: Podcast
   onDirtyChange?: (dirty: boolean) => void
@@ -37,7 +36,8 @@ interface PodcastScriptEditorProps {
 /**
  * Editing the script at `scripted`: the text of each turn under its fixed speaker, and the
  * summary. A save is validated on the server: errors block it (nothing saved), segue warnings are
- * shown and may stay. Also Regenerate script and Change stories, which discard the script.
+ * shown and may stay. Also Regenerate script, which discards it, and at a review stop Approve and
+ * voice (waits until the edits are saved or discarded; asks for the cost first).
  */
 export function PodcastScriptEditor({ podcast, onDirtyChange }: PodcastScriptEditorProps) {
   const dialogue = podcast.dialogue
@@ -47,7 +47,7 @@ export function PodcastScriptEditor({ podcast, onDirtyChange }: PodcastScriptEdi
   const [texts, setTexts] = useState<string[][]>(() => (dialogue ? textsOf(dialogue) : []))
   const [summary, setSummary] = useState(dialogue?.episodeSummary ?? '')
   const [feedback, setFeedback] = useState<Feedback>({ errors: [], warnings: [] })
-  const [confirm, setConfirm] = useState<Rewind | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
   // When the stored script changes (a save, or a new script), the fields follow it; a refetch of
   // the same script leaves unsaved edits alone, and the save's warnings stay visible.
@@ -80,11 +80,10 @@ export function PodcastScriptEditor({ podcast, onDirtyChange }: PodcastScriptEdi
     })
   }
 
-  const handleRewind = () => {
-    const regenerate = confirm === 'regenerate'
-    rewind.mutate({ id: podcast.id, to: 'selected', advance: regenerate }, {
+  const handleRegenerate = () => {
+    rewind.mutate({ id: podcast.id, to: 'selected', advance: true }, {
       onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
-      onSettled: () => setConfirm(null),
+      onSettled: () => setConfirming(false),
     })
   }
 
@@ -132,29 +131,31 @@ export function PodcastScriptEditor({ podcast, onDirtyChange }: PodcastScriptEdi
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {dirty && (
-          <>
-            <Button size="sm" onClick={handleSave} loading={save.isPending}>Save script</Button>
-            <Button size="sm" variant="ghost" onClick={() => { setTexts(textsOf(dialogue)); setSummary(dialogue.episodeSummary); setFeedback({ errors: [], warnings: [] }) }} disabled={save.isPending}>
-              Discard changes
-            </Button>
-          </>
+      {/* Always shown (disabled while nothing changed), so the form does not shift when an edit starts */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-3">
+        <Button size="sm" variant="secondary" onClick={handleSave} loading={save.isPending} disabled={!dirty}>Save script</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setTexts(textsOf(dialogue)); setSummary(dialogue.episodeSummary); setFeedback({ errors: [], warnings: [] }) }} disabled={!dirty || save.isPending}>
+          Discard changes
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setConfirming(true)} disabled={save.isPending || rewind.isPending}>Regenerate script</Button>
+        {podcast.awaitingReview && (
+          <span className="sm:ml-auto">
+            <PodcastRunButton podcast={podcast} size="sm" confirmTitle="Approve the script and voice it?" disabled={dirty}>Approve and voice</PodcastRunButton>
+          </span>
         )}
-        <Button size="sm" variant="secondary" onClick={() => setConfirm('regenerate')} disabled={save.isPending || rewind.isPending}>Regenerate script</Button>
-        <Button size="sm" variant="secondary" onClick={() => setConfirm('stories')} disabled={save.isPending || rewind.isPending}>Change stories</Button>
       </div>
+      {podcast.awaitingReview && (
+        <p className="min-h-[1rem] text-xs text-neutral-600">{dirty ? 'Save or discard your changes before approving.' : ''}</p>
+      )}
 
       <ConfirmDialog
-        open={confirm !== null}
-        onClose={() => setConfirm(null)}
-        onConfirm={handleRewind}
-        title={confirm === 'regenerate' ? 'Write a new script?' : 'Go back to the stories?'}
-        description={confirm === 'regenerate'
-          ? 'This script and your edits are discarded and a new one is written for the same stories. It then waits for your review.'
-          : 'This script and your edits are discarded. After you change the stories, approving them writes a new script.'}
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={handleRegenerate}
+        title="Write a new script?"
+        description="This script and your edits are discarded and a new one is written for the same stories. It then waits for your review."
         variant="danger"
-        confirmLabel={confirm === 'regenerate' ? 'Regenerate script' : 'Change stories'}
+        confirmLabel="Regenerate script"
         loading={rewind.isPending}
       />
     </section>

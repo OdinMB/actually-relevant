@@ -56,7 +56,7 @@ describe('PodcastStoryPicker', () => {
     mockApi.saveStories.mockResolvedValue(makePodcast({ stage: 'selected', storyIds: ['s1', 's6', 's3', 's4'] }))
     renderInAdmin(<PodcastStoryPicker podcast={makePodcast({ stage: 'selected', storyIds: ids(4) })} />)
     fireEvent.change(await screen.findByLabelText('Swap story 2 for another story'), { target: { value: 's6' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save stories' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save selection' }))
     await waitFor(() => expect(mockApi.saveStories).toHaveBeenCalledWith('pod-1', ['s1', 's6', 's3', 's4']))
   })
 

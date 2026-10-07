@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { makeDialogue, makePodcast, renderInAdmin } from '../../test/podcasts'
 
-const mockApi = vi.hoisted(() => ({ saveScript: vi.fn(), active: vi.fn() }))
+const mockApi = vi.hoisted(() => ({ saveScript: vi.fn(), active: vi.fn(), resume: vi.fn(), usage: vi.fn() }))
 vi.mock('../../lib/admin-api', async importOriginal => ({
   ...(await importOriginal<typeof import('../../lib/admin-api')>()),
   adminApi: { podcasts: mockApi },
@@ -14,6 +14,7 @@ import { PodcastScriptEditor, buildScriptEdit } from './PodcastScriptEditor'
 beforeEach(() => {
   vi.clearAllMocks()
   mockApi.active.mockResolvedValue([])
+  mockApi.usage.mockResolvedValue({ monthToDateChars: 0, monthlyCap: 32000, typicalEpisodeChars: 4900, maxEpisodeChars: 6200 })
 })
 
 describe('buildScriptEdit', () => {
@@ -44,6 +45,24 @@ describe('PodcastScriptEditor', () => {
     await waitFor(() => expect(mockApi.saveScript).toHaveBeenCalled())
     expect(mockApi.saveScript.mock.calls[0][1].segments[2].turns[0]).toEqual({ speaker: 'HOST_A', text: 'And now, vaccines.' })
     expect(await screen.findByText('segment 3 (story 2): short bridge')).toBeTruthy()
+  })
+
+  it('keeps approval disabled until the edits are saved or discarded', () => {
+    renderInAdmin(<PodcastScriptEditor podcast={makePodcast()} />)
+    const approve = screen.getByRole('button', { name: 'Approve and voice' }) as HTMLButtonElement
+    expect(approve.disabled).toBe(false)
+    fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
+    expect(approve.disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
+    expect(approve.disabled).toBe(false)
+  })
+
+  it('asks for the cost before approving the script, and sends nothing on cancel', async () => {
+    renderInAdmin(<PodcastScriptEditor podcast={makePodcast()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and voice' }))
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mockApi.resume).not.toHaveBeenCalled()
   })
 
   it('shows the errors of a refused save', async () => {

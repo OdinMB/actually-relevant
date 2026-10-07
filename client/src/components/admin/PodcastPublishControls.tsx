@@ -3,8 +3,8 @@ import type { Podcast } from '@shared/types'
 import { Button } from '../ui/Button'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { useToast } from '../ui/Toast'
+import { ReasonButton } from '../ui/ReasonButton'
 import { usePublishPodcast } from '../../hooks/usePodcasts'
-import { formatDate } from '../../lib/constants'
 
 export type PublishOption = 'publish' | 'republish' | 'unpublish' | 'blocked'
 
@@ -42,8 +42,9 @@ const CONFIRM: Record<Exclude<PublishOption, 'blocked'>,{ button: string; title:
 }
 
 /**
- * Publish, publish again or unpublish an episode, each behind a confirmation; where publishing is not
- * possible, the reason in place of the button.
+ * Publish, publish again or unpublish an episode, each behind a confirmation. Where publishing is
+ * not possible, Publish stays visible but disabled, with the server's reason in its tooltip and
+ * description, so it is never hidden without saying why.
  */
 export function PodcastPublishControls({ podcast }: { podcast: Podcast }) {
   const publish = usePublishPodcast()
@@ -52,7 +53,7 @@ export function PodcastPublishControls({ podcast }: { podcast: Podcast }) {
   const option = publishOption(podcast)
 
   if (option === 'blocked') {
-    return <p className="text-sm text-neutral-700">Publishing is not possible now: {podcast.publishBlockedReason}.</p>
+    return <ReasonButton reason={`Publishing is not possible now: ${podcast.publishBlockedReason}.`}>Publish</ReasonButton>
   }
 
   const copy = CONFIRM[option]
@@ -63,11 +64,8 @@ export function PodcastPublishControls({ podcast }: { podcast: Podcast }) {
   })
 
   return (
-    <div className="space-y-2">
-      {podcast.status === 'published' && podcast.publishedAt && (
-        <p className="text-sm text-neutral-800">Published on {formatDate(podcast.publishedAt)}. It is in the podcast feed and on the podcast page.</p>
-      )}
-      <Button size="sm" variant={copy.danger ? 'secondary' : 'primary'} onClick={() => setOpen(true)} disabled={publish.isPending}>
+    <>
+      <Button variant={copy.danger ? 'secondary' : 'primary'} onClick={() => setOpen(true)} disabled={publish.isPending}>
         {copy.button}
       </Button>
       <ConfirmDialog
@@ -80,6 +78,6 @@ export function PodcastPublishControls({ podcast }: { podcast: Podcast }) {
         variant={copy.danger ? 'danger' : 'primary'}
         loading={publish.isPending}
       />
-    </div>
+    </>
   )
 }

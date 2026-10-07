@@ -129,12 +129,11 @@ export function PodcastStoryPicker({ podcast, onDirtyChange }: PodcastStoryPicke
         </div>
       )}
 
-      {dirty && (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleSave} loading={save.isPending}>Save stories</Button>
-          <Button size="sm" variant="ghost" onClick={() => { setChosen(podcast.storyIds); setErrors([]) }} disabled={save.isPending}>Discard changes</Button>
-        </div>
-      )}
+      {/* Always shown (disabled while nothing changed), so the form does not shift when an edit starts */}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={handleSave} loading={save.isPending} disabled={!dirty}>Save selection</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setChosen(podcast.storyIds); setErrors([]) }} disabled={!dirty || save.isPending}>Discard changes</Button>
+      </div>
     </section>
   )
 }

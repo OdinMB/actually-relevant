@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { Link, useLocation } from 'react-router-dom'
 import { makePodcast, renderInAdmin } from '../../test/podcasts'
 
 const mockApi = vi.hoisted(() => ({
@@ -13,23 +14,33 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
   adminApi: { podcasts: mockApi },
 }))
 
-import { PodcastDetail, canEditTitle } from './PodcastDetail'
+import { PodcastDetail } from './PodcastDetail'
+import { titleEditBlockedReason } from './PodcastTitle'
 import { podcastRefetchInterval, PODCAST_POLL_MS } from '../../hooks/usePodcasts'
+
+function Where() {
+  const location = useLocation()
+  return <output data-testid="where">{location.pathname + location.search}</output>
+}
+
+const tab = (name: string) => screen.getByRole('tab', { name: new RegExp(`^${name}`) })
+const describedBy = (el: HTMLElement) => document.getElementById(el.getAttribute('aria-describedby') ?? '')
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockApi.usage.mockResolvedValue({ monthToDateChars: 10800, monthlyCap: 32000 })
+  mockApi.usage.mockResolvedValue({ monthToDateChars: 10800, monthlyCap: 32000, typicalEpisodeChars: 4900, maxEpisodeChars: 6200 })
   mockApi.active.mockResolvedValue([])
   mockApi.storyPool.mockResolvedValue({ stories: [], minStories: 4, maxStories: 5 })
 })
 
-describe('canEditTitle', () => {
+describe('titleEditBlockedReason', () => {
   it('allows a title edit once there is a script, at rest, before publication', () => {
-    expect(canEditTitle(makePodcast())).toBe(true)
-    expect(canEditTitle(makePodcast({ stage: 'ready' }))).toBe(true)
-    expect(canEditTitle(makePodcast({ stage: 'selected' }))).toBe(false)
-    expect(canEditTitle(makePodcast({ inProgress: true }))).toBe(false)
-    expect(canEditTitle(makePodcast({ stage: 'ready', status: 'published' }))).toBe(false)
+    expect(titleEditBlockedReason(makePodcast())).toBeNull()
+    expect(titleEditBlockedReason(makePodcast({ stage: 'ready' }))).toBeNull()
+    expect(titleEditBlockedReason(makePodcast({ stage: 'selected' }))).not.toBeNull()
+    expect(titleEditBlockedReason(makePodcast({ inProgress: true }))).not.toBeNull()
+    expect(titleEditBlockedReason(makePodcast({ stage: 'ready', status: 'published' }))).not.toBeNull()
+    expect(titleEditBlockedReason(makePodcast({ stage: 'ready', publishedAt: '2026-10-12T07:00:00.000Z' }))).not.toBeNull()
   })
 })
 
@@ -41,48 +52,142 @@ describe('podcastRefetchInterval', () => {
   })
 })
 
-describe('PodcastDetail', () => {
-  it('shows a blocked episode\'s reason with a Resume button', () => {
-    renderInAdmin(<PodcastDetail podcast={makePodcast({ awaitingReview: false, blockedAt: '2026-10-10T07:00:00.000Z', blockedReason: 'the dialogue is still invalid' })} />)
-    expect(screen.getByRole('alert').textContent).toContain('the dialogue is still invalid')
-    expect(screen.getByRole('button', { name: 'Resume' })).toBeTruthy()
+describe('PodcastDetail tabs', () => {
+  it('opens the tab of the current stage and disables the stages not reached', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'created', mode: null, awaitingReview: false })} />)
+    expect(tab('Stories').getAttribute('aria-selected')).toBe('true')
+    expect(tab('Script').hasAttribute('disabled') || tab('Script').getAttribute('aria-disabled') === 'true').toBe(true)
+    expect(screen.getByRole('button', { name: 'Fully automated' })).toBeTruthy()
   })
 
   it('opens the script editor for a scripted episode at rest', () => {
     renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    expect(tab('Script').getAttribute('aria-selected')).toBe('true')
     expect(screen.getByLabelText('Episode summary')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Approve script and voice it' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Approve and voice' })).toBeTruthy()
+  })
+
+  it('keeps the tab named in the URL and writes a chosen tab back to it', () => {
+    renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { route: '/admin/podcasts/pod-1?tab=stories' })
+    expect(tab('Stories').getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(tab('Audio'))
+    expect(tab('Audio').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts/pod-1?tab=audio')
+  })
+
+  it('while a run works: a spinner on the running tab, its activity announced, and no approval', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'scripted', inProgress: true, awaitingReview: false, activity: 'Voicing' })} />)
+    expect(tab('Audio').getAttribute('aria-selected')).toBe('true')
+    expect(tab('Audio').querySelector('[data-state="running"]')).toBeTruthy()
+    expect(screen.getAllByRole('status').some(el => el.textContent?.includes('Voicing'))).toBe(true)
+    expect(screen.queryByRole('button', { name: /Approve|Resume|Start over/ })).toBeNull()
   })
 
   it('shows the script read-only while a run works on the episode', () => {
     renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'voiced', inProgress: true, awaitingReview: false, activity: 'Assembling and uploading' })} />)
+    fireEvent.click(tab('Script'))
     expect(screen.getByText('HOST A: Hello.')).toBeTruthy()
     expect(screen.queryByLabelText('Episode summary')).toBeNull()
   })
 
-  it('plays a ready episode from its CDN URL, shows the characters billed and the next steps', async () => {
-    const audioUrl = 'https://audio.actuallyrelevant.news/episodes/2026-W41-abcd1234.mp3'
-    const { container } = renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'ready', awaitingReview: false, audioUrl, durationSec: 342, ttsChars: 5400 })} />)
-    const audio = container.querySelector('audio')
-    expect(audio?.getAttribute('src')).toBe(audioUrl)
-    expect(audio?.getAttribute('preload')).toBe('none')
-    expect(screen.getByText('Duration 5:42')).toBeTruthy()
-    expect(screen.getByText('5,400')).toBeTruthy()
-    expect(await screen.findByText('10,800 of 32,000')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Next steps' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Regenerate audio' })).toBeTruthy()
+  it('shows a blocked episode\'s reason with Resume in the bar', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ awaitingReview: false, blockedAt: '2026-10-10T07:00:00.000Z', blockedReason: 'the dialogue is still invalid' })} />)
+    expect(screen.getByRole('alert').textContent).toContain('the dialogue is still invalid')
+    expect(within(screen.getByRole('region', { name: 'Episode actions' })).getByRole('button', { name: 'Resume' })).toBeTruthy()
+  })
+})
+
+describe('PodcastDetail unsaved changes', () => {
+  it('asks before a tab switch discards edits, and stays on cancel', async () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
+    fireEvent.click(tab('Stories'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(tab('Script').getAttribute('aria-selected')).toBe('true')
+    expect((screen.getByLabelText('Episode summary') as HTMLTextAreaElement).value).toBe('Changed.')
   })
 
-  it('offers no audio changes on a published episode', () => {
-    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'ready', status: 'published', awaitingReview: false })} />)
-    expect(screen.queryByRole('button', { name: 'Regenerate audio' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull()
+  it('switches once the discard is confirmed', async () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
+    fireEvent.click(tab('Stories'))
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Discard changes' }))
+    await waitFor(() => expect(tab('Stories').getAttribute('aria-selected')).toBe('true'))
   })
 
-  it('sends the "edited by a person" flag when the box is changed', async () => {
+  it('switches without asking when nothing is unsaved', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    fireEvent.click(tab('Stories'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(tab('Stories').getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('holds an in-app link while edits are unsaved, and follows it once confirmed', async () => {
+    renderInAdmin(<><Link to="/admin/podcasts">Back to Podcasts</Link><PodcastDetail podcast={makePodcast()} /><Where /></>, { route: '/admin/podcasts/pod-1' })
+    fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
+    fireEvent.click(screen.getByRole('link', { name: 'Back to Podcasts' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts/pod-1')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Discard changes' }))
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts'))
+  })
+})
+
+describe('PodcastDetail title', () => {
+  it('edits the title inline: Enter saves', async () => {
+    mockApi.update.mockResolvedValue(makePodcast({ title: 'W41: New' }))
+    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }))
+    const field = screen.getByLabelText('Title')
+    fireEvent.change(field, { target: { value: 'W41: New' } })
+    fireEvent.submit(field.closest('form')!)
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('pod-1', { title: 'W41: New' }))
+  })
+
+  it('Escape cancels the edit without saving', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }))
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Something else' } })
+    fireEvent.keyDown(screen.getByLabelText('Title'), { key: 'Escape' })
+    expect(screen.queryByLabelText('Title')).toBeNull()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('W41: Clean air and vaccines')
+    expect(mockApi.update).not.toHaveBeenCalled()
+  })
+
+  it('keeps the pencil inert, with its reason, on a published episode', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'ready', status: 'published', publishedAt: '2026-10-12T07:00:00.000Z', awaitingReview: false })} />)
+    const pencil = screen.getByRole('button', { name: 'Edit title' })
+    expect(pencil.getAttribute('aria-disabled')).toBe('true')
+    expect(describedBy(pencil)?.textContent).toBe(titleEditBlockedReason(makePodcast({ status: 'published' })))
+    fireEvent.click(pencil)
+    expect(screen.queryByLabelText('Title')).toBeNull()
+  })
+})
+
+describe('PodcastDetail "edited by a person" chip', () => {
+  it('sends the flag when the chip is changed', async () => {
     mockApi.update.mockResolvedValue(makePodcast({ humanEdited: true }))
     renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
     fireEvent.click(screen.getByLabelText('Edited by a person'))
     await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('pod-1', { humanEdited: true }))
+  })
+
+  it('explains itself in a tooltip that opens on keyboard focus and describes the checkbox', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast()} />)
+    const box = screen.getByLabelText('Edited by a person')
+    const tip = describedBy(box)
+    expect(tip?.getAttribute('role')).toBe('tooltip')
+    expect(tip?.parentElement?.className).toContain('hidden')
+    fireEvent.focus(box)
+    expect(tip?.parentElement?.className).not.toContain('hidden')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(tip?.parentElement?.className).toContain('hidden')
+  })
+
+  it('stays changeable on a published episode', () => {
+    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'ready', status: 'published', publishedAt: '2026-10-12T07:00:00.000Z', awaitingReview: false })} />)
+    expect((screen.getByLabelText('Edited by a person') as HTMLInputElement).disabled).toBe(false)
   })
 })
