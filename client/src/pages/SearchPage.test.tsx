@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import SearchPage from './SearchPage'
+import { publicApi } from '../lib/api'
 
 vi.mock('../lib/api', () => ({
   publicApi: {
@@ -56,5 +57,13 @@ describe('SearchPage', () => {
   it('shows prompt when no query provided', async () => {
     renderSearchPage('/search')
     expect(await screen.findByText('Enter a search term to find stories.')).toBeTruthy()
+  })
+
+  it('reports a failed search as an error, not as zero results', async () => {
+    vi.mocked(publicApi.stories.list).mockRejectedValueOnce(new Error('429'))
+    renderSearchPage('/search?q=climate')
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.queryByText(/No results found/)).toBeNull()
+    expect(screen.queryByText(/\d+ results?$/)).toBeNull()
   })
 })

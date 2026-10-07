@@ -16,7 +16,7 @@ export default function SearchPage() {
     setPage(1)
   }, [q])
 
-  const { data, isLoading } = usePublicStories({
+  const { data, isLoading, isError } = usePublicStories({
     search: q || undefined,
     page,
     pageSize: 12,
@@ -44,7 +44,7 @@ export default function SearchPage() {
               'Search'
             )}
           </h1>
-          {q && !isLoading && (
+          {q && !isLoading && !isError && (
             <p className="text-sm text-neutral-500 mt-1">
               {data?.total === 1 ? '1 result' : `${data?.total ?? 0} results`}
             </p>
@@ -55,6 +55,10 @@ export default function SearchPage() {
           <p className="text-neutral-500 text-center py-8">Enter a search term to find stories.</p>
         ) : isLoading ? (
           <SearchResultsSkeleton />
+        ) : isError ? (
+          <p role="alert" className="text-neutral-600 text-center py-8">
+            Search is unavailable right now. Please try again in a few minutes.
+          </p>
         ) : stories.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-neutral-500 mb-4">No results found for &ldquo;{q}&rdquo;.</p>

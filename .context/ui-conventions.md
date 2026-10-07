@@ -36,12 +36,12 @@ The client uses `React.lazy()` to split code and reduce initial bundle size. Hom
 **Rules:**
 
 - **HomePage** (`client/src/pages/HomePage.tsx`): Static import in `App.tsx` -- this is the critical landing page
-- **Other public pages** (`client/src/pages/*.tsx`): Use **`React.lazy()`** in `App.tsx` -- prerendering still works (Puppeteer waits for chunks)
+- **Other public pages** (`client/src/pages/*.tsx`): Use **`React.lazy()`** in `App.tsx`, wrapped in `LazyPage` -- prerendering waits for the chunk because the route fallback carries `routeFallbackProps` (`client/src/lib/renderComplete.ts`). A new route-level Suspense fallback must spread them too, or a slow chunk ships the spinner as the page's static HTML.
 - **Admin pages** (`client/src/pages/admin/*.tsx`): Use **`React.lazy()`** in `App.tsx`. Must use `export default` (not named exports).
 - **Admin-only npm packages** (`@headlessui/react`, `@heroicons/react`): Automatically code-split via lazy loading.
 - **Error boundary:** `ChunkErrorBoundary` and `LazyPage` wrapper handle chunk load failures with reload button.
 - **Preloading:** `LoginPage` calls `preloadAdminChunks()` on mount.
-- **Heavy widgets inside a public page** get their own `React.lazy()` chunk inside the page, with a skeleton fallback. The prerenderer snapshots 100ms after start (`render-complete` in `main.tsx`), so a page chunk that bundles a multi-MB library is captured as a spinner. Mount the lazy widget only after the page's first commit (a `useEffect`-set flag, plain skeleton until then): if it suspends in the page's first render, React throttles revealing the nested fallback and the snapshot still shows the route spinner. Example: `DevelopersPage` lazy-loads `components/developers/ApiReference.tsx` (Scalar).
+- **Heavy widgets inside a public page** get their own `React.lazy()` chunk inside the page, with a skeleton fallback. The prerenderer snapshots once no route fallback is showing (checked from 100ms after start, at most 5s; `signalRenderComplete` in `lib/renderComplete.ts`). It does not wait for the page's own data or nested Suspense, and a page chunk that bundles a multi-MB library delays every snapshot or, past 5s, is captured as a spinner. Mount the lazy widget only after the page's first commit (a `useEffect`-set flag, plain skeleton until then): if it suspends in the page's first render, React throttles revealing the nested fallback and the snapshot still shows the route spinner. Example: `DevelopersPage` lazy-loads `components/developers/ApiReference.tsx` (Scalar).
 
 ## Accessibility (WCAG 2.2 AA)
 

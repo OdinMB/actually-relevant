@@ -6,6 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/query'
 import { AuthProvider } from './lib/auth'
 import { appRoutes } from './App'
+import { signalRenderComplete } from './lib/renderComplete'
 import './index.css'
 
 // A data router, so pages can block navigation (useBlocker) — browser Back included.
@@ -30,7 +31,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Signal to prerenderer that rendering is complete
-setTimeout(() => {
-  document.dispatchEvent(new Event('render-complete'))
-}, 100)
+signalRenderComplete()

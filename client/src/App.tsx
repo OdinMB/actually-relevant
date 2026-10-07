@@ -7,9 +7,10 @@ import NotFoundPage from './pages/NotFoundPage'
 import { LoadingSpinner } from './components/ui/LoadingSpinner'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary'
 import { DefaultSeo } from './lib/seo'
+import { routeFallbackProps } from './lib/renderComplete'
 
 // Public pages — lazy-loaded to reduce homepage bundle size
-// Puppeteer prerenderer waits for chunks to load, so prerendering still works
+// The prerenderer waits for their chunks: their fallbacks carry routeFallbackProps (lib/renderComplete)
 const StoryPage = lazy(() => import('./pages/StoryPage'))
 const IssuePage = lazy(() => import('./pages/IssuePage'))
 const IssuesIndexPage = lazy(() => import('./pages/IssuesPage'))
@@ -62,7 +63,7 @@ export function preloadAdminChunks() {
 
 function PageFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center" {...routeFallbackProps}>
       <LoadingSpinner size="lg" />
     </div>
   )
@@ -70,7 +71,7 @@ function PageFallback() {
 
 function StandalonePageFallback() {
   return (
-    <main className="flex min-h-screen items-center justify-center">
+    <main className="flex min-h-screen items-center justify-center" {...routeFallbackProps}>
       <h1 className="sr-only">Loading</h1>
       <LoadingSpinner size="lg" />
     </main>
