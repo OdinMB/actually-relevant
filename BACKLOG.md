@@ -20,6 +20,19 @@
 - Split the admin-run half of `server/src/services/podcastWeekly.ts` (`startAdminRun`, `resumeEpisode`) into `podcastRuns.ts`
 - Split `client/src/components/admin/PodcastStoryFinder.tsx` (filters, results, chosen list) if hybrid search or saved filters arrive
 - Podcast: an `eval:recalibrate` fixture for standalone episodes, needed only once the standalone prompt changes
+- Podcast: re-voice only the chunks whose text changed after a script edit (today a rewind to `scripted` re-voices the whole episode)
+- Podcast: re-tag the MP3's ID3 title after a title edit at `ready`
+- Podcast: re-run the configuration check when a podcast job is enabled from the admin Jobs page (today only at boot and at each run)
+- Podcast: periodic cleanup of orphaned Bunny objects under `episodes/` (an upload followed by a lost lease or a failed `ready` write leaves one)
+- Podcast: saving stories at `selected` after a failed script stage leaves `lastError` set, so the page offers "Resume" instead of "Approve"
+- Podcast: the run-progress toast is re-announced in the polite live region on every text change (every chunk while voicing); announce less often
+- Admin podcast list (`PodcastTable`) shows "Draft" for an unpublished episode where the detail page says "Unpublished"; align them
+- Narrow `CreateContentDialog`'s `type` to newsletters (`'podcast'` is unused)
+- Drop the redundant `@@index([token])` on `PendingSubscription` (the `@unique` index covers it) in a migration
+- `social_auto_post`: fail and alert when every channel attempt failed (today per-channel errors are only logged)
+- Admin job run route (`POST /api/admin/jobs/:jobName/run`): answer 409 when the job is already running (today it says "triggered" and `runJob` skips)
+- Remove the dead `server/src/jobs/blueskyAutoPost.ts`
+- Scheduler: sequence the boot catch-up jobs (all overdue jobs start at once today)
 
 - Library of static "always true" snippets in the four issue areas that are included randomly (per day) on the frontpage and issue pages
 - Compare: relevance stats against SPIEGEL, BBC, etc.
