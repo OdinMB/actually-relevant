@@ -14,7 +14,7 @@ On server startup, `index.ts` calls `startScheduler()`, which runs `initSchedule
 
 ## Reliability Features
 
-**Overlap prevention**: Running state lives in memory only (`runningJobs`, a `Set<string>` in `server/src/jobs/scheduler.ts`), never in the database. `job_runs` stores only `lastStartedAt`, `lastCompletedAt` and `lastError`. Every trigger path goes through `runJob`: cron ticks, the boot catch-up and the admin manual run. If the job is already in `runningJobs`, the new run is skipped with a warning log, and nothing is queued. The admin manual run asks first (`isJobRunning`) and answers 409 "already running" for a busy job, which the Jobs page shows as an error toast. Overlap is prevented within one process only.
+**Overlap prevention**: Running state lives in memory only (`runningJobs`, a `Set<string>` in `server/src/jobs/scheduler.ts`), never in the database. `job_runs` stores only `lastStartedAt`, `lastCompletedAt` and `lastError`. Every trigger path goes through `runJob`: cron ticks, the boot catch-up and the admin manual run. If the job is already in `runningJobs`, the new run is skipped with a warning log, and nothing is queued. The admin manual run asks first (`isJobRunning`) and answers 409 "already running" for a busy job, which the Jobs page and the Dashboard show as an error toast. Overlap is prevented within one process only.
 
 **Overdue detection**: At startup, after a job is registered, it runs immediately if it never completed (`lastCompletedAt` is null), or if more than **2×** its estimated interval has passed since `lastCompletedAt` (`isOverdue`). The interval comes from `estimateCronIntervalMs`, a heuristic and not a full cron evaluator. It reads the hour field first:
 - `*/N` means N hours.

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
+import { ToastProvider } from '../../components/ui/Toast'
+import { adminApi, ApiError } from '../../lib/admin-api'
 import DashboardPage from './DashboardPage'
 
 // Mock the API module
@@ -54,7 +56,9 @@ function renderDashboard() {
     <HelmetProvider>
       <MemoryRouter>
         <QueryClientProvider client={queryClient}>
-          <DashboardPage />
+          <ToastProvider>
+            <DashboardPage />
+          </ToastProvider>
         </QueryClientProvider>
       </MemoryRouter>
     </HelmetProvider>,
@@ -85,5 +89,12 @@ describe('DashboardPage', () => {
   it('renders run buttons for each job', async () => {
     renderDashboard()
     expect(await screen.findByRole('button', { name: 'Run Crawl Feeds' })).toBeInTheDocument()
+  })
+
+  it('shows the server message when a run is refused', async () => {
+    vi.mocked(adminApi.jobs.run).mockRejectedValueOnce(new ApiError(409, 'Job crawl_feeds is already running'))
+    renderDashboard()
+    fireEvent.click(await screen.findByRole('button', { name: 'Run Crawl Feeds' }))
+    expect(await screen.findByText('Job crawl_feeds is already running')).toBeInTheDocument()
   })
 })

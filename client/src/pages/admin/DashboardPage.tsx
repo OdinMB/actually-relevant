@@ -12,6 +12,8 @@ import { JobStatusBadge } from '../../components/admin/JobStatusBadge'
 import { ActionIconButton } from '../../components/ui/ActionIconButton'
 import { formatStatus, STATUS_VARIANTS, jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from '../../components/admin/TimeWithRelative'
+import { useToast } from '../../components/ui/Toast'
+import { ApiError } from '../../lib/admin-api'
 
 function StatsGrid({ stats }: { stats: Record<string, number> }) {
   return (
@@ -38,6 +40,7 @@ export default function DashboardPage() {
   const statsQuery = useStoryStats()
   const jobsQuery = useJobs()
   const runJob = useRunJob()
+  const { toast } = useToast()
 
   return (
     <>
@@ -119,7 +122,10 @@ export default function DashboardPage() {
                           <ActionIconButton
                             icon={PlayIcon}
                             label={`Run ${jobDisplayName(job.jobName)}`}
-                            onClick={() => runJob.mutate(job.jobName)}
+                            onClick={() => runJob.mutate(job.jobName, {
+                              // 409 when a run is already under way: the server's answer says so.
+                              onError: (err) => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
+                            })}
                             disabled={runJob.isPending && runJob.variables === job.jobName}
                           />
                         )}
