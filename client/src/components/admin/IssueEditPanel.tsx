@@ -5,9 +5,11 @@ import { Textarea } from '../ui/Textarea'
 import { Select } from '../ui/Select'
 import { useIssue, useIssues, useUpdateIssue } from '../../hooks/useIssues'
 import { useEditForm } from '../../hooks/useEditForm'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { EditPanel, PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
 import { ArrayField } from './ArrayField'
+import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 
 interface MakeADifferenceLink {
   label: string
@@ -54,7 +56,10 @@ function IssueEditForm({ issue, onClose }: { issue: Issue; onClose: () => void }
     toPayload: (f) => f,
     successMessage: 'Issue updated',
     entityName: 'issue',
-    onSuccess: onClose,
+    onSuccess: () => {
+      leave.markSaved()
+      onClose()
+    },
     onFieldChange: (key, value, _next) => {
       if (key === 'name' && !slugManual) {
         return { slug: slugify(value as string) }
@@ -62,6 +67,7 @@ function IssueEditForm({ issue, onClose }: { issue: Issue; onClose: () => void }
       return undefined
     },
   })
+  const leave = useUnsavedChangesGuard(isDirty)
 
   const hasChildren = issue.children && issue.children.length > 0
   const parentOptions = (issuesQuery.data || [])
@@ -183,6 +189,7 @@ function IssueEditForm({ issue, onClose }: { issue: Issue; onClose: () => void }
       </div>
       </div>
       <PanelFooter isPending={isPending} isDirty={isDirty} onCancel={onClose} />
+      <UnsavedChangesDialog leave={leave} />
     </form>
   )
 }
