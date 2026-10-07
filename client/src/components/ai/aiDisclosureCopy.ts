@@ -29,8 +29,12 @@ export const AI_DISCLOSURE_COPY = {
   embedHeader: 'AI-generated headlines from Actually Relevant',
   /** Appended to the AI blurb that the share buttons prefill. */
   shareSuffix: '(AI summary via Actually Relevant)',
-  /** Label at the top of the /podcast page (owner-approved 2026-10-06, plan open question 1). */
-  podcastLabel: 'Written and voiced by AI.',
+  /**
+   * Subtitle under the /podcast page heading, after the "AI" badge (owner-approved 2026-10-07;
+   * replaced the label "Written and voiced by AI." and the separate intro paragraph).
+   */
+  podcastSubtitle:
+    "A weekly five-minute briefing on the news that matters most to humanity, written and voiced by AI. Two AI hosts talk through a handful of the week's stories, based on our AI analysis.",
 } as const
 
 /** The attribution line under an AI-selected quote: "— {attribution} · {note}", or the note alone. */

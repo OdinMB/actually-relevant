@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -61,12 +61,61 @@ beforeEach(() => {
   mockApi.podcast.mockResolvedValue(RESPONSE)
 })
 
+async function expandStories() {
+  const toggle = await screen.findByRole('button', { name: /Stories \(2\)/ })
+  fireEvent.click(toggle)
+  return toggle
+}
+
 describe('PodcastPage', () => {
-  it('shows the AI label before any episode', async () => {
+  it('shows the AI subtitle before any episode', async () => {
     renderPage()
-    const label = screen.getByText(AI_DISCLOSURE_COPY.podcastLabel)
+    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle)
     const episode = await screen.findByRole('heading', { name: /W42: Clean air/ })
-    expect(label.compareDocumentPosition(episode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(subtitle.compareDocumentPosition(episode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('does not repeat the per-episode AI line on the page', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: /W42: Clean air/ })
+    expect(screen.queryByText(RESPONSE.episodes[0].aiLine)).toBeNull()
+  })
+
+  it('collapses each episode story list until its toggle is pressed', async () => {
+    renderPage()
+    const toggle = await screen.findByRole('button', { name: /Stories \(2\)/ })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    const list = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
+    expect(list).not.toBeNull()
+    expect(list?.hidden).toBe(true)
+    expect(screen.queryByRole('link', { name: 'Air data ruling' })).toBeNull()
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(list?.hidden).toBe(false)
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(list?.hidden).toBe(true)
+  })
+
+  it('shows the transcript link beside the stories toggle only when the episode has one', async () => {
+    mockApi.podcast.mockResolvedValue({
+      ...RESPONSE,
+      episodes: [{ ...RESPONSE.episodes[0], transcriptUrl: 'https://audio.actuallyrelevant.news/episodes/x.vtt' }],
+    })
+    renderPage()
+    const toggle = await screen.findByRole('button', { name: /Stories \(2\)/ })
+    const transcript = screen.getByRole('link', { name: /Transcript/ })
+    expect(transcript.getAttribute('href')).toBe('https://audio.actuallyrelevant.news/episodes/x.vtt')
+    expect(toggle.closest('[data-episode-actions]')).toBe(transcript.closest('[data-episode-actions]'))
+  })
+
+  it('has no stories toggle for an episode without stories', async () => {
+    mockApi.podcast.mockResolvedValue({ ...RESPONSE, episodes: [{ ...RESPONSE.episodes[0], stories: [] }] })
+    renderPage()
+    await screen.findByRole('heading', { name: /W42: Clean air/ })
+    expect(screen.queryByRole('button', { name: /Stories/ })).toBeNull()
   })
 
   it('streams each episode from the CDN without preloading, and links the feed', async () => {
@@ -80,7 +129,8 @@ describe('PodcastPage', () => {
 
   it('links our analysis only for stories that have a page', async () => {
     renderPage()
-    expect((await screen.findByRole('link', { name: 'Air data ruling' })).getAttribute('href')).toBe('/stories/air')
+    await expandStories()
+    expect(screen.getByRole('link', { name: 'Air data ruling' }).getAttribute('href')).toBe('/stories/air')
     expect(screen.queryByRole('link', { name: 'Vaccine rollout' })).toBeNull()
     expect(screen.getAllByRole('link', { name: 'source' })).toHaveLength(2)
   })
@@ -88,6 +138,8 @@ describe('PodcastPage', () => {
   it('has no a11y violations', async () => {
     const { container } = renderPage()
     await screen.findByRole('heading', { name: /W42: Clean air/ })
+    expect(await axe(container)).toHaveNoViolations()
+    await expandStories()
     expect(await axe(container)).toHaveNoViolations()
   })
 })
