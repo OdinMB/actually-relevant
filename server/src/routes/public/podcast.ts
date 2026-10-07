@@ -7,21 +7,23 @@
  */
 import { Router } from 'express'
 import { config } from '../../config.js'
+import { sendRepresentation } from '../../lib/httpRepresentation.js'
 import { createLogger } from '../../lib/logger.js'
 import { apiLimiter } from '../../middleware/rateLimit.js'
-import { getFeedXml } from '../../services/podcastFeed.js'
+import { getFeed } from '../../services/podcastFeed.js'
 import { getPublishedEpisodes } from '../../services/podcastPublish.js'
 import { podcastShowInfo, toPublicEpisode } from '../../services/podcastShow.js'
 
 const router = Router()
 const log = createLogger('podcast-feed')
 
-router.get('/feed.xml', async (_req, res) => {
+router.get('/feed.xml', async (req, res) => {
   try {
-    const xml = await getFeedXml(getPublishedEpisodes)
-    res.set('Content-Type', 'application/rss+xml; charset=utf-8')
-    res.set('Cache-Control', `public, max-age=${config.feed.cacheMaxAge}`)
-    res.send(xml)
+    const feed = await getFeed(getPublishedEpisodes)
+    sendRepresentation(req, res, feed, {
+      'Content-Type': 'application/rss+xml; charset=utf-8',
+      'Cache-Control': `public, max-age=${config.feed.cacheMaxAge}`,
+    })
   } catch (err) {
     log.error({ err }, 'failed to generate the podcast feed')
     res.status(500).json({ error: 'Failed to generate feed' })

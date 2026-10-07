@@ -32,12 +32,18 @@ export interface ListenLink {
   url: string
 }
 
+/** An Apple Podcasts category, with at most one subcategory, by Apple's exact names. */
+export interface PodcastCategory {
+  name: string
+  subcategory?: string
+}
+
 export interface PodcastShowInfo {
   title: string
   description: string
   author: string
   ownerEmail: string
-  category: string
+  categories: PodcastCategory[]
   /** The show page on the website. */
   link: string
   /** The public feed URL (a Render rewrite to the API's feed route). */
@@ -54,7 +60,7 @@ export function podcastShowInfo(): PodcastShowInfo {
     description: PODCAST_SHOW_DESCRIPTION,
     author: p.showAuthor,
     ownerEmail: p.ownerEmail,
-    category: p.category,
+    categories: p.categories,
     link: `${config.siteUrl}/podcast`,
     feedUrl: `${config.siteUrl}${p.feedPath}`,
     artworkUrl: p.artworkUrl,

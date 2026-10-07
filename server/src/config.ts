@@ -220,8 +220,13 @@ export const config = {
     // "actuallyrelevant.news/podcast.xml". Never change it, even if the feed moves.
     feedGuid: "097a5224-a76e-5f98-98e0-151f653772ae",
     showAuthor: "Actually Relevant",
-    // Apple Podcasts category (owner proposal, plan open question 2).
-    category: "News",
+    // Apple Podcasts categories (owner decision, 2026-10-07): Apple's exact names, a subcategory
+    // nested in its parent. The feed escapes them ("Society &amp; Culture").
+    categories: [
+      { name: "News", subcategory: "Daily News" },
+      { name: "Science" },
+      { name: "Society & Culture" },
+    ] as { name: string; subcategory?: string }[],
     // Show artwork (itunes:image, required by Apple): 3000x3000 JPEG on Bunny under show/, built
     // deterministically from the brand logo (not AI-generated). A new image gets a new file name,
     // because the CDN caches the old one for up to 30 days.

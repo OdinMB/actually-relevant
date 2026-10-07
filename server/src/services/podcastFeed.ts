@@ -4,10 +4,14 @@
  * `<podcast:txt purpose="ai-content">true</podcast:txt>`, every item description starts with the
  * episode's AI line, the GUID is the row id and the enclosure the CDN URL with its exact byte length.
  */
+import { createHash } from 'node:crypto'
 import { config } from '../config.js'
 import { TTLCache, cached } from '../lib/cache.js'
+import { prepareRepresentation, type Representation } from '../lib/httpRepresentation.js'
 import { escapeXml } from '../lib/xml.js'
-import { episodeDescriptionHtml, episodeDescriptionText, podcastShowInfo, type PublishedEpisode } from './podcastShow.js'
+import {
+  episodeDescriptionHtml, episodeDescriptionText, podcastShowInfo, type PodcastCategory, type PublishedEpisode,
+} from './podcastShow.js'
 
 const NAMESPACES = [
   'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"',
@@ -28,7 +32,12 @@ export function formatItunesDuration(totalSec: number): string {
   return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`
 }
 
-function itemXml(episode: PublishedEpisode): string {
+function categoryXml({ name, subcategory }: PodcastCategory): string {
+  const open = `<itunes:category text="${escapeXml(name)}"`
+  return subcategory ? `${open}><itunes:category text="${escapeXml(subcategory)}"/></itunes:category>` : `${open}/>`
+}
+
+function itemXml(episode: PublishedEpisode, artworkUrl: string): string {
   const parts = [
     el('title', episode.title),
     el('itunes:title', episode.title),
@@ -41,6 +50,7 @@ function itemXml(episode: PublishedEpisode): string {
     ...(episode.durationSec != null ? [el('itunes:duration', formatItunesDuration(episode.durationSec))] : []),
     el('itunes:episodeType', 'full'),
     el('itunes:explicit', 'false'),
+    `<itunes:image href="${escapeXml(artworkUrl)}"/>`,
     ...(episode.transcriptUrl ? [`<podcast:transcript url="${escapeXml(episode.transcriptUrl)}" type="text/vtt" language="en"/>`] : []),
     AI_CONTENT_TXT,
   ]
@@ -65,23 +75,48 @@ export function buildPodcastFeedXml(episodes: PublishedEpisode[], now: Date = ne
     `<itunes:owner>${el('itunes:name', show.author)}${el('itunes:email', show.ownerEmail)}</itunes:owner>`,
     `<itunes:image href="${escapeXml(show.artworkUrl)}"/>`,
     `<image>${el('url', show.artworkUrl)}${el('title', show.title)}${el('link', show.link)}</image>`,
-    `<itunes:category text="${escapeXml(show.category)}"/>`,
+    ...show.categories.map(categoryXml),
     el('itunes:explicit', 'false'),
     el('itunes:type', 'episodic'),
     `<podcast:locked owner="${escapeXml(show.ownerEmail)}">no</podcast:locked>`,
     el('podcast:guid', config.podcast.feedGuid),
     AI_CONTENT_TXT,
-    ...episodes.map(itemXml),
+    ...episodes.map(episode => itemXml(episode, show.artworkUrl)),
   ]
   return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" ${NAMESPACES}><channel>${channel.join('')}</channel></rss>\n`
 }
 
-const feedCache = new TTLCache<string>(config.feed.cacheMaxAge * 1000)
+const feedCache = new TTLCache<Representation>(config.feed.cacheMaxAge * 1000)
 const cacheSlot = 'podcast-feed'
 
-/** The feed XML, cached in-process for `config.feed.cacheMaxAge`; `load` reads the published episodes. */
-export function getFeedXml(load: () => Promise<PublishedEpisode[]>): Promise<string> {
-  return cached(feedCache, cacheSlot, async () => buildPodcastFeedXml(await load()))
+/** Fixed date for comparing content: the document without its build date. */
+const CONTENT_ONLY = new Date(0)
+
+/**
+ * When this process last saw the feed's content change. A rebuild that finds the same content keeps
+ * the date, so lastBuildDate, Last-Modified and the ETag stay put and apps get their 304. After a
+ * restart the date is the first build's: never earlier than a real change (a config change, an
+ * unpublish), at the cost of one full refetch per deploy.
+ */
+let contentState: { hash: string; changedAt: Date } | null = null
+
+function contentChangedAt(episodes: PublishedEpisode[], now: Date): Date {
+  const hash = createHash('sha256').update(buildPodcastFeedXml(episodes, CONTENT_ONLY)).digest('hex')
+  if (contentState?.hash !== hash) contentState = { hash, changedAt: new Date(Math.floor(now.getTime() / 1000) * 1000) }
+  return contentState.changedAt
+}
+
+/**
+ * The feed, ready to serve (body, gzip and deflate, ETag, Last-Modified), cached in-process for
+ * `config.feed.cacheMaxAge`; `load` reads the published episodes. lastBuildDate is the time the
+ * content last changed, so it matches Last-Modified.
+ */
+export function getFeed(load: () => Promise<PublishedEpisode[]>, now: Date = new Date()): Promise<Representation> {
+  return cached(feedCache, cacheSlot, async () => {
+    const episodes = await load()
+    const changedAt = contentChangedAt(episodes, now)
+    return prepareRepresentation(buildPodcastFeedXml(episodes, changedAt), changedAt)
+  })
 }
 
 /** Drop the cached feed, so the next request rebuilds it (after a publish, an unpublish or an AI-line change). */

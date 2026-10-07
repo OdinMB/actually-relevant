@@ -46,6 +46,16 @@ describe('GET /api/podcast/feed.xml', () => {
     expect(res.text).toContain('<guid isPermaLink="false">podcast-1</guid>')
   })
 
+  it('compresses the feed and answers a revalidation with 304', async () => {
+    const res = await request(podcastOnly).get('/api/podcast/feed.xml').set('Accept-Encoding', 'gzip')
+    expect(res.headers['content-encoding']).toBe('gzip')
+    expect(res.headers['content-length']).toBeDefined()
+    expect(res.headers['last-modified']).toBeDefined()
+    const again = await request(podcastOnly).get('/api/podcast/feed.xml')
+      .set('Accept-Encoding', 'gzip').set('If-None-Match', res.headers['etag'])
+    expect(again.status).toBe(304)
+  })
+
   it('is mounted before the shared API rate limiter', async () => {
     const res = await request(viaPublicApi).get('/api/podcast/feed.xml')
     expect(res.status).toBe(200)

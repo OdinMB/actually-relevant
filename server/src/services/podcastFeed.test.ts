@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import Parser from 'rss-parser'
-import { buildPodcastFeedXml, formatItunesDuration, getFeedXml, invalidateFeedCache } from './podcastFeed.js'
+import { buildPodcastFeedXml, formatItunesDuration, getFeed, invalidateFeedCache } from './podcastFeed.js'
 import type { PublishedEpisode } from './podcastShow.js'
 import { config } from '../config.js'
 import { PODCAST_EPISODE_AI_LINE, PODCAST_EPISODE_AI_LINE_EDITED, PODCAST_SHOW_DESCRIPTION } from '../lib/aiLabelCopy.js'
@@ -93,24 +93,58 @@ describe('buildPodcastFeedXml', () => {
     expect(without).not.toContain('itunes:duration')
   })
 
-  it('writes the configured artwork as itunes:image and as the RSS channel image', async () => {
+  it('writes the configured artwork as itunes:image on the channel and every item, and as the RSS channel image', async () => {
     config.podcast.artworkUrl = 'https://audio.actuallyrelevant.news/show/a&b.jpg'
-    const xml = buildPodcastFeedXml([], NOW)
-    expect(channelOnly(xml)).toContain('<itunes:image href="https://audio.actuallyrelevant.news/show/a&amp;b.jpg"/>')
+    const xml = buildPodcastFeedXml([episode(), episode({ id: 'e2' })], NOW)
+    const tag = '<itunes:image href="https://audio.actuallyrelevant.news/show/a&amp;b.jpg"/>'
+    expect(channelOnly(xml)).toContain(tag)
+    for (const item of items(xml)) expect(item).toContain(tag)
     expect((await parser.parseString(xml)).image?.url).toBe('https://audio.actuallyrelevant.news/show/a&b.jpg')
+  })
+
+  it('nests a subcategory inside its category and escapes category names', () => {
+    const original = config.podcast.categories
+    config.podcast.categories = [{ name: 'News', subcategory: 'Daily News' }, { name: 'Society & Culture' }]
+    try {
+      expect(channelOnly(buildPodcastFeedXml([], NOW))).toContain(
+        '<itunes:category text="News"><itunes:category text="Daily News"/></itunes:category><itunes:category text="Society &amp; Culture"/>',
+      )
+    } finally {
+      config.podcast.categories = original
+    }
   })
 })
 
-describe('getFeedXml', () => {
+describe('getFeed', () => {
+  const t = (iso: string) => new Date(iso)
+
   it('caches the document until it is invalidated', async () => {
     let calls = 0
     const load = async () => { calls++; return [] }
-    await getFeedXml(load)
-    await getFeedXml(load)
+    await getFeed(load)
+    await getFeed(load)
     expect(calls).toBe(1)
     invalidateFeedCache()
-    await getFeedXml(load)
+    await getFeed(load)
     expect(calls).toBe(2)
+  })
+
+  it('keeps Last-Modified, lastBuildDate and the ETag while a rebuild finds the same content, and moves them when it changes', async () => {
+    const a = [episode({ id: 'change-tracking-a' })]
+    const first = await getFeed(async () => a, t('2026-10-12T08:00:00.400Z'))
+    expect(first.lastModified.toISOString()).toBe('2026-10-12T08:00:00.000Z')
+    expect(first.identity.toString('utf8')).toContain('<lastBuildDate>Mon, 12 Oct 2026 08:00:00 GMT</lastBuildDate>')
+
+    invalidateFeedCache()
+    const same = await getFeed(async () => a, t('2026-10-12T09:00:00Z'))
+    expect(same.lastModified).toEqual(first.lastModified)
+    expect(same.etag).toBe(first.etag)
+
+    invalidateFeedCache()
+    const changed = await getFeed(async () => [...a, episode({ id: 'change-tracking-b' })], t('2026-10-12T10:00:00Z'))
+    expect(changed.lastModified.toISOString()).toBe('2026-10-12T10:00:00.000Z')
+    expect(changed.etag).not.toBe(first.etag)
+    expect(changed.identity.toString('utf8')).toContain('<lastBuildDate>Mon, 12 Oct 2026 10:00:00 GMT</lastBuildDate>')
   })
 })
 
