@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { usePodcasts, useStartWeeklyPodcast, useDeletePodcast } from '../../hooks/usePodcasts'
+import { usePodcasts, useStartWeeklyPodcast, useCreateStandalonePodcast, useDeletePodcast } from '../../hooks/usePodcasts'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
@@ -15,6 +15,7 @@ export default function PodcastsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const podcastsQuery = usePodcasts(statusFilter ? { status: statusFilter } : undefined)
   const startWeekly = useStartWeeklyPodcast()
+  const createStandalone = useCreateStandalonePodcast()
   const deletePodcast = useDeletePodcast()
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -28,6 +29,16 @@ export default function PodcastsPage() {
       navigate(`/admin/podcasts/${pod.id}`)
     } catch {
       toast('error', "Failed to open this week's episode")
+    }
+  }
+
+  /** Creates a standalone episode and opens it, where its stories are chosen. */
+  const handleCreateStandalone = async () => {
+    try {
+      const pod = await createStandalone.mutateAsync()
+      navigate(`/admin/podcasts/${pod.id}`)
+    } catch {
+      toast('error', 'Failed to create the episode')
     }
   }
 
@@ -56,7 +67,12 @@ export default function PodcastsPage() {
 
       <PageHeader
         title="Podcasts"
-        actions={<Button onClick={handleStartWeekly} loading={startWeekly.isPending}>Start this week&apos;s episode</Button>}
+        actions={(
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={handleCreateStandalone} loading={createStandalone.isPending}>New podcast</Button>
+            <Button onClick={handleStartWeekly} loading={startWeekly.isPending}>Start this week&apos;s episode</Button>
+          </div>
+        )}
       />
 
       <div className="flex gap-1 mb-4">
@@ -77,7 +93,7 @@ export default function PodcastsPage() {
 
       {podcastsQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
       {podcastsQuery.error && <ErrorState message="Failed to load podcasts" onRetry={() => podcastsQuery.refetch()} />}
-      {podcastsQuery.data && podcastsQuery.data.data.length === 0 && <EmptyState title="No podcasts yet" description="Start this week's episode, then choose whether to review each step or let it run." />}
+      {podcastsQuery.data && podcastsQuery.data.data.length === 0 && <EmptyState title="No podcasts yet" description="Start this week's episode and choose whether to review each step or let it run, or make a new podcast from stories you pick." />}
       {podcastsQuery.data && podcastsQuery.data.data.length > 0 && (
         <PodcastTable
           podcasts={podcastsQuery.data.data}

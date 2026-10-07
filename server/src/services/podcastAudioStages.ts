@@ -16,7 +16,7 @@ import { deleteObject, isBunnyConfigured, publicUrl, putObject } from '../lib/bu
 import type { PodcastDialogue } from '../schemas/llm.js'
 import { assembleSpokenSegments } from './podcastDialogue.js'
 import { buildTranscriptVtt, chunkChars, chunkContinuity, chunkTurns, type Chunk } from './podcastChunks.js'
-import { assertBalanceCovers, assertJobEnabled, PodcastBlockedError, reserveTtsChars } from './podcastGuards.js'
+import { assertBalanceCovers, assertJobEnabled, PodcastBlockedError, reserveTtsChars, standaloneCopyRefusal } from './podcastGuards.js'
 
 const log = createLogger('podcast-audio')
 
@@ -55,9 +55,9 @@ export type AudioStageWrite = {
 }
 
 /** The episode's TTS chunks, rebuilt from the stored dialogue (deterministic, so a resume matches). */
-export function episodeChunks(episode: Pick<Podcast, 'id' | 'dialogue'>): Chunk[] {
+export function episodeChunks(episode: Pick<Podcast, 'id' | 'dialogue' | 'kind'>): Chunk[] {
   if (!episode.dialogue) throw new Error(`podcast ${episode.id} has no dialogue to voice`)
-  return chunkTurns(assembleSpokenSegments(episode.dialogue as unknown as PodcastDialogue), config.podcast.chunkMaxChars)
+  return chunkTurns(assembleSpokenSegments(episode.dialogue as unknown as PodcastDialogue, episode.kind), config.podcast.chunkMaxChars)
 }
 
 const voiceFor = (speaker: 'HOST_A' | 'HOST_B') => (speaker === 'HOST_A' ? config.podcast.voiceIdA : config.podcast.voiceIdB)
@@ -91,8 +91,14 @@ async function voiceStub(chunks: Chunk[], index: number): Promise<Omit<VoicedChu
   return { bytes, requestId: null, chars, durationMs: cbrDurationMs(bytes.length) }
 }
 
-/** scripted → voiced: voice every chunk not stored yet, in order; a resume pays for nothing twice. */
+/**
+ * scripted → voiced: voice every chunk not stored yet, in order; a resume pays for nothing twice.
+ * A live voicing of a standalone episode whose wording the owner has not confirmed is blocked before
+ * any credits are spent; a dry run voices the silent stub as always.
+ */
 export async function voiceEpisode(episode: Podcast, ctx: AudioStageContext): Promise<AudioStageWrite> {
+  const refusal = episode.dryRun ? null : standaloneCopyRefusal(episode.kind)
+  if (refusal) throw new PodcastBlockedError(refusal)
   const chunks = episodeChunks(episode)
   const stored = await prisma.podcastAudioChunk.findMany({ where: { podcastId: episode.id }, select: { index: true } })
   const done = new Set(stored.map(c => c.index))
@@ -139,7 +145,7 @@ export async function finishEpisode(episode: Podcast, ctx: AudioStageContext): P
   }
 
   const pauseMs = config.podcast.segmentPauseMs
-  const tags = { title: episode.title, artist: config.podcast.showTitle, album: config.podcast.showTitle, comment: podcastEpisodeAiLine(episode.humanEdited) }
+  const tags = { title: episode.title, artist: config.podcast.showTitle, album: config.podcast.showTitle, comment: podcastEpisodeAiLine(episode.humanEdited, episode.kind) }
   const { buffer, durationSec } = await assembleEpisodeMp3(rows.map(r => Buffer.from(r.bytes)), tags, { pauseMs, loudnorm: !episode.dryRun })
   const vtt = buildTranscriptVtt(chunks, rows.map(r => r.durationMs), pauseMs)
 

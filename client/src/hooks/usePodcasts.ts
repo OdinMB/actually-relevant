@@ -1,6 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../lib/admin-api'
-import type { Podcast, PodcastMode, PodcastScriptEdit } from '@shared/types'
+import type { Podcast, PodcastMode, PodcastScriptEdit, PodcastStoryFilters } from '@shared/types'
 import { usePodcastProgress } from './usePodcastProgress'
 
 /** How often an episode is re-read while a process works on it. */
@@ -75,6 +75,31 @@ export function useStartWeeklyPodcast() {
   return useMutation({
     mutationFn: () => adminApi.podcasts.startWeekly(),
     onSuccess: store,
+  })
+}
+
+/** Creates a standalone episode at `created` (starts nothing). */
+export function useCreateStandalonePodcast() {
+  const store = useStoreEpisode()
+  return useMutation({
+    mutationFn: () => adminApi.podcasts.createStandalone(),
+    onSuccess: store,
+  })
+}
+
+/** One page of the standalone story finder's results; the previous page stays shown while the next loads. */
+export function usePodcastStorySearch(filters: PodcastStoryFilters, page: number, pageSize: number) {
+  return useQuery({
+    queryKey: ['podcast-story-search', filters, page, pageSize],
+    queryFn: () => adminApi.podcasts.storySearch(filters, page, pageSize),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** The selection model's suggestion for a standalone episode; writes nothing on the server. */
+export function useSuggestPodcastStories() {
+  return useMutation({
+    mutationFn: ({ id, filters }: { id: string; filters: PodcastStoryFilters }) => adminApi.podcasts.suggestStories(id, filters),
   })
 }
 

@@ -24,7 +24,7 @@ const dialogue = {
 }
 
 function row(overrides: Record<string, unknown> = {}) {
-  return { id: 'p', stage: 'created', mode: null, leaseUntil: null, lastError: null, blockedAt: null, dialogue: null, ...overrides }
+  return { id: 'p', stage: 'created', kind: 'weekly', mode: null, leaseUntil: null, lastError: null, blockedAt: null, dialogue: null, ...overrides }
 }
 
 describe('getPodcastById', () => {
@@ -78,7 +78,7 @@ describe('getPodcastById', () => {
 
   it('estimates the characters a voicing of the stored script sends, and none without a script', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ stage: 'scripted', dialogue }))
-    const total = episodeChunks({ id: 'p', dialogue } as never).flat().reduce((n, t) => n + t.text.length, 0)
+    const total = episodeChunks({ id: 'p', dialogue, kind: 'weekly' } as never).flat().reduce((n, t) => n + t.text.length, 0)
     expect((await getPodcastById('p'))?.ttsCharsEstimate).toBe(total)
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ stage: 'selected' }))
     expect((await getPodcastById('p'))?.ttsCharsEstimate).toBeNull()
@@ -90,8 +90,8 @@ describe('getActiveEpisodes', () => {
 
   it('lists only episodes with a live lease, with the step and, while voicing, the chunk counts', async () => {
     mockPrisma.podcast.findMany.mockResolvedValueOnce([
-      { id: 'a', title: 'W41: A', stage: 'scripted', mode: 'interactive', dialogue },
-      { id: 'b', title: 'W40: B', stage: 'created', mode: 'automated', dialogue: null },
+      { id: 'a', title: 'W41: A', stage: 'scripted', mode: 'interactive', kind: 'weekly', dialogue },
+      { id: 'b', title: 'W40: B', stage: 'created', mode: 'automated', kind: 'weekly', dialogue: null },
     ])
     mockPrisma.podcastAudioChunk.count.mockResolvedValueOnce(2)
     const now = new Date('2026-10-10T06:00:00Z')
@@ -101,7 +101,7 @@ describe('getActiveEpisodes', () => {
     expect(mockPrisma.podcast.findMany.mock.calls[0][0].where).toEqual({ leaseUntil: { gt: now } })
     expect(active[0]).toEqual({
       id: 'a', title: 'W41: A', stage: 'scripted', mode: 'interactive', activity: 'Voicing',
-      chunksDone: 2, chunksTotal: episodeChunks({ id: 'a', dialogue } as never).length,
+      chunksDone: 2, chunksTotal: episodeChunks({ id: 'a', dialogue, kind: 'weekly' } as never).length,
     })
     expect(active[1]).toMatchObject({ id: 'b', activity: 'Selecting stories', chunksDone: null, chunksTotal: null })
     expect(mockPrisma.podcastAudioChunk.count).toHaveBeenCalledTimes(1)

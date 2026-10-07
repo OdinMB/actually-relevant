@@ -1,22 +1,14 @@
 ---
 plan-id: 2026-10-07-podcast-standalone-episodes
 title: Standalone podcast episodes built by hand from any published stories, beside the weekly episode
-status: draft
+status: implemented
 created: 2026-10-07
 author: claude-code (AI)
 repo: OdinMB/actually-relevant
 themes: [ai-risk, cost]
 decisions:
-  - id: ADR-0014
-    title: Mark an episode's kind in an explicit kind column, weekly or standalone, with standalone rows never carrying a week key
-    status: proposed
-    context: Standalone episodes have no ISO week, and legacy rows already have a null week key, so a null week key cannot tell a standalone episode apart.
-    decision: Add a PodcastKind enum column (default weekly) plus a CHECK that a standalone row has a null week_key; the publish job's candidate query also filters kind = weekly.
-  - id: ADR-0015
-    title: A person performs the selection stage of a standalone episode; the AI suggestion is advisory and writes nothing
-    status: proposed
-    context: The weekly selection stage is an LLM run over the week's pool, but a standalone episode's stories come from any published story, picked by a person.
-    decision: Saving a standalone episode's stories at created writes the snapshot and moves it to selected (interactive) under the lease; Suggest stories is a stateless LLM call returning ids for the picker; no run may start a standalone episode from created.
+  - ref: .context/decisions/0016-podcast-kind-column.md
+  - ref: .context/decisions/0015-person-performs-standalone-selection-stage.md
 type: feature
 complexity: complex
 ---
@@ -31,7 +23,7 @@ reused); the same min/max as weekly; then script and audio as usual (interactive
 automatically" allowed once the stories are set); the same feed and `/podcast` page; default title
 without the `W41:` prefix (editable); **published by hand only**, never touched by the weekly
 generate and publish jobs. Every other choice below is the planning agent's (AI), recorded as
-ADR-0014 and ADR-0015 or in this section's prose.
+ADR-0016 and ADR-0015 or in this section's prose.
 
 ## Problem
 
@@ -60,7 +52,7 @@ under the existing rules. Not changed, flagged for the owner: the show-level des
 
 ## Approach
 
-**Data model (ADR-0014).** New enum `PodcastKind { weekly standalone }` and column
+**Data model (ADR-0016).** New enum `PodcastKind { weekly standalone }` and column
 `kind PodcastKind NOT NULL DEFAULT 'weekly'` on `podcasts`. Existing rows, legacy ones included,
 become `weekly`; a legacy row stays recognisable by `stage = legacy`, as today. The migration adds
 `CHECK (kind <> 'standalone' OR week_key IS NULL)`, so a standalone row can never take a week's
@@ -242,7 +234,7 @@ client tests.
 | `.context/ai-transparency.md` | Rows 8 and 11 and the podcast measures: standalone episodes, person-chosen stories, their opener and AI lines pending owner approval (publish and live voicing gated); open owner decision: the show description still says "weekly" |
 | `.context/prompting.md` | One line: podcast prompts carry per-kind wording records; standalone wording never dates stories relative to now |
 | `.context/admin-dashboard.md` | One line: New podcast and the story finder |
-| `.context/decisions.md`, `.context/decisions/0014-…`, `0015-…` | Written at implementation when the stubs are promoted (`adr` skill) |
+| `.context/decisions.md`, `.context/decisions/0016-…`, `0015-…` | Written at implementation when the stubs are promoted (`adr` skill) |
 
 ## Tests
 

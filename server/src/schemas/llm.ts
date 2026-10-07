@@ -211,20 +211,33 @@ const podcastSegmentSchema = z.object({
     ),
 });
 
-export const podcastDialogueSchema = z.object({
-  episodeTitle: z
-    .string()
-    .describe(`Episode title in plain text, at most ${config.podcast.maxTitleChars} characters, naming the week's main themes.`),
-  episodeSummary: z
-    .string()
-    .describe("Two plain sentences describing the episode for a podcast app. No URLs, no markdown."),
-  segments: z
-    .array(podcastSegmentSchema)
-    .describe(
-      "The whole conversation, in spoken order. Across the whole conversation, segment boundaries included, " +
-        "the same speaker never speaks more than twice in a row."
-    ),
-});
+/** The dialogue schema whose title asks for the themes of `themesOf` ("the week's", "the episode's"). */
+function buildPodcastDialogueSchema(themesOf: string) {
+  return z.object({
+    episodeTitle: z
+      .string()
+      .describe(`Episode title in plain text, at most ${config.podcast.maxTitleChars} characters, naming ${themesOf} main themes.`),
+    episodeSummary: z
+      .string()
+      .describe("Two plain sentences describing the episode for a podcast app. No URLs, no markdown."),
+    segments: z
+      .array(podcastSegmentSchema)
+      .describe(
+        "The whole conversation, in spoken order. Across the whole conversation, segment boundaries included, " +
+          "the same speaker never speaks more than twice in a row."
+      ),
+  });
+}
+
+/** The weekly episode's dialogue schema (the eval harness and the ship checks version it by name). */
+export const podcastDialogueSchema = buildPodcastDialogueSchema("the week's");
+
+const standalonePodcastDialogueSchema = buildPodcastDialogueSchema("the episode's");
+
+/** The dialogue schema for an episode of this kind: the weekly one unchanged, or one without "the week". */
+export function podcastDialogueSchemaFor(kind: "weekly" | "standalone"): typeof podcastDialogueSchema {
+  return kind === "standalone" ? standalonePodcastDialogueSchema : podcastDialogueSchema;
+}
 
 export const podcastSelectResultSchema = z.object({
   selectedIds: z

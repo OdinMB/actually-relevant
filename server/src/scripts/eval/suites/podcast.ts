@@ -41,14 +41,14 @@ export function podcastEpisodeStories(p: PodcastItem): StoryForPodcast[] {
   }))
 }
 
-export const podcastPrompt = (p: PodcastItem) => buildPodcastPrompt(podcastEpisodeStories(p), dialogueCharBudget())
+export const podcastPrompt = (p: PodcastItem) => buildPodcastPrompt(podcastEpisodeStories(p), dialogueCharBudget('weekly'), 'weekly')
 
 const selectStory = (s: PodcastFixtureStory & { id: string }): StoryForPodcastSelect => ({
   id: s.id, issue: s.category, title: s.title, summary: s.summary, relevance: s.relevance ?? null, emotionTag: s.emotionTag ?? null,
 })
 
 export const podcastSelectPrompt = (p: PodcastItem) =>
-  buildPodcastSelectPrompt(podcastPool(p).map(selectStory), config.podcast.minStories, config.podcast.maxStories)
+  buildPodcastSelectPrompt(podcastPool(p).map(selectStory), config.podcast.minStories, config.podcast.maxStories, 'weekly')
 
 export const scoreDialogue = (p: PodcastItem, dialogue: PodcastDialogue): DialogueCheck =>
   checkDialogue(dialogue, podcastEpisodeStories(p))
@@ -77,7 +77,7 @@ export function scorePodcast(ps: PodcastItem[], recs: CallRecord<PodcastDialogue
 }
 
 /** The dialogue as the owner rates it: the spoken episode, "HOST A: …". */
-export const renderDialogue = (d: PodcastDialogue) => renderScript(assembleSpokenSegments(d))
+export const renderDialogue = (d: PodcastDialogue) => renderScript(assembleSpokenSegments(d, 'weekly'))
 
 export interface SelectionCheck {
   /** Valid, distinct pool ids in the answer. */

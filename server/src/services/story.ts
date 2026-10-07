@@ -158,6 +158,14 @@ function buildWhereClause(filters: StoryFilters): Prisma.StoryWhereInput {
   return where
 }
 
+/**
+ * The admin list's where clause for published stories only, with its issue, date and text-search
+ * semantics (the podcast's story finder uses it, so the two never drift apart).
+ */
+export function publishedStoryWhere(filters: Pick<StoryFilters, 'issueId' | 'crawledAfter' | 'crawledBefore' | 'search'>): Prisma.StoryWhereInput {
+  return buildWhereClause({ ...filters, status: StoryStatus.published })
+}
+
 const ADMIN_LIST_SELECT = {
   id: true,
   sourceUrl: true,

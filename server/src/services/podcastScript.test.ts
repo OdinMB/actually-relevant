@@ -10,9 +10,9 @@ vi.mock('./llm.js', () => ({
   rateLimitDelay: vi.fn().mockResolvedValue(undefined),
 }))
 
-const { selectEpisodeStories, writeEpisodeScript, buildShowNotes, loadEpisodePool, loadEpisodeStories } = await import('./podcastScript.js')
+const { selectEpisodeStories, chooseStories, writeEpisodeScript, buildShowNotes, loadEpisodePool, loadEpisodeStories, TooFewStoriesError } = await import('./podcastScript.js')
 const { PodcastBlockedError } = await import('./podcastGuards.js')
-const { PODCAST_EPISODE_AI_LINE, PODCAST_EPISODE_AI_LINE_EDITED } = await import('../lib/aiLabelCopy.js')
+const { PODCAST_EPISODE_AI_LINE, PODCAST_EPISODE_AI_LINE_EDITED, PODCAST_EPISODE_COPY } = await import('../lib/aiLabelCopy.js')
 const { config } = await import('../config.js')
 
 function poolStory(n: number, issue = `Issue ${n}`) {
@@ -76,6 +76,33 @@ describe('selectEpisodeStories', () => {
   })
 })
 
+describe('chooseStories', () => {
+  beforeEach(() => vi.clearAllMocks())
+  const promptOf = () => JSON.stringify(mockInvoke.mock.calls[0][0])
+
+  it('throws TooFewStoriesError without calling the model when the pool is under the minimum', async () => {
+    const err = await chooseStories([poolStory(1), poolStory(2), poolStory(3)], 'standalone').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(TooFewStoriesError)
+    expect(err).toMatchObject({ available: 3, needed: config.podcast.minStories })
+    expect(mockInvoke).not.toHaveBeenCalled()
+  })
+
+  it('returns the pool stories in the model\'s order, without unknown or duplicate ids, capped at the maximum', async () => {
+    mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-6', 'x', 'story-2', 'story-6', 'story-1', 'story-3', 'story-4', 'story-5'] }))
+    const chosen = await chooseStories([1, 2, 3, 4, 5, 6].map(n => poolStory(n)), 'standalone')
+    expect(chosen.map(s => s.id)).toEqual(['story-6', 'story-2', 'story-1', 'story-3', 'story-4'])
+  })
+
+  it('builds the prompt variant of the kind', async () => {
+    mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-1', 'story-2', 'story-3', 'story-4'] }))
+    await chooseStories([1, 2, 3, 4].map(n => poolStory(n)), 'standalone')
+    expect(promptOf()).not.toMatch(/this week/)
+    vi.clearAllMocks()
+    await chooseStories([1, 2, 3, 4].map(n => poolStory(n)), 'weekly')
+    expect(promptOf()).toMatch(/this week's episode/)
+  })
+})
+
 describe('writeEpisodeScript', () => {
   beforeEach(() => vi.clearAllMocks())
 
@@ -111,14 +138,14 @@ describe('writeEpisodeScript', () => {
 
   it('returns a valid dialogue from the first call', async () => {
     mockInvoke.mockResolvedValueOnce(answer(valid))
-    const result = await writeEpisodeScript(selected)
+    const result = await writeEpisodeScript(selected, 'weekly')
     expect(result.dialogue).toEqual(valid)
     expect(mockInvoke).toHaveBeenCalledTimes(1)
   })
 
   it('regenerates once with the problems when the first dialogue is invalid', async () => {
     mockInvoke.mockResolvedValueOnce(answer(invalid)).mockResolvedValueOnce(answer(valid))
-    const result = await writeEpisodeScript(selected)
+    const result = await writeEpisodeScript(selected, 'weekly')
     expect(result.dialogue).toEqual(valid)
     expect(mockInvoke).toHaveBeenCalledTimes(2)
     const secondPrompt = JSON.stringify(mockInvoke.mock.calls[1][0])
@@ -128,15 +155,25 @@ describe('writeEpisodeScript', () => {
 
   it('counts an unparsable answer as the one regeneration', async () => {
     mockInvoke.mockResolvedValueOnce(answer(null)).mockResolvedValueOnce(answer(valid))
-    expect((await writeEpisodeScript(selected)).dialogue).toEqual(valid)
+    expect((await writeEpisodeScript(selected, 'weekly')).dialogue).toEqual(valid)
     mockInvoke.mockReset()
     mockInvoke.mockResolvedValueOnce(answer(null)).mockResolvedValueOnce(answer(invalid))
-    await expect(writeEpisodeScript(selected)).rejects.toBeInstanceOf(PodcastBlockedError)
+    await expect(writeEpisodeScript(selected, 'weekly')).rejects.toBeInstanceOf(PodcastBlockedError)
+  })
+
+  it('validates a standalone dialogue with the standalone rules and feeds a relative date back', async () => {
+    const standalone = JSON.parse(JSON.stringify(valid).replace(' this week', '').replace('a week worth', 'an episode worth')) as PodcastDialogue
+    const dated = { ...standalone, episodeSummary: 'Stories from last month. Plain ones.' }
+    mockInvoke.mockResolvedValueOnce(answer(dated)).mockResolvedValueOnce(answer(standalone))
+    expect((await writeEpisodeScript(selected, 'standalone')).dialogue).toEqual(standalone)
+    const [firstPrompt, secondPrompt] = mockInvoke.mock.calls.map(c => JSON.stringify(c[0]))
+    expect(firstPrompt).not.toMatch(/this week's episode|for humanity this week/)
+    expect(secondPrompt).toContain('last month')
   })
 
   it('blocks the episode when the regeneration is still invalid', async () => {
     mockInvoke.mockResolvedValue(answer(invalid))
-    await expect(writeEpisodeScript(selected)).rejects.toBeInstanceOf(PodcastBlockedError)
+    await expect(writeEpisodeScript(selected, 'weekly')).rejects.toBeInstanceOf(PodcastBlockedError)
     expect(mockInvoke).toHaveBeenCalledTimes(2)
   })
 })
@@ -148,7 +185,7 @@ describe('buildShowNotes', () => {
   ]
 
   it('starts with the AI line and links our analysis and the source of each story', () => {
-    const notes = buildShowNotes('The summary.', stories, false)
+    const notes = buildShowNotes('The summary.', stories, false, 'weekly')
     expect(notes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE)
     expect(notes).toContain('The summary.')
     expect(notes).toContain('/stories/headline-1')
@@ -158,7 +195,13 @@ describe('buildShowNotes', () => {
   })
 
   it('starts with the edited line when a person edited the episode', () => {
-    expect(buildShowNotes('The summary.', stories, true).split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE_EDITED)
+    expect(buildShowNotes('The summary.', stories, true, 'weekly').split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE_EDITED)
+  })
+
+  it('picks the AI line by kind', () => {
+    const { aiLine, aiLineEdited } = PODCAST_EPISODE_COPY.standalone
+    expect(buildShowNotes('The summary.', stories, false, 'standalone').split('\n')[0]).toBe(aiLine)
+    expect(buildShowNotes('The summary.', stories, true, 'standalone').split('\n')[0]).toBe(aiLineEdited)
   })
 })
 

@@ -11,6 +11,9 @@ import type {
   PodcastListItem,
   PodcastMode,
   PodcastScriptEdit,
+  PodcastStoryCandidate,
+  PodcastStoryFilters,
+  PodcastStorySearchResult,
   PodcastScriptSaveResult,
   PodcastStoryPool,
   PodcastUsage,
@@ -296,6 +299,14 @@ export const adminApi = {
     delete: (id: string) => request<void>(`/podcasts/${id}`, { method: 'DELETE' }),
     /** Finds or creates this week's episode; nothing runs until a mode is chosen on its page. */
     startWeekly: () => request<Podcast>('/podcasts/weekly', { method: 'POST' }),
+    /** Creates a standalone episode at `created`; a person then chooses its stories on its page. */
+    createStandalone: () => request<Podcast>('/podcasts/standalone', { method: 'POST' }),
+    /** Published stories of any date for a standalone episode's story finder, most relevant first. */
+    storySearch: (filters: PodcastStoryFilters, page: number, pageSize: number) =>
+      request<PodcastStorySearchResult>(`/podcasts/story-search${toQueryString({ ...filters, page, pageSize } as Record<string, unknown>)}`),
+    /** The selection model's 4-5 stories for a standalone episode; writes nothing. 422 (`{ errors }`) when too few match. */
+    suggestStories: (id: string, filters: PodcastStoryFilters) =>
+      request<{ stories: PodcastStoryCandidate[] }>(`/podcasts/${id}/suggest-stories`, { method: 'POST', body: JSON.stringify(filters) }),
     /** Episodes a process is working on right now. */
     active: () => request<ActivePodcastRun[]>('/podcasts/active'),
     /** Start (with a mode), approve, finish automatically or resume; the work continues in the background (202). */

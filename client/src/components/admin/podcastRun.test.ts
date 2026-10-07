@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { makePodcast } from '../../test/podcasts'
+import { makePodcast, makeStandalonePodcast } from '../../test/podcasts'
 import { nextAction, runVoices } from './podcastRun'
 
 describe('nextAction', () => {
@@ -19,6 +19,13 @@ describe('nextAction', () => {
     expect(nextAction(makePodcast({ stage: 'ready' }))).toBeNull()
     expect(nextAction(makePodcast({ status: 'published' }))).toBeNull()
     expect(nextAction(makePodcast({ stage: 'legacy' }))).toBeNull()
+  })
+
+  it('asks a person to choose a standalone episode\'s stories at created, whatever its mode', () => {
+    expect(nextAction(makeStandalonePodcast())).toBe('choose-stories')
+    expect(nextAction(makeStandalonePodcast({ mode: 'interactive' }))).toBe('choose-stories')
+    expect(nextAction(makeStandalonePodcast({ mode: 'automated', lastError: 'x' }))).toBe('choose-stories')
+    expect(nextAction(makeStandalonePodcast({ stage: 'selected', mode: 'interactive', awaitingReview: true }))).toBe('approve-stories')
   })
 })
 

@@ -28,6 +28,7 @@ const LIST_COLUMNS = {
   stage: true,
   mode: true,
   weekKey: true,
+  kind: true,
   storyIds: true,
   attempts: true,
   blockedAt: true,
@@ -65,7 +66,7 @@ export function episodeActivity(row: { stage: PodcastStage; inProgress: boolean 
 }
 
 /** Spoken characters a full voicing of the stored dialogue sends to TTS; null before there is a script. */
-function ttsCharsEstimate(row: Pick<Podcast, 'id' | 'dialogue'>): number | null {
+function ttsCharsEstimate(row: Pick<Podcast, 'id' | 'dialogue' | 'kind'>): number | null {
   if (!row.dialogue) return null
   return episodeChunks(row).reduce((n, chunk) => n + chunkChars(chunk), 0)
 }
@@ -128,7 +129,7 @@ export interface ActiveEpisode {
 export async function getActiveEpisodes(now: Date = new Date()): Promise<ActiveEpisode[]> {
   const rows = await prisma.podcast.findMany({
     where: { leaseUntil: { gt: now } },
-    select: { id: true, title: true, stage: true, mode: true, dialogue: true },
+    select: { id: true, title: true, stage: true, mode: true, kind: true, dialogue: true },
     orderBy: { createdAt: 'desc' },
   })
   return Promise.all(rows.map(async row => {

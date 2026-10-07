@@ -4,11 +4,11 @@
  * path, and the guard against changing an episode that is in progress or was published. Used by
  * the pipeline, the weekly run, CRUD and the admin routes, so the checks are never scattered.
  */
-import { ContentStatus, PodcastStage, type Podcast } from '@prisma/client'
+import { ContentStatus, PodcastStage, type Podcast, type PodcastKind } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { ElevenLabsQuotaError, getRemainingCharacters, isElevenLabsConfigured } from '../lib/elevenlabs.js'
-import { PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED } from '../lib/aiLabelCopy.js'
+import { PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED, PODCAST_STANDALONE_COPY_CONFIRMED } from '../lib/aiLabelCopy.js'
 
 /** A failure that retrying will not fix: the episode is blocked until an admin Resume. */
 export class PodcastBlockedError extends Error {
@@ -127,6 +127,16 @@ export function wasPublished(episode: Pick<Podcast, 'stage' | 'status' | 'publis
 export function editedAiLineRefusal(humanEdited: boolean, confirmed: boolean = PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED): string | null {
   if (!humanEdited || confirmed) return null
   return 'an episode marked "Edited by a person" cannot be listed yet: its AI line awaits the owner\'s confirmation (PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED in server/src/lib/aiLabelCopy.ts)'
+}
+
+/**
+ * Why an episode of this kind may not be voiced live or listed, or null when it may: a standalone
+ * episode's opener and AI line go out only once the owner has confirmed their wording
+ * (`PODCAST_STANDALONE_COPY_CONFIRMED`). A weekly episode is never refused here.
+ */
+export function standaloneCopyRefusal(kind: PodcastKind, confirmed: boolean = PODCAST_STANDALONE_COPY_CONFIRMED): string | null {
+  if (kind !== 'standalone' || confirmed) return null
+  return "a standalone episode cannot be voiced live or listed yet: its opener and AI line await the owner's confirmation (PODCAST_STANDALONE_COPY_CONFIRMED in server/src/lib/aiLabelCopy.ts)"
 }
 
 /**

@@ -53,7 +53,7 @@ export async function findOrCreateWeekEpisode(now: Date = new Date()): Promise<P
   if (existing) return existing
   try {
     return await prisma.podcast.create({
-      data: { title: defaultEpisodeTitle(weekKey), weekKey, stage: PodcastStage.created, dryRun: config.podcast.dryRun },
+      data: { title: defaultEpisodeTitle({ weekKey, createdAt: now }), weekKey, stage: PodcastStage.created, dryRun: config.podcast.dryRun },
     })
   } catch (err) {
     if (!isUniqueViolation(err)) throw err
@@ -99,6 +99,20 @@ async function announceReady(id: string, now: Date): Promise<void> {
   }
 }
 
+/**
+ * A row made in a dry run, now run live: back to `created`, discarding the stub's work. A standalone
+ * row goes back only to `selected`, keeping the stories a person chose (at `selected` already, only
+ * the flag changes).
+ */
+async function leaveDryRun(episode: Podcast, leaseHeld: boolean): Promise<void> {
+  const keepStories = episode.kind === 'standalone' && episode.stage !== PodcastStage.created
+  if (keepStories && episode.stage === PodcastStage.selected) {
+    await prisma.podcast.update({ where: { id: episode.id }, data: { dryRun: false } })
+    return
+  }
+  await rewindEpisode(episode.id, keepStories ? 'selected' : 'created', { dryRun: false, leaseHeld })
+}
+
 interface RunOptions {
   trigger: AdvanceTrigger
   now: Date
@@ -129,7 +143,7 @@ async function runEpisode(episode: Podcast, { trigger, now, leaseHeld }: RunOpti
 
   try {
     assertPodcastRunnable({ trigger, dryRun: config.podcast.dryRun })
-    if (episode.dryRun && !config.podcast.dryRun) await rewindEpisode(id, 'created', { dryRun: false, leaseHeld })
+    if (episode.dryRun && !config.podcast.dryRun) await leaveDryRun(episode, leaseHeld)
     const advanced = await advanceEpisode(id, { trigger, leaseHeld })
     if (advanced.status === 'busy') return result('skipped', 'in progress in another process')
     if (advanced.stage === PodcastStage.ready) await announceReady(id, now)
@@ -166,10 +180,14 @@ export interface AdminRunRequest {
  * block. The caller answers 202 and then runs `resumeEpisode` with the lease this leaves held.
  * A rewind without a given mode makes the episode interactive: a person stepped in, so the run
  * stops at the next review point instead of voicing unseen. Refusals are `PodcastRefusedError` (409).
+ * No run starts a standalone episode from `created`: a person chooses its stories (ADR-0015).
  */
 export async function startAdminRun(id: string, req: AdminRunRequest = {}): Promise<void> {
   const episode = await prisma.podcast.findUniqueOrThrow({ where: { id } })
   if (episode.stage === PodcastStage.legacy) throw new PodcastRefusedError('a legacy episode cannot be run')
+  if (episode.kind === 'standalone' && (req.rewindTo ?? episode.stage) === PodcastStage.created) {
+    throw new PodcastRefusedError("choose the episode's stories first")
+  }
   const mode = req.mode ?? (req.rewindTo ? 'interactive' : episode.mode)
   if (!mode) throw new PodcastRefusedError('choose interactive or fully automated first')
   if (!req.rewindTo && episode.stage === PodcastStage.ready) throw new PodcastRefusedError('the episode is already ready')

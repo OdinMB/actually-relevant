@@ -1,10 +1,12 @@
 /**
  * Dialogue rules and transformations for the two-speaker podcast, without I/O: validation of the
- * model's dialogue (including the segue rule), the spoken episode with the code-added opener and
- * sign-off, the admin script view, and a person's text edits applied to the stored structure.
+ * model's dialogue (including the segue rule, and for a standalone episode the rule against dating
+ * stories relative to now), the spoken episode with the kind's code-added opener and sign-off, the
+ * admin script view, and a person's text edits applied to the stored structure.
  */
+import type { PodcastKind } from '@prisma/client'
 import { config } from '../config.js'
-import { PODCAST_OPENER } from '../lib/aiLabelCopy.js'
+import { podcastOpener, podcastSignOff } from '../lib/aiLabelCopy.js'
 import type { PodcastCharBudget } from '../prompts/podcast.js'
 import { PODCAST_AUDIO_TAGS, type PodcastDialogue } from '../schemas/llm.js'
 
@@ -38,6 +40,8 @@ export interface DialogueValidation {
 }
 
 export interface ValidationOptions {
+  /** The episode's kind: its spoken opener and sign-off, its length budget, and its wording rules. */
+  kind: PodcastKind
   /**
    * `person`: the segue rules become warnings, since a person may write a short bridge on purpose
    * and hears the result before publishing. Every other rule protects TTS spend, chunking or the
@@ -46,26 +50,22 @@ export interface ValidationOptions {
   authoredBy?: 'model' | 'person'
 }
 
-/** Spoken last turn of every episode (HOST_A), added in code after the model's outro. */
-export const PODCAST_SIGN_OFF = "That's it for this week. Tell us what you think on actuallyrelevant.news. Thanks for listening."
-
-const CODE_TURN_CHARS = PODCAST_OPENER.length + PODCAST_SIGN_OFF.length
-
 /**
  * The characters the model's own turns may take, so the whole episode stays inside the band, and
- * the length the prompt asks them for.
+ * the length the prompt asks them for. The code turns' length depends on the kind's wording.
  */
-export function dialogueCharBudget(): PodcastCharBudget {
+export function dialogueCharBudget(kind: PodcastKind): PodcastCharBudget {
+  const codeTurnChars = podcastOpener(kind).length + podcastSignOff(kind).length
   const [lo, hi] = config.podcast.spokenCharBand
-  return { min: lo - CODE_TURN_CHARS, max: hi - CODE_TURN_CHARS, aim: config.podcast.spokenCharAim - CODE_TURN_CHARS }
+  return { min: lo - codeTurnChars, max: hi - codeTurnChars, aim: config.podcast.spokenCharAim - codeTurnChars }
 }
 
-/** The episode as it is spoken: the opener, the model's segments, the sign-off. */
-export function assembleSpokenSegments(dialogue: PodcastDialogue): SpokenSegment[] {
+/** The episode as it is spoken: the kind's opener, the model's segments, the kind's sign-off. */
+export function assembleSpokenSegments(dialogue: PodcastDialogue, kind: PodcastKind): SpokenSegment[] {
   return [
-    { kind: 'opener', storyRef: null, turns: [{ speaker: 'HOST_A', text: PODCAST_OPENER }] },
+    { kind: 'opener', storyRef: null, turns: [{ speaker: 'HOST_A', text: podcastOpener(kind) }] },
     ...dialogue.segments.map(s => ({ kind: s.kind, storyRef: s.storyRef, turns: s.turns.map(t => ({ speaker: t.speaker, text: t.text })) })),
-    { kind: 'signoff', storyRef: null, turns: [{ speaker: 'HOST_A', text: PODCAST_SIGN_OFF }] },
+    { kind: 'signoff', storyRef: null, turns: [{ speaker: 'HOST_A', text: podcastSignOff(kind) }] },
   ]
 }
 
@@ -213,21 +213,42 @@ function speakerRunErrors(spoken: SpokenSegment[]): string[] {
  * The band covers the whole spoken episode; the error speaks in the prompt's terms (the model's own
  * turns against its budget), so the regeneration knows exactly how far to move.
  */
-function bandErrors(spoken: SpokenSegment[], dialogue: PodcastDialogue): string[] {
+function bandErrors(spoken: SpokenSegment[], dialogue: PodcastDialogue, kind: PodcastKind): string[] {
   const [lo, hi] = config.podcast.spokenCharBand
   const total = spoken.flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
   if (total >= lo && total <= hi) return []
   const own = dialogue.segments.flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
-  const { min, max } = dialogueCharBudget()
+  const { min, max } = dialogueCharBudget(kind)
   return [`your turns total ${own} spoken characters, audio tags included; they must total ${min} to ${max}`]
+}
+
+const RELATIVE_TIME_RE = /\b(?:this|last|past|next) (?:week|month)(?:'s)?\b/i
+
+/**
+ * A standalone episode's stories may come from different weeks or months, so nothing in it dates a
+ * story relative to now ("this week", "last month"). A weekly episode has no such rule.
+ */
+function relativeTimeErrors(dialogue: PodcastDialogue, kind: PodcastKind): string[] {
+  if (kind !== 'standalone') return []
+  const found = (text: string) => text.match(RELATIVE_TIME_RE)?.[0]
+  const errors: string[] = []
+  for (const [name, text] of [['title', dialogue.episodeTitle], ['summary', dialogue.episodeSummary]] as const) {
+    const phrase = found(text)
+    if (phrase) errors.push(`the episode ${name} says "${phrase}"; the stories may come from different weeks, so never date them relative to now`)
+  }
+  dialogue.segments.forEach((s, i) => s.turns.forEach((t, j) => {
+    const phrase = found(stripTags(t.text))
+    if (phrase) errors.push(`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the stories may come from different weeks, so never date them relative to now`)
+  }))
+  return errors
 }
 
 /**
  * Every rule the dialogue must meet before it is stored; the model's errors are fed back on the one
  * regeneration. For a person's edit the segue rules are warnings (`ValidationOptions`).
  */
-export function validateDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[], opts: ValidationOptions = {}): DialogueValidation {
-  const spoken = assembleSpokenSegments(dialogue)
+export function validateDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[], opts: ValidationOptions): DialogueValidation {
+  const spoken = assembleSpokenSegments(dialogue, opts.kind)
   const hasUrl = urlChecker(stories)
   const segue = segueErrors(dialogue, stories)
   const segueIsWarning = opts.authoredBy === 'person'
@@ -235,9 +256,10 @@ export function validateDialogue(dialogue: PodcastDialogue, stories: DialogueSto
     ...metadataErrors(dialogue, hasUrl),
     ...structureErrors(dialogue, stories),
     ...turnErrors(dialogue, hasUrl),
+    ...relativeTimeErrors(dialogue, opts.kind),
     ...(segueIsWarning ? [] : segue),
     ...speakerRunErrors(spoken),
-    ...bandErrors(spoken, dialogue),
+    ...bandErrors(spoken, dialogue, opts.kind),
   ]
   return { valid: errors.length === 0, errors, warnings: segueIsWarning ? segue : [] }
 }

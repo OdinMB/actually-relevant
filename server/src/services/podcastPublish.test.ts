@@ -11,7 +11,7 @@ vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastFeed.js', () => mockFeed)
 
 const { publishEpisode, unpublishEpisode, getPublishedEpisodes, pickAutoPublishCandidate, publishBlockedReason } = await import('./podcastPublish.js')
-const { PodcastRefusedError, wasPublished } = await import('./podcastGuards.js')
+const { PodcastRefusedError, wasPublished, standaloneCopyRefusal } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-12T07:00:00Z') // Monday of 2026-W42
 const ready = (overrides: Record<string, unknown> = {}) =>
@@ -32,6 +32,12 @@ describe('publishEpisode', () => {
     await expect(publishEpisode('podcast-1', NOW)).rejects.toBeInstanceOf(PodcastRefusedError)
     expect(writes()).toHaveLength(0)
     expect(mockFeed.invalidateFeedCache).not.toHaveBeenCalled()
+  })
+
+  it('refuses a standalone episode while its wording is unconfirmed, and saves nothing', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready({ kind: 'standalone' }))
+    await expect(publishEpisode('podcast-1', NOW)).rejects.toThrow(/standalone/)
+    expect(writes()).toHaveLength(0)
   })
 
   it('refuses a dry-run episode', async () => {
@@ -88,6 +94,12 @@ describe('publishBlockedReason', () => {
     expect(publishBlockedReason(ready({ audioUrl: null }), false)).toMatch(/no uploaded audio/)
   })
 
+  it('refuses a ready standalone episode while its wording is unconfirmed, and never a weekly one', () => {
+    expect(publishBlockedReason(ready({ kind: 'standalone' }), false)).toMatch(/standalone episode .* owner's confirmation/)
+    expect(standaloneCopyRefusal('standalone', true)).toBeNull()
+    expect(standaloneCopyRefusal('weekly', false)).toBeNull()
+  })
+
   it('is null for a listed episode, which can always be unpublished', () => {
     expect(publishBlockedReason(ready({ status: 'published', dryRun: true }), true)).toBeNull()
   })
@@ -132,11 +144,11 @@ describe('getPublishedEpisodes', () => {
     const publishedAt = new Date('2026-10-12T08:00:00Z')
     const stories = [{ ref: 1, id: 's1', title: 'T', publisher: 'P', sourceUrl: 'https://x.example/1', slug: 't', issue: 'I' }]
     mockPrisma.podcast.findMany.mockResolvedValueOnce([{
-      id: 'podcast-1', title: 'W42: T', episodeSummary: 'S.', episodeStories: stories, humanEdited: true,
+      id: 'podcast-1', title: 'W42: T', kind: 'weekly', episodeSummary: 'S.', episodeStories: stories, humanEdited: true,
       audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null, publishedAt,
     }])
     expect(await getPublishedEpisodes()).toEqual([{
-      id: 'podcast-1', title: 'W42: T', summary: 'S.', stories, humanEdited: true,
+      id: 'podcast-1', title: 'W42: T', kind: 'weekly', summary: 'S.', stories, humanEdited: true,
       audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null, publishedAt,
     }])
   })
@@ -149,6 +161,7 @@ describe('pickAutoPublishCandidate', () => {
     expect(await pickAutoPublishCandidate(saturdayMorning)).toBeNull()
     const query = mockPrisma.podcast.findFirst.mock.calls[0][0]
     expect(query.where).toMatchObject({
+      kind: 'weekly',
       stage: 'ready',
       dryRun: false,
       status: { not: 'published' },

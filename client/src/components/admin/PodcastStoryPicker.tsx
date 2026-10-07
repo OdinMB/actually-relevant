@@ -1,17 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { Podcast, PodcastPoolStory } from '@shared/types'
 import { Button } from '../ui/Button'
 import { LoadingSpinner } from '../ui/LoadingSpinner'
-import { useToast } from '../ui/Toast'
-import { ApiError } from '../../lib/admin-api'
-import { usePodcastStoryPool, useSavePodcastStories } from '../../hooks/usePodcasts'
+import { usePodcastStoryPool } from '../../hooks/usePodcasts'
+import { usePodcastStoryDraft } from './podcastStoryDraft'
+import { StoryDraftErrors, StoryDraftFooter } from './PodcastStoryDraftControls'
 
 /** The chosen ids with the story at `index` replaced in place. */
 export function swapStory(chosen: string[], index: number, id: string): string[] {
   return chosen.map((current, i) => (i === index ? id : current))
 }
-
-const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every((id, i) => id === b[i])
 
 function StoryLine({ story }: { story: PodcastPoolStory | undefined }) {
   if (!story) return <span className="text-neutral-500 italic">No longer in this week&apos;s pool</span>
@@ -34,22 +32,8 @@ interface PodcastStoryPickerProps {
  */
 export function PodcastStoryPicker({ podcast, onDirtyChange }: PodcastStoryPickerProps) {
   const pool = usePodcastStoryPool(podcast.id, true)
-  const save = useSavePodcastStories()
-  const { toast } = useToast()
-  const [chosen, setChosen] = useState<string[]>(podcast.storyIds)
-  const [errors, setErrors] = useState<string[]>([])
-
-  // When the saved stories change on the server, the picker follows them.
-  const savedKey = podcast.storyIds.join(',')
-  const [shownKey, setShownKey] = useState(savedKey)
-  if (savedKey !== shownKey) {
-    setShownKey(savedKey)
-    setChosen(podcast.storyIds)
-  }
-
-  const dirty = !sameOrder(chosen, podcast.storyIds)
-  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange])
-  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
+  const draft = usePodcastStoryDraft(podcast, onDirtyChange)
+  const { chosen, setChosen } = draft
 
   const byId = useMemo(() => new Map((pool.data?.stories ?? []).map(s => [s.id, s])), [pool.data])
   const others = (pool.data?.stories ?? []).filter(s => !chosen.includes(s.id))
@@ -57,17 +41,6 @@ export function PodcastStoryPicker({ podcast, onDirtyChange }: PodcastStoryPicke
   if (pool.isLoading) return <div className="flex justify-center py-6"><LoadingSpinner /></div>
   if (pool.error || !pool.data) return <p role="alert" className="text-sm text-red-700">Failed to load this week&apos;s stories.</p>
   const { minStories, maxStories } = pool.data
-
-  const handleSave = () => {
-    setErrors([])
-    save.mutate({ id: podcast.id, storyIds: chosen }, {
-      onSuccess: () => toast('success', 'Stories saved'),
-      onError: err => {
-        const body = err instanceof ApiError ? (err.body as { errors?: string[] } | undefined) : undefined
-        setErrors(body?.errors ?? [err instanceof Error ? err.message : 'Failed to save the stories'])
-      },
-    })
-  }
 
   return (
     <section aria-labelledby="podcast-stories-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-4">
@@ -123,17 +96,8 @@ export function PodcastStoryPicker({ podcast, onDirtyChange }: PodcastStoryPicke
         </details>
       )}
 
-      {errors.length > 0 && (
-        <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          <ul className="list-disc pl-5">{errors.map(e => <li key={e}>{e}</li>)}</ul>
-        </div>
-      )}
-
-      {/* Always shown (disabled while nothing changed), so the form does not shift when an edit starts */}
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={handleSave} loading={save.isPending} disabled={!dirty}>Save selection</Button>
-        <Button size="sm" variant="ghost" onClick={() => { setChosen(podcast.storyIds); setErrors([]) }} disabled={!dirty || save.isPending}>Discard changes</Button>
-      </div>
+      <StoryDraftErrors errors={draft.errors} />
+      <StoryDraftFooter draft={draft} />
     </section>
   )
 }

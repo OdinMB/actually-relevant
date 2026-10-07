@@ -22,6 +22,7 @@ const EPISODE = {
   title: 'W42: Clean air',
   summary: 'Two stories.',
   stories: [{ ref: 1, id: 's1', title: 'Air', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air', issue: 'Planet' }],
+  kind: 'weekly' as const,
   humanEdited: false,
   audioUrl: 'https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.mp3',
   audioBytes: 123456,

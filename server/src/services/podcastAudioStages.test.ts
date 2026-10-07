@@ -31,6 +31,7 @@ vi.mock('./podcastGuards.js', async importOriginal => ({ ...(await importOrigina
 const stages = await import('./podcastAudioStages.js')
 const { PodcastBlockedError, PodcastStoppedError } = await import('./podcastGuards.js')
 const { config } = await import('../config.js')
+const { PODCAST_EPISODE_COPY } = await import('../lib/aiLabelCopy.js')
 
 const turn = (speaker: 'HOST_A' | 'HOST_B', mark: string) => ({ speaker, text: `${mark} `.repeat(70).trim() }) // ~349 chars
 const story = (ref: number) => ({ kind: 'story', storyRef: ref, turns: [turn('HOST_B', `s${ref}b`), turn('HOST_A', `s${ref}a`), turn('HOST_B', `s${ref}c`)] })
@@ -45,14 +46,14 @@ const dialogue = {
 }
 
 function episode(overrides: Record<string, unknown> = {}) {
-  return { id: 'pod-1', stage: 'scripted', status: 'draft', title: 'Week 41', weekKey: '2026-W41', dryRun: false, dialogue, ...overrides } as never
+  return { id: 'pod-1', stage: 'scripted', status: 'draft', title: 'Week 41', weekKey: '2026-W41', kind: 'weekly', dryRun: false, dialogue, ...overrides } as never
 }
 
 function context(trigger: 'cron' | 'admin' = 'admin') {
   return { trigger, renewLease: vi.fn(), storeChunk: vi.fn() }
 }
 
-const CHUNKS = stages.episodeChunks({ id: 'pod-1', dialogue } as never)
+const CHUNKS = stages.episodeChunks({ id: 'pod-1', dialogue, kind: 'weekly' } as never)
 
 describe('voiceEpisode', () => {
   beforeEach(() => {
@@ -101,6 +102,23 @@ describe('voiceEpisode', () => {
     expect(mockElevenLabs.textToDialogue).toHaveBeenCalledTimes(CHUNKS.length - 2)
     expect(mockGuards.reserveTtsChars).toHaveBeenCalledTimes(CHUNKS.length - 2)
     expect(ctx.storeChunk.mock.calls.map(c => c[0].index)).toEqual(CHUNKS.map((_, i) => i).slice(2))
+  })
+
+  it('blocks the live voicing of a standalone episode before any spend while its wording is unconfirmed', async () => {
+    const standalone = episode({ kind: 'standalone', weekKey: null })
+    await expect(stages.voiceEpisode(standalone, context())).rejects.toBeInstanceOf(PodcastBlockedError)
+    expect(mockGuards.assertBalanceCovers).not.toHaveBeenCalled()
+    expect(mockGuards.reserveTtsChars).not.toHaveBeenCalled()
+    expect(mockElevenLabs.textToDialogue).not.toHaveBeenCalled()
+  })
+
+  it('voices a standalone dry run with the stub, its standalone opener and sign-off in the chunks', async () => {
+    const ctx = context()
+    await stages.voiceEpisode(episode({ kind: 'standalone', weekKey: null, dryRun: true }), ctx)
+    expect(ctx.storeChunk).toHaveBeenCalled()
+    const chunks = stages.episodeChunks({ id: 'pod-1', dialogue, kind: 'standalone' } as never)
+    expect(chunks[0][0].text).toBe(PODCAST_EPISODE_COPY.standalone.opener)
+    expect(chunks.at(-1)!.at(-1)!.text).toBe(PODCAST_EPISODE_COPY.standalone.signOff)
   })
 
   it('stops before the TTS call when the reservation is refused', async () => {

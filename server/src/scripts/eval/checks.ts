@@ -166,7 +166,7 @@ export function checkDialogue(dialogue: PodcastDialogue, stories: DialogueStoryR
   const sentences = splitSentences(spoken.replace(/\s+/g, ' '))
   const distinct = [...new Set(stories.map(s => s.publisher).filter(p => p && p !== 'Unknown'))]
   return {
-    errors: validateDialogue(dialogue, stories).errors,
+    errors: validateDialogue(dialogue, stories, { kind: 'weekly' }).errors,
     longSentenceShare: rate(sentences.map(s => countWords(s) > 18)),
     publisherCoverage: rate(distinct.map(p => spoken.toLowerCase().includes(p.toLowerCase()))),
     segues: dialogue.segments

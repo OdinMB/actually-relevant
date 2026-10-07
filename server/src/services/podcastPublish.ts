@@ -9,7 +9,7 @@ import { ContentStatus, PodcastStage, type Podcast } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { PodcastRefusedError, editedAiLineRefusal } from './podcastGuards.js'
+import { PodcastRefusedError, editedAiLineRefusal, standaloneCopyRefusal } from './podcastGuards.js'
 import { withEpisodeLease } from './podcastPipeline.js'
 import { invalidateFeedCache } from './podcastFeed.js'
 import { episodeSnapshots } from './podcastScript.js'
@@ -21,12 +21,14 @@ const log = createLogger('podcast-publish')
 const HOUR_MS = 60 * 60 * 1000
 const WEEK_MS = 7 * 24 * HOUR_MS
 
+type PublishFields = 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes' | 'humanEdited' | 'kind'
+
 /** Why an episode cannot be published, or null when it can. */
-export function publishRefusal(episode: Pick<Podcast, 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes' | 'humanEdited'>): string | null {
+export function publishRefusal(episode: Pick<Podcast, PublishFields>): string | null {
   if (episode.stage !== PodcastStage.ready) return `only a ready episode can be published; this one is at ${episode.stage}`
   if (episode.dryRun) return 'a dry-run episode (silent stub voice) cannot be published'
   if (!episode.audioUrl || episode.audioBytes == null) return 'the episode has no uploaded audio'
-  return editedAiLineRefusal(episode.humanEdited)
+  return standaloneCopyRefusal(episode.kind) ?? editedAiLineRefusal(episode.humanEdited)
 }
 
 /**
@@ -35,7 +37,7 @@ export function publishRefusal(episode: Pick<Podcast, 'stage' | 'dryRun' | 'audi
  * always be unpublished. `inProgress` is a live lease: publishing would be refused until the run ends.
  */
 export function publishBlockedReason(
-  episode: Pick<Podcast, 'status' | 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes' | 'humanEdited'>,
+  episode: Pick<Podcast, 'status' | PublishFields>,
   inProgress: boolean,
 ): string | null {
   if (episode.status === ContentStatus.published) return null
@@ -85,7 +87,7 @@ export async function getPublishedEpisodes(): Promise<PublishedEpisode[]> {
       audioBytes: { not: null },
     },
     select: {
-      id: true, title: true, episodeSummary: true, episodeStories: true, humanEdited: true,
+      id: true, title: true, kind: true, episodeSummary: true, episodeStories: true, humanEdited: true,
       audioUrl: true, audioBytes: true, durationSec: true, transcriptUrl: true, publishedAt: true,
     },
     orderBy: { publishedAt: 'desc' },
@@ -96,6 +98,7 @@ export async function getPublishedEpisodes(): Promise<PublishedEpisode[]> {
     return [{
       id: row.id,
       title: row.title,
+      kind: row.kind,
       summary: row.episodeSummary,
       stories: Array.isArray(row.episodeStories) ? episodeSnapshots(row) : [],
       humanEdited: row.humanEdited,
@@ -111,12 +114,14 @@ export async function getPublishedEpisodes(): Promise<PublishedEpisode[]> {
 /**
  * The episode the automatic publish job may publish: the newest `ready`, non-dry-run episode of the
  * current or the previous ISO week that was never published or taken down, and that has been ready
- * for at least `autoPublishMinAgeHours`, so the owner had the evening before to listen. Null when there is none.
+ * for at least `autoPublishMinAgeHours`, so the owner had the evening before to listen. Only a weekly
+ * episode: a standalone one is published by hand only. Null when there is none.
  */
 export async function pickAutoPublishCandidate(now: Date = new Date()): Promise<Pick<Podcast, 'id' | 'title' | 'weekKey'> | null> {
   const readyBefore = new Date(now.getTime() - config.podcast.autoPublishMinAgeHours * HOUR_MS)
   return prisma.podcast.findFirst({
     where: {
+      kind: 'weekly',
       stage: PodcastStage.ready,
       dryRun: false,
       status: { not: ContentStatus.published },

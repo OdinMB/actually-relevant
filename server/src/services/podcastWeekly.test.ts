@@ -8,7 +8,7 @@ const mockPipeline = vi.hoisted(() => ({
   rewindEpisode: vi.fn(),
   claimEpisode: vi.fn(),
   releaseEpisode: vi.fn(),
-  defaultEpisodeTitle: (weekKey: string | null) => `Actually Relevant, ${weekKey}`,
+  defaultEpisodeTitle: (row: { weekKey: string | null }) => `Actually Relevant, ${row.weekKey}`,
   LeaseLostError: class LeaseLostError extends Error {},
 }))
 
@@ -35,7 +35,7 @@ const { PodcastBlockedError, PodcastStoppedError, PodcastRefusedError } = await 
 const NOW = new Date('2026-10-10T06:00:00Z') // Saturday of 2026-W41
 
 function row(overrides: Record<string, unknown> = {}) {
-  return { id: 'pod-1', weekKey: '2026-W41', stage: 'created', status: 'draft', mode: 'automated', dryRun: false, blockedAt: null, attempts: 0, ...overrides }
+  return { id: 'pod-1', weekKey: '2026-W41', kind: 'weekly', stage: 'created', status: 'draft', mode: 'automated', dryRun: false, blockedAt: null, attempts: 0, ...overrides }
 }
 
 describe('isoWeekKey', () => {
@@ -62,7 +62,7 @@ describe('findOrCreateWeekEpisode', () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
     mockPrisma.podcast.create.mockResolvedValueOnce(row())
     await findOrCreateWeekEpisode(NOW)
-    expect(mockPrisma.podcast.create).toHaveBeenCalledWith({ data: expect.objectContaining({ weekKey: '2026-W41', dryRun: false }) })
+    expect(mockPrisma.podcast.create).toHaveBeenCalledWith({ data: expect.objectContaining({ weekKey: '2026-W41', dryRun: false, title: 'Actually Relevant, 2026-W41' }) })
   })
 
   it('reads the row another process created first (unique week key)', async () => {
@@ -210,6 +210,29 @@ describe('runWeeklyEpisode', () => {
   })
 })
 
+describe('resumeEpisode on a dry-run standalone row with a live config', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPipeline.advanceEpisode.mockResolvedValue({ status: 'done', stage: 'scripted' })
+    mockPrisma.podcast.update.mockResolvedValue(row())
+  })
+  const standalone = (stage: string) => row({ kind: 'standalone', weekKey: null, mode: 'interactive', dryRun: true, stage })
+
+  it('rewinds to selected, keeping the stories a person chose', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(standalone('scripted'))
+    await resumeEpisode('pod-1')
+    expect(mockPipeline.rewindEpisode).toHaveBeenCalledWith('pod-1', 'selected', { dryRun: false, leaseHeld: true })
+  })
+
+  it('at selected only clears the flag', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(standalone('selected'))
+    await resumeEpisode('pod-1')
+    expect(mockPipeline.rewindEpisode).not.toHaveBeenCalled()
+    expect(mockPrisma.podcast.update).toHaveBeenCalledWith({ where: { id: 'pod-1' }, data: { dryRun: false } })
+    expect(mockPipeline.advanceEpisode).toHaveBeenCalled()
+  })
+})
+
 describe('startAdminRun', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -247,6 +270,24 @@ describe('startAdminRun', () => {
     await startAdminRun('pod-1', { rewindTo: 'selected' })
     expect(mockPipeline.rewindEpisode).toHaveBeenCalledWith('pod-1', 'selected', { dryRun: false, leaseHeld: true })
     expect(mockPrisma.podcast.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ mode: 'interactive' }) }))
+  })
+
+  it('refuses a standalone episode whose run would start at created, before claiming', async () => {
+    const standalone = (overrides: Record<string, unknown> = {}) => row({ kind: 'standalone', weekKey: null, mode: 'interactive', ...overrides })
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(standalone())
+    await expect(startAdminRun('pod-1', { mode: 'automated' })).rejects.toThrow(/choose the episode's stories first/)
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(standalone({ stage: 'scripted' }))
+    await expect(startAdminRun('pod-1', { rewindTo: 'created' })).rejects.toBeInstanceOf(PodcastRefusedError)
+    expect(mockPipeline.claimEpisode).not.toHaveBeenCalled()
+    expect(mockPipeline.rewindEpisode).not.toHaveBeenCalled()
+  })
+
+  it('runs a standalone episode from selected, and a rewind to selected', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ kind: 'standalone', weekKey: null, stage: 'selected', mode: 'interactive' }))
+    await startAdminRun('pod-1')
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ kind: 'standalone', weekKey: null, stage: 'ready' }))
+    await startAdminRun('pod-1', { rewindTo: 'selected' })
+    expect(mockPipeline.claimEpisode).toHaveBeenCalledTimes(2)
   })
 
   it('releases the lease when the rewind is refused', async () => {

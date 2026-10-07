@@ -84,6 +84,7 @@ export function samplePodcast(overrides: Record<string, any> = {}) {
     storyIds: [],
     status: 'draft' as const,
     weekKey: null,
+    kind: 'weekly' as const,
     stage: 'created' as const,
     dialogue: null,
     episodeStories: null,

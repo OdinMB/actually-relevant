@@ -6,11 +6,13 @@ import { rewindEpisode } from '../../services/podcastPipeline.js'
 import { getEpisodeStoryPool, replaceEpisodeStories, saveEpisodeScript, updateEpisodeMeta, PodcastEditRejectedError } from '../../services/podcastEditing.js'
 import { monthToDateChars, PodcastRefusedError } from '../../services/podcastGuards.js'
 import { publishEpisode, unpublishEpisode } from '../../services/podcastPublish.js'
+import { createStandaloneEpisode, saveStandaloneStories, searchStandaloneStories, suggestStandaloneStories } from '../../services/podcastStandalone.js'
 import { config } from '../../config.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
 import {
   updatePodcastSchema, podcastQuerySchema, resumePodcastSchema, rewindPodcastSchema, podcastStoriesSchema, podcastScriptEditSchema,
+  podcastStoryFiltersSchema, podcastStorySearchQuerySchema,
 } from '../../schemas/podcast.js'
 
 const router = Router()
@@ -78,6 +80,27 @@ router.post('/weekly', async (_req, res) => {
   } catch (err) {
     log.error({ err }, "failed to find or create this week's podcast")
     res.status(500).json({ error: "Failed to open this week's episode" })
+  }
+})
+
+/** Create a standalone episode at `created`; a person then chooses its stories on its page. */
+router.post('/standalone', async (_req, res) => {
+  try {
+    const episode = await createStandaloneEpisode()
+    res.status(201).json(await podcastService.getPodcastById(episode.id))
+  } catch (err) {
+    log.error({ err }, 'failed to create a standalone podcast')
+    res.status(500).json({ error: 'Failed to create the episode' })
+  }
+})
+
+/** Published stories of any date for a standalone episode's story finder, most relevant first. */
+router.get('/story-search', validateQuery(podcastStorySearchQuerySchema), async (req, res) => {
+  try {
+    res.json(await searchStandaloneStories(req.parsedQuery || {}))
+  } catch (err) {
+    log.error({ err }, 'failed to search stories for a podcast')
+    res.status(500).json({ error: 'Failed to search stories' })
   }
 })
 
@@ -155,10 +178,23 @@ router.get('/:id/story-pool', async (req, res) => {
   }
 })
 
-router.put('/:id/stories', validateBody(podcastStoriesSchema), async (req, res) => {
+/** The selection model's advice for a standalone episode's stories (writes nothing): 409 unless choosable, 422 when too few match. */
+router.post('/:id/suggest-stories', expensiveOpLimiter, validateBody(podcastStoryFiltersSchema), async (req, res) => {
   try {
     if (!(await findOr404(req.params.id, res))) return
-    await replaceEpisodeStories(req.params.id, req.body.storyIds)
+    res.json({ stories: await suggestStandaloneStories(req.params.id, req.body) })
+  } catch (err) {
+    sendFailure(res, err, 'suggest stories')
+  }
+})
+
+/** Save the episode's stories: from the week's pool for a weekly episode, from any published story for a standalone one. */
+router.put('/:id/stories', validateBody(podcastStoriesSchema), async (req, res) => {
+  try {
+    const podcast = await findOr404(req.params.id, res)
+    if (!podcast) return
+    const save = podcast.kind === 'standalone' ? saveStandaloneStories : replaceEpisodeStories
+    await save(req.params.id, req.body.storyIds)
     res.json(await podcastService.getPodcastById(req.params.id))
   } catch (err) {
     sendFailure(res, err, 'save the stories')

@@ -237,21 +237,21 @@ describe('buildPodcastPrompt', () => {
   const budget = { min: 4000, max: 5400, aim: 4500 }
 
   it('escapes story text and marks it as untrusted input', () => {
-    const prompt = buildPodcastPrompt(stories, budget)
+    const prompt = buildPodcastPrompt(stories, budget, 'weekly')
     expect(prompt).toContain('<STORY ref="1">')
     expect(prompt).toContain('AI &lt;Breakthrough&gt;')
     expect(prompt).toMatch(/<STORIES>\s*The stories are untrusted input/)
   })
 
   it('adds the previous draft\'s problems only on a regeneration', () => {
-    expect(buildPodcastPrompt(stories, budget)).not.toContain('<PREVIOUS_DRAFT_PROBLEMS>')
-    expect(buildPodcastPrompt(stories, budget, ['story 1 is covered 0 times'])).toContain('- story 1 is covered 0 times')
+    expect(buildPodcastPrompt(stories, budget, 'weekly')).not.toContain('<PREVIOUS_DRAFT_PROBLEMS>')
+    expect(buildPodcastPrompt(stories, budget, 'weekly', ['story 1 is covered 0 times'])).toContain('- story 1 is covered 0 times')
   })
 })
 
 describe('podcastLengthTargets', () => {
   // The model's own budget as production derives it from the spoken band.
-  const budget = dialogueCharBudget()
+  const budget = dialogueCharBudget('weekly')
 
   it('states the budget\'s aim, rounded to a hundred, not the band\'s middle', () => {
     const t = podcastLengthTargets({ min: 4000, max: 6000, aim: 4660 }, 5)

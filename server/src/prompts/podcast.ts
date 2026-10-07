@@ -55,12 +55,35 @@ export function podcastLengthTargets(budget: PodcastCharBudget, storyCount: numb
   }
 }
 
+export type PodcastPromptKind = 'weekly' | 'standalone'
+
 /**
- * The two-speaker dialogue for the weekly episode. Format rules live in podcastDialogueSchema's
+ * The wording that differs by episode kind. A standalone episode's stories are picked by a person and
+ * may come from different weeks or months, so nothing in its prompt says "this week" and the model
+ * is told never to date a story relative to now.
+ */
+const KIND_WORDING: Record<PodcastPromptKind, { role: string; goal: string; introCovers: string; extraConstraints: string }> = {
+  weekly: {
+    role: 'a weekly five-minute news briefing',
+    goal: "this week's episode",
+    introCovers: 'says the episode covers the stories rated most relevant for humanity this week',
+    extraConstraints: '',
+  },
+  standalone: {
+    role: 'a five-minute news briefing',
+    goal: 'this episode',
+    introCovers: 'says the episode covers a selection of stories rated relevant for humanity',
+    extraConstraints: "\n- The stories may come from different weeks or months. Never date a story relative to now ('this week', 'last month', 'yesterday'); when the material uses such words, paraphrase them or give the date only if the material states it.",
+  },
+}
+
+/**
+ * The two-speaker dialogue for an episode of `kind`. Format rules live in the dialogue schema's
  * descriptions; code adds the AI opener before the intro and a fixed sign-off after the outro.
  * `problems` lists what was wrong with the previous draft, on the one regeneration.
  */
-export function buildPodcastPrompt(stories: StoryForPodcast[], budget: PodcastCharBudget, problems: string[] = []): string {
+export function buildPodcastPrompt(stories: StoryForPodcast[], budget: PodcastCharBudget, kind: PodcastPromptKind, problems: string[] = []): string {
+  const wording = KIND_WORDING[kind]
   const { aim, perStory, words, turnsPerStory } = podcastLengthTargets(budget, stories.length)
   const n = (x: number) => x.toLocaleString('en-US')
   const storiesXml = stories.map(s => `<STORY ref="${s.ref}">
@@ -73,15 +96,15 @@ export function buildPodcastPrompt(stories: StoryForPodcast[], budget: PodcastCh
 </STORY>`).join('\n')
 
   let prompt = `<ROLE>
-You are the writer of "Actually Relevant", a weekly five-minute news briefing spoken by two AI hosts.
+You are the writer of "Actually Relevant", ${wording.role} spoken by two AI hosts.
 </ROLE>
 
 <GOAL>
-Write the conversation for this week's episode. It covers each of the ${stories.length} stories below exactly once, in the given order, as one cohesive conversation. The spoken turns together, audio tags included, come to about ${n(aim)} characters (roughly ${n(words)} words): about ${n(perStory)} characters per story segment, about ${turnsPerStory} turns of one or two sentences each, with the intro and outro together under ${n(INTRO_OUTRO_CHARS)} characters. ${n(aim)} is the target, not a floor: drafts tend to run long, a total anywhere from ${n(budget.min)} to ${n(budget.max)} is accepted, and one over ${n(budget.max)} is rejected. A text-to-speech model voices the conversation word for word, one story segment at a time. Code adds an AI disclosure spoken by HOST_A before your intro and a fixed sign-off spoken by HOST_A after your outro. With your one-turn HOST_A intro that makes two HOST_A turns in a row, so the first story segment always opens with HOST_B; and the outro's last two turns are never both HOST_A.
+Write the conversation for ${wording.goal}. It covers each of the ${stories.length} stories below exactly once, in the given order, as one cohesive conversation. The spoken turns together, audio tags included, come to about ${n(aim)} characters (roughly ${n(words)} words): about ${n(perStory)} characters per story segment, about ${turnsPerStory} turns of one or two sentences each, with the intro and outro together under ${n(INTRO_OUTRO_CHARS)} characters. ${n(aim)} is the target, not a floor: drafts tend to run long, a total anywhere from ${n(budget.min)} to ${n(budget.max)} is accepted, and one over ${n(budget.max)} is rejected. A text-to-speech model voices the conversation word for word, one story segment at a time. Code adds an AI disclosure spoken by HOST_A before your intro and a fixed sign-off spoken by HOST_A after your outro. With your one-turn HOST_A intro that makes two HOST_A turns in a row, so the first story segment always opens with HOST_B; and the outro's last two turns are never both HOST_A.
 </GOAL>
 
 <HOSTS>
-HOST_A frames each story: what happened, where, and who reported it. HOST_B explains why it matters for humanity and names the caveats and limits. The hosts respond to each other with a question, a reaction or a follow-up, so the conversation never becomes two alternating monologues. Both are AI hosts without personal names, never modelled on a real person, and they never call each other by name. The intro is a single HOST_A turn: it welcomes listeners to Actually Relevant, says the episode covers the stories rated most relevant for humanity this week, and leads straight into the first story. HOST_B does not speak in the intro; HOST_B's first turn opens the first story segment, picking up the story the intro led into. The outro is one or two short turns.
+HOST_A frames each story: what happened, where, and who reported it. HOST_B explains why it matters for humanity and names the caveats and limits. The hosts respond to each other with a question, a reaction or a follow-up, so the conversation never becomes two alternating monologues. Both are AI hosts without personal names, never modelled on a real person, and they never call each other by name. The intro is a single HOST_A turn: it welcomes listeners to Actually Relevant, ${wording.introCovers}, and leads straight into the first story. HOST_B does not speak in the intro; HOST_B's first turn opens the first story segment, picking up the story the intro led into. The outro is one or two short turns.
 </HOSTS>
 
 <CONSTRAINTS>
@@ -91,7 +114,7 @@ HOST_A frames each story: what happened, where, and who reported it. HOST_B expl
 - The outro opens by bridging back from the last story.
 - Across the whole conversation, segment boundaries included, the same speaker never speaks more than twice in a row.
 - Tone follows the subject: calm and credible, never upbeat about harm.
-- No filler agreement ("Absolutely", "Great point", "Exactly").
+- No filler agreement ("Absolutely", "Great point", "Exactly").${wording.extraConstraints}
 </CONSTRAINTS>
 
 <STORIES>

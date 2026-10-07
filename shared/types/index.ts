@@ -220,6 +220,9 @@ export type PodcastStage = 'legacy' | 'created' | 'selected' | 'scripted' | 'voi
 /** How far a run goes: `interactive` stops after `selected` and `scripted` for a person's review. Null until chosen. */
 export type PodcastMode = 'automated' | 'interactive'
 
+/** `weekly`: this ISO week's episode, the only kind the jobs touch; `standalone`: built by hand from any published stories, published by hand only. */
+export type PodcastKind = 'weekly' | 'standalone'
+
 /** A story as the episode froze it when the script was written. */
 export interface PodcastEpisodeStory {
   ref: number
@@ -238,7 +241,9 @@ export interface PodcastListItem {
   status: 'draft' | 'published'
   stage: PodcastStage
   mode: PodcastMode | null
+  /** Null for legacy and standalone rows. */
   weekKey: string | null
+  kind: PodcastKind
   storyIds: string[]
   attempts: number
   blockedAt: string | null
@@ -330,6 +335,32 @@ export interface PodcastStoryPool {
   stories: PodcastPoolStory[]
   minStories: number
   maxStories: number
+}
+
+/** A published story as a standalone episode's story finder lists it (search results and suggestions). */
+export interface PodcastStoryCandidate {
+  id: string
+  title: string
+  publisher: string
+  sourceUrl: string
+  slug: string | null
+  issue: string
+  relevance: number | null
+  dateCrawled: string
+}
+
+/** One page of the story finder's results, with the episode's story limits. */
+export interface PodcastStorySearchResult extends PaginatedResponse<PodcastStoryCandidate> {
+  minStories: number
+  maxStories: number
+}
+
+/** The story finder's filters: when the story was found (ISO datetimes), its issue, a text search. */
+export interface PodcastStoryFilters {
+  crawledAfter?: string
+  crawledBefore?: string
+  issueId?: string
+  search?: string
 }
 
 /** An episode a process is working on right now (`GET /api/admin/podcasts/active`). */

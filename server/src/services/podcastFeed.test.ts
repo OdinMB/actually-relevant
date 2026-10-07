@@ -16,6 +16,7 @@ function episode(overrides: Partial<PublishedEpisode> = {}): PublishedEpisode {
       { ref: 1, id: 's1', title: 'Air data ruling', publisher: 'Nation', sourceUrl: 'https://news.example/1?a=1&b=2', slug: 'air', issue: 'Planet' },
       { ref: 2, id: 's2', title: 'Vaccine rollout', publisher: 'Phys.org', sourceUrl: 'https://news.example/2', slug: null, issue: 'Health' },
     ],
+    kind: 'weekly' as const,
     humanEdited: false,
     audioUrl: 'https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.mp3',
     audioBytes: 5_812_345,

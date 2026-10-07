@@ -25,7 +25,7 @@ const snapshots = fixtureStories.map(s => ({ ref: s.ref, id: `s${s.ref}`, title:
 
 function episode(stage: string, overrides: Record<string, unknown> = {}) {
   return {
-    id: 'pod-1', stage, status: 'draft', humanEdited: false, createdAt: new Date('2026-10-05T06:00:00Z'), storiesSelectedAt: SELECTED_AT,
+    id: 'pod-1', stage, status: 'draft', kind: 'weekly', humanEdited: false, createdAt: new Date('2026-10-05T06:00:00Z'), storiesSelectedAt: SELECTED_AT,
     storyIds: ['s1', 's2', 's3', 's4'], episodeStories: snapshots, dialogue: null, episodeSummary: 'Summary.', showNotes: '', ...overrides,
   }
 }

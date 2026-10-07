@@ -1,17 +1,17 @@
 /**
- * The weekly episode's stories and words: the week's story pool and the episode's frozen story
- * snapshots, the two LLM calls (story selection, dialogue), and the show notes.
+ * An episode's stories and words: the week's story pool and the episode's frozen story snapshots,
+ * the two LLM calls (story selection from a pool, dialogue), and the show notes.
  */
 import { HumanMessage } from '@langchain/core/messages'
 import type { z } from 'zod'
-import { StoryStatus } from '@prisma/client'
+import { StoryStatus, type PodcastKind } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { withRetry } from '../lib/retry.js'
 import { podcastEpisodeAiLine } from '../lib/aiLabelCopy.js'
 import { buildPodcastPrompt, buildPodcastSelectPrompt, type StoryForPodcast } from '../prompts/index.js'
-import { podcastDialogueSchema, podcastSelectResultSchema, type PodcastDialogue } from '../schemas/llm.js'
+import { podcastDialogueSchemaFor, podcastSelectResultSchema, type PodcastDialogue } from '../schemas/llm.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { dialogueCharBudget, validateDialogue } from './podcastDialogue.js'
 import { PodcastBlockedError } from './podcastGuards.js'
@@ -61,7 +61,8 @@ async function invokeStructured<S extends z.ZodTypeAny>(schema: S, tier: Tier, p
   return (res.parsed ?? null) as z.infer<S> | null
 }
 
-const storySelect = {
+/** The fields every story loader of the podcast reads (pool, snapshots, prompt material). */
+export const storySelect = {
   id: true,
   title: true,
   sourceTitle: true,
@@ -77,7 +78,8 @@ const storySelect = {
   feed: { select: { title: true, displayTitle: true, issue: { select: { name: true, parent: { select: { name: true } } } } } },
 } as const
 
-type PoolStory = Awaited<ReturnType<typeof loadPool>>[number]
+/** A story as the podcast loads it (`storySelect`), before it becomes a snapshot. */
+export type PoolStory = Awaited<ReturnType<typeof loadPool>>[number]
 
 /**
  * The newsletter's pool: stories published from the week's crawl before `anchor`, most relevant
@@ -100,7 +102,8 @@ function topIssueName(s: PoolStory): string {
   return issue?.parent?.name ?? issue?.name ?? 'General'
 }
 
-const storyFacts = (s: PoolStory): Omit<EpisodeStory, 'ref'> => ({
+/** A story's facts as the episode shows them: title, publisher, links and top-level issue. */
+export const storyFacts = (s: PoolStory): Omit<EpisodeStory, 'ref'> => ({
   id: s.id,
   title: s.title || s.sourceTitle,
   publisher: s.feed?.displayTitle || s.feed?.title || 'Unknown',
@@ -109,7 +112,8 @@ const storyFacts = (s: PoolStory): Omit<EpisodeStory, 'ref'> => ({
   issue: topIssueName(s),
 })
 
-const snapshotOf = (s: PoolStory, ref: number): EpisodeStory => ({ ref, ...storyFacts(s) })
+/** The frozen snapshot of a story at position `ref` in the episode. */
+export const snapshotOf = (s: PoolStory, ref: number): EpisodeStory => ({ ref, ...storyFacts(s) })
 
 /** The prompt material for a story, under the episode's frozen snapshot (its ref, title and publisher). */
 function promptFor(s: PoolStory, snapshot: EpisodeStory): StoryForPodcast {
@@ -143,11 +147,7 @@ export async function loadEpisodePool(anchor: Date): Promise<PoolEntry[]> {
  * published fails the script stage (kept on the row), so a person changes the selection.
  */
 export async function loadEpisodeStories(snapshots: EpisodeStory[]): Promise<SelectedStory[]> {
-  const rows = await prisma.story.findMany({
-    where: { id: { in: snapshots.map(s => s.id) }, status: StoryStatus.published },
-    select: storySelect,
-  })
-  const byId = new Map(rows.map(r => [r.id, r]))
+  const byId = new Map((await loadStoriesByIds(snapshots.map(s => s.id))).map(r => [r.id, r]))
   return snapshots.map(snapshot => {
     const story = byId.get(snapshot.id)
     if (!story) throw new Error(`story "${snapshot.title}" is no longer published; change the selection`)
@@ -155,17 +155,32 @@ export async function loadEpisodeStories(snapshots: EpisodeStory[]): Promise<Sel
   })
 }
 
-/** The week's 4-5 stories for audio, in episode order, from the pool before `anchor`. Fails closed under the minimum. */
-export async function selectEpisodeStories(anchor: Date): Promise<SelectedStory[]> {
-  const { minStories, maxStories, selectModelTier } = config.podcast
-  const pool = await loadPool(anchor)
-  if (pool.length < minStories) {
-    throw new Error(`only ${pool.length} published stories this week; an episode needs ${minStories}`)
+/** The published stories among `ids`, of any date, in no particular order (a missing id is not published). */
+export function loadStoriesByIds(ids: string[]): Promise<PoolStory[]> {
+  return prisma.story.findMany({ where: { id: { in: ids }, status: StoryStatus.published }, select: storySelect })
+}
+
+/** The pool holds fewer stories than an episode needs; the model is not asked. */
+export class TooFewStoriesError extends Error {
+  constructor(readonly available: number, readonly needed: number) {
+    super(`only ${available} stories to choose from; an episode needs ${needed}`)
+    this.name = 'TooFewStoriesError'
   }
+}
+
+/**
+ * The model's 4-5 stories from `pool`, in episode order: unknown and duplicate ids dropped, capped at
+ * the maximum. `TooFewStoriesError` before any call when the pool is under the minimum; an error
+ * when the model's valid answer is.
+ */
+export async function chooseStories<S extends PoolStory>(pool: S[], kind: PodcastKind): Promise<S[]> {
+  const { minStories, maxStories, selectModelTier } = config.podcast
+  if (pool.length < minStories) throw new TooFewStoriesError(pool.length, minStories)
   const prompt = buildPodcastSelectPrompt(
     pool.map(s => ({ id: s.id, issue: topIssueName(s), title: s.title || s.sourceTitle, summary: s.summary || '', relevance: s.relevance, emotionTag: s.emotionTag })),
     minStories,
     maxStories,
+    kind,
   )
   const result = await invokeStructured(podcastSelectResultSchema, selectModelTier, prompt, 'podcast-select')
   if (!result) throw new Error('podcast selection: the model returned no parsable output')
@@ -175,25 +190,39 @@ export async function selectEpisodeStories(anchor: Date): Promise<SelectedStory[
   if (ids.length < minStories) {
     throw new Error(`podcast selection returned ${ids.length} valid stories; an episode needs ${minStories}`)
   }
-  return ids.map((id, i) => toSelected(byId.get(id)!, i + 1))
+  return ids.map(id => byId.get(id)!)
+}
+
+/** The week's 4-5 stories for audio, in episode order, from the pool before `anchor`. Fails closed under the minimum. */
+export async function selectEpisodeStories(anchor: Date): Promise<SelectedStory[]> {
+  try {
+    const chosen = await chooseStories(await loadPool(anchor), 'weekly')
+    return chosen.map((s, i) => toSelected(s, i + 1))
+  } catch (err) {
+    if (err instanceof TooFewStoriesError) {
+      throw new Error(`only ${err.available} published stories this week; an episode needs ${err.needed}`)
+    }
+    throw err
+  }
 }
 
 /**
- * The dialogue for the selected stories. An invalid or unparsable answer gets one regeneration
- * with the problems listed; a second failure blocks the episode (never truncated or patched).
+ * The dialogue for the selected stories of an episode of `kind`. An invalid or unparsable answer
+ * gets one regeneration with the problems listed; a second failure blocks the episode (never
+ * truncated or patched).
  */
-export async function writeEpisodeScript(stories: SelectedStory[]): Promise<EpisodeScript> {
+export async function writeEpisodeScript(stories: SelectedStory[], kind: PodcastKind): Promise<EpisodeScript> {
   const tier = config.podcast.scriptModelTier
   const refs = stories.map(s => ({ ref: s.snapshot.ref, title: s.snapshot.title, publisher: s.snapshot.publisher }))
   let problems: string[] = []
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const prompt = buildPodcastPrompt(stories.map(s => s.prompt), dialogueCharBudget(), problems)
-    const dialogue = await invokeStructured(podcastDialogueSchema, tier, prompt, 'podcast-script')
+    const prompt = buildPodcastPrompt(stories.map(s => s.prompt), dialogueCharBudget(kind), kind, problems)
+    const dialogue = await invokeStructured(podcastDialogueSchemaFor(kind), tier, prompt, 'podcast-script')
     if (!dialogue) {
       problems = ['the previous answer did not match the output schema']
       continue
     }
-    const validation = validateDialogue(dialogue, refs)
+    const validation = validateDialogue(dialogue, refs, { kind })
     if (validation.valid) return { dialogue, modelId: config.llm.models[tier].name }
     log.warn({ attempt, errors: validation.errors }, 'podcast dialogue invalid')
     problems = validation.errors
@@ -205,11 +234,11 @@ export async function writeEpisodeScript(stories: SelectedStory[]): Promise<Epis
  * Plain-text show notes: the AI line first (the edited wording when a person changed the stories or
  * the script), the summary, then each story with our analysis and its source.
  */
-export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEdited: boolean): string {
+export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEdited: boolean, kind: PodcastKind): string {
   const items = stories.map(s => [
     `${s.ref}. ${s.title} (${s.publisher})`,
     ...(s.slug ? [`   Our AI analysis: ${config.siteUrl}/stories/${s.slug}`] : []),
     `   Source: ${s.sourceUrl}`,
   ].join('\n'))
-  return [podcastEpisodeAiLine(humanEdited), '', summary.trim(), '', 'Stories in this episode:', ...items].join('\n')
+  return [podcastEpisodeAiLine(humanEdited, kind), '', summary.trim(), '', 'Stories in this episode:', ...items].join('\n')
 }

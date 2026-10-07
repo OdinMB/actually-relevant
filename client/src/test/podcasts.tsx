@@ -52,6 +52,7 @@ function baseEpisode(overrides: Partial<Podcast>): Omit<Podcast, 'publishBlocked
     stage: 'scripted',
     mode: 'interactive',
     weekKey: '2026-W41',
+    kind: 'weekly',
     storyIds: ['s1', 's2'],
     attempts: 0,
     blockedAt: null,
@@ -85,4 +86,22 @@ function baseEpisode(overrides: Partial<Podcast>): Omit<Podcast, 'publishBlocked
     updatedAt: '2026-10-10T06:00:00.000Z',
     ...overrides,
   }
+}
+
+/** A new standalone episode at `created`, its stories not chosen yet; override what a test needs. */
+export function makeStandalonePodcast(overrides: Partial<Podcast> = {}): Podcast {
+  return makePodcast({
+    kind: 'standalone',
+    weekKey: null,
+    title: 'Actually Relevant, 2026-10-07',
+    stage: 'created',
+    mode: null,
+    awaitingReview: false,
+    storyIds: [],
+    episodeStories: null,
+    dialogue: null,
+    script: '',
+    ttsCharsEstimate: null,
+    ...overrides,
+  })
 }

@@ -33,7 +33,7 @@ export function PodcastTable({ podcasts, onView, onDelete }: PodcastTableProps) 
                   {pod.title}
                 </button>
               </td>
-              <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{pod.weekKey ?? '—'}</td>
+              <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{pod.kind === 'standalone' ? 'Standalone' : pod.weekKey ?? '—'}</td>
               <td className="px-3 py-2"><PodcastStageBadge podcast={pod} /></td>
               <td className="px-3 py-2">
                 <Badge variant={pod.status === 'published' ? 'green' : 'gray'}>

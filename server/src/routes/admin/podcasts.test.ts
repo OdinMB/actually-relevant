@@ -32,12 +32,19 @@ const mockEditing = vi.hoisted(() => ({
 }))
 const mockBunny = vi.hoisted(() => ({ deleteObject: vi.fn(), putObject: vi.fn(), isBunnyConfigured: vi.fn(), publicUrl: vi.fn() }))
 const mockPublish = vi.hoisted(() => ({ publishEpisode: vi.fn(), unpublishEpisode: vi.fn() }))
+const mockStandalone = vi.hoisted(() => ({
+  createStandaloneEpisode: vi.fn(),
+  searchStandaloneStories: vi.fn(),
+  suggestStandaloneStories: vi.fn(),
+  saveStandaloneStories: vi.fn(),
+}))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/podcastWeekly.js', () => mockWeekly)
 vi.mock('../../services/podcastPipeline.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastPipeline.js')>()), ...mockPipeline }))
 vi.mock('../../services/podcastEditing.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastEditing.js')>()), ...mockEditing }))
 vi.mock('../../lib/bunnyStorage.js', () => mockBunny)
+vi.mock('../../services/podcastStandalone.js', () => mockStandalone)
 vi.mock('../../services/podcastPublish.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastPublish.js')>()), ...mockPublish }))
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
@@ -140,6 +147,55 @@ describe('Admin Podcasts API', () => {
       expect(res.body.weekKey).toBe('2026-W41')
       expect(mockWeekly.startAdminRun).not.toHaveBeenCalled()
       expect(mockWeekly.resumeEpisode).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('standalone episodes', () => {
+    it('POST /standalone creates the row and answers 201 with the episode', async () => {
+      mockStandalone.createStandaloneEpisode.mockResolvedValue(samplePodcast({ kind: 'standalone' }))
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ kind: 'standalone' }))
+      const res = await request(app).post('/api/admin/podcasts/standalone').set(authHeader())
+      expect(res.status).toBe(201)
+      expect(res.body.kind).toBe('standalone')
+      expect(mockWeekly.startAdminRun).not.toHaveBeenCalled()
+    })
+
+    it('GET /story-search is routed before /:id and passes the parsed filters', async () => {
+      mockStandalone.searchStandaloneStories.mockResolvedValue({ data: [], total: 0, page: 2, pageSize: 10, totalPages: 0 })
+      const res = await request(app).get('/api/admin/podcasts/story-search?search=water&page=2&pageSize=10&crawledAfter=2026-09-01T00:00:00.000Z').set(authHeader())
+      expect(res.status).toBe(200)
+      expect(mockStandalone.searchStandaloneStories).toHaveBeenCalledWith({ search: 'water', page: 2, pageSize: 10, crawledAfter: '2026-09-01T00:00:00.000Z' })
+      expect(mockPrisma.podcast.findUnique).not.toHaveBeenCalled()
+    })
+
+    it('GET /story-search rejects a bad date and a page over 50', async () => {
+      expect((await request(app).get('/api/admin/podcasts/story-search?crawledAfter=yesterday').set(authHeader())).status).toBe(400)
+      expect((await request(app).get('/api/admin/podcasts/story-search?pageSize=51').set(authHeader())).status).toBe(400)
+      expect(mockStandalone.searchStandaloneStories).not.toHaveBeenCalled()
+    })
+
+    it('POST /:id/suggest-stories returns the stories, and maps a refusal to 409 and too few matches to 422', async () => {
+      mockStandalone.suggestStandaloneStories.mockResolvedValueOnce([{ id: 'story-1' }])
+      const ok = await request(app).post('/api/admin/podcasts/podcast-1/suggest-stories').set(authHeader()).send({ issueId: 'issue-1' })
+      expect(ok.status).toBe(200)
+      expect(ok.body).toEqual({ stories: [{ id: 'story-1' }] })
+      expect(mockStandalone.suggestStandaloneStories).toHaveBeenCalledWith('podcast-1', { issueId: 'issue-1' })
+
+      mockStandalone.suggestStandaloneStories.mockRejectedValueOnce(new PodcastRefusedError('only a standalone episode'))
+      expect((await request(app).post('/api/admin/podcasts/podcast-1/suggest-stories').set(authHeader()).send({})).status).toBe(409)
+      mockStandalone.suggestStandaloneStories.mockRejectedValueOnce(new PodcastEditRejectedError(['only 2 stories match the filters']))
+      const tooFew = await request(app).post('/api/admin/podcasts/podcast-1/suggest-stories').set(authHeader()).send({})
+      expect(tooFew.status).toBe(422)
+      expect(tooFew.body.errors).toEqual(['only 2 stories match the filters'])
+    })
+
+    it('PUT /:id/stories saves a standalone episode\'s stories through the standalone path', async () => {
+      mockPrisma.podcast.findUnique.mockResolvedValue(samplePodcast({ kind: 'standalone' }))
+      const storyIds = ['s1', 's2', 's3', 's4']
+      const res = await request(app).put('/api/admin/podcasts/podcast-1/stories').set(authHeader()).send({ storyIds })
+      expect(res.status).toBe(200)
+      expect(mockStandalone.saveStandaloneStories).toHaveBeenCalledWith('podcast-1', storyIds)
+      expect(mockEditing.replaceEpisodeStories).not.toHaveBeenCalled()
     })
   })
 

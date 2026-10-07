@@ -4,6 +4,7 @@
  * starts with its AI line (`humanEdited` picks the wording). The feed and the public JSON both read
  * it, so the two never disagree.
  */
+import type { PodcastKind } from '@prisma/client'
 import { config } from '../config.js'
 import { escapeXml } from '../lib/xml.js'
 import { AI_GENERATED_PODCAST_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
@@ -14,6 +15,8 @@ import { buildShowNotes, type EpisodeStory } from './podcastScript.js'
 export interface PublishedEpisode {
   id: string
   title: string
+  /** Picks the AI line's wording (weekly or standalone). */
+  kind: PodcastKind
   summary: string
   stories: EpisodeStory[]
   humanEdited: boolean
@@ -61,7 +64,7 @@ export function podcastShowInfo(): PodcastShowInfo {
 
 /** The episode's plain-text description: the AI line, the summary, then each story with our analysis and its source. */
 export function episodeDescriptionText(episode: PublishedEpisode): string {
-  return buildShowNotes(episode.summary, episode.stories, episode.humanEdited)
+  return buildShowNotes(episode.summary, episode.stories, episode.humanEdited, episode.kind)
 }
 
 /** The same description as HTML (feed `content:encoded`), every value escaped. */
@@ -72,7 +75,7 @@ export function episodeDescriptionHtml(episode: PublishedEpisode): string {
     return `<li>${escapeXml(s.title)} (${escapeXml(s.publisher)}).${analysis} ${link(s.sourceUrl, 'Source')}</li>`
   })
   return [
-    `<p>${escapeXml(podcastEpisodeAiLine(episode.humanEdited))}</p>`,
+    `<p>${escapeXml(podcastEpisodeAiLine(episode.humanEdited, episode.kind))}</p>`,
     `<p>${escapeXml(episode.summary.trim())}</p>`,
     '<p>Stories in this episode:</p>',
     `<ol>${items.join('')}</ol>`,
@@ -84,7 +87,7 @@ export function toPublicEpisode(episode: PublishedEpisode) {
   return {
     id: episode.id,
     title: episode.title,
-    aiLine: podcastEpisodeAiLine(episode.humanEdited),
+    aiLine: podcastEpisodeAiLine(episode.humanEdited, episode.kind),
     summary: episode.summary,
     publishedAt: episode.publishedAt.toISOString(),
     durationSec: episode.durationSec,

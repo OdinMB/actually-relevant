@@ -1,22 +1,25 @@
 import { describe, it, expect } from 'vitest'
 import { config } from '../config.js'
-import { PODCAST_OPENER } from '../lib/aiLabelCopy.js'
+import { PODCAST_EPISODE_COPY, PODCAST_OPENER, PODCAST_SIGN_OFF } from '../lib/aiLabelCopy.js'
 import type { PodcastDialogue } from '../schemas/llm.js'
 import {
-  applyTurnEdits, assembleSpokenSegments, dialogueCharBudget, renderScript, textChanged, validateDialogue, PODCAST_SIGN_OFF,
+  applyTurnEdits, assembleSpokenSegments, dialogueCharBudget, renderScript, textChanged, validateDialogue,
   type DialogueTextEdit,
 } from './podcastDialogue.js'
 import {
   fixtureStories as stories, filler, goodDialogue, INTRO_TEXT, storySegment, withSegment, withTurn, type Segment,
 } from '../test/podcastFixtures.js'
 
+const W = { kind: 'weekly' } as const
+const S = { kind: 'standalone' } as const
+
 function errorsOf(d: PodcastDialogue): string[] {
-  return validateDialogue(d, stories).errors
+  return validateDialogue(d, stories, W).errors
 }
 
 describe('validateDialogue', () => {
   it('accepts a dialogue that covers every story with bridges inside the band', () => {
-    const result = validateDialogue(goodDialogue(), stories)
+    const result = validateDialogue(goodDialogue(), stories, W)
     expect(result.errors).toEqual([])
     expect(result.valid).toBe(true)
   })
@@ -36,9 +39,9 @@ describe('validateDialogue', () => {
   it('rejects a dialogue that does not start with the intro and end with the outro', () => {
     const d = goodDialogue()
     const noIntro = { ...d, segments: d.segments.slice(1) }
-    expect(validateDialogue(noIntro, stories).valid).toBe(false)
+    expect(validateDialogue(noIntro, stories, W).valid).toBe(false)
     const noOutro = { ...d, segments: d.segments.slice(0, -1) }
-    expect(validateDialogue(noOutro, stories).valid).toBe(false)
+    expect(validateDialogue(noOutro, stories, W).valid).toBe(false)
   })
 
   it('rejects a first story segment that opens with HOST_A: opener, intro and that turn are three in a row', () => {
@@ -73,7 +76,7 @@ describe('validateDialogue', () => {
     const d = goodDialogue()
     const short = { ...d, segments: d.segments.map(s => ({ ...s, turns: s.turns.slice(0, 1) })) }
     const modelOnly = short.segments.flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
-    const { min, max } = dialogueCharBudget()
+    const { min, max } = dialogueCharBudget('weekly')
     const message = errorsOf(short).find(e => /spoken characters/.test(e)) ?? ''
     expect(message).toContain(String(modelOnly))
     expect(message).toContain(`${min} to ${max}`)
@@ -81,7 +84,7 @@ describe('validateDialogue', () => {
 
   it('counts the code-added opener and sign-off in the band', () => {
     const d = goodDialogue()
-    const total = assembleSpokenSegments(d).flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
+    const total = assembleSpokenSegments(d, 'weekly').flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
     const modelOnly = d.segments.flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
     expect(total).toBe(modelOnly + PODCAST_OPENER.length + PODCAST_SIGN_OFF.length)
   })
@@ -125,7 +128,7 @@ describe('validateDialogue', () => {
     expect(errorsOf(withTurn(d, 3, 1, `${filler(300, 'pub')} Read it at reuters.com/world today.`)).join(' ')).toMatch(/URL/)
     expect(errorsOf(withTurn(d, 4, 1, `${filler(300, 'pub')} Read it at vox.com/x today.`)).join(' ')).toMatch(/URL/)
     const withAp = stories.map(s => (s.ref === 3 ? { ...s, publisher: 'AP' } : s))
-    expect(validateDialogue(withTurn(d, 3, 1, `${filler(300, 'pub')} Read it at cap.com today.`), withAp).errors.join(' ')).toMatch(/URL/)
+    expect(validateDialogue(withTurn(d, 3, 1, `${filler(300, 'pub')} Read it at cap.com today.`), withAp, W).errors.join(' ')).toMatch(/URL/)
   })
 
   it('rejects an empty or overlong episode title', () => {
@@ -165,9 +168,50 @@ describe('validateDialogue', () => {
   })
 })
 
+/** The good dialogue without its relative dates, as a standalone episode must read. */
+const standaloneDialogue = (): PodcastDialogue =>
+  JSON.parse(JSON.stringify(goodDialogue()).replace(/from this week/g, 'from May').replace(/this week/g, 'in May'))
+
+describe('validateDialogue for a standalone episode', () => {
+  it('accepts a dialogue that never dates a story relative to now, even when a story title does', () => {
+    expect(validateDialogue(standaloneDialogue(), stories, S).errors).toEqual([])
+    const datedTitles = stories.map(s => ({ ...s, title: `${s.title} this week` }))
+    expect(validateDialogue(standaloneDialogue(), datedTitles, S).errors).toEqual([])
+  })
+
+  it('rejects relative dates in a turn, the title or the summary, for the model and a person alike', () => {
+    const inTurn = withTurn(standaloneDialogue(), 2, 1, `${filler(300, 'rel')} It was announced last month.`)
+    expect(validateDialogue(inTurn, stories, S).errors.join(' ')).toMatch(/turn 2: says "last month"/)
+    expect(validateDialogue(inTurn, stories, { ...S, authoredBy: 'person' }).errors.join(' ')).toMatch(/last month/)
+    const inMeta = { ...standaloneDialogue(), episodeTitle: "This week's clean air", episodeSummary: 'Stories from the past week. Each matters.' }
+    const errors = validateDialogue(inMeta, stories, S).errors.join(' ')
+    expect(errors).toMatch(/title says "This week's"/)
+    expect(errors).toMatch(/summary says "past week"/)
+  })
+
+  it('has no such rule for a weekly episode', () => {
+    expect(validateDialogue(goodDialogue(), stories, W).errors).toEqual([])
+    expect(validateDialogue(goodDialogue(), stories, S).errors.join(' ')).toMatch(/this week/)
+  })
+
+  it('counts the standalone opener and sign-off in the band', () => {
+    const d = standaloneDialogue()
+    const { opener, signOff } = PODCAST_EPISODE_COPY.standalone
+    const total = assembleSpokenSegments(d, 'standalone').flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
+    const modelOnly = d.segments.flatMap(s => s.turns).reduce((n, t) => n + t.text.length, 0)
+    expect(total).toBe(modelOnly + opener.length + signOff.length)
+  })
+})
+
 describe('assembleSpokenSegments', () => {
+  it('uses the standalone opener and sign-off for a standalone episode', () => {
+    const segments = assembleSpokenSegments(standaloneDialogue(), 'standalone')
+    expect(segments[0].turns).toEqual([{ speaker: 'HOST_A', text: PODCAST_EPISODE_COPY.standalone.opener }])
+    expect(segments.at(-1)?.turns).toEqual([{ speaker: 'HOST_A', text: PODCAST_EPISODE_COPY.standalone.signOff }])
+  })
+
   it('puts the opener first and the sign-off last, both spoken by HOST_A', () => {
-    const segments = assembleSpokenSegments(goodDialogue())
+    const segments = assembleSpokenSegments(goodDialogue(), 'weekly')
     expect(segments[0]).toEqual({ kind: 'opener', storyRef: null, turns: [{ speaker: 'HOST_A', text: PODCAST_OPENER }] })
     expect(segments.at(-1)).toEqual({ kind: 'signoff', storyRef: null, turns: [{ speaker: 'HOST_A', text: PODCAST_SIGN_OFF }] })
     expect(segments.slice(1, -1).map(s => s.kind)).toEqual(['intro', 'story', 'story', 'story', 'story', 'outro'])
@@ -176,20 +220,28 @@ describe('assembleSpokenSegments', () => {
 
 describe('dialogueCharBudget', () => {
   it('leaves room for the code-added turns inside the band', () => {
-    const { min, max } = dialogueCharBudget()
+    const { min, max } = dialogueCharBudget('weekly')
     const code = PODCAST_OPENER.length + PODCAST_SIGN_OFF.length
     expect([min + code, max + code]).toEqual(config.podcast.spokenCharBand)
   })
 
   it('asks the model\'s own turns for the episode aim less the code-added turns', () => {
     const code = PODCAST_OPENER.length + PODCAST_SIGN_OFF.length
-    expect(dialogueCharBudget().aim + code).toBe(config.podcast.spokenCharAim)
+    expect(dialogueCharBudget('weekly').aim + code).toBe(config.podcast.spokenCharAim)
+  })
+
+  it('subtracts each kind\'s own code-added turns', () => {
+    const { opener, signOff } = PODCAST_EPISODE_COPY.standalone
+    const { min, max, aim } = dialogueCharBudget('standalone')
+    const code = opener.length + signOff.length
+    expect([min + code, max + code]).toEqual(config.podcast.spokenCharBand)
+    expect(aim + code).toBe(config.podcast.spokenCharAim)
   })
 })
 
 describe('renderScript', () => {
   it('renders every spoken turn with its speaker, segments separated by a blank line', () => {
-    const script = renderScript(assembleSpokenSegments(goodDialogue()))
+    const script = renderScript(assembleSpokenSegments(goodDialogue(), 'weekly'))
     const lines = script.split('\n')
     expect(lines[0]).toBe(`HOST A: ${PODCAST_OPENER}`)
     expect(lines[1]).toBe('')
@@ -203,11 +255,11 @@ describe('validateDialogue for a person\'s edit', () => {
     const shortBridge = withTurn(goodDialogue(), 2, 0, 'And now, vaccines.')
     const sameOpenings = withTurn(withTurn(shortBridge, 3, 0, 'Next up this week is a story about the deep ocean floor and a treaty.'), 4, 0, 'Next up this week is a story about export rules for computer chips.')
 
-    const asModel = validateDialogue(sameOpenings, stories)
+    const asModel = validateDialogue(sameOpenings, stories, W)
     expect(asModel.valid).toBe(false)
     expect(asModel.warnings).toEqual([])
 
-    const asPerson = validateDialogue(sameOpenings, stories, { authoredBy: 'person' })
+    const asPerson = validateDialogue(sameOpenings, stories, { ...W, authoredBy: 'person' })
     expect(asPerson.valid).toBe(true)
     expect(asPerson.errors).toEqual([])
     expect(asPerson.warnings.join(' ')).toMatch(/spoken bridge/)
@@ -216,12 +268,12 @@ describe('validateDialogue for a person\'s edit', () => {
 
   it('keeps every other rule an error for a person', () => {
     const withUrl = withTurn(goodDialogue(), 2, 1, 'Read it at https://example.org today.')
-    const result = validateDialogue(withUrl, stories, { authoredBy: 'person' })
+    const result = validateDialogue(withUrl, stories, { ...W, authoredBy: 'person' })
     expect(result.valid).toBe(false)
     expect(result.errors.join(' ')).toMatch(/URL/)
 
     const tooShort = withSegment(goodDialogue(), 2, storySegment(2, { turns: storySegment(2).turns.map(t => ({ ...t, text: t.text.slice(0, 60) })) }))
-    expect(validateDialogue(tooShort, stories, { authoredBy: 'person' }).errors.join(' ')).toMatch(/spoken characters/)
+    expect(validateDialogue(tooShort, stories, { ...W, authoredBy: 'person' }).errors.join(' ')).toMatch(/spoken characters/)
   })
 })
 

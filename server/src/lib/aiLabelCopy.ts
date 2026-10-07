@@ -62,9 +62,65 @@ export const PODCAST_EPISODE_AI_LINE_EDITED = "AI-generated: Everything in this 
  */
 export const PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED: boolean = true
 
+/** Spoken last turn of every weekly episode (HOST_A), added in code after the model's outro. */
+export const PODCAST_SIGN_OFF = "That's it for this week. Tell us what you think on actuallyrelevant.news. Thanks for listening."
+
+/** The kinds of episode, as the schema's `PodcastKind` enum names them. */
+export type PodcastCopyKind = 'weekly' | 'standalone'
+
+export interface PodcastEpisodeCopy {
+  /** Spoken first turn (HOST_A), before the model's intro. */
+  opener: string
+  /** Spoken last turn (HOST_A), after the model's outro. */
+  signOff: string
+  /** First line of the show notes, the feed description, the public JSON and the ID3 comment. */
+  aiLine: string
+  /** The same line for an episode marked "Edited by a person". */
+  aiLineEdited: string
+}
+
+/**
+ * The episode copy by kind. Weekly: the owner-approved constants above, unchanged. Standalone (an
+ * episode built by hand from any published stories, which may come from different weeks): the
+ * wording the coordinator relayed on 2026-10-07 as the owner's decision. It goes public only once
+ * `PODCAST_STANDALONE_COPY_CONFIRMED` is true.
+ */
+export const PODCAST_EPISODE_COPY: Record<PodcastCopyKind, PodcastEpisodeCopy> = {
+  weekly: {
+    opener: PODCAST_OPENER,
+    signOff: PODCAST_SIGN_OFF,
+    aiLine: PODCAST_EPISODE_AI_LINE,
+    aiLineEdited: PODCAST_EPISODE_AI_LINE_EDITED,
+  },
+  standalone: {
+    opener: "Everything you're about to hear was written and voiced by AI from selected news stories.",
+    signOff: "That's it for this episode. Tell us what you think on actuallyrelevant.news. Thanks for listening.",
+    aiLine: "AI-generated: Everything in this episode was written and voiced by AI from news stories a person selected. People built and oversee the system but don't write or edit individual episodes.",
+    aiLineEdited: 'AI-generated: Everything in this episode was written and voiced by AI from news stories a person selected. A person reviewed and edited this episode.',
+  },
+}
+
+/**
+ * Whether the owner has confirmed the standalone wording in `PODCAST_EPISODE_COPY.standalone` in his
+ * own words. While false, a standalone episode is never voiced live (`voiceEpisode`) or listed
+ * (`publishRefusal`); dry runs still work. Set to true only on the owner's own confirmation.
+ */
+export const PODCAST_STANDALONE_COPY_CONFIRMED: boolean = false
+
+/** The spoken opener of an episode of this kind. */
+export function podcastOpener(kind: PodcastCopyKind): string {
+  return PODCAST_EPISODE_COPY[kind].opener
+}
+
+/** The spoken sign-off of an episode of this kind. */
+export function podcastSignOff(kind: PodcastCopyKind): string {
+  return PODCAST_EPISODE_COPY[kind].signOff
+}
+
 /** The episode's AI line: the edited wording when a person changed the stories or the script. */
-export function podcastEpisodeAiLine(humanEdited: boolean): string {
-  return humanEdited ? PODCAST_EPISODE_AI_LINE_EDITED : PODCAST_EPISODE_AI_LINE
+export function podcastEpisodeAiLine(humanEdited: boolean, kind: PodcastCopyKind): string {
+  const copy = PODCAST_EPISODE_COPY[kind]
+  return humanEdited ? copy.aiLineEdited : copy.aiLine
 }
 
 /**

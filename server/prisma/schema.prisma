@@ -227,6 +227,12 @@ enum PodcastMode {
   interactive
 }
 
+/// weekly: this ISO week's episode (the jobs' only kind); standalone: built by hand from any published stories, never touched by the jobs (ADR-0016)
+enum PodcastKind {
+  weekly
+  standalone
+}
+
 model Podcast {
   id             String        @id @default(uuid())
   title          String
@@ -234,8 +240,10 @@ model Podcast {
   script         String        @default("")
   storyIds       String[]      @map("story_ids")
   status         ContentStatus @default(draft)
-  /// ISO week in UTC (YYYY-Www) of the weekly episode; null for legacy rows
+  /// ISO week in UTC (YYYY-Www) of the weekly episode; null for legacy and standalone rows
   weekKey        String?       @unique @map("week_key")
+  /// Weekly or standalone; a CHECK (podcasts_standalone_without_week_key) keeps a standalone row's week key null
+  kind           PodcastKind   @default(weekly)
   stage          PodcastStage  @default(created)
   /// The model's dialogue (segments of turns, storyRef = episodeStories[].ref)
   dialogue       Json?

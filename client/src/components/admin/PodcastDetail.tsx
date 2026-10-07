@@ -29,6 +29,7 @@ function StatusBadges({ podcast }: { podcast: Podcast }) {
       {podcast.dryRun && <Badge variant="orange">Dry run</Badge>}
       {podcast.mode && <Badge variant="gray">{MODE_LABEL[podcast.mode]}</Badge>}
       {podcast.stage !== 'legacy' && <PodcastHumanEditedChip podcast={podcast} />}
+      {podcast.kind === 'standalone' && <Badge variant="blue">Standalone</Badge>}
       {podcast.weekKey && <span className="text-sm text-neutral-600">{podcast.weekKey}</span>}
       {podcast.publishedAt && <span className="text-sm text-neutral-600">first published {formatDate(podcast.publishedAt)}</span>}
     </div>

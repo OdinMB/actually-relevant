@@ -37,6 +37,23 @@ export const podcastScriptEditSchema = z.object({
   }).strict()).max(20),
 }).strict()
 
+/**
+ * The story finder's filters for a standalone episode: when the story was found (`dateCrawled`), its
+ * issue, and a text search. The Suggest stories body, and with paging the search query.
+ */
+export const podcastStoryFiltersSchema = z.object({
+  crawledAfter: z.string().datetime().optional(),
+  crawledBefore: z.string().datetime().optional(),
+  issueId: z.string().min(1).optional(),
+  search: z.string().trim().max(200).optional(),
+}).strict()
+
+/** The finder's search: the filters, one page of results (at most 50). */
+export const podcastStorySearchQuerySchema = podcastStoryFiltersSchema.extend({
+  page: z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().positive().max(50).optional(),
+})
+
 export const podcastQuerySchema = z.object({
   status: z.enum(['draft', 'published']).optional(),
   stage: z.enum(STAGES).optional(),

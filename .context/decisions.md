@@ -19,3 +19,5 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0012 · Keep publication (status) separate from production (stage) and make automatic publishing a job toggle](decisions/0012-podcast-publication-separate-from-production.md) — superseded by ADR-0013
 - [ADR-0013 · Generate the weekly episode at guarded Friday slots and auto-publish it Saturday 07:00 Berlin, apart from production](decisions/0013-friday-generation-saturday-berlin-publication.md)
 - [ADR-0014 · Accept a just-rotated refresh token for 60 seconds instead of revoking its session, and rotate atomically](decisions/0014-refresh-token-reuse-grace-window.md)
+- [ADR-0015 · A person performs the selection stage of a standalone episode; the AI suggestion is advisory and writes nothing](decisions/0015-person-performs-standalone-selection-stage.md)
+- [ADR-0016 · Mark an episode's kind in an explicit kind column, weekly or standalone, with standalone rows never carrying a week key](decisions/0016-podcast-kind-column.md)

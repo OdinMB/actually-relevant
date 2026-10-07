@@ -31,7 +31,7 @@ const {
   advanceEpisode, rewindEpisode, withEpisodeLease, releaseHeldLeases, pausesForReview, defaultEpisodeTitle, LeaseLostError,
 } = await import('./podcastPipeline.js')
 const { PodcastStoppedError, PodcastRefusedError } = await import('./podcastGuards.js')
-const { PODCAST_OPENER } = await import('../lib/aiLabelCopy.js')
+const { PODCAST_OPENER, PODCAST_EPISODE_COPY } = await import('../lib/aiLabelCopy.js')
 
 const snapshot = (ref: number) => ({ ref, id: `story-${ref}`, title: `T${ref}`, publisher: 'P', sourceUrl: 'https://x.example', slug: `t${ref}`, issue: 'I' })
 const dialogue = {
@@ -43,7 +43,7 @@ const CREATED_AT = new Date('2026-10-10T06:00:00Z')
 
 function episode(stage: string, overrides: Record<string, unknown> = {}) {
   return {
-    id: 'pod-1', stage, status: 'draft', title: 'Week', mode: null, weekKey: null, humanEdited: false, createdAt: CREATED_AT,
+    id: 'pod-1', stage, status: 'draft', title: 'Week', mode: null, weekKey: null, kind: 'weekly', humanEdited: false, createdAt: CREATED_AT,
     episodeStories: [1, 2, 3, 4].map(snapshot), leaseOwner: null, leaseUntil: null, audioPath: null, transcriptPath: null, ...overrides,
   }
 }
@@ -230,6 +230,29 @@ describe('advanceEpisode', () => {
     stagesRead(['legacy'])
     await expect(advanceEpisode('pod-1', { trigger: 'admin' })).rejects.toThrow(/legacy/)
   })
+
+  it('never runs the model selection for a standalone episode at created (the backstop)', async () => {
+    stagesRead(['created'], { kind: 'standalone', mode: 'automated' })
+    await expect(advanceEpisode('pod-1', { trigger: 'admin' })).rejects.toBeInstanceOf(PodcastRefusedError)
+    expect(mockScript.selectEpisodeStories).not.toHaveBeenCalled()
+    expect(writesWith('stage')).toHaveLength(0)
+  })
+
+  it('writes a standalone episode\'s script with its kind: the model title unprefixed and the standalone opener', async () => {
+    stagesRead(['selected', 'scripted'], { kind: 'standalone', mode: 'interactive' })
+    await advanceEpisode('pod-1', { trigger: 'admin' })
+    expect(mockScript.writeEpisodeScript.mock.calls[0][1]).toBe('standalone')
+    const [scriptWrite] = writesWith('script')
+    expect(scriptWrite.data.title).toBe('Episode title')
+    expect(scriptWrite.data.script.startsWith(`HOST A: ${PODCAST_EPISODE_COPY.standalone.opener}`)).toBe(true)
+  })
+})
+
+describe('defaultEpisodeTitle', () => {
+  it('names a weekly row by its week and a standalone row by its UTC creation date', () => {
+    expect(defaultEpisodeTitle({ weekKey: '2026-W41', createdAt: CREATED_AT })).toBe('Actually Relevant, 2026-W41')
+    expect(defaultEpisodeTitle({ weekKey: null, createdAt: new Date('2026-10-07T23:30:00Z') })).toBe('Actually Relevant, 2026-10-07')
+  })
 })
 
 describe('pausesForReview', () => {
@@ -270,9 +293,15 @@ describe('rewindEpisode', () => {
     const [write] = writesWith('stage')
     expect(write.data).toMatchObject({
       stage: 'selected', ...audioCleared, script: '', showNotes: '', episodeSummary: '', scriptModelId: null, ttsSeed: null,
-      title: defaultEpisodeTitle('2026-W41'),
+      title: 'Actually Relevant, 2026-W41',
     })
     for (const kept of ['episodeStories', 'storyIds', 'storiesSelectedAt', 'humanEdited']) expect(write.data).not.toHaveProperty(kept)
+  })
+
+  it('restores a standalone episode\'s dated default title', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('scripted', { kind: 'standalone', title: 'A model title' }))
+    await rewindEpisode('pod-1', 'selected', { dryRun: false })
+    expect(writesWith('stage')[0].data.title).toBe('Actually Relevant, 2026-10-10')
   })
 
   it('to created also clears the stories and the "edited by a person" flag', async () => {

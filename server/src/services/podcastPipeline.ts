@@ -137,9 +137,12 @@ export function pausesForReview(episode: Pick<Podcast, 'mode' | 'stage'>): boole
   return episode.mode === 'interactive' && REVIEW_STOPS.has(episode.stage)
 }
 
-/** The title a weekly row starts with, and returns to when its script is discarded. */
-export function defaultEpisodeTitle(weekKey: string | null): string {
-  return `Actually Relevant, ${weekKey ?? 'episode'}`
+/**
+ * The title a row starts with, and returns to when its script is discarded: the week key for a
+ * weekly row, the UTC creation date for a standalone one (so several are told apart).
+ */
+export function defaultEpisodeTitle(row: Pick<Podcast, 'weekKey' | 'createdAt'>): string {
+  return `Actually Relevant, ${row.weekKey ?? row.createdAt.toISOString().slice(0, 10)}`
 }
 
 /** "W41" for the ISO week key "2026-W41"; none without a week key. */
@@ -151,9 +154,11 @@ type StageRunner = (episode: Podcast, ctx: AudioStageContext) => Promise<StageWr
 /**
  * created → selected: the model picks the stories from the week's pool as of now; the snapshot
  * freezes them, and `storiesSelectedAt` keeps the pool's anchor so the story picker lists the
- * same pool the model chose from.
+ * same pool the model chose from. A standalone episode's stories are chosen by a person
+ * (ADR-0015); `startAdminRun` already refuses to run one from `created`, and this is the backstop.
  */
-async function selectStage(): Promise<StageWrite> {
+async function selectStage(episode: Podcast): Promise<StageWrite> {
+  if (episode.kind === 'standalone') throw new PodcastRefusedError("a standalone episode's stories are chosen by a person; choose them first")
   const anchor = new Date()
   const snapshots = (await selectEpisodeStories(anchor)).map(s => s.snapshot)
   return { stage: 'selected', episodeStories: snapshots, storyIds: snapshots.map(s => s.id), storiesSelectedAt: anchor }
@@ -162,14 +167,14 @@ async function selectStage(): Promise<StageWrite> {
 /** selected → scripted: write and validate the dialogue for the frozen stories; the title gets the week prefix. */
 async function writeScriptStage(episode: Podcast): Promise<StageWrite> {
   const snapshots = episodeSnapshots(episode)
-  const { dialogue, modelId } = await writeEpisodeScript(await loadEpisodeStories(snapshots))
+  const { dialogue, modelId } = await writeEpisodeScript(await loadEpisodeStories(snapshots), episode.kind)
   const label = weekLabel(episode.weekKey)
   return {
     stage: 'scripted',
     title: label ? `${label}: ${dialogue.episodeTitle}` : dialogue.episodeTitle,
     episodeSummary: dialogue.episodeSummary,
-    showNotes: buildShowNotes(dialogue.episodeSummary, snapshots, episode.humanEdited),
-    script: renderScript(assembleSpokenSegments(dialogue)),
+    showNotes: buildShowNotes(dialogue.episodeSummary, snapshots, episode.humanEdited, episode.kind),
+    script: renderScript(assembleSpokenSegments(dialogue, episode.kind)),
     dialogue,
     scriptModelId: modelId,
   }
@@ -270,7 +275,7 @@ const freshSeed = () => randomInt(1, 2 ** 31 - 1)
 function rewindWrite(episode: Podcast, to: RewindTarget, opts: RewindOptions): Prisma.PodcastUpdateManyMutationInput {
   const base = { stage: to, dryRun: opts.dryRun, lastError: null, failedAt: null, ...AUDIO_CLEARED, ...(opts.mode ? { mode: opts.mode } : {}) }
   if (to === 'scripted') return { ...base, ttsSeed: freshSeed() }
-  const scriptCleared = { ...base, ...SCRIPT_CLEARED, title: defaultEpisodeTitle(episode.weekKey) }
+  const scriptCleared = { ...base, ...SCRIPT_CLEARED, title: defaultEpisodeTitle(episode) }
   return to === 'selected' ? scriptCleared : { ...scriptCleared, ...STORIES_CLEARED }
 }
 

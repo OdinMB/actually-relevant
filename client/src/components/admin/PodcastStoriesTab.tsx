@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, type ReactElement } from 'react'
 import type { Podcast } from '@shared/types'
 import { Button } from '../ui/Button'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { useToast } from '../ui/Toast'
 import { useRewindPodcast } from '../../hooks/usePodcasts'
 import { PodcastRunButton } from './PodcastRunButton'
+import { PodcastStoryFinder } from './PodcastStoryFinder'
 import { PodcastStoryPicker } from './PodcastStoryPicker'
 import { atRestAndChangeable, nextAction } from './podcastRun'
 
@@ -45,12 +46,17 @@ function ModeChoice({ podcast }: { podcast: Podcast }) {
   )
 }
 
-type Rewind = 'start-over' | 'change-stories'
+type Rewind = 'start-over' | 'start-over-standalone' | 'change-stories'
 
 const REWIND: Record<Rewind, { title: string; description: string; label: string }> = {
   'start-over': {
     title: 'Start this episode over?',
     description: 'The stories, script and audio are discarded and new stories are selected. The episode then waits for your review.',
+    label: 'Start over',
+  },
+  'start-over-standalone': {
+    title: 'Start this episode over?',
+    description: 'The stories, script and audio are discarded. Choose the stories again.',
     label: 'Start over',
   },
   'change-stories': {
@@ -66,10 +72,27 @@ interface PodcastStoriesTabProps {
   onDirtyChange: (dirty: boolean) => void
 }
 
+/** Where each rewind goes; only a weekly Start over continues at once (the model selects new stories). */
+const REWIND_TARGET: Record<Rewind, { to: 'created' | 'selected'; advance: boolean }> = {
+  'start-over': { to: 'created', advance: true },
+  'start-over-standalone': { to: 'created', advance: false },
+  'change-stories': { to: 'selected', advance: false },
+}
+
+/** The story editor for the episode at rest, or null: the finder for a standalone episode, the week's pool picker for a weekly one. */
+function storyEditor(podcast: Podcast, onDirtyChange: (dirty: boolean) => void): ReactElement | null {
+  const standalone = podcast.kind === 'standalone'
+  const editable = atRestAndChangeable(podcast) && (podcast.stage === 'selected' || (standalone && podcast.stage === 'created'))
+  if (!editable) return null
+  return standalone
+    ? <PodcastStoryFinder podcast={podcast} onDirtyChange={onDirtyChange} />
+    : <PodcastStoryPicker podcast={podcast} onDirtyChange={onDirtyChange} />
+}
+
 /**
- * The Stories stage as a form: the mode choice for a new episode; at `selected`, the picker
- * (Save selection) and the approval that writes the script; later, the chosen stories read-only
- * with Change stories (at `scripted`) and Start over.
+ * The Stories stage as a form: the mode choice for a new weekly episode, the story finder for a new
+ * standalone one; at `selected`, the picker or finder (Save selection) and the approval that writes
+ * the script; later, the chosen stories read-only with Change stories (at `scripted`) and Start over.
  */
 export function PodcastStoriesTab({ podcast, pendingEdits, onDirtyChange }: PodcastStoriesTabProps) {
   const rewind = useRewindPodcast()
@@ -82,18 +105,16 @@ export function PodcastStoriesTab({ podcast, pendingEdits, onDirtyChange }: Podc
 
   const handleRewind = () => {
     if (!confirm) return
-    const startOver = confirm === 'start-over'
-    rewind.mutate({ id: podcast.id, to: startOver ? 'created' : 'selected', advance: startOver }, {
+    rewind.mutate({ id: podcast.id, ...REWIND_TARGET[confirm] }, {
       onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
       onSettled: () => setConfirm(null),
     })
   }
+  const startOver: Rewind = podcast.kind === 'standalone' ? 'start-over-standalone' : 'start-over'
 
   return (
     <div className="space-y-4">
-      {podcast.stage === 'selected' && changeable
-        ? <PodcastStoryPicker podcast={podcast} onDirtyChange={onDirtyChange} />
-        : <EpisodeStoriesList podcast={podcast} />}
+      {storyEditor(podcast, onDirtyChange) ?? <EpisodeStoriesList podcast={podcast} />}
 
       <div className="flex flex-wrap items-center gap-2">
         {action === 'approve-stories' && (
@@ -103,7 +124,7 @@ export function PodcastStoriesTab({ podcast, pendingEdits, onDirtyChange }: Podc
           <Button variant="secondary" size="sm" onClick={() => setConfirm('change-stories')} disabled={rewind.isPending}>Change stories</Button>
         )}
         {changeable && podcast.stage !== 'created' && (
-          <Button variant="ghost" size="sm" onClick={() => setConfirm('start-over')} disabled={rewind.isPending}>Start over</Button>
+          <Button variant="ghost" size="sm" onClick={() => setConfirm(startOver)} disabled={rewind.isPending}>Start over</Button>
         )}
       </div>
       {action === 'approve-stories' && (

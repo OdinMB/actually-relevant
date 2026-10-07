@@ -55,7 +55,8 @@ export async function getEpisodeStoryPool(episode: Pick<Podcast, 'storiesSelecte
   }
 }
 
-function storyCountErrors(storyIds: string[]): string[] {
+/** A chosen story list's count and duplicate errors (the same rule for weekly and standalone). */
+export function storyCountErrors(storyIds: string[]): string[] {
   const { minStories, maxStories } = config.podcast
   const errors: string[] = []
   if (new Set(storyIds).size !== storyIds.length) errors.push('a story is chosen twice')
@@ -109,21 +110,21 @@ export async function saveEpisodeScript(id: string, edit: DialogueTextEdit): Pro
 
     const snapshots = episodeSnapshots(episode)
     const refs = snapshots.map(s => ({ ref: s.ref, title: s.title, publisher: s.publisher }))
-    const validation = validateDialogue(applied.dialogue, refs, { authoredBy: 'person' })
+    const validation = validateDialogue(applied.dialogue, refs, { kind: episode.kind, authoredBy: 'person' })
     if (!validation.valid) throw new PodcastEditRejectedError(validation.errors, validation.warnings)
 
     const humanEdited = episode.humanEdited || textChanged(stored, applied.dialogue)
-    const script = renderScript(assembleSpokenSegments(applied.dialogue))
+    const script = renderScript(assembleSpokenSegments(applied.dialogue, episode.kind))
     await update({
       dialogue: applied.dialogue,
       episodeSummary: applied.dialogue.episodeSummary,
       script,
-      showNotes: buildShowNotes(applied.dialogue.episodeSummary, snapshots, humanEdited),
+      showNotes: buildShowNotes(applied.dialogue.episodeSummary, snapshots, humanEdited, episode.kind),
       humanEdited,
     })
     // A failed voicing leaves its chunks stored, and a resume skips every stored index: once the
     // spoken words change, those chunks voice the old text, so they go.
-    if (script !== renderScript(assembleSpokenSegments(stored))) {
+    if (script !== renderScript(assembleSpokenSegments(stored, episode.kind))) {
       await prisma.podcastAudioChunk.deleteMany({ where: { podcastId: id } })
     }
     return { warnings: validation.warnings }
@@ -159,7 +160,7 @@ export async function updateEpisodeMeta(id: string, edit: EpisodeMetaEdit): Prom
       if (refusal) throw new PodcastRefusedError(refusal)
     }
     const notes = flagChanged && episode.showNotes !== ''
-      ? { showNotes: buildShowNotes(episode.episodeSummary, episodeSnapshots(episode), edit.humanEdited!) }
+      ? { showNotes: buildShowNotes(episode.episodeSummary, episodeSnapshots(episode), edit.humanEdited!, episode.kind) }
       : {}
     await update({ ...(edit.title !== undefined ? { title: edit.title } : {}), ...(edit.humanEdited !== undefined ? { humanEdited: edit.humanEdited } : {}), ...notes })
   }, 'edited')

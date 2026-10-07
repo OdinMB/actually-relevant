@@ -1,11 +1,16 @@
 import type { Podcast, PodcastMode } from '@shared/types'
 import { wasPublished } from './podcastPublished'
 
-export type NextAction = 'choose-mode' | 'approve-stories' | 'approve-script' | 'resume'
+export type NextAction = 'choose-stories' | 'choose-mode' | 'approve-stories' | 'approve-script' | 'resume'
 
-/** What a person can do next at rest; null while a run works, once ready, published or legacy. */
+/**
+ * What a person can do next at rest; null while a run works, once ready, published or legacy. A
+ * standalone episode at `created` waits for a person to choose its stories, whatever its mode: no run
+ * selects them.
+ */
 export function nextAction(podcast: Podcast): NextAction | null {
   if (podcast.inProgress || podcast.stage === 'legacy' || podcast.stage === 'ready' || wasPublished(podcast)) return null
+  if (podcast.kind === 'standalone' && podcast.stage === 'created') return 'choose-stories'
   if (podcast.stage === 'created' && !podcast.mode) return 'choose-mode'
   if (podcast.awaitingReview) return podcast.stage === 'selected' ? 'approve-stories' : 'approve-script'
   return 'resume'

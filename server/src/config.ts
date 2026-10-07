@@ -167,6 +167,9 @@ export const config = {
     dryRun: process.env.NODE_ENV !== "production",
     maxStories: 5,
     minStories: 4,
+    // "Suggest stories" for a standalone episode: the most relevant published stories matching the
+    // finder's filters, at most this many, go to the selection call (the weekly pool is the 7-day window).
+    suggestPoolMax: 60,
     selectModelTier: "large" as const,
     scriptModelTier: "large" as const,
     // Spoken characters of the whole episode, code-added opener and sign-off and audio tags included.
