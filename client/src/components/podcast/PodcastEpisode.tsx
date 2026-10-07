@@ -2,19 +2,11 @@ import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { PublicPodcastEpisode } from '@shared/types'
 import AiBadge from '../ai/AiBadge'
+import EpisodeStoryList from './EpisodeStoryList'
+import { formatEpisodeDate, formatEpisodeDuration, podcastTranscriptPath } from '../../lib/podcast'
 
-const LINK_CLASS = 'text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded'
 const ACTION_CLASS =
   'inline-flex items-center gap-1 font-medium text-brand-700 hover:text-brand-800 hover:underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded'
-
-function formatDuration(sec: number | null): string | null {
-  if (sec == null) return null
-  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
-}
-
-function formatEpisodeDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
-}
 
 function ChevronIcon({ open }: { open: boolean }) {
   return (
@@ -35,46 +27,36 @@ function ChevronIcon({ open }: { open: boolean }) {
 
 /**
  * The episode's secondary area: one quiet row of actions ("Stories (n)" and "Transcript"),
- * where Stories discloses the story list inline below the row. Collapsed by default; the list
- * stays in the DOM (`hidden`) so the toggle's `aria-controls` always resolves.
+ * where Stories discloses the story list inline below the row and Transcript opens the episode's
+ * transcript page. Collapsed by default; the list stays in the DOM (`hidden`) so the toggle's
+ * `aria-controls` always resolves.
  */
 function EpisodeDetails({ episode }: { episode: PublicPodcastEpisode }) {
   const [open, setOpen] = useState(false)
   const listId = useId()
   const hasStories = episode.stories.length > 0
-  if (!hasStories && !episode.transcriptUrl) return null
 
   return (
     <div className="mt-3 text-sm">
       <div data-episode-actions className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {hasStories && (
-          <button
-            type="button"
-            className={ACTION_CLASS}
-            aria-expanded={open}
-            aria-controls={listId}
-            onClick={() => setOpen(o => !o)}
-          >
-            Stories ({episode.stories.length})
-            <ChevronIcon open={open} />
-          </button>
+          <>
+            <button
+              type="button"
+              className={ACTION_CLASS}
+              aria-expanded={open}
+              aria-controls={listId}
+              onClick={() => setOpen(o => !o)}
+            >
+              Stories ({episode.stories.length})
+              <ChevronIcon open={open} />
+            </button>
+            <span aria-hidden="true" className="text-neutral-400">·</span>
+          </>
         )}
-        {hasStories && episode.transcriptUrl && <span aria-hidden="true" className="text-neutral-400">·</span>}
-        {episode.transcriptUrl && (
-          <a href={episode.transcriptUrl} className={ACTION_CLASS}>Transcript</a>
-        )}
+        <Link to={podcastTranscriptPath(episode.id)} className={ACTION_CLASS}>Transcript</Link>
       </div>
-      {hasStories && (
-        <ol id={listId} hidden={!open} className="mt-2 list-decimal pl-5 space-y-1 text-neutral-700">
-          {episode.stories.map(story => (
-            <li key={story.sourceUrl}>
-              {story.slug ? <Link to={`/stories/${story.slug}`} className={LINK_CLASS}>{story.title}</Link> : story.title}
-              {' '}({story.publisher},{' '}
-              <a href={story.sourceUrl} className={LINK_CLASS} rel="noopener noreferrer" target="_blank">source</a>)
-            </li>
-          ))}
-        </ol>
-      )}
+      {hasStories && <EpisodeStoryList stories={episode.stories} id={listId} hidden={!open} />}
     </div>
   )
 }
@@ -86,7 +68,7 @@ function EpisodeDetails({ episode }: { episode: PublicPodcastEpisode }) {
  */
 export default function PodcastEpisode({ episode }: { episode: PublicPodcastEpisode }) {
   const headingId = `episode-${episode.id}`
-  const duration = formatDuration(episode.durationSec)
+  const duration = formatEpisodeDuration(episode.durationSec)
   return (
     <article aria-labelledby={headingId} className="border-t border-neutral-200 pt-6">
       <h3 id={headingId} className="text-xl font-semibold text-neutral-900">

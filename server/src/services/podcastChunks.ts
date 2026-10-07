@@ -49,7 +49,12 @@ export function chunkContinuity(chunks: Chunk[], index: number, contextChars: nu
 }
 
 const TAG_RE = /\[[^\]\n]{1,40}\]/g
-const SPEAKER_LABEL = { HOST_A: 'Host A', HOST_B: 'Host B' } as const
+
+/** The generic host names a listener reads in the VTT and on the transcript page. */
+export const SPEAKER_LABEL = { HOST_A: 'Host A', HOST_B: 'Host B' } as const
+
+/** A turn's text as a reader sees it: audio tags are not spoken, so they are left out. */
+export const readableText = (text: string): string => text.replace(TAG_RE, ' ').replace(/\s+/g, ' ').trim()
 
 function timestamp(ms: number): string {
   const total = Math.max(0, Math.round(ms))
@@ -75,7 +80,7 @@ export function buildTranscriptVtt(chunks: Chunk[], durationsMs: number[], pause
     let at = offset
     for (const turn of chunk) {
       const end = at + (durationsMs[i] * turn.text.length) / total
-      const text = turn.text.replace(TAG_RE, ' ').replace(/\s+/g, ' ').trim()
+      const text = readableText(turn.text)
       if (text !== '') cues.push(`${timestamp(at)} --> ${timestamp(end)}\n<v ${SPEAKER_LABEL[turn.speaker]}>${text}`)
       at = end
     }

@@ -10,7 +10,7 @@ const mockFeed = vi.hoisted(() => ({ invalidateFeedCache: vi.fn() }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastFeed.js', () => mockFeed)
 
-const { publishEpisode, unpublishEpisode, getPublishedEpisodes, pickAutoPublishCandidate, publishBlockedReason } = await import('./podcastPublish.js')
+const { publishEpisode, unpublishEpisode, getPublishedEpisodes, getPublishedEpisode, pickAutoPublishCandidate, publishBlockedReason } = await import('./podcastPublish.js')
 const { PodcastRefusedError, wasPublished, standaloneCopyRefusal } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-12T07:00:00Z') // Monday of 2026-W42
@@ -166,6 +166,27 @@ describe('getPublishedEpisodes', () => {
       id: 'podcast-1', title: 'W42: T', kind: 'weekly', summary: 'S.', stories, humanEdited: true,
       audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null, publishedAt,
     }])
+  })
+})
+
+describe('getPublishedEpisode', () => {
+  it('finds the episode only among the published, ready, live episodes with audio', async () => {
+    mockPrisma.podcast.findFirst.mockResolvedValueOnce(null)
+    expect(await getPublishedEpisode('podcast-1')).toBeNull()
+    const query = mockPrisma.podcast.findFirst.mock.calls[0][0]
+    expect(query.where).toMatchObject({
+      id: 'podcast-1', status: 'published', stage: 'ready', dryRun: false, publishedAt: { not: null }, audioUrl: { not: null },
+    })
+  })
+
+  it('returns the published episode with its stored dialogue', async () => {
+    const publishedAt = new Date('2026-10-12T08:00:00Z')
+    const dialogue = { episodeTitle: 'T', episodeSummary: 'S.', segments: [] }
+    mockPrisma.podcast.findFirst.mockResolvedValueOnce({
+      id: 'podcast-1', title: 'W42: T', kind: 'weekly', episodeSummary: 'S.', episodeStories: [], humanEdited: false,
+      audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null, publishedAt, dialogue,
+    })
+    expect(await getPublishedEpisode('podcast-1')).toMatchObject({ id: 'podcast-1', summary: 'S.', publishedAt, dialogue })
   })
 })
 

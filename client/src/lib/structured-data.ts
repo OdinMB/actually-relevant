@@ -1,5 +1,6 @@
-import type { PublicStory } from '@shared/types'
+import type { PublicPodcastEpisode, PublicStory } from '@shared/types'
 import type { PublicIssue } from './api'
+import { podcastTranscriptPath } from './podcast'
 import { SEO } from './seo'
 
 const LOGO_URL = `${SEO.siteUrl}/images/logo.png`
@@ -78,6 +79,32 @@ export function buildCollectionPageSchema(issue: PublicIssue) {
       '@type': 'WebSite',
       name: SEO.siteName,
     },
+  }
+}
+
+/** A published podcast episode, described on its transcript page. */
+export function buildPodcastEpisodeSchema(
+  episode: Pick<PublicPodcastEpisode, 'id' | 'title' | 'summary' | 'publishedAt' | 'durationSec' | 'audioUrl'>,
+) {
+  const sec = episode.durationSec
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'PodcastEpisode',
+    name: episode.title,
+    description: episode.summary.slice(0, 200),
+    datePublished: episode.publishedAt,
+    url: `${SEO.siteUrl}${podcastTranscriptPath(episode.id)}`,
+    ...(sec != null ? { timeRequired: `PT${Math.floor(sec / 60)}M${sec % 60}S` } : {}),
+    associatedMedia: { '@type': 'MediaObject', contentUrl: episode.audioUrl, encodingFormat: 'audio/mpeg' },
+    partOfSeries: {
+      '@type': 'PodcastSeries',
+      name: SEO.siteName,
+      url: `${SEO.siteUrl}/podcast`,
+      webFeed: `${SEO.siteUrl}/podcast.xml`,
+    },
+    publisher,
+    // The page that explains that AI writes the episodes
+    publishingPrinciples: `${SEO.siteUrl}/methodology`,
   }
 }
 

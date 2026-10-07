@@ -7,9 +7,10 @@
 import type { PodcastKind } from '@prisma/client'
 import { config } from '../config.js'
 import { escapeXml } from '../lib/xml.js'
-import { AI_GENERATED_PODCAST_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
+import { AI_GENERATED_PODCAST_DETAIL_FIELDS, AI_GENERATED_PODCAST_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
 import { PODCAST_SHOW_DESCRIPTION, podcastEpisodeAiLine } from '../lib/aiLabelCopy.js'
 import { buildShowNotes, type EpisodeStory } from './podcastScript.js'
+import { publicTranscript } from './podcastTranscript.js'
 
 /** A published episode as the feed and the public JSON read it. */
 export interface PublishedEpisode {
@@ -106,3 +107,12 @@ export function toPublicEpisode(episode: PublishedEpisode) {
 }
 
 export type PublicPodcastEpisode = ReturnType<typeof toPublicEpisode>
+
+/** One published episode for its transcript page: the public episode, its readable transcript, and a marker naming it. */
+export function toPublicEpisodeDetail(episode: PublishedEpisode & { dialogue: unknown }) {
+  return {
+    ...toPublicEpisode(episode),
+    transcript: publicTranscript(episode.dialogue, episode.kind, episode.stories),
+    aiGenerated: { fields: [...AI_GENERATED_PODCAST_DETAIL_FIELDS], digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA },
+  }
+}

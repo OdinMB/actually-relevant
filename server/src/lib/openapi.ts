@@ -1,7 +1,12 @@
 import 'zod-openapi/extend'
 import { z } from 'zod'
 import { createDocument } from 'zod-openapi'
-import { AI_GENERATED_PODCAST_FIELDS, AI_GENERATED_STORY_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from './aiProvenance.js'
+import {
+  AI_GENERATED_PODCAST_DETAIL_FIELDS,
+  AI_GENERATED_PODCAST_FIELDS,
+  AI_GENERATED_STORY_FIELDS,
+  IPTC_TRAINED_ALGORITHMIC_MEDIA,
+} from './aiProvenance.js'
 import { OPENAPI_AI_FIELD_PREFIX, OPENAPI_REPUBLISHER_NOTE } from './aiLabelCopy.js'
 
 /** Description of a field in AI_GENERATED_STORY_FIELDS: the "AI-generated." label, then the details. */
@@ -159,6 +164,30 @@ const podcastEpisodeSchema = z.object({
     digitalSourceType: z.literal(IPTC_TRAINED_ALGORITHMIC_MEDIA),
   }).openapi({ description: 'Machine-readable marker of the AI-generated fields of this episode. Unsigned metadata, not a watermark.' }),
 }).openapi({ ref: 'PodcastEpisode' })
+
+const podcastEpisodeDetailSchema = podcastEpisodeSchema.extend({
+  transcript: z.array(z.object({
+    story: z.object({
+      title: z.string().openapi({ description: aiField('Headline written by an AI model for the story page.') }),
+      publisher: z.string(),
+      sourceUrl: z.string().url(),
+      slug: z.string().nullable(),
+    }).nullable().openapi({ description: 'The story this part of the conversation is about; null for the opening, intro, outro and sign-off.' }),
+    turns: z.array(z.object({
+      speaker: z.enum(['Host A', 'Host B']).openapi({ description: 'One of the two generic AI hosts.' }),
+      text: z.string(),
+    })),
+  })).openapi({
+    description: aiField(
+      'The episode as spoken, in order: the fixed opening and sign-off and the dialogue written by an AI model (a person may have edited it), ' +
+        'one entry per part of the conversation, audio tags left out.',
+    ),
+  }),
+  aiGenerated: z.object({
+    fields: z.array(z.enum(AI_GENERATED_PODCAST_DETAIL_FIELDS)),
+    digitalSourceType: z.literal(IPTC_TRAINED_ALGORITHMIC_MEDIA),
+  }).openapi({ description: 'Machine-readable marker of the AI-generated fields of this episode. Unsigned metadata, not a watermark.' }),
+}).openapi({ ref: 'PodcastEpisodeDetail' })
 
 const podcastResponseSchema = z.object({
   show: z.object({
@@ -412,6 +441,39 @@ export function getOpenAPIDocument(): any {
               description: 'Show information and published episodes',
               content: {
                 'application/json': { schema: podcastResponseSchema },
+              },
+            },
+          },
+        },
+      },
+      '/api/podcast/episodes/{id}': {
+        get: {
+          operationId: 'getPodcastEpisode',
+          summary: 'Podcast episode with transcript',
+          description:
+            'Returns one published episode with its readable transcript: the conversation as spoken, by the two AI hosts, ' +
+            'grouped by the story each part is about. Episodes are written and voiced by AI.',
+          tags: ['Podcast'],
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Episode id (also the feed item GUID); never changes once the episode is published',
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'The episode and its transcript',
+              content: {
+                'application/json': { schema: podcastEpisodeDetailSchema },
+              },
+            },
+            '404': {
+              description: 'No published episode with this id',
+              content: {
+                'application/json': { schema: errorResponseSchema },
               },
             },
           },

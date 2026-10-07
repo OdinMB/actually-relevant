@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
-const mockPublish = vi.hoisted(() => ({ getPublishedEpisodes: vi.fn() }))
+const mockPublish = vi.hoisted(() => ({ getPublishedEpisodes: vi.fn(), getPublishedEpisode: vi.fn() }))
 // A limiter that refuses everything: whatever passes it was never rate-limited.
 vi.mock('../../middleware/rateLimit.js', () => ({
   apiLimiter: (_req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) => res.status(429).json({ error: 'limited' }),
@@ -92,5 +92,51 @@ describe('GET /api/podcast', () => {
       aiGenerated: { fields: ['title', 'summary', 'audioUrl', 'transcriptUrl'] },
     })
     expect(res.body.episodes[0].stories[0]).toEqual({ title: 'Air', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air' })
+  })
+})
+
+describe('GET /api/podcast/episodes/:id', () => {
+  const DIALOGUE = {
+    episodeTitle: 'Clean air',
+    episodeSummary: 'Two stories.',
+    segments: [
+      { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'Welcome.' }] },
+      { kind: 'story', storyRef: 1, turns: [{ speaker: 'HOST_B', text: '[thoughtful] Air data.' }] },
+      { kind: 'outro', storyRef: null, turns: [{ speaker: 'HOST_B', text: 'Bye.' }] },
+    ],
+  }
+
+  async function routerWithoutLimiter() {
+    vi.resetModules()
+    vi.doMock('../../middleware/rateLimit.js', () => ({ apiLimiter: (_req: unknown, _res: unknown, next: () => void) => next() }))
+    vi.doMock('../../services/podcastPublish.js', () => mockPublish)
+    const { default: router } = await import('./podcast.js')
+    return express().use('/api/podcast', router)
+  }
+
+  it('keeps the shared rate limiter on the episode route', async () => {
+    expect((await request(podcastOnly).get('/api/podcast/episodes/podcast-1')).status).toBe(429)
+  })
+
+  it('answers 404 for an episode that is not published', async () => {
+    mockPublish.getPublishedEpisode.mockResolvedValue(null)
+    const res = await request(await routerWithoutLimiter()).get('/api/podcast/episodes/podcast-2')
+    expect(res.status).toBe(404)
+    expect(mockPublish.getPublishedEpisode).toHaveBeenCalledWith('podcast-2')
+  })
+
+  it('returns only the public fields, the readable transcript and a marker that names the transcript', async () => {
+    // Internal fields the service might carry must never reach the response.
+    mockPublish.getPublishedEpisode.mockResolvedValue({ ...EPISODE, dialogue: DIALOGUE, lastError: 'boom', leaseOwner: 'proc-1' })
+    const res = await request(await routerWithoutLimiter()).get('/api/podcast/episodes/podcast-1')
+    expect(res.status).toBe(200)
+    expect(Object.keys(res.body).sort()).toEqual([
+      'aiGenerated', 'aiLine', 'audioBytes', 'audioUrl', 'durationSec', 'id', 'publishedAt', 'stories', 'summary', 'title', 'transcript', 'transcriptUrl',
+    ])
+    expect(res.body.aiGenerated.fields).toContain('transcript')
+    expect(res.body.transcript[2]).toEqual({
+      story: { title: 'Air', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air' },
+      turns: [{ speaker: 'Host B', text: 'Air data.' }],
+    })
   })
 })

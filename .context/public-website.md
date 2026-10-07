@@ -16,8 +16,9 @@ Saved appears only once the visitor has saved a story, and goes when the last is
 | `/contact` | `ContactPage` | Email + bilingual imprint (EN/DE) |
 | `/newsletter` | `NewsletterPage` | Inline subscribe form (reuses `SubscribeForm`) |
 | `/podcast` | `PodcastPage` | Weekly AI podcast: AI subtitle, feed link, listen links and episodes with `<audio preload="none">` on the CDN (`.context/podcast.md`) |
+| `/podcast/:id/transcript` | `PodcastTranscriptPage` | One published episode's readable transcript: "AI" badge and title, the `/podcast` AI subtitle, player, the conversation by "Host A"/"Host B" with a heading per story, the story list. `:id` is the episode's row id (the feed GUID), which never changes once published (`.context/podcast.md`) |
 
-All routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `routes.ts` (for sitemap generation). Static routes (issues, methodology, about, contact) are prerendered at build time. Dynamic story routes are added to the sitemap via `generate-sitemap.ts`.
+Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `routes.ts`, and prerendered at build time. Dynamic routes (`/stories/:slug`, `/podcast/:id/transcript`) are only in `App.tsx`: they load client-side, are not prerendered, and the server sitemap lists them (`.context/seo.md`).
 
 ## Public API
 
@@ -27,6 +28,7 @@ All routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.t
 - `GET /api/issues/:slug` — Single issue by slug
 
 - `GET /api/podcast` — The podcast show and its published episodes (each with its AI line and an `aiGenerated` marker)
+- `GET /api/podcast/episodes/:id` — One published episode with its readable `transcript` (404 unless published; its `aiGenerated` marker names `transcript` too)
 
 Every story object the public JSON routes return (`/api/stories`, `/api/stories/:slug`, `/api/stories/:slug/related`, `/api/homepage`) carries a machine-readable `aiGenerated` marker, added in the route with `withAiGeneratedMarker()` (`server/src/lib/aiProvenance.ts`). A new public route that returns stories must add it too; the compliance record (`.context/ai-transparency.md`) relies on it.
 

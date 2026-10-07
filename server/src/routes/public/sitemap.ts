@@ -3,6 +3,7 @@ import { config } from '../../config.js'
 import { createLogger } from '../../lib/logger.js'
 import { TTLCache, cached } from '../../lib/cache.js'
 import prisma from '../../lib/prisma.js'
+import { listPublishedEpisodeDates } from '../../services/podcastPublish.js'
 
 const router = Router()
 const log = createLogger('sitemap')
@@ -45,7 +46,11 @@ function formatDate(date: Date): string {
   return date.toISOString().split('T')[0]
 }
 
-function buildSitemapXml(baseUrl: string, stories: { slug: string; datePublished: Date | null }[]): string {
+function buildSitemapXml(
+  baseUrl: string,
+  stories: { slug: string; datePublished: Date | null }[],
+  episodes: { id: string; publishedAt: Date }[],
+): string {
   const staticUrls = STATIC_ROUTES.map(
     (route) => `  <url>
     <loc>${baseUrl}${route.path}</loc>
@@ -63,9 +68,17 @@ function buildSitemapXml(baseUrl: string, stories: { slug: string; datePublished
   </url>`
   })
 
+  // Each published episode's transcript page (its id never changes once published)
+  const transcriptUrls = episodes.map((episode) => `  <url>
+    <loc>${baseUrl}/podcast/${episode.id}/transcript</loc>
+    <lastmod>${formatDate(episode.publishedAt)}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>`)
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${[...staticUrls, ...storyUrls].join('\n')}
+${[...staticUrls, ...storyUrls, ...transcriptUrls].join('\n')}
 </urlset>
 `
 }
@@ -79,8 +92,10 @@ router.get('/', async (_req, res) => {
         orderBy: { datePublished: 'desc' },
       })
 
-      log.info({ storyCount: stories.length }, 'generated sitemap')
-      return buildSitemapXml(getSiteUrl(), stories as { slug: string; datePublished: Date | null }[])
+      const episodes = await listPublishedEpisodeDates()
+
+      log.info({ storyCount: stories.length, episodeCount: episodes.length }, 'generated sitemap')
+      return buildSitemapXml(getSiteUrl(), stories as { slug: string; datePublished: Date | null }[], episodes)
     })
 
     res.set('Content-Type', 'application/xml; charset=utf-8')

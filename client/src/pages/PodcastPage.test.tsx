@@ -99,23 +99,20 @@ describe('PodcastPage', () => {
     expect(list?.hidden).toBe(true)
   })
 
-  it('shows the transcript link beside the stories toggle only when the episode has one', async () => {
-    mockApi.podcast.mockResolvedValue({
-      ...RESPONSE,
-      episodes: [{ ...RESPONSE.episodes[0], transcriptUrl: 'https://audio.actuallyrelevant.news/episodes/x.vtt' }],
-    })
+  it('links the episode transcript page beside the stories toggle', async () => {
     renderPage()
     const toggle = await screen.findByRole('button', { name: /Stories \(2\)/ })
     const transcript = screen.getByRole('link', { name: /Transcript/ })
-    expect(transcript.getAttribute('href')).toBe('https://audio.actuallyrelevant.news/episodes/x.vtt')
+    expect(transcript.getAttribute('href')).toBe('/podcast/podcast-1/transcript')
     expect(toggle.closest('[data-episode-actions]')).toBe(transcript.closest('[data-episode-actions]'))
   })
 
-  it('has no stories toggle for an episode without stories', async () => {
+  it('has no stories toggle for an episode without stories, but still its transcript link', async () => {
     mockApi.podcast.mockResolvedValue({ ...RESPONSE, episodes: [{ ...RESPONSE.episodes[0], stories: [] }] })
     renderPage()
     await screen.findByRole('heading', { name: /W42: Clean air/ })
     expect(screen.queryByRole('button', { name: /Stories/ })).toBeNull()
+    expect(screen.getByRole('link', { name: /Transcript/ }).getAttribute('href')).toBe('/podcast/podcast-1/transcript')
   })
 
   it('streams each episode from the CDN without preloading, and links the feed', async () => {

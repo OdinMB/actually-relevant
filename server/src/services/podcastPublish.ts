@@ -1,11 +1,12 @@
 /**
  * Moving episodes in and out of the feed (ADR-0013): publish, unpublish, the published episodes the
- * feed and the public JSON list, and the automatic publish job's candidate. `status = published`
+ * public surfaces read (feed, public JSON, an episode's transcript page, sitemap), and the automatic
+ * publish job's candidate. `status = published`
  * means listed; only this module changes it. Publishing needs a `ready`, non-dry-run episode; the
  * first publication date is kept for good (the episode is never regenerated or deleted after it);
  * unpublishing always works, deletes nothing on the CDN and is never undone by the automatic job.
  */
-import { ContentStatus, PodcastStage, type Podcast } from '@prisma/client'
+import { ContentStatus, PodcastStage, type Podcast, type Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
@@ -92,40 +93,58 @@ export async function unpublishEpisode(id: string, now: Date = new Date()): Prom
   return true
 }
 
+/** What "published" means for every public surface: the feed, /podcast, an episode's transcript page, the sitemap. */
+const PUBLISHED_WHERE = {
+  status: ContentStatus.published,
+  stage: PodcastStage.ready,
+  dryRun: false,
+  publishedAt: { not: null },
+  audioUrl: { not: null },
+  audioBytes: { not: null },
+} satisfies Prisma.PodcastWhereInput
+
+const PUBLISHED_SELECT = {
+  id: true, title: true, kind: true, episodeSummary: true, episodeStories: true, humanEdited: true,
+  audioUrl: true, audioBytes: true, durationSec: true, transcriptUrl: true, publishedAt: true,
+} satisfies Prisma.PodcastSelect
+
+type PublishedRow = Prisma.PodcastGetPayload<{ select: typeof PUBLISHED_SELECT }>
+
+function toPublishedEpisode(row: PublishedRow): PublishedEpisode | null {
+  // The where clause guarantees these; the check narrows the types.
+  if (!row.audioUrl || row.audioBytes == null || !row.publishedAt) return null
+  return {
+    id: row.id,
+    title: row.title,
+    kind: row.kind,
+    summary: row.episodeSummary,
+    stories: Array.isArray(row.episodeStories) ? episodeSnapshots(row) : [],
+    humanEdited: row.humanEdited,
+    audioUrl: row.audioUrl,
+    audioBytes: row.audioBytes,
+    durationSec: row.durationSec,
+    transcriptUrl: row.transcriptUrl,
+    publishedAt: row.publishedAt,
+  }
+}
+
 /** Published, ready, non-dry-run episodes with their audio, newest first: the feed's and the public page's list. */
 export async function getPublishedEpisodes(): Promise<PublishedEpisode[]> {
-  const rows = await prisma.podcast.findMany({
-    where: {
-      status: ContentStatus.published,
-      stage: PodcastStage.ready,
-      dryRun: false,
-      publishedAt: { not: null },
-      audioUrl: { not: null },
-      audioBytes: { not: null },
-    },
-    select: {
-      id: true, title: true, kind: true, episodeSummary: true, episodeStories: true, humanEdited: true,
-      audioUrl: true, audioBytes: true, durationSec: true, transcriptUrl: true, publishedAt: true,
-    },
-    orderBy: { publishedAt: 'desc' },
-  })
-  return rows.flatMap(row => {
-    // The where clause guarantees these; the check narrows the types.
-    if (!row.audioUrl || row.audioBytes == null || !row.publishedAt) return []
-    return [{
-      id: row.id,
-      title: row.title,
-      kind: row.kind,
-      summary: row.episodeSummary,
-      stories: Array.isArray(row.episodeStories) ? episodeSnapshots(row) : [],
-      humanEdited: row.humanEdited,
-      audioUrl: row.audioUrl,
-      audioBytes: row.audioBytes,
-      durationSec: row.durationSec,
-      transcriptUrl: row.transcriptUrl,
-      publishedAt: row.publishedAt,
-    }]
-  })
+  const rows = await prisma.podcast.findMany({ where: PUBLISHED_WHERE, select: PUBLISHED_SELECT, orderBy: { publishedAt: 'desc' } })
+  return rows.flatMap(row => toPublishedEpisode(row) ?? [])
+}
+
+/** One published episode with its stored dialogue (for its transcript page); null when it is not published. */
+export async function getPublishedEpisode(id: string): Promise<(PublishedEpisode & { dialogue: unknown }) | null> {
+  const row = await prisma.podcast.findFirst({ where: { id, ...PUBLISHED_WHERE }, select: { ...PUBLISHED_SELECT, dialogue: true } })
+  const episode = row && toPublishedEpisode(row)
+  return episode && { ...episode, dialogue: row.dialogue }
+}
+
+/** The ids and first publication dates of the published episodes, newest first (the sitemap's transcript pages). */
+export async function listPublishedEpisodeDates(): Promise<{ id: string; publishedAt: Date }[]> {
+  const rows = await prisma.podcast.findMany({ where: PUBLISHED_WHERE, select: { id: true, publishedAt: true }, orderBy: { publishedAt: 'desc' } })
+  return rows.flatMap(r => (r.publishedAt ? [{ id: r.id, publishedAt: r.publishedAt }] : []))
 }
 
 /**

@@ -391,6 +391,19 @@ export interface PublicPodcastEpisode {
   aiGenerated: { fields: string[]; digitalSourceType: string }
 }
 
+/** One part of a published episode's conversation, as spoken: under the story it is about, if any. */
+export interface PublicPodcastTranscriptSegment {
+  /** Null for the opener, intro, outro and sign-off. */
+  story: { title: string; publisher: string; sourceUrl: string; slug: string | null } | null
+  /** Each turn under its generic AI host's name, audio tags left out. */
+  turns: { speaker: 'Host A' | 'Host B'; text: string }[]
+}
+
+/** `GET /api/podcast/episodes/:id`: one published episode with its readable transcript. */
+export interface PublicPodcastEpisodeDetail extends PublicPodcastEpisode {
+  transcript: PublicPodcastTranscriptSegment[]
+}
+
 /** `GET /api/podcast`: the show and its published episodes, newest first. */
 export interface PublicPodcastResponse {
   show: {

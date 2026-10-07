@@ -9,6 +9,9 @@ const mockPrisma = vi.hoisted(() => ({
   story: {
     findMany: vi.fn(),
   },
+  podcast: {
+    findMany: vi.fn(),
+  },
   $disconnect: vi.fn(),
 }))
 
@@ -32,6 +35,18 @@ describe('GET /api/sitemap.xml', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     sitemapCache.clear()
+    mockPrisma.podcast.findMany.mockResolvedValue([])
+  })
+
+  it('lists the transcript page of each published podcast episode', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([])
+    mockPrisma.podcast.findMany.mockResolvedValue([{ id: 'ep-1', publishedAt: new Date('2026-10-12T07:30:00Z') }])
+
+    const res = await request(app).get('/api/sitemap.xml')
+
+    expect(res.text).toContain('<loc>https://actuallyrelevant.news/podcast/ep-1/transcript</loc>')
+    expect(res.text).toContain('<lastmod>2026-10-12</lastmod>')
+    expect(mockPrisma.podcast.findMany.mock.calls[0][0].where).toMatchObject({ status: 'published', dryRun: false })
   })
 
   it('returns valid XML with correct content type', async () => {

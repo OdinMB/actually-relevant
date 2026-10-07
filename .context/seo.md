@@ -24,9 +24,9 @@ Served dynamically by the backend at `GET /api/sitemap.xml`. In production, a Re
 
 ### How It Works
 
-1. `GET /api/sitemap.xml` queries all published stories (slug + datePublished) from the database
+1. `GET /api/sitemap.xml` queries all published stories (slug + datePublished) and the published podcast episodes (`listPublishedEpisodeDates()`, the same "published" rule as the feed) from the database
 2. Combines with hardcoded static routes (same list as `client/src/routes.ts`)
-3. Generates XML with `<lastmod>` for stories using `datePublished`
+3. Generates XML with `<lastmod>` for stories using `datePublished`, and one `/podcast/<id>/transcript` entry per published episode (`lastmod` = first publication, priority 0.5)
 4. Response is cached in-memory (TTL: `config.sitemap.cacheMaxAge`, default 1 hour)
 5. `Cache-Control: public, max-age=3600` header allows CDN/proxy caching
 6. New stories appear in the sitemap automatically within the cache TTL
@@ -56,7 +56,7 @@ The podcast's RSS feed is served the same way, at the canonical `https://actuall
 | Destination | `https://<backend-service>.onrender.com/api/podcast/feed.xml` |
 | Action | **Rewrite** |
 
-Same rules as the sitemap: above the SPA catch-all, and no static `podcast.xml` in `client/public/`. The `/podcast` page is an ordinary prerendered route (in both route lists below). Details: `.context/podcast.md`, "Publishing, feed and page".
+Same rules as the sitemap: above the SPA catch-all, and no static `podcast.xml` in `client/public/`. The `/podcast` page is an ordinary prerendered route (in both route lists below). Each episode's transcript page, `/podcast/<id>/transcript`, is dynamic like a story page: not prerendered and not in either static list, but in the server sitemap; its Helmet sets title, description, canonical and `og:*`, and it carries `PodcastEpisode` and breadcrumb JSON-LD (`buildPodcastEpisodeSchema` in `client/src/lib/structured-data.ts`); its not-found state is `noindex`. Details: `.context/podcast.md`, "Publishing, feed and page".
 
 ### Configuration
 

@@ -9,3 +9,13 @@ export function usePodcastEpisodes() {
     staleTime: 5 * 60 * 1000,
   })
 }
+
+/** One published episode with its readable transcript, for its transcript page. */
+export function usePodcastEpisode(id: string) {
+  return useQuery({
+    queryKey: ['public-podcast-episode', id],
+    queryFn: () => publicApi.podcastEpisode(id),
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000,
+  })
+}

@@ -57,3 +57,6 @@ export function withAiGeneratedMarker<T extends AiStoryText>(story: T): T & { ai
  * them, so the marker lists them all; openapi.test.ts checks each is described as AI-generated.
  */
 export const AI_GENERATED_PODCAST_FIELDS = ['title', 'summary', 'audioUrl', 'transcriptUrl'] as const
+
+/** The same for one episode with its readable transcript (`GET /api/podcast/episodes/:id`). */
+export const AI_GENERATED_PODCAST_DETAIL_FIELDS = [...AI_GENERATED_PODCAST_FIELDS, 'transcript'] as const
