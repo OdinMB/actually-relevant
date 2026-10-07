@@ -9,6 +9,7 @@ function makeJob(overrides: Partial<JobRun> = {}): JobRun {
     jobName: 'crawl_feeds',
     lastStartedAt: null,
     lastCompletedAt: null,
+    lastSucceededAt: null,
     lastError: null,
     enabled: true,
     running: false,

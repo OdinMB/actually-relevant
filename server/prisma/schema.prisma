@@ -338,9 +338,13 @@ model JobRun {
   jobName         String    @unique @map("job_name")
   lastStartedAt   DateTime? @map("last_started_at")
   lastCompletedAt DateTime? @map("last_completed_at")
+  lastSucceededAt DateTime? @map("last_succeeded_at")
   lastError       String?   @map("last_error")
   enabled         Boolean   @default(true)
   cronExpression  String    @map("cron_expression")
+  // Cross-instance run lease (scheduler.ts): who holds it, and until when (UTC, database clock)
+  lockedBy        String?   @map("locked_by")
+  lockedUntil     DateTime? @map("locked_until")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 

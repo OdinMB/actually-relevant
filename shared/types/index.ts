@@ -555,9 +555,13 @@ export interface JobRun {
   id: string
   jobName: JobName
   lastStartedAt: string | null
+  /** Last finished run, success or failure. */
   lastCompletedAt: string | null
+  /** Last run that finished without an error. */
+  lastSucceededAt: string | null
   lastError: string | null
   enabled: boolean
+  /** A run is under way in any server process (in memory, or a live job lease). */
   running: boolean
   cronExpression: string
   /** IANA zone the cron expression is read in; null for the server's own clock. */

@@ -1,6 +1,8 @@
 import prisma from './lib/prisma.js'
 import { createLogger } from './lib/logger.js'
 import { startScheduler, stopScheduler } from './jobs/scheduler.js'
+import { releaseHeldJobLeases } from './jobs/jobLease.js'
+import { config } from './config.js'
 import { cleanupExpiredTokens } from './services/auth.js'
 import { taskRegistry } from './lib/taskRegistry.js'
 import { releaseHeldLeases } from './services/podcastPipeline.js'
@@ -17,13 +19,19 @@ let shuttingDown = false
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 
+/** Start the scheduler and, where this process schedules jobs, the boot podcast configuration check. */
+export function startBackgroundWork(): void {
+  // Retries with backoff while the database is unavailable; alerts once. Schedules nothing with
+  // SCHEDULER_ENABLED=false (scheduler.ts)
+  startScheduler()
+  // Alerts at once when a podcast job is enabled but a setting is missing (never throws). The alert
+  // concerns scheduled podcast runs, so a process that schedules nothing skips it
+  if (config.scheduler.enabled) void checkPodcastConfigAtBoot()
+}
+
 const server = app.listen(PORT, () => {
   log.info({ port: PORT }, 'server started')
-
-  // Retries with backoff while the database is unavailable; alerts once (scheduler.ts)
-  startScheduler()
-  // Alerts at once when a podcast job is enabled but a setting is missing (never throws)
-  void checkPodcastConfigAtBoot()
+  startBackgroundWork()
 })
 
 const tokenCleanupTimer = setInterval(async () => {
@@ -72,12 +80,19 @@ export async function shutdown(): Promise<void> {
   // 4. Clean up task registry
   taskRegistry.destroy()
 
-  // 5. Hand back podcast leases, so the next process can resume an episode at once
+  // 5. Hand back podcast leases, so the next process can resume an episode at once ...
   try {
     const released = await releaseHeldLeases()
     if (released > 0) log.info({ released }, 'released podcast leases')
   } catch (err) {
     log.error({ err }, 'failed to release podcast leases')
+  }
+  // ... and job leases, so the next process can run those jobs at once rather than in leaseMinutes
+  try {
+    const released = await releaseHeldJobLeases()
+    if (released > 0) log.info({ released }, 'released job leases')
+  } catch (err) {
+    log.error({ err }, 'failed to release job leases')
   }
 
   // 6. Disconnect database

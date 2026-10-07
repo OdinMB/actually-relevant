@@ -3,18 +3,23 @@ import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
 import { notifyJobFailure } from '../lib/notify.js'
 import { config } from '../config.js'
-import { JOB_HANDLERS } from './handlers.js'
+import { JOB_HANDLERS, JOB_PIPELINE_ORDER } from './handlers.js'
 import { jobTimeZone } from './jobTimeZones.js'
+import { claimJobRun, finishJobRun, jobsWithLiveLease, withJobLeaseHeartbeat } from './jobLease.js'
 
 const log = createLogger('scheduler')
 
 const tasksByName = new Map<string, cron.ScheduledTask>()
+/** Fast path of the overlap guard within this process; the job lease (jobLease.ts) covers other processes. */
 const runningJobs = new Set<string>()
+/** Bumped by stopScheduler, so a boot catch-up chain started before it ends at its next step. */
+let catchUpGeneration = 0
 
 export async function initScheduler(): Promise<void> {
   log.info('initializing')
 
   const jobs = await prisma.jobRun.findMany()
+  const overdue: string[] = []
 
   for (const job of jobs) {
     if (!job.enabled) {
@@ -38,18 +43,55 @@ export async function initScheduler(): Promise<void> {
     tasksByName.set(job.jobName, task)
     log.info({ jobName: job.jobName, cronExpression: job.cronExpression }, 'registered')
 
-    // Check if overdue
-    if (isOverdue(job)) {
-      log.info({ jobName: job.jobName }, 'overdue, running now')
-      launchJob(job.jobName, handler)
-    }
+    if (isOverdue(job)) overdue.push(job.jobName)
   }
 
   log.info({ jobCount: tasksByName.size }, 'ready')
+
+  if (overdue.length > 0) {
+    const ordered = inPipelineOrder(overdue)
+    log.info({ jobs: ordered }, 'overdue at boot, catching up one after another')
+    const generation = catchUpGeneration
+    runCatchUp(ordered, generation).catch(err => {
+      log.error({ err }, 'boot catch-up stopped; the remaining jobs wait for their schedule')
+    })
+  }
 }
 
+/** Sort job names by JOB_PIPELINE_ORDER; a name missing from it goes last. */
+function inPipelineOrder(jobNames: string[]): string[] {
+  const rank = (name: string) => {
+    const index = JOB_PIPELINE_ORDER.indexOf(name)
+    return index === -1 ? Infinity : index
+  }
+  return [...jobNames].sort((a, b) => rank(a) - rank(b))
+}
+
+/**
+ * Run the boot catch-up one job at a time. Before each step the job's row is read again: a job
+ * disabled meanwhile, or no longer overdue because its cron tick ran it, is skipped. A stopScheduler
+ * (a new generation) ends the chain before its next step.
+ */
+async function runCatchUp(jobNames: string[], generation: number): Promise<void> {
+  for (const jobName of jobNames) {
+    if (generation !== catchUpGeneration) return
+    const handler = JOB_HANDLERS[jobName]
+    const job = await prisma.jobRun.findUnique({ where: { jobName } })
+    if (!handler || !tasksByName.has(jobName) || !job?.enabled || !isOverdue(job)) {
+      log.info({ jobName }, 'no longer due for catch-up, skipping')
+      continue
+    }
+    log.info({ jobName }, 'overdue, running now')
+    await runJob(jobName, handler)
+  }
+}
+
+/**
+ * Overdue at boot: more than 2x the estimated interval since the last finished run. A job that
+ * never finished is not overdue; it waits for its first cron tick.
+ */
 function isOverdue(job: { jobName: string; lastCompletedAt: Date | null; cronExpression: string }): boolean {
-  if (!job.lastCompletedAt) return true
+  if (!job.lastCompletedAt) return false
 
   // Simple heuristic: parse the cron to estimate interval
   // For expressions like "0 */6 * * *", the interval is ~6 hours
@@ -142,9 +184,10 @@ function countDaysInDowExpr(expr: string): number | null {
 }
 
 /**
- * Run a job with bookkeeping. Always resolves: a failure of the handler or of
- * any bookkeeping write is logged, recorded where possible, and alerted, and
- * the running mark is always removed.
+ * Run a job with bookkeeping, under the job's lease. Always resolves: a failure
+ * of the handler or of any bookkeeping write is logged, recorded where possible,
+ * and alerted, and the running mark is always removed. While another process
+ * holds the lease the run is skipped quietly: nothing recorded, nothing alerted.
  */
 async function runJob(jobName: string, handler: () => Promise<void>): Promise<void> {
   if (runningJobs.has(jobName)) {
@@ -153,18 +196,15 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
   }
 
   runningJobs.add(jobName)
-  log.info({ jobName }, 'started')
 
   try {
-    await prisma.jobRun.update({
-      where: { jobName },
-      data: { lastStartedAt: new Date(), lastError: null },
-    })
-    await handler()
-    await prisma.jobRun.update({
-      where: { jobName },
-      data: { lastCompletedAt: new Date() },
-    })
+    if ((await claimJobRun(jobName)) === 'held') {
+      log.info({ jobName }, 'held by another process, skipping')
+      return
+    }
+    log.info({ jobName }, 'started')
+    await withJobLeaseHeartbeat(jobName, handler)
+    await finishJobRun(jobName, null)
     log.info({ jobName }, 'completed')
   } catch (err) {
     let errorMsg = err instanceof Error ? err.message : String(err)
@@ -181,13 +221,10 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
   }
 }
 
-/** Write the failure to the job row; a failed write is logged, never thrown. */
+/** Write the failure to the job row and release the lease; a failed write is logged, never thrown. */
 async function recordFailure(jobName: string, errorMsg: string): Promise<void> {
   try {
-    await prisma.jobRun.update({
-      where: { jobName },
-      data: { lastError: errorMsg, lastCompletedAt: new Date() },
-    })
+    await finishJobRun(jobName, errorMsg)
   } catch (err) {
     log.error({ jobName, err }, 'failed to record job failure')
   }
@@ -200,16 +237,20 @@ function scheduleJob(jobName: string, cronExpression: string, handler: () => Pro
   return timezone ? cron.schedule(cronExpression, tick, { timezone }) : cron.schedule(cronExpression, tick)
 }
 
-/** Fire-and-forget trigger used by cron ticks and boot catch-up. */
+/** Fire-and-forget trigger used by cron ticks (the boot catch-up awaits runJob in its own chain). */
 function launchJob(jobName: string, handler: () => Promise<void>): void {
   runJob(jobName, handler).catch(err => {
     log.error({ jobName, err }, 'job launcher caught unexpected rejection')
   })
 }
 
-/** Whether a run of the job is under way in this process (the admin run route answers 409 then). */
-function isJobRunning(jobName: string): boolean {
-  return runningJobs.has(jobName)
+/**
+ * Whether a run of the job is under way, in this process or, by a live lease, in another
+ * (the admin run route answers 409 then).
+ */
+async function isJobRunning(jobName: string): Promise<boolean> {
+  if (runningJobs.has(jobName)) return true
+  return (await jobsWithLiveLease()).has(jobName)
 }
 
 // Exported for manual trigger via admin API and testing
@@ -220,6 +261,11 @@ export async function reloadJob(jobName: string): Promise<void> {
   const existing = tasksByName.get(jobName)
   if (existing) existing.stop()
   tasksByName.delete(jobName)
+
+  if (!config.scheduler.enabled) {
+    log.info({ jobName }, 'scheduler disabled (SCHEDULER_ENABLED): saved, not scheduled in this process')
+    return
+  }
 
   // Read fresh config from DB
   const job = await prisma.jobRun.findUnique({ where: { jobName } })
@@ -249,6 +295,10 @@ let schedulerStopped = false
  * config.scheduler.initAlertAfterAttempts failed attempts.
  */
 export function startScheduler(): void {
+  if (!config.scheduler.enabled) {
+    log.info('scheduler disabled (SCHEDULER_ENABLED): no job is scheduled in this process')
+    return
+  }
   schedulerStopped = false
   void attemptStart(1, false)
 }
@@ -290,6 +340,7 @@ async function attemptStart(attempt: number, alerted: boolean): Promise<void> {
 
 export function stopScheduler(): void {
   schedulerStopped = true
+  catchUpGeneration++
   if (initRetryTimer) {
     clearTimeout(initRetryTimer)
     initRetryTimer = null

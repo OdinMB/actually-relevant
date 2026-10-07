@@ -74,6 +74,19 @@ async function analyzeImage(imagePath) {
 }
 
 /**
+ * Analyze an image for a report over many files: an unreadable file is
+ * skipped with a warning (null) instead of aborting the whole run.
+ */
+async function analyzeOrSkip(image) {
+  try {
+    return await analyzeImage(image.path);
+  } catch (error) {
+    console.warn(`Skipping ${image.relativePath}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
  * Get the output path for an optimized variant
  */
 function getOptimizedPath(image, preset, orientation) {
@@ -189,9 +202,14 @@ async function showInfo() {
   const images = findImages(IMAGES_DIR);
   let totalOriginalKB = 0;
   let totalOptimizedKB = 0;
+  let unreadable = 0;
 
   for (const image of images) {
-    const analysis = await analyzeImage(image.path);
+    const analysis = await analyzeOrSkip(image);
+    if (!analysis) {
+      unreadable++;
+      continue;
+    }
     const variants = getExistingVariants(image);
     const missing = getMissingVariants(image, variants);
 
@@ -227,6 +245,9 @@ async function showInfo() {
   if (totalOptimizedKB > 0) {
     console.log(`Optimized size: ${formatSize(totalOptimizedKB)}`);
   }
+  if (unreadable > 0) {
+    console.log(`Skipped (unreadable): ${unreadable}`);
+  }
 }
 
 /**
@@ -244,9 +265,14 @@ async function optimizeAll() {
   const images = findImages(IMAGES_DIR);
   let generated = 0;
   let skipped = 0;
+  let unreadable = 0;
 
   for (const image of images) {
-    const analysis = await analyzeImage(image.path);
+    const analysis = await analyzeOrSkip(image);
+    if (!analysis) {
+      unreadable++;
+      continue;
+    }
     const variants = getExistingVariants(image);
     const missing = getMissingVariants(image, variants);
 
@@ -275,6 +301,9 @@ async function optimizeAll() {
   }
 
   console.log(`\nDone! Generated ${generated} variants, skipped ${skipped} fully-optimized images.`);
+  if (unreadable > 0) {
+    console.log(`Skipped (unreadable): ${unreadable}`);
+  }
 }
 
 /**

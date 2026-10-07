@@ -127,7 +127,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `llm-analysis.md` | Model tiers (GPT-6 defaults; prompts and models change together), prompt directory, schema-driven format, analysis stages |
 | `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks |
 | `prompting.md` | Prompt conventions for the GPT-5/GPT-6 reasoning models and calibration lessons (read before modifying prompts) |
-| `scheduler.md` | Job registry, overlap prevention, concurrency, admin API |
+| `scheduler.md` | Job registry, overlap prevention (job lease), catch-up, `SCHEDULER_ENABLED`, concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
 | `newsletter-podcast.md` | Newsletter: create-assign-select-generate workflow, issue ordering, templates, Plunk sending, carousel |
 | `decisions.md` | Architectural decision log: the index, with one file per decision in `.context/decisions/`; append-only history |

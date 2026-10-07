@@ -28,6 +28,7 @@ vi.mock('../../lib/admin-api', () => ({
           jobName: 'crawl_feeds',
           lastStartedAt: '2025-01-01T00:00:00Z',
           lastCompletedAt: '2025-01-01T00:01:00Z',
+          lastSucceededAt: '2025-01-01T00:01:00Z',
           lastError: null,
           enabled: true,
           cronExpression: '0 */6 * * *',

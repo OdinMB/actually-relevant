@@ -58,10 +58,16 @@ function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => void }) {
           <p className="text-sm text-neutral-600"><TimeWithRelative dateStr={job.lastStartedAt} /></p>
         </div>
 
-        {/* Last Completed */}
+        {/* Last Finished (success or failure) */}
         <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-1">Last Completed</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-1">Last Finished</label>
           <p className="text-sm text-neutral-600"><TimeWithRelative dateStr={job.lastCompletedAt} /></p>
+        </div>
+
+        {/* Last Success */}
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 mb-1">Last Success</label>
+          <p className="text-sm text-neutral-600"><TimeWithRelative dateStr={job.lastSucceededAt} /></p>
         </div>
 
         {/* Error */}
@@ -114,7 +120,8 @@ export function JobsTable({ jobs }: JobsTableProps) {
               <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Enabled</th>
               <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Status</th>
               <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Last Started</th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Last Completed</th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Last Finished</th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Last Success</th>
               <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Error</th>
               <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">Actions</th>
             </tr>
@@ -142,6 +149,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
                 <td className="px-3 py-2"><JobStatusBadge job={job} /></td>
                 <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell"><TimeWithRelative dateStr={job.lastStartedAt} /></td>
                 <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell"><TimeWithRelative dateStr={job.lastCompletedAt} /></td>
+                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell"><TimeWithRelative dateStr={job.lastSucceededAt} /></td>
                 <td className="px-3 py-2 max-w-[200px] hidden lg:table-cell">
                   {job.lastError ? (
                     <button

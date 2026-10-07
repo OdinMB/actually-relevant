@@ -21,3 +21,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0014 · Accept a just-rotated refresh token for 60 seconds instead of revoking its session, and rotate atomically](decisions/0014-refresh-token-reuse-grace-window.md)
 - [ADR-0015 · A person performs the selection stage of a standalone episode; the AI suggestion is advisory and writes nothing](decisions/0015-person-performs-standalone-selection-stage.md)
 - [ADR-0016 · Mark an episode's kind in an explicit kind column, weekly or standalone, with standalone rows never carrying a week key](decisions/0016-podcast-kind-column.md)
+- [ADR-0017 · Fence every job run with a heartbeat-renewed lease on its job_runs row, claimed atomically on the database clock](decisions/0017-job-run-lease.md)

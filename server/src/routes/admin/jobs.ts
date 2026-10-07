@@ -61,8 +61,15 @@ router.post('/:jobName/run', async (req, res) => {
     res.status(404).json({ error: 'Job not found' })
     return
   }
-  if (isJobRunning(req.params.jobName)) {
-    res.status(409).json({ error: `Job ${req.params.jobName} is already running` })
+  try {
+    // In this process, or in another by a live job lease
+    if (await isJobRunning(req.params.jobName)) {
+      res.status(409).json({ error: `Job ${req.params.jobName} is already running` })
+      return
+    }
+  } catch (err) {
+    log.error({ err, jobName: req.params.jobName }, 'failed to check whether the job is running')
+    res.status(500).json({ error: 'Failed to trigger job' })
     return
   }
 

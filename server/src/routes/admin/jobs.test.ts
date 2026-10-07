@@ -27,9 +27,11 @@ vi.mock('../../services/crawler.js', () => ({
   crawlUrl: vi.fn(),
 }))
 const mockReloadJob = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
-const mockIsJobRunning = vi.hoisted(() => vi.fn().mockReturnValue(false))
+const mockIsJobRunning = vi.hoisted(() => vi.fn())
+const mockJobsWithLiveLease = vi.hoisted(() => vi.fn())
 const mockJobEnableRefusal = vi.hoisted(() => vi.fn().mockReturnValue(null))
 vi.mock('../../jobs/scheduler.js', () => ({ runJob: mockRunJob, reloadJob: mockReloadJob, isJobRunning: mockIsJobRunning, runningJobs: new Set() }))
+vi.mock('../../jobs/jobLease.js', () => ({ jobsWithLiveLease: mockJobsWithLiveLease }))
 vi.mock('../../jobs/jobEnableChecks.js', () => ({ jobEnableRefusal: mockJobEnableRefusal }))
 vi.mock('../../jobs/crawlFeeds.js', () => ({ runCrawlFeeds: mockRunCrawlFeeds }))
 vi.mock('../../jobs/preassessStories.js', () => ({ runPreassessStories: mockRunPreassessStories }))
@@ -43,6 +45,8 @@ const { default: app } = await import('../../app.js')
 describe('Admin Jobs API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockIsJobRunning.mockResolvedValue(false)
+    mockJobsWithLiveLease.mockResolvedValue(new Set())
   })
 
   describe('GET /api/admin/jobs', () => {
@@ -60,6 +64,22 @@ describe('Admin Jobs API', () => {
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(2)
       expect(res.body[0].jobName).toBe('crawl_feeds')
+    })
+
+    it("reports a job as running while another process's lease is live, and keeps the lease fields out", async () => {
+      const lockedUntil = new Date(Date.now() + 60_000)
+      mockPrisma.jobRun.findMany.mockResolvedValue([
+        { jobName: 'crawl_feeds', enabled: true, cronExpression: '0 */6 * * *', lockedBy: 'other:1:abcd', lockedUntil },
+        { jobName: 'assess_stories', enabled: true, cronExpression: '0 8 * * *', lockedBy: null, lockedUntil: null },
+      ])
+      mockJobsWithLiveLease.mockResolvedValue(new Set(['crawl_feeds']))
+
+      const res = await request(app).get('/api/admin/jobs').set(authHeader())
+
+      expect(res.status).toBe(200)
+      expect(res.body.map((job: { running: boolean }) => job.running)).toEqual([true, false])
+      expect(res.body[0]).not.toHaveProperty('lockedBy')
+      expect(res.body[0]).not.toHaveProperty('lockedUntil')
     })
 
     it('returns 401 without auth', async () => {
@@ -128,7 +148,7 @@ describe('Admin Jobs API', () => {
 
   describe('POST /api/admin/jobs/:jobName/run', () => {
     it('answers 409 and starts nothing while the job is already running', async () => {
-      mockIsJobRunning.mockReturnValueOnce(true)
+      mockIsJobRunning.mockResolvedValueOnce(true)
 
       const res = await request(app)
         .post('/api/admin/jobs/crawl_feeds/run')

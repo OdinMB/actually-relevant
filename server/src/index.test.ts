@@ -47,6 +47,12 @@ vi.mock('./lib/taskRegistry.js', () => ({
 vi.mock('./app.js', () => ({ default: mockApp }))
 const mockReleaseHeldLeases = vi.hoisted(() => vi.fn().mockResolvedValue(0))
 vi.mock('./services/podcastPipeline.js', () => ({ releaseHeldLeases: mockReleaseHeldLeases }))
+const mockReleaseHeldJobLeases = vi.hoisted(() => vi.fn().mockResolvedValue(0))
+vi.mock('./jobs/jobLease.js', () => ({ releaseHeldJobLeases: mockReleaseHeldJobLeases }))
+const mockCheckPodcastConfigAtBoot = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock('./jobs/podcastBootCheck.js', () => ({ checkPodcastConfigAtBoot: mockCheckPodcastConfigAtBoot }))
+
+const { config } = await import('./config.js')
 
 // Import after mocks are set up
 const indexModule = await import('./index.js')
@@ -89,6 +95,7 @@ describe('server index', () => {
       })
       mockTaskRegistryDestroy.mockImplementation(() => { callOrder.push('taskRegistryDestroy') })
       mockReleaseHeldLeases.mockImplementation(async () => { callOrder.push('releasePodcastLeases'); return 0 })
+      mockReleaseHeldJobLeases.mockImplementation(async () => { callOrder.push('releaseJobLeases'); return 0 })
       mockPrisma.$disconnect.mockImplementation(async () => { callOrder.push('prismaDisconnect') })
 
       const shutdownPromise = indexModule.shutdown()
@@ -100,6 +107,7 @@ describe('server index', () => {
         'serverClose',
         'taskRegistryDestroy',
         'releasePodcastLeases',
+        'releaseJobLeases',
         'prismaDisconnect',
       ])
     })
@@ -109,6 +117,16 @@ describe('server index', () => {
       const shutdownPromise = indexModule.shutdown()
       await vi.advanceTimersByTimeAsync(1000)
       await shutdownPromise
+      expect(mockPrisma.$disconnect).toHaveBeenCalledTimes(1)
+    })
+
+    it('still releases job leases and disconnects when releasing the podcast leases fails', async () => {
+      mockReleaseHeldLeases.mockRejectedValueOnce(new Error('db gone'))
+      mockReleaseHeldJobLeases.mockRejectedValueOnce(new Error('db gone'))
+      const shutdownPromise = indexModule.shutdown()
+      await vi.advanceTimersByTimeAsync(1000)
+      await shutdownPromise
+      expect(mockReleaseHeldJobLeases).toHaveBeenCalledTimes(1)
       expect(mockPrisma.$disconnect).toHaveBeenCalledTimes(1)
     })
 
@@ -198,6 +216,25 @@ describe('server index', () => {
       await shutdownPromise
 
       expect(mockProcessExit).toHaveBeenCalledWith(0)
+    })
+  })
+
+  describe('startBackgroundWork()', () => {
+    afterEach(() => {
+      config.scheduler.enabled = true
+    })
+
+    it('starts the scheduler and checks the podcast configuration', () => {
+      config.scheduler.enabled = true
+      indexModule.startBackgroundWork()
+      expect(mockStartScheduler).toHaveBeenCalledTimes(1)
+      expect(mockCheckPodcastConfigAtBoot).toHaveBeenCalledTimes(1)
+    })
+
+    it('skips the podcast configuration check where the scheduler is disabled', () => {
+      config.scheduler.enabled = false
+      indexModule.startBackgroundWork()
+      expect(mockCheckPodcastConfigAtBoot).not.toHaveBeenCalled()
     })
   })
 

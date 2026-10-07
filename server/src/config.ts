@@ -260,6 +260,13 @@ export const config = {
     initRetryMaxMs: 5 * 60_000,
     // One notifyJobFailure alert after this many failed attempts.
     initAlertAfterAttempts: 3,
+    // SCHEDULER_ENABLED=false (or 0/no/off) schedules nothing in this process, e.g. a second
+    // process against the production database; the admin Run button still works there.
+    enabled: !['false', '0', 'no', 'off'].includes((process.env.SCHEDULER_ENABLED ?? '').trim().toLowerCase()),
+    // Cross-instance job lease (ADR-0017): held for leaseMinutes, renewed every leaseRenewMs while
+    // the handler runs, so a crashed holder blocks its job for at most leaseMinutes.
+    leaseMinutes: 10,
+    leaseRenewMs: 2 * 60_000,
   },
   feed: {
     size: parseInt(process.env.RSS_FEED_SIZE || "50", 10),

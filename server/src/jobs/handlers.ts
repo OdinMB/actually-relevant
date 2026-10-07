@@ -24,3 +24,22 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   generate_podcast: () => runGeneratePodcast(),
   publish_podcast: () => runPublishPodcast(),
 }
+
+/**
+ * The order the boot catch-up runs overdue jobs in, one after another (scheduler.ts): each stage
+ * before the stages that consume its output. A job missing here runs last. Same order as the
+ * admin's JOB_PIPELINE_ORDER (client/src/lib/constants.ts); the server does not import shared/.
+ */
+export const JOB_PIPELINE_ORDER: readonly string[] = [
+  'crawl_feeds',
+  'preassess_stories',
+  'assess_stories',
+  'select_stories',
+  'publish_stories',
+  'social_auto_post',
+  'bluesky_update_metrics',
+  'mastodon_update_metrics',
+  'generate_newsletter',
+  'generate_podcast',
+  'publish_podcast',
+]
