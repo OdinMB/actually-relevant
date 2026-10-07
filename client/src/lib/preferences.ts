@@ -28,6 +28,19 @@ export function hasSetPreferences(): boolean {
 
 // --- Saved stories ---
 
+/** Fired on window whenever this tab changes the saved stories; other tabs get a `storage` event. */
+export const SAVED_CHANGED_EVENT = 'ar-saved-changed'
+
+/** Calls `onChange` when the saved stories change in this tab or another; returns the unsubscribe. */
+export function subscribeSaved(onChange: () => void): () => void {
+  window.addEventListener('storage', onChange)
+  window.addEventListener(SAVED_CHANGED_EVENT, onChange)
+  return () => {
+    window.removeEventListener('storage', onChange)
+    window.removeEventListener(SAVED_CHANGED_EVENT, onChange)
+  }
+}
+
 function getSavedArray(): string[] {
   try {
     const raw = localStorage.getItem(SAVED_STORIES_KEY)
@@ -44,6 +57,7 @@ function saveSavedArray(slugs: string[]): void {
   } catch {
     // silently ignore
   }
+  window.dispatchEvent(new Event(SAVED_CHANGED_EVENT))
 }
 
 export function getSavedSlugs(): string[] {

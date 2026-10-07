@@ -1,6 +1,8 @@
 # Public Website
 
-The public site uses `PublicLayout` with hardcoded navigation in `PublicLayout.tsx`: the issue bar (`ISSUE_LINKS`), the header's Saved, Newsletter and Podcast links (desktop right of the logo, and the same three in the mobile menu dialog), and the footer's Navigate (`FOOTER_NAV`), Connect (channels: Newsletter, Podcast, RSS and the rest, written out inline) and Issues columns. A new channel goes in both the header (desktop and mobile) and Connect; each link appears once in the footer. This document covers routes, components, data flow, and static content structure.
+The public site uses `PublicLayout` with hardcoded navigation in `PublicLayout.tsx`: the issue bar (`ISSUE_LINKS`), the header's Newsletter, Podcast and Saved links, in that order (desktop right of the logo, and the same three in the mobile menu dialog), and the footer's Navigate (`FOOTER_NAV`), Connect (channels: Newsletter, Podcast, RSS and the rest, written out inline) and Issues columns. A new channel goes in both the header (desktop and mobile) and Connect; each link appears once in the footer.
+
+Saved appears only once the visitor has saved a story, and goes when the last is removed, at once and without a reload: `useSavedCount` (`client/src/hooks/`) subscribes to the saved-stories store in `lib/preferences.ts`, whose `toggleSaved` announces every change itself (other tabs through the `storage` event), so a new place that saves or removes a story needs no event of its own. Prerendered pages carry no Saved link, since the prerender's browser has nothing saved; the client adds it on its first render. Because the desktop group is anchored right, Newsletter and Podcast then sit one link further left for a visitor with saved stories. The Layout Instability API records no shift for it (0 on a prerendered page with three saved stories and the JS delayed 1.5 s, 2026-10-07), because the client replaces the prerendered nodes rather than moving them. This document covers routes, components, data flow, and static content structure.
 
 ## Routes
 
@@ -74,7 +76,8 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 
 ## Shared Components
 
-- `HeaderAiLine` — site-wide AI notice: a micro-line under the header claim in `PublicLayout`'s `BrandLogo`, a sibling link to `/methodology` (never inside the home link); keep it no wider than the claim, or the header collides with the flanking nav at 1024 px (`.context/ai-transparency.md` §7)
+- `BrandLogo` — the header's logo, claim and AI line (`client/src/components/BrandLogo.tsx`, used in the header and the mobile menu dialog). Phones: claim, then `HeaderAiLine` under it. From `md` up: one line, "[AI] claim · AI line", with the logo absolutely positioned and centered above it, so the home link (logo, decorative badge, claim) and the AI link stay separate links. The line clears the flanking controls only because they end within the logo's height (`.context/ai-transparency.md` §7)
+- `HeaderAiLine` — site-wide AI notice, a sibling link to `/methodology` (never inside the home link)
 - `StoryTitleLabel` — "AI" badge plus title label above every card and hero headline; new story listings should render headlines through `StoryCard` or this component so they carry the badge (`.context/ai-transparency.md`)
 - `StoryCard` — Story card with title, rating, summary (used on homepage + issue pages)
 - `RatingDisplay` — Relevance rating with color coding

@@ -20,9 +20,7 @@ export default function BookmarkButton({ slug, size = 'sm', hoverReveal = false,
     e.preventDefault()
     e.stopPropagation()
     const nowSaved = toggleSaved(slug)
-    setSaved(nowSaved)
-    // Notify SavedPage and other components
-    window.dispatchEvent(new Event('ar-saved-changed'))
+    setSaved(nowSaved) // toggleSaved notifies the header and SavedPage itself
   }
 
   const iconSize = size === 'md' ? 'w-5 h-5' : 'w-4 h-4'

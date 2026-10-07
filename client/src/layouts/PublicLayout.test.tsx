@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+import { render, screen, within, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import PublicLayout from './PublicLayout'
 import { BRAND } from '../config'
+import { toggleSaved } from '../lib/preferences'
 
 function renderLayout() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -45,6 +46,55 @@ describe('PublicLayout', () => {
     expect(home).toHaveAttribute('href', '/')
     expect(home).toHaveTextContent(BRAND.claim.replace(/\.$/, ''))
     expect(home).not.toContainElement(aiLine)
+  })
+
+  it('keeps the line badge out of the home link name, so the home link reads as logo and claim only', () => {
+    renderLayout()
+    const header = screen.getByRole('banner')
+    const home = within(header).getByRole('link', { name: /Actually Relevant/ })
+    expect(home).toHaveAccessibleName(`Actually Relevant ${BRAND.claim.replace(/\.$/, '')}`)
+  })
+
+  describe('Saved link', () => {
+    const savedLinks = () =>
+      within(screen.getByRole('banner')).queryAllByRole('link', { name: /^Saved/, hidden: true })
+
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('is absent, in the header and the mobile menu, while nothing is saved', () => {
+      renderLayout()
+      expect(savedLinks()).toHaveLength(0)
+    })
+
+    it('appears when the first story is saved and goes when the last is removed, without a reload', () => {
+      renderLayout()
+
+      act(() => {
+        toggleSaved('a-story')
+      })
+      expect(savedLinks()).toHaveLength(2)
+      expect(savedLinks()[0]).toHaveAttribute('href', '/saved')
+
+      act(() => {
+        toggleSaved('a-story')
+      })
+      expect(savedLinks()).toHaveLength(0)
+    })
+
+    it('comes after Newsletter and Podcast, in the header and the mobile menu', () => {
+      localStorage.setItem('ar-saved-stories', JSON.stringify(['a-story']))
+      renderLayout()
+      const header = screen.getByRole('banner')
+      const order = [
+        ...within(header).getAllByRole('button', { name: 'Newsletter', hidden: true }),
+        ...within(header).getAllByRole('link', { name: /^(Podcast|Saved)/, hidden: true }),
+      ]
+        .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+        .map((el) => el.textContent?.replace(/\s*\(\d+\)$/, '').trim())
+      expect(order).toEqual(['Newsletter', 'Podcast', 'Saved', 'Newsletter', 'Podcast', 'Saved Stories'])
+    })
   })
 
   it('no longer puts an AI notice band at the top of <main>', () => {

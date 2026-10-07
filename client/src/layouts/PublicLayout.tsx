@@ -1,17 +1,17 @@
-import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { getCategoryColor } from "../lib/category-colors";
 import { API_BASE } from "../lib/api";
 import { BRAND, GITHUB_REPO_URL } from "../config";
-import { getSavedSlugs } from "../lib/preferences";
+import { useSavedCount } from "../hooks/useSavedCount";
 import SubscribeProvider, {
   useSubscribe,
 } from "../components/SubscribeProvider";
 import FeedbackProvider from "../components/FeedbackProvider";
 import { PositivityProvider } from "../contexts/PositivityContext";
 import { MoodDialPanel } from "../components/PositivitySlider";
-import HeaderAiLine from "../components/ai/HeaderAiLine";
+import BrandLogo from "../components/BrandLogo";
 const KOFI_URL = "https://ko-fi.com/odinmb";
 const BLUESKY_URL = "https://bsky.app/profile/actuallyrelevant.bsky.social";
 const MASTODON_URL = "https://mastodon.social/@actuallyrelevant";
@@ -55,36 +55,6 @@ const FOOTER_LEGAL = [
   { label: "No tracking", href: "/no-ads-no-tracking" },
 ];
 
-/** Logo and claim link home; the AI line under them is a sibling link to the explainer. */
-function BrandLogo({ onClick }: { onClick?: () => void }) {
-  return (
-    <div className="flex flex-col items-center shrink-0">
-      <Link
-        to="/"
-        onClick={onClick}
-        className="flex flex-col items-center rounded focus-visible:ring-2 focus-visible:ring-brand-500"
-      >
-        <picture>
-          <source
-            srcSet="/images/optimized/logo-text-horizontal-small-h.webp"
-            type="image/webp"
-          />
-          <img
-            src="/images/logo-text-horizontal.png"
-            alt="Actually Relevant"
-            className="h-14 md:h-16 aspect-[5/2]"
-          />
-        </picture>
-        <span className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-neutral-500 mt-1">
-          {BRAND.claim.replace(/\.$/, "")}
-        </span>
-      </Link>
-      {/* Site-wide AI notice at first exposure (AI Act Art. 50(5)); .context/ai-transparency.md */}
-      <HeaderAiLine onClick={onClick} />
-    </div>
-  );
-}
-
 function CategoryColorStrip({ className }: { className?: string }) {
   return (
     <div className={`flex h-1 ${className ?? ""}`} aria-hidden="true">
@@ -119,6 +89,21 @@ function PodcastIcon({ className }: { className?: string }) {
     >
       <path d="M8.25 4.5a3.75 3.75 0 1 1 7.5 0v8.25a3.75 3.75 0 1 1-7.5 0V4.5Z" />
       <path d="M6 10.5a.75.75 0 0 1 .75.75v1.5a5.25 5.25 0 1 0 10.5 0v-1.5a.75.75 0 0 1 1.5 0v1.5a6.751 6.751 0 0 1-6 6.709v2.291h3a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1 0-1.5h3v-2.291a6.751 6.751 0 0 1-6-6.709v-1.5A.75.75 0 0 1 6 10.5Z" />
+    </svg>
+  );
+}
+
+function SavedIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="currentColor"
+      strokeWidth={1}
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
     </svg>
   );
 }
@@ -158,28 +143,13 @@ function PublicLayoutInner() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [savedCount, setSavedCount] = useState(0);
+  const savedCount = useSavedCount();
   const { openSubscribe } = useSubscribe();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const menuDialogRef = useRef<HTMLDialogElement>(null);
   const navigate = useNavigate();
 
   const location = useLocation();
-
-  // Track saved stories count reactively
-  const refreshSavedCount = useCallback(() => {
-    setSavedCount(getSavedSlugs().length);
-  }, []);
-
-  useEffect(() => {
-    refreshSavedCount();
-    window.addEventListener("storage", refreshSavedCount);
-    window.addEventListener("ar-saved-changed", refreshSavedCount);
-    return () => {
-      window.removeEventListener("storage", refreshSavedCount);
-      window.removeEventListener("ar-saved-changed", refreshSavedCount);
-    };
-  }, [refreshSavedCount]);
 
   const isActiveIssue = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + "/");
@@ -272,17 +242,8 @@ function PublicLayoutInner() {
               <MoodDialPanel />
             </div>
 
-            {/* Desktop: saved + subscribe — vertically centered on logo */}
+            {/* Desktop: newsletter, podcast, saved — vertically centered on logo */}
             <div className="hidden lg:flex items-center gap-1 absolute right-12 top-4 h-16">
-              <Link
-                to="/saved"
-                className="inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-2 py-1 text-neutral-500 hover:text-brand-700"
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth={1} aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
-                Saved{savedCount > 0 && ` (${savedCount})`}
-              </Link>
               <button
                 onClick={() => openSubscribe()}
                 className="inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-2 py-1 text-neutral-500 hover:text-brand-700"
@@ -297,6 +258,16 @@ function PublicLayoutInner() {
                 <PodcastIcon className="w-4 h-4 shrink-0" />
                 Podcast
               </Link>
+              {/* Only once a story is saved (useSavedCount follows every save and removal) */}
+              {savedCount > 0 && (
+                <Link
+                  to="/saved"
+                  className="inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-2 py-1 text-neutral-500 hover:text-brand-700"
+                >
+                  <SavedIcon className="w-4 h-4 shrink-0" />
+                  Saved ({savedCount})
+                </Link>
+              )}
             </div>
 
             {/* Mobile: search on left, menu on right — vertically centered on logo */}
@@ -459,18 +430,8 @@ function PublicLayoutInner() {
                 })}
               </ul>
 
-              {/* Saved, Subscribe & Support — each on its own line */}
+              {/* Newsletter, Podcast, Saved & Support — each on its own line */}
               <div className="border-t border-neutral-100 pt-3 px-2 flex flex-col">
-                <Link
-                  to="/saved"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2 py-2.5 text-sm font-bold text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-                >
-                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth={1} aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
-                  Saved Stories{savedCount > 0 && ` (${savedCount})`}
-                </Link>
                 <button
                   onClick={() => {
                     setMenuOpen(false);
@@ -489,6 +450,16 @@ function PublicLayoutInner() {
                   <PodcastIcon className="w-3.5 h-3.5 shrink-0" />
                   Podcast
                 </Link>
+                {savedCount > 0 && (
+                  <Link
+                    to="/saved"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2 py-2.5 text-sm font-bold text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                  >
+                    <SavedIcon className="w-3.5 h-3.5 shrink-0" />
+                    Saved Stories ({savedCount})
+                  </Link>
+                )}
                 <a
                   href={KOFI_URL}
                   target="_blank"

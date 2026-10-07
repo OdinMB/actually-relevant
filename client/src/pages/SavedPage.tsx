@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { publicApi } from "../lib/api";
-import { getSavedSlugs } from "../lib/preferences";
+import { getSavedSlugs, subscribeSaved } from "../lib/preferences";
 import StoryCard from "../components/StoryCard";
 import type { PublicStory } from "@shared/types";
 
@@ -18,14 +18,7 @@ export default function SavedPage() {
     setSavedSlugs(getSavedSlugs());
   }, []);
 
-  useEffect(() => {
-    window.addEventListener("storage", refreshSaved);
-    window.addEventListener("ar-saved-changed", refreshSaved);
-    return () => {
-      window.removeEventListener("storage", refreshSaved);
-      window.removeEventListener("ar-saved-changed", refreshSaved);
-    };
-  }, [refreshSaved]);
+  useEffect(() => subscribeSaved(refreshSaved), [refreshSaved]);
 
   // Fetch all saved stories (up to 100)
   const { data: stories, isLoading } = useQuery({
