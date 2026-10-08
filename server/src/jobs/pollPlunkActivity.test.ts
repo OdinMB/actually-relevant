@@ -107,6 +107,11 @@ describe('runPollPlunkActivity', () => {
     mockListActivity.mockRejectedValueOnce(new Error('unrecognized Plunk activity response shape'))
     await expect(runPollPlunkActivity(NOW)).rejects.toThrow(/unrecognized/)
   })
+
+  it('fails the run when Plunk says there is more but gives no cursor to read it', async () => {
+    mockListActivity.mockResolvedValueOnce({ items: [], nextCursor: null, hasMore: true })
+    await expect(runPollPlunkActivity(NOW)).rejects.toThrow(/no cursor/)
+  })
 })
 
 describe('activityNotice', () => {

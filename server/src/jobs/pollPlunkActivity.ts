@@ -76,6 +76,11 @@ export async function runPollPlunkActivity(now: Date = new Date()): Promise<void
       const notice = activityNotice(activity)
       if (notice) await notify(notice, { reopen: false })
     }
+    // The live API answers { data, hasMore } with no cursor key on a last page; if it ever says
+    // there is more without one, stopping here would drop the rest silently.
+    if (page.hasMore && !page.nextCursor) {
+      throw new Error(`Plunk activity says more pages follow but gave no cursor (after ${pages} pages, ${items} items)`)
+    }
     cursor = page.hasMore ? page.nextCursor : null
   } while (cursor)
 
