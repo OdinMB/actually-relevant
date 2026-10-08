@@ -74,6 +74,14 @@ export interface Args {
 function parseWindow(raw: string): CreatedWindow {
   const parts = raw.split('..')
   if (parts.length !== 2) throw new Error(`--protect-created expects <ISO start>..<ISO end>, got "${raw}"`)
+  // A date-time without Z or an offset parses in the machine's local zone, so
+  // the same flag would mean different instants locally and on Render. Require
+  // a plain date (UTC midnight) or an explicit zone.
+  for (const p of parts) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.trim()) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(p.trim())) {
+      throw new Error(`--protect-created needs a date (YYYY-MM-DD) or a date-time with Z or an offset, got "${p}" in "${raw}"`)
+    }
+  }
   const [start, end] = parts.map((p) => new Date(p.trim()))
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     throw new Error(`--protect-created has an unparseable date: "${raw}"`)

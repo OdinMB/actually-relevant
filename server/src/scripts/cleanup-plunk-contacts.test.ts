@@ -110,6 +110,15 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['--protect-created=2026-03-01'])).toThrow()
     expect(() => parseArgs(['--protect-created=nope..2026-03-02'])).toThrow()
     expect(() => parseArgs(['--protect-created=2026-03-02..2026-03-01'])).toThrow()
+    expect(() => parseArgs(['--protect-created='])).toThrow()
+    expect(() => parseArgs(['--protect-created=2026-03-01..2026-03-02..2026-03-03'])).toThrow()
+  })
+
+  it('rejects a date-time without a zone, which would parse in local time', () => {
+    expect(() => parseArgs(['--protect-created=2026-02-15T00:00..2026-02-16T00:00Z'])).toThrow()
+    expect(parseArgs(['--protect-created=2026-02-15T00:00+01:00..2026-02-16T00:00Z']).protectedWindows[0].start).toEqual(
+      new Date('2026-02-14T23:00:00.000Z'),
+    )
   })
 
   it('rejects unknown flags', () => {
