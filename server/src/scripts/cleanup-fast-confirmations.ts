@@ -270,8 +270,8 @@ async function main() {
       // POST /contacts upserts by email: the same call the confirm flow uses in
       // production to set subscribed:true, so it is the proven way to flip the flag.
       const updated = await plunk.createContact({ email: c.plunkEmail, subscribed: false })
-      if (updated && updated.subscribed !== false) {
-        throw new Error(`Plunk answered subscribed=${String(updated.subscribed)}`)
+      if (!updated || updated.subscribed !== false) {
+        throw new Error(`Plunk did not confirm the unsubscribe (subscribed=${String(updated?.subscribed)})`)
       }
       unsubscribed++
       console.log(`  UNSUBSCRIBED: ${c.email} (gap ${formatGap(c.gapSeconds)})`)
