@@ -202,6 +202,34 @@ describe('Admin Feeds API', () => {
     })
   })
 
+  describe('paywall title marker', () => {
+    const newFeed = { title: 'Test Feed', rssUrl: 'https://example.com/feed', issueId: '00000000-0000-0000-0000-000000000001' }
+
+    it.each([
+      ['an uncompilable regex', '(S+'],
+      ['an over-long marker', 'a'.repeat(201)],
+    ])('refuses %s on create and update', async (_label, marker) => {
+      const created = await request(app).post('/api/admin/feeds').set(authHeader()).send({ ...newFeed, paywallTitleMarker: marker })
+      const updated = await request(app).put('/api/admin/feeds/feed-1').set(authHeader()).send({ paywallTitleMarker: marker })
+
+      expect([created.status, updated.status]).toEqual([400, 400])
+      expect(mockPrisma.feed.create).not.toHaveBeenCalled()
+      expect(mockPrisma.feed.update).not.toHaveBeenCalled()
+    })
+
+    it('persists a valid marker and the detection switch', async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue(sampleIssue())
+      mockPrisma.feed.create.mockResolvedValue(sampleFeed())
+      mockPrisma.feed.update.mockResolvedValue(sampleFeed())
+
+      await request(app).post('/api/admin/feeds').set(authHeader()).send({ ...newFeed, paywallTitleMarker: '^\\(S\\+\\)' })
+      await request(app).put('/api/admin/feeds/feed-1').set(authHeader()).send({ paywallDetection: false, paywallTitleMarker: null })
+
+      expect(mockPrisma.feed.create.mock.calls[0][0].data).toMatchObject({ paywallTitleMarker: '^\\(S\\+\\)' })
+      expect(mockPrisma.feed.update.mock.calls[0][0].data).toMatchObject({ paywallDetection: false, paywallTitleMarker: null })
+    })
+  })
+
   describe('DELETE /api/admin/feeds/:id', () => {
     it('deletes a feed with no stories', async () => {
       mockPrisma.story.count.mockResolvedValue(0)

@@ -4,7 +4,16 @@ Feed lifecycle, crawl scheduling and health tracking, quality metrics and favico
 
 ## Creating and Updating Feeds
 
-Creating a feed requires `title`, `rssUrl` and an `issueId` that exists. An unknown issue fails with "Issue not found", and an update that changes `issueId` is checked the same way. New feeds start `active = true` with both failure counters at 0. `crawlIntervalHours` defaults to 24 in the schema and in Zod (`server/prisma/schema.prisma`, `server/src/schemas/feed.ts`); the admin form (`client/src/components/admin/FeedForm.tsx`) pre-fills 6. Optional fields: `url` (homepage), `displayTitle`, `language`, `region`, `htmlSelector`.
+Creating a feed requires `title`, `rssUrl` and an `issueId` that exists. An unknown issue fails with "Issue not found", and an update that changes `issueId` is checked the same way. New feeds start `active = true` with both failure counters at 0. `crawlIntervalHours` defaults to 24 in the schema and in Zod (`server/prisma/schema.prisma`, `server/src/schemas/feed.ts`); the admin form (`client/src/components/admin/FeedForm.tsx`) pre-fills 6. Optional fields: `url` (homepage), `displayTitle`, `language`, `region`, `htmlSelector`, and the paywall setting below.
+
+## Paywall Setting
+
+Two fields per feed (ADR-0032), shown in the create dialog and the edit panel (`FeedPaywallFields`). How the crawler applies them: `content-extraction.md`, "Access Classification".
+
+- **`paywallDetection`** ("Detect paywalled articles automatically", default on). Off, the markup rule never produces `locked`; what would have been locked is stored as `metered`. For a metered feed whose full-text articles the rule rejects.
+- **`paywallTitleMarker`** ("Subscriber-article title marker", optional regex, e.g. `^\(S\+\)` for SPIEGEL). A match on the article's title forces `locked`, whatever the markup or the checkbox say. For publishers without the schema.org tag, and for bot-blocked feeds that reach us only through the API tier, provided the API keeps the title prefix. Zod refuses a marker that does not compile or is over 200 characters (400 on create and update).
+
+There is no "always locked" mode: that is the same as deactivating the feed. Changing either field affects future crawls only; stories already rejected as locked stay rejected (an editor can filter the story list by feed and "Paywall: Locked" and re-queue them).
 
 ## Deleting Feeds (Soft Delete)
 
@@ -42,7 +51,9 @@ A feed is stale once `consecutiveEmptyCrawls >= config.crawl.staleAfterEmptyCraw
 - `publishedCount`: stories with status `published`.
 - `publishRate`: published ÷ total, rounded to 3 decimals, 0 when the feed has no stories.
 - `avgRelevance`: mean `relevance` of stories in `analyzed`, `selected` or `published` that have a rating, rounded to 1 decimal, otherwise null.
-- `extractionMethods`: `crawlMethod → count`, counting only stories with a `crawlMethod`.
+- `extractionMethods`: `crawlMethod → count`, counting only stories with a `crawlMethod`. `teaser` appears for locked pages where every extraction tier failed.
+
+Paywall-locked stories are stored (as `rejected`), so they count in `totalCrawled` and lower `publishRate`.
 
 Feeds with no stories are included. Results are cached in process memory for `config.feedQuality.cacheMinutes` (10). The feed table shows the dominant method, and the edit panel shows the full percentage breakdown.
 
@@ -65,4 +76,6 @@ An accepted image must have an `image/*` content type, be non-empty and be at mo
 | `server/src/routes/admin/feeds.ts` | Admin feed endpoints |
 | `server/src/schemas/feed.ts` | Zod schemas and defaults |
 | `client/src/components/admin/FeedTable.tsx` | Feed table, stale warning, dominant extraction method |
-| `client/src/components/admin/FeedForm.tsx` | Create/edit form |
+| `client/src/components/admin/FeedForm.tsx` | Create dialog |
+| `client/src/components/admin/FeedEditPanel.tsx` | Edit panel, quality card |
+| `client/src/components/admin/FeedPaywallFields.tsx` | Paywall setting fields, shared by both |

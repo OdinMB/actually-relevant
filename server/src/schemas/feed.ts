@@ -14,6 +14,21 @@ const feedRegionValues = [
 
 const feedRegionSchema = z.enum(feedRegionValues)
 
+function compilesAsRegex(pattern: string): boolean {
+  try {
+    new RegExp(pattern)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** A regex tested on an article's title; a match marks the article paywall-locked (ADR-0032). */
+const paywallTitleMarkerSchema = z.string()
+  .min(1)
+  .max(200, 'Title marker must be at most 200 characters')
+  .refine(compilesAsRegex, 'Title marker must be a valid regular expression')
+
 export const createFeedSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   rssUrl: z.string().url('Must be a valid URL'),
@@ -24,6 +39,8 @@ export const createFeedSchema = z.object({
   issueId: z.string().uuid('Must be a valid issue ID'),
   crawlIntervalHours: z.number().int().positive().optional().default(24),
   htmlSelector: z.string().optional(),
+  paywallDetection: z.boolean().optional(),
+  paywallTitleMarker: paywallTitleMarkerSchema.nullable().optional(),
 })
 
 export const updateFeedSchema = z.object({
@@ -36,5 +53,7 @@ export const updateFeedSchema = z.object({
   issueId: z.string().uuid('Must be a valid issue ID').optional(),
   crawlIntervalHours: z.number().int().positive().optional(),
   htmlSelector: z.string().nullable().optional(),
+  paywallDetection: z.boolean().optional(),
+  paywallTitleMarker: paywallTitleMarkerSchema.nullable().optional(),
   active: z.boolean().optional(),
 })

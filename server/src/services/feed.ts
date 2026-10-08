@@ -47,6 +47,8 @@ export async function createFeed(data: {
   issueId: string
   crawlIntervalHours?: number
   htmlSelector?: string
+  paywallDetection?: boolean
+  paywallTitleMarker?: string | null
 }): Promise<Feed & { isStale: boolean }> {
   // Verify issue exists
   const issue = await prisma.issue.findUnique({ where: { id: data.issueId } })
@@ -66,6 +68,8 @@ export async function updateFeed(id: string, data: Partial<{
   issueId: string
   crawlIntervalHours: number
   htmlSelector: string | null
+  paywallDetection: boolean
+  paywallTitleMarker: string | null
   active: boolean
 }>): Promise<Feed & { isStale: boolean }> {
   if (data.issueId) {

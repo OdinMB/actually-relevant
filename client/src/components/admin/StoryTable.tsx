@@ -29,6 +29,17 @@ function ClusterBadge({ story }: { story: Story }) {
   )
 }
 
+function PaywallBadge({ story }: { story: Story }) {
+  if (story.accessTier !== 'locked') return null
+  return (
+    <span title="Rejected at crawl: subscriber-only article" className="shrink-0">
+      <Badge variant="orange">
+        Paywall<span className="sr-only">: rejected at crawl, subscriber-only article</span>
+      </Badge>
+    </span>
+  )
+}
+
 interface StoryTableProps {
   stories: Story[]
   selectedIds: Set<string>
@@ -162,6 +173,7 @@ export function StoryTable({
                       {story.title || story.sourceTitle}
                     </button>
                     <ClusterBadge story={story} />
+                    <PaywallBadge story={story} />
                     {(story._count?.blueskyPosts ?? 0) > 0 && (
                       <ChatBubbleLeftRightIcon className="h-4 w-4 shrink-0 text-blue-500" aria-label="Posted to Bluesky" title="Posted to Bluesky" />
                     )}

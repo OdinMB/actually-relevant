@@ -171,6 +171,14 @@ export const config = {
     localFailThreshold: parseInt(process.env.LOCAL_FAIL_THRESHOLD || "3", 10),
     totalFailThreshold: parseInt(process.env.TOTAL_FAIL_THRESHOLD || "3", 10),
   },
+  // Access classification at extraction (.context/content-extraction.md, "Access classification").
+  // A page the publisher marks as not free is `locked` only with evidence of truncation: the
+  // extracted words fall below minWordRatio x the page's JSON-LD wordCount, or the extracted text
+  // (whitespace collapsed) is shorter than lockedMaxChars. Otherwise it is `metered`.
+  paywall: {
+    lockedMaxChars: parseInt(process.env.PAYWALL_LOCKED_MAX_CHARS || "1500", 10),
+    minWordRatio: parseFloat(process.env.PAYWALL_MIN_WORD_RATIO || "0.3"),
+  },
   content: {
     storyAssignmentDays: parseInt(process.env.STORY_ASSIGNMENT_DAYS || "7", 10),
   },

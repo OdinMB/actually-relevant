@@ -58,6 +58,7 @@ export function StoryFiltersBar({ issues, feeds }: StoryFiltersBarProps) {
     searchParams.get('feedId'),
     searchParams.get('emotionTag'),
     searchParams.get('rating'),
+    searchParams.get('accessTier'),
   ].filter(Boolean).length
 
   return (
@@ -137,6 +138,17 @@ export function StoryFiltersBar({ issues, feeds }: StoryFiltersBarProps) {
           value={searchParams.get('emotionTag') || ''}
           onChange={e => setFilter('emotionTag', e.target.value)}
           options={EMOTION_TAGS.map(e => ({ value: e, label: e.charAt(0).toUpperCase() + e.slice(1) }))}
+        />
+        <Select
+          id="filter-paywall"
+          label="Paywall"
+          placeholder="Any"
+          value={searchParams.get('accessTier') || ''}
+          onChange={e => setFilter('accessTier', e.target.value)}
+          options={[
+            { value: 'locked', label: 'Locked' },
+            { value: 'metered', label: 'Metered' },
+          ]}
         />
         <Select
           id="filter-sort"

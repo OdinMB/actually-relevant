@@ -81,6 +81,7 @@ model Story {
   antifactors            String?
   relevanceCalculation   String?      @map("relevance_calculation")
   crawlMethod            String?      @map("crawl_method")
+  accessTier             String?      @map("access_tier")
   embedding              Unsupported("vector(1536)")?
   embeddingContentHash   String?      @db.VarChar(64) @map("embedding_content_hash")
   embeddingGeneratedAt   DateTime?    @map("embedding_generated_at")
@@ -135,6 +136,8 @@ model Feed {
   lastModified            String?   @map("last_modified")
   lastCrawlResult         String?   @map("last_crawl_result")
   htmlSelector            String?   @map("html_selector")
+  paywallDetection        Boolean   @default(true) @map("paywall_detection")
+  paywallTitleMarker      String?   @map("paywall_title_marker")
   stories            Story[]
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")

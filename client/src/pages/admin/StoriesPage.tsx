@@ -28,6 +28,7 @@ import type { MastodonDraft } from '../../components/admin/MastodonDraftPanel'
 import { useToast } from '../../components/ui/Toast'
 
 const DEFAULT_PAGE_SIZE = 25
+const ACCESS_TIER_FILTERS = ['locked', 'metered'] as const
 
 function useFiltersFromParams(): StoryFilters {
   const [searchParams] = useSearchParams()
@@ -37,6 +38,7 @@ function useFiltersFromParams(): StoryFilters {
     feedId: searchParams.get('feedId') || undefined,
     emotionTag: searchParams.get('emotionTag') as StoryFilters['emotionTag'] || undefined,
     rating: searchParams.get('rating') || undefined,
+    accessTier: ACCESS_TIER_FILTERS.find(t => t === searchParams.get('accessTier')),
     sort: (searchParams.get('sort') as StorySort) || 'date_desc',
     page: Number(searchParams.get('page')) || 1,
     pageSize: Number(searchParams.get('pageSize')) || DEFAULT_PAGE_SIZE,

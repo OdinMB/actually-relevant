@@ -447,6 +447,112 @@ describe('maxParseBytes guard', () => {
   })
 })
 
+describe('access classification', () => {
+  const lockedHtml = (extra = '') => `<html><head><title>Doc title</title>
+    <meta property="og:title" content="(S+) Locked story">
+    <meta property="og:description" content="The teaser description">
+    <script type="application/ld+json">{"@type":"NewsArticle","isAccessibleForFree":false}</script>${extra}
+    </head><body><p>Teaser</p></body></html>`
+  const freeHtml = `<html><head><script type="application/ld+json">{"isAccessibleForFree":true}</script></head><body></body></html>`
+  const plainHtml = `<html><head><title>Plain</title></head><body><p>Short</p></body></html>`
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.PIPFEED_API_KEY
+    delete process.env.DIFFBOT_TOKEN
+    _resetApiState()
+  })
+
+  it('classifies the local tier result from the fetched HTML', async () => {
+    mockAxiosGet.mockResolvedValue({ data: lockedHtml() })
+    mockReadabilityParse.mockReturnValue({ title: 'Locked story', textContent: LONG_TEXT })
+
+    const result = await extractContent('https://example.com/article')
+
+    expect(result!.method).toBe('readability')
+    expect(result!.accessTier).toBe('locked')
+  })
+
+  it('classifies an API tier result from the fetched HTML', async () => {
+    process.env.DIFFBOT_TOKEN = 'test-token'
+    mockAxiosGet
+      .mockResolvedValueOnce({ data: lockedHtml() })
+      .mockResolvedValueOnce({ data: { objects: [{ title: 'API', text: LONG_TEXT }] } })
+    mockReadabilityParse.mockReturnValue(null)
+
+    const result = await extractContent('https://example.com/article')
+
+    expect(result!.method).toBe('diffbot')
+    expect(result!.accessTier).toBe('locked')
+  })
+
+  it('is unknown when local extraction is skipped, the fetch fails, or the page is too large', async () => {
+    process.env.DIFFBOT_TOKEN = 'test-token'
+    const apiResponse = { data: { objects: [{ title: 'API', text: LONG_TEXT }] } }
+
+    mockAxiosGet.mockResolvedValueOnce(apiResponse)
+    const skipped = await extractContent('https://example.com/a', { skipLocalExtraction: true })
+
+    mockAxiosGet.mockRejectedValueOnce(new Error('403')).mockResolvedValueOnce(apiResponse)
+    const failed = await extractContent('https://example.com/b')
+
+    const huge = lockedHtml(`<!-- ${'x'.repeat(2 * 1024 * 1024)} -->`)
+    mockAxiosGet.mockResolvedValueOnce({ data: huge }).mockResolvedValueOnce(apiResponse)
+    const tooLarge = await extractContent('https://example.com/c')
+
+    expect([skipped!.accessTier, failed!.accessTier, tooLarge!.accessTier]).toEqual(['unknown', 'unknown', 'unknown'])
+  })
+
+  it('applies the feed title marker to the API title when there is no HTML', async () => {
+    process.env.DIFFBOT_TOKEN = 'test-token'
+    mockAxiosGet.mockResolvedValueOnce({ data: { objects: [{ title: '(S+) From the API', text: LONG_TEXT }] } })
+
+    const result = await extractContent('https://example.com/article', {
+      skipLocalExtraction: true,
+      paywall: { detection: true, titleMarker: '^\\(S\\+\\)' },
+    })
+
+    expect(result!.accessTier).toBe('locked')
+  })
+
+  it('returns a teaser result when every tier fails on a locked page', async () => {
+    mockAxiosGet.mockResolvedValue({ data: lockedHtml() })
+    mockReadabilityParse.mockReturnValue(null)
+
+    const result = await extractContent('https://example.com/article')
+
+    expect(result).toEqual({
+      title: '(S+) Locked story',
+      content: 'The teaser description',
+      datePublished: null,
+      method: 'teaser',
+      accessTier: 'locked',
+    })
+  })
+
+  it('still returns null when every tier fails on a free or unmarked page, or with detection off', async () => {
+    mockReadabilityParse.mockReturnValue(null)
+
+    mockAxiosGet.mockResolvedValueOnce({ data: freeHtml })
+    const free = await extractContent('https://example.com/a')
+    mockAxiosGet.mockResolvedValueOnce({ data: plainHtml })
+    const unmarked = await extractContent('https://example.com/b')
+    mockAxiosGet.mockResolvedValueOnce({ data: lockedHtml() })
+    const detectionOff = await extractContent('https://example.com/c', { paywall: { detection: false, titleMarker: null } })
+
+    expect([free, unmarked, detectionOff]).toEqual([null, null, null])
+  })
+
+  it('returns null, not a teaser, when the feed bails out before the API tier', async () => {
+    mockAxiosGet.mockResolvedValue({ data: lockedHtml() })
+    mockReadabilityParse.mockReturnValue(null)
+
+    const result = await extractContent('https://example.com/article', { shouldAbort: () => true })
+
+    expect(result).toBeNull()
+  })
+})
+
 describe('ApiThrottle', () => {
   it('doubles delay on 429 and reduces on success', async () => {
     const throttle = new ApiThrottle(0, 0, 1000) // no base delay, no backoff wait, 1s max

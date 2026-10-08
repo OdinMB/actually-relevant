@@ -1,5 +1,6 @@
 import { parseFeed, type ParseFeedResult } from './rssParser.js'
-import { extractContent } from './extractor.js'
+import { extractContent, type ExtractionMethod } from './extractor.js'
+import type { PaywallPolicy } from '../lib/paywall.js'
 import { getExistingUrls, createStory } from './story.js'
 import { getFeedById, getDueFeeds, updateCrawlStatus, updateFeedCacheHeaders } from './feed.js'
 import { createLogger } from '../lib/logger.js'
@@ -9,6 +10,12 @@ import { normalizeUrl } from '../utils/urlNormalization.js'
 import { summarizeError } from '../utils/errors.js'
 
 const log = createLogger('crawler')
+
+const LOCAL_METHODS: ReadonlySet<ExtractionMethod> = new Set(['selector', 'readability', 'teaser'])
+
+function paywallPolicy(feed: { paywallDetection: boolean; paywallTitleMarker: string | null }): PaywallPolicy {
+  return { detection: feed.paywallDetection, titleMarker: feed.paywallTitleMarker }
+}
 
 export interface CrawlResult {
   feedId: string
@@ -113,6 +120,7 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
           htmlSelector: feed.htmlSelector,
           skipLocalExtraction: skipLocal,
           shouldAbort: () => skipAll,
+          paywall: paywallPolicy(feed),
         })
 
         if (!extracted) {
@@ -130,7 +138,8 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
         }
 
         totalFailCount = 0
-        if (extracted.method === 'selector' || extracted.method === 'readability') {
+        // A teaser counts as local: the page was fetched and parsed, it is only locked.
+        if (LOCAL_METHODS.has(extracted.method)) {
           localFailCount = 0
         } else {
           localFailCount++
@@ -144,7 +153,11 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
           feedId,
           sourceDatePublished: extracted.datePublished || item.datePublished || undefined,
           crawlMethod: extracted.method,
+          accessTier: extracted.accessTier,
         })
+        if (extracted.accessTier === 'locked') {
+          log.info({ feed: feed.title, url: item.url, method: extracted.method }, 'paywall-locked story stored as rejected')
+        }
 
         result.newStories++
       } catch (err: any) {
@@ -238,6 +251,7 @@ export async function crawlUrl(url: string, feedId: string): Promise<{ storyId: 
 
   const extracted = await extractContent(url, {
     htmlSelector: feed.htmlSelector,
+    paywall: paywallPolicy(feed),
   })
 
   if (!extracted) return null
@@ -249,6 +263,7 @@ export async function crawlUrl(url: string, feedId: string): Promise<{ storyId: 
     feedId,
     sourceDatePublished: extracted.datePublished || undefined,
     crawlMethod: extracted.method,
+    accessTier: extracted.accessTier,
   })
 
   return { storyId: story.id }

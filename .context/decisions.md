@@ -31,3 +31,6 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0024 · Load Cloudflare Turnstile only when the visitor submits the signup form, as ADR-0021 otherwise](decisions/0024-turnstile-loads-only-on-signup-submit.md)
 - [ADR-0028 · Record every owner alert as a row in admin_notices, shown in the admin, with WEBHOOK_URL only an optional forward](decisions/0028-admin-notices-store-every-owner-alert.md)
 - [ADR-0029 · Learn of Plunk spam complaints and permanent bounces by polling Plunk's activity API hourly, not through a Plunk webhook](decisions/0029-poll-plunk-activity-for-complaints-and-bounces.md)
+- [ADR-0030 · Classify a story's access tier at extraction from publisher markup and store it on the story](decisions/0030-classify-access-tier-at-extraction.md)
+- [ADR-0031 · Store locked stories as rejected at crawl, before pre-assessment, so no model call or automated stage ever sees them](decisions/0031-reject-locked-stories-at-crawl.md)
+- [ADR-0032 · Give each feed a paywall setting, automatic detection on or off plus an optional title marker that forces locked](decisions/0032-per-feed-paywall-setting.md)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Issue, FeedRegion } from '@shared/types'
+import type { Issue, Feed, FeedRegion } from '@shared/types'
 import { FEED_REGIONS } from '@shared/constants'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
@@ -14,6 +14,7 @@ import { formatDateWithTime } from '../../lib/constants'
 import { EditPanel, PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
 import { buildIssueOptions } from './FeedForm'
+import { FeedPaywallFields } from './FeedPaywallFields'
 
 interface FeedEditPanelProps {
   feedId: string | null
@@ -21,7 +22,7 @@ interface FeedEditPanelProps {
   onClose: () => void
 }
 
-function buildFormState(feed: { title: string; rssUrl: string; url: string | null; displayTitle: string | null; issueId: string; language: string; region: string | null; crawlIntervalHours: number; htmlSelector: string | null; active: boolean }) {
+function buildFormState(feed: Pick<Feed, 'title' | 'rssUrl' | 'url' | 'displayTitle' | 'issueId' | 'language' | 'region' | 'crawlIntervalHours' | 'htmlSelector' | 'paywallDetection' | 'paywallTitleMarker' | 'active'>) {
   return {
     title: feed.title,
     rssUrl: feed.rssUrl,
@@ -32,6 +33,8 @@ function buildFormState(feed: { title: string; rssUrl: string; url: string | nul
     region: feed.region || '',
     crawlIntervalHours: String(feed.crawlIntervalHours),
     htmlSelector: feed.htmlSelector || '',
+    paywallDetection: feed.paywallDetection,
+    paywallTitleMarker: feed.paywallTitleMarker || '',
     active: feed.active,
   }
 }
@@ -132,6 +135,8 @@ function FeedEditForm({ feedId, issues, onClose }: { feedId: string; issues: Iss
       region: (f.region || null) as FeedRegion | null,
       crawlIntervalHours: Number(f.crawlIntervalHours),
       htmlSelector: f.htmlSelector || null,
+      paywallDetection: f.paywallDetection,
+      paywallTitleMarker: f.paywallTitleMarker.trim() || null,
       active: f.active,
     }),
     successMessage: 'Feed updated',
@@ -179,6 +184,12 @@ function FeedEditForm({ feedId, issues, onClose }: { feedId: string; issues: Iss
           <Input id="feed-interval" label="Interval (hours)" type="number" min="1" value={form.crawlIntervalHours} onChange={e => set('crawlIntervalHours', e.target.value)} />
         </div>
         <Input id="feed-selector" label="HTML Selector (optional)" value={form.htmlSelector} onChange={e => set('htmlSelector', e.target.value)} placeholder="e.g. article .content" />
+        <FeedPaywallFields
+          detection={form.paywallDetection}
+          titleMarker={form.paywallTitleMarker}
+          onDetectionChange={v => set('paywallDetection', v)}
+          onTitleMarkerChange={v => set('paywallTitleMarker', v)}
+        />
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

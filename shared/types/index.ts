@@ -80,6 +80,8 @@ export interface Story {
   antifactors: string | null
   relevanceCalculation: string | null
   crawlMethod: string | null
+  /** Classified at extraction: free, metered, locked (rejected at crawl) or unknown; null on stories crawled before it existed. */
+  accessTier: string | null
   clusterId: string | null
   createdAt: string
   updatedAt: string
@@ -141,6 +143,10 @@ export interface Feed {
   lastModified: string | null
   lastCrawlResult: string | null
   htmlSelector: string | null
+  /** Off: the markup rule never marks this feed's articles locked. */
+  paywallDetection: boolean
+  /** Regex tested on an article's title; a match marks it locked. */
+  paywallTitleMarker: string | null
   createdAt: string
   updatedAt: string
 }
@@ -596,6 +602,7 @@ export interface StoryFilters {
   ratingMax?: number
   rating?: string
   emotionTag?: EmotionTag
+  accessTier?: 'locked' | 'metered'
   sort?: StorySort
   page?: number
   pageSize?: number

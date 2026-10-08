@@ -40,11 +40,29 @@ When consecutive articles all fail extraction entirely (local + API both return 
 
 ### Extraction Method Tracking
 
-The extraction method that succeeded (`selector`, `readability`, `diffbot`, or `pipfeed`) is persisted to `Story.crawlMethod` when the story is created. This field is used by the feed quality metrics to show a per-feed breakdown of which extraction tiers are working. The admin panel displays the dominant method in the feed table and a full percentage breakdown in the feed edit panel. Stories created before this feature have `crawlMethod = null` and are excluded from the breakdown.
+The extraction method that succeeded (`selector`, `readability`, `diffbot`, or `pipfeed`), or `teaser` for a locked page where every tier failed (see Access Classification), is persisted to `Story.crawlMethod` when the story is created. This field is used by the feed quality metrics to show a per-feed breakdown of which extraction tiers are working. The admin panel displays the dominant method in the feed table and a full percentage breakdown in the feed edit panel. Stories created before this feature have `crawlMethod = null` and are excluded from the breakdown.
 
 ### Mid-Flight Cancellation
 
 The crawler passes a `shouldAbort` callback (tied to the `skipAll` flag) through `extractContent()` → `extractByApi()` → `ApiThrottle.run()`. This allows in-flight extractions to bail out before making expensive API calls — even if they started before `skipAll` was set. The abort is checked at three points: before the API tier in `extractContent()`, before entering the throttle in `extractByApi()`, and after dequeuing/backoff-waiting inside `ApiThrottle.run()`. This prevents wasting 30+ seconds on API backoff waits for articles in a feed that has already been identified as failing.
+
+## Access Classification
+
+Every extraction result carries an access tier, stored as `Story.accessTier` (ADR-0030). `classifyAccess()` in `server/src/lib/paywall.ts` reads the fetched HTML with cheerio: every `script[type="application/ld+json"]` (top-level arrays, `@graph`, `hasPart`; a malformed block is ignored), `meta[property="article:content_tier"]`, the JSON-LD `wordCount`, and `og:title`. `isAccessibleForFree` is normalized from `true`/`false` and the strings `"True"`/`"False"`; any node saying false means the publisher restricts the article.
+
+- **No flag** → `unknown` (BBC and most free sites). Never treated as paid.
+- **Flag true** → `free`.
+- **Flag false** → `locked` when there is evidence of truncation: `content_tier` is `locked`, or the extracted words fall below `config.paywall.minWordRatio` (0.3, env `PAYWALL_MIN_WORD_RATIO`) × `wordCount`, or the extracted text, whitespace collapsed, is shorter than `config.paywall.lockedMaxChars` (1,500, env `PAYWALL_LOCKED_MAX_CHARS`). Otherwise `metered`: metered sites (The Diplomat, STAT) mark every article false but serve the full text, so the flag alone would remove them.
+
+The feed's paywall setting applies after the markup rule (ADR-0032; fields in `feed-management.md`). With `paywallDetection` off, what would be locked is stored as `metered`. A `paywallTitleMarker` that matches the page title (`og:title`, else `<title>`, else the winning tier's title) forces `locked`, whatever the markup, the length or the checkbox say. A marker that fails to compile at crawl time is logged and ignored.
+
+The classification runs whenever the page was fetched and is under `maxParseBytes`, against whichever tier's text won, **the API tier included**: a teaser under 300 characters falls through to Diffbot, and the HTML is still in hand. With no parseable HTML (fetch failed or bot-blocked, page over `maxParseBytes`, or `skipLocal` set for the rest of the crawl) the tier is `unknown`, unless the feed's title marker matches the API tier's title.
+
+**The teaser result.** When every tier fails on a page classified as `locked`, `extractContent()` returns `method: 'teaser'` with the page title and its `og:description`/meta description (or empty) as content, instead of `null`. `null` would count toward `skipLocal` and `skipAll` and the item would be retried, with a fresh API call, on every crawl while it stays in the RSS feed. The crawler counts `teaser` as a local success. A `shouldAbort` bail-out still returns `null`.
+
+**A locked story is created `rejected`, not `fetched`**, by `createStory()` (ADR-0031), so no model call is ever made for it and it never reaches any reader-facing surface; the override and its consequences are in `story-pipeline.md`. The crawler logs one info line per locked story stored.
+
+**Limits.** Classification is a snapshot: SPIEGEL unlocks some S+ pieces later, and a story rejected as locked stays rejected. Stories crawled before the column existed have `accessTier = null`. A publisher's subscribe prompt can push a teaser over `lockedMaxChars`: a SPIEGEL international S+ teaser extracted to about 3,100 characters on 2026-10-08, including the "weiterlesen mit SPIEGEL+" offer, and would be `metered` by the markup rule alone; SPIEGEL's `og:title` starts "(S+) ", which the feed's title marker `^\(S\+\)` catches. The crawler's user agent was served the full markup by SPIEGEL on that date. The second cheerio parse adds to the per-article memory in the CPU & Memory Budget, bounded by the same `maxParseBytes`.
 
 ## Resource Limits
 
@@ -63,8 +81,8 @@ RSS Feed → Parse items (max config.crawl.rssItemLimit, default 30)
          → Deduplicate against existing story URLs
          → For each new item (parallel, up to config.concurrency.crawlArticles):
             → Fetch page HTML (with retry, timeout config.crawl.httpTimeoutMs, default 10 s)
-            → Extract content (3-tier chain)
-            → Create story with status 'fetched'
+            → Extract content (3-tier chain) and classify access
+            → Create story with status 'fetched', or 'rejected' when its access tier is 'locked'
          → Update the feed's crawl status (see feed-management.md, "Crawl status and health counters")
 ```
 
@@ -78,7 +96,7 @@ The RSS fetch sends the feed's stored `lastEtag` as `If-None-Match` and `lastMod
 
 ### Story Fields from the RSS Fallback
 
-When the extractor returns no title or publish date, the story uses the RSS item's title and `isoDate`/`pubDate` instead (`crawlFeed()` in `server/src/services/crawler.ts`). Every new story is created in `fetched` status, with `crawlMethod` set to the tier that succeeded.
+When the extractor returns no title or publish date, the story uses the RSS item's title and `isoDate`/`pubDate` instead (`crawlFeed()` in `server/src/services/crawler.ts`). Every new story is created in `fetched` status, or `rejected` when its access tier is `locked`, with `crawlMethod` set to the tier that succeeded and `accessTier` to the classification.
 
 ### Deduplication
 
@@ -97,7 +115,9 @@ URLs are normalized (HTTPS, no trailing slash, no tracking params, sorted query)
 | File | Role |
 |------|------|
 | `server/src/services/crawler.ts` | Orchestration: RSS → deduplicate → extract → create stories |
-| `server/src/services/extractor.ts` | 3-tier extraction chain |
+| `server/src/services/extractor.ts` | 3-tier extraction chain, teaser result |
+| `server/src/lib/paywall.ts` | Access classification from publisher markup and the feed's paywall setting |
+| `server/src/scripts/scan-teaser-analyses.ts` | `npm run scan:teasers`: read-only list of published stories probably rated on a teaser |
 | `server/src/services/rssParser.ts` | RSS/Atom feed parsing (max `config.crawl.rssItemLimit` items) |
 | `server/src/lib/retry.ts` | Retry utility with exponential backoff (used by RSS parser, extractor) |
 | `server/src/jobs/crawlFeeds.ts` | Scheduled job handler |
@@ -111,3 +131,4 @@ Feed CRUD, the due rule, crawl-health counters, quality metrics and favicons: `f
 2. Test the crawl: `POST /api/admin/feeds/:id/crawl`
 3. Check extracted content quality in the stories
 4. If content is noisy or incomplete, set `htmlSelector` on the feed via `PUT /api/admin/feeds/:id`
+5. For a publisher with subscriber articles, check that its locked articles come in as `rejected` with the Paywall badge; set a title marker for one that marks them only in the title, and switch detection off for a metered feed whose full-text articles are rejected

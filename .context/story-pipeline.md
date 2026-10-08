@@ -4,15 +4,23 @@ Stories are the core entity. They flow through a status pipeline from crawling t
 
 ## Status Flow
 
-Every automated stage transition is driven by a scheduled polling job, not by events. Each job queries for the stories eligible for its stage (by status and threshold) and processes them in bulk, so a story waits in its status until the next run of that stage's job. The one chained step is dedup, which runs right after a story's assessment commits (see `dedup.md`). The crawler creates stories in `fetched` status, and this pipeline only consumes them.
+Every automated stage transition is driven by a scheduled polling job, not by events. Each job queries for the stories eligible for its stage (by status and threshold) and processes them in bulk, so a story waits in its status until the next run of that stage's job. The one chained step is dedup, which runs right after a story's assessment commits (see `dedup.md`). The crawler creates stories in `fetched` status, and this pipeline only consumes them. A paywall-locked story is created `rejected` instead (below).
 
 ```
-fetched → pre_analyzed → analyzed → selected → published
-                       ↘ rejected  ↘ rejected
-                         (assess)    (select)
+(crawl) → fetched → pre_analyzed → analyzed → selected → published
+        ↘ rejected              ↘ rejected  ↘ rejected
+          (paywall)               (assess)    (select)
 
 rejected / trashed: from any status by admin
 ```
+
+### Paywall-Locked Stories
+
+A story whose access tier is `locked` (`content-extraction.md`, "Access Classification") is created `rejected` by `createStory()` (ADR-0031), keeping its row and teaser text. Pre-assess and assess pick only `fetched`/`pre_analyzed` stories, so no model call is ever made for it; it gets no issue (`issueId` stays null), no embedding, never joins a cluster, and no selection, publish, newsletter, podcast or social stage ever sees it. Editors find these stories with the story list's "Paywall" filter (`?accessTier=locked`) and the Paywall badge.
+
+**Any editor action on it is the override.** There is deliberately no second gate later in the pipeline, so that an editor can re-queue stories on purpose, for example after switching a misclassified feed's detection off:
+- **Re-assess** gives it a full analysis and sets it `analyzed`; from there the select and publish jobs treat it like any other story, so it can publish automatically unless the editor rejects it again. It also enters dedup with its (headline-based) rating and can win a cluster over a free duplicate.
+- **Publish straight from `rejected`** publishes a story with no AI title, summary or rating; the slug falls back to `sourceTitle`. No guard stops this.
 
 ### Status Definitions
 
@@ -23,7 +31,7 @@ rejected / trashed: from any status by admin
 | `analyzed` | Assess job | Full LLM analysis complete: detailed factors, ratings, summary, blurb, etc. |
 | `selected` | Select job | LLM chose this story for publication from the analyzed pool. |
 | `published` | Publish job or admin action | Live on the public site. |
-| `rejected` | Assess job, select job, or admin | Not relevant enough, or manually excluded. |
+| `rejected` | Crawler (paywall-locked), assess job, select job, or admin | Subscriber-only teaser, not relevant enough, or manually excluded. |
 | `trashed` | Admin action | Soft-deleted. |
 
 **Terminal statuses:** `published`, `rejected` and `trashed`. No automated job moves a story out of these. Only an admin action does.
@@ -57,7 +65,7 @@ Stories get a URL slug (e.g. `ai-breakthrough-in-protein-folding`) when they are
 
 | Job | Schedule | What It Does |
 |-----|----------|--------------|
-| `crawl_feeds` | Every 6 hours | Fetches RSS feeds, extracts content, creates stories as `fetched` |
+| `crawl_feeds` | Every 6 hours | Fetches RSS feeds, extracts content, creates stories as `fetched` (paywall-locked ones as `rejected`) |
 | `preassess_stories` | Configurable | Batch pre-screens all `fetched` stories |
 | `assess_stories` | Configurable | Full analysis on `pre_analyzed` stories with `relevancePre >= threshold` (per-issue `minPreRating`, else `fullAssessmentThreshold`, default 5); rejects the rest |
 | `select_stories` | Configurable | Selects top ~50% of `analyzed` stories with `relevance >= 5` (both configurable via `config.selection.*`), batched into groups of ≤20 |
@@ -91,7 +99,7 @@ Stories get a URL slug (e.g. `ai-breakthrough-in-protein-folding`) when they are
 
 Stories carry both crawled data and AI-generated analysis:
 
-**Source data** (set during crawl, never modified afterwards): `sourceUrl`, `sourceTitle`, `sourceContent`, `sourceDatePublished`, `dateCrawled`, `feedId`, `crawlMethod`
+**Source data** (set during crawl, never modified afterwards): `sourceUrl`, `sourceTitle`, `sourceContent`, `sourceDatePublished`, `dateCrawled`, `feedId`, `crawlMethod`, `accessTier` (`free`, `metered`, `locked`, `unknown`; null on stories crawled before it existed)
 
 **Issue assignment** (set during pre-assessment): `issueId` — the LLM-assigned issue for this story. Set by `assignIssuesToStories()` as the first step of pre-assessment. Falls back to `feed.issueId` if the LLM returns an invalid slug. Downstream code uses `story.issue ?? story.feed.issue` for issue lookup.
 

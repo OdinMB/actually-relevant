@@ -8,6 +8,7 @@ import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { withRetry, isRetryableError } from '../lib/retry.js'
 import { crawlLimiter } from '../lib/crawlLimiter.js'
+import { classifyAccess, DEFAULT_PAYWALL_POLICY, type AccessTier, type PaywallPolicy } from '../lib/paywall.js'
 
 const log = createLogger('extractor')
 const USER_AGENT = 'ActuallyRelevant/1.0 (news curation bot; +https://actuallyrelevant.news)'
@@ -24,12 +25,19 @@ class ThrottleAbortError extends Error {
   constructor() { super('Throttle aborted') }
 }
 
+export type ExtractionMethod = 'selector' | 'readability' | 'diffbot' | 'pipfeed' | 'teaser'
+
 export interface ExtractionResult {
   title: string | null
   content: string
   datePublished: string | null
-  method: 'selector' | 'readability' | 'diffbot' | 'pipfeed'
+  /** `teaser`: every tier failed on a page classified as locked; content is the page description. */
+  method: ExtractionMethod
+  accessTier: AccessTier
 }
+
+/** What a single extraction tier produces, before access classification. */
+type TierResult = Omit<ExtractionResult, 'accessTier' | 'method'> & { method: Exclude<ExtractionMethod, 'teaser'> }
 
 /**
  * Shared throttle for API extraction services. On 429, waits a backoff period
@@ -139,7 +147,7 @@ async function fetchPage(url: string): Promise<string | null> {
   }
 }
 
-function extractBySelector(html: string, selector: string): ExtractionResult | null {
+function extractBySelector(html: string, selector: string): TierResult | null {
   try {
     const $ = cheerio.load(html)
     const container = $(selector).first()
@@ -160,7 +168,7 @@ function extractBySelector(html: string, selector: string): ExtractionResult | n
   }
 }
 
-function extractByReadability(html: string, url: string): ExtractionResult | null {
+function extractByReadability(html: string, url: string): TierResult | null {
   let dom: InstanceType<typeof JSDOM> | null = null
   try {
     dom = new JSDOM(html, { url })
@@ -181,7 +189,7 @@ function extractByReadability(html: string, url: string): ExtractionResult | nul
   }
 }
 
-async function extractByDiffbot(url: string): Promise<ExtractionResult | null> {
+async function extractByDiffbot(url: string): Promise<TierResult | null> {
   const token = process.env.DIFFBOT_TOKEN
   if (!token) return null
 
@@ -223,7 +231,7 @@ async function extractByDiffbot(url: string): Promise<ExtractionResult | null> {
   }
 }
 
-async function extractByPipfeed(url: string): Promise<ExtractionResult | null> {
+async function extractByPipfeed(url: string): Promise<TierResult | null> {
   const apiKey = process.env.PIPFEED_API_KEY
   if (!apiKey) return null
 
@@ -267,7 +275,7 @@ async function extractByPipfeed(url: string): Promise<ExtractionResult | null> {
  * Calls the configured extraction API with shared throttle.
  * On 429: registers backoff, waits, then lets subsequent calls proceed at reduced pace.
  */
-async function extractByApi(url: string, api: 'diffbot' | 'pipfeed', shouldAbort?: () => boolean): Promise<ExtractionResult | null> {
+async function extractByApi(url: string, api: 'diffbot' | 'pipfeed', shouldAbort?: () => boolean): Promise<TierResult | null> {
   if (shouldAbort?.()) {
     log.info({ url, api }, 'extraction skipped (feed bail-out)')
     return null
@@ -290,45 +298,55 @@ async function extractByApi(url: string, api: 'diffbot' | 'pipfeed', shouldAbort
   }
 }
 
+/**
+ * Fetch the page for the local tiers. Returns null when there is nothing to parse locally: the
+ * fetch failed, or the page is above maxParseBytes. Building a JSDOM/cheerio DOM from a
+ * multi-megabyte string expands ~10-20x and spikes native memory (counted against Render's RSS
+ * limit), which can OOM the crawl; such pages are deferred to the API tier, which extracts
+ * server-side without loading the DOM into our heap.
+ */
+async function fetchParseablePage(url: string): Promise<string | null> {
+  const html = await fetchPage(url)
+  if (html == null) return null
+  const htmlBytes = Buffer.byteLength(html, 'utf8')
+  if (htmlBytes > config.crawl.maxParseBytes) {
+    log.warn({ url, htmlBytes, maxParseBytes: config.crawl.maxParseBytes }, 'page exceeds maxParseBytes; skipping local parse, deferring to API tier')
+    return null
+  }
+  return html
+}
+
 export async function extractContent(
   url: string,
-  options?: { htmlSelector?: string | null; skipLocalExtraction?: boolean; shouldAbort?: () => boolean }
+  options?: {
+    htmlSelector?: string | null
+    skipLocalExtraction?: boolean
+    shouldAbort?: () => boolean
+    /** The feed's paywall setting (ADR-0032); defaults to detection on, no title marker. */
+    paywall?: PaywallPolicy
+  }
 ): Promise<ExtractionResult | null> {
   if (!isAllowedUrl(url)) {
     log.warn({ url }, 'blocked disallowed URL')
     return null
   }
 
-  if (!options?.skipLocalExtraction) {
-    const html = await fetchPage(url)
+  const policy = options?.paywall ?? DEFAULT_PAYWALL_POLICY
+  const html = options?.skipLocalExtraction ? null : await fetchParseablePage(url)
+  const classified = (result: TierResult): ExtractionResult => {
+    const { accessTier } = classifyAccess({ html, extractedText: result.content, title: result.title, policy })
+    log.info({ url, method: result.method, contentLength: result.content.length, accessTier }, 'extraction succeeded')
+    return { ...result, accessTier }
+  }
 
-    // Pages above maxParseBytes are skipped for local parsing: building a JSDOM/cheerio
-    // DOM from a multi-megabyte string expands ~10-20x and spikes native memory (counted
-    // against Render's RSS limit), which can OOM the crawl. Defer these to the API tier,
-    // which extracts server-side without loading the DOM into our heap.
-    const htmlBytes = html != null ? Buffer.byteLength(html, 'utf8') : 0
-    const tooLargeToParse = htmlBytes > config.crawl.maxParseBytes
-    if (tooLargeToParse) {
-      log.warn({ url, htmlBytes, maxParseBytes: config.crawl.maxParseBytes }, 'page exceeds maxParseBytes; skipping local parse, deferring to API tier')
-    }
-
+  if (html) {
     // Tier 1: CSS selector extraction
-    if (html && !tooLargeToParse && options?.htmlSelector) {
-      const result = extractBySelector(html, options.htmlSelector)
-      if (result) {
-        log.info({ url, method: result.method, contentLength: result.content.length }, 'extraction succeeded')
-        return result
-      }
-    }
+    const selectorResult = options?.htmlSelector ? extractBySelector(html, options.htmlSelector) : null
+    if (selectorResult) return classified(selectorResult)
 
     // Tier 2: Readability extraction
-    if (html && !tooLargeToParse) {
-      const readabilityResult = extractByReadability(html, url)
-      if (readabilityResult) {
-        log.info({ url, method: readabilityResult.method, contentLength: readabilityResult.content.length }, 'extraction succeeded')
-        return readabilityResult
-      }
-    }
+    const readabilityResult = extractByReadability(html, url)
+    if (readabilityResult) return classified(readabilityResult)
   }
 
   // Bail out before expensive API call if the feed has already triggered skip-all
@@ -339,10 +357,25 @@ export async function extractContent(
 
   // Tier 3: External API extraction
   const apiResult = await extractByApi(url, config.crawl.extractionApi, options?.shouldAbort)
-  if (apiResult) return apiResult
+  if (apiResult) return classified(apiResult)
+  if (options?.shouldAbort?.()) return null
+
+  // Every tier failed. A locked page is still stored, as a teaser, rather than returned as null:
+  // null counts toward the crawler's skip-local/skip-all thresholds and is retried on every crawl.
+  const teaser = html ? teaserResult(html, policy) : null
+  if (teaser) {
+    log.info({ url, contentLength: teaser.content.length }, 'all extraction methods failed on a locked page; storing the teaser')
+    return teaser
+  }
 
   log.warn({ url }, 'all extraction methods failed')
   return null
+}
+
+function teaserResult(html: string, policy: PaywallPolicy): ExtractionResult | null {
+  const { accessTier, pageTitle, description } = classifyAccess({ html, extractedText: '', title: null, policy })
+  if (accessTier !== 'locked') return null
+  return { title: pageTitle, content: description ?? '', datePublished: null, method: 'teaser', accessTier }
 }
 
 // Exported for testing only

@@ -32,7 +32,7 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
-const { getStoryIdsByStatus, generateUniqueSlugs, getStories, deleteStory, dissolveCluster, getClusterRedirectSlug } = await import('./story.js')
+const { getStoryIdsByStatus, generateUniqueSlugs, getStories, deleteStory, dissolveCluster, getClusterRedirectSlug, createStory } = await import('./story.js')
 
 describe('getStories', () => {
   beforeEach(() => {
@@ -103,6 +103,37 @@ describe('getStories', () => {
     expect(call.select.feed.select.id).toBe(true)
     expect(call.select.feed.select.title).toBe(true)
     expect(call.select.feed.select.issue).toBeDefined()
+  })
+
+  it('filters by access tier', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([])
+    mockPrisma.story.count.mockResolvedValue(0)
+
+    await getStories({ accessTier: 'locked' })
+
+    expect(mockPrisma.story.findMany.mock.calls[0][0].where.accessTier).toBe('locked')
+  })
+})
+
+describe('createStory', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.feed.findUnique.mockResolvedValue({ id: 'feed-1' })
+    mockPrisma.story.create.mockImplementation(({ data }: { data: unknown }) => Promise.resolve(data))
+  })
+
+  const base = { sourceUrl: 'https://example.com/a', sourceTitle: 'A', sourceContent: 'C', feedId: 'feed-1' }
+
+  it('stores a locked story as rejected, with its access tier', async () => {
+    await createStory({ ...base, accessTier: 'locked' })
+
+    expect(mockPrisma.story.create.mock.calls[0][0].data).toMatchObject({ status: 'rejected', accessTier: 'locked' })
+  })
+
+  it.each([['metered'], ['unknown'], ['free'], [undefined]] as const)('stores a %s story as fetched', async (accessTier) => {
+    await createStory({ ...base, accessTier })
+
+    expect(mockPrisma.story.create.mock.calls[0][0].data).toMatchObject({ status: 'fetched', accessTier: accessTier ?? null })
   })
 })
 

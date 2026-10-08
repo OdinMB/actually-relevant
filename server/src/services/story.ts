@@ -11,6 +11,8 @@ import { config } from '../config.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { buildRelatedStoriesPrompt } from '../prompts/related-stories.js'
 import { relatedStoriesResultSchema } from '../schemas/llm.js'
+import type { ExtractionMethod } from './extractor.js'
+import type { AccessTier } from '../lib/paywall.js'
 
 const log = createLogger('story')
 
@@ -24,6 +26,7 @@ interface StoryFilters {
   ratingMax?: number
   rating?: string
   emotionTag?: string
+  accessTier?: 'locked' | 'metered'
   search?: string
   sort?: string
   page?: number
@@ -141,6 +144,9 @@ function buildWhereClause(filters: StoryFilters): Prisma.StoryWhereInput {
   if (filters.emotionTag) {
     where.emotionTag = filters.emotionTag as EmotionTag
   }
+  if (filters.accessTier) {
+    where.accessTier = filters.accessTier
+  }
   if (filters.search) {
     conditions.push({
       OR: [
@@ -191,6 +197,7 @@ const ADMIN_LIST_SELECT = {
   issueId: true,
   issue: { select: { id: true, name: true, slug: true } },
   crawlMethod: true,
+  accessTier: true,
   clusterId: true,
   cluster: { select: { primaryStoryId: true } },
   createdAt: true,
@@ -292,7 +299,8 @@ export async function createStory(data: {
   sourceContent: string
   feedId: string
   sourceDatePublished?: string
-  crawlMethod?: 'selector' | 'readability' | 'diffbot' | 'pipfeed'
+  crawlMethod?: ExtractionMethod
+  accessTier?: AccessTier
 }): Promise<Story> {
   const feed = await prisma.feed.findUnique({ where: { id: data.feedId } })
   if (!feed) {
@@ -306,6 +314,10 @@ export async function createStory(data: {
       feedId: data.feedId,
       sourceDatePublished: data.sourceDatePublished ? new Date(data.sourceDatePublished) : null,
       crawlMethod: data.crawlMethod || null,
+      accessTier: data.accessTier ?? null,
+      // A paywall-locked story is rejected at crawl, before any model call (ADR-0031); an editor's
+      // re-assess, re-queue or publish is the override.
+      status: data.accessTier === 'locked' ? StoryStatus.rejected : StoryStatus.fetched,
     },
   })
 }

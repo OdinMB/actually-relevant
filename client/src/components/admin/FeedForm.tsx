@@ -7,6 +7,7 @@ import { Select } from '../ui/Select'
 import { Button } from '../ui/Button'
 import { useCreateFeed } from '../../hooks/useFeeds'
 import { useToast } from '../ui/Toast'
+import { FeedPaywallFields } from './FeedPaywallFields'
 
 /** Build hierarchical issue options: parents first, children indented under their parent. */
 function buildIssueOptions(issues: Issue[]): { value: string; label: string }[] {
@@ -31,6 +32,21 @@ function buildIssueOptions(issues: Issue[]): { value: string; label: string }[] 
   return options
 }
 
+const EMPTY_FORM = {
+  title: '',
+  rssUrl: '',
+  url: '',
+  displayTitle: '',
+  issueId: '',
+  language: 'en',
+  region: '',
+  crawlIntervalHours: '6',
+  htmlSelector: '',
+  paywallDetection: true,
+  paywallTitleMarker: '',
+  active: true,
+}
+
 interface FeedCreateFormProps {
   open: boolean
   onClose: () => void
@@ -39,25 +55,14 @@ interface FeedCreateFormProps {
 
 /** Create-only dialog for adding a new feed. */
 export function FeedCreateForm({ open, onClose, issues }: FeedCreateFormProps) {
-  const [form, setForm] = useState({
-    title: '',
-    rssUrl: '',
-    url: '',
-    displayTitle: '',
-    issueId: '',
-    language: 'en',
-    region: '',
-    crawlIntervalHours: '6',
-    htmlSelector: '',
-    active: true,
-  })
+  const [form, setForm] = useState(EMPTY_FORM)
 
   const createFeed = useCreateFeed()
   const { toast } = useToast()
 
   useEffect(() => {
     if (open) {
-      setForm({ title: '', rssUrl: '', url: '', displayTitle: '', issueId: '', language: 'en', region: '', crawlIntervalHours: '6', htmlSelector: '', active: true })
+      setForm(EMPTY_FORM)
     }
   }, [open])
 
@@ -76,6 +81,8 @@ export function FeedCreateForm({ open, onClose, issues }: FeedCreateFormProps) {
         region: (form.region || null) as FeedRegion | null,
         crawlIntervalHours: Number(form.crawlIntervalHours),
         htmlSelector: form.htmlSelector || null,
+        paywallDetection: form.paywallDetection,
+        paywallTitleMarker: form.paywallTitleMarker.trim() || null,
         active: form.active,
       })
       toast('success', 'Feed created')
@@ -119,6 +126,12 @@ export function FeedCreateForm({ open, onClose, issues }: FeedCreateFormProps) {
               <Input id="feed-interval" label="Interval (hours)" type="number" min="1" value={form.crawlIntervalHours} onChange={e => set('crawlIntervalHours', e.target.value)} />
             </div>
             <Input id="feed-selector" label="HTML Selector (optional)" value={form.htmlSelector} onChange={e => set('htmlSelector', e.target.value)} placeholder="e.g. article .content" />
+            <FeedPaywallFields
+              detection={form.paywallDetection}
+              titleMarker={form.paywallTitleMarker}
+              onDetectionChange={v => set('paywallDetection', v)}
+              onTitleMarkerChange={v => set('paywallTitleMarker', v)}
+            />
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

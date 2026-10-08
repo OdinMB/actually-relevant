@@ -30,6 +30,8 @@ const sampleFeed = {
   title: 'Test Feed',
   rssUrl: 'https://example.com/feed',
   htmlSelector: null,
+  paywallDetection: true,
+  paywallTitleMarker: null,
   lastEtag: null,
   lastModified: null,
 }
@@ -504,6 +506,42 @@ describe('crawlFeed', () => {
       expect(call[1]).toEqual(expect.objectContaining({ skipLocalExtraction: false }))
     }
   })
+
+  it('passes the feed paywall setting to the extractor and the access tier to createStory', async () => {
+    mockGetFeedById.mockResolvedValue({ ...sampleFeed, paywallDetection: false, paywallTitleMarker: '^\\(S\\+\\)' })
+    mockParseFeed.mockResolvedValue(rssResult([
+      { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
+    ]))
+    mockGetExistingUrls.mockResolvedValue(new Set())
+    mockExtractContent.mockResolvedValue({ title: 'A', content: 'C', datePublished: null, method: 'readability', accessTier: 'locked' })
+    mockCreateStory.mockResolvedValue({ id: 'story-1', status: 'rejected' })
+
+    await crawlFeed('feed-1')
+
+    expect(mockExtractContent).toHaveBeenCalledWith('https://example.com/a', expect.objectContaining({
+      paywall: { detection: false, titleMarker: '^\\(S\\+\\)' },
+    }))
+    expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ accessTier: 'locked' }))
+  })
+
+  it('counts a teaser result as a local success, so locked teasers in a row do not set skip-local', async () => {
+    const threshold = config.crawl.localFailThreshold
+    mockGetFeedById.mockResolvedValue(sampleFeed)
+    const items = Array.from({ length: threshold + 2 }, (_, i) => ({
+      url: `https://example.com/locked-${i}`, title: `Locked ${i}`, datePublished: null, description: null,
+    }))
+    mockParseFeed.mockResolvedValue(rssResult(items))
+    mockGetExistingUrls.mockResolvedValue(new Set())
+    mockExtractContent.mockResolvedValue({ title: 'T', content: '', datePublished: null, method: 'teaser', accessTier: 'locked' })
+    mockCreateStory.mockResolvedValue({ id: 'story-1', status: 'rejected' })
+
+    const result = await crawlFeed('feed-1')
+
+    expect(result.newStories).toBe(threshold + 2)
+    for (const call of mockExtractContent.mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({ skipLocalExtraction: false }))
+    }
+  })
 })
 
 describe('crawlAllDueFeeds', () => {
@@ -624,5 +662,19 @@ describe('crawlUrl', () => {
         crawlMethod: 'readability',
       })
     )
+  })
+
+  it('passes the feed paywall setting and the access tier through', async () => {
+    mockGetFeedById.mockResolvedValue({ ...sampleFeed, paywallTitleMarker: 'Z\\+' })
+    mockGetExistingUrls.mockResolvedValue(new Set())
+    mockExtractContent.mockResolvedValue({ title: 'T', content: 'C', datePublished: null, method: 'teaser', accessTier: 'locked' })
+    mockCreateStory.mockResolvedValue({ id: 'locked-story' })
+
+    await crawlUrl('https://example.com/article', 'feed-1')
+
+    expect(mockExtractContent).toHaveBeenCalledWith('https://example.com/article', expect.objectContaining({
+      paywall: { detection: true, titleMarker: 'Z\\+' },
+    }))
+    expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ accessTier: 'locked', crawlMethod: 'teaser' }))
   })
 })

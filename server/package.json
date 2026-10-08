@@ -26,6 +26,7 @@
     "cleanup:plunk-contacts:apply": "tsx src/scripts/cleanup-plunk-contacts.ts --apply",
     "cleanup:fast-confirmations": "tsx src/scripts/cleanup-fast-confirmations.ts",
     "cleanup:fast-confirmations:apply": "tsx src/scripts/cleanup-fast-confirmations.ts --apply",
+    "scan:teasers": "tsx src/scripts/scan-teaser-analyses.ts",
     "social:bot-profile": "tsx src/scripts/set-social-bot-profile.ts",
     "social:bot-profile:apply": "tsx src/scripts/set-social-bot-profile.ts --apply",
     "db:populate-issue-content": "tsx src/scripts/migrate/populate-issue-content.ts",

@@ -15,6 +15,17 @@ import { PanelFooter } from './PanelFooter'
 import { buildIssueOptions } from './StoryFiltersBar'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 
+const ACCESS_TIER_LABELS: Record<string, string> = {
+  locked: 'Paywall locked (rejected at crawl)',
+  metered: 'Marked paid, full text received',
+  free: 'Free',
+  unknown: 'Not marked by the publisher',
+}
+
+function formatAccessTier(tier: string | null): string {
+  return tier ? ACCESS_TIER_LABELS[tier] ?? tier : 'Not classified'
+}
+
 interface StoryEditFormProps {
   story: Story
   issues: Issue[]
@@ -141,6 +152,8 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
           <dd className="text-neutral-900">{formatDate(story.sourceDatePublished)}</dd>
           <dt className="text-neutral-500">Feed</dt>
           <dd className="text-neutral-900">{story.feed?.title || '—'}</dd>
+          <dt className="text-neutral-500">Access</dt>
+          <dd className="text-neutral-900">{formatAccessTier(story.accessTier)}</dd>
           <dt className="text-neutral-500">URL</dt>
           <dd className="text-neutral-900 truncate">
             <a href={story.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:text-brand-800 underline">
