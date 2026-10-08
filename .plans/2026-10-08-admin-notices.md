@@ -1,7 +1,7 @@
 ---
 plan-id: 2026-10-08-admin-notices
 title: Keep every owner alert as an admin notice with an unseen badge, and poll Plunk for spam complaints and bounces
-status: draft
+status: approved
 created: 2026-10-08
 author: claude-code (AI)
 repo: OdinMB/actually-relevant
@@ -25,7 +25,9 @@ complexity: complex
 
 The owner's request (2026-10-08): keep `WEBHOOK_URL` optional, collect the notifications on our side, show them in the admin with a label on the ones not yet seen, and give newsletter and podcast problems the same treatment through one shared mechanism. The trigger is Plunk: the next spam complaint before about 5,800 total sends disables the account again (`DOCS/2026-10-08_plunk-suspension-review.md`, section 1), and today nobody would hear of one.
 
-The agent made the design calls below (stubs ADR-0028 and ADR-0029, and the list under "Behavior choices for the owner"). No person has confirmed them yet.
+The agent made the design calls below (stubs ADR-0028 and ADR-0029, and the list under "Behavior choices for the owner"). The owner was shown them (including the reviewer's corrections) and approved the plan in session.
+
+Confirmed by Odin Mühlenbein on 2026-10-08: ADR-0028, ADR-0029
 
 Related plans: `.plans/completed/2026-10-06_scheduler-hardening.md` (where `notifyJobFailure` is called), `.plans/completed/2026-10-06_autonomous-two-speaker-podcast.md` (`notifyEvent` and the podcast notices), `.plans/completed/2026-10-08_newsletter-signup-hardening.md` (the signup cap alert). `.plans/2026-10-08-paywalled-stories.md` touches none of the same files.
 
