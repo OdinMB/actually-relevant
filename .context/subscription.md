@@ -72,23 +72,29 @@ Order matters; every gate runs before any side effect:
 
 Two operator scripts in `server/src/scripts/`, both run by hand and both previewing by default. **Run them only from the Render API service's Shell** (dashboard: the API web service, Shell tab), where the production `DATABASE_URL` and Plunk key are set. Never run them locally: the protection sets (who confirmed, who confirmed again) come from whatever database `DATABASE_URL` points at, so a local run would judge production Plunk contacts against the dev database. Both need an active Plunk account; a suspended one returns 403 `PROJECT_DISABLED`.
 
+Render's Shell opens inside the `server` folder, so the commands below take no `--prefix server`.
+
 ### Never-confirmed contacts (`cleanup-plunk-contacts.ts`)
 
 ```bash
-npm run cleanup:plunk-contacts --prefix server        # dry run
-npm run cleanup:plunk-contacts:apply --prefix server  # deletes
+npm run cleanup:plunk-contacts        # dry run
+npm run cleanup:plunk-contacts:apply  # deletes
 ```
 
-It deletes Plunk contacts that are not subscribed, have no confirmed local `PendingSubscription`, and were created more than 14 days ago (`PURGE_MIN_AGE_DAYS`). Subscribed contacts, and anyone who ever confirmed locally, are never touched.
+It deletes Plunk contacts that are not subscribed, have no confirmed local `PendingSubscription`, were created more than 14 days ago (`PURGE_MIN_AGE_DAYS`), and fall outside the import guard. Subscribed contacts, and anyone who ever confirmed locally, are never touched.
+
+- **Import guard:** the owner imported the previous provider's subscribers straight into Plunk on 15 February 2026, 01:36 Berlin time. Those contacts have no local `PendingSubscription`, so one who later unsubscribed (or was unsubscribed after a complaint) looks like a bot, and deleting the contact would erase Plunk's record that they opted out. Contacts created inside a protected window are never purged. The default window is `2026-02-14T23:00Z` to `2026-02-16T00:00Z` (start inclusive, end exclusive), the import day in Berlin and in UTC. `--protect-created=<ISO start>..<ISO end>` replaces it and may be repeated; repeat the default window if it should still apply, e.g. `npm run cleanup:plunk-contacts -- --protect-created=2026-02-14T23:00Z..2026-02-16T00:00Z --protect-created=<other window>`.
+- **Dry run** (default) is read-only. Besides the first 20 addresses it prints the purgeable contacts per UTC creation day (top 15 by count), so another import spike shows up as one large day, and how many contacts the import guard kept that would otherwise have been purged.
+- **Apply** deletes the purgeable contacts, 200 ms apart, and prints deleted and failed counts.
 
 ### Fast pre-June confirmations (`cleanup-fast-confirmations.ts`)
 
 Before 2026-06-03 the confirm link changed state on GET, so link scanners "confirmed" bot-submitted addresses within seconds. This script unsubscribes (never deletes) those Plunk contacts, so a real person caught by mistake can sign up again. Plunk cannot reset complaint stats, so it is deliberately conservative.
 
 ```bash
-npm run cleanup:fast-confirmations --prefix server                                    # gap distribution only
-npm run cleanup:fast-confirmations --prefix server -- --max-seconds=10                # + addresses that would go
-npm run cleanup:fast-confirmations:apply --prefix server -- --max-seconds=10          # unsubscribes
+npm run cleanup:fast-confirmations                              # gap distribution only
+npm run cleanup:fast-confirmations -- --max-seconds=10          # + addresses that would go
+npm run cleanup:fast-confirmations:apply -- --max-seconds=10    # unsubscribes
 ```
 
 - **Preview** (default) reads only the database and changes nothing. It prints how all confirmed signups created before the cutoff spread over confirmation gaps (`<5s`, `5-10s`, `10-30s`, `30-60s`, `1-5min`, `5-60min`, `>1h`), so the owner picks the threshold from data; with `--max-seconds=N` it also lists every candidate with its gap.

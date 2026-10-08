@@ -23,16 +23,18 @@
  * data, and with --max-seconds=N lists the addresses that would be unsubscribed.
  * Preview reads only the database; Plunk is contacted only in apply mode.
  *
- *   npm run cleanup:fast-confirmations --prefix server                         # gap distribution
- *   npm run cleanup:fast-confirmations --prefix server -- --max-seconds=10     # + candidate list
- *   npm run cleanup:fast-confirmations:apply --prefix server -- --max-seconds=10
+ * RUN IT FROM THE RENDER API SERVICE'S SHELL, NEVER LOCALLY. The Shell opens in
+ * the server folder, so the commands there take no --prefix:
+ *
+ *   npm run cleanup:fast-confirmations                                  # gap distribution
+ *   npm run cleanup:fast-confirmations -- --max-seconds=10              # + candidate list
+ *   npm run cleanup:fast-confirmations:apply -- --max-seconds=10        # unsubscribes
  *
  * Flags: --max-seconds=N (required with --apply; a gap strictly below N counts
  * as fast), --before=YYYY-MM-DD (cutoff, default 2026-06-03).
  *
- * RUN IT FROM THE RENDER API SERVICE'S SHELL, NEVER LOCALLY. It needs the
- * production DATABASE_URL and Plunk key that are set there. Run locally, the
- * candidates and the "re-confirmed" protection set would come from the dev
+ * It needs the production DATABASE_URL and Plunk key that are set there. Run
+ * locally, the candidates and the "re-confirmed" protection set would come from the dev
  * database, and apply would unsubscribe the wrong people in production Plunk.
  *
  * NOTE: apply requires the Plunk account to be ACTIVE — while it is suspended
@@ -245,7 +247,7 @@ async function main() {
   if (!args.apply) {
     console.log(
       `\nPreview complete; nothing changed. Apply also skips addresses no longer subscribed in Plunk.\n` +
-        `To unsubscribe: npm run cleanup:fast-confirmations:apply --prefix server -- --max-seconds=${args.maxSeconds}`,
+        `To unsubscribe: npm run cleanup:fast-confirmations:apply -- --max-seconds=${args.maxSeconds}`,
     )
     await prisma.$disconnect()
     return
