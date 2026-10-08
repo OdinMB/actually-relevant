@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import path from 'path'
 import {
   chooseBackupFileName,
+  completenessProblems,
   fetchAllContacts,
   summarizeContacts,
   DOCS_DIR,
@@ -85,6 +86,17 @@ describe('fetchAllContacts', () => {
   it('throws when Plunk repeats a cursor', async () => {
     const listPage = vi.fn().mockResolvedValue(page([{ id: '1' }], { hasMore: true, nextCursor: 'same' }))
     await expect(fetchAllContacts(listPage)).rejects.toThrow(/repeated a cursor/)
+  })
+})
+
+describe('completenessProblems', () => {
+  it('is empty for a complete listing, or one with no reported total', () => {
+    expect(completenessProblems({ contacts: [{ id: '1' }, { id: '2' }], pages: 1, reportedTotal: 2 })).toEqual([])
+    expect(completenessProblems({ contacts: [{ id: '1' }], pages: 1, reportedTotal: null })).toEqual([])
+  })
+
+  it('flags a total mismatch and duplicate ids', () => {
+    expect(completenessProblems({ contacts: [{ id: '1' }, { id: '1' }], pages: 2, reportedTotal: 5 })).toHaveLength(2)
   })
 })
 

@@ -235,6 +235,37 @@ describe('Plunk API client', () => {
       expect(page.total).toBe(9)
     })
 
+    it('keeps the cursor of a { success, data: [...], cursor, hasMore } envelope (no silent stop after page one)', async () => {
+      mockAxiosInstance.get.mockResolvedValue({
+        data: { success: true, data: [{ id: 'c1', email: 'a@x.com', subscribed: true }], cursor: 'nx', hasMore: true, total: 9 },
+      })
+
+      const page = await listContacts(undefined, 50)
+
+      expect(page.items).toHaveLength(1)
+      expect(page.nextCursor).toBe('nx')
+      expect(page.hasMore).toBe(true)
+      expect(page.total).toBe(9)
+    })
+
+    it('reads a nested { success, data: { data, cursor, hasMore } } envelope', async () => {
+      mockAxiosInstance.get.mockResolvedValue({
+        data: { success: true, data: { data: [{ id: 'c1', email: 'a@x.com' }], cursor: 'nx', hasMore: true, total: 9 } },
+      })
+
+      const page = await listContacts(undefined, 50)
+
+      expect(page.items).toHaveLength(1)
+      expect(page.nextCursor).toBe('nx')
+      expect(page.hasMore).toBe(true)
+    })
+
+    it('throws on an unrecognized shape instead of returning an empty page', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { weird: true } })
+
+      await expect(listContacts(undefined, 50)).rejects.toThrow(/unrecognized Plunk response shape/)
+    })
+
     it('passes the cursor param when paginating', async () => {
       mockAxiosInstance.get.mockResolvedValue({ data: { data: [], cursor: null, hasMore: false, total: 0 } })
 

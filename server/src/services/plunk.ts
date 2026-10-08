@@ -191,15 +191,34 @@ export async function deleteContact(id: string): Promise<void> {
   )
 }
 
+/** A `{ success, data: { ... } }` envelope's inner object; anything else as it is. */
+function unwrapContactsEnvelope(body: unknown): unknown {
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    const inner = (body as { data?: unknown }).data
+    if (inner && typeof inner === 'object' && !Array.isArray(inner)) return inner
+  }
+  return body
+}
+
+/** True when the response carries a contact array in a shape parseContactsResponse reads. */
+export function hasContactsArray(body: unknown): boolean {
+  const b = unwrapContactsEnvelope(body) as { data?: unknown; items?: unknown; contacts?: unknown } | null
+  return Array.isArray(b) || Array.isArray(b?.data) || Array.isArray(b?.items) || Array.isArray(b?.contacts)
+}
+
 /**
  * Normalize Plunk's list-contacts response into a typed page. The hosted "next"
  * API (next-api.useplunk.com) returns `{ data: [...], cursor, hasMore, total }`;
  * other/older surfaces return a bare array or `{ items }`/`{ contacts }`. Read
- * all of them, tolerating missing pagination fields.
+ * all of them, once nested in a `{ success, data: { ... } }` envelope, tolerating
+ * missing pagination fields. Pagination fields beside a `data` array are read
+ * from the same level, so an envelope `{ success, data: [...], cursor, hasMore }`
+ * keeps its cursor.
  */
 export function parseContactsResponse(
-  body: unknown,
+  rawBody: unknown,
 ): { items: Contact[]; nextCursor: string | null; hasMore: boolean; total: number } {
+  const body = unwrapContactsEnvelope(rawBody)
   if (Array.isArray(body)) {
     return { items: body as Contact[], nextCursor: null, hasMore: false, total: body.length }
   }
@@ -226,19 +245,15 @@ export async function listContacts(cursor?: string, limit = 50): Promise<{ items
     async () => {
       const params: Record<string, string | number> = { limit }
       if (cursor) params.cursor = cursor
-      const { data: body } = await client.get('/contacts', { params })
-      // If the response carried no recognizable contact array, the Plunk shape
-      // likely changed — surface it instead of silently returning nothing.
-      const hasKnownArray =
-        Array.isArray(body) ||
-        Array.isArray(body?.data) ||
-        Array.isArray(body?.items) ||
-        Array.isArray(body?.contacts)
-      if (!hasKnownArray) {
-        log.warn(
-          { shape: body && typeof body === 'object' ? Object.keys(body) : typeof body },
-          'listContacts: unrecognized Plunk response shape; extracted no contacts',
-        )
+      // rawClient, not client: the shared client's `{ success, data }` unwrap would drop a
+      // `cursor`/`hasMore` beside a `data` array and silently end paging after page one.
+      const { data: body } = await rawClient.get('/contacts', { params })
+      // No recognizable contact array means the Plunk shape changed: fail rather than
+      // return an empty page that a backup or restore would take for "no contacts".
+      if (!hasContactsArray(body)) {
+        const shape = body && typeof body === 'object' ? Object.keys(body) : typeof body
+        log.warn({ shape }, 'listContacts: unrecognized Plunk response shape')
+        throw new Error(`listContacts: unrecognized Plunk response shape (${Array.isArray(shape) ? shape.join(', ') : shape})`)
       }
       return parseContactsResponse(body)
     },

@@ -55,6 +55,17 @@ describe('findMissingContacts', () => {
     expect(findMissingContacts(backup, []).map((m) => m.email)).toEqual(['a@x.org'])
   })
 
+  it('never restores an unsubscribed contact as subscribed, whatever the flag spelling', () => {
+    const backup = [
+      { email: 'a@x.org', subscribed: false },
+      { email: 'b@x.org', subscribed: 'false' },
+      { email: 'c@x.org', subscribed: 0 },
+      { email: 'd@x.org', subscribed: null },
+      { email: 'e@x.org', subscribed: 'true' },
+    ]
+    expect(findMissingContacts(backup, []).map((m) => m.subscribed)).toEqual([false, false, false, false, true])
+  })
+
   it('restores a missing subscribed flag as unsubscribed and leaves out non-primitive data', () => {
     const [m] = findMissingContacts([{ email: 'a@x.org', data: { nested: { a: 1 }, nil: null, name: 'A' } }], [])
     expect(m.subscribed).toBe(false)

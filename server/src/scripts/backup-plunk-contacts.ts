@@ -120,6 +120,20 @@ export function summarizeContacts(contacts: RawContact[]): BackupSummary {
   return { count: contacts.length, subscribed, unsubscribed, unknownStatus, duplicateIds, missingEmail }
 }
 
+/**
+ * Reasons a paged contact list may be incomplete: Plunk's reported total differs
+ * from the contacts paged, or an id appeared twice. Empty when it looks complete.
+ */
+export function completenessProblems(result: FetchAllResult): string[] {
+  const summary = summarizeContacts(result.contacts)
+  const problems: string[] = []
+  if (result.reportedTotal !== null && result.reportedTotal !== summary.count) {
+    problems.push(`Plunk reported a total of ${result.reportedTotal} but ${summary.count} contacts were paged`)
+  }
+  if (summary.duplicateIds > 0) problems.push(`${summary.duplicateIds} contact ids appeared more than once`)
+  return problems
+}
+
 const pad = (n: number) => String(n).padStart(2, '0')
 
 /**
@@ -155,17 +169,13 @@ async function main() {
   const plunk = await import('../services/plunk.js')
 
   console.log('Plunk contact backup (read-only)')
-  const { contacts, pages, reportedTotal } = await fetchAllContacts(
+  const fetched = await fetchAllContacts(
     // The typed Contact is the same raw object Plunk returned (parseContactsResponse maps no fields).
     (cursor, limit) => plunk.listContacts(cursor, limit) as unknown as Promise<ContactsPage>,
   )
+  const { contacts, pages, reportedTotal } = fetched
   const summary = summarizeContacts(contacts)
-
-  const problems: string[] = []
-  if (reportedTotal !== null && reportedTotal !== summary.count) {
-    problems.push(`Plunk reported a total of ${reportedTotal} but ${summary.count} contacts were paged`)
-  }
-  if (summary.duplicateIds > 0) problems.push(`${summary.duplicateIds} contact ids appeared more than once`)
+  const problems = completenessProblems(fetched)
 
   const exportedAt = new Date()
   const backup: BackupFile = {

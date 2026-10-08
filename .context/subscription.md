@@ -84,7 +84,7 @@ npm run backup:plunk-contacts --prefix server
 Remove-Item Env:PLUNK_SECRET_KEY
 ```
 
-It pages through every contact and writes `DOCS/YYYY-MM-DD_plunk-contacts-backup.json` at the repo root (UTC date; `DOCS/` is gitignored). It never overwrites: an existing name gets `-HHMM` added. The file is `{ exportedAt, plunkBaseUrl, count, contacts }`, each contact exactly as Plunk returned it, custom data included. It prints the count, subscribed and unsubscribed totals and the path, never an address. It fails when Plunk announces more pages without a cursor or repeats one, and exits non-zero with a warning when Plunk's reported total differs from the contacts paged or an id appears twice; don't run a cleanup on such a backup.
+It pages through every contact and writes `DOCS/YYYY-MM-DD_plunk-contacts-backup.json` at the repo root (UTC date; `DOCS/` is gitignored). It never overwrites: an existing name gets `-HHMM` added. The file is `{ exportedAt, plunkBaseUrl, count, contacts }`, each contact exactly as Plunk returned it, custom data included. It prints the count, subscribed and unsubscribed totals and the path, never an address. It fails when Plunk announces more pages without a cursor or repeats one, or when a page carries no recognizable contact array (`listContacts` throws rather than return an empty page; it reads the raw response, so a cursor beside a `{ success, data }` envelope's array is kept), and exits non-zero with a warning when Plunk's reported total differs from the contacts paged or an id appears twice; don't run a cleanup on such a backup.
 
 **The backup holds subscriber addresses (personal data).** Keep it only on the owner's machine, never commit or share it, and delete it once the cleanup has proven right (a few weeks).
 
@@ -97,7 +97,7 @@ npm run restore:plunk-contacts:apply --prefix server -- --file=../DOCS/2026-10-0
 Remove-Item Env:PLUNK_SECRET_KEY
 ```
 
-A relative `--file` resolves against `server/`. Preview is read-only and lists the contacts in the backup but missing now (count, addresses, the subscribed status each had). Apply recreates each through `POST /contacts` (`createContact`) with its email, subscribed status and custom data (string, number and boolean values; others are left out and counted), 200 ms apart, then prints recreated and failed counts. Contacts that still exist are never changed. A recreated contact is a new Plunk contact with a new id and creation date; its event history does not come back.
+A relative `--file` resolves against `server/`. Preview is read-only and lists the contacts in the backup but missing now (count, addresses, the subscribed status each had). Apply recreates each through `POST /contacts` (`createContact`) with its email, subscribed status and custom data (string, number and boolean values; others are left out and counted), 200 ms apart, then prints recreated and failed counts. Contacts that still exist are never changed. Apply refuses to run when the current listing looks incomplete (Plunk's total differs from the contacts paged, or an id repeats): a contact the listing missed would be sent through `POST /contacts` with the backup's older status. Only a `subscribed` of `true` (or `"true"`, `1`) restores as subscribed; anything else restores as unsubscribed. A recreated contact is a new Plunk contact with a new id and creation date; its event history does not come back.
 
 ### Never-confirmed contacts (`cleanup-plunk-contacts.ts`)
 

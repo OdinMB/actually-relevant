@@ -34,7 +34,7 @@ import { fileURLToPath, pathToFileURL } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
-import { fetchAllContacts, type ContactsPage, type RawContact } from './backup-plunk-contacts.js'
+import { completenessProblems, fetchAllContacts, type ContactsPage, type RawContact } from './backup-plunk-contacts.js'
 
 const CREATE_DELAY_MS = 200
 
@@ -84,7 +84,9 @@ const normalize = (email: unknown): string | null =>
 /**
  * Contacts in the backup whose lowercased email is not among the current ones.
  * Each email once (first occurrence); backup entries without an email are skipped.
- * A missing `subscribed` flag restores as unsubscribed, the safe side.
+ * Only `true` (or the string "true", or 1, as the admin's subscriber list reads it)
+ * restores as subscribed; anything else, a missing flag included, restores as
+ * unsubscribed, the safe side.
  */
 export function findMissingContacts(backup: RawContact[], current: RawContact[]): MissingContact[] {
   const present = new Set<string>()
@@ -106,7 +108,7 @@ export function findMissingContacts(backup: RawContact[], current: RawContact[])
         else droppedDataKeys.push(k)
       }
     }
-    missing.push({ email: (c.email as string).trim(), subscribed: c.subscribed === true, data, droppedDataKeys })
+    missing.push({ email: (c.email as string).trim(), subscribed: c.subscribed === true || c.subscribed === 'true' || c.subscribed === 1, data, droppedDataKeys })
   }
   return missing
 }
@@ -164,10 +166,18 @@ async function main() {
   console.log(`Plunk contact restore — mode: ${args.apply ? 'APPLY (will recreate)' : 'PREVIEW (no changes)'}`)
   console.log(`Backup: ${filePath} (${backup.length} contacts)`)
 
-  const { contacts: current } = await fetchAllContacts(
+  const fetched = await fetchAllContacts(
     (cursor, limit) => plunk.listContacts(cursor, limit) as unknown as Promise<ContactsPage>,
   )
+  const current = fetched.contacts
   console.log(`Current Plunk contacts: ${current.length}`)
+  // A contact the listing missed would be "recreated" through POST /contacts, which may
+  // overwrite it with the backup's (older) subscribed status. Never apply on such a listing.
+  const listingProblems = completenessProblems(fetched)
+  for (const p of listingProblems) console.error(`WARNING: ${p}`)
+  if (listingProblems.length > 0 && args.apply) {
+    throw new Error('the current Plunk listing looks incomplete; refusing to recreate contacts. Re-run the preview later.')
+  }
 
   const missing = findMissingContacts(backup, current)
   const subscribed = missing.filter((m) => m.subscribed).length
