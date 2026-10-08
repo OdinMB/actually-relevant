@@ -32,7 +32,7 @@ actually-relevant/
 
 **Backend:** Express + TypeScript, PostgreSQL + pgvector (Prisma ORM), LangChain + OpenAI (structured output with Zod), node-cron, Zod
 
-**Deployment:** Render.com (static site + web service + PostgreSQL)
+**Deployment:** Render.com (static site + web service + PostgreSQL). **Every push to `main` deploys both services to production**, including pending migrations (`.context/deployment.md`).
 
 ## Commands
 

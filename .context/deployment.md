@@ -2,6 +2,8 @@
 
 Render.com runs three services: the PostgreSQL database, the backend web service (root `server/`) and the frontend static site (root `client/`). There is no `render.yaml`; the dashboard settings are the source of truth, and the README's "Deploying to Render.com" section documents them.
 
+**Auto-deploy from `main`.** Both the backend and the static site deploy automatically on every push to `main`, at the same time and in no guaranteed order. A push to `main` is therefore a production release: the backend build runs `prisma migrate deploy`, so every migration committed since the last deploy is applied to the production database. Nothing is staged in between. A change that needs the backend live before the frontend (a new endpoint the client calls, a required env var) must keep the new client working against the old backend for the minutes in between, or land in two pushes. On the static site, `VITE_*` values are baked in at build time, so changing one needs a rebuild.
+
 | Service | Root | Dashboard build command |
 |---------|------|-------------------------|
 | Backend (web service) | `server` | `npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build` |
