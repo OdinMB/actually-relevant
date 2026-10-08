@@ -23,6 +23,9 @@
  * data, and with --max-seconds=N lists the addresses that would be unsubscribed.
  * Preview reads only the database; Plunk is contacted only in apply mode.
  *
+ * BACK UP FIRST: run backup-plunk-contacts.ts on the owner's machine before
+ * --apply (npm run backup:plunk-contacts --prefix server). See .context/subscription.md.
+ *
  * RUN IT FROM THE RENDER API SERVICE'S SHELL, NEVER LOCALLY. The Shell opens in
  * the server folder, so the commands there take no --prefix:
  *

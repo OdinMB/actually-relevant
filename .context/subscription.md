@@ -70,9 +70,34 @@ Order matters; every gate runs before any side effect:
 
 ## Cleaning Up Plunk Contacts
 
-Two operator scripts in `server/src/scripts/`, both run by hand and both previewing by default. **Run them only from the Render API service's Shell** (dashboard: the API web service, Shell tab), where the production `DATABASE_URL` and Plunk key are set. Never run them locally: the protection sets (who confirmed, who confirmed again) come from whatever database `DATABASE_URL` points at, so a local run would judge production Plunk contacts against the dev database. Both need an active Plunk account; a suspended one returns 403 `PROJECT_DISABLED`.
+Two cleanup scripts in `server/src/scripts/`, both run by hand and both previewing by default, with a backup and restore pair to run locally before them (below). **Run the cleanups only from the Render API service's Shell** (dashboard: the API web service, Shell tab), where the production `DATABASE_URL` and Plunk key are set. Never run them locally: the protection sets (who confirmed, who confirmed again) come from whatever database `DATABASE_URL` points at, so a local run would judge production Plunk contacts against the dev database. Both need an active Plunk account; a suspended one returns 403 `PROJECT_DISABLED`.
 
-Render's Shell opens inside the `server` folder, so the commands below take no `--prefix server`.
+Render's Shell opens inside the `server` folder, so the cleanup commands below take no `--prefix server`.
+
+### Back up first (`backup-plunk-contacts.ts`)
+
+Plunk has no export, so take a backup on the owner's machine before either cleanup. It is read-only, needs only the Plunk secret key (no database), and runs locally, not on Render, whose disk is wiped on deploy. dotenv does not override a variable already set, so in PowerShell:
+
+```powershell
+$env:PLUNK_SECRET_KEY="sk_..."
+npm run backup:plunk-contacts --prefix server
+Remove-Item Env:PLUNK_SECRET_KEY
+```
+
+It pages through every contact and writes `DOCS/YYYY-MM-DD_plunk-contacts-backup.json` at the repo root (UTC date; `DOCS/` is gitignored). It never overwrites: an existing name gets `-HHMM` added. The file is `{ exportedAt, plunkBaseUrl, count, contacts }`, each contact exactly as Plunk returned it, custom data included. It prints the count, subscribed and unsubscribed totals and the path, never an address. It fails when Plunk announces more pages without a cursor or repeats one, and exits non-zero with a warning when Plunk's reported total differs from the contacts paged or an id appears twice; don't run a cleanup on such a backup.
+
+**The backup holds subscriber addresses (personal data).** Keep it only on the owner's machine, never commit or share it, and delete it once the cleanup has proven right (a few weeks).
+
+**Restore** (`restore-plunk-contacts.ts`) compares a backup with the current Plunk contacts by lowercased email:
+
+```powershell
+$env:PLUNK_SECRET_KEY="sk_..."
+npm run restore:plunk-contacts --prefix server -- --file=../DOCS/2026-10-08_plunk-contacts-backup.json        # preview
+npm run restore:plunk-contacts:apply --prefix server -- --file=../DOCS/2026-10-08_plunk-contacts-backup.json  # recreates
+Remove-Item Env:PLUNK_SECRET_KEY
+```
+
+A relative `--file` resolves against `server/`. Preview is read-only and lists the contacts in the backup but missing now (count, addresses, the subscribed status each had). Apply recreates each through `POST /contacts` (`createContact`) with its email, subscribed status and custom data (string, number and boolean values; others are left out and counted), 200 ms apart, then prints recreated and failed counts. Contacts that still exist are never changed. A recreated contact is a new Plunk contact with a new id and creation date; its event history does not come back.
 
 ### Never-confirmed contacts (`cleanup-plunk-contacts.ts`)
 

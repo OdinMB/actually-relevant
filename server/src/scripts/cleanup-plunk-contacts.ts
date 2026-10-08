@@ -27,6 +27,10 @@
  * creation days (to spot other import spikes), and how many contacts the
  * import guard kept.
  *
+ * BACK UP FIRST: run backup-plunk-contacts.ts on the owner's machine before
+ * --apply (npm run backup:plunk-contacts --prefix server); restore-plunk-contacts.ts
+ * recreates contacts deleted by mistake. See .context/subscription.md.
+ *
  * RUN IT FROM THE RENDER API SERVICE'S SHELL, NEVER LOCALLY. The Shell opens in
  * the server folder, so the commands there take no --prefix:
  *
