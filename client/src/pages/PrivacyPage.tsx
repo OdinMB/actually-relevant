@@ -106,10 +106,12 @@ export default function PrivacyPage() {
           <p className="mt-3">
             To keep bots from signing up other people&apos;s addresses, the
             signup form uses Cloudflare Turnstile, which checks that a person is
-            filling it in. Once you start entering an address, Turnstile loads
-            from Cloudflare and receives your IP address and information about
-            your browser and device. Cloudflare processes this on our behalf,
-            which may involve a transfer to the USA.
+            filling it in. Turnstile loads from Cloudflare only when you submit
+            the form, so Cloudflare receives your IP address and information
+            about your browser only if you submit the form. Cloudflare uses this data
+            only for bot protection: to check this signup on our behalf, and,
+            under its own responsibility, to improve its bot detection. This
+            may involve a transfer to the USA.
           </p>
           <p className="mt-3">
             Our newsletter provider, Plunk, automatically tracks email
@@ -225,9 +227,9 @@ export default function PrivacyPage() {
                     Bot protection on the newsletter form
                   </td>
                   <td className="align-top py-2">
-                    IP address and browser and device information when you use
-                    the signup form. Cloudflare processes them on our behalf,
-                    which may involve a transfer to the USA. See their{" "}
+                    IP address and browser information, only when you submit
+                    the signup form, used only for bot protection. This may
+                    involve a transfer to the USA. See their{" "}
                     <a
                       href="https://www.cloudflare.com/turnstile-privacy-policy/"
                       className="text-brand-700 hover:text-brand-800"
@@ -310,7 +312,7 @@ export default function PrivacyPage() {
             your IP address is not shared with third parties when you visit.
             There are two exceptions. On the podcast page, an episode loads from
             Bunny.net only when you press play. On the newsletter signup form,
-            Cloudflare Turnstile loads only once you start entering an address.
+            Cloudflare Turnstile loads only when you submit the form.
           </p>
 
           <h2 className="section-heading mt-10">Your Rights</h2>

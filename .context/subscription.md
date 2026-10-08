@@ -21,9 +21,9 @@ Double opt-in newsletter signup. A visitor submits an email, receives a confirma
 
 The token and confirm routes (`GET /token`, `GET /confirm`, `POST /confirm`) share the generous public limiter, not the two subscribe limiters. The per-IP limiters keep their counters in memory, so a deploy resets them.
 
-The client build reads `VITE_TURNSTILE_SITE_KEY` (in `client/src/components/TurnstileWidget.tsx`, not `config.ts`, which `vite.config.ts` imports in Node). Empty means no widget.
+The client build reads `VITE_TURNSTILE_SITE_KEY` (`turnstileSiteKey()` in `client/src/lib/turnstile.ts`, not `config.ts`, which `vite.config.ts` imports in Node). Empty means no challenge runs.
 
-**Local development:** set `SUBSCRIPTIONS_ENABLED=true` in the server's `.env` to see the form at all. Without Turnstile keys the form works and the server skips the check. To try the widget, use Cloudflare's always-pass test keys (site key `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`).
+**Local development:** set `SUBSCRIPTIONS_ENABLED=true` in the server's `.env` to see the form at all. Without Turnstile keys the form works and the server skips the check. To try the challenge, use Cloudflare's always-pass test keys (site key `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`).
 
 ## The Switch
 
@@ -62,7 +62,7 @@ Order matters; every gate runs before any side effect:
 ## Client Behavior
 
 - `SubscribeForm` (`client/src/components/SubscribeForm.tsx`, used by `SubscribeModal` on every public page and by `/newsletter`) has one email field and a hidden honeypot. Its token fetch on mount also decides availability: a token opens the form; `ApiError` with code `SIGNUPS_PAUSED` shows the "Signups are paused" notice at once (no retry); a paused answer to the POST does the same. While the token loads, submit is disabled.
-- **Turnstile** (`TurnstileWidget.tsx`, no npm dependency) loads only after the visitor focuses or types in the email field, never on mount: the modal is mounted (closed) on every page, and loading on mount would send every visitor's IP to Cloudflare and could put the script into prerendered pages. Submit stays disabled until the widget reports a token (when a site key is set). After any failed submit the widget is remounted, because a token is single-use. A widget load error shows inline with `role="alert"`.
+- **Turnstile loads only on submit** (`client/src/lib/turnstile.ts`, `hooks/useTurnstileChallenge.ts`, no npm dependency). Owner rule: a visitor who does not sign up never contacts Cloudflare, so rendering, focusing or typing in the form requests nothing; the modal is mounted (closed) on every page, and the script must never reach prerendered pages. On submit (button or Enter) the form first checks the address shape (`something@domain.suffix`; a bad one shows the inline error and requests nothing), then, when a site key is set, injects Cloudflare's script, renders a widget with `execution: 'execute'`, `appearance: 'interaction-only'` (invisible unless Cloudflare needs the visitor to interact) and `retry: 'never'`, runs it, and POSTs with the token. The button reads "Verifying..." meanwhile, then "Subscribing...". Every submit runs a fresh challenge, because a token is single-use, and the widget is removed as soon as it settles or the form unmounts. A challenge always settles: one that has neither a token nor a failure within 30 s (`TURNSTILE_TIMEOUT_MS`, script load included) counts as failed. A script-load failure, challenge error, timeout or unsupported browser shows the inline human-check error with `role="alert"` and leaves the form usable; submitting again retries, reloading the script if it failed.
 - On success it tells the visitor to check their inbox. On any refusal it shows the message inline and never claims the email was sent.
 - `SubscribedPage` does not confirm on load. It shows a confirm button. Success shows a welcome state, an expired link suggests subscribing again, and a transient or network error keeps the button so the visitor can retry.
 
@@ -82,6 +82,6 @@ It deletes Plunk contacts that are not subscribed, have no confirmed local `Pend
 ## Key Files
 
 - Server: `server/src/services/subscribe.ts`, `server/src/services/subscribeLimits.ts`, `server/src/services/plunk.ts`, `server/src/routes/public/subscribe.ts`, `server/src/lib/formToken.ts`, `server/src/lib/turnstile.ts`
-- Client: `client/src/components/SubscribeForm.tsx`, `TurnstileWidget.tsx`, `SubscribeModal.tsx`, `SubscribeProvider.tsx`, `client/src/pages/SubscribedPage.tsx`
+- Client: `client/src/components/SubscribeForm.tsx`, `client/src/lib/turnstile.ts`, `client/src/hooks/useTurnstileChallenge.ts`, `SubscribeModal.tsx`, `SubscribeProvider.tsx`, `client/src/pages/SubscribedPage.tsx`
 - Admin reconciliation view: see `admin-dashboard.md` (Subscribers page)
-- Decisions: ADR-0021 (Turnstile), ADR-0022 (limits from rows), ADR-0023 (normalized storage) in `.context/decisions/`
+- Decisions: ADR-0021 (Turnstile), ADR-0024 (Turnstile loads only on submit; supersedes ADR-0021's loading), ADR-0022 (limits from rows), ADR-0023 (normalized storage) in `.context/decisions/`

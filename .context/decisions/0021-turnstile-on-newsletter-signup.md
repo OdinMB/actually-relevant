@@ -1,7 +1,8 @@
 ---
 id: ADR-0021
 title: Protect the newsletter signup with Cloudflare Turnstile, verified server-side and failing closed in production
-status: accepted
+status: superseded
+superseded-by: ADR-0024
 date: 2026-10-08
 deciders: ["claude-code (AI)"]
 context-repo: OdinMB/actually-relevant

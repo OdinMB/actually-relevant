@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import SubscribeForm from './SubscribeForm'
 import { ApiError } from '../lib/api'
+import type { TurnstileRenderOptions } from '../lib/turnstile'
 
 const mockSubscribe = vi.fn()
 const mockGetToken = vi.fn()
@@ -22,23 +23,25 @@ vi.mock('../config', () => ({
   BRAND: { claim: 'News that matters to humanity.', claimSupport: 'Curated with care by AI.' },
 }))
 
-// A stand-in for Cloudflare's widget: a button that hands the form a token.
-const turnstile = vi.hoisted(() => ({ siteKey: '', mounts: 0 }))
-vi.mock('./TurnstileWidget', async () => {
-  const { createElement, useEffect } = await import('react')
-  function StubWidget({ onToken }: { onToken: (token: string | null) => void }) {
-    useEffect(() => {
-      turnstile.mounts++
-    }, [])
-    return createElement('button', { type: 'button', onClick: () => onToken('ts-token') }, 'Pass human check')
+// Cloudflare's script is never fetched in tests: a stand-in API is installed when the
+// injected <script> tag is made to fire `load`.
+function stubTurnstile() {
+  const rendered: TurnstileRenderOptions[] = []
+  const api = {
+    render: vi.fn((_el: HTMLElement, options: TurnstileRenderOptions) => {
+      rendered.push(options)
+      return `widget-${rendered.length}`
+    }),
+    execute: vi.fn(),
+    remove: vi.fn(),
   }
-  return {
-    get TURNSTILE_SITE_KEY() {
-      return turnstile.siteKey
-    },
-    default: StubWidget,
-  }
-})
+  return { api, rendered }
+}
+const scriptTags = () => document.head.querySelectorAll('script[src*="challenges.cloudflare.com/turnstile"]')
+function finishScriptLoad(api: ReturnType<typeof stubTurnstile>['api']) {
+  window.turnstile = api
+  scriptTags()[0].dispatchEvent(new Event('load'))
+}
 
 const pausedError = () => new ApiError(503, 'Newsletter signups are paused.', 'SIGNUPS_PAUSED')
 
@@ -53,8 +56,14 @@ describe('SubscribeForm', () => {
     mockSubscribe.mockReset()
     mockGetToken.mockReset()
     mockGetToken.mockResolvedValue({ token: 'test-token' })
-    turnstile.siteKey = ''
-    turnstile.mounts = 0
+    vi.stubEnv('VITE_TURNSTILE_SITE_KEY', '')
+    delete window.turnstile
+    scriptTags().forEach((s) => s.remove())
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    delete window.turnstile
   })
 
   it('has an email field and no first-name field', async () => {
@@ -134,54 +143,107 @@ describe('SubscribeForm', () => {
 
   describe('with Turnstile configured', () => {
     beforeEach(() => {
-      turnstile.siteKey = 'site-key'
+      vi.stubEnv('VITE_TURNSTILE_SITE_KEY', 'site-key')
     })
 
-    it('loads no widget until the email field is focused', async () => {
+    it('requests nothing from Cloudflare on render, focus or typing', async () => {
       const user = userEvent.setup()
-      render(<SubscribeForm idPrefix="test" />)
-      await waitFor(() => expect(mockGetToken).toHaveBeenCalled())
-
-      expect(screen.queryByRole('button', { name: /human check/i })).not.toBeInTheDocument()
+      await renderReady()
 
       await user.click(screen.getByPlaceholderText('you@example.com'))
-      expect(screen.getByRole('button', { name: /human check/i })).toBeInTheDocument()
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+
+      expect(scriptTags()).toHaveLength(0)
     })
 
-    it('keeps submit disabled until the widget reports a token, then sends it', async () => {
+    it('loads Turnstile on submit, runs the challenge and posts its token', async () => {
       mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
+      const { api, rendered } = stubTurnstile()
       const user = userEvent.setup()
-      render(<SubscribeForm idPrefix="test" />)
-      await waitFor(() => expect(mockGetToken).toHaveBeenCalled())
+      await renderReady()
 
       await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
-      expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeDisabled()
-
-      await user.click(screen.getByRole('button', { name: /human check/i }))
-      await waitFor(() => expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
       await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
 
+      expect(scriptTags()).toHaveLength(1)
+      expect(screen.getByRole('button', { name: /verifying/i })).toBeDisabled()
+      expect(mockSubscribe).not.toHaveBeenCalled()
+
+      finishScriptLoad(api)
+      await waitFor(() => expect(api.execute).toHaveBeenCalled())
+      rendered[0].callback('ts-token')
+
       await waitFor(() => {
-        expect(mockSubscribe).toHaveBeenCalledWith(
-          expect.objectContaining({ formToken: 'test-token', turnstileToken: 'ts-token' }),
-        )
+        expect(mockSubscribe).toHaveBeenCalledWith({
+          email: 'hello@example.com',
+          formToken: 'test-token',
+          turnstileToken: 'ts-token',
+        })
       })
     })
 
-    it('shows a fresh widget after a failed submit, clearing the used token', async () => {
-      mockSubscribe.mockResolvedValue({ success: false, message: "We couldn't verify that you're human." })
+    it('loads nothing and posts nothing when the address is malformed', async () => {
       const user = userEvent.setup()
-      render(<SubscribeForm idPrefix="test" />)
-      await waitFor(() => expect(mockGetToken).toHaveBeenCalled())
+      await renderReady()
 
-      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
-      await user.click(screen.getByRole('button', { name: /human check/i }))
-      await waitFor(() => expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
+      // Passes the browser's type="email" check, but has no domain suffix.
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example')
       await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
 
-      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
-      expect(turnstile.mounts).toBe(2)
-      expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeDisabled()
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+      expect(scriptTags()).toHaveLength(0)
+      expect(mockSubscribe).not.toHaveBeenCalled()
+    })
+
+    it('shows the human-check error when the script fails to load, and lets the visitor retry', async () => {
+      const user = userEvent.setup()
+      await renderReady()
+
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
+      scriptTags()[0].dispatchEvent(new Event('error'))
+
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/human check/i))
+      expect(mockSubscribe).not.toHaveBeenCalled()
+
+      const button = screen.getByRole('button', { name: /^subscribe$/i })
+      expect(button).toBeEnabled()
+      await user.click(button)
+      expect(scriptTags()).toHaveLength(1)
+      // Settle the second load so it does not leak into the next test.
+      scriptTags()[0].dispatchEvent(new Event('error'))
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/human check/i))
+    })
+
+    it('shows the human-check error when the challenge fails', async () => {
+      const { api, rendered } = stubTurnstile()
+      window.turnstile = api
+      const user = userEvent.setup()
+      await renderReady()
+
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
+      await waitFor(() => expect(rendered).toHaveLength(1))
+      rendered[0]['error-callback']()
+
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/human check/i))
+      expect(mockSubscribe).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled()
+    })
+
+    it('removes a pending widget on unmount', async () => {
+      const { api, rendered } = stubTurnstile()
+      window.turnstile = api
+      const user = userEvent.setup()
+      const { unmount } = render(<SubscribeForm idPrefix="test" />)
+      await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
+
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
+      await waitFor(() => expect(rendered).toHaveLength(1))
+
+      unmount()
+      expect(api.remove).toHaveBeenCalledWith('widget-1')
     })
   })
 

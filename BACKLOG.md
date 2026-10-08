@@ -15,7 +15,7 @@
 - Root `errorElement` on the router: a branded error page instead of react-router's default "Unexpected Application Error" screen
 - Move imports from `react-router-dom` to `react-router` (about 60 files) before react-router v8 drops the re-export
 - Podcast: freeze the spoken opener and sign-off per episode before their wording next changes, so older transcript pages keep the words their audio used (today `publicTranscript` takes the current wording from `aiLabelCopy.ts`)
-- Plunk account suspended again (2026-10-08); newsletter signups paused (`SUBSCRIPTIONS_ENABLED = false` in `client/src/config.ts`) and the newsletter job off. Find the cause before reactivating (suspected: unconfirmed bot signups on the list, 0.116% complaint rate), clean the list, then re-enable signups and the job
+- Plunk account suspended again (2026-10-08); newsletter signups paused (server env `SUBSCRIPTIONS_ENABLED` unset) and the newsletter job off. Before reactivating: find the cause with Plunk (suspected: unconfirmed bot signups on the list, 0.166% complaint rate), clean the list (`cleanup:plunk-contacts`), set up Turnstile (widget, `TURNSTILE_SECRET_KEY` on the API, `VITE_TURNSTILE_SITE_KEY` on the static site), then set `SUBSCRIPTIONS_ENABLED=true` and re-enable the job
 - Alerts by email: send job failures and podcast notices through Plunk to an owner address when no WEBHOOK_URL is set (owner is reactivating the Plunk account)
 
 ## Podcast registration (owner)

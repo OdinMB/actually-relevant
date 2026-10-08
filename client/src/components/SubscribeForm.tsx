@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { publicApi, ApiError } from '../lib/api'
 import { BRAND } from '../config'
-import TurnstileWidget, { TURNSTILE_SITE_KEY } from './TurnstileWidget'
+import { turnstileSiteKey } from '../lib/turnstile'
+import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
 
 interface SubscribeFormProps {
   /** Called after successful submission (e.g. to close a modal) */
@@ -21,6 +22,11 @@ function isSignupsPaused(err: unknown): boolean {
   return err instanceof ApiError && err.code === 'SIGNUPS_PAUSED'
 }
 
+/** A plausible address: something@domain.suffix, no spaces. The server validates fully. */
+function isPlausibleEmail(address: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)
+}
+
 export default function SubscribeForm({
   onSuccess,
   autoFocus = false,
@@ -28,17 +34,14 @@ export default function SubscribeForm({
   hideHeading = false,
 }: SubscribeFormProps) {
   const [email, setEmail] = useState('')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'verifying' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [website, setWebsite] = useState('') // honeypot — humans never fill this
   const [formToken, setFormToken] = useState<string | null>(null)
   const [availability, setAvailability] = useState<Availability>('checking')
-  // Turnstile loads only once the visitor engages with the email field, so a page
-  // that merely mounts the (closed) modal sends nothing to Cloudflare.
-  const [engaged, setEngaged] = useState(false)
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  // Turnstile loads only on submit, so visitors who never sign up never contact Cloudflare.
   const [turnstileFailed, setTurnstileFailed] = useState(false)
-  const [widgetKey, setWidgetKey] = useState(0)
+  const { containerRef: turnstileContainerRef, getToken: getTurnstileToken } = useTurnstileChallenge()
   const emailInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -75,30 +78,40 @@ export default function SubscribeForm({
     }
   }, [])
 
-  const handleTurnstileToken = useCallback((token: string | null) => {
-    setTurnstileToken(token)
-    if (token) setTurnstileFailed(false)
-  }, [])
-  const handleTurnstileError = useCallback(() => setTurnstileFailed(true), [])
-
-  // A Turnstile token is single-use: after any failed submit, show a fresh widget.
-  const resetTurnstile = () => {
-    setTurnstileToken(null)
-    setWidgetKey((k) => k + 1)
-  }
-
-  const needsTurnstile = TURNSTILE_SITE_KEY !== ''
-  const canSubmit = status !== 'loading' && formToken !== null && (!needsTurnstile || turnstileToken !== null)
+  const siteKey = turnstileSiteKey()
+  const busy = status === 'verifying' || status === 'loading'
+  const canSubmit = !busy && formToken !== null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim() || !canSubmit || !formToken) return
+    const address = email.trim()
+    if (!canSubmit || !formToken) return
+    if (!isPlausibleEmail(address)) {
+      setTurnstileFailed(false)
+      setStatus('error')
+      setErrorMessage('Please enter a valid email address.')
+      return
+    }
+
+    setErrorMessage('')
+    setTurnstileFailed(false)
+    // A token is single-use, so every submit runs a fresh challenge.
+    let turnstileToken: string | undefined
+    if (siteKey) {
+      setStatus('verifying')
+      try {
+        turnstileToken = await getTurnstileToken(siteKey)
+      } catch {
+        setStatus('idle')
+        setTurnstileFailed(true)
+        return
+      }
+    }
 
     setStatus('loading')
-    setErrorMessage('')
     try {
       const result = await publicApi.subscribe({
-        email: email.trim(),
+        email: address,
         ...(website ? { website } : {}),
         formToken,
         ...(turnstileToken ? { turnstileToken } : {}),
@@ -106,7 +119,6 @@ export default function SubscribeForm({
       if (!result.success) {
         setStatus('error')
         setErrorMessage(result.message || 'Something went wrong. Please try again.')
-        resetTurnstile()
         return
       }
       setStatus('success')
@@ -117,7 +129,6 @@ export default function SubscribeForm({
       }
       setStatus('error')
       setErrorMessage('Something went wrong. Please try again.')
-      resetTurnstile()
     }
   }
 
@@ -190,11 +201,7 @@ export default function SubscribeForm({
             id={`${idPrefix}-email`}
             type="email"
             value={email}
-            onFocus={() => setEngaged(true)}
-            onChange={(e) => {
-              setEngaged(true)
-              setEmail(e.target.value.trim())
-            }}
+            onChange={(e) => setEmail(e.target.value.trim())}
             placeholder="you@example.com"
             required
             autoComplete="email"
@@ -216,14 +223,8 @@ export default function SubscribeForm({
           />
         </div>
 
-        {needsTurnstile && engaged && (
-          <TurnstileWidget
-            key={widgetKey}
-            siteKey={TURNSTILE_SITE_KEY}
-            onToken={handleTurnstileToken}
-            onError={handleTurnstileError}
-          />
-        )}
+        {/* Stays empty unless Cloudflare needs the visitor to interact during a submit. */}
+        {siteKey && <div ref={turnstileContainerRef} className="empty:hidden" />}
 
         {turnstileFailed && (
           <p className="text-sm text-red-600" role="alert">
@@ -242,7 +243,7 @@ export default function SubscribeForm({
           disabled={!canSubmit}
           className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {status === 'loading' ? 'Subscribing...' : 'Subscribe'}
+          {status === 'verifying' ? 'Verifying...' : status === 'loading' ? 'Subscribing...' : 'Subscribe'}
         </button>
       </form>
     </>

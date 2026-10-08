@@ -25,6 +25,7 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0018 · Route the client through react-router 7's data router, built from a route tree App.tsx exports](decisions/0018-react-router-7-data-router.md)
 - [ADR-0019 · Name api.actuallyrelevant.news as the API's public host, keeping the onrender.com host answering](decisions/0019-api-host-api-actuallyrelevant-news.md)
 - [ADR-0020 · Hold the job-run lease for 2 minutes and renew it every 30 seconds, both overridable, as ADR-0017 otherwise](decisions/0020-job-lease-two-minutes-renewed-every-30-seconds.md)
-- [ADR-0021 · Protect the newsletter signup with Cloudflare Turnstile, verified server-side and failing closed in production](decisions/0021-turnstile-on-newsletter-signup.md)
+- [ADR-0021 · Protect the newsletter signup with Cloudflare Turnstile, verified server-side and failing closed in production](decisions/0021-turnstile-on-newsletter-signup.md) — superseded by ADR-0024
 - [ADR-0022 · Derive the per-address and global confirmation-email limits from pending_subscriptions rows](decisions/0022-send-limits-from-pending-subscription-rows.md)
 - [ADR-0023 · Store subscriber email addresses trimmed and lowercased, and lowercase existing rows by migration](decisions/0023-store-subscriber-emails-normalized.md)
+- [ADR-0024 · Load Cloudflare Turnstile only when the visitor submits the signup form, as ADR-0021 otherwise](decisions/0024-turnstile-loads-only-on-signup-submit.md)
