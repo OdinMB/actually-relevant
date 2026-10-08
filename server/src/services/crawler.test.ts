@@ -542,6 +542,24 @@ describe('crawlFeed', () => {
       expect(call[1]).toEqual(expect.objectContaining({ skipLocalExtraction: false }))
     }
   })
+
+  it('counts an API-tier result the HTML classified as locked as a local success', async () => {
+    const threshold = config.crawl.localFailThreshold
+    mockGetFeedById.mockResolvedValue(sampleFeed)
+    const items = Array.from({ length: threshold + 2 }, (_, i) => ({
+      url: `https://example.com/locked-api-${i}`, title: `Locked ${i}`, datePublished: null, description: null,
+    }))
+    mockParseFeed.mockResolvedValue(rssResult(items))
+    mockGetExistingUrls.mockResolvedValue(new Set())
+    mockExtractContent.mockResolvedValue({ title: 'T', content: 'Short API text', datePublished: null, method: 'diffbot', accessTier: 'locked' })
+    mockCreateStory.mockResolvedValue({ id: 'story-1', status: 'rejected' })
+
+    await crawlFeed('feed-1')
+
+    for (const call of mockExtractContent.mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({ skipLocalExtraction: false }))
+    }
+  })
 })
 
 describe('crawlAllDueFeeds', () => {

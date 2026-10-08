@@ -138,8 +138,10 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
         }
 
         totalFailCount = 0
-        // A teaser counts as local: the page was fetched and parsed, it is only locked.
-        if (LOCAL_METHODS.has(extracted.method)) {
+        // A teaser, or any result the HTML classified as locked, counts as local: the page was
+        // fetched and parsed, it is only locked. Counting it as a local failure would set skip-local
+        // and switch off paywall detection for the rest of the crawl.
+        if (LOCAL_METHODS.has(extracted.method) || extracted.accessTier === 'locked') {
           localFailCount = 0
         } else {
           localFailCount++

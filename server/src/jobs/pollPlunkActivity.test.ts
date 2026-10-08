@@ -73,11 +73,11 @@ describe('runPollPlunkActivity', () => {
     expect(mockNotify).toHaveBeenCalledTimes(2)
   })
 
-  it('stops at the page limit with a warning', async () => {
-    mockListActivity.mockResolvedValue(page([], { cursor: 'again' }))
-    await runPollPlunkActivity(NOW)
+  it('fails the run at the page limit, keeping the notices already recorded', async () => {
+    mockListActivity.mockResolvedValue(page([activity('e1_complaint', 'email.complaint')], { cursor: 'again' }))
+    await expect(runPollPlunkActivity(NOW)).rejects.toThrow(/page limit/)
     expect(mockListActivity).toHaveBeenCalledTimes(config.plunk.activityMaxPages)
-    expect(mockLog.warn).toHaveBeenCalledOnce()
+    expect(mockNotify).toHaveBeenCalledTimes(config.plunk.activityMaxPages)
   })
 
   it('records every event insert-only, keyed by its activity id', async () => {

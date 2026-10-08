@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { ADMIN_NOTICE_SOURCES, type AdminNotice, type AdminNoticeSource } from '../../lib/admin-api'
@@ -45,9 +45,18 @@ export default function NoticesPage() {
   const unseenCount = noticesQuery.data?.unseenCount ?? 0
   const totalPages = Math.ceil(total / NOTICE_PAGE_SIZE)
 
+  // A later page emptied (its notices were marked seen under the unseen filter): go back to the last
+  // page that has notices, rather than showing "No notices" with no pager.
+  const pageEmptied = Boolean(noticesQuery.data) && items.length === 0 && total > 0 && page > 1
+  useEffect(() => {
+    if (pageEmptied) setParam('page', totalPages > 1 ? String(totalPages) : '')
+  }, [pageEmptied, totalPages]) // setParam is recreated each render; these two decide the effect
+
   const toggle = (notice: AdminNotice) => {
     setExpandedId(expandedId === notice.id ? null : notice.id)
-    if (!notice.seenAt) markSeen.mutate(notice.id)
+    // In the unseen-only view a seen notice drops out of the list on refetch, so expanding it there
+    // leaves it unseen; the row's Mark seen button marks it once read.
+    if (!notice.seenAt && show !== 'unseen') markSeen.mutate(notice.id)
   }
 
   const handleMarkAll = () => {

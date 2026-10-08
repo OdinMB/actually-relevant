@@ -64,9 +64,10 @@ export async function runPollPlunkActivity(now: Date = new Date()): Promise<void
   let pages = 0
   let items = 0
   do {
+    // Fail loudly rather than succeed quietly: a complaint beyond the limit would otherwise never be
+    // read (for example if the API ignored the types filter). Notices already recorded are kept.
     if (pages >= activityMaxPages) {
-      log.warn({ pages, startDate }, 'stopped at the page limit; older activity in the window was not read')
-      break
+      throw new Error(`Plunk activity poll stopped at the page limit (${pages} pages, ${items} items); older activity in the window was not read`)
     }
     const page = await listActivity({ types: TYPES, startDate, cursor, limit: activityPageLimit })
     pages++

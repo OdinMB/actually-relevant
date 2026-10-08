@@ -23,11 +23,18 @@ function compilesAsRegex(pattern: string): boolean {
   }
 }
 
+/**
+ * A group containing + or * that is itself repeated, e.g. (\w+\s?)+ or (.*)*: the shape that
+ * backtracks catastrophically. A heuristic, not a proof of safety; the crawl also caps the title.
+ */
+const NESTED_REPETITION = /\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)\s*[+*{]/
+
 /** A regex tested on an article's title; a match marks the article paywall-locked (ADR-0032). */
 const paywallTitleMarkerSchema = z.string()
   .min(1)
   .max(200, 'Title marker must be at most 200 characters')
   .refine(compilesAsRegex, 'Title marker must be a valid regular expression')
+  .refine(pattern => !NESTED_REPETITION.test(pattern), 'Title marker must not contain nested repetition')
 
 export const createFeedSchema = z.object({
   title: z.string().min(1, 'Title is required'),

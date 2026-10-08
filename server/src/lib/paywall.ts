@@ -113,10 +113,13 @@ function markupTier(markup: AccessMarkup, extractedText: string): AccessTier {
   return isTruncated(markup, extractedText) ? 'locked' : 'metered'
 }
 
+const TITLE_MARKER_MAX_CHARS = 300
+
 function titleMarkerMatches(marker: string | null, title: string | null): boolean {
   if (!marker || !title) return false
   try {
-    return new RegExp(marker).test(title)
+    // Publisher-controlled input on the main thread: cap it so a slow pattern stays bounded.
+    return new RegExp(marker).test(title.slice(0, TITLE_MARKER_MAX_CHARS))
   } catch (err) {
     log.warn({ marker, reason: err instanceof Error ? err.message : String(err) }, 'feed paywall title marker does not compile; ignored')
     return false

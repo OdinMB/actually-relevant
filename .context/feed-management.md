@@ -11,9 +11,9 @@ Creating a feed requires `title`, `rssUrl` and an `issueId` that exists. An unkn
 Two fields per feed (ADR-0032), shown in the create dialog and the edit panel (`FeedPaywallFields`). How the crawler applies them: `content-extraction.md`, "Access Classification".
 
 - **`paywallDetection`** ("Detect paywalled articles automatically", default on). Off, the markup rule never produces `locked`; what would have been locked is stored as `metered`. For a metered feed whose full-text articles the rule rejects.
-- **`paywallTitleMarker`** ("Subscriber-article title marker", optional regex, e.g. `^\(S\+\)` for SPIEGEL). A match on the article's title forces `locked`, whatever the markup or the checkbox say. For publishers without the schema.org tag, and for bot-blocked feeds that reach us only through the API tier, provided the API keeps the title prefix. Zod refuses a marker that does not compile or is over 200 characters (400 on create and update).
+- **`paywallTitleMarker`** ("Subscriber-article title marker", optional regex, e.g. `^\(S\+\)` for SPIEGEL). A match on the article's title forces `locked`, whatever the markup or the checkbox say. For publishers without the schema.org tag, and for bot-blocked feeds that reach us only through the API tier, provided the API keeps the title prefix. Zod refuses a marker that does not compile, is over 200 characters, or repeats a group that itself contains `+` or `*` (e.g. `(\w+\s?)+`, which backtracks catastrophically on the publisher-controlled title), with a 400 on create and update. The crawl tests only the title's first 300 characters.
 
-There is no "always locked" mode: that is the same as deactivating the feed. Changing either field affects future crawls only; stories already rejected as locked stay rejected (an editor can filter the story list by feed and "Paywall: Locked" and re-queue them).
+There is no "always locked" mode: that is the same as deactivating the feed. Changing either field affects future crawls only; stories already rejected as locked stay rejected (an editor can filter the story list by feed, Status "Rejected" and "Paywall: Locked" and re-queue them).
 
 ## Deleting Feeds (Soft Delete)
 

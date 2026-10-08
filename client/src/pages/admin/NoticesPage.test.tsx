@@ -82,6 +82,21 @@ describe('NoticesPage', () => {
     expect(mockApi.notices.markSeen).toHaveBeenCalledWith('n-1')
   })
 
+  it('does not mark a notice seen on expand in the unseen-only view, so it stays readable', async () => {
+    renderPage('/admin/notices?show=unseen')
+    await screen.findByText(UNSEEN.title)
+    fireEvent.click(within(rowOf(UNSEEN.title)).getByRole('button', { expanded: false }))
+    expect(within(rowOf(UNSEEN.title)).getByRole('button', { expanded: true })).toBeInTheDocument()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(mockApi.notices.markSeen).not.toHaveBeenCalled()
+  })
+
+  it('goes back to the last page that has notices when a later page empties', async () => {
+    mockApi.notices.list.mockResolvedValue({ items: [], total: 30, page: 3, limit: 25, unseenCount: 30 })
+    const { router } = renderPage('/admin/notices?show=unseen&page=3')
+    await waitFor(() => expect(router.state.location.search).toBe('?show=unseen&page=2'))
+  })
+
   it('marks all seen for the current source filter', async () => {
     renderPage('/admin/notices?source=plunk')
     await screen.findByText(UNSEEN.title)

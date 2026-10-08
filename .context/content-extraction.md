@@ -58,7 +58,7 @@ The feed's paywall setting applies after the markup rule (ADR-0032; fields in `f
 
 The classification runs whenever the page was fetched and is under `maxParseBytes`, against whichever tier's text won, **the API tier included**: a teaser under 300 characters falls through to Diffbot, and the HTML is still in hand. With no parseable HTML (fetch failed or bot-blocked, page over `maxParseBytes`, or `skipLocal` set for the rest of the crawl) the tier is `unknown`, unless the feed's title marker matches the API tier's title.
 
-**The teaser result.** When every tier fails on a page classified as `locked`, `extractContent()` returns `method: 'teaser'` with the page title and its `og:description`/meta description (or empty) as content, instead of `null`. `null` would count toward `skipLocal` and `skipAll` and the item would be retried, with a fresh API call, on every crawl while it stays in the RSS feed. The crawler counts `teaser` as a local success. A `shouldAbort` bail-out still returns `null`.
+**The teaser result.** When every tier fails on a page classified as `locked`, `extractContent()` returns `method: 'teaser'` with the page title and its `og:description`/meta description (or empty) as content, instead of `null`. `null` would count toward `skipLocal` and `skipAll` and the item would be retried, with a fresh API call, on every crawl while it stays in the RSS feed. The crawler counts `teaser` as a local success, and so any result classified `locked` (an API-tier win on a page whose HTML showed it locked): counting those as local failures would set `skipLocal` and switch classification off for the rest of a paywalled feed's crawl. A `shouldAbort` bail-out still returns `null`.
 
 **A locked story is created `rejected`, not `fetched`**, by `createStory()` (ADR-0031), so no model call is ever made for it and it never reaches any reader-facing surface; the override and its consequences are in `story-pipeline.md`. The crawler logs one info line per locked story stored.
 
@@ -108,7 +108,7 @@ URLs are normalized (HTTPS, no trailing slash, no tracking params, sorted query)
 - `POST /api/admin/feeds/:id/crawl` — trigger full RSS crawl for one feed
 - `POST /api/admin/feeds/crawl-all` — crawl all feeds that are due
 
-`crawl-url` normalizes the URL first. It rejects the request with "URL already crawled" when a story with that normalized URL already exists. It returns `null` and creates no story when every extraction tier fails. There is no RSS item here, so a missing title becomes "Untitled" and a missing publish date stays empty (`crawlUrl()` in `server/src/services/crawler.ts`).
+`crawl-url` normalizes the URL first. It rejects the request with "URL already crawled" when a story with that normalized URL already exists. It returns `null` and creates no story when every extraction tier fails, except on a page classified `locked`, where it stores the `teaser` result. Any URL classified `locked` is created `rejected` (ADR-0031), like a scheduled crawl's; the response and the "URL crawled successfully" toast do not say so, the story is found under the story list's Status "Rejected" and "Paywall: Locked" filters, and crawling the URL again returns "URL already crawled". There is no RSS item here, so a missing title becomes "Untitled" and a missing publish date stays empty (`crawlUrl()` in `server/src/services/crawler.ts`).
 
 ## Key Files
 

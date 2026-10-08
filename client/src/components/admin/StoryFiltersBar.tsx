@@ -46,6 +46,11 @@ export function StoryFiltersBar({ issues, feeds }: StoryFiltersBarProps) {
     } else {
       next.delete(key)
     }
+    // Locked stories are created rejected (ADR-0031), so "Locked" under the default Published
+    // status would always be empty.
+    if (key === 'accessTier' && value === 'locked' && next.get('status') === 'published') {
+      next.set('status', 'rejected')
+    }
     // Reset to page 1 on filter change
     next.delete('page')
     setSearchParams(next)

@@ -120,6 +120,12 @@ describe('classifyAccess', () => {
       expect(classifyAccess({ html, extractedText: longBody, title: null, policy }).accessTier).toBe('free')
     })
 
+    it('tests only the first 300 characters of a title', () => {
+      const marker = { detection: true, titleMarker: 'END$' }
+      expect(classifyAccess({ html: null, extractedText: longBody, title: `${'x'.repeat(296)}END`, policy: marker }).accessTier).toBe('locked')
+      expect(classifyAccess({ html: null, extractedText: longBody, title: `${'x'.repeat(400)}END`, policy: marker }).accessTier).toBe('unknown')
+    })
+
     it('ignores a marker that does not compile', () => {
       const html = page({ jsonLd: [{ '@type': 'NewsArticle', isAccessibleForFree: true }], meta: { 'og:title': '(S+) story' } })
       const broken = { detection: true, titleMarker: '(S+' }

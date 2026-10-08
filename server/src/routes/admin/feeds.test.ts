@@ -208,6 +208,8 @@ describe('Admin Feeds API', () => {
     it.each([
       ['an uncompilable regex', '(S+'],
       ['an over-long marker', 'a'.repeat(201)],
+      ['a marker with nested repetition', '^(\\w+\\s?)+:$'],
+      ['a marker with a repeated star group', '(.*)*\\(S\\+\\)'],
     ])('refuses %s on create and update', async (_label, marker) => {
       const created = await request(app).post('/api/admin/feeds').set(authHeader()).send({ ...newFeed, paywallTitleMarker: marker })
       const updated = await request(app).put('/api/admin/feeds/feed-1').set(authHeader()).send({ paywallTitleMarker: marker })
