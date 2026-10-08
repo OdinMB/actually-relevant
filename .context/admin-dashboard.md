@@ -1,6 +1,6 @@
 # Admin Dashboard
 
-The admin dashboard is a React SPA at `/admin/*` with 10 pages, JWT-based auth with httpOnly refresh cookies, and TanStack Query for data fetching.
+The admin dashboard is a React SPA at `/admin/*`, JWT-based auth with httpOnly refresh cookies, and TanStack Query for data fetching.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ The admin dashboard is a React SPA at `/admin/*` with 10 pages, JWT-based auth w
 ```
 /admin/login          → LoginPage (no auth)
 /admin                → AdminLayout (auth required)
-  /admin              → DashboardPage (stats + jobs health)
+  /admin              → DashboardPage (unseen notices card, stats, jobs health)
   /admin/stories      → StoriesPage (filters, table, bulk actions)
   /admin/stories/:id  → StoryDetailPage
   /admin/feeds        → FeedsPage
@@ -33,6 +33,8 @@ The admin dashboard is a React SPA at `/admin/*` with 10 pages, JWT-based auth w
   /admin/podcasts     → PodcastsPage
   /admin/podcasts/:id → PodcastDetailPage
   /admin/jobs         → JobsPage (auto-refreshes every 10s)
+  /admin/feedback     → FeedbackPage
+  /admin/notices      → NoticesPage (owner alerts; ?source=, ?show=unseen|all, ?page=)
   /admin/users        → UsersPage (admin-only user management)
 ```
 
@@ -46,6 +48,8 @@ The admin dashboard is a React SPA at `/admin/*` with 10 pages, JWT-based auth w
 - **Unsaved-changes guard** (on the podcast episode page, the story editor `StoryEditForm` as page and panel, and the issue editors, the `IssueEditPage` route, which compares its form with what it loaded, and the Issues list's `IssueEditPanel`): `useUnsavedChangesGuard(dirty)` returns `guard(action)` plus the state for its dialog, `UnsavedChangesDialog`; while dirty it also holds every in-app navigation to another path through react-router's `useBlocker` (a `Link`, a `navigate()` call, browser Back/Forward) in the same dialog, and asks on reload or close (`beforeunload`). A change of the search alone on the same path passes (it is the page's own URL state, such as `?tab=`; tab switches go through `guard`). A navigation that itself discards the edits passes `state: LEAVE_UNSAVED` (e.g. after deleting the episode); a save that then navigates calls `markSaved()` first, since the form has not re-rendered as clean when the navigation is checked. Cancel buttons that navigate ask like any other navigation. `useBlocker` needs the data router (`createBrowserRouter` in `main.tsx`), so a component test of a guarded page renders in a `createMemoryRouter`, as `renderInAdmin` (`client/src/test/podcasts.tsx`) and `renderAdminRoutes` (`client/src/test/admin.tsx`) do; a router allows one active blocker at a time, so a page mounts one guard. The story and issue lists' edit panels open and close through local state, not a navigation, so closing one with unsaved edits does not ask; leaving the list while it holds edits does
 - **Actions that cannot run now stay visible with their reason**: `ReasonButton` (`aria-disabled`, focusable, the reason as tooltip and `aria-describedby`) rather than a hidden or plainly disabled button. `Tooltip` (`components/ui/Tooltip.tsx`) opens on hover and keyboard focus, stays while hovered, closes on Escape, and keeps its text in the DOM for the description
 - **Sticky action bars** sit at the end of the page in flow (`sticky -bottom-4 lg:-bottom-6`, negative margins to the edges of `<main>`'s padding: `<main>` is the scroll container and a `bottom-0` would stick at its padding edge, leaving a strip below the bar that content scrolls through) rather than `fixed`, so they never cover content, and below the toasts (`z-10` against `z-50`)
+- **Sidebar badges**: `NavItems` takes a `badgeCounts` map (`layouts/navBadges.ts`), one per badged item: Feedback (unread count) and Notices (unseen count), each polled every 60 s. The Notices badge is red while any unseen notice is `critical`, brand-colored otherwise; the color is never the only signal, so a badged link's accessible name carries the count in words ("Notices, 3 unseen, 1 critical") and the visual badge is `aria-hidden`.
+- **Notices** (`.context/admin-notices.md`): the Notices page lists every owner alert newest occurrence first, 25 a page, with the source and unseen filters in the URL. An unseen row is tinted and carries an "Unseen" badge (text, not color alone); expanding a row or its Mark seen button marks it seen; "Mark all seen" applies to the current source filter without a confirm (a recurrence reopens a notice anyway). There is no delete: retention prunes. The Dashboard opens with an "Unseen notices" card (newest 5, hidden when there are none). Hooks in `hooks/useNotices.ts`; both mutations invalidate `['admin','notices']` and `['noticeCount']`.
 - **Carousel ZIP download** uses `response.blob()` + `URL.createObjectURL` + auto-click download
 - **Cron editing** is inline in the jobs table with save/cancel
 - **Issue slug** auto-generates from name in create mode

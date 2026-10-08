@@ -12,6 +12,7 @@ import { JobStatusBadge } from '../../components/admin/JobStatusBadge'
 import { ActionIconButton } from '../../components/ui/ActionIconButton'
 import { formatStatus, STATUS_VARIANTS, jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from '../../components/admin/TimeWithRelative'
+import { UnseenNoticesCard } from '../../components/admin/UnseenNoticesCard'
 import { useToast } from '../../components/ui/Toast'
 import { ApiError } from '../../lib/admin-api'
 
@@ -49,6 +50,8 @@ export default function DashboardPage() {
       </Helmet>
 
       <PageHeader title="Dashboard" description="Overview of stories and jobs" />
+
+      <UnseenNoticesCard />
 
       {/* Story Stats */}
       <section className="mb-8">

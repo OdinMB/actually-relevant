@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockWeekly = vi.hoisted(() => ({ runWeeklyEpisode: vi.fn() }))
-const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn(), hasAlertChannel: vi.fn() }))
+const mockNotify = vi.hoisted(() => ({ notify: vi.fn() }))
 const mockPrisma = vi.hoisted(() => ({
   podcast: { findUnique: vi.fn() },
   $executeRaw: vi.fn(),
@@ -67,19 +67,13 @@ describe('runGeneratePodcast', () => {
       mockWeekly.runWeeklyEpisode.mockResolvedValueOnce({ outcome, podcastId: 'pod-1', reason: 'blocked' })
       await expect(runGeneratePodcast(FRIDAY_1800)).resolves.toBeUndefined()
     }
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
-  it('with an alert channel, skips a still-blocked episode quietly: the block was alerted once', async () => {
-    mockNotify.hasAlertChannel.mockReturnValue(true)
-    mockWeekly.runWeeklyEpisode.mockResolvedValueOnce({ outcome: 'skipped', podcastId: 'pod-1', reason: 'blocked', stillBlocked: 'monthly TTS cap reached' })
+  it('skips a still-blocked episode on a later slot without throwing: its notice was recorded once', async () => {
+    mockWeekly.runWeeklyEpisode.mockResolvedValueOnce({ outcome: 'skipped', podcastId: 'pod-1', reason: 'blocked' })
     await expect(runGeneratePodcast(FRIDAY_1400)).resolves.toBeUndefined()
-  })
-
-  it('without an alert channel, fails again on a still-blocked episode, so the Jobs page keeps showing the error', async () => {
-    mockNotify.hasAlertChannel.mockReturnValue(false)
-    mockWeekly.runWeeklyEpisode.mockResolvedValueOnce({ outcome: 'skipped', podcastId: 'pod-1', reason: 'blocked', stillBlocked: 'monthly TTS cap reached' })
-    await expect(runGeneratePodcast(FRIDAY_1400)).rejects.toThrow(/still blocked: monthly TTS cap reached/)
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
   it('does not remind before Friday evening about an episode waiting for its person', async () => {
@@ -88,25 +82,25 @@ describe('runGeneratePodcast', () => {
       await runGeneratePodcast(now)
     }
     expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
   it('reminds once at the Friday evening slot, naming the episode, its stage and the admin link', async () => {
     mockWeekly.runWeeklyEpisode.mockResolvedValueOnce(waiting())
     await runGeneratePodcast(FRIDAY_1800)
     expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
-    const [title, message] = mockNotify.notifyEvent.mock.calls[0]
+    const [{ title, message, source, link }] = mockNotify.notify.mock.calls[0]
     expect(title).toMatch(/waiting/i)
+    expect({ source, link }).toEqual({ source: 'podcast', link: '/admin/podcasts/pod-1' })
     expect(message).toContain('W42: Water')
     expect(message).toContain('scripted')
-    expect(message).toContain('/admin/podcasts/pod-1')
   })
 
   it('sends no second reminder once the claim was taken by an earlier run or process', async () => {
     mockWeekly.runWeeklyEpisode.mockResolvedValueOnce(waiting())
     mockPrisma.$executeRaw.mockResolvedValueOnce(0)
     await runGeneratePodcast(new Date('2026-10-16T19:00:00Z'))
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
   it('does not remind while a person\'s run is in progress', async () => {
@@ -114,13 +108,13 @@ describe('runGeneratePodcast', () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(episode({ leaseUntil: new Date(FRIDAY_1800.getTime() + 60_000) }))
     await runGeneratePodcast(FRIDAY_1800)
     expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
   it('names a block in the reminder', async () => {
     mockWeekly.runWeeklyEpisode.mockResolvedValueOnce(waiting())
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(episode({ blockedReason: 'dialogue invalid' }))
     await runGeneratePodcast(FRIDAY_1800)
-    expect(mockNotify.notifyEvent.mock.calls[0][1]).toContain('dialogue invalid')
+    expect(mockNotify.notify.mock.calls[0][0].message).toContain('dialogue invalid')
   })
 })

@@ -1,22 +1,14 @@
 ---
 plan-id: 2026-10-08-admin-notices
 title: Keep every owner alert as an admin notice with an unseen badge, and poll Plunk for spam complaints and bounces
-status: approved
+status: implemented
 created: 2026-10-08
 author: claude-code (AI)
 repo: OdinMB/actually-relevant
 themes: [personal-data, vendor]
 decisions:
-  - id: ADR-0028
-    title: Record every owner alert as a row in admin_notices, shown in the admin, with WEBHOOK_URL only an optional forward
-    status: proposed
-    context: Without WEBHOOK_URL every job failure and podcast or signup notice is dropped, and the owner wants no chat channel; the admin is the only place he looks.
-    decision: One notify() writes an admin_notices row (source, severity, title, message, link, dedupe key, global seenAt) and then forwards to WEBHOOK_URL when it is set; a repeat of a dedupe key updates and reopens its one row.
-  - id: ADR-0029
-    title: Learn of Plunk spam complaints and permanent bounces by polling Plunk's activity API hourly, not through a Plunk webhook
-    status: proposed
-    context: One more complaint before about 5,800 total sends disables the Plunk project, and Plunk's webhooks are unretried dashboard workflow steps that stop once the project is disabled.
-    decision: A scheduled job reads GET /activity?types=email.complaint,email.bounced over a fixed trailing 30-day window on every run, records each activity id at most once (insert-only, never reopening), and keeps no recipient address.
+  - ref: .context/decisions/0028-admin-notices-store-every-owner-alert.md
+  - ref: .context/decisions/0029-poll-plunk-activity-for-complaints-and-bounces.md
 type: feature
 complexity: complex
 ---

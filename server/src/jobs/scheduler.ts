@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
-import { notifyJobFailure } from '../lib/notify.js'
+import { jobFailureNotice, notify } from '../lib/notify.js'
 import { config } from '../config.js'
 import { JOB_HANDLERS, JOB_PIPELINE_ORDER } from './handlers.js'
 import { jobTimeZone } from './jobTimeZones.js'
@@ -215,7 +215,7 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
     }
     log.error({ jobName, err }, 'job failed')
     await recordFailure(jobName, errorMsg)
-    notifyJobFailure(jobName, errorMsg).catch(() => {})
+    notify(jobFailureNotice(jobName, errorMsg)).catch(() => {})
   } finally {
     runningJobs.delete(jobName)
   }
@@ -300,10 +300,15 @@ export function startScheduler(): void {
     return
   }
   schedulerStopped = false
-  void attemptStart(1, false)
+  void attemptStart(1, null)
 }
 
-async function attemptStart(attempt: number, alerted: boolean): Promise<void> {
+/**
+ * One start attempt. `alertedReason` is the failure the boot alert named, once one was sent: that
+ * alert usually cannot be stored (the database is what is down), so a later successful start
+ * records a notice in its place.
+ */
+async function attemptStart(attempt: number, alertedReason: string | null): Promise<void> {
   initRetryTimer = null
   if (schedulerStopped) return
 
@@ -314,22 +319,29 @@ async function attemptStart(attempt: number, alerted: boolean): Promise<void> {
       stopScheduler()
       return
     }
-    if (alerted) log.info({ attempt }, 'scheduler started after earlier failures')
+    if (alertedReason !== null) {
+      log.info({ attempt }, 'scheduler started after earlier failures')
+      notify({
+        ...jobFailureNotice('scheduler', `scheduler started after ${attempt - 1} failed attempts: ${alertedReason}`),
+        title: 'Scheduler started after failures',
+      }).catch(() => {})
+    }
     return
   } catch (err) {
     const { initRetryBaseMs, initRetryMaxMs, initAlertAfterAttempts } = config.scheduler
     const delayMs = Math.min(initRetryBaseMs * 2 ** (attempt - 1), initRetryMaxMs)
     log.error({ err, attempt, retryInMs: delayMs }, 'scheduler initialization failed, retrying')
 
-    let nowAlerted = alerted
-    if (!alerted && attempt >= initAlertAfterAttempts) {
-      nowAlerted = true
+    let nowAlerted = alertedReason
+    if (alertedReason === null && attempt >= initAlertAfterAttempts) {
       const reason = err instanceof Error ? err.message : String(err)
+      nowAlerted = reason
       const retryMinutes = Math.round(initRetryMaxMs / 60_000)
-      notifyJobFailure(
-        'scheduler',
-        `scheduler could not start: ${reason}; retrying (backoff up to every ${retryMinutes} min)`,
-      ).catch(() => {})
+      notify({
+        ...jobFailureNotice('scheduler', `scheduler could not start: ${reason}; retrying (backoff up to every ${retryMinutes} min)`),
+        severity: 'critical',
+        title: 'Scheduler could not start',
+      }).catch(() => {})
     }
 
     if (schedulerStopped) return

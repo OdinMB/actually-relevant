@@ -31,6 +31,7 @@ export const JOB_DISPLAY_NAMES: Record<JobName, string> = {
   generate_newsletter: 'Generate Newsletter',
   generate_podcast: 'Generate Podcast',
   publish_podcast: 'Publish Podcast',
+  poll_plunk_activity: 'Plunk Complaints',
 }
 
 /**
@@ -54,6 +55,7 @@ export const JOB_PIPELINE_ORDER: JobName[] = [
   'generate_newsletter',
   'generate_podcast',
   'publish_podcast',
+  'poll_plunk_activity',
 ]
 
 const STATUS_LABELS: Partial<Record<string, string>> = {

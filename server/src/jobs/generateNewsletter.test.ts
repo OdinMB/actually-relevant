@@ -9,6 +9,9 @@ const mockSelectStoriesForNewsletter = vi.hoisted(() => vi.fn())
 const mockGenerateContent = vi.hoisted(() => vi.fn())
 const mockGenerateHtmlContent = vi.hoisted(() => vi.fn())
 const mockSendTest = vi.hoisted(() => vi.fn())
+const mockNotify = vi.hoisted(() => vi.fn())
+
+vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 
 vi.mock('../lib/prisma.js', () => ({
   default: {
@@ -126,12 +129,21 @@ describe('runGenerateNewsletter', () => {
     expect(mockSendTest).toHaveBeenCalledWith('nl-42')
   })
 
-  it('skips silently when no recent published stories', async () => {
+  it('skips with one notice keyed to the week when no recent published stories', async () => {
     mockCount.mockResolvedValue(0)
 
     await runGenerateNewsletter()
 
     expect(mockCreateNewsletter).not.toHaveBeenCalled()
+    expect(mockNotify).toHaveBeenCalledOnce()
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'newsletter', severity: 'warning', dedupeKey: 'newsletter-no-stories:2026-W08',
+    }))
+  })
+
+  it('records no notice when it builds the issue', async () => {
+    await runGenerateNewsletter()
+    expect(mockNotify).not.toHaveBeenCalled()
   })
 
   it('skips when a built issue already has this week\'s key', async () => {

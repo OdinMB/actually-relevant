@@ -10,7 +10,7 @@
  */
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { notifyEvent } from '../lib/notify.js'
+import { notify } from '../lib/notify.js'
 import { assertJobEnabled, assertPodcastRunnable, PodcastStoppedError } from '../services/podcastGuards.js'
 import { pickAutoPublishCandidate, publishEpisode } from '../services/podcastPublish.js'
 import { alertMissedWeek } from '../services/podcastMissedWeek.js'
@@ -56,8 +56,11 @@ export async function runPublishPodcast(now: Date = new Date()): Promise<void> {
     return
   }
   await publishEpisode(candidate.id, now)
-  await notifyEvent('Podcast episode published', [
-    `${candidate.title} (${candidate.weekKey}) is now in the feed and on /podcast.`,
-    `Unpublish if needed: ${config.clientUrl}/admin/podcasts/${candidate.id}`,
-  ].join('\n'))
+  await notify({
+    source: 'podcast',
+    severity: 'info',
+    title: 'Podcast episode published',
+    message: `${candidate.title} (${candidate.weekKey}) is now in the feed and on /podcast. Unpublish it from the episode page if needed.`,
+    link: `/admin/podcasts/${candidate.id}`,
+  })
 }

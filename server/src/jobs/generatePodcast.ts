@@ -1,15 +1,15 @@
 /**
  * The generate_podcast cron entry (ADR-0013). It fires at several Friday slots; inside the UTC
  * Friday window it runs this week's episode automated (podcastWeekly.ts holds the retry, attempt
- * cap and block policy, and sends the ready notice). A block throws, so the scheduler alerts once;
- * later slots skip the blocked episode, and fail again only where no alert channel is set, so the
- * Jobs page keeps showing the error. An episode a person runs interactively is left alone, and
- * on Friday evening the owner gets one reminder that it is waiting for him.
+ * cap and block policy, and sends the ready notice). A block throws, so the scheduler records one
+ * job-failure notice; later slots skip the blocked episode quietly, and the notice stays unseen
+ * until the owner opens it. An episode a person runs interactively is left alone, and on Friday
+ * evening the owner gets one reminder that it is waiting for him.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { hasAlertChannel, notifyEvent } from '../lib/notify.js'
+import { notify } from '../lib/notify.js'
 import { runWeeklyEpisode } from '../services/podcastWeekly.js'
 
 const log = createLogger('generate_podcast')
@@ -41,9 +41,14 @@ async function remindWaitingEpisode(id: string, now: Date): Promise<void> {
   const lines = [
     `${episode.title} is at "${episode.stage}" in interactive mode; the weekly automatic run leaves it to you.`,
     ...(episode.blockedReason ? [`Blocked: ${episode.blockedReason}`] : []),
-    `Continue it: ${config.clientUrl}/admin/podcasts/${id}`,
   ]
-  await notifyEvent('Podcast episode waiting for you', lines.join('\n'))
+  await notify({
+    source: 'podcast',
+    severity: 'info',
+    title: 'Podcast episode waiting for you',
+    message: lines.join('\n'),
+    link: `/admin/podcasts/${id}`,
+  })
   log.info({ podcastId: id }, 'sent the waiting-episode reminder')
 }
 
@@ -54,7 +59,5 @@ export async function runGeneratePodcast(now: Date = new Date()): Promise<void> 
   }
   const result = await runWeeklyEpisode({ trigger: 'cron', now })
   if (result.outcome === 'blocked') throw new Error(`podcast episode ${result.podcastId} blocked: ${result.reason ?? 'unknown reason'}`)
-  // With no alert channel the Jobs page is the only alert, so a later slot keeps the error showing.
-  if (result.stillBlocked && !hasAlertChannel()) throw new Error(`podcast episode ${result.podcastId} still blocked: ${result.stillBlocked}`)
   if (result.waitingForPerson && now.getUTCHours() >= config.podcast.reminderFromHourUtc) await remindWaitingEpisode(result.podcastId, now)
 }

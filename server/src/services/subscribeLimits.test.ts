@@ -6,10 +6,10 @@ const mockPrisma = vi.hoisted(() => ({
     count: vi.fn(),
   },
 }))
-const mockNotifyEvent = vi.hoisted(() => vi.fn())
+const mockNotify = vi.hoisted(() => vi.fn())
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
-vi.mock('../lib/notify.js', () => ({ notifyEvent: mockNotifyEvent }))
+vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 
 const { config } = await import('../config.js')
 
@@ -28,7 +28,7 @@ describe('checkSendAllowance', () => {
     vi.setSystemTime(new Date('2026-10-08T12:00:00Z'))
     mockPrisma.pendingSubscription.findFirst.mockResolvedValue(null)
     mockPrisma.pendingSubscription.count.mockResolvedValue(0)
-    mockNotifyEvent.mockResolvedValue(undefined)
+    mockNotify.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -50,7 +50,7 @@ describe('checkSendAllowance', () => {
     expect(where.email).toBe('a@example.com')
     expect(where.confirmedAt).toBeNull()
     expect(where.createdAt.gt.getTime()).toBe(Date.now() - config.subscribe.perAddressWindowHours * HOUR_MS)
-    expect(mockNotifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify).not.toHaveBeenCalled()
   })
 
   it('refuses at the hourly cap and alerts the owner once, without the address', async () => {
@@ -59,8 +59,9 @@ describe('checkSendAllowance', () => {
 
     expect(await checkSendAllowance('victim@example.com')).toBe('global-cap')
     expect(mockPrisma.pendingSubscription.count.mock.calls[0][0].where.createdAt.gt.getTime()).toBe(Date.now() - HOUR_MS)
-    expect(mockNotifyEvent).toHaveBeenCalledTimes(1)
-    expect(JSON.stringify(mockNotifyEvent.mock.calls[0])).not.toContain('victim@example.com')
+    expect(mockNotify).toHaveBeenCalledTimes(1)
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ source: 'subscriptions', severity: 'warning', dedupeKey: 'signup-cap' }))
+    expect(JSON.stringify(mockNotify.mock.calls[0])).not.toContain('victim@example.com')
   })
 
   it('allows a send just below the cap', async () => {
@@ -77,10 +78,10 @@ describe('checkSendAllowance', () => {
     await checkSendAllowance('a@example.com')
     vi.setSystemTime(Date.now() + 30 * 60 * 1000)
     expect(await checkSendAllowance('b@example.com')).toBe('global-cap')
-    expect(mockNotifyEvent).toHaveBeenCalledTimes(1)
+    expect(mockNotify).toHaveBeenCalledTimes(1)
 
     vi.setSystemTime(Date.now() + HOUR_MS)
     await checkSendAllowance('c@example.com')
-    expect(mockNotifyEvent).toHaveBeenCalledTimes(2)
+    expect(mockNotify).toHaveBeenCalledTimes(2)
   })
 })

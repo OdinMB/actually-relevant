@@ -295,7 +295,7 @@ export const config = {
     // delay starts at initRetryBaseMs and doubles up to initRetryMaxMs, forever.
     initRetryBaseMs: 5_000,
     initRetryMaxMs: 5 * 60_000,
-    // One notifyJobFailure alert after this many failed attempts.
+    // One critical notice (notify) after this many failed attempts.
     initAlertAfterAttempts: 3,
     // SCHEDULER_ENABLED=false (or 0/no/off) schedules nothing in this process, e.g. a second
     // process against the production database; the admin Run button still works there.
@@ -348,6 +348,17 @@ export const config = {
     testSegmentId: process.env.PLUNK_TEST_SEGMENT_ID || "",
 
     baseUrl: "https://next-api.useplunk.com",
+    // The poll_plunk_activity job (ADR-0029): every run reads this trailing window of complaints
+    // and bounces, whatever earlier runs saw; each event is recorded once by its activity id.
+    activityLookbackDays: 30,
+    activityPageLimit: 20,
+    activityMaxPages: 20,
+    // Activity items carry the email's body in metadata, so a page is far larger than the client's 1 MB cap.
+    activityMaxResponseBytes: 5 * 1024 * 1024,
+  },
+  notices: {
+    // Seen admin notices older than this (by last occurrence) are deleted; unseen ones are kept.
+    retentionDays: 90,
   },
   subscribe: {
     confirmTokenExpiryHours: parseInt(

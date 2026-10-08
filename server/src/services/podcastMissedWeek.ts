@@ -8,7 +8,7 @@ import { ContentStatus, PodcastStage, type Podcast } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { notifyEvent } from '../lib/notify.js'
+import { notify } from '../lib/notify.js'
 import { publishRefusal, unfinishedReason } from './podcastPublish.js'
 import { isoWeekKey } from './podcastWeekly.js'
 
@@ -62,6 +62,11 @@ export async function alertMissedWeek(now: Date): Promise<void> {
     return
   }
   log.warn({ weekKey, reason, podcastId: episode?.id }, 'no podcast episode to publish this Saturday')
-  const link = `${config.clientUrl}/admin/podcasts${episode ? `/${episode.id}` : ''}`
-  await notifyEvent(MISSED_WEEK_TITLE, `${weekKey}: ${reason}.\nOpen: ${link}`)
+  await notify({
+    source: 'podcast',
+    severity: 'warning',
+    title: MISSED_WEEK_TITLE,
+    message: `${weekKey}: ${reason}.`,
+    link: `/admin/podcasts${episode ? `/${episode.id}` : ''}`,
+  })
 }

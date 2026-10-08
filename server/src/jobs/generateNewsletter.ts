@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { StoryStatus } from '@prisma/client'
 import { createLogger } from '../lib/logger.js'
+import { notify } from '../lib/notify.js'
 import {
   createNewsletter,
   assignStories,
@@ -74,22 +75,32 @@ async function checkWeeklySlot(now: Date, weekKey: string): Promise<'proceed' | 
 }
 
 export async function runGenerateNewsletter(): Promise<void> {
+  const now = new Date()
+  const weekKey = getWeekKey(now)
+  const days = config.content.storyAssignmentDays
   // Must match the query in newsletter.assignStories() to avoid false positives
   const count = await prisma.story.count({
     where: {
       status: StoryStatus.published,
-      dateCrawled: { gte: new Date(Date.now() - config.content.storyAssignmentDays * DAY_MS) },
+      dateCrawled: { gte: new Date(now.getTime() - days * DAY_MS) },
     },
   })
 
   if (count === 0) {
-    log.info('no recent published stories, skipping newsletter generation')
+    log.warn({ weekKey }, 'no recent published stories, skipping newsletter generation')
+    // A stalled pipeline would otherwise mean a week with no newsletter and no word about it.
+    await notify({
+      source: 'newsletter',
+      severity: 'warning',
+      title: 'No newsletter this week',
+      message: `No published story was crawled in the last ${days} days; check the Jobs page (crawl, assess, publish).`,
+      link: '/admin/jobs',
+      dedupeKey: `newsletter-no-stories:${weekKey}`,
+    })
     return
   }
 
-  const now = new Date()
   const title = getWeekTitle(now)
-  const weekKey = getWeekKey(now)
 
   if (await checkWeeklySlot(now, weekKey) === 'skip') return
 

@@ -7,7 +7,6 @@ import { validateBody } from '../../middleware/validate.js'
 import { updateJobSchema } from '../../schemas/job.js'
 import { JOB_HANDLERS } from '../../jobs/handlers.js'
 import { getJobs, updateJob } from '../../services/job.js'
-import { hasAlertChannel } from '../../lib/notify.js'
 
 const router = Router()
 const log = createLogger('jobs')
@@ -27,11 +26,6 @@ router.get('/server-time', (_req, res) => {
     time: new Date().toISOString(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   })
-})
-
-/** Whether job failures and podcast notices reach anyone outside the admin (WEBHOOK_URL is set). */
-router.get('/alert-channel', (_req, res) => {
-  res.json({ configured: hasAlertChannel() })
 })
 
 router.put('/:jobName', validateBody(updateJobSchema), async (req, res) => {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockPublish = vi.hoisted(() => ({ pickAutoPublishCandidate: vi.fn(), publishEpisode: vi.fn() }))
 const mockGuards = vi.hoisted(() => ({ assertJobEnabled: vi.fn(), assertPodcastRunnable: vi.fn() }))
-const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn() }))
+const mockNotify = vi.hoisted(() => ({ notify: vi.fn() }))
 
 vi.mock('../services/podcastPublish.js', () => mockPublish)
 vi.mock('../services/podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('../services/podcastGuards.js')>()), ...mockGuards }))
@@ -53,7 +53,9 @@ describe('runPublishPodcast', () => {
     await runPublishPodcast(SATURDAY)
     expect(mockPublish.pickAutoPublishCandidate).toHaveBeenCalledWith(SATURDAY)
     expect(mockPublish.publishEpisode).toHaveBeenCalledWith('pod-1', SATURDAY)
-    expect(mockNotify.notifyEvent.mock.calls[0][1]).toContain('W42: Water')
+    expect(mockNotify.notify).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'podcast', severity: 'info', link: '/admin/podcasts/pod-1', message: expect.stringContaining('W42: Water'),
+    }))
   })
 
   it('does nothing on a day other than Saturday in Berlin, so a boot catch-up never publishes on another day', async () => {
@@ -75,7 +77,7 @@ describe('runPublishPodcast', () => {
     mockPublish.pickAutoPublishCandidate.mockResolvedValueOnce(null)
     await runPublishPodcast(SATURDAY)
     expect(mockPublish.publishEpisode).not.toHaveBeenCalled()
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
     expect(mockMissed.alertMissedWeek).toHaveBeenCalledWith(SATURDAY)
   })
 
@@ -109,6 +111,6 @@ describe('runPublishPodcast', () => {
   it('fails when publishing is refused, so the owner learns the episode was not published', async () => {
     mockPublish.publishEpisode.mockRejectedValueOnce(new PodcastRefusedError('the edited AI line awaits confirmation'))
     await expect(runPublishPodcast(SATURDAY)).rejects.toBeInstanceOf(PodcastRefusedError)
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 })

@@ -17,7 +17,7 @@ const mockGuards = vi.hoisted(() => ({
   episodeTtsChars: vi.fn(async () => 5400),
   monthToDateChars: vi.fn(async () => 10_800),
 }))
-const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn() }))
+const mockNotify = vi.hoisted(() => ({ notify: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastPipeline.js', () => mockPipeline)
@@ -120,9 +120,9 @@ describe('runWeeklyEpisode', () => {
     expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
   })
 
-  it('skips a blocked episode on the cron trigger, passing on why it is blocked', async () => {
+  it('skips a blocked episode on the cron trigger', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ blockedAt: new Date(), blockedReason: 'monthly TTS cap reached' }))
-    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'skipped', stillBlocked: 'monthly TTS cap reached' })
+    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'skipped', reason: 'blocked' })
     expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
   })
 
@@ -188,18 +188,17 @@ describe('runWeeklyEpisode', () => {
     mockPipeline.advanceEpisode.mockResolvedValueOnce({ status: 'done', stage: 'ready' })
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ stage: 'ready', title: 'The week in water', durationSec: 342 }))
     await runWeeklyEpisode({ trigger: 'cron', now: NOW })
-    const [title, message] = mockNotify.notifyEvent.mock.calls[0]
-    expect(title).toBe('Podcast episode ready')
+    const [{ source, severity, message, link }] = mockNotify.notify.mock.calls[0]
+    expect({ source, severity, link }).toEqual({ source: 'podcast', severity: 'info', link: '/admin/podcasts/pod-1' })
     expect(message).toContain('The week in water')
     expect(message).toContain('5:42')
     expect(message).toContain('5400')
-    expect(message).toContain('/admin/podcasts/pod-1')
   })
 
   it('sends no notice for a run that stops short of ready', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row())
     await runWeeklyEpisode({ trigger: 'admin', now: NOW })
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
   it('resets a dry-run row before advancing when the config is live', async () => {

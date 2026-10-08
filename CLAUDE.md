@@ -133,6 +133,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `decisions.md` | Architectural decision log: the index, with one file per decision in `.context/decisions/`; append-only history |
 | `podcast.md` | Two-speaker podcast, weekly and standalone episodes (kind, person-chosen stories, copy gate): stages, lease, weekly run and blocks, interactive/automated modes, a person's edits and rewinds, progress toast, selection and dialogue rules (segues), ElevenLabs voicing, ffmpeg assembly, Bunny storage (never reuse a file name), spend cap, dry run, publish/unpublish rules, the RSS feed and `/podcast` page, admin endpoints, the Friday generate and Saturday (Berlin) auto-publish jobs |
 | `authentication.md` | JWT flow, cookie config, token rotation and reuse rules, roles |
+| `admin-notices.md` | Owner alerts: `notify()` records every alert as an admin notice (optional `WEBHOOK_URL` forward), dedupe and reopen, global seen, retention, no personal data; the hourly Plunk complaint and bounce poll |
 | `subscription.md` | Double opt-in newsletter signup: server switch (`SUBSCRIPTIONS_ENABLED`), bot gate (honeypot, form token, Turnstile), per-address and hourly send limits, Plunk, contact cleanup |
 | `admin-dashboard.md` | TanStack Query patterns, URL-persisted filters, bulk actions |
 | `public-website.md` | Routes, positivity slider, RSS feeds, design system |

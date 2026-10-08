@@ -1,93 +1,31 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-const mockAxiosPost = vi.fn()
-vi.mock('axios', () => ({
-  default: { post: mockAxiosPost },
-}))
+const mockAxiosPost = vi.hoisted(() => vi.fn())
+vi.mock('axios', () => ({ default: { post: mockAxiosPost } }))
 
-const { notifyJobFailure, notifyEvent, hasAlertChannel } = await import('./notify.js')
+const mockRecordNotice = vi.hoisted(() => vi.fn())
+vi.mock('../services/adminNotices.js', () => ({ recordNotice: mockRecordNotice }))
 
-describe('hasAlertChannel', () => {
-  const originalEnv = process.env.WEBHOOK_URL
-  afterEach(() => {
-    if (originalEnv !== undefined) process.env.WEBHOOK_URL = originalEnv
-    else delete process.env.WEBHOOK_URL
-  })
+const { notify, jobFailureNotice } = await import('./notify.js')
+const { config } = await import('../config.js')
 
-  it('is true only when WEBHOOK_URL is set to something', () => {
-    delete process.env.WEBHOOK_URL
-    expect(hasAlertChannel()).toBe(false)
-    process.env.WEBHOOK_URL = ''
-    expect(hasAlertChannel()).toBe(false)
-    process.env.WEBHOOK_URL = 'https://hooks.example.com/webhook'
-    expect(hasAlertChannel()).toBe(true)
-  })
-})
+const WEBHOOK = 'https://hooks.example.com/webhook'
+const notice = {
+  source: 'podcast' as const,
+  severity: 'info' as const,
+  title: 'Podcast episode ready',
+  message: 'Week 41, 5:42',
+  link: '/admin/podcasts/pod-1',
+}
 
-describe('notifyJobFailure', () => {
+describe('notify', () => {
   const originalEnv = process.env.WEBHOOK_URL
 
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.WEBHOOK_URL
-  })
-
-  afterEach(() => {
-    if (originalEnv !== undefined) {
-      process.env.WEBHOOK_URL = originalEnv
-    } else {
-      delete process.env.WEBHOOK_URL
-    }
-  })
-
-  it('does nothing when WEBHOOK_URL is not set', async () => {
-    await notifyJobFailure('crawl_feeds', 'connection timeout')
-    expect(mockAxiosPost).not.toHaveBeenCalled()
-  })
-
-  it('sends POST to WEBHOOK_URL with job failure details', async () => {
-    process.env.WEBHOOK_URL = 'https://hooks.example.com/webhook'
+    mockRecordNotice.mockResolvedValue(true)
     mockAxiosPost.mockResolvedValue({ status: 200 })
-
-    await notifyJobFailure('crawl_feeds', 'connection timeout')
-
-    expect(mockAxiosPost).toHaveBeenCalledWith(
-      'https://hooks.example.com/webhook',
-      expect.objectContaining({
-        content: 'Job **crawl_feeds** failed: connection timeout',
-        text: 'Job "crawl_feeds" failed: connection timeout',
-        jobName: 'crawl_feeds',
-        error: 'connection timeout',
-        timestamp: expect.any(String),
-      }),
-      { timeout: 5000, maxContentLength: 1 * 1024 * 1024 },
-    )
-  })
-
-  it('includes ISO timestamp in payload', async () => {
-    process.env.WEBHOOK_URL = 'https://hooks.example.com/webhook'
-    mockAxiosPost.mockResolvedValue({ status: 200 })
-
-    await notifyJobFailure('assess_stories', 'rate limit')
-
-    const payload = mockAxiosPost.mock.calls[0][1]
-    expect(() => new Date(payload.timestamp).toISOString()).not.toThrow()
-  })
-
-  it('does not throw when webhook request fails', async () => {
-    process.env.WEBHOOK_URL = 'https://hooks.example.com/webhook'
-    mockAxiosPost.mockRejectedValue(new Error('network error'))
-
-    await expect(notifyJobFailure('crawl_feeds', 'oops')).resolves.toBeUndefined()
-  })
-})
-
-describe('notifyEvent', () => {
-  const originalEnv = process.env.WEBHOOK_URL
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    delete process.env.WEBHOOK_URL
   })
 
   afterEach(() => {
@@ -95,19 +33,59 @@ describe('notifyEvent', () => {
     else delete process.env.WEBHOOK_URL
   })
 
-  it('is silent without WEBHOOK_URL', async () => {
-    await notifyEvent('Podcast episode ready', 'details')
+  it('records the notice and posts nothing without WEBHOOK_URL', async () => {
+    await notify(notice)
+    expect(mockRecordNotice).toHaveBeenCalledWith(notice, {})
     expect(mockAxiosPost).not.toHaveBeenCalled()
   })
 
-  it('posts the title and message', async () => {
-    process.env.WEBHOOK_URL = 'https://hooks.example.com/webhook'
-    mockAxiosPost.mockResolvedValue({ status: 200 })
-    await notifyEvent('Podcast episode ready', 'Week 41, 5:42')
-    expect(mockAxiosPost).toHaveBeenCalledWith(
-      'https://hooks.example.com/webhook',
-      expect.objectContaining({ title: 'Podcast episode ready', message: 'Week 41, 5:42', content: '**Podcast episode ready**\nWeek 41, 5:42', timestamp: expect.any(String) }),
-      { timeout: 5000, maxContentLength: 1 * 1024 * 1024 },
-    )
+  it('records and then forwards when WEBHOOK_URL is set, with the absolute link in the text', async () => {
+    process.env.WEBHOOK_URL = WEBHOOK
+    await notify(notice)
+    expect(mockRecordNotice).toHaveBeenCalledOnce()
+    const [url, payload] = mockAxiosPost.mock.calls[0]
+    expect(url).toBe(WEBHOOK)
+    expect(payload).toMatchObject({ title: notice.title, message: notice.message, source: 'podcast', severity: 'info' })
+    expect(payload.text).toContain(`${config.clientUrl}/admin/podcasts/pod-1`)
+    expect(payload.content).toContain(`${config.clientUrl}/admin/podcasts/pod-1`)
+  })
+
+  it('passes the record options through (insert-only)', async () => {
+    await notify(notice, { reopen: false })
+    expect(mockRecordNotice).toHaveBeenCalledWith(notice, { reopen: false })
+  })
+
+  it('does not forward an insert-only repeat that was skipped', async () => {
+    process.env.WEBHOOK_URL = WEBHOOK
+    mockRecordNotice.mockResolvedValueOnce(false)
+    await notify(notice, { reopen: false })
+    expect(mockAxiosPost).not.toHaveBeenCalled()
+  })
+
+  it('still posts when recording fails (the database is down) and does not throw', async () => {
+    process.env.WEBHOOK_URL = WEBHOOK
+    mockRecordNotice.mockRejectedValueOnce(new Error('db down'))
+    await expect(notify(notice)).resolves.toBeUndefined()
+    expect(mockAxiosPost).toHaveBeenCalledOnce()
+  })
+
+  it('resolves when the post fails', async () => {
+    process.env.WEBHOOK_URL = WEBHOOK
+    mockAxiosPost.mockRejectedValueOnce(new Error('network error'))
+    await expect(notify(notice)).resolves.toBeUndefined()
+  })
+})
+
+describe('jobFailureNotice', () => {
+  it('files newsletter and podcast jobs under their product, with its page', () => {
+    expect(jobFailureNotice('generate_newsletter', 'x')).toMatchObject({ source: 'newsletter', link: '/admin/newsletters' })
+    expect(jobFailureNotice('generate_podcast', 'x')).toMatchObject({ source: 'podcast', link: '/admin/podcasts' })
+    expect(jobFailureNotice('publish_podcast', 'x')).toMatchObject({ source: 'podcast', link: '/admin/podcasts' })
+  })
+
+  it('files every other job under jobs, keyed by job name', () => {
+    expect(jobFailureNotice('crawl_feeds', 'timeout')).toMatchObject({
+      source: 'jobs', severity: 'warning', link: '/admin/jobs', message: 'timeout', dedupeKey: 'job-failure:crawl_feeds',
+    })
   })
 })

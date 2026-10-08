@@ -48,6 +48,7 @@ export type JobName =
   | 'generate_newsletter'
   | 'generate_podcast'
   | 'publish_podcast'
+  | 'poll_plunk_activity'
 
 export type JobStatus = 'idle' | 'running' | 'failed'
 

@@ -41,7 +41,7 @@ Order matters; every gate runs before any side effect:
 6. **Already confirmed** → success reply, nothing done. Unconfirmed rows do not short-circuit.
 7. **Send limits** (`services/subscribeLimits.ts`, `checkSendAllowance`), counted from `pending_subscriptions` rows in Postgres so they survive deploys:
    - an unconfirmed row for this address newer than `perAddressWindowHours` → success reply, nothing written or sent (same reply as a real signup);
-   - `globalHourlyMax` rows created in the last hour → `success: false`, "try again later", and one owner alert through `notifyEvent` (`WEBHOOK_URL`) at most once per hour per process. The alert carries no address.
+   - `globalHourlyMax` rows created in the last hour → `success: false`, "try again later", and one owner alert at most once per hour per process: a `subscriptions` / `warning` admin notice (key `signup-cap`, so a repeat reopens the one row; `.context/admin-notices.md`), forwarded to `WEBHOOK_URL` when that is set. The alert carries no address.
 8. **Email verification via Plunk is best-effort.** Explicit failure (bad format, no MX, disposable) rejects the signup; if the verify API errors, the check is skipped.
 9. **Re-subscribe:** delete unconfirmed rows for the address (only rows older than the per-address window can be there).
 10. Create the `PendingSubscription` (single-use UUID `token`, `plunkContactId: null`, `expiresAt = now + confirmTokenExpiryHours`) and send the confirmation email. **If the send fails, the row is deleted again**, so each row stands for exactly one sent email and the limits count exactly.

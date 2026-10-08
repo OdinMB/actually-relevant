@@ -29,3 +29,5 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0022 · Derive the per-address and global confirmation-email limits from pending_subscriptions rows](decisions/0022-send-limits-from-pending-subscription-rows.md)
 - [ADR-0023 · Store subscriber email addresses trimmed and lowercased, and lowercase existing rows by migration](decisions/0023-store-subscriber-emails-normalized.md)
 - [ADR-0024 · Load Cloudflare Turnstile only when the visitor submits the signup form, as ADR-0021 otherwise](decisions/0024-turnstile-loads-only-on-signup-submit.md)
+- [ADR-0028 · Record every owner alert as a row in admin_notices, shown in the admin, with WEBHOOK_URL only an optional forward](decisions/0028-admin-notices-store-every-owner-alert.md)
+- [ADR-0029 · Learn of Plunk spam complaints and permanent bounces by polling Plunk's activity API hourly, not through a Plunk webhook](decisions/0029-poll-plunk-activity-for-complaints-and-bounces.md)

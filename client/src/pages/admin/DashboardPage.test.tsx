@@ -39,6 +39,9 @@ vi.mock('../../lib/admin-api', () => ({
       ]),
       run: vi.fn().mockResolvedValue({ message: 'Job triggered' }),
     },
+    notices: {
+      list: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 5, unseenCount: 0 }),
+    },
   },
   ApiError: class ApiError extends Error {
     status: number

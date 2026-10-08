@@ -62,6 +62,12 @@ async function main() {
       update: {},
       create: { jobName: 'publish_podcast', cronExpression: '0 7 * * 6', enabled: false },
     }),
+    // Hourly read of Plunk spam complaints and bounces (ADR-0029)
+    prisma.jobRun.upsert({
+      where: { jobName: 'poll_plunk_activity' },
+      update: {},
+      create: { jobName: 'poll_plunk_activity', cronExpression: '20 * * * *', enabled: false },
+    }),
   ])
 
   console.log(`Seeded ${jobs.length} job runs (all disabled)`)

@@ -446,6 +446,28 @@ model Feedback {
   @@map("feedback")
 }
 
+// --- Admin notices (.context/admin-notices.md) ---
+
+// Every owner alert: job failures, podcast and newsletter notices, the signup cap, Plunk
+// complaints and bounces. `source` and `severity` are checked in services/adminNotices.ts, not
+// Postgres enums, so a new source needs no migration. A repeat of a `dedupeKey` folds into its row.
+model AdminNotice {
+  id              String    @id @default(uuid())
+  source          String
+  severity        String
+  title           String
+  message         String
+  link            String?
+  dedupeKey       String?   @unique @map("dedupe_key")
+  count           Int       @default(1)
+  firstOccurredAt DateTime  @default(now()) @map("first_occurred_at")
+  lastOccurredAt  DateTime  @default(now()) @map("last_occurred_at")
+  seenAt          DateTime? @map("seen_at")
+
+  @@index([seenAt, lastOccurredAt])
+  @@map("admin_notices")
+}
+
 // --- Auth Tables ---
 
 model User {

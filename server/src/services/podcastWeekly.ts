@@ -10,7 +10,7 @@ import { ContentStatus, PodcastStage, type Podcast, type PodcastMode } from '@pr
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { notifyEvent } from '../lib/notify.js'
+import { notify } from '../lib/notify.js'
 import {
   advanceEpisode, claimEpisode, defaultEpisodeTitle, releaseEpisode, rewindEpisode, LeaseLostError,
   type AdvanceTrigger, type RewindTarget,
@@ -29,8 +29,6 @@ export interface WeeklyResult {
   reason?: string
   /** Skipped because a person runs the episode interactively: it waits for them, not for the job. */
   waitingForPerson?: true
-  /** Skipped on the cron trigger because an earlier run blocked the episode: the block's reason. */
-  stillBlocked?: string
 }
 
 /**
@@ -93,9 +91,14 @@ async function announceReady(id: string, now: Date): Promise<void> {
     const lines = [
       `${episode.title}${episode.dryRun ? ' (dry run, silent stub voice)' : ''}`,
       `Duration ${minutesSeconds(episode.durationSec ?? 0)}; TTS characters this episode ${episodeChars}, this month ${monthChars} of ${config.podcast.monthlyTtsCharCap}.`,
-      `Listen and publish: ${config.clientUrl}/admin/podcasts/${id}`,
     ]
-    await notifyEvent('Podcast episode ready', lines.join('\n'))
+    await notify({
+      source: 'podcast',
+      severity: 'info',
+      title: 'Podcast episode ready',
+      message: lines.join('\n'),
+      link: `/admin/podcasts/${id}`,
+    })
   } catch (err) {
     log.warn({ err, podcastId: id }, 'could not send the podcast ready notice')
   }
@@ -135,7 +138,7 @@ async function runEpisode(episode: Podcast, { trigger, now, leaseHeld }: RunOpti
     return { ...result('skipped', 'interactive: the owner is reviewing it'), waitingForPerson: true }
   }
   if (episode.blockedAt) {
-    if (trigger === 'cron') return { ...result('skipped', 'blocked'), stillBlocked: episode.blockedReason ?? 'unknown reason' }
+    if (trigger === 'cron') return result('skipped', 'blocked')
     await clearBlock(id)
   } else if (trigger === 'admin' && episode.attempts > 0) {
     await clearBlock(id)

@@ -5,7 +5,7 @@ const mockPrisma = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
   podcast: { findUnique: vi.fn() },
 }))
-const mockNotify = vi.hoisted(() => ({ notifyEvent: vi.fn() }))
+const mockNotify = vi.hoisted(() => ({ notify: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../lib/notify.js', () => mockNotify)
@@ -78,21 +78,23 @@ describe('alertMissedWeek', () => {
     await alertMissedWeek(SATURDAY)
     expect(mockPrisma.podcast.findUnique).toHaveBeenCalledWith({ where: { weekKey: '2026-W42' } })
     expect(mockPrisma.$executeRaw.mock.calls[0].slice(1)).toContain('2026-W42')
-    expect(mockNotify.notifyEvent).toHaveBeenCalledOnce()
-    expect(mockNotify.notifyEvent.mock.calls[0][1]).toMatch(/no episode was generated/)
+    expect(mockNotify.notify).toHaveBeenCalledOnce()
+    expect(mockNotify.notify).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'podcast', severity: 'warning', link: '/admin/podcasts', message: expect.stringMatching(/no episode was generated/),
+    }))
   })
 
   it('sends nothing when the week was already claimed (a retry or a boot catch-up the same week)', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
     mockPrisma.$executeRaw.mockResolvedValueOnce(0)
     await alertMissedWeek(SATURDAY)
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
   it('neither claims the week nor sends anything when the episode is already listed', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(readyEpisode({ status: 'published', publishedAt: SATURDAY }))
     await alertMissedWeek(SATURDAY)
     expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
-    expect(mockNotify.notifyEvent).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 })

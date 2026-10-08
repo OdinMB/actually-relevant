@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { notifyEvent } from '../lib/notify.js'
+import { notify } from '../lib/notify.js'
 import { createLogger } from '../lib/logger.js'
 
 const log = createLogger('subscribe-limits')
@@ -51,8 +51,12 @@ async function alertCapReached(sentLastHour: number, now: number): Promise<void>
   if (now - lastCapAlertAt < HOUR_MS) return
   lastCapAlertAt = now
   log.warn({ sentLastHour }, 'newsletter signup cap reached')
-  await notifyEvent(
-    'Newsletter signup cap reached',
-    `${sentLastHour} confirmation emails in the last hour; new signups are refused until the hour passes.`,
-  )
+  await notify({
+    source: 'subscriptions',
+    severity: 'warning',
+    title: 'Newsletter signup cap reached',
+    message: `${sentLastHour} confirmation emails in the last hour; new signups are refused until the hour passes.`,
+    link: '/admin/subscribers',
+    dedupeKey: 'signup-cap',
+  })
 }

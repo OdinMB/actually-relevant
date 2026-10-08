@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type InternalAxiosRequestConfig } from 'axios'
 import { config } from '../config.js'
 import { withRetry, isRetryableError, isConnectionNotEstablished } from '../lib/retry.js'
 import { createLogger } from '../lib/logger.js'
@@ -12,10 +12,26 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-client.interceptors.request.use((cfg) => {
+const authorize = (cfg: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
   cfg.headers.Authorization = `Bearer ${config.plunk.secretKey}`
   return cfg
+}
+
+client.interceptors.request.use(authorize)
+
+/**
+ * Same API and auth, without the `{ success, data }` unwrap below: the activity list carries its
+ * `cursor` and `hasMore` beside `data`, which the unwrap would drop. Its larger response cap is for
+ * the email bodies each activity item carries.
+ */
+const rawClient = axios.create({
+  baseURL: config.plunk.baseUrl,
+  timeout: 15000,
+  maxContentLength: config.plunk.activityMaxResponseBytes,
+  headers: { 'Content-Type': 'application/json' },
 })
+
+rawClient.interceptors.request.use(authorize)
 
 // Plunk "next" API wraps responses in { success, data }; unwrap automatically
 client.interceptors.response.use((res) => {
@@ -225,6 +241,106 @@ export async function listContacts(cursor?: string, limit = 50): Promise<{ items
         )
       }
       return parseContactsResponse(body)
+    },
+    { retries: 3, retryOn: isRetryableError },
+  )
+}
+
+// --- Activity (spam complaints and bounces, ADR-0029) ---
+
+export type PlunkActivityType = 'email.complaint' | 'email.bounced'
+
+/**
+ * One activity item, as Plunk's open-source `ActivityService.getActivities` returns it:
+ * `{ id: "<emailId>_complaint", type, timestamp, contactEmail, contactId, metadata }`, where
+ * `metadata` carries the email's subject, campaign name, source type, body and (for a bounce) the
+ * SES diagnostic. Read tolerantly: the hosted API has not been checked against this shape.
+ */
+export interface PlunkActivity {
+  id?: unknown
+  type?: unknown
+  timestamp?: unknown
+  contactEmail?: unknown
+  contactId?: unknown
+  metadata?: unknown
+}
+
+export interface ActivityPage {
+  items: PlunkActivity[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+
+type ActivityBody = {
+  data?: unknown
+  items?: unknown
+  activities?: unknown
+  cursor?: unknown
+  nextCursor?: unknown
+  hasMore?: unknown
+}
+
+/**
+ * Normalize an activity list response, read before any `{ success, data }` unwrap: a bare array,
+ * or an array under `data`, `items` or `activities` with `cursor`/`nextCursor` and `hasMore` beside
+ * it (once nested, as a `{ success, data: { data, cursor } }` envelope). Null when no array is found.
+ */
+export function parseActivityResponse(body: unknown): ActivityPage | null {
+  if (Array.isArray(body)) return { items: body as PlunkActivity[], nextCursor: null, hasMore: false }
+  if (!body || typeof body !== 'object') return null
+  const b = body as ActivityBody
+  const array = [b.data, b.items, b.activities].find(Array.isArray)
+  if (!array) {
+    // An envelope around the page itself
+    return b.data && typeof b.data === 'object' ? parseActivityResponse(b.data) : null
+  }
+  const nextCursor =
+    typeof b.cursor === 'string' && b.cursor ? b.cursor : typeof b.nextCursor === 'string' && b.nextCursor ? b.nextCursor : null
+  const hasMore = typeof b.hasMore === 'boolean' ? b.hasMore : nextCursor !== null
+  return { items: array as PlunkActivity[], nextCursor, hasMore }
+}
+
+const keysOf = (value: unknown): string[] | string =>
+  value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value) : Array.isArray(value) ? 'array' : typeof value
+
+export interface ListActivityOpts {
+  types: PlunkActivityType[]
+  startDate: Date
+  cursor?: string | null
+  limit: number
+}
+
+/**
+ * One page of the account's activity of the given types since `startDate`. Read-only (GET), which
+ * the hosted API also allows while the project is disabled. Throws when the response carries no
+ * recognizable list, so a changed shape fails the job instead of passing as "nothing new".
+ */
+export async function listActivity(opts: ListActivityOpts): Promise<ActivityPage> {
+  return withRetry(
+    async () => {
+      const params: Record<string, string | number> = {
+        types: opts.types.join(','),
+        startDate: opts.startDate.toISOString(),
+        limit: opts.limit,
+      }
+      if (opts.cursor) params.cursor = opts.cursor
+      const { data: body } = await rawClient.get('/activity', { params })
+      const page = parseActivityResponse(body)
+      if (!page) {
+        log.warn({ shape: keysOf(body) }, 'listActivity: unrecognized Plunk response shape')
+        throw new Error(`unrecognized Plunk activity response shape (keys: ${JSON.stringify(keysOf(body))})`)
+      }
+      // Shape check for the first live runs (ADR-0029): key names and counts only, never values.
+      log.info({
+        responseKeys: keysOf(body),
+        itemKeys: page.items[0] ? keysOf(page.items[0]) : null,
+        metadataKeys: page.items[0] ? keysOf(page.items[0].metadata) : null,
+        count: page.items.length,
+        hasMore: page.hasMore,
+        startDate: params.startDate,
+        oldestTimestamp: page.items.map(i => i.timestamp).filter((t): t is string => typeof t === 'string').sort()[0] ?? null,
+      }, 'listActivity: page shape')
+      return page
     },
     { retries: 3, retryOn: isRetryableError },
   )

@@ -20,10 +20,13 @@ import {
   ChatBubbleLeftRightIcon,
   ChatBubbleLeftEllipsisIcon,
   GlobeAltIcon,
+  BellAlertIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../lib/auth'
 import { adminApi } from '../lib/admin-api'
 import { useServerTime } from '../hooks/useJobs'
+import { useNoticeCount } from '../hooks/useNotices'
+import { feedbackBadge, noticeBadge, type BadgeKey, type NavBadge } from './navBadges'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { ToastProvider } from '../components/ui/Toast'
 import { BackgroundTaskProvider } from '../hooks/useBackgroundTasks'
@@ -42,38 +45,49 @@ const navigation = [
   { name: 'Podcasts', href: '/admin/podcasts', icon: MicrophoneIcon },
   { name: 'Bluesky', href: '/admin/bluesky', icon: ChatBubbleLeftRightIcon },
   { name: 'Mastodon', href: '/admin/mastodon', icon: GlobeAltIcon },
-  { name: 'Feedback', href: '/admin/feedback', icon: ChatBubbleLeftEllipsisIcon, badge: true },
+  { name: 'Feedback', href: '/admin/feedback', icon: ChatBubbleLeftEllipsisIcon, badge: 'feedback' as const },
+  { name: 'Notices', href: '/admin/notices', icon: BellAlertIcon, badge: 'notices' as const },
   { name: 'Jobs', href: '/admin/jobs', icon: ClockIcon },
   { name: 'Users', href: '/admin/users', icon: UsersIcon },
 ]
 
-function NavItems({ onClick, unreadFeedbackCount }: { onClick?: () => void; unreadFeedbackCount: number }) {
+export function NavItems({ onClick, badgeCounts }: { onClick?: () => void; badgeCounts: Partial<Record<BadgeKey, NavBadge>> }) {
   return (
     <>
-      {navigation.map(item => (
-        <NavLink
-          key={item.name}
-          to={item.href}
-          end={item.end}
-          onClick={onClick}
-          className={({ isActive }) =>
-            `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500
-            ${isActive
-              ? 'bg-brand-50 text-brand-700'
-              : 'text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900'
-            }`
-          }
-        >
-          <item.icon className="h-5 w-5 shrink-0" />
-          {item.name}
-          {item.badge && unreadFeedbackCount > 0 && (
-            <span className="ml-auto inline-flex items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[1.25rem]">
-              {unreadFeedbackCount > 99 ? '99+' : unreadFeedbackCount}
-            </span>
-          )}
-        </NavLink>
-      ))}
+      {navigation.map(item => {
+        const badge = item.badge ? badgeCounts[item.badge] : undefined
+        return (
+          <NavLink
+            key={item.name}
+            to={item.href}
+            end={item.end}
+            onClick={onClick}
+            aria-label={badge ? `${item.name}, ${badge.description}` : undefined}
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500
+              ${isActive
+                ? 'bg-brand-50 text-brand-700'
+                : 'text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900'
+              }`
+            }
+          >
+            <item.icon className="h-5 w-5 shrink-0" />
+            {item.name}
+            {badge && (
+              <span
+                aria-hidden="true"
+                data-critical={badge.critical || undefined}
+                className={`ml-auto inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[1.25rem] ${
+                  badge.critical ? 'bg-red-600' : 'bg-brand-600'
+                }`}
+              >
+                {badge.count > 99 ? '99+' : badge.count}
+              </span>
+            )}
+          </NavLink>
+        )
+      })}
     </>
   )
 }
@@ -98,7 +112,11 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     refetchInterval: 60_000,
     staleTime: 30_000,
   })
-  const unreadFeedbackCount = feedbackCountQuery.data?.unreadCount ?? 0
+  const noticeCountQuery = useNoticeCount()
+  const badgeCounts = {
+    feedback: feedbackBadge(feedbackCountQuery.data?.unreadCount),
+    notices: noticeBadge(noticeCountQuery.data),
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -106,7 +124,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <span className="text-lg font-bold text-neutral-900">Admin</span>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4" aria-label="Admin navigation">
-        <NavItems onClick={onNavigate} unreadFeedbackCount={unreadFeedbackCount} />
+        <NavItems onClick={onNavigate} badgeCounts={badgeCounts} />
       </nav>
       <ServerClock />
       <div className="border-t border-neutral-200 px-3 py-3">

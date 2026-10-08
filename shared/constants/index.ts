@@ -29,6 +29,7 @@ export const JOB_NAMES: JobName[] = [
   'generate_newsletter',
   'generate_podcast',
   'publish_podcast',
+  'poll_plunk_activity',
 ]
 
 export const FEED_REGIONS: { value: FeedRegion; label: string }[] = [

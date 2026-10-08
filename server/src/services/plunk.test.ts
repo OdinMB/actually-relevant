@@ -1,19 +1,35 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+/** The HTTP layer every client shares; each created client applies its own response interceptors on top. */
 const mockAxiosInstance = {
   post: vi.fn(),
   get: vi.fn(),
   patch: vi.fn(),
   delete: vi.fn(),
-  interceptors: {
-    request: { use: vi.fn() },
-    response: { use: vi.fn() },
-  },
 }
+
+type Interceptor = (res: unknown) => unknown
 
 vi.mock('axios', () => ({
   default: {
-    create: () => mockAxiosInstance,
+    create: () => {
+      const responseInterceptors: Interceptor[] = []
+      const through = (method: keyof typeof mockAxiosInstance) => async (...args: unknown[]) => {
+        let res: unknown = await (mockAxiosInstance[method] as (...a: unknown[]) => Promise<unknown>)(...args)
+        if (res) for (const interceptor of responseInterceptors) res = interceptor(res)
+        return res
+      }
+      return {
+        post: through('post'),
+        get: through('get'),
+        patch: through('patch'),
+        delete: through('delete'),
+        interceptors: {
+          request: { use: vi.fn() },
+          response: { use: (fn: Interceptor) => { responseInterceptors.push(fn) } },
+        },
+      }
+    },
   },
 }))
 
@@ -28,6 +44,8 @@ const {
   verifyEmail,
   listContacts,
   parseContactsResponse,
+  parseActivityResponse,
+  listActivity,
 } = await import('./plunk.js')
 
 describe('Plunk API client', () => {
@@ -223,6 +241,57 @@ describe('Plunk API client', () => {
       await listContacts('cur123', 100)
 
       expect(mockAxiosInstance.get).toHaveBeenCalledWith('/contacts', { params: { limit: 100, cursor: 'cur123' } })
+    })
+  })
+
+  describe('parseActivityResponse', () => {
+    const item = { id: 'e1_complaint', type: 'email.complaint', timestamp: '2026-10-01T10:00:00Z', metadata: {} }
+
+    it('reads the open-source shape: data, cursor, hasMore', () => {
+      expect(parseActivityResponse({ data: [item], cursor: 'c2', hasMore: true })).toEqual({ items: [item], nextCursor: 'c2', hasMore: true })
+    })
+
+    it('reads a bare array as a single last page', () => {
+      expect(parseActivityResponse([item])).toEqual({ items: [item], nextCursor: null, hasMore: false })
+    })
+
+    it('reads items or activities with a nextCursor, inferring hasMore from the cursor when it is missing', () => {
+      expect(parseActivityResponse({ items: [item], nextCursor: 'n' })).toEqual({ items: [item], nextCursor: 'n', hasMore: true })
+      expect(parseActivityResponse({ activities: [item] })).toEqual({ items: [item], nextCursor: null, hasMore: false })
+    })
+
+    it('reads a page wrapped in a { success, data } envelope', () => {
+      expect(parseActivityResponse({ success: true, data: { data: [item], cursor: 'c3', hasMore: true } }))
+        .toEqual({ items: [item], nextCursor: 'c3', hasMore: true })
+    })
+
+    it('reports an unrecognized shape as null rather than as an empty page', () => {
+      expect(parseActivityResponse({ results: [item] })).toBeNull()
+      expect(parseActivityResponse('nope')).toBeNull()
+      expect(parseActivityResponse(null)).toBeNull()
+    })
+  })
+
+  describe('listActivity', () => {
+    const startDate = new Date('2026-09-08T00:00:00Z')
+
+    it('keeps the cursor of a { success, data, cursor, hasMore } body', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { success: true, data: [{ id: 'e1_complaint' }], cursor: 'c2', hasMore: true } })
+      const page = await listActivity({ types: ['email.complaint', 'email.bounced'], startDate, limit: 20 })
+      expect(page).toEqual({ items: [{ id: 'e1_complaint' }], nextCursor: 'c2', hasMore: true })
+    })
+
+    it('asks for the types since the start date, with the cursor when paging', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { data: [], hasMore: false } })
+      await listActivity({ types: ['email.complaint', 'email.bounced'], startDate, cursor: 'c2', limit: 20 })
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/activity', {
+        params: { types: 'email.complaint,email.bounced', startDate: '2026-09-08T00:00:00.000Z', limit: 20, cursor: 'c2' },
+      })
+    })
+
+    it('throws on an unrecognized shape', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { results: [] } })
+      await expect(listActivity({ types: ['email.complaint'], startDate, limit: 20 })).rejects.toThrow(/unrecognized/)
     })
   })
 })

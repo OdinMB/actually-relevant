@@ -9,6 +9,7 @@ import { runSocialAutoPost } from './socialAutoPost.js'
 import { runMastodonUpdateMetrics } from './mastodonUpdateMetrics.js'
 import { runGeneratePodcast } from './generatePodcast.js'
 import { runPublishPodcast } from './publishPodcast.js'
+import { runPollPlunkActivity } from './pollPlunkActivity.js'
 
 export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   crawl_feeds: runCrawlFeeds,
@@ -23,6 +24,7 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   // Called with no argument: the handlers' `now` parameter is for tests.
   generate_podcast: () => runGeneratePodcast(),
   publish_podcast: () => runPublishPodcast(),
+  poll_plunk_activity: () => runPollPlunkActivity(),
 }
 
 /**
@@ -42,4 +44,5 @@ export const JOB_PIPELINE_ORDER: readonly string[] = [
   'generate_newsletter',
   'generate_podcast',
   'publish_podcast',
+  'poll_plunk_activity',
 ]

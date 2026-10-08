@@ -41,6 +41,25 @@ export interface FeedbackItem {
   updatedAt: string
 }
 
+export const ADMIN_NOTICE_SOURCES = ['jobs', 'newsletter', 'podcast', 'subscriptions', 'plunk'] as const
+export type AdminNoticeSource = (typeof ADMIN_NOTICE_SOURCES)[number]
+export type AdminNoticeSeverity = 'critical' | 'warning' | 'info'
+
+export interface AdminNotice {
+  id: string
+  source: AdminNoticeSource
+  severity: AdminNoticeSeverity
+  title: string
+  message: string
+  /** A relative admin path, rendered as a router link. */
+  link: string | null
+  dedupeKey: string | null
+  count: number
+  firstOccurredAt: string
+  lastOccurredAt: string
+  seenAt: string | null
+}
+
 export interface FeedQualityMetrics {
   totalCrawled: number
   publishedCount: number
@@ -336,7 +355,6 @@ export const adminApi = {
     run: (jobName: string) =>
       request<{ message: string }>(`/jobs/${jobName}/run`, { method: 'POST' }),
     serverTime: () => request<{ time: string; timezone: string }>('/jobs/server-time'),
-    alertChannel: () => request<{ configured: boolean }>('/jobs/alert-channel'),
   },
 
   // Clusters
@@ -410,6 +428,18 @@ export const adminApi = {
     delete: (id: string) => request<void>(`/feedback/${id}`, { method: 'DELETE' }),
     bulk: (ids: string[], action: string) =>
       request<{ affected: number }>('/feedback/bulk', { method: 'POST', body: JSON.stringify({ ids, action }) }),
+  },
+
+  // Notices (owner alerts; .context/admin-notices.md)
+  notices: {
+    list: (params?: { source?: AdminNoticeSource; show?: 'unseen' | 'all'; page?: number; limit?: number }) =>
+      request<{ items: AdminNotice[]; total: number; page: number; limit: number; unseenCount: number }>(
+        `/notices${toQueryString((params || {}) as Record<string, unknown>)}`
+      ),
+    count: () => request<{ unseen: number; unseenCritical: number }>('/notices/count'),
+    markSeen: (id: string) => request<AdminNotice>(`/notices/${id}/seen`, { method: 'POST' }),
+    markAllSeen: (source?: AdminNoticeSource) =>
+      request<{ affected: number }>('/notices/seen', { method: 'POST', body: JSON.stringify(source ? { source } : {}) }),
   },
 
   // Users

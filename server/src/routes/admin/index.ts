@@ -12,6 +12,7 @@ import clusterRouter from './clusters.js'
 import blueskyRouter from './bluesky.js'
 import mastodonRouter from './mastodon.js'
 import feedbackRouter from './feedback.js'
+import noticeRouter from './notices.js'
 
 const router = Router()
 
@@ -30,5 +31,6 @@ router.use('/clusters', clusterRouter)
 router.use('/bluesky', blueskyRouter)
 router.use('/mastodon', mastodonRouter)
 router.use('/feedback', feedbackRouter)
+router.use('/notices', noticeRouter)
 
 export default router
