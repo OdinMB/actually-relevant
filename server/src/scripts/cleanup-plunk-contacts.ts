@@ -17,6 +17,11 @@
  *   npm run cleanup:plunk-contacts --prefix server          # dry run (lists what would go)
  *   npm run cleanup:plunk-contacts:apply --prefix server    # deletes
  *
+ * RUN IT FROM THE RENDER API SERVICE'S SHELL, NEVER LOCALLY. It needs the
+ * production DATABASE_URL and Plunk key that are set there. Run locally, the
+ * "confirmed" protection set would come from the dev database, and apply would
+ * delete real subscribers' contacts from production Plunk.
+ *
  * NOTE: requires the Plunk account to be ACTIVE — while it is suspended the API
  * returns 403 (PROJECT_DISABLED), so run this only after reinstatement.
  */

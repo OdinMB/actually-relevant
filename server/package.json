@@ -24,6 +24,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "cleanup:plunk-contacts": "tsx src/scripts/cleanup-plunk-contacts.ts",
     "cleanup:plunk-contacts:apply": "tsx src/scripts/cleanup-plunk-contacts.ts --apply",
+    "cleanup:fast-confirmations": "tsx src/scripts/cleanup-fast-confirmations.ts",
+    "cleanup:fast-confirmations:apply": "tsx src/scripts/cleanup-fast-confirmations.ts --apply",
     "social:bot-profile": "tsx src/scripts/set-social-bot-profile.ts",
     "social:bot-profile:apply": "tsx src/scripts/set-social-bot-profile.ts --apply",
     "db:populate-issue-content": "tsx src/scripts/migrate/populate-issue-content.ts",

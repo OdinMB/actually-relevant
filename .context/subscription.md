@@ -68,16 +68,33 @@ Order matters; every gate runs before any side effect:
 
 **CSP:** if the static site ever gets a Content-Security-Policy header (none today), it needs `https://challenges.cloudflare.com` in `script-src` and `frame-src`.
 
-## Cleaning Up Never-Confirmed Plunk Contacts
+## Cleaning Up Plunk Contacts
 
-`server/src/scripts/cleanup-plunk-contacts.ts`, run by hand:
+Two operator scripts in `server/src/scripts/`, both run by hand and both previewing by default. **Run them only from the Render API service's Shell** (dashboard: the API web service, Shell tab), where the production `DATABASE_URL` and Plunk key are set. Never run them locally: the protection sets (who confirmed, who confirmed again) come from whatever database `DATABASE_URL` points at, so a local run would judge production Plunk contacts against the dev database. Both need an active Plunk account; a suspended one returns 403 `PROJECT_DISABLED`.
+
+### Never-confirmed contacts (`cleanup-plunk-contacts.ts`)
 
 ```bash
 npm run cleanup:plunk-contacts --prefix server        # dry run
 npm run cleanup:plunk-contacts:apply --prefix server  # deletes
 ```
 
-It deletes Plunk contacts that are not subscribed, have no confirmed local `PendingSubscription`, and were created more than 14 days ago (`PURGE_MIN_AGE_DAYS`). Subscribed contacts, and anyone who ever confirmed locally, are never touched. It needs an active Plunk account; a suspended one returns 403 `PROJECT_DISABLED`.
+It deletes Plunk contacts that are not subscribed, have no confirmed local `PendingSubscription`, and were created more than 14 days ago (`PURGE_MIN_AGE_DAYS`). Subscribed contacts, and anyone who ever confirmed locally, are never touched.
+
+### Fast pre-June confirmations (`cleanup-fast-confirmations.ts`)
+
+Before 2026-06-03 the confirm link changed state on GET, so link scanners "confirmed" bot-submitted addresses within seconds. This script unsubscribes (never deletes) those Plunk contacts, so a real person caught by mistake can sign up again. Plunk cannot reset complaint stats, so it is deliberately conservative.
+
+```bash
+npm run cleanup:fast-confirmations --prefix server                                    # gap distribution only
+npm run cleanup:fast-confirmations --prefix server -- --max-seconds=10                # + addresses that would go
+npm run cleanup:fast-confirmations:apply --prefix server -- --max-seconds=10          # unsubscribes
+```
+
+- **Preview** (default) reads only the database and changes nothing. It prints how all confirmed signups created before the cutoff spread over confirmation gaps (`<5s`, `5-10s`, `10-30s`, `30-60s`, `1-5min`, `5-60min`, `>1h`), so the owner picks the threshold from data; with `--max-seconds=N` it also lists every candidate with its gap.
+- **Candidates:** addresses (lowercased, deduped) whose every confirmed signup created before the cutoff (`--before=YYYY-MM-DD`, default 2026-06-03) has a gap strictly below N seconds.
+- **Never touched:** an address with a confirmed signup created on or after the cutoff (a genuine re-confirmation through the button flow), an address with any pre-cutoff confirmation at or above N, and any contact not currently subscribed in Plunk.
+- **Apply** refuses to run without an explicit `--max-seconds`. It sets each remaining contact to `subscribed: false` through `POST /contacts` (the upsert the confirm flow uses), 200 ms apart, and prints a summary: unsubscribed, skipped (not subscribed in Plunk), skipped (re-confirmed), failed.
 
 ## Key Files
 
