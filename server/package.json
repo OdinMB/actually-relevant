@@ -25,6 +25,8 @@
     "backup:plunk-contacts": "tsx src/scripts/backup-plunk-contacts.ts",
     "restore:plunk-contacts": "tsx src/scripts/restore-plunk-contacts.ts",
     "restore:plunk-contacts:apply": "tsx src/scripts/restore-plunk-contacts.ts --apply",
+    "unsubscribe:plunk-contacts": "tsx src/scripts/unsubscribe-plunk-contacts.ts",
+    "unsubscribe:plunk-contacts:apply": "tsx src/scripts/unsubscribe-plunk-contacts.ts --apply",
     "cleanup:plunk-contacts":"tsx src/scripts/cleanup-plunk-contacts.ts",
     "cleanup:plunk-contacts:apply": "tsx src/scripts/cleanup-plunk-contacts.ts --apply",
     "cleanup:fast-confirmations": "tsx src/scripts/cleanup-fast-confirmations.ts",

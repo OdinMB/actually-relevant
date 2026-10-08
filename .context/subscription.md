@@ -70,7 +70,7 @@ Order matters; every gate runs before any side effect:
 
 ## Cleaning Up Plunk Contacts
 
-Two cleanup scripts in `server/src/scripts/`, both run by hand and both previewing by default, with a backup and restore pair to run locally before them (below). **Run the cleanups only from the Render API service's Shell** (dashboard: the API web service, Shell tab), where the production `DATABASE_URL` and Plunk key are set. Never run them locally: the protection sets (who confirmed, who confirmed again) come from whatever database `DATABASE_URL` points at, so a local run would judge production Plunk contacts against the dev database. Both need an active Plunk account; a suspended one returns 403 `PROJECT_DISABLED`.
+Two cleanup scripts in `server/src/scripts/`, both run by hand and both previewing by default, with a backup and restore pair to run locally before them (below), and a local script that unsubscribes a hand-picked list of addresses. **Run the cleanups only from the Render API service's Shell** (dashboard: the API web service, Shell tab), where the production `DATABASE_URL` and Plunk key are set. Never run them locally: the protection sets (who confirmed, who confirmed again) come from whatever database `DATABASE_URL` points at, so a local run would judge production Plunk contacts against the dev database. Both need an active Plunk account; a suspended one returns 403 `PROJECT_DISABLED`.
 
 Render's Shell opens inside the `server` folder, so the cleanup commands below take no `--prefix server`.
 
@@ -98,6 +98,19 @@ Remove-Item Env:PLUNK_SECRET_KEY
 ```
 
 A relative `--file` resolves against `server/`. Preview is read-only and lists the contacts in the backup but missing now (count, addresses, the subscribed status each had). Apply recreates each through `POST /contacts` (`createContact`) with its email, subscribed status and custom data (string, number and boolean values; others are left out and counted), 200 ms apart, then prints recreated and failed counts. Contacts that still exist are never changed. Apply refuses to run when the current listing looks incomplete (Plunk's total differs from the contacts paged, or an id repeats): a contact the listing missed would be sent through `POST /contacts` with the backup's older status. Only a `subscribed` of `true` (or `"true"`, `1`) restores as subscribed; anything else restores as unsubscribed. A recreated contact is a new Plunk contact with a new id and creation date; its event history does not come back.
+
+### Unsubscribing a list of addresses (`unsubscribe-plunk-contacts.ts`)
+
+For when Plunk's dashboard will not unsubscribe contacts (in October 2026 it answered with an error). Run it locally on the owner's machine from the repo root; it needs only the Plunk key (read from `server/.env`, which holds the production key, or from `$env:PLUNK_SECRET_KEY`), no database:
+
+```powershell
+npm run unsubscribe:plunk-contacts --prefix server -- --file=../DOCS/2026-10-08_unsubscribe-list.txt        # preview
+npm run unsubscribe:plunk-contacts:apply --prefix server -- --file=../DOCS/2026-10-08_unsubscribe-list.txt  # unsubscribes
+```
+
+- **The list file** has one address per line; blank lines and `#` comments are skipped, addresses are lowercased and deduped, and any other line (two addresses, a CSV row) stops the run. It holds personal data: keep it in `DOCS/` (gitignored) on the owner's machine only and delete it once done.
+- **Preview first.** It is strictly read-only: it lists every Plunk contact (refusing, in both modes, a listing that looks incomplete, as restore does, since a missed contact would show as "not found") and prints each listed address as currently subscribed, snoozed, already unsubscribed or not found, with counts.
+- **Apply** changes only the listed contacts that are subscribed or snoozed (Plunk resubscribes a snoozed contact when the snooze ends), never deletes, never touches anything off the list. It calls `PATCH /contacts/:id` with `{ subscribed: false }` (`updateContact`) by the id from the listing: Plunk's synchronous per-contact update, which cannot create a contact (unlike the `POST /contacts` upsert), clears any snooze and returns the contact. A change counts only when that contact reads `subscribed: false` with no snooze; otherwise it is failed and Plunk's error is printed as status and message. 200 ms apart, `withRetry` on transient errors. If the first change fails it stops rather than try the rest. It ends with unsubscribed, already unsubscribed, not found and failed counts, and exits non-zero on any failure.
 
 ### Never-confirmed contacts (`cleanup-plunk-contacts.ts`)
 
