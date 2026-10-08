@@ -14,9 +14,10 @@ if (!config.subscribe.formTokenSecret) {
  * Anti-bot form token for the public subscribe form.
  *
  * The token is a stateless, HMAC-signed `{ ts, nonce }` payload issued when the
- * form is rendered (GET /api/subscribe/token) and validated on submit. It proves
- * the submitter fetched a token from our origin (blocking scripts that POST
- * directly to the API) and enforces a minimum fill time (tripping instant bots).
+ * form is rendered (GET /api/subscribe/token) and validated on submit. It trips
+ * scripts that POST without fetching a token and enforces a minimum fill time
+ * (tripping instant bots). A script that fetches a token first passes it;
+ * Turnstile (lib/turnstile.ts) is the gate that stops those.
  *
  * Intentionally stateless: there is NO consumed-nonce store, so a token can in
  * principle be replayed within its lifetime. That is acceptable for a deterrent —

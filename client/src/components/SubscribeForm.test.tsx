@@ -2,22 +2,45 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import SubscribeForm from './SubscribeForm'
+import { ApiError } from '../lib/api'
 
 const mockSubscribe = vi.fn()
 const mockGetToken = vi.fn()
 
-vi.mock('../lib/api', () => ({
-  publicApi: {
-    subscribe: (...args: unknown[]) => mockSubscribe(...args),
-    getSubscribeToken: (...args: unknown[]) => mockGetToken(...args),
-  },
-}))
+vi.mock('../lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
+  return {
+    ApiError: actual.ApiError,
+    publicApi: {
+      subscribe: (...args: unknown[]) => mockSubscribe(...args),
+      getSubscribeToken: (...args: unknown[]) => mockGetToken(...args),
+    },
+  }
+})
 
-// These tests cover the form when signups are enabled.
 vi.mock('../config', () => ({
   BRAND: { claim: 'News that matters to humanity.', claimSupport: 'Curated with care by AI.' },
-  SUBSCRIPTIONS_ENABLED: true,
 }))
+
+// A stand-in for Cloudflare's widget: a button that hands the form a token.
+const turnstile = vi.hoisted(() => ({ siteKey: '', mounts: 0 }))
+vi.mock('./TurnstileWidget', async () => {
+  const { createElement, useEffect } = await import('react')
+  function StubWidget({ onToken }: { onToken: (token: string | null) => void }) {
+    useEffect(() => {
+      turnstile.mounts++
+    }, [])
+    return createElement('button', { type: 'button', onClick: () => onToken('ts-token') }, 'Pass human check')
+  }
+  return {
+    get TURNSTILE_SITE_KEY() {
+      return turnstile.siteKey
+    },
+    default: StubWidget,
+  }
+})
+
+const pausedError = () => new ApiError(503, 'Newsletter signups are paused.', 'SIGNUPS_PAUSED')
 
 /** Render and wait until the form token has loaded (submit is disabled until then). */
 async function renderReady() {
@@ -30,14 +53,15 @@ describe('SubscribeForm', () => {
     mockSubscribe.mockReset()
     mockGetToken.mockReset()
     mockGetToken.mockResolvedValue({ token: 'test-token' })
+    turnstile.siteKey = ''
+    turnstile.mounts = 0
   })
 
-  it('renders the form with first name and email fields', async () => {
+  it('has an email field and no first-name field', async () => {
     render(<SubscribeForm idPrefix="test" />)
 
-    expect(screen.getByPlaceholderText('First name (optional)')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /subscribe/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('textbox')).toHaveLength(1) // the honeypot is aria-hidden
     await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
   })
 
@@ -65,7 +89,36 @@ describe('SubscribeForm', () => {
     })
   })
 
-  it('submits with the form token and shows success message', async () => {
+  describe('when the API says signups are paused', () => {
+    it('shows the paused notice instead of the form, asking only once', async () => {
+      mockGetToken.mockRejectedValue(pausedError())
+      render(<SubscribeForm idPrefix="test" />)
+
+      await waitFor(() => expect(screen.getByText(/signups are paused/i)).toBeInTheDocument())
+      expect(screen.queryByPlaceholderText('you@example.com')).not.toBeInTheDocument()
+      expect(mockGetToken).toHaveBeenCalledTimes(1)
+    })
+
+    it('renders the close action when onSuccess is provided', async () => {
+      mockGetToken.mockRejectedValue(pausedError())
+      render(<SubscribeForm idPrefix="test" onSuccess={vi.fn()} />)
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /got it/i })).toBeInTheDocument())
+    })
+
+    it('switches to the paused notice when the signup itself is refused as paused', async () => {
+      mockSubscribe.mockRejectedValue(pausedError())
+      const user = userEvent.setup()
+
+      await renderReady()
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com')
+      await user.click(screen.getByRole('button', { name: /subscribe/i }))
+
+      await waitFor(() => expect(screen.getByText(/signups are paused/i)).toBeInTheDocument())
+    })
+  })
+
+  it('submits the email and form token, never a first name, and shows success', async () => {
     mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
     const user = userEvent.setup()
 
@@ -76,9 +129,60 @@ describe('SubscribeForm', () => {
     await waitFor(() => {
       expect(screen.getByText(/check your email/i)).toBeInTheDocument()
     })
-    expect(mockSubscribe).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'hello@example.com', formToken: 'test-token' }),
-    )
+    expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'test-token' })
+  })
+
+  describe('with Turnstile configured', () => {
+    beforeEach(() => {
+      turnstile.siteKey = 'site-key'
+    })
+
+    it('loads no widget until the email field is focused', async () => {
+      const user = userEvent.setup()
+      render(<SubscribeForm idPrefix="test" />)
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalled())
+
+      expect(screen.queryByRole('button', { name: /human check/i })).not.toBeInTheDocument()
+
+      await user.click(screen.getByPlaceholderText('you@example.com'))
+      expect(screen.getByRole('button', { name: /human check/i })).toBeInTheDocument()
+    })
+
+    it('keeps submit disabled until the widget reports a token, then sends it', async () => {
+      mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
+      const user = userEvent.setup()
+      render(<SubscribeForm idPrefix="test" />)
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalled())
+
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: /human check/i }))
+      await waitFor(() => expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
+      await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
+
+      await waitFor(() => {
+        expect(mockSubscribe).toHaveBeenCalledWith(
+          expect.objectContaining({ formToken: 'test-token', turnstileToken: 'ts-token' }),
+        )
+      })
+    })
+
+    it('shows a fresh widget after a failed submit, clearing the used token', async () => {
+      mockSubscribe.mockResolvedValue({ success: false, message: "We couldn't verify that you're human." })
+      const user = userEvent.setup()
+      render(<SubscribeForm idPrefix="test" />)
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalled())
+
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      await user.click(screen.getByRole('button', { name: /human check/i }))
+      await waitFor(() => expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
+      await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
+
+      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+      expect(turnstile.mounts).toBe(2)
+      expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeDisabled()
+    })
   })
 
   it('shows error message on failure', async () => {
@@ -138,22 +242,6 @@ describe('SubscribeForm', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
 
     expect(screen.getByRole('heading')).toBeInTheDocument()
-  })
-
-  it('includes firstName when provided', async () => {
-    mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
-    const user = userEvent.setup()
-
-    await renderReady()
-    await user.type(screen.getByPlaceholderText('First name (optional)'), 'Alice')
-    await user.type(screen.getByPlaceholderText('you@example.com'), 'alice@example.com')
-    await user.click(screen.getByRole('button', { name: /subscribe/i }))
-
-    await waitFor(() => {
-      expect(mockSubscribe).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'alice@example.com', firstName: 'Alice', formToken: 'test-token' }),
-      )
-    })
   })
 
   it('disables submit button while loading', async () => {

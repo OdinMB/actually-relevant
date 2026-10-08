@@ -84,29 +84,32 @@ export default function PrivacyPage() {
           <h3 className="text-lg font-normal mt-6 mb-2">
             Newsletter (Optional)
           </h3>
-          <p>If you choose to subscribe to our newsletter, we collect:</p>
-          <ul className="list-disc pl-6 space-y-1 mt-2">
-            <li>
-              Your <strong>email address</strong> (provided voluntarily by you)
-            </li>
-            <li>
-              Your <strong>IP address</strong> (recorded by our newsletter
-              provider,{" "}
-              <a
-                href="https://www.useplunk.com/"
-                className="text-brand-700 hover:text-brand-800"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Plunk
-              </a>
-              , to prevent spam and abuse)
-            </li>
-          </ul>
+          <p>
+            If you choose to subscribe to our newsletter, we collect your{" "}
+            <strong>email address</strong> (provided voluntarily by you).
+          </p>
           <p className="mt-3">
-            This data is used solely to send you updates about Actually Relevant
-            and to prevent abuse of the newsletter service. We will never share,
-            sell, or distribute your email address to any third party.
+            It is used solely to send you updates about Actually Relevant and to
+            prevent abuse of the newsletter service. We never sell it or share it
+            for anyone else's purposes. Our newsletter provider,{" "}
+            <a
+              href="https://www.useplunk.com/"
+              className="text-brand-700 hover:text-brand-800"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Plunk
+            </a>
+            , and its delivery provider, Amazon SES (Amazon Web Services),
+            process it on our behalf to send our emails.
+          </p>
+          <p className="mt-3">
+            To keep bots from signing up other people&apos;s addresses, the
+            signup form uses Cloudflare Turnstile, which checks that a person is
+            filling it in. Once you start entering an address, Turnstile loads
+            from Cloudflare and receives your IP address and information about
+            your browser and device. Cloudflare processes this on our behalf,
+            which may involve a transfer to the USA.
           </p>
           <p className="mt-3">
             Our newsletter provider, Plunk, automatically tracks email
@@ -194,7 +197,8 @@ export default function PrivacyPage() {
                   </td>
                   <td className="align-top py-2 pr-4">Newsletter delivery</td>
                   <td className="align-top py-2">
-                    Email address and IP address (if you subscribe). See their{" "}
+                    Email address (if you subscribe), delivered through
+                    Amazon SES. See their{" "}
                     <a
                       href="https://www.useplunk.com/privacy"
                       className="text-brand-700 hover:text-brand-800"
@@ -202,6 +206,35 @@ export default function PrivacyPage() {
                       rel="noopener noreferrer"
                     >
                       privacy policy
+                    </a>
+                    .
+                  </td>
+                </tr>
+                <tr className="border-b border-neutral-100">
+                  <td className="align-top py-2 pr-4">
+                    <a
+                      href="https://www.cloudflare.com/application-services/products/turnstile/"
+                      className="text-brand-700 hover:text-brand-800"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Cloudflare Turnstile
+                    </a>
+                  </td>
+                  <td className="align-top py-2 pr-4">
+                    Bot protection on the newsletter form
+                  </td>
+                  <td className="align-top py-2">
+                    IP address and browser and device information when you use
+                    the signup form. Cloudflare processes them on our behalf,
+                    which may involve a transfer to the USA. See their{" "}
+                    <a
+                      href="https://www.cloudflare.com/turnstile-privacy-policy/"
+                      className="text-brand-700 hover:text-brand-800"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Turnstile privacy addendum
                     </a>
                     .
                   </td>
@@ -275,8 +308,9 @@ export default function PrivacyPage() {
             All fonts used on this site are self-hosted. We do not load fonts,
             scripts, or other resources from external CDNs like Google, meaning
             your IP address is not shared with third parties when you visit.
-            The one exception is podcast audio: on the podcast page, an episode
-            loads from Bunny.net only when you press play.
+            There are two exceptions. On the podcast page, an episode loads from
+            Bunny.net only when you press play. On the newsletter signup form,
+            Cloudflare Turnstile loads only once you start entering an address.
           </p>
 
           <h2 className="section-heading mt-10">Your Rights</h2>

@@ -98,6 +98,8 @@ The build generates the Prisma client, applies any pending database migrations, 
 | `PORT` | No | Render sets this automatically (defaults to 10000) |
 | `PUBLIC_API_KEY` | No | Static API key for public consumers (mobile apps, etc.) |
 | `LOG_LEVEL` | No | Logging verbosity (default: `info`) |
+| `SUBSCRIPTIONS_ENABLED` | No | `true` opens newsletter signups; unset or anything else keeps them paused (`.context/subscription.md`) |
+| `TURNSTILE_SECRET_KEY` | For signups | Cloudflare Turnstile secret; without it, production refuses every signup |
 
 **Architecture notes:**
 
@@ -133,6 +135,7 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `VITE_API_URL` | Yes | Backend URL (e.g. `https://api.actuallyrelevant.news`) |
+| `VITE_TURNSTILE_SITE_KEY` | For signups | Cloudflare Turnstile site key for the newsletter form |
 
 ### Post-deploy Steps
 

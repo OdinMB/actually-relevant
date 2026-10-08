@@ -1,16 +1,24 @@
-import { useState, useRef, useEffect } from 'react'
-import { publicApi } from '../lib/api'
-import { BRAND, SUBSCRIPTIONS_ENABLED } from '../config'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { publicApi, ApiError } from '../lib/api'
+import { BRAND } from '../config'
+import TurnstileWidget, { TURNSTILE_SITE_KEY } from './TurnstileWidget'
 
 interface SubscribeFormProps {
   /** Called after successful submission (e.g. to close a modal) */
   onSuccess?: () => void
-  /** Auto-focus the first input on mount */
+  /** Auto-focus the email input on mount */
   autoFocus?: boolean
   /** ID prefix for form elements (avoids collisions when rendered multiple times) */
   idPrefix?: string
   /** Hide the heading and tagline (when the parent provides its own) */
   hideHeading?: boolean
+}
+
+/** Whether the API takes signups: it answers the token request with SIGNUPS_PAUSED when not. */
+type Availability = 'checking' | 'open' | 'paused'
+
+function isSignupsPaused(err: unknown): boolean {
+  return err instanceof ApiError && err.code === 'SIGNUPS_PAUSED'
 }
 
 export default function SubscribeForm({
@@ -19,34 +27,45 @@ export default function SubscribeForm({
   idPrefix = 'subscribe',
   hideHeading = false,
 }: SubscribeFormProps) {
-  const [firstName, setFirstName] = useState('')
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [website, setWebsite] = useState('') // honeypot — humans never fill this
   const [formToken, setFormToken] = useState<string | null>(null)
-  const firstInputRef = useRef<HTMLInputElement>(null)
+  const [availability, setAvailability] = useState<Availability>('checking')
+  // Turnstile loads only once the visitor engages with the email field, so a page
+  // that merely mounts the (closed) modal sends nothing to Cloudflare.
+  const [engaged, setEngaged] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileFailed, setTurnstileFailed] = useState(false)
+  const [widgetKey, setWidgetKey] = useState(0)
+  const emailInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (autoFocus) {
-      requestAnimationFrame(() => firstInputRef.current?.focus())
+      requestAnimationFrame(() => emailInputRef.current?.focus())
     }
   }, [autoFocus])
 
-  // Fetch the anti-bot form token on mount. Submission is disabled until it loads.
+  // Fetch the anti-bot form token on mount; its answer also says whether signups are open.
   useEffect(() => {
-    if (!SUBSCRIPTIONS_ENABLED) return
     let cancelled = false
     async function loadToken() {
       // Try up to twice; if both fail, the token stays null and submit stays
-      // disabled (the API is unreachable anyway).
+      // disabled (the API is unreachable anyway). A paused answer is final.
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const { token } = await publicApi.getSubscribeToken()
-          if (!cancelled) setFormToken(token)
+          if (!cancelled) {
+            setFormToken(token)
+            setAvailability('open')
+          }
           return
-        } catch {
-          // retry once
+        } catch (err) {
+          if (isSignupsPaused(err)) {
+            if (!cancelled) setAvailability('paused')
+            return
+          }
         }
       }
     }
@@ -56,32 +75,53 @@ export default function SubscribeForm({
     }
   }, [])
 
+  const handleTurnstileToken = useCallback((token: string | null) => {
+    setTurnstileToken(token)
+    if (token) setTurnstileFailed(false)
+  }, [])
+  const handleTurnstileError = useCallback(() => setTurnstileFailed(true), [])
+
+  // A Turnstile token is single-use: after any failed submit, show a fresh widget.
+  const resetTurnstile = () => {
+    setTurnstileToken(null)
+    setWidgetKey((k) => k + 1)
+  }
+
+  const needsTurnstile = TURNSTILE_SITE_KEY !== ''
+  const canSubmit = status !== 'loading' && formToken !== null && (!needsTurnstile || turnstileToken !== null)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim() || !formToken) return
+    if (!email.trim() || !canSubmit || !formToken) return
 
     setStatus('loading')
     setErrorMessage('')
     try {
       const result = await publicApi.subscribe({
         email: email.trim(),
-        ...(firstName.trim() ? { firstName: firstName.trim() } : {}),
         ...(website ? { website } : {}),
         formToken,
+        ...(turnstileToken ? { turnstileToken } : {}),
       })
       if (!result.success) {
         setStatus('error')
         setErrorMessage(result.message || 'Something went wrong. Please try again.')
+        resetTurnstile()
         return
       }
       setStatus('success')
-    } catch {
+    } catch (err) {
+      if (isSignupsPaused(err)) {
+        setAvailability('paused')
+        return
+      }
       setStatus('error')
       setErrorMessage('Something went wrong. Please try again.')
+      resetTurnstile()
     }
   }
 
-  if (!SUBSCRIPTIONS_ENABLED) {
+  if (availability === 'paused') {
     return (
       <div className="text-center py-4" role="status">
         <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-amber-50 flex items-center justify-center">
@@ -144,25 +184,17 @@ export default function SubscribeForm({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor={`${idPrefix}-first-name`} className="sr-only">First name (optional)</label>
-          <input
-            ref={firstInputRef}
-            id={`${idPrefix}-first-name`}
-            type="text"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            placeholder="First name (optional)"
-            autoComplete="given-name"
-            className="w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-200 outline-none transition-colors"
-          />
-        </div>
-        <div>
           <label htmlFor={`${idPrefix}-email`} className="sr-only">Email address</label>
           <input
+            ref={emailInputRef}
             id={`${idPrefix}-email`}
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value.trim())}
+            onFocus={() => setEngaged(true)}
+            onChange={(e) => {
+              setEngaged(true)
+              setEmail(e.target.value.trim())
+            }}
             placeholder="you@example.com"
             required
             autoComplete="email"
@@ -184,6 +216,21 @@ export default function SubscribeForm({
           />
         </div>
 
+        {needsTurnstile && engaged && (
+          <TurnstileWidget
+            key={widgetKey}
+            siteKey={TURNSTILE_SITE_KEY}
+            onToken={handleTurnstileToken}
+            onError={handleTurnstileError}
+          />
+        )}
+
+        {turnstileFailed && (
+          <p className="text-sm text-red-600" role="alert">
+            The human check couldn't load. Please reload the page and try again.
+          </p>
+        )}
+
         {status === 'error' && (
           <p id={`${idPrefix}-error`} className="text-sm text-red-600" role="alert">
             {errorMessage}
@@ -192,7 +239,7 @@ export default function SubscribeForm({
 
         <button
           type="submit"
-          disabled={status === 'loading' || !formToken}
+          disabled={!canSubmit}
           className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {status === 'loading' ? 'Subscribing...' : 'Subscribe'}

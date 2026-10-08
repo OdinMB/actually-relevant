@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
 import { TEST_API_KEY } from '../../test/helpers.js'
 
@@ -15,15 +15,22 @@ vi.mock('../../lib/formToken.js', () => ({
 
 const mockSubscribe = vi.hoisted(() => vi.fn())
 const mockConfirm = vi.hoisted(() => vi.fn())
+const mockVerifyTurnstile = vi.hoisted(() => vi.fn())
 
 class EmailValidationError extends Error {}
 class ConfirmationEmailError extends Error {}
+class SignupUnavailableError extends Error {}
 
 vi.mock('../../services/subscribe.js', () => ({
   subscribe: (...args: any[]) => mockSubscribe(...args),
   confirmSubscription: (...args: any[]) => mockConfirm(...args),
   EmailValidationError,
   ConfirmationEmailError,
+  SignupUnavailableError,
+}))
+
+vi.mock('../../lib/turnstile.js', () => ({
+  verifyTurnstile: (...args: any[]) => mockVerifyTurnstile(...args),
 }))
 
 const mockPrisma = vi.hoisted(() => ({ $disconnect: vi.fn() }))
@@ -37,12 +44,99 @@ vi.mock('../../services/crawler.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
+const { config } = await import('../../config.js')
 
 describe('Public Subscribe API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    config.subscribe.enabled = true
     mockSubscribe.mockResolvedValue(undefined)
     mockConfirm.mockResolvedValue(undefined)
+    mockVerifyTurnstile.mockResolvedValue('ok')
+  })
+
+  afterEach(() => {
+    config.subscribe.enabled = false
+  })
+
+  describe('while signups are paused', () => {
+    beforeEach(() => {
+      config.subscribe.enabled = false
+    })
+
+    it('refuses the token with 503 SIGNUPS_PAUSED', async () => {
+      const res = await request(app).get('/api/subscribe/token')
+
+      expect(res.status).toBe(503)
+      expect(res.body.code).toBe('SIGNUPS_PAUSED')
+      expect(res.body.token).toBeUndefined()
+    })
+
+    it('refuses a signup with 503 SIGNUPS_PAUSED and sends nothing', async () => {
+      const res = await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 't' })
+
+      expect(res.status).toBe(503)
+      expect(res.body.code).toBe('SIGNUPS_PAUSED')
+      expect(mockVerifyTurnstile).not.toHaveBeenCalled()
+      expect(mockSubscribe).not.toHaveBeenCalled()
+    })
+
+    it('still confirms an already-sent link', async () => {
+      const res = await request(app)
+        .post('/api/subscribe/confirm')
+        .send({ token: 'abc', email: 'u@example.com' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(mockConfirm).toHaveBeenCalledWith('abc', 'u@example.com')
+    })
+  })
+
+  describe('Turnstile', () => {
+    it('tells the visitor when the human check fails, and subscribes nothing', async () => {
+      mockVerifyTurnstile.mockResolvedValue('failed')
+
+      const res = await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 'bad' })
+
+      expect(res.body.success).toBe(false)
+      expect(res.body.message).toMatch(/human/i)
+      expect(mockSubscribe).not.toHaveBeenCalled()
+    })
+
+    it('refuses with "try again later" when the check cannot run', async () => {
+      mockVerifyTurnstile.mockResolvedValue('unavailable')
+
+      const res = await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 't' })
+
+      expect(res.body.success).toBe(false)
+      expect(res.body.message).toMatch(/try again later/i)
+      expect(mockSubscribe).not.toHaveBeenCalled()
+    })
+
+    it('passes the token and the visitor IP to the check', async () => {
+      await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 'tok' })
+
+      expect(mockVerifyTurnstile).toHaveBeenCalledWith('tok', expect.any(String))
+    })
+
+    it('runs only after the honeypot and the form token pass', async () => {
+      await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'bot@example.com', website: 'x', formToken: 'valid-token', turnstileToken: 't' })
+      await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'bot@example.com', formToken: 'wrong', turnstileToken: 't' })
+
+      expect(mockVerifyTurnstile).not.toHaveBeenCalled()
+    })
   })
 
   describe('GET /api/subscribe/token', () => {
@@ -127,6 +221,25 @@ describe('Public Subscribe API', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(false)
       expect(res.body.message).toMatch(/try again/i)
+    })
+
+    it('returns success:false with the message at the global cap', async () => {
+      mockSubscribe.mockRejectedValue(new SignupUnavailableError('Signups are unavailable right now. Please try again later.'))
+
+      const res = await request(app)
+        .post('/api/subscribe')
+        .send({ email: 'user@example.com', formToken: 'valid-token' })
+
+      expect(res.body.success).toBe(false)
+      expect(res.body.message).toMatch(/try again later/i)
+    })
+
+    it('passes only the trimmed email to the service, never a first name', async () => {
+      await request(app)
+        .post('/api/subscribe')
+        .send({ email: ' user@example.com ', firstName: 'Buy pills', formToken: 'valid-token' })
+
+      expect(mockSubscribe).toHaveBeenCalledWith({ email: 'user@example.com' })
     })
 
     it('returns success:false on an unexpected error', async () => {

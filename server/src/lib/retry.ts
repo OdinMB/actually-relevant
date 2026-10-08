@@ -27,6 +27,21 @@ export function isRetryableError(err: unknown): boolean {
   return false
 }
 
+const NOT_CONNECTED_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'])
+
+/**
+ * True only when the request certainly never reached the server: no response, and
+ * a connection that was refused or a host name that did not resolve. Use it for
+ * calls that must not run twice (sending an email), where a timeout or a reset
+ * might mean the first attempt was already accepted.
+ */
+export function isConnectionNotEstablished(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false
+  const { response, code } = err as { response?: unknown; code?: unknown }
+  if (response) return false
+  return typeof code === 'string' && NOT_CONNECTED_CODES.has(code)
+}
+
 export async function withRetry<T>(
   fn: () => Promise<T>,
   options: RetryOptions = {},

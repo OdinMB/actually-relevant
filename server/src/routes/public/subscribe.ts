@@ -1,17 +1,23 @@
-import { Router } from 'express'
+import { Router, type RequestHandler } from 'express'
 import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { config } from '../../config.js'
 import { validateBody } from '../../middleware/validate.js'
 import * as subscribeService from '../../services/subscribe.js'
-import { EmailValidationError, ConfirmationEmailError } from '../../services/subscribe.js'
+import { EmailValidationError, ConfirmationEmailError, SignupUnavailableError } from '../../services/subscribe.js'
 import { issueFormToken, verifyFormToken } from '../../lib/formToken.js'
+import { verifyTurnstile, type TurnstileResult } from '../../lib/turnstile.js'
 import { createLogger } from '../../lib/logger.js'
 
 const router = Router()
 const log = createLogger('public:subscribe')
 
 const CHECK_EMAIL_MESSAGE = 'Check your email to confirm your subscription.'
+
+const TURNSTILE_MESSAGES: Record<Exclude<TurnstileResult, 'ok'>, string> = {
+  failed: "We couldn't verify that you're human. Please try again.",
+  unavailable: 'Signups are unavailable right now. Please try again later.',
+}
 
 // Burst limiter for the costly signup POST (creates pending row + sends email).
 const subscribeLimiter = rateLimit({
@@ -42,25 +48,39 @@ const lightLimiter = rateLimit({
   message: { error: 'Too many requests. Please try again later.' },
 })
 
+// Unknown keys (an old client's firstName) are stripped by zod and never reach the service.
 const subscribeSchema = z.object({
-  email: z.string().email('Invalid email address').max(255),
-  firstName: z.string().max(100).optional(),
+  email: z.string().trim().email('Invalid email address').max(255),
   website: z.string().optional(), // honeypot — humans never fill this
   formToken: z.string().optional(),
+  turnstileToken: z.string().max(4096).optional(),
 })
 
 const confirmSchema = z.object({
   token: z.string().min(1).max(100),
-  email: z.string().email().max(255),
+  email: z.string().trim().email().max(255),
 })
 
+/**
+ * The one signup switch (`SUBSCRIPTIONS_ENABLED`, closed unless 'true'). While paused,
+ * the token and signup routes refuse with 503 + SIGNUPS_PAUSED and nothing happens;
+ * confirming an already-sent link keeps working.
+ */
+const requireSignupsOpen: RequestHandler = (_req, res, next) => {
+  if (!config.subscribe.enabled) {
+    res.status(503).json({ error: 'Newsletter signups are paused.', code: 'SIGNUPS_PAUSED' })
+    return
+  }
+  next()
+}
+
 // Issue a short-lived anti-bot form token when the form is rendered.
-router.get('/token', lightLimiter, (_req, res) => {
+router.get('/token', requireSignupsOpen, lightLimiter, (_req, res) => {
   res.set('Cache-Control', 'no-store')
   res.json({ token: issueFormToken() })
 })
 
-router.post('/', subscribeLimiter, subscribeDailyLimiter, validateBody(subscribeSchema), async (req, res) => {
+router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, validateBody(subscribeSchema), async (req, res) => {
   // Silently accept honeypot-filled submissions (return success so bots aren't tipped off).
   if (req.body.website) {
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
@@ -68,22 +88,34 @@ router.post('/', subscribeLimiter, subscribeDailyLimiter, validateBody(subscribe
   }
 
   // Require a valid, appropriately-aged form token. Missing/invalid → silent accept,
-  // no Plunk call. This blocks scripts that POST directly without loading the form.
+  // no Plunk call. This trips naive bots; a script can still fetch a token, which
+  // is why Turnstile follows.
   if (!verifyFormToken(req.body.formToken).ok) {
     log.info('rejected subscribe: missing or invalid form token')
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
     return
   }
 
+  // Turnstile, before any side effect. Unlike the two silent gates above, a person
+  // can fail it, so they are told.
+  const turnstile = await verifyTurnstile(req.body.turnstileToken, req.ip)
+  if (turnstile !== 'ok') {
+    res.json({ success: false, message: TURNSTILE_MESSAGES[turnstile] })
+    return
+  }
+
   try {
-    const { email, firstName } = req.body
-    await subscribeService.subscribe({ email, firstName })
+    await subscribeService.subscribe({ email: req.body.email })
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
   } catch (err) {
     // Surface real failures to the visitor rather than falsely claiming the email
-    // was sent. (An already-confirmed email returns success earlier via early return,
+    // was sent. (An already-confirmed or throttled address returns success earlier,
     // so this path can't leak subscription status — these are genuine errors.)
-    if (err instanceof EmailValidationError || err instanceof ConfirmationEmailError) {
+    if (
+      err instanceof EmailValidationError ||
+      err instanceof ConfirmationEmailError ||
+      err instanceof SignupUnavailableError
+    ) {
       res.json({ success: false, message: err.message })
       return
     }

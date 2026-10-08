@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { config } from '../config.js'
-import { withRetry, isRetryableError } from '../lib/retry.js'
+import { withRetry, isRetryableError, isConnectionNotEstablished } from '../lib/retry.js'
 import { createLogger } from '../lib/logger.js'
 
 const log = createLogger('plunk')
@@ -240,6 +240,10 @@ export interface SendTransactionalOpts {
   name?: string
 }
 
+/**
+ * Retried only when the connection was never made: a timeout, a reset or a 5xx may
+ * come after Plunk accepted the email, and a retry would then deliver it twice.
+ */
 export async function sendTransactional(opts: SendTransactionalOpts): Promise<void> {
   return withRetry(
     async () => {
@@ -253,7 +257,7 @@ export async function sendTransactional(opts: SendTransactionalOpts): Promise<vo
       })
       log.info({ to: opts.to }, 'transactional email sent')
     },
-    { retries: 3, retryOn: isRetryableError },
+    { retries: 2, retryOn: isConnectionNotEstablished },
   )
 }
 

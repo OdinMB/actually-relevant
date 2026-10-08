@@ -130,6 +130,38 @@ describe('Plunk API client', () => {
         subject: 'Confirm',
       }))
     })
+
+    // A timeout or 5xx may come after Plunk accepted the email; retrying would send it twice.
+    it('is not retried after a timeout', async () => {
+      mockAxiosInstance.post.mockRejectedValue(Object.assign(new Error('timeout of 15000ms exceeded'), { code: 'ECONNABORTED' }))
+
+      await expect(sendTransactional({ to: 'a@example.com', subject: 's', body: 'b' })).rejects.toThrow('timeout')
+      expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1)
+    })
+
+    it('is not retried after a 500', async () => {
+      mockAxiosInstance.post.mockRejectedValue(Object.assign(new Error('status code 500'), { response: { status: 500 } }))
+
+      await expect(sendTransactional({ to: 'a@example.com', subject: 's', body: 'b' })).rejects.toThrow('500')
+      expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1)
+    })
+
+    it('is retried when the connection was refused', async () => {
+      vi.useFakeTimers()
+      try {
+        mockAxiosInstance.post
+          .mockRejectedValueOnce(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }))
+          .mockResolvedValueOnce({ data: {} })
+
+        const sent = sendTransactional({ to: 'a@example.com', subject: 's', body: 'b' })
+        await vi.runAllTimersAsync()
+        await sent
+
+        expect(mockAxiosInstance.post).toHaveBeenCalledTimes(2)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   describe('parseContactsResponse', () => {

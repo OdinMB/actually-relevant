@@ -6,6 +6,7 @@ const mockPrisma = {
     findFirst: vi.fn(),
     create: vi.fn(),
     deleteMany: vi.fn(),
+    delete: vi.fn(),
     update: vi.fn(),
   },
 }
@@ -16,18 +17,30 @@ const mockPlunk = {
   verifyEmail: vi.fn(),
 }
 
+const mockCheckSendAllowance = vi.fn()
+
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./plunk.js', () => mockPlunk)
+vi.mock('./subscribeLimits.js', () => ({
+  checkSendAllowance: (...args: unknown[]) => mockCheckSendAllowance(...args),
+}))
 
-const { subscribe, confirmSubscription, EmailValidationError, ConfirmationEmailError } =
-  await import('./subscribe.js')
+const {
+  subscribe,
+  confirmSubscription,
+  EmailValidationError,
+  ConfirmationEmailError,
+  SignupUnavailableError,
+} = await import('./subscribe.js')
 
 describe('subscribe service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCheckSendAllowance.mockResolvedValue('ok')
     mockPrisma.pendingSubscription.findFirst.mockResolvedValue(null)
     mockPrisma.pendingSubscription.create.mockResolvedValue({ id: '1' })
     mockPrisma.pendingSubscription.deleteMany.mockResolvedValue({ count: 0 })
+    mockPrisma.pendingSubscription.delete.mockResolvedValue({ id: '1' })
     mockPrisma.pendingSubscription.update.mockResolvedValue({ id: '1' })
     mockPlunk.createContact.mockResolvedValue({ id: 'contact-1' })
     mockPlunk.sendTransactional.mockResolvedValue(undefined)
@@ -68,10 +81,71 @@ describe('subscribe service', () => {
       expect(callOrder).toEqual(['verify', 'send'])
     })
 
-    it('throws ConfirmationEmailError when the confirmation email fails to send', async () => {
+    it('throws ConfirmationEmailError and removes its row when the confirmation email fails to send', async () => {
+      mockPrisma.pendingSubscription.create.mockResolvedValue({ id: 'row-7' })
       mockPlunk.sendTransactional.mockRejectedValue(new Error('Request failed with status code 403'))
 
       await expect(subscribe({ email: 'test@example.com' })).rejects.toThrow(ConfirmationEmailError)
+      expect(mockPrisma.pendingSubscription.delete).toHaveBeenCalledWith({ where: { id: 'row-7' } })
+    })
+
+    it('still reports the send failure when removing the row fails too', async () => {
+      mockPlunk.sendTransactional.mockRejectedValue(new Error('Plunk down'))
+      mockPrisma.pendingSubscription.delete.mockRejectedValue(new Error('db down'))
+
+      await expect(subscribe({ email: 'test@example.com' })).rejects.toThrow(ConfirmationEmailError)
+    })
+
+    it('keeps its row when the email was sent', async () => {
+      await subscribe({ email: 'test@example.com' })
+
+      expect(mockPrisma.pendingSubscription.delete).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('normalization', () => {
+    it('looks up, stores and sends to the trimmed, lowercased address', async () => {
+      await subscribe({ email: '  Victim@Example.COM ' })
+
+      expect(mockPrisma.pendingSubscription.findFirst.mock.calls[0][0].where.email).toBe('victim@example.com')
+      expect(mockCheckSendAllowance).toHaveBeenCalledWith('victim@example.com')
+      expect(mockPlunk.verifyEmail).toHaveBeenCalledWith('victim@example.com')
+      expect(mockPrisma.pendingSubscription.deleteMany.mock.calls[0][0].where.email).toBe('victim@example.com')
+      expect(mockPrisma.pendingSubscription.create.mock.calls[0][0].data.email).toBe('victim@example.com')
+      const sent = mockPlunk.sendTransactional.mock.calls[0][0]
+      expect(sent.to).toBe('victim@example.com')
+      expect(sent.body).toContain('email=victim%40example.com')
+    })
+  })
+
+  describe('send limits', () => {
+    it('sends nothing and writes nothing for an address that got an email within the window', async () => {
+      mockCheckSendAllowance.mockResolvedValue('address-limited')
+
+      await expect(subscribe({ email: 'test@example.com' })).resolves.toBeUndefined()
+
+      expect(mockPlunk.verifyEmail).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.deleteMany).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+    })
+
+    it('refuses with SignupUnavailableError at the global cap, sending nothing', async () => {
+      mockCheckSendAllowance.mockResolvedValue('global-cap')
+
+      await expect(subscribe({ email: 'test@example.com' })).rejects.toThrow(SignupUnavailableError)
+
+      expect(mockPlunk.verifyEmail).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+    })
+
+    it('does not consult the limits for an already-confirmed address', async () => {
+      mockPrisma.pendingSubscription.findFirst.mockResolvedValue({ confirmedAt: new Date() })
+
+      await subscribe({ email: 'test@example.com' })
+
+      expect(mockCheckSendAllowance).not.toHaveBeenCalled()
     })
   })
 
@@ -99,33 +173,6 @@ describe('subscribe service', () => {
 
       expect(mockPrisma.pendingSubscription.create).toHaveBeenCalled()
       expect(mockPlunk.sendTransactional).toHaveBeenCalled()
-    })
-  })
-
-  describe('firstName handling', () => {
-    it('personalizes the greeting with the first name', async () => {
-      await subscribe({ email: 'test@example.com', firstName: 'Jane' })
-
-      const emailBody = mockPlunk.sendTransactional.mock.calls[0][0].body
-      expect(emailBody).toContain('Hi Jane,')
-    })
-
-    it('uses a plain greeting when no first name is provided', async () => {
-      await subscribe({ email: 'test@example.com' })
-
-      const emailBody = mockPlunk.sendTransactional.mock.calls[0][0].body
-      expect(emailBody).toContain('Hi,')
-      expect(emailBody).not.toContain('Jane')
-    })
-
-    it('strips URLs and markup from the first name in the greeting', async () => {
-      await subscribe({ email: 'test@example.com', firstName: 'Cheap pills http://spam.com <b>buy</b>' })
-
-      const emailBody = mockPlunk.sendTransactional.mock.calls[0][0].body
-      // The sanitized name appears in the greeting; the URL and markup are gone.
-      expect(emailBody).toContain('Hi Cheap pills buy,')
-      expect(emailBody).not.toContain('spam.com')
-      expect(emailBody).not.toContain('<b>buy</b>')
     })
   })
 
@@ -211,6 +258,22 @@ describe('subscribe service', () => {
 
       expect(mockPlunk.createContact).not.toHaveBeenCalled()
       expect(mockPrisma.pendingSubscription.update).not.toHaveBeenCalled()
+    })
+
+    it('matches the stored lowercased row from a mixed-case link', async () => {
+      mockPrisma.pendingSubscription.findFirst.mockResolvedValue({
+        id: 'p1',
+        confirmedAt: null,
+        expiresAt: future,
+        plunkContactId: null,
+      })
+
+      await confirmSubscription('t', 'Mixed@Example.com')
+
+      expect(mockPrisma.pendingSubscription.findFirst).toHaveBeenCalledWith({
+        where: { token: 't', email: 'mixed@example.com' },
+      })
+      expect(mockPlunk.createContact).toHaveBeenCalledWith({ email: 'mixed@example.com', subscribed: true })
     })
 
     it('throws on an invalid token', async () => {

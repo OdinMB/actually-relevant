@@ -1,5 +1,31 @@
 import { describe, it, expect, vi } from 'vitest'
-import { withRetry, isRetryableError } from './retry.js'
+import { withRetry, isRetryableError, isConnectionNotEstablished } from './retry.js'
+
+describe('isConnectionNotEstablished', () => {
+  it('is true when the connection was refused or the host did not resolve', () => {
+    expect(isConnectionNotEstablished({ code: 'ECONNREFUSED' })).toBe(true)
+    expect(isConnectionNotEstablished({ code: 'ENOTFOUND' })).toBe(true)
+    expect(isConnectionNotEstablished({ code: 'EAI_AGAIN' })).toBe(true)
+  })
+
+  it('is false when the request may have reached the server', () => {
+    expect(isConnectionNotEstablished({ code: 'ECONNABORTED' })).toBe(false)
+    expect(isConnectionNotEstablished({ code: 'ETIMEDOUT' })).toBe(false)
+    expect(isConnectionNotEstablished({ code: 'ECONNRESET' })).toBe(false)
+    expect(isConnectionNotEstablished(new Error('timeout of 15000ms exceeded'))).toBe(false)
+    expect(isConnectionNotEstablished({ response: { status: 429 } })).toBe(false)
+    expect(isConnectionNotEstablished({ response: { status: 503 } })).toBe(false)
+  })
+
+  it('is false when a response came back, whatever the code', () => {
+    expect(isConnectionNotEstablished({ code: 'ECONNREFUSED', response: { status: 502 } })).toBe(false)
+  })
+
+  it('is false for non-objects', () => {
+    expect(isConnectionNotEstablished(null)).toBe(false)
+    expect(isConnectionNotEstablished('ECONNREFUSED')).toBe(false)
+  })
+})
 
 describe('isRetryableError', () => {
   it('retries on timeout errors', () => {

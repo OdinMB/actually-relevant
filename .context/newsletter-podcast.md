@@ -49,7 +49,7 @@ Template structure:
 - **Story blocks** — Title (linked), publisher favicon + name + "original article" / "relevance analysis" links, body text or blockquote
 - **Support Us** — Ko-fi link with "Free. Independent. Without ads." tagline
 - **AI disclaimer** — "Curated and written with care by AI" + bug/mistake notice
-- **Footer** — Website link, Plunk `{{plunk_id}}` unsubscribe link
+- **Footer** — Website link. Our template carries no unsubscribe link (removed in February); Plunk adds its own footer unsubscribe link and, since 2026-08-09, one-click unsubscribe headers
 
 ### Carousel images (`POST /api/admin/newsletters/:id/carousel`)
 

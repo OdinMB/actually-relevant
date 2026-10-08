@@ -374,6 +374,14 @@ export const config = {
     ),
     // HMAC key for form tokens. Dedicated secret, falling back to JWT_SECRET so it works out of the box.
     formTokenSecret: process.env.FORM_TOKEN_SECRET || process.env.JWT_SECRET || "",
+    // The one signup switch. Closed unless explicitly 'true': a missing value means paused.
+    enabled: process.env.SUBSCRIPTIONS_ENABLED === 'true',
+    // Cloudflare Turnstile secret. Missing in production refuses every signup (fail closed).
+    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || "",
+    // At most one confirmation email per normalized address within this window.
+    perAddressWindowHours: parseInt(process.env.SUBSCRIBE_PER_ADDRESS_WINDOW_HOURS || "24", 10),
+    // At most this many confirmation emails per rolling hour across all addresses.
+    globalHourlyMax: parseInt(process.env.SUBSCRIBE_GLOBAL_HOURLY_MAX || "30", 10),
   },
   relatedStories: {
     displayCount: 4,

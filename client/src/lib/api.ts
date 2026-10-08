@@ -6,6 +6,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** Machine-readable reason from the error body, e.g. `SIGNUPS_PAUSED`. */
+    public code?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -17,7 +19,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }))
-    throw new ApiError(res.status, body.error || res.statusText)
+    throw new ApiError(res.status, body.error || res.statusText, typeof body.code === 'string' ? body.code : undefined)
   }
 
   return res.json()
@@ -82,7 +84,7 @@ export const publicApi = {
   sources: () =>
     request<{ byRegion: Record<string, string[]>; byIssue: Record<string, string[]>; totalCount: number }>('/sources'),
 
-  subscribe: (data: { email: string; firstName?: string; website?: string; formToken?: string }) =>
+  subscribe: (data: { email: string; website?: string; formToken?: string; turnstileToken?: string }) =>
     request<{ success: boolean; message: string }>('/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
