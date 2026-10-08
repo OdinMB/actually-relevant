@@ -228,7 +228,7 @@ export default function SubscribeForm({
 
         {turnstileFailed && (
           <p className="text-sm text-red-600" role="alert">
-            The human check couldn't load. Please reload the page and try again.
+            The human check couldn't load. Please press Subscribe to try again.
           </p>
         )}
 

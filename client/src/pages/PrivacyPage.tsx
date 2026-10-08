@@ -9,7 +9,7 @@ export default function PrivacyPage() {
         <title>Privacy Policy - {SEO.siteName}</title>
         <meta
           name="description"
-          content="Actually Relevant respects your privacy. No cookies, no tracking pixels, no invasive analytics. Learn what minimal data we collect."
+          content="Actually Relevant respects your privacy. We set no cookies and use no tracking pixels or invasive analytics. Learn what minimal data we collect."
         />
         <meta
           property="og:title"
@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         />
         <meta
           property="og:description"
-          content="Actually Relevant respects your privacy. No cookies, no tracking pixels, no invasive analytics."
+          content="Actually Relevant respects your privacy. We set no cookies and use no tracking pixels or invasive analytics."
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={`${SEO.siteUrl}/privacy`} />
@@ -29,8 +29,9 @@ export default function PrivacyPage() {
 
         <div className="prose max-w-none">
           <p>
-            We do not use cookies, tracking pixels, Google Analytics,
-            advertising scripts, or any other invasive data collection. Your
+            We do not set cookies, and we do not use tracking pixels, Google
+            Analytics, advertising scripts, or any other invasive data
+            collection. Your
             browser keeps your dial position, saved stories, and reading history
             on your device, and they never leave it.
           </p>
@@ -110,8 +111,17 @@ export default function PrivacyPage() {
             the form, so Cloudflare receives your IP address and information
             about your browser only if you submit the form. Cloudflare uses this data
             only for bot protection: to check this signup on our behalf, and,
-            under its own responsibility, to improve its bot detection. This
-            may involve a transfer to the USA.
+            under its own responsibility, to improve its bot detection.
+            Cloudflare is a US company and may process this data in the USA.
+            It states that it is certified under the EU-U.S. Data Privacy
+            Framework, and its data processing agreement applies the EU
+            standard contractual clauses if that certification lapses.
+          </p>
+          <p className="mt-3">
+            Plunk states that it stores your email address in the EU (on
+            Hetzner servers in Germany). Sending each email through Amazon SES
+            involves a temporary transfer to the USA, which Plunk covers with
+            the EU standard contractual clauses.
           </p>
           <p className="mt-3">
             Our newsletter provider, Plunk, automatically tracks email
@@ -140,6 +150,9 @@ export default function PrivacyPage() {
           <p>
             We do not set cookies, and we do not use sessionStorage, IndexedDB,
             or any other browser storage mechanism for public visitors.
+            If you submit the newsletter signup form, Cloudflare may set a
+            technically necessary cookie during the human check, which it uses
+            only to detect problems with the check itself.
           </p>
           <p>
             Your <strong>dial position</strong> (a single number between 0 and
