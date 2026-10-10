@@ -29,7 +29,7 @@ vi.mock('../config.js', async importOriginal => {
   return { ...actual, config: { ...actual.config, podcast: { ...actual.config.podcast, dryRun: false } } }
 })
 
-const { isoWeekKey, runWeeklyEpisode, resumeEpisode, startAdminRun, findOrCreateWeekEpisode } = await import('./podcastWeekly.js')
+const { isoWeekKey, runWeeklyEpisode, resumeEpisode, startAdminRun, findOrCreateWeekEpisode, weeklyCronAction } = await import('./podcastWeekly.js')
 const { PodcastBlockedError, PodcastStoppedError, PodcastRefusedError } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-10T06:00:00Z') // Saturday of 2026-W41
@@ -46,6 +46,22 @@ describe('isoWeekKey', () => {
     // Sunday 23:30 UTC is still the same week, whatever the server's zone
     expect(isoWeekKey(new Date('2026-10-11T23:30:00Z'))).toBe('2026-W41')
     expect(isoWeekKey(new Date('2026-10-12T00:00:00Z'))).toBe('2026-W42')
+  })
+})
+
+describe('weeklyCronAction', () => {
+  const BLOCKED = new Date('2026-10-09T10:00:00Z')
+  it.each([
+    ['a published episode', { status: 'published', stage: 'ready', mode: 'automated', blockedAt: null }, 'finished'],
+    ['a ready episode', { status: 'draft', stage: 'ready', mode: 'automated', blockedAt: null }, 'finished'],
+    ['a ready interactive episode', { status: 'draft', stage: 'ready', mode: 'interactive', blockedAt: null }, 'finished'],
+    ['an interactive episode', { status: 'draft', stage: 'selected', mode: 'interactive', blockedAt: null }, 'waiting-for-person'],
+    ['a blocked interactive episode', { status: 'draft', stage: 'scripted', mode: 'interactive', blockedAt: BLOCKED }, 'waiting-for-person'],
+    ['a blocked automated episode', { status: 'draft', stage: 'scripted', mode: 'automated', blockedAt: BLOCKED }, 'blocked'],
+    ['an episode nobody started', { status: 'draft', stage: 'created', mode: null, blockedAt: null }, 'advance'],
+    ['an automated episode in progress', { status: 'draft', stage: 'voiced', mode: 'automated', blockedAt: null }, 'advance'],
+  ] as const)('%s', (_label, episode, expected) => {
+    expect(weeklyCronAction(episode)).toBe(expected)
   })
 })
 

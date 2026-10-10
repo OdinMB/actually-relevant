@@ -26,6 +26,7 @@ const mockWeekly = vi.hoisted(() => ({
   startAdminRun: vi.fn(),
   resumeEpisode: vi.fn(),
 }))
+const mockWeekSlot = vi.hoisted(() => ({ getWeekSlot: vi.fn() }))
 const mockPipeline = vi.hoisted(() => ({ rewindEpisode: vi.fn() }))
 const mockEditing = vi.hoisted(() => ({
   getEpisodeStoryPool: vi.fn(),
@@ -44,6 +45,7 @@ const mockStandalone = vi.hoisted(() => ({
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/podcastWeekly.js', () => mockWeekly)
+vi.mock('../../services/podcastWeekSlot.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastWeekSlot.js')>()), ...mockWeekSlot }))
 vi.mock('../../services/podcastPipeline.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastPipeline.js')>()), ...mockPipeline }))
 vi.mock('../../services/podcastEditing.js', async importOriginal => ({ ...(await importOriginal<typeof import('../../services/podcastEditing.js')>()), ...mockEditing }))
 vi.mock('../../lib/bunnyStorage.js', () => mockBunny)
@@ -134,6 +136,29 @@ describe('Admin Podcasts API', () => {
 
     it('requires auth', async () => {
       expect((await request(app).get('/api/admin/podcasts/active')).status).toBe(401)
+    })
+  })
+
+  describe('GET /api/admin/podcasts/weekly', () => {
+    const slot = { weekKey: '2026-W41', episode: null, fridayRun: 'create', fridayWindow: 'ahead', automaticRunEnabled: true }
+
+    it('requires auth', async () => {
+      expect((await request(app).get('/api/admin/podcasts/weekly')).status).toBe(401)
+      expect(mockWeekSlot.getWeekSlot).not.toHaveBeenCalled()
+    })
+
+    it('is routed before /:id and reads the slot without creating the week\'s row', async () => {
+      mockWeekSlot.getWeekSlot.mockResolvedValue(slot)
+      const res = await request(app).get('/api/admin/podcasts/weekly').set(authHeader())
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual(slot)
+      expect(mockWeekly.findOrCreateWeekEpisode).not.toHaveBeenCalled()
+      expect(mockPrisma.podcast.findUnique).not.toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'weekly' } }))
+    })
+
+    it('answers 500 when the slot cannot be read', async () => {
+      mockWeekSlot.getWeekSlot.mockRejectedValue(new Error('db down'))
+      expect((await request(app).get('/api/admin/podcasts/weekly').set(authHeader())).status).toBe(500)
     })
   })
 

@@ -95,6 +95,12 @@ export async function getPodcasts(filters: PodcastFilters) {
   })
 }
 
+/** The weekly episode of `weekKey` as a list row with its progress flags, or null when the week has none. */
+export async function getWeekEpisodeListItem(weekKey: string) {
+  const row = await prisma.podcast.findUnique({ where: { weekKey }, select: LIST_COLUMNS })
+  return row ? withProgress(row) : null
+}
+
 /**
  * One episode with its derived state: `inProgress`, `awaitingReview`, the running `activity`, the
  * TTS characters spent on it (`ttsChars`, every re-voice included) and the characters a voicing of

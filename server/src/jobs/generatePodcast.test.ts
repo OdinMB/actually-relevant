@@ -11,7 +11,8 @@ vi.mock('../services/podcastWeekly.js', () => mockWeekly)
 vi.mock('../lib/notify.js', () => mockNotify)
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
-const { runGeneratePodcast, inGenerateWindow } = await import('./generatePodcast.js')
+// The window rule itself is tested in podcastWeekSlot.test.ts; the real one runs here.
+const { runGeneratePodcast } = await import('./generatePodcast.js')
 
 // 2026-10-16 is a Friday.
 const FRIDAY_0600 = new Date('2026-10-16T06:00:00Z')
@@ -26,18 +27,6 @@ function episode(overrides: Record<string, unknown> = {}) {
   return { id: 'pod-1', title: 'W42: Water', stage: 'scripted', blockedReason: null, lastError: null, leaseUntil: null, ...overrides }
 }
 
-describe('inGenerateWindow', () => {
-  it('opens at the start of Friday (UTC) and closes at the configured UTC hour that evening', () => {
-    expect(inGenerateWindow(new Date('2026-10-15T23:59:00Z'))).toBe(false) // Thursday
-    expect(inGenerateWindow(new Date('2026-10-16T00:00:00Z'))).toBe(true)
-    expect(inGenerateWindow(FRIDAY_1800)).toBe(true) // the last slot
-    expect(inGenerateWindow(new Date('2026-10-16T19:59:00Z'))).toBe(true)
-    expect(inGenerateWindow(new Date('2026-10-16T20:00:00Z'))).toBe(false)
-    expect(inGenerateWindow(new Date('2026-10-17T06:00:00Z'))).toBe(false) // Saturday, the old window
-    expect(inGenerateWindow(new Date('2026-10-14T10:00:00Z'))).toBe(false) // a Wednesday boot catch-up
-  })
-})
-
 describe('runGeneratePodcast', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -49,6 +38,7 @@ describe('runGeneratePodcast', () => {
   it('does nothing outside the Friday window', async () => {
     await runGeneratePodcast(new Date('2026-10-14T10:00:00Z'))
     await runGeneratePodcast(new Date('2026-10-17T06:00:00Z'))
+    await runGeneratePodcast(new Date('2026-10-16T20:00:00Z'))
     expect(mockWeekly.runWeeklyEpisode).not.toHaveBeenCalled()
   })
 

@@ -118,6 +118,21 @@ async function leaveDryRun(episode: Podcast, leaseHeld: boolean): Promise<void> 
   await rewindEpisode(episode.id, keepStories ? 'selected' : 'created', { dryRun: false, leaseHeld })
 }
 
+/**
+ * What the automatic (cron) run does with the week's episode, in the order `runEpisode` applies it:
+ * a published or ready episode is finished; an interactive one waits for its person, blocked or
+ * not; a blocked one is skipped until a person resumes it; anything else advances (an episode
+ * nobody started runs automated). The admin slot view reports the same answer (podcastWeekSlot.ts).
+ */
+export type WeeklyCronAction = 'finished' | 'waiting-for-person' | 'blocked' | 'advance'
+
+export function weeklyCronAction(episode: Pick<Podcast, 'status' | 'stage' | 'mode' | 'blockedAt'>): WeeklyCronAction {
+  if (episode.status === ContentStatus.published || episode.stage === PodcastStage.ready) return 'finished'
+  if (episode.mode === 'interactive') return 'waiting-for-person'
+  if (episode.blockedAt) return 'blocked'
+  return 'advance'
+}
+
 interface RunOptions {
   trigger: AdvanceTrigger
   now: Date
@@ -132,19 +147,20 @@ async function runEpisode(episode: Podcast, { trigger, now, leaseHeld }: RunOpti
     return { outcome, podcastId: id, ...(reason ? { reason } : {}) }
   }
 
-  if (episode.status === ContentStatus.published || episode.stage === PodcastStage.ready) return result('skipped', 'already finished')
-  // The job never overrides a person mid-review, blocked or not: the episode waits for them.
-  if (trigger === 'cron' && episode.mode === 'interactive') {
-    return { ...result('skipped', 'interactive: the owner is reviewing it'), waitingForPerson: true }
-  }
-  if (episode.blockedAt) {
-    if (trigger === 'cron') return result('skipped', 'blocked')
+  const cronAction = weeklyCronAction(episode)
+  if (cronAction === 'finished') return result('skipped', 'already finished')
+  if (trigger === 'cron') {
+    // The job never overrides a person mid-review, blocked or not: the episode waits for them.
+    if (cronAction === 'waiting-for-person') {
+      return { ...result('skipped', 'interactive: the owner is reviewing it'), waitingForPerson: true }
+    }
+    if (cronAction === 'blocked') return result('skipped', 'blocked')
+    // An episode nobody started runs automated on the cron trigger.
+    if (episode.mode === null) await prisma.podcast.update({ where: { id }, data: { mode: 'automated' } })
+  } else if (episode.blockedAt || episode.attempts > 0) {
+    // An admin action clears a block and the week's attempt count.
     await clearBlock(id)
-  } else if (trigger === 'admin' && episode.attempts > 0) {
-    await clearBlock(id)
   }
-  // An episode nobody started runs automated on the cron trigger.
-  if (trigger === 'cron' && episode.mode === null) await prisma.podcast.update({ where: { id }, data: { mode: 'automated' } })
 
   try {
     assertPodcastRunnable({ dryRun: config.podcast.dryRun })

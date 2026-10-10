@@ -266,6 +266,27 @@ export interface PodcastListItem {
   updatedAt: string
 }
 
+/**
+ * What the Friday automatic run does with this week's slot: `create` when the week has no episode
+ * yet; otherwise the cron's own rule for the claimed episode (`finished`: nothing new this week,
+ * `waiting-for-person`: an interactive episode is left to its person, `blocked`: skipped until a
+ * person resumes it, `advance`: continued and finished automated).
+ */
+export type PodcastFridayRun = 'create' | 'finished' | 'waiting-for-person' | 'blocked' | 'advance'
+
+/**
+ * This ISO week's weekly-episode slot (UTC), read without creating a row. `fridayWindow`: `ahead`
+ * before Friday, `open` during Friday's automatic run, `passed` from Friday evening through Sunday.
+ * `automaticRunEnabled`: whether the generate_podcast job is switched on.
+ */
+export interface PodcastWeekSlot {
+  weekKey: string
+  episode: PodcastListItem | null
+  fridayRun: PodcastFridayRun
+  fridayWindow: 'ahead' | 'open' | 'passed'
+  automaticRunEnabled: boolean
+}
+
 export type PodcastSpeaker = 'HOST_A' | 'HOST_B'
 
 /** The model's dialogue as stored (the opener and sign-off are added in code, outside it). */

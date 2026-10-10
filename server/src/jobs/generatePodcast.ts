@@ -1,6 +1,7 @@
 /**
  * The generate_podcast cron entry (ADR-0013). It fires at several Friday slots; inside the UTC
- * Friday window it runs this week's episode automated (podcastWeekly.ts holds the retry, attempt
+ * Friday window (`fridayWindow` in podcastWeekSlot.ts, which the admin slot notice reads too) it
+ * runs this week's episode automated (podcastWeekly.ts holds the retry, attempt
  * cap and block policy, and sends the ready notice). A block throws, so the scheduler records one
  * job-failure notice; later slots skip the blocked episode quietly, and the notice stays unseen
  * until the owner opens it. An episode a person runs interactively is left alone, and on Friday
@@ -11,15 +12,9 @@ import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { runWeeklyEpisode } from '../services/podcastWeekly.js'
+import { fridayWindow } from '../services/podcastWeekSlot.js'
 
 const log = createLogger('generate_podcast')
-
-const FRIDAY = 5
-
-/** Friday from 00:00 until `generateWindowEndHourUtc`, in UTC whatever the server's zone. */
-export function inGenerateWindow(now: Date): boolean {
-  return now.getUTCDay() === FRIDAY && now.getUTCHours() < config.podcast.generateWindowEndHourUtc
-}
 
 /**
  * Remind the owner that this week's interactive episode is waiting for him: once per episode (one
@@ -53,7 +48,7 @@ async function remindWaitingEpisode(id: string, now: Date): Promise<void> {
 }
 
 export async function runGeneratePodcast(now: Date = new Date()): Promise<void> {
-  if (!inGenerateWindow(now)) {
+  if (fridayWindow(now) !== 'open') {
     log.info('outside the Friday window, nothing to do')
     return
   }

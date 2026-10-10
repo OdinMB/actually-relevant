@@ -2,6 +2,7 @@ import { Router, type Response } from 'express'
 import { createLogger } from '../../lib/logger.js'
 import * as podcastService from '../../services/podcast.js'
 import { findOrCreateWeekEpisode, resumeEpisode, startAdminRun, type AdminRunRequest } from '../../services/podcastWeekly.js'
+import { getWeekSlot } from '../../services/podcastWeekSlot.js'
 import { rewindEpisode } from '../../services/podcastPipeline.js'
 import { getEpisodeStoryPool, replaceEpisodeStories, saveEpisodeScript, updateEpisodeMeta, PodcastEditRejectedError } from '../../services/podcastEditing.js'
 import { monthToDateChars, PodcastRefusedError } from '../../services/podcastGuards.js'
@@ -69,6 +70,16 @@ router.get('/', validateQuery(podcastQuerySchema), async (req, res) => {
   } catch (err) {
     log.error({ err }, 'failed to fetch podcasts')
     res.status(500).json({ error: 'Failed to fetch podcasts' })
+  }
+})
+
+/** This ISO week's slot, read without creating a row (routed before /:id). */
+router.get('/weekly', async (_req, res) => {
+  try {
+    res.json(await getWeekSlot())
+  } catch (err) {
+    log.error({ err }, "failed to read this week's podcast slot")
+    res.status(500).json({ error: "Failed to read this week's podcast slot" })
   }
 })
 

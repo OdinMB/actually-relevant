@@ -13,6 +13,17 @@ export function usePodcasts(params?: { status?: string }) {
   })
 }
 
+/**
+ * This week's slot. The key sits under `['podcasts']`, so every invalidation of the list (create,
+ * start, delete, a run ending in the progress provider) refreshes it too.
+ */
+export function usePodcastWeekSlot() {
+  return useQuery({
+    queryKey: ['podcasts', 'week-slot'],
+    queryFn: () => adminApi.podcasts.weekSlot(),
+  })
+}
+
 /** Re-read only while a process works on the episode. */
 export function podcastRefetchInterval(podcast: Podcast | undefined): number | false {
   return podcast?.inProgress ? PODCAST_POLL_MS : false

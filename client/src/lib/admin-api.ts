@@ -17,6 +17,7 @@ import type {
   PodcastScriptSaveResult,
   PodcastStoryPool,
   PodcastUsage,
+  PodcastWeekSlot,
   JobRun,
   User,
   StoryFilters,
@@ -316,6 +317,8 @@ export const adminApi = {
     update: (id: string, data: { title?: string; humanEdited?: boolean }) =>
       request<Podcast>(`/podcasts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/podcasts/${id}`, { method: 'DELETE' }),
+    /** This week's slot (its episode or none, what Friday's automatic run will do); creates nothing. */
+    weekSlot: () => request<PodcastWeekSlot>('/podcasts/weekly'),
     /** Finds or creates this week's episode; nothing runs until a mode is chosen on its page. */
     startWeekly: () => request<Podcast>('/podcasts/weekly', { method: 'POST' }),
     /** Creates a standalone episode at `created`; a person then chooses its stories on its page. */
