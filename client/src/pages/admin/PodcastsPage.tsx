@@ -27,9 +27,10 @@ export default function PodcastsPage() {
   const [confirmClaim, setConfirmClaim] = useState(false)
 
   /**
-   * A claimed slot's episode opens directly: the click claims nothing. Otherwise (free, or not
-   * known yet) a confirm comes first, since the POST makes this week's episode, which Friday's
-   * automatic run then finishes or skips instead of making its own.
+   * A claimed slot's episode opens directly: the click claims nothing. Otherwise (free, or the
+   * slot could not be read) a confirm comes first, since the POST makes this week's episode, which
+   * Friday's automatic run then finishes or skips instead of making its own. While the slot is
+   * still loading the button shows as loading, so the dialog never misstates a claimed week.
    */
   const handleWeeklyClick = () => {
     if (claimedEpisode) navigate(`/admin/podcasts/${claimedEpisode.id}`)
@@ -85,7 +86,7 @@ export default function PodcastsPage() {
         actions={(
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={handleCreateStandalone} loading={createStandalone.isPending}>New podcast</Button>
-            <Button onClick={handleWeeklyClick} loading={startWeekly.isPending}>
+            <Button onClick={handleWeeklyClick} loading={startWeekly.isPending || weekSlot.isPending}>
               {claimedEpisode ? "Open this week's episode" : "Start this week's episode"}
             </Button>
           </div>
@@ -125,8 +126,8 @@ export default function PodcastsPage() {
         open={confirmClaim}
         onClose={() => setConfirmClaim(false)}
         onConfirm={handleStartWeekly}
-        title="Make this week's episode?"
-        description="This becomes this week's episode. Friday's automatic run will then finish or skip it instead of making a new one. For a test or a one-off, use New podcast."
+        title="Start this week's episode?"
+        description="This becomes this week's episode. Friday's automatic run will then finish or skip it instead of making a new one. For a test or a one-off, use “New podcast” instead."
         confirmLabel="Start this week's episode"
       />
 

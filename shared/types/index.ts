@@ -276,7 +276,8 @@ export type PodcastFridayRun = 'create' | 'finished' | 'waiting-for-person' | 'b
 
 /**
  * This ISO week's weekly-episode slot (UTC), read without creating a row. `fridayWindow`: `ahead`
- * before Friday, `open` during Friday's automatic run, `passed` from Friday evening through Sunday.
+ * before Friday, `open` while Friday's automatic slots still run, `passed` once the last slot has
+ * gone by (Friday 19:00 UTC) through Sunday.
  * `automaticRunEnabled`: whether the generate_podcast job is switched on.
  */
 export interface PodcastWeekSlot {

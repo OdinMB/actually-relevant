@@ -7,7 +7,7 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
-const { fridayWindow, getWeekSlot } = await import('./podcastWeekSlot.js')
+const { fridayWindow, slotWindow, getWeekSlot } = await import('./podcastWeekSlot.js')
 
 // 2026-10-16 is a Friday, in 2026-W42.
 const WEDNESDAY = new Date('2026-10-14T10:00:00Z')
@@ -33,6 +33,22 @@ describe('fridayWindow', () => {
     ['2026-10-19T00:00:00Z', 'ahead'], // the next Monday
   ] as const)('%s is %s', (iso, expected) => {
     expect(fridayWindow(new Date(iso))).toBe(expected)
+  })
+})
+
+describe('slotWindow', () => {
+  it.each([
+    ['2026-10-15T23:59:00Z', 'ahead'],
+    ['2026-10-16T18:30:00Z', 'open'], // the last slot's hour, its run may still be going
+    ['2026-10-16T19:00:00Z', 'passed'], // gate still open, but no slot fires again this week
+    ['2026-10-16T20:00:00Z', 'passed'],
+    ['2026-10-17T06:00:00Z', 'passed'],
+  ] as const)('%s is %s', (iso, expected) => {
+    expect(slotWindow(new Date(iso))).toBe(expected)
+  })
+
+  it('leaves the cron gate open at Friday 19:00', () => {
+    expect(fridayWindow(new Date('2026-10-16T19:00:00Z'))).toBe('open')
   })
 })
 
@@ -62,6 +78,12 @@ describe('getWeekSlot', () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ stage: 'ready' }))
     const slot = await getWeekSlot(new Date('2026-10-17T06:00:00Z'))
     expect(slot).toMatchObject({ weekKey: '2026-W42', fridayRun: 'finished', fridayWindow: 'passed' })
+  })
+
+  it('reports Friday 19:00 UTC as passed, once the last generation slot has gone by', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ mode: 'automated', stage: 'scripted' }))
+    const slot = await getWeekSlot(new Date('2026-10-16T19:00:00Z'))
+    expect(slot).toMatchObject({ fridayRun: 'advance', fridayWindow: 'passed' })
   })
 
   it('reports the automatic run as off when the job row is disabled or missing', async () => {

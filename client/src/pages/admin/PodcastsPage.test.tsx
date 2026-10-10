@@ -39,9 +39,19 @@ describe('PodcastsPage: this week\'s slot', () => {
     mockApi.podcasts.startWeekly.mockResolvedValue(makePodcast({ id: 'pod-new' }))
   })
 
+  it('keeps the weekly button busy while the slot is still loading, so no dialog misstates it', async () => {
+    mockApi.podcasts.weekSlot.mockReturnValue(new Promise(() => {}))
+    renderPage()
+    const button = await weeklyButton()
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(mockApi.podcasts.startWeekly).not.toHaveBeenCalled()
+  })
+
   it('asks before claiming a free slot, and cancel claims nothing', async () => {
     renderPage()
-    await screen.findByText(/is free/)
+    await screen.findByText(/no episode for this week yet/i)
     fireEvent.click(await weeklyButton())
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -51,7 +61,7 @@ describe('PodcastsPage: this week\'s slot', () => {
 
   it('claims the slot on confirm and opens the episode', async () => {
     renderPage()
-    await screen.findByText(/is free/)
+    await screen.findByText(/no episode for this week yet/i)
     fireEvent.click(await weeklyButton())
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: "Start this week's episode" }))

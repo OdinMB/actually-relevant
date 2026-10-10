@@ -7,12 +7,12 @@
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { getWeekEpisodeListItem } from './podcast.js'
+import { GENERATE_PODCAST_JOB } from './podcastAudioStages.js'
 import { isoWeekKey, weeklyCronAction, type WeeklyCronAction } from './podcastWeekly.js'
 
 const SUNDAY = 0
 const FRIDAY = 5
 const SATURDAY = 6
-const GENERATE_JOB = 'generate_podcast'
 
 /**
  * Where `now` falls against this ISO week's Friday window, in UTC whatever the server's zone:
@@ -27,13 +27,25 @@ export function fridayWindow(now: Date): FridayWindow {
   return weekday === SATURDAY || weekday === SUNDAY ? 'passed' : 'ahead'
 }
 
+/**
+ * The window as the slot notice reports it: `fridayWindow(now)`, except that Friday counts as
+ * `passed` once the hour after the last generation slot (`reminderFromHourUtc`) begins. The gate
+ * stays open until `generateWindowEndHourUtc`, but no slot fires between those hours, so the notice
+ * must not promise that Friday's run will still create or finish the episode. Display only; the
+ * cron gate keeps `fridayWindow`.
+ */
+export function slotWindow(now: Date): FridayWindow {
+  const window = fridayWindow(now)
+  return window === 'open' && now.getUTCHours() > config.podcast.reminderFromHourUtc ? 'passed' : window
+}
+
 /** This week's slot: its episode or null, what Friday's run will do (`create` when free), the window, and whether the job is on. */
 export async function getWeekSlot(now: Date = new Date()) {
   const weekKey = isoWeekKey(now)
   const [episode, job] = await Promise.all([
     getWeekEpisodeListItem(weekKey),
-    prisma.jobRun.findUnique({ where: { jobName: GENERATE_JOB }, select: { enabled: true } }),
+    prisma.jobRun.findUnique({ where: { jobName: GENERATE_PODCAST_JOB }, select: { enabled: true } }),
   ])
   const fridayRun: 'create' | WeeklyCronAction = episode ? weeklyCronAction(episode) : 'create'
-  return { weekKey, episode, fridayRun, fridayWindow: fridayWindow(now), automaticRunEnabled: job?.enabled === true }
+  return { weekKey, episode, fridayRun, fridayWindow: slotWindow(now), automaticRunEnabled: job?.enabled === true }
 }
