@@ -68,7 +68,7 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
 
 This project requires **three services** on Render: a managed PostgreSQL database, an Express backend (web service), and a React frontend (static site). The backend and frontend run on separate origins.
 
-The database is created by hand. The backend and the static site are declared in the [`render.yaml`](render.yaml) blueprint at the repository root: commands, root directories, health check, rewrite rules and every environment variable the code reads. Three non-secret settings that are the same on every host are fixed values in the file: `NODE_ENV=production`, `TRUST_PROXY=2` and `NODE_VERSION`, which pins Node on both services and equals the root `.node-version`. Every other value, all secrets, custom domains and the instance plan stay in the dashboard. `server/src/blueprint.test.ts` holds the file to the code and both `env.example` files. Services that already exist are adopted into the blueprint with the runbook in [`.context/deployment.md`](.context/deployment.md).
+The database is created by hand. The backend and the static site are declared in the [`render.yaml`](render.yaml) blueprint at the repository root: service names, region, instance plan, custom domains, commands, root directories, health check, rewrite rules and the environment variables production sets. Three non-secret settings that are the same on every host are fixed values in the file: `NODE_ENV=production`, `TRUST_PROXY=2` and `NODE_VERSION`, which pins Node on both services and equals the root `.node-version`. Every other value, and all secrets, stay in the dashboard. `server/src/blueprint.test.ts` holds the file to the code and both `env.example` files. Services that already exist are adopted into the blueprint with the runbook in [`.context/deployment.md`](.context/deployment.md).
 
 ### 1. PostgreSQL Database
 
@@ -81,13 +81,13 @@ The database is created by hand. The backend and the static site are declared in
 
 ### 2. Backend and Static Site
 
-1. In `render.yaml`, replace the `FROM-DASHBOARD-…` placeholders with your own new service names and the backend's region, and point the `/sitemap.xml` and `/podcast.xml` rewrites at your own backend host. Render matches services by name, so pick names no existing service in your account uses.
+1. In `render.yaml`, replace the service names, the backend's region and plan, and the custom domains (`domains:`) with your own, and point the `/sitemap.xml` and `/podcast.xml` rewrites at your own backend host. Render matches services by name, so pick names no existing service in your account uses. Without a custom domain, remove the `domains:` lists and `renderSubdomainPolicy: disabled`, which would otherwise leave the site unreachable. Also remove the `npx prisma migrate resolve --applied …` step from the backend's build command: on a new database it would mark that migration applied without running it.
 2. In the dashboard, go to New → Blueprint, connect the repository and choose `render.yaml` on `main`.
 3. Fill in the prompted variable values. The tables below describe the main ones; the rest (newsletter, extraction, social posting) are optional and documented in `server/env.example`, `server/src/config.ts` and the matching `.context/` files. Render prompts for values only on this first creation; set later additions in each service's Environment tab.
 
 ### Backend (Web Service)
 
-The build generates the Prisma client, applies any pending database migrations, and compiles TypeScript. Migrations run automatically on every deploy via `prisma migrate deploy`, which is a no-op when there are no pending migrations. `NODE_ENV=production` makes a plain `npm install` skip devDependencies, so the command installs them with `--include=dev`, and the `build` script installs them again itself and compiles with the lockfile's TypeScript (see `.context/deployment.md`).
+The build generates the Prisma client, applies any pending database migrations, and compiles TypeScript (its command is in `render.yaml`; the `migrate resolve` step in it is a leftover from a one-off migration fix in production). Migrations run automatically on every deploy via `prisma migrate deploy`, which is a no-op when there are no pending migrations. `NODE_ENV=production` makes a plain `npm install` skip devDependencies, so the command installs them with `--include=dev`, and the `build` script installs them again itself and compiles with the lockfile's TypeScript (see `.context/deployment.md`).
 
 **Environment Variables:**
 

@@ -4,7 +4,7 @@
  * owner's render-side-project blueprint test; each adaptation is commented where it sits.
  *
  * A new setting goes into the code, server/env.example and render.yaml together, or into
- * one of the two exclusion lists below with its reason. Otherwise this test fails.
+ * one of the three exclusion lists below with its reason. Otherwise this test fails.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'fs'
@@ -54,7 +54,6 @@ const RUNS_ON_ITS_CODE_DEFAULT: Record<string, string> = {
     'SELECT_MAX_GROUP_SIZE', 'SELECT_RATIO', 'SELECT_RELEVANCE_MIN', 'PUBLISH_CHUNK_SIZE',
     'STORY_ASSIGNMENT_DAYS', 'NEWSLETTER_STORIES_PER_ISSUE',
     'CONCURRENCY_PREASSESS', 'CONCURRENCY_ASSESS', 'CONCURRENCY_SELECT', 'CONCURRENCY_RECLASSIFY',
-    'CONCURRENCY_CRAWL_FEEDS', 'CONCURRENCY_CRAWL_ARTICLES',
   ]),
   ...tunables('embedding tuning', ['EMBEDDING_MODEL', 'EMBEDDING_BATCH_SIZE', 'EMBEDDING_CONCURRENCY', 'EMBEDDING_DELAY_MS']),
   ...tunables('crawl and extraction tuning', [
@@ -85,6 +84,26 @@ const RUNS_ON_ITS_CODE_DEFAULT: Record<string, string> = {
     'LOG_DIR', 'LOG_RETENTION_DAYS', 'FAVICON_DIR',
   ]),
 }
+
+/**
+ * Read by the server and listed in server/env.example, but not set in production as of
+ * 2026-10-13 (Render's export of the live services), so the blueprint leaves them out:
+ * named there as `sync: false`, they would be prompted for on blueprint creation and could
+ * be created empty. Each read treats "" and unset alike (`||` or a truthiness check), and
+ * production runs on the code default or with the feature off. If production ever sets
+ * one, move it into render.yaml.
+ */
+const NOT_SET_IN_PRODUCTION: Record<string, string> = {
+  ...tunables('not set in production as of 2026-10-13 (Render export); runs on its code default', [
+    'SITE_URL', 'CLIENT_URL', 'FORM_TOKEN_SECRET', 'PLUNK_FROM_NAME', 'EXTRACTION_API', 'LOG_LEVEL',
+  ]),
+  ...tunables('not set in production as of 2026-10-13 (Render export); feature off', [
+    'PUBLIC_API_KEY', 'WEBHOOK_URL',
+  ]),
+}
+
+const LEFT_OUT_OF_BLUEPRINT = (name: string) =>
+  name in NOT_IN_BLUEPRINT || name in RUNS_ON_ITS_CODE_DEFAULT || name in NOT_SET_IN_PRODUCTION
 
 function filesUnder(dir: string, keep: (relPath: string) => boolean): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' })
@@ -137,6 +156,8 @@ interface EnvVar {
 
 interface Service {
   fields: Record<string, string>
+  /** Plain scalar lists under a four-space field, such as `domains:`. */
+  lists: Record<string, string[]>
   envVars: EnvVar[]
 }
 
@@ -162,6 +183,7 @@ function readBlueprint(text: string): Service[] {
   let current: Service | undefined
   let inEnvVars = false
   let entry: EnvVar | undefined
+  let list: string[] | undefined
 
   for (const [index, line] of text.split(/\r?\n/).entries()) {
     if (isBlankOrComment(line)) continue
@@ -187,14 +209,22 @@ function readBlueprint(text: string): Service[] {
 
     const start = /^ {2}- type:\s*(.+)$/.exec(line)
     if (start) {
-      current = { fields: { type: scalar(start[1]) }, envVars: [] }
+      current = { fields: { type: scalar(start[1]) }, lists: {}, envVars: [] }
       services.push(current)
+      list = undefined
+      continue
+    }
+    const item = /^ {6}- ([^\s:#]+)\s*$/.exec(line)
+    if (item && list) {
+      list.push(item[1])
       continue
     }
     const field = /^ {4}([A-Za-z]+):\s*(.*)$/.exec(line)
     if (!field || !current) continue
+    list = undefined
     if (field[1] !== 'envVars') {
       current.fields[field[1]] = scalar(field[2])
+      if (field[2].trim() === '') list = current.lists[field[1]] = []
       continue
     }
     if (field[2].trim() !== '') throw fail('envVars must be a block list')
@@ -235,16 +265,18 @@ describe('render.yaml', () => {
   })
 
   it('keeps every exclusion-list entry a variable the server reads', () => {
-    const stale = [...Object.keys(NOT_IN_BLUEPRINT), ...Object.keys(RUNS_ON_ITS_CODE_DEFAULT)].filter(
-      (name) => !serverReads.has(name),
-    )
+    const stale = [
+      ...Object.keys(NOT_IN_BLUEPRINT),
+      ...Object.keys(RUNS_ON_ITS_CODE_DEFAULT),
+      ...Object.keys(NOT_SET_IN_PRODUCTION),
+    ].filter((name) => !serverReads.has(name))
     expect(stale).toEqual([])
   })
 
   it('has the two services, shaped as the deployment expects', () => {
-    // Adaptation: there is no CI, so autoDeployTrigger is `commit`, not `checksPass`. The
-    // region is a dashboard value; only its presence is checked (the runbook's
-    // `grep FROM-DASHBOARD` gate covers the placeholder).
+    // Adaptation: there is no CI, so autoDeployTrigger is `commit`, not `checksPass`. Name,
+    // region and plan are copied from Render's export of the live services; only their
+    // presence is checked.
     expect(services).toHaveLength(2)
     expect(backend?.fields).toMatchObject({
       type: 'web',
@@ -255,6 +287,8 @@ describe('render.yaml', () => {
       healthCheckPath: '/health',
     })
     expect(backend?.fields.region).toBeTruthy()
+    expect(backend?.fields.plan).toBeTruthy()
+    expect(blueprintText).not.toMatch(/^[^#\n]*FROM-DASHBOARD/m) // no adoption placeholder left
     expect(staticSite?.fields).toMatchObject({
       type: 'web',
       runtime: 'static',
@@ -265,6 +299,14 @@ describe('render.yaml', () => {
     // Dropped: the shutdown-delay check. The app's force exit is 10 s, inside Render's
     // 30 s default (not verified, Render docs); setting maxShutdownDelaySeconds would
     // overwrite an unknown production setting.
+  })
+
+  it('lists the custom domains, so that a sync cannot drop one (ADR-0038)', () => {
+    // The rewrites proxy to the backend by its custom domain, so the backend must list it.
+    const rewriteHosts = [...blueprintText.matchAll(/destination: https:\/\/([^/\s]+)\//g)].map((m) => m[1])
+    expect(rewriteHosts.length).toBeGreaterThan(0)
+    for (const host of rewriteHosts) expect(backend?.lists.domains ?? []).toContain(host)
+    expect(staticSite?.lists.domains ?? []).not.toEqual([])
   })
 
   it('keeps the sitemap and podcast rewrites above the SPA catch-all', () => {
@@ -279,9 +321,7 @@ describe('render.yaml', () => {
 
   it('names every variable the code reads, or leaves it out deliberately', () => {
     const named = new Set(keysOf(backend))
-    const missing = [...serverReads].filter(
-      (name) => !named.has(name) && !(name in NOT_IN_BLUEPRINT) && !(name in RUNS_ON_ITS_CODE_DEFAULT),
-    )
+    const missing = [...serverReads].filter((name) => !named.has(name) && !LEFT_OUT_OF_BLUEPRINT(name))
     expect(missing).toEqual([])
     const staticNamed = new Set(keysOf(staticSite))
     expect([...clientReads].filter((name) => !staticNamed.has(name))).toEqual([])
@@ -300,10 +340,7 @@ describe('render.yaml', () => {
 
   it('names nothing forbidden on either service', () => {
     const forbidden = keysOf(backend).filter(
-      (key) =>
-        key in NOT_IN_BLUEPRINT ||
-        key in RUNS_ON_ITS_CODE_DEFAULT ||
-        /^(TEST_|LANGSMITH_|LANGCHAIN_|VITE_)/.test(key),
+      (key) => LEFT_OUT_OF_BLUEPRINT(key) || /^(TEST_|LANGSMITH_|LANGCHAIN_|VITE_)/.test(key),
     )
     expect(forbidden).toEqual([])
     // Adaptation: Render builds the static site from source, and its VITE_* values are
@@ -368,6 +405,23 @@ describe('readBlueprint', () => {
     ].join('\n')
     const [service] = readBlueprint(text)
     expect(service.envVars).toEqual([{ key: 'A', value: '2' }])
+  })
+
+  it('reads a plain list under a field, and not the mappings of a list such as routes', () => {
+    const text = [
+      'services:',
+      '  - type: web',
+      '    domains:',
+      '      - example.org',
+      '      - www.example.org',
+      '    routes:',
+      '      - type: rewrite',
+      '        source: /*',
+      '    rootDir: client',
+      '      - stray.example.org',
+    ].join('\n')
+    const [service] = readBlueprint(text)
+    expect(service.lists).toEqual({ domains: ['example.org', 'www.example.org'], routes: [] })
   })
 })
 

@@ -1,20 +1,22 @@
 # Deployment
 
-Render.com runs three services: the PostgreSQL database, the backend web service (root `server/`) and the frontend static site (root `client/`). The root `render.yaml` blueprint owns the two services' settings: commands, root directories, health check, rewrite order and every environment variable the code reads. Each variable is in one of two modes:
+Render.com runs three services: the PostgreSQL database, the backend web service (root `server/`) and the frontend static site (root `client/`). The root `render.yaml` blueprint owns the two services' settings: names, the backend's region and plan, custom domains, commands, root directories, health check, rewrite order and the environment variables production sets. Its service-level settings mirror Render's own export of the live services (backend `actually-relevant-api`, Frankfurt, plan `starter`, domain `api.actuallyrelevant.news`; static site `actually-relevant`, domains `actuallyrelevant.news` and `www.actuallyrelevant.news`, `onrender.com` subdomain disabled), because Render's docs say that on adoption every setting the file leaves out is overridden by its default. Each variable is in one of two modes:
 
 - **A fixed `value:`** for settings that are not secret and are the same on every host: `NODE_ENV=production`, `TRUST_PROXY=2` and `NODE_VERSION=22.22.0` (both services). A sync writes it over the dashboard, so it must equal what production runs.
-- **`sync: false`** for secrets (including `WEBHOOK_URL`, whose URL embeds a token, and `FEEDBACK_IP_HASH_SECRET`), canonical addresses (`SITE_URL`, `CLIENT_URL`, `FRONTEND_URL`, `API_URL`, `VITE_API_URL`), switches (`SUBSCRIPTIONS_ENABLED`, `*_AUTO_POST_ENABLED`, `AUTH_COOKIE_SAMESITE`) and values production may set that the repository cannot see. Their values live in the dashboard.
+- **`sync: false`** for secrets (including `FEEDBACK_IP_HASH_SECRET`), canonical addresses (`FRONTEND_URL`, `API_URL`, `VITE_API_URL`), switches (`SUBSCRIPTIONS_ENABLED`, `*_AUTO_POST_ENABLED`, `AUTH_COOKIE_SAMESITE`) and values production sets that the repository cannot see (`CONCURRENCY_CRAWL_FEEDS`, `CONCURRENCY_CRAWL_ARTICLES`). Their values live in the dashboard.
 
-The dashboard also holds custom domains, the instance plan and the database, which the blueprint deliberately leaves out. `server/src/blueprint.test.ts` holds `render.yaml`, `.node-version`, `server/env.example` and `client/env.example` to the variables the code reads (a source scan of `process.env.NAME`, `env("…")` in the Prisma schema, and `import.meta.env.VITE_*` in the client). A new variable goes into the code, `server/env.example` (or `client/env.example`) and `render.yaml` together, or into one of the test's two exclusion lists with its reason: `NOT_IN_BLUEPRINT` (`PORT`, `SCHEDULER_ENABLED`) or `RUNS_ON_ITS_CODE_DEFAULT` (the tunables in `config.ts`). Decision records: [ADR-0036](decisions/0036-fixed-values-and-blueprint-test.md) (superseding [ADR-0034](decisions/0034-render-blueprint.md)), [ADR-0035](decisions/0035-database-outside-blueprint.md).
+The dashboard also holds the database, which the blueprint deliberately leaves out. `server/src/blueprint.test.ts` holds `render.yaml`, `.node-version`, `server/env.example` and `client/env.example` to the variables the code reads (a source scan of `process.env.NAME`, `env("…")` in the Prisma schema, and `import.meta.env.VITE_*` in the client), and checks that the backend lists the domain the rewrites target. A new variable goes into the code, `server/env.example` (or `client/env.example`) and `render.yaml` together, or into one of the test's three exclusion lists with its reason: `NOT_IN_BLUEPRINT` (`PORT`, `SCHEDULER_ENABLED`), `RUNS_ON_ITS_CODE_DEFAULT` (the tunables in `config.ts`) or `NOT_SET_IN_PRODUCTION` (`SITE_URL`, `CLIENT_URL`, `PUBLIC_API_KEY`, `FORM_TOKEN_SECRET`, `PLUNK_FROM_NAME`, `EXTRACTION_API`, `WEBHOOK_URL`, `LOG_LEVEL`: production did not set them as of 2026-10-13, and each read treats an empty value like an unset one). Setting one of those in production means moving it into `render.yaml`. Decision records: [ADR-0036](decisions/0036-fixed-values-and-blueprint-test.md) (superseding [ADR-0034](decisions/0034-render-blueprint.md)), [ADR-0038](decisions/0038-mirror-render-service-settings.md) (domains and plan in the file, replacing that part of ADR-0034 and ADR-0036), [ADR-0035](decisions/0035-database-outside-blueprint.md).
 
-Until the adoption runbook below has been run, the blueprint is a draft: its `FROM-DASHBOARD-…` placeholders stand for the exact service names and the backend's region, and the dashboard stays the source of truth.
+Until a blueprint is connected (runbook below, part B), Render ignores the file and the dashboard stays the source of truth.
 
 **Auto-deploy from `main`.** Both the backend and the static site deploy automatically on every push to `main`, at the same time and in no guaranteed order. A push to `main` is therefore a production release: the backend build runs `prisma migrate deploy`, so every migration committed since the last deploy is applied to the production database. Nothing is staged in between. A change that needs the backend live before the frontend (a new endpoint the client calls, a required env var) must keep the new client working against the old backend for the minutes in between, or land in two pushes. On the static site, `VITE_*` values are baked in at build time, so changing one needs a rebuild.
 
 | Service | Root | Build command (in `render.yaml`) |
 |---------|------|----------------------------------|
-| Backend (web service) | `server` | `npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build` |
+| Backend (web service) | `server` | `npm install --include=dev && npx prisma generate && npx prisma migrate resolve --applied 20260209120000_add_feed_region && npx prisma migrate deploy && npm run build` |
 | Frontend (static site) | `client` | `npm install && npm run build` |
+
+The backend's `migrate resolve --applied 20260209120000_add_feed_region` step is a leftover from a one-off migration fix that production's dashboard command still carried at adoption; `render.yaml` copies it exactly so that adoption changes nothing. Removing it is a separate change.
 
 ## Why the builds install devDependencies and pin `tsc`
 
@@ -22,7 +24,7 @@ On 2026-09-24 chosenpath's Render build broke (fixed in chosenpath commit `100c4
 
 So both `build` scripts start with `node ../scripts/install-dev-deps.mjs`, which runs `npm install --include=dev` in the package, whatever the build command in `render.yaml` is (the script also sidesteps an npm quirk on Windows, described in the file). Then they call `node node_modules/typescript/bin/tsc`, never bare `tsc`, and print its version first: a missing install fails loudly instead of silently using another compiler, and the Render log shows which compiler ran. Upgrade TypeScript through the lockfiles, not the platform's PATH.
 
-The backend's `npx prisma generate` and `npx prisma migrate deploy` run before `npm run build`, so they rely on the `render.yaml` build command's own `npm install --include=dev`. Keep it: without it they currently still find the lockfile's Prisma through `@prisma/client`'s optional peer dependency, but if that ever changes, `npx` would fetch `prisma@latest` instead.
+The backend's `npx prisma` steps run before `npm run build`, so they rely on the `render.yaml` build command's own `npm install --include=dev`. Keep it: without it they currently still find the lockfile's Prisma through `@prisma/client`'s optional peer dependency, but if that ever changes, `npx` would fetch `prisma@latest` instead.
 
 On success the build logs show:
 
@@ -101,16 +103,16 @@ The procedure for the first adoption, and for any re-adoption after a disconnect
    - the publish directory;
    - every redirect, rewrite and header rule, in order, noting whether `/sitemap.xml` and `/podcast.xml` already sit above `/*` and which host their destinations name;
    - every environment variable *name*;
-   - custom domains (they stay in the dashboard);
+   - custom domains and the `onrender.com` subdomain setting (`renderSubdomainPolicy`);
    - whether `LOG_DIR`, `LOG_RETENTION_DAYS` or `FAVICON_DIR` are set; `NODE_VERSION` must equal `.node-version` on both services.
 3. Edit `render.yaml`:
-   1. **Placeholders.** Replace each `FROM-DASHBOARD-…` with the generated value.
-   2. **Commands and paths.** Diff the build command, start command, root directories, publish path and health check against the generated ones. Where they differ, the generated value wins, because it is what production runs.
-   3. **Variables.** Add every variable name the dashboard has and the file lacks, as `sync: false`, or as a fixed value if it is not secret and the same on every host, with the value read off the dashboard. If the name is in the blueprint test's `RUNS_ON_ITS_CODE_DEFAULT` list, production does not run the default after all: move it from the list into the file.
+   1. **Service settings.** Diff the names, the backend's region and plan, `domains:` and `renderSubdomainPolicy` against the generated ones, and copy the generated values exactly (ADR-0038): Render matches services by name, and on adoption a setting the file leaves out is overridden by its default. On the first adoption (2026-10-13) the file carried `FROM-DASHBOARD-…` placeholders for the names and the region; a later re-adoption diffs the values already there.
+   2. **Commands and paths.** Diff the build command, start command, root directories, publish path and health check against the generated ones. Where they differ, the generated value wins, because it is what production runs. The publish path is relative to the root directory (`dist`, not `client/dist`), as the 2026-10-13 export showed.
+   3. **Variables.** Add every variable name the dashboard has and the file lacks, as `sync: false`, or as a fixed value if it is not secret and the same on every host, with the value read off the dashboard. If the name is in one of the blueprint test's `RUNS_ON_ITS_CODE_DEFAULT` or `NOT_SET_IN_PRODUCTION` lists, production sets it after all: move it from the list into the file. In the other direction, a name the file carries that the dashboard lacks is either something production is missing (find out before connecting) or a variable production runs without: then move it into `NOT_SET_IN_PRODUCTION` with its reason, so that the creation prompt cannot create it empty.
    4. **Fixed values.** Compare each fixed `value:` (`NODE_ENV`, `TRUST_PROXY`, both `NODE_VERSION`s) with the dashboard. They must be equal, since a sync writes them over the dashboard; where they differ, find out which is right before connecting.
    5. **Copied blocks.** Copy exactly as generated any build filter, pre-deploy command, disk, header rule or extra route the dashboard has. If previews are on, copy the `previews` block too.
    6. **Auto-deploy.** If it is off today, either accept `commit`, which is the convention, or set `off` on purpose.
-4. Confirm `grep -n FROM-DASHBOARD render.yaml` prints nothing. Then run `render blueprints validate render.yaml`, commit and push `main`. With no blueprint connected, Render deploys the commit as usual.
+4. Run the blueprint test (`npm run test --prefix server -- --run src/blueprint.test.ts`; it fails on any `FROM-DASHBOARD-…` placeholder left in a setting). Then run `render blueprints validate render.yaml`, commit and push `main`. With no blueprint connected, Render deploys the commit as usual.
 
 **B. Apply.**
 
@@ -126,7 +128,7 @@ The procedure for the first adoption, and for any re-adoption after a disconnect
 9. Open the static site's Redirects/Rewrites tab. It must list `/sitemap.xml` and `/podcast.xml` above `/*`, plus only the extra rules copied in step 3, with no duplicates. Fix the order and delete duplicates now: until you do, a wrong order serves the SPA shell at `/sitemap.xml` or `/podcast.xml`.
 10. Run `curl -I https://actuallyrelevant.news/sitemap.xml` and `curl -I https://actuallyrelevant.news/podcast.xml`. Both must return XML from the backend.
 11. Run `curl https://<backend-host>/health`. It must return `{"status":"ok"}`. Then load the site and log in to the admin, which proves `JWT_SECRET`, CORS and cookies. Run the `/health/client-ip` check above. Send one test message through the feedback form: it must succeed (a 503 means `FEEDBACK_IP_HASH_SECRET` is missing), then delete it in the admin.
-12. Each service's custom domains must still be listed and verified, and each Environment tab must still hold every variable with a value.
+12. Each service's custom domains must be exactly those in `render.yaml`, all verified, and each Environment tab must still hold every variable with a value. A variable that appears with an empty value was created by the step-7 prompt: delete it unless the README marks it required.
 13. Each Settings tab must match the step-2 record, apart from intended changes. Then delete the generated file if it held any values.
 
 **D. Rollback.**
