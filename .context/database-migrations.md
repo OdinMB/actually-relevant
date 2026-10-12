@@ -60,7 +60,7 @@ On Render (Linux), none of the Windows DLL-locking issues apply. Migrations run 
 npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
 ```
 
-Production's dashboard command still carries a leftover `migrate resolve --applied 20260209120000_add_feed_region` step until the blueprint's sync replaces it (see `deployment.md`). Never add a `migrate resolve` to the build command: it runs on every deploy, and on a fresh database it marks a migration applied without running it.
+The command lives in `render.yaml`; the blueprint sync of 2026-10-13 removed a leftover `migrate resolve --applied 20260209120000_add_feed_region` step from it (see `deployment.md`). Never add a `migrate resolve` to the build command: it runs on every deploy, and on a fresh database it marks a migration applied without running it.
 
 Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prisma CLI is a devDependency, which `npx prisma` must find locally rather than fetch as `prisma@latest` (see `deployment.md`). The build does not run `predev`, so `db:prepare` never runs on Render.
 
