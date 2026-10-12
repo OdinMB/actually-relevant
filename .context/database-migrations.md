@@ -57,10 +57,10 @@ Code: `server/src/scripts/db-prepare/` (`index.ts` orchestrates; `gate.ts` and `
 On Render (Linux), none of the Windows DLL-locking issues apply. Migrations run automatically during the build step:
 
 ```
-npm install --include=dev && npx prisma generate && npx prisma migrate resolve --applied 20260209120000_add_feed_region && npx prisma migrate deploy && npm run build
+npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
 ```
 
-The `migrate resolve` step is a leftover from a one-off fix, kept for now so that the blueprint matches production (see `deployment.md`).
+Production's dashboard command still carries a leftover `migrate resolve --applied 20260209120000_add_feed_region` step until the blueprint's sync replaces it (see `deployment.md`). Never add a `migrate resolve` to the build command: it runs on every deploy, and on a fresh database it marks a migration applied without running it.
 
 Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prisma CLI is a devDependency, which `npx prisma` must find locally rather than fetch as `prisma@latest` (see `deployment.md`). The build does not run `predev`, so `db:prepare` never runs on Render.
 

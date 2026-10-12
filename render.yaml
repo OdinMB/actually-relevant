@@ -44,9 +44,10 @@ services:
     region: frankfurt
     plan: starter
     rootDir: server
-    # Production's command, copied exactly from the export. The `migrate resolve` step is
-    # a leftover from a one-off migration fix; removing it is separate work.
-    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate resolve --applied 20260209120000_add_feed_region && npx prisma migrate deploy && npm run build
+    # Production's command from the export, minus its leftover `prisma migrate resolve
+    # --applied 20260209120000_add_feed_region` step, removed on purpose: the sync writes
+    # this command over the dashboard's (.context/deployment.md).
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: npm start
     healthCheckPath: /health
     branch: main
