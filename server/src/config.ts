@@ -473,6 +473,11 @@ export const config = {
     rateLimitWindowMs: parseInt(process.env.FEEDBACK_RATE_LIMIT_WINDOW_MS || String(60 * 60 * 1000), 10),
     rateLimitMax: parseInt(process.env.FEEDBACK_RATE_LIMIT_MAX || '3', 10),
     messageMaxLength: 2000,
+    /**
+     * Key for the HMAC of the visitor IP stored with feedback (ADR-0037). Unset: every
+     * feedback submission is refused with 503, in every environment.
+     */
+    ipHashSecret: process.env.FEEDBACK_IP_HASH_SECRET || '',
   },
   socialAutoPost: {
     lookbackHours: parseInt(process.env.SOCIAL_LOOKBACK_HOURS || process.env.BLUESKY_LOOKBACK_HOURS || '25', 10),

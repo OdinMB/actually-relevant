@@ -1,11 +1,11 @@
 import { Router } from 'express'
-import { createHash } from 'crypto'
 import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { config } from '../../config.js'
 import { validateBody } from '../../middleware/validate.js'
 import prisma from '../../lib/prisma.js'
 import { createLogger } from '../../lib/logger.js'
+import { hashFeedbackIp } from '../../lib/feedbackIpHash.js'
 
 const router = Router()
 const log = createLogger('public:feedback')
@@ -33,9 +33,14 @@ router.post('/', feedbackLimiter, validateBody(feedbackSchema), async (req, res)
       return
     }
 
-    const { category, message, email } = req.body
     const ip = req.ip || req.socket.remoteAddress || 'unknown'
-    const ipHash = createHash('sha256').update(ip).digest('hex')
+    const ipHash = hashFeedbackIp(ip)
+    if (ipHash === null) {
+      res.status(503).json({ error: 'Feedback is unavailable right now. Please try again later.' })
+      return
+    }
+
+    const { category, message, email } = req.body
 
     await prisma.feedback.create({
       data: {

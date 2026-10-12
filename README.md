@@ -45,9 +45,11 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
    ```bash
    cp server/env.example server/.env   # then fill in the values
    cp client/env.example client/.env
-   # Required at minimum: DATABASE_URL, OPENAI_API_KEY, JWT_SECRET, FRONTEND_URL.
-   # The template's DATABASE_URL already points at the Docker database
-   #   (postgresql://ardev:...@localhost:5433/actually_relevant_dev, see docker-compose.yml).
+   # Required at minimum: DATABASE_URL, OPENAI_API_KEY, JWT_SECRET, FRONTEND_URL;
+   # FEEDBACK_IP_HASH_SECRET too if you use the feedback form.
+   # The template's comment gives the Docker database's DATABASE_URL
+   #   (postgresql://ardev:...@localhost:5433/actually_relevant_dev, see docker-compose.yml)
+   # and how to generate the secrets.
    # See server/src/config.ts for all available settings and their defaults.
    ```
 
@@ -66,7 +68,7 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
 
 This project requires **three services** on Render: a managed PostgreSQL database, an Express backend (web service), and a React frontend (static site). The backend and frontend run on separate origins.
 
-The database is created by hand. The backend and the static site are declared in the [`render.yaml`](render.yaml) blueprint at the repository root: commands, root directories, health check, rewrite rules and the names of every environment variable. Values, secrets, custom domains and the instance plan stay in the dashboard. Services that already exist are adopted into the blueprint with the runbook in [`.context/deployment.md`](.context/deployment.md).
+The database is created by hand. The backend and the static site are declared in the [`render.yaml`](render.yaml) blueprint at the repository root: commands, root directories, health check, rewrite rules and every environment variable the code reads. Three non-secret settings that are the same on every host are fixed values in the file: `NODE_ENV=production`, `TRUST_PROXY=2` and `NODE_VERSION`, which pins Node on both services and equals the root `.node-version`. Every other value, all secrets, custom domains and the instance plan stay in the dashboard. `server/src/blueprint.test.ts` holds the file to the code and both `env.example` files. Services that already exist are adopted into the blueprint with the runbook in [`.context/deployment.md`](.context/deployment.md).
 
 ### 1. PostgreSQL Database
 
@@ -81,7 +83,7 @@ The database is created by hand. The backend and the static site are declared in
 
 1. In `render.yaml`, replace the `FROM-DASHBOARD-…` placeholders with your own new service names and the backend's region, and point the `/sitemap.xml` and `/podcast.xml` rewrites at your own backend host. Render matches services by name, so pick names no existing service in your account uses.
 2. In the dashboard, go to New → Blueprint, connect the repository and choose `render.yaml` on `main`.
-3. Fill in the prompted variable values. The tables below describe the main ones; the rest (newsletter, extraction, social posting) are optional and documented in `server/src/config.ts` and the matching `.context/` files. Render prompts for values only on this first creation; set later additions in each service's Environment tab.
+3. Fill in the prompted variable values. The tables below describe the main ones; the rest (newsletter, extraction, social posting) are optional and documented in `server/env.example`, `server/src/config.ts` and the matching `.context/` files. Render prompts for values only on this first creation; set later additions in each service's Environment tab.
 
 ### Backend (Web Service)
 
@@ -95,19 +97,22 @@ The build generates the Prisma client, applies any pending database migrations, 
 | `OPENAI_API_KEY` | Yes | OpenAI API key for LLM analysis |
 | `FRONTEND_URL` | Yes | Frontend URL for CORS (e.g. `https://actuallyrelevant.news`) |
 | `JWT_SECRET` | Yes | Random string (32+ chars) for signing auth tokens |
-| `NODE_ENV` | Yes | Set to `production` (enables secure cross-origin cookies) |
+| `NODE_ENV` | Fixed in `render.yaml` | `production` (enables secure cross-origin cookies) |
+| `NODE_VERSION` | Fixed in `render.yaml` | Exact Node version, equal to `.node-version` (`22.22.0`); set on both services |
 | `PORT` | No | Render sets this automatically (defaults to 10000) |
 | `PUBLIC_API_KEY` | No | Static API key for public consumers (mobile apps, etc.) |
 | `LOG_LEVEL` | No | Logging verbosity (default: `info`) |
 | `SUBSCRIPTIONS_ENABLED` | No | `true` opens newsletter signups; unset or anything else keeps them paused (`.context/subscription.md`) |
 | `TURNSTILE_SECRET_KEY` | For signups | Cloudflare Turnstile secret; without it, production refuses every signup |
-| `TRUST_PROXY` | No | Proxy hops to trust for client IPs (default: `1`). Set to the count the `/health/client-ip` check confirms (see `.context/deployment.md`) |
+| `TRUST_PROXY` | Fixed in `render.yaml` | Proxy hops to trust for client IPs: `2`, measured on 2026-10-12 with the `/health/client-ip` check (code default `1`; see `.context/deployment.md`) |
+| `FEEDBACK_IP_HASH_SECRET` | For feedback | Key for the hashed IP stored with feedback (64 hex characters: `openssl rand -hex 32`, or in Windows PowerShell `$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b \| ForEach-Object { $_.ToString('x2') })`). Without it, feedback is refused |
 
 **Architecture notes:**
 
 - **Cron jobs** run in-process via node-cron — no separate worker service is needed. Job configuration lives in the `job_runs` database table and is managed from the admin dashboard.
 - **Graceful shutdown** handles `SIGTERM` (sent by Render on deploy) by draining in-flight LLM tasks before disconnecting from the database.
-- **Reverse proxy** trust is a hop count, `TRUST_PROXY` (default 1), because requests pass Cloudflare and then Render's proxies. Too low and visitors share rate limits; too high and a visitor can spoof their address. Verify it after deploy with `GET /health/client-ip` (see `.context/deployment.md`).
+- **Reverse proxy** trust is a hop count, `TRUST_PROXY`, because requests pass Cloudflare and then Render's proxies: `2` on Render, fixed in `render.yaml` (code default 1). Too low and visitors share rate limits; too high and a visitor can spoof their address. Verify it after deploy, and after any change of domain or proxy, with `GET /health/client-ip` (see `.context/deployment.md`).
+- **Node** is pinned to one exact version by `NODE_VERSION` on both services and the root `.node-version` (for local tools); an upgrade changes all three in one commit, and the blueprint test enforces that they agree.
 - **Cross-origin cookies** use `sameSite: 'none'` + `secure: true` in production, which is required while the frontend and backend are on different sites. This is why `NODE_ENV=production` is mandatory. The API answers at `api.actuallyrelevant.news` (same site as the frontend) since 2026-10-07; once the static site's `VITE_API_URL` points there and the admin works on it, set `AUTH_COOKIE_SAMESITE=strict`; see `.context/authentication.md`.
 
 ### Frontend (Static Site)
@@ -124,6 +129,7 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
 |----------|----------|-------------|
 | `VITE_API_URL` | Yes | Backend URL (e.g. `https://api.actuallyrelevant.news`) |
 | `VITE_TURNSTILE_SITE_KEY` | For signups | Cloudflare Turnstile site key for the newsletter form |
+| `NODE_VERSION` | Fixed in `render.yaml` | Same exact Node version as the backend, equal to `.node-version` |
 
 ### Post-deploy Steps
 

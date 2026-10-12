@@ -1,8 +1,9 @@
 ---
 id: ADR-0034
 title: Declare both Render services in one committed render.yaml, naming every variable and keeping values in the dashboard
-status: accepted
-date: 2026-10-12
+status: superseded
+superseded-by: ADR-0036
+date: 2026-10-13
 deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant
 themes: [handover]

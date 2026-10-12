@@ -1,6 +1,11 @@
 # Deployment
 
-Render.com runs three services: the PostgreSQL database, the backend web service (root `server/`) and the frontend static site (root `client/`). The root `render.yaml` blueprint owns the two services' settings: commands, root directories, health check, rewrite order and the names of their environment variables. The dashboard holds the variables' values, custom domains, the instance plan and the database, which the blueprint deliberately leaves out. Decision records: [ADR-0034](decisions/0034-render-blueprint.md), [ADR-0035](decisions/0035-database-outside-blueprint.md).
+Render.com runs three services: the PostgreSQL database, the backend web service (root `server/`) and the frontend static site (root `client/`). The root `render.yaml` blueprint owns the two services' settings: commands, root directories, health check, rewrite order and every environment variable the code reads. Each variable is in one of two modes:
+
+- **A fixed `value:`** for settings that are not secret and are the same on every host: `NODE_ENV=production`, `TRUST_PROXY=2` and `NODE_VERSION=22.22.0` (both services). A sync writes it over the dashboard, so it must equal what production runs.
+- **`sync: false`** for secrets (including `WEBHOOK_URL`, whose URL embeds a token, and `FEEDBACK_IP_HASH_SECRET`), canonical addresses (`SITE_URL`, `CLIENT_URL`, `FRONTEND_URL`, `API_URL`, `VITE_API_URL`), switches (`SUBSCRIPTIONS_ENABLED`, `*_AUTO_POST_ENABLED`, `AUTH_COOKIE_SAMESITE`) and values production may set that the repository cannot see. Their values live in the dashboard.
+
+The dashboard also holds custom domains, the instance plan and the database, which the blueprint deliberately leaves out. `server/src/blueprint.test.ts` holds `render.yaml`, `.node-version`, `server/env.example` and `client/env.example` to the variables the code reads (a source scan of `process.env.NAME`, `env("…")` in the Prisma schema, and `import.meta.env.VITE_*` in the client). A new variable goes into the code, `server/env.example` (or `client/env.example`) and `render.yaml` together, or into one of the test's two exclusion lists with its reason: `NOT_IN_BLUEPRINT` (`PORT`, `SCHEDULER_ENABLED`) or `RUNS_ON_ITS_CODE_DEFAULT` (the tunables in `config.ts`). Decision records: [ADR-0036](decisions/0036-fixed-values-and-blueprint-test.md) (superseding [ADR-0034](decisions/0034-render-blueprint.md)), [ADR-0035](decisions/0035-database-outside-blueprint.md).
 
 Until the adoption runbook below has been run, the blueprint is a draft: its `FROM-DASHBOARD-…` placeholders stand for the exact service names and the backend's region, and the dashboard stays the source of truth.
 
@@ -21,10 +26,20 @@ The backend's `npx prisma generate` and `npx prisma migrate deploy` run before `
 
 On success the build logs show:
 
+- Both services, near the top: Render's Node line, `Using Node.js version 22.22.0 (from NODE_VERSION)` or similar on the backend and `Installing Node.js version 22.22.0...` on the static site. Any other version means `NODE_VERSION` differs from `.node-version`.
 - Backend: `✔ Generated Prisma Client (v6.19.3)`, then `> node ../scripts/install-dev-deps.mjs && node node_modules/typescript/bin/tsc --version && node node_modules/typescript/bin/tsc`, npm's install summary (`up to date` after the build command's own install), and `Version 5.9.3`.
 - Frontend: `> node ../scripts/install-dev-deps.mjs && node node_modules/typescript/bin/tsc --version && ...`, npm's install summary, `Version 5.9.3`, then `vite v7.3.5 building client environment for production...`.
 
 The versions are the lockfiles' (`client/package-lock.json`, `server/package-lock.json`); a different version in the log means the lockfile changed.
+
+## Node version
+
+Both services run one exact Node version, `22.22.0`, the version production ran when it was pinned on 2026-10-12 (until then Render's default, which changes over time). Two places carry it, and `server/src/blueprint.test.ts` checks that they agree:
+
+- **`NODE_VERSION`, a fixed value on both services in `render.yaml`.** Render reads it before any version file, so it holds whatever Render does with a `rootDir` (Render's docs do not say whether `.node-version` is read from the repository root or from `server/` and `client/`; not verified). Until the blueprint is connected, the same value is set by hand on both services' Environment pages.
+- **`.node-version` at the repository root,** for local tools (fnm, nvm, Volta, asdf).
+
+An upgrade changes `.node-version` and both `NODE_VERSION` values in one commit, and sets the dashboard values to match until the blueprint is connected. Use an exact `major.minor.patch`: a major-only pin lets Render move minor versions under production.
 
 ## Scheduler during deploys
 
@@ -36,7 +51,7 @@ The podcast assembles its MP3 with `ffmpeg-static` (exact version `5.3.0` in `se
 
 ## Client IPs behind Cloudflare and Render
 
-Requests reach the backend through Cloudflare and then one or more of Render's internal proxies. Express derives `req.ip` from `X-Forwarded-For` (XFF) by trusting a fixed number of hops, `TRUST_PROXY` (`config.trustProxyHops`, default 1). With N hops, `req.ip` is the entry N steps left of the socket address: for XFF `a, b, c`, N=1 gives `c`, N=2 gives `b`. Every rate limiter (search, which pays for embedding calls; subscribe; feedback and its stored `ipHash`; login; refresh; the general and expensive-op limiters) keys on `req.ip`, so the count matters both ways:
+Requests reach the backend through Cloudflare and then one or more of Render's internal proxies. Express derives `req.ip` from `X-Forwarded-For` (XFF) by trusting a fixed number of hops, `TRUST_PROXY` (`config.trustProxyHops`, default 1). With N hops, `req.ip` is the entry N steps left of the socket address: for XFF `a, b, c`, N=1 gives `c`, N=2 gives `b`. Every rate limiter (search, which pays for embedding calls; subscribe; feedback; login; refresh; the general and expensive-op limiters) keys on `req.ip`, and feedback stores an HMAC-SHA256 of it keyed by `FEEDBACK_IP_HASH_SECRET` as `ipHash` ([ADR-0037](decisions/0037-feedback-ip-hmac.md); without the secret every feedback submission gets a 503 and nothing is stored; rows from before 2026-10-12 keep unkeyed hashes that never match new ones). So the count matters both ways:
 
 - **Too low:** `req.ip` is a proxy address and visitors share every bucket. That is a cost and availability problem.
 - **Too high:** a visitor picks their own bucket by sending `X-Forwarded-For`, because Cloudflare appends to a client-sent XFF rather than replacing it. That silently bypasses every limit.
@@ -59,13 +74,13 @@ The right count is the position of `cloudflareIp` in `forwardedFor`, counted fro
 
 1. Deploy. With the default of 1, behavior is unchanged.
 2. Run the `curl` above against both hostnames. Expect `matchesCloudflare: false` and an `ip` that is not your own. Count `cloudflareIp`'s position in `forwardedFor` from the right.
-3. Set `TRUST_PROXY` to that count (expect 2 or 3). It is named in `render.yaml` with `sync: false`, value set in the dashboard: the backend's Environment tab. Render redeploys.
+3. Set `TRUST_PROXY` to that count (expect 2 or 3). It is a fixed value in `render.yaml`, `"2"` since the measurement on 2026-10-12 on both hostnames (XFF `spoof, client, cloudflare-edge`): change it there. Until the blueprint is connected, the dashboard value (the backend's Environment tab) applies and must also match; it is 2. Render redeploys.
 4. Run the `curl` again against both hostnames. Expect `matchesCloudflare: true`, and `ip` must not be `203.0.113.7`.
 
 ## Changing deployment settings
 
 - **Edit `render.yaml`, not the dashboard,** for any field the file declares. Once a blueprint is connected, a dashboard edit to a declared field is overwritten on the next sync.
-- **A new variable** goes in as a `sync: false` entry, and its value is set in the dashboard's Environment tab: Render prompts for `sync: false` values only when the blueprint is first created, never on later syncs. Never add a `value:`, which is rewritten on every sync.
+- **A new variable** goes into the code, `server/env.example` and `render.yaml` together, or into one of the blueprint test's exclusion lists; the test fails otherwise. In `render.yaml` it takes a fixed `value:` only if it is not secret and is the same on every host, and `sync: false` otherwise. A `sync: false` value is set by hand on the service's Environment page: Render prompts for those only when the blueprint is first created, never on later syncs. Say so in the commit that adds one.
 - **Never delete a service the blueprint manages** to start over: the next sync recreates it. Disconnect the blueprint first; disconnecting deletes nothing.
 - **Validate before pushing:** `render blueprints validate render.yaml` (Render CLI v2.7.0+, logged in; exits non-zero on failure). The file's first line points editors with the YAML extension at Render's schema.
 - Field semantics: Render's [blueprint spec](https://render.com/docs/blueprint-spec).
@@ -87,13 +102,14 @@ The procedure for the first adoption, and for any re-adoption after a disconnect
    - every redirect, rewrite and header rule, in order, noting whether `/sitemap.xml` and `/podcast.xml` already sit above `/*` and which host their destinations name;
    - every environment variable *name*;
    - custom domains (they stay in the dashboard);
-   - whether `NODE_VERSION`, `LOG_DIR`, `LOG_RETENTION_DAYS` or `FAVICON_DIR` are set.
+   - whether `LOG_DIR`, `LOG_RETENTION_DAYS` or `FAVICON_DIR` are set; `NODE_VERSION` must equal `.node-version` on both services.
 3. Edit `render.yaml`:
    1. **Placeholders.** Replace each `FROM-DASHBOARD-…` with the generated value.
    2. **Commands and paths.** Diff the build command, start command, root directories, publish path and health check against the generated ones. Where they differ, the generated value wins, because it is what production runs.
-   3. **Variables.** Add every variable name the dashboard has and the file lacks, as `sync: false`.
-   4. **Copied blocks.** Copy exactly as generated any build filter, pre-deploy command, disk, header rule or extra route the dashboard has. If previews are on, copy the `previews` block too.
-   5. **Auto-deploy.** If it is off today, either accept `commit`, which is the convention, or set `off` on purpose.
+   3. **Variables.** Add every variable name the dashboard has and the file lacks, as `sync: false`, or as a fixed value if it is not secret and the same on every host, with the value read off the dashboard. If the name is in the blueprint test's `RUNS_ON_ITS_CODE_DEFAULT` list, production does not run the default after all: move it from the list into the file.
+   4. **Fixed values.** Compare each fixed `value:` (`NODE_ENV`, `TRUST_PROXY`, both `NODE_VERSION`s) with the dashboard. They must be equal, since a sync writes them over the dashboard; where they differ, find out which is right before connecting.
+   5. **Copied blocks.** Copy exactly as generated any build filter, pre-deploy command, disk, header rule or extra route the dashboard has. If previews are on, copy the `previews` block too.
+   6. **Auto-deploy.** If it is off today, either accept `commit`, which is the convention, or set `off` on purpose.
 4. Confirm `grep -n FROM-DASHBOARD render.yaml` prints nothing. Then run `render blueprints validate render.yaml`, commit and push `main`. With no blueprint connected, Render deploys the commit as usual.
 
 **B. Apply.**
@@ -109,7 +125,7 @@ The procedure for the first adoption, and for any re-adoption after a disconnect
 
 9. Open the static site's Redirects/Rewrites tab. It must list `/sitemap.xml` and `/podcast.xml` above `/*`, plus only the extra rules copied in step 3, with no duplicates. Fix the order and delete duplicates now: until you do, a wrong order serves the SPA shell at `/sitemap.xml` or `/podcast.xml`.
 10. Run `curl -I https://actuallyrelevant.news/sitemap.xml` and `curl -I https://actuallyrelevant.news/podcast.xml`. Both must return XML from the backend.
-11. Run `curl https://<backend-host>/health`. It must return `{"status":"ok"}`. Then load the site and log in to the admin, which proves `JWT_SECRET`, CORS and cookies. Run the `/health/client-ip` check above.
+11. Run `curl https://<backend-host>/health`. It must return `{"status":"ok"}`. Then load the site and log in to the admin, which proves `JWT_SECRET`, CORS and cookies. Run the `/health/client-ip` check above. Send one test message through the feedback form: it must succeed (a 503 means `FEEDBACK_IP_HASH_SECRET` is missing), then delete it in the admin.
 12. Each service's custom domains must still be listed and verified, and each Environment tab must still hold every variable with a value.
 13. Each Settings tab must match the step-2 record, apart from intended changes. Then delete the generated file if it held any values.
 
@@ -127,7 +143,10 @@ The procedure for the first adoption, and for any re-adoption after a disconnect
 
 | File | Purpose |
 |------|---------|
-| `render.yaml` | Service settings for the backend and the static site, and their variable names |
+| `render.yaml` | Service settings for the backend and the static site, and their variables (fixed values or `sync: false`) |
+| `server/src/blueprint.test.ts` | Holds `render.yaml`, `.node-version` and both `env.example` files to the variables the code reads |
+| `.node-version` | The one Node version, for local tools; equals both `NODE_VERSION` values |
+| `server/src/lib/feedbackIpHash.ts` | Keyed feedback IP hash; logs an error at boot when `FEEDBACK_IP_HASH_SECRET` is unset |
 | `scripts/install-dev-deps.mjs` | The `npm install --include=dev` step of both builds |
 | `client/package.json` | `build`: install devDependencies, pinned `tsc -b`, `vite build` (with prerender) |
 | `server/package.json` | `build`: install devDependencies, pinned `tsc` |

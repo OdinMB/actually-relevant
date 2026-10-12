@@ -135,6 +135,14 @@ export default function PrivacyPage() {
             in every email.
           </p>
 
+          <h3 className="text-lg font-normal mt-6 mb-2">Feedback Form</h3>
+          <p>
+            If you send us feedback, we store your message, the category you
+            chose, and your email address if you give one, so we can read and
+            reply. We also store a hashed form of your IP address to spot
+            repeated abusive submissions. We don't use it for anything else.
+          </p>
+
           <h3 className="text-lg font-normal mt-6 mb-2">Server Logs</h3>
           <p>
             Our server records basic request metadata (URL path, HTTP status,

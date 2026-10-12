@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
+import { createHmac } from 'crypto'
 import { TEST_API_KEY } from '../../test/helpers.js'
 
 vi.mock('express-rate-limit', () => ({
@@ -20,9 +21,21 @@ vi.mock('../../services/crawler.js', () => ({
   crawlUrl: vi.fn(),
 }))
 
+// The real hash, behind a spy, so one test can make it report a missing secret.
+vi.mock('../../lib/feedbackIpHash.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/feedbackIpHash.js')>()
+  return { hashFeedbackIp: vi.fn(actual.hashFeedbackIp) }
+})
+
+const TEST_IP_HASH_SECRET = 'test-feedback-ip-hash-secret'
+
+// Set before the app (and config) load; dotenv/config never overrides a set variable.
 process.env.PUBLIC_API_KEY = TEST_API_KEY
+process.env.FEEDBACK_IP_HASH_SECRET = TEST_IP_HASH_SECRET
+process.env.TRUST_PROXY = '1'
 
 const { default: app } = await import('../../app.js')
+const { hashFeedbackIp } = await import('../../lib/feedbackIpHash.js')
 
 describe('Public Feedback API', () => {
   beforeEach(() => {
@@ -79,6 +92,7 @@ describe('Public Feedback API', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
       expect(mockPrisma.feedback.create).not.toHaveBeenCalled()
+      expect(hashFeedbackIp).not.toHaveBeenCalled()
     })
 
     it('returns 400 for missing category', async () => {
@@ -121,16 +135,30 @@ describe('Public Feedback API', () => {
       expect(res.status).toBe(400)
     })
 
-    it('hashes the IP address', async () => {
+    it('stores the HMAC of the visitor IP under the secret', async () => {
       mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-3' })
 
       await request(app)
         .post('/api/feedback')
+        .set('X-Forwarded-For', '198.51.100.4')
         .send({ category: 'general', message: 'Test' })
 
       const call = mockPrisma.feedback.create.mock.calls[0][0]
-      // ipHash should be a 64-char hex string (SHA-256)
-      expect(call.data.ipHash).toMatch(/^[a-f0-9]{64}$/)
+      expect(call.data.ipHash).toBe(
+        createHmac('sha256', TEST_IP_HASH_SECRET).update('198.51.100.4').digest('hex'),
+      )
+    })
+
+    it('refuses with 503 and stores nothing when the hash secret is missing', async () => {
+      vi.mocked(hashFeedbackIp).mockReturnValueOnce(null)
+
+      const res = await request(app)
+        .post('/api/feedback')
+        .send({ category: 'general', message: 'Test' })
+
+      expect(res.status).toBe(503)
+      expect(res.body.error).toEqual(expect.any(String))
+      expect(mockPrisma.feedback.create).not.toHaveBeenCalled()
     })
 
     it('treats empty email string as null', async () => {

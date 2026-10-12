@@ -1,11 +1,25 @@
 # yaml-language-server: $schema=https://render.com/schema/render.yaml.json
 #
-# Render blueprint for the backend web service and the static site.
+# Render blueprint for the backend web service and the static site (ADR-0036).
 #
-# This file owns the services' settings: commands, root directories, health check,
-# rewrite order and the list of environment variable names. The Render dashboard keeps
-# the variables' values and secrets, the PostgreSQL database (deliberately not declared
-# here, ADR-0035), custom domains and the instance plan (ADR-0034).
+# Runtimes: the backend is a native Node service (runtime: node), built from source with
+# its own dependencies; the frontend is a Render static site (runtime: static) served
+# from Render's CDN. This file owns the services' settings: commands, root directories,
+# health check, rewrite order and every environment variable the code reads.
+#
+# Every variable is in exactly one of two modes:
+# - a fixed `value:` for settings that are not secret and are the same on every host
+#   (NODE_ENV, the measured TRUST_PROXY hop count, NODE_VERSION). A sync rewrites the
+#   dashboard with it, so it must equal what production runs.
+# - `sync: false` for secrets, canonical addresses (SITE_URL, CLIENT_URL, FRONTEND_URL,
+#   API_URL, VITE_API_URL), switches, and values production may set that this file
+#   cannot see. Their values live on each service's Environment page.
+#
+# Left out on purpose: the PostgreSQL database (ADR-0035) and any fromDatabase; every
+# secret value; test-only and local-only variables (PORT, which Render sets, and
+# SCHEDULER_ENABLED, for a second process only); tunables that run on their code
+# default in server/src/config.ts; VITE_* variables on the backend; and `domains:`,
+# which stay in the dashboard.
 #
 # Strings starting with FROM-DASHBOARD- are placeholders. They are filled in from the
 # dashboard's "Generate Blueprint" output by the adoption runbook in
@@ -13,9 +27,12 @@
 # blueprint is connected. Render ignores this file until then. `grep FROM-DASHBOARD
 # render.yaml` must print nothing before connecting.
 #
-# Every variable uses `sync: false`. Never add a `value:`: Render rewrites it on every
-# sync and silently undoes a change made in the dashboard. Adding a name here does not
-# set its value; set that in the dashboard, since later syncs never prompt for it.
+# Render prompts for `sync: false` values only when the blueprint is first created. A
+# variable added later is set by hand on the service's Environment page.
+#
+# NODE_VERSION must equal the repository's .node-version, on both services.
+# server/src/blueprint.test.ts holds this file to the code, .node-version and both
+# env.example files.
 #
 # Validate before pushing: render blueprints validate render.yaml
 # Field reference: https://render.com/docs/blueprint-spec
@@ -46,7 +63,10 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: NODE_ENV
-        sync: false
+        value: production
+      # Runtime: equal to .node-version (both services)
+      - key: NODE_VERSION
+        value: "22.22.0"
       # URLs and keys
       - key: SITE_URL
         sync: false
@@ -109,7 +129,11 @@ services:
         sync: false
       - key: LOG_LEVEL
         sync: false
+      # Measured on 2026-10-12 on both hostnames (.context/deployment.md, "Client IPs")
       - key: TRUST_PROXY
+        value: "2"
+      # Feedback form: HMAC key for the stored IP hash; unset refuses feedback (ADR-0037)
+      - key: FEEDBACK_IP_HASH_SECRET
         sync: false
 
   # Frontend: React static site with prerendered public routes.
@@ -140,6 +164,8 @@ services:
         source: /*
         destination: /index.html
     envVars:
+      - key: NODE_VERSION
+        value: "22.22.0"
       - key: VITE_API_URL
         sync: false
       - key: VITE_TURNSTILE_SITE_KEY

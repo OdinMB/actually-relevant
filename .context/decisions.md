@@ -35,5 +35,7 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0031 · Store locked stories as rejected at crawl, before pre-assessment, so no model call or automated stage ever sees them](decisions/0031-reject-locked-stories-at-crawl.md)
 - [ADR-0032 · Give each feed a paywall setting, automatic detection on or off plus an optional title marker that forces locked](decisions/0032-per-feed-paywall-setting.md)
 - [ADR-0033 · Identify visitors by a configured trusted-proxy hop count that fails closed](decisions/0033-trusted-proxy-hop-count.md)
-- [ADR-0034 · Declare both Render services in one committed render.yaml, naming every variable and keeping values in the dashboard](decisions/0034-render-blueprint.md)
+- [ADR-0034 · Declare both Render services in one committed render.yaml, naming every variable and keeping values in the dashboard](decisions/0034-render-blueprint.md) — superseded by ADR-0036
 - [ADR-0035 · Keep the production PostgreSQL instance out of the blueprint](decisions/0035-database-outside-blueprint.md)
+- [ADR-0036 · Fix same-on-every-host settings and the Node version as values in render.yaml, held to the code by a test](decisions/0036-fixed-values-and-blueprint-test.md)
+- [ADR-0037 · Hash feedback IP addresses with HMAC-SHA256 under a dedicated secret, and refuse feedback without it](decisions/0037-feedback-ip-hmac.md)
