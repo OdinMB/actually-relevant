@@ -39,11 +39,14 @@ Served dynamically by the backend at `GET /api/sitemap.xml`. In production, a Re
 | Destination | `https://api.actuallyrelevant.news/api/sitemap.xml` |
 | Action | **Rewrite** |
 
-Both rewrites (this one and the podcast feed's below) target the API's custom domain, `https://api.actuallyrelevant.news`, not the service's `*.onrender.com` host (the owner is changing them in the Render dashboard, 2026-10-07).
+The rule lives in the static site's `routes` in the root `render.yaml`, beside the podcast feed's below. Change them there, not in the dashboard (`.context/deployment.md`).
+
+Both rewrites (this one and the podcast feed's below) target the API's custom domain, `https://api.actuallyrelevant.news` (ADR-0019), not the service's `*.onrender.com` host.
 
 **Critical — Rule Order:**
 - Render evaluates rewrite rules **top-to-bottom, first match wins**
-- The `/sitemap.xml` rule must appear **before** the SPA catch-all rule (`/*` → `/index.html`)
+- The `/sitemap.xml` and `/podcast.xml` rules must stay **before** the SPA catch-all rule (`/*` → `/index.html`)
+- Render merges the file's routes with rules already in the dashboard, so check the order in the static site's Redirects/Rewrites tab after a blueprint sync
 - If reversed, the catch-all matches first and serves the SPA shell, which then 404s on the client
 
 **Important:** No static `sitemap.xml` file should exist in `client/public/` — Render serves static files before applying rewrite rules.

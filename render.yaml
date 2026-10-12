@@ -1,0 +1,146 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+#
+# Render blueprint for the backend web service and the static site.
+#
+# This file owns the services' settings: commands, root directories, health check,
+# rewrite order and the list of environment variable names. The Render dashboard keeps
+# the variables' values and secrets, the PostgreSQL database (deliberately not declared
+# here, ADR-0035), custom domains and the instance plan (ADR-0034).
+#
+# Strings starting with FROM-DASHBOARD- are placeholders. They are filled in from the
+# dashboard's "Generate Blueprint" output by the adoption runbook in
+# .context/deployment.md ("Adopting the services into the blueprint") before a
+# blueprint is connected. Render ignores this file until then. `grep FROM-DASHBOARD
+# render.yaml` must print nothing before connecting.
+#
+# Every variable uses `sync: false`. Never add a `value:`: Render rewrites it on every
+# sync and silently undoes a change made in the dashboard. Adding a name here does not
+# set its value; set that in the dashboard, since later syncs never prompt for it.
+#
+# Validate before pushing: render blueprints validate render.yaml
+# Field reference: https://render.com/docs/blueprint-spec
+
+services:
+  # Backend: Express API, cron jobs and Prisma migrations.
+  - type: web
+    runtime: node
+    # Exact service name from the dashboard. Hint: the onrender host in
+    # server/src/lib/openapi.ts is actually-relevant-api.
+    name: FROM-DASHBOARD-backend-name
+    # The backend's region from the dashboard (it cannot change after creation).
+    region: FROM-DASHBOARD-backend-region
+    rootDir: server
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    branch: main
+    autoDeployTrigger: commit
+    envVars:
+      # Required
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: NODE_ENV
+        sync: false
+      # URLs and keys
+      - key: SITE_URL
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: API_URL
+        sync: false
+      - key: PUBLIC_API_KEY
+        sync: false
+      - key: FORM_TOKEN_SECRET
+        sync: false
+      # Set to strict once VITE_API_URL points at api.actuallyrelevant.news (ADR-0019)
+      - key: AUTH_COOKIE_SAMESITE
+        sync: false
+      # Newsletter (Plunk)
+      - key: PLUNK_SECRET_KEY
+        sync: false
+      - key: PLUNK_PUBLIC_KEY
+        sync: false
+      - key: PLUNK_FROM_EMAIL
+        sync: false
+      - key: PLUNK_FROM_NAME
+        sync: false
+      - key: PLUNK_TEST_SEGMENT_ID
+        sync: false
+      # Newsletter signup (switch and Turnstile bot check)
+      - key: SUBSCRIPTIONS_ENABLED
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      # Podcast (ElevenLabs voicing, Bunny audio hosting)
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: BUNNY_STORAGE_ZONE
+        sync: false
+      - key: BUNNY_STORAGE_PASSWORD
+        sync: false
+      # Content extraction
+      - key: EXTRACTION_API
+        sync: false
+      - key: DIFFBOT_TOKEN
+        sync: false
+      - key: PIPFEED_API_KEY
+        sync: false
+      # Social posting
+      - key: BLUESKY_HANDLE
+        sync: false
+      - key: BLUESKY_APP_PASSWORD
+        sync: false
+      - key: BLUESKY_AUTO_POST_ENABLED
+        sync: false
+      - key: MASTODON_URL
+        sync: false
+      - key: MASTODON_TOKEN
+        sync: false
+      - key: MASTODON_AUTO_POST_ENABLED
+        sync: false
+      # Operations
+      - key: WEBHOOK_URL
+        sync: false
+      - key: LOG_LEVEL
+        sync: false
+      - key: TRUST_PROXY
+        sync: false
+
+  # Frontend: React static site with prerendered public routes.
+  - type: web
+    runtime: static
+    # Exact service name from the dashboard.
+    name: FROM-DASHBOARD-static-site-name
+    rootDir: client
+    buildCommand: npm install && npm run build
+    # Correct from the generated blueprint if it differs: Render's docs leave open
+    # whether this path is relative to rootDir (dist) or to the repository root
+    # (client/dist).
+    staticPublishPath: dist
+    branch: main
+    autoDeployTrigger: commit
+    # Order matters: Render applies the first matching rule, so /sitemap.xml and
+    # /podcast.xml must stay above the SPA catch-all. No static sitemap.xml or
+    # podcast.xml may exist in client/public/. Both rewrites target the API's custom
+    # domain, not the onrender.com host (ADR-0019, .context/seo.md).
+    routes:
+      - type: rewrite
+        source: /sitemap.xml
+        destination: https://api.actuallyrelevant.news/api/sitemap.xml
+      - type: rewrite
+        source: /podcast.xml
+        destination: https://api.actuallyrelevant.news/api/podcast/feed.xml
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_TURNSTILE_SITE_KEY
+        sync: false

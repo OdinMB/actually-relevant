@@ -66,6 +66,8 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
 
 This project requires **three services** on Render: a managed PostgreSQL database, an Express backend (web service), and a React frontend (static site). The backend and frontend run on separate origins.
 
+The database is created by hand. The backend and the static site are declared in the [`render.yaml`](render.yaml) blueprint at the repository root: commands, root directories, health check, rewrite rules and the names of every environment variable. Values, secrets, custom domains and the instance plan stay in the dashboard. Services that already exist are adopted into the blueprint with the runbook in [`.context/deployment.md`](.context/deployment.md).
+
 ### 1. PostgreSQL Database
 
 1. Create a new PostgreSQL instance on Render
@@ -75,14 +77,13 @@ This project requires **three services** on Render: a managed PostgreSQL databas
    CREATE EXTENSION IF NOT EXISTS vector;
    ```
 
-### 2. Backend (Web Service)
+### 2. Backend and Static Site
 
-| Field | Value |
-|-------|-------|
-| **Root Directory** | `server` |
-| **Build Command** | `npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build` |
-| **Start Command** | `npm start` |
-| **Health Check Path** | `/health` |
+1. In `render.yaml`, replace the `FROM-DASHBOARD-…` placeholders with your own new service names and the backend's region, and point the `/sitemap.xml` and `/podcast.xml` rewrites at your own backend host. Render matches services by name, so pick names no existing service in your account uses.
+2. In the dashboard, go to New → Blueprint, connect the repository and choose `render.yaml` on `main`.
+3. Fill in the prompted variable values. The tables below describe the main ones; the rest (newsletter, extraction, social posting) are optional and documented in `server/src/config.ts` and the matching `.context/` files. Render prompts for values only on this first creation; set later additions in each service's Environment tab.
+
+### Backend (Web Service)
 
 The build generates the Prisma client, applies any pending database migrations, and compiles TypeScript. Migrations run automatically on every deploy via `prisma migrate deploy`, which is a no-op when there are no pending migrations. `NODE_ENV=production` makes a plain `npm install` skip devDependencies, so the command installs them with `--include=dev`, and the `build` script installs them again itself and compiles with the lockfile's TypeScript (see `.context/deployment.md`).
 
@@ -109,25 +110,11 @@ The build generates the Prisma client, applies any pending database migrations, 
 - **Reverse proxy** trust is a hop count, `TRUST_PROXY` (default 1), because requests pass Cloudflare and then Render's proxies. Too low and visitors share rate limits; too high and a visitor can spoof their address. Verify it after deploy with `GET /health/client-ip` (see `.context/deployment.md`).
 - **Cross-origin cookies** use `sameSite: 'none'` + `secure: true` in production, which is required while the frontend and backend are on different sites. This is why `NODE_ENV=production` is mandatory. The API answers at `api.actuallyrelevant.news` (same site as the frontend) since 2026-10-07; once the static site's `VITE_API_URL` points there and the admin works on it, set `AUTH_COOKIE_SAMESITE=strict`; see `.context/authentication.md`.
 
-### 3. Frontend (Static Site)
-
-| Field | Value |
-|-------|-------|
-| **Root Directory** | `client` |
-| **Build Command** | `npm install && npm run build` |
-| **Publish Directory** | `dist` |
+### Frontend (Static Site)
 
 The `build` script installs devDependencies itself (`npm install --include=dev`, see `.context/deployment.md`), then type-checks, bundles with Vite, and prerenders public routes using Puppeteer. Render's build environment includes Chromium, so prerendering works without extra setup.
 
-**Rewrite rules:** Add these rewrites in the Render dashboard **in this exact order** (Render evaluates rules top-to-bottom, first match wins):
-
-| Source | Destination | Action |
-|--------|-------------|--------|
-| `/sitemap.xml` | `https://<backend-service>.onrender.com/api/sitemap.xml` | Rewrite |
-| `/podcast.xml` | `https://<backend-service>.onrender.com/api/podcast/feed.xml` | Rewrite |
-| `/*` | `/index.html` | Rewrite |
-
-**Order is critical:** The `/sitemap.xml` and `/podcast.xml` rules must appear *before* the catch-all `/*` rule. If reversed, the catch-all matches first and serves the SPA shell, resulting in a 404.
+**Rewrite rules** are the static site's `routes` in `render.yaml`: `/sitemap.xml` and `/podcast.xml` to the backend's `/api/sitemap.xml` and `/api/podcast/feed.xml`, then the catch-all `/*` to `/index.html`. **Order is critical:** the `/sitemap.xml` and `/podcast.xml` rules must stay *before* the catch-all `/*` rule (Render evaluates rules top-to-bottom, first match wins). If reversed, the catch-all matches first and serves the SPA shell, resulting in a 404.
 
 The sitemap rewrite proxies requests to the backend, which generates the sitemap dynamically from published stories. The podcast rewrite serves the podcast's RSS feed at its permanent public URL (`.context/podcast.md`). No static `sitemap.xml` or `podcast.xml` file should exist in `client/public/` — Render serves static files before applying rewrite rules.
 
@@ -146,9 +133,8 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
    ```bash
    npx tsx src/scripts/create-admin.ts
    ```
-4. Add the `/sitemap.xml` and `/podcast.xml` rewrite rules to the static site (see Frontend section above)
-5. Verify the health endpoint: `curl https://<backend-url>/health`
-6. Verify the sitemap: `curl https://<frontend-url>/sitemap.xml`
+4. Verify the health endpoint: `curl https://<backend-url>/health`
+5. Verify the sitemap: `curl https://<frontend-url>/sitemap.xml`
 
 ## Project Structure
 
@@ -194,7 +180,7 @@ Please do not intentionally remove or tamper with the machine-readable markings 
 
 ### Build Fails
 Check the build logs. Common issues:
-- Missing `Root Directory` setting on Render
+- Wrong root directory: check `rootDir` in `render.yaml` (`server` for the backend, `client` for the static site)
 - Node version mismatch — add `engines` to package.json if needed
 - Missing `npx prisma generate` before server build
 
