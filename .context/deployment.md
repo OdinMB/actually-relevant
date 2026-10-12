@@ -7,7 +7,7 @@ Render.com runs three services: the PostgreSQL database, the backend web service
 
 The dashboard also holds the database, which the blueprint deliberately leaves out. `server/src/blueprint.test.ts` holds `render.yaml`, `.node-version`, `server/env.example` and `client/env.example` to the variables the code reads (a source scan of `process.env.NAME`, `env("…")` in the Prisma schema, and `import.meta.env.VITE_*` in the client), and checks that the backend lists the domain the rewrites target. A new variable goes into the code, `server/env.example` (or `client/env.example`) and `render.yaml` together, or into one of the test's three exclusion lists with its reason: `NOT_IN_BLUEPRINT` (`PORT`, `SCHEDULER_ENABLED`), `RUNS_ON_ITS_CODE_DEFAULT` (the tunables in `config.ts`) or `NOT_SET_IN_PRODUCTION` (`SITE_URL`, `CLIENT_URL`, `PUBLIC_API_KEY`, `FORM_TOKEN_SECRET`, `PLUNK_FROM_NAME`, `EXTRACTION_API`, `WEBHOOK_URL`, `LOG_LEVEL`: production did not set them as of 2026-10-13, and each read treats an empty value like an unset one). Setting one of those in production means moving it into `render.yaml`. Decision records: [ADR-0036](decisions/0036-fixed-values-and-blueprint-test.md) (superseding [ADR-0034](decisions/0034-render-blueprint.md)), [ADR-0038](decisions/0038-mirror-render-service-settings.md) (domains and plan in the file, replacing that part of ADR-0034 and ADR-0036), [ADR-0035](decisions/0035-database-outside-blueprint.md).
 
-Until a blueprint is connected (runbook below, part B), Render ignores the file and the dashboard stays the source of truth.
+**The blueprint is connected.** It was adopted on 2026-10-13 as blueprint `actually-relevant`, with both services associated to it. The only setting the adoption changed was the backend's shorter build command (below); the rewrites for `/sitemap.xml` and `/podcast.xml`, `/health`, the `/health/client-ip` check, admin login and the custom domains were verified afterwards. Render now syncs the file on every push to `main`, so for every field it declares, `render.yaml` is the source of truth, not the dashboard.
 
 **Auto-deploy from `main`.** Both the backend and the static site deploy automatically on every push to `main`, at the same time and in no guaranteed order. A push to `main` is therefore a production release: the backend build runs `prisma migrate deploy`, so every migration committed since the last deploy is applied to the production database. Nothing is staged in between. A change that needs the backend live before the frontend (a new endpoint the client calls, a required env var) must keep the new client working against the old backend for the minutes in between, or land in two pushes. On the static site, `VITE_*` values are baked in at build time, so changing one needs a rebuild.
 
@@ -16,7 +16,7 @@ Until a blueprint is connected (runbook below, part B), Render ignores the file 
 | Backend (web service) | `server` | `npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build` |
 | Frontend (static site) | `client` | `npm install && npm run build` |
 
-Production's dashboard command, as exported on 2026-10-13, still carries a leftover step between `generate` and `deploy`: `npx prisma migrate resolve --applied 20260209120000_add_feed_region`, most likely from February, when the plan that added that migration had its SQL run by hand in pgAdmin and then marked as resolved (`.plans/completed/2026-02-09_seo-landing-pages.md`), though automated migrations had started on 2026-02-03; the repository holds no record of the dashboard edit itself. `render.yaml` leaves it out on purpose (2026-10-13): the migration is recorded as applied in production, so `migrate deploy` skips it either way, and on a fresh database the step would mark it applied without running it. The sync writes the file's command over the dashboard's at adoption.
+Until the adoption, production's dashboard command, as exported on 2026-10-13, carried a leftover step between `generate` and `deploy`: `npx prisma migrate resolve --applied 20260209120000_add_feed_region`, most likely from February, when the plan that added that migration had its SQL run by hand in pgAdmin and then marked as resolved (`.plans/completed/2026-02-09_seo-landing-pages.md`), though automated migrations had started on 2026-02-03; the repository holds no record of the dashboard edit itself. `render.yaml` leaves it out on purpose (2026-10-13): the migration is recorded as applied in production, so `migrate deploy` skips it either way, and on a fresh database the step would mark it applied without running it. The adoption's sync wrote the file's command over the dashboard's.
 
 ## Why the builds install devDependencies and pin `tsc`
 
@@ -38,10 +38,10 @@ The versions are the lockfiles' (`client/package-lock.json`, `server/package-loc
 
 Both services run one exact Node version, `22.22.0`, the version production ran when it was pinned on 2026-10-12 (until then Render's default, which changes over time). Two places carry it, and `server/src/blueprint.test.ts` checks that they agree:
 
-- **`NODE_VERSION`, a fixed value on both services in `render.yaml`.** Render reads it before any version file, so it holds whatever Render does with a `rootDir` (Render's docs do not say whether `.node-version` is read from the repository root or from `server/` and `client/`; not verified). Until the blueprint is connected, the same value is set by hand on both services' Environment pages.
+- **`NODE_VERSION`, a fixed value on both services in `render.yaml`.** Render reads it before any version file, so it holds whatever Render does with a `rootDir` (Render's docs do not say whether `.node-version` is read from the repository root or from `server/` and `client/`; not verified).
 - **`.node-version` at the repository root,** for local tools (fnm, nvm, Volta, asdf).
 
-An upgrade changes `.node-version` and both `NODE_VERSION` values in one commit, and sets the dashboard values to match until the blueprint is connected. Use an exact `major.minor.patch`: a major-only pin lets Render move minor versions under production.
+An upgrade changes `.node-version` and both `NODE_VERSION` values in one commit; the sync carries them to the dashboard. Use an exact `major.minor.patch`: a major-only pin lets Render move minor versions under production.
 
 ## Scheduler during deploys
 
@@ -76,20 +76,20 @@ The right count is the position of `cloudflareIp` in `forwardedFor`, counted fro
 
 1. Deploy. With the default of 1, behavior is unchanged.
 2. Run the `curl` above against both hostnames. Expect `matchesCloudflare: false` and an `ip` that is not your own. Count `cloudflareIp`'s position in `forwardedFor` from the right.
-3. Set `TRUST_PROXY` to that count (expect 2 or 3). It is a fixed value in `render.yaml`, `"2"` since the measurement on 2026-10-12 on both hostnames (XFF `spoof, client, cloudflare-edge`): change it there. Until the blueprint is connected, the dashboard value (the backend's Environment tab) applies and must also match; it is 2. Render redeploys.
+3. Set `TRUST_PROXY` to that count (expect 2 or 3). It is a fixed value in `render.yaml`, `"2"` since the measurement on 2026-10-12 on both hostnames (XFF `spoof, client, cloudflare-edge`): change it there, and the sync redeploys the backend.
 4. Run the `curl` again against both hostnames. Expect `matchesCloudflare: true`, and `ip` must not be `203.0.113.7`.
 
 ## Changing deployment settings
 
-- **Edit `render.yaml`, not the dashboard,** for any field the file declares. Once a blueprint is connected, a dashboard edit to a declared field is overwritten on the next sync.
+- **Edit `render.yaml`, not the dashboard,** for any field the file declares. A dashboard edit to a declared field is overwritten on the next sync.
 - **A new variable** goes into the code, `server/env.example` and `render.yaml` together, or into one of the blueprint test's exclusion lists; the test fails otherwise. In `render.yaml` it takes a fixed `value:` only if it is not secret and is the same on every host, and `sync: false` otherwise. A `sync: false` value is set by hand on the service's Environment page: Render prompts for those only when the blueprint is first created, never on later syncs. Say so in the commit that adds one.
-- **Never delete a service the blueprint manages** to start over: the next sync recreates it. Disconnect the blueprint first; disconnecting deletes nothing.
-- **Validate before pushing:** `render blueprints validate render.yaml` (Render CLI v2.7.0+, logged in; exits non-zero on failure). The file's first line points editors with the YAML extension at Render's schema.
+- **Never delete a service the blueprint manages** to start over: the next sync recreates it. Disconnect the blueprint first; disconnecting deletes nothing. After a disconnect, the dashboard is the source of truth until the runbook below is run again.
+- **Optional check before pushing:** `render blueprints validate render.yaml` (Render CLI v2.7.0+, logged in; exits non-zero on failure). The blueprint test covers the variables and placeholders; this checks the file against Render's schema. The file's first line points editors with the YAML extension at Render's schema.
 - Field semantics: Render's [blueprint spec](https://render.com/docs/blueprint-spec).
 
 ## Adopting the services into the blueprint
 
-The procedure for the first adoption, and for any re-adoption after a disconnect. Allow 30 minutes and watch both services. Render matches a blueprint entry to an existing service by name (type and region must match too), merges routes and headers with the dashboard's rather than replacing them, keeps variables the file lacks, and redeploys the affected services with zero downtime unless a persistent disk is attached. Two omitted fields are not kept: leaving out `buildFilter` empties an existing filter, and leaving out `previews` turns previews off.
+The first adoption ran on 2026-10-13 (above). This is the procedure for any re-adoption after a disconnect. Allow 30 minutes and watch both services. Render matches a blueprint entry to an existing service by name (type and region must match too), merges routes and headers with the dashboard's rather than replacing them, keeps variables the file lacks, and redeploys the affected services with zero downtime unless a persistent disk is attached. Two omitted fields are not kept: leaving out `buildFilter` empties an existing filter, and leaving out `previews` turns previews off.
 
 **A. Inventory (nothing changes yet).**
 
@@ -106,13 +106,13 @@ The procedure for the first adoption, and for any re-adoption after a disconnect
    - custom domains and the `onrender.com` subdomain setting (`renderSubdomainPolicy`);
    - whether `LOG_DIR`, `LOG_RETENTION_DAYS` or `FAVICON_DIR` are set; `NODE_VERSION` must equal `.node-version` on both services.
 3. Edit `render.yaml`:
-   1. **Service settings.** Diff the names, the backend's region and plan, `domains:` and `renderSubdomainPolicy` against the generated ones, and copy the generated values exactly (ADR-0038): Render matches services by name, and on adoption a setting the file leaves out is overridden by its default. On the first adoption (2026-10-13) the file carried `FROM-DASHBOARD-…` placeholders for the names and the region; a later re-adoption diffs the values already there.
-   2. **Commands and paths.** Diff the build command, start command, root directories, publish path and health check against the generated ones. Where they differ, the generated value wins, because it is what production runs. One intended difference stays: the backend's build command leaves out the dashboard's `migrate resolve --applied 20260209120000_add_feed_region` step (above), and the sync applies that change at step 8. The publish path is relative to the root directory (`dist`, not `client/dist`), as the 2026-10-13 export showed.
+   1. **Service settings.** Diff the names, the backend's region and plan, `domains:` and `renderSubdomainPolicy` against the generated ones, and copy the generated values exactly (ADR-0038): Render matches services by name, and on adoption a setting the file leaves out is overridden by its default. The file already carries the values from the 2026-10-13 export; diff them against the new one.
+   2. **Commands and paths.** Diff the build command, start command, root directories, publish path and health check against the generated ones. Where they differ, the generated value wins, because it is what production runs. The backend's build command no longer carries the old `migrate resolve --applied 20260209120000_add_feed_region` step (above); if a dashboard edit has brought it back, leave it out of the file. The publish path is relative to the root directory (`dist`, not `client/dist`), as the 2026-10-13 export showed.
    3. **Variables.** Add every variable name the dashboard has and the file lacks, as `sync: false`, or as a fixed value if it is not secret and the same on every host, with the value read off the dashboard. If the name is in one of the blueprint test's `RUNS_ON_ITS_CODE_DEFAULT` or `NOT_SET_IN_PRODUCTION` lists, production sets it after all: move it from the list into the file. In the other direction, a name the file carries that the dashboard lacks is either something production is missing (find out before connecting) or a variable production runs without: then move it into `NOT_SET_IN_PRODUCTION` with its reason, so that the creation prompt cannot create it empty.
    4. **Fixed values.** Compare each fixed `value:` (`NODE_ENV`, `TRUST_PROXY`, both `NODE_VERSION`s) with the dashboard. They must be equal, since a sync writes them over the dashboard; where they differ, find out which is right before connecting.
    5. **Copied blocks.** Copy exactly as generated any build filter, pre-deploy command, disk, header rule or extra route the dashboard has. If previews are on, copy the `previews` block too.
    6. **Auto-deploy.** If it is off today, either accept `commit`, which is the convention, or set `off` on purpose.
-4. Run the blueprint test (`npm run test --prefix server -- --run src/blueprint.test.ts`; it fails on any `FROM-DASHBOARD-…` placeholder left in a setting). Then run `render blueprints validate render.yaml`, commit and push `main`. With no blueprint connected, Render deploys the commit as usual.
+4. Run the blueprint test (`npm run test --prefix server -- --run src/blueprint.test.ts`; it fails on any `FROM-DASHBOARD-…` placeholder left in a setting), optionally `render blueprints validate render.yaml`, then commit and push `main`. With no blueprint connected, Render deploys the commit as usual.
 
 **B. Apply.**
 
@@ -121,7 +121,7 @@ The procedure for the first adoption, and for any re-adoption after a disconnect
 7. If the screen asks for `sync: false` values, check each against the service's Environment tab:
    - **The variable already exists:** paste its current value. Never leave it blank.
    - **The variable doesn't exist:** leave it empty only if the README marks it optional.
-8. Click Deploy Blueprint. Both services redeploy with zero downtime, unless a persistent disk is attached, in which case expect a short gap on the backend.
+8. Click Deploy Blueprint. Both services redeploy (zero downtime, with the disk exception noted at the top of this section).
 
 **C. Verify, straight after the deploys finish.**
 
@@ -139,7 +139,7 @@ The procedure for the first adoption, and for any re-adoption after a disconnect
   2. Under Blueprints, disconnect `actually-relevant`. No resource is deleted.
   3. Restore any changed setting from the step-2 record in the dashboard.
   4. **Turn auto-deploy back on** for each rolled-back service, because a manual rollback switches it off. Confirm it in Settings.
-- **While a blueprint manages a service,** never delete it to start over: the next sync recreates it. After a disconnect, the dashboard is the source of truth until you run this runbook again.
+- Never delete a service to start over; see "Changing deployment settings".
 
 ## Key Files
 
