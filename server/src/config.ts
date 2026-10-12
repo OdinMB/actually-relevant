@@ -47,6 +47,21 @@ function parsePositiveSeconds(value: string | undefined, fallback: number, varNa
 }
 
 /**
+ * Parse TRUST_PROXY, the number of proxy hops Express trusts when deriving
+ * req.ip from X-Forwarded-For. Unset or empty → 1; anything but a plain
+ * non-negative integer throws at startup, so a typo cannot silently become a
+ * different trust level. `true` and address lists are rejected on purpose:
+ * `true` trusts every entry a visitor sends.
+ */
+export function parseTrustProxyHops(value: string | undefined): number {
+  if (value === undefined || value === '') return 1
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`TRUST_PROXY="${value}" is not a hop count; expected a non-negative integer`)
+  }
+  return Number(value)
+}
+
+/**
  * Parse the cross-instance job lease timing (ADR-0020). Defaults: a 2-minute lease renewed every
  * 30 seconds. Throws at startup on a value that is not a positive whole number of seconds, or on a
  * renewal interval longer than half the lease, which would leave a run fewer than two renewal
@@ -64,6 +79,13 @@ export function parseJobLeaseTiming(leaseValue: string | undefined, renewValue: 
 }
 
 export const config = {
+  /**
+   * Proxy hops between the visitor and the server (Cloudflare, then Render's proxies).
+   * Too low: req.ip is a proxy address and visitors share every rate-limit bucket.
+   * Too high: a visitor picks their own bucket via X-Forwarded-For, bypassing limits.
+   * Set it to the count `GET /health/client-ip` confirms; see .context/deployment.md.
+   */
+  trustProxyHops: parseTrustProxyHops(process.env.TRUST_PROXY),
   auth: {
     /**
      * A refresh token presented again within this long after it was rotated is

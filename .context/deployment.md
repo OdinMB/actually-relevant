@@ -32,6 +32,34 @@ A zero-downtime deploy runs the old and the new backend side by side for a while
 
 The podcast assembles its MP3 with `ffmpeg-static` (exact version `5.3.0` in `server/package.json`), whose install script downloads a static ffmpeg binary (about 76 MB on Linux) into `server/node_modules/ffmpeg-static/` during `npm install`. Render's native Node runtime has no system ffmpeg, so a build that skips install scripts (`--ignore-scripts`) would leave the podcast unable to reach `ready` ("ffmpeg binary not found"). Measured on Render on 2026-10-06: joining and loudness-normalising a 5-minute episode took 16.5 s with a 73 MB ffmpeg peak, well inside the instance's memory. The podcast's environment variables (`ELEVENLABS_API_KEY`, `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`) are described in `.context/podcast.md`.
 
+## Client IPs behind Cloudflare and Render
+
+Requests reach the backend through Cloudflare and then one or more of Render's internal proxies. Express derives `req.ip` from `X-Forwarded-For` (XFF) by trusting a fixed number of hops, `TRUST_PROXY` (`config.trustProxyHops`, default 1). With N hops, `req.ip` is the entry N steps left of the socket address: for XFF `a, b, c`, N=1 gives `c`, N=2 gives `b`. Every rate limiter (search, which pays for embedding calls; subscribe; feedback and its stored `ipHash`; login; refresh; the general and expensive-op limiters) keys on `req.ip`, so the count matters both ways:
+
+- **Too low:** `req.ip` is a proxy address and visitors share every bucket. That is a cost and availability problem.
+- **Too high:** a visitor picks their own bucket by sending `X-Forwarded-For`, because Cloudflare appends to a client-sent XFF rather than replacing it. That silently bypasses every limit.
+
+`TRUST_PROXY` accepts only a plain non-negative integer; anything else (`true`, an address list, `2abc`) stops startup, so on Render the previous deploy keeps serving. No Render document gives the count; reports from Render users suggest 2 or 3. Decision record: [ADR-0033](decisions/0033-trusted-proxy-hop-count.md).
+
+**The check.** `GET /health/client-ip` returns the caller's own view of their request (`ip`, `cloudflareIp` from `CF-Connecting-IP`, raw `forwardedFor`, `trustProxyHops`, `matchesCloudflare`) with `Cache-Control: no-store`, and stores and logs no address. Cloudflare sets `CF-Connecting-IP` and overwrites any value a visitor sends, so it is the ground truth. One request with a spoofed header tests both directions:
+
+```bash
+curl -s -H "X-Forwarded-For: 203.0.113.7" https://<backend-host>/health/client-ip
+```
+
+- **Correct count:** `matchesCloudflare: true`.
+- **Too low:** `ip` is a proxy address and `matchesCloudflare` is `false`.
+- **Too high:** `ip` is `203.0.113.7` and `matchesCloudflare` is `false`.
+
+The right count is the position of `cloudflareIp` in `forwardedFor`, counted from the right with the rightmost entry as 1. Run the check against both hostnames the backend answers on, the `onrender.com` one and the custom API domain, `api.actuallyrelevant.news` (ADR-0019). If they need different counts, no single value is right; make the backend reachable through one path only rather than picking a compromise.
+
+**Rollout, and again after any change of domain, proxy or Render plan:**
+
+1. Deploy. With the default of 1, behavior is unchanged.
+2. Run the `curl` above against both hostnames. Expect `matchesCloudflare: false` and an `ip` that is not your own. Count `cloudflareIp`'s position in `forwardedFor` from the right.
+3. Set `TRUST_PROXY` to that count in the backend's Render dashboard settings (expect 2 or 3). Render redeploys.
+4. Run the `curl` again against both hostnames. Expect `matchesCloudflare: true`, and `ip` must not be `203.0.113.7`.
+
 ## Key Files
 
 | File | Purpose |
@@ -40,3 +68,5 @@ The podcast assembles its MP3 with `ffmpeg-static` (exact version `5.3.0` in `se
 | `client/package.json` | `build`: install devDependencies, pinned `tsc -b`, `vite build` (with prerender) |
 | `server/package.json` | `build`: install devDependencies, pinned `tsc` |
 | `README.md` | Render dashboard settings per service |
+| `server/src/config.ts` | `parseTrustProxyHops`, `trustProxyHops` |
+| `server/src/routes/health.ts` | `GET /health/client-ip` check |

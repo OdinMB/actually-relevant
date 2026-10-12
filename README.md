@@ -100,12 +100,13 @@ The build generates the Prisma client, applies any pending database migrations, 
 | `LOG_LEVEL` | No | Logging verbosity (default: `info`) |
 | `SUBSCRIPTIONS_ENABLED` | No | `true` opens newsletter signups; unset or anything else keeps them paused (`.context/subscription.md`) |
 | `TURNSTILE_SECRET_KEY` | For signups | Cloudflare Turnstile secret; without it, production refuses every signup |
+| `TRUST_PROXY` | No | Proxy hops to trust for client IPs (default: `1`). Set to the count the `/health/client-ip` check confirms (see `.context/deployment.md`) |
 
 **Architecture notes:**
 
 - **Cron jobs** run in-process via node-cron — no separate worker service is needed. Job configuration lives in the `job_runs` database table and is managed from the admin dashboard.
 - **Graceful shutdown** handles `SIGTERM` (sent by Render on deploy) by draining in-flight LLM tasks before disconnecting from the database.
-- **Reverse proxy** trust is configured (`trust proxy: 1`) for correct client IP detection behind Render's load balancer.
+- **Reverse proxy** trust is a hop count, `TRUST_PROXY` (default 1), because requests pass Cloudflare and then Render's proxies. Too low and visitors share rate limits; too high and a visitor can spoof their address. Verify it after deploy with `GET /health/client-ip` (see `.context/deployment.md`).
 - **Cross-origin cookies** use `sameSite: 'none'` + `secure: true` in production, which is required while the frontend and backend are on different sites. This is why `NODE_ENV=production` is mandatory. The API answers at `api.actuallyrelevant.news` (same site as the frontend) since 2026-10-07; once the static site's `VITE_API_URL` points there and the admin works on it, set `AUTH_COOKIE_SAMESITE=strict`; see `.context/authentication.md`.
 
 ### 3. Frontend (Static Site)

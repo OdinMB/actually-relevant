@@ -34,3 +34,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0030 · Classify a story's access tier at extraction from publisher markup and store it on the story](decisions/0030-classify-access-tier-at-extraction.md)
 - [ADR-0031 · Store locked stories as rejected at crawl, before pre-assessment, so no model call or automated stage ever sees them](decisions/0031-reject-locked-stories-at-crawl.md)
 - [ADR-0032 · Give each feed a paywall setting, automatic detection on or off plus an optional title marker that forces locked](decisions/0032-per-feed-paywall-setting.md)
+- [ADR-0033 · Identify visitors by a configured trusted-proxy hop count that fails closed](decisions/0033-trusted-proxy-hop-count.md)

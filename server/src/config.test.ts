@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseJobLeaseTiming, parseSameSite } from './config.js'
+import { parseJobLeaseTiming, parseSameSite, parseTrustProxyHops } from './config.js'
 
 describe('parseJobLeaseTiming', () => {
   it('falls back to a 2-minute lease renewed every 30 seconds when unset or empty', () => {
@@ -37,5 +37,23 @@ describe('parseSameSite', () => {
 
   it('refuses an unknown value at startup', () => {
     expect(() => parseSameSite('stirct', 'AUTH_COOKIE_SAMESITE')).toThrow('AUTH_COOKIE_SAMESITE')
+  })
+})
+
+describe('parseTrustProxyHops', () => {
+  it.each([undefined, ''])('defaults to 1 for %j', (value) => {
+    expect(parseTrustProxyHops(value)).toBe(1)
+  })
+
+  it.each([
+    ['0', 0],
+    ['2', 2],
+    ['3', 3],
+  ])('parses %j as %i', (value, expected) => {
+    expect(parseTrustProxyHops(value)).toBe(expected)
+  })
+
+  it.each(['-1', '1.5', '2abc', 'true', 'loopback', ' 2'])('throws for %j, naming TRUST_PROXY', (value) => {
+    expect(() => parseTrustProxyHops(value)).toThrow(/TRUST_PROXY/)
   })
 })

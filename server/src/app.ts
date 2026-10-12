@@ -7,6 +7,7 @@ import helmet from 'helmet'
 import { randomUUID } from 'crypto'
 import type { Request, Response, NextFunction } from 'express'
 import { createLogger } from './lib/logger.js'
+import { config } from './config.js'
 import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import adminRouter from './routes/admin/index.js'
@@ -17,8 +18,10 @@ const httpLog = createLogger('http')
 
 const app = express()
 
-// Trust proxy for correct IP detection behind reverse proxy (Render.com)
-app.set('trust proxy', 1)
+// Requests pass Cloudflare and then Render's proxies; trust exactly that many hops
+// so req.ip (and every rate limit) keys on the visitor. The count is TRUST_PROXY,
+// verified with GET /health/client-ip — see .context/deployment.md.
+app.set('trust proxy', config.trustProxyHops)
 
 // Security headers
 app.use(helmet({
