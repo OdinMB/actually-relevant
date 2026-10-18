@@ -14,8 +14,8 @@ import { config } from '../config.js'
 /** Statuses whose old stories are deleted. Every other unpublished status only loses its embedding. */
 export const DELETABLE_STATUSES = ['fetched', 'pre_analyzed', 'rejected', 'trashed'] as const
 
-const cutoff = (maxAgeDays: number) =>
-  Prisma.sql`((now() AT TIME ZONE 'UTC') - make_interval(days => ${maxAgeDays}::int))`
+const cutoff = (maxAgeMonths: number) =>
+  Prisma.sql`((now() AT TIME ZONE 'UTC') - make_interval(months => ${maxAgeMonths}::int))`
 
 /**
  * Delete up to `limit` stories crawled before the cutoff and add their counts to
@@ -24,14 +24,14 @@ const cutoff = (maxAgeDays: number) =>
  * (its "Also covered by" sources). Returns the deleted count per status.
  */
 export async function deleteOldStoriesBatch(
-  maxAgeDays: number = config.storyRetention.maxAgeDays,
+  maxAgeMonths: number = config.storyRetention.maxAgeMonths,
   limit: number = config.storyRetention.batchSize,
 ): Promise<Record<string, number>> {
   const statuses = Prisma.join(DELETABLE_STATUSES.map(s => Prisma.sql`${s}::"StoryStatus"`))
   const rows = await prisma.$queryRaw<{ status: string; count: number }[]>`
     WITH doomed AS (
       SELECT s."id" FROM "stories" s
-      WHERE s."date_crawled" < ${cutoff(maxAgeDays)}
+      WHERE s."date_crawled" < ${cutoff(maxAgeMonths)}
         AND s."status" IN (${statuses})
         AND NOT EXISTS (SELECT 1 FROM "bluesky_posts" b WHERE b."story_id" = s."id")
         AND NOT EXISTS (SELECT 1 FROM "mastodon_posts" m WHERE m."story_id" = s."id")
@@ -75,14 +75,14 @@ export async function deleteEmptyClusters(): Promise<number> {
  * delete keeps). The hash goes too, so publishing such a story generates a new one (`ensureEmbedding`).
  */
 export async function clearOldEmbeddingsBatch(
-  maxAgeDays: number = config.storyRetention.maxAgeDays,
+  maxAgeMonths: number = config.storyRetention.maxAgeMonths,
   limit: number = config.storyRetention.batchSize,
 ): Promise<number> {
   return prisma.$executeRaw`
     UPDATE "stories" SET "embedding" = NULL, "embedding_content_hash" = NULL, "embedding_generated_at" = NULL
     WHERE "id" IN (
       SELECT "id" FROM "stories"
-      WHERE "date_crawled" < ${cutoff(maxAgeDays)}
+      WHERE "date_crawled" < ${cutoff(maxAgeMonths)}
         AND "status" <> 'published'
         AND "embedding" IS NOT NULL
       LIMIT ${limit}::int

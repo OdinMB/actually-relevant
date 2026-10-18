@@ -389,7 +389,8 @@ export const config = {
   storyRetention: {
     // The cleanup_old_stories job (.context/story-retention.md): stories crawled longer ago than this
     // are deleted (unkept statuses only) or lose their embedding (every other unpublished story).
-    maxAgeDays: 365,
+    // Shown on the admin Jobs page (jobs/jobSettings.ts).
+    maxAgeMonths: 6,
     // Rows per statement; each delete batch and its roll-up commit together.
     batchSize: 500,
   },
