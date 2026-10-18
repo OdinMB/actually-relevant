@@ -89,6 +89,31 @@ export async function clearOldEmbeddingsBatch(
     )`
 }
 
+export interface LifetimeMonthRow {
+  /** YYYY-MM, by crawl date */
+  month: string
+  crawled: number
+  /** Got a screening rating */
+  screened: number
+  /** Got a full assessment */
+  assessed: number
+  published: number
+  /** Of `crawled`, deleted by the cleanup */
+  archived: number
+}
+
+export interface LifetimeGroupRow {
+  id: string
+  name: string
+  crawled: number
+  published: number
+  archived: number
+  /** Mean screening rating over the stories that got one, 1 decimal; null when none did */
+  avgRelevancePre: number | null
+  /** Stories with a screening rating of 7 or more */
+  highPre: number
+}
+
 export interface LifetimeStoryStats {
   /** Every story ever crawled: live plus deleted by the cleanup. */
   total: number
@@ -99,39 +124,122 @@ export interface LifetimeStoryStats {
   byRelevancePre: Record<string, number>
   /** Full-assessment rating 1-10; "none" for stories never fully assessed. */
   byRelevance: Record<string, number>
+  /** Newest month first */
+  byMonth: LifetimeMonthRow[]
+  /** By feed (source), most crawled first */
+  byFeed: LifetimeGroupRow[]
+  /** By issue (the story's, else its feed's), most crawled first */
+  byIssue: LifetimeGroupRow[]
 }
 
-type CountRow = { key: string | null; count: number }
+/** A screening rating at or above this counts as "high" in the per-source and per-issue rows. */
+export const HIGH_PRE_RATING = 7
 
-function addRows(target: Record<string, number>, rows: CountRow[]): void {
-  for (const row of rows) {
-    const key = row.key ?? 'none'
-    target[key] = (target[key] ?? 0) + Number(row.count)
+interface CombinedRow {
+  month: string
+  feedId: string
+  feedName: string | null
+  issueId: string | null
+  issueName: string | null
+  status: string
+  relevancePre: number | null
+  relevance: number | null
+  n: number
+  archived: number
+}
+
+/**
+ * Live stories and archived counts as one list of grouped rows, so every breakdown below adds the
+ * two the same way. Issue: the story's, else its feed's (as the rest of the app reads it).
+ */
+async function loadCombinedRows(): Promise<CombinedRow[]> {
+  const rows = await prisma.$queryRaw<CombinedRow[]>`
+    WITH combined AS (
+      SELECT date_trunc('month', s."date_crawled")::date AS month, s."feed_id", COALESCE(s."issue_id", f."issue_id") AS issue_id,
+             s."status"::text AS status, s."relevance_pre", s."relevance", count(*)::int AS n, 0 AS archived
+      FROM "stories" s JOIN "feeds" f ON f."id" = s."feed_id"
+      GROUP BY 1, 2, 3, 4, 5, 6
+      UNION ALL
+      SELECT a."crawl_month", a."feed_id", COALESCE(a."issue_id", f."issue_id"), a."status", a."relevance_pre", a."relevance",
+             sum(a."story_count")::int, sum(a."story_count")::int
+      FROM "story_archive_counts" a LEFT JOIN "feeds" f ON f."id" = a."feed_id"
+      GROUP BY 1, 2, 3, 4, 5, 6
+    )
+    SELECT to_char(c.month, 'YYYY-MM') AS "month", c."feed_id" AS "feedId",
+           f."title" AS "feedName", c.issue_id AS "issueId", i."name" AS "issueName",
+           c.status, c."relevance_pre" AS "relevancePre", c."relevance", c.n, c.archived
+    FROM combined c
+    LEFT JOIN "feeds" f ON f."id" = c."feed_id"
+    LEFT JOIN "issues" i ON i."id" = c.issue_id`
+  return rows.map(r => ({ ...r, n: Number(r.n), archived: Number(r.archived) }))
+}
+
+type GroupAcc = LifetimeGroupRow & { preSum: number; preCount: number }
+
+function groupRows(rows: CombinedRow[], key: (r: CombinedRow) => [string, string]): LifetimeGroupRow[] {
+  const groups = new Map<string, GroupAcc>()
+  for (const r of rows) {
+    const [id, name] = key(r)
+    let g = groups.get(id)
+    if (!g) {
+      g = { id, name, crawled: 0, published: 0, archived: 0, avgRelevancePre: null, highPre: 0, preSum: 0, preCount: 0 }
+      groups.set(id, g)
+    }
+    g.crawled += r.n
+    g.archived += r.archived
+    if (r.status === 'published') g.published += r.n
+    if (r.relevancePre !== null) {
+      g.preSum += r.relevancePre * r.n
+      g.preCount += r.n
+      if (r.relevancePre >= HIGH_PRE_RATING) g.highPre += r.n
+    }
   }
+  return [...groups.values()]
+    .map(({ preSum, preCount, ...g }) => ({ ...g, avgRelevancePre: preCount ? Math.round((preSum / preCount) * 10) / 10 : null }))
+    .sort((a, b) => b.crawled - a.crawled || a.name.localeCompare(b.name))
 }
 
-/** Lifetime totals: the live stories plus the archived counts. */
+const ratingKey = (rating: number | null) => (rating === null ? 'none' : String(rating))
+const bump = (target: Record<string, number>, key: string, n: number) => { target[key] = (target[key] ?? 0) + n }
+
+/** Lifetime totals: the live stories plus the archived counts, overall and by month, feed and issue. */
 export async function getLifetimeStoryStats(): Promise<LifetimeStoryStats> {
-  const [liveStatus, livePre, liveRel, archStatus, archPre, archRel] = await Promise.all([
-    prisma.$queryRaw<CountRow[]>`SELECT "status"::text AS "key", count(*)::int AS "count" FROM "stories" GROUP BY 1`,
-    prisma.$queryRaw<CountRow[]>`SELECT "relevance_pre"::text AS "key", count(*)::int AS "count" FROM "stories" GROUP BY 1`,
-    prisma.$queryRaw<CountRow[]>`SELECT "relevance"::text AS "key", count(*)::int AS "count" FROM "stories" GROUP BY 1`,
-    prisma.$queryRaw<CountRow[]>`SELECT "status" AS "key", sum("story_count")::int AS "count" FROM "story_archive_counts" GROUP BY 1`,
-    prisma.$queryRaw<CountRow[]>`SELECT "relevance_pre"::text AS "key", sum("story_count")::int AS "count" FROM "story_archive_counts" GROUP BY 1`,
-    prisma.$queryRaw<CountRow[]>`SELECT "relevance"::text AS "key", sum("story_count")::int AS "count" FROM "story_archive_counts" GROUP BY 1`,
-  ])
+  const rows = await loadCombinedRows()
 
   const byStatus: Record<string, number> = {}
   const byRelevancePre: Record<string, number> = {}
   const byRelevance: Record<string, number> = {}
-  addRows(byStatus, liveStatus)
-  addRows(byStatus, archStatus)
-  addRows(byRelevancePre, livePre)
-  addRows(byRelevancePre, archPre)
-  addRows(byRelevance, liveRel)
-  addRows(byRelevance, archRel)
+  const months = new Map<string, LifetimeMonthRow>()
+  let total = 0
+  let archived = 0
 
-  const sum = (rows: CountRow[]) => rows.reduce((n, r) => n + Number(r.count), 0)
-  const archived = sum(archStatus)
-  return { total: sum(liveStatus) + archived, archived, byStatus, byRelevancePre, byRelevance }
+  for (const r of rows) {
+    total += r.n
+    archived += r.archived
+    bump(byStatus, r.status, r.n)
+    bump(byRelevancePre, ratingKey(r.relevancePre), r.n)
+    bump(byRelevance, ratingKey(r.relevance), r.n)
+
+    let m = months.get(r.month)
+    if (!m) {
+      m = { month: r.month, crawled: 0, screened: 0, assessed: 0, published: 0, archived: 0 }
+      months.set(r.month, m)
+    }
+    m.crawled += r.n
+    m.archived += r.archived
+    if (r.relevancePre !== null) m.screened += r.n
+    if (r.relevance !== null) m.assessed += r.n
+    if (r.status === 'published') m.published += r.n
+  }
+
+  return {
+    total,
+    archived,
+    byStatus,
+    byRelevancePre,
+    byRelevance,
+    byMonth: [...months.values()].sort((a, b) => b.month.localeCompare(a.month)),
+    byFeed: groupRows(rows, r => [r.feedId, r.feedName ?? 'Unknown feed']),
+    byIssue: groupRows(rows, r => [r.issueId ?? 'none', r.issueName ?? 'No issue']),
+  }
 }

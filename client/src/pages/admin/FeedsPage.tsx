@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { useQueryClient } from '@tanstack/react-query'
 import { useFeeds, useDeleteFeed, useFeedQuality } from '../../hooks/useFeeds'
@@ -55,7 +56,17 @@ export default function FeedsPage() {
   const queryClient = useQueryClient()
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [editingFeedId, setEditingFeedId] = useState<string | null>(null)
+  // The open edit panel is in the URL (?open=<id>), so other pages can link to a feed
+  const [searchParams, setSearchParams] = useSearchParams()
+  const editingFeedId = searchParams.get('open')
+  const setEditingFeedId = (id: string | null) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (id) next.set('open', id)
+      else next.delete('open')
+      return next
+    })
+  }
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const invalidateFeeds = () => {

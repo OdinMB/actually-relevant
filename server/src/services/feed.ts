@@ -188,7 +188,12 @@ export async function deleteFeed(id: string): Promise<{ action: 'deleted' | 'dea
 // ──── Feed Quality Metrics ─────────────────────────────────────────────────
 
 export interface FeedQualityMetrics {
+  /** Every story ever crawled from the feed, including those the monthly cleanup deleted */
   totalCrawled: number
+  /** Of `totalCrawled`, the stories the cleanup deleted (.context/story-retention.md) */
+  archivedCount: number
+  /** Mean screening rating over every story that got one, deleted ones included; null when none did */
+  avgRelevancePre: number | null
   publishedCount: number
   publishRate: number
   avgRelevance: number | null
@@ -200,6 +205,9 @@ interface RawQualityRow {
   total_crawled: bigint
   published_count: bigint
   avg_relevance: number | null
+  archived_count: bigint
+  pre_sum: bigint
+  pre_count: bigint
 }
 
 let qualityCache: { data: Map<string, FeedQualityMetrics>; expiry: number } | null = null
@@ -209,15 +217,39 @@ export async function getAllFeedQualityMetrics(): Promise<Map<string, FeedQualit
     return qualityCache.data
   }
 
+  // Stories the monthly cleanup deleted are added back from story_archive_counts, so the totals,
+  // the publish rate and the screening average stay lifetime figures (.context/story-retention.md).
   const rows = await prisma.$queryRaw<RawQualityRow[]>`
+    WITH live AS (
+      SELECT
+        s.feed_id,
+        COUNT(*) AS total_crawled,
+        COUNT(*) FILTER (WHERE s.status = 'published') AS published_count,
+        AVG(s.relevance) FILTER (WHERE s.relevance IS NOT NULL AND s.status IN ('analyzed', 'selected', 'published')) AS avg_relevance,
+        COALESCE(SUM(s.relevance_pre), 0) AS pre_sum,
+        COUNT(s.relevance_pre) AS pre_count
+      FROM stories s
+      GROUP BY s.feed_id
+    ), archived AS (
+      SELECT
+        a.feed_id,
+        SUM(a.story_count) AS archived_count,
+        COALESCE(SUM(a.relevance_pre * a.story_count), 0) AS pre_sum,
+        COALESCE(SUM(a.story_count) FILTER (WHERE a.relevance_pre IS NOT NULL), 0) AS pre_count
+      FROM story_archive_counts a
+      GROUP BY a.feed_id
+    )
     SELECT
       f.id AS feed_id,
-      COUNT(s.id) AS total_crawled,
-      COUNT(s.id) FILTER (WHERE s.status = 'published') AS published_count,
-      AVG(s.relevance) FILTER (WHERE s.relevance IS NOT NULL AND s.status IN ('analyzed', 'selected', 'published')) AS avg_relevance
+      COALESCE(l.total_crawled, 0) + COALESCE(a.archived_count, 0) AS total_crawled,
+      COALESCE(l.published_count, 0) AS published_count,
+      l.avg_relevance,
+      COALESCE(a.archived_count, 0) AS archived_count,
+      COALESCE(l.pre_sum, 0) + COALESCE(a.pre_sum, 0) AS pre_sum,
+      COALESCE(l.pre_count, 0) + COALESCE(a.pre_count, 0) AS pre_count
     FROM feeds f
-    LEFT JOIN stories s ON s.feed_id = f.id
-    GROUP BY f.id
+    LEFT JOIN live l ON l.feed_id = f.id
+    LEFT JOIN archived a ON a.feed_id = f.id
   `
 
   // Extraction method breakdown per feed
@@ -244,9 +276,11 @@ export async function getAllFeedQualityMetrics(): Promise<Map<string, FeedQualit
     const publishedCount = Number(row.published_count)
     const avgRelevance = row.avg_relevance ? Math.round(row.avg_relevance * 10) / 10 : null
     const publishRate = totalCrawled > 0 ? Math.round((publishedCount / totalCrawled) * 1000) / 1000 : 0
+    const preCount = Number(row.pre_count)
+    const avgRelevancePre = preCount > 0 ? Math.round((Number(row.pre_sum) / preCount) * 10) / 10 : null
 
     result.set(row.feed_id, {
-      totalCrawled, publishedCount, publishRate, avgRelevance,
+      totalCrawled, archivedCount: Number(row.archived_count), avgRelevancePre, publishedCount, publishRate, avgRelevance,
       extractionMethods: methodsByFeed.get(row.feed_id) || {},
     })
   }

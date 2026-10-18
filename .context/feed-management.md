@@ -47,15 +47,17 @@ A feed is stale once `consecutiveEmptyCrawls >= config.crawl.staleAfterEmptyCraw
 
 `GET /api/admin/feeds/quality` returns these per feed (`getAllFeedQualityMetrics()`):
 
-- `totalCrawled`: all stories in the feed, any status.
-- `publishedCount`: stories with status `published`.
+- `totalCrawled`: all stories ever crawled from the feed, any status, including those the monthly cleanup deleted (`story_archive_counts`, `story-retention.md`).
+- `archivedCount`: of those, the ones the cleanup deleted.
+- `publishedCount`: stories with status `published` (never deleted).
 - `publishRate`: published ÷ total, rounded to 3 decimals, 0 when the feed has no stories.
+- `avgRelevancePre`: mean screening rating over every story that got one, deleted ones included, rounded to 1 decimal, otherwise null.
 - `avgRelevance`: mean `relevance` of stories in `analyzed`, `selected` or `published` that have a rating, rounded to 1 decimal, otherwise null.
-- `extractionMethods`: `crawlMethod → count`, counting only stories with a `crawlMethod`. `teaser` appears for locked pages where every extraction tier failed.
+- `extractionMethods`: `crawlMethod → count`, counting only live stories with a `crawlMethod` (the archive keeps no crawl method). `teaser` appears for locked pages where every extraction tier failed.
 
 Paywall-locked stories are stored (as `rejected`), so they count in `totalCrawled` and lower `publishRate`.
 
-Feeds with no stories are included. Results are cached in process memory for `config.feedQuality.cacheMinutes` (10). The feed table shows the dominant method, and the edit panel shows the full percentage breakdown.
+Feeds with no stories are included. Results are cached in process memory for `config.feedQuality.cacheMinutes` (10). The feed table shows lifetime Crawled, the dominant method, and the edit panel shows lifetime crawled (with the deleted count), the screening average and the full percentage breakdown. The open edit panel is in the URL (`/admin/feeds?open=<id>`), which the Stats page links to.
 
 ## Favicons
 

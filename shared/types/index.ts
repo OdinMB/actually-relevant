@@ -639,6 +639,29 @@ export type StorySort =
   | 'title_asc'
   | 'title_desc'
 
+export interface LifetimeMonthRow {
+  /** YYYY-MM, by crawl date */
+  month: string
+  crawled: number
+  screened: number
+  assessed: number
+  published: number
+  /** Of `crawled`, deleted by the monthly cleanup */
+  archived: number
+}
+
+/** One feed or issue in the lifetime totals */
+export interface LifetimeGroupRow {
+  id: string
+  name: string
+  crawled: number
+  published: number
+  archived: number
+  avgRelevancePre: number | null
+  /** Stories with a screening rating of 7 or more */
+  highPre: number
+}
+
 /** GET /api/admin/stories/lifetime-stats: live stories plus those the monthly cleanup deleted. */
 export interface LifetimeStoryStats {
   total: number
@@ -647,6 +670,11 @@ export interface LifetimeStoryStats {
   /** Keys "1".."10", or "none" for never rated */
   byRelevancePre: Record<string, number>
   byRelevance: Record<string, number>
+  /** Newest month first */
+  byMonth: LifetimeMonthRow[]
+  /** Most crawled first */
+  byFeed: LifetimeGroupRow[]
+  byIssue: LifetimeGroupRow[]
 }
 
 export interface PaginatedResponse<T> {

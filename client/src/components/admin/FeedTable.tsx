@@ -40,6 +40,7 @@ export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDe
             <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">Issue</th>
             <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">Lang</th>
             <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">Interval</th>
+            <th scope="col" className="hidden xl:table-cell text-right px-3 py-2 font-medium text-neutral-500" title="Every story ever crawled, including those the monthly cleanup deleted">Crawled</th>
             <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">Pub %</th>
             <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">Avg Rel.</th>
             <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">Method</th>
@@ -103,6 +104,9 @@ export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDe
                 const m = qualityMetrics?.[feed.id]
                 return (
                   <>
+                    <td className="hidden xl:table-cell px-3 py-2 text-right text-neutral-600 text-xs tabular-nums">
+                      {m ? m.totalCrawled.toLocaleString('en-US') : '--'}
+                    </td>
                     <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">
                       {m ? `${Math.round(m.publishRate * 100)}%` : '--'}
                     </td>

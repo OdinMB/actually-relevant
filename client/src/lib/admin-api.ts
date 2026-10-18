@@ -63,7 +63,10 @@ export interface AdminNotice {
 }
 
 export interface FeedQualityMetrics {
+  /** Lifetime: includes the stories the monthly cleanup deleted */
   totalCrawled: number
+  archivedCount: number
+  avgRelevancePre: number | null
   publishedCount: number
   publishRate: number
   avgRelevance: number | null
