@@ -23,7 +23,7 @@ function describe(result: CleanupResult): string {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([status, count]) => `${status} ${count}`)
     .join(', ')
-  const deleted = `Deleted ${result.deleted} stories crawled more than ${config.storyRetention.maxAgeDays} days ago`
+  const deleted = `Deleted ${result.deleted} stories crawled more than ${config.storyRetention.maxAgeMonths} months ago`
   return [
     result.deleted > 0 ? `${deleted} (${statuses}).` : `${deleted}: none were due.`,
     `Cleared the embeddings of ${result.embeddingsCleared} older unpublished stories that were kept.`,

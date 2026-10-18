@@ -139,6 +139,11 @@ export function JobsTable({ jobs }: JobsTableProps) {
                   >
                     {jobDisplayName(job.jobName)}
                   </button>
+                  {job.setting && (
+                    <span className="block text-xs font-normal text-neutral-500" title="Set in server/src/config.ts">
+                      {job.setting}
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2 hidden lg:table-cell">
                   <CronEditor job={job} />

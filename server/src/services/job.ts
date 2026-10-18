@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js'
 import { runningJobs } from '../jobs/scheduler.js'
 import { jobsWithLiveLease } from '../jobs/jobLease.js'
 import { jobTimeZone } from '../jobs/jobTimeZones.js'
+import { jobSetting } from '../jobs/jobSettings.js'
 
 /** Every job with its running state: a run in this process, or a live lease held by any process. */
 export async function getJobs() {
@@ -13,6 +14,7 @@ export async function getJobs() {
     ...job,
     running: runningJobs.has(job.jobName) || leased.has(job.jobName),
     timeZone: jobTimeZone(job.jobName),
+    setting: jobSetting(job.jobName),
   }))
 }
 

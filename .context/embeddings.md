@@ -18,7 +18,7 @@ A SHA-256 hash of the embedding input string is stored as `embedding_content_has
 
 ### Trigger Points
 
-Embeddings are generated **before** the state change is committed during assessment. If embedding generation fails (after 3 retries via `withRetry`), the assess operation rolls back. No story reaches `analyzed` without a valid embedding, and since publish requires a prior `analyzed` state, published stories are guaranteed to have embeddings. The exception is age: the monthly `cleanup_old_stories` job clears the embedding of every unpublished story crawled more than a year ago (`story-retention.md`), and the publish safety net below generates it again.
+Embeddings are generated **before** the state change is committed during assessment. If embedding generation fails (after 3 retries via `withRetry`), the assess operation rolls back. No story reaches `analyzed` without a valid embedding, and since publish requires a prior `analyzed` state, published stories are guaranteed to have embeddings. The exception is age: the monthly `cleanup_old_stories` job clears the embedding of every unpublished story crawled more than 6 months ago (`story-retention.md`), and the publish safety net below generates it again.
 
 1. **On assessment** (`assessStory`): Embedding generated from LLM analysis results, saved atomically with the analysis data
 2. **On edit of published story** (`updateStory`): Regenerates if title/titleLabel/summary changed, saved atomically with the edit

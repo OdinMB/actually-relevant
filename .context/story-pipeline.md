@@ -36,7 +36,7 @@ A story whose access tier is `locked` (`content-extraction.md`, "Access Classifi
 
 **Terminal statuses:** `published`, `rejected` and `trashed`. No automated job moves a story out of these. Only an admin action does.
 
-**Archive behavior:** Rejected and trashed stories stay available to review, re-assess or republish for a year. After that the monthly `cleanup_old_stories` job deletes them (and `fetched`/`pre_analyzed` stories that old), keeping their counts for lifetime totals, unless a social post, newsletter, podcast or a published cluster member keeps them; old unpublished stories it keeps lose their embedding until published or re-assessed. See `story-retention.md`.
+**Archive behavior:** Rejected and trashed stories stay available to review, re-assess or republish for 6 months (`config.storyRetention.maxAgeMonths`). After that the monthly `cleanup_old_stories` job deletes them (and `fetched`/`pre_analyzed` stories that old), keeping their counts for lifetime totals, unless a social post, newsletter, podcast or a published cluster member keeps them; old unpublished stories it keeps lose their embedding until published or re-assessed. See `story-retention.md`.
 
 ### Transition Rules
 

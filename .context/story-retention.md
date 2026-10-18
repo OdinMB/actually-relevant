@@ -6,7 +6,7 @@ The monthly `cleanup_old_stories` job keeps the database from growing without bo
 
 Each run, in this order (`jobs/cleanupOldStories.ts`, SQL in `services/storyRetention.ts`):
 
-1. **Deletes old stories in batches** of `config.storyRetention.batchSize` (500) until a batch comes back short. A story is deleted when it was crawled more than `config.storyRetention.maxAgeDays` (365) days ago on the database clock, its status is `fetched`, `pre_analyzed`, `rejected` or `trashed` (`DELETABLE_STATUSES`), and none of these keeps it:
+1. **Deletes old stories in batches** of `config.storyRetention.batchSize` (500) until a batch comes back short. A story is deleted when it was crawled more than `config.storyRetention.maxAgeMonths` (6) months ago on the database clock (`make_interval(months => …)`; the owner shortened it from a year on 2026-10-18), its status is `fetched`, `pre_analyzed`, `rejected` or `trashed` (`DELETABLE_STATUSES`), and none of these keeps it:
    - a Bluesky or Mastodon post row for it (the foreign keys are `RESTRICT`),
    - a newsletter that lists it in `story_ids` or `selected_story_ids`,
    - a podcast that lists it in `story_ids`,
@@ -58,4 +58,5 @@ Deleted rows and cleared embeddings free space Postgres reuses for new rows (aut
 | `client/src/pages/admin/StatsPage.tsx` | The Stats page |
 | `client/src/pages/admin/DashboardPage.tsx` | Lifetime totals line |
 | `server/src/services/feed.ts` | `getAllFeedQualityMetrics()`: lifetime per-feed totals |
-| `server/src/config.ts` | `storyRetention.maxAgeDays`, `storyRetention.batchSize` |
+| `server/src/config.ts` | `storyRetention.maxAgeMonths`, `storyRetention.batchSize` |
+| `server/src/jobs/jobSettings.ts` | The cutoff line shown under the job's name on the Jobs page (`setting` in `GET /api/admin/jobs`) |
