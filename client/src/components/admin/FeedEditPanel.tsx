@@ -104,8 +104,15 @@ function QualityCard({ feedId }: { feedId: string }) {
     <div className="rounded-md bg-neutral-50 border border-neutral-200 p-3 text-sm">
       <p className="font-medium text-neutral-700 mb-2">Feed Quality</p>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-600">
+        <span>Crawled (lifetime):</span>
+        <span className="font-medium">
+          {m.totalCrawled.toLocaleString('en-US')}
+          {m.archivedCount > 0 && ` (${m.archivedCount.toLocaleString('en-US')} deleted by cleanup)`}
+        </span>
         <span>Publish Rate:</span>
         <span className="font-medium">{Math.round(m.publishRate * 100)}% ({m.publishedCount} of {m.totalCrawled})</span>
+        <span>Avg Screening:</span>
+        <span className="font-medium">{m.avgRelevancePre?.toFixed(1) ?? '--'}</span>
         <span>Avg Relevance:</span>
         <span className="font-medium">{m.avgRelevance?.toFixed(1) ?? '--'}</span>
         <span>Extraction:</span>

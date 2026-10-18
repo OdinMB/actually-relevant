@@ -34,7 +34,11 @@ One row per (crawl month, feed, issue, final status, screening rating, full rati
 
 ## Lifetime totals
 
-`getLifetimeStoryStats()` adds the archive counts to the live stories: `total`, `archived`, and counts by status, screening rating (`relevancePre`) and full rating (`relevance`), with `none` for unrated. `GET /api/admin/stories/lifetime-stats` serves it and the admin Dashboard's "Lifetime Totals" section shows it. `GET /api/admin/stories/stats` still counts live stories only.
+`getLifetimeStoryStats()` reads the live stories (grouped) and the archive rows as one list (`loadCombinedRows`) and adds them up the same way: `total`, `archived`, counts by status, screening rating (`relevancePre`) and full rating (`relevance`) with `none` for unrated, and rows by crawl month, by feed and by issue (the story's issue, else its feed's). Each feed and issue row has crawled, published, deleted, the mean screening rating and the count screened at `HIGH_PRE_RATING` (7) or above. `GET /api/admin/stories/lifetime-stats` serves it, uncached.
+
+- **Stats page** (`/admin/stats`, "Stats" in the admin nav): tiles (crawled, screened, fully assessed, published, deleted by cleanup), both rating distributions, final status, then sortable tables by source and by issue and a table by month. Each source links to its feed's edit panel (`/admin/feeds?open=<id>`).
+- **Dashboard**: one line of lifetime totals with a link to the Stats page. `GET /api/admin/stories/stats` (the status grid) still counts live stories only.
+- **Feeds** (`feed-management.md`, Quality Metrics): `totalCrawled`, the publish rate and the new `avgRelevancePre` include archived stories, and `archivedCount` says how many; the feed table's Crawled column and the edit panel's quality card show them. The extraction-method breakdown counts live stories only, since the archive keeps no crawl method.
 
 ## Disk space
 
@@ -51,5 +55,7 @@ Deleted rows and cleared embeddings free space Postgres reuses for new rows (aut
 | `server/src/jobs/cleanupOldStories.ts` | The job: batches, notice, failure message |
 | `server/src/services/storyRetention.ts` | Delete-and-count statement, empty clusters, embedding clearing, lifetime totals |
 | `server/src/routes/admin/stories.ts` | `GET /api/admin/stories/lifetime-stats` |
-| `client/src/pages/admin/DashboardPage.tsx` | Lifetime Totals section |
+| `client/src/pages/admin/StatsPage.tsx` | The Stats page |
+| `client/src/pages/admin/DashboardPage.tsx` | Lifetime totals line |
+| `server/src/services/feed.ts` | `getAllFeedQualityMetrics()`: lifetime per-feed totals |
 | `server/src/config.ts` | `storyRetention.maxAgeDays`, `storyRetention.batchSize` |

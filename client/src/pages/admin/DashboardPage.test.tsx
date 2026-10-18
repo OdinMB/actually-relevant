@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
@@ -26,6 +26,9 @@ vi.mock('../../lib/admin-api', () => ({
         byStatus: { rejected: 1201, published: 8 },
         byRelevancePre: { '7': 40, '3': 1100, none: 89 },
         byRelevance: { '7': 12, none: 1217 },
+        byMonth: [],
+        byFeed: [],
+        byIssue: [],
       }),
     },
     jobs: {
@@ -86,19 +89,17 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
   })
 
-  it('shows lifetime totals including deleted stories', async () => {
+  it('shows lifetime totals including deleted stories, linking to the stats page', async () => {
     renderDashboard()
     expect(await screen.findByText('1,229')).toBeInTheDocument()
-    expect(screen.getByText(/including 1,200 deleted by the monthly cleanup/)).toBeInTheDocument()
-    expect(screen.getByText('1,100')).toBeInTheDocument()
+    expect(screen.getByText(/8 published, 1,200 deleted by the monthly cleanup/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'See all stats' })).toHaveAttribute('href', '/admin/stats')
   })
 
   it('shows story stats after loading', async () => {
     renderDashboard()
-    // Scoped to the status grid: the lifetime table's rating rows also read 10 and 8.
-    const section = screen.getByRole('heading', { name: 'Stories by Status' }).closest('section')!
-    expect(await within(section).findByText('10')).toBeInTheDocument()
-    expect(within(section).getByText('8')).toBeInTheDocument()
+    expect(await screen.findByText('10')).toBeInTheDocument()
+    expect(screen.getByText('8')).toBeInTheDocument()
   })
 
   it('shows jobs table after loading', async () => {

@@ -21,6 +21,7 @@ import {
   ChatBubbleLeftEllipsisIcon,
   GlobeAltIcon,
   BellAlertIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../lib/auth'
 import { adminApi } from '../lib/admin-api'
@@ -39,6 +40,7 @@ const navigation = [
   { name: 'Stories', href: '/admin/stories', icon: DocumentTextIcon },
   { name: 'Clusters', href: '/admin/clusters', icon: Square3Stack3DIcon },
   { name: 'Feeds', href: '/admin/feeds', icon: RssIcon },
+  { name: 'Stats', href: '/admin/stats', icon: ChartBarIcon },
   { name: 'Issues', href: '/admin/issues', icon: TagIcon },
   { name: 'Newsletters', href: '/admin/newsletters', icon: EnvelopeIcon },
   { name: 'Subscribers', href: '/admin/subscribers', icon: UserGroupIcon },
