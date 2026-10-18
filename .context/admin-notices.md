@@ -25,6 +25,7 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 | `podcastBootCheck.ts` configuration incomplete | `podcast` / `warning` | `podcast-config` | `/admin/jobs` |
 | `subscribeLimits.ts` signup cap | `subscriptions` / `warning` | `signup-cap` | `/admin/subscribers` |
 | `generateNewsletter.ts` no stories this week | `newsletter` / `warning` | `newsletter-no-stories:<weekKey>` | `/admin/jobs` |
+| `cleanupOldStories.ts` monthly result (`.context/story-retention.md`) | `jobs` / `info` | none (one per run) | `/admin/jobs` |
 | `pollPlunkActivity.ts` spam complaint | `plunk` / `critical` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |
 | `pollPlunkActivity.ts` permanent bounce | `plunk` / `warning` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |
 

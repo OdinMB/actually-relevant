@@ -386,6 +386,13 @@ export const config = {
     // Activity items carry the email's body in metadata, so a page is far larger than the client's 1 MB cap.
     activityMaxResponseBytes: 5 * 1024 * 1024,
   },
+  storyRetention: {
+    // The cleanup_old_stories job (.context/story-retention.md): stories crawled longer ago than this
+    // are deleted (unkept statuses only) or lose their embedding (every other unpublished story).
+    maxAgeDays: 365,
+    // Rows per statement; each delete batch and its roll-up commit together.
+    batchSize: 500,
+  },
   notices: {
     // Seen admin notices older than this (by last occurrence) are deleted; unseen ones are kept.
     retentionDays: 90,

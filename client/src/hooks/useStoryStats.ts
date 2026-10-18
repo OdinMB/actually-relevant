@@ -7,3 +7,10 @@ export function useStoryStats() {
     queryFn: () => adminApi.stories.stats(),
   })
 }
+
+export function useLifetimeStoryStats() {
+  return useQuery({
+    queryKey: ['lifetimeStoryStats'],
+    queryFn: () => adminApi.stories.lifetimeStats(),
+  })
+}

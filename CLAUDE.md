@@ -123,6 +123,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 |------|-------|
 | `story-pipeline.md` | Status transitions, jobs, admin endpoints, slugs, field reference |
 | `content-extraction.md` | 3-tier extraction chain, crawl flow, conditional RSS, resource limits, adding feeds |
+| `story-retention.md` | Monthly cleanup: which old stories are deleted or kept, the `story_archive_counts` roll-up, lifetime totals, cleared embeddings and how publishing restores them |
 | `feed-management.md` | Feed CRUD and soft delete, crawl due rule, crawl-health counters, quality metrics, favicons |
 | `llm-analysis.md` | Model tiers (GPT-6 defaults; prompts and models change together), prompt directory, schema-driven format, analysis stages |
 | `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks |

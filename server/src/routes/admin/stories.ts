@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { createLogger } from '../../lib/logger.js'
 import * as storyService from '../../services/story.js'
 import * as analysisService from '../../services/analysis.js'
+import { getLifetimeStoryStats } from '../../services/storyRetention.js'
 import { crawlUrl } from '../../services/crawler.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
@@ -30,6 +31,16 @@ router.get('/stats', async (_req, res) => {
   } catch (err) {
     log.error({ err }, 'failed to fetch story stats')
     res.status(500).json({ error: 'Failed to fetch story stats' })
+  }
+})
+
+// Lifetime totals: live stories plus those the monthly cleanup deleted (.context/story-retention.md)
+router.get('/lifetime-stats', async (_req, res) => {
+  try {
+    res.json(await getLifetimeStoryStats())
+  } catch (err) {
+    log.error({ err }, 'failed to fetch lifetime story stats')
+    res.status(500).json({ error: 'Failed to fetch lifetime story stats' })
   }
 })
 

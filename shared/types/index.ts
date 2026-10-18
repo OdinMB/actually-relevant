@@ -49,6 +49,7 @@ export type JobName =
   | 'generate_podcast'
   | 'publish_podcast'
   | 'poll_plunk_activity'
+  | 'cleanup_old_stories'
 
 export type JobStatus = 'idle' | 'running' | 'failed'
 
@@ -637,6 +638,16 @@ export type StorySort =
   | 'date_desc'
   | 'title_asc'
   | 'title_desc'
+
+/** GET /api/admin/stories/lifetime-stats: live stories plus those the monthly cleanup deleted. */
+export interface LifetimeStoryStats {
+  total: number
+  archived: number
+  byStatus: Record<string, number>
+  /** Keys "1".."10", or "none" for never rated */
+  byRelevancePre: Record<string, number>
+  byRelevance: Record<string, number>
+}
 
 export interface PaginatedResponse<T> {
   data: T[]

@@ -354,6 +354,27 @@ model JobRun {
   @@map("job_runs")
 }
 
+// --- Story retention (.context/story-retention.md) ---
+
+// Counts of stories the cleanup_old_stories job deleted, so lifetime totals survive the deletion.
+// Append-only: each delete batch adds its own rows, so readers always SUM "story_count". No foreign
+// keys: the feed or issue may change later, the counts stay as they were.
+model StoryArchiveCount {
+  id           String   @id @default(uuid())
+  crawlMonth   DateTime @db.Date @map("crawl_month")
+  feedId       String   @map("feed_id")
+  issueId      String?  @map("issue_id")
+  status       String
+  relevancePre Int?     @map("relevance_pre")
+  relevance    Int?
+  emotionTag   String?  @map("emotion_tag")
+  storyCount   Int      @map("story_count")
+  archivedAt   DateTime @default(now()) @map("archived_at")
+
+  @@index([crawlMonth])
+  @@map("story_archive_counts")
+}
+
 // --- Bluesky Tables ---
 
 model BlueskyPost {

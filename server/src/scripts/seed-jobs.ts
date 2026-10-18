@@ -68,6 +68,12 @@ async function main() {
       update: {},
       create: { jobName: 'poll_plunk_activity', cronExpression: '20 * * * *', enabled: false },
     }),
+    // Monthly story retention: roll up, then delete old unkept stories (.context/story-retention.md)
+    prisma.jobRun.upsert({
+      where: { jobName: 'cleanup_old_stories' },
+      update: {},
+      create: { jobName: 'cleanup_old_stories', cronExpression: '0 3 1 * *', enabled: false },
+    }),
   ])
 
   console.log(`Seeded ${jobs.length} job runs (all disabled)`)
