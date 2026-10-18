@@ -107,7 +107,7 @@ function estimateCronIntervalMs(cronExpr: string): number | null {
   const parts = cronExpr.split(' ')
   if (parts.length < 5) return null
 
-  const [, hourPart, , , dowPart] = parts
+  const [, hourPart, domPart, , dowPart] = parts
 
   // Base interval from hour field
   let baseHours: number | null = null
@@ -134,7 +134,19 @@ function estimateCronIntervalMs(cronExpr: string): number | null {
   // runs is longer than the hour-based estimate (e.g. weekly jobs)
   const dowMultiplier = estimateDowMultiplier(dowPart)
 
-  return baseHours * dowMultiplier * 60 * 60 * 1000
+  // A fixed day of the month ("1", or "1,15") runs that many times a month: about 30 days ÷ count.
+  // Without this a monthly job would read as daily and rerun at every boot after two days.
+  const domMultiplier = estimateDomMultiplier(domPart)
+
+  return baseHours * dowMultiplier * domMultiplier * 60 * 60 * 1000
+}
+
+/** Days between runs from the day-of-month field: 1 for "*", 30 ÷ count for a fixed list of days. */
+function estimateDomMultiplier(domPart: string): number {
+  if (!domPart || domPart === '*') return 1
+  const days = domPart.split(',')
+  if (!days.every(d => /^\d+$/.test(d))) return 1
+  return 30 / days.length
 }
 
 /**

@@ -10,6 +10,7 @@ import { runMastodonUpdateMetrics } from './mastodonUpdateMetrics.js'
 import { runGeneratePodcast } from './generatePodcast.js'
 import { runPublishPodcast } from './publishPodcast.js'
 import { runPollPlunkActivity } from './pollPlunkActivity.js'
+import { runCleanupOldStories } from './cleanupOldStories.js'
 
 export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   crawl_feeds: runCrawlFeeds,
@@ -25,6 +26,7 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   generate_podcast: () => runGeneratePodcast(),
   publish_podcast: () => runPublishPodcast(),
   poll_plunk_activity: () => runPollPlunkActivity(),
+  cleanup_old_stories: async () => { await runCleanupOldStories() },
 }
 
 /**
@@ -45,4 +47,5 @@ export const JOB_PIPELINE_ORDER: readonly string[] = [
   'generate_podcast',
   'publish_podcast',
   'poll_plunk_activity',
+  'cleanup_old_stories',
 ]

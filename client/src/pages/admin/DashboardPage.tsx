@@ -1,7 +1,8 @@
 import { Helmet } from 'react-helmet-async'
 import { PlayIcon } from '@heroicons/react/24/outline'
 import { STORY_STATUSES } from '@shared/constants'
-import { useStoryStats } from '../../hooks/useStoryStats'
+import type { LifetimeStoryStats } from '@shared/types'
+import { useStoryStats, useLifetimeStoryStats } from '../../hooks/useStoryStats'
 import { useJobs, useRunJob } from '../../hooks/useJobs'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Card } from '../../components/ui/Card'
@@ -37,8 +38,45 @@ function StatsGrid({ stats }: { stats: Record<string, number> }) {
   )
 }
 
+const RATINGS = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'none']
+
+function LifetimeStats({ stats }: { stats: LifetimeStoryStats }) {
+  return (
+    <div className="bg-white rounded-lg border border-neutral-200 shadow-sm p-4">
+      <p className="text-sm text-neutral-700 mb-3">
+        <span className="text-2xl font-bold text-neutral-900 mr-2">{stats.total.toLocaleString('en-US')}</span>
+        stories crawled in total, including {stats.archived.toLocaleString('en-US')} deleted by the monthly cleanup
+      </p>
+      <div className="overflow-x-auto">
+        <table className="text-sm">
+          <caption className="sr-only">Lifetime story counts by rating</caption>
+          <thead>
+            <tr className="text-left text-neutral-500">
+              <th scope="col" className="pr-6 py-1 font-medium">Rating</th>
+              <th scope="col" className="pr-6 py-1 font-medium text-right">Screening</th>
+              <th scope="col" className="py-1 font-medium text-right">Full assessment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {RATINGS.map(rating => (
+              <tr key={rating} className="border-t border-neutral-100">
+                <th scope="row" className="pr-6 py-1 font-normal text-neutral-700">
+                  {rating === 'none' ? 'Not rated' : rating}
+                </th>
+                <td className="pr-6 py-1 text-right tabular-nums">{(stats.byRelevancePre[rating] ?? 0).toLocaleString('en-US')}</td>
+                <td className="py-1 text-right tabular-nums">{(stats.byRelevance[rating] ?? 0).toLocaleString('en-US')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const statsQuery = useStoryStats()
+  const lifetimeQuery = useLifetimeStoryStats()
   const jobsQuery = useJobs()
   const runJob = useRunJob()
   const { toast } = useToast()
@@ -63,6 +101,17 @@ export default function DashboardPage() {
           <ErrorState message="Failed to load stats" onRetry={() => statsQuery.refetch()} />
         )}
         {statsQuery.data && <StatsGrid stats={statsQuery.data} />}
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold text-neutral-900 mb-3">Lifetime Totals</h2>
+        {lifetimeQuery.isLoading && (
+          <div className="flex justify-center py-8"><LoadingSpinner /></div>
+        )}
+        {lifetimeQuery.error && (
+          <ErrorState message="Failed to load lifetime totals" onRetry={() => lifetimeQuery.refetch()} />
+        )}
+        {lifetimeQuery.data && <LifetimeStats stats={lifetimeQuery.data} />}
       </section>
 
       {/* Jobs */}

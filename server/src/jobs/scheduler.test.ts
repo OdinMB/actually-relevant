@@ -501,6 +501,11 @@ describe('scheduler', () => {
       expect(estimateCronIntervalMs('0 9 * * 1-5')).toBe(24 * (7 / 5) * 60 * 60 * 1000)
     })
 
+    it('factors in a fixed day of the month as monthly', () => {
+      expect(estimateCronIntervalMs('0 3 1 * *')).toBe(30 * 24 * HOUR)
+      expect(estimateCronIntervalMs('0 3 1,15 * *')).toBe(15 * 24 * HOUR)
+    })
+
     it('handles wrap-around day-of-week range', () => {
       // Fri-Tue (5-2) = 5 days → 24h * 7/5 = 33.6h
       expect(estimateCronIntervalMs('0 9 * * 5-2')).toBe(24 * (7 / 5) * 60 * 60 * 1000)
