@@ -14,11 +14,13 @@ Saved appears only once the visitor has saved a story, and goes when the last is
 | `/methodology` | `MethodologyPage` | Three-criteria framework explanation |
 | `/about` | `AboutPage` | Mission and approach |
 | `/contact` | `ContactPage` | Email + bilingual imprint (EN/DE) |
-| `/newsletter` | `NewsletterPage` | Inline subscribe form (reuses `SubscribeForm`) |
+| `/newsletter` | `NewsletterPage` | Inline subscribe form (reuses `SubscribeForm`), and a link to the archive |
+| `/newsletter/archive` | `NewsletterArchivePage` | Published newsletter issues, newest first, paginated (skeleton while loading) |
+| `/newsletter/:slug` | `NewsletterIssuePage` | One published issue's web edition: title and date, the issue's AI label, then its stored markdown with each story heading through `StoryTitleLabel` and linked to the story page; not-found state is `noindex` (`.context/newsletter-podcast.md`, "Web edition") |
 | `/podcast` | `PodcastPage` | Weekly AI podcast: AI subtitle, feed link, listen links and episodes with `<audio preload="none">` on the CDN (`.context/podcast.md`) |
 | `/podcast/:id/transcript` | `PodcastTranscriptPage` | One published episode's readable transcript: "AI" badge and title, the `/podcast` AI subtitle, player, the conversation by "Host A"/"Host B" with a heading per story, the story list. `:id` is the episode's row id (the feed GUID), which never changes once published (`.context/podcast.md`) |
 
-Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `routes.ts`, and prerendered at build time. Dynamic routes (`/stories/:slug`, `/podcast/:id/transcript`) are only in `App.tsx`: they load client-side, are not prerendered, and the server sitemap lists them (`.context/seo.md`).
+Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `routes.ts`, and prerendered at build time. Dynamic routes (`/stories/:slug`, `/podcast/:id/transcript`, `/newsletter/:slug`) are only in `App.tsx`: they load client-side, are not prerendered, and the server sitemap lists them (`.context/seo.md`). Story pages reach the browser through the backend, which puts the story's preview tags into the shell (`.context/seo.md`, "Story link previews").
 
 ## Public API
 
@@ -37,6 +39,9 @@ Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `mai
 
 - `GET /api/podcast` — The podcast show and its published episodes (each with its AI line and an `aiGenerated` marker)
 - `GET /api/podcast/episodes/:id` — One published episode with its readable `transcript` (404 unless published; its `aiGenerated` marker names `transcript` too)
+- `GET /api/newsletters` — Published newsletter issues, newest first (paginated)
+- `GET /api/newsletters/:slug` — One published issue's web edition, with its `aiLabel` and an `aiGenerated` marker (404 unless published)
+- `GET /api/stories/:slug/og.png` — A published story's 1200x630 link-preview image (`.context/seo.md`)
 
 Every story object the public JSON routes return (`/api/stories`, `/api/stories/:slug`, `/api/stories/:slug/related`, `/api/homepage`) carries a machine-readable `aiGenerated` marker, added in the route with `withAiGeneratedMarker()` (`server/src/lib/aiProvenance.ts`). A new public route that returns stories must add it too; the compliance record (`.context/ai-transparency.md`) relies on it.
 

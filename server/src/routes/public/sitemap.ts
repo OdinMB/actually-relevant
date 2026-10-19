@@ -4,6 +4,7 @@ import { createLogger } from '../../lib/logger.js'
 import { TTLCache, cached } from '../../lib/cache.js'
 import prisma from '../../lib/prisma.js'
 import { listPublishedEpisodeDates } from '../../services/podcastPublish.js'
+import { listPublishedIssueDates } from '../../services/newsletterArchive.js'
 
 const router = Router()
 const log = createLogger('sitemap')
@@ -37,6 +38,7 @@ const STATIC_ROUTES: { path: string; priority: number; changefreq: ChangeFreq }[
   { path: '/free-api', priority: 0.7, changefreq: 'monthly' },
   { path: '/stewardship', priority: 0.6, changefreq: 'monthly' },
   { path: '/podcast', priority: 0.7, changefreq: 'weekly' },
+  { path: '/newsletter/archive', priority: 0.6, changefreq: 'weekly' },
   { path: '/widgets', priority: 0.4, changefreq: 'monthly' },
   { path: '/subscribed', priority: 0.2, changefreq: 'yearly' },
   { path: '/thank-you', priority: 0.3, changefreq: 'yearly' },
@@ -50,6 +52,7 @@ function buildSitemapXml(
   baseUrl: string,
   stories: { slug: string; datePublished: Date | null }[],
   episodes: { id: string; publishedAt: Date }[],
+  issues: { slug: string; publishedAt: Date }[] = [],
 ): string {
   const staticUrls = STATIC_ROUTES.map(
     (route) => `  <url>
@@ -76,9 +79,17 @@ function buildSitemapXml(
     <priority>0.5</priority>
   </url>`)
 
+  // Each published newsletter issue's web edition (its slug never changes)
+  const issueUrls = issues.map((issue) => `  <url>
+    <loc>${baseUrl}/newsletter/${issue.slug}</loc>
+    <lastmod>${formatDate(issue.publishedAt)}</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>`)
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${[...staticUrls, ...storyUrls, ...transcriptUrls].join('\n')}
+${[...staticUrls, ...storyUrls, ...transcriptUrls, ...issueUrls].join('\n')}
 </urlset>
 `
 }
@@ -93,9 +104,10 @@ router.get('/', async (_req, res) => {
       })
 
       const episodes = await listPublishedEpisodeDates()
+      const issues = await listPublishedIssueDates()
 
-      log.info({ storyCount: stories.length, episodeCount: episodes.length }, 'generated sitemap')
-      return buildSitemapXml(getSiteUrl(), stories as { slug: string; datePublished: Date | null }[], episodes)
+      log.info({ storyCount: stories.length, episodeCount: episodes.length, issueCount: issues.length }, 'generated sitemap')
+      return buildSitemapXml(getSiteUrl(), stories as { slug: string; datePublished: Date | null }[], episodes, issues)
     })
 
     res.set('Content-Type', 'application/xml; charset=utf-8')

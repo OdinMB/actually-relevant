@@ -11,6 +11,7 @@ import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { withRetry } from '../lib/retry.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
+import { ensureNewsletterSlug, newsletterIssueUrl, publicationFields } from './newsletterArchive.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
 
@@ -72,8 +73,10 @@ export async function createNewsletter(data: { title: string; weekKey?: string }
   return prisma.newsletter.create({ data: { title: data.title, weekKey: data.weekKey } })
 }
 
+/** Setting `status: 'published'` also makes the issue public on the web (newsletterArchive.ts). */
 export async function updateNewsletter(id: string, data: Prisma.NewsletterUpdateInput) {
-  return prisma.newsletter.update({ where: { id }, data })
+  const publication = await publicationFields(id, data.status)
+  return prisma.newsletter.update({ where: { id }, data: { ...data, ...publication } })
 }
 
 export async function deleteNewsletter(id: string) {
@@ -351,6 +354,9 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
   if (!newsletter) throw new Error('Newsletter not found')
   if (!newsletter.content) throw new Error('No content to convert')
 
+  // The web edition's address, for "View in browser"; it opens once the issue is published
+  const webUrl = newsletterIssueUrl(await ensureNewsletterSlug(newsletter))
+
   // Split on --- separators to get individual blocks
   const sections = newsletter.content.split(/\n---\n/).filter(s => s.trim())
 
@@ -517,6 +523,12 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
     <tr>
       <td align="center" style="padding: 32px 16px;">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+          <!-- Web edition -->
+          <tr>
+            <td style="padding: 12px 32px 0; text-align: center;">
+              <a href="${escapeHtml(webUrl)}" style="font-size: 12px; color: #a3a3a3; text-decoration: underline;">View in browser</a>
+            </td>
+          </tr>
           <!-- Header -->
           <tr>
             <td style="padding: 20px 32px 12px; text-align: center;">

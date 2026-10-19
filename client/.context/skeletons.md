@@ -31,6 +31,8 @@ All skeletons are in `client/src/components/skeletons/`:
 | `SearchResultsSkeleton` | SearchPage results grid |
 | `RelatedStoriesSkeleton` | StoryPage related stories section |
 | `ApiReferenceSkeleton` | DevelopersPage, while the lazy Scalar reference chunk loads |
+| `NewsletterArchiveSkeleton` | NewsletterArchivePage issue list |
+| `NewsletterIssueSkeleton` | NewsletterIssuePage (a newsletter issue's web edition) |
 
 ## Usage Pattern
 

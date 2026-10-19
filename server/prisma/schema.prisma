@@ -179,6 +179,10 @@ model Newsletter {
   status            ContentStatus    @default(draft)
   /// ISO week (YYYY-Www) of the automatic weekly issue; set only by the generate_newsletter job
   weekKey   String?          @map("week_key")
+  /// URL segment of the public web edition (/newsletter/<slug>); assigned on HTML build or first publish, never changed
+  slug        String?        @unique
+  /// First time the issue was set to published (the public archive's date); kept when unpublished
+  publishedAt DateTime?      @map("published_at")
   sends     NewsletterSend[]
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")

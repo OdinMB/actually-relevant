@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildBreadcrumbSchema } from '../lib/structured-data'
@@ -41,6 +42,17 @@ export default function NewsletterPage() {
         <div className="max-w-md mx-auto mt-8">
           <SubscribeForm hideHeading idPrefix="newsletter-page" />
         </div>
+
+        <p className="mt-10 text-center text-neutral-600">
+          Want to see what you&apos;ll get first?{' '}
+          <Link
+            to="/newsletter/archive"
+            className="text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
+          >
+            Read past issues on the web
+          </Link>
+          .
+        </p>
       </div>
     </>
   )

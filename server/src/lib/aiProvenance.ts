@@ -60,3 +60,10 @@ export const AI_GENERATED_PODCAST_FIELDS = ['title', 'summary', 'audioUrl', 'tra
 
 /** The same for one episode with its readable transcript (`GET /api/podcast/episodes/:id`). */
 export const AI_GENERATED_PODCAST_DETAIL_FIELDS = [...AI_GENERATED_PODCAST_FIELDS, 'transcript'] as const
+
+/**
+ * Fields of a public newsletter issue (`GET /api/newsletters/:slug`) with AI-generated content: the
+ * issue text (AI-selected stories, AI intro, headlines and summaries) and its stories' AI headlines
+ * and labels. openapi.test.ts checks each is described as AI-generated.
+ */
+export const AI_GENERATED_NEWSLETTER_FIELDS = ['content', 'stories'] as const

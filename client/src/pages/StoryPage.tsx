@@ -16,6 +16,7 @@ import AiLabel from '../components/ai/AiLabel'
 import { AI_DISCLOSURE_COPY, quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { StoryPageSkeleton } from '../components/skeletons'
 import { SEO, CommonOgTags } from '../lib/seo'
+import { storyOgImageUrl } from '../lib/api'
 import { buildArticleSchema, buildBreadcrumbSchema } from '../lib/structured-data'
 
 // ---------------------------------------------------------------------------
@@ -150,7 +151,8 @@ export default function StoryPage() {
         {story.datePublished && (
           <meta property="article:published_time" content={story.datePublished} />
         )}
-        {CommonOgTags({})}
+        {/* The story's own preview image; the server injects the same tags for crawlers (.context/seo.md) */}
+        {CommonOgTags({ image: storyOgImageUrl(story.slug) })}
         <script type="application/ld+json">
           {JSON.stringify(buildArticleSchema(story))}
         </script>

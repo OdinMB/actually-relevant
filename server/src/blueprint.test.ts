@@ -64,6 +64,7 @@ const RUNS_ON_ITS_CODE_DEFAULT: Record<string, string> = {
   ]),
   ...tunables('job lease timing (ADR-0020)', ['JOB_LEASE_SECONDS', 'JOB_LEASE_RENEW_SECONDS']),
   ...tunables('feed and sitemap caching', ['RSS_FEED_SIZE', 'RSS_CACHE_MAX_AGE', 'SITEMAP_CACHE_MAX_AGE']),
+  ...tunables('story link preview caching (.context/seo.md)', ['STORY_PAGE_SHELL_CACHE_SECONDS', 'STORY_OG_IMAGE_CACHE_SECONDS']),
   ...tunables('rate limits', [
     'RATE_LIMIT_PUBLIC_WINDOW_MS', 'RATE_LIMIT_PUBLIC_MAX', 'RATE_LIMIT_EXPENSIVE_WINDOW_MS',
     'RATE_LIMIT_EXPENSIVE_MAX', 'RATE_LIMIT_SEARCH_WINDOW_MS', 'RATE_LIMIT_SEARCH_MAX',
@@ -317,6 +318,9 @@ describe('render.yaml', () => {
     expect(blueprintText.indexOf('source: /sitemap.xml')).toBeLessThan(catchAll)
     expect(blueprintText.indexOf('source: /podcast.xml')).toBeGreaterThan(-1)
     expect(blueprintText.indexOf('source: /podcast.xml')).toBeLessThan(catchAll)
+    // Story pages go through the backend for their link-preview tags (.context/seo.md)
+    expect(blueprintText.indexOf('source: /stories/*')).toBeGreaterThan(-1)
+    expect(blueprintText.indexOf('source: /stories/*')).toBeLessThan(catchAll)
   })
 
   it('names every variable the code reads, or leaves it out deliberately', () => {
