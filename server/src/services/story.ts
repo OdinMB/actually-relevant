@@ -13,6 +13,7 @@ import { buildRelatedStoriesPrompt } from '../prompts/related-stories.js'
 import { relatedStoriesResultSchema } from '../schemas/llm.js'
 import type { ExtractionMethod } from './extractor.js'
 import type { AccessTier } from '../lib/paywall.js'
+import { storyInIssueSql, storyInIssueWhere } from '../lib/issueFilter.js'
 
 const log = createLogger('story')
 
@@ -682,31 +683,8 @@ export const PUBLIC_STORY_SELECT = {
   },
 } as const
 
-function buildIssueCondition(issueSlug: string): Prisma.StoryWhereInput {
-  return {
-    OR: [
-      {
-        issue: {
-          OR: [
-            { slug: issueSlug },
-            { parent: { slug: issueSlug } },
-          ],
-        },
-      },
-      {
-        issue: null,
-        feed: {
-          issue: {
-            OR: [
-              { slug: issueSlug },
-              { parent: { slug: issueSlug } },
-            ],
-          },
-        },
-      },
-    ],
-  }
-}
+/** Stories in the issue with this slug or its children (lib/issueFilter.ts holds the rule). */
+const buildIssueCondition = storyInIssueWhere
 
 const RRF_FETCH_LIMIT = 50
 const RRF_K = 60
@@ -719,16 +697,8 @@ async function hybridSearch(options: {
 }) {
   const { query, issueSlug, page, pageSize } = options
 
-  // Build issue filter SQL fragment for semantic search
-  const issueFilter = issueSlug
-    ? Prisma.sql`AND (
-        EXISTS (SELECT 1 FROM issues i WHERE i.id = s.issue_id AND (i.slug = ${issueSlug} OR i.parent_id IN (SELECT pi.id FROM issues pi WHERE pi.slug = ${issueSlug})))
-        OR (s.issue_id IS NULL AND EXISTS (
-          SELECT 1 FROM feeds f2 JOIN issues fi ON fi.id = f2.issue_id
-          WHERE f2.id = s.feed_id AND (fi.slug = ${issueSlug} OR fi.parent_id IN (SELECT pi.id FROM issues pi WHERE pi.slug = ${issueSlug}))
-        ))
-      )`
-    : Prisma.empty
+  // The same issue rule as the text leg, as SQL for the semantic leg
+  const issueFilter = issueSlug ? Prisma.sql`AND ${storyInIssueSql(issueSlug)}` : Prisma.empty
 
   // Run semantic and text searches in parallel
   const [semanticIds, textIds] = await Promise.all([
@@ -1140,14 +1110,6 @@ export async function getClusterMembers(slug: string): Promise<{
 const NEGATIVE_EMOTIONS: EmotionTag[] = [EmotionTag.frustrating, EmotionTag.scary]
 
 export async function getHomepageData(issueSlugs: string[], storiesPerIssue = 7) {
-  // Build issue slug conditions for stories (includes child issues)
-  const buildIssueCondition = (slug: string) => ({
-    OR: [
-      { issue: { OR: [{ slug }, { parent: { slug } }] } },
-      { issue: null, feed: { issue: { OR: [{ slug }, { parent: { slug } }] } } },
-    ],
-  })
-
   const orderBy: Prisma.StoryOrderByWithRelationInput[] = [{ datePublished: 'desc' }, { dateCrawled: 'desc' }]
 
   // Fetch three emotion buckets per issue for client-side mixing.
