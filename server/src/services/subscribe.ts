@@ -61,7 +61,7 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
     where: { email, confirmedAt: { not: null } },
   })
   if (existing) {
-    log.info({ email }, 'already subscribed, returning success without action')
+    log.info({ subscriptionId: existing.id }, 'already subscribed, returning success without action')
     return
   }
 
@@ -70,7 +70,7 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
   // learns nothing; nothing is written or sent.
   const allowance = await checkSendAllowance(email)
   if (allowance === 'address-limited') {
-    log.info({ email }, 'confirmation email already sent within the window, sending nothing')
+    log.info('confirmation email already sent within the window, sending nothing')
     return
   }
   if (allowance === 'global-cap') {
@@ -99,7 +99,7 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
     const detail = axios.isAxiosError(err)
       ? { status: err.response?.status, plunkResponse: err.response?.data }
       : {}
-    log.warn({ err, ...detail, email }, 'email verification failed, skipping check')
+    log.warn({ err, ...detail }, 'email verification failed, skipping check')
   }
 
   // Delete any existing unconfirmed pending subscriptions for this email.
@@ -138,13 +138,13 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
       subject: 'Confirm your subscription to Actually Relevant',
       body: html,
     })
-    log.info({ email }, 'confirmation email sent')
+    log.info({ subscriptionId: pending.id }, 'confirmation email sent')
   } catch (err) {
-    log.error({ err, email }, 'failed to send confirmation email')
+    log.error({ err, subscriptionId: pending.id }, 'failed to send confirmation email')
     // A row stands for exactly one sent email (the send limits count rows), so a
     // failed send must not leave one behind.
     await prisma.pendingSubscription.delete({ where: { id: pending.id } }).catch((deleteErr: unknown) => {
-      log.error({ err: deleteErr, email }, 'failed to remove the pending row after a failed send')
+      log.error({ err: deleteErr, subscriptionId: pending.id }, 'failed to remove the pending row after a failed send')
     })
     throw new ConfirmationEmailError(
       "We couldn't send the confirmation email right now. Please try again in a few minutes.",
@@ -222,7 +222,7 @@ export async function confirmSubscription(token: string, rawEmail: string) {
     const contact = await plunk.createContact({ email, subscribed: true })
     plunkContactId = contact.id
   } catch (err) {
-    log.warn({ err, email }, 'failed to create Plunk contact on confirm, marking confirmed anyway')
+    log.warn({ err, subscriptionId: pending.id }, 'failed to create Plunk contact on confirm, marking confirmed anyway')
   }
 
   await prisma.pendingSubscription.update({
@@ -230,5 +230,5 @@ export async function confirmSubscription(token: string, rawEmail: string) {
     data: { confirmedAt: new Date(), plunkContactId },
   })
 
-  log.info({ email }, 'subscription confirmed')
+  log.info({ subscriptionId: pending.id, plunkContactId }, 'subscription confirmed')
 }

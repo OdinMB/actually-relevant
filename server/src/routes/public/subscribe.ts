@@ -145,7 +145,8 @@ router.post('/confirm', lightLimiter, validateBody(confirmSchema), async (req, r
     await subscribeService.confirmSubscription(token, email)
     res.json({ success: true })
   } catch (err) {
-    log.warn({ err, email }, 'confirmation failed')
+    // No address or token in the log (`.context/logging.md`, "Personal data")
+    log.warn({ err }, 'confirmation failed')
     const reason = err instanceof ConfirmationLinkError ? err.reason : 'invalid'
     res.json({ success: false, reason })
   }

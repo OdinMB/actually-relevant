@@ -33,6 +33,9 @@ vi.mock('axios', () => ({
   },
 }))
 
+const mockLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }))
+vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLogger }))
+
 const {
   createCampaign,
   sendCampaign,
@@ -179,6 +182,21 @@ describe('Plunk API client', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+  })
+
+  describe('logging', () => {
+    it('never logs the email address of a contact, a recipient or a verified address', async () => {
+      const address = 'person@example.com'
+      mockAxiosInstance.post.mockResolvedValue({ data: { id: 'contact-1', email: address, valid: true, domainExists: true, isDisposable: false } })
+
+      await createContact({ email: address, subscribed: true })
+      await sendTransactional({ to: address, subject: 'Confirm', body: '<p>Confirm</p>' })
+      await verifyEmail(address)
+
+      const logged = JSON.stringify([...mockLogger.info.mock.calls, ...mockLogger.warn.mock.calls, ...mockLogger.debug.mock.calls])
+      expect(mockLogger.info).toHaveBeenCalled()
+      expect(logged).not.toContain(address)
     })
   })
 

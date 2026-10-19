@@ -133,7 +133,7 @@ export async function getCampaignStats(id: string): Promise<CampaignStats> {
 export async function createContact(opts: CreateContactOpts): Promise<Contact> {
   return withRetry(
     async () => {
-      log.info({ email: opts.email, subscribed: opts.subscribed }, 'creating contact')
+      log.info({ subscribed: opts.subscribed }, 'creating contact')
       const { data } = await client.post('/contacts', opts)
       log.info({ contactId: data.id }, 'contact created')
       return data
@@ -348,7 +348,7 @@ export interface SendTransactionalOpts {
 export async function sendTransactional(opts: SendTransactionalOpts): Promise<void> {
   return withRetry(
     async () => {
-      log.info({ to: opts.to, subject: opts.subject }, 'sending transactional email')
+      log.info({ subject: opts.subject }, 'sending transactional email')
       await client.post('/v1/send', {
         to: opts.to,
         subject: opts.subject,
@@ -356,7 +356,7 @@ export async function sendTransactional(opts: SendTransactionalOpts): Promise<vo
         from: opts.from || config.plunk.fromEmail,
         name: opts.name || config.plunk.fromName,
       })
-      log.info({ to: opts.to }, 'transactional email sent')
+      log.info({ subject: opts.subject }, 'transactional email sent')
     },
     { retries: 2, retryOn: isConnectionNotEstablished },
   )
@@ -373,9 +373,9 @@ export interface EmailVerifyResult {
 export async function verifyEmail(email: string): Promise<EmailVerifyResult> {
   return withRetry(
     async () => {
-      log.info({ email }, 'verifying email')
+      log.info('verifying email')
       const { data } = await client.post('/v1/verify', { email })
-      log.info({ email, result: data }, 'email verification result')
+      log.info({ valid: data?.valid, domainExists: data?.domainExists, isDisposable: data?.isDisposable }, 'email verification result')
       return data
     },
     { retries: 3, retryOn: isRetryableError },
