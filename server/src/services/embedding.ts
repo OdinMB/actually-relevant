@@ -1,6 +1,5 @@
 import crypto from 'node:crypto'
 import OpenAI from 'openai'
-import { withRetry } from '../lib/retry.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { createLogger } from '../lib/logger.js'
 import { config } from '../config.js'
@@ -13,7 +12,10 @@ import {
 
 const log = createLogger('embedding')
 
-const openai = new OpenAI()
+// The SDK retries 408/409/429/5xx and connection errors with backoff, honoring Retry-After; the
+// same 3 retries as the chat models (createChatModel). Never wrap these calls in withRetry() as
+// well: the layers multiply (`.context/llm-analysis.md`, "Retries").
+const openai = new OpenAI({ maxRetries: 3 })
 
 export type StoryForEmbedding = StoryEmbeddingRow
 
@@ -55,15 +57,11 @@ const searchEmbeddingCache = new TTLCache<number[]>(SEARCH_CACHE_TTL_MS, { maxEn
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   const input = text.length > MAX_EMBEDDING_CHARS ? text.slice(0, MAX_EMBEDDING_CHARS) : text
-  const response = await withRetry(
-    () =>
-      openai.embeddings.create({
-        model: config.embedding.model,
-        input,
-        dimensions: config.embedding.dimensions,
-      }),
-    { retries: 3, baseDelayMs: 1000 },
-  )
+  const response = await openai.embeddings.create({
+    model: config.embedding.model,
+    input,
+    dimensions: config.embedding.dimensions,
+  })
   return response.data[0].embedding
 }
 
@@ -79,15 +77,11 @@ export async function generateSearchEmbedding(query: string): Promise<number[]> 
 export async function generateEmbeddingsBatch(
   texts: string[],
 ): Promise<number[][]> {
-  const response = await withRetry(
-    () =>
-      openai.embeddings.create({
-        model: config.embedding.model,
-        input: texts,
-        dimensions: config.embedding.dimensions,
-      }),
-    { retries: 3, baseDelayMs: 1000 },
-  )
+  const response = await openai.embeddings.create({
+    model: config.embedding.model,
+    input: texts,
+    dimensions: config.embedding.dimensions,
+  })
   // OpenAI returns embeddings in order of input, but sort by index to be safe
   return response.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
 }
@@ -95,7 +89,7 @@ export async function generateEmbeddingsBatch(
 /**
  * Generate an embedding vector for story content without touching the DB.
  * Returns the vector + hash, or null if no update is needed.
- * Throws on OpenAI failure (after 3 retries via withRetry).
+ * Throws on OpenAI failure (after the SDK's retries).
  */
 export async function generateEmbeddingForContent(
   story: Pick<StoryForEmbedding, 'title' | 'titleLabel' | 'summary' | 'embeddingContentHash'>,
