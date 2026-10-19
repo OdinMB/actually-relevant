@@ -68,7 +68,14 @@ The classification runs whenever the page was fetched and is under `maxParseByte
 
 HTTP responses from page fetches, RSS feeds, and external API calls (Diffbot, PipFeed) are capped at 5 MB (`maxContentLength`) to prevent OOM on pathological responses. Pages whose fetched HTML exceeds `config.crawl.maxParseBytes` (default 2 MB, env `MAX_PARSE_BYTES`) skip local parsing (tiers 1+2) and fall straight through to the API tier: a multi-MB HTML string expands ~10-20x as a DOM, and that allocation counts against Render's ~512 MiB RSS limit — which `--max-old-space-size=384` does **not** bound (it caps only the V8 heap) — so a single oversized page can OOM the crawl even at low concurrency. JSDOM DOM objects are explicitly released via `dom.window.close()` in a `finally` block after Readability extraction, as JSDOM windows hold timers, event listeners, and expanded DOM trees that are not reliably garbage collected without explicit cleanup. Outbound webhook and email service (Plunk) responses are capped at 1 MB. The Bluesky og:image fetch uses `AbortSignal.timeout(10_000)` to prevent hanging. Favicon fetches use streaming reads with per-chunk size checks to avoid allocating large buffers for unexpected responses.
 
-Article page fetches follow at most 5 redirects. Each redirect target is checked with `isAllowedUrl()` (`server/src/utils/urlValidation.ts`), which blocks non-http(s) schemes, localhost, loopback, private, link-local and metadata IPs, and `.internal`/`.local` hosts. A blocked redirect fails the fetch, and the page counts as a local-extraction failure (`fetchPage()` in `server/src/services/extractor.ts`).
+### SSRF guard
+
+Every server-side fetch of a URL that came from outside goes through `server/src/utils/urlValidation.ts`: article pages (`fetchPage()` in `extractor.ts`), feeds (`parseFeed()` in `rssParser.ts`, admin-entered URLs) and favicons (`favicon.ts`, including `<link rel=icon>` hrefs taken from the fetched page). It has two layers, and both must pass:
+
+- **The URL** (`isAllowedUrl()`): http(s) only; no IP literal in a private, loopback, link-local (cloud metadata), carrier-grade NAT, documentation, multicast or reserved range, in any spelling the URL parser accepts (decimal `2130706433`, hex `0x7f.1`, IPv4-mapped, IPv4-compatible and NAT64 IPv6); no single-label name (Render's private service names, e.g. the database host), `localhost` or `*.localhost`, and no `.local`, `.internal`, `.localdomain` or `.home.arpa` name.
+- **What a name resolves to** (`safeLookup()`, passed to axios as `lookup` via `ssrfGuard`): every address DNS returns is checked, and one private record refuses the request. The check runs at connect time, so there is no window for DNS rebinding between check and fetch.
+
+Redirects (at most 5) pass both layers: `beforeRedirect` re-runs `isAllowedUrl()` on the target, and follow-redirects reuses the `lookup` option for the next hop. A refused request fails like any other fetch error: the article counts as a local-extraction failure, the feed records a crawl error ("Blocked feed URL: ..."), and the favicon source is skipped. Any new fetch of an outside URL spreads `...ssrfGuard` into its axios options and checks `isAllowedUrl()` first.
 
 ### CPU & Memory Budget
 
@@ -121,7 +128,7 @@ URLs are normalized (HTTPS, no trailing slash, no tracking params, sorted query)
 | `server/src/services/rssParser.ts` | RSS/Atom feed parsing (max `config.crawl.rssItemLimit` items) |
 | `server/src/lib/retry.ts` | Retry utility with exponential backoff (used by RSS parser, extractor) |
 | `server/src/jobs/crawlFeeds.ts` | Scheduled job handler |
-| `server/src/utils/urlValidation.ts` | `isAllowedUrl()` redirect/SSRF guard |
+| `server/src/utils/urlValidation.ts` | SSRF guard: `isAllowedUrl()`, `safeLookup()`, `ssrfGuard` axios options |
 
 Feed CRUD, the due rule, crawl-health counters, quality metrics and favicons: `feed-management.md`.
 

@@ -2,7 +2,7 @@ import axios from 'axios'
 import * as cheerio from 'cheerio'
 import { Readability } from '@mozilla/readability'
 import { JSDOM } from 'jsdom'
-import { isAllowedUrl } from '../utils/urlValidation.js'
+import { isAllowedUrl, ssrfGuard } from '../utils/urlValidation.js'
 import { summarizeError } from '../utils/errors.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
@@ -131,13 +131,7 @@ async function fetchPage(url: string): Promise<string | null> {
         maxRedirects: 5,
         responseType: 'text',
         maxContentLength: 5 * 1024 * 1024, // 5 MB cap to prevent OOM on huge pages
-        beforeRedirect: (options: Record<string, any>) => {
-          const redirectUrl = typeof options.href === 'string' ? options.href
-            : `${options.protocol}//${options.hostname}${options.path}`
-          if (!isAllowedUrl(redirectUrl)) {
-            throw new Error(`Blocked redirect to disallowed URL: ${redirectUrl}`)
-          }
-        },
+        ...ssrfGuard, // resolved addresses and every redirect checked (utils/urlValidation.ts)
       }))
     )
     return response.data
