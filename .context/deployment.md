@@ -22,10 +22,12 @@ Until the adoption, production's dashboard command, as exported on 2026-10-13, c
 
 ## CI gate
 
-`.github/workflows/ci.yml` runs on every pull request and on every push to `main`, with no path filter (pushes to other branches run only through their pull request; triggers, cancelling and minutes in `.context/ci.md`). Its two jobs are GitHub check runs named `server` and `client`:
+`.github/workflows/ci.yml` runs on every pull request and on every push to `main`, with no path filter (pushes to other branches run only through their pull request). Its two jobs are GitHub check runs named `server` and `client`; what each runs, how to run it locally, and the triggers, cancelling and minutes are in `ci.md`:
 
-- **`server`:** the migration check (`npm run check:migrations`, `.context/database-migrations.md`, "Migration check"), Prisma generate, type-check, unit tests, the PostgreSQL integration tests against a `pgvector/pgvector:pg17` service, and `npm run build`.
-- **`client`:** type-check, unit tests, and `npm run build` including the prerender. The prerender launches the Chrome that `npm ci` downloads for puppeteer, with `--no-sandbox` (`vite.config.ts`), so it runs on `ubuntu-latest` without system packages.
+- **`server`:** the migration check, Prisma generate, type-check, lint, format check, unit tests with the coverage floor, the PostgreSQL integration tests against a `pgvector/pgvector:pg17` service, `npm run build`, and the production-dependency audit.
+- **`client`:** type-check, lint, format check, unit tests with the coverage floor, `npm run build` including the prerender, and the audit. The prerender launches the Chrome that `npm ci` downloads for puppeteer, with `--no-sandbox` (`vite.config.ts`), so it runs on `ubuntu-latest` without system packages.
+
+The audit can turn `main` red with no code change, when a new advisory is published; nothing deploys until a commit fixes or allowlists it (`ci.md`, "Dependency audit").
 
 The builds are the same scripts Render runs. CI does not run `prisma migrate deploy` against anything but its throwaway test database, so a migration that fails only on production data still fails in the Render build, after CI.
 

@@ -5,10 +5,46 @@
 | Check | Server | Client | Fails when |
 |---|---|---|---|
 | Migration check | `npm run check:migrations --prefix server` | | a migration drops `stories_embedding_idx`, or a new one holds an unmarked destructive statement (`database-migrations.md`, "Migration check") |
-| Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error |
-| Unit tests | `npm run test --prefix server` | `npm run test --prefix client -- --run` | a failing test |
+| Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error; both tsconfigs set `strict` and `noUncheckedIndexedAccess` |
+| Lint | `npm run lint --prefix server` | `… client` | any ESLint error or warning (`--max-warnings 0`) |
+| Format | `npm run format:check --prefix server` | `… client` | a file Prettier would change; fix with `npm run format --prefix <pkg>` |
+| Unit tests and coverage | `npm run test:coverage --prefix server` | `… client` | a failing test, or coverage below a threshold |
 | PostgreSQL tests | `npm run test:db --prefix server` | | a failing db test (`database-migrations.md`, "Integration Tests") |
 | Build | `npm run build --prefix server` | `… client` | the production build fails; the client's includes the puppeteer prerender |
+| Dependency audit | `npm run audit:prod --prefix server` | `… client` | a production advisory at high or above that the allowlist does not excuse |
+
+The build runs after the tests so a type or test failure is reported first; the audit runs last because it is the one check that can turn red without a code change (below).
+
+## Type-check: `noUncheckedIndexedAccess`
+
+An index into an array or a record is `T | undefined`. Guard it where the value can be missing (`const [first] = rows; if (!first) return null`, `.at(-1)?.id`, a destructuring default); use `!` only where an invariant makes it present (a bounded loop index, a regex group that always matches). Route params are the common case: `req.params.id!`. A typed middleware before the handler (`failsWith`, `validateBody`, a rate limiter) makes Express infer `ParamsDictionary` rather than the path's own params, so the type cannot see that `/:id` guarantees `id`.
+
+## Lint
+
+Flat configs in `server/eslint.config.js` and `client/eslint.config.js`: `@eslint/js` recommended, `typescript-eslint` recommended (not the type-checked presets), and on the client `eslint-plugin-react-hooks` 7 recommended. Deliberate departures, each commented in the config:
+
+- **Both:** `no-unused-vars` ignores `_`-prefixed names, caught errors and keys dropped by a rest spread. `no-explicit-any` is off in tests and test fixtures (mocks stand in for typed collaborators).
+- **Server:** `no-irregular-whitespace` skips regexes (number parsing matches no-break spaces, a CSV reader strips a BOM). `no-namespace` allows `declare global { namespace Express }`. Three inline `no-explicit-any` disables in source carry their reason (pino's error serializer, the recursive OpenAPI issue schema, `req.parsedQuery`).
+- **Client:** off, from react-hooks 7's React Compiler rules: `set-state-in-effect` (9 effects that sync state from storage, the URL or loaded data; each rewrite is a behavior change to test on its own) and `static-components` (3 false positives on `getCategoryPattern()`, which returns a module-level component). `preserve-caught-error` is off in `src/` because the client's ES2020 lib has no `Error` `cause`; it stays on for `scripts/`.
+
+Turning one of these back on is a follow-up, not a CI change: fix the findings in the same commit.
+
+## Format
+
+Prettier 3, one config at the repository root (`.prettierrc.json`): no semicolons, single quotes, width 160, `arrowParens: avoid`, trailing commas. These match the code as it was written, chosen by measuring the reformat diff. Each package's `.prettierignore` leaves out build output, lockfiles, Markdown, `server/prisma/migrations/` (applied migrations stay byte-for-byte) and `client/index.html` (build-time placeholders). Files outside the two packages (root `scripts/`, the workflow) are not checked.
+
+## Coverage floor
+
+`test:coverage` runs the unit tests (the server's `unit` project only) with v8 coverage and global thresholds: server statements 69, branches 65, functions 63, lines 71; client 53, 53, 43, 53, each set just below the value measured on 2026-10-19 (recorded beside the thresholds in `server/vitest.config.ts` and `client/vite.config.ts`). It is a ratchet: when coverage rises, raise the threshold in the same change; never lower one to land a change. Reports go to `coverage/` (gitignored).
+
+## Dependency audit
+
+`audit:prod` (`scripts/audit-check.mjs`) runs `npm audit --omit=dev` and fails on any advisory at high or above unless the package's `audit-allowlist.json` excuses it. An entry names one advisory (GHSA id) in one package, a `via` package, a reason and a review date; it holds only while every production path to the package runs through `via`, and an entry that matches nothing fails the check so that it is deleted once the fix lands.
+
+- **Server:** no entries.
+- **Client:** `braces` (GHSA-vfj7-8cjw-p6xm, high) via `@headlessui/tailwindcss`: `@scalar/api-reference-react` pulls in tailwindcss 3 through it, with chokidar and micromatch. `postcss-selector-parser` (GHSA-rj75-hqrm-r3gf) on the same path is moderate, below the bar, so it needs no entry. Both go when @scalar moves off tailwindcss 3.
+
+**A new advisory can turn `main` red with no code change**, and while it is red nothing deploys. Then either update the dependency, or, after reviewing that the advisory does not reach the running app, add an allowlist entry with its reason; both are a commit to `main`, which deploys once green.
 
 ## Triggers and cancelling
 
@@ -37,6 +73,7 @@ The repository is public, and GitHub Actions on standard GitHub-hosted runners (
 2. Run `test:db` (the Postgres service and its tests) only on `main`, or on pull requests that touch `server/`, accepting that a pull request can then merge with a db test red.
 3. Skip the client's prerender on pull requests (build without it) and keep it on `main`, where Render's build would otherwise be the first to run it.
 4. Draft pull requests: add `if: github.event.pull_request.draft == false` to the jobs and `types: [opened, synchronize, reopened, ready_for_review]` to the trigger.
-5. Cancel superseded runs (already on) and keep the caches warm (already on).
+5. Run lint and the format check in one short job ahead of the rest, so a formatting slip fails in a minute instead of after the tests.
+6. Cancel superseded runs (already on) and keep the caches warm (already on).
 
 Measure before and after any of these, and record the change here.

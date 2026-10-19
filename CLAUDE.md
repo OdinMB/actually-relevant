@@ -51,6 +51,10 @@ npm run typecheck --prefix server     # Type-check server (tsc --noEmit)
 npm run test --prefix server          # Run server tests
 npm run test:db --prefix server       # PostgreSQL integration tests (needs TEST_DATABASE_URL, a local *_test database; fails without it)
 npm run check:migrations --prefix server # Embedding-index drop anywhere, unmarked DROP/TRUNCATE in new migrations (CI)
+npm run lint --prefix <client|server>          # ESLint, warnings fail (CI)
+npm run format --prefix <client|server>        # Prettier write; CI runs format:check
+npm run test:coverage --prefix <client|server> # Unit tests + coverage floor; raise thresholds, never lower (CI)
+npm run audit:prod --prefix <client|server>    # npm audit --omit=dev at high, minus audit-allowlist.json (CI)
 ```
 
 **Type-checking:** use `npm run typecheck --prefix <client|server>`. It's the canonical TS check and runs without a permission prompt. Do **not** invoke `tsc` via `node .../node_modules/typescript/bin/tsc` or bare `tsc` -- those are not allowlisted and force a confirmation.
@@ -158,7 +162,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `logging.md` | Pino config, error serialization, structured data, log levels |
 | `server-conventions.md` | Route errors (typed `ServiceError`s, `failsWith()`, the one global handler), test-only `_` exports |
 | `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands, the PostgreSQL integration tests (`*.db.test.ts`, `TEST_DATABASE_URL`, guard rules) and CI |
-| `ci.md` | The CI checks Render waits for and their local commands; triggers, cancelling, caches; measuring CI minutes and the levers if they ever matter |
+| `ci.md` | The CI checks Render waits for (lint, format, types with `noUncheckedIndexedAccess`, coverage ratchet, audit allowlist, builds): commands, rules turned off and why, what to do when `main` is red; triggers, cancelling, caches; measuring CI minutes and the levers if they ever matter |
 | `deployment.md` | Render services and the `render.yaml` blueprint (service settings change there, not in the dashboard); why builds install devDependencies and pin `tsc` (read before touching build scripts or `render.yaml`, or adding an env var: `server/src/blueprint.test.ts` fails until it is in the code, `env.example` and `render.yaml`) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |
