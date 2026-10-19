@@ -29,6 +29,28 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleString()
 }
 
+/** Says what Publish does beyond the admin: it puts the issue on the public website. */
+export function PublishHint({ newsletter }: { newsletter: Pick<Newsletter, 'status' | 'slug'> }) {
+  if (newsletter.status === 'published' && newsletter.slug) {
+    const path = `/newsletter/${newsletter.slug}`
+    return (
+      <p className="text-xs text-neutral-500">
+        This issue is public on the website at{' '}
+        <a href={path} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:text-brand-800 underline">
+          {path}
+        </a>
+        . Unpublish to take it down.
+      </p>
+    )
+  }
+  return (
+    <p className="text-xs text-neutral-500">
+      Publishing makes this issue public on the website, in the newsletter archive. The email&apos;s
+      &quot;View in browser&quot; link works once the issue is published.
+    </p>
+  )
+}
+
 function SendStatusBadge({ status }: { status: string }) {
   const variants: Record<string, 'green' | 'yellow' | 'red' | 'gray' | 'blue'> = {
     sent: 'green',
@@ -287,6 +309,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
             {newsletter.status === 'published' ? 'Unpublish' : 'Publish'}
           </Button>
         </div>
+        <PublishHint newsletter={newsletter} />
 
         {/* Selected stories */}
         <AssignedStoriesList

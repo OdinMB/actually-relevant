@@ -42,3 +42,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0038 · Declare custom domains, plan and subdomain policy in render.yaml exactly as Render exports them](decisions/0038-mirror-render-service-settings.md)
 - [ADR-0039 · Delete unkept stories after a year, counting them into an append-only summary table in the same statement](decisions/0039-monthly-story-retention.md)
 - [ADR-0040 · Serve story pages through the backend, which injects each story's preview tags into the client's own index.html](decisions/0040-story-pages-through-backend.md)
+- [ADR-0041 · Make a newsletter issue public on the website exactly while its admin status is published](decisions/0041-newsletter-published-means-public.md)

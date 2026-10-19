@@ -14,7 +14,7 @@ Newsletters are generated from published stories through a create-assign-generat
 4. **Generate content** — `POST /:id/generate` produces the content
 5. **Edit** — `PUT /:id` to manually edit generated content
 6. **Build and send** — `POST /:id/html`, then `send-test` / `send-live` (see Sending)
-7. **Publish** — `PUT /:id` with `status: 'published'`
+7. **Publish** — `PUT /:id` with `status: 'published'`. This makes the issue public on the website (see Web edition)
 
 ## Newsletter
 
@@ -42,6 +42,7 @@ Selected stories are sorted by a fixed issue order, then alphabetically by title
 Converts the markdown content into a responsive HTML email and saves it to the newsletter record. The function both generates and persists the HTML (callers do not need to save separately). Rendering needs `content` (otherwise 400 "No content to convert"). An issue counts as **built** once `html` is non-empty; the weekly job's guards key on this.
 
 Template structure:
+- **View in browser** — a small link above the logo to the issue's web edition, `https://actuallyrelevant.news/newsletter/<slug>`. Building the HTML assigns the slug if the issue has none (`ensureNewsletterSlug()`), so the link exists before the issue is published; it opens only once the issue is published (until then the page is "Issue Not Found"). Publish the issue before or when sending it live
 - **Header** — Logo, tagline, four-color category strip (amber/teal/red/indigo), newsletter title (uppercase, bold)
 - **AI label** — directly under the week title, before any AI text: "**AI-generated:** AI selected the stories in this issue and wrote the intro, headlines, and summaries." (`NEWSLETTER_TOP_LABEL` in `server/src/lib/aiLabelCopy.ts`)
 - **Intro** — Editorial intro paragraph(s) if present
@@ -92,10 +93,22 @@ Both sends need the stored `html` ("No HTML content — generate HTML first"). E
 - **Live** (`sendLive`, optional `scheduledFor`): name and subject are the title, and the audience is `ALL` subscribers. The row is `isTest: false`. Status is `scheduled` with `sentAt: null` when `scheduledFor` is given; otherwise status is `sending` with `sentAt: now`. A live send does **not** change the newsletter's `status`. Publishing is the separate `PUT /:id` step.
 - **Stats** (`refreshSendStats`): fetches Plunk campaign stats for the send's `plunkCampaignId` and stores them in `stats`. A send without a campaign ID gets 400.
 
+### Web edition (public archive)
+
+**An issue is public on the website exactly while its admin status is `published`** (ADR-0041; there is no separate switch). The admin's publish control says so ("Publishing makes this issue public on the website…", and for a published issue its public address; `PublishHint` in `client/src/components/admin/NewsletterDetail.tsx`). Unpublishing (`status: 'draft'`) takes it off the archive, the issue page, the API and the sitemap at once (API responses are cached for 5 minutes).
+
+- **Slug.** `newsletters.slug` (unique), from the title by `newsletterSlugBase()` ("Week 42, 2026" → `week-42-2026`; `archive` is reserved for the archive page and becomes `archive-issue`; a taken slug gets `-2`, `-3`, …). Assigned on the first HTML build or the first publish, whichever comes first, and never changed afterwards, renaming included, so a URL in a sent email keeps working. Issues already published when the column was added were backfilled by the migration with the same rule.
+- **Date.** `newsletters.published_at`, set by the first publish and kept on unpublish and republish; the archive orders and dates issues by it.
+- **What is shown.** The stored `content` markdown (so a person's edits show), without the template's machine markers (`toWebMarkdown()`: `{feed:<id>}` and the ` {issue-slug}` after each `#` heading). The issue page puts the issue's AI label (`NEWSLETTER_TOP_LABEL`, served as `aiLabel`, the same wording as at the top of the email) under the title before any AI text; each `##` story heading gets the "AI" badge and title label through `StoryTitleLabel` and links to the story page when the story is still published (matched by its heading text, `title || sourceTitle`, which is what `generateContent()` wrote; a heading edited by hand still gets the badge, without a label or link); absolute links to the site stay in the app; other links open in a new tab.
+- **Public API.** `GET /api/newsletters` (paginated, `page`, `pageSize` up to 50; slug, title, publishedAt, storyCount) and `GET /api/newsletters/:slug` (404 unless published; `aiLabel`, web `content`, `stories` with headline, title, titleLabel, sourceTitle, sourceUrl, publisher and a slug only while the story is published, and an `aiGenerated` marker with `fields: ['content', 'stories']`, `AI_GENERATED_NEWSLETTER_FIELDS`). Both behind the shared rate limiter, `Cache-Control: public, max-age=300`, documented in the OpenAPI spec. Code: `server/src/services/newsletterArchive.ts`, `server/src/routes/public/newsletters.ts`.
+- **Pages.** `/newsletter/archive` (prerendered, `NewsletterArchivePage`) and `/newsletter/:slug` (dynamic, `NewsletterIssuePage`, in the server sitemap), linked from `/newsletter` ("Read past issues on the web"). See `.context/public-website.md`.
+
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/newsletters` | Public: published issues, newest first |
+| GET | `/api/newsletters/:slug` | Public: one published issue's web edition (404 unless published) |
 | GET | `/api/admin/newsletters` | List (paginated, filterable by status) |
 | POST | `/api/admin/newsletters` | Create |
 | GET | `/api/admin/newsletters/:id` | Get single |
@@ -116,7 +129,10 @@ Both sends need the stored `html` ("No HTML content — generate HTML first"). E
 | File | Purpose |
 |------|---------|
 | `server/src/services/newsletter.ts` | Newsletter CRUD, story assignment, content generation, carousel orchestration |
-| `server/src/services/carousel.ts` | Canvas image generation, PDF creation, ZIP bundling |
+| `server/src/services/newsletterArchive.ts` | Web edition: slugs, publication date, public queries, web markdown |
+| `server/src/routes/public/newsletters.ts` | Public archive and issue endpoints |
+| `client/src/pages/NewsletterArchivePage.tsx`, `NewsletterIssuePage.tsx` | The archive and issue pages |
+| `server/src/services/carousel.ts` | Canvas image generation, PDF creation, ZIP bundling (also the story og:image, `.context/seo.md`) |
 | `server/src/services/plunk.ts` | Plunk campaigns, sends and stats |
 | `server/src/routes/admin/newsletters.ts` | Newsletter admin API endpoints |
 | `server/src/schemas/newsletter.ts` | Newsletter request validation schemas |

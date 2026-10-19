@@ -1,4 +1,11 @@
-import type { PublicStory, PaginatedResponse, PublicPodcastResponse, PublicPodcastEpisodeDetail } from '@shared/types'
+import type {
+  PublicStory,
+  PaginatedResponse,
+  PublicPodcastResponse,
+  PublicPodcastEpisodeDetail,
+  PublicNewsletterIssue,
+  PublicNewsletterIssueSummary,
+} from '@shared/types'
 
 export const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api'
 
@@ -88,6 +95,13 @@ export const publicApi = {
 
   /** One published episode with its readable transcript (404 unless published). */
   podcastEpisode: (id: string) => request<PublicPodcastEpisodeDetail>(`/podcast/episodes/${encodeURIComponent(id)}`),
+
+  /** Published newsletter issues, newest first (the web archive). */
+  newsletterArchive: (page = 1) =>
+    request<PaginatedResponse<PublicNewsletterIssueSummary>>(`/newsletters${toQueryString({ page })}`),
+
+  /** One published newsletter issue's web edition; 404 unless published. */
+  newsletterIssue: (slug: string) => request<PublicNewsletterIssue>(`/newsletters/${encodeURIComponent(slug)}`),
 
   sources: () =>
     request<{ byRegion: Record<string, string[]>; byIssue: Record<string, string[]>; totalCount: number }>('/sources'),

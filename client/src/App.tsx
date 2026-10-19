@@ -30,6 +30,8 @@ const NewsFatiguePage = lazy(() => import('./pages/NewsFatiguePage'))
 const FreeApiPage = lazy(() => import('./pages/FreeApiPage'))
 const StewardshipPage = lazy(() => import('./pages/StewardshipPage'))
 const NewsletterPage = lazy(() => import('./pages/NewsletterPage'))
+const NewsletterArchivePage = lazy(() => import('./pages/NewsletterArchivePage'))
+const NewsletterIssuePage = lazy(() => import('./pages/NewsletterIssuePage'))
 const PodcastPage = lazy(() => import('./pages/PodcastPage'))
 const PodcastTranscriptPage = lazy(() => import('./pages/PodcastTranscriptPage'))
 const FeedbackPagePublic = lazy(() => import('./pages/FeedbackPage'))
@@ -129,6 +131,8 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
         <Route path="/free-api" element={<LazyPage><FreeApiPage /></LazyPage>} />
         <Route path="/stewardship" element={<LazyPage><StewardshipPage /></LazyPage>} />
         <Route path="/newsletter" element={<LazyPage><NewsletterPage /></LazyPage>} />
+        <Route path="/newsletter/archive" element={<LazyPage><NewsletterArchivePage /></LazyPage>} />
+        <Route path="/newsletter/:slug" element={<LazyPage><NewsletterIssuePage /></LazyPage>} />
         <Route path="/podcast" element={<LazyPage><PodcastPage /></LazyPage>} />
         <Route path="/podcast/:id/transcript" element={<LazyPage><PodcastTranscriptPage /></LazyPage>} />
         <Route path="/feedback" element={<LazyPage><FeedbackPagePublic /></LazyPage>} />
