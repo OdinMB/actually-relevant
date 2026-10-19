@@ -6,6 +6,8 @@ import { RSS_ITEM_PREFIX, rssChannelDescription } from '../../lib/aiLabelCopy.js
 import { Feed } from 'feed'
 import * as storyService from '../../services/story.js'
 import * as issueService from '../../services/issue.js'
+import { validateQuery } from '../../middleware/validate.js'
+import { feedQuerySchema } from '../../schemas/story.js'
 
 const router = Router()
 const log = createLogger('feed')
@@ -56,16 +58,31 @@ function setRssHeaders(res: import('express').Response) {
   res.set('Cache-Control', `public, max-age=${config.feed.cacheMaxAge}`)
 }
 
+/**
+ * The feed variant a request asks for. The in-memory cache key carries it, so a filtered and
+ * an unfiltered feed never share an entry; minRelevance has ten values, which keeps the key
+ * space bounded. HTTP caches (browsers, Cloudflare) key on the full URL, query included.
+ */
+function feedVariant(minRelevance: number | undefined) {
+  return {
+    cacheSuffix: minRelevance === undefined ? '' : `:minRelevance=${minRelevance}`,
+    query: minRelevance === undefined ? '' : `?minRelevance=${minRelevance}`,
+    titleSuffix: minRelevance === undefined ? '' : ` (relevance ${minRelevance}+)`,
+  }
+}
+
 // Global feed — all published stories
-router.get('/', async (_req, res) => {
+router.get('/', validateQuery(feedQuerySchema), async (req, res) => {
   try {
-    const xml = await cached(feedCache, 'feed:global', async () => {
-      const result = await storyService.getPublishedStories({ page: 1, pageSize: config.feed.size })
+    const { minRelevance } = req.parsedQuery as { minRelevance?: number }
+    const variant = feedVariant(minRelevance)
+    const xml = await cached(feedCache, `feed:global${variant.cacheSuffix}`, async () => {
+      const result = await storyService.getPublishedStories({ page: 1, pageSize: config.feed.size, minRelevance })
 
       const feed = buildFeed({
-        title: 'Actually Relevant',
+        title: `Actually Relevant${variant.titleSuffix}`,
         description: rssChannelDescription(),
-        feedPath: '/api/feed',
+        feedPath: `/api/feed${variant.query}`,
       })
       addStoryItems(feed, result.data)
 
@@ -81,26 +98,29 @@ router.get('/', async (_req, res) => {
 })
 
 // Per-issue feed
-router.get('/:issueSlug', async (req, res) => {
+router.get('/:issueSlug', validateQuery(feedQuerySchema), async (req, res) => {
   try {
     const { issueSlug } = req.params
+    const { minRelevance } = req.parsedQuery as { minRelevance?: number }
     const issue = await issueService.getIssueBySlug(issueSlug)
     if (!issue) {
       res.status(404).json({ error: 'Issue not found' })
       return
     }
 
-    const xml = await cached(feedCache, `feed:issue:${issueSlug}`, async () => {
+    const variant = feedVariant(minRelevance)
+    const xml = await cached(feedCache, `feed:issue:${issueSlug}${variant.cacheSuffix}`, async () => {
       const result = await storyService.getPublishedStories({
         page: 1,
         pageSize: config.feed.size,
         issueSlug,
+        minRelevance,
       })
 
       const feed = buildFeed({
-        title: `Actually Relevant — ${issue.name}`,
+        title: `Actually Relevant — ${issue.name}${variant.titleSuffix}`,
         description: rssChannelDescription(issue.name),
-        feedPath: `/api/feed/${issueSlug}`,
+        feedPath: `/api/feed/${issueSlug}${variant.query}`,
       })
       addStoryItems(feed, result.data)
 

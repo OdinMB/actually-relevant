@@ -22,8 +22,16 @@ Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `mai
 
 ## Public API
 
-- `GET /api/stories` — Paginated published stories, filterable by `issueSlug` and `positivity` (0-100)
+- `GET /api/stories` — Paginated published stories, newest first, filterable by `issueSlug`, `emotionTags` and the incremental-sync filters below, or searched with `search` (hybrid search). Cached 60 seconds (`Cache-Control: public, max-age=60`, no server-side cache)
 - `GET /api/stories/:id` — Single published story
+
+**Incremental sync** (`publicStoryQuerySchema` in `server/src/schemas/story.ts`, applied in `getPublishedStories()`). These names are part of the public API contract: never rename them.
+
+- `publishedSince` — ISO 8601 date-time with a zone (`Z` or an offset; a bare date is a 400), inclusive lower bound on `datePublished`
+- `publishedBefore` — same format, exclusive upper bound; must be later than `publishedSince` (else 400)
+- `minRelevance` — whole number 1-10, `relevance >= minRelevance`
+- All three are rejected with a 400 when combined with `search`: hybrid search does not apply them, and a silent no-op would mislead a poller. `total`/`totalPages` describe the filtered set.
+- Documented in the OpenAPI spec from the same Zod schemas (`requestParams.query` in `server/src/lib/openapi.ts`), with examples on `/free-api` and `/developers`.
 - `GET /api/issues` — All issues (id, name, slug, description only)
 - `GET /api/issues/:slug` — Single issue by slug
 
@@ -40,7 +48,10 @@ Hooks: `usePublicStories.ts`, `usePublicIssues.ts`
 Public RSS 2.0 feeds are available without authentication:
 
 - `GET /api/feed` — Global feed of the 50 most recent published stories
-- `GET /api/feed/:issueSlug` — Per-issue feed (e.g., `/api/feed/human-development`)
+- `GET /api/feed/:issueSlug` — Per-issue feed (e.g., `/api/feed/human-development`; the issue is a path segment, an `?issueSlug=` query on `/api/feed` is ignored)
+- Both take `?minRelevance=1..10` (`feedQuerySchema`; anything else is a JSON 400). A filtered feed's channel title ends in "(relevance N+)" and its self link carries the query. The feeds take no date filter: a reader polls one fixed URL and dedupes by item GUID, so a fixed `publishedSince` would only freeze the feed.
+
+**Caching.** Feeds are cached in memory (`feedCache`, TTL `config.feed.cacheMaxAge`) under a key that includes the variant (`feed:global`, `feed:global:minRelevance=7`, `feed:issue:<slug>:minRelevance=7`), so filtered and unfiltered feeds never share an entry; `minRelevance` has ten values, which keeps the key space bounded. A new feed parameter must join the key, and must stay bounded (an unbounded value such as a timestamp would let any caller grow the cache). Browser and Cloudflare caches key on the full URL, query string included, so the `Cache-Control` header is safe for every variant.
 
 Feed items include: title, link to story page, AI-generated summary prefixed "[AI-generated] ", publish date, and issue category. The channel description is fixed copy that says AI writes and curates the feed (`rssChannelDescription()` in `server/src/lib/aiLabelCopy.ts`; per-issue feeds no longer use the issue's own description). RSS readers never see the site's labels, so keep the item prefix when changing the feed. Responses use `Content-Type: application/rss+xml` with a 15-minute cache (`Cache-Control: public, max-age=900`).
 

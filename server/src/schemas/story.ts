@@ -102,10 +102,39 @@ export const bulkSelectIdsSchema = z.object({
   storyIds: z.array(z.string().uuid()).min(2, 'At least 2 story IDs are required for selection').max(500, 'Maximum 500 story IDs allowed'),
 })
 
+// Incremental-sync filters of the public API and RSS feeds. Their names are part of the
+// public API contract (documented in lib/openapi.ts and on /free-api), so never rename them.
+const ISO_DATE_TIME_MESSAGE = 'Must be an ISO 8601 date-time with a time zone, e.g. 2026-10-01T00:00:00Z'
+
+export const publishedSinceParam = z.string()
+  .datetime({ offset: true, message: ISO_DATE_TIME_MESSAGE })
+export const publishedBeforeParam = z.string()
+  .datetime({ offset: true, message: ISO_DATE_TIME_MESSAGE })
+export const minRelevanceParam = z.coerce.number({ invalid_type_error: 'Must be a whole number from 1 to 10' })
+  .int('Must be a whole number from 1 to 10')
+  .min(1, 'Must be a whole number from 1 to 10')
+  .max(10, 'Must be a whole number from 1 to 10')
+
 export const publicStoryQuerySchema = z.object({
   issueSlug: z.string().optional(),
   search: z.string().min(2).max(200).optional(),
   emotionTags: z.string().optional(),
+  publishedSince: publishedSinceParam.optional(),
+  publishedBefore: publishedBeforeParam.optional(),
+  minRelevance: minRelevanceParam.optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   pageSize: z.coerce.number().int().positive().max(100).optional().default(25),
+})
+  .refine(
+    q => !q.publishedSince || !q.publishedBefore || Date.parse(q.publishedSince) < Date.parse(q.publishedBefore),
+    { message: 'publishedSince must be earlier than publishedBefore', path: ['publishedBefore'] },
+  )
+  .refine(
+    q => !q.search || (q.publishedSince === undefined && q.publishedBefore === undefined && q.minRelevance === undefined),
+    { message: 'publishedSince, publishedBefore and minRelevance cannot be combined with search', path: ['search'] },
+  )
+
+/** Query of the public RSS feeds: only the relevance floor (a feed reader polls one fixed URL). */
+export const feedQuerySchema = z.object({
+  minRelevance: minRelevanceParam.optional(),
 })
