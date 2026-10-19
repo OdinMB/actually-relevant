@@ -54,64 +54,6 @@ export function useBulkUpdateStatus() {
   })
 }
 
-export function usePreassessStories() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (storyIds?: string[]) => adminApi.stories.preassess(storyIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function useAssessStory() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => adminApi.stories.assess(id),
-    onSuccess: (story) => {
-      queryClient.setQueryData(['story', story.id], story)
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function useSelectStories() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (storyIds: string[]) => adminApi.stories.select(storyIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function usePublishStory() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => adminApi.stories.publish(id),
-    onSuccess: (story) => {
-      queryClient.setQueryData(['story', story.id], story)
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function useRejectStory() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => adminApi.stories.reject(id),
-    onSuccess: (story) => {
-      queryClient.setQueryData(['story', story.id], story)
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
 export function useDissolveCluster() {
   const queryClient = useQueryClient()
   return useMutation({

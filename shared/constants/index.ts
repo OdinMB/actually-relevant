@@ -1,4 +1,4 @@
-import type { StoryStatus, EmotionTag, JobName, FeedRegion } from '../types/index.js'
+import type { StoryStatus, EmotionTag, FeedRegion } from '../types/index.js'
 
 export const STORY_STATUSES: StoryStatus[] = [
   'fetched',
@@ -17,22 +17,6 @@ export const EMOTION_TAGS: EmotionTag[] = [
   'calm',
 ]
 
-export const JOB_NAMES: JobName[] = [
-  'crawl_feeds',
-  'preassess_stories',
-  'assess_stories',
-  'select_stories',
-  'publish_stories',
-  'social_auto_post',
-  'bluesky_update_metrics',
-  'mastodon_update_metrics',
-  'generate_newsletter',
-  'generate_podcast',
-  'publish_podcast',
-  'poll_plunk_activity',
-  'cleanup_old_stories',
-]
-
 export const FEED_REGIONS: { value: FeedRegion; label: string }[] = [
   { value: 'north_america', label: 'North America' },
   { value: 'western_europe', label: 'Western Europe' },
@@ -45,9 +29,4 @@ export const FEED_REGIONS: { value: FeedRegion; label: string }[] = [
   { value: 'global', label: 'Global' },
 ]
 
-export const FEED_REGION_LABELS: Record<FeedRegion, string> = Object.fromEntries(
-  FEED_REGIONS.map(r => [r.value, r.label])
-) as Record<FeedRegion, string>
-
 export const DEFAULT_PAGE_SIZE = 25
-export const MAX_PAGE_SIZE = 100

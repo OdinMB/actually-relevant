@@ -74,7 +74,7 @@ That figure is then multiplied by 7 ÷ (days per week in the day-of-week field),
 1. Create handler in `server/src/jobs/yourJob.ts` exporting an `async function runYourJob(): Promise<void>`
 2. Register handler in `server/src/jobs/handlers.ts` by adding to the `JOB_HANDLERS` map, and add the name to `JOB_PIPELINE_ORDER` there (the boot catch-up order) at its place in the pipeline
 3. Add a row to `job_runs` table (via migration or seed) with `jobName`, `cronExpression`, and `enabled`
-4. Add the name to `JobName` (`shared/types`), `JOB_NAMES` (`shared/constants`) and the admin's `JOB_DISPLAY_NAMES` and `JOB_PIPELINE_ORDER` (`client/src/lib/constants.ts`)
+4. Add the name to `JobName` (`shared/types`) and the admin's `JOB_DISPLAY_NAMES` and `JOB_PIPELINE_ORDER` (`client/src/lib/constants.ts`)
 
 ## Admin API
 
