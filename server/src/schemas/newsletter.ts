@@ -22,3 +22,9 @@ export const newsletterQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional(),
   pageSize: z.coerce.number().int().positive().max(100).optional(),
 })
+
+/** `GET /api/newsletters`: the public archive of published issues. */
+export const publicNewsletterQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().positive().max(50).optional(),
+})

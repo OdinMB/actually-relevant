@@ -11,6 +11,7 @@ import sourcesRouter from './sources.js'
 import feedbackRouter from './feedback.js'
 import podcastRouter from './podcast.js'
 import { storyImageRouter, storyPageRouter } from './storyPreview.js'
+import newslettersRouter from './newsletters.js'
 
 const router = Router()
 
@@ -34,5 +35,6 @@ router.use('/subscribe', subscribeRouter)
 router.use('/sitemap.xml', sitemapRouter)
 router.use('/docs', docsRouter)
 router.use('/feedback', feedbackRouter)
+router.use('/newsletters', newslettersRouter)
 
 export default router

@@ -2,6 +2,7 @@ import 'zod-openapi/extend'
 import { z } from 'zod'
 import { createDocument } from 'zod-openapi'
 import {
+  AI_GENERATED_NEWSLETTER_FIELDS,
   AI_GENERATED_PODCAST_DETAIL_FIELDS,
   AI_GENERATED_PODCAST_FIELDS,
   AI_GENERATED_STORY_FIELDS,
@@ -199,6 +200,49 @@ const podcastResponseSchema = z.object({
   }),
   episodes: z.array(podcastEpisodeSchema),
 }).openapi({ ref: 'PodcastResponse' })
+
+const newsletterIssueSummarySchema = z.object({
+  slug: z.string().openapi({ description: 'URL segment of the issue; never changes once assigned.', example: 'week-42-2026' }),
+  title: z.string().openapi({ example: 'Week 42, 2026' }),
+  publishedAt: z.string().datetime().openapi({ description: 'When the issue was first published.' }),
+  storyCount: z.number().int(),
+}).openapi({ ref: 'NewsletterIssueSummary' })
+
+const newsletterArchiveResponseSchema = z.object({
+  data: z.array(newsletterIssueSummarySchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  totalPages: z.number().int(),
+}).openapi({ ref: 'NewsletterArchiveResponse' })
+
+const newsletterIssueSchema = z.object({
+  slug: z.string().openapi({ example: 'week-42-2026' }),
+  title: z.string().openapi({ example: 'Week 42, 2026' }),
+  publishedAt: z.string().datetime(),
+  aiLabel: z.object({ lead: z.string(), text: z.string() }).openapi({
+    description: 'The AI label shown at the top of the issue, in the email and on the web.',
+  }),
+  content: z.string().openapi({
+    description: aiField(
+      'The issue as Markdown: an intro written by an AI model, then one section per issue area with the AI-selected stories, ' +
+        'each with its AI headline, publisher, links and an AI summary or a quote selected by AI.',
+    ),
+  }),
+  stories: z.array(z.object({
+    headline: z.string().openapi({ description: 'The heading the story has in `content`.' }),
+    title: z.string().nullable(),
+    titleLabel: z.string().nullable(),
+    sourceTitle: z.string(),
+    sourceUrl: z.string().url(),
+    publisher: z.string(),
+    slug: z.string().nullable().openapi({ description: 'Story page slug; null if the story is no longer published.' }),
+  })).openapi({ description: aiField('The stories AI selected for the issue, with the headlines and title labels an AI model wrote.') }),
+  aiGenerated: z.object({
+    fields: z.array(z.enum(AI_GENERATED_NEWSLETTER_FIELDS)),
+    digitalSourceType: z.literal(IPTC_TRAINED_ALGORITHMIC_MEDIA),
+  }).openapi({ description: 'Machine-readable marker of the AI-generated fields of this issue. Unsigned metadata, not a watermark.' }),
+}).openapi({ ref: 'NewsletterIssue' })
 
 const errorResponseSchema = z.object({
   error: z.string().openapi({ example: 'Not found' }),
@@ -479,6 +523,51 @@ export function getOpenAPIDocument(): any {
           },
         },
       },
+      '/api/newsletters': {
+        get: {
+          operationId: 'listNewsletterIssues',
+          summary: 'Newsletter archive',
+          description: 'Returns the published issues of the weekly newsletter, newest first. Each issue is AI-written from AI-selected stories.',
+          tags: ['Newsletter'],
+          parameters: [
+            { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1 }, description: 'Page number (default 1)' },
+            { name: 'pageSize', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50 }, description: 'Issues per page (default 20)' },
+          ],
+          responses: {
+            '200': {
+              description: 'Published issues',
+              content: {
+                'application/json': { schema: newsletterArchiveResponseSchema },
+              },
+            },
+          },
+        },
+      },
+      '/api/newsletters/{slug}': {
+        get: {
+          operationId: 'getNewsletterIssue',
+          summary: 'Newsletter issue',
+          description: 'Returns one published issue of the weekly newsletter: its AI label, its Markdown text and its stories.',
+          tags: ['Newsletter'],
+          parameters: [
+            { name: 'slug', in: 'path', required: true, schema: { type: 'string' }, description: 'Issue slug, e.g. week-42-2026' },
+          ],
+          responses: {
+            '200': {
+              description: 'The issue',
+              content: {
+                'application/json': { schema: newsletterIssueSchema },
+              },
+            },
+            '404': {
+              description: 'No published issue with this slug',
+              content: {
+                'application/json': { schema: errorResponseSchema },
+              },
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {},
@@ -489,6 +578,7 @@ export function getOpenAPIDocument(): any {
       { name: 'Issues', description: 'Issue categories and hierarchy' },
       { name: 'Feed', description: 'RSS 2.0 feeds' },
       { name: 'Podcast', description: 'The weekly AI-written and AI-voiced podcast' },
+      { name: 'Newsletter', description: 'Published issues of the weekly AI-written newsletter' },
     ],
   })
 }
