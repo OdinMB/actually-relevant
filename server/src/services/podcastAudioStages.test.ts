@@ -182,22 +182,47 @@ describe('finishEpisode', () => {
     expect(tags.comment).toMatch(/^AI-generated/)
     expect(opts).toEqual({ pauseMs: config.podcast.segmentPauseMs, loudnorm: true })
 
-    const [[mp3Path, , mp3Type], [vttPath, vtt, vttType]] = mockBunny.putObject.mock.calls
+    const [[mp3Path, , mp3Type], [vttPath, vtt, vttType], [chaptersPath, , chaptersType]] = mockBunny.putObject.mock.calls
     expect(mp3Path).toMatch(/^episodes\/2026-W41-[0-9a-f]{8}\.mp3$/)
     expect(vttPath).toBe(mp3Path.replace(/\.mp3$/, '.vtt'))
-    expect([mp3Type, vttType]).toEqual(['audio/mpeg', 'text/vtt'])
+    expect(chaptersPath).toBe(mp3Path.replace(/\.mp3$/, '.chapters.json'))
+    expect([mp3Type, vttType, chaptersType]).toEqual(['audio/mpeg', 'text/vtt', 'application/json'])
     expect(vtt.toString()).toMatch(/^WEBVTT/)
     expect(write).toMatchObject({
       stage: 'ready', audioPath: mp3Path, audioUrl: `https://cdn.example/${mp3Path}`, transcriptPath: vttPath,
+      chaptersPath, chaptersUrl: `https://cdn.example/${chaptersPath}`,
       audioBytes: 4000, durationSec: 312, readyAt: expect.any(Date),
     })
+  })
+
+  it('uploads chapters titled and linked from the frozen stories, timed on the stored chunk durations', async () => {
+    const episodeStories = [1, 2, 3].map(ref => ({
+      ref, id: `s${ref}`, title: `Story ${ref} headline`, publisher: 'P', sourceUrl: `https://src.example/${ref}`,
+      slug: ref === 2 ? null : `story-${ref}`, issue: 'Planet',
+    }))
+    await stages.finishEpisode(episode({ stage: 'voiced', episodeStories }), context())
+
+    const doc = JSON.parse(mockBunny.putObject.mock.calls[2][1].toString())
+    expect(doc.version).toBe('1.2.0')
+    expect(doc.chapters.map((c: { title: string }) => c.title)).toEqual([
+      'Introduction', 'Story 1 headline', 'Story 2 headline', 'Story 3 headline', 'Wrap-up',
+    ])
+    expect(doc.chapters[0].startTime).toBe(0)
+    expect(doc.chapters[1].url).toBe(`${config.siteUrl}/stories/story-1`)
+    // A story without a slug has no page to link
+    expect(doc.chapters[2]).not.toHaveProperty('url')
+    const starts = doc.chapters.map((c: { startTime: number }) => c.startTime)
+    expect(starts).toEqual([...starts].sort((a, b) => a - b))
+    // The last chapter starts before the episode ends (stored durations 1,000 ms × index plus pauses)
+    const totalMs = stored().reduce((n, r) => n + r.durationMs, 0) + (CHUNKS.length - 1) * config.podcast.segmentPauseMs
+    expect(starts.at(-1) * 1000).toBeLessThan(totalMs)
   })
 
   it('never reuses a file name across renders', async () => {
     await stages.finishEpisode(episode({ stage: 'voiced' }), context())
     await stages.finishEpisode(episode({ stage: 'voiced' }), context())
     const paths = mockBunny.putObject.mock.calls.map(c => c[0])
-    expect(new Set(paths).size).toBe(4)
+    expect(new Set(paths).size).toBe(6)
   })
 
   it('puts a dry run under dry-run/ without loudnorm', async () => {
@@ -220,11 +245,20 @@ describe('finishEpisode', () => {
 })
 
 describe('deleteEpisodeObjects', () => {
-  it('deletes both objects and survives a storage failure', async () => {
+  it('deletes all three objects and survives a storage failure', async () => {
     vi.clearAllMocks()
     mockBunny.deleteObject.mockResolvedValue(undefined)
     mockBunny.deleteObject.mockRejectedValueOnce(new Error('401'))
-    await expect(stages.deleteEpisodeObjects({ id: 'pod-1', audioPath: 'episodes/a.mp3', transcriptPath: 'episodes/a.vtt' })).resolves.toBeUndefined()
+    await expect(stages.deleteEpisodeObjects({
+      id: 'pod-1', audioPath: 'episodes/a.mp3', transcriptPath: 'episodes/a.vtt', chaptersPath: 'episodes/a.chapters.json',
+    })).resolves.toBeUndefined()
+    expect(mockBunny.deleteObject.mock.calls.map(c => c[0])).toEqual(['episodes/a.mp3', 'episodes/a.vtt', 'episodes/a.chapters.json'])
+  })
+
+  it('skips the chapters of an episode made before chapters existed', async () => {
+    vi.clearAllMocks()
+    mockBunny.deleteObject.mockResolvedValue(undefined)
+    await stages.deleteEpisodeObjects({ id: 'pod-1', audioPath: 'episodes/a.mp3', transcriptPath: 'episodes/a.vtt', chaptersPath: null })
     expect(mockBunny.deleteObject.mock.calls.map(c => c[0])).toEqual(['episodes/a.mp3', 'episodes/a.vtt'])
   })
 })

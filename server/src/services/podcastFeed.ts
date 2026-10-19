@@ -53,6 +53,8 @@ function itemXml(episode: PublishedEpisode, artworkUrl: string): string {
     el('itunes:explicit', 'false'),
     `<itunes:image href="${escapeXml(artworkUrl)}"/>`,
     ...(episode.transcriptUrl ? [`<podcast:transcript url="${escapeXml(episode.transcriptUrl)}" type="text/vtt" language="en"/>`] : []),
+    // Episodes made before chapters existed have none; apps then fall back to their own.
+    ...(episode.chaptersUrl ? [`<podcast:chapters url="${escapeXml(episode.chaptersUrl)}" type="application/json+chapters"/>`] : []),
     AI_CONTENT_TXT,
   ]
   return `<item>${parts.join('')}</item>`

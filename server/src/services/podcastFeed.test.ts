@@ -22,6 +22,7 @@ function episode(overrides: Partial<PublishedEpisode> = {}): PublishedEpisode {
     audioBytes: 5_812_345,
     durationSec: 372,
     transcriptUrl: 'https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.vtt',
+    chaptersUrl: 'https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.chapters.json',
     publishedAt: new Date('2026-10-12T07:30:00Z'),
     ...overrides,
   }
@@ -99,6 +100,17 @@ describe('buildPodcastFeedXml', () => {
     expect(withBoth).toContain('<itunes:duration>00:06:12</itunes:duration>')
     expect(without).not.toContain('podcast:transcript')
     expect(without).not.toContain('itunes:duration')
+  })
+
+  it('references the JSON chapters when the episode has them, and leaves them out on an older episode', () => {
+    const xml = buildPodcastFeedXml([episode(), episode({ id: 'e2', chaptersUrl: null })], NOW)
+    const [withChapters, older] = items(xml)
+    expect(withChapters).toContain(
+      '<podcast:chapters url="https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.chapters.json" type="application/json+chapters"/>',
+    )
+    expect(older).not.toContain('podcast:chapters')
+    // The tag lives in the Podcasting 2.0 namespace the feed already declares
+    expect(xml).toContain('xmlns:podcast="https://podcastindex.org/namespace/1.0"')
   })
 
   it('writes the configured artwork as itunes:image on the channel and every item, and as the RSS channel image', async () => {

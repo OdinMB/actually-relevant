@@ -107,6 +107,8 @@ export function samplePodcast(overrides: Record<string, any> = {}) {
     audioPath: null,
     transcriptUrl: null,
     transcriptPath: null,
+    chaptersUrl: null,
+    chaptersPath: null,
     audioBytes: null,
     durationSec: null,
     readyAt: null,

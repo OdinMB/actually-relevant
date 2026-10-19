@@ -160,12 +160,15 @@ describe('getPublishedEpisodes', () => {
     const stories = [{ ref: 1, id: 's1', title: 'T', publisher: 'P', sourceUrl: 'https://x.example/1', slug: 't', issue: 'I' }]
     mockPrisma.podcast.findMany.mockResolvedValueOnce([{
       id: 'podcast-1', title: 'W42: T', kind: 'weekly', episodeSummary: 'S.', episodeStories: stories, humanEdited: true,
-      audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null, publishedAt,
+      audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null,
+      chaptersUrl: 'https://audio.example/e.chapters.json', publishedAt,
     }])
     expect(await getPublishedEpisodes()).toEqual([{
       id: 'podcast-1', title: 'W42: T', kind: 'weekly', summary: 'S.', stories, humanEdited: true,
-      audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null, publishedAt,
+      audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null,
+      chaptersUrl: 'https://audio.example/e.chapters.json', publishedAt,
     }])
+    expect(mockPrisma.podcast.findMany.mock.calls.at(-1)![0].select).toMatchObject({ chaptersUrl: true })
   })
 })
 

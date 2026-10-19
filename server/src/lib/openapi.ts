@@ -8,6 +8,7 @@ import {
   IPTC_TRAINED_ALGORITHMIC_MEDIA,
 } from './aiProvenance.js'
 import { OPENAPI_AI_FIELD_PREFIX, OPENAPI_REPUBLISHER_NOTE } from './aiLabelCopy.js'
+import { minRelevanceParam, publishedBeforeParam, publishedSinceParam } from '../schemas/story.js'
 
 /** Description of a field in AI_GENERATED_STORY_FIELDS: the "AI-generated." label, then the details. */
 function aiField(details: string): string {
@@ -200,6 +201,31 @@ const podcastResponseSchema = z.object({
   episodes: z.array(podcastEpisodeSchema),
 }).openapi({ ref: 'PodcastResponse' })
 
+// Incremental-sync query parameters, documented from the same Zod schemas the routes validate with.
+const minRelevanceQuery = minRelevanceParam.optional().openapi({
+  description:
+    'Only stories whose relevance rating is at least this value (1-10). ' +
+    'Combine with publishedSince to fetch only high-signal stories since your last poll.',
+  example: 7,
+})
+
+const storySyncQuerySchema = z.object({
+  publishedSince: publishedSinceParam.optional().openapi({
+    description:
+      'Only stories published at or after this ISO 8601 date-time (inclusive, compared with `datePublished`). ' +
+      'Pass the `datePublished` of the newest story you already have, or the time of your last poll.',
+    example: '2026-10-01T00:00:00Z',
+  }),
+  publishedBefore: publishedBeforeParam.optional().openapi({
+    description:
+      'Only stories published before this ISO 8601 date-time (exclusive). Must be later than publishedSince.',
+    example: '2026-10-08T00:00:00Z',
+  }),
+  minRelevance: minRelevanceQuery,
+})
+
+const feedQueryDocSchema = z.object({ minRelevance: minRelevanceQuery })
+
 const errorResponseSchema = z.object({
   error: z.string().openapi({ example: 'Not found' }),
 }).openapi({ ref: 'ErrorResponse' })
@@ -251,8 +277,12 @@ export function getOpenAPIDocument(): any {
           operationId: 'listStories',
           summary: 'List published stories',
           description:
-            'Returns a paginated list of published stories. Supports filtering by issue and semantic search.',
+            'Returns a paginated list of published stories, newest first. Supports filtering by issue, emotion tag, ' +
+            'publish date and minimum relevance, and semantic search.\n\n' +
+            'For incremental sync, poll with `publishedSince` (and optionally `minRelevance`) instead of re-reading the newest pages. ' +
+            'The date and relevance filters cannot be combined with `search` (400). Responses are cached for 60 seconds.',
           tags: ['Stories'],
+          requestParams: { query: storySyncQuerySchema },
           parameters: [
             {
               name: 'page',
@@ -290,6 +320,12 @@ export function getOpenAPIDocument(): any {
               description: 'Paginated list of published stories',
               content: {
                 'application/json': { schema: storyListResponseSchema },
+              },
+            },
+            '400': {
+              description: 'Invalid query parameters (e.g. a malformed date-time, minRelevance outside 1-10, or a date filter combined with search)',
+              content: {
+                'application/json': { schema: errorResponseSchema },
               },
             },
           },
@@ -381,8 +417,10 @@ export function getOpenAPIDocument(): any {
         get: {
           operationId: 'getRssFeed',
           summary: 'RSS feed (all stories)',
-          description: 'Returns an RSS 2.0 feed of all published stories. Cached for 15 minutes.',
+          description:
+            'Returns an RSS 2.0 feed of the most recent published stories. Add `?minRelevance=7` for a high-signal feed. Cached for 15 minutes.',
           tags: ['Feed'],
+          requestParams: { query: feedQueryDocSchema },
           responses: {
             '200': {
               description: 'RSS 2.0 XML feed',
@@ -392,6 +430,12 @@ export function getOpenAPIDocument(): any {
                 },
               },
             },
+            '400': {
+              description: 'Invalid minRelevance',
+              content: {
+                'application/json': { schema: errorResponseSchema },
+              },
+            },
           },
         },
       },
@@ -399,8 +443,10 @@ export function getOpenAPIDocument(): any {
         get: {
           operationId: 'getRssFeedByIssue',
           summary: 'RSS feed (per issue)',
-          description: 'Returns an RSS 2.0 feed filtered to a specific issue. Cached for 15 minutes.',
+          description:
+            'Returns an RSS 2.0 feed filtered to a specific issue. Accepts `minRelevance` like the global feed. Cached for 15 minutes.',
           tags: ['Feed'],
+          requestParams: { query: feedQueryDocSchema },
           parameters: [
             {
               name: 'issueSlug',
@@ -417,6 +463,12 @@ export function getOpenAPIDocument(): any {
                 'application/rss+xml': {
                   schema: { type: 'string' },
                 },
+              },
+            },
+            '400': {
+              description: 'Invalid minRelevance',
+              content: {
+                'application/json': { schema: errorResponseSchema },
               },
             },
             '404': {

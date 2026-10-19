@@ -26,6 +26,9 @@ router.get('/', (req, res, next) => {
       issueSlug: query.issueSlug,
       search: query.search,
       emotionTags,
+      publishedSince: query.publishedSince ? new Date(query.publishedSince) : undefined,
+      publishedBefore: query.publishedBefore ? new Date(query.publishedBefore) : undefined,
+      minRelevance: query.minRelevance,
     })
     res.set('Cache-Control', 'public, max-age=60')
     res.json({ ...result, data: result.data.map(withAiGeneratedMarker) })

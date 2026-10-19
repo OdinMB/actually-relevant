@@ -105,7 +105,7 @@ const PUBLISHED_WHERE = {
 
 const PUBLISHED_SELECT = {
   id: true, title: true, kind: true, episodeSummary: true, episodeStories: true, humanEdited: true,
-  audioUrl: true, audioBytes: true, durationSec: true, transcriptUrl: true, publishedAt: true,
+  audioUrl: true, audioBytes: true, durationSec: true, transcriptUrl: true, chaptersUrl: true, publishedAt: true,
 } satisfies Prisma.PodcastSelect
 
 type PublishedRow = Prisma.PodcastGetPayload<{ select: typeof PUBLISHED_SELECT }>
@@ -124,6 +124,7 @@ function toPublishedEpisode(row: PublishedRow): PublishedEpisode | null {
     audioBytes: row.audioBytes,
     durationSec: row.durationSec,
     transcriptUrl: row.transcriptUrl,
+    chaptersUrl: row.chaptersUrl,
     publishedAt: row.publishedAt,
   }
 }

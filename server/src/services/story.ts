@@ -814,11 +814,17 @@ export async function getPublishedStories(options: {
   issueSlug?: string
   search?: string
   emotionTags?: string[]
+  /** Inclusive lower bound on datePublished. Not applied to search. */
+  publishedSince?: Date
+  /** Exclusive upper bound on datePublished. Not applied to search. */
+  publishedBefore?: Date
+  /** Minimum relevance rating (1-10). Not applied to search. */
+  minRelevance?: number
 }) {
   const page = options.page || 1
   const pageSize = options.pageSize || 25
 
-  // Use hybrid search when search query is provided
+  // Use hybrid search when search query is provided (the sync filters above do not apply)
   if (options.search) {
     return hybridSearch({
       query: options.search,
@@ -835,6 +841,17 @@ export async function getPublishedStories(options: {
   }
   if (options.emotionTags?.length) {
     conditions.push({ emotionTag: { in: options.emotionTags as EmotionTag[] } })
+  }
+  if (options.publishedSince || options.publishedBefore) {
+    conditions.push({
+      datePublished: {
+        ...(options.publishedSince && { gte: options.publishedSince }),
+        ...(options.publishedBefore && { lt: options.publishedBefore }),
+      },
+    })
+  }
+  if (options.minRelevance !== undefined) {
+    conditions.push({ relevance: { gte: options.minRelevance } })
   }
 
   const orderBy: Prisma.StoryOrderByWithRelationInput[] = [{ datePublished: 'desc' }, { dateCrawled: 'desc' }]

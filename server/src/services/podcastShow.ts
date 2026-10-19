@@ -25,6 +25,8 @@ export interface PublishedEpisode {
   audioBytes: number
   durationSec: number | null
   transcriptUrl: string | null
+  /** The Podcasting 2.0 JSON chapters file; null on episodes made before chapters existed. Feed only, not in the public JSON. */
+  chaptersUrl: string | null
   publishedAt: Date
 }
 
