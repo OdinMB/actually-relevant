@@ -50,7 +50,15 @@ vi.mock('./dedup.js', () => ({
 }))
 // Status writes go through the lifecycle module, tested on PostgreSQL (storyLifecycle.db.test.ts)
 const mockTransition = vi.hoisted(() => vi.fn())
-vi.mock('./storyLifecycle.js', () => ({ transition: mockTransition }))
+const mockRecordAnalysis = vi.hoisted(() => vi.fn())
+vi.mock('./storyLifecycle.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./storyLifecycle.js')>()),
+  transition: mockTransition,
+  recordAnalysis: mockRecordAnalysis,
+  partition: async (ids: string[]) => ({ eligible: ids, skipped: [] }),
+}))
+/** The rows the last recordAnalysis call wrote. */
+const recordedRows = () => mockRecordAnalysis.mock.calls.at(-1)?.[2] as { id: string; data: Record<string, unknown>; embedding?: unknown }[]
 
 const { preAssessStories, reclassifyStories, assessStory, selectStories } = await import('./analysis.js')
 const { PUBLIC_STORY_SELECT } = await import('./story.js')
@@ -97,14 +105,11 @@ describe('preAssessStories', () => {
     expect(results[0]).toEqual({ storyId: 'story-1', rating: 4, emotionTag: 'calm' })
     expect(results[1]).toEqual({ storyId: 'story-2', rating: 2, emotionTag: 'calm' })
 
-    expect(mockPrisma.story.update).toHaveBeenCalledWith({
-      where: { id: 'story-1' },
-      data: { issueId: issue.id, relevancePre: 4, emotionTag: 'calm', status: 'pre_analyzed' },
-    })
-    expect(mockPrisma.story.update).toHaveBeenCalledWith({
-      where: { id: 'story-2' },
-      data: { issueId: issue.id, relevancePre: 2, emotionTag: 'calm', status: 'pre_analyzed' },
-    })
+    // The status move is the lifecycle module's: these are the fields it writes with it
+    expect(mockRecordAnalysis).toHaveBeenCalledWith('preassess', 'pipeline', [
+      { id: 'story-1', data: { issueId: issue.id, relevancePre: 4, emotionTag: 'calm' } },
+      { id: 'story-2', data: { issueId: issue.id, relevancePre: 2, emotionTag: 'calm' } },
+    ])
   })
 
   it('falls back to feed issueId for invalid slugs', async () => {
@@ -132,10 +137,9 @@ describe('preAssessStories', () => {
 
     expect(results).toHaveLength(1)
     // Falls back to feed's issueId
-    expect(mockPrisma.story.update).toHaveBeenCalledWith({
-      where: { id: 'story-1' },
-      data: { issueId: story.feed.issue.id, relevancePre: 5, emotionTag: 'calm', status: 'pre_analyzed' },
-    })
+    expect(recordedRows()).toEqual([
+      { id: 'story-1', data: { issueId: story.feed.issue.id, relevancePre: 5, emotionTag: 'calm' } },
+    ])
   })
 })
 
@@ -209,14 +213,14 @@ describe('assessStory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockDetectAndCluster.mockResolvedValue({ clusterId: null, newCluster: false, memberCount: 0, rejectedIds: [] })
+    mockRecordAnalysis.mockImplementation(async (_stage: string, _actor: string, rows: { id: string }[]) =>
+      new Map(rows.map(r => [r.id, 'advanced'])))
   })
 
-  it('generates embedding before saving analysis and embedding atomically', async () => {
-    const story = storyWithRelations({ id: 'story-1' })
+  it('generates the embedding from the analysis and hands both to the lifecycle write', async () => {
+    const story = storyWithRelations({ id: 'story-1', status: 'pre_analyzed' })
     mockPrisma.story.findUnique.mockResolvedValue(story)
-    mockPrisma.story.update.mockResolvedValue({})
     mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1, 0.2], hash: 'abc123' })
-    mockSaveEmbeddingTx.mockResolvedValue(undefined)
 
     const structuredResponse = {
       publicationDate: '2024-01-15 00:00:00',
@@ -250,24 +254,24 @@ describe('assessStory', () => {
       embeddingContentHash: null,
     })
 
-    // Transaction saves analysis + embedding atomically
-    expect(mockPrisma.$transaction).toHaveBeenCalled()
-    expect(mockPrisma.story.update).toHaveBeenCalledWith({
-      where: { id: 'story-1' },
-      data: expect.objectContaining({
-        titleLabel: 'Test topic',
-        summary: 'Test summary with key information.',
-        status: 'analyzed',
-      }),
-    })
-    expect(mockSaveEmbeddingTx).toHaveBeenCalledWith(
-      mockPrisma, 'story-1', [0.1, 0.2], 'abc123',
-    )
+    // One write: the analysis fields and the embedding together
+    expect(mockRecordAnalysis).toHaveBeenCalledWith('assess', 'pipeline', [{
+      id: 'story-1',
+      data: expect.objectContaining({ titleLabel: 'Test topic', summary: 'Test summary with key information.' }),
+      embedding: { embedding: [0.1, 0.2], hash: 'abc123' },
+    }])
   })
 
   it('throws when story not found', async () => {
     mockPrisma.story.findUnique.mockResolvedValue(null)
     await expect(assessStory('nonexistent')).rejects.toThrow('Story not found')
+  })
+
+  it('skips a trashed story without a model call', async () => {
+    mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1', status: 'trashed' }))
+    expect(await assessStory('story-1', 'editor')).toBe('skipped')
+    expect(mockGetMediumLLM).not.toHaveBeenCalled()
+    expect(mockRecordAnalysis).not.toHaveBeenCalled()
   })
 
   it('throws and does not save when embedding generation fails', async () => {
@@ -297,17 +301,13 @@ describe('assessStory', () => {
 
     await expect(assessStory('story-1')).rejects.toThrow('OpenAI API error')
 
-    // Transaction should not have been called
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
-    expect(mockPrisma.story.update).not.toHaveBeenCalled()
+    expect(mockRecordAnalysis).not.toHaveBeenCalled()
   })
 
   it('runs dedup after successful assessment', async () => {
     const story = storyWithRelations({ id: 'story-1' })
     mockPrisma.story.findUnique.mockResolvedValue(story)
-    mockPrisma.story.update.mockResolvedValue({})
     mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1], hash: 'h1' })
-    mockSaveEmbeddingTx.mockResolvedValue(undefined)
     mockDetectAndCluster.mockResolvedValue({ clusterId: 'c1', newCluster: true, memberCount: 2, rejectedIds: [] })
 
     const mockStructuredLlm = {
@@ -355,11 +355,11 @@ describe('AI-generated field registry', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockDetectAndCluster.mockResolvedValue({ clusterId: null, newCluster: false, memberCount: 0, rejectedIds: [] })
+    mockRecordAnalysis.mockResolvedValue(new Map([['story-1', 'advanced']]))
   })
 
   it('declares exactly the model-written story fields that the public API serves', async () => {
     mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1' }))
-    mockPrisma.story.update.mockResolvedValue({})
     mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1], hash: 'h1' })
     mockGetMediumLLM.mockReturnValue({
       withStructuredOutput: () => ({ invoke: vi.fn().mockResolvedValue(sentinelResponse()) }),
@@ -367,7 +367,7 @@ describe('AI-generated field registry', () => {
 
     await assessStory('story-1')
 
-    const written = mockPrisma.story.update.mock.calls[0][0].data as Record<string, unknown>
+    const written = recordedRows()[0].data
     const modelWritten = Object.keys(written).filter(
       (key) => typeof written[key] === 'string' && (written[key] as string).includes(SENTINEL),
     )

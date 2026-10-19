@@ -497,14 +497,24 @@ describe('Admin Stories API', () => {
 
   describe('POST /api/admin/stories/:id/assess', () => {
     it('assesses a single story', async () => {
-      mockAssessStory.mockResolvedValue(undefined)
+      mockAssessStory.mockResolvedValue('advanced')
       mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations)
 
       const res = await request(app)
         .post('/api/admin/stories/story-1/assess')
         .set(authHeader())
       expect(res.status).toBe(200)
-      expect(mockAssessStory).toHaveBeenCalledWith('story-1')
+      expect(mockAssessStory).toHaveBeenCalledWith('story-1', 'editor')
+    })
+
+    it('returns 409 for a trashed story', async () => {
+      mockAssessStory.mockResolvedValue('skipped')
+
+      const res = await request(app)
+        .post('/api/admin/stories/story-1/assess')
+        .set(authHeader())
+      expect(res.status).toBe(409)
+      expect(res.body.error).toMatch(/trashed/)
     })
 
     it('returns 404 when story not found', async () => {
@@ -686,6 +696,34 @@ describe('Admin Stories API', () => {
         .set(authHeader())
         .send({ storyIds: [] })
       expect(res.status).toBe(400)
+    })
+
+    it('leaves trashed stories out and lists them as skipped', async () => {
+      const [a, b] = ['1', '2'].map(n => `00000000-0000-0000-0000-00000000000${n}`)
+      mockPartition.mockResolvedValue({ eligible: [a], skipped: [{ id: b, status: 'trashed' }] })
+
+      const res = await request(app)
+        .post('/api/admin/stories/bulk-assess')
+        .set(authHeader())
+        .send({ storyIds: [a, b] })
+
+      expect(res.status).toBe(202)
+      expect(res.body.skipped).toEqual([b])
+      expect(mockBulkAssess).toHaveBeenCalledWith([a], res.body.taskId)
+    })
+
+    it('returns 409 when every story is trashed', async () => {
+      const a = '00000000-0000-0000-0000-000000000001'
+      mockPartition.mockResolvedValue({ eligible: [], skipped: [{ id: a, status: 'trashed' }] })
+
+      const res = await request(app)
+        .post('/api/admin/stories/bulk-preassess')
+        .set(authHeader())
+        .send({ storyIds: [a] })
+
+      expect(res.status).toBe(409)
+      expect(res.body.skipped).toEqual([a])
+      expect(mockBulkPreAssess).not.toHaveBeenCalled()
     })
   })
 

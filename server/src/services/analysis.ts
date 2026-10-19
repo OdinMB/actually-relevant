@@ -15,9 +15,11 @@ import { preAssessResultSchema, reclassifyResultSchema, assessResultSchema, sele
 import type { Guidelines } from '../prompts/shared.js'
 import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
-import { saveEmbeddingTx } from '../lib/vectors.js'
 import { NotFoundError } from '../utils/errors.js'
-import { transition, type MoveResult } from './storyLifecycle.js'
+import {
+  analysisFrom, partition, recordAnalysis, transition,
+  type Actor, type AnalysisOutcome, type AnalysisRow, type MoveResult,
+} from './storyLifecycle.js'
 
 const log = createLogger('analysis')
 
@@ -40,7 +42,12 @@ interface BatchClassificationOptions<T extends { articleId: string; issueSlug: s
   llm: ChatOpenAI
   schema: z.ZodType<{ articles: T[] }>
   buildPrompt: (stories: StoryForPreassess[], issues: IssueForPreassess[]) => string
-  buildUpdate: (item: T, issueId: string | null) => Prisma.StoryUpdateInput
+  buildUpdate: (item: T, issueId: string | null) => Prisma.StoryUncheckedUpdateManyInput
+  /**
+   * Write one batch's results. Default: plain field updates (reclassify, emotion tagging, which
+   * never change status). Pre-assessment passes the lifecycle module's recordAnalysis.
+   */
+  persist?: (rows: AnalysisRow[]) => Promise<unknown>
   /** Whether to assign feed issue to stories not returned by the LLM. Default true (pre-assess behavior). */
   fallbackToFeedIssue?: boolean
   onProgress?: ProgressCallback
@@ -49,10 +56,15 @@ interface BatchClassificationOptions<T extends { articleId: string; issueSlug: s
   label: string
 }
 
+const updateFields = (rows: AnalysisRow[]) =>
+  prisma.$transaction(rows.map(r => prisma.story.update({ where: { id: r.id }, data: r.data })))
+
 async function runBatchClassification<T extends { articleId: string; issueSlug: string; emotionTag: string }>(
   options: BatchClassificationOptions<T>,
 ): Promise<{ storyId: string; item: T }[]> {
-  const { storyIds, llm, schema, buildPrompt, buildUpdate, fallbackToFeedIssue = true, onProgress, batchSize, concurrency, label } = options
+  const {
+    storyIds, llm, schema, buildPrompt, buildUpdate, persist = updateFields, fallbackToFeedIssue = true, onProgress, batchSize, concurrency, label,
+  } = options
 
   const issues = await prisma.issue.findMany({
     select: { id: true, slug: true, name: true, description: true },
@@ -103,7 +115,8 @@ async function runBatchClassification<T extends { articleId: string; issueSlug: 
 
         const storyMap = new Map(batch.map(s => [s.id, s]))
         const batchResults: { storyId: string; item: T }[] = []
-        const updates: ReturnType<typeof prisma.story.update>[] = []
+        const rows: AnalysisRow[] = []
+        const fallbackRows: AnalysisRow[] = []
         for (const item of response.articles) {
           const story = storyMap.get(item.articleId)
           if (!story) {
@@ -117,10 +130,7 @@ async function runBatchClassification<T extends { articleId: string; issueSlug: 
             issueId = story.feed.issueId
           }
 
-          updates.push(prisma.story.update({
-            where: { id: story.id },
-            data: buildUpdate(item, issueId),
-          }))
+          rows.push({ id: story.id, data: buildUpdate(item, issueId) })
 
           batchResults.push({
             storyId: story.id,
@@ -132,17 +142,13 @@ async function runBatchClassification<T extends { articleId: string; issueSlug: 
         if (fallbackToFeedIssue) {
           for (const story of batch) {
             if (!batchResults.some(r => r.storyId === story.id)) {
-              updates.push(prisma.story.update({
-                where: { id: story.id },
-                data: { issueId: story.feed.issueId },
-              }))
+              fallbackRows.push({ id: story.id, data: { issueId: story.feed.issueId } })
             }
           }
         }
 
-        if (updates.length > 0) {
-          await prisma.$transaction(updates)
-        }
+        if (rows.length > 0) await persist(rows)
+        if (fallbackRows.length > 0) await updateFields(fallbackRows)
         onProgress?.({ type: 'completed', count: batchResults.length })
         const missing = batch.length - batchResults.length
         if (missing > 0) {
@@ -171,12 +177,25 @@ async function runBatchClassification<T extends { articleId: string; issueSlug: 
 
 // --- Pre-assessment ---
 
+/**
+ * Screen stories in batches. A `fetched` story (or, for an editor, a `rejected` one) moves to
+ * `pre_analyzed`; a story further along keeps its status and gets the new screening fields; a
+ * trashed story is left out before any model call (`storyLifecycle.ts`, recordAnalysis).
+ */
 export async function preAssessStories(
   storyIds: string[],
   onProgress?: ProgressCallback,
+  actor: Actor = 'pipeline',
 ): Promise<{ storyId: string; rating: number; emotionTag: string }[]> {
+  const { eligible, skipped } = await partition(storyIds, analysisFrom('preassess', actor))
+  if (skipped.length > 0) {
+    log.info({ skipped }, 'pre-assessment skipped stories whose status does not allow it')
+    onProgress?.({ type: 'failed', count: skipped.length, error: 'Story status does not allow pre-assessment' })
+  }
+  if (eligible.length === 0) return []
+
   const results = await runBatchClassification({
-    storyIds,
+    storyIds: eligible,
     llm: getMediumLLM(),
     schema: preAssessResultSchema,
     buildPrompt: buildPreassessPrompt,
@@ -184,8 +203,8 @@ export async function preAssessStories(
       issueId,
       relevancePre: item.rating,
       emotionTag: item.emotionTag as EmotionTag,
-      status: 'pre_analyzed',
     }),
+    persist: rows => recordAnalysis('preassess', actor, rows),
     onProgress,
     batchSize: config.preassess.batchSize,
     concurrency: config.concurrency.preassess,
@@ -256,12 +275,22 @@ export async function tagEmotionOnly(
 
 // --- Full assessment ---
 
-export async function assessStory(storyId: string): Promise<void> {
+/**
+ * Fully assess one story. A story before `analyzed` (or, for an editor, a `rejected` one) moves to
+ * `analyzed`; an `analyzed`, `selected` or `published` story keeps its status and gets the new
+ * analysis and embedding; a trashed story is skipped without a model call, as is one trashed while
+ * the call ran (`storyLifecycle.ts`, recordAnalysis).
+ */
+export async function assessStory(storyId: string, actor: Actor = 'pipeline'): Promise<AnalysisOutcome> {
   const story = await prisma.story.findUnique({
     where: { id: storyId },
     include: { issue: true, feed: { include: { issue: true } } },
   })
   if (!story) throw new NotFoundError('Story not found')
+  if (!analysisFrom('assess', actor).includes(story.status)) {
+    log.info({ storyId, status: story.status, actor }, 'assessment skipped: status does not allow it')
+    return 'skipped'
+  }
 
   log.info({ storyId, title: story.sourceTitle?.slice(0, 80) }, 'assessing story')
 
@@ -288,7 +317,6 @@ export async function assessStory(storyId: string): Promise<void> {
     antifactors: parsed.limitingFactors.join('\n'),
     relevanceCalculation: parsed.relevanceCalculation.join('\n'),
     relevance: parsed.conservativeRating,
-    status: 'analyzed' as const,
   }
 
   // Generate embedding from analysis results BEFORE saving — throws on failure
@@ -299,13 +327,10 @@ export async function assessStory(storyId: string): Promise<void> {
     embeddingContentHash: null, // force generation
   })
 
-  // Save analysis + embedding atomically
-  await prisma.$transaction(async (tx) => {
-    await tx.story.update({ where: { id: storyId }, data: analysisData })
-    if (embeddingData) {
-      await saveEmbeddingTx(tx, storyId, embeddingData.embedding, embeddingData.hash)
-    }
-  })
+  // Save analysis + embedding atomically, unless the status changed during the call
+  const outcomes = await recordAnalysis('assess', actor, [{ id: storyId, data: analysisData, embedding: embeddingData }])
+  const outcome = outcomes.get(storyId) ?? 'skipped'
+  if (outcome === 'skipped') return outcome
 
   // Dedup runs after the transaction — embedding is guaranteed to exist
   if (config.dedup.enabled) {
@@ -319,12 +344,14 @@ export async function assessStory(storyId: string): Promise<void> {
         log.error({ err, storyId }, 'post-assessment dedup failed')
       })
   }
+  return outcome
 }
 
 /** Orchestrate concurrent assessment of multiple stories. */
 export async function assessStories(
   storyIds: string[],
   onProgress?: ProgressCallback,
+  actor: Actor = 'pipeline',
 ): Promise<{ completed: number; errors: number }> {
   const semaphore = new Semaphore(config.concurrency.assess)
   let completed = 0
@@ -333,7 +360,7 @@ export async function assessStories(
   const settled = await Promise.allSettled(
     storyIds.map(id =>
       semaphore.run(async () => {
-        await assessStory(id)
+        await assessStory(id, actor)
         completed++
         onProgress?.({ type: 'completed', count: 1 })
       }),
@@ -502,7 +529,7 @@ function taskProgressCallback(taskId: string): ProgressCallback {
 
 export async function bulkPreAssess(storyIds: string[], taskId: string): Promise<void> {
   try {
-    await preAssessStories(storyIds, taskProgressCallback(taskId))
+    await preAssessStories(storyIds, taskProgressCallback(taskId), 'editor')
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     log.error({ err, taskId }, 'bulk pre-assess failed')
@@ -544,7 +571,7 @@ export async function bulkTagEmotions(storyIds: string[], taskId: string): Promi
 
 export async function bulkAssess(storyIds: string[], taskId: string): Promise<void> {
   try {
-    await assessStories(storyIds, taskProgressCallback(taskId))
+    await assessStories(storyIds, taskProgressCallback(taskId), 'editor')
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     log.error({ err, taskId }, 'bulk assess failed')

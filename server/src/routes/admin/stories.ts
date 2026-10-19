@@ -19,7 +19,8 @@ import {
   bulkSelectIdsSchema,
 } from '../../schemas/story.js'
 import { taskRegistry } from '../../lib/taskRegistry.js'
-import { allowedFrom, partition } from '../../services/storyLifecycle.js'
+import { allowedFrom, analysisFrom, partition, type AnalysisStage } from '../../services/storyLifecycle.js'
+import { ConflictError } from '../../utils/errors.js'
 import { crawlUrlSchema } from '../../schemas/job.js'
 
 // Errors: services throw ServiceErrors (404/400/409) and the global handler in app.ts answers;
@@ -62,14 +63,26 @@ function filterProcessingIds(storyIds: string[]): { filtered: string[]; skipped:
   return { filtered, skipped }
 }
 
+/** Of the non-processing ids, those an editor's analysis may write (not trashed); the rest join `skipped`. */
+async function filterAnalyzableIds(stage: AnalysisStage, filtered: string[], skipped: string[]): Promise<string[]> {
+  const { eligible, skipped: notAnalyzable } = await partition(filtered, analysisFrom(stage, 'editor'))
+  skipped.push(...notAnalyzable.map(s => s.id))
+  return eligible
+}
+
 router.post('/bulk-preassess', failsWith('Failed to start bulk pre-assess'), expensiveOpLimiter, validateBody(bulkStoryIdsSchema), async (req, res) => {
   const { filtered, skipped } = filterProcessingIds(req.body.storyIds)
   if (filtered.length === 0) {
     res.status(409).json({ error: 'All stories are already being processed', skipped })
     return
   }
-  const taskId = taskRegistry.create('preassess', filtered.length, filtered)
-  analysisService.bulkPreAssess(filtered, taskId)
+  const eligible = await filterAnalyzableIds('preassess', filtered, skipped)
+  if (eligible.length === 0) {
+    res.status(409).json({ error: 'None of the stories can be pre-assessed: restore trashed stories first', skipped })
+    return
+  }
+  const taskId = taskRegistry.create('preassess', eligible.length, eligible)
+  analysisService.bulkPreAssess(eligible, taskId)
   res.status(202).json({ taskId, ...(skipped.length > 0 ? { skipped } : {}) })
 })
 
@@ -101,8 +114,13 @@ router.post('/bulk-assess', failsWith('Failed to start bulk assess'), expensiveO
     res.status(409).json({ error: 'All stories are already being processed', skipped })
     return
   }
-  const taskId = taskRegistry.create('assess', filtered.length, filtered)
-  analysisService.bulkAssess(filtered, taskId)
+  const eligible = await filterAnalyzableIds('assess', filtered, skipped)
+  if (eligible.length === 0) {
+    res.status(409).json({ error: 'None of the stories can be assessed: restore trashed stories first', skipped })
+    return
+  }
+  const taskId = taskRegistry.create('assess', eligible.length, eligible)
+  analysisService.bulkAssess(eligible, taskId)
   res.status(202).json({ taskId, ...(skipped.length > 0 ? { skipped } : {}) })
 })
 
@@ -174,12 +192,14 @@ router.post('/preassess', failsWith('Failed to pre-assess stories'), expensiveOp
     return
   }
 
-  const results = await analysisService.preAssessStories(storyIds)
+  const results = await analysisService.preAssessStories(storyIds, undefined, 'editor')
   res.json({ processed: results.length, results })
 })
 
 router.post('/:id/assess', failsWith('Failed to assess story'), expensiveOpLimiter, async (req, res) => {
-  await analysisService.assessStory(req.params.id)
+  const outcome = await analysisService.assessStory(req.params.id, 'editor')
+  // An editor's assessment skips only a trashed story (before the model call, or trashed during it)
+  if (outcome === 'skipped') throw new ConflictError('A trashed story cannot be assessed: restore it first')
   res.json(await storyService.getStoryById(req.params.id))
 })
 

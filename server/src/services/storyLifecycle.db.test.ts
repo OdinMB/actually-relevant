@@ -133,12 +133,12 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   // ──── Assessment and pre-assessment ─────────────────────────────────────
 
-  it.fails('re-assessing a published story refreshes it and keeps it on the site [5c]', async () => {
+  it('re-assessing a published story refreshes it and keeps it on the site', async () => {
     const s = await story({ status: 'published', slug: 'live', title: 'Old title', datePublished: new Date() })
     await setEmbedding(s.id, 1)
     mockInvoke.mockResolvedValue(assessAnswer())
 
-    await assessStory(s.id)
+    expect(await assessStory(s.id, 'editor')).toBe('refreshed')
 
     const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
     expect(after.status).toBe('published')
@@ -147,61 +147,97 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(await getPublishedStoryBySlug('live')).not.toBeNull()
   })
 
-  it.fails('re-assessing a selected story keeps it selected [5c]', async () => {
+  it('re-assessing a selected story keeps it selected', async () => {
     const s = await story({ status: 'selected' })
     mockInvoke.mockResolvedValue(assessAnswer())
-    await assessStory(s.id)
+    await assessStory(s.id, 'editor')
     expect((await row(s.id)).status).toBe('selected')
   })
 
-  // Fails until the write clears the reason: the CHECK constraint refuses a reason on `analyzed`
-  it.fails('re-assessing a paywall-rejected story re-queues it as analyzed [5c]', async () => {
+  it('an editor re-assessing a paywall-rejected story re-queues it as analyzed and clears the reason', async () => {
     const s = await story({ status: 'rejected', rejectionReason: 'paywall', accessTier: 'locked' })
     mockInvoke.mockResolvedValue(assessAnswer())
-    await assessStory(s.id)
-    expect((await row(s.id)).status).toBe('analyzed')
+    expect(await assessStory(s.id, 'editor')).toBe('advanced')
+    expect(await row(s.id)).toMatchObject({ status: 'analyzed', rejectionReason: null })
   })
 
-  it.fails('assessing a trashed story makes no model call and leaves it trashed [5c]', async () => {
+  it('the assess job never takes a story out of rejected', async () => {
+    const s = await story({ status: 'rejected', rejectionReason: 'editor' })
+    expect(await assessStory(s.id)).toBe('skipped')
+    expect(mockInvoke).not.toHaveBeenCalled()
+    expect(await row(s.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor' })
+  })
+
+  it('assessing a trashed story makes no model call and leaves it trashed', async () => {
     const s = await story({ status: 'trashed' })
     mockInvoke.mockResolvedValue(assessAnswer())
-    await assessStory(s.id).catch(() => undefined)
+    expect(await assessStory(s.id, 'editor')).toBe('skipped')
     expect(mockInvoke).not.toHaveBeenCalled()
     expect((await row(s.id)).status).toBe('trashed')
   })
 
-  it.fails('a story trashed during the assess call stays trashed and gets no embedding [5c]', async () => {
+  it('a story trashed during the assess call stays trashed and gets no embedding', async () => {
     const s = await story({ status: 'pre_analyzed' })
     mockInvoke.mockImplementation(async () => {
       await updateStoryStatus(s.id, 'trashed')
       return assessAnswer()
     })
 
-    await assessStory(s.id).catch(() => undefined)
+    expect(await assessStory(s.id)).toBe('skipped')
 
     const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
     expect(after.status).toBe('trashed')
+    expect(after.title).toBeNull()
     expect(after.embeddingContentHash).toBeNull()
   })
 
-  it.fails('re-screening a published story rewrites relevancePre and keeps it published [5c]', async () => {
+  it('re-screening a published story rewrites relevancePre and keeps it published', async () => {
     const s = await story({ status: 'published', slug: 'p' })
     await prisma.story.update({ where: { id: s.id }, data: { relevancePre: 3 } })
     mockInvoke.mockResolvedValue({ articles: [{ articleId: s.id, issueSlug, rating: 9, emotionTag: 'calm' }] })
 
-    await preAssessStories([s.id])
+    await preAssessStories([s.id], undefined, 'editor')
 
     const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
     expect(after.relevancePre).toBe(9)
     expect(after.status).toBe('published')
   })
 
-  it.fails('pre-assessing a trashed story makes no model call [5c]', async () => {
+  it('an editor pre-assessing a rejected story re-queues it; the job leaves it alone', async () => {
+    const byEditor = await story({ status: 'rejected', rejectionReason: 'paywall' })
+    const byJob = await story({ status: 'rejected', rejectionReason: 'paywall' })
+    mockInvoke.mockImplementation(async (messages: BaseMessage[]) => ({
+      articles: [byEditor.id, byJob.id].filter(id => promptOf(messages).includes(id))
+        .map(articleId => ({ articleId, issueSlug, rating: 6, emotionTag: 'calm' })),
+    }))
+
+    await preAssessStories([byEditor.id], undefined, 'editor')
+    await preAssessStories([byJob.id])
+
+    expect(await row(byEditor.id)).toMatchObject({ status: 'pre_analyzed', rejectionReason: null })
+    expect(await row(byJob.id)).toMatchObject({ status: 'rejected', rejectionReason: 'paywall' })
+  })
+
+  it('pre-assessing a trashed story makes no model call', async () => {
     const s = await story({ status: 'trashed' })
     mockInvoke.mockResolvedValue({ articles: [{ articleId: s.id, issueSlug, rating: 9, emotionTag: 'calm' }] })
-    await preAssessStories([s.id])
+    await preAssessStories([s.id], undefined, 'editor')
     expect(mockInvoke).not.toHaveBeenCalled()
     expect((await row(s.id)).status).toBe('trashed')
+  })
+
+  it('a story trashed during the pre-assess call stays trashed', async () => {
+    const s = await story({ status: 'fetched' })
+    mockInvoke.mockImplementation(async () => {
+      await updateStoryStatus(s.id, 'trashed')
+      return { articles: [{ articleId: s.id, issueSlug, rating: 9, emotionTag: 'calm' }] }
+    })
+
+    await preAssessStories([s.id])
+
+    const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
+    expect(after.status).toBe('trashed')
+    expect(after.relevancePre).toBeNull()
   })
 
   // ──── Publishing ────────────────────────────────────────────────────────
