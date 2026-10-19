@@ -37,6 +37,7 @@ const { runAssessStories } = await import('../jobs/assessStories.js')
 const { runSelectStories } = await import('../jobs/selectStories.js')
 const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
 const { transition } = await import('./storyLifecycle.js')
+const { detectAndCluster } = await import('./dedup.js')
 const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary, createManualCluster } = await import('./cluster.js')
 
 let feedId = ''
@@ -407,6 +408,34 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(await primaryOf(clusterId)).toBe(dup.id)
     expect((await row(dup.id)).status).toBe('published')
     expect(await row(editorRejected.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor' })
+  })
+
+  // ──── Dedup formation ───────────────────────────────────────────────────
+
+  it('dedup forms a cluster around the published story and rejects the newcomer as a duplicate', async () => {
+    const pub = await story({ status: 'published', slug: 'first', datePublished: new Date(), title: 'First', summary: 's' })
+    const fresh = await story({ status: 'analyzed', relevance: 9, title: 'Second', summary: 's' })
+    const late = await story({ status: 'analyzed', relevance: 9, title: 'Third', summary: 's' })
+    for (const s of [pub, fresh, late]) await setEmbedding(s.id, 1)
+    mockInvoke.mockResolvedValue({ assessments: [{ candidateNumber: 1, isDuplicate: true, reason: 'same event' }] })
+    config.dedup.enabled = true
+    try {
+      // `fresh` sees one candidate: `pub` (both unclustered)
+      await prisma.story.update({ where: { id: late.id }, data: { status: 'fetched' } })
+      const formed = await detectAndCluster(fresh.id)
+      expect(formed).toMatchObject({ newCluster: true, memberCount: 2, rejectedIds: [fresh.id] })
+      expect(await primaryOf(formed.clusterId!)).toBe(pub.id)
+      expect(await row(pub.id)).toMatchObject({ status: 'published', slug: 'first' })
+      expect(await row(fresh.id)).toMatchObject({ status: 'rejected', rejectionReason: 'duplicate' })
+
+      // `late` sees the cluster's primary and joins that cluster
+      await prisma.story.update({ where: { id: late.id }, data: { status: 'analyzed' } })
+      const joined = await detectAndCluster(late.id)
+      expect(joined).toMatchObject({ clusterId: formed.clusterId, newCluster: false, memberCount: 3, rejectedIds: [late.id] })
+      expect(await row(late.id)).toMatchObject({ status: 'rejected', rejectionReason: 'duplicate' })
+    } finally {
+      config.dedup.enabled = false
+    }
   })
 
   // ──── Set primary and merge ─────────────────────────────────────────────

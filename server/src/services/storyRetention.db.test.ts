@@ -186,15 +186,20 @@ describeDb('story retention (PostgreSQL)', () => {
     expect(await runCleanupOldStories()).toMatchObject({ deleted: 0, clustersDeleted: 0, primariesReElected: 0 })
   })
 
-  it('deleteStory uses the same repair', async () => {
+  it('deleteStory uses the same repair, which re-elects without restoring', async () => {
     const { feed } = await setup()
     const p = await createStory({ feedId: feed.id, status: 'analyzed', relevance: 8 })
-    const m1 = await createStory({ feedId: feed.id, status: 'rejected', relevance: 2 })
-    const m2 = await createStory({ feedId: feed.id, status: 'rejected', relevance: 5 })
-    const clusterId = await clusterOf([p.id, m1.id, m2.id], p.id)
+    const m1 = await createStory({ feedId: feed.id, status: 'rejected', rejectionReason: 'duplicate', relevance: 2 })
+    const m2 = await createStory({ feedId: feed.id, status: 'rejected', rejectionReason: 'duplicate', relevance: 5 })
+    const editorRejected = await createStory({ feedId: feed.id, status: 'rejected', rejectionReason: 'editor', relevance: 9 })
+    const clusterId = await clusterOf([p.id, m1.id, m2.id, editorRejected.id], p.id)
 
     await deleteStory(p.id)
+    // An editor's rejection is never elected; the elected duplicate stays rejected (pipeline mode)
     expect((await prisma.storyCluster.findUniqueOrThrow({ where: { id: clusterId } })).primaryStoryId).toBe(m2.id)
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: m2.id } })).toMatchObject({ status: 'rejected', rejectionReason: 'duplicate' })
+
+    await deleteStory(editorRejected.id)
 
     await deleteStory(m2.id)
     expect(await prisma.storyCluster.findUnique({ where: { id: clusterId } })).toBeNull()

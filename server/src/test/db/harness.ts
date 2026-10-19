@@ -61,6 +61,7 @@ export async function createStory(data: {
   clusterId?: string | null
   slug?: string | null
   title?: string | null
+  summary?: string | null
   relevance?: number | null
   datePublished?: Date | null
   accessTier?: string | null
@@ -80,6 +81,7 @@ export async function createStory(data: {
       clusterId: data.clusterId ?? null,
       slug: data.slug ?? null,
       title: data.title ?? null,
+      summary: data.summary ?? null,
       relevance: data.relevance ?? null,
       datePublished: data.datePublished ?? null,
       accessTier: data.accessTier ?? null,
