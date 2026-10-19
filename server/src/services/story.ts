@@ -15,6 +15,7 @@ import type { ExtractionMethod } from './extractor.js'
 import type { AccessTier } from '../lib/paywall.js'
 import { storyInIssueSql, storyInIssueWhere } from '../lib/issueFilter.js'
 import { repairClusters } from './clusterRepair.js'
+import { TTLCache, cached } from '../lib/cache.js'
 
 const log = createLogger('story')
 
@@ -390,7 +391,9 @@ export async function updateStory(id: string, data: Record<string, any>): Promis
 
   // A plain update suffices only when we neither auto-assign a slug nor persist an embedding.
   if (!needsPublishPrep && !embeddingData) {
-    return prisma.story.update({ where: { id }, data: updateData })
+    const story = await prisma.story.update({ where: { id }, data: updateData })
+    if (story.status !== StoryStatus.published) forgetRelatedStories([id])
+    return story
   }
 
   // Otherwise write transactionally. Acquire the slug lock only when auto-assigning a slug.
@@ -422,7 +425,9 @@ export async function updateStoryStatus(id: string, status: string): Promise<Sto
       return tx.story.update({ where: { id }, data })
     })
   }
-  return prisma.story.update({ where: { id }, data: { status: status as StoryStatus } })
+  const story = await prisma.story.update({ where: { id }, data: { status: status as StoryStatus } })
+  forgetRelatedStories([id])
+  return story
 }
 
 export async function generateUniqueSlugs(
@@ -536,10 +541,12 @@ export async function bulkUpdateStatus(ids: string[], status: string) {
     }
     return { count: publishedCount }
   }
-  return prisma.story.updateMany({
+  const result = await prisma.story.updateMany({
     where: { id: { in: ids } },
     data: { status: status as StoryStatus },
   })
+  forgetRelatedStories(ids)
+  return result
 }
 
 export async function deleteStory(id: string): Promise<void> {
@@ -550,6 +557,7 @@ export async function deleteStory(id: string): Promise<void> {
   })
 
   await prisma.story.delete({ where: { id } })
+  forgetRelatedStories([id])
 
   // Dissolve a cluster left with one member, or re-elect its primary (the same repair as retention)
   if (storyCluster?.clusterId) await repairClusters([storyCluster.clusterId])
@@ -804,51 +812,55 @@ export async function getPublishedStories(options: {
   })
 }
 
-// In-memory cache for LLM-ranked related story IDs
-const relatedCache = new Map<string, { ids: string[]; expiry: number }>()
+/** A source story's LLM-ranked related story ids (`displayCount` of them, best first). */
+interface RelatedEntry {
+  sourceId: string
+  ids: string[]
+}
+
+// Per source slug. Every read re-checks that the source and each related story are still published,
+// so the cache never serves an unpublished story; unpublishing also drops the story's own entry.
 const MAX_RELATED_CACHE_SIZE = 500
-const EVICTION_INTERVAL = 60 * 60 * 1000 // 1 hour
-let lastEviction = Date.now()
+const relatedCache = new TTLCache<RelatedEntry | null>(
+  config.relatedStories.cacheHours * 60 * 60 * 1000,
+  { maxEntries: MAX_RELATED_CACHE_SIZE },
+)
 
-function evictExpiredCache() {
-  const now = Date.now()
-  if (now - lastEviction < EVICTION_INTERVAL) return
-  lastEviction = now
-  for (const [key, value] of relatedCache) {
-    if (value.expiry <= now) relatedCache.delete(key)
-  }
+/** Drop the cached related lists of these stories, which left `published` or were deleted. */
+export function forgetRelatedStories(storyIds: string[]): void {
+  if (storyIds.length === 0) return
+  const gone = new Set(storyIds)
+  relatedCache.invalidateWhere(entry => entry !== null && gone.has(entry.sourceId))
 }
 
-/** Evict the entry with the earliest expiry to make room for a new one. */
-function evictOldestEntry() {
-  let oldestKey: string | null = null
-  let oldestExpiry = Infinity
-  for (const [key, value] of relatedCache) {
-    if (value.expiry < oldestExpiry) {
-      oldestExpiry = value.expiry
-      oldestKey = key
-    }
-  }
-  if (oldestKey) relatedCache.delete(oldestKey)
-}
-
+/**
+ * Related stories for a published story: the cosine-nearest published stories, re-ranked by a
+ * small-tier model and cached per slug (`.context/embeddings.md`). Concurrent misses for a slug share
+ * one computation (one LLM call); only the published ones of the cached ids are returned.
+ */
 export async function getRelatedStories(slug: string, limit: number = config.relatedStories.displayCount) {
-  evictExpiredCache()
+  const entry = await cached(relatedCache, slug, () => rankRelatedStories(slug), e => e !== null && e.ids.length > 0)
+  if (!entry || entry.ids.length === 0) return []
 
-  // Always work with displayCount for caching consistency, then slice to requested limit
-  const displayCount = config.relatedStories.displayCount
-
-  // 1. Check in-memory cache
-  const cached = relatedCache.get(slug)
-  if (cached && cached.expiry > Date.now()) {
-    const ids = cached.ids.slice(0, limit)
-    const stories = await prisma.story.findMany({
-      where: { id: { in: ids } },
-      select: PUBLIC_STORY_SELECT,
-    })
-    const storyMap = new Map(stories.map((s) => [s.id, s]))
-    return ids.map((id) => storyMap.get(id)).filter((s): s is NonNullable<typeof s> => s != null)
+  // One query checks the source is still published and fetches the published related stories
+  const rows = await prisma.story.findMany({
+    where: { id: { in: [entry.sourceId, ...entry.ids] }, status: 'published' },
+    select: PUBLIC_STORY_SELECT,
+  })
+  const storyMap = new Map(rows.map((s) => [s.id, s]))
+  if (!storyMap.has(entry.sourceId)) {
+    relatedCache.invalidate(slug)
+    return []
   }
+  return entry.ids
+    .map((id) => storyMap.get(id))
+    .filter((s): s is NonNullable<typeof s> => s != null)
+    .slice(0, limit)
+}
+
+/** Steps 2-5 of getRelatedStories: null when no published story with an embedding has this slug. */
+async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
+  const displayCount = config.relatedStories.displayCount
 
   // 2. Find the source story and verify it has an embedding
   const rows = await prisma.$queryRaw<{ id: string; title: string | null; title_label: string | null }[]>`
@@ -856,7 +868,7 @@ export async function getRelatedStories(slug: string, limit: number = config.rel
     WHERE slug = ${slug} AND status = 'published' AND embedding IS NOT NULL
     LIMIT 1
   `
-  if (rows.length === 0) return []
+  if (rows.length === 0) return null
 
   const source = rows[0]
   const candidateCount = displayCount * config.relatedStories.candidateMultiplier
@@ -871,7 +883,7 @@ export async function getRelatedStories(slug: string, limit: number = config.rel
     ORDER BY s.embedding <=> (SELECT embedding FROM stories WHERE id = ${source.id})
     LIMIT ${candidateCount}
   `
-  if (candidates.length === 0) return []
+  if (candidates.length === 0) return { sourceId: source.id, ids: [] }
 
   // 4. If we have fewer candidates than needed, skip LLM and return all
   let selectedIds: string[]
@@ -910,23 +922,7 @@ export async function getRelatedStories(slug: string, limit: number = config.rel
     }
   }
 
-  // 6. Cache the result (evict oldest if at capacity)
-  if (!relatedCache.has(slug) && relatedCache.size >= MAX_RELATED_CACHE_SIZE) {
-    evictOldestEntry()
-  }
-  relatedCache.set(slug, {
-    ids: selectedIds,
-    expiry: Date.now() + config.relatedStories.cacheHours * 60 * 60 * 1000,
-  })
-
-  // 7. Fetch full story data in LLM-selected order, sliced to requested limit
-  const returnIds = selectedIds.slice(0, limit)
-  const stories = await prisma.story.findMany({
-    where: { id: { in: returnIds } },
-    select: PUBLIC_STORY_SELECT,
-  })
-  const storyMap = new Map(stories.map((s) => [s.id, s]))
-  return returnIds.map((id) => storyMap.get(id)).filter((s): s is NonNullable<typeof s> => s != null)
+  return { sourceId: source.id, ids: selectedIds }
 }
 
 interface StatusFilterOptions {
@@ -1001,10 +997,12 @@ export async function publishStory(id: string): Promise<Story> {
 }
 
 export async function rejectStory(id: string): Promise<Story> {
-  return prisma.story.update({
+  const story = await prisma.story.update({
     where: { id },
     data: { status: StoryStatus.rejected },
   })
+  forgetRelatedStories([id])
+  return story
 }
 
 export async function getPublishedStoryBySlug(slug: string) {

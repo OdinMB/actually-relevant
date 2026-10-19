@@ -34,7 +34,7 @@ async function clusterOf(memberIds: string[], primaryId: string | null) {
 
 describeDb('story retention (PostgreSQL)', () => {
   useTestDatabase()
-  beforeEach(() => mockNotify.mockReset().mockResolvedValue(undefined))
+  beforeEach(() => { mockNotify.mockReset().mockResolvedValue(undefined) })
 
   it('deletes old stories of every deletable status and nothing else', async () => {
     const { feed } = await setup()

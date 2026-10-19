@@ -46,7 +46,7 @@ async function seedMatrix() {
 
 describeDb('issue filter (PostgreSQL)', () => {
   useTestDatabase()
-  beforeEach(() => mockSearchEmbedding.mockReset())
+  beforeEach(() => { mockSearchEmbedding.mockReset() })
 
   it('the Prisma and SQL forms select the same stories, for a parent and for a child slug', async () => {
     const stories = await seedMatrix()

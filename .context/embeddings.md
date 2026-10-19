@@ -39,17 +39,23 @@ RRF score: `score(d) = Σ 1/(RRF_K + rank)` with `RRF_K = 60` and 1-based ranks.
 
 `GET /api/stories/:slug/related` (`getRelatedStories()` in `server/src/services/story.ts`):
 
-1. **Cache check:** a hit returns the cached IDs, sliced to `limit`.
+1. **Cache check:** a hit fetches the source and the cached IDs in one query limited to `published`. If the source is no longer published the entry is dropped and the result is empty; otherwise the cached stories that are still published come back in cached order, sliced to `limit`. An unpublished story therefore never appears in a server answer, whenever it was cached.
 2. **Source check:** the source story must exist, be published and have an embedding. Otherwise the result is empty.
 3. **Candidate pool:** `displayCount × candidateMultiplier` (4 × 3 = 12) nearest published stories with embeddings by cosine distance, excluding the source.
 4. **Small pool:** if there are no more candidates than `displayCount`, the LLM is skipped and all candidates are returned in cosine order.
 5. **LLM re-rank:** otherwise the LLM picks the most editorially relevant candidates, using title label and title. Returned IDs not in the candidate pool are discarded. If the LLM call fails or no valid IDs come back, the top `displayCount` in cosine order are used instead.
 
-The result is always computed and cached for `displayCount` IDs, then sliced to the requested `limit`. The model tier is `relatedStories.modelTier` (`small`). Config is under `relatedStories` in `server/src/config.ts`: `displayCount` 4, `candidateMultiplier` 3, `cacheHours` 72, `httpCacheSeconds` 259200. Prompt: `server/src/prompts/related-stories.ts`. Schema: `relatedStoriesResultSchema` in `server/src/schemas/llm.ts`.
+The result is always computed and cached for `displayCount` IDs, then sliced to the requested `limit` (the route validates `limit` as an integer 1-10, else 400). The model tier is `relatedStories.modelTier` (`small`). Config is under `relatedStories` in `server/src/config.ts`: `displayCount` 4, `candidateMultiplier` 3, `cacheHours` 72, `httpCacheSeconds` 259200. Prompt: `server/src/prompts/related-stories.ts`. Schema: `relatedStoriesResultSchema` in `server/src/schemas/llm.ts`.
 
 ### Cache
 
-An in-memory, per-process map in `story.ts`. The key is the source story's slug and the value is the ordered list of related story IDs. Each entry expires after `relatedStories.cacheHours` (72h). Expired entries are swept at most once an hour, on the next request. At `MAX_RELATED_CACHE_SIZE` (500) entries, the entry with the earliest expiry is evicted before a new slug is inserted. The cache is lost when the server restarts.
+A `TTLCache` (`server/src/lib/cache.ts`) in `story.ts`, per process and lost on restart. The key is the source story's slug and the value is the source's id with the ordered list of related story IDs. Each entry expires after `relatedStories.cacheHours` (72h). At `MAX_RELATED_CACHE_SIZE` (500) entries, setting a new slug drops the expired entries, then the oldest. Concurrent misses for one slug share one computation, so a burst of first visitors costs one LLM call. A source with no candidates is not cached.
+
+When a story leaves `published` or is deleted through the story service (`updateStory`, `updateStoryStatus`, `bulkUpdateStatus`, `rejectStory`, `deleteStory`), its own entry is dropped (`forgetRelatedStories`); other paths are covered by the published check on every hit. Other stories' lists that name it simply leave it out until they expire.
+
+**HTTP cache:** the route still sends `Cache-Control: public, max-age=259200` (`httpCacheSeconds`, 72 h), so a browser or CDN that cached a response can show a now-unpublished story's link for up to that long (it leads to a 404). Kept on purpose: the long lifetime is what spares the LLM re-rank on repeat visits; shorten `httpCacheSeconds` if unpublished stories must vanish from every client sooner.
+
+The search-query embedding cache in `embedding.ts` (`generateSearchEmbedding`) is the same `TTLCache`: 50 entries, 1 hour, keyed by the trimmed lowercased query, concurrent identical queries sharing one call.
 
 ## Database
 

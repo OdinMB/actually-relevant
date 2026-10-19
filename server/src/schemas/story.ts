@@ -102,6 +102,11 @@ export const bulkSelectIdsSchema = z.object({
   storyIds: z.array(z.string().uuid()).min(2, 'At least 2 story IDs are required for selection').max(500, 'Maximum 500 story IDs allowed'),
 })
 
+/** `GET /api/stories/:slug/related`: how many related stories to return (default `relatedStories.displayCount`). */
+export const relatedStoriesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(10).optional(),
+})
+
 export const publicStoryQuerySchema = z.object({
   issueSlug: z.string().optional(),
   search: z.string().min(2).max(200).optional(),
