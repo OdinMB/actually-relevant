@@ -6,6 +6,7 @@ import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { buildBlueskyPickBestPrompt } from '../prompts/index.js'
 import type { StoryForBlueskyPick } from '../prompts/index.js'
 import { blueskyPickBestSchema } from '../schemas/bluesky.js'
+import { BadRequestError } from '../utils/errors.js'
 
 const log = createLogger('social-media')
 
@@ -72,7 +73,7 @@ export async function pickBestStoryForSocial(storyIds: string[]): Promise<{ stor
     include: { issue: true },
   })
 
-  if (stories.length === 0) throw new Error('No stories found')
+  if (stories.length === 0) throw new BadRequestError('No stories found')
 
   // If only one candidate, just return it
   if (stories.length === 1) {

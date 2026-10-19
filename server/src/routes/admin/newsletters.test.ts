@@ -252,4 +252,61 @@ describe('Admin Newsletters API', () => {
       }
     })
   })
+
+  // Statuses and bodies the services' typed errors and the global handler give (unchanged from the
+  // per-route catch blocks they replaced)
+  describe('error answers', () => {
+    it('answers 404 with the service message for an unknown newsletter', async () => {
+      mockPrisma.newsletter.findUnique.mockResolvedValue(null)
+
+      for (const path of ['assign', 'select', 'generate', 'html']) {
+        const res = await request(app).post(`/api/admin/newsletters/unknown/${path}`).set(authHeader())
+        expect(res.status, path).toBe(404)
+        expect(res.body, path).toEqual({ error: 'Newsletter not found' })
+      }
+    })
+
+    it('answers 400 when the longlist is empty', async () => {
+      mockPrisma.newsletter.findUnique.mockResolvedValue(sampleNewsletter({ storyIds: [] }))
+
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/select').set(authHeader())
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'No stories in longlist' })
+    })
+
+    it('answers 400 when there is no content to convert to HTML', async () => {
+      mockPrisma.newsletter.findUnique.mockResolvedValue(sampleNewsletter({ content: null }))
+
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/html').set(authHeader())
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'No content to convert' })
+    })
+
+    it('answers 404 with the route text when Prisma finds no row to update', async () => {
+      mockPrisma.newsletter.update.mockRejectedValue(Object.assign(new Error('No record'), { code: 'P2025' }))
+
+      const res = await request(app).put('/api/admin/newsletters/unknown').set(authHeader()).send({ title: 'x' })
+      expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Newsletter not found' })
+    })
+
+    it('answers 500 with the route text on an unexpected failure', async () => {
+      mockPrisma.newsletter.findUnique.mockResolvedValue(sampleNewsletter())
+      mockPrisma.story.findMany.mockResolvedValue([])
+
+      // No recent stories is not a request error: it stays a 500, as before
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/assign').set(authHeader())
+      expect(res.status).toBe(500)
+      expect(res.body).toEqual({ error: 'Failed to assign stories' })
+    })
+
+    it('answers 500 with the list route text when the query fails', async () => {
+      mockPrisma.newsletter.findMany.mockRejectedValue(new Error('db down'))
+      mockPrisma.newsletter.count.mockRejectedValue(new Error('db down'))
+
+      const res = await request(app).get('/api/admin/newsletters').set(authHeader())
+      expect(res.status).toBe(500)
+      expect(res.body).toEqual({ error: 'Failed to fetch newsletters' })
+    })
+  })
 })

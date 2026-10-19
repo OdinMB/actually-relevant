@@ -5,13 +5,15 @@ import { authLimiter, refreshLimiter } from '../middleware/rateLimit.js'
 import { loginSchema, changePasswordSchema } from '../schemas/auth.js'
 import { getUserByEmail, changePassword } from '../services/user.js'
 import {
-  verifyPassword,
+  verifyLoginPassword,
   generateAccessToken,
   generateRefreshToken,
   rotateRefreshToken,
   revokeRefreshToken,
   verifyAccessToken,
+  RefreshTokenRejectedError,
 } from '../services/auth.js'
+import { failsWith } from '../middleware/routeErrors.js'
 import { getUserById } from '../services/user.js'
 import { createLogger } from '../lib/logger.js'
 import { config, type CookieSameSite } from '../config.js'
@@ -21,7 +23,6 @@ const log = createLogger('auth')
 const router = Router()
 
 const REFRESH_COOKIE = 'refresh_token'
-const COOKIE_MAX_AGE = 24 * 60 * 60 * 1000 // 24 hours
 
 function isSecureEnv(): boolean {
   return process.env.NODE_ENV === 'production'
@@ -37,7 +38,7 @@ function setRefreshCookie(res: any, token: string) {
     httpOnly: true,
     secure: isSecureEnv(),
     sameSite: cookieSameSite(),
-    maxAge: COOKIE_MAX_AGE,
+    maxAge: config.auth.refreshTokenLifetimeMs, // the cookie lives as long as the token it carries
     path: '/api/auth',
   })
 }
@@ -51,63 +52,43 @@ function clearRefreshCookie(res: any) {
   })
 }
 
-const REJECTED_REFRESH_ERRORS = new Set([
-  'Invalid refresh token',
-  'Refresh token expired',
-  'Refresh token reuse detected',
-])
+router.post('/login', failsWith('Login failed'), authLimiter, validateBody(loginSchema), async (req, res) => {
+  const { email, password } = req.body
 
-router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) => {
-  try {
-    const { email, password } = req.body
-
-    const user = await getUserByEmail(email)
-    if (!user) {
-      res.status(401).json({ error: 'Invalid email or password' })
-      return
-    }
-
-    const valid = await verifyPassword(password, user.passwordHash)
-    if (!valid) {
-      res.status(401).json({ error: 'Invalid email or password' })
-      return
-    }
-
-    const accessToken = generateAccessToken(user)
-    const refreshToken = await generateRefreshToken(user.id)
-
-    setRefreshCookie(res, refreshToken)
-    res.json({
-      accessToken,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
-    })
-  } catch (err) {
-    log.error({ err }, 'login failed')
-    res.status(500).json({ error: 'Login failed' })
+  const user = await getUserByEmail(email)
+  // Runs bcrypt even without an account, so response time does not reveal which emails exist
+  const valid = await verifyLoginPassword(password, user?.passwordHash)
+  if (!user || !valid) {
+    res.status(401).json({ error: 'Invalid email or password' })
+    return
   }
+
+  const accessToken = generateAccessToken(user)
+  const refreshToken = await generateRefreshToken(user.id)
+
+  setRefreshCookie(res, refreshToken)
+  res.json({
+    accessToken,
+    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+  })
 })
 
-router.post('/refresh', refreshLimiter, async (req, res) => {
-  try {
-    const token = req.cookies?.[REFRESH_COOKIE]
-    if (!token) {
-      res.status(401).json({ error: 'No refresh token' })
-      return
-    }
+router.post('/refresh', failsWith('Token refresh failed'), refreshLimiter, async (req, res) => {
+  const token = req.cookies?.[REFRESH_COOKIE]
+  if (!token) {
+    res.status(401).json({ error: 'No refresh token' })
+    return
+  }
 
+  try {
     const result = await rotateRefreshToken(token)
     setRefreshCookie(res, result.refreshToken)
     res.json({ accessToken: result.accessToken })
   } catch (err) {
-    // Clear the cookie only when the token itself was rejected. A server-side
-    // failure (DB hiccup, restart mid-deploy) keeps it, so the client can retry.
-    if (err instanceof Error && REJECTED_REFRESH_ERRORS.has(err.message)) {
-      clearRefreshCookie(res)
-      res.status(401).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'token refresh failed')
-    res.status(500).json({ error: 'Token refresh failed' })
+    // Clear the cookie only when the token itself was rejected (401 from the global handler). A
+    // server-side failure (DB hiccup, restart mid-deploy) keeps it, so the client can retry.
+    if (err instanceof RefreshTokenRejectedError) clearRefreshCookie(res)
+    throw err
   }
 })
 
@@ -148,18 +129,10 @@ router.get('/me', async (req, res) => {
   }
 })
 
-router.put('/password', requireAuth, validateBody(changePasswordSchema), async (req, res) => {
-  try {
-    await changePassword(req.user!.userId, req.body.currentPassword, req.body.newPassword)
-    res.json({ message: 'Password changed' })
-  } catch (err) {
-    if (err instanceof Error && err.message === 'Current password is incorrect') {
-      res.status(401).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'password change failed')
-    res.status(500).json({ error: 'Password change failed' })
-  }
+// A wrong current password is an UnauthorizedError (401) from changePassword
+router.put('/password', failsWith('Password change failed'), requireAuth, validateBody(changePasswordSchema), async (req, res) => {
+  await changePassword(req.user!.userId, req.body.currentPassword, req.body.newPassword)
+  res.json({ message: 'Password changed' })
 })
 
 export default router

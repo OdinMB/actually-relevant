@@ -105,16 +105,6 @@ export async function createCampaign(opts: CreateCampaignOpts): Promise<Campaign
   )
 }
 
-export async function updateCampaign(id: string, opts: Partial<CreateCampaignOpts>): Promise<Campaign> {
-  return withRetry(
-    async () => {
-      const { data } = await client.patch(`/campaigns/${id}`, opts)
-      return data
-    },
-    { retries: 3, retryOn: isRetryableError },
-  )
-}
-
 export async function sendCampaign(id: string, scheduledFor?: string): Promise<void> {
   return withRetry(
     async () => {
@@ -132,16 +122,6 @@ export async function getCampaignStats(id: string): Promise<CampaignStats> {
   return withRetry(
     async () => {
       const { data } = await client.get(`/campaigns/${id}/stats`)
-      return data
-    },
-    { retries: 3, retryOn: isRetryableError },
-  )
-}
-
-export async function listCampaigns(): Promise<Campaign[]> {
-  return withRetry(
-    async () => {
-      const { data } = await client.get('/campaigns')
       return data
     },
     { retries: 3, retryOn: isRetryableError },
@@ -166,16 +146,6 @@ export async function updateContact(id: string, updates: Partial<CreateContactOp
   return withRetry(
     async () => {
       const { data } = await client.patch(`/contacts/${id}`, updates)
-      return data
-    },
-    { retries: 3, retryOn: isRetryableError },
-  )
-}
-
-export async function getContact(id: string): Promise<Contact> {
-  return withRetry(
-    async () => {
-      const { data } = await client.get(`/contacts/${id}`)
       return data
     },
     { retries: 3, retryOn: isRetryableError },
@@ -407,18 +377,6 @@ export async function verifyEmail(email: string): Promise<EmailVerifyResult> {
       const { data } = await client.post('/v1/verify', { email })
       log.info({ email, result: data }, 'email verification result')
       return data
-    },
-    { retries: 3, retryOn: isRetryableError },
-  )
-}
-
-// --- Event tracking ---
-
-export async function trackEvent(email: string, event: string, data?: Record<string, unknown>): Promise<void> {
-  return withRetry(
-    async () => {
-      log.debug({ email, event }, 'tracking event')
-      await client.post('/v1/track', { email, event, data })
     },
     { retries: 3, retryOn: isRetryableError },
   )

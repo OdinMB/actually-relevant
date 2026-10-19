@@ -40,6 +40,10 @@ These changes are tuned for Luna and would shift gpt-5-mini and gpt-5-nano: on t
 
 `@langchain/openai` forwards its `reasoning: { effort }` option only for model IDs it recognises as reasoning models (`o*`, `gpt-5*`), and silently drops it for `gpt-6-*`. `createChatModel` therefore sends effort as `modelKwargs: { reasoning_effort }`, which reaches every Chat Completions request. Never set `temperature`, `topP` or `maxTokens` on these clients: GPT-6 rejects sampling parameters above effort `none`, and LangChain would send `max_tokens` for `gpt-6-*`. Never use `method: 'functionCalling'` or bound tools either: GPT-6 Chat Completions function calling works only at effort `none`. The default `withStructuredOutput` method (`response_format` json_schema) is fine.
 
+### Retries
+
+LLM calls are retried by the OpenAI SDK under LangChain, never by `withRetry()`: `createChatModel` sets `maxRetries: 3`, so one `invoke` makes at most 4 attempts, with the SDK's backoff on 408/409/429/5xx and connection errors (honoring `Retry-After`). Wrapping an `invoke` in `withRetry()` as well stacks the two layers (up to 16 attempts, each billed when it reaches the model), so no LLM call site does. `withRetry()` (`server/src/lib/retry.ts`) is for other external HTTP calls (axios: feeds, pages, extraction APIs, Plunk, Bluesky, Mastodon, ElevenLabs, Bunny). Its `isRetryableError()` reads the status from `err.response.status` (axios) or `err.status` (OpenAI SDK), retrying 429 and 5xx. A parse failure (`parsed: null`, a schema mismatch) is not a transport error, and neither layer retries it. The one OpenAI call still wrapped in `withRetry()` is the embeddings request in `services/embedding.ts` (SDK default `maxRetries` 2 under it).
+
 ## Prompts Directory
 
 Prompt templates live in `server/src/prompts/`:

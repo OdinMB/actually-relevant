@@ -18,6 +18,7 @@ import type { updateStorySchema } from '../schemas/story.js'
 import { storyInIssueSql, storyInIssueWhere } from '../lib/issueFilter.js'
 import { repairClusters } from './clusterRepair.js'
 import { TTLCache, cached } from '../lib/cache.js'
+import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('story')
 
@@ -309,7 +310,7 @@ export async function createStory(data: {
 }): Promise<Story> {
   const feed = await prisma.feed.findUnique({ where: { id: data.feedId } })
   if (!feed) {
-    throw new Error('Feed not found')
+    throw new BadRequestError('Feed not found')
   }
   return prisma.story.create({
     data: {
@@ -605,7 +606,7 @@ export async function dissolveCluster(storyId: string): Promise<void> {
   })
 
   if (!story?.clusterId) {
-    throw new Error('Story is not in a cluster')
+    throw new BadRequestError('Story is not in a cluster')
   }
 
   const clusterId = story.clusterId

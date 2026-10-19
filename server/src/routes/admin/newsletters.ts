@@ -1,10 +1,11 @@
 import { Router } from 'express'
-import { createLogger } from '../../lib/logger.js'
 import { createReadStream, unlinkSync } from 'fs'
+import { createLogger } from '../../lib/logger.js'
 import * as newsletterService from '../../services/newsletter.js'
 import { generateCarouselForNewsletter } from '../../services/newsletter.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import {
   createNewsletterSchema,
   updateNewsletterSchema,
@@ -12,224 +13,90 @@ import {
   sendLiveSchema,
 } from '../../schemas/newsletter.js'
 
+// Errors: the service throws ServiceErrors ("Newsletter not found" 404, "No stories selected" 400,
+// TestSegmentNotConfiguredError 409, …) and the global handler in app.ts answers;
+// failsWith() names each route's 500 text and its Prisma not-found text.
 const router = Router()
 const log = createLogger('newsletters')
+const newsletterNotFound = { notFound: 'Newsletter not found' }
 
-router.get('/', validateQuery(newsletterQuerySchema), async (req, res) => {
-  try {
-    const filters = req.parsedQuery || {}
-    const result = await newsletterService.getNewsletters(filters)
-    res.json(result)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch newsletters')
-    res.status(500).json({ error: 'Failed to fetch newsletters' })
-  }
+router.get('/', failsWith('Failed to fetch newsletters'), validateQuery(newsletterQuerySchema), async (req, res) => {
+  res.json(await newsletterService.getNewsletters(req.parsedQuery || {}))
 })
 
-router.get('/:id', async (req, res) => {
-  try {
-    const newsletter = await newsletterService.getNewsletterById(req.params.id)
-    if (!newsletter) {
-      res.status(404).json({ error: 'Newsletter not found' })
-      return
-    }
-    res.json(newsletter)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch newsletter')
-    res.status(500).json({ error: 'Failed to fetch newsletter' })
+router.get('/:id', failsWith('Failed to fetch newsletter'), async (req, res) => {
+  const newsletter = await newsletterService.getNewsletterById(req.params.id)
+  if (!newsletter) {
+    res.status(404).json({ error: 'Newsletter not found' })
+    return
   }
+  res.json(newsletter)
 })
 
-router.post('/', validateBody(createNewsletterSchema), async (req, res) => {
-  try {
-    const newsletter = await newsletterService.createNewsletter(req.body)
-    res.status(201).json(newsletter)
-  } catch (err) {
-    log.error({ err }, 'failed to create newsletter')
-    res.status(500).json({ error: 'Failed to create newsletter' })
-  }
+router.post('/', failsWith('Failed to create newsletter'), validateBody(createNewsletterSchema), async (req, res) => {
+  res.status(201).json(await newsletterService.createNewsletter(req.body))
 })
 
-router.put('/:id', validateBody(updateNewsletterSchema), async (req, res) => {
-  try {
-    const newsletter = await newsletterService.updateNewsletter(req.params.id, req.body)
-    res.json(newsletter)
-  } catch (err: any) {
-    if (err.code === 'P2025') {
-      res.status(404).json({ error: 'Newsletter not found' })
-      return
-    }
-    log.error({ err }, 'failed to update newsletter')
-    res.status(500).json({ error: 'Failed to update newsletter' })
-  }
+router.put('/:id', failsWith('Failed to update newsletter', newsletterNotFound), validateBody(updateNewsletterSchema), async (req, res) => {
+  res.json(await newsletterService.updateNewsletter(req.params.id, req.body))
 })
 
-router.delete('/:id', async (req, res) => {
-  try {
-    await newsletterService.deleteNewsletter(req.params.id)
-    res.status(204).send()
-  } catch (err: any) {
-    if (err.code === 'P2025') {
-      res.status(404).json({ error: 'Newsletter not found' })
-      return
-    }
-    log.error({ err }, 'failed to delete newsletter')
-    res.status(500).json({ error: 'Failed to delete newsletter' })
-  }
+router.delete('/:id', failsWith('Failed to delete newsletter', newsletterNotFound), async (req, res) => {
+  await newsletterService.deleteNewsletter(req.params.id)
+  res.status(204).send()
 })
 
-router.post('/:id/assign', async (req, res) => {
-  try {
-    const newsletter = await newsletterService.assignStories(req.params.id)
-    res.json(newsletter)
-  } catch (err: any) {
-    if (err.message === 'Newsletter not found') {
-      res.status(404).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'failed to assign stories')
-    res.status(500).json({ error: 'Failed to assign stories' })
-  }
+router.post('/:id/assign', failsWith('Failed to assign stories', newsletterNotFound), async (req, res) => {
+  res.json(await newsletterService.assignStories(req.params.id))
 })
 
-router.post('/:id/select', expensiveOpLimiter, async (req, res) => {
-  try {
-    const newsletter = await newsletterService.selectStoriesForNewsletter(req.params.id)
-    res.json(newsletter)
-  } catch (err: any) {
-    if (err.message === 'Newsletter not found') {
-      res.status(404).json({ error: err.message })
-      return
-    }
-    if (err.message === 'No stories in longlist') {
-      res.status(400).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'failed to select stories for newsletter')
-    res.status(500).json({ error: 'Failed to select stories' })
-  }
+router.post('/:id/select', failsWith('Failed to select stories', newsletterNotFound), expensiveOpLimiter, async (req, res) => {
+  res.json(await newsletterService.selectStoriesForNewsletter(req.params.id))
 })
 
-router.post('/:id/generate', expensiveOpLimiter, async (req, res) => {
-  try {
-    const newsletter = await newsletterService.generateContent(req.params.id)
-    res.json(newsletter)
-  } catch (err: any) {
-    if (err.message === 'Newsletter not found') {
-      res.status(404).json({ error: err.message })
-      return
-    }
-    if (err.message === 'No stories selected') {
-      res.status(400).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'failed to generate newsletter content')
-    res.status(500).json({ error: 'Failed to generate newsletter content' })
-  }
+router.post('/:id/generate', failsWith('Failed to generate newsletter content', newsletterNotFound), expensiveOpLimiter, async (req, res) => {
+  res.json(await newsletterService.generateContent(req.params.id))
 })
 
-router.post('/:id/carousel', async (req, res) => {
-  try {
-    const zipPath = await generateCarouselForNewsletter(req.params.id)
-    res.setHeader('Content-Type', 'application/zip')
-    res.setHeader('Content-Disposition', 'attachment; filename=carousel_images.zip')
-    const stream = createReadStream(zipPath)
-    stream.pipe(res)
-    stream.on('end', () => {
-      try { unlinkSync(zipPath) } catch { /* ignore */ }
-    })
-  } catch (err: any) {
-    if (err.message === 'Newsletter not found') {
-      res.status(404).json({ error: err.message })
-      return
-    }
-    if (err.message === 'No stories selected') {
-      res.status(400).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'failed to generate carousel images')
-    res.status(500).json({ error: 'Failed to generate carousel images' })
-  }
+router.post('/:id/carousel', failsWith('Failed to generate carousel images', newsletterNotFound), async (req, res) => {
+  const zipPath = await generateCarouselForNewsletter(req.params.id)
+  res.setHeader('Content-Type', 'application/zip')
+  res.setHeader('Content-Disposition', 'attachment; filename=carousel_images.zip')
+  const stream = createReadStream(zipPath)
+  stream.on('error', err => {
+    log.error({ err, zipPath }, 'failed to stream carousel images')
+    res.destroy(err)
+  })
+  stream.pipe(res)
+  stream.on('end', () => {
+    try { unlinkSync(zipPath) } catch { /* ignore */ }
+  })
 })
 
 // --- HTML generation ---
 
-router.post('/:id/html', async (req, res) => {
-  try {
-    const html = await newsletterService.generateHtmlContent(req.params.id)
-    res.json({ html })
-  } catch (err: any) {
-    if (err.message === 'Newsletter not found') {
-      res.status(404).json({ error: err.message })
-      return
-    }
-    if (err.message === 'No content to convert') {
-      res.status(400).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'failed to generate HTML content')
-    res.status(500).json({ error: 'Failed to generate HTML content' })
-  }
+router.post('/:id/html', failsWith('Failed to generate HTML content', newsletterNotFound), async (req, res) => {
+  res.json({ html: await newsletterService.generateHtmlContent(req.params.id) })
 })
 
 // --- Send endpoints ---
 
-router.post('/:id/send-test', async (req, res) => {
-  try {
-    const send = await newsletterService.sendTest(req.params.id)
-    res.json(send)
-  } catch (err: any) {
-    if (err instanceof newsletterService.TestSegmentNotConfiguredError) {
-      res.status(409).json({ error: err.message })
-      return
-    }
-    if (err.message === 'Newsletter not found') {
-      res.status(404).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'failed to send test newsletter')
-    res.status(500).json({ error: 'Failed to send test newsletter' })
-  }
+router.post('/:id/send-test', failsWith('Failed to send test newsletter', newsletterNotFound), async (req, res) => {
+  res.json(await newsletterService.sendTest(req.params.id))
 })
 
-router.post('/:id/send-live', validateBody(sendLiveSchema), async (req, res) => {
-  try {
-    const send = await newsletterService.sendLive(req.params.id, req.body.scheduledFor)
-    res.json(send)
-  } catch (err: any) {
-    if (err.message === 'Newsletter not found') {
-      res.status(404).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'failed to send live newsletter')
-    res.status(500).json({ error: 'Failed to send live newsletter' })
-  }
+router.post('/:id/send-live', failsWith('Failed to send live newsletter', newsletterNotFound), validateBody(sendLiveSchema), async (req, res) => {
+  res.json(await newsletterService.sendLive(req.params.id, req.body.scheduledFor))
 })
 
 // --- Send history & stats ---
 
-router.get('/:id/sends', async (req, res) => {
-  try {
-    const sends = await newsletterService.getNewsletterSends(req.params.id)
-    res.json(sends)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch newsletter sends')
-    res.status(500).json({ error: 'Failed to fetch sends' })
-  }
+router.get('/:id/sends', failsWith('Failed to fetch sends'), async (req, res) => {
+  res.json(await newsletterService.getNewsletterSends(req.params.id))
 })
 
-router.post('/:id/sends/:sendId/refresh-stats', async (req, res) => {
-  try {
-    const send = await newsletterService.refreshSendStats(req.params.sendId)
-    res.json(send)
-  } catch (err: any) {
-    if (err.message === 'No Plunk campaign ID') {
-      res.status(400).json({ error: err.message })
-      return
-    }
-    log.error({ err }, 'failed to refresh send stats')
-    res.status(500).json({ error: 'Failed to refresh stats' })
-  }
+router.post('/:id/sends/:sendId/refresh-stats', failsWith('Failed to refresh stats'), async (req, res) => {
+  res.json(await newsletterService.refreshSendStats(req.params.sendId))
 })
 
 export default router

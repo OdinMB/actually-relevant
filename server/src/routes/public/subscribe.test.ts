@@ -20,6 +20,11 @@ const mockVerifyTurnstile = vi.hoisted(() => vi.fn())
 class EmailValidationError extends Error {}
 class ConfirmationEmailError extends Error {}
 class SignupUnavailableError extends Error {}
+class ConfirmationLinkError extends Error {
+  constructor(readonly reason: 'invalid' | 'expired') {
+    super(reason)
+  }
+}
 
 vi.mock('../../services/subscribe.js', () => ({
   subscribe: (...args: any[]) => mockSubscribe(...args),
@@ -27,6 +32,7 @@ vi.mock('../../services/subscribe.js', () => ({
   EmailValidationError,
   ConfirmationEmailError,
   SignupUnavailableError,
+  ConfirmationLinkError,
 }))
 
 vi.mock('../../lib/turnstile.js', () => ({
@@ -294,7 +300,7 @@ describe('Public Subscribe API', () => {
     })
 
     it('reports expired links', async () => {
-      mockConfirm.mockRejectedValue(new Error('Confirmation link has expired'))
+      mockConfirm.mockRejectedValue(new ConfirmationLinkError('expired'))
 
       const res = await request(app)
         .post('/api/subscribe/confirm')
@@ -304,7 +310,17 @@ describe('Public Subscribe API', () => {
     })
 
     it('reports invalid links', async () => {
-      mockConfirm.mockRejectedValue(new Error('Invalid confirmation link'))
+      mockConfirm.mockRejectedValue(new ConfirmationLinkError('invalid'))
+
+      const res = await request(app)
+        .post('/api/subscribe/confirm')
+        .send({ token: 'abc', email: 'u@example.com' })
+
+      expect(res.body).toEqual({ success: false, reason: 'invalid' })
+    })
+
+    it('reports any other failure as an invalid link', async () => {
+      mockConfirm.mockRejectedValue(new Error('database down'))
 
       const res = await request(app)
         .post('/api/subscribe/confirm')

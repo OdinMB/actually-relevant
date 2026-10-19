@@ -35,6 +35,7 @@ const {
   removeFromCluster,
   mergeClusters,
   dissolveCluster,
+  StoriesAlreadyClusteredError,
 } = await import('./cluster.js')
 
 describe('getAllClusters', () => {
@@ -278,20 +279,18 @@ describe('createManualCluster', () => {
     )
   })
 
-  it('throws with ALREADY_CLUSTERED code if stories are in clusters', async () => {
+  it('throws StoriesAlreadyClusteredError (409, with the story ids) if stories are in clusters', async () => {
     mockPrisma.story.findMany.mockResolvedValue([
       { id: 's1', clusterId: null, title: 'Story 1' },
       { id: 's2', clusterId: 'existing-cluster', title: 'Story 2' },
     ])
 
-    try {
-      await createManualCluster(['s1', 's2'], 's1')
-      expect.fail('Should have thrown')
-    } catch (err: any) {
-      expect(err.code).toBe('ALREADY_CLUSTERED')
-      expect(err.storyIds).toEqual(['s2'])
-      expect(err.message).toContain('Story 2')
-    }
+    const err = await createManualCluster(['s1', 's2'], 's1').catch(e => e)
+    expect(err).toBeInstanceOf(StoriesAlreadyClusteredError)
+    expect(err.status).toBe(409)
+    expect(err.storyIds).toEqual(['s2'])
+    expect(err.message).toContain('Story 2')
+    expect(err.toBody()).toEqual({ error: err.message, storyIds: ['s2'] })
   })
 
   it('creates cluster with specified primary and auto-rejects', async () => {

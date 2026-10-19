@@ -9,11 +9,11 @@ import { generateCarouselZip, type CarouselStory } from './carousel.js'
 import * as plunk from './plunk.js'
 import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
-import { withRetry } from '../lib/retry.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { ensureNewsletterSlug, newsletterIssueUrl, publicationFields } from './newsletterArchive.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
+import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('newsletter')
 
@@ -85,7 +85,7 @@ export async function deleteNewsletter(id: string) {
 
 export async function assignStories(newsletterId: string) {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
 
   // Find recently published stories from the last N days
   const stories = await prisma.story.findMany({
@@ -108,8 +108,8 @@ export async function assignStories(newsletterId: string) {
 
 export async function selectStoriesForNewsletter(newsletterId: string) {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
-  if (newsletter.storyIds.length === 0) throw new Error('No stories in longlist')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
+  if (newsletter.storyIds.length === 0) throw new BadRequestError('No stories in longlist')
 
   // Fetch stories with title, summary, and issue info
   const stories = await prisma.story.findMany({
@@ -157,10 +157,8 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
   await rateLimitDelay()
   const llm = getLLMByTier(config.newsletter.selectModelTier)
   const structuredLlm = llm.withStructuredOutput(newsletterSelectResultSchema)
-  const response = await withRetry(
-    () => structuredLlm.invoke([new HumanMessage(prompt)]),
-    { retries: 3 },
-  )
+  // Retried by the OpenAI SDK (maxRetries in createChatModel), not by withRetry
+  const response = await structuredLlm.invoke([new HumanMessage(prompt)])
 
   // Only keep IDs that exist in the longlist
   const longlistSet = new Set(newsletter.storyIds)
@@ -179,8 +177,8 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
 
 export async function generateContent(newsletterId: string) {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
-  if (newsletter.selectedStoryIds.length === 0) throw new Error('No stories selected')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
+  if (newsletter.selectedStoryIds.length === 0) throw new BadRequestError('No stories selected')
 
   const stories = await prisma.story.findMany({
     where: { id: { in: newsletter.selectedStoryIds } },
@@ -245,10 +243,7 @@ export async function generateContent(newsletterId: string) {
     await rateLimitDelay()
     const llm = getLLMByTier(config.newsletter.contentModelTier)
     const structuredLlm = llm.withStructuredOutput(newsletterIntroSchema)
-    const introResult = await withRetry(
-      () => structuredLlm.invoke([new HumanMessage(introPrompt)]),
-      { retries: 3 },
-    )
+    const introResult = await structuredLlm.invoke([new HumanMessage(introPrompt)])
     intro = introResult.intro
     log.info({ newsletterId, introLength: intro.length }, 'generated newsletter intro')
   } catch (err) {
@@ -268,7 +263,7 @@ export async function generateContent(newsletterId: string) {
     const issueName = resolved.name
     const issueSlug = resolved.slug
     const publisher = story.feed?.displayTitle || story.feed?.title || 'Unknown'
-    const relevanceUrl = story.slug ? `https://actuallyrelevant.news/stories/${story.slug}` : ''
+    const relevanceUrl = story.slug ? `${config.siteUrl}/stories/${story.slug}` : ''
 
     // Add issue section header when the group changes
     if (issueName !== currentIssue) {
@@ -303,8 +298,8 @@ export async function generateContent(newsletterId: string) {
 
 export async function generateCarouselForNewsletter(newsletterId: string): Promise<string> {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
-  if (newsletter.selectedStoryIds.length === 0) throw new Error('No stories selected')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
+  if (newsletter.selectedStoryIds.length === 0) throw new BadRequestError('No stories selected')
 
   const stories = await prisma.story.findMany({
     where: { id: { in: newsletter.selectedStoryIds } },
@@ -351,8 +346,8 @@ function escapeHtml(text: string): string {
  */
 export async function generateHtmlContent(newsletterId: string): Promise<string> {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
-  if (!newsletter.content) throw new Error('No content to convert')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
+  if (!newsletter.content) throw new BadRequestError('No content to convert')
 
   // The web edition's address, for "View in browser"; it opens once the issue is published
   const webUrl = newsletterIssueUrl(await ensureNewsletterSlug(newsletter))
@@ -481,7 +476,7 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
         if (publisherName || originalUrl) {
           const parts: string[] = []
           const faviconHtml = feedId
-            ? `<img src="https://actuallyrelevant.news/images/feeds/${feedId}.png" alt="" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; border-radius: 2px; margin-right: 4px;">`
+            ? `<img src="${config.siteUrl}/images/feeds/${feedId}.png" alt="" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; border-radius: 2px; margin-right: 4px;">`
             : ''
           if (publisherName) parts.push(`${faviconHtml}<span style="vertical-align: middle;">${escapeHtml(publisherName)}</span>`)
           if (originalUrl) parts.push(`<a href="${escapeHtml(originalUrl)}" style="color: #2563eb; text-decoration: none; vertical-align: middle;">original article</a>`)
@@ -532,8 +527,8 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
           <!-- Header -->
           <tr>
             <td style="padding: 20px 32px 12px; text-align: center;">
-              <a href="https://actuallyrelevant.news" style="text-decoration: none;">
-                <img src="https://actuallyrelevant.news/images/logo-text-horizontal.png" alt="Actually Relevant" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
+              <a href="${config.siteUrl}" style="text-decoration: none;">
+                <img src="${config.siteUrl}/images/logo-text-horizontal.png" alt="Actually Relevant" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
               </a>
               <p style="margin: -2px 0 0; font-size: 15px; font-style: italic; color: #a3a3a3;">News that matter to humanity</p>
             </td>
@@ -586,12 +581,12 @@ ${introSection}
           <tr>
             <td style="padding: 20px 32px 24px; text-align: center; background-color: #fafafa; border-top: 1px solid #e5e5e5; margin-top: 16px;">
               <p style="margin: 0 0 10px; font-size: 12px; color: #a3a3a3;">
-                <a href="https://actuallyrelevant.news" style="color: #2563eb; text-decoration: none;">actuallyrelevant.news</a>
+                <a href="${config.siteUrl}" style="color: #2563eb; text-decoration: none;">actuallyrelevant.news</a>
               </p>
               <p style="margin: 0 0 10px; font-size: 12px; color: #a3a3a3;">
-                <a href="https://bsky.app/profile/actuallyrelevant.bsky.social" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="https://actuallyrelevant.news/images/social/bluesky.png" alt="Bluesky" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Bluesky</a>
+                <a href="https://bsky.app/profile/actuallyrelevant.bsky.social" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/bluesky.png" alt="Bluesky" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Bluesky</a>
                 <span style="color: #d4d4d4; margin: 0 6px;">&middot;</span>
-                <a href="https://mastodon.social/@actuallyrelevant" rel="me" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="https://actuallyrelevant.news/images/social/mastodon.png" alt="Mastodon" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Mastodon</a>
+                <a href="https://mastodon.social/@actuallyrelevant" rel="me" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/mastodon.png" alt="Mastodon" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Mastodon</a>
               </p>
             </td>
           </tr>
@@ -620,7 +615,7 @@ export async function getNewsletterSends(newsletterId: string) {
 }
 
 /** A test send was refused because no test segment is configured (never falls back to all subscribers). */
-export class TestSegmentNotConfiguredError extends Error {
+export class TestSegmentNotConfiguredError extends ConflictError {
   constructor() {
     super('Test send refused: PLUNK_TEST_SEGMENT_ID is not set, and a test email is never sent to all subscribers')
     this.name = 'TestSegmentNotConfiguredError'
@@ -693,7 +688,7 @@ export async function sendLive(newsletterId: string, scheduledFor?: string) {
 
 export async function refreshSendStats(sendId: string) {
   const send = await prisma.newsletterSend.findUniqueOrThrow({ where: { id: sendId } })
-  if (!send.plunkCampaignId) throw new Error('No Plunk campaign ID')
+  if (!send.plunkCampaignId) throw new BadRequestError('No Plunk campaign ID')
 
   const stats = await plunk.getCampaignStats(send.plunkCampaignId)
 
