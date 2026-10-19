@@ -53,7 +53,7 @@ A `TTLCache` (`server/src/lib/cache.ts`) in `relatedStories.ts`, per process and
 
 When a story leaves `published` or is deleted through the story service (`updateStory`, `updateStoryStatus`, `bulkUpdateStatus`, `rejectStory`, `deleteStory`), its own entry is dropped (`forgetRelatedStories`); other paths are covered by the published check on every hit. Other stories' lists that name it simply leave it out until they expire.
 
-**HTTP cache:** the route still sends `Cache-Control: public, max-age=259200` (`httpCacheSeconds`, 72 h), so a browser or CDN that cached a response can show a now-unpublished story's link for up to that long (it leads to a 404). Kept on purpose: the long lifetime is what spares the LLM re-rank on repeat visits; shorten `httpCacheSeconds` if unpublished stories must vanish from every client sooner.
+**HTTP cache:** the route still sends `Cache-Control: public, max-age=259200` (`httpCacheSeconds`, 72 h), so a browser or CDN that cached a response can show a now-unpublished story's link for up to that long (it leads to a 404). Kept on purpose: the long lifetime is what spares the LLM re-rank on repeat visits; shorten `httpCacheSeconds` if unpublished stories must vanish from every client sooner. Why the re-rank runs on the public request path at all, and when to revisit that: ADR-0043.
 
 The search-query embedding cache in `embedding.ts` (`generateSearchEmbedding`) is the same `TTLCache`: 50 entries, 1 hour, keyed by the trimmed lowercased query, concurrent identical queries sharing one call.
 

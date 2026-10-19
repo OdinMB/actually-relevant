@@ -1,6 +1,7 @@
 /**
  * Related stories on the public story page: the cosine-nearest published stories, re-ranked by a
- * small-tier model and cached per slug (`.context/embeddings.md`).
+ * small-tier model and cached per slug (`.context/embeddings.md`). The model call on the public
+ * request path is deliberate (ADR-0043).
  */
 import prisma from '../lib/prisma.js'
 import { HumanMessage } from '@langchain/core/messages'

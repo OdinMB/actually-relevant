@@ -44,3 +44,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0040 · Serve story pages through the backend, which injects each story's preview tags into the client's own index.html](decisions/0040-story-pages-through-backend.md)
 - [ADR-0041 · Make a newsletter issue public on the website exactly while its admin status is published](decisions/0041-newsletter-published-means-public.md)
 - [ADR-0042 · Delete unkept stories after 6 months, and repair the clusters the deletion touches](decisions/0042-six-month-story-retention.md)
+- [ADR-0043 · Re-rank related stories with a small model on the public request path, cached 72 hours in memory and over HTTP, one call per slug at a time](decisions/0043-related-stories-rerank-on-request-path.md)
