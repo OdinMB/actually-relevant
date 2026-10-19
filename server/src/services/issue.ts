@@ -1,10 +1,10 @@
 import prisma from '../lib/prisma.js'
-import type { Issue } from '@prisma/client'
+import type { Issue, Prisma } from '@prisma/client'
 import { BadRequestError, ConflictError } from '../utils/errors.js'
 
 // --- JSON field helpers ---
 
-function serializeJsonFields(data: Record<string, any>): Record<string, any> {
+function serializeJsonFields(data: Record<string, unknown>): Record<string, unknown> {
   const result = { ...data }
   if ('evaluationCriteria' in result) {
     result.evaluationCriteria = JSON.stringify(result.evaluationCriteria ?? [])
@@ -106,7 +106,7 @@ export async function createIssue(data: {
   if (data.parentId) {
     await validateParent(data.parentId)
   }
-  const issue = await prisma.issue.create({ data: serializeJsonFields(data) as any })
+  const issue = await prisma.issue.create({ data: serializeJsonFields(data) as Prisma.IssueUncheckedCreateInput })
   return parseJsonFields(issue)
 }
 
@@ -164,7 +164,7 @@ const PUBLIC_ISSUE_SELECT = {
   parentId: true,
 } as const
 
-function parsePublicIssueJson(issue: any) {
+function parsePublicIssueJson<T extends Pick<Issue, 'evaluationCriteria' | 'makeADifference'>>(issue: T) {
   return {
     ...issue,
     evaluationCriteria: safeParseJson(issue.evaluationCriteria, []),

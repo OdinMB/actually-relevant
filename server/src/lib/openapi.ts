@@ -115,6 +115,7 @@ const makeADifferenceSchema = z.object({
   url: z.string().url().openapi({ example: 'https://example.org/donate' }),
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- recursive schema (children), which z.lazy needs annotated
 const publicIssueSchema: z.ZodType<any> = z.object({
   id: z.string().uuid(),
   name: z.string().openapi({ example: 'Planet & Climate' }),

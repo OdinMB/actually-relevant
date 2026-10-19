@@ -1,4 +1,4 @@
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
+import { createCanvas, GlobalFonts, type SKRSContext2D } from '@napi-rs/canvas'
 import PDFDocument from 'pdfkit'
 import archiver from 'archiver'
 import { createWriteStream, mkdirSync, unlinkSync, existsSync } from 'fs'
@@ -35,7 +35,7 @@ function registerFonts() {
   }
 }
 
-function wrapText(ctx: any, text: string, maxWidth: number): string[] {
+function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): string[] {
   const words = text.split(' ')
   const lines: string[] = []
   let currentLine = ''

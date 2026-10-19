@@ -50,7 +50,8 @@ export default function NoticesPage() {
   const pageEmptied = Boolean(noticesQuery.data) && items.length === 0 && total > 0 && page > 1
   useEffect(() => {
     if (pageEmptied) setParam('page', totalPages > 1 ? String(totalPages) : '')
-  }, [pageEmptied, totalPages]) // setParam is recreated each render; these two decide the effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setParam is recreated each render; these two decide the effect
+  }, [pageEmptied, totalPages])
 
   const toggle = (notice: AdminNotice) => {
     setExpandedId(expandedId === notice.id ? null : notice.id)

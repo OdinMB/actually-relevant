@@ -23,7 +23,8 @@ export function isRetryableError(err: unknown): boolean {
     return status === 429 || (status >= 500 && status < 600)
   }
   // Network errors (no response)
-  if ((err as any)?.code === 'ECONNABORTED' || (err as any)?.code === 'ETIMEDOUT') {
+  const code = (err as { code?: unknown } | null)?.code
+  if (code === 'ECONNABORTED' || code === 'ETIMEDOUT') {
     return true
   }
   return false

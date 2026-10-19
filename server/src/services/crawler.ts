@@ -107,11 +107,9 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
   let totalFailCount = 0
   let skipLocal = false
   let skipAll = false
-  let skippedDueToFailures = 0
   await Promise.allSettled(
     newItems.map(item => articleSemaphore.run(async () => {
       if (skipAll) {
-        skippedDueToFailures++
         result.errors++
         return
       }
@@ -162,9 +160,9 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
         }
 
         result.newStories++
-      } catch (err: any) {
+      } catch (err) {
         // Unique constraint violation = URL was inserted by a concurrent crawl; treat as skip
-        if (err?.code === 'P2002') {
+        if ((err as { code?: unknown } | null)?.code === 'P2002') {
           log.info({ url: item.url }, 'story already exists (concurrent insert), skipping')
           result.skipped++
           return

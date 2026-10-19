@@ -20,7 +20,6 @@ const PRESETS = {
 
 // Supported image extensions (skip SVG - already vector)
 const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
-const SKIP_EXTENSIONS = ['.svg', '.gif', '.ico'];
 
 /**
  * Recursively find all images in a directory
@@ -69,7 +68,7 @@ async function analyzeImage(imagePath) {
       sizeKB: Math.round(stat.size / 1024)
     };
   } catch (error) {
-    throw new Error(`Failed to analyze ${imagePath}: ${error.message}`);
+    throw new Error(`Failed to analyze ${imagePath}: ${error.message}`, { cause: error });
   }
 }
 
@@ -125,7 +124,7 @@ async function generateVariant(imagePath, outputPath, size, orientation) {
       sizeKB: Math.round(stat.size / 1024)
     };
   } catch (error) {
-    throw new Error(`Failed to generate ${outputPath}: ${error.message}`);
+    throw new Error(`Failed to generate ${outputPath}: ${error.message}`, { cause: error });
   }
 }
 

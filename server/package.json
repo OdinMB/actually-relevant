@@ -9,6 +9,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "node ../scripts/install-dev-deps.mjs && node node_modules/typescript/bin/tsc --version && node node_modules/typescript/bin/tsc",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "start": "node --max-old-space-size=384 dist/index.js",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
@@ -30,7 +33,7 @@
     "restore:plunk-contacts:apply": "tsx src/scripts/restore-plunk-contacts.ts --apply",
     "unsubscribe:plunk-contacts": "tsx src/scripts/unsubscribe-plunk-contacts.ts",
     "unsubscribe:plunk-contacts:apply": "tsx src/scripts/unsubscribe-plunk-contacts.ts --apply",
-    "cleanup:plunk-contacts":"tsx src/scripts/cleanup-plunk-contacts.ts",
+    "cleanup:plunk-contacts": "tsx src/scripts/cleanup-plunk-contacts.ts",
     "cleanup:plunk-contacts:apply": "tsx src/scripts/cleanup-plunk-contacts.ts --apply",
     "cleanup:fast-confirmations": "tsx src/scripts/cleanup-fast-confirmations.ts",
     "cleanup:fast-confirmations:apply": "tsx src/scripts/cleanup-fast-confirmations.ts --apply",
@@ -86,6 +89,7 @@
     "zod-openapi": "^4.2.4"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/archiver": "^7.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
@@ -97,10 +101,15 @@
     "@types/node-cron": "^3.0.11",
     "@types/pdfkit": "^0.17.4",
     "@types/supertest": "^6.0.2",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
     "prisma": "^6.0.0",
     "supertest": "^7.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4",
+    "typescript-eslint": "^8.71.2",
     "vitest": "^4.1.11"
   },
   "overrides": {

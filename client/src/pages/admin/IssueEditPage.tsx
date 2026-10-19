@@ -84,11 +84,11 @@ export default function IssueEditPage() {
     }
   }, [issueQuery.data])
 
-  const set = (key: string, value: any) => {
+  const set = <K extends keyof IssueForm>(key: K, value: IssueForm[K]) => {
     setForm(f => {
       const next = { ...f, [key]: value }
       if (key === 'name' && !slugManual) {
-        next.slug = slugify(value)
+        next.slug = slugify(next.name)
       }
       return next
     })

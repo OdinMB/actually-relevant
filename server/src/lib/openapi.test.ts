@@ -47,13 +47,11 @@ describe('getOpenAPIDocument', () => {
   })
 
   it('documents the incremental-sync filters on the story list and minRelevance on both feeds', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const names = (path: string) => doc.paths[path].get.parameters.map((p: any) => p.name)
+    const names =(path: string) => doc.paths[path].get.parameters.map((p: any) => p.name)
     expect(names('/api/stories')).toEqual(expect.arrayContaining(['publishedSince', 'publishedBefore', 'minRelevance', 'page', 'search']))
     expect(names('/api/feed')).toEqual(['minRelevance'])
     expect(names('/api/feed/{issueSlug}')).toEqual(expect.arrayContaining(['issueSlug', 'minRelevance']))
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const minRelevance = doc.paths['/api/stories'].get.parameters.find((p: any) => p.name === 'minRelevance')
+    const minRelevance =doc.paths['/api/stories'].get.parameters.find((p: any) => p.name === 'minRelevance')
     expect(minRelevance.schema).toMatchObject({ minimum: 1, maximum: 10 })
     expect(minRelevance.description).toContain('relevance rating')
     expect(doc.paths['/api/stories'].get.responses['400']).toBeDefined()

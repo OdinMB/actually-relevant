@@ -53,7 +53,7 @@ describe('splitHalves', () => {
   })
 
   it('halves each stratum, so the halves differ in size by at most one overall', () => {
-    const { calibration, holdout } = splitHalves(pool, byId, t => t.lang)
+    const { calibration } = splitHalves(pool, byId, t => t.lang)
     for (const lang of ['en', 'zh', 'de']) {
       expect(calibration.filter(t => t.lang === lang)).toHaveLength(pool.filter(t => t.lang === lang).length / 2)
     }

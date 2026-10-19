@@ -200,7 +200,7 @@ export async function selectEpisodeStories(anchor: Date): Promise<SelectedStory[
     return chosen.map((s, i) => toSelected(s, i + 1))
   } catch (err) {
     if (err instanceof TooFewStoriesError) {
-      throw new Error(`only ${err.available} published stories this week; an episode needs ${err.needed}`)
+      throw new Error(`only ${err.available} published stories this week; an episode needs ${err.needed}`, { cause: err })
     }
     throw err
   }

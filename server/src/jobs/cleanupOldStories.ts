@@ -72,7 +72,7 @@ export async function runCleanupOldStories(): Promise<CleanupResult> {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     // Rethrown for the scheduler, whose job-failure notice carries this message.
-    throw new Error(`Story cleanup failed after deleting ${result.deleted} stories and clearing ${result.embeddingsCleared} embeddings: ${reason}`)
+    throw new Error(`Story cleanup failed after deleting ${result.deleted} stories and clearing ${result.embeddingsCleared} embeddings: ${reason}`, { cause: err })
   }
 
   log.info(result, 'old stories cleaned up')

@@ -99,7 +99,7 @@ async function main() {
             story as { id: string; title: string; summary: string | null },
           )
 
-          const labelChanged = result.titleLabel !== (story as any).titleLabel
+          const labelChanged = result.titleLabel !== story.titleLabel
           const titleChanged = result.title !== result.originalTitle
           console.log(`\n  Original:  "${result.originalTitle}"`)
           console.log(`  Label:     "${result.titleLabel}"${labelChanged ? ' ← CHANGED' : ''}`)

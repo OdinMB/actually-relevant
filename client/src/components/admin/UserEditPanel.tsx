@@ -48,6 +48,13 @@ function PasswordResetSection({ userId }: { userId: string }) {
     [userId, password, confirm, resetPassword, toast, reset],
   )
 
+  const preventParentSubmit = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') e.preventDefault()
+    },
+    [],
+  )
+
   if (!open) {
     return (
       <button
@@ -59,13 +66,6 @@ function PasswordResetSection({ userId }: { userId: string }) {
       </button>
     )
   }
-
-  const preventParentSubmit = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') e.preventDefault()
-    },
-    [],
-  )
 
   return (
     <div className="border border-neutral-200 rounded-lg p-3 space-y-3">

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
@@ -88,7 +88,7 @@ export default function StoriesPage() {
     queryClient.invalidateQueries({ queryKey: ['storyStats'] })
   }, [queryClient])
 
-  const stories = storiesQuery.data?.data || []
+  const stories = useMemo(() => storiesQuery.data?.data || [], [storiesQuery.data])
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
