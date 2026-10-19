@@ -1,6 +1,6 @@
 # Story Retention
 
-The monthly `cleanup_old_stories` job keeps the database from growing without bound: it deletes old stories nobody needs, keeps their counts so lifetime totals survive, and clears the embeddings of the old unpublished stories it keeps (ADR-0039).
+The monthly `cleanup_old_stories` job keeps the database from growing without bound: it deletes old stories nobody needs, keeps their counts so lifetime totals survive, and clears the embeddings of the old unpublished stories it keeps (ADR-0039, its cutoff superseded by ADR-0040).
 
 ## What the job does
 
@@ -14,9 +14,11 @@ Each run, in this order (`jobs/cleanupOldStories.ts`, SQL in `services/storyRete
 
    `published`, `analyzed` and `selected` stories are never deleted.
 2. **Counts each deleted story in the same statement** (one data-modifying CTE: select with `FOR UPDATE SKIP LOCKED`, delete, insert the grouped counts into `story_archive_counts`). A story can never be deleted without being counted or counted twice.
-3. **Deletes empty clusters**, those no story points to any more. Deleting a cluster's primary sets `primary_story_id` to null (`ON DELETE SET NULL`); a cluster that keeps members without a primary is left as is, since its kept members are rejected anyway.
+3. **Repairs the clusters it took members from**, as `deleteStory()` does (`repairClusters()`, `dedup.md`): the delete statement also returns the deleted stories' cluster ids, and after the last batch a cluster left with one member or none is dissolved, and one that keeps two or more members but lost its primary (`primary_story_id` is `ON DELETE SET NULL`) gets a new primary by `updatePrimary()`. Without this a lost primary would leave every member a non-primary (selection and auto-reject skip such a cluster).
 4. **Clears the embeddings** (`embedding`, `embedding_content_hash`, `embedding_generated_at`) of every unpublished story crawled before the same cutoff, in batches. Clearing the hash is what makes `ensureEmbedding()` generate a new one.
-5. **Records a notice** (source `jobs`, severity `info`, no dedupe key, so one row per run) with the deleted count per status, the cleared embeddings and the removed clusters, including on a run where nothing was due.
+5. **Records a notice** (source `jobs`, severity `info`, no dedupe key, so one row per run) with the deleted count per status, the cleared embeddings, the dissolved clusters and the re-elected primaries, including on a run where nothing was due.
+
+`storyRetention.db.test.ts` runs all of this against PostgreSQL (`database-migrations.md`, "Integration Tests"): every deletable and kept status, each keep rule, the counts, batching and a second run, embedding clearing and the cluster repair.
 
 A failure stops the run and throws "Story cleanup failed after deleting N stories and clearing M embeddings: <reason>", so the scheduler's job-failure notice (`job-failure:cleanup_old_stories`) carries what was done. Batches already committed stay committed; the next run carries on.
 
@@ -53,7 +55,9 @@ Deleted rows and cleared embeddings free space Postgres reuses for new rows (aut
 | File | Role |
 |------|------|
 | `server/src/jobs/cleanupOldStories.ts` | The job: batches, notice, failure message |
-| `server/src/services/storyRetention.ts` | Delete-and-count statement, empty clusters, embedding clearing, lifetime totals |
+| `server/src/services/storyRetention.ts` | Delete-and-count statement (with the touched cluster ids), embedding clearing, lifetime totals |
+| `server/src/services/clusterRepair.ts` | `repairClusters()`, shared with `deleteStory()` |
+| `server/src/services/storyRetention.db.test.ts` | The retention SQL and cluster repair against PostgreSQL |
 | `server/src/routes/admin/stories.ts` | `GET /api/admin/stories/lifetime-stats` |
 | `client/src/pages/admin/StatsPage.tsx` | The Stats page |
 | `client/src/pages/admin/DashboardPage.tsx` | Lifetime totals line |

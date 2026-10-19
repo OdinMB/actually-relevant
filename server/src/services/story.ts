@@ -14,6 +14,7 @@ import { relatedStoriesResultSchema } from '../schemas/llm.js'
 import type { ExtractionMethod } from './extractor.js'
 import type { AccessTier } from '../lib/paywall.js'
 import { storyInIssueSql, storyInIssueWhere } from '../lib/issueFilter.js'
+import { repairClusters } from './clusterRepair.js'
 
 const log = createLogger('story')
 
@@ -550,34 +551,8 @@ export async function deleteStory(id: string): Promise<void> {
 
   await prisma.story.delete({ where: { id } })
 
-  // Clean up cluster after deletion
-  if (storyCluster?.clusterId) {
-    const remaining = await prisma.story.count({
-      where: { clusterId: storyCluster.clusterId },
-    })
-    if (remaining <= 1) {
-      // Dissolve cluster: remove remaining member, delete cluster
-      await prisma.story.updateMany({
-        where: { clusterId: storyCluster.clusterId },
-        data: { clusterId: null },
-      })
-      await prisma.storyCluster.delete({
-        where: { id: storyCluster.clusterId },
-      })
-      log.info({ clusterId: storyCluster.clusterId }, 'dissolved cluster after story deletion')
-    } else {
-      // Re-elect primary (import-safe: inline logic to avoid circular dependency)
-      const cluster = await prisma.storyCluster.findUnique({
-        where: { id: storyCluster.clusterId },
-        select: { primaryStoryId: true },
-      })
-      if (!cluster?.primaryStoryId) {
-        // Primary was the deleted story, need re-election
-        const { updatePrimary } = await import('./dedup.js')
-        await updatePrimary(storyCluster.clusterId)
-      }
-    }
-  }
+  // Dissolve a cluster left with one member, or re-elect its primary (the same repair as retention)
+  if (storyCluster?.clusterId) await repairClusters([storyCluster.clusterId])
 
   // Clean up dangling storyId references in newsletters and podcasts
   const [newsletters, podcasts] = await Promise.all([

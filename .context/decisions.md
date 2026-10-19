@@ -40,4 +40,5 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0036 · Fix same-on-every-host settings and the Node version as values in render.yaml, held to the code by a test](decisions/0036-fixed-values-and-blueprint-test.md)
 - [ADR-0037 · Hash feedback IP addresses with HMAC-SHA256 under a dedicated secret, and refuse feedback without it](decisions/0037-feedback-ip-hmac.md)
 - [ADR-0038 · Declare custom domains, plan and subdomain policy in render.yaml exactly as Render exports them](decisions/0038-mirror-render-service-settings.md)
-- [ADR-0039 · Delete unkept stories after a year, counting them into an append-only summary table in the same statement](decisions/0039-monthly-story-retention.md)
+- [ADR-0039 · Delete unkept stories after a year, counting them into an append-only summary table in the same statement](decisions/0039-monthly-story-retention.md) — superseded by ADR-0040
+- [ADR-0040 · Delete unkept stories after 6 months, and repair the clusters the deletion touches](decisions/0040-six-month-story-retention.md)

@@ -38,6 +38,8 @@ Admin operations (`server/src/services/cluster.ts`):
 
 Every admin operation finishes by auto-rejecting with published stories included.
 
+**Deleting members** (`repairClusters()` in `server/src/services/clusterRepair.ts`): deleting a story (`deleteStory()`) and the monthly retention cleanup (`story-retention.md`) repair each cluster they took members from in the same way. A cluster left with one member or none is dissolved (the member is unlinked, the cluster row deleted; its status is left as it is). A cluster that keeps two or more members but lost its primary (`primary_story_id` is `ON DELETE SET NULL`) gets one by `updatePrimary()`. Neither path auto-rejects afterwards: the remaining members were already non-primaries, and the new primary keeps its status.
+
 ## Pipeline Position
 
 ```
@@ -114,6 +116,7 @@ In `server/src/config.ts` under `dedup`:
 | `server/src/routes/admin/clusters.ts` | Admin cluster API endpoints (includes search-stories and create) |
 | `server/src/schemas/cluster.ts` | Zod schemas for cluster creation and story search |
 | `server/src/services/story.ts` | `getClusterMembers()`, `dissolveCluster()` (per-story) |
+| `server/src/services/clusterRepair.ts` | `repairClusters()`: dissolve or re-elect after member deletion (`deleteStory()`, retention) |
 | `server/src/routes/admin/stories.ts` | `POST /:id/dissolve-cluster` endpoint |
 | `client/src/pages/admin/ClustersPage.tsx` | Admin clusters list page |
 | `client/src/components/admin/ClusterTable.tsx` | Clusters list table |
