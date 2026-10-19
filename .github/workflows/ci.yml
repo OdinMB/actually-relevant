@@ -1,7 +1,11 @@
-# Runs the check battery on every push and pull request: type-check and unit tests for both
-# packages, and the server's PostgreSQL integration tests against a throwaway pgvector database
-# (ADR-0044). Advisory only: Render deploys on every push to main whatever this reports
-# (render.yaml `autoDeployTrigger: commit`). No secrets are needed or used.
+# Runs the check battery on every push and pull request: type-check, unit tests and the
+# production build for both packages (the client's with its prerender), the migration check,
+# and the server's PostgreSQL integration tests against a throwaway pgvector database
+# (ADR-0044). Production deploys wait for it: render.yaml sets `autoDeployTrigger:
+# checksPass` on both services, so Render deploys a commit on main only once every check on
+# it has passed, and skips a red one (ADR-0047, .context/deployment.md). Keep it running on
+# every push to main with no path filter: Render deploys nothing for a commit with no checks.
+# No secrets are needed or used.
 name: CI
 
 on:
@@ -34,12 +38,31 @@ jobs:
       OPENAI_API_KEY: sk-test-dummy
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The migration check diffs against the base branch, so it needs the history
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci --prefix server
+      - name: Migration check
+        # Base: the pull request's target; on main, the commit before the push; elsewhere main
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            base="origin/$BASE_REF"
+          elif [ "$REF" = refs/heads/main ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            base="$BEFORE"
+          else
+            base=origin/main
+          fi
+          npm run check:migrations --prefix server -- --base "$base"
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
       - name: Generate the Prisma client
         run: npm run db:generate --prefix server
         env:
@@ -51,6 +74,8 @@ jobs:
         run: npm run test:db --prefix server
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/actually_relevant_test
+      - name: Build (as Render does, minus the migrate step)
+        run: npm run build --prefix server
 
   client:
     runs-on: ubuntu-latest
@@ -61,6 +86,10 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: client/package-lock.json
+      # Also downloads puppeteer's Chrome, which the prerender launches with --no-sandbox
+      # (vite.config.ts), so Ubuntu's user-namespace restriction does not stop it
       - run: npm ci --prefix client
       - run: npm run typecheck --prefix client
       - run: npm run test --prefix client -- --run
+      - name: Build with prerender
+        run: npm run build --prefix client

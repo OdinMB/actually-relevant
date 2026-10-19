@@ -275,7 +275,7 @@ describe('render.yaml', () => {
   })
 
   it('has the two services, shaped as the deployment expects', () => {
-    // Adaptation: there is no CI, so autoDeployTrigger is `commit`, not `checksPass`. Name,
+    // Both services deploy only once the commit's CI checks pass (`checksPass`, ADR-0047). Name,
     // region and plan are copied from Render's export of the live services; only their
     // presence is checked.
     expect(services).toHaveLength(2)
@@ -284,7 +284,7 @@ describe('render.yaml', () => {
       runtime: 'node',
       rootDir: 'server',
       branch: 'main',
-      autoDeployTrigger: 'commit',
+      autoDeployTrigger: 'checksPass',
       healthCheckPath: '/health',
     })
     expect(backend?.fields.region).toBeTruthy()
@@ -295,7 +295,7 @@ describe('render.yaml', () => {
       runtime: 'static',
       rootDir: 'client',
       branch: 'main',
-      autoDeployTrigger: 'commit',
+      autoDeployTrigger: 'checksPass',
     })
     // Dropped: the shutdown-delay check. The app's force exit is 10 s, inside Render's
     // 30 s default (not verified, Render docs); setting maxShutdownDelaySeconds would

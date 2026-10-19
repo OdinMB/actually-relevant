@@ -40,9 +40,27 @@ Code: `server/src/scripts/db-prepare/` (`index.ts` orchestrates; `gate.ts` and `
    npm run db:migrate:diff --prefix server
    ```
 
-3. **Review the generated SQL before committing it, and delete `DROP INDEX "stories_embedding_idx";`.** Both `db:migrate:create` and `db:migrate:diff` always emit that line, even with no schema change: the pgvector HNSW index was created by raw SQL in `20260206120000_add_embedding_fields`, and Prisma 6 cannot represent an index on an `Unsupported("vector(1536)")` column, so it treats it as unknown and proposes dropping it. Committing it would turn every vector search into a sequential scan. `server/src/test/migrations.test.ts` fails if any migration drops the index without re-creating it in the same migration (comments are ignored, so a migration may mention it). Apart from that line, a migrate diff from a fully migrated database is empty: the earlier drift (newsletter_sends defaults, two missing indexes, the `feeds_url_key` rename) was reconciled by `20261005120000_reconcile_schema_drift`. Anything else in a fresh diff is drift, and belongs in its own migration, not hidden in an unrelated one.
+3. **Review the generated SQL before committing it, and delete `DROP INDEX "stories_embedding_idx";`.** Both `db:migrate:create` and `db:migrate:diff` always emit that line, even with no schema change: the pgvector HNSW index was created by raw SQL in `20260206120000_add_embedding_fields`, and Prisma 6 cannot represent an index on an `Unsupported("vector(1536)")` column, so it treats it as unknown and proposes dropping it. Committing it would turn every vector search into a sequential scan. `server/src/test/migrations.test.ts` and `npm run check:migrations` (below) fail if any migration drops the index without re-creating it in the same migration (comments are ignored, so a migration may mention it). Apart from that line, a migrate diff from a fully migrated database is empty: the earlier drift (newsletter_sends defaults, two missing indexes, the `feeds_url_key` rename) was reconciled by `20261005120000_reconcile_schema_drift`. Anything else in a fresh diff is drift, and belongs in its own migration, not hidden in an unrelated one.
 4. Restart the dev server (or run `npm run db:prepare --prefix server`): the migration is applied and the client regenerated. If a dev server is already running, stop it first, or the regenerate hits the DLL lock.
-5. Commit the migration folder with the schema change. Production applies it on the next deploy.
+5. Run `npm run check:migrations --prefix server` (below), then commit the migration folder with the schema change. Production applies it on the next green deploy.
+
+## Migration check
+
+`npm run check:migrations --prefix server` (`server/src/scripts/check-migrations/`, rules in `rules.ts`) runs in CI before anything else in the `server` job, so a failure keeps the commit from deploying (`deployment.md`, "CI gate"). It fails on:
+
+- **`stories_embedding_idx` dropped and not re-created, in any migration**, old or new. No marker excuses it.
+- **Destructive statements in a migration the branch adds**: `DROP TABLE`, `TRUNCATE`, and any `ALTER ...` statement containing `DROP` (`DROP COLUMN`, `DROP CONSTRAINT`, `DROP DEFAULT`, `DROP NOT NULL`, ...). Migrations already on the base branch are not re-checked, so the historical drops (`drop_source_names`, `drop_email_events`, the schema restructure and the drift reconcile) pass.
+
+A destructive migration passes once a person has reviewed it and it carries the marker on its own comment line, with a reason:
+
+```sql
+-- reviewed-destructive: column unused since 2026-10-01 (code stopped reading it in the previous deploy)
+ALTER TABLE "stories" DROP COLUMN "legacy_field";
+```
+
+The marker covers the whole file. Before adding it, check the two-phase rule under "Production Migrations": the code that read the dropped object must already be deployed without it. A Prisma-generated `DROP CONSTRAINT`/`ADD CONSTRAINT` pair for a foreign-key change counts too: review it and mark it.
+
+"Added" means added (or renamed) since the merge base with `--base <ref>` (default `origin/main`), including uncommitted and untracked files. CI passes the pull request's target branch, on `main` the commit before the push, and `origin/main` on any other branch; it checks out full history for this. A base git cannot resolve (a force-pushed-away commit, a shallow clone) fails the check rather than passing it; rerun locally with an explicit `--base`. The matching is textual, per statement with comments stripped: a drop inside a `DO` block or an `EXECUTE` string is not caught, and a string literal that reads like a drop is (mark it).
 
 ## Critical Rules
 
@@ -72,7 +90,7 @@ TEST_DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevan
 
 In a cloud dev container with a local PostgreSQL 16 and pgvector on `localhost:5432`, the same works with `psql -h localhost -U postgres -c "CREATE DATABASE actually_relevant_test"` and `TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/actually_relevant_test`. The migrations use nothing that differs between 16 and 17.
 
-**CI** (`.github/workflows/ci.yml`) runs on every push and pull request: a `pgvector/pgvector:pg17` service with the database `actually_relevant_test`, then the server's type-check, `test` and `test:db`, and the client's type-check and tests. It needs no secrets and leaves `DATABASE_URL` unset except for `db:generate`, which only wants a value. It is advisory: Render still deploys every push to `main` (`deployment.md`).
+**CI** (`.github/workflows/ci.yml`) runs on every push and pull request: a `pgvector/pgvector:pg17` service with the database `actually_relevant_test`, then the server's migration check, type-check, `test`, `test:db` and build, and the client's type-check, tests and build. It needs no secrets and leaves `DATABASE_URL` unset except for `db:generate`, which only wants a value. Render deploys a commit on `main` only once CI passes on it (`deployment.md`, "CI gate").
 
 ## Production Migrations
 
@@ -104,6 +122,7 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 | `npm run db:migrate:create --prefix server -- --name <name>` | Generate migration SQL without applying |
 | `npm run db:migrate:status --prefix server` | Check which migrations are pending/applied |
 | `npm run db:migrate:diff --prefix server` | Print the SQL from the database to the schema, read-only (expected: only the `stories_embedding_idx` drop) |
+| `npm run check:migrations --prefix server [-- --base <ref>]` | Fail on the embedding-index drop anywhere, or an unmarked destructive statement in a new migration (runs in CI) |
 | `npm run db:migrate:resolve --prefix server -- --rolled-back <name>` | Mark a failed migration as rolled back |
 | `npm run db:migrate:deploy --prefix server` | Apply pending migrations to whatever `DATABASE_URL` points at (no local guard) |
 | `npm run db:generate --prefix server` | Regenerate the Prisma client (**dev server stopped**) |

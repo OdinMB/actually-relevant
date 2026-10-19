@@ -32,7 +32,7 @@ actually-relevant/
 
 **Backend:** Express + TypeScript, PostgreSQL + pgvector (Prisma ORM), LangChain + OpenAI (structured output with Zod), node-cron, Zod
 
-**Deployment:** Render.com (static site + web service + PostgreSQL). **Every push to `main` deploys both services to production**, including pending migrations (`.context/deployment.md`).
+**Deployment:** Render.com (static site + web service + PostgreSQL). **Every push to `main` deploys both services to production once CI passes on it**, including pending migrations (`.context/deployment.md`, "CI gate").
 
 ## Commands
 
@@ -50,6 +50,7 @@ npm run build --prefix server         # Build server (installs devDeps first)
 npm run typecheck --prefix server     # Type-check server (tsc --noEmit)
 npm run test --prefix server          # Run server tests
 npm run test:db --prefix server       # PostgreSQL integration tests (needs TEST_DATABASE_URL, a local *_test database; fails without it)
+npm run check:migrations --prefix server # Embedding-index drop anywhere, unmarked DROP/TRUNCATE in new migrations (CI)
 ```
 
 **Type-checking:** use `npm run typecheck --prefix <client|server>`. It's the canonical TS check and runs without a permission prompt. Do **not** invoke `tsc` via `node .../node_modules/typescript/bin/tsc` or bare `tsc` -- those are not allowlisted and force a confirmation.
