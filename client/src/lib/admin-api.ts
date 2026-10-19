@@ -236,7 +236,8 @@ export const adminApi = {
     updateStatus: (id: string, status: StoryStatus) =>
       request<Story>(`/stories/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
     bulkStatus: (ids: string[], status: StoryStatus) =>
-      request<{ updated: number }>('/stories/bulk-status', { method: 'POST', body: JSON.stringify({ ids, status }) }),
+      // skipped: ids already at that status, or no longer existing
+      request<{ updated: number; skipped: string[] }>('/stories/bulk-status', { method: 'POST', body: JSON.stringify({ ids, status }) }),
     preassess: (storyIds?: string[]) =>
       request<{ processed: number }>('/stories/preassess', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     assess: (id: string) => request<Story>(`/stories/${id}/assess`, { method: 'POST' }),

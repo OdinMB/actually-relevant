@@ -178,8 +178,8 @@ router.put('/:id/status', failsWith('Failed to update story status', storyNotFou
 })
 
 router.post('/bulk-status', failsWith('Failed to bulk update story status'), validateBody(bulkUpdateStatusSchema), async (req, res) => {
-  const result = await storyService.bulkUpdateStatus(req.body.ids, req.body.status)
-  res.json({ updated: result.count })
+  // `skipped`: ids already at the status, or unknown (decision 10)
+  res.json(await storyService.bulkUpdateStatus(req.body.ids, req.body.status))
 })
 
 router.post('/preassess', failsWith('Failed to pre-assess stories'), expensiveOpLimiter, validateBody(preassessBodySchema), async (req, res) => {

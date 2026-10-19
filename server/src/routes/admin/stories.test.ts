@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
 import { authHeader, sampleStory, sampleFeed, sampleIssue, TEST_API_KEY } from '../../test/helpers.js'
-import { config } from '../../config.js'
 
 vi.mock('express-rate-limit', () => ({
   default: () => (_req: any, _res: any, next: any) => next(),
@@ -17,6 +16,7 @@ const mockPrisma = vi.hoisted(() => ({
   story: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -310,12 +310,28 @@ describe('Admin Stories API', () => {
   describe('PUT /api/admin/stories/:id', () => {
     it('updates a story', async () => {
       mockPrisma.story.update.mockResolvedValue(sampleStory({ title: 'Updated' }))
+      mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ title: 'Updated' }))
 
       const res = await request(app)
         .put('/api/admin/stories/story-1')
         .set(authHeader())
         .send({ title: 'Updated' })
       expect(res.status).toBe(200)
+      expect(mockTransition).not.toHaveBeenCalled()
+    })
+
+    it('writes the fields, then moves the status', async () => {
+      mockPrisma.story.update.mockResolvedValue(sampleStory())
+      mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'rejected' }))
+
+      const res = await request(app)
+        .put('/api/admin/stories/story-1')
+        .set(authHeader())
+        .send({ title: 'Edited', status: 'rejected' })
+
+      expect(res.status).toBe(200)
+      expect(mockPrisma.story.update).toHaveBeenCalledWith({ where: { id: 'story-1' }, data: { title: 'Edited' } })
+      expect(mockTransition).toHaveBeenCalledWith(['story-1'], { to: 'rejected', reason: 'editor' }, 'editor')
     })
 
     it('returns 404 for unknown story', async () => {
@@ -330,20 +346,28 @@ describe('Admin Stories API', () => {
   })
 
   describe('PUT /api/admin/stories/:id/status', () => {
-    it('updates story status', async () => {
-      // preparePublishData + updateStoryStatus call findUnique
-      mockPrisma.story.findUnique.mockResolvedValue(sampleStory({ slug: 'existing-slug', datePublished: new Date() }))
-      mockPrisma.story.update.mockResolvedValue(sampleStory({ status: 'published' }))
+    it('moves the story as the editor and answers with it', async () => {
+      mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'published' }))
 
       const res = await request(app)
         .put('/api/admin/stories/story-1/status')
         .set(authHeader())
         .send({ status: 'published' })
       expect(res.status).toBe(200)
-      // Single-story publish acquires the slug advisory lock via $executeRaw (the lock
-      // function returns void, which $queryRaw cannot deserialize). Existing slug → no
-      // slug write, so $executeRaw is the lock only.
-      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
+      expect(res.body.status).toBe('published')
+      expect(mockTransition).toHaveBeenCalledWith(['story-1'], { to: 'published' }, 'editor')
+    })
+
+    it('answers 200 with the story when it already has the status', async () => {
+      mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: 'story-1', status: 'trashed' }] })
+      mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'trashed' }))
+
+      const res = await request(app)
+        .put('/api/admin/stories/story-1/status')
+        .set(authHeader())
+        .send({ status: 'trashed' })
+      expect(res.status).toBe(200)
+      expect(res.body.status).toBe('trashed')
     })
 
     it('rejects invalid status', async () => {
@@ -356,59 +380,18 @@ describe('Admin Stories API', () => {
   })
 
   describe('POST /api/admin/stories/bulk-status', () => {
-    it('bulk updates story statuses', async () => {
-      // findMany for stories needing slugs
-      mockPrisma.story.findMany.mockResolvedValueOnce([])
-      mockPrisma.story.updateMany.mockResolvedValueOnce({ count: 1 })
-      mockPrisma.story.updateMany.mockResolvedValueOnce({ count: 2 })
+    it('answers with the moved count and the skipped ids', async () => {
+      const [a, b, c] = ['1', '2', '3'].map(n => `00000000-0000-0000-0000-00000000000${n}`)
+      mockTransition.mockResolvedValue({ moved: [a, b], skipped: [{ id: c, status: 'rejected' }] })
 
       const res = await request(app)
         .post('/api/admin/stories/bulk-status')
         .set(authHeader())
-        .send({
-          ids: [
-            '00000000-0000-0000-0000-000000000001',
-            '00000000-0000-0000-0000-000000000002',
-            '00000000-0000-0000-0000-000000000003',
-          ],
-          status: 'published',
-        })
-      expect(res.status).toBe(200)
-      expect(res.body.updated).toBe(3)
-      // Publishers serialize on the advisory lock (acquired via $executeRaw) before
-      // touching slugs. No stories needed slugs, so $executeRaw is the lock only.
-      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
-    })
-
-    it('assigns slugs for unslugged stories in a single batched statement', async () => {
-      // findMany #1: stories needing slugs; findMany #2 (inside generateUniqueSlugs): existing slugs
-      mockPrisma.story.findMany.mockResolvedValueOnce([
-        { id: '00000000-0000-0000-0000-000000000001', title: 'First Story', sourceTitle: 'src-1' },
-        { id: '00000000-0000-0000-0000-000000000002', title: 'Second Story', sourceTitle: 'src-2' },
-      ])
-      mockPrisma.story.findMany.mockResolvedValueOnce([])
-      mockPrisma.story.updateMany.mockResolvedValueOnce({ count: 0 })
-      mockPrisma.story.updateMany.mockResolvedValueOnce({ count: 2 })
-
-      const res = await request(app)
-        .post('/api/admin/stories/bulk-status')
-        .set(authHeader())
-        .send({
-          ids: [
-            '00000000-0000-0000-0000-000000000001',
-            '00000000-0000-0000-0000-000000000002',
-          ],
-          status: 'published',
-        })
+        .send({ ids: [a, b, c], status: 'rejected' })
 
       expect(res.status).toBe(200)
-      expect(res.body.updated).toBe(2)
-      // Two $executeRaw calls: the advisory lock acquired first in the tx, then the
-      // single batched slug UPDATE. Slugs for both stories are written in that one
-      // statement (not one per story) — a per-story loop would be lock + 2 = 3 calls.
-      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(2)
-      // Per-story tx.story.update must not be used for slugs (that was the timeout source).
-      expect(mockPrisma.story.update).not.toHaveBeenCalled()
+      expect(res.body).toEqual({ updated: 2, skipped: [c] })
+      expect(mockTransition).toHaveBeenCalledWith([a, b, c], { to: 'rejected', reason: 'editor' }, 'editor')
     })
 
     it('rejects empty ids array', async () => {
@@ -419,37 +402,6 @@ describe('Admin Stories API', () => {
       expect(res.status).toBe(400)
     })
 
-    it('publishes a large set in bounded chunks', async () => {
-      // chunkSize + 1 ids => exactly two chunks (a full one and a remainder of 1).
-      const total = config.publish.chunkSize + 1
-      const ids = Array.from({ length: total }, (_, i) =>
-        `00000000-0000-0000-0000-${String(i + 1).padStart(12, '0')}`)
-      mockPrisma.story.findMany.mockResolvedValue([]) // no stories need slugs
-      // Two updateMany calls per chunk (already-dated, newly-dated), in order across
-      // both chunks: chunk 1 → 60 + 40 = 100, chunk 2 → 1 + 0 = 1. The summed total
-      // (101) proves counts accumulate across chunks, not just the last one.
-      mockPrisma.story.updateMany
-        .mockResolvedValue({ count: 0 })
-        .mockResolvedValueOnce({ count: 60 })
-        .mockResolvedValueOnce({ count: 40 })
-        .mockResolvedValueOnce({ count: 1 })
-        .mockResolvedValueOnce({ count: 0 })
-
-      const res = await request(app)
-        .post('/api/admin/stories/bulk-status')
-        .set(authHeader())
-        .send({ ids, status: 'published' })
-
-      expect(res.status).toBe(200)
-      expect(res.body.updated).toBe(101)
-      // Each chunk gets its own embedding pass and its own slug-locked transaction,
-      // so memory and transaction size stay bounded regardless of backlog size.
-      expect(mockEnsureEmbeddings).toHaveBeenCalledTimes(2)
-      expect(mockEnsureEmbeddings.mock.calls[0][0]).toHaveLength(config.publish.chunkSize)
-      expect(mockEnsureEmbeddings.mock.calls[1][0]).toHaveLength(1)
-      // One advisory lock ($executeRaw) per chunk; no slugs needed so no slug UPDATE.
-      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(2)
-    })
   })
 
   describe('POST /api/admin/stories/preassess', () => {
@@ -570,22 +522,17 @@ describe('Admin Stories API', () => {
 
   describe('POST /api/admin/stories/:id/publish', () => {
     it('publishes a story', async () => {
-      // preparePublishData calls findUnique
-      mockPrisma.story.findUnique.mockResolvedValue(sampleStory({ slug: 'existing-slug', datePublished: new Date() }))
-      mockPrisma.story.update.mockResolvedValue(sampleStory({ status: 'published' }))
+      mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'published' }))
 
       const res = await request(app)
         .post('/api/admin/stories/story-1/publish')
         .set(authHeader())
       expect(res.status).toBe(200)
-      // Single-story publish acquires the slug advisory lock via $executeRaw. Existing
-      // slug → no slug write, so $executeRaw is the lock only.
-      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
+      expect(mockTransition).toHaveBeenCalledWith(['story-1'], { to: 'published' }, 'editor')
     })
 
     it('returns 404 for unknown story', async () => {
-      mockPrisma.story.findUnique.mockResolvedValue(null)
-      mockPrisma.story.update.mockRejectedValue({ code: 'P2025' })
+      mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: 'unknown', status: null }] })
 
       const res = await request(app)
         .post('/api/admin/stories/unknown/publish')
@@ -595,17 +542,18 @@ describe('Admin Stories API', () => {
   })
 
   describe('POST /api/admin/stories/:id/reject', () => {
-    it('rejects a story', async () => {
-      mockPrisma.story.update.mockResolvedValue(sampleStory({ status: 'rejected' }))
+    it('rejects a story as the editor', async () => {
+      mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'rejected' }))
 
       const res = await request(app)
         .post('/api/admin/stories/story-1/reject')
         .set(authHeader())
       expect(res.status).toBe(200)
+      expect(mockTransition).toHaveBeenCalledWith(['story-1'], { to: 'rejected', reason: 'editor' }, 'editor')
     })
 
     it('returns 404 for unknown story', async () => {
-      mockPrisma.story.update.mockRejectedValue({ code: 'P2025' })
+      mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: 'unknown', status: null }] })
 
       const res = await request(app)
         .post('/api/admin/stories/unknown/reject')

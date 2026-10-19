@@ -3,7 +3,7 @@
  * import path (`services/story.js`) that routes, jobs and the tests' `vi.mock` calls use.
  *
  * - storyQueries.ts   admin list and filters, by-id reads, status counts, pipeline id queries
- * - storyWrites.ts    create, admin edit, every status write, publishing and slugs, delete
+ * - storyWrites.ts    create, admin edit, editor status moves (via storyLifecycle.ts), delete
  * - publicStories.ts  public listing, story by slug, cluster redirect/sources, homepage buckets
  * - storySearch.ts    hybrid (semantic + text) search
  * - relatedStories.ts related stories, their LLM re-rank and cache
@@ -22,8 +22,6 @@ export {
   getStoryIdsByStatus,
 } from './storyQueries.js'
 export {
-  generateUniqueSlug,
-  generateUniqueSlugs,
   createStory,
   type StoryUpdate,
   updateStory,

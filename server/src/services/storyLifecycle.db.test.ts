@@ -36,6 +36,7 @@ const { runPublishStories } = await import('../jobs/publishStories.js')
 const { runAssessStories } = await import('../jobs/assessStories.js')
 const { runSelectStories } = await import('../jobs/selectStories.js')
 const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
+const { transition } = await import('./storyLifecycle.js')
 const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary } = await import('./cluster.js')
 
 let feedId = ''
@@ -242,21 +243,38 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   // ──── Publishing ────────────────────────────────────────────────────────
 
-  it.fails('a story trashed while the publish job ensures embeddings gets no slug or date [5d]', async () => {
+  it('a story trashed while the publish job ensures embeddings gets no slug or date and is not counted', async () => {
     const s = await story({ status: 'selected', title: 'Will be trashed' })
+    const other = await story({ status: 'selected', title: 'Goes live' })
     mockEnsureEmbeddings.mockImplementation(async () => {
       await prisma.$executeRaw`UPDATE stories SET status = 'trashed' WHERE id = ${s.id}`
     })
 
-    await runPublishStories()
+    const result = await transition([s.id, other.id], { to: 'published' }, 'pipeline')
 
-    const after = await row(s.id)
-    expect(after.status).toBe('trashed')
-    expect(after.slug).toBeNull()
-    expect(after.datePublished).toBeNull()
+    expect(result).toEqual({ moved: [other.id], skipped: [{ id: s.id, status: 'trashed' }] })
+    expect(await row(s.id)).toMatchObject({ status: 'trashed', slug: null, datePublished: null })
+    expect(await row(other.id)).toMatchObject({ status: 'published', slug: 'goes-live' })
   })
 
-  it.fails('the publish job publishes a cluster primary, not a selected non-primary [5d]', async () => {
+  it('publishing works through bounded chunks, each with its own embedding pass', async () => {
+    const chunkSize = config.publish.chunkSize
+    config.publish.chunkSize = 2
+    try {
+      const ids = []
+      for (let i = 0; i < 5; i++) ids.push((await story({ status: 'selected', title: 'Same title' })).id)
+
+      await runPublishStories()
+
+      expect(mockEnsureEmbeddings).toHaveBeenCalledTimes(3)
+      const slugs = [...(await statusesOf(ids)).values()].map(r => { expect(r.status).toBe('published'); return r.slug })
+      expect(new Set(slugs).size).toBe(5)
+    } finally {
+      config.publish.chunkSize = chunkSize
+    }
+  })
+
+  it('the publish job publishes a cluster primary, not a selected non-primary', async () => {
     const primary = await story({ status: 'selected', title: 'Primary', relevance: 9 })
     const member = await story({ status: 'selected', title: 'Member', relevance: 5 })
     const clusterId = await createCluster([primary.id, member.id], primary.id)
@@ -264,11 +282,11 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     await runPublishStories()
 
     expect((await row(primary.id)).status).toBe('published')
-    expect((await row(member.id)).status).toBe('rejected')
+    expect(await row(member.id)).toMatchObject({ status: 'rejected', rejectionReason: 'duplicate', slug: null })
     expect(await primaryOf(clusterId)).toBe(primary.id)
   })
 
-  it.fails('an editor publishing a non-primary makes it primary and rejects the unpublished former one [5d]', async () => {
+  it('an editor publishing a non-primary makes it primary and rejects the unpublished former one', async () => {
     const primary = await story({ status: 'analyzed', relevance: 9 })
     const member = await story({ status: 'rejected', title: 'Member' })
     const keptPublished = await story({ status: 'published', slug: 'kept', datePublished: new Date() })
@@ -279,7 +297,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     await publishStory(member.id)
 
     expect(await primaryOf(clusterId)).toBe(member.id)
-    expect((await row(primary.id)).status).toBe('rejected')
+    expect(await row(primary.id)).toMatchObject({ status: 'rejected', rejectionReason: 'duplicate' })
     expect((await row(keptPublished.id)).status).toBe('published')
   })
 
@@ -292,6 +310,19 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
     await publishStory(trashed.id)
     expect(await row(trashed.id)).toEqual(published)
+  })
+
+  it('an editor publishing a rejected story clears its reason', async () => {
+    const s = await story({ status: 'rejected', rejectionReason: 'paywall', title: 'Override' })
+    await publishStory(s.id)
+    expect(await row(s.id)).toMatchObject({ status: 'published', rejectionReason: null, slug: 'override' })
+  })
+
+  it('unpublishing keeps the slug and the publish date', async () => {
+    const date = new Date('2026-09-01T00:00:00Z')
+    const s = await story({ status: 'published', slug: 'stays', datePublished: date })
+    await updateStoryStatus(s.id, 'analyzed')
+    expect(await row(s.id)).toMatchObject({ status: 'analyzed', slug: 'stays', datePublished: date })
   })
 
   // ──── Dissolve and remove ───────────────────────────────────────────────
@@ -352,7 +383,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await row(trashed.id)).status).toBe('trashed')
   })
 
-  it.fails('rejecting the primary elects the next member and restores it [5d]', async () => {
+  it('rejecting the primary elects the next member and restores it', async () => {
     const primary = await story({ status: 'analyzed', relevance: 9 })
     const next = await story({ status: 'rejected', rejectionReason: 'duplicate', relevance: 6 })
     const clusterId = await createCluster([primary.id, next.id], primary.id)
@@ -360,7 +391,22 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     await rejectStory(primary.id)
 
     expect(await primaryOf(clusterId)).toBe(next.id)
-    expect((await row(next.id)).status).toBe('analyzed')
+    expect(await row(primary.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor' })
+    expect(await row(next.id)).toMatchObject({ status: 'analyzed', rejectionReason: null })
+  })
+
+  it('trashing a published primary elects a duplicate and puts it back on the site', async () => {
+    const date = new Date('2026-09-01T00:00:00Z')
+    const primary = await story({ status: 'published', slug: 'p', datePublished: date })
+    const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'd', datePublished: date })
+    const editorRejected = await story({ status: 'rejected', rejectionReason: 'editor', relevance: 10 })
+    const clusterId = await createCluster([primary.id, dup.id, editorRejected.id], primary.id)
+
+    await updateStoryStatus(primary.id, 'trashed')
+
+    expect(await primaryOf(clusterId)).toBe(dup.id)
+    expect((await row(dup.id)).status).toBe('published')
+    expect(await row(editorRejected.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor' })
   })
 
   // ──── Set primary and merge ─────────────────────────────────────────────
