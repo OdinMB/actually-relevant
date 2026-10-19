@@ -12,6 +12,8 @@ const log = createLogger('scheduler')
 const tasksByName = new Map<string, cron.ScheduledTask>()
 /** Fast path of the overlap guard within this process; the job lease (jobLease.ts) covers other processes. */
 const runningJobs = new Set<string>()
+/** The promise of each run under way in this process, which graceful shutdown awaits (waitForRunningJobs). */
+const runningJobRuns = new Map<string, Promise<void>>()
 /** Bumped by stopScheduler, so a boot catch-up chain started before it ends at its next step. */
 let catchUpGeneration = 0
 
@@ -208,7 +210,16 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
   }
 
   runningJobs.add(jobName)
+  const run = executeJob(jobName, handler).finally(() => {
+    runningJobs.delete(jobName)
+    runningJobRuns.delete(jobName)
+  })
+  runningJobRuns.set(jobName, run)
+  return run
+}
 
+/** The body of runJob: claim, run under the heartbeat, record. Never rejects. */
+async function executeJob(jobName: string, handler: () => Promise<void>): Promise<void> {
   try {
     if ((await claimJobRun(jobName)) === 'held') {
       log.info({ jobName }, 'held by another process, skipping')
@@ -228,9 +239,24 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
     log.error({ jobName, err }, 'job failed')
     await recordFailure(jobName, errorMsg)
     notify(jobFailureNotice(jobName, errorMsg)).catch(() => {})
-  } finally {
-    runningJobs.delete(jobName)
   }
+}
+
+/**
+ * Graceful shutdown: wait up to `timeoutMs` for the runs in progress in this process (cron ticks,
+ * catch-up, manual runs) to finish, bookkeeping included. Returns the jobs still running at the
+ * deadline (empty when all finished).
+ */
+export async function waitForRunningJobs(timeoutMs: number): Promise<string[]> {
+  if (runningJobRuns.size === 0) return []
+  let timer: NodeJS.Timeout | undefined
+  const deadline = new Promise<void>(resolve => {
+    timer = setTimeout(resolve, Math.max(0, timeoutMs))
+    timer.unref()
+  })
+  await Promise.race([Promise.allSettled([...runningJobRuns.values()]), deadline])
+  clearTimeout(timer)
+  return [...runningJobRuns.keys()]
 }
 
 /** Write the failure to the job row and release the lease; a failed write is logged, never thrown. */

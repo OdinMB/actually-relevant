@@ -13,6 +13,11 @@ import { buildRelatedStoriesPrompt } from '../prompts/related-stories.js'
 import { relatedStoriesResultSchema } from '../schemas/llm.js'
 import type { ExtractionMethod } from './extractor.js'
 import type { AccessTier } from '../lib/paywall.js'
+import type { z } from 'zod'
+import type { updateStorySchema } from '../schemas/story.js'
+import { storyInIssueSql, storyInIssueWhere } from '../lib/issueFilter.js'
+import { repairClusters } from './clusterRepair.js'
+import { TTLCache, cached } from '../lib/cache.js'
 
 const log = createLogger('story')
 
@@ -332,68 +337,82 @@ export async function getExistingUrls(urls: string[]): Promise<Set<string>> {
   return new Set(existing.map(s => s.sourceUrl))
 }
 
+interface PublishData {
+  datePublished?: Date
+  slug?: string
+}
+
 async function preparePublishData(
   id: string,
   client: Prisma.TransactionClient = prisma,
-): Promise<Record<string, any>> {
+): Promise<PublishData> {
   const story = await client.story.findUnique({
     where: { id },
     select: { datePublished: true, slug: true, title: true, sourceTitle: true },
   })
   if (!story) return {}
-  const data: Record<string, any> = {}
+  const data: PublishData = {}
   if (!story.datePublished) data.datePublished = new Date()
   if (!story.slug) data.slug = await generateUniqueSlug(story.title || story.sourceTitle, id, client)
   return data
 }
 
-const EMBEDDING_RELEVANT_FIELDS = ['title', 'titleLabel', 'summary'] as const
+/** An admin edit of a story: the validated body of `PUT /api/admin/stories/:id`. */
+export type StoryUpdate = z.infer<typeof updateStorySchema>
 
-export async function updateStory(id: string, data: Record<string, any>): Promise<Story> {
-  const updateData = { ...data }
-  // Convert date strings to Date objects if present
-  if (updateData.sourceDatePublished !== undefined) {
-    updateData.sourceDatePublished = updateData.sourceDatePublished ? new Date(updateData.sourceDatePublished) : null
+/**
+ * Apply an admin edit. A story that is or becomes published gets its embedding brought up to date
+ * before the write, whatever fields the edit carries: an edit of its title, label or summary
+ * regenerates it and fails the edit if that fails; a publish without such an edit generates a
+ * missing one (retention clears old unpublished stories' embeddings) and, like the other publish
+ * paths, goes ahead without it if generation fails.
+ */
+export async function updateStory(id: string, input: StoryUpdate): Promise<Story> {
+  const { sourceDatePublished, ...fields } = input
+  const updateData: Prisma.StoryUncheckedUpdateInput = {
+    ...fields,
+    ...(sourceDatePublished !== undefined && {
+      sourceDatePublished: sourceDatePublished ? new Date(sourceDatePublished) : null,
+    }),
   }
-  if (updateData.datePublished !== undefined) {
-    updateData.datePublished = updateData.datePublished ? new Date(updateData.datePublished) : null
-  }
-  // When a status→published transition needs an auto-generated slug, the slug
-  // read-modify-write must run under the shared slug lock (deferred to runWrite below).
-  const needsPublishPrep = updateData.status === 'published' && updateData.datePublished === undefined
+  // A publish may need an auto-generated slug and date; that read-modify-write runs under the
+  // shared slug lock (runWrite below).
+  const publishing = input.status === StoryStatus.published
 
-  // Check if this edit requires embedding regeneration. The embedding is generated via
-  // a slow external call BEFORE any transaction, then persisted alongside the update.
-  const hasRelevantChange = EMBEDDING_RELEVANT_FIELDS.some((f) => f in updateData)
+  // The embedding is generated via a slow external call BEFORE any transaction, then persisted
+  // alongside the update.
+  const contentEdited = input.title !== undefined || input.titleLabel !== undefined || input.summary !== undefined
   let embeddingData: Awaited<ReturnType<typeof generateEmbeddingForContent>> = null
-  if (hasRelevantChange) {
-    // Single DB read to check status and get embedding content
+  if (contentEdited || publishing) {
     const currentStory = await fetchStoryForEmbedding(id)
-    const isPublished = currentStory?.status === 'published' || updateData.status === 'published'
-
-    if (isPublished) {
-      if (!currentStory) throw new Error('Story not found')
-      // Generate embedding before saving — roll back on failure
-
+    // No row: the update below fails with P2025 (404)
+    if (currentStory && (publishing || currentStory.status === StoryStatus.published)) {
       const merged = {
         ...currentStory,
-        ...(updateData.title !== undefined ? { title: updateData.title } : {}),
-        ...(updateData.titleLabel !== undefined ? { titleLabel: updateData.titleLabel } : {}),
-        ...(updateData.summary !== undefined ? { summary: updateData.summary } : {}),
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.titleLabel !== undefined ? { titleLabel: input.titleLabel } : {}),
+        ...(input.summary !== undefined ? { summary: input.summary } : {}),
       }
-
-      embeddingData = await generateEmbeddingForContent(merged)
+      try {
+        // null when the stored embedding already matches the content
+        embeddingData = await generateEmbeddingForContent(merged)
+      } catch (err) {
+        if (contentEdited) throw err
+        log.warn({ err, storyId: id }, 'failed to ensure embedding on publish, proceeding without')
+      }
     }
   }
 
   // A plain update suffices only when we neither auto-assign a slug nor persist an embedding.
-  if (!needsPublishPrep && !embeddingData) {
-    return prisma.story.update({ where: { id }, data: updateData })
+  if (!publishing && !embeddingData) {
+    const story = await prisma.story.update({ where: { id }, data: updateData })
+    if (story.status !== StoryStatus.published) forgetRelatedStories([id])
+    return story
   }
 
   // Otherwise write transactionally. Acquire the slug lock only when auto-assigning a slug.
   const runWrite = async (tx: Prisma.TransactionClient): Promise<Story> => {
-    if (needsPublishPrep) {
+    if (publishing) {
       const publishData = await preparePublishData(id, tx)
       if (!updateData.slug && publishData.slug) updateData.slug = publishData.slug
       if (publishData.datePublished) updateData.datePublished = publishData.datePublished
@@ -405,7 +424,7 @@ export async function updateStory(id: string, data: Record<string, any>): Promis
     return story
   }
 
-  return needsPublishPrep
+  return publishing
     ? withSlugLock(runWrite)
     : prisma.$transaction(runWrite)
 }
@@ -420,7 +439,9 @@ export async function updateStoryStatus(id: string, status: string): Promise<Sto
       return tx.story.update({ where: { id }, data })
     })
   }
-  return prisma.story.update({ where: { id }, data: { status: status as StoryStatus } })
+  const story = await prisma.story.update({ where: { id }, data: { status: status as StoryStatus } })
+  forgetRelatedStories([id])
+  return story
 }
 
 export async function generateUniqueSlugs(
@@ -534,10 +555,12 @@ export async function bulkUpdateStatus(ids: string[], status: string) {
     }
     return { count: publishedCount }
   }
-  return prisma.story.updateMany({
+  const result = await prisma.story.updateMany({
     where: { id: { in: ids } },
     data: { status: status as StoryStatus },
   })
+  forgetRelatedStories(ids)
+  return result
 }
 
 export async function deleteStory(id: string): Promise<void> {
@@ -548,35 +571,10 @@ export async function deleteStory(id: string): Promise<void> {
   })
 
   await prisma.story.delete({ where: { id } })
+  forgetRelatedStories([id])
 
-  // Clean up cluster after deletion
-  if (storyCluster?.clusterId) {
-    const remaining = await prisma.story.count({
-      where: { clusterId: storyCluster.clusterId },
-    })
-    if (remaining <= 1) {
-      // Dissolve cluster: remove remaining member, delete cluster
-      await prisma.story.updateMany({
-        where: { clusterId: storyCluster.clusterId },
-        data: { clusterId: null },
-      })
-      await prisma.storyCluster.delete({
-        where: { id: storyCluster.clusterId },
-      })
-      log.info({ clusterId: storyCluster.clusterId }, 'dissolved cluster after story deletion')
-    } else {
-      // Re-elect primary (import-safe: inline logic to avoid circular dependency)
-      const cluster = await prisma.storyCluster.findUnique({
-        where: { id: storyCluster.clusterId },
-        select: { primaryStoryId: true },
-      })
-      if (!cluster?.primaryStoryId) {
-        // Primary was the deleted story, need re-election
-        const { updatePrimary } = await import('./dedup.js')
-        await updatePrimary(storyCluster.clusterId)
-      }
-    }
-  }
+  // Dissolve a cluster left with one member, or re-elect its primary (the same repair as retention)
+  if (storyCluster?.clusterId) await repairClusters([storyCluster.clusterId])
 
   // Clean up dangling storyId references in newsletters and podcasts
   const [newsletters, podcasts] = await Promise.all([
@@ -682,31 +680,8 @@ export const PUBLIC_STORY_SELECT = {
   },
 } as const
 
-function buildIssueCondition(issueSlug: string): Prisma.StoryWhereInput {
-  return {
-    OR: [
-      {
-        issue: {
-          OR: [
-            { slug: issueSlug },
-            { parent: { slug: issueSlug } },
-          ],
-        },
-      },
-      {
-        issue: null,
-        feed: {
-          issue: {
-            OR: [
-              { slug: issueSlug },
-              { parent: { slug: issueSlug } },
-            ],
-          },
-        },
-      },
-    ],
-  }
-}
+/** Stories in the issue with this slug or its children (lib/issueFilter.ts holds the rule). */
+const buildIssueCondition = storyInIssueWhere
 
 const RRF_FETCH_LIMIT = 50
 const RRF_K = 60
@@ -719,16 +694,8 @@ async function hybridSearch(options: {
 }) {
   const { query, issueSlug, page, pageSize } = options
 
-  // Build issue filter SQL fragment for semantic search
-  const issueFilter = issueSlug
-    ? Prisma.sql`AND (
-        EXISTS (SELECT 1 FROM issues i WHERE i.id = s.issue_id AND (i.slug = ${issueSlug} OR i.parent_id IN (SELECT pi.id FROM issues pi WHERE pi.slug = ${issueSlug})))
-        OR (s.issue_id IS NULL AND EXISTS (
-          SELECT 1 FROM feeds f2 JOIN issues fi ON fi.id = f2.issue_id
-          WHERE f2.id = s.feed_id AND (fi.slug = ${issueSlug} OR fi.parent_id IN (SELECT pi.id FROM issues pi WHERE pi.slug = ${issueSlug}))
-        ))
-      )`
-    : Prisma.empty
+  // The same issue rule as the text leg, as SQL for the semantic leg
+  const issueFilter = issueSlug ? Prisma.sql`AND ${storyInIssueSql(issueSlug)}` : Prisma.empty
 
   // Run semantic and text searches in parallel
   const [semanticIds, textIds] = await Promise.all([
@@ -876,51 +843,55 @@ export async function getPublishedStories(options: {
   })
 }
 
-// In-memory cache for LLM-ranked related story IDs
-const relatedCache = new Map<string, { ids: string[]; expiry: number }>()
+/** A source story's LLM-ranked related story ids (`displayCount` of them, best first). */
+interface RelatedEntry {
+  sourceId: string
+  ids: string[]
+}
+
+// Per source slug. Every read re-checks that the source and each related story are still published,
+// so the cache never serves an unpublished story; unpublishing also drops the story's own entry.
 const MAX_RELATED_CACHE_SIZE = 500
-const EVICTION_INTERVAL = 60 * 60 * 1000 // 1 hour
-let lastEviction = Date.now()
+const relatedCache = new TTLCache<RelatedEntry | null>(
+  config.relatedStories.cacheHours * 60 * 60 * 1000,
+  { maxEntries: MAX_RELATED_CACHE_SIZE },
+)
 
-function evictExpiredCache() {
-  const now = Date.now()
-  if (now - lastEviction < EVICTION_INTERVAL) return
-  lastEviction = now
-  for (const [key, value] of relatedCache) {
-    if (value.expiry <= now) relatedCache.delete(key)
-  }
+/** Drop the cached related lists of these stories, which left `published` or were deleted. */
+export function forgetRelatedStories(storyIds: string[]): void {
+  if (storyIds.length === 0) return
+  const gone = new Set(storyIds)
+  relatedCache.invalidateWhere(entry => entry !== null && gone.has(entry.sourceId))
 }
 
-/** Evict the entry with the earliest expiry to make room for a new one. */
-function evictOldestEntry() {
-  let oldestKey: string | null = null
-  let oldestExpiry = Infinity
-  for (const [key, value] of relatedCache) {
-    if (value.expiry < oldestExpiry) {
-      oldestExpiry = value.expiry
-      oldestKey = key
-    }
-  }
-  if (oldestKey) relatedCache.delete(oldestKey)
-}
-
+/**
+ * Related stories for a published story: the cosine-nearest published stories, re-ranked by a
+ * small-tier model and cached per slug (`.context/embeddings.md`). Concurrent misses for a slug share
+ * one computation (one LLM call); only the published ones of the cached ids are returned.
+ */
 export async function getRelatedStories(slug: string, limit: number = config.relatedStories.displayCount) {
-  evictExpiredCache()
+  const entry = await cached(relatedCache, slug, () => rankRelatedStories(slug), e => e !== null && e.ids.length > 0)
+  if (!entry || entry.ids.length === 0) return []
 
-  // Always work with displayCount for caching consistency, then slice to requested limit
-  const displayCount = config.relatedStories.displayCount
-
-  // 1. Check in-memory cache
-  const cached = relatedCache.get(slug)
-  if (cached && cached.expiry > Date.now()) {
-    const ids = cached.ids.slice(0, limit)
-    const stories = await prisma.story.findMany({
-      where: { id: { in: ids } },
-      select: PUBLIC_STORY_SELECT,
-    })
-    const storyMap = new Map(stories.map((s) => [s.id, s]))
-    return ids.map((id) => storyMap.get(id)).filter((s): s is NonNullable<typeof s> => s != null)
+  // One query checks the source is still published and fetches the published related stories
+  const rows = await prisma.story.findMany({
+    where: { id: { in: [entry.sourceId, ...entry.ids] }, status: 'published' },
+    select: PUBLIC_STORY_SELECT,
+  })
+  const storyMap = new Map(rows.map((s) => [s.id, s]))
+  if (!storyMap.has(entry.sourceId)) {
+    relatedCache.invalidate(slug)
+    return []
   }
+  return entry.ids
+    .map((id) => storyMap.get(id))
+    .filter((s): s is NonNullable<typeof s> => s != null)
+    .slice(0, limit)
+}
+
+/** Steps 2-5 of getRelatedStories: null when no published story with an embedding has this slug. */
+async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
+  const displayCount = config.relatedStories.displayCount
 
   // 2. Find the source story and verify it has an embedding
   const rows = await prisma.$queryRaw<{ id: string; title: string | null; title_label: string | null }[]>`
@@ -928,7 +899,7 @@ export async function getRelatedStories(slug: string, limit: number = config.rel
     WHERE slug = ${slug} AND status = 'published' AND embedding IS NOT NULL
     LIMIT 1
   `
-  if (rows.length === 0) return []
+  if (rows.length === 0) return null
 
   const source = rows[0]
   const candidateCount = displayCount * config.relatedStories.candidateMultiplier
@@ -943,7 +914,7 @@ export async function getRelatedStories(slug: string, limit: number = config.rel
     ORDER BY s.embedding <=> (SELECT embedding FROM stories WHERE id = ${source.id})
     LIMIT ${candidateCount}
   `
-  if (candidates.length === 0) return []
+  if (candidates.length === 0) return { sourceId: source.id, ids: [] }
 
   // 4. If we have fewer candidates than needed, skip LLM and return all
   let selectedIds: string[]
@@ -982,23 +953,7 @@ export async function getRelatedStories(slug: string, limit: number = config.rel
     }
   }
 
-  // 6. Cache the result (evict oldest if at capacity)
-  if (!relatedCache.has(slug) && relatedCache.size >= MAX_RELATED_CACHE_SIZE) {
-    evictOldestEntry()
-  }
-  relatedCache.set(slug, {
-    ids: selectedIds,
-    expiry: Date.now() + config.relatedStories.cacheHours * 60 * 60 * 1000,
-  })
-
-  // 7. Fetch full story data in LLM-selected order, sliced to requested limit
-  const returnIds = selectedIds.slice(0, limit)
-  const stories = await prisma.story.findMany({
-    where: { id: { in: returnIds } },
-    select: PUBLIC_STORY_SELECT,
-  })
-  const storyMap = new Map(stories.map((s) => [s.id, s]))
-  return returnIds.map((id) => storyMap.get(id)).filter((s): s is NonNullable<typeof s> => s != null)
+  return { sourceId: source.id, ids: selectedIds }
 }
 
 interface StatusFilterOptions {
@@ -1043,19 +998,6 @@ export async function getStoryIdsByStatus(
   return stories.map(s => s.id)
 }
 
-export async function getStoriesByStatus(
-  status: string,
-  options: StatusFilterOptions = {},
-) {
-  const where = buildStatusWhereClause(status, options)
-  return prisma.story.findMany({
-    where,
-    include: { feed: { include: { issue: true } } },
-    orderBy: { dateCrawled: 'desc' },
-    take: options.limit ?? 200,
-  })
-}
-
 export async function publishStory(id: string): Promise<Story> {
   // ensureEmbedding makes slow external calls, so it stays OUTSIDE the lock/tx.
   await ensureEmbedding(id)
@@ -1073,10 +1015,12 @@ export async function publishStory(id: string): Promise<Story> {
 }
 
 export async function rejectStory(id: string): Promise<Story> {
-  return prisma.story.update({
+  const story = await prisma.story.update({
     where: { id },
     data: { status: StoryStatus.rejected },
   })
+  forgetRelatedStories([id])
+  return story
 }
 
 export async function getPublishedStoryBySlug(slug: string) {
@@ -1157,14 +1101,6 @@ export async function getClusterMembers(slug: string): Promise<{
 const NEGATIVE_EMOTIONS: EmotionTag[] = [EmotionTag.frustrating, EmotionTag.scary]
 
 export async function getHomepageData(issueSlugs: string[], storiesPerIssue = 7) {
-  // Build issue slug conditions for stories (includes child issues)
-  const buildIssueCondition = (slug: string) => ({
-    OR: [
-      { issue: { OR: [{ slug }, { parent: { slug } }] } },
-      { issue: null, feed: { issue: { OR: [{ slug }, { parent: { slug } }] } } },
-    ],
-  })
-
   const orderBy: Prisma.StoryOrderByWithRelationInput[] = [{ datePublished: 'desc' }, { dateCrawled: 'desc' }]
 
   // Fetch three emotion buckets per issue for client-side mixing.

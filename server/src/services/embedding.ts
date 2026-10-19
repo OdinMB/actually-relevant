@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import OpenAI from 'openai'
 import { withRetry } from '../lib/retry.js'
+import { TTLCache, cached } from '../lib/cache.js'
 import { createLogger } from '../lib/logger.js'
 import { config } from '../config.js'
 import {
@@ -46,18 +47,11 @@ export function needsEmbeddingUpdate(
 // ~8k token limit for text-embedding-3-small; truncate at char level with safety margin
 const MAX_EMBEDDING_CHARS = 30_000
 
-// Small LRU cache for search query embeddings to avoid redundant OpenAI calls.
+// Small cache for search query embeddings to avoid redundant OpenAI calls.
 // 50 entries * ~6KB each = ~300KB max memory.
 const SEARCH_CACHE_MAX = 50
 const SEARCH_CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
-const searchEmbeddingCache = new Map<string, { embedding: number[]; expiry: number }>()
-
-function evictExpiredSearchCache() {
-  const now = Date.now()
-  for (const [key, entry] of searchEmbeddingCache) {
-    if (entry.expiry <= now) searchEmbeddingCache.delete(key)
-  }
-}
+const searchEmbeddingCache = new TTLCache<number[]>(SEARCH_CACHE_TTL_MS, { maxEntries: SEARCH_CACHE_MAX })
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   const input = text.length > MAX_EMBEDDING_CHARS ? text.slice(0, MAX_EMBEDDING_CHARS) : text
@@ -75,25 +69,11 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
 /**
  * Generate embedding for a search query with caching.
- * Identical queries within the TTL reuse the cached embedding.
+ * Identical queries (trimmed, case-insensitive) within the TTL reuse the cached embedding, and
+ * concurrent identical queries share one call.
  */
 export async function generateSearchEmbedding(query: string): Promise<number[]> {
-  const key = query.trim().toLowerCase()
-
-  const cached = searchEmbeddingCache.get(key)
-  if (cached && cached.expiry > Date.now()) return cached.embedding
-
-  const embedding = await generateEmbedding(query)
-
-  // Evict expired entries and enforce max size
-  evictExpiredSearchCache()
-  if (searchEmbeddingCache.size >= SEARCH_CACHE_MAX) {
-    const oldest = searchEmbeddingCache.keys().next().value!
-    searchEmbeddingCache.delete(oldest)
-  }
-
-  searchEmbeddingCache.set(key, { embedding, expiry: Date.now() + SEARCH_CACHE_TTL_MS })
-  return embedding
+  return cached(searchEmbeddingCache, query.trim().toLowerCase(), () => generateEmbedding(query))
 }
 
 export async function generateEmbeddingsBatch(

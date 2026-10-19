@@ -49,6 +49,7 @@ npm run dev --prefix server           # Start server with hot reload
 npm run build --prefix server         # Build server (installs devDeps first)
 npm run typecheck --prefix server     # Type-check server (tsc --noEmit)
 npm run test --prefix server          # Run server tests
+npm run test:db --prefix server       # PostgreSQL integration tests only (need TEST_DATABASE_URL; skipped without it)
 ```
 
 **Type-checking:** use `npm run typecheck --prefix <client|server>`. It's the canonical TS check and runs without a permission prompt. Do **not** invoke `tsc` via `node .../node_modules/typescript/bin/tsc` or bare `tsc` -- those are not allowlisted and force a confirmation.
@@ -145,7 +146,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `seo.md` | Sitemap, Render rewrites, robots.txt, route registration, head-tag defaults (`DefaultSeo` + `data-rh` fallbacks in `index.html`), story link previews (story pages proxied through the backend, per-story `og.png`) |
 | `images.md` | WebP optimization, size presets, CLI commands |
 | `logging.md` | Pino config, error serialization, structured data, log levels |
-| `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands |
+| `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands, the opt-in PostgreSQL integration tests (`*.db.test.ts`, `TEST_DATABASE_URL`) |
 | `deployment.md` | Render services and the `render.yaml` blueprint (service settings change there, not in the dashboard); why builds install devDependencies and pin `tsc` (read before touching build scripts or `render.yaml`, or adding an env var: `server/src/blueprint.test.ts` fails until it is in the code, `env.example` and `render.yaml`) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |

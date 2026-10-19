@@ -214,12 +214,18 @@ describe('Public Stories API', () => {
       mockPrisma.$queryRaw
         .mockResolvedValueOnce([{ id: 'source', title: 'Source', title_label: null }])
         .mockResolvedValueOnce([{ id: 'story-1', title: 'Published Article', title_label: null }])
-      mockPrisma.story.findMany.mockResolvedValue([publicStory])
+      // The final fetch also returns the source, proving it is still published
+      mockPrisma.story.findMany.mockResolvedValue([{ id: 'source' }, publicStory])
 
       const res = await request(app).get('/api/stories/source-slug/related')
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(1)
       expect(res.body[0].aiGenerated).toEqual(expectedMarker(publicStory))
+    })
+
+    it.each(['0', '-3', '11', '2.5', 'abc'])('refuses limit=%s', async (limit) => {
+      const res = await request(app).get(`/api/stories/source-slug/related?limit=${limit}`)
+      expect(res.status).toBe(400)
     })
   })
 

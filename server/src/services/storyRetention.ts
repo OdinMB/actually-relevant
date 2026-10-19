@@ -21,14 +21,16 @@ const cutoff = (maxAgeMonths: number) =>
  * Delete up to `limit` stories crawled before the cutoff and add their counts to
  * `story_archive_counts`, in one statement. Kept whatever their age: published stories, stories a
  * newsletter, podcast or social post names, and every member of a cluster with a published story
- * (its "Also covered by" sources). Returns the deleted count per status.
+ * (its "Also covered by" sources). Returns the deleted count per status and the clusters the deleted
+ * stories belonged to, which the caller repairs (`repairClusters()`).
  */
 export async function deleteOldStoriesBatch(
   maxAgeMonths: number = config.storyRetention.maxAgeMonths,
   limit: number = config.storyRetention.batchSize,
-): Promise<Record<string, number>> {
+): Promise<{ deletedByStatus: Record<string, number>; clusterIds: string[] }> {
   const statuses = Prisma.join(DELETABLE_STATUSES.map(s => Prisma.sql`${s}::"StoryStatus"`))
-  const rows = await prisma.$queryRaw<{ status: string; count: number }[]>`
+  // Two kinds of result row: a status with its count, or a cluster id
+  const rows = await prisma.$queryRaw<{ status: string | null; count: number | null; cluster_id: string | null }[]>`
     WITH doomed AS (
       SELECT s."id" FROM "stories" s
       WHERE s."date_crawled" < ${cutoff(maxAgeMonths)}
@@ -48,7 +50,7 @@ export async function deleteOldStoriesBatch(
     deleted AS (
       DELETE FROM "stories" s USING doomed d WHERE s."id" = d."id"
       RETURNING s."date_crawled", s."feed_id", s."issue_id", s."status", s."relevance_pre",
-                s."relevance", s."emotion_tag"
+                s."relevance", s."emotion_tag", s."cluster_id"
     ),
     counted AS (
       INSERT INTO "story_archive_counts" ("id", "crawl_month", "feed_id", "issue_id", "status",
@@ -59,15 +61,16 @@ export async function deleteOldStoriesBatch(
       GROUP BY 2, 3, 4, 5, 6, 7, 8
       RETURNING "status", "story_count"
     )
-    SELECT "status", sum("story_count")::int AS "count" FROM counted GROUP BY "status"`
-  return Object.fromEntries(rows.map(r => [r.status, Number(r.count)]))
-}
-
-/** Clusters left with no member once their stories are deleted. */
-export async function deleteEmptyClusters(): Promise<number> {
-  return prisma.$executeRaw`
-    DELETE FROM "story_clusters" c
-    WHERE NOT EXISTS (SELECT 1 FROM "stories" s WHERE s."cluster_id" = c."id")`
+    SELECT "status", sum("story_count")::int AS "count", NULL::text AS "cluster_id" FROM counted GROUP BY "status"
+    UNION ALL
+    SELECT NULL, NULL, "cluster_id" FROM deleted WHERE "cluster_id" IS NOT NULL GROUP BY "cluster_id"`
+  const deletedByStatus: Record<string, number> = {}
+  const clusterIds: string[] = []
+  for (const r of rows) {
+    if (r.cluster_id !== null) clusterIds.push(r.cluster_id)
+    else if (r.status !== null) deletedByStatus[r.status] = Number(r.count)
+  }
+  return { deletedByStatus, clusterIds }
 }
 
 /**

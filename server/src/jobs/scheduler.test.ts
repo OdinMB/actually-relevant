@@ -44,7 +44,7 @@ vi.mock('./preassessStories.js', () => ({ runPreassessStories: vi.fn() }))
 vi.mock('./assessStories.js', () => ({ runAssessStories: mockRunAssessStories }))
 vi.mock('./selectStories.js', () => ({ runSelectStories: vi.fn() }))
 
-const { initScheduler, startScheduler, stopScheduler, reloadJob, runJob, runningJobs, isJobRunning, estimateCronIntervalMs } =
+const { initScheduler, startScheduler, stopScheduler, reloadJob, runJob, runningJobs, isJobRunning, estimateCronIntervalMs, waitForRunningJobs } =
   await import('./scheduler.js')
 const { config } = await import('../config.js')
 
@@ -135,6 +135,37 @@ describe('scheduler', () => {
       runningJobs.add('crawl_feeds')
       await runJob('crawl_feeds', vi.fn())
       expect(mockLease.claimJobRun).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('waitForRunningJobs (graceful shutdown)', () => {
+    it('resolves at once with nothing running', async () => {
+      expect(await waitForRunningJobs(1000)).toEqual([])
+    })
+
+    it('waits for a run in progress, its bookkeeping included', async () => {
+      let finish!: () => void
+      const handler = vi.fn(() => new Promise<void>(r => { finish = r }))
+      void runJob('crawl_feeds', handler)
+      await flush()
+
+      const waiting = waitForRunningJobs(5000)
+      finish()
+
+      expect(await waiting).toEqual([])
+      expect(mockLease.finishJobRun).toHaveBeenCalledWith('crawl_feeds', null)
+    })
+
+    it('gives up at the deadline and names the jobs still running', async () => {
+      let finish!: () => void
+      void runJob('crawl_feeds', () => new Promise<void>(r => { finish = r }))
+      await flush()
+
+      expect(await waitForRunningJobs(20)).toEqual(['crawl_feeds'])
+
+      finish()
+      await flush()
+      expect(await waitForRunningJobs(20)).toEqual([])
     })
   })
 

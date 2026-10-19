@@ -8,6 +8,7 @@ const mockPrisma = vi.hoisted(() => ({
 
 const mockStartScheduler = vi.hoisted(() => vi.fn())
 const mockStopScheduler = vi.hoisted(() => vi.fn())
+const mockWaitForRunningJobs = vi.hoisted(() => vi.fn().mockResolvedValue([]))
 
 const mockGetProcessingStoryIds = vi.hoisted(() => vi.fn().mockReturnValue([]))
 const mockTaskRegistryDestroy = vi.hoisted(() => vi.fn())
@@ -37,6 +38,7 @@ vi.mock('./lib/logger.js', () => ({
 vi.mock('./jobs/scheduler.js', () => ({
   startScheduler: mockStartScheduler,
   stopScheduler: mockStopScheduler,
+  waitForRunningJobs: mockWaitForRunningJobs,
 }))
 vi.mock('./lib/taskRegistry.js', () => ({
   taskRegistry: {
@@ -67,6 +69,7 @@ describe('server index', () => {
     mockGetProcessingStoryIds.mockReturnValue([])
     mockServerClose.mockImplementation((cb: () => void) => cb())
     mockPrisma.$disconnect.mockResolvedValue(undefined)
+    mockWaitForRunningJobs.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -93,6 +96,7 @@ describe('server index', () => {
         callOrder.push('serverClose')
         cb()
       })
+      mockWaitForRunningJobs.mockImplementation(async () => { callOrder.push('waitForJobs'); return [] })
       mockTaskRegistryDestroy.mockImplementation(() => { callOrder.push('taskRegistryDestroy') })
       mockReleaseHeldLeases.mockImplementation(async () => { callOrder.push('releasePodcastLeases'); return 0 })
       mockReleaseHeldJobLeases.mockImplementation(async () => { callOrder.push('releaseJobLeases'); return 0 })
@@ -105,6 +109,7 @@ describe('server index', () => {
       expect(callOrder).toEqual([
         'stopScheduler',
         'serverClose',
+        'waitForJobs',
         'taskRegistryDestroy',
         'releasePodcastLeases',
         'releaseJobLeases',
@@ -208,6 +213,33 @@ describe('server index', () => {
       expect(mockTaskRegistryDestroy).toHaveBeenCalledTimes(1)
       expect(mockPrisma.$disconnect).toHaveBeenCalledTimes(1)
       expect(mockProcessExit).toHaveBeenCalledWith(0)
+    })
+
+    it('waits for running jobs within the drain deadline before releasing job leases', async () => {
+      let finishJob!: () => void
+      mockWaitForRunningJobs.mockImplementation(() => new Promise<string[]>(r => { finishJob = () => r([]) }))
+
+      const shutdownPromise = indexModule.shutdown()
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(mockWaitForRunningJobs).toHaveBeenCalledTimes(1)
+      const timeoutMs = mockWaitForRunningJobs.mock.calls[0][0]
+      expect(timeoutMs).toBeGreaterThan(0)
+      expect(timeoutMs).toBeLessThanOrEqual(9000)
+      expect(mockReleaseHeldJobLeases).not.toHaveBeenCalled()
+
+      finishJob()
+      await shutdownPromise
+      expect(mockReleaseHeldJobLeases).toHaveBeenCalledTimes(1)
+      expect(mockProcessExit).toHaveBeenCalledWith(0)
+    })
+
+    it('carries on with cleanup when a job is still running at the deadline', async () => {
+      mockWaitForRunningJobs.mockResolvedValue(['crawl_feeds'])
+      const shutdownPromise = indexModule.shutdown()
+      await vi.advanceTimersByTimeAsync(1000)
+      await shutdownPromise
+      expect(mockReleaseHeldJobLeases).toHaveBeenCalledTimes(1)
+      expect(mockPrisma.$disconnect).toHaveBeenCalledTimes(1)
     })
 
     it('calls process.exit(0) on successful shutdown', async () => {

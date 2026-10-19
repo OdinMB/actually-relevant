@@ -115,6 +115,11 @@ export const minRelevanceParam = z.coerce.number({ invalid_type_error: 'Must be 
   .min(1, 'Must be a whole number from 1 to 10')
   .max(10, 'Must be a whole number from 1 to 10')
 
+/** `GET /api/stories/:slug/related`: how many related stories to return (default `relatedStories.displayCount`). */
+export const relatedStoriesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(10).optional(),
+})
+
 export const publicStoryQuerySchema = z.object({
   issueSlug: z.string().optional(),
   search: z.string().min(2).max(200).optional(),
