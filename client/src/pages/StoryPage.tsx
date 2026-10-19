@@ -16,7 +16,7 @@ import AiLabel from '../components/ai/AiLabel'
 import { AI_DISCLOSURE_COPY, quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { StoryPageSkeleton } from '../components/skeletons'
 import { SEO, CommonOgTags } from '../lib/seo'
-import { buildArticleSchema, buildBreadcrumbSchema } from '../lib/structured-data'
+import { buildArticleSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
 
 // ---------------------------------------------------------------------------
 // Analysis section with ruled heading + numbered points
@@ -152,10 +152,10 @@ export default function StoryPage() {
         )}
         {CommonOgTags({})}
         <script type="application/ld+json">
-          {JSON.stringify(buildArticleSchema(story))}
+          {toJsonLd(buildArticleSchema(story))}
         </script>
         <script type="application/ld+json">
-          {JSON.stringify(buildBreadcrumbSchema([
+          {toJsonLd(buildBreadcrumbSchema([
             { name: 'Home', url: SEO.siteUrl },
             { name: issueName, url: `${SEO.siteUrl}/issues/${issueSlug}` },
             { name: displayTitle },

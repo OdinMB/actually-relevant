@@ -10,7 +10,7 @@ import PullQuote, { getQuoteVariant } from '../components/PullQuote'
 import Pagination from '../components/Pagination'
 import { IssuePageSkeleton } from '../components/skeletons'
 import { SEO, CommonOgTags } from '../lib/seo'
-import { buildCollectionPageSchema, buildBreadcrumbSchema } from '../lib/structured-data'
+import { buildCollectionPageSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
 import { usePositivity } from '../contexts/PositivityContext'
 import { positivityToEmotionTags } from '../lib/mix-stories'
 import type { PublicStory } from '@shared/types'
@@ -185,10 +185,10 @@ export default function IssuePage() {
         {CommonOgTags({})}
         <link rel="alternate" type="application/rss+xml" title={`${issue.name} RSS Feed`} href={`${API_BASE}/feed/${slug}`} />
         <script type="application/ld+json">
-          {JSON.stringify(buildCollectionPageSchema(issue))}
+          {toJsonLd(buildCollectionPageSchema(issue))}
         </script>
         <script type="application/ld+json">
-          {JSON.stringify(buildBreadcrumbSchema([
+          {toJsonLd(buildBreadcrumbSchema([
             { name: 'Home', url: SEO.siteUrl },
             ...(issue.parent ? [{ name: issue.parent.name, url: `${SEO.siteUrl}/issues/${issue.parent.slug}` }] : []),
             { name: issue.name },

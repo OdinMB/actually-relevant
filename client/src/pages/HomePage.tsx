@@ -14,7 +14,7 @@ import { getHeadline } from '../lib/title-label'
 import StoryTitleLabel from '../components/StoryTitleLabel'
 import { quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { SEO, CommonOgTags } from '../lib/seo'
-import { buildWebSiteSchema, buildOrganizationSchema } from '../lib/structured-data'
+import { buildWebSiteSchema, buildOrganizationSchema, toJsonLd } from '../lib/structured-data'
 import SupportBanner from '../components/SupportBanner'
 import NewsletterBanner from '../components/NewsletterBanner'
 import { usePositivity } from '../contexts/PositivityContext'
@@ -254,10 +254,10 @@ export default function HomePage() {
         <meta property="og:url" content={`${SEO.siteUrl}/`} />
         {CommonOgTags({})}
         <script type="application/ld+json">
-          {JSON.stringify(buildWebSiteSchema())}
+          {toJsonLd(buildWebSiteSchema())}
         </script>
         <script type="application/ld+json">
-          {JSON.stringify(buildOrganizationSchema())}
+          {toJsonLd(buildOrganizationSchema())}
         </script>
       </Helmet>
 
