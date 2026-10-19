@@ -189,7 +189,7 @@ export default function StoriesPage() {
       // Single story: generate draft and open panel
       setBlueskyPanelOpen(true)
       setBlueskyDraft(null)
-      adminApi.bluesky.generateDraft(ids[0])
+      adminApi.bluesky.generateDraft(ids[0]!)
         .then((draft) => {
           setBlueskyDraft(draft as BlueskyDraft)
         })
@@ -215,7 +215,7 @@ export default function StoriesPage() {
       // Single story: generate draft and open panel
       setMastodonPanelOpen(true)
       setMastodonDraft(null)
-      adminApi.mastodon.generateDraft(ids[0])
+      adminApi.mastodon.generateDraft(ids[0]!)
         .then((draft) => {
           setMastodonDraft(draft as MastodonDraft)
         })

@@ -30,9 +30,9 @@ const bridges = [
 
 /** The intro's HOST_A turn leads into the first story, so story 1 opens with HOST_B picking it up. */
 export function storySegment(ref: number, overrides: Partial<Segment> = {}): Segment {
-  const [first, second]: Turn['speaker'][] = ref === 1 ? ['HOST_B', 'HOST_A'] : ['HOST_A', 'HOST_B']
+  const [first, second]: [Turn['speaker'], Turn['speaker']] = ref === 1 ? ['HOST_B', 'HOST_A'] : ['HOST_A', 'HOST_B']
   const turns: Turn[] = [
-    { speaker: first, text: bridges[ref - 1] },
+    { speaker: first, text: bridges[ref - 1]! },
     { speaker: second, text: filler(340, `story ${ref} first`) },
     { speaker: first, text: filler(340, `story ${ref} second`) },
     { speaker: second, text: filler(330, `story ${ref} third`) },
@@ -66,6 +66,6 @@ export function withSegment(d: PodcastDialogue, index: number, segment: Segment)
 }
 
 export function withTurn(d: PodcastDialogue, segmentIndex: number, turnIndex: number, text: string): PodcastDialogue {
-  const seg = d.segments[segmentIndex]
+  const seg = d.segments[segmentIndex]!
   return withSegment(d, segmentIndex, { ...seg, turns: seg.turns.map((t, i) => (i === turnIndex ? { ...t, text } : t)) })
 }

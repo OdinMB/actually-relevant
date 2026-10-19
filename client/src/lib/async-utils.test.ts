@@ -59,8 +59,8 @@ describe('parallelMap', () => {
 
     expect(results).toEqual([10, 30])
     expect(errors).toHaveLength(2)
-    expect(errors[0].item).toBe(2)
-    expect(errors[1].item).toBe(4)
+    expect(errors[0]!.item).toBe(2)
+    expect(errors[1]!.item).toBe(4)
   })
 
   it('returns empty results for empty input', async () => {

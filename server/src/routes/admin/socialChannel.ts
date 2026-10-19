@@ -51,7 +51,7 @@ export function socialChannelRouter(service: SocialChannelService, schemas: Soci
 
   // Get single post
   router.get('/posts/:id', failsWith('Failed to get post'), async (req, res) => {
-    const post = await service.getPostById(req.params.id)
+    const post = await service.getPostById(req.params.id!)
     if (!post) {
       res.status(404).json({ error: 'Post not found' })
       return
@@ -71,17 +71,17 @@ export function socialChannelRouter(service: SocialChannelService, schemas: Soci
 
   // Update draft text
   router.put('/posts/:id', failsWith('Failed to update draft'), validateBody(schemas.updateDraftBody), async (req, res) => {
-    res.json(await service.updateDraft(req.params.id, req.body.postText))
+    res.json(await service.updateDraft(req.params.id!, req.body.postText))
   })
 
   // Publish draft to the channel
   router.post('/posts/:id/publish', failsWith('Failed to publish post'), expensiveOpLimiter, async (req, res) => {
-    res.json(await service.publishPost(req.params.id))
+    res.json(await service.publishPost(req.params.id!))
   })
 
   // Delete post (draft or published)
   router.delete('/posts/:id', failsWith('Failed to delete post'), async (req, res) => {
-    await service.deletePostRecord(req.params.id)
+    await service.deletePostRecord(req.params.id!)
     res.status(204).send()
   })
 

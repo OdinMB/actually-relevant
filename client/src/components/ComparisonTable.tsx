@@ -102,7 +102,7 @@ export default function ComparisonTable({ headers, rows, highlightColumn, compet
                         {row.feature}
                       </dt>
                       <dd className="text-sm text-neutral-700 mt-0.5">
-                        <CellContent cell={row.cells[colIdx]} />
+                        <CellContent cell={row.cells[colIdx]!} />
                       </dd>
                     </div>
                   ))}

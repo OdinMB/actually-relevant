@@ -73,7 +73,7 @@ function buildWhereClause(filters: StoryFilters): Prisma.StoryWhereInput {
     const match = filters.rating.match(/^(gte|lte)(\d+)$/)
     if (match) {
       const op = match[1] as 'gte' | 'lte'
-      const val = parseInt(match[2], 10)
+      const val = parseInt(match[2]!, 10)
       const condition = { [op]: val }
       conditions.push({
         OR: [

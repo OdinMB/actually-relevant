@@ -281,7 +281,7 @@ export default function IssueEditPage() {
                     placeholder="Label"
                     onChange={e => {
                       const updated = [...form.makeADifference]
-                      updated[i] = { ...updated[i], label: e.target.value }
+                      updated[i] = { ...link, label: e.target.value }
                       set('makeADifference', updated)
                     }}
                     className="w-1/3 rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:ring-brand-500"
@@ -292,7 +292,7 @@ export default function IssueEditPage() {
                     placeholder="URL"
                     onChange={e => {
                       const updated = [...form.makeADifference]
-                      updated[i] = { ...updated[i], url: e.target.value }
+                      updated[i] = { ...link, url: e.target.value }
                       set('makeADifference', updated)
                     }}
                     className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:ring-brand-500"

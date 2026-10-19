@@ -58,8 +58,8 @@ export function decideSocialPick(metrics: Record<string, PickArmMetrics>, candid
   return pickLowestPassing(
     candidates.filter(c => metrics[c]).map(c => ({
       arm: c,
-      failures: (metrics[c].validRate ?? 0) < 1 ? [`valid story ID rate ${pct(metrics[c].validRate)} < 100%`] : [],
-      evidence: [`valid IDs ${pct(metrics[c].validRate)}; agreement with the posted story ${pct(metrics[c].storedAgreement)} (information only)`],
+      failures: (metrics[c]!.validRate ?? 0) < 1 ? [`valid story ID rate ${pct(metrics[c]!.validRate)} < 100%`] : [],
+      evidence: [`valid IDs ${pct(metrics[c]!.validRate)}; agreement with the posted story ${pct(metrics[c]!.storedAgreement)} (information only)`],
     })),
   )
 }
@@ -95,17 +95,17 @@ function scorePost(items: SocialPostItem[], recs: CallRecord<{ postText: string 
 }
 
 export function decideSocialPost(metrics: Record<string, PostArmMetrics>, baseline: string, candidates: string[]): Decision {
-  const b = metrics[baseline]
+  const b = metrics[baseline]!
   return pickLowestPassing(
     candidates.filter(c => metrics[c]).map(c => ({
       arm: c,
       failures: [
-        ...(metrics[c].drafts === 0 ? ['no drafts returned'] : []),
-        ...(metrics[c].overLimit > b.overLimit ? [`${metrics[c].overLimit} raw drafts over the limit (mini ${b.overLimit})`] : []),
-        ...(metrics[c].forbidden > 0 ? [`${metrics[c].forbidden} drafts with URLs, mentions, disallowed hashtags, the title or junk`] : []),
-        ...(metrics[c].failures > b.failures ? [`${metrics[c].failures} failed calls (mini ${b.failures})`] : []),
+        ...(metrics[c]!.drafts === 0 ? ['no drafts returned'] : []),
+        ...(metrics[c]!.overLimit > b.overLimit ? [`${metrics[c]!.overLimit} raw drafts over the limit (mini ${b.overLimit})`] : []),
+        ...(metrics[c]!.forbidden > 0 ? [`${metrics[c]!.forbidden} drafts with URLs, mentions, disallowed hashtags, the title or junk`] : []),
+        ...(metrics[c]!.failures > b.failures ? [`${metrics[c]!.failures} failed calls (mini ${b.failures})`] : []),
       ],
-      evidence: [`${metrics[c].overLimit} over-limit drafts (mini ${b.overLimit}); no forbidden content`],
+      evidence: [`${metrics[c]!.overLimit} over-limit drafts (mini ${b.overLimit}); no forbidden content`],
     })),
   )
 }

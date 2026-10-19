@@ -59,7 +59,7 @@ async function main() {
       }
     }
 
-    cursor = rows[rows.length - 1].id
+    cursor = rows[rows.length - 1]!.id
 
     if (toProcess.length > 0) {
       // Process in API batch chunks, with semaphore controlling concurrent batches
@@ -72,8 +72,8 @@ async function main() {
             const embeddings = await generateEmbeddingsBatch(chunk.map((c) => c.content))
 
             for (let j = 0; j < chunk.length; j++) {
-              const { story, hash } = chunk[j]
-              const embedding = embeddings[j]
+              const { story, hash } = chunk[j]!
+              const embedding = embeddings[j]!
 
               console.log(`\n  [${(story.title || 'untitled').slice(0, 60)}]`)
               console.log(`  Hash: ${hash.slice(0, 12)}...`)

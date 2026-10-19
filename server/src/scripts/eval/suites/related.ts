@@ -60,10 +60,10 @@ export function scoreRelated(stories: RelatedItem[], records: CallRecord<Related
 }
 
 export function decideRelated(metrics: Record<string, RelatedArmMetrics>, baseline: string, candidates: string[]): Decision {
-  const b = metrics[baseline]
+  const b = metrics[baseline]!
   return pickLowestPassing(
     candidates.filter(c => metrics[c]).map(c => {
-      const m = metrics[c]
+      const m = metrics[c]!
       return {
         arm: c,
         failures: [

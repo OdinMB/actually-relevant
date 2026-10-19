@@ -43,7 +43,7 @@ export function CreateClusterPanel({ open, onClose, preSelectedStoryIds = [], on
       const found = results.filter((s): s is ClusterStorySearchResult => s != null)
       if (found.length > 0) {
         setSelectedStories(found)
-        setPrimaryId(found[0].id)
+        setPrimaryId(found[0]!.id)
       }
     })
   }, [open, preSelectedStoryIds])
@@ -78,7 +78,7 @@ export function CreateClusterPanel({ open, onClose, preSelectedStoryIds = [], on
     setSelectedStories(prev => {
       const remaining = prev.filter(s => s.id !== storyId)
       if (primaryId === storyId) {
-        setPrimaryId(remaining.length > 0 ? remaining[0].id : null)
+        setPrimaryId(remaining[0]?.id ?? null)
       }
       return remaining
     })

@@ -108,7 +108,7 @@ async function writeFields(id: string, input: StoryUpdate, updateData: Prisma.St
  */
 async function moveOne(id: string, status: StoryStatus): Promise<Story> {
   const { skipped } = await transition([id], editorMoveTo(status), 'editor')
-  if (skipped.length > 0 && skipped[0].status === null) throw new NotFoundError('Story not found')
+  if (skipped[0] && skipped[0].status === null) throw new NotFoundError('Story not found')
   return prisma.story.findUniqueOrThrow({ where: { id } })
 }
 

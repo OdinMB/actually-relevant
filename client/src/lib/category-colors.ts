@@ -68,7 +68,7 @@ const CATEGORY_COLORS: Record<string, CategoryColor> = {
   },
 }
 
-const DEFAULT_COLOR: CategoryColor = CATEGORY_COLORS['general-news']
+const DEFAULT_COLOR: CategoryColor = CATEGORY_COLORS['general-news']!
 
 export function getCategoryColor(issueSlug: string): CategoryColor {
   return CATEGORY_COLORS[issueSlug] ?? DEFAULT_COLOR

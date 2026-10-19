@@ -71,9 +71,8 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
     WHERE slug = ${slug} AND status = 'published' AND embedding IS NOT NULL
     LIMIT 1
   `
-  if (rows.length === 0) return null
-
-  const source = rows[0]
+  const [source] = rows
+  if (!source) return null
   const candidateCount = displayCount * config.relatedStories.candidateMultiplier
 
   // 3. Get a larger candidate pool via cosine distance

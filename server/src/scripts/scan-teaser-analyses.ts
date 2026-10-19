@@ -132,7 +132,7 @@ async function main() {
         if (reason) findings.push({ slug: s.slug, sourceTitle: s.sourceTitle, feedTitle: s.feed.title, length: s.sourceContent.length, reason })
       }
       scanned += page.length
-      cursor = page[page.length - 1].id
+      cursor = page[page.length - 1]!.id
     }
     console.log(toMarkdown(findings, scanned))
   } finally {

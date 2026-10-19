@@ -32,6 +32,6 @@ describe('appRoutes', () => {
     expect(within(main).getByRole('heading', { level: 1 })).toBeTruthy()
     expect(screen.getByRole('banner')).toBeTruthy()
     const matches = router.state.matches
-    expect(matches[matches.length - 1].route.path).toBe('*')
+    expect(matches[matches.length - 1]!.route.path).toBe('*')
   })
 })

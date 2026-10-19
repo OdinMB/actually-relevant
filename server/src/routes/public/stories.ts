@@ -51,7 +51,7 @@ router.get('/:slug/cluster', async (req, res) => {
 
 router.get('/:slug/related', validateQuery(relatedStoriesQuerySchema), async (req, res) => {
   try {
-    const stories = await storyService.getRelatedStories(req.params.slug, req.parsedQuery!.limit)
+    const stories = await storyService.getRelatedStories(req.params.slug!,req.parsedQuery!.limit)
     res.set('Cache-Control', `public, max-age=${config.relatedStories.httpCacheSeconds}`)
     res.json(stories.map(withAiGeneratedMarker))
   } catch (err) {

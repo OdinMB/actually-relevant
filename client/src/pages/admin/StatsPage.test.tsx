@@ -71,7 +71,7 @@ describe('StatsPage', () => {
     renderPage()
     const table = await screen.findByRole('table', { name: /by month crawled/ })
     const rows = within(table).getAllByRole('row').slice(1)
-    expect(within(rows[0]).getByRole('rowheader')).toHaveTextContent('2026-09')
+    expect(within(rows[0]!).getByRole('rowheader')).toHaveTextContent('2026-09')
     expect(rows[1]).toHaveTextContent('1,200')
   })
 })

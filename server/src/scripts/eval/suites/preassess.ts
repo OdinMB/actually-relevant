@@ -106,7 +106,7 @@ export function scorePreassess(
 }
 
 export function decidePreassess(metrics: Record<string, PreassessArmMetrics>, baseline: string, candidates: string[]): Decision {
-  const b = metrics[baseline]
+  const b = metrics[baseline]!
   const bars = {
     issue: effectiveBar(0.85, b.issueAgreement),
     emotion: effectiveBar(0.8, b.emotionAgreement),
@@ -117,7 +117,7 @@ export function decidePreassess(metrics: Record<string, PreassessArmMetrics>, ba
     (value ?? 0) >= bar ? [] : [`${label} ${pct(value)} < ${pct(bar)}`]
   return pickLowestPassing(
     candidates.filter(c => metrics[c]).map(c => {
-      const m = metrics[c]
+      const m = metrics[c]!
       const drift = m.passRate != null && m.storedPassRate ? Math.abs(m.passRate - m.storedPassRate) / m.storedPassRate : 0
       return {
         arm: c,

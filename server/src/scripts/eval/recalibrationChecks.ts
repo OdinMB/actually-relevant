@@ -173,7 +173,7 @@ const dedupStep: RecalibrationStepDef = {
 }
 
 /** Every story of the phase-1 sample (not a half): the set is for taste, not calibration. */
-const ratingSetArms = (effort: ReasoningEffort) => [MINI, luna(effort)]
+const ratingSetArms = (effort: ReasoningEffort): [Arm, Arm] => [MINI, luna(effort)]
 
 const ratingSetStep: RecalibrationStepDef = {
   name: 'rating-set',

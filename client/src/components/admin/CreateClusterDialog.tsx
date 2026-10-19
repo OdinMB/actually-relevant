@@ -17,7 +17,7 @@ interface CreateClusterDialogProps {
 }
 
 export function CreateClusterDialog({ open, onClose, stories, onSuccess }: CreateClusterDialogProps) {
-  const [primaryId, setPrimaryId] = useState<string | null>(stories.length > 0 ? stories[0].id : null)
+  const [primaryId, setPrimaryId] = useState<string | null>(stories[0]?.id ?? null)
   const createCluster = useCreateCluster()
   const { toast } = useToast()
 
@@ -43,7 +43,7 @@ export function CreateClusterDialog({ open, onClose, stories, onSuccess }: Creat
   // Reset primary when dialog opens with new stories
   useEffect(() => {
     if (open && (!primaryId || !stories.find(s => s.id === primaryId))) {
-      setPrimaryId(stories.length > 0 ? stories[0].id : null)
+      setPrimaryId(stories[0]?.id ?? null)
     }
   }, [open, stories, primaryId])
 

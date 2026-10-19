@@ -87,7 +87,7 @@ describe('PodcastPage', () => {
   it('does not repeat the per-episode AI line on the page', async () => {
     renderPage()
     await screen.findByRole('heading', { name: /W42: Clean air/ })
-    expect(screen.queryByText(RESPONSE.episodes[0].aiLine)).toBeNull()
+    expect(screen.queryByText(RESPONSE.episodes[0]!.aiLine)).toBeNull()
   })
 
   it('collapses each episode story list until its toggle is pressed', async () => {

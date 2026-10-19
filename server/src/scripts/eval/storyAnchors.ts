@@ -15,7 +15,7 @@ const NOT_ACTORS = new Set([
 const isAcronym = (w: string) => /^\p{Lu}[\p{Lu}\p{N}]+$/u.test(w)
 const bareWord = (w: string) => w.replace(/['’]s$/u, '').replace(/['’-]+$/u, '')
 /** "COVID-19" is judged by "COVID". */
-const notAnActor = (w: string) => NOT_ACTORS.has(w.split('-')[0])
+const notAnActor = (w: string) => NOT_ACTORS.has(w.split('-')[0]!)
 const capitalised = (w: string) => w.length >= 2 && /^\p{Lu}/u.test(w) && !notAnActor(w)
 
 /**

@@ -68,7 +68,7 @@ function parseDays(dayField: string): string | null {
 function formatHourRange(rangeStr: string): string | null {
   const match = rangeStr.match(/^(\d+)-(\d+)$/)
   if (!match) return null
-  return `${formatHourLabel(parseInt(match[1], 10))} \u2013 ${formatHourLabel(parseInt(match[2], 10))}`
+  return `${formatHourLabel(parseInt(match[1]!, 10))} \u2013 ${formatHourLabel(parseInt(match[2]!, 10))}`
 }
 
 /**
@@ -79,7 +79,7 @@ export function cronToHuman(expr: string): string {
   const parts = expr.trim().split(/\s+/)
   if (parts.length !== 5) return expr
 
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
+  const [minute = '', hour = '', dayOfMonth, month, dayOfWeek = ''] = parts
 
   // Only handle standard cases (no month/day-of-month specifics)
   if (dayOfMonth !== '*' || month !== '*') return expr
@@ -92,7 +92,7 @@ export function cronToHuman(expr: string): string {
 
   // Every N minutes: "*/N * * * *" or "*/N 9-17 * * *"
   if (everyNMin) {
-    const n = parseInt(everyNMin[1], 10)
+    const n = parseInt(everyNMin[1]!, 10)
     const minLabel = `${n} minute${n > 1 ? 's' : ''}`
 
     if (hourRange) {
@@ -111,7 +111,7 @@ export function cronToHuman(expr: string): string {
 
   // Every N hours with non-zero minutes: "MM */N * * *"
   if (everyNHours && !isNaN(min)) {
-    const n = parseInt(everyNHours[1], 10)
+    const n = parseInt(everyNHours[1]!, 10)
     const hourLabel = `${n} hour${n > 1 ? 's' : ''}`
     if (min === 0) {
       const prefix = dayStr ? `${dayStr}, every` : 'Every'

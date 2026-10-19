@@ -25,7 +25,7 @@ interface FeedTableProps {
 
 function getDominantMethod(methods?: Record<string, number>): string {
   if (!methods || Object.keys(methods).length === 0) return '--'
-  return Object.entries(methods).sort((a, b) => b[1] - a[1])[0][0]
+  return Object.entries(methods).sort((a, b) => b[1] - a[1])[0]![0]
 }
 
 export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDelete }: FeedTableProps) {

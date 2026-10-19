@@ -58,7 +58,7 @@ function HeroSection({ story }: { story: PublicStory }) {
 
         {story.relevanceReasons && parsePoints(story.relevanceReasons)[0] ? (
           <p className="text-lg text-neutral-600 leading-relaxed max-w-2xl">
-            {limitSentences(stripPrefix(stripMarkdown(parsePoints(story.relevanceReasons)[0])), 2)}
+            {limitSentences(stripPrefix(stripMarkdown(parsePoints(story.relevanceReasons)[0]!)), 2)}
           </p>
         ) : story.quote ? (
           <blockquote className="decorative-quote max-w-2xl">
@@ -128,9 +128,8 @@ function IssueSection({
     ? allStories.filter((s) => s.id !== heroStoryId)
     : allStories
 
-  if (stories.length === 0) return null
-
   const [featured, ...rest] = stories
+  if (!featured) return null
 
   return (
     <>
@@ -276,7 +275,7 @@ export default function HomePage() {
           </>
         ) : sortedIssues.length > 0 ? (
           sortedIssues.map((issue, idx) => {
-            const layout = LAYOUTS[idx % LAYOUTS.length]
+            const layout = LAYOUTS[idx % LAYOUTS.length]!
             const isLast = idx === sortedIssues.length - 1
             const divider: 'quote' | 'diamond' | 'none' = isLast
               ? 'none'

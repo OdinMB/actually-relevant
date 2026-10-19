@@ -118,7 +118,7 @@ export async function findExistingCluster(storyIds: string[]): Promise<{ id: str
   if (stories.length === 0) return null
 
   // Pick the cluster of the newest duplicate
-  const primaryClusterId = stories[0].clusterId!
+  const primaryClusterId = stories[0]!.clusterId!
 
   // Check for multi-cluster collision
   const uniqueClusterIds = [...new Set(stories.map(s => s.clusterId!))]
@@ -197,7 +197,7 @@ export async function detectAndCluster(storyId: string): Promise<DetectResult> {
     return { clusterId: null, newCluster: false, memberCount: 0, rejectedIds: [] }
   }
 
-  log.info({ storyId, candidateCount: candidates.length, nearestDistance: candidates[0].distance }, 'found dedup candidates')
+  log.info({ storyId, candidateCount: candidates.length, nearestDistance: candidates[0]!.distance }, 'found dedup candidates')
 
   // Stage 2: LLM confirmation
   const results = await confirmDuplicates(

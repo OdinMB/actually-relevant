@@ -212,7 +212,7 @@ export function replaceRatingSet(
   replacement: { set: RatingSet; key: RatingKey },
 ): { file: RatingSetsFile; key: RatingKey } {
   const index = file.sets.findIndex(s => slugOfSetId(s.id) === slug)
-  const oldIds = new Set(index >= 0 ? file.sets[index].items.map(i => i.id) : [])
+  const oldIds = new Set(index >= 0 ? file.sets[index]!.items.map(i => i.id) : [])
   const sets = index >= 0 ? file.sets.map((s, i) => (i === index ? replacement.set : s)) : [...file.sets, replacement.set]
   const entries = Object.entries(key)
   const kept = entries.filter(([id]) => !oldIds.has(id))

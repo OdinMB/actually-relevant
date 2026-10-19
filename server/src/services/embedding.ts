@@ -62,7 +62,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     input,
     dimensions: config.embedding.dimensions,
   })
-  return response.data[0].embedding
+  const [first] = response.data
+  if (!first) throw new Error('OpenAI returned no embedding')
+  return first.embedding
 }
 
 /**
@@ -158,11 +160,12 @@ export async function batchGenerateEmbeddings(
     try {
       const embeddings = await generateEmbeddingsBatch(batch.map(b => b.content))
       for (let j = 0; j < batch.length; j++) {
+        const item = batch[j]!
         results.push({
-          id: batch[j].story.id,
+          id: item.story.id,
           success: true,
           embedding: embeddings[j],
-          hash: batch[j].hash,
+          hash: item.hash,
         })
       }
     } catch (err) {

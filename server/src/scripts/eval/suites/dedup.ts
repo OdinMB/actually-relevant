@@ -48,15 +48,19 @@ export function votesFrom(parsed: DedupConfirmation | null, candidateCount: numb
   return { votes, outOfRange }
 }
 
-const unanimous = (votes: Vote[]): Vote => (votes.every(v => v !== null && v === votes[0]) ? votes[0] : null)
+/** The vote every arm cast, or null; a missing vote counts as null. */
+const unanimous = (votes: (Vote | undefined)[]): Vote => {
+  const [first = null] = votes
+  return votes.every(v => v !== undefined && v !== null && v === first) ? first : null
+}
 
 /** Arm votes per candidate (outer index: arm). */
 export function isDisputed(armVotes: Vote[][]): boolean {
-  return armVotes[0].some((_, i) => unanimous(armVotes.map(v => v[i])) === null)
+  return (armVotes[0] ?? []).some((_, i) => unanimous(armVotes.map(v => v[i])) === null)
 }
 
 export function labelSet(armVotes: Vote[][], judgeVotes?: Vote[][]): PairLabel[] {
-  return armVotes[0].map((_, i) => {
+  return (armVotes[0] ?? []).map((_, i) => {
     const agreed = unanimous(armVotes.map(v => v[i]))
     if (agreed !== null) return agreed ? 'dup' : 'not'
     if (!judgeVotes) return 'disputed'
@@ -108,10 +112,10 @@ export function scoreDedupArm(votes: Vote[][], labels: PairLabel[][]): Pick<Dedu
 }
 
 export function decideDedup(metrics: Record<string, DedupArmMetrics>, baseline: string, candidates: string[]): Decision {
-  const b = metrics[baseline]
+  const b = metrics[baseline]!
   return pickLowestPassing(
     candidates.filter(c => metrics[c]).map(c => {
-      const m = metrics[c]
+      const m = metrics[c]!
       return {
         arm: c,
         failures: [
@@ -130,15 +134,15 @@ async function judgeDisputed(
   armVotes: Vote[][][],
   prompt: DedupPrompt,
 ): Promise<{ labels: PairLabel[][]; judgeRecords: Map<string, CallRecord<DedupConfirmation>[]> }> {
-  const disputed = all.map((_, s) => isDisputed(armVotes[s]))
+  const disputed = all.map((_, s) => isDisputed(armVotes[s]!))
   const judged = all.filter((_, s) => disputed[s])
   const judgeRecords = await runArms(ctx, JUDGES, judged, SCHEMA, dedupConfirmationSchema, prompt)
   let j = 0
   const labels = all.map((set, s) => {
-    if (!disputed[s]) return labelSet(armVotes[s])
+    if (!disputed[s]) return labelSet(armVotes[s]!)
     const idx = j++
     const judgeVotes = JUDGES.map(a => votesFrom(parsedOf(judgeRecords.get(armKey(a))?.[idx]), set.candidates.length).votes)
-    return labelSet(armVotes[s], judgeVotes)
+    return labelSet(armVotes[s]!, judgeVotes)
   })
   return { labels, judgeRecords }
 }
@@ -165,9 +169,9 @@ export interface LabelledSets {
 export async function labelDedupSets(ctx: SuiteContext, all: DedupSet[], prompt: DedupPrompt): Promise<LabelledSets> {
   const armRecords = await runArms(ctx, ARMS, all, SCHEMA, dedupConfirmationSchema, prompt)
   const perArm = new Map(ARMS.map(a => [armKey(a), votesByArm(all, armRecords, a)]))
-  const armVotes = all.map((_, s) => ARMS.map(a => perArm.get(armKey(a))?.[s].votes ?? []))
+  const armVotes = all.map((_, s) => ARMS.map(a => perArm.get(armKey(a))?.[s]?.votes ?? []))
   const { labels, judgeRecords } = await judgeDisputed(ctx, all, armVotes, prompt)
-  return { labels, perArm, armRecords, judgeRecords, disputedSets: all.filter((_, s) => isDisputed(armVotes[s])).length }
+  return { labels, perArm, armRecords, judgeRecords, disputedSets: all.filter((_, s) => isDisputed(armVotes[s]!)).length }
 }
 
 export const dedupSuite: Suite = {

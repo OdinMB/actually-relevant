@@ -56,8 +56,9 @@ export async function fetchStoryForEmbedding(
     FROM stories
     WHERE id = ${storyId}
   `
-  if (rows.length === 0) return null
-  return { ...mapRow(rows[0]), status: rows[0].status }
+  const [row] = rows
+  if (!row) return null
+  return { ...mapRow(row), status: row.status }
 }
 
 /** Fetch multiple stories' embedding-relevant fields. Optionally filter by status. */

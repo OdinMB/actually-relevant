@@ -162,8 +162,8 @@ export async function generateCarouselZip(
 
   // Generate PNG images
   for (let i = 0; i < stories.length; i++) {
-    const buffer = createStoryImage(stories[i])
-    const filepath = join(outputDir, filenames[i])
+    const buffer = createStoryImage(stories[i]!)
+    const filepath = join(outputDir, filenames[i]!)
     await fs.writeFile(filepath, buffer)
     imagePaths.push(filepath)
   }

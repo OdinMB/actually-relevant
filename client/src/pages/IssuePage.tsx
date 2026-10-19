@@ -29,9 +29,8 @@ function StoryGroup({
   stories: PublicStory[]
   layout: LayoutVariant
 }) {
-  if (stories.length === 0) return null
-
   const [first, ...rest] = stories
+  if (!first) return null
 
   // Layout A: featured (2-col) + compact sidebar
   if (layout === 'A') {
@@ -248,7 +247,7 @@ export default function IssuePage() {
         {stories.length > 0 ? (
           <>
             {storyGroups.map((group, idx) => {
-              const layout = LAYOUTS[idx % LAYOUTS.length]
+              const layout = LAYOUTS[idx % LAYOUTS.length]!
               const isLast = idx === storyGroups.length - 1
               const useQuote = idx % 2 === 0
 

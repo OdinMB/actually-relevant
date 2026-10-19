@@ -32,7 +32,7 @@ router.get('/', failsWith('Failed to list clusters'), async (_req, res) => {
 })
 
 router.get('/:id', failsWith('Failed to get cluster'), async (req, res) => {
-  const cluster = await clusterService.getClusterById(req.params.id)
+  const cluster = await clusterService.getClusterById(req.params.id!)
   if (!cluster) {
     res.status(404).json({ error: 'Cluster not found' })
     return
@@ -46,20 +46,20 @@ router.post('/', failsWith('Failed to create cluster'), validateBody(createClust
 })
 
 router.put('/:id/primary', failsWith('Failed to set cluster primary', clusterNotFound), validateBody(setPrimarySchema), async (req, res) => {
-  res.json(await clusterService.setClusterPrimary(req.params.id, req.body.storyId))
+  res.json(await clusterService.setClusterPrimary(req.params.id!, req.body.storyId))
 })
 
 router.post('/:id/remove-member', failsWith('Failed to remove member from cluster', clusterNotFound), validateBody(removeMemberSchema), async (req, res) => {
-  const cluster = await clusterService.removeFromCluster(req.params.id, req.body.storyId)
+  const cluster = await clusterService.removeFromCluster(req.params.id!, req.body.storyId)
   res.json(cluster ?? { dissolved: true })
 })
 
 router.post('/:id/merge', failsWith('Failed to merge clusters'), validateBody(mergeSchema), async (req, res) => {
-  res.json(await clusterService.mergeClusters(req.params.id, req.body.sourceId))
+  res.json(await clusterService.mergeClusters(req.params.id!, req.body.sourceId))
 })
 
 router.delete('/:id', failsWith('Failed to dissolve cluster'), async (req, res) => {
-  await clusterService.dissolveCluster(req.params.id)
+  await clusterService.dissolveCluster(req.params.id!)
   res.status(204).send()
 })
 

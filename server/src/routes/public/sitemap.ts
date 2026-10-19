@@ -45,7 +45,7 @@ const STATIC_ROUTES: { path: string; priority: number; changefreq: ChangeFreq }[
 ]
 
 function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0]
+  return date.toISOString().slice(0, 10)
 }
 
 function buildSitemapXml(

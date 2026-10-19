@@ -131,7 +131,7 @@ export function bucketGaps(rows: SignupRow[], cutoff: Date): { label: string; co
     if (!r.confirmedAt || r.createdAt >= cutoff) continue
     const gap = gapSeconds(r)
     const i = BUCKETS.findIndex((b) => gap < b.upTo)
-    counts[i].count++
+    counts[i]!.count++
   }
   return counts
 }

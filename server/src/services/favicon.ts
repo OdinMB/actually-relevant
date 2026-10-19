@@ -124,7 +124,7 @@ async function tryHtmlParsing(origin: string): Promise<Buffer | null> {
       if (!href) return
       const sizes = $(el).attr('sizes') || ''
       const match = sizes.match(/(\d+)x\d+/)
-      const size = match ? parseInt(match[1]) : 0
+      const size = match ? parseInt(match[1]!) : 0
       iconLinks.push({ href, size })
     })
 
@@ -217,17 +217,18 @@ export async function fetchAllFavicons(): Promise<{ succeeded: number; failed: n
       })
     )
     for (const [idx, result] of results.entries()) {
+      const feed = batch[idx]!
       if (result.status === 'fulfilled') {
         if (result.value === 'skipped') skipped++
         else if (result.value === 'fetched') succeeded++
         else {
           failed++
-          errors.push(`${batch[idx].title}: not found`)
+          errors.push(`${feed.title}: not found`)
         }
       } else {
         failed++
-        errors.push(`${batch[idx].title}: ${result.reason?.message || 'Unknown error'}`)
-        log.warn({ feedId: batch[idx].id, err: result.reason }, 'failed to fetch favicon')
+        errors.push(`${feed.title}: ${result.reason?.message || 'Unknown error'}`)
+        log.warn({ feedId: feed.id, err: result.reason }, 'failed to fetch favicon')
       }
     }
   }

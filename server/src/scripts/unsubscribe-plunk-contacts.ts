@@ -197,7 +197,7 @@ export async function applyUnsubscribes(
   const log = opts.log ?? ((line: string) => console.log(line))
   const todo = listed.filter((a) => needsChange(a) && a.id)
   for (let i = 0; i < todo.length; i++) {
-    const a = todo[i]
+    const a = todo[i]!
     try {
       const updated = (await opts.unsubscribe(a.id as string)) as { subscribed?: unknown; snoozedUntil?: unknown } | null
       if (!updated || typeof updated !== 'object' || updated.subscribed !== false) {

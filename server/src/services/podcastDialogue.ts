@@ -183,7 +183,7 @@ function segueErrors(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): st
   let previousStoryOpening: string | null = null
   dialogue.segments.forEach((s, i) => {
     if (s.kind === 'intro' || s.turns.length === 0) return
-    const opening = s.turns[0].text
+    const opening = s.turns[0]!.text
     const plain = stripTags(opening)
     const title = s.storyRef === null ? undefined : headline.get(s.storyRef)
     const restated = title !== undefined && title !== '' && (normalize(opening) === title || title.includes(normalize(opening)))
@@ -221,7 +221,7 @@ function closingErrors(dialogue: PodcastDialogue): string[] {
   return dialogue.segments.flatMap((s, i) => {
     if (s.kind !== 'outro') return []
     return closingTurnIndexes(s.turns).flatMap(j => {
-      const phrase = stripTags(s.turns[j].text).match(CLOSING_RE)?.[0]
+      const phrase = stripTags(s.turns[j]!.text).match(CLOSING_RE)?.[0]
       return phrase ? [`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the outro must not thank listeners or sign off, because code adds the sign-off after it`] : []
     })
   })
@@ -232,14 +232,15 @@ function closingTurnIndexes(turns: PodcastDialogue['segments'][number]['turns'])
   const last = turns.length - 1
   if (last < 0) return []
   const before = last - 1
-  return before > 0 && turns[before].speaker === turns[last].speaker ? [before, last] : [last]
+  return before > 0 && turns[before]!.speaker === turns[last]!.speaker ? [before, last] : [last]
 }
 
 function speakerRunErrors(spoken: SpokenSegment[]): string[] {
   const turns = spoken.flatMap(s => s.turns)
   for (let i = 2; i < turns.length; i++) {
-    if (turns[i].speaker === turns[i - 1].speaker && turns[i].speaker === turns[i - 2].speaker) {
-      return [`${turns[i].speaker} speaks three times in a row (spoken turn ${i + 1}, opener included); at most twice`]
+    const speaker = turns[i]!.speaker
+    if (speaker === turns[i - 1]!.speaker && speaker === turns[i - 2]!.speaker) {
+      return [`${speaker} speaks three times in a row (spoken turn ${i + 1}, opener included); at most twice`]
     }
   }
   return []
@@ -322,11 +323,11 @@ function structureMismatches(dialogue: PodcastDialogue, edit: DialogueTextEdit):
     return [`the script has ${dialogue.segments.length} segments, the edit ${edit.segments.length}`]
   }
   return dialogue.segments.flatMap((segment, i) => {
-    const edited = edit.segments[i]
+    const edited = edit.segments[i]!
     const where = label(segment, i)
     if (edited.kind !== segment.kind || edited.storyRef !== segment.storyRef) return [`${where}: the segment's kind or story changed`]
     if (edited.turns.length !== segment.turns.length) return [`${where}: has ${segment.turns.length} turns, the edit ${edited.turns.length}`]
-    return segment.turns.flatMap((turn, j) => (edited.turns[j].speaker === turn.speaker ? [] : [`${where}, turn ${j + 1}: the speaker changed`]))
+    return segment.turns.flatMap((turn, j) => (edited.turns[j]!.speaker === turn.speaker ? [] : [`${where}, turn ${j + 1}: the speaker changed`]))
   })
 }
 
@@ -343,7 +344,7 @@ export function applyTurnEdits(dialogue: PodcastDialogue, edit: DialogueTextEdit
       episodeSummary: edit.episodeSummary,
       segments: dialogue.segments.map((segment, i) => ({
         ...segment,
-        turns: segment.turns.map((turn, j) => ({ ...turn, text: edit.segments[i].turns[j].text })),
+        turns: segment.turns.map((turn, j) => ({ ...turn, text: edit.segments[i]!.turns[j]!.text })),
       })),
     },
     mismatches: [],

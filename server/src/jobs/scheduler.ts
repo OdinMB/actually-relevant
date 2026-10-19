@@ -109,14 +109,14 @@ function estimateCronIntervalMs(cronExpr: string): number | null {
   const parts = cronExpr.split(' ')
   if (parts.length < 5) return null
 
-  const [, hourPart, domPart, , dowPart] = parts
+  const [, hourPart = '', domPart = '', , dowPart = ''] = parts
 
   // Base interval from hour field
   let baseHours: number | null = null
 
   // "*/N" pattern → every N hours
   const everyMatch = hourPart.match(/^\*\/(\d+)$/)
-  if (everyMatch) baseHours = parseInt(everyMatch[1])
+  if (everyMatch) baseHours = parseInt(everyMatch[1]!)
 
   // "H1,H2,H3" pattern → interval between entries
   if (baseHours === null) {
@@ -174,8 +174,8 @@ function countDaysInDowExpr(expr: string): number | null {
     // Range: "1-5"
     const rangeMatch = part.match(/^(\d+)-(\d+)$/)
     if (rangeMatch) {
-      const start = parseInt(rangeMatch[1])
-      const end = parseInt(rangeMatch[2])
+      const start = parseInt(rangeMatch[1]!)
+      const end = parseInt(rangeMatch[2]!)
       if (start <= end) {
         for (let d = start; d <= end; d++) days.add(d % 7)
       } else {

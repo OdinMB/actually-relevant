@@ -102,7 +102,7 @@ router.get('/:issueSlug', validateQuery(feedQuerySchema), async (req, res) => {
   try {
     const { issueSlug } = req.params
     const { minRelevance } = req.parsedQuery as { minRelevance?: number }
-    const issue = await issueService.getIssueBySlug(issueSlug)
+    const issue = await issueService.getIssueBySlug(issueSlug!)
     if (!issue) {
       res.status(404).json({ error: 'Issue not found' })
       return

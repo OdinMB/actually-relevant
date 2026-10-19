@@ -38,7 +38,7 @@ describe('runTurnstileChallenge', () => {
     expect(tags).toHaveLength(1)
 
     window.turnstile = api
-    tags[0].dispatchEvent(new Event('load'))
+    tags[0]!.dispatchEvent(new Event('load'))
     await vi.waitFor(() => expect(api.render).toHaveBeenCalledTimes(2))
   })
 
@@ -56,7 +56,7 @@ describe('runTurnstileChallenge', () => {
     })
     expect(api.execute).toHaveBeenCalledWith(container)
 
-    rendered[0].callback('tok')
+    rendered[0]!.callback('tok')
     await expect(token).resolves.toBe('tok')
     expect(api.remove).toHaveBeenCalledWith('widget-1')
   })
@@ -69,7 +69,7 @@ describe('runTurnstileChallenge', () => {
 
       const { token } = runTurnstileChallenge(container, 'k')
       await vi.waitFor(() => expect(rendered).toHaveLength(1))
-      rendered[0][event]()
+      rendered[0]![event]()
 
       await expect(token).rejects.toThrow()
       expect(api.remove).toHaveBeenCalledWith('widget-1')
@@ -78,14 +78,14 @@ describe('runTurnstileChallenge', () => {
 
   it('rejects when the script fails to load, and a later challenge tries again', async () => {
     const first = runTurnstileChallenge(container, 'k')
-    scriptTags()[0].dispatchEvent(new Event('error'))
+    scriptTags()[0]!.dispatchEvent(new Event('error'))
     await expect(first.token).rejects.toThrow()
     expect(scriptTags()).toHaveLength(0)
 
     const second = runTurnstileChallenge(container, 'k')
     expect(scriptTags()).toHaveLength(1)
     // Settle the shared load so it does not leak into the next test.
-    scriptTags()[0].dispatchEvent(new Event('error'))
+    scriptTags()[0]!.dispatchEvent(new Event('error'))
     await expect(second.token).rejects.toThrow()
   })
 
@@ -135,7 +135,7 @@ describe('runTurnstileChallenge', () => {
     await expect(challenge.token).rejects.toThrow()
 
     window.turnstile = api
-    scriptTags()[0].dispatchEvent(new Event('load'))
+    scriptTags()[0]!.dispatchEvent(new Event('load'))
     await new Promise((r) => setTimeout(r, 0))
     expect(api.render).not.toHaveBeenCalled()
   })

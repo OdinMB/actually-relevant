@@ -86,14 +86,14 @@ export function scoreAssess(stories: AssessItem[], records: CallRecord<AssessRes
 }
 
 export function decideAssess(metrics: Record<string, AssessArmMetrics>, baseline: string, candidates: string[]): Decision {
-  const b = metrics[baseline]
+  const b = metrics[baseline]!
   // The noise floor is the baseline rerun against stored ratings: a candidate is
   // held to 1.0 MAD, or to the baseline's own MAD when the task is noisier than that.
   const madBar = b.vsStored.mad != null && b.vsStored.mad > 1 ? b.vsStored.mad : 1
   const splitBar = effectiveBar(0.85, b.vsStored.splitAgreement)
   return pickLowestPassing(
     candidates.filter(c => metrics[c]).map(c => {
-      const m = metrics[c]
+      const m = metrics[c]!
       const formatFailures = ASSESS_FORMAT_CHECKS
         .filter(k => (m.format[k] ?? 0) < (b.format[k] ?? 0) - 0.05)
         .map(k => `format ${k} ${pct(m.format[k])} < baseline ${pct(b.format[k])} − 5 pts`)

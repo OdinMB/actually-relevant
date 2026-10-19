@@ -14,7 +14,7 @@ router.get('/', failsWith('Failed to fetch issues'), async (_req, res) => {
 })
 
 router.get('/:id', failsWith('Failed to fetch issue'), async (req, res) => {
-  const issue = await issueService.getIssueById(req.params.id)
+  const issue = await issueService.getIssueById(req.params.id!)
   if (!issue) {
     res.status(404).json({ error: 'Issue not found' })
     return
@@ -27,11 +27,11 @@ router.post('/', failsWith('Failed to create issue', issueErrors), validateBody(
 })
 
 router.put('/:id', failsWith('Failed to update issue', issueErrors), validateBody(updateIssueSchema), async (req, res) => {
-  res.json(await issueService.updateIssue(req.params.id, req.body))
+  res.json(await issueService.updateIssue(req.params.id!, req.body))
 })
 
 router.delete('/:id', failsWith('Failed to delete issue', issueErrors), async (req, res) => {
-  await issueService.deleteIssue(req.params.id)
+  await issueService.deleteIssue(req.params.id!)
   res.status(204).send()
 })
 

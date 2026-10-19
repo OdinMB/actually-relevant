@@ -44,15 +44,16 @@ export function readNumbers(text: string): NumberToken[] {
   const tokens: NumberToken[] = []
   for (const m of text.matchAll(NUMBER_RE)) {
     const [raw, currency, digits, percent, scaleWord] = m
-    const base = readNumber(digits.replace(GROUP_SPACE, '').replace(/[.,]$/, ''))
+    const base = readNumber(digits!.replace(GROUP_SPACE, '').replace(/[.,]$/, ''))
     const scale = scaleWord ? SCALE[scaleWord.toLowerCase()] ?? 1 : 1
     const values = scale === 1 ? base : [...base.map(v => v * scale), ...base]
     tokens.push({ raw: raw.trim(), values, marked: Boolean(currency || percent || scaleWord), index: m.index ?? 0 })
   }
   for (const m of text.matchAll(WORD_NUMBER_RE)) {
     const [raw, word, scaleWord] = m
-    const n = WORD_VALUES[word.toLowerCase()]
-    tokens.push({ raw, values: [n * SCALE[scaleWord.toLowerCase()], n], marked: true, index: m.index ?? 0 })
+    // WORD_NUMBER_RE matches only words and scales these tables hold
+    const n = WORD_VALUES[word!.toLowerCase()]!
+    tokens.push({ raw, values: [n * SCALE[scaleWord!.toLowerCase()]!, n], marked: true, index: m.index ?? 0 })
   }
   return tokens
 }

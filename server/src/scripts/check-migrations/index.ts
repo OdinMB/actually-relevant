@@ -47,7 +47,7 @@ function migrationNames(paths: string): Set<string> {
   const names = new Set<string>()
   for (const line of paths.split('\n')) {
     const match = /^prisma\/migrations\/([^/]+)\/migration\.sql$/.exec(line.trim())
-    if (match) names.add(match[1])
+    if (match) names.add(match[1]!)
   }
   return names
 }

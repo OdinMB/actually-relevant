@@ -16,7 +16,7 @@ const INTRO_STYLES = [
 ]
 
 export function pickIntroStyle(): string {
-  return INTRO_STYLES[Math.floor(Math.random() * INTRO_STYLES.length)]
+  return INTRO_STYLES[Math.floor(Math.random() * INTRO_STYLES.length)]!
 }
 
 export function buildNewsletterIntroPrompt(

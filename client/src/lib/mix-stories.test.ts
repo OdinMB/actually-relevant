@@ -152,8 +152,8 @@ describe('mixHomepageStories', () => {
     const buckets = makeBuckets(3, 2, 3)
     const result = mixHomepageStories(buckets, 6, 50)
     for (let i = 1; i < result.length; i++) {
-      const prev = new Date(result[i - 1].datePublished!).getTime()
-      const curr = new Date(result[i].datePublished!).getTime()
+      const prev = new Date(result[i - 1]!.datePublished!).getTime()
+      const curr = new Date(result[i]!.datePublished!).getTime()
       expect(prev).toBeGreaterThanOrEqual(curr)
     }
   })
@@ -295,8 +295,8 @@ describe('filterStoriesByPositivity', () => {
     const stories = mixedStories()
     const result = filterStoriesByPositivity(stories, 75)
     for (let i = 1; i < result.length; i++) {
-      const prev = new Date(result[i - 1].datePublished!).getTime()
-      const curr = new Date(result[i].datePublished!).getTime()
+      const prev = new Date(result[i - 1]!.datePublished!).getTime()
+      const curr = new Date(result[i]!.datePublished!).getTime()
       expect(prev).toBeGreaterThanOrEqual(curr)
     }
   })
@@ -337,6 +337,6 @@ describe('filterStoriesByPositivity', () => {
     ]
     const result = filterStoriesByPositivity(stories, 100)
     expect(result).toHaveLength(1)
-    expect(result[0].emotionTag).toBe('uplifting')
+    expect(result[0]!.emotionTag).toBe('uplifting')
   })
 })

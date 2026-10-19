@@ -173,7 +173,7 @@ const podcastStep: RecalibrationStepDef = {
       runOne(ctx, SOL, items, PODCAST_SELECT_SCHEMA, podcastSelectResultSchema, podcastSelectPrompt),
       runOne(ctx, SOL, items, PODCAST_SCHEMA, podcastDialogueSchema, podcastPrompt),
     ])
-    const p = items[0]
+    const p = items[0]!
     const dialogue = parsedOf(dialogues[0])
     const selection = parsedOf(selections[0])
     const dialogueCheck = dialogue ? scoreDialogue(p, dialogue) : null

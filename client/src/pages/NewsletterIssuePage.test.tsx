@@ -93,7 +93,7 @@ describe('NewsletterIssuePage', () => {
     renderPage()
     const analysis = await screen.findByRole('link', { name: 'relevance analysis' })
     expect(analysis.getAttribute('href')).toBe('/stories/clean-air')
-    const original = screen.getAllByRole('link', { name: 'original article' })[0]
+    const original = screen.getAllByRole('link', { name: 'original article' })[0]!
     expect(original.getAttribute('target')).toBe('_blank')
     expect(original.getAttribute('rel')).toBe('noopener noreferrer')
   })

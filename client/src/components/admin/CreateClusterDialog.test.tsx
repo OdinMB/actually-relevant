@@ -91,7 +91,7 @@ describe('CreateClusterDialog', () => {
     // Find the "Make primary" button for the second story
     const makePrimaryButtons = screen.getAllByTitle('Make primary')
     expect(makePrimaryButtons).toHaveLength(1) // Only non-primary story has the button
-    await user.click(makePrimaryButtons[0])
+    await user.click(makePrimaryButtons[0]!)
 
     // Now the second story should be primary
     expect(screen.getByTitle('Primary story')).toBeInTheDocument()

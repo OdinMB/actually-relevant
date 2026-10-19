@@ -87,7 +87,7 @@ describe('PodcastTranscriptPage', () => {
     await screen.findByText('Welcome to the week.')
     const turns = container.querySelectorAll('[data-transcript-turn]')
     expect(turns).toHaveLength(6)
-    expect(turns[2].textContent).toBe('Host B: A court ruled on air data.')
+    expect(turns[2]!.textContent).toBe('Host B: A court ruled on air data.')
   })
 
   it('heads each story segment with the story, linked to our story page when it has one', async () => {

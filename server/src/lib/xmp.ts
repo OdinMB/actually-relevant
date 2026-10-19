@@ -39,7 +39,7 @@ const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
 /** CRC-32 as PNG chunks use it (ISO 3309 / ITU-T V.42). */
 export function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff
-  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8)
+  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8)
   return (crc ^ 0xffffffff) >>> 0
 }
 

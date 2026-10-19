@@ -257,8 +257,7 @@ export async function generateContent(newsletterId: string) {
   }
 
   let currentIssue = ''
-  for (let i = 0; i < stories.length; i++) {
-    const story = stories[i]
+  for (const [i, story] of stories.entries()) {
     const resolved = resolveIssue(story)
     const issueName = resolved.name
     const issueSlug = resolved.slug
@@ -391,8 +390,8 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
         // Parse "# Issue Name {slug}"
         const headerMatch = trimmed.slice(2).match(/^(.+?)\s*\{([^}]+)\}\s*$/)
         if (headerMatch) {
-          issueHeader = headerMatch[1]
-          issueSlug = headerMatch[2]
+          issueHeader = headerMatch[1]!
+          issueSlug = headerMatch[2]!
         } else {
           issueHeader = trimmed.slice(2)
         }
@@ -455,12 +454,12 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
         if (metaLine) {
           const links = [...metaLine.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)]
           for (const link of links) {
-            if (link[1] === 'original article') originalUrl = link[2]
-            else if (link[1] === 'relevance analysis') relevanceUrl = link[2]
+            if (link[1] === 'original article') originalUrl = link[2]!
+            else if (link[1] === 'relevance analysis') relevanceUrl = link[2]!
           }
           // Extract feed ID if present: {feed:uuid}
           const feedMatch = metaLine.match(/\{feed:([^}]+)\}/)
-          if (feedMatch) feedId = feedMatch[1]
+          if (feedMatch) feedId = feedMatch[1]!
           // Publisher is plain text before the first link (after optional {feed:...} tag)
           const firstBracket = metaLine.indexOf('[')
           if (firstBracket > 0) {

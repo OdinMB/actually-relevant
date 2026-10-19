@@ -16,7 +16,7 @@ const VALID_VALUES = [0, 25, 50, 75, 100]
 
 function clampToValid(value: number): number {
   // Snap to nearest valid value
-  let closest = VALID_VALUES[0]
+  let closest = VALID_VALUES[0]!
   let minDist = Math.abs(value - closest)
   for (const v of VALID_VALUES) {
     const dist = Math.abs(value - v)

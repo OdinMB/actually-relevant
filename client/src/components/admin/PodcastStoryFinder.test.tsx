@@ -94,8 +94,8 @@ describe('PodcastStoryFinder', () => {
     renderInAdmin(<PodcastStoryFinder podcast={makeStandalonePodcast()} />)
     await screen.findByRole('button', { name: 'Add Story 1' })
     const rows = within(screen.getByRole('list', { name: 'Matching stories' })).getAllByRole('listitem')
-    expect(rows[0].textContent).toMatch(/Rating 9/)
-    expect(rows[1].textContent).toMatch(/Rating —/)
+    expect(rows[0]!.textContent).toMatch(/Rating 9/)
+    expect(rows[1]!.textContent).toMatch(/Rating —/)
   })
 
   it('searches with the applied filters from the first page', async () => {

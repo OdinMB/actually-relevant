@@ -51,7 +51,7 @@ export function PodcastStageTabs({ podcast, selected, onSelect, panels }: Podcas
   const index = PODCAST_TABS.findIndex(def => def.tab === selected)
 
   return (
-    <TabGroup selectedIndex={index} onChange={i => onSelect(PODCAST_TABS[i].tab)}>
+    <TabGroup selectedIndex={index} onChange={i => onSelect(PODCAST_TABS[i]!.tab)}>
       <TabList aria-label="Production stages" className="flex gap-1 border-b border-neutral-200">
         {PODCAST_TABS.map((def, i) => (
           <Tab
@@ -63,10 +63,10 @@ export function PodcastStageTabs({ podcast, selected, onSelect, panels }: Podcas
               data-[selected]:border-brand-700 data-[selected]:text-brand-800
               data-[disabled]:cursor-not-allowed data-[disabled]:text-neutral-400 data-[disabled]:hover:text-neutral-400"
           >
-            <StateIcon state={states[i]} />
+            <StateIcon state={states[i]!} />
             {LABEL[def.tab]}
             <span className="sr-only">
-              {`, ${STATE_TEXT[states[i]]}`}{states[i] === 'locked' ? `: ${def.lockedReason}` : ''}
+              {`, ${STATE_TEXT[states[i]!]}`}{states[i] === 'locked' ? `: ${def.lockedReason}` : ''}
             </span>
           </Tab>
         ))}

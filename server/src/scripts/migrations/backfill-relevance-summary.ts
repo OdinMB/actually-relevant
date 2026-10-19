@@ -135,7 +135,7 @@ async function main() {
       }
     }
 
-    cursor = stories[stories.length - 1].id
+    cursor = stories[stories.length - 1]!.id
 
     if (TEST_MODE) break
   }

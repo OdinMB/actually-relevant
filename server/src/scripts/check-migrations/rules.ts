@@ -37,7 +37,7 @@ function dropsIndex(s: string): boolean {
 
 /** A HNSW index of that name on stories. */
 function createsIndexStatement(s: string): boolean {
-  const [head, ...rest] = s.split(/\bon\b/i)
+  const [head = '', ...rest] = s.split(/\bon\b/i)
   return (
     /^create\s+(unique\s+)?index\b/i.test(s) &&
     namesIndex.test(head) &&
@@ -71,7 +71,7 @@ const DESTRUCTIVE: { kind: string; test: (s: string) => boolean }[] = [
 export function destructiveStatements(sql: string): string[] {
   return statements(sql).flatMap((s) => {
     const rule = DESTRUCTIVE.find((r) => r.test(s))
-    return rule ? [`${rule.kind}: ${s.split('\n')[0].trim()}`] : []
+    return rule ? [`${rule.kind}: ${s.split('\n', 1)[0]!.trim()}`] : []
   })
 }
 

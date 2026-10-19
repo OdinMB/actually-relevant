@@ -9,7 +9,7 @@ export function moveStory(chosen: string[], index: number, delta: -1 | 1): strin
   const target = index + delta
   if (index < 0 || index >= chosen.length || target < 0 || target >= chosen.length) return chosen
   const next = [...chosen]
-  ;[next[index], next[target]] = [next[target], next[index]]
+  ;[next[index], next[target]] = [next[target]!, next[index]!]
   return next
 }
 

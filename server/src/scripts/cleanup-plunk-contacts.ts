@@ -87,7 +87,7 @@ function parseWindow(raw: string): CreatedWindow {
     }
   }
   const [start, end] = parts.map((p) => new Date(p.trim()))
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     throw new Error(`--protect-created has an unparseable date: "${raw}"`)
   }
   if (start >= end) throw new Error(`--protect-created start must be before end: "${raw}"`)

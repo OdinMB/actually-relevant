@@ -178,7 +178,7 @@ export async function getAccountStatuses(
         isReblog: s.reblog !== null,
       }))
 
-      const nextMaxId = items.length > 0 ? items[items.length - 1].id : undefined
+      const nextMaxId = items.at(-1)?.id
 
       log.info({ itemCount: items.length, nextMaxId: nextMaxId ?? null }, 'fetched Mastodon account statuses')
       return { items, nextMaxId }

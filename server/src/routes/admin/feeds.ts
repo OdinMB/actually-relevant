@@ -27,7 +27,7 @@ router.get('/quality', failsWith('Failed to fetch quality metrics'), async (_req
 })
 
 router.get('/:id', failsWith('Failed to fetch feed'), async (req, res) => {
-  const feed = await feedService.getFeedById(req.params.id)
+  const feed = await feedService.getFeedById(req.params.id!)
   if (!feed) {
     res.status(404).json({ error: 'Feed not found' })
     return
@@ -40,11 +40,11 @@ router.post('/', failsWith('Failed to create feed', feedErrors), validateBody(cr
 })
 
 router.put('/:id', failsWith('Failed to update feed', feedErrors), validateBody(updateFeedSchema), async (req, res) => {
-  res.json(await feedService.updateFeed(req.params.id, req.body))
+  res.json(await feedService.updateFeed(req.params.id!, req.body))
 })
 
 router.delete('/:id', failsWith('Failed to delete feed', feedErrors), async (req, res) => {
-  const result = await feedService.deleteFeed(req.params.id)
+  const result = await feedService.deleteFeed(req.params.id!)
   const message = result.action === 'deleted'
     ? 'Feed deleted'
     : 'Feed deactivated (has linked stories)'
@@ -52,16 +52,16 @@ router.delete('/:id', failsWith('Failed to delete feed', feedErrors), async (req
 })
 
 router.post('/:id/crawl', failsWith('Failed to crawl feed'), async (req, res) => {
-  const feed = await feedService.getFeedById(req.params.id)
+  const feed = await feedService.getFeedById(req.params.id!)
   if (!feed) {
     res.status(404).json({ error: 'Feed not found' })
     return
   }
-  res.json(await crawlFeed(req.params.id))
+  res.json(await crawlFeed(req.params.id!))
 })
 
 router.post('/:id/favicon', failsWith('Failed to fetch favicon'), async (req, res) => {
-  const feed = await feedService.getFeedById(req.params.id)
+  const feed = await feedService.getFeedById(req.params.id!)
   if (!feed) {
     res.status(404).json({ error: 'Feed not found' })
     return

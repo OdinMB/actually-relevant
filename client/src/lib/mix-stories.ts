@@ -94,7 +94,7 @@ export function pickHero(
   if (all.length === 0) return null
 
   all.sort(byDateDesc)
-  return all[0]
+  return all[0] ?? null
 }
 
 /**

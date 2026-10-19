@@ -328,7 +328,7 @@ export default function ComparePage() {
                   <CellContent cell={row.us} />
                 </td>
                 <td className="py-2.5 px-4 border-b border-neutral-200 text-neutral-600">
-                  <CellContent cell={row.them[idx]} />
+                  <CellContent cell={row.them[idx]!} />
                 </td>
               </tr>
             ))}

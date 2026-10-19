@@ -30,7 +30,7 @@ describe('ComparisonTable', () => {
     render(<ComparisonTable headers={HEADERS} rows={ROWS} highlightColumn={0} />)
     const headerCells = screen.getAllByRole('columnheader')
     // highlightColumn=0 highlights "Product A" (first competitor column, index 1 in DOM)
-    expect(headerCells[1].className).toContain('bg-brand-50')
+    expect(headerCells[1]!.className).toContain('bg-brand-50')
   })
 
   it('renders card view toggle on mobile', async () => {

@@ -186,7 +186,7 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
 
   // If only one candidate, just return it
   if (candidates.length === 1) {
-    return { storyId: candidates[0].id, reasoning: 'Only one unposted story in the selection.' }
+    return { storyId: candidates[0]!.id, reasoning: 'Only one unposted story in the selection.' }
   }
 
   const storiesForPrompt: StoryForBlueskyPick[] = candidates.map((s) => ({
@@ -213,7 +213,7 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
   const valid = candidates.find((s) => s.id === result.storyId)
   if (!valid) {
     log.warn({ returnedId: result.storyId }, 'LLM returned invalid storyId, falling back to first candidate')
-    return { storyId: candidates[0].id, reasoning: 'LLM returned invalid ID; selected first candidate.' }
+    return { storyId: candidates[0]!.id, reasoning: 'LLM returned invalid ID; selected first candidate.' }
   }
 
   log.info({ storyId: result.storyId, reasoning: result.reasoning }, 'best story picked')

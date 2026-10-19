@@ -88,11 +88,12 @@ export const renderSeed = (episode: Pick<Podcast, 'ttsSeed'>): number => episode
 /** Voice one chunk with ElevenLabs, after reserving its characters against the monthly cap. */
 async function voiceLive(episode: Podcast, chunks: Chunk[], index: number): Promise<Omit<VoicedChunk, 'index'>> {
   const podcastId = episode.id
-  const chars = chunkChars(chunks[index])
+  const chunk = chunks[index]!
+  const chars = chunkChars(chunk)
   await reserveTtsChars(podcastId, chars)
   try {
     const result = await textToDialogue({
-      inputs: chunks[index].map(t => ({ text: t.text, voiceId: voiceFor(t.speaker) })),
+      inputs: chunk.map(t => ({ text: t.text, voiceId: voiceFor(t.speaker) })),
       seed: renderSeed(episode),
       ...chunkContinuity(chunks, index, config.podcast.continuityChars),
     })
@@ -106,7 +107,7 @@ async function voiceLive(episode: Podcast, chunks: Chunk[], index: number): Prom
 
 /** The dry-run stub: silence as long as the chunk would take to speak. No credits, no reservation. */
 async function voiceStub(chunks: Chunk[], index: number): Promise<Omit<VoicedChunk, 'index'>> {
-  const chars = chunkChars(chunks[index])
+  const chars = chunkChars(chunks[index]!)
   const bytes = await silentMp3(chars / config.podcast.stubCharsPerSecond)
   return { bytes, requestId: null, chars, durationMs: cbrDurationMs(bytes.length) }
 }
@@ -124,7 +125,7 @@ export async function voiceEpisode(episode: Podcast, ctx: AudioStageContext): Pr
   const done = new Set(stored.map(c => c.index))
   const pending = chunks.map((_, i) => i).filter(i => !done.has(i))
 
-  if (!episode.dryRun && pending.length > 0) await assertBalanceCovers(pending.reduce((n, i) => n + chunkChars(chunks[i]), 0))
+  if (!episode.dryRun && pending.length > 0) await assertBalanceCovers(pending.reduce((n, i) => n + chunkChars(chunks[i]!), 0))
   for (const index of pending) {
     await ctx.renewLease()
     if (ctx.trigger === 'cron') await assertJobEnabled(GENERATE_PODCAST_JOB)

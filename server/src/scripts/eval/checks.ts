@@ -171,7 +171,7 @@ export function checkDialogue(dialogue: PodcastDialogue, stories: DialogueStoryR
     publisherCoverage: rate(distinct.map(p => spoken.toLowerCase().includes(p.toLowerCase()))),
     segues: dialogue.segments
       .filter(s => s.kind !== 'intro' && s.turns.length > 0)
-      .map(s => ({ segment: s.kind === 'story' ? `story ${s.storyRef}` : s.kind, opening: s.turns[0].text })),
+      .map(s => ({ segment: s.kind === 'story' ? `story ${s.storyRef}` : s.kind, opening: s.turns[0]!.text })),
   }
 }
 
@@ -184,7 +184,7 @@ export function percentile(values: number[], p: number): number | null {
   if (values.length === 0) return null
   const sorted = [...values].sort((a, b) => a - b)
   const rank = Math.ceil((p / 100) * sorted.length)
-  return sorted[Math.max(0, rank - 1)]
+  return sorted[Math.max(0, rank - 1)]!
 }
 
 export function jaccard(a: readonly string[], b: readonly string[]): number {

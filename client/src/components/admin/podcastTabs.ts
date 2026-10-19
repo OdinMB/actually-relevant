@@ -50,9 +50,9 @@ const ATTENTION: TabState[] = ['review', 'running', 'error']
 export function defaultTab(podcast: TabFields): PodcastTab {
   const states = PODCAST_TABS.map(def => tabState(podcast, def))
   const attention = states.findIndex(s => ATTENTION.includes(s))
-  if (attention >= 0) return PODCAST_TABS[attention].tab
+  if (attention >= 0) return PODCAST_TABS[attention]!.tab
   const next = states.indexOf('next')
-  return PODCAST_TABS[next >= 0 ? next : PODCAST_TABS.length - 1].tab
+  return PODCAST_TABS[next >= 0 ? next : PODCAST_TABS.length - 1]!.tab
 }
 
 /** The tab named in the URL when it exists and is open, otherwise the tab of the current stage. */

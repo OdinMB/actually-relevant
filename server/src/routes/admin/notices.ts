@@ -39,7 +39,7 @@ router.post('/seen', failsWith('Failed to mark notices seen'), validateBody(mark
 })
 
 router.post('/:id/seen', failsWith('Failed to mark notice seen'), async (req, res) => {
-  const notice = await markNoticeSeen(req.params.id)
+  const notice = await markNoticeSeen(req.params.id!)
   if (!notice) {
     res.status(404).json({ error: 'Notice not found' })
     return
