@@ -41,3 +41,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0037 · Hash feedback IP addresses with HMAC-SHA256 under a dedicated secret, and refuse feedback without it](decisions/0037-feedback-ip-hmac.md)
 - [ADR-0038 · Declare custom domains, plan and subdomain policy in render.yaml exactly as Render exports them](decisions/0038-mirror-render-service-settings.md)
 - [ADR-0039 · Delete unkept stories after a year, counting them into an append-only summary table in the same statement](decisions/0039-monthly-story-retention.md)
+- [ADR-0040 · Delete unkept stories after 6 months instead of a year](decisions/0040-story-retention-six-months.md) (supersedes ADR-0039's cutoff)
