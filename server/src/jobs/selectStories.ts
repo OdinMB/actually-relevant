@@ -1,8 +1,8 @@
 import { getStoryIdsByStatus } from '../services/story.js'
 import { selectStoriesInGroups } from '../services/analysis.js'
+import { transition } from '../services/storyLifecycle.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import prisma from '../lib/prisma.js'
 
 const log = createLogger('select_stories')
 
@@ -20,11 +20,8 @@ export async function runSelectStories(): Promise<void> {
   const belowThreshold = allAnalyzed.filter(id => !qualifiedSet.has(id))
 
   if (belowThreshold.length > 0) {
-    await prisma.story.updateMany({
-      where: { id: { in: belowThreshold }, status: 'analyzed' },
-      data: { status: 'rejected' },
-    })
-    log.info({ count: belowThreshold.length }, 'rejected analyzed stories below selection relevance minimum')
+    const { moved } = await transition(belowThreshold, { to: 'rejected', reason: 'select_threshold' }, 'pipeline')
+    log.info({ count: moved.length }, 'rejected analyzed stories below selection relevance minimum')
   }
 
   if (ids.length === 0) {

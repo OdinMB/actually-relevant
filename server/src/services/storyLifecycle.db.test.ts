@@ -28,8 +28,13 @@ vi.mock('./embedding.js', () => ({
   ensureEmbeddings: mockEnsureEmbeddings,
 }))
 
-const { publishStory, rejectStory, updateStoryStatus, dissolveCluster: dissolveStoryCluster, getPublishedStoryBySlug } = await import('./story.js')
+const {
+  publishStory, rejectStory, updateStoryStatus, dissolveCluster: dissolveStoryCluster, getPublishedStoryBySlug,
+  createStory: createStoryViaService,
+} = await import('./story.js')
 const { runPublishStories } = await import('../jobs/publishStories.js')
+const { runAssessStories } = await import('../jobs/assessStories.js')
+const { runSelectStories } = await import('../jobs/selectStories.js')
 const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
 const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary } = await import('./cluster.js')
 
@@ -336,6 +341,29 @@ describeDb('story lifecycle (PostgreSQL)', () => {
   })
 
   // ──── Rejection reasons ─────────────────────────────────────────────────
+
+  it('a paywall-locked story is created rejected for the paywall', async () => {
+    const s = await createStoryViaService({ sourceUrl: 'https://news.example/locked', sourceTitle: 'Locked', sourceContent: 'teaser', feedId, accessTier: 'locked' })
+    expect(await row(s.id)).toMatchObject({ status: 'rejected', rejectionReason: 'paywall' })
+    const free = await createStoryViaService({ sourceUrl: 'https://news.example/free', sourceTitle: 'Free', sourceContent: 'text', feedId, accessTier: 'free' })
+    expect(await row(free.id)).toMatchObject({ status: 'fetched', rejectionReason: null })
+  })
+
+  it('the threshold jobs reject below-threshold stories with their reason and nothing else', async () => {
+    const issue = await prisma.feed.findUniqueOrThrow({ where: { id: feedId }, select: { issueId: true } })
+    const lowPre = await story({ status: 'pre_analyzed', issueId: issue.issueId })
+    await prisma.story.update({ where: { id: lowPre.id }, data: { relevancePre: 1 } })
+    const lowRelevance = await story({ status: 'analyzed', relevance: 1 })
+    const trashed = await story({ status: 'trashed', relevance: 1 })
+
+    await runAssessStories()
+    await runSelectStories()
+
+    expect(await row(lowPre.id)).toMatchObject({ status: 'rejected', rejectionReason: 'assess_threshold' })
+    expect(await row(lowRelevance.id)).toMatchObject({ status: 'rejected', rejectionReason: 'select_threshold' })
+    expect((await row(trashed.id)).status).toBe('trashed')
+    expect(mockInvoke).not.toHaveBeenCalled()
+  })
 
   it('the database refuses a rejection reason on a story that is not rejected', async () => {
     const s = await story({ status: 'analyzed' })

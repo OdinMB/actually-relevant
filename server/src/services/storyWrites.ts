@@ -17,6 +17,7 @@ import type { updateStorySchema } from '../schemas/story.js'
 import { repairClusters } from './clusterRepair.js'
 import { forgetRelatedStories } from './relatedStories.js'
 import { BadRequestError } from '../utils/errors.js'
+import { initialStatus } from './storyLifecycle.js'
 
 const log = createLogger('story')
 
@@ -159,7 +160,7 @@ export async function createStory(data: {
       accessTier: data.accessTier ?? null,
       // A paywall-locked story is rejected at crawl, before any model call (ADR-0031); an editor's
       // re-assess, re-queue or publish is the override.
-      status: data.accessTier === 'locked' ? StoryStatus.rejected : StoryStatus.fetched,
+      ...initialStatus(data.accessTier),
     },
   })
 }
