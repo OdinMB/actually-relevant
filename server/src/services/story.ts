@@ -13,6 +13,7 @@ import { buildRelatedStoriesPrompt } from '../prompts/related-stories.js'
 import { relatedStoriesResultSchema } from '../schemas/llm.js'
 import type { ExtractionMethod } from './extractor.js'
 import type { AccessTier } from '../lib/paywall.js'
+import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('story')
 
@@ -304,7 +305,7 @@ export async function createStory(data: {
 }): Promise<Story> {
   const feed = await prisma.feed.findUnique({ where: { id: data.feedId } })
   if (!feed) {
-    throw new Error('Feed not found')
+    throw new BadRequestError('Feed not found')
   }
   return prisma.story.create({
     data: {
@@ -372,7 +373,7 @@ export async function updateStory(id: string, data: Record<string, any>): Promis
     const isPublished = currentStory?.status === 'published' || updateData.status === 'published'
 
     if (isPublished) {
-      if (!currentStory) throw new Error('Story not found')
+      if (!currentStory) throw new NotFoundError('Story not found')
       // Generate embedding before saving — roll back on failure
 
       const merged = {
@@ -607,7 +608,7 @@ export async function dissolveCluster(storyId: string): Promise<void> {
   })
 
   if (!story?.clusterId) {
-    throw new Error('Story is not in a cluster')
+    throw new BadRequestError('Story is not in a cluster')
   }
 
   const clusterId = story.clusterId

@@ -31,6 +31,14 @@ export class SignupUnavailableError extends Error {
   }
 }
 
+/** A confirmation link that cannot confirm: `invalid` (no such token for the address) or `expired`. */
+export class ConfirmationLinkError extends Error {
+  constructor(readonly reason: 'invalid' | 'expired') {
+    super(reason === 'expired' ? 'Confirmation link has expired' : 'Invalid confirmation link')
+    this.name = 'ConfirmationLinkError'
+  }
+}
+
 /**
  * The one form an address is stored and looked up in: trimmed and lowercased.
  * Nothing else (no Gmail dot or plus folding).
@@ -194,7 +202,7 @@ export async function confirmSubscription(token: string, rawEmail: string) {
   })
 
   if (!pending) {
-    throw new Error('Invalid confirmation link')
+    throw new ConfirmationLinkError('invalid')
   }
 
   if (pending.confirmedAt) {
@@ -202,7 +210,7 @@ export async function confirmSubscription(token: string, rawEmail: string) {
   }
 
   if (new Date() > pending.expiresAt) {
-    throw new Error('Confirmation link has expired')
+    throw new ConfirmationLinkError('expired')
   }
 
   // Upsert the Plunk contact to subscribed:true. The contact already exists —

@@ -12,6 +12,7 @@ import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
+import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('newsletter')
 
@@ -81,7 +82,7 @@ export async function deleteNewsletter(id: string) {
 
 export async function assignStories(newsletterId: string) {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
 
   // Find recently published stories from the last N days
   const stories = await prisma.story.findMany({
@@ -104,8 +105,8 @@ export async function assignStories(newsletterId: string) {
 
 export async function selectStoriesForNewsletter(newsletterId: string) {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
-  if (newsletter.storyIds.length === 0) throw new Error('No stories in longlist')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
+  if (newsletter.storyIds.length === 0) throw new BadRequestError('No stories in longlist')
 
   // Fetch stories with title, summary, and issue info
   const stories = await prisma.story.findMany({
@@ -173,8 +174,8 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
 
 export async function generateContent(newsletterId: string) {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
-  if (newsletter.selectedStoryIds.length === 0) throw new Error('No stories selected')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
+  if (newsletter.selectedStoryIds.length === 0) throw new BadRequestError('No stories selected')
 
   const stories = await prisma.story.findMany({
     where: { id: { in: newsletter.selectedStoryIds } },
@@ -294,8 +295,8 @@ export async function generateContent(newsletterId: string) {
 
 export async function generateCarouselForNewsletter(newsletterId: string): Promise<string> {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
-  if (newsletter.selectedStoryIds.length === 0) throw new Error('No stories selected')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
+  if (newsletter.selectedStoryIds.length === 0) throw new BadRequestError('No stories selected')
 
   const stories = await prisma.story.findMany({
     where: { id: { in: newsletter.selectedStoryIds } },
@@ -342,8 +343,8 @@ function escapeHtml(text: string): string {
  */
 export async function generateHtmlContent(newsletterId: string): Promise<string> {
   const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new Error('Newsletter not found')
-  if (!newsletter.content) throw new Error('No content to convert')
+  if (!newsletter) throw new NotFoundError('Newsletter not found')
+  if (!newsletter.content) throw new BadRequestError('No content to convert')
 
   // Split on --- separators to get individual blocks
   const sections = newsletter.content.split(/\n---\n/).filter(s => s.trim())
@@ -602,7 +603,7 @@ export async function getNewsletterSends(newsletterId: string) {
 }
 
 /** A test send was refused because no test segment is configured (never falls back to all subscribers). */
-export class TestSegmentNotConfiguredError extends Error {
+export class TestSegmentNotConfiguredError extends ConflictError {
   constructor() {
     super('Test send refused: PLUNK_TEST_SEGMENT_ID is not set, and a test email is never sent to all subscribers')
     this.name = 'TestSegmentNotConfiguredError'
@@ -675,7 +676,7 @@ export async function sendLive(newsletterId: string, scheduledFor?: string) {
 
 export async function refreshSendStats(sendId: string) {
   const send = await prisma.newsletterSend.findUniqueOrThrow({ where: { id: sendId } })
-  if (!send.plunkCampaignId) throw new Error('No Plunk campaign ID')
+  if (!send.plunkCampaignId) throw new BadRequestError('No Plunk campaign ID')
 
   const stats = await plunk.getCampaignStats(send.plunkCampaignId)
 

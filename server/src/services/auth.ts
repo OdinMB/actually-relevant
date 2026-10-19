@@ -3,6 +3,13 @@ import jwt from 'jsonwebtoken'
 import { randomBytes, randomUUID } from 'crypto'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
+import { UnauthorizedError } from '../utils/errors.js'
+
+/**
+ * The refresh token itself was rejected (unknown, expired, or reused after the grace window):
+ * 401, and the route clears the cookie. Any other failure keeps the cookie so the client can retry.
+ */
+export class RefreshTokenRejectedError extends UnauthorizedError {}
 
 const BCRYPT_ROUNDS = 12
 const ACCESS_TOKEN_EXPIRY = '15m'
@@ -61,10 +68,10 @@ export async function rotateRefreshToken(
     include: { user: true },
   })
 
-  if (!record) throw new Error('Invalid refresh token')
+  if (!record) throw new RefreshTokenRejectedError('Invalid refresh token')
   if (record.expiresAt < new Date()) {
     await prisma.refreshToken.delete({ where: { id: record.id } })
-    throw new Error('Refresh token expired')
+    throw new RefreshTokenRejectedError('Refresh token expired')
   }
 
   if (record.rotatedAt) {
@@ -73,7 +80,7 @@ export async function rotateRefreshToken(
     // is a lost response or a second tab, and gets a fresh token in the family.
     if (!isWithinReuseGrace(record.rotatedAt)) {
       await prisma.refreshToken.deleteMany({ where: { familyId: record.familyId } })
-      throw new Error('Refresh token reuse detected')
+      throw new RefreshTokenRejectedError('Refresh token reuse detected')
     }
     return issueTokenPair(record.user, record.familyId)
   }
@@ -87,7 +94,7 @@ export async function rotateRefreshToken(
     // A concurrent request rotated or revoked it between our read and write
     const current = await prisma.refreshToken.findUnique({ where: { id: record.id } })
     if (!current?.rotatedAt || !isWithinReuseGrace(current.rotatedAt)) {
-      throw new Error('Invalid refresh token')
+      throw new RefreshTokenRejectedError('Invalid refresh token')
     }
   }
 

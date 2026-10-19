@@ -1,6 +1,18 @@
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
 import { updatePrimary, autoRejectNonPrimary } from './dedup.js'
+import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors.js'
+
+/** 409: some of the stories are already in a cluster; the body lists their ids. */
+export class StoriesAlreadyClusteredError extends ConflictError {
+  constructor(message: string, readonly storyIds: string[]) {
+    super(message)
+  }
+
+  override toBody() {
+    return { error: this.message, storyIds: this.storyIds }
+  }
+}
 
 const log = createLogger('cluster')
 
@@ -41,10 +53,10 @@ export async function getClusterById(id: string) {
 
 export async function createManualCluster(storyIds: string[], primaryStoryId: string) {
   if (storyIds.length < 2) {
-    throw new Error('At least 2 stories are required to create a cluster')
+    throw new BadRequestError('At least 2 stories are required to create a cluster')
   }
   if (!storyIds.includes(primaryStoryId)) {
-    throw new Error('Primary story must be one of the selected stories')
+    throw new BadRequestError('Primary story must be one of the selected stories')
   }
 
   // Verify all stories exist and none are already clustered
@@ -56,16 +68,13 @@ export async function createManualCluster(storyIds: string[], primaryStoryId: st
   if (stories.length !== storyIds.length) {
     const foundIds = new Set(stories.map(s => s.id))
     const missing = storyIds.filter(id => !foundIds.has(id))
-    throw new Error(`Stories not found: ${missing.join(', ')}`)
+    throw new NotFoundError(`Stories not found: ${missing.join(', ')}`)
   }
 
   const alreadyClustered = stories.filter(s => s.clusterId !== null)
   if (alreadyClustered.length > 0) {
     const titles = alreadyClustered.map(s => s.title ?? s.id)
-    const error = new Error(`Stories already in a cluster: ${titles.join(', ')}`)
-    ;(error as any).code = 'ALREADY_CLUSTERED'
-    ;(error as any).storyIds = alreadyClustered.map(s => s.id)
-    throw error
+    throw new StoriesAlreadyClusteredError(`Stories already in a cluster: ${titles.join(', ')}`, alreadyClustered.map(s => s.id))
   }
 
   // Create cluster with the specified primary
@@ -110,7 +119,7 @@ export async function setClusterPrimary(clusterId: string, storyId: string) {
     select: { clusterId: true },
   })
   if (!story || story.clusterId !== clusterId) {
-    throw new Error('Story is not a member of this cluster')
+    throw new BadRequestError('Story is not a member of this cluster')
   }
 
   await prisma.storyCluster.update({
@@ -129,7 +138,7 @@ export async function removeFromCluster(clusterId: string, storyId: string) {
     select: { clusterId: true, status: true },
   })
   if (!story || story.clusterId !== clusterId) {
-    throw new Error('Story is not a member of this cluster')
+    throw new BadRequestError('Story is not a member of this cluster')
   }
 
   // Remove the story from the cluster (and restore to analyzed if auto-rejected)
@@ -168,15 +177,16 @@ export async function removeFromCluster(clusterId: string, storyId: string) {
 
 export async function mergeClusters(targetId: string, sourceId: string) {
   if (targetId === sourceId) {
-    throw new Error('Cannot merge a cluster with itself')
+    throw new BadRequestError('Cannot merge a cluster with itself')
   }
 
   const [target, source] = await Promise.all([
     prisma.storyCluster.findUnique({ where: { id: targetId }, select: { id: true } }),
     prisma.storyCluster.findUnique({ where: { id: sourceId }, select: { id: true } }),
   ])
-  if (!target) throw new Error('Target cluster not found')
-  if (!source) throw new Error('Source cluster not found')
+  // 400, not 404: the clusters are named in the request (the URL's and the body's)
+  if (!target) throw new BadRequestError('Target cluster not found')
+  if (!source) throw new BadRequestError('Source cluster not found')
 
   // Move all source members to target
   await prisma.story.updateMany({
@@ -206,7 +216,7 @@ export async function dissolveCluster(clusterId: string) {
     where: { id: clusterId },
     select: { id: true },
   })
-  if (!cluster) throw new Error('Cluster not found')
+  if (!cluster) throw new NotFoundError('Cluster not found')
 
   // Restore auto-rejected members to analyzed
   await prisma.story.updateMany({

@@ -16,12 +16,17 @@ import { buildShowNotes, episodeSnapshots, loadEpisodePool, type EpisodeStory, t
 import { withEpisodeLease } from './podcastPipeline.js'
 import { PodcastRefusedError, editedAiLineRefusal, wasPublished } from './podcastGuards.js'
 import { invalidateFeedCache } from './podcastFeed.js'
+import { UnprocessableError } from '../utils/errors.js'
 
-/** A person's change whose content breaks a rule (422): nothing was saved. */
-export class PodcastEditRejectedError extends Error {
+/** A person's change whose content breaks a rule (422, with the errors and warnings): nothing was saved. */
+export class PodcastEditRejectedError extends UnprocessableError {
   constructor(readonly errors: string[], readonly warnings: string[] = []) {
     super(errors.join('; '))
     this.name = 'PodcastEditRejectedError'
+  }
+
+  override toBody() {
+    return { error: this.message, errors: this.errors, warnings: this.warnings }
   }
 }
 

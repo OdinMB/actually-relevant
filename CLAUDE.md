@@ -84,7 +84,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 
 - **Retry logic**: `withRetry()` (3 retries, exponential backoff) for external HTTP calls; the OpenAI SDK's `maxRetries: 3` for LLM calls.
 - **Graceful shutdown**: `server/src/index.ts` handles `SIGTERM`/`SIGINT`.
-- **Global error handler**: `server/src/app.ts` catches Prisma `P2025`/`P2002` and known service errors.
+- **Route errors**: services throw `ServiceError` subclasses (`NotFoundError`, `BadRequestError`, `ConflictError`, … in `server/src/utils/errors.ts`), never errors a route matches by message; routes don't catch, they name their 500/404/409 texts with `failsWith()`, and the global handler answers (`.context/server-conventions.md`).
 - **Request correlation**: Every request gets `X-Request-Id` header.
 - **Health check**: `GET /health` verifies DB connectivity.
 
@@ -107,7 +107,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Toast provider**: Components using `useToast()` need `<ToastProvider>` in tests.
 - **Headless UI dialogs**: Use `getByRole('heading', { name: ... })` to disambiguate from buttons.
 - **URL-persisted state**: Admin pages use `useSearchParams()` for state (e.g., `?open=id`).
-- **Server tests**: `vi.hoisted()` for mocks, `supertest` + `authHeader()` for route tests.
+- **Server tests**: `vi.hoisted()` for mocks, `supertest` + `authHeader()` for route tests. `_`-prefixed exports (`_resetShutdownState`, `_resetApiState`) exist for tests only; app code never calls them.
 
 ## Project Management (`pm/`)
 
@@ -145,6 +145,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `seo.md` | Sitemap, Render rewrites, robots.txt, route registration, head-tag defaults (`DefaultSeo` + `data-rh` fallbacks in `index.html`) |
 | `images.md` | WebP optimization, size presets, CLI commands |
 | `logging.md` | Pino config, error serialization, structured data, log levels |
+| `server-conventions.md` | Route errors (typed `ServiceError`s, `failsWith()`, the one global handler), test-only `_` exports |
 | `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands |
 | `deployment.md` | Render services and the `render.yaml` blueprint (service settings change there, not in the dashboard); why builds install devDependencies and pin `tsc` (read before touching build scripts or `render.yaml`, or adding an env var: `server/src/blueprint.test.ts` fails until it is in the code, `env.example` and `render.yaml`) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
