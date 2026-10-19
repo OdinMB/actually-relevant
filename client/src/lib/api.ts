@@ -2,6 +2,14 @@ import type { PublicStory, PaginatedResponse, PublicPodcastResponse, PublicPodca
 
 export const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api'
 
+/**
+ * A story's link-preview image (1200x630, served by the API); the site-wide image without a slug.
+ * The server's story-page route injects the same URL for crawlers (server/src/lib/storyPreviewUrls.ts).
+ */
+export function storyOgImageUrl(slug: string | null | undefined): string {
+  return slug ? `${API_BASE}/stories/${encodeURIComponent(slug)}/og.png` : 'https://actuallyrelevant.news/images/og-image.png'
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,

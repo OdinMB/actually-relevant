@@ -142,10 +142,10 @@ services:
       - actuallyrelevant.news
       - www.actuallyrelevant.news
     renderSubdomainPolicy: disabled
-    # Order matters: Render applies the first matching rule, so /sitemap.xml and
-    # /podcast.xml must stay above the SPA catch-all. No static sitemap.xml or
-    # podcast.xml may exist in client/public/. Both rewrites target the API's custom
-    # domain, not the onrender.com host (ADR-0019, .context/seo.md).
+    # Order matters: Render applies the first matching rule, so /sitemap.xml,
+    # /podcast.xml and /stories/* must stay above the SPA catch-all. No static sitemap.xml or
+    # podcast.xml may exist in client/public/, and nothing may be built under dist/stories/.
+    # The rewrites target the API's custom domain, not the onrender.com host (ADR-0019, .context/seo.md).
     routes:
       - type: rewrite
         source: /sitemap.xml
@@ -153,6 +153,12 @@ services:
       - type: rewrite
         source: /podcast.xml
         destination: https://api.actuallyrelevant.news/api/podcast/feed.xml
+      # Story pages: the backend returns this build's index.html with the story's title,
+      # description and og:/twitter: tags injected, so shared links preview as the story.
+      # On any failure it returns the shell unchanged (.context/seo.md, "Story link previews").
+      - type: rewrite
+        source: /stories/*
+        destination: https://api.actuallyrelevant.news/api/story-page/*
       - type: rewrite
         source: /*
         destination: /index.html

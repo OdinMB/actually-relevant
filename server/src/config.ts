@@ -491,4 +491,27 @@ export const config = {
     lookbackHours: parseInt(process.env.SOCIAL_LOOKBACK_HOURS || process.env.BLUESKY_LOOKBACK_HOURS || '25', 10),
     pickModelTier: 'medium' as const,
   },
+  /** Story link previews: the og:image endpoint and the story-page shell route (.context/seo.md). */
+  storyPreview: {
+    /** Public API origin that serves `/api/stories/:slug/og.png`; absolute because crawlers need it. */
+    apiUrl: process.env.API_URL || 'https://api.actuallyrelevant.news',
+    /** The built client's index.html on the static site; the story-page route injects meta tags into it. */
+    shellUrl: `${process.env.SITE_URL || 'https://actuallyrelevant.news'}/index.html`,
+    /** How long the fetched shell is reused before it is revalidated (short: it names the build's hashed assets). */
+    shellCacheSeconds: parseInt(process.env.STORY_PAGE_SHELL_CACHE_SECONDS || '60', 10),
+    shellFetchTimeoutMs: 5000,
+    /** Browser and CDN cache of the story-page HTML. */
+    pageCacheSeconds: 60,
+    /** In-memory cache of rendered pages, per slug. */
+    pageCacheEntries: 200,
+    /** HTTP cache lifetime of a story's og.png. */
+    imageCacheSeconds: parseInt(process.env.STORY_OG_IMAGE_CACHE_SECONDS || '86400', 10),
+    /** In-memory cache of rendered og.png images (about 50-150 KB each). */
+    imageCacheEntries: 50,
+    imageCacheTtlSeconds: 6 * 60 * 60,
+  },
+  /** Public newsletter archive (`/newsletter/archive`, `.context/newsletter-podcast.md`). */
+  newsletterArchive: {
+    cacheMaxAge: 300,
+  },
 } as const;

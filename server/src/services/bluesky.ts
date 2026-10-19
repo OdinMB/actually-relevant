@@ -11,6 +11,7 @@ import { blueskyPostTextSchema, blueskyPickBestSchema } from '../schemas/bluesky
 import type { AuthorFeedResult } from '../lib/bluesky.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { buildMetaLine } from './socialPostFormat.js'
+import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
 
 const log = createLogger('bluesky-service')
 
@@ -298,8 +299,8 @@ export async function publishPost(postId: string) {
     description: story.marketingBlurb || story.summary || '',
   }
 
-  // Global og:image, served from client/public/images (the same file as the site's og:image meta)
-  linkCard.thumbUrl = `${config.siteUrl}/images/og-image.png`
+  // The story's own preview image (the same URL as its page's og:image); the global one without a slug
+  linkCard.thumbUrl = story.slug ? storyOgImageUrl(story.slug) : `${config.siteUrl}/images/og-image.png`
 
   try {
     const result = await createPost(post.postText, linkCard, publisherName, publisherUrl)
