@@ -43,7 +43,7 @@ A module that holds process state exports a `_reset…()` function (or another `
 
 ## CORS
 
-`app.ts` opens CORS to any origin (GET only) for the public read paths in `publicReadPaths` (`/api/stories`, `/api/issues`, `/api/homepage`, `/api/feed`, `/api/docs`, `/api/subscribe/token`, `/api/podcast`), matching a listed path or its sub-paths, never a bare string prefix: `/api/feedback` and `/api/subscribe` stay restricted to `FRONTEND_URL` and the local dev origins. A new public read endpoint is added to the list; anything that writes or reads per-user state is not. `app.test.ts` covers both sides.
+`app.ts` opens CORS to any origin (GET only) for the public read paths in `publicReadPaths` (`/api/stories`, `/api/issues`, `/api/homepage`, `/api/feed`, `/api/docs`, `/api/subscribe/token`, `/api/podcast`, `/api/newsletters`), matching a listed path or its sub-paths, never a bare string prefix: `/api/feedback` and `/api/subscribe` stay restricted to `FRONTEND_URL` and the local dev origins. A new public read endpoint is added to the list; anything that writes or reads per-user state is not. `app.test.ts` covers both sides.
 
 ## Request IDs
 

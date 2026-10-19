@@ -112,7 +112,7 @@ describe('X-Request-Id', () => {
 })
 
 describe('CORS', () => {
-  it.each(['/api/feed', '/api/feed/some-issue', '/api/stories', '/api/subscribe/token', '/api/podcast/feed.xml'])(
+  it.each(['/api/feed', '/api/feed/some-issue', '/api/stories', '/api/subscribe/token', '/api/podcast/feed.xml', '/api/newsletters', '/api/newsletters/week-42-2026'])(
     'opens %s to any origin', async (path) => {
       const res = await request(app).options(path).set('Origin', 'https://widget.example.com')
       expect(res.status).toBe(204)
@@ -120,7 +120,7 @@ describe('CORS', () => {
     },
   )
 
-  it.each(['/api/feedback', '/api/feeds', '/api/storiesx', '/api/subscribe'])(
+  it.each(['/api/feedback', '/api/feeds', '/api/storiesx', '/api/subscribe', '/api/newslettersx', '/api/admin/newsletters'])(
     'keeps %s restricted even though it starts like a public path', async (path) => {
       const res = await request(app).post(path).set('Origin', 'https://evil-site.com')
       expect(res.headers['access-control-allow-origin']).toBeUndefined()
