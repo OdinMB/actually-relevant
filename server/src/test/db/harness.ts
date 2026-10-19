@@ -10,12 +10,11 @@ import type { StoryStatus } from '@prisma/client'
 import prisma from '../../lib/prisma.js'
 import { testDatabaseRefusal } from './guard.js'
 
-export const hasTestDatabase = Boolean(process.env.TEST_DATABASE_URL)
-
-/** `describe` when TEST_DATABASE_URL is set, `describe.skip` otherwise. */
-export function describeDb(name: string, fn: () => void): void {
-  ;(hasTestDatabase ? describe : describe.skip)(name, fn)
-}
+/**
+ * `describe` for a db test file. It no longer skips: the db project's global setup fails the run
+ * when TEST_DATABASE_URL is missing. Kept as a name so the db test files read alike.
+ */
+export const describeDb = describe
 
 /** Truncate every table but Prisma's migration history. */
 export async function truncateAllTables(): Promise<void> {
@@ -64,6 +63,7 @@ export async function createStory(data: {
   title?: string | null
   relevance?: number | null
   datePublished?: Date | null
+  accessTier?: string | null
 }) {
   const id = randomUUID()
   return prisma.story.create({
@@ -81,8 +81,25 @@ export async function createStory(data: {
       title: data.title ?? null,
       relevance: data.relevance ?? null,
       datePublished: data.datePublished ?? null,
+      accessTier: data.accessTier ?? null,
     },
   })
+}
+
+/** A cluster of existing stories with the given primary (null: none yet). */
+export async function createCluster(memberIds: string[], primaryId: string | null): Promise<string> {
+  const cluster = await prisma.storyCluster.create({ data: { primaryStoryId: primaryId } })
+  await prisma.story.updateMany({ where: { id: { in: memberIds } }, data: { clusterId: cluster.id } })
+  return cluster.id
+}
+
+/** The lifecycle fields of each story, by id (a deleted story is absent). */
+export async function statusesOf(ids: string[]) {
+  const rows = await prisma.story.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, status: true, slug: true, datePublished: true, clusterId: true },
+  })
+  return new Map(rows.map(r => [r.id, r]))
 }
 
 /** Store an embedding: a 1536-dimension unit vector along `axis` (cosine distance 0 to itself, 1 to any other axis). */

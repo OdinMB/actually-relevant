@@ -1,8 +1,9 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 
 // PostgreSQL integration tests (`*.db.test.ts`, `.context/database-migrations.md` "Integration
-// tests"): they run against TEST_DATABASE_URL, which their project hands to Prisma as DATABASE_URL,
-// and are skipped when it is unset, so `npm run test` passes without a database.
+// Tests"): the `db` project runs against TEST_DATABASE_URL, which it hands to Prisma as
+// DATABASE_URL, and fails without it (globalSetup). `npm run test` runs the `unit` project only;
+// `npm run test:db` runs the `db` project.
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
 
 export default defineConfig({

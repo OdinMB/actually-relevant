@@ -54,20 +54,25 @@ Code: `server/src/scripts/db-prepare/` (`index.ts` orchestrates; `gate.ts` and `
 
 ## Integration Tests (PostgreSQL)
 
-Most server tests mock Prisma. Logic whose guarantee lives in SQL (retention keep rules and cluster repair, the job lease, pgvector search, the issue filter, the signup send limits) also has `*.db.test.ts` files that run against a real database. They are the `db` project in `server/vitest.config.ts`; every other test is the `unit` project.
+Most server tests mock Prisma. Logic whose guarantee lives in SQL (story status moves and cluster edits, retention keep rules and cluster repair, the job lease, pgvector search, the issue filter, the signup send limits) also has `*.db.test.ts` files that run against a real database. They are the `db` project in `server/vitest.config.ts`; every other test is the `unit` project.
 
-- **Opt-in by `TEST_DATABASE_URL`.** Unset, the db tests are skipped (`describeDb` is `describe.skip`) and `npm run test --prefix server` needs no database. Set, `npm run test` runs them too, and `npm run test:db --prefix server` runs only them.
-- **Guarded.** The URL must be local (the `db:prepare` host rule) and its database name must contain `test`; anything else fails the run before a query (`src/test/db/guard.ts`). The db project hands that URL to Prisma as `DATABASE_URL`, and the truncate refuses to run unless the two match.
-- **Migrated once per run.** The project's global setup runs `prisma migrate deploy` on the test database with the project's own CLI (`src/test/db/globalSetup.ts`). pgvector must be available to the database (the Docker image has it).
+- **Two commands, both part of the checks.** `npm run test --prefix server` runs the `unit` project only and needs no database. `npm run test:db --prefix server` runs the `db` project and **fails** when `TEST_DATABASE_URL` is unset (it used to skip). Run both before committing a change to anything a db test covers.
+- **The variable comes from the shell**, never from `server/.env`: the global setup reads the shell's environment, and `DATABASE_URL` there is still the development database.
+- **Guarded (ADR-0044).** The URL must be local (the `db:prepare` host rule), its database name must end in `_test`, and it must not name the same database as the shell's `DATABASE_URL`; anything else fails the run before a query (`src/test/db/guard.ts`). The db project hands that URL to Prisma as `DATABASE_URL`, and the truncate refuses to run unless the two match.
+- **Migrated once per run, and only this database.** The project's global setup runs `prisma migrate deploy` on the test database with the project's own CLI (`src/test/db/globalSetup.ts`). Tests never run `migrate reset` or `migrate dev`, and migrate no other database. pgvector must be available to the database (the Docker image has it).
 - **Empty before each test.** `useTestDatabase()` truncates every table except `_prisma_migrations` before each test, seeded `job_runs` rows included, so tests insert what they need with the fixtures in `src/test/db/harness.ts`. Db test files run one at a time (`fileParallelism: false`).
 - **No external calls.** Mock the OpenAI-backed modules (`services/embedding.js`, `services/llm.js`) as the unit tests do; `harness.ts` has unit vectors (`axisVector`, `setEmbedding`) for pgvector queries.
 
-Against the Docker database, create a test database once and point the variable at it:
+Against the Docker database (pg17, as production), create a test database once and point the variable at it:
 
 ```bash
 docker exec actually-relevant-db psql -U ardev -d actually_relevant_dev -c "CREATE DATABASE actually_relevant_test"
 TEST_DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevant_test npm run test:db --prefix server
 ```
+
+In a cloud dev container with a local PostgreSQL 16 and pgvector on `localhost:5432`, the same works with `psql -h localhost -U postgres -c "CREATE DATABASE actually_relevant_test"` and `TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/actually_relevant_test`. The migrations use nothing that differs between 16 and 17.
+
+**CI** (`.github/workflows/ci.yml`) runs on every push and pull request: a `pgvector/pgvector:pg17` service with the database `actually_relevant_test`, then the server's type-check, `test` and `test:db`, and the client's type-check and tests. It needs no secrets and leaves `DATABASE_URL` unset except for `db:generate`, which only wants a value. It is advisory: Render still deploys every push to `main` (`deployment.md`).
 
 ## Production Migrations
 

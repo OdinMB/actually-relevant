@@ -1,0 +1,66 @@
+# Runs the check battery on every push and pull request: type-check and unit tests for both
+# packages, and the server's PostgreSQL integration tests against a throwaway pgvector database
+# (ADR-0044). Advisory only: Render deploys on every push to main whatever this reports
+# (render.yaml `autoDeployTrigger: commit`). No secrets are needed or used.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # The major version production and the Docker dev database run
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: actually_relevant_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Nothing calls OpenAI in tests; the client libraries only want a key to exist
+      OPENAI_API_KEY: sk-test-dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --prefix server
+      - name: Generate the Prisma client
+        run: npm run db:generate --prefix server
+        env:
+          # prisma.config.ts requires a value; generate never connects to it
+          DATABASE_URL: postgresql://unused:unused@localhost:5432/unused
+      - run: npm run typecheck --prefix server
+      - run: npm run test --prefix server
+      - name: PostgreSQL integration tests
+        run: npm run test:db --prefix server
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/actually_relevant_test
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci --prefix client
+      - run: npm run typecheck --prefix client
+      - run: npm run test --prefix client -- --run
