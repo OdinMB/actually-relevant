@@ -12,6 +12,7 @@
     "start": "node --max-old-space-size=384 dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:db": "vitest run --project db",
     "db:migrate": "prisma migrate dev",
     "db:migrate:create": "prisma migrate dev --create-only",
     "db:migrate:deploy": "prisma migrate deploy",
