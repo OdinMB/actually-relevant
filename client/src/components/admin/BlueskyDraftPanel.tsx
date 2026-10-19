@@ -5,9 +5,13 @@ import {
   type SocialDraftPanelProps,
 } from './social/SocialDraftPanel'
 
+import { SITE_URL } from '../../config'
+
 export type BlueskyDraft = SocialDraft
 
 const LIMIT = 300
+// The card links our story page on the live site (server: `${config.siteUrl}/stories/<slug>`)
+const SITE_HOST = new URL(SITE_URL).host
 
 /** Count graphemes (user-perceived characters) using Intl.Segmenter. */
 function countGraphemes(text: string): number {
@@ -37,7 +41,7 @@ const blueskyDraftChannel: SocialDraftChannel = {
         <div className="flex items-start gap-2">
           <span className="shrink-0 text-neutral-400">Card:</span>
           <span className="text-brand-700 break-all">
-            actuallyrelevant.com/stories/{draft.story.slug || '...'}
+            {SITE_HOST}/stories/{draft.story.slug || '...'}
           </span>
         </div>
         <div className="flex items-start gap-2">

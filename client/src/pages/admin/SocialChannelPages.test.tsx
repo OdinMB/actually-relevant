@@ -102,6 +102,7 @@ describe('social draft panels', () => {
     const box = await screen.findByLabelText('Post text')
     fireEvent.change(box, { target: { value: '👍🏽👍🏽' } }) // two graphemes, eight UTF-16 units
     expect(screen.getByText('2/300')).toBeInTheDocument()
+    expect(screen.getByText('actuallyrelevant.news/stories/a')).toBeInTheDocument()
 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Post to Bluesky' })) })
     expect(h.onUpdate).toHaveBeenCalledWith('p9', '👍🏽👍🏽')
