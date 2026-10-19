@@ -41,6 +41,10 @@ Tests: `middleware/routeErrors.test.ts` covers the handler; route tests reject s
 
 A module that holds process state exports a `_reset…()` function (or another `_`-prefixed export) for tests only, e.g. `_resetShutdownState` in `index.ts` and `_resetApiState` in `services/extractor.ts`. Application code never calls an `_`-prefixed export; tests call it in `beforeEach`.
 
+## CORS
+
+`app.ts` opens CORS to any origin (GET only) for the public read paths in `publicReadPaths` (`/api/stories`, `/api/issues`, `/api/homepage`, `/api/feed`, `/api/docs`, `/api/subscribe/token`, `/api/podcast`), matching a listed path or its sub-paths, never a bare string prefix: `/api/feedback` and `/api/subscribe` stay restricted to `FRONTEND_URL` and the local dev origins. A new public read endpoint is added to the list; anything that writes or reads per-user state is not. `app.test.ts` covers both sides.
+
 ## Key Files
 
 | File | What |
