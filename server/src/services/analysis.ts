@@ -2,7 +2,7 @@ import { HumanMessage } from '@langchain/core/messages'
 import type { ChatOpenAI } from '@langchain/openai'
 import type { z } from 'zod'
 import prisma from '../lib/prisma.js'
-import { EmotionTag, Prisma } from '@prisma/client'
+import { EmotionTag, Prisma, StoryStatus } from '@prisma/client'
 import { config } from '../config.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { splitIntoGroups } from '../lib/utils.js'
@@ -17,6 +17,7 @@ import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
 import { saveEmbeddingTx } from '../lib/vectors.js'
 import { NotFoundError } from '../utils/errors.js'
+import { transition, type MoveResult } from './storyLifecycle.js'
 
 const log = createLogger('analysis')
 
@@ -351,33 +352,50 @@ export async function assessStories(
   return { completed, errors }
 }
 
-export async function selectStories(storyIds: string[]): Promise<{ selected: string[]; rejected: string[] }> {
+export interface SelectionResult {
+  /** Ids that moved to `selected` */
+  selected: string[]
+  /** Ids that moved to `rejected` (as duplicates or not picked) */
+  rejected: string[]
+  /** Ids left alone: not `analyzed` when read, or no longer when written */
+  skipped: string[]
+}
+
+/** In `ids` order, the ids a move reported as moved. */
+const inOrder = (ids: string[], result: MoveResult) => {
+  const moved = new Set(result.moved)
+  return ids.filter(id => moved.has(id))
+}
+
+export async function selectStories(storyIds: string[]): Promise<SelectionResult> {
+  // Only `analyzed` stories enter the pool; any other id is skipped, never selected or rejected
   const stories = await prisma.story.findMany({
-    where: { id: { in: storyIds } },
+    where: { id: { in: storyIds }, status: StoryStatus.analyzed },
     include: { cluster: { select: { primaryStoryId: true } } },
   })
+  const poolIds = new Set(stories.map(s => s.id))
+  const skipped = [...new Set(storyIds)].filter(id => !poolIds.has(id))
 
-  if (stories.length === 0) return { selected: [], rejected: [] }
+  if (stories.length === 0) return { selected: [], rejected: [], skipped }
 
   // Dedup safety net: keep only primary (or unclustered) stories for LLM selection
   const dedupFiltered = stories.filter(s => {
     if (!s.cluster) return true // no cluster — keep
     return s.cluster.primaryStoryId === s.id // only primary
   })
-  const dedupRejectedIds = stories
+  const nonPrimaryIds = stories
     .filter(s => s.cluster && s.cluster.primaryStoryId !== s.id)
     .map(s => s.id)
 
-  if (dedupRejectedIds.length > 0) {
-    // Safety net: re-reject non-primary stories that may have been manually un-rejected
-    log.info({ filtered: dedupRejectedIds.length }, 'filtered non-primary cluster members from selection')
-    await prisma.story.updateMany({
-      where: { id: { in: dedupRejectedIds } },
-      data: { status: 'rejected' },
-    })
+  // Safety net: re-reject non-primary stories that may have been manually un-rejected
+  const dedup = await transition(nonPrimaryIds, { to: 'rejected', reason: 'duplicate' }, 'pipeline')
+  if (nonPrimaryIds.length > 0) {
+    log.info({ filtered: nonPrimaryIds.length }, 'filtered non-primary cluster members from selection')
   }
+  const dedupRejectedIds = inOrder(nonPrimaryIds, dedup)
+  skipped.push(...dedup.skipped.map(s => s.id))
 
-  if (dedupFiltered.length === 0) return { selected: [], rejected: dedupRejectedIds }
+  if (dedupFiltered.length === 0) return { selected: [], rejected: dedupRejectedIds, skipped }
 
   log.info({ storyCount: dedupFiltered.length }, 'selecting from stories')
 
@@ -405,39 +423,26 @@ export async function selectStories(storyIds: string[]): Promise<{ selected: str
   log.info({ selectedCount: response.selectedIds.length }, 'LLM selection response received')
 
   const selectedSet = new Set(response.selectedIds)
-  const selected: string[] = []
-  const rejected: string[] = [...dedupRejectedIds]
+  const picked = dedupFiltered.filter(s => selectedSet.has(s.id)).map(s => s.id)
+  const notPicked = dedupFiltered.filter(s => !selectedSet.has(s.id)).map(s => s.id)
 
-  for (const story of dedupFiltered) {
-    if (selectedSet.has(story.id)) {
-      selected.push(story.id)
-    } else {
-      rejected.push(story.id)
-    }
-  }
+  // Conditional moves: a story trashed or rejected by an editor during the call stays as it is
+  const selection = await transition(picked, { to: 'selected' }, 'pipeline')
+  const rejection = await transition(notPicked, { to: 'rejected', reason: 'selection' }, 'pipeline')
+  skipped.push(...selection.skipped.map(s => s.id), ...rejection.skipped.map(s => s.id))
 
-  if (selected.length > 0) {
-    await prisma.story.updateMany({
-      where: { id: { in: selected } },
-      data: { status: 'selected' },
-    })
+  return {
+    selected: inOrder(picked, selection),
+    rejected: [...dedupRejectedIds, ...inOrder(notPicked, rejection)],
+    skipped,
   }
-  const llmRejected = rejected.filter(id => !dedupRejectedIds.includes(id))
-  if (llmRejected.length > 0) {
-    await prisma.story.updateMany({
-      where: { id: { in: llmRejected } },
-      data: { status: 'rejected' },
-    })
-  }
-
-  return { selected, rejected }
 }
 
 /** Split stories into groups and run concurrent selection across groups. */
 export async function selectStoriesInGroups(
   storyIds: string[],
   onProgress?: ProgressCallback,
-): Promise<{ selected: number; rejected: number; errors: number }> {
+): Promise<{ selected: number; rejected: number; skipped: number; errors: number }> {
   const groups = splitIntoGroups(storyIds, config.selection.maxGroupSize)
   const semaphore = new Semaphore(config.concurrency.select)
 
@@ -445,6 +450,7 @@ export async function selectStoriesInGroups(
 
   let totalSelected = 0
   let totalRejected = 0
+  let totalSkipped = 0
   let errors = 0
 
   const settled = await Promise.allSettled(
@@ -452,7 +458,8 @@ export async function selectStoriesInGroups(
       semaphore.run(async () => {
         log.info({ group: i + 1, totalGroups: groups.length, storyCount: group.length }, 'processing group')
         const result = await selectStories(group)
-        const processed = result.selected.length + result.rejected.length
+        // A skipped story was handled: its status no longer allowed selection
+        const processed = result.selected.length + result.rejected.length + result.skipped.length
         onProgress?.({ type: 'completed', count: processed })
         const unprocessed = group.length - processed
         if (unprocessed > 0) {
@@ -467,6 +474,7 @@ export async function selectStoriesInGroups(
     if (result.status === 'fulfilled') {
       totalSelected += result.value.selected.length
       totalRejected += result.value.rejected.length
+      totalSkipped += result.value.skipped.length
     } else {
       errors++
       const msg = result.reason instanceof Error ? result.reason.message : 'Unknown error'
@@ -477,7 +485,7 @@ export async function selectStoriesInGroups(
     }
   }
 
-  return { selected: totalSelected, rejected: totalRejected, errors }
+  return { selected: totalSelected, rejected: totalRejected, skipped: totalSkipped, errors }
 }
 
 // --- Bulk wrappers with task progress tracking ---

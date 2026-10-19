@@ -84,6 +84,19 @@ vi.mock('../../services/analysis.js', () => ({
   bulkSelect: mockBulkSelect,
 }))
 
+// The status moves themselves are tested on PostgreSQL (storyLifecycle.db.test.ts); here the
+// routes' use of them. partition() admits every id unless a test says otherwise.
+const mockTransition = vi.hoisted(() => vi.fn())
+const mockPartition = vi.hoisted(() => vi.fn())
+const mockLifecycleDissolve = vi.hoisted(() => vi.fn())
+vi.mock('../../services/storyLifecycle.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/storyLifecycle.js')>()),
+  transition: mockTransition,
+  partition: mockPartition,
+  dissolveCluster: mockLifecycleDissolve,
+}))
+const admitAll = async (ids: string[]) => ({ eligible: ids, skipped: [] })
+
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
@@ -99,6 +112,8 @@ describe('Admin Stories API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     taskRegistry.clear()
+    mockPartition.mockImplementation(admitAll)
+    mockTransition.mockImplementation(async (ids: string[]) => ({ moved: ids, skipped: [] }))
   })
 
   describe('GET /api/admin/stories', () => {
@@ -700,6 +715,34 @@ describe('Admin Stories API', () => {
         .set(authHeader())
         .send({ storyIds: ['00000000-0000-0000-0000-000000000001'] })
       expect(res.status).toBe(400)
+    })
+
+    it('selects only analyzed stories and lists the others as skipped', async () => {
+      const [a, b, c] = ['1', '2', '3'].map(n => `00000000-0000-0000-0000-00000000000${n}`)
+      mockPartition.mockResolvedValue({ eligible: [a, b], skipped: [{ id: c, status: 'published' }] })
+
+      const res = await request(app)
+        .post('/api/admin/stories/bulk-select')
+        .set(authHeader())
+        .send({ storyIds: [a, b, c] })
+
+      expect(res.status).toBe(202)
+      expect(res.body.skipped).toEqual([c])
+      expect(mockBulkSelect).toHaveBeenCalledWith([a, b], res.body.taskId)
+    })
+
+    it('refuses when fewer than 2 analyzed stories remain', async () => {
+      const [a, b] = ['1', '2'].map(n => `00000000-0000-0000-0000-00000000000${n}`)
+      mockPartition.mockResolvedValue({ eligible: [a], skipped: [{ id: b, status: 'trashed' }] })
+
+      const res = await request(app)
+        .post('/api/admin/stories/bulk-select')
+        .set(authHeader())
+        .send({ storyIds: [a, b] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.skipped).toEqual([b])
+      expect(mockBulkSelect).not.toHaveBeenCalled()
     })
   })
 

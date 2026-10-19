@@ -19,6 +19,7 @@ import {
   bulkSelectIdsSchema,
 } from '../../schemas/story.js'
 import { taskRegistry } from '../../lib/taskRegistry.js'
+import { allowedFrom, partition } from '../../services/storyLifecycle.js'
 import { crawlUrlSchema } from '../../schemas/job.js'
 
 // Errors: services throw ServiceErrors (404/400/409) and the global handler in app.ts answers;
@@ -111,12 +112,15 @@ router.post('/bulk-select', failsWith('Failed to start bulk select'), expensiveO
     res.status(409).json({ error: 'All stories are already being processed', skipped })
     return
   }
-  if (filtered.length < 2) {
-    res.status(400).json({ error: 'At least 2 non-processing story IDs are required after filtering', skipped })
+  // Selection only moves `analyzed` stories; the others come back as skipped
+  const { eligible, skipped: notAnalyzed } = await partition(filtered, allowedFrom({ to: 'selected' }, 'pipeline'))
+  skipped.push(...notAnalyzed.map(s => s.id))
+  if (eligible.length < 2) {
+    res.status(400).json({ error: 'At least 2 analyzed, non-processing story IDs are required after filtering', skipped })
     return
   }
-  const taskId = taskRegistry.create('select', filtered.length, filtered)
-  analysisService.bulkSelect(filtered, taskId)
+  const taskId = taskRegistry.create('select', eligible.length, eligible)
+  analysisService.bulkSelect(eligible, taskId)
   res.status(202).json({ taskId, ...(skipped.length > 0 ? { skipped } : {}) })
 })
 

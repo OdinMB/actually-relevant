@@ -48,6 +48,9 @@ vi.mock('../lib/vectors.js', () => ({
 vi.mock('./dedup.js', () => ({
   detectAndCluster: mockDetectAndCluster,
 }))
+// Status writes go through the lifecycle module, tested on PostgreSQL (storyLifecycle.db.test.ts)
+const mockTransition = vi.hoisted(() => vi.fn())
+vi.mock('./storyLifecycle.js', () => ({ transition: mockTransition }))
 
 const { preAssessStories, reclassifyStories, assessStory, selectStories } = await import('./analysis.js')
 const { PUBLIC_STORY_SELECT } = await import('./story.js')
@@ -379,46 +382,14 @@ describe('AI-generated field registry', () => {
 describe('selectStories', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockTransition.mockImplementation(async (ids: string[]) => ({ moved: ids, skipped: [] }))
   })
 
-  it('calls LLM and updates selected/rejected statuses', async () => {
-    const stories = [
-      sampleStory({ id: 'story-1', summary: 'Summary 1', status: 'analyzed' }),
-      sampleStory({ id: 'story-2', summary: 'Summary 2', status: 'analyzed' }),
-      sampleStory({ id: 'story-3', summary: 'Summary 3', status: 'analyzed' }),
-      sampleStory({ id: 'story-4', summary: 'Summary 4', status: 'analyzed' }),
-    ]
-    mockPrisma.story.findMany.mockResolvedValue(stories)
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 2 })
-
-    const mockStructuredLlm = {
-      invoke: vi.fn().mockResolvedValue({
-        selectedIds: ['story-1', 'story-3'],
-      }),
-    }
-    mockGetLargeLLM.mockReturnValue({
-      withStructuredOutput: () => mockStructuredLlm,
-    })
-
-    const result = await selectStories(['story-1', 'story-2', 'story-3', 'story-4'])
-
-    expect(result.selected).toEqual(['story-1', 'story-3'])
-    expect(result.rejected).toEqual(['story-2', 'story-4'])
-
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['story-1', 'story-3'] } },
-      data: { status: 'selected' },
-    })
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['story-2', 'story-4'] } },
-      data: { status: 'rejected' },
-    })
-  })
-
-  it('returns empty arrays when no stories found', async () => {
+  it('skips every id when none is analyzed, without a model call', async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
     const result = await selectStories(['nonexistent'])
-    expect(result).toEqual({ selected: [], rejected: [] })
+    expect(result).toEqual({ selected: [], rejected: [], skipped: ['nonexistent'] })
+    expect(mockGetLargeLLM).not.toHaveBeenCalled()
   })
 
   it('shows the model when each candidate\'s source was published', async () => {

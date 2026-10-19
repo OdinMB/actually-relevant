@@ -71,7 +71,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   // ──── Selection ─────────────────────────────────────────────────────────
 
-  it.fails('a story trashed during the select call stays trashed and is not published next [5b]', async () => {
+  it('a story trashed during the select call stays trashed and is not published next', async () => {
     const a = await story({ status: 'analyzed', relevance: 8 })
     const b = await story({ status: 'analyzed', relevance: 8 })
     mockInvoke.mockImplementation(async () => {
@@ -82,13 +82,14 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const result = await selectStories([a.id, b.id])
 
     expect(result.selected).toEqual([b.id])
+    expect(result.skipped).toEqual([a.id])
     expect((await row(a.id)).status).toBe('trashed')
     await runPublishStories()
     expect((await row(a.id)).status).toBe('trashed')
     expect((await row(b.id)).status).toBe('published')
   })
 
-  it.fails('a story an editor rejects during the select call stays rejected [5b]', async () => {
+  it('a story an editor rejects during the select call stays rejected', async () => {
     const a = await story({ status: 'analyzed', relevance: 8 })
     mockInvoke.mockImplementation(async () => {
       await rejectStory(a.id)
@@ -101,7 +102,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await row(a.id)).status).toBe('rejected')
   })
 
-  it.fails('selection never revives a trashed story and never shows it to the model [5b]', async () => {
+  it('selection never revives a trashed story and never shows it to the model', async () => {
     const primary = await story({ status: 'analyzed', relevance: 8 })
     const trashedMember = await story({ status: 'trashed' })
     const trashedLoner = await story({ status: 'trashed' })
@@ -113,6 +114,21 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await row(trashedMember.id)).status).toBe('trashed')
     expect((await row(trashedLoner.id)).status).toBe('trashed')
     expect(promptOf(mockInvoke.mock.calls[0][0])).not.toContain(trashedLoner.id)
+  })
+
+  it('selection records why it rejected: a duplicate, or not picked', async () => {
+    const primary = await story({ status: 'analyzed', relevance: 8 })
+    const member = await story({ status: 'analyzed', relevance: 8 })
+    const notPicked = await story({ status: 'analyzed', relevance: 8 })
+    await createCluster([primary.id, member.id], primary.id)
+    mockInvoke.mockResolvedValue({ selectedIds: [primary.id] })
+
+    const result = await selectStories([primary.id, member.id, notPicked.id])
+
+    expect(result).toEqual({ selected: [primary.id], rejected: [member.id, notPicked.id], skipped: [] })
+    expect(await row(primary.id)).toMatchObject({ status: 'selected', rejectionReason: null })
+    expect(await row(member.id)).toMatchObject({ status: 'rejected', rejectionReason: 'duplicate' })
+    expect(await row(notPicked.id)).toMatchObject({ status: 'rejected', rejectionReason: 'selection' })
   })
 
   // ──── Assessment and pre-assessment ─────────────────────────────────────
