@@ -1,0 +1,353 @@
+/**
+ * Story status moves and cluster edits against PostgreSQL. The OpenAI-backed modules are mocked; a
+ * mocked call that changes a row mid-call (an editor trashing the story while the model runs) is
+ * how the races are reproduced. Known defects are `it.fails`, each naming the step of
+ * `.plans/2026-10-19_story-lifecycle-and-db-tests.md` that fixes it.
+ */
+import { it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
+import type { BaseMessage } from '@langchain/core/messages'
+import prisma from '../lib/prisma.js'
+import { config } from '../config.js'
+import {
+  axisVector, createCluster, createFeed, createIssue, createStory, describeDb, setEmbedding, statusesOf, useTestDatabase,
+} from '../test/db/harness.js'
+
+const mockInvoke = vi.hoisted(() => vi.fn())
+vi.mock('./llm.js', () => ({
+  getLLMByTier: () => ({ withStructuredOutput: () => ({ invoke: mockInvoke }) }),
+  getMediumLLM: () => ({ withStructuredOutput: () => ({ invoke: mockInvoke }) }),
+  getSmallLLM: () => ({ withStructuredOutput: () => ({ invoke: mockInvoke }) }),
+  rateLimitDelay: () => Promise.resolve(),
+}))
+const mockEnsureEmbeddings = vi.hoisted(() => vi.fn())
+const mockGenerate = vi.hoisted(() => vi.fn())
+vi.mock('./embedding.js', () => ({
+  generateEmbeddingForContent: mockGenerate,
+  generateSearchEmbedding: vi.fn(),
+  ensureEmbedding: (id: string) => mockEnsureEmbeddings([id]),
+  ensureEmbeddings: mockEnsureEmbeddings,
+}))
+
+const { publishStory, rejectStory, updateStoryStatus, dissolveCluster: dissolveStoryCluster, getPublishedStoryBySlug } = await import('./story.js')
+const { runPublishStories } = await import('../jobs/publishStories.js')
+const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
+const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary } = await import('./cluster.js')
+
+let feedId = ''
+let issueSlug = ''
+const story = (data: Omit<Parameters<typeof createStory>[0], 'feedId'> = {}) => createStory({ feedId, ...data })
+const row = async (id: string) => (await statusesOf([id])).get(id)!
+const primaryOf = async (clusterId: string) =>
+  (await prisma.storyCluster.findUnique({ where: { id: clusterId }, select: { primaryStoryId: true } }))?.primaryStoryId
+const promptOf = (messages: BaseMessage[]) => messages.map(m => String(m.content)).join('\n')
+
+const assessAnswer = (rating = 7) => ({
+  publicationDate: '1970-01-01 00:00:00', quote: 'q', quoteAttribution: 'Original article', summary: 'New summary',
+  factors: ['- f'], limitingFactors: ['- l'], relevanceCalculation: ['- c'], conservativeRating: rating,
+  relevanceSummary: 'rs', titleLabel: 'Label', relevanceTitle: 'New title', marketingBlurb: 'mb',
+})
+
+const dedupWasEnabled = config.dedup.enabled
+
+describeDb('story lifecycle (PostgreSQL)', () => {
+  useTestDatabase()
+  // Dedup after assessment is fire-and-forget; its own cases call it directly
+  beforeAll(() => { config.dedup.enabled = false })
+  afterAll(() => { config.dedup.enabled = dedupWasEnabled })
+
+  beforeEach(async () => {
+    mockInvoke.mockReset()
+    mockEnsureEmbeddings.mockReset().mockResolvedValue(undefined)
+    mockGenerate.mockReset().mockResolvedValue({ embedding: axisVector(5), hash: 'assessed' })
+    const issue = await createIssue()
+    issueSlug = issue.slug
+    feedId = (await createFeed(issue.id)).id
+  })
+
+  // ──── Selection ─────────────────────────────────────────────────────────
+
+  it.fails('a story trashed during the select call stays trashed and is not published next [5b]', async () => {
+    const a = await story({ status: 'analyzed', relevance: 8 })
+    const b = await story({ status: 'analyzed', relevance: 8 })
+    mockInvoke.mockImplementation(async () => {
+      await updateStoryStatus(a.id, 'trashed')
+      return { selectedIds: [a.id, b.id] }
+    })
+
+    const result = await selectStories([a.id, b.id])
+
+    expect(result.selected).toEqual([b.id])
+    expect((await row(a.id)).status).toBe('trashed')
+    await runPublishStories()
+    expect((await row(a.id)).status).toBe('trashed')
+    expect((await row(b.id)).status).toBe('published')
+  })
+
+  it.fails('a story an editor rejects during the select call stays rejected [5b]', async () => {
+    const a = await story({ status: 'analyzed', relevance: 8 })
+    mockInvoke.mockImplementation(async () => {
+      await rejectStory(a.id)
+      return { selectedIds: [a.id] }
+    })
+
+    const result = await selectStories([a.id])
+
+    expect(result.selected).toEqual([])
+    expect((await row(a.id)).status).toBe('rejected')
+  })
+
+  it.fails('selection never revives a trashed story and never shows it to the model [5b]', async () => {
+    const primary = await story({ status: 'analyzed', relevance: 8 })
+    const trashedMember = await story({ status: 'trashed' })
+    const trashedLoner = await story({ status: 'trashed' })
+    await createCluster([primary.id, trashedMember.id], primary.id)
+    mockInvoke.mockResolvedValue({ selectedIds: [primary.id] })
+
+    await selectStories([primary.id, trashedMember.id, trashedLoner.id])
+
+    expect((await row(trashedMember.id)).status).toBe('trashed')
+    expect((await row(trashedLoner.id)).status).toBe('trashed')
+    expect(promptOf(mockInvoke.mock.calls[0][0])).not.toContain(trashedLoner.id)
+  })
+
+  // ──── Assessment and pre-assessment ─────────────────────────────────────
+
+  it.fails('re-assessing a published story refreshes it and keeps it on the site [5c]', async () => {
+    const s = await story({ status: 'published', slug: 'live', title: 'Old title', datePublished: new Date() })
+    await setEmbedding(s.id, 1)
+    mockInvoke.mockResolvedValue(assessAnswer())
+
+    await assessStory(s.id)
+
+    const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
+    expect(after.status).toBe('published')
+    expect(after.title).toBe('New title')
+    expect(after.embeddingContentHash).toBe('assessed')
+    expect(await getPublishedStoryBySlug('live')).not.toBeNull()
+  })
+
+  it.fails('re-assessing a selected story keeps it selected [5c]', async () => {
+    const s = await story({ status: 'selected' })
+    mockInvoke.mockResolvedValue(assessAnswer())
+    await assessStory(s.id)
+    expect((await row(s.id)).status).toBe('selected')
+  })
+
+  it('re-assessing a paywall-rejected story re-queues it as analyzed', async () => {
+    const s = await story({ status: 'rejected', accessTier: 'locked' })
+    mockInvoke.mockResolvedValue(assessAnswer())
+    await assessStory(s.id)
+    expect((await row(s.id)).status).toBe('analyzed')
+  })
+
+  it.fails('assessing a trashed story makes no model call and leaves it trashed [5c]', async () => {
+    const s = await story({ status: 'trashed' })
+    mockInvoke.mockResolvedValue(assessAnswer())
+    await assessStory(s.id).catch(() => undefined)
+    expect(mockInvoke).not.toHaveBeenCalled()
+    expect((await row(s.id)).status).toBe('trashed')
+  })
+
+  it.fails('a story trashed during the assess call stays trashed and gets no embedding [5c]', async () => {
+    const s = await story({ status: 'pre_analyzed' })
+    mockInvoke.mockImplementation(async () => {
+      await updateStoryStatus(s.id, 'trashed')
+      return assessAnswer()
+    })
+
+    await assessStory(s.id).catch(() => undefined)
+
+    const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
+    expect(after.status).toBe('trashed')
+    expect(after.embeddingContentHash).toBeNull()
+  })
+
+  it.fails('re-screening a published story rewrites relevancePre and keeps it published [5c]', async () => {
+    const s = await story({ status: 'published', slug: 'p' })
+    await prisma.story.update({ where: { id: s.id }, data: { relevancePre: 3 } })
+    mockInvoke.mockResolvedValue({ articles: [{ articleId: s.id, issueSlug, rating: 9, emotionTag: 'calm' }] })
+
+    await preAssessStories([s.id])
+
+    const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
+    expect(after.relevancePre).toBe(9)
+    expect(after.status).toBe('published')
+  })
+
+  it.fails('pre-assessing a trashed story makes no model call [5c]', async () => {
+    const s = await story({ status: 'trashed' })
+    mockInvoke.mockResolvedValue({ articles: [{ articleId: s.id, issueSlug, rating: 9, emotionTag: 'calm' }] })
+    await preAssessStories([s.id])
+    expect(mockInvoke).not.toHaveBeenCalled()
+    expect((await row(s.id)).status).toBe('trashed')
+  })
+
+  // ──── Publishing ────────────────────────────────────────────────────────
+
+  it.fails('a story trashed while the publish job ensures embeddings gets no slug or date [5d]', async () => {
+    const s = await story({ status: 'selected', title: 'Will be trashed' })
+    mockEnsureEmbeddings.mockImplementation(async () => {
+      await prisma.$executeRaw`UPDATE stories SET status = 'trashed' WHERE id = ${s.id}`
+    })
+
+    await runPublishStories()
+
+    const after = await row(s.id)
+    expect(after.status).toBe('trashed')
+    expect(after.slug).toBeNull()
+    expect(after.datePublished).toBeNull()
+  })
+
+  it.fails('the publish job publishes a cluster primary, not a selected non-primary [5d]', async () => {
+    const primary = await story({ status: 'selected', title: 'Primary', relevance: 9 })
+    const member = await story({ status: 'selected', title: 'Member', relevance: 5 })
+    const clusterId = await createCluster([primary.id, member.id], primary.id)
+
+    await runPublishStories()
+
+    expect((await row(primary.id)).status).toBe('published')
+    expect((await row(member.id)).status).toBe('rejected')
+    expect(await primaryOf(clusterId)).toBe(primary.id)
+  })
+
+  it.fails('an editor publishing a non-primary makes it primary and rejects the unpublished former one [5d]', async () => {
+    const primary = await story({ status: 'analyzed', relevance: 9 })
+    const member = await story({ status: 'rejected', title: 'Member' })
+    const keptPublished = await story({ status: 'published', slug: 'kept', datePublished: new Date() })
+    const clusterId = await createCluster([primary.id, member.id, keptPublished.id], primary.id)
+    // The kept one was published later than the member will be: the member wins the election
+    await prisma.story.update({ where: { id: keptPublished.id }, data: { datePublished: new Date(Date.now() + 60_000) } })
+
+    await publishStory(member.id)
+
+    expect(await primaryOf(clusterId)).toBe(member.id)
+    expect((await row(primary.id)).status).toBe('rejected')
+    expect((await row(keptPublished.id)).status).toBe('published')
+  })
+
+  it('an editor can publish a trashed story, and publishing a published one changes nothing', async () => {
+    const trashed = await story({ status: 'trashed', title: 'Back from the bin' })
+    await publishStory(trashed.id)
+    const published = await row(trashed.id)
+    expect(published.status).toBe('published')
+    expect(published.slug).toBe('back-from-the-bin')
+
+    await publishStory(trashed.id)
+    expect(await row(trashed.id)).toEqual(published)
+  })
+
+  // ──── Dissolve and remove ───────────────────────────────────────────────
+
+  it.fails('dissolving puts a published duplicate back on the site, slug and date unchanged [5f]', async () => {
+    const date = new Date('2026-09-01T00:00:00Z')
+    const primary = await story({ status: 'published', slug: 'primary', datePublished: date })
+    const dup = await story({ status: 'rejected', slug: 'dup', datePublished: date })
+    const fresh = await story({ status: 'rejected' })
+    const clusterId = await createCluster([primary.id, dup.id, fresh.id], primary.id)
+
+    await dissolveCluster(clusterId)
+
+    expect(await row(dup.id)).toMatchObject({ status: 'published', slug: 'dup', datePublished: date, clusterId: null })
+    expect((await row(fresh.id)).status).toBe('analyzed')
+    expect(await prisma.storyCluster.count()).toBe(0)
+  })
+
+  it.fails('the per-story dissolve behaves the same [5f]', async () => {
+    const date = new Date('2026-09-01T00:00:00Z')
+    const primary = await story({ status: 'published', slug: 'primary', datePublished: date })
+    const dup = await story({ status: 'rejected', slug: 'dup', datePublished: date })
+    await createCluster([primary.id, dup.id], primary.id)
+
+    await dissolveStoryCluster(primary.id)
+
+    expect(await row(dup.id)).toMatchObject({ status: 'published', slug: 'dup', clusterId: null })
+  })
+
+  it.fails('removing down to one member dissolves by the same rule [5f]', async () => {
+    const date = new Date('2026-09-01T00:00:00Z')
+    const primary = await story({ status: 'analyzed' })
+    const dup = await story({ status: 'rejected', slug: 'dup', datePublished: date })
+    const clusterId = await createCluster([primary.id, dup.id], primary.id)
+
+    expect(await removeFromCluster(clusterId, primary.id)).toBeNull()
+
+    expect((await row(dup.id)).status).toBe('published')
+    expect((await row(primary.id)).status).toBe('analyzed')
+  })
+
+  // ──── Election ──────────────────────────────────────────────────────────
+
+  it.fails('re-election never picks a trashed member [5f]', async () => {
+    const primary = await story({ status: 'analyzed', relevance: 5 })
+    const trashed = await story({ status: 'trashed', relevance: 9 })
+    const leaving = await story({ status: 'rejected', relevance: 1 })
+    const other = await story({ status: 'analyzed', relevance: 2 })
+    const clusterId = await createCluster([primary.id, trashed.id, leaving.id, other.id], primary.id)
+
+    await removeFromCluster(clusterId, leaving.id)
+
+    expect(await primaryOf(clusterId)).toBe(primary.id)
+    expect((await row(trashed.id)).status).toBe('trashed')
+  })
+
+  it.fails('rejecting the primary elects the next member and restores it [5d]', async () => {
+    const primary = await story({ status: 'analyzed', relevance: 9 })
+    const next = await story({ status: 'rejected', relevance: 6 })
+    const clusterId = await createCluster([primary.id, next.id], primary.id)
+
+    await rejectStory(primary.id)
+
+    expect(await primaryOf(clusterId)).toBe(next.id)
+    expect((await row(next.id)).status).toBe('analyzed')
+  })
+
+  // ──── Set primary and merge ─────────────────────────────────────────────
+
+  it.fails('setting a rejected duplicate as primary restores it and rejects published members [5f]', async () => {
+    const primary = await story({ status: 'published', slug: 'p', datePublished: new Date() })
+    const chosen = await story({ status: 'rejected' })
+    const clusterId = await createCluster([primary.id, chosen.id], primary.id)
+
+    await setClusterPrimary(clusterId, chosen.id)
+
+    expect(await primaryOf(clusterId)).toBe(chosen.id)
+    expect((await row(chosen.id)).status).toBe('analyzed')
+    expect((await row(primary.id)).status).toBe('rejected')
+  })
+
+  it('merging rejects published non-primaries of the merged cluster', async () => {
+    const a = await story({ status: 'published', slug: 'a', datePublished: new Date('2026-01-01') })
+    const b = await story({ status: 'rejected' })
+    const c = await story({ status: 'published', slug: 'c', datePublished: new Date('2026-02-01') })
+    const d = await story({ status: 'rejected' })
+    const target = await createCluster([a.id, b.id], a.id)
+    const source = await createCluster([c.id, d.id], c.id)
+
+    await mergeClusters(target, source)
+
+    expect(await primaryOf(target)).toBe(a.id)
+    expect((await row(c.id)).status).toBe('rejected')
+    expect(await prisma.storyCluster.count()).toBe(1)
+  })
+
+  // ──── Concurrency ───────────────────────────────────────────────────────
+
+  it('a concurrent publish and trash of one story both finish and leave one of the two', async () => {
+    const s = await story({ status: 'analyzed', title: 'Contested' })
+
+    await Promise.all([publishStory(s.id), updateStoryStatus(s.id, 'trashed')])
+
+    expect(['published', 'trashed']).toContain((await row(s.id)).status)
+  })
+
+  it('a publish run and a dissolve of the same cluster do not deadlock', async () => {
+    const primary = await story({ status: 'selected', title: 'P' })
+    const member = await story({ status: 'rejected' })
+    const clusterId = await createCluster([primary.id, member.id], primary.id)
+
+    await Promise.all([runPublishStories(), dissolveCluster(clusterId)])
+
+    expect((await row(primary.id)).status).toBe('published')
+    expect(await prisma.storyCluster.count()).toBe(0)
+  })
+})
