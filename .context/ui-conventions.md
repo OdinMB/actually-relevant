@@ -30,6 +30,10 @@ Defined in `client/src/index.css`:
 - `.section-heading` -- Section headings (text-2xl)
 - `.section-heading-lg` -- Larger section headings (text-3xl)
 
+## Public URLs
+
+The site URL and the Ko-fi, Bluesky, Mastodon and GitHub addresses are constants in `client/src/config.ts` (`SITE_URL`, `KOFI_URL`, `BLUESKY_PROFILE_URL`, `MASTODON_PROFILE_URL`, `GITHUB_REPO_URL`); `SEO.siteUrl` is `SITE_URL`. Import them rather than writing an address inline. `index.html` and the build scripts in `client/scripts/` cannot import them and keep their own copies.
+
 ## Bundle Splitting
 
 The client uses `React.lazy()` to split code and reduce initial bundle size. Homepage visitors only download homepage code; other pages load on demand.

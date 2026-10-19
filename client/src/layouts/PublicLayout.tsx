@@ -3,7 +3,13 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { getCategoryColor } from "../lib/category-colors";
 import { API_BASE } from "../lib/api";
-import { BRAND, GITHUB_REPO_URL } from "../config";
+import {
+  BRAND,
+  GITHUB_REPO_URL,
+  KOFI_URL,
+  BLUESKY_PROFILE_URL,
+  MASTODON_PROFILE_URL,
+} from "../config";
 import { useSavedCount } from "../hooks/useSavedCount";
 import SubscribeProvider, {
   useSubscribe,
@@ -12,10 +18,6 @@ import FeedbackProvider from "../components/FeedbackProvider";
 import { PositivityProvider } from "../contexts/PositivityContext";
 import { MoodDialPanel } from "../components/PositivitySlider";
 import BrandLogo from "../components/BrandLogo";
-const KOFI_URL = "https://ko-fi.com/odinmb";
-const BLUESKY_URL = "https://bsky.app/profile/actuallyrelevant.bsky.social";
-const MASTODON_URL = "https://mastodon.social/@actuallyrelevant";
-const GITHUB_URL = GITHUB_REPO_URL;
 
 const ISSUE_LINKS = [
   {
@@ -588,7 +590,7 @@ function PublicLayoutInner() {
               </p>
               <div className="flex gap-2 mt-4">
                 <a
-                  href={BLUESKY_URL}
+                  href={BLUESKY_PROFILE_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center w-8 h-8 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-brand-500"
@@ -597,7 +599,7 @@ function PublicLayoutInner() {
                   <img src="/images/optimized/social/bluesky-thumb-w.webp" alt="" width={18} height={18} className="w-[18px] h-[18px]" aria-hidden="true" />
                 </a>
                 <a
-                  href={MASTODON_URL}
+                  href={MASTODON_PROFILE_URL}
                   target="_blank"
                   rel="noopener noreferrer me"
                   className="flex items-center justify-center w-8 h-8 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-brand-500"
@@ -606,7 +608,7 @@ function PublicLayoutInner() {
                   <img src="/images/optimized/social/mastodon-thumb-w.webp" alt="" width={18} height={18} className="w-[18px] h-[18px]" aria-hidden="true" />
                 </a>
                 <a
-                  href={GITHUB_URL}
+                  href={GITHUB_REPO_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center w-8 h-8 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-brand-500"

@@ -4,6 +4,7 @@ import { SEO, CommonOgTags } from '../lib/seo'
 import { buildBreadcrumbSchema } from '../lib/structured-data'
 import StructuredData from '../components/StructuredData'
 import LandingCta from '../components/LandingCta'
+import { KOFI_URL } from '../config'
 
 const META = {
   title: 'News Without Ads or Tracking \u2014 Actually Relevant',
@@ -38,8 +39,6 @@ const COMPARISON = [
   { us: 'Funded by donations', them: 'Funded by advertising' },
   { us: 'Never sells data', them: 'Data often sold or shared' },
 ]
-
-const KOFI_URL = 'https://ko-fi.com/odinmb'
 
 function HeartIcon({ className }: { className?: string }) {
   return (

@@ -1,4 +1,4 @@
-const KOFI_URL = 'https://ko-fi.com/odinmb';
+import { KOFI_URL } from '../config';
 
 function HeartIcon({ className }: { className?: string }) {
   return (

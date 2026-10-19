@@ -1,3 +1,5 @@
+import { KOFI_URL } from "../config";
+
 function HeartIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -10,8 +12,6 @@ function HeartIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-
-const KOFI_URL = "https://ko-fi.com/odinmb";
 
 export default function SupportBanner() {
   return (
