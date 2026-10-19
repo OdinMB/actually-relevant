@@ -273,6 +273,9 @@ model Podcast {
   audioPath      String?       @map("audio_path")
   transcriptUrl  String?       @map("transcript_url")
   transcriptPath String?       @map("transcript_path")
+  /// Public CDN URL and storage path of the Podcasting 2.0 JSON chapters file (stored at `ready`); null on episodes from before chapters
+  chaptersUrl    String?       @map("chapters_url")
+  chaptersPath   String?       @map("chapters_path")
   audioBytes     Int?          @map("audio_bytes")
   durationSec    Int?          @map("duration_sec")
   readyAt        DateTime?     @map("ready_at")

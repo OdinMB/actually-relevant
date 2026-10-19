@@ -1,7 +1,7 @@
 /**
  * How the spoken episode is cut into TTS requests and timed back, without I/O: packing segments
- * into chunks, the text continuity each request carries, and the VTT transcript timed from the
- * voiced chunks' measured durations.
+ * into chunks, the text continuity each request carries, and the VTT transcript and the JSON
+ * chapters, both timed from the voiced chunks' measured durations.
  */
 import type { SpokenSegment, Turn } from './podcastDialogue.js'
 
@@ -65,26 +65,120 @@ function timestamp(ms: number): string {
   return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(total % 1000, 3)}`
 }
 
+interface TimedTurn {
+  turn: Turn
+  startMs: number
+  endMs: number
+}
+
 /**
- * The WebVTT transcript. Within each chunk the turns share its measured duration in proportion to
- * their characters (approximate; exact timings would need the timestamps endpoint); each chunk
- * starts after the preceding chunks' durations plus the pauses inserted between them at assembly.
- * Audio tags are not spoken, so they are left out of the cue text.
+ * Every turn of the episode, in spoken order, with its approximate place in the MP3. Within each
+ * chunk the turns share its measured duration in proportion to their characters (exact timings
+ * would need the timestamps endpoint); each chunk starts after the preceding chunks' durations
+ * plus the pauses inserted between them at assembly. The VTT and the chapters both read this.
  */
-export function buildTranscriptVtt(chunks: Chunk[], durationsMs: number[], pauseMs: number): string {
+function timeTurns(chunks: Chunk[], durationsMs: number[], pauseMs: number): TimedTurn[] {
   if (durationsMs.length !== chunks.length) throw new Error(`${chunks.length} chunks but ${durationsMs.length} durations`)
-  const cues: string[] = []
+  const timed: TimedTurn[] = []
   let offset = 0
   chunks.forEach((chunk, i) => {
     const total = Math.max(1, chunkChars(chunk))
     let at = offset
     for (const turn of chunk) {
       const end = at + (durationsMs[i] * turn.text.length) / total
-      const text = readableText(turn.text)
-      if (text !== '') cues.push(`${timestamp(at)} --> ${timestamp(end)}\n<v ${SPEAKER_LABEL[turn.speaker]}>${text}`)
+      timed.push({ turn, startMs: at, endMs: end })
       at = end
     }
     offset += durationsMs[i] + (i < chunks.length - 1 ? pauseMs : 0)
   })
+  return timed
+}
+
+/**
+ * The WebVTT transcript: one cue per turn, timed by `timeTurns` (approximate by design). Audio tags
+ * are not spoken, so they are left out of the cue text.
+ */
+export function buildTranscriptVtt(chunks: Chunk[], durationsMs: number[], pauseMs: number): string {
+  const cues = timeTurns(chunks, durationsMs, pauseMs).flatMap(({ turn, startMs, endMs }) => {
+    const text = readableText(turn.text)
+    return text === '' ? [] : [`${timestamp(startMs)} --> ${timestamp(endMs)}\n<v ${SPEAKER_LABEL[turn.speaker]}>${text}`]
+  })
   return `WEBVTT\n\n${cues.join('\n\n')}\n`
+}
+
+/** A story as a chapter names and links it. */
+export interface ChapterStory {
+  ref: number
+  /** The story's headline, as the episode froze it. */
+  title: string
+  /** Our story page; null when the story has no slug. */
+  url: string | null
+}
+
+export interface Chapter {
+  /** Seconds from the start of the MP3. */
+  startTime: number
+  title: string
+  url?: string
+}
+
+/** A Podcasting 2.0 JSON chapters document (`application/json+chapters`, spec version 1.2.0). */
+export interface ChaptersDocument {
+  version: '1.2.0'
+  chapters: Chapter[]
+}
+
+/** Titles of the chapters that are not about a story. Plain navigation, not AI-label wording. */
+export const CHAPTER_TITLE = { opening: 'Introduction', closing: 'Wrap-up' } as const
+
+const seconds = (ms: number) => Math.round(ms) / 1000
+
+/**
+ * The episode's chapters, timed exactly like the VTT (`timeTurns`, the same chunks, durations and
+ * pause): an opening chapter (the opener and the intro), one per story segment titled with the
+ * story's headline and linking its story page, and a closing one (the outro and the sign-off).
+ * Consecutive segments about the same story make one chapter; a story segment whose story is
+ * unknown runs on as part of the chapter before it. No LLM call: titles come from the snapshot.
+ */
+export function buildChapters(
+  segments: SpokenSegment[],
+  chunks: Chunk[],
+  durationsMs: number[],
+  pauseMs: number,
+  stories: ChapterStory[],
+): ChaptersDocument {
+  const timed = timeTurns(chunks, durationsMs, pauseMs)
+  const turnCount = segments.reduce((n, s) => n + s.turns.length, 0)
+  if (turnCount !== timed.length) throw new Error(`${turnCount} turns in the segments but ${timed.length} in the chunks`)
+
+  const byRef = new Map(stories.map(s => [s.ref, s]))
+  const chapters: Chapter[] = []
+  let lastKey: string | null = null
+  let turnIndex = 0
+  for (const segment of segments) {
+    const startMs = segment.turns.length > 0 ? timed[turnIndex].startMs : null
+    turnIndex += segment.turns.length
+    if (startMs === null) continue
+
+    const story = segment.kind === 'story' && segment.storyRef != null ? byRef.get(segment.storyRef) : undefined
+    const startTime = seconds(startMs)
+    let key: string
+    let chapter: Chapter
+    if (story) {
+      key = `story:${story.ref}`
+      chapter = { startTime, title: story.title, ...(story.url ? { url: story.url } : {}) }
+    } else if (segment.kind === 'opener' || segment.kind === 'intro') {
+      key = 'opening'
+      chapter = { startTime, title: CHAPTER_TITLE.opening }
+    } else if (segment.kind === 'outro' || segment.kind === 'signoff') {
+      key = 'closing'
+      chapter = { startTime, title: CHAPTER_TITLE.closing }
+    } else {
+      continue
+    }
+    if (key === lastKey) continue
+    lastKey = key
+    chapters.push(chapter)
+  }
+  return { version: '1.2.0', chapters }
 }
