@@ -1,6 +1,6 @@
 # Public Website
 
-The public site uses `PublicLayout` with hardcoded navigation in `PublicLayout.tsx`: the issue bar (`ISSUE_LINKS`), the header's Newsletter, Podcast and Saved links, in that order (desktop right of the logo, and the same three in the mobile menu dialog), and the footer's Navigate (`FOOTER_NAV`), Connect (channels: Newsletter, Podcast, RSS and the rest, written out inline) and Issues columns. A new channel goes in both the header (desktop and mobile) and Connect; each link appears once in the footer.
+The public site uses `PublicLayout` with hardcoded navigation in `client/src/layouts/public/` (link lists in `navLinks.ts`): the issue bar (`ISSUE_LINKS`), the header's Newsletter, Podcast and Saved links, in that order (desktop right of the logo, and the same three in the mobile menu dialog), and the footer's Navigate (`FOOTER_NAV`), Connect (channels: Newsletter, Podcast, RSS and the rest, written out inline) and Issues columns. A new channel goes in both the header (desktop and mobile) and Connect; each link appears once in the footer.
 
 Saved appears only once the visitor has saved a story, and goes when the last is removed, at once and without a reload: `useSavedCount` (`client/src/hooks/`) subscribes to the saved-stories store in `lib/preferences.ts`, whose `toggleSaved` announces every change itself (other tabs through the `storage` event), so a new place that saves or removes a story needs no event of its own. Prerendered pages carry no Saved link, since the prerender's browser has nothing saved; the client adds it on its first render. Because the desktop group is anchored right, Newsletter and Podcast then sit one link further left for a visitor with saved stories. The Layout Instability API records no shift for it (0 on a prerendered page with three saved stories and the JS delayed 1.5 s, 2026-10-07), because the client replaces the prerendered nodes rather than moving them. This document covers routes, components, data flow, and static content structure.
 
@@ -114,7 +114,11 @@ Preload hints: `client/index.html`
 
 ## Key Files
 
-- `client/src/layouts/PublicLayout.tsx` — Header, footer, navigation, positivity slider placement
+- `client/src/layouts/PublicLayout.tsx` — Providers, skip link, RSS autodiscovery, scroll reset; composes the parts in `client/src/layouts/public/`:
+  - `SiteHeader.tsx` — logo bar and its actions, positivity slider placement; owns menu and search state
+  - `IssueNav.tsx` (desktop issue bar), `MobileMenu.tsx` (menu dialog), `SearchPanel.tsx` (search bar)
+  - `SiteFooter.tsx` — sign-off, brand, Navigate, Connect and Issues columns
+  - `navLinks.ts` (`ISSUE_LINKS`, `FOOTER_NAV`, `FOOTER_LEGAL`), `icons.tsx`
 - `client/src/pages/HomePage.tsx` — Homepage with issue sections
 - `client/src/pages/StoryPage.tsx` — Story detail
 - `client/src/pages/IssuePage.tsx` — Issue page with stories + static content
