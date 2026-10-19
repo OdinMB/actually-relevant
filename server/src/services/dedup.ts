@@ -145,16 +145,27 @@ export async function findExistingCluster(storyIds: string[]): Promise<{ id: str
  */
 async function formCluster(storyId: string, duplicateIds: string[], existingClusterId: string | null): Promise<DetectResult> {
   const joining = [storyId, ...duplicateIds]
-  return withClusterLocks(existingClusterId ? [existingClusterId] : [], async (tx, locked) => {
-    const existing = existingClusterId && locked.has(existingClusterId) ? existingClusterId : null
-    const clusterId = existing ?? (await tx.storyCluster.create({ data: {} })).id
-    await tx.story.updateMany({ where: { id: { in: joining }, clusterId: null }, data: { clusterId } })
-    const { rejected } = await reelectPrimary(clusterId, 'pipeline', tx)
-    const memberCount = await tx.story.count({ where: { clusterId } })
-    log.info({ storyId, clusterId, memberCount, newCluster: !existing }, existing ? 'added story to existing cluster' : 'created new cluster')
-    return { clusterId, newCluster: !existing, memberCount, rejectedIds: rejected }
-  })
+  try {
+    return await withClusterLocks(existingClusterId ? [existingClusterId] : [], async (tx, locked) => {
+      const existing = existingClusterId && locked.has(existingClusterId) ? existingClusterId : null
+      const clusterId = existing ?? (await tx.storyCluster.create({ data: {} })).id
+      await tx.story.updateMany({ where: { id: { in: joining }, clusterId: null }, data: { clusterId } })
+      const memberCount = await tx.story.count({ where: { clusterId } })
+      // The stories were clustered elsewhere meanwhile: a cluster of one is no cluster
+      if (memberCount < 2) throw new TooFewMembers()
+      const { rejected } = await reelectPrimary(clusterId, 'pipeline', tx)
+      log.info({ storyId, clusterId, memberCount, newCluster: !existing }, existing ? 'added story to existing cluster' : 'created new cluster')
+      return { clusterId, newCluster: !existing, memberCount, rejectedIds: rejected }
+    })
+  } catch (err) {
+    if (!(err instanceof TooFewMembers)) throw err
+    log.info({ storyId, duplicateIds }, 'dedup cluster not formed: the stories joined other clusters meanwhile')
+    return { clusterId: null, newCluster: false, memberCount: 0, rejectedIds: [] }
+  }
 }
+
+/** Rolls back a cluster formation that would leave fewer than two members. */
+class TooFewMembers extends Error {}
 
 // ──── Full pipeline ──────────────────────────────────────────────────────────
 

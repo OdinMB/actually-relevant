@@ -122,23 +122,25 @@ export interface AnalysisRow {
 }
 
 /**
- * Write analysis results in one transaction, each row conditional on the status read just
- * before, so a story whose status changed meanwhile (trashed during the model call) is skipped
- * and gets neither the fields nor the embedding.
+ * Write analysis results in one transaction, each row conditional on `expected`: the status the
+ * caller read before its model call. A story whose status changed meanwhile (an editor trashed or
+ * rejected it during the call) is skipped and gets neither the fields nor the embedding, so the
+ * editor's move is never reverted.
  */
 export async function recordAnalysis(
   stage: AnalysisStage,
   actor: Actor,
   rows: AnalysisRow[],
+  expected: ReadonlyMap<string, StoryStatus>,
 ): Promise<Map<string, AnalysisOutcome>> {
   const outcomes = new Map<string, AnalysisOutcome>()
   if (rows.length === 0) return outcomes
   const { to, advance, refresh } = ANALYSIS[stage]
 
   await prisma.$transaction(async (tx) => {
-    const current = await currentStatuses(tx, rows.map(r => r.id))
+    await lockForMove(tx, rows.map(r => r.id))
     for (const row of rows) {
-      const status = current.get(row.id)
+      const status = expected.get(row.id)
       const outcome: AnalysisOutcome = status && advance[actor].includes(status) ? 'advanced'
         : status && refresh.includes(status) ? 'refreshed'
         : 'skipped'
@@ -170,17 +172,24 @@ export function analysisFrom(stage: AnalysisStage, actor: Actor): StoryStatus[] 
 
 // ──── Read-only partition ───────────────────────────────────────────────
 
-/** Split ids into those `from` admits now and the rest (read-only: for bulk routes before they queue a task). */
-export async function partition(ids: string[], from: StoryStatus[]): Promise<{ eligible: string[]; skipped: Skipped[] }> {
+/**
+ * Split ids into those `from` admits now and the rest (read-only: for bulk routes before they
+ * queue a task, and for analysis before its model call). `statuses` holds the eligible ids'
+ * statuses as read, for `recordAnalysis`.
+ */
+export async function partition(ids: string[], from: StoryStatus[]): Promise<{ eligible: string[]; skipped: Skipped[]; statuses: Map<string, StoryStatus> }> {
   const current = await currentStatuses(prisma, ids)
   const eligible: string[] = []
   const skipped: Skipped[] = []
+  const statuses = new Map<string, StoryStatus>()
   for (const id of new Set(ids)) {
     const status = current.get(id) ?? null
-    if (status && from.includes(status)) eligible.push(id)
-    else skipped.push({ id, status })
+    if (status && from.includes(status)) {
+      eligible.push(id)
+      statuses.set(id, status)
+    } else skipped.push({ id, status })
   }
-  return { eligible, skipped }
+  return { eligible, skipped, statuses }
 }
 
 // ──── Moves ─────────────────────────────────────────────────────────────
@@ -197,10 +206,7 @@ export async function transition(ids: string[], move: Move, actor: Actor): Promi
 
   const result = move.to === published
     ? await publishIds(unique, from, actor)
-    : await prisma.$transaction(
-      tx => (actor === 'editor' ? editorMove(tx, unique, move, from) : pipelineMove(tx, unique, move, from)),
-      { timeout: config.database.transactionTimeoutMs },
-    )
+    : await inTransaction(tx => (actor === 'editor' ? editorMove(tx, unique, move, from) : pipelineMove(tx, unique, move, from)))
 
   if (actor === 'editor' && move.to !== published) forgetRelatedStories(result.moved)
   log.info({
@@ -211,15 +217,18 @@ export async function transition(ids: string[], move: Move, actor: Actor): Promi
 }
 
 async function pipelineMove(tx: Tx, ids: string[], move: Move, from: StoryStatus[]): Promise<MoveResult> {
-  const before = await lockStories(tx, ids)
+  const before = await lockForMove(tx, ids)
   const moved = await moveWhere(tx, { id: { in: ids }, status: { in: from } }, move)
   return { moved, skipped: skippedOf(ids, moved, before) }
 }
 
 async function editorMove(tx: Tx, ids: string[], move: Move, from: StoryStatus[]): Promise<MoveResult> {
-  await lockClustersOf(tx, ids)
-  const before = await lockStories(tx, ids)
-  const moved = await moveWhere(tx, { id: { in: ids }, status: { in: from } }, move)
+  const before = await lockForMove(tx, ids)
+  // An editor's reject also overrides another reason (a duplicate stays rejected for good)
+  const fromRejected: Prisma.StoryWhereInput[] = move.to === rejected
+    ? [{ status: rejected, OR: [{ rejectionReason: null }, { rejectionReason: { not: move.reason } }] }]
+    : []
+  const moved = await moveWhere(tx, { id: { in: ids }, OR: [{ status: { in: from } }, ...fromRejected] }, move)
 
   // Moving a cluster's face (its primary, or a published member) changes who should lead it
   const clusters = new Set<string>()
@@ -273,8 +282,7 @@ async function ensureEmbeddingsBeforePublish(chunk: string[], from: StoryStatus[
 }
 
 async function publishChunk(tx: Tx, chunk: string[], from: StoryStatus[], actor: Actor): Promise<MoveResult> {
-  await lockClustersOf(tx, chunk)
-  const before = await lockStories(tx, chunk)
+  const before = await lockForMove(tx, chunk)
 
   const flipped = await tx.story.updateManyAndReturn({
     where: {
@@ -294,10 +302,16 @@ async function publishChunk(tx: Tx, chunk: string[], from: StoryStatus[], actor:
     await tx.story.updateMany({ where: { id: { in: moved }, datePublished: null }, data: { datePublished: new Date() } })
   }
 
-  const clusters = [...new Set(flipped.map(s => s.clusterId).filter((c): c is string => c !== null))].sort()
-  for (const clusterId of clusters) await reelectPrimary(clusterId, 'pipeline', tx)
+  // Every cluster the chunk touches, not only the moved stories': a `selected` non-primary the
+  // job left alone is rejected as a duplicate here rather than waiting in `selected` for good
+  const clusterIds = [...before.values(), ...flipped].map(s => s.clusterId).filter((c): c is string => c !== null)
+  for (const clusterId of [...new Set(clusterIds)].sort()) await reelectPrimary(clusterId, 'pipeline', tx)
 
-  return { moved, skipped: skippedOf(chunk, moved, before) }
+  // Skipped ids report their status after the election, which may have just rejected them
+  const movedSet = new Set(moved)
+  const skippedIds = chunk.filter(id => !movedSet.has(id))
+  const after = await currentStatuses(tx, skippedIds)
+  return { moved, skipped: skippedIds.map(id => ({ id, status: after.get(id) ?? null })) }
 }
 
 // ──── Cluster primaries ─────────────────────────────────────────────────
@@ -346,6 +360,8 @@ export interface ElectionResult { primaryId: string | null; rejected: string[]; 
  * the primary pointer stays as it is (or is cleared when it names a story no longer a member).
  */
 export async function reelectPrimary(clusterId: string, mode: ElectionMode, tx: Tx, chosenPrimaryId?: string): Promise<ElectionResult> {
+  // The members' rows in id order before any write (the caller holds the cluster's lock)
+  await tx.$queryRaw`SELECT id FROM stories WHERE cluster_id = ${clusterId} ORDER BY id FOR UPDATE`
   const cluster = await tx.storyCluster.findUnique({
     where: { id: clusterId },
     select: {
@@ -387,16 +403,42 @@ async function restoreDuplicates(tx: Tx, where: Prisma.StoryWhereInput): Promise
   const duplicates = { ...where, status: rejected, rejectionReason: RejectionReason.duplicate }
   const republished = await moveWhere(tx, { ...duplicates, datePublished: { not: null } }, { to: published })
   const requeued = await moveWhere(tx, { ...duplicates, datePublished: null }, { to: analyzed })
+  republishedIn.get(tx)?.push(...republished)
   return [...republished, ...requeued]
+}
+
+// ──── Transactions ──────────────────────────────────────────────────────
+
+/** Stories put back on the site in a transaction, keyed by its client, for after the commit. */
+const republishedIn = new WeakMap<Tx, string[]>()
+
+/**
+ * Run `fn` in a transaction. Stories it put back on the site (restored duplicates) get their
+ * embedding ensured after the commit, outside the transaction: the retention job clears the
+ * embeddings of old unpublished stories (`story-retention.md`). A failure republishes without one.
+ */
+async function inTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  const republished: string[] = []
+  const result = await prisma.$transaction(async (tx) => {
+    republished.length = 0 // a retried callback starts over
+    republishedIn.set(tx, republished)
+    return fn(tx)
+  }, { timeout: config.database.transactionTimeoutMs })
+  if (republished.length > 0) {
+    try {
+      await ensureEmbeddings([...new Set(republished)])
+    } catch (err) {
+      log.warn({ err, storyCount: republished.length }, 'failed to ensure embeddings of restored stories, proceeding without')
+    }
+  }
+  return result
 }
 
 // ──── Cluster edits ─────────────────────────────────────────────────────
 
 /** Run `fn` in a transaction holding the row locks of these clusters; `locked` is those that exist. */
 export async function withClusterLocks<T>(clusterIds: string[], fn: (tx: Tx, locked: Set<string>) => Promise<T>): Promise<T> {
-  return prisma.$transaction(async (tx) => fn(tx, await lockClusters(tx, clusterIds)), {
-    timeout: config.database.transactionTimeoutMs,
-  })
+  return inTransaction(async (tx) => fn(tx, await lockClusters(tx, clusterIds)))
 }
 
 /** Restore duplicate members, unlink every member and delete the cluster. */
@@ -466,6 +508,12 @@ async function lockClusters(tx: Tx, clusterIds: string[]): Promise<Set<string>> 
 async function lockClustersOf(tx: Tx, storyIds: string[]): Promise<void> {
   const rows = await tx.story.findMany({ where: { id: { in: storyIds }, clusterId: { not: null } }, select: { clusterId: true } })
   await lockClusters(tx, rows.map(r => r.clusterId!))
+}
+
+/** The lock order for moving stories: their clusters' rows by id, then the story rows by id. */
+async function lockForMove(tx: Tx, ids: string[]): Promise<Map<string, LockedStory>> {
+  await lockClustersOf(tx, ids)
+  return lockStories(tx, ids)
 }
 
 interface LockedStory { status: StoryStatus; clusterId: string | null; isPrimary: boolean }

@@ -29,7 +29,7 @@ Stories are grouped into clusters via `story_clusters` table:
   - `editor-story` (an editor's status move of a primary or published member): as pipeline, but an elected `duplicate` is restored.
   - `editor-cluster` (create, set primary, remove member, merge): published non-primaries are rejected too, and the chosen or elected primary is restored if it was a `duplicate`.
 
-  **Restoring** a `duplicate` rejection moves it to `published` if it has a `datePublished` (slug and date unchanged), else to `analyzed`. Other rejection reasons, and rejections from before the reason existed (null), are never restored.
+  **Restoring** a `duplicate` rejection moves it to `published` if it has a `datePublished` (slug and date unchanged; its embedding is ensured after the commit), else to `analyzed`. An editor rejecting a `duplicate` turns its reason into `editor`, so no later dissolve restores it. Other rejection reasons, and rejections from before the reason existed (null), are never restored.
 - A story can belong to at most one cluster
 
 ### Auto-Rejection and Admin Operations
@@ -60,7 +60,7 @@ Dedup runs fire-and-forget after the assessment transaction commits (`assessStor
 
 ## Cluster Formation
 
-If no confirmed duplicate is in a cluster yet, a new cluster is created with the source story and every confirmed duplicate as members. If any is clustered, the source joins the existing cluster as described below. Membership, election and auto-rejection run in one transaction after the LLM confirmation, holding the existing cluster's row lock (`formCluster()` in `dedup.ts`, calling `reelectPrimary(..., 'pipeline', tx)`): only stories still unclustered join, and if the existing cluster was dissolved meanwhile a new one is created. Published members are preserved.
+If no confirmed duplicate is in a cluster yet, a new cluster is created with the source story and every confirmed duplicate as members. If any is clustered, the source joins the existing cluster as described below. Membership, election and auto-rejection run in one transaction after the LLM confirmation, holding the existing cluster's row lock (`formCluster()` in `dedup.ts`, calling `reelectPrimary(..., 'pipeline', tx)`): only stories still unclustered join, and if the existing cluster was dissolved meanwhile a new one is created. A formation that would leave fewer than two members (the stories joined other clusters during the model call) rolls back and forms nothing. Published members are preserved.
 
 **Multi-cluster collisions:** when confirmed duplicates belong to different existing clusters, the source story joins the cluster of the **newest duplicate** (by `dateCrawled`). Other clusters are not auto-merged — merging requires explicit admin action via the clusters page. A warning is logged when this occurs. Duplicates already in a different cluster stay where they are; only unclustered duplicates are added to the target cluster.
 

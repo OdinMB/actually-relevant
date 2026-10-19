@@ -16,7 +16,7 @@ rejected / trashed: from any status by an editor
 
 **One module writes status.** `server/src/services/storyLifecycle.ts` is the only code that writes `stories.status` and `stories.rejection_reason` (ADR-0045); `server/src/test/statusWriters.test.ts` fails when any other source file does. Every move is conditional: it names the statuses it may move from and writes with `WHERE status IN (...)`, so a story an editor trashed or rejected while an LLM call or embedding pass was running is **skipped**, never forced. Every move returns `{ moved, skipped: { id, status }[] }` and logs both. Two actors: `pipeline` (the jobs and the bulk analysis and selection actions) and `editor` (explicit admin status and cluster actions).
 
-**Rejection reasons.** Every move into `rejected` records why, in `rejection_reason` (ADR-0046): `paywall`, `assess_threshold`, `select_threshold`, `selection`, `duplicate` (a non-primary cluster member) or `editor`. Every move out clears it, and a database CHECK (`stories_rejection_reason_only_when_rejected`) refuses a reason on any other status. Rows rejected before the column existed have a reason only where the migration could tell (`paywall` for locked stories, `duplicate` for non-primary cluster members); the rest are null, and null is never automatically restored.
+**Rejection reasons.** Every move into `rejected` records why, in `rejection_reason` (ADR-0046): `paywall`, `assess_threshold`, `select_threshold`, `selection`, `duplicate` (a non-primary cluster member) or `editor`. Every move out clears it, and a database CHECK (`stories_rejection_reason_only_when_rejected`) refuses a reason on any other status. Rows rejected before the column existed have a reason only where the migration could tell (`paywall` for locked stories, `duplicate` for non-primary cluster members that were never published); the rest are null, and null is never automatically restored.
 
 ### Paywall-Locked Stories
 
@@ -57,9 +57,9 @@ The table `storyLifecycle.ts` enforces. A move from a status not listed is skipp
 | select threshold | pipeline | `analyzed` | `rejected`/`select_threshold` |
 | select | pipeline (job, `/select`, `/bulk-select`) | `analyzed` | `selected`, or `rejected`/`selection`; the pool read is `analyzed` only, other ids skipped |
 | selection safety net | pipeline | `analyzed` | non-primary cluster members `rejected`/`duplicate` |
-| publish | pipeline (job) | `selected`, unclustered or cluster primary | slug, `datePublished` where unset, embedding ensured outside the transaction; re-elects the cluster (pipeline mode) |
+| publish | pipeline (job) | `selected`, unclustered or cluster primary | slug, `datePublished` where unset, embedding ensured outside the transaction; re-elects every cluster the chunk touches (pipeline mode), so a `selected` non-primary it left alone ends `rejected`/`duplicate` (reported as skipped with that status) |
 | publish | editor | any but `published` (`trashed` included: the override) | as above; clears the reason |
-| reject | editor | any but `rejected` | `rejected`/`editor`; re-elects (editor-story mode) if it was published or the primary |
+| reject | editor | any but `rejected`/`editor` (a story rejected for another reason, a `duplicate` say, gets reason `editor`, so no dissolve brings it back) | `rejected`/`editor`; re-elects (editor-story mode) if it was published or the primary |
 | trash | editor | any but `trashed` | `trashed`; re-elects as for reject |
 | re-queue (`fetched`, `pre_analyzed`, `analyzed`, `selected`) | editor | any but the target | reason cleared; re-elects as for reject |
 | set status (edit form, `PUT /:id/status`, `/bulk-status`) | editor | per target | routed to the publish, reject, trash or re-queue row |
@@ -67,7 +67,11 @@ The table `storyLifecycle.ts` enforces. A move from a status not listed is skipp
 
 An editor move to the status the story already has is a no-op that answers 200 with the story. `PUT /:id` with a `status` writes the fields first, then the move, in two transactions: a failed move after a saved edit returns the error with the fields kept.
 
-**Lock order** in every transaction that touches status and clusters: the slug advisory lock (publish only), then the affected `story_clusters` rows `FOR UPDATE` ordered by id, then the story rows ordered by id. Publish locks the clusters of its chunk before the flip, so a concurrent cluster edit cannot deadlock against it.
+**Analysis results are written against the status read before the model call** (`recordAnalysis(stage, actor, rows, expected)`): a story an editor moved during the call (trashed, rejected) is skipped, so the editor's move stands.
+
+**Lock order** in every transaction that writes status (moves, analysis results, publishing, cluster edits): the slug advisory lock (publish only), then the affected `story_clusters` rows `FOR UPDATE` ordered by id, then the story rows ordered by id; an election then locks its cluster's member rows in id order before writing. Publish locks the clusters of its chunk before the flip, so a concurrent cluster edit cannot deadlock against it.
+
+**Restored stories get their embedding back.** A cluster edit or editor election that restores a published `duplicate` puts it back on the site; its embedding is ensured after the commit, outside the transaction (the retention job may have cleared it), and a failure is logged and leaves it published without one, as for every publish path.
 
 **Publishing.** The publish job and editor publishes go through the module's `transition(ids, { to: 'published' }, actor)`. Ids are processed in **bounded chunks** of `config.publish.chunkSize` (default 100, env `PUBLISH_CHUNK_SIZE`): for each chunk the embeddings of the still-eligible ids are ensured first, outside any transaction (a failure is logged and the publish goes ahead without one), then one slug-locked interactive transaction locks the chunk's clusters and story rows, flips the status with `updateManyAndReturn ... WHERE status IN (...)`, assigns slugs to the moved rows that have none in **one** batched `UPDATE … FROM (VALUES …)` statement (a per-story loop previously exceeded Prisma's transaction timeout, P2028), sets `datePublished` where unset, and re-elects the moved stories' clusters. Only moved ids get slugs and dates, and the job counts moved rows. Each chunk **commits independently**: a failure on a later chunk leaves earlier chunks published, and the next run resumes from the remaining `selected` stories. Chunking bounds the embedding pass and the transaction within Render's memory limit and the transaction timeout (`DB_TRANSACTION_TIMEOUT_MS`, default 15000ms, `config.database.transactionTimeoutMs`).
 

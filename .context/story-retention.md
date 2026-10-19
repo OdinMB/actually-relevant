@@ -25,7 +25,7 @@ A failure stops the run and throws "Story cleanup failed after deleting N storie
 ## Getting an embedding back
 
 An old unpublished story without an embedding gets one again when it is:
-- **published**, by any path (`publishStory`, `updateStoryStatus`, bulk publish's `publishChunk`, an admin edit setting `status: 'published'` through `updateStory`): each generates a missing embedding first, whatever else the edit carries. As everywhere, a failed generation is logged and the publish goes ahead without one.
+- **published**, by any path (the publish job, `publishStory`, `updateStoryStatus`, bulk status, an admin edit setting `status: 'published'` through `updateStory`, all through `storyLifecycle.ts`), or **put back on the site** as a restored duplicate by a cluster edit or an editor's election: each ensures a missing embedding, before the flip for a publish and right after the commit for a restore. As everywhere, a failed generation is logged and the story goes live without one.
 - **re-assessed**: the assessment writes a fresh embedding with the analysis.
 
 Until then it is invisible to the semantic half of admin search, related stories and dedup candidates (dedup only looks 14 days back anyway).

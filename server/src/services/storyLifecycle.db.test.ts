@@ -6,6 +6,9 @@
  */
 import { it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 import type { BaseMessage } from '@langchain/core/messages'
+import { readFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import {
@@ -302,6 +305,18 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await row(keptPublished.id)).status).toBe('published')
   })
 
+  it('a selected non-primary the publish job leaves alone is rejected as a duplicate, and reported so', async () => {
+    const primary = await story({ status: 'published', slug: 'lead', datePublished: new Date() })
+    const stray = await story({ status: 'selected', title: 'Stray' })
+    const clusterId = await createCluster([primary.id, stray.id], primary.id)
+
+    const result = await transition([stray.id], { to: 'published' }, 'pipeline')
+
+    expect(result).toEqual({ moved: [], skipped: [{ id: stray.id, status: 'rejected' }] })
+    expect(await row(stray.id)).toMatchObject({ status: 'rejected', rejectionReason: 'duplicate', slug: null })
+    expect(await primaryOf(clusterId)).toBe(primary.id)
+  })
+
   it('an editor can publish a trashed story, and publishing a published one changes nothing', async () => {
     const trashed = await story({ status: 'trashed', title: 'Back from the bin' })
     await publishStory(trashed.id)
@@ -344,6 +359,43 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(await row(fresh.id)).toMatchObject({ status: 'analyzed', rejectionReason: null })
     for (const k of kept) expect(await row(k.id)).toMatchObject({ status: 'rejected', rejectionReason: k.rejectionReason, clusterId: null })
     expect(await prisma.storyCluster.count()).toBe(0)
+  })
+
+  it('a duplicate put back on the site gets its embedding ensured after the commit', async () => {
+    const primary = await story({ status: 'analyzed' })
+    const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'dup', datePublished: new Date() })
+    const queued = await story({ status: 'rejected', rejectionReason: 'duplicate' })
+    const clusterId = await createCluster([primary.id, dup.id, queued.id], primary.id)
+    mockEnsureEmbeddings.mockRejectedValueOnce(new Error('openai down'))
+
+    await dissolveCluster(clusterId)
+
+    expect(mockEnsureEmbeddings).toHaveBeenCalledWith([dup.id])
+    expect((await row(dup.id)).status).toBe('published')
+  })
+
+  it('an editor election that restores a published duplicate ensures its embedding too', async () => {
+    const primary = await story({ status: 'published', slug: 'p', datePublished: new Date() })
+    const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'd', datePublished: new Date() })
+    await createCluster([primary.id, dup.id], primary.id)
+
+    await updateStoryStatus(primary.id, 'trashed')
+
+    expect(mockEnsureEmbeddings).toHaveBeenCalledWith([dup.id])
+  })
+
+  it('an editor can reject a duplicate for good, and a dissolve then leaves it rejected', async () => {
+    const primary = await story({ status: 'analyzed' })
+    const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'gone', datePublished: new Date() })
+    const clusterId = await createCluster([primary.id, dup.id], primary.id)
+
+    await rejectStory(dup.id)
+    expect(await row(dup.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor' })
+    const again = await transition([dup.id], { to: 'rejected', reason: 'editor' }, 'editor')
+    expect(again).toEqual({ moved: [], skipped: [{ id: dup.id, status: 'rejected' }] })
+
+    await dissolveCluster(clusterId)
+    expect(await row(dup.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor', clusterId: null })
   })
 
   it('the per-story dissolve behaves the same', async () => {
@@ -515,6 +567,28 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(mockInvoke).not.toHaveBeenCalled()
   })
 
+  it('the migration backfill marks only never-published rejected non-primaries as duplicates', async () => {
+    const migration = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'prisma', 'migrations',
+      '20261019120000_story_rejection_reason', 'migration.sql'), 'utf8')
+    const backfills = migration.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(s => /^UPDATE\b/i.test(s))
+    expect(backfills).toHaveLength(2)
+
+    const primary = await story({ status: 'published', slug: 'p', datePublished: new Date() })
+    const never = await story({ status: 'rejected' })
+    const once = await story({ status: 'rejected', slug: 'once', datePublished: new Date() })
+    const locked = await story({ status: 'rejected', accessTier: 'locked' })
+    const loose = await story({ status: 'rejected' })
+    await createCluster([primary.id, never.id, once.id], primary.id)
+
+    for (const sql of backfills) await prisma.$executeRawUnsafe(sql)
+
+    expect((await row(never.id)).rejectionReason).toBe('duplicate')
+    expect((await row(once.id)).rejectionReason).toBeNull()
+    expect((await row(locked.id)).rejectionReason).toBe('paywall')
+    expect((await row(loose.id)).rejectionReason).toBeNull()
+    expect((await row(primary.id)).rejectionReason).toBeNull()
+  })
+
   it('the database refuses a rejection reason on a story that is not rejected', async () => {
     const s = await story({ status: 'analyzed' })
     await expect(prisma.$executeRaw`UPDATE stories SET rejection_reason = 'editor' WHERE id = ${s.id}`)
@@ -540,5 +614,68 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
     expect((await row(primary.id)).status).toBe('published')
     expect(await prisma.storyCluster.count()).toBe(0)
+  })
+
+  it('publishing, editor rejects and cluster edits of one cluster all finish (no deadlock)', async () => {
+    for (let round = 0; round < 5; round++) {
+      const members = await Promise.all([1, 2, 3, 4].map(i => story({ status: 'selected', relevance: i, title: `R${round}-${i}` })))
+      const ids = members.map(m => m.id).sort()
+      const clusterId = await createCluster(ids, ids[0])
+
+      const results = await Promise.allSettled([
+        transition(ids, { to: 'published' }, 'editor'),
+        transition([...ids].reverse(), { to: 'rejected', reason: 'editor' }, 'editor'),
+        setClusterPrimary(clusterId, ids[3]),
+        removeFromCluster(clusterId, ids[2]),
+      ])
+
+      expect(results.filter(r => r.status === 'rejected').map(r => String((r as PromiseRejectedResult).reason))
+        .filter(e => /deadlock/i.test(e))).toEqual([])
+    }
+  })
+
+  it('an editor reject during an editor re-assessment stands', async () => {
+    const s = await story({ status: 'analyzed', title: 'Before' })
+    mockInvoke.mockImplementation(async () => {
+      await rejectStory(s.id)
+      return assessAnswer()
+    })
+
+    expect(await assessStory(s.id, 'editor')).toBe('skipped')
+
+    expect(await row(s.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor' })
+    expect((await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).title).toBe('Before')
+  })
+
+  it('an editor reject during an editor pre-assessment stands', async () => {
+    const s = await story({ status: 'pre_analyzed' })
+    mockInvoke.mockImplementation(async () => {
+      await rejectStory(s.id)
+      return { articles: [{ articleId: s.id, issueSlug, rating: 9, emotionTag: 'calm' }] }
+    })
+
+    await preAssessStories([s.id], undefined, 'editor')
+
+    expect(await row(s.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor' })
+  })
+
+  it('a dedup formation whose stories joined other clusters meanwhile leaves no cluster of one', async () => {
+    const pub = await story({ status: 'published', slug: 'only', datePublished: new Date(), title: 'Only', summary: 's' })
+    const fresh = await story({ status: 'analyzed', title: 'Fresh', summary: 's' })
+    const other = await story({ status: 'analyzed', title: 'Other' })
+    for (const s of [pub, fresh]) await setEmbedding(s.id, 1)
+    mockInvoke.mockImplementation(async () => {
+      // An editor clusters the newcomer elsewhere while the model decides
+      await createCluster([fresh.id, other.id], other.id)
+      return { assessments: [{ candidateNumber: 1, isDuplicate: true, reason: 'same event' }] }
+    })
+    config.dedup.enabled = true
+    try {
+      expect(await detectAndCluster(fresh.id)).toMatchObject({ clusterId: null })
+    } finally {
+      config.dedup.enabled = false
+    }
+    expect(await prisma.storyCluster.count()).toBe(1)
+    expect((await row(pub.id)).clusterId).toBeNull()
   })
 })

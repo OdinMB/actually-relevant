@@ -187,7 +187,9 @@ export async function preAssessStories(
   onProgress?: ProgressCallback,
   actor: Actor = 'pipeline',
 ): Promise<{ storyId: string; rating: number; emotionTag: string }[]> {
-  const { eligible, skipped } = await partition(storyIds, analysisFrom('preassess', actor))
+  // The statuses read here are what the results are written against (an editor's move during
+  // the model calls wins)
+  const { eligible, skipped, statuses } = await partition(storyIds, analysisFrom('preassess', actor))
   if (skipped.length > 0) {
     log.info({ skipped }, 'pre-assessment skipped stories whose status does not allow it')
     onProgress?.({ type: 'failed', count: skipped.length, error: 'Story status does not allow pre-assessment' })
@@ -204,7 +206,7 @@ export async function preAssessStories(
       relevancePre: item.rating,
       emotionTag: item.emotionTag as EmotionTag,
     }),
-    persist: rows => recordAnalysis('preassess', actor, rows),
+    persist: rows => recordAnalysis('preassess', actor, rows, statuses),
     onProgress,
     batchSize: config.preassess.batchSize,
     concurrency: config.concurrency.preassess,
@@ -328,7 +330,9 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
   })
 
   // Save analysis + embedding atomically, unless the status changed during the call
-  const outcomes = await recordAnalysis('assess', actor, [{ id: storyId, data: analysisData, embedding: embeddingData }])
+  // Written against the status read before the model call: a move made meanwhile wins
+  const outcomes = await recordAnalysis('assess', actor, [{ id: storyId, data: analysisData, embedding: embeddingData }],
+    new Map([[storyId, story.status]]))
   const outcome = outcomes.get(storyId) ?? 'skipped'
   if (outcome === 'skipped') return outcome
 

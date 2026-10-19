@@ -55,7 +55,7 @@ vi.mock('./storyLifecycle.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./storyLifecycle.js')>()),
   transition: mockTransition,
   recordAnalysis: mockRecordAnalysis,
-  partition: async (ids: string[]) => ({ eligible: ids, skipped: [] }),
+  partition: async (ids: string[]) => ({ eligible: ids, skipped: [], statuses: new Map(ids.map(id => [id, 'fetched'])) }),
 }))
 /** The rows the last recordAnalysis call wrote. */
 const recordedRows = () => mockRecordAnalysis.mock.calls.at(-1)?.[2] as { id: string; data: Record<string, unknown>; embedding?: unknown }[]
@@ -109,7 +109,7 @@ describe('preAssessStories', () => {
     expect(mockRecordAnalysis).toHaveBeenCalledWith('preassess', 'pipeline', [
       { id: 'story-1', data: { issueId: issue.id, relevancePre: 4, emotionTag: 'calm' } },
       { id: 'story-2', data: { issueId: issue.id, relevancePre: 2, emotionTag: 'calm' } },
-    ])
+    ], expect.any(Map))
   })
 
   it('falls back to feed issueId for invalid slugs', async () => {
@@ -259,7 +259,9 @@ describe('assessStory', () => {
       id: 'story-1',
       data: expect.objectContaining({ titleLabel: 'Test topic', summary: 'Test summary with key information.' }),
       embedding: { embedding: [0.1, 0.2], hash: 'abc123' },
-    }])
+    }], expect.any(Map))
+    // Written against the status read before the model call
+    expect([...mockRecordAnalysis.mock.calls.at(-1)![3]]).toEqual([['story-1', expect.any(String)]])
   })
 
   it('throws when story not found', async () => {
