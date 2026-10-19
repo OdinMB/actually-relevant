@@ -1,0 +1,12 @@
+{
+  "$comment": "Reviewed exceptions for npm run audit:prod (scripts/audit-check.mjs, .context/ci.md). Each entry excuses one advisory in one package while every production path to it runs through `via`. postcss-selector-parser (GHSA-rj75-hqrm-r3gf, moderate, same tailwindcss 3 path) is below the high bar, so it needs no entry.",
+  "advisories": [
+    {
+      "advisory": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "via": "@headlessui/tailwindcss",
+      "reason": "Stack-exhaustion DoS on deeply nested glob patterns. braces 3.0.3 reaches the production tree only through @scalar/api-reference-react > @scalar/api-client > @headlessui/tailwindcss > tailwindcss 3 (chokidar, micromatch), a Tailwind plugin the API docs page bundles. Nothing in the shipped browser bundle expands globs from user input, and no fixed braces 3.x exists; it goes when @scalar moves off tailwindcss 3.",
+      "reviewed": "2026-10-19"
+    }
+  ]
+}
