@@ -71,7 +71,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 ## Key Conventions
 
 - **Prefer file tools over bash** -- Use Read, Write, Edit, Glob, Grep instead of cat, sed, grep, find.
-- **Server config** -- All tunable constants centralized in `server/src/config.ts` with env var overrides.
+- **Server config** -- All tunable constants centralized in `server/src/config.ts` with env var overrides. Each override goes through a parser that throws at startup on a bad value (`parseWholeNumber`, `parseOneOf`, …), never a bare `parseInt` (`.context/deployment.md`).
 - **Logging** -- Use `createLogger('module')` from `server/src/lib/logger.ts`. Never `console.log` in application code (scripts exempt). See `.context/logging.md`.
 - **Prompts** -- Read `.context/prompting.md` before modifying any prompt in `server/src/prompts/`. Reasoning-model conventions (declarative constraints, XML scaffolding); prompts are tuned for the GPT-6 defaults, so check a rating, dedup, social-post or selection prompt change with `eval:recalibrate` (`.context/model-eval.md`).
 - **Retry logic** -- External HTTP and LLM calls must use `withRetry()` from `server/src/lib/retry.ts`.
