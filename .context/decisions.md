@@ -46,4 +46,5 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0042 · Delete unkept stories after 6 months, and repair the clusters the deletion touches](decisions/0042-six-month-story-retention.md)
 - [ADR-0043 · Re-rank related stories with a small model on the public request path, cached 72 hours in memory and over HTTP, one call per slug at a time](decisions/0043-related-stories-rerank-on-request-path.md)
 - [ADR-0044 · Let tests migrate only a guarded local database named *_test, with migrate deploy once per run and TRUNCATE between tests](decisions/0044-guarded-test-database.md)
+- [ADR-0045 · Make one module, storyLifecycle.ts, the only writer of story status, with conditional moves, a transition table and transactional cluster edits](decisions/0045-story-lifecycle-owner.md)
 - [ADR-0046 · Record why a story is rejected in a nullable rejection_reason column, backfilled by a guess, and restore only duplicate rejections](decisions/0046-story-rejection-reason.md)
