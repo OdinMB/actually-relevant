@@ -13,6 +13,8 @@ import { buildRelatedStoriesPrompt } from '../prompts/related-stories.js'
 import { relatedStoriesResultSchema } from '../schemas/llm.js'
 import type { ExtractionMethod } from './extractor.js'
 import type { AccessTier } from '../lib/paywall.js'
+import type { z } from 'zod'
+import type { updateStorySchema } from '../schemas/story.js'
 import { storyInIssueSql, storyInIssueWhere } from '../lib/issueFilter.js'
 import { repairClusters } from './clusterRepair.js'
 import { TTLCache, cached } from '../lib/cache.js'
@@ -335,62 +337,74 @@ export async function getExistingUrls(urls: string[]): Promise<Set<string>> {
   return new Set(existing.map(s => s.sourceUrl))
 }
 
+interface PublishData {
+  datePublished?: Date
+  slug?: string
+}
+
 async function preparePublishData(
   id: string,
   client: Prisma.TransactionClient = prisma,
-): Promise<Record<string, any>> {
+): Promise<PublishData> {
   const story = await client.story.findUnique({
     where: { id },
     select: { datePublished: true, slug: true, title: true, sourceTitle: true },
   })
   if (!story) return {}
-  const data: Record<string, any> = {}
+  const data: PublishData = {}
   if (!story.datePublished) data.datePublished = new Date()
   if (!story.slug) data.slug = await generateUniqueSlug(story.title || story.sourceTitle, id, client)
   return data
 }
 
-const EMBEDDING_RELEVANT_FIELDS = ['title', 'titleLabel', 'summary'] as const
+/** An admin edit of a story: the validated body of `PUT /api/admin/stories/:id`. */
+export type StoryUpdate = z.infer<typeof updateStorySchema>
 
-export async function updateStory(id: string, data: Record<string, any>): Promise<Story> {
-  const updateData = { ...data }
-  // Convert date strings to Date objects if present
-  if (updateData.sourceDatePublished !== undefined) {
-    updateData.sourceDatePublished = updateData.sourceDatePublished ? new Date(updateData.sourceDatePublished) : null
+/**
+ * Apply an admin edit. A story that is or becomes published gets its embedding brought up to date
+ * before the write, whatever fields the edit carries: an edit of its title, label or summary
+ * regenerates it and fails the edit if that fails; a publish without such an edit generates a
+ * missing one (retention clears old unpublished stories' embeddings) and, like the other publish
+ * paths, goes ahead without it if generation fails.
+ */
+export async function updateStory(id: string, input: StoryUpdate): Promise<Story> {
+  const { sourceDatePublished, ...fields } = input
+  const updateData: Prisma.StoryUncheckedUpdateInput = {
+    ...fields,
+    ...(sourceDatePublished !== undefined && {
+      sourceDatePublished: sourceDatePublished ? new Date(sourceDatePublished) : null,
+    }),
   }
-  if (updateData.datePublished !== undefined) {
-    updateData.datePublished = updateData.datePublished ? new Date(updateData.datePublished) : null
-  }
-  // When a status→published transition needs an auto-generated slug, the slug
-  // read-modify-write must run under the shared slug lock (deferred to runWrite below).
-  const needsPublishPrep = updateData.status === 'published' && updateData.datePublished === undefined
+  // A publish may need an auto-generated slug and date; that read-modify-write runs under the
+  // shared slug lock (runWrite below).
+  const publishing = input.status === StoryStatus.published
 
-  // Check if this edit requires embedding regeneration. The embedding is generated via
-  // a slow external call BEFORE any transaction, then persisted alongside the update.
-  const hasRelevantChange = EMBEDDING_RELEVANT_FIELDS.some((f) => f in updateData)
+  // The embedding is generated via a slow external call BEFORE any transaction, then persisted
+  // alongside the update.
+  const contentEdited = input.title !== undefined || input.titleLabel !== undefined || input.summary !== undefined
   let embeddingData: Awaited<ReturnType<typeof generateEmbeddingForContent>> = null
-  if (hasRelevantChange) {
-    // Single DB read to check status and get embedding content
+  if (contentEdited || publishing) {
     const currentStory = await fetchStoryForEmbedding(id)
-    const isPublished = currentStory?.status === 'published' || updateData.status === 'published'
-
-    if (isPublished) {
-      if (!currentStory) throw new Error('Story not found')
-      // Generate embedding before saving — roll back on failure
-
+    // No row: the update below fails with P2025 (404)
+    if (currentStory && (publishing || currentStory.status === StoryStatus.published)) {
       const merged = {
         ...currentStory,
-        ...(updateData.title !== undefined ? { title: updateData.title } : {}),
-        ...(updateData.titleLabel !== undefined ? { titleLabel: updateData.titleLabel } : {}),
-        ...(updateData.summary !== undefined ? { summary: updateData.summary } : {}),
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.titleLabel !== undefined ? { titleLabel: input.titleLabel } : {}),
+        ...(input.summary !== undefined ? { summary: input.summary } : {}),
       }
-
-      embeddingData = await generateEmbeddingForContent(merged)
+      try {
+        // null when the stored embedding already matches the content
+        embeddingData = await generateEmbeddingForContent(merged)
+      } catch (err) {
+        if (contentEdited) throw err
+        log.warn({ err, storyId: id }, 'failed to ensure embedding on publish, proceeding without')
+      }
     }
   }
 
   // A plain update suffices only when we neither auto-assign a slug nor persist an embedding.
-  if (!needsPublishPrep && !embeddingData) {
+  if (!publishing && !embeddingData) {
     const story = await prisma.story.update({ where: { id }, data: updateData })
     if (story.status !== StoryStatus.published) forgetRelatedStories([id])
     return story
@@ -398,7 +412,7 @@ export async function updateStory(id: string, data: Record<string, any>): Promis
 
   // Otherwise write transactionally. Acquire the slug lock only when auto-assigning a slug.
   const runWrite = async (tx: Prisma.TransactionClient): Promise<Story> => {
-    if (needsPublishPrep) {
+    if (publishing) {
       const publishData = await preparePublishData(id, tx)
       if (!updateData.slug && publishData.slug) updateData.slug = publishData.slug
       if (publishData.datePublished) updateData.datePublished = publishData.datePublished
@@ -410,7 +424,7 @@ export async function updateStory(id: string, data: Record<string, any>): Promis
     return story
   }
 
-  return needsPublishPrep
+  return publishing
     ? withSlugLock(runWrite)
     : prisma.$transaction(runWrite)
 }
