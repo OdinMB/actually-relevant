@@ -144,6 +144,25 @@ describe('generateHtmlContent', () => {
     expect(introIndex).toBeLessThan(storyIndex)
   })
 
+  it('builds every site link and image from config.siteUrl', async () => {
+    const original = config.siteUrl
+    config.siteUrl = 'https://staging.example'
+    try {
+      mockPrisma.newsletter.findUnique.mockResolvedValue({
+        ...baseNewsletter,
+        content: storyBlock({ issue: 'Technology', title: 'T', publisher: 'Nature', url: 'https://example.com/t', body: 'B.' }),
+      })
+      const html = await generateHtmlContent('nl-1')
+
+      expect(html).toContain('href="https://staging.example"')
+      expect(html).toContain('src="https://staging.example/images/logo-text-horizontal.png"')
+      expect(html).toContain('src="https://staging.example/images/social/bluesky.png"')
+      expect(html).not.toMatch(/(href|src)="https:\/\/actuallyrelevant\.news/)
+    } finally {
+      config.siteUrl = original
+    }
+  })
+
   it('labels the issue as AI-generated directly under the week title, and keeps the bottom line', async () => {
     const content = [
       'An intro written by AI.',

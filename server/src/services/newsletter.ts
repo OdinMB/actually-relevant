@@ -260,7 +260,7 @@ export async function generateContent(newsletterId: string) {
     const issueName = resolved.name
     const issueSlug = resolved.slug
     const publisher = story.feed?.displayTitle || story.feed?.title || 'Unknown'
-    const relevanceUrl = story.slug ? `https://actuallyrelevant.news/stories/${story.slug}` : ''
+    const relevanceUrl = story.slug ? `${config.siteUrl}/stories/${story.slug}` : ''
 
     // Add issue section header when the group changes
     if (issueName !== currentIssue) {
@@ -470,7 +470,7 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
         if (publisherName || originalUrl) {
           const parts: string[] = []
           const faviconHtml = feedId
-            ? `<img src="https://actuallyrelevant.news/images/feeds/${feedId}.png" alt="" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; border-radius: 2px; margin-right: 4px;">`
+            ? `<img src="${config.siteUrl}/images/feeds/${feedId}.png" alt="" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; border-radius: 2px; margin-right: 4px;">`
             : ''
           if (publisherName) parts.push(`${faviconHtml}<span style="vertical-align: middle;">${escapeHtml(publisherName)}</span>`)
           if (originalUrl) parts.push(`<a href="${escapeHtml(originalUrl)}" style="color: #2563eb; text-decoration: none; vertical-align: middle;">original article</a>`)
@@ -515,8 +515,8 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
           <!-- Header -->
           <tr>
             <td style="padding: 20px 32px 12px; text-align: center;">
-              <a href="https://actuallyrelevant.news" style="text-decoration: none;">
-                <img src="https://actuallyrelevant.news/images/logo-text-horizontal.png" alt="Actually Relevant" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
+              <a href="${config.siteUrl}" style="text-decoration: none;">
+                <img src="${config.siteUrl}/images/logo-text-horizontal.png" alt="Actually Relevant" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
               </a>
               <p style="margin: -2px 0 0; font-size: 15px; font-style: italic; color: #a3a3a3;">News that matter to humanity</p>
             </td>
@@ -569,12 +569,12 @@ ${introSection}
           <tr>
             <td style="padding: 20px 32px 24px; text-align: center; background-color: #fafafa; border-top: 1px solid #e5e5e5; margin-top: 16px;">
               <p style="margin: 0 0 10px; font-size: 12px; color: #a3a3a3;">
-                <a href="https://actuallyrelevant.news" style="color: #2563eb; text-decoration: none;">actuallyrelevant.news</a>
+                <a href="${config.siteUrl}" style="color: #2563eb; text-decoration: none;">actuallyrelevant.news</a>
               </p>
               <p style="margin: 0 0 10px; font-size: 12px; color: #a3a3a3;">
-                <a href="https://bsky.app/profile/actuallyrelevant.bsky.social" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="https://actuallyrelevant.news/images/social/bluesky.png" alt="Bluesky" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Bluesky</a>
+                <a href="https://bsky.app/profile/actuallyrelevant.bsky.social" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/bluesky.png" alt="Bluesky" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Bluesky</a>
                 <span style="color: #d4d4d4; margin: 0 6px;">&middot;</span>
-                <a href="https://mastodon.social/@actuallyrelevant" rel="me" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="https://actuallyrelevant.news/images/social/mastodon.png" alt="Mastodon" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Mastodon</a>
+                <a href="https://mastodon.social/@actuallyrelevant" rel="me" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/mastodon.png" alt="Mastodon" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Mastodon</a>
               </p>
             </td>
           </tr>
