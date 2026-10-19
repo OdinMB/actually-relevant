@@ -133,8 +133,9 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await row(s.id)).status).toBe('selected')
   })
 
-  it('re-assessing a paywall-rejected story re-queues it as analyzed', async () => {
-    const s = await story({ status: 'rejected', accessTier: 'locked' })
+  // Fails until the write clears the reason: the CHECK constraint refuses a reason on `analyzed`
+  it.fails('re-assessing a paywall-rejected story re-queues it as analyzed [5c]', async () => {
+    const s = await story({ status: 'rejected', rejectionReason: 'paywall', accessTier: 'locked' })
     mockInvoke.mockResolvedValue(assessAnswer())
     await assessStory(s.id)
     expect((await row(s.id)).status).toBe('analyzed')
@@ -241,21 +242,25 @@ describeDb('story lifecycle (PostgreSQL)', () => {
   it.fails('dissolving puts a published duplicate back on the site, slug and date unchanged [5f]', async () => {
     const date = new Date('2026-09-01T00:00:00Z')
     const primary = await story({ status: 'published', slug: 'primary', datePublished: date })
-    const dup = await story({ status: 'rejected', slug: 'dup', datePublished: date })
-    const fresh = await story({ status: 'rejected' })
-    const clusterId = await createCluster([primary.id, dup.id, fresh.id], primary.id)
+    const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'dup', datePublished: date })
+    const fresh = await story({ status: 'rejected', rejectionReason: 'duplicate' })
+    const kept = await Promise.all(([null, 'editor', 'assess_threshold', 'selection'] as const).map(
+      rejectionReason => story({ status: 'rejected', rejectionReason }),
+    ))
+    const clusterId = await createCluster([primary.id, dup.id, fresh.id, ...kept.map(k => k.id)], primary.id)
 
     await dissolveCluster(clusterId)
 
-    expect(await row(dup.id)).toMatchObject({ status: 'published', slug: 'dup', datePublished: date, clusterId: null })
-    expect((await row(fresh.id)).status).toBe('analyzed')
+    expect(await row(dup.id)).toMatchObject({ status: 'published', rejectionReason: null, slug: 'dup', datePublished: date, clusterId: null })
+    expect(await row(fresh.id)).toMatchObject({ status: 'analyzed', rejectionReason: null })
+    for (const k of kept) expect(await row(k.id)).toMatchObject({ status: 'rejected', rejectionReason: k.rejectionReason, clusterId: null })
     expect(await prisma.storyCluster.count()).toBe(0)
   })
 
   it.fails('the per-story dissolve behaves the same [5f]', async () => {
     const date = new Date('2026-09-01T00:00:00Z')
     const primary = await story({ status: 'published', slug: 'primary', datePublished: date })
-    const dup = await story({ status: 'rejected', slug: 'dup', datePublished: date })
+    const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'dup', datePublished: date })
     await createCluster([primary.id, dup.id], primary.id)
 
     await dissolveStoryCluster(primary.id)
@@ -266,7 +271,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
   it.fails('removing down to one member dissolves by the same rule [5f]', async () => {
     const date = new Date('2026-09-01T00:00:00Z')
     const primary = await story({ status: 'analyzed' })
-    const dup = await story({ status: 'rejected', slug: 'dup', datePublished: date })
+    const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'dup', datePublished: date })
     const clusterId = await createCluster([primary.id, dup.id], primary.id)
 
     expect(await removeFromCluster(clusterId, primary.id)).toBeNull()
@@ -292,7 +297,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   it.fails('rejecting the primary elects the next member and restores it [5d]', async () => {
     const primary = await story({ status: 'analyzed', relevance: 9 })
-    const next = await story({ status: 'rejected', relevance: 6 })
+    const next = await story({ status: 'rejected', rejectionReason: 'duplicate', relevance: 6 })
     const clusterId = await createCluster([primary.id, next.id], primary.id)
 
     await rejectStory(primary.id)
@@ -305,7 +310,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   it.fails('setting a rejected duplicate as primary restores it and rejects published members [5f]', async () => {
     const primary = await story({ status: 'published', slug: 'p', datePublished: new Date() })
-    const chosen = await story({ status: 'rejected' })
+    const chosen = await story({ status: 'rejected', rejectionReason: 'duplicate' })
     const clusterId = await createCluster([primary.id, chosen.id], primary.id)
 
     await setClusterPrimary(clusterId, chosen.id)
@@ -328,6 +333,14 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(await primaryOf(target)).toBe(a.id)
     expect((await row(c.id)).status).toBe('rejected')
     expect(await prisma.storyCluster.count()).toBe(1)
+  })
+
+  // ──── Rejection reasons ─────────────────────────────────────────────────
+
+  it('the database refuses a rejection reason on a story that is not rejected', async () => {
+    const s = await story({ status: 'analyzed' })
+    await expect(prisma.$executeRaw`UPDATE stories SET rejection_reason = 'editor' WHERE id = ${s.id}`)
+      .rejects.toThrow(/stories_rejection_reason_only_when_rejected/)
   })
 
   // ──── Concurrency ───────────────────────────────────────────────────────

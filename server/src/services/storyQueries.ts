@@ -121,6 +121,7 @@ const ADMIN_LIST_SELECT = {
   sourceDatePublished: true,
   feedId: true,
   status: true,
+  rejectionReason: true,
   dateCrawled: true,
   datePublished: true,
   relevancePre: true,

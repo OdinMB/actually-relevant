@@ -8,6 +8,15 @@ export type StoryStatus =
   | 'rejected'
   | 'trashed'
 
+// Why a story is rejected; null on every other status
+export type RejectionReason =
+  | 'paywall'
+  | 'assess_threshold'
+  | 'select_threshold'
+  | 'selection'
+  | 'duplicate'
+  | 'editor'
+
 export type EmotionTag =
   | 'uplifting'
   | 'frustrating'
@@ -64,6 +73,7 @@ export interface Story {
   feedId: string
   issueId: string | null
   status: StoryStatus
+  rejectionReason: RejectionReason | null
   dateCrawled: string
   datePublished: string | null
   relevancePre: number | null

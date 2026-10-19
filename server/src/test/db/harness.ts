@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeEach, describe } from 'vitest'
-import type { StoryStatus } from '@prisma/client'
+import type { RejectionReason, StoryStatus } from '@prisma/client'
 import prisma from '../../lib/prisma.js'
 import { testDatabaseRefusal } from './guard.js'
 
@@ -64,6 +64,7 @@ export async function createStory(data: {
   relevance?: number | null
   datePublished?: Date | null
   accessTier?: string | null
+  rejectionReason?: RejectionReason | null
 }) {
   const id = randomUUID()
   return prisma.story.create({
@@ -82,6 +83,7 @@ export async function createStory(data: {
       relevance: data.relevance ?? null,
       datePublished: data.datePublished ?? null,
       accessTier: data.accessTier ?? null,
+      rejectionReason: data.rejectionReason ?? null,
     },
   })
 }
@@ -97,7 +99,7 @@ export async function createCluster(memberIds: string[], primaryId: string | nul
 export async function statusesOf(ids: string[]) {
   const rows = await prisma.story.findMany({
     where: { id: { in: ids } },
-    select: { id: true, status: true, slug: true, datePublished: true, clusterId: true },
+    select: { id: true, status: true, rejectionReason: true, slug: true, datePublished: true, clusterId: true },
   })
   return new Map(rows.map(r => [r.id, r]))
 }
