@@ -74,7 +74,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Server config** -- All tunable constants centralized in `server/src/config.ts` with env var overrides. Each override goes through a parser that throws at startup on a bad value (`parseWholeNumber`, `parseOneOf`, …), never a bare `parseInt` (`.context/deployment.md`).
 - **Logging** -- Use `createLogger('module')` from `server/src/lib/logger.ts`. Never `console.log` in application code (scripts exempt). See `.context/logging.md`.
 - **Prompts** -- Read `.context/prompting.md` before modifying any prompt in `server/src/prompts/`. Reasoning-model conventions (declarative constraints, XML scaffolding); prompts are tuned for the GPT-6 defaults, so check a rating, dedup, social-post or selection prompt change with `eval:recalibrate` (`.context/model-eval.md`).
-- **Retry logic** -- External HTTP and LLM calls must use `withRetry()` from `server/src/lib/retry.ts`.
+- **Retry logic** -- External HTTP calls use `withRetry()` from `server/src/lib/retry.ts`. LLM calls do not: the OpenAI SDK retries them (`maxRetries` in `createChatModel()`), and wrapping them too stacks retries (`.context/llm-analysis.md`, "Retries").
 - **AI transparency (EU AI Act)** -- Changing an AI feature, model, AI label, model-written story field or export pipeline? Update `.context/ai-transparency.md` in the same change. It is the compliance record: feature inventory with model ids, labels and machine-readable markers, and the owner decisions still open. Visible AI label wording is owner-approved and lives only in `client/src/components/ai/aiDisclosureCopy.ts` and `server/src/lib/aiLabelCopy.ts`; don't change it without the owner, and render new story listings through `StoryCard`/`StoryTitleLabel` so they carry the "AI" badge.
 - **American English** -- All UI text uses American English spelling ("analyzed" not "analysed").
 - **Em dashes** -- One per paragraph max in user-facing copy.
@@ -82,7 +82,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 
 ## Resilience
 
-- **Retry logic**: `withRetry()` (3 attempts, exponential backoff) for HTTP and LLM calls.
+- **Retry logic**: `withRetry()` (3 retries, exponential backoff) for external HTTP calls; the OpenAI SDK's `maxRetries: 3` for LLM calls.
 - **Graceful shutdown**: `server/src/index.ts` handles `SIGTERM`/`SIGINT`.
 - **Global error handler**: `server/src/app.ts` catches Prisma `P2025`/`P2002` and known service errors.
 - **Request correlation**: Every request gets `X-Request-Id` header.

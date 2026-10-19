@@ -9,7 +9,6 @@ import { generateCarouselZip, type CarouselStory } from './carousel.js'
 import * as plunk from './plunk.js'
 import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
-import { withRetry } from '../lib/retry.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
@@ -154,10 +153,8 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
   await rateLimitDelay()
   const llm = getLLMByTier(config.newsletter.selectModelTier)
   const structuredLlm = llm.withStructuredOutput(newsletterSelectResultSchema)
-  const response = await withRetry(
-    () => structuredLlm.invoke([new HumanMessage(prompt)]),
-    { retries: 3 },
-  )
+  // Retried by the OpenAI SDK (maxRetries in createChatModel), not by withRetry
+  const response = await structuredLlm.invoke([new HumanMessage(prompt)])
 
   // Only keep IDs that exist in the longlist
   const longlistSet = new Set(newsletter.storyIds)
@@ -242,10 +239,7 @@ export async function generateContent(newsletterId: string) {
     await rateLimitDelay()
     const llm = getLLMByTier(config.newsletter.contentModelTier)
     const structuredLlm = llm.withStructuredOutput(newsletterIntroSchema)
-    const introResult = await withRetry(
-      () => structuredLlm.invoke([new HumanMessage(introPrompt)]),
-      { retries: 3 },
-    )
+    const introResult = await structuredLlm.invoke([new HumanMessage(introPrompt)])
     intro = introResult.intro
     log.info({ newsletterId, introLength: intro.length }, 'generated newsletter intro')
   } catch (err) {

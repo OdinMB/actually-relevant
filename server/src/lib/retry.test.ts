@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { APIError } from 'openai'
 import { withRetry, isRetryableError, isConnectionNotEstablished } from './retry.js'
 
 describe('isConnectionNotEstablished', () => {
@@ -59,6 +60,18 @@ describe('isRetryableError', () => {
   it('does not retry on generic errors', () => {
     expect(isRetryableError(new Error('some bug'))).toBe(false)
     expect(isRetryableError('string error')).toBe(false)
+  })
+
+  // The OpenAI SDK puts the status on err.status, not err.response.status
+  it('retries OpenAI SDK 429 and 5xx errors', () => {
+    expect(isRetryableError(APIError.generate(429, {}, 'Rate limit reached', new Headers()))).toBe(true)
+    expect(isRetryableError(APIError.generate(500, {}, 'server error', new Headers()))).toBe(true)
+    expect(isRetryableError(APIError.generate(503, {}, 'overloaded', new Headers()))).toBe(true)
+  })
+
+  it('does not retry OpenAI SDK 4xx errors', () => {
+    expect(isRetryableError(APIError.generate(400, {}, 'bad request', new Headers()))).toBe(false)
+    expect(isRetryableError(APIError.generate(401, {}, 'bad key', new Headers()))).toBe(false)
   })
 })
 

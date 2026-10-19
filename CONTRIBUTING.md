@@ -37,7 +37,7 @@ Follow the conventions already established in the codebase. Key points:
 
 - TypeScript throughout (client and server)
 - Use `createLogger('module')` for logging — no `console.log` in application code
-- Wrap external HTTP and LLM calls with `withRetry()`
+- Wrap external HTTP calls with `withRetry()`; LLM calls rely on the OpenAI SDK's own retries (`maxRetries` in `createChatModel()`), so don't wrap them too
 - Server config lives in `server/src/config.ts`
 - American English in all user-facing text
 
