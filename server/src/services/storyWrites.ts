@@ -15,7 +15,7 @@ import type { updateStorySchema } from '../schemas/story.js'
 import { repairClusters } from './clusterRepair.js'
 import { forgetRelatedStories } from './relatedStories.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
-import { editorMoveTo, initialStatus, transition } from './storyLifecycle.js'
+import { dissolveCluster as dissolveClusterById, editorMoveTo, initialStatus, transition } from './storyLifecycle.js'
 
 const log = createLogger('story')
 
@@ -175,25 +175,6 @@ export async function dissolveCluster(storyId: string): Promise<void> {
     throw new BadRequestError('Story is not in a cluster')
   }
 
-  const clusterId = story.clusterId
-
-  // Restore auto-rejected members to analyzed
-  await prisma.story.updateMany({
-    where: {
-      clusterId,
-      status: 'rejected',
-    },
-    data: { status: 'analyzed' },
-  })
-
-  // Remove all members from cluster
-  await prisma.story.updateMany({
-    where: { clusterId },
-    data: { clusterId: null },
-  })
-
-  // Delete the cluster record
-  await prisma.storyCluster.delete({ where: { id: clusterId } })
-
-  log.info({ clusterId, triggeredBy: storyId }, 'dissolved cluster via admin action')
+  await dissolveClusterById(story.clusterId)
+  log.info({ clusterId: story.clusterId, triggeredBy: storyId }, 'dissolved cluster via admin action')
 }

@@ -32,6 +32,12 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
+const mockLifecycleDissolve = vi.hoisted(() => vi.fn())
+vi.mock('./storyLifecycle.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./storyLifecycle.js')>()),
+  dissolveCluster: mockLifecycleDissolve,
+}))
+
 const { getStoryIdsByStatus, getStories, deleteStory, dissolveCluster, getClusterRedirectSlug, createStory } = await import('./story.js')
 
 describe('getStories', () => {
@@ -323,40 +329,13 @@ describe('dissolveCluster', () => {
     await expect(dissolveCluster('s-missing')).rejects.toThrow('Story is not in a cluster')
   })
 
-  it('restores rejected members to analyzed, removes all from cluster, deletes cluster record', async () => {
+  it("dissolves the story's cluster through the lifecycle module", async () => {
     mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'cluster-1' })
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 2 })
-    mockPrisma.storyCluster.delete.mockResolvedValue({})
+    mockLifecycleDissolve.mockResolvedValue({ restored: [] })
 
     await dissolveCluster('s1')
 
-    // First updateMany: restore rejected members to analyzed
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { clusterId: 'cluster-1', status: 'rejected' },
-      data: { status: 'analyzed' },
-    })
-
-    // Second updateMany: remove all members from cluster
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { clusterId: 'cluster-1' },
-      data: { clusterId: null },
-    })
-
-    // Delete the cluster record
-    expect(mockPrisma.storyCluster.delete).toHaveBeenCalledWith({
-      where: { id: 'cluster-1' },
-    })
-  })
-
-  it('calls updateMany twice and storyCluster.delete once', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'cluster-2' })
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 1 })
-    mockPrisma.storyCluster.delete.mockResolvedValue({})
-
-    await dissolveCluster('s2')
-
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledTimes(2)
-    expect(mockPrisma.storyCluster.delete).toHaveBeenCalledTimes(1)
+    expect(mockLifecycleDissolve).toHaveBeenCalledWith('cluster-1')
   })
 })
 

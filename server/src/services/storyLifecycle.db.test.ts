@@ -37,7 +37,7 @@ const { runAssessStories } = await import('../jobs/assessStories.js')
 const { runSelectStories } = await import('../jobs/selectStories.js')
 const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
 const { transition } = await import('./storyLifecycle.js')
-const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary } = await import('./cluster.js')
+const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary, createManualCluster } = await import('./cluster.js')
 
 let feedId = ''
 let issueSlug = ''
@@ -327,7 +327,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   // ──── Dissolve and remove ───────────────────────────────────────────────
 
-  it.fails('dissolving puts a published duplicate back on the site, slug and date unchanged [5f]', async () => {
+  it('dissolving puts a published duplicate back on the site, slug and date unchanged', async () => {
     const date = new Date('2026-09-01T00:00:00Z')
     const primary = await story({ status: 'published', slug: 'primary', datePublished: date })
     const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'dup', datePublished: date })
@@ -345,7 +345,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(await prisma.storyCluster.count()).toBe(0)
   })
 
-  it.fails('the per-story dissolve behaves the same [5f]', async () => {
+  it('the per-story dissolve behaves the same', async () => {
     const date = new Date('2026-09-01T00:00:00Z')
     const primary = await story({ status: 'published', slug: 'primary', datePublished: date })
     const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'dup', datePublished: date })
@@ -356,7 +356,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(await row(dup.id)).toMatchObject({ status: 'published', slug: 'dup', clusterId: null })
   })
 
-  it.fails('removing down to one member dissolves by the same rule [5f]', async () => {
+  it('removing down to one member dissolves by the same rule', async () => {
     const date = new Date('2026-09-01T00:00:00Z')
     const primary = await story({ status: 'analyzed' })
     const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'dup', datePublished: date })
@@ -370,7 +370,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   // ──── Election ──────────────────────────────────────────────────────────
 
-  it.fails('re-election never picks a trashed member [5f]', async () => {
+  it('re-election never picks a trashed member', async () => {
     const primary = await story({ status: 'analyzed', relevance: 5 })
     const trashed = await story({ status: 'trashed', relevance: 9 })
     const leaving = await story({ status: 'rejected', relevance: 1 })
@@ -411,7 +411,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   // ──── Set primary and merge ─────────────────────────────────────────────
 
-  it.fails('setting a rejected duplicate as primary restores it and rejects published members [5f]', async () => {
+  it('setting a rejected duplicate as primary restores it and rejects published members', async () => {
     const primary = await story({ status: 'published', slug: 'p', datePublished: new Date() })
     const chosen = await story({ status: 'rejected', rejectionReason: 'duplicate' })
     const clusterId = await createCluster([primary.id, chosen.id], primary.id)
@@ -421,6 +421,29 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(await primaryOf(clusterId)).toBe(chosen.id)
     expect((await row(chosen.id)).status).toBe('analyzed')
     expect((await row(primary.id)).status).toBe('rejected')
+  })
+
+  it('a manual cluster rejects every member but the chosen one, published ones too', async () => {
+    const chosen = await story({ status: 'analyzed', relevance: 1 })
+    const pub = await story({ status: 'published', slug: 'pub', datePublished: new Date() })
+    const created = await createManualCluster([chosen.id, pub.id], chosen.id)
+
+    expect(created?.primaryStory?.id).toBe(chosen.id)
+    expect(await row(pub.id)).toMatchObject({ status: 'rejected', rejectionReason: 'duplicate' })
+  })
+
+  it('two manual clusters claiming one story: one wins, the other leaves nothing behind', async () => {
+    const [a, b, c] = await Promise.all([story({ status: 'analyzed' }), story({ status: 'analyzed' }), story({ status: 'analyzed' })])
+
+    const results = await Promise.allSettled([
+      createManualCluster([a.id, b.id], a.id),
+      createManualCluster([b.id, c.id], c.id),
+    ])
+
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
+    expect(await prisma.storyCluster.count()).toBe(1)
+    const rows = await prisma.story.findMany({ where: { id: { in: [a.id, b.id, c.id] } }, select: { clusterId: true } })
+    expect(rows.filter(r => r.clusterId !== null)).toHaveLength(2)
   })
 
   it('merging rejects published non-primaries of the merged cluster', async () => {

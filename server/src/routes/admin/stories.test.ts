@@ -841,17 +841,16 @@ describe('Admin Stories API', () => {
     })
 
     it('returns 200 and the updated story after dissolution', async () => {
-      // dissolveCluster calls: findUnique (for clusterId), updateMany x2, storyCluster.delete
       mockPrisma.story.findUnique
         .mockResolvedValueOnce({ clusterId: 'cluster-1' }) // dissolveCluster lookup
         .mockResolvedValueOnce(storyWithRelations) // getStoryById after dissolution
-      mockPrisma.story.updateMany.mockResolvedValue({ count: 2 })
-      mockPrisma.storyCluster.delete.mockResolvedValue({})
+      mockLifecycleDissolve.mockResolvedValue({ restored: [] })
 
       const res = await request(app)
         .post('/api/admin/stories/story-1/dissolve-cluster')
         .set(authHeader())
       expect(res.status).toBe(200)
+      expect(mockLifecycleDissolve).toHaveBeenCalledWith('cluster-1')
       expect(res.body.sourceTitle).toBe('Test Article')
     })
   })
