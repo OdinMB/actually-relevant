@@ -151,6 +151,6 @@ Both use the `medium` model tier (configured separately as `postModelTier` and `
 | `server/src/jobs/blueskyUpdateMetrics.ts` | Metrics polling cron job handler |
 | `server/src/config.ts` | Configuration (bluesky section) |
 | `server/prisma/schema.prisma` | BlueskyPost model |
-| `client/src/components/admin/BlueskyDraftPanel.tsx` | Draft review side panel |
-| `client/src/pages/admin/BlueskyPage.tsx` | Admin Bluesky overview page |
+| `client/src/components/admin/BlueskyDraftPanel.tsx` | Draft review side panel: Bluesky's limit, grapheme count and link preview on the shared `social/SocialDraftPanel.tsx` |
+| `client/src/pages/admin/BlueskyPage.tsx` | Admin Bluesky overview page: Bluesky's API calls and item fields on the shared `components/admin/social/SocialChannelPage.tsx` (shared with Mastodon) |
 | `client/src/components/admin/BulkActionsBar.tsx` | Bluesky action buttons |

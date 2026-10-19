@@ -5,6 +5,7 @@ import { publicApi } from '../lib/api'
 import { formatRelativeTime } from '../lib/constants'
 import AiLabel from '../components/ai/AiLabel'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
+import { SITE_URL } from '../config'
 
 export default function EmbedPage() {
   const [params] = useSearchParams()
@@ -106,13 +107,13 @@ export default function EmbedPage() {
 
       <div className={`px-4 py-2 border-t flex items-center justify-center ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}>
         <a
-          href="https://actuallyrelevant.news"
+          href={SITE_URL}
           target="_blank"
           rel="noopener noreferrer"
           className={`inline-flex items-center gap-1.5 text-[11px] ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-700'}`}
         >
           <img
-            src="https://actuallyrelevant.news/images/logo-no-text-square.png"
+            src={`${SITE_URL}/images/logo-no-text-square.png`}
             alt=""
             className="w-5 h-5 rounded-sm"
             aria-hidden="true"

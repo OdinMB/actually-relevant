@@ -1,14 +1,14 @@
 import { ReactNode } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { BRAND } from '../config'
+import { BRAND, SITE_URL } from '../config'
 
 // Shared SEO constants
 export const SEO = {
   siteName: 'Actually Relevant',
-  siteUrl: 'https://actuallyrelevant.news',
+  siteUrl: SITE_URL,
   defaultTitle: 'Actually Relevant - News That Matters to Humanity',
   defaultDescription: `${BRAND.claim} ${BRAND.claimSupport}`,
-  ogImage: 'https://actuallyrelevant.news/images/og-image.png',
+  ogImage: `${SITE_URL}/images/og-image.png`,
   ogImageWidth: '1200',
   ogImageHeight: '630',
   twitterCard: 'summary_large_image' as const,

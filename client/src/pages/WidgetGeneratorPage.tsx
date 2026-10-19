@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { SEO, CommonOgTags } from "../lib/seo";
+import { SITE_URL } from "../config";
 
 const ISSUES = [
   { label: "All issues", value: "" },
@@ -11,8 +12,8 @@ const ISSUES = [
   { label: "Science & Technology", value: "science-technology" },
 ];
 
-const WIDGET_URL = "https://actuallyrelevant.news/widget.js";
-const EMBED_URL = "https://actuallyrelevant.news/embed";
+const WIDGET_URL = `${SITE_URL}/widget.js`;
+const EMBED_URL = `${SITE_URL}/embed`;
 
 export default function WidgetGeneratorPage() {
   const [issue, setIssue] = useState("");

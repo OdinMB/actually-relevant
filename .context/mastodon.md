@@ -180,6 +180,6 @@ Story picking reuses `pickBestStoryForSocial()` from the shared service, which u
 | `server/src/jobs/mastodonUpdateMetrics.ts` | Metrics polling cron job handler |
 | `server/src/config.ts` | Configuration (mastodon + socialAutoPost sections) |
 | `server/prisma/schema.prisma` | MastodonPost model |
-| `client/src/components/admin/MastodonDraftPanel.tsx` | Draft review side panel |
-| `client/src/pages/admin/MastodonPage.tsx` | Admin Mastodon overview page |
+| `client/src/components/admin/MastodonDraftPanel.tsx` | Draft review side panel: Mastodon's limit, character count and posting info on the shared `social/SocialDraftPanel.tsx` |
+| `client/src/pages/admin/MastodonPage.tsx` | Admin Mastodon overview page: Mastodon's API calls and item fields on the shared `components/admin/social/SocialChannelPage.tsx` (shared with Bluesky) |
 | `client/src/components/admin/BulkActionsBar.tsx` | Mastodon action buttons |
