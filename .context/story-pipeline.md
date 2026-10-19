@@ -54,10 +54,10 @@ Stories get a URL slug (e.g. `ai-breakthrough-in-protein-folding`) when they are
 **Generation rules:**
 - Created from `title` (falls back to `sourceTitle`) using `server/src/utils/slugify.ts`
 - Lowercase, hyphens only, max 80 chars (truncated at word boundary)
-- Duplicates resolved by appending `-2`, `-3`, etc. (checked via `generateUniqueSlug()` in `story.ts`)
+- Duplicates resolved by appending `-2`, `-3`, etc. (checked via `generateUniqueSlug()` in `storyWrites.ts`)
 - Stored as `slug String? @unique` — nullable because unpublished stories don't have one
 
-**Where slugs are set:** `updateStory()`, `updateStoryStatus()`, `bulkUpdateStatus()`, and `publishStory()` in `server/src/services/story.ts` — all check `!story.slug` before generating.
+**Where slugs are set:** `updateStory()`, `updateStoryStatus()`, `bulkUpdateStatus()`, and `publishStory()` in `server/src/services/storyWrites.ts` — all check `!story.slug` before generating.
 
 **Public routing:** `/stories/:slug` — the public API and client both use slug-based URLs exclusively.
 
@@ -86,7 +86,10 @@ Stories get a URL slug (e.g. `ai-breakthrough-in-protein-folding`) when they are
 
 | File | Role |
 |------|------|
-| `server/src/services/story.ts` | CRUD, filtering, status transitions |
+| `server/src/services/story.ts` | Barrel re-exporting the story service modules below (the import path routes, jobs and test mocks use) |
+| `server/src/services/storyQueries.ts` | Admin list and filters, by-id reads, status counts, `getStoryIdsByStatus` |
+| `server/src/services/storyWrites.ts` | Create, admin edit, every status write, publishing and slugs, delete, per-story cluster dissolve |
+| `server/src/services/publicStories.ts` | Public listing, story by slug, cluster redirect and sources, homepage buckets |
 | `server/src/services/analysis.ts` | LLM orchestration (preassess, assess, select) |
 | `server/src/jobs/preassessStories.ts` | Scheduled pre-assessment |
 | `server/src/jobs/assessStories.ts` | Scheduled full assessment |

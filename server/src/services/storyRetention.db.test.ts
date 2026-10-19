@@ -7,7 +7,7 @@ import { repairClusters } from './clusterRepair.js'
 
 const mockNotify = vi.hoisted(() => vi.fn())
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
-// story.ts (deleteStory) imports the OpenAI-backed modules; nothing here calls them
+// storyWrites.ts (deleteStory) imports the OpenAI-backed modules; nothing here calls them
 vi.mock('./embedding.js', () => ({
   generateEmbeddingForContent: vi.fn(), generateSearchEmbedding: vi.fn(), ensureEmbedding: vi.fn(), ensureEmbeddings: vi.fn(),
 }))

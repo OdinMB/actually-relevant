@@ -28,7 +28,7 @@ The publish step uses `ensureEmbedding()` / `ensureEmbeddings()` as a safety net
 
 ## Hybrid Search (RRF)
 
-When `getPublishedStories` gets a `search` query (the `search` parameter of `GET /api/stories`, set from the stories list page), it switches from the normal chronological listing to **Reciprocal Rank Fusion** (`hybridSearch()` in `server/src/services/story.ts`). The two legs run in parallel, both limited to published stories and both honouring the optional `issueSlug` filter (an issue and its child issues, or the feed's issue when the story has none):
+When `getPublishedStories` gets a `search` query (the `search` parameter of `GET /api/stories`, set from the stories list page), it switches from the normal chronological listing to **Reciprocal Rank Fusion** (`hybridSearch()` in `server/src/services/storySearch.ts`). The two legs run in parallel, both limited to published stories and both honouring the optional `issueSlug` filter (an issue and its child issues, or the feed's issue when the story has none):
 
 - **Semantic leg:** embeds the query, then takes the top `RRF_FETCH_LIMIT` (50) by cosine distance (`embedding <=> query_vector`). If the embedding or the query fails, this leg returns nothing and search falls back to text-only.
 - **Text leg:** a case-insensitive `contains` match on `title` or `summary`, ordered by `datePublished` desc then `dateCrawled` desc, top 50.
@@ -37,7 +37,7 @@ RRF score: `score(d) = Σ 1/(RRF_K + rank)` with `RRF_K = 60` and 1-based ranks.
 
 ## Related Stories
 
-`GET /api/stories/:slug/related` (`getRelatedStories()` in `server/src/services/story.ts`):
+`GET /api/stories/:slug/related` (`getRelatedStories()` in `server/src/services/relatedStories.ts`):
 
 1. **Cache check:** a hit fetches the source and the cached IDs in one query limited to `published`. If the source is no longer published the entry is dropped and the result is empty; otherwise the cached stories that are still published come back in cached order, sliced to `limit`. An unpublished story therefore never appears in a server answer, whenever it was cached.
 2. **Source check:** the source story must exist, be published and have an embedding. Otherwise the result is empty.
@@ -49,7 +49,7 @@ The result is always computed and cached for `displayCount` IDs, then sliced to 
 
 ### Cache
 
-A `TTLCache` (`server/src/lib/cache.ts`) in `story.ts`, per process and lost on restart. The key is the source story's slug and the value is the source's id with the ordered list of related story IDs. Each entry expires after `relatedStories.cacheHours` (72h). At `MAX_RELATED_CACHE_SIZE` (500) entries, setting a new slug drops the expired entries, then the oldest. Concurrent misses for one slug share one computation, so a burst of first visitors costs one LLM call. A source with no candidates is not cached.
+A `TTLCache` (`server/src/lib/cache.ts`) in `relatedStories.ts`, per process and lost on restart. The key is the source story's slug and the value is the source's id with the ordered list of related story IDs. Each entry expires after `relatedStories.cacheHours` (72h). At `MAX_RELATED_CACHE_SIZE` (500) entries, setting a new slug drops the expired entries, then the oldest. Concurrent misses for one slug share one computation, so a burst of first visitors costs one LLM call. A source with no candidates is not cached.
 
 When a story leaves `published` or is deleted through the story service (`updateStory`, `updateStoryStatus`, `bulkUpdateStatus`, `rejectStory`, `deleteStory`), its own entry is dropped (`forgetRelatedStories`); other paths are covered by the published check on every hit. Other stories' lists that name it simply leave it out until they expire.
 
@@ -97,7 +97,9 @@ Uses raw SQL for fetching (bypasses Prisma type limitations), processes in batch
 | `server/src/services/embedding.ts` | Core embedding service (generate, hash, batch) |
 | `server/src/services/embedding.test.ts` | Unit tests |
 | `server/src/lib/vectors.ts` | Raw SQL embedding persistence (`saveEmbedding`, `saveEmbeddingTx`) |
-| `server/src/services/story.ts` | Lifecycle hooks, hybrid search, related stories and their cache |
+| `server/src/services/storyWrites.ts` | Lifecycle hooks: embeddings on publish and on edits of published stories |
+| `server/src/services/storySearch.ts` | Hybrid (RRF) search |
+| `server/src/services/relatedStories.ts` | Related stories, their re-rank and cache |
 | `server/src/prompts/related-stories.ts` | Related-stories re-rank prompt |
 | `server/src/services/analysis.ts` | Assessment with atomic embedding save |
 | `server/src/scripts/migrations/backfill-embeddings.ts` | Backfill script |

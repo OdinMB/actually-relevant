@@ -90,7 +90,7 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 - `client/src/components/PositivitySlider.tsx` — Slider UI with emoji labels and info tooltip
 - `client/src/contexts/PositivityContext.tsx` — React Context + localStorage persistence
 - `client/src/lib/mix-stories.ts` — `mixHomepageStories()` and `filterStoriesByPositivity()` helpers
-- `server/src/services/story.ts` — `getHomepageData()` returns `{ positive, negative }` per issue
+- `server/src/services/publicStories.ts` — `getHomepageData()` returns `{ positive, negative }` per issue
 
 ## Shared Components
 

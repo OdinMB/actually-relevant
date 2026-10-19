@@ -115,7 +115,8 @@ In `server/src/config.ts` under `dedup`:
 | `server/src/services/cluster.ts` | Cluster management: list, detail, create, search, set primary, remove member, merge, dissolve |
 | `server/src/routes/admin/clusters.ts` | Admin cluster API endpoints (includes search-stories and create) |
 | `server/src/schemas/cluster.ts` | Zod schemas for cluster creation and story search |
-| `server/src/services/story.ts` | `getClusterMembers()`, `dissolveCluster()` (per-story) |
+| `server/src/services/publicStories.ts` | `getClusterMembers()`, `getClusterRedirectSlug()` |
+| `server/src/services/storyWrites.ts` | `dissolveCluster()` (per-story) |
 | `server/src/services/clusterRepair.ts` | `repairClusters()`: dissolve or re-elect after member deletion (`deleteStory()`, retention) |
 | `server/src/routes/admin/stories.ts` | `POST /:id/dissolve-cluster` endpoint |
 | `client/src/pages/admin/ClustersPage.tsx` | Admin clusters list page |
@@ -136,7 +137,7 @@ In `server/src/config.ts` under `dedup`:
 - **Change LLM confirmation:** Edit prompt in `prompts/dedup.ts` and schema in `schemas/llm.ts`
 - **Change primary selection:** Edit `updatePrimary()` in `dedup.ts` -- modify the sort comparator
 - **Change auto-reject behavior:** Edit `autoRejectNonPrimary()` in `dedup.ts`. Accepts `{ includePublished?: boolean }` option -- automatic pipeline preserves published stories, but admin-initiated actions (manual cluster creation, set primary, remove member, merge) pass `includePublished: true` to reject published non-primary members.
-- **Dissolve a cluster:** `dissolveCluster()` in `story.ts` -- restores rejected members to `analyzed`, removes all `clusterId` references, deletes the cluster record
+- **Dissolve a cluster:** `dissolveCluster()` in `storyWrites.ts` -- restores rejected members to `analyzed`, removes all `clusterId` references, deletes the cluster record
 
 ## Public URL Redirect
 
@@ -144,4 +145,4 @@ When a published story becomes a non-primary cluster member (e.g. after manual c
 
 - **Server:** `GET /api/stories/:slug` calls `getClusterRedirectSlug()` when the story is not found as published. Returns 302 redirect to `/api/stories/<primary-slug>` if the slug belongs to a non-primary cluster member whose primary is published.
 - **Client:** `StoryPage` detects when the returned story's slug differs from the URL param and does a `navigate(replace: true)` to update the browser URL.
-- **Service:** `getClusterRedirectSlug()` in `story.ts` looks up the story by slug (any status), checks if it's a non-primary cluster member, and returns the primary's slug if the primary is published.
+- **Service:** `getClusterRedirectSlug()` in `publicStories.ts` looks up the story by slug (any status), checks if it's a non-primary cluster member, and returns the primary's slug if the primary is published.
