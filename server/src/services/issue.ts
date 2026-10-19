@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js'
 import type { Issue } from '@prisma/client'
+import { BadRequestError, ConflictError } from '../utils/errors.js'
 
 // --- JSON field helpers ---
 
@@ -129,7 +130,7 @@ export async function updateIssue(id: string, data: Partial<{
     // If this issue has children, it cannot become a child itself
     const childCount = await prisma.issue.count({ where: { parentId: id } })
     if (childCount > 0 && data.parentId !== null) {
-      throw new Error('Cannot set parent on an issue that has children')
+      throw new BadRequestError('Cannot set parent on an issue that has children')
     }
   }
   const issue = await prisma.issue.update({ where: { id }, data: serializeJsonFields(data) })
@@ -138,14 +139,14 @@ export async function updateIssue(id: string, data: Partial<{
 
 async function validateParent(parentId: string, selfId?: string) {
   if (selfId && parentId === selfId) {
-    throw new Error('An issue cannot be its own parent')
+    throw new BadRequestError('An issue cannot be its own parent')
   }
   const parent = await prisma.issue.findUnique({ where: { id: parentId } })
   if (!parent) {
-    throw new Error('Parent issue not found')
+    throw new BadRequestError('Parent issue not found')
   }
   if (parent.parentId) {
-    throw new Error('Cannot nest more than one level deep')
+    throw new BadRequestError('Cannot nest more than one level deep')
   }
 }
 
@@ -251,10 +252,10 @@ export async function deleteIssue(id: string): Promise<void> {
     prisma.issue.count({ where: { parentId: id } }),
   ])
   if (feedCount > 0) {
-    throw new Error('Cannot delete issue with existing feeds')
+    throw new ConflictError('Cannot delete issue with existing feeds')
   }
   if (childCount > 0) {
-    throw new Error('Cannot delete issue with child issues')
+    throw new ConflictError('Cannot delete issue with child issues')
   }
   await prisma.issue.delete({ where: { id } })
 }

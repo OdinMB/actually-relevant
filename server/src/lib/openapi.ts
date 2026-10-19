@@ -2,12 +2,14 @@ import 'zod-openapi/extend'
 import { z } from 'zod'
 import { createDocument } from 'zod-openapi'
 import {
+  AI_GENERATED_NEWSLETTER_FIELDS,
   AI_GENERATED_PODCAST_DETAIL_FIELDS,
   AI_GENERATED_PODCAST_FIELDS,
   AI_GENERATED_STORY_FIELDS,
   IPTC_TRAINED_ALGORITHMIC_MEDIA,
 } from './aiProvenance.js'
 import { OPENAPI_AI_FIELD_PREFIX, OPENAPI_REPUBLISHER_NOTE } from './aiLabelCopy.js'
+import { minRelevanceParam, publishedBeforeParam, publishedSinceParam } from '../schemas/story.js'
 
 /** Description of a field in AI_GENERATED_STORY_FIELDS: the "AI-generated." label, then the details. */
 function aiField(details: string): string {
@@ -200,6 +202,74 @@ const podcastResponseSchema = z.object({
   episodes: z.array(podcastEpisodeSchema),
 }).openapi({ ref: 'PodcastResponse' })
 
+// Incremental-sync query parameters, documented from the same Zod schemas the routes validate with.
+const minRelevanceQuery = minRelevanceParam.optional().openapi({
+  description:
+    'Only stories whose relevance rating is at least this value (1-10). ' +
+    'Combine with publishedSince to fetch only high-signal stories since your last poll.',
+  example: 7,
+})
+
+const storySyncQuerySchema = z.object({
+  publishedSince: publishedSinceParam.optional().openapi({
+    description:
+      'Only stories published at or after this ISO 8601 date-time (inclusive, compared with `datePublished`). ' +
+      'Pass the `datePublished` of the newest story you already have, or the time of your last poll.',
+    example: '2026-10-01T00:00:00Z',
+  }),
+  publishedBefore: publishedBeforeParam.optional().openapi({
+    description:
+      'Only stories published before this ISO 8601 date-time (exclusive). Must be later than publishedSince.',
+    example: '2026-10-08T00:00:00Z',
+  }),
+  minRelevance: minRelevanceQuery,
+})
+
+const feedQueryDocSchema = z.object({ minRelevance: minRelevanceQuery })
+
+const newsletterIssueSummarySchema = z.object({
+  slug: z.string().openapi({ description: 'URL segment of the issue; never changes once assigned.', example: 'week-42-2026' }),
+  title: z.string().openapi({ example: 'Week 42, 2026' }),
+  publishedAt: z.string().datetime().openapi({ description: 'When the issue was first published.' }),
+  storyCount: z.number().int(),
+}).openapi({ ref: 'NewsletterIssueSummary' })
+
+const newsletterArchiveResponseSchema = z.object({
+  data: z.array(newsletterIssueSummarySchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  totalPages: z.number().int(),
+}).openapi({ ref: 'NewsletterArchiveResponse' })
+
+const newsletterIssueSchema = z.object({
+  slug: z.string().openapi({ example: 'week-42-2026' }),
+  title: z.string().openapi({ example: 'Week 42, 2026' }),
+  publishedAt: z.string().datetime(),
+  aiLabel: z.object({ lead: z.string(), text: z.string() }).openapi({
+    description: 'The AI label shown at the top of the issue, in the email and on the web.',
+  }),
+  content: z.string().openapi({
+    description: aiField(
+      'The issue as Markdown: an intro written by an AI model, then one section per issue area with the AI-selected stories, ' +
+        'each with its AI headline, publisher, links and an AI summary or a quote selected by AI.',
+    ),
+  }),
+  stories: z.array(z.object({
+    headline: z.string().openapi({ description: 'The heading the story has in `content`.' }),
+    title: z.string().nullable(),
+    titleLabel: z.string().nullable(),
+    sourceTitle: z.string(),
+    sourceUrl: z.string().url(),
+    publisher: z.string(),
+    slug: z.string().nullable().openapi({ description: 'Story page slug; null if the story is no longer published.' }),
+  })).openapi({ description: aiField('The stories AI selected for the issue, with the headlines and title labels an AI model wrote.') }),
+  aiGenerated: z.object({
+    fields: z.array(z.enum(AI_GENERATED_NEWSLETTER_FIELDS)),
+    digitalSourceType: z.literal(IPTC_TRAINED_ALGORITHMIC_MEDIA),
+  }).openapi({ description: 'Machine-readable marker of the AI-generated fields of this issue. Unsigned metadata, not a watermark.' }),
+}).openapi({ ref: 'NewsletterIssue' })
+
 const errorResponseSchema = z.object({
   error: z.string().openapi({ example: 'Not found' }),
 }).openapi({ ref: 'ErrorResponse' })
@@ -251,8 +321,12 @@ export function getOpenAPIDocument(): any {
           operationId: 'listStories',
           summary: 'List published stories',
           description:
-            'Returns a paginated list of published stories. Supports filtering by issue and semantic search.',
+            'Returns a paginated list of published stories, newest first. Supports filtering by issue, emotion tag, ' +
+            'publish date and minimum relevance, and semantic search.\n\n' +
+            'For incremental sync, poll with `publishedSince` (and optionally `minRelevance`) instead of re-reading the newest pages. ' +
+            'The date and relevance filters cannot be combined with `search` (400). Responses are cached for 60 seconds.',
           tags: ['Stories'],
+          requestParams: { query: storySyncQuerySchema },
           parameters: [
             {
               name: 'page',
@@ -290,6 +364,12 @@ export function getOpenAPIDocument(): any {
               description: 'Paginated list of published stories',
               content: {
                 'application/json': { schema: storyListResponseSchema },
+              },
+            },
+            '400': {
+              description: 'Invalid query parameters (e.g. a malformed date-time, minRelevance outside 1-10, or a date filter combined with search)',
+              content: {
+                'application/json': { schema: errorResponseSchema },
               },
             },
           },
@@ -381,8 +461,10 @@ export function getOpenAPIDocument(): any {
         get: {
           operationId: 'getRssFeed',
           summary: 'RSS feed (all stories)',
-          description: 'Returns an RSS 2.0 feed of all published stories. Cached for 15 minutes.',
+          description:
+            'Returns an RSS 2.0 feed of the most recent published stories. Add `?minRelevance=7` for a high-signal feed. Cached for 15 minutes.',
           tags: ['Feed'],
+          requestParams: { query: feedQueryDocSchema },
           responses: {
             '200': {
               description: 'RSS 2.0 XML feed',
@@ -392,6 +474,12 @@ export function getOpenAPIDocument(): any {
                 },
               },
             },
+            '400': {
+              description: 'Invalid minRelevance',
+              content: {
+                'application/json': { schema: errorResponseSchema },
+              },
+            },
           },
         },
       },
@@ -399,8 +487,10 @@ export function getOpenAPIDocument(): any {
         get: {
           operationId: 'getRssFeedByIssue',
           summary: 'RSS feed (per issue)',
-          description: 'Returns an RSS 2.0 feed filtered to a specific issue. Cached for 15 minutes.',
+          description:
+            'Returns an RSS 2.0 feed filtered to a specific issue. Accepts `minRelevance` like the global feed. Cached for 15 minutes.',
           tags: ['Feed'],
+          requestParams: { query: feedQueryDocSchema },
           parameters: [
             {
               name: 'issueSlug',
@@ -417,6 +507,12 @@ export function getOpenAPIDocument(): any {
                 'application/rss+xml': {
                   schema: { type: 'string' },
                 },
+              },
+            },
+            '400': {
+              description: 'Invalid minRelevance',
+              content: {
+                'application/json': { schema: errorResponseSchema },
               },
             },
             '404': {
@@ -479,6 +575,51 @@ export function getOpenAPIDocument(): any {
           },
         },
       },
+      '/api/newsletters': {
+        get: {
+          operationId: 'listNewsletterIssues',
+          summary: 'Newsletter archive',
+          description: 'Returns the published issues of the weekly newsletter, newest first. Each issue is AI-written from AI-selected stories.',
+          tags: ['Newsletter'],
+          parameters: [
+            { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1 }, description: 'Page number (default 1)' },
+            { name: 'pageSize', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50 }, description: 'Issues per page (default 20)' },
+          ],
+          responses: {
+            '200': {
+              description: 'Published issues',
+              content: {
+                'application/json': { schema: newsletterArchiveResponseSchema },
+              },
+            },
+          },
+        },
+      },
+      '/api/newsletters/{slug}': {
+        get: {
+          operationId: 'getNewsletterIssue',
+          summary: 'Newsletter issue',
+          description: 'Returns one published issue of the weekly newsletter: its AI label, its Markdown text and its stories.',
+          tags: ['Newsletter'],
+          parameters: [
+            { name: 'slug', in: 'path', required: true, schema: { type: 'string' }, description: 'Issue slug, e.g. week-42-2026' },
+          ],
+          responses: {
+            '200': {
+              description: 'The issue',
+              content: {
+                'application/json': { schema: newsletterIssueSchema },
+              },
+            },
+            '404': {
+              description: 'No published issue with this slug',
+              content: {
+                'application/json': { schema: errorResponseSchema },
+              },
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {},
@@ -489,6 +630,7 @@ export function getOpenAPIDocument(): any {
       { name: 'Issues', description: 'Issue categories and hierarchy' },
       { name: 'Feed', description: 'RSS 2.0 feeds' },
       { name: 'Podcast', description: 'The weekly AI-written and AI-voiced podcast' },
+      { name: 'Newsletter', description: 'Published issues of the weekly AI-written newsletter' },
     ],
   })
 }

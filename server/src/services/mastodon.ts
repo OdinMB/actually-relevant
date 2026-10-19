@@ -10,6 +10,7 @@ import { mastodonPostTextSchema } from '../schemas/mastodon.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import type { AccountStatusesResult } from '../lib/mastodon.js'
 import { buildMetaLine } from './socialPostFormat.js'
+import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('mastodon-service')
 
@@ -77,14 +78,14 @@ export async function generateDraft(storyId: string) {
     },
   })
 
-  if (!story) throw new Error('Story not found')
-  if (!story.title || !story.summary) throw new Error('Story must be fully analyzed (title and summary required)')
+  if (!story) throw new NotFoundError('Story not found')
+  if (!story.title || !story.summary) throw new BadRequestError('Story must be fully analyzed (title and summary required)')
 
   // Prevent duplicate posts
   const existingPost = await prisma.mastodonPost.findFirst({
     where: { storyId },
   })
-  if (existingPost) throw new Error('Story already has a Mastodon post')
+  if (existingPost) throw new BadRequestError('Story already has a Mastodon post')
 
   const publisherName = story.feed.displayTitle || story.feed.title
   const issueName = story.issue?.name ?? null
@@ -173,8 +174,8 @@ export async function pickAndDraft(storyIds: string[]) {
 
 export async function updateDraft(postId: string, postText: string) {
   const post = await prisma.mastodonPost.findUnique({ where: { id: postId } })
-  if (!post) throw new Error('Post not found')
-  if (post.status !== 'draft') throw new Error('Can only edit draft posts')
+  if (!post) throw new NotFoundError('Post not found')
+  if (post.status !== 'draft') throw new BadRequestError('Can only edit draft posts')
 
   return prisma.mastodonPost.update({
     where: { id: postId },
@@ -188,7 +189,7 @@ export async function updateDraft(postId: string, postText: string) {
  */
 export async function deletePostRecord(postId: string) {
   const post = await prisma.mastodonPost.findUnique({ where: { id: postId } })
-  if (!post) throw new Error('Post not found')
+  if (!post) throw new NotFoundError('Post not found')
 
   // If published with a status ID, delete from Mastodon first
   if (post.status === 'published' && post.statusId) {
@@ -214,7 +215,7 @@ export async function deletePostRecord(postId: string) {
  */
 export async function publishPost(postId: string) {
   if (!isMastodonConfigured()) {
-    throw new Error('Mastodon credentials not configured')
+    throw new BadRequestError('Mastodon credentials not configured')
   }
 
   const post = await prisma.mastodonPost.findUnique({
@@ -222,8 +223,8 @@ export async function publishPost(postId: string) {
     include: { story: { include: { feed: true } } },
   })
 
-  if (!post) throw new Error('Post not found')
-  if (post.status !== 'draft') throw new Error('Can only publish draft posts')
+  if (!post) throw new NotFoundError('Post not found')
+  if (post.status !== 'draft') throw new BadRequestError('Can only publish draft posts')
 
   try {
     const result = await createStatus(post.postText)

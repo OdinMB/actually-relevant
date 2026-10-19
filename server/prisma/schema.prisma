@@ -179,6 +179,10 @@ model Newsletter {
   status            ContentStatus    @default(draft)
   /// ISO week (YYYY-Www) of the automatic weekly issue; set only by the generate_newsletter job
   weekKey   String?          @map("week_key")
+  /// URL segment of the public web edition (/newsletter/<slug>); assigned on HTML build or first publish, never changed
+  slug        String?        @unique
+  /// First time the issue was set to published (the public archive's date); kept when unpublished
+  publishedAt DateTime?      @map("published_at")
   sends     NewsletterSend[]
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")
@@ -273,6 +277,9 @@ model Podcast {
   audioPath      String?       @map("audio_path")
   transcriptUrl  String?       @map("transcript_url")
   transcriptPath String?       @map("transcript_path")
+  /// Public CDN URL and storage path of the Podcasting 2.0 JSON chapters file (stored at `ready`); null on episodes from before chapters
+  chaptersUrl    String?       @map("chapters_url")
+  chaptersPath   String?       @map("chapters_path")
   audioBytes     Int?          @map("audio_bytes")
   durationSec    Int?          @map("duration_sec")
   readyAt        DateTime?     @map("ready_at")

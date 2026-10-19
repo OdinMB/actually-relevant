@@ -8,7 +8,6 @@ import { StoryStatus, type PodcastKind } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { withRetry } from '../lib/retry.js'
 import { podcastEpisodeAiLine } from '../lib/aiLabelCopy.js'
 import { buildPodcastPrompt, buildPodcastSelectPrompt, type StoryForPodcast } from '../prompts/index.js'
 import { podcastDialogueSchemaFor, podcastSelectResultSchema, type PodcastDialogue } from '../schemas/llm.js'
@@ -55,7 +54,8 @@ type Tier = 'small' | 'medium' | 'large'
 async function invokeStructured<S extends z.ZodTypeAny>(schema: S, tier: Tier, prompt: string, call: string): Promise<z.infer<S> | null> {
   await rateLimitDelay()
   const llm = getLLMByTier(tier).withStructuredOutput(schema, { includeRaw: true })
-  const res = await withRetry(() => llm.invoke([new HumanMessage(prompt)]), { retries: 3 })
+  // Retried by the OpenAI SDK (maxRetries in createChatModel), not by withRetry
+  const res = await llm.invoke([new HumanMessage(prompt)])
   const usage = (res.raw as { usage_metadata?: unknown }).usage_metadata
   log.info({ call, model: config.llm.models[tier].name, usage, parsed: res.parsed != null }, 'podcast LLM call')
   return (res.parsed ?? null) as z.infer<S> | null

@@ -95,6 +95,12 @@ const ENDPOINTS = [
   },
   {
     method: 'GET',
+    path: '/api/stories?publishedSince=&minRelevance=',
+    description:
+      'Incremental sync: only stories published since an ISO 8601 date-time (publishedBefore sets an upper bound), optionally rated at least 1 to 10',
+  },
+  {
+    method: 'GET',
     path: '/api/stories/:slug',
     description: 'Individual story by slug',
   },
@@ -107,6 +113,11 @@ const ENDPOINTS = [
     method: 'GET',
     path: '/api/feed',
     description: 'RSS feed (all issue areas)',
+  },
+  {
+    method: 'GET',
+    path: '/api/feed?minRelevance=7',
+    description: 'RSS feed of only the stories rated 7 or higher (works on per-issue feeds too)',
   },
 ]
 
@@ -172,7 +183,10 @@ export default function FreeApiPage() {
 curl ${API_BASE}/stories
 
 # Filter by issue area
-curl "${API_BASE}/stories?issueSlug=planet-climate"`}</code>
+curl "${API_BASE}/stories?issueSlug=planet-climate"
+
+# Poll for new high-signal stories: rated 7+ and published since your last check
+curl "${API_BASE}/stories?publishedSince=2026-10-01T00:00:00Z&minRelevance=7"`}</code>
           </pre>
           <p className="text-sm text-neutral-500 mt-3">
             These endpoints return JSON. Use curl, fetch(), or an API client. The responses won't
@@ -313,28 +327,33 @@ curl "${API_BASE}/stories?issueSlug=planet-climate"`}</code>
             <li>
               Human Development:{' '}
               <span className="text-brand-700">
-                {API_BASE}/feed?issueSlug=human-development
+                {API_BASE}/feed/human-development
               </span>
             </li>
             <li>
               Planet & Climate:{' '}
               <span className="text-brand-700">
-                {API_BASE}/feed?issueSlug=planet-climate
+                {API_BASE}/feed/planet-climate
               </span>
             </li>
             <li>
               Existential Threats:{' '}
               <span className="text-brand-700">
-                {API_BASE}/feed?issueSlug=existential-threats
+                {API_BASE}/feed/existential-threats
               </span>
             </li>
             <li>
               Science & Technology:{' '}
               <span className="text-brand-700">
-                {API_BASE}/feed?issueSlug=science-technology
+                {API_BASE}/feed/science-technology
               </span>
             </li>
           </ul>
+          <p className="mt-3">
+            Only want the most significant stories? Add <code>?minRelevance=7</code> to any feed,
+            for example{' '}
+            <span className="font-mono text-sm text-brand-700">{API_BASE}/feed/planet-climate?minRelevance=7</span>.
+          </p>
 
           {/* Widgets */}
           <h2 className="section-heading mt-10">Embeddable Widgets</h2>

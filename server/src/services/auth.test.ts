@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import bcrypt from 'bcryptjs'
 
 const mockPrisma = vi.hoisted(() => ({
   refreshToken: {
@@ -32,6 +33,7 @@ afterEach(() => {
 const {
   hashPassword,
   verifyPassword,
+  verifyLoginPassword,
   generateAccessToken,
   verifyAccessToken,
   generateRefreshToken,
@@ -53,6 +55,32 @@ describe('hashPassword / verifyPassword', () => {
   it('rejects wrong password', async () => {
     const hash = await hashPassword('correct-password')
     expect(await verifyPassword('wrong-password', hash)).toBe(false)
+  })
+
+  it('hashes at the configured cost', async () => {
+    const hash = await hashPassword('pw')
+    expect(hash.split('$')[2]).toBe(String(config.auth.bcryptRounds))
+  })
+})
+
+describe('verifyLoginPassword', () => {
+  it("checks the account's hash", async () => {
+    const hash = await hashPassword('right')
+    expect(await verifyLoginPassword('right', hash)).toBe(true)
+    expect(await verifyLoginPassword('wrong', hash)).toBe(false)
+  })
+
+  it('still runs a bcrypt comparison when there is no account, and refuses', async () => {
+    const compare = vi.spyOn(bcrypt, 'compare')
+    try {
+      expect(await verifyLoginPassword('anything', null)).toBe(false)
+      expect(await verifyLoginPassword('anything', undefined)).toBe(false)
+      expect(compare).toHaveBeenCalledTimes(2)
+      // Against a real hash at the same cost as stored passwords, so it takes as long
+      expect(String(compare.mock.calls[0][1]).split('$')[2]).toBe(String(config.auth.bcryptRounds))
+    } finally {
+      compare.mockRestore()
+    }
   })
 })
 

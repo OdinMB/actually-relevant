@@ -1,4 +1,4 @@
-import { AtpAgent, RichText } from '@atproto/api'
+import { AppBskyEmbedExternal, AppBskyFeedDefs, AtpAgent, RichText, type AppBskyFeedGetAuthorFeed, type BlobRef } from '@atproto/api'
 import { config } from '../config.js'
 import { createLogger } from './logger.js'
 import { withRetry } from './retry.js'
@@ -47,7 +47,8 @@ async function withSessionRetry<T>(fn: (agent: AtpAgent) => Promise<T>): Promise
       try {
         return await fn(a)
       } catch (err: unknown) {
-        const status = (err as any)?.status ?? (err as any)?.response?.status
+        const e = err as { status?: unknown; response?: { status?: unknown } } | null
+        const status = e?.status ?? e?.response?.status
         if (status === 401) {
           log.warn('Bluesky session expired, re-authenticating')
           resetSession()
@@ -117,7 +118,7 @@ export async function createPost(
     }
 
     // Build external embed (link card)
-    let thumb: any
+    let thumb: BlobRef | undefined
     if (linkCard.thumbUrl) {
       try {
         const MAX_OG_IMAGE_BYTES = 1_000_000 // Bluesky max blob size
@@ -155,22 +156,19 @@ export async function createPost(
       }
     }
 
-    const external: any = {
+    const external: AppBskyEmbedExternal.External = {
       uri: linkCard.uri,
       title: linkCard.title,
       description: linkCard.description,
+      ...(thumb ? { thumb } : {}),
     }
-    if (thumb) external.thumb = thumb
 
     log.info({ textLength: fullText.length, linkCard: linkCard.uri }, 'creating Bluesky post')
 
     const result = await a.post({
       text: rt.text,
       facets: rt.facets,
-      embed: {
-        $type: 'app.bsky.embed.external' as const,
-        external,
-      } as any,
+      embed: { $type: 'app.bsky.embed.external', external },
       createdAt: new Date().toISOString(),
     })
 
@@ -197,9 +195,9 @@ export interface PostMetrics {
 export async function getPostMetrics(postUri: string): Promise<PostMetrics> {
   return withSessionRetry(async (a) => {
     const response = await a.getPostThread({ uri: postUri, depth: 0 })
-    const thread = response.data.thread as any
+    const thread = response.data.thread
 
-    if (thread.$type !== 'app.bsky.feed.defs#threadViewPost') {
+    if (!AppBskyFeedDefs.isThreadViewPost(thread)) {
       throw new Error(`Unexpected thread type: ${thread.$type}`)
     }
 
@@ -264,39 +262,38 @@ export async function getAuthorFeed(
   limit = 25,
 ): Promise<AuthorFeedResult> {
   return withSessionRetry(async (a) => {
-    const params: Record<string, unknown> = {
+    const params: AppBskyFeedGetAuthorFeed.QueryParams = {
       actor: config.bluesky.handle,
       limit,
       filter: 'posts_no_replies',
+      ...(cursor ? { cursor } : {}),
     }
-    if (cursor) params.cursor = cursor
 
     log.info({ limit, cursor: cursor ?? null }, 'fetching Bluesky author feed')
-    const response = await a.getAuthorFeed(params as any)
+    const response = await a.getAuthorFeed(params)
 
     const items: AuthorFeedItem[] = response.data.feed.map((entry) => {
-      const post = entry.post as any
-      const record = post.record as any
-      const isRepost = entry.reason?.$type === 'app.bsky.feed.defs#reasonRepost'
+      const post = entry.post
+      const record = post.record // an open record ({ [key]: unknown }): read only string fields
+      const isRepost = AppBskyFeedDefs.isReasonRepost(entry.reason)
 
       // Extract external embed if present
       let embed: AuthorFeedItem['embed']
-      const embedData = post.embed
-      if (embedData?.$type === 'app.bsky.embed.external#view') {
-        const ext = embedData.external
+      if (AppBskyEmbedExternal.isView(post.embed)) {
+        const ext = post.embed.external
         embed = {
-          uri: ext?.uri,
-          title: ext?.title,
-          description: ext?.description,
-          thumbUrl: ext?.thumb,
+          uri: ext.uri,
+          title: ext.title,
+          description: ext.description,
+          thumbUrl: ext.thumb,
         }
       }
 
       return {
         uri: post.uri,
         cid: post.cid,
-        text: record?.text ?? '',
-        createdAt: record?.createdAt ?? post.indexedAt,
+        text: typeof record.text === 'string' ? record.text : '',
+        createdAt: typeof record.createdAt === 'string' ? record.createdAt : post.indexedAt,
         indexedAt: post.indexedAt,
         likeCount: post.likeCount ?? 0,
         repostCount: post.repostCount ?? 0,

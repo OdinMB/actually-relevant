@@ -1,159 +1,80 @@
 import { Router } from 'express'
-import { createLogger } from '../../lib/logger.js'
 import * as feedService from '../../services/feed.js'
 import { fetchFavicon, fetchAllFavicons } from '../../services/favicon.js'
 import { crawlFeed, crawlAllDueFeeds } from '../../services/crawler.js'
 import { validateBody } from '../../middleware/validate.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import { createFeedSchema, updateFeedSchema } from '../../schemas/feed.js'
 
+// Errors: an issueId naming no issue is a BadRequestError (400) from the feed service; the global
+// handler in app.ts answers it, and failsWith() names each route's 500 and Prisma texts.
 const router = Router()
-const log = createLogger('feeds')
+const feedErrors = { notFound: 'Feed not found', duplicate: 'A feed with this RSS URL already exists' }
 
-router.get('/', async (req, res) => {
-  try {
-    const filters: { issueId?: string; active?: boolean } = {}
-    if (req.query.issueId) filters.issueId = req.query.issueId as string
-    if (req.query.active !== undefined) filters.active = req.query.active === 'true'
-    const feeds = await feedService.getFeeds(filters)
-    res.json(feeds)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch feeds')
-    res.status(500).json({ error: 'Failed to fetch feeds' })
-  }
+router.get('/', failsWith('Failed to fetch feeds'), async (req, res) => {
+  const filters: { issueId?: string; active?: boolean } = {}
+  if (req.query.issueId) filters.issueId = req.query.issueId as string
+  if (req.query.active !== undefined) filters.active = req.query.active === 'true'
+  res.json(await feedService.getFeeds(filters))
 })
 
-router.get('/quality', async (_req, res) => {
-  try {
-    const metrics = await feedService.getAllFeedQualityMetrics()
-    // Convert Map to plain object for JSON serialization
-    const obj: Record<string, feedService.FeedQualityMetrics> = {}
-    for (const [id, m] of metrics) obj[id] = m
-    res.json(obj)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch feed quality metrics')
-    res.status(500).json({ error: 'Failed to fetch quality metrics' })
-  }
+router.get('/quality', failsWith('Failed to fetch quality metrics'), async (_req, res) => {
+  const metrics = await feedService.getAllFeedQualityMetrics()
+  // Convert Map to plain object for JSON serialization
+  const obj: Record<string, feedService.FeedQualityMetrics> = {}
+  for (const [id, m] of metrics) obj[id] = m
+  res.json(obj)
 })
 
-router.get('/:id', async (req, res) => {
-  try {
-    const feed = await feedService.getFeedById(req.params.id)
-    if (!feed) {
-      res.status(404).json({ error: 'Feed not found' })
-      return
-    }
-    res.json(feed)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch feed')
-    res.status(500).json({ error: 'Failed to fetch feed' })
+router.get('/:id', failsWith('Failed to fetch feed'), async (req, res) => {
+  const feed = await feedService.getFeedById(req.params.id)
+  if (!feed) {
+    res.status(404).json({ error: 'Feed not found' })
+    return
   }
+  res.json(feed)
 })
 
-router.post('/', validateBody(createFeedSchema), async (req, res) => {
-  try {
-    const feed = await feedService.createFeed(req.body)
-    res.status(201).json(feed)
-  } catch (err: any) {
-    if (err.message === 'Issue not found') {
-      res.status(400).json({ error: err.message })
-      return
-    }
-    if (err.code === 'P2002') {
-      res.status(409).json({ error: 'A feed with this RSS URL already exists' })
-      return
-    }
-    log.error({ err }, 'failed to create feed')
-    res.status(500).json({ error: 'Failed to create feed' })
-  }
+router.post('/', failsWith('Failed to create feed', feedErrors), validateBody(createFeedSchema), async (req, res) => {
+  res.status(201).json(await feedService.createFeed(req.body))
 })
 
-router.put('/:id', validateBody(updateFeedSchema), async (req, res) => {
-  try {
-    const feed = await feedService.updateFeed(req.params.id, req.body)
-    res.json(feed)
-  } catch (err: any) {
-    if (err.message === 'Issue not found') {
-      res.status(400).json({ error: err.message })
-      return
-    }
-    if (err.code === 'P2025') {
-      res.status(404).json({ error: 'Feed not found' })
-      return
-    }
-    if (err.code === 'P2002') {
-      res.status(409).json({ error: 'A feed with this RSS URL already exists' })
-      return
-    }
-    log.error({ err }, 'failed to update feed')
-    res.status(500).json({ error: 'Failed to update feed' })
-  }
+router.put('/:id', failsWith('Failed to update feed', feedErrors), validateBody(updateFeedSchema), async (req, res) => {
+  res.json(await feedService.updateFeed(req.params.id, req.body))
 })
 
-router.delete('/:id', async (req, res) => {
-  try {
-    const result = await feedService.deleteFeed(req.params.id)
-    const message = result.action === 'deleted'
-      ? 'Feed deleted'
-      : 'Feed deactivated (has linked stories)'
-    res.json({ action: result.action, message })
-  } catch (err: any) {
-    if (err.code === 'P2025') {
-      res.status(404).json({ error: 'Feed not found' })
-      return
-    }
-    log.error({ err }, 'failed to delete feed')
-    res.status(500).json({ error: 'Failed to delete feed' })
-  }
+router.delete('/:id', failsWith('Failed to delete feed', feedErrors), async (req, res) => {
+  const result = await feedService.deleteFeed(req.params.id)
+  const message = result.action === 'deleted'
+    ? 'Feed deleted'
+    : 'Feed deactivated (has linked stories)'
+  res.json({ action: result.action, message })
 })
 
-router.post('/:id/crawl', async (req, res) => {
-  try {
-    const feed = await feedService.getFeedById(req.params.id)
-    if (!feed) {
-      res.status(404).json({ error: 'Feed not found' })
-      return
-    }
-    const result = await crawlFeed(req.params.id)
-    res.json(result)
-  } catch (err) {
-    log.error({ err }, 'failed to crawl feed')
-    res.status(500).json({ error: 'Failed to crawl feed' })
+router.post('/:id/crawl', failsWith('Failed to crawl feed'), async (req, res) => {
+  const feed = await feedService.getFeedById(req.params.id)
+  if (!feed) {
+    res.status(404).json({ error: 'Feed not found' })
+    return
   }
+  res.json(await crawlFeed(req.params.id))
 })
 
-router.post('/:id/favicon', async (req, res) => {
-  try {
-    const feed = await feedService.getFeedById(req.params.id)
-    if (!feed) {
-      res.status(404).json({ error: 'Feed not found' })
-      return
-    }
-    const result = await fetchFavicon(feed.id, feed.rssUrl, feed.url, true)
-    res.json(result)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch favicon')
-    res.status(500).json({ error: 'Failed to fetch favicon' })
+router.post('/:id/favicon', failsWith('Failed to fetch favicon'), async (req, res) => {
+  const feed = await feedService.getFeedById(req.params.id)
+  if (!feed) {
+    res.status(404).json({ error: 'Feed not found' })
+    return
   }
+  res.json(await fetchFavicon(feed.id, feed.rssUrl, feed.url, true))
 })
 
-router.post('/fetch-favicons', async (_req, res) => {
-  try {
-    const result = await fetchAllFavicons()
-    res.json(result)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch favicons')
-    res.status(500).json({ error: 'Failed to fetch favicons' })
-  }
+router.post('/fetch-favicons', failsWith('Failed to fetch favicons'), async (_req, res) => {
+  res.json(await fetchAllFavicons())
 })
 
-router.post('/crawl-all', async (_req, res) => {
-  try {
-    const results = await crawlAllDueFeeds()
-    res.json(results)
-  } catch (err) {
-    log.error({ err }, 'failed to crawl all feeds')
-    res.status(500).json({ error: 'Failed to crawl feeds' })
-  }
+router.post('/crawl-all', failsWith('Failed to crawl feeds'), async (_req, res) => {
+  res.json(await crawlAllDueFeeds())
 })
 
 export default router

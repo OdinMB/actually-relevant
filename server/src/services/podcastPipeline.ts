@@ -252,7 +252,7 @@ export interface RewindOptions {
 
 const AUDIO_CLEARED = {
   ttsModelId: null, voiceIds: Prisma.DbNull, audioUrl: null, audioPath: null, transcriptUrl: null, transcriptPath: null,
-  audioBytes: null, durationSec: null, readyAt: null,
+  chaptersUrl: null, chaptersPath: null, audioBytes: null, durationSec: null, readyAt: null,
 } satisfies Prisma.PodcastUpdateManyMutationInput
 
 const SCRIPT_CLEARED = {
@@ -298,7 +298,7 @@ async function rewindHeld(episode: Podcast, to: RewindTarget, opts: RewindOption
 /**
  * Take an episode back to an earlier stage under its lease (ADR-0008). Refuses an episode in
  * progress, a legacy or published one, and a target that is not before the stage. The previous
- * MP3 and VTT are deleted best-effort afterwards (a new render always gets a new file name).
+ * MP3, VTT and chapters are deleted best-effort afterwards (a new render always gets a new file name).
  */
 export async function rewindEpisode(id: string, to: RewindTarget, opts: RewindOptions): Promise<void> {
   const previous = opts.leaseHeld

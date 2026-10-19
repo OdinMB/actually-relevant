@@ -16,6 +16,7 @@ import type { Guidelines } from '../prompts/shared.js'
 import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
 import { saveEmbeddingTx } from '../lib/vectors.js'
+import { NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('analysis')
 
@@ -259,7 +260,7 @@ export async function assessStory(storyId: string): Promise<void> {
     where: { id: storyId },
     include: { issue: true, feed: { include: { issue: true } } },
   })
-  if (!story) throw new Error('Story not found')
+  if (!story) throw new NotFoundError('Story not found')
 
   log.info({ storyId, title: story.sourceTitle?.slice(0, 80) }, 'assessing story')
 

@@ -269,7 +269,7 @@ describe('rewindEpisode', () => {
   beforeEach(setUp)
 
   const ready = () => episode('ready', { weekKey: '2026-W41', audioPath: 'episodes/2026-W41-aaaa.mp3', transcriptPath: 'episodes/2026-W41-aaaa.vtt', humanEdited: true })
-  const audioCleared = { audioUrl: null, audioPath: null, transcriptUrl: null, transcriptPath: null, audioBytes: null, durationSec: null, readyAt: null, ttsModelId: null }
+  const audioCleared = { audioUrl: null, audioPath: null, transcriptUrl: null, transcriptPath: null, chaptersUrl: null, chaptersPath: null, audioBytes: null, durationSec: null, readyAt: null, ttsModelId: null }
 
   it('to scripted clears only the audio, draws a fresh seed, deletes the chunks and the old objects', async () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready())

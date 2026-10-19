@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import indexHtml from '../../index.html?raw'
-import { buildArticleSchema, buildPodcastEpisodeSchema } from './structured-data'
+import { buildArticleSchema, buildPodcastEpisodeSchema, toJsonLd } from './structured-data'
 import { makeStory } from '../test/stories'
 
 describe('buildArticleSchema', () => {
@@ -32,5 +32,19 @@ describe('app shell author metadata (story routes are not prerendered, so crawle
   it('names the project, not a person, as the author', () => {
     expect(doc.querySelector('meta[name="author"]')?.getAttribute('content')).toBe('Actually Relevant')
     expect(doc.querySelector('meta[property="article:author"]')?.getAttribute('content')).toBe('Actually Relevant')
+  })
+})
+
+describe('toJsonLd', () => {
+  const hostile = { headline: '</script><script>alert(1)</script> & more', note: 'line\u2028sep\u2029para' }
+
+  it('leaves no character that can end the script element or break a JS parser', () => {
+    const out = toJsonLd(hostile)
+    expect(out).not.toMatch(/[<>&\u2028\u2029]/)
+    expect(out).toContain('\\u003c/script\\u003e')
+  })
+
+  it('parses back to the same value', () => {
+    expect(JSON.parse(toJsonLd(hostile))).toEqual(hostile)
   })
 })

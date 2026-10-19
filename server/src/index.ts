@@ -1,6 +1,6 @@
 import prisma from './lib/prisma.js'
 import { createLogger } from './lib/logger.js'
-import { startScheduler, stopScheduler } from './jobs/scheduler.js'
+import { startScheduler, stopScheduler, waitForRunningJobs } from './jobs/scheduler.js'
 import { releaseHeldJobLeases } from './jobs/jobLease.js'
 import { config } from './config.js'
 import { cleanupExpiredTokens } from './services/auth.js'
@@ -77,10 +77,17 @@ export async function shutdown(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS))
   }
 
-  // 4. Clean up task registry
+  // 4. Wait for scheduled jobs this process is running (a crawl, a newsletter build, a cleanup batch),
+  // within the same deadline, so a deploy does not cut one between its steps
+  const stillRunning = await waitForRunningJobs(drainDeadline - Date.now())
+  if (stillRunning.length > 0) {
+    log.warn({ jobs: stillRunning }, 'job drain timeout exceeded, proceeding with shutdown')
+  }
+
+  // 5. Clean up task registry
   taskRegistry.destroy()
 
-  // 5. Hand back podcast leases, so the next process can resume an episode at once ...
+  // 6. Hand back podcast leases, so the next process can resume an episode at once ...
   try {
     const released = await releaseHeldLeases()
     if (released > 0) log.info({ released }, 'released podcast leases')
@@ -95,7 +102,7 @@ export async function shutdown(): Promise<void> {
     log.error({ err }, 'failed to release job leases')
   }
 
-  // 6. Disconnect database
+  // 7. Disconnect database
   await prisma.$disconnect()
 
   log.info('graceful shutdown complete')

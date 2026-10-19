@@ -161,13 +161,11 @@ export async function getAccountStatuses(
 
       log.info({ limit, maxId: maxId ?? null }, 'fetching Mastodon account statuses')
 
-      const params: Record<string, unknown> = {
+      const statuses = await c.v1.accounts.$select(account.id).statuses.list({
         limit,
         excludeReplies: true,
-      }
-      if (maxId) params.maxId = maxId
-
-      const statuses = await c.v1.accounts.$select(account.id).statuses.list(params as any)
+        ...(maxId ? { maxId } : {}),
+      })
 
       const items: AccountStatusItem[] = statuses.map((s) => ({
         id: s.id,

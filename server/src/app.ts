@@ -5,9 +5,10 @@ import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import helmet from 'helmet'
 import { randomUUID } from 'crypto'
-import type { Request, Response, NextFunction } from 'express'
+import type { Request, Response } from 'express'
 import { createLogger } from './lib/logger.js'
 import { config } from './config.js'
+import { errorHandler } from './middleware/routeErrors.js'
 import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import adminRouter from './routes/admin/index.js'
@@ -49,9 +50,11 @@ const allowedOrigins = [
 // Open CORS for public read-only endpoints (widget/embed API calls from any origin).
 // /api/subscribe/token is included: it's an anonymous, side-effect-free GET the
 // public signup form must fetch on render (the state-changing POSTs stay restricted below).
-const publicReadPaths = ['/api/stories', '/api/issues', '/api/homepage', '/api/feed', '/api/docs', '/api/subscribe/token', '/api/podcast']
+const publicReadPaths = ['/api/stories', '/api/issues', '/api/homepage', '/api/feed', '/api/docs', '/api/subscribe/token', '/api/podcast', '/api/newsletters']
+// A path or one of its sub-paths, never a mere string prefix (/api/feed must not open /api/feedback).
+const isPublicReadPath = (path: string) => publicReadPaths.some(p => path === p || path.startsWith(p + '/'))
 app.use((req, res, next) => {
-  if (publicReadPaths.some(p => req.path.startsWith(p))) {
+  if (isPublicReadPath(req.path)) {
     res.set('Access-Control-Allow-Origin', '*')
     res.set('Access-Control-Allow-Methods', 'GET')
     res.set('Access-Control-Allow-Headers', 'Content-Type')
@@ -74,9 +77,14 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '100kb' }))
 app.use(cookieParser())
 
-// Request ID — inherit from header or generate
+// Request ID: inherit a well-formed one from the header (a proxy's trace id), else generate. The
+// value is echoed in a response header and written to logs, so anything else is replaced.
+const REQUEST_ID_RE = /^[A-Za-z0-9._-]{1,64}$/
+export function requestIdFrom(header: string | string[] | undefined): string {
+  return typeof header === 'string' && REQUEST_ID_RE.test(header) ? header : randomUUID()
+}
 app.use((req, res, next) => {
-  req.id = (req.headers['x-request-id'] as string) || randomUUID()
+  req.id = requestIdFrom(req.headers['x-request-id'])
   res.set('X-Request-Id', req.id)
   next()
 })
@@ -106,33 +114,8 @@ app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Not found' })
 })
 
-// Global error handler — must be last middleware (4 parameters required)
-app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-  const log = createLogger('http')
-
-  // Prisma known request errors
-  if (err?.constructor?.name === 'PrismaClientKnownRequestError') {
-    if (err.code === 'P2025') {
-      res.status(404).json({ error: 'Not found' })
-      return
-    }
-    if (err.code === 'P2002') {
-      res.status(409).json({ error: 'Already exists' })
-      return
-    }
-  }
-
-  // Known service errors
-  if (err instanceof Error) {
-    const notFoundMessages = ['Feed not found', 'Story not found', 'User not found', 'Issue not found']
-    if (notFoundMessages.includes(err.message)) {
-      res.status(404).json({ error: err.message })
-      return
-    }
-  }
-
-  log.error({ err, method: req.method, url: req.originalUrl }, 'unhandled error')
-  res.status(500).json({ error: 'Internal server error' })
-})
+// Global error handler — must be last middleware. The one place a thrown error becomes a response
+// (middleware/routeErrors.ts; .context/server-conventions.md, "Route errors").
+app.use(errorHandler)
 
 export default app

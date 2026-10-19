@@ -14,8 +14,11 @@ import { textToDialogue, ElevenLabsQuotaError } from '../lib/elevenlabs.js'
 import { assembleEpisodeMp3, cbrDurationMs, silentMp3 } from '../lib/podcastAudio.js'
 import { deleteObject, isBunnyConfigured, publicUrl, putObject } from '../lib/bunnyStorage.js'
 import type { PodcastDialogue } from '../schemas/llm.js'
-import { assembleSpokenSegments } from './podcastDialogue.js'
-import { buildTranscriptVtt, chunkChars, chunkContinuity, chunkTurns, type Chunk } from './podcastChunks.js'
+import { assembleSpokenSegments, type SpokenSegment } from './podcastDialogue.js'
+import {
+  buildChapters, buildTranscriptVtt, chunkChars, chunkContinuity, chunkTurns, type ChapterStory, type Chunk,
+} from './podcastChunks.js'
+import type { EpisodeStory } from './podcastScript.js'
 import { assertBalanceCovers, assertJobEnabled, PodcastBlockedError, reserveTtsChars, standaloneCopyRefusal } from './podcastGuards.js'
 
 const log = createLogger('podcast-audio')
@@ -49,15 +52,32 @@ export type AudioStageWrite = {
   audioPath?: string
   transcriptUrl?: string
   transcriptPath?: string
+  chaptersUrl?: string
+  chaptersPath?: string
   audioBytes?: number
   durationSec?: number
   readyAt?: Date
 }
 
+/** The episode as spoken: the stored dialogue with the kind's opener and sign-off. */
+function episodeSegments(episode: Pick<Podcast, 'id' | 'dialogue' | 'kind'>): SpokenSegment[] {
+  if (!episode.dialogue) throw new Error(`podcast ${episode.id} has no dialogue to voice`)
+  return assembleSpokenSegments(episode.dialogue as unknown as PodcastDialogue, episode.kind)
+}
+
 /** The episode's TTS chunks, rebuilt from the stored dialogue (deterministic, so a resume matches). */
 export function episodeChunks(episode: Pick<Podcast, 'id' | 'dialogue' | 'kind'>): Chunk[] {
-  if (!episode.dialogue) throw new Error(`podcast ${episode.id} has no dialogue to voice`)
-  return chunkTurns(assembleSpokenSegments(episode.dialogue as unknown as PodcastDialogue, episode.kind), config.podcast.chunkMaxChars)
+  return chunkTurns(episodeSegments(episode), config.podcast.chunkMaxChars)
+}
+
+/** The stories as the chapters name and link them: the frozen headline and our story page. */
+function chapterStories(episode: Pick<Podcast, 'episodeStories'>): ChapterStory[] {
+  if (!Array.isArray(episode.episodeStories)) return []
+  return (episode.episodeStories as EpisodeStory[]).map(s => ({
+    ref: s.ref,
+    title: s.title,
+    url: s.slug ? `${config.siteUrl}/stories/${s.slug}` : null,
+  }))
 }
 
 const voiceFor = (speaker: 'HOST_A' | 'HOST_B') => (speaker === 'HOST_A' ? config.podcast.voiceIdA : config.podcast.voiceIdB)
@@ -125,20 +145,23 @@ export function episodeObjectBase(episode: Pick<Podcast, 'id' | 'weekKey' | 'dry
 }
 
 /**
- * Remove an episode's uploaded MP3 and VTT. Best-effort: a failure leaves an unreferenced file on
- * the CDN, which is logged, never fatal (a new render always gets a new name).
+ * Remove an episode's uploaded MP3, VTT and chapters. Best-effort: a failure leaves an unreferenced
+ * file on the CDN, which is logged, never fatal (a new render always gets a new name).
  */
-export async function deleteEpisodeObjects(episode: Pick<Podcast, 'id' | 'audioPath' | 'transcriptPath'>): Promise<void> {
-  for (const path of [episode.audioPath, episode.transcriptPath]) {
+export async function deleteEpisodeObjects(
+  episode: Pick<Podcast, 'id' | 'audioPath' | 'transcriptPath'> & Partial<Pick<Podcast, 'chaptersPath'>>,
+): Promise<void> {
+  for (const path of [episode.audioPath, episode.transcriptPath, episode.chaptersPath]) {
     if (!path) continue
     await deleteObject(path).catch(err => log.warn({ err, podcastId: episode.id, path }, 'could not delete a podcast object from storage'))
   }
 }
 
-/** voiced → ready: assemble the MP3, build the VTT, upload both under a fresh name. */
+/** voiced → ready: assemble the MP3, build the VTT and the chapters, upload all three under a fresh name. */
 export async function finishEpisode(episode: Podcast, ctx: AudioStageContext): Promise<AudioStageWrite> {
   if (!isBunnyConfigured()) throw new Error('storage not configured: set BUNNY_STORAGE_ZONE and BUNNY_STORAGE_PASSWORD')
-  const chunks = episodeChunks(episode)
+  const segments = episodeSegments(episode)
+  const chunks = chunkTurns(segments, config.podcast.chunkMaxChars)
   const rows = await prisma.podcastAudioChunk.findMany({ where: { podcastId: episode.id }, orderBy: { index: 'asc' } })
   if (rows.length !== chunks.length || rows.some((r, i) => r.index !== i)) {
     throw new Error(`podcast ${episode.id} has ${rows.length} stored chunks for ${chunks.length} expected; regenerate the episode`)
@@ -147,15 +170,19 @@ export async function finishEpisode(episode: Podcast, ctx: AudioStageContext): P
   const pauseMs = config.podcast.segmentPauseMs
   const tags = { title: episode.title, artist: config.podcast.showTitle, album: config.podcast.showTitle, comment: podcastEpisodeAiLine(episode.humanEdited, episode.kind) }
   const { buffer, durationSec } = await assembleEpisodeMp3(rows.map(r => Buffer.from(r.bytes)), tags, { pauseMs, loudnorm: !episode.dryRun })
-  const vtt = buildTranscriptVtt(chunks, rows.map(r => r.durationMs), pauseMs)
+  const durationsMs = rows.map(r => r.durationMs)
+  const vtt = buildTranscriptVtt(chunks, durationsMs, pauseMs)
+  const chapters = buildChapters(segments, chunks, durationsMs, pauseMs, chapterStories(episode))
 
   const base = episodeObjectBase(episode)
   const audioPath = `${base}.mp3`
   const transcriptPath = `${base}.vtt`
+  const chaptersPath = `${base}.chapters.json`
   await ctx.renewLease()
   await putObject(audioPath, buffer, 'audio/mpeg')
   await putObject(transcriptPath, Buffer.from(vtt, 'utf8'), 'text/vtt')
-  log.info({ podcastId: episode.id, audioPath, bytes: buffer.length, durationSec }, 'podcast audio uploaded')
+  await putObject(chaptersPath, Buffer.from(JSON.stringify(chapters), 'utf8'), 'application/json')
+  log.info({ podcastId: episode.id, audioPath, bytes: buffer.length, durationSec, chapters: chapters.chapters.length }, 'podcast audio uploaded')
 
   return {
     stage: PodcastStage.ready,
@@ -163,6 +190,8 @@ export async function finishEpisode(episode: Podcast, ctx: AudioStageContext): P
     audioPath,
     transcriptUrl: publicUrl(transcriptPath),
     transcriptPath,
+    chaptersUrl: publicUrl(chaptersPath),
+    chaptersPath,
     audioBytes: buffer.length,
     durationSec,
     readyAt: new Date(),

@@ -31,6 +31,18 @@ log.debug({ storyId, rating }, 'pre-assessment result')
 5. **Numeric/ID values** go in the data object, not interpolated into the message
 6. **Axios errors**: For error sites in HTTP-heavy code (crawl, RSS), prefer `{ reason: summarizeError(err) }` over `{ err }` to avoid serializing bulky response bodies. Import `summarizeError` from `server/src/utils/errors.ts`
 
+## Personal data
+
+Logs never carry an email address, IP address or other identifier of a person in readable form. They go to stdout (Render's log aggregator) and to rotating files kept for `LOG_RETENTION_DAYS`, outside every retention rule and deletion request the database follows.
+
+- **Log a row id, not the person.** Subscription code logs `subscriptionId` (the `pending_subscriptions` row) and `plunkContactId`; whoever needs the address looks it up by id in the database, where deletion applies.
+- **Log a flag when only presence matters**: `hasEmail: !!email` (feedback).
+- **No home-made hash of an address in logs.** An unkeyed hash of an email or IP is reversible by guessing (the reason for the keyed IP hash, ADR-0037); if correlation ever needs one, use an HMAC under a secret, as `lib/feedbackIpHash.ts` does.
+- **Log the fields you need from a third-party response**, never the whole body when it may echo the address (Plunk's verify result logs `valid`, `domainExists`, `isDisposable` only).
+- Secrets in links (a confirmation token) are not logged either.
+
+`plunk.test.ts` and `subscribe.test.ts` assert that no logged call contains the address. CLI scripts in `server/src/scripts/` print to the operator's terminal and are outside this rule, but keep addresses out of output that gets pasted elsewhere.
+
 ## Configuration
 
 | Environment Variable | Default | Description |

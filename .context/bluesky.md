@@ -25,9 +25,9 @@ Bluesky posts are limited to 300 graphemes. The LLM text max chars are calculate
 
 ### Link Card Thumbnail
 
-Bluesky does **not** auto-fetch og: metadata from URLs. The link card (title, description, thumbnail) is constructed at publish time in `publishPost()` (`server/src/services/bluesky.ts`). The thumbnail image is fetched from a hardcoded URL, uploaded as a blob to Bluesky, and attached to the embed.
+Bluesky does **not** auto-fetch og: metadata from URLs. The link card (title, description, thumbnail) is constructed at publish time in `publishPost()` (`server/src/services/bluesky.ts`). The thumbnail image is fetched, uploaded as a blob to Bluesky, and attached to the embed; if the fetch fails, the post goes out without a thumbnail.
 
-**Current behavior:** All posts use the global `/images/og-image.png` (served from `client/public/images/`; `bluesky.test.ts` checks the file exists). When per-story og:images are implemented, `publishPost()` must be updated to use the story-specific og:image URL instead. See also `.context/seo.md`.
+**Thumbnail:** the story's own 1200x630 preview image, `GET /api/stories/:slug/og.png` on the API host (`storyOgImageUrl()` in `server/src/lib/storyPreviewUrls.ts`), the same image as the story page's `og:image`. It carries "AI-generated" in its pixels. A story without a slug falls back to the global `/images/og-image.png` (served from `client/public/images/`; `bluesky.test.ts` checks the file exists). See `.context/seo.md`, "Story link previews".
 
 ## Flows
 
@@ -146,11 +146,11 @@ Both use the `medium` model tier (configured separately as `postModelTier` and `
 | `server/src/services/bluesky.ts` | Service layer (draft generation, publishing, metrics) |
 | `server/src/schemas/bluesky.ts` | Zod schemas for LLM output and API validation |
 | `server/src/prompts/bluesky.ts` | LLM prompt builders |
-| `server/src/routes/admin/bluesky.ts` | Admin API routes |
+| `server/src/routes/admin/bluesky.ts` | Admin API routes: the shared `socialChannelRouter` (`routes/admin/socialChannel.ts`) with Bluesky's service and schemas |
 | `server/src/jobs/socialAutoPost.ts` | Unified auto-post cron job for all channels |
 | `server/src/jobs/blueskyUpdateMetrics.ts` | Metrics polling cron job handler |
 | `server/src/config.ts` | Configuration (bluesky section) |
 | `server/prisma/schema.prisma` | BlueskyPost model |
-| `client/src/components/admin/BlueskyDraftPanel.tsx` | Draft review side panel |
-| `client/src/pages/admin/BlueskyPage.tsx` | Admin Bluesky overview page |
+| `client/src/components/admin/BlueskyDraftPanel.tsx` | Draft review side panel: Bluesky's limit, grapheme count and link preview on the shared `social/SocialDraftPanel.tsx` |
+| `client/src/pages/admin/BlueskyPage.tsx` | Admin Bluesky overview page: Bluesky's API calls and item fields on the shared `components/admin/social/SocialChannelPage.tsx` (shared with Mastodon) |
 | `client/src/components/admin/BulkActionsBar.tsx` | Bluesky action buttons |

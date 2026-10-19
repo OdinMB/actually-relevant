@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('openai', () => {
   const mockCreate = vi.fn()
+  const constructorOptions: unknown[] = []
   return {
     default: class OpenAI {
       embeddings = { create: mockCreate }
+      constructor(options?: unknown) {
+        constructorOptions.push(options)
+      }
     },
     __mockCreate: mockCreate,
+    __constructorOptions: constructorOptions,
   }
 })
 
@@ -15,10 +20,6 @@ vi.mock('../lib/prisma.js', () => ({
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
   },
-}))
-
-vi.mock('../lib/retry.js', () => ({
-  withRetry: (fn: () => Promise<unknown>) => fn(),
 }))
 
 const mockLogger = vi.hoisted(() => ({
@@ -54,6 +55,20 @@ const {
 // Access the mock through the module
 const openaiModule = await import('openai')
 const mockCreate = (openaiModule as any).__mockCreate as ReturnType<typeof vi.fn>
+const openaiConstructorOptions = (openaiModule as any).__constructorOptions as unknown[]
+
+describe('OpenAI embeddings client retries', () => {
+  it('lets the SDK retry, with the chat models\' 3 retries', () => {
+    expect(openaiConstructorOptions).toEqual([{ maxRetries: 3 }])
+  })
+
+  it('does not retry on top of the SDK: a failed request is made once', async () => {
+    vi.clearAllMocks()
+    mockCreate.mockRejectedValue(Object.assign(new Error('rate limited'), { status: 429 }))
+    await expect(generateEmbedding('text')).rejects.toThrow('rate limited')
+    expect(mockCreate).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('buildEmbeddingContent', () => {
   it('builds content with all fields present', () => {

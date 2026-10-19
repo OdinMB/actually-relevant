@@ -54,19 +54,37 @@ function wrapText(ctx: any, text: string, maxWidth: number): string[] {
   return lines
 }
 
-export function createStoryImage(story: CarouselStory): Buffer {
-  registerFonts()
+export interface ImageSize {
+  width: number
+  height: number
+}
 
-  const canvas = createCanvas(WIDTH, HEIGHT)
+/** The carousel slide's size (16:9). */
+export const CAROUSEL_SLIDE_SIZE: ImageSize = { width: WIDTH, height: HEIGHT }
+
+/** The size link previews use for og:image (1.91:1), for the per-story preview image. */
+export const OG_IMAGE_SIZE: ImageSize = { width: 1200, height: 630 }
+
+/**
+ * Render one story as a PNG: category header, AI headline, publisher and date, AI summary
+ * (cut to fit the height), and the pixel footer with the AI label. Marked as AI-generated
+ * with an XMP chunk. The carousel uses the default size; the og:image route passes
+ * OG_IMAGE_SIZE.
+ */
+export function createStoryImage(story: CarouselStory, size: ImageSize = CAROUSEL_SLIDE_SIZE): Buffer {
+  registerFonts()
+  const { width, height } = size
+
+  const canvas = createCanvas(width, height)
   const ctx = canvas.getContext('2d')
 
   // White background
   ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, WIDTH, HEIGHT)
+  ctx.fillRect(0, 0, width, height)
 
   // Header bar (colored rectangle)
   ctx.fillStyle = '#2563eb'
-  ctx.fillRect(0, 0, WIDTH, HEADER_HEIGHT)
+  ctx.fillRect(0, 0, width, HEADER_HEIGHT)
 
   // Header text (category name on the header)
   ctx.fillStyle = '#ffffff'
@@ -85,7 +103,7 @@ export function createStoryImage(story: CarouselStory): Buffer {
   // Title (bold, word-wrapped)
   ctx.fillStyle = '#000000'
   ctx.font = '30px InterBold, Arial, sans-serif'
-  const titleLines = wrapText(ctx, story.title, WIDTH - PADDING * 2)
+  const titleLines = wrapText(ctx, story.title, width - PADDING * 2)
   for (const line of titleLines) {
     ctx.fillText(line, PADDING, currentY)
     currentY += 42
@@ -113,9 +131,9 @@ export function createStoryImage(story: CarouselStory): Buffer {
   // Summary (word-wrapped)
   ctx.fillStyle = '#374151'
   ctx.font = '20px InterRegular, Arial, sans-serif'
-  const summaryLines = wrapText(ctx, story.summary, WIDTH - PADDING * 2)
+  const summaryLines = wrapText(ctx, story.summary, width - PADDING * 2)
   for (const line of summaryLines) {
-    if (currentY > HEIGHT - PADDING - 80) break // Leave room for logo area
+    if (currentY > height - PADDING - 80) break // Leave room for logo area
     ctx.fillText(line, PADDING, currentY)
     currentY += 30
   }
@@ -126,7 +144,7 @@ export function createStoryImage(story: CarouselStory): Buffer {
   ctx.fillStyle = '#6b7280'
   ctx.font = '14px InterRegular, Arial, sans-serif'
   ctx.textAlign = 'right'
-  ctx.fillText(CAROUSEL_COPY.slideFooter, WIDTH - PADDING, HEIGHT - PADDING / 2 - 10)
+  ctx.fillText(CAROUSEL_COPY.slideFooter, width - PADDING, height - PADDING / 2 - 10)
 
   // The slide renders AI-written headline and summary text: mark the file as AI-generated.
   return embedXmpInPng(canvas.toBuffer('image/png'), aiGeneratedXmpPacket())

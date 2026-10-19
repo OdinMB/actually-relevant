@@ -11,6 +11,8 @@ import { blueskyPostTextSchema, blueskyPickBestSchema } from '../schemas/bluesky
 import type { AuthorFeedResult } from '../lib/bluesky.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { buildMetaLine } from './socialPostFormat.js'
+import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
+import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('bluesky-service')
 
@@ -85,14 +87,14 @@ export async function generateDraft(storyId: string) {
     },
   })
 
-  if (!story) throw new Error('Story not found')
-  if (!story.title || !story.summary) throw new Error('Story must be fully analyzed (title and summary required)')
+  if (!story) throw new NotFoundError('Story not found')
+  if (!story.title || !story.summary) throw new BadRequestError('Story must be fully analyzed (title and summary required)')
 
   // Prevent duplicate posts
   const existingPost = await prisma.blueskyPost.findFirst({
     where: { storyId },
   })
-  if (existingPost) throw new Error('Story already has a Bluesky post')
+  if (existingPost) throw new BadRequestError('Story already has a Bluesky post')
 
   const publisherName = story.feed.displayTitle || story.feed.title
   const issueName = story.issue?.name ?? null
@@ -168,7 +170,7 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
     include: { issue: true },
   })
 
-  if (stories.length === 0) throw new Error('No stories found')
+  if (stories.length === 0) throw new BadRequestError('No stories found')
 
   // Filter out stories that already have any Bluesky post (draft, published, or failed)
   const alreadyHavePost = await prisma.blueskyPost.findMany({
@@ -180,7 +182,7 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
   const postedSet = new Set(alreadyHavePost.map((p: { storyId: string }) => p.storyId))
   const candidates = stories.filter((s) => !postedSet.has(s.id))
 
-  if (candidates.length === 0) throw new Error('All selected stories already have a Bluesky post')
+  if (candidates.length === 0) throw new BadRequestError('All selected stories already have a Bluesky post')
 
   // If only one candidate, just return it
   if (candidates.length === 1) {
@@ -233,8 +235,8 @@ export async function pickAndDraft(storyIds: string[]) {
 
 export async function updateDraft(postId: string, postText: string) {
   const post = await prisma.blueskyPost.findUnique({ where: { id: postId } })
-  if (!post) throw new Error('Post not found')
-  if (post.status !== 'draft') throw new Error('Can only edit draft posts')
+  if (!post) throw new NotFoundError('Post not found')
+  if (post.status !== 'draft') throw new BadRequestError('Can only edit draft posts')
 
   return prisma.blueskyPost.update({
     where: { id: postId },
@@ -248,7 +250,7 @@ export async function updateDraft(postId: string, postText: string) {
  */
 export async function deletePostRecord(postId: string) {
   const post = await prisma.blueskyPost.findUnique({ where: { id: postId } })
-  if (!post) throw new Error('Post not found')
+  if (!post) throw new NotFoundError('Post not found')
 
   // If published with a URI, delete from Bluesky first
   if (post.status === 'published' && post.postUri) {
@@ -274,7 +276,7 @@ export async function deletePostRecord(postId: string) {
  */
 export async function publishPost(postId: string) {
   if (!isBlueskyConfigured()) {
-    throw new Error('Bluesky credentials not configured')
+    throw new BadRequestError('Bluesky credentials not configured')
   }
 
   const post = await prisma.blueskyPost.findUnique({
@@ -282,8 +284,8 @@ export async function publishPost(postId: string) {
     include: { story: { include: { feed: true } } },
   })
 
-  if (!post) throw new Error('Post not found')
-  if (post.status !== 'draft') throw new Error('Can only publish draft posts')
+  if (!post) throw new NotFoundError('Post not found')
+  if (post.status !== 'draft') throw new BadRequestError('Can only publish draft posts')
 
   const story = post.story
   const storyUrl = `${config.siteUrl}/stories/${story.slug}`
@@ -298,8 +300,8 @@ export async function publishPost(postId: string) {
     description: story.marketingBlurb || story.summary || '',
   }
 
-  // Global og:image, served from client/public/images (the same file as the site's og:image meta)
-  linkCard.thumbUrl = `${config.siteUrl}/images/og-image.png`
+  // The story's own preview image (the same URL as its page's og:image); the global one without a slug
+  linkCard.thumbUrl = story.slug ? storyOgImageUrl(story.slug) : `${config.siteUrl}/images/og-image.png`
 
   try {
     const result = await createPost(post.postText, linkCard, publisherName, publisherUrl)

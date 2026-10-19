@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { ChunkErrorBoundary } from "../components/ui/ChunkErrorBoundary";
 import { ApiReferenceSkeleton } from "../components/skeletons";
+import { API_BASE } from "../lib/api";
 
 // The Scalar reference is several MB. Loading it as its own chunk keeps this
 // page small, so its title, description and intro are in the DOM before the
@@ -51,6 +52,19 @@ export default function DevelopersPage() {
           HTTP API. No API key or signup is needed. The reference below lists
           every endpoint with its parameters and example requests.
         </p>
+        <h2 className="mt-4 text-base font-semibold text-neutral-800">
+          Incremental sync
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm text-neutral-600">
+          To pick up only what is new, pass the <code>datePublished</code> of
+          the newest story you already have as <code>publishedSince</code>,
+          and optionally a relevance floor. The RSS feeds take{" "}
+          <code>minRelevance</code> too.
+        </p>
+        <pre className="mt-2 max-w-3xl overflow-x-auto rounded-lg bg-neutral-900 p-3 text-sm text-neutral-100">
+          <code>{`curl "${API_BASE}/stories?publishedSince=2026-10-01T00:00:00Z&minRelevance=7"
+curl "${API_BASE}/feed?minRelevance=7"`}</code>
+        </pre>
       </section>
       <div className="min-h-[calc(100vh-3rem)]">
         {pageMounted ? (

@@ -365,7 +365,7 @@ async function loadRelated(db: Db, shortfalls: string[]): Promise<RelatedItem[]>
     ORDER BY md5(s.id || 'gpt6-eval')
     LIMIT ${TARGETS.related.total}`
   const ids = sources.map(s => s.id)
-  // Mirrors story.ts getRelatedStories: the 12 cosine-nearest published stories.
+  // Mirrors relatedStories.ts getRelatedStories: the 12 cosine-nearest published stories.
   const rows = ids.length === 0 ? [] : await db.$queryRaw<{ source_id: string; id: string; title: string | null; title_label: string | null }[]>`
     SELECT src.id AS source_id, c.id, c.title, c.title_label
     FROM stories src

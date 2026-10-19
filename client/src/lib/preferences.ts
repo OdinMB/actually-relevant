@@ -1,30 +1,5 @@
-const PREFERRED_ISSUES_KEY = 'ar-preferred-issues'
 const SAVED_STORIES_KEY = 'ar-saved-stories'
 const MAX_SAVED = 100
-
-// --- Issue preferences ---
-
-export function getPreferredIssues(): string[] {
-  try {
-    const raw = localStorage.getItem(PREFERRED_ISSUES_KEY)
-    if (!raw) return []
-    return JSON.parse(raw) as string[]
-  } catch {
-    return []
-  }
-}
-
-export function setPreferredIssues(slugs: string[]): void {
-  try {
-    localStorage.setItem(PREFERRED_ISSUES_KEY, JSON.stringify(slugs))
-  } catch {
-    // silently ignore
-  }
-}
-
-export function hasSetPreferences(): boolean {
-  return localStorage.getItem(PREFERRED_ISSUES_KEY) !== null
-}
 
 // --- Saved stories ---
 

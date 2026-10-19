@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { getOpenAPIDocument } from './openapi.js'
-import { AI_GENERATED_PODCAST_DETAIL_FIELDS, AI_GENERATED_PODCAST_FIELDS, AI_GENERATED_STORY_FIELDS } from './aiProvenance.js'
+import {
+  AI_GENERATED_NEWSLETTER_FIELDS,
+  AI_GENERATED_PODCAST_DETAIL_FIELDS,
+  AI_GENERATED_PODCAST_FIELDS,
+  AI_GENERATED_STORY_FIELDS,
+} from './aiProvenance.js'
 
 describe('getOpenAPIDocument', () => {
   const doc = getOpenAPIDocument()
@@ -39,6 +44,29 @@ describe('getOpenAPIDocument', () => {
       expect(detail.properties[field].description.startsWith('AI-generated. '), field).toBe(true)
     }
     expect(doc.paths['/api/podcast/episodes/{id}'].get.responses['404']).toBeDefined()
+  })
+
+  it('documents the incremental-sync filters on the story list and minRelevance on both feeds', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const names = (path: string) => doc.paths[path].get.parameters.map((p: any) => p.name)
+    expect(names('/api/stories')).toEqual(expect.arrayContaining(['publishedSince', 'publishedBefore', 'minRelevance', 'page', 'search']))
+    expect(names('/api/feed')).toEqual(['minRelevance'])
+    expect(names('/api/feed/{issueSlug}')).toEqual(expect.arrayContaining(['issueSlug', 'minRelevance']))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const minRelevance = doc.paths['/api/stories'].get.parameters.find((p: any) => p.name === 'minRelevance')
+    expect(minRelevance.schema).toMatchObject({ minimum: 1, maximum: 10 })
+    expect(minRelevance.description).toContain('relevance rating')
+    expect(doc.paths['/api/stories'].get.responses['400']).toBeDefined()
+  })
+
+  it('labels the newsletter issue\'s AI fields and lists them in its marker', () => {
+    const issue = schemas.NewsletterIssue
+    expect(issue.properties.aiGenerated.properties.fields.items.enum).toEqual([...AI_GENERATED_NEWSLETTER_FIELDS])
+    for (const field of AI_GENERATED_NEWSLETTER_FIELDS) {
+      expect(issue.properties[field].description.startsWith('AI-generated. '), field).toBe(true)
+    }
+    expect(doc.paths['/api/newsletters'].get.responses['200']).toBeDefined()
+    expect(doc.paths['/api/newsletters/{slug}'].get.responses['404']).toBeDefined()
   })
 
   it('asks republishers to label the AI text, in the API description', () => {

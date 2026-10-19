@@ -2,7 +2,7 @@ import { Router } from 'express'
 import * as storyService from '../../services/story.js'
 import { validateQuery } from '../../middleware/validate.js'
 import { searchLimiter } from '../../middleware/rateLimit.js'
-import { publicStoryQuerySchema } from '../../schemas/story.js'
+import { publicStoryQuerySchema, relatedStoriesQuerySchema } from '../../schemas/story.js'
 import { createLogger } from '../../lib/logger.js'
 import { config } from '../../config.js'
 import { withAiGeneratedMarker } from '../../lib/aiProvenance.js'
@@ -26,6 +26,9 @@ router.get('/', (req, res, next) => {
       issueSlug: query.issueSlug,
       search: query.search,
       emotionTags,
+      publishedSince: query.publishedSince ? new Date(query.publishedSince) : undefined,
+      publishedBefore: query.publishedBefore ? new Date(query.publishedBefore) : undefined,
+      minRelevance: query.minRelevance,
     })
     res.set('Cache-Control', 'public, max-age=60')
     res.json({ ...result, data: result.data.map(withAiGeneratedMarker) })
@@ -46,10 +49,9 @@ router.get('/:slug/cluster', async (req, res) => {
   }
 })
 
-router.get('/:slug/related', async (req, res) => {
+router.get('/:slug/related', validateQuery(relatedStoriesQuerySchema), async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 4, 10)
-    const stories = await storyService.getRelatedStories(req.params.slug, limit)
+    const stories = await storyService.getRelatedStories(req.params.slug, req.parsedQuery!.limit)
     res.set('Cache-Control', `public, max-age=${config.relatedStories.httpCacheSeconds}`)
     res.json(stories.map(withAiGeneratedMarker))
   } catch (err) {

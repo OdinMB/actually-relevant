@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js'
 import type { Feed, FeedRegion, Prisma } from '@prisma/client'
 import { config } from '../config.js'
+import { BadRequestError } from '../utils/errors.js'
 
 interface FeedFilters {
   issueId?: string
@@ -53,7 +54,7 @@ export async function createFeed(data: {
   // Verify issue exists
   const issue = await prisma.issue.findUnique({ where: { id: data.issueId } })
   if (!issue) {
-    throw new Error('Issue not found')
+    throw new BadRequestError('Issue not found')
   }
   return withStaleFlag(await prisma.feed.create({ data }))
 }
@@ -75,7 +76,7 @@ export async function updateFeed(id: string, data: Partial<{
   if (data.issueId) {
     const issue = await prisma.issue.findUnique({ where: { id: data.issueId } })
     if (!issue) {
-      throw new Error('Issue not found')
+      throw new BadRequestError('Issue not found')
     }
   }
   return withStaleFlag(await prisma.feed.update({ where: { id }, data }))

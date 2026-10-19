@@ -88,6 +88,7 @@ process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
 const { taskRegistry } = await import('../../lib/taskRegistry.js')
+const { NotFoundError } = await import('../../utils/errors.js')
 
 const storyWithRelations = {
   ...sampleStory(),
@@ -492,12 +493,23 @@ describe('Admin Stories API', () => {
     })
 
     it('returns 404 when story not found', async () => {
-      mockAssessStory.mockRejectedValue(new Error('Story not found'))
+      mockAssessStory.mockRejectedValue(new NotFoundError('Story not found'))
 
       const res = await request(app)
         .post('/api/admin/stories/unknown/assess')
         .set(authHeader())
       expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Story not found' })
+    })
+
+    it('returns 500 with the route text on an unexpected failure', async () => {
+      mockAssessStory.mockRejectedValue(new Error('model down'))
+
+      const res = await request(app)
+        .post('/api/admin/stories/story-1/assess')
+        .set(authHeader())
+      expect(res.status).toBe(500)
+      expect(res.body).toEqual({ error: 'Failed to assess story' })
     })
   })
 

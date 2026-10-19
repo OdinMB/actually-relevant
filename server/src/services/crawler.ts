@@ -7,7 +7,7 @@ import { createLogger } from '../lib/logger.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { config } from '../config.js'
 import { normalizeUrl } from '../utils/urlNormalization.js'
-import { summarizeError } from '../utils/errors.js'
+import { ConflictError, NotFoundError, summarizeError } from '../utils/errors.js'
 
 const log = createLogger('crawler')
 
@@ -28,7 +28,7 @@ export interface CrawlResult {
 
 export async function crawlFeed(feedId: string): Promise<CrawlResult> {
   const feed = await getFeedById(feedId)
-  if (!feed) throw new Error('Feed not found')
+  if (!feed) throw new NotFoundError('Feed not found')
 
   const result: CrawlResult = {
     feedId,
@@ -241,14 +241,14 @@ export async function crawlAllDueFeeds(): Promise<CrawlResult[]> {
 
 export async function crawlUrl(url: string, feedId: string): Promise<{ storyId: string } | null> {
   const feed = await getFeedById(feedId)
-  if (!feed) throw new Error('Feed not found')
+  if (!feed) throw new NotFoundError('Feed not found')
 
   url = normalizeUrl(url)
 
   // Check not already crawled
   const existing = await getExistingUrls([url])
   if (existing.has(url)) {
-    throw new Error('URL already crawled')
+    throw new ConflictError('URL already crawled')
   }
 
   const extracted = await extractContent(url, {

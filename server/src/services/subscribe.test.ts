@@ -25,6 +25,9 @@ vi.mock('./subscribeLimits.js', () => ({
   checkSendAllowance: (...args: unknown[]) => mockCheckSendAllowance(...args),
 }))
 
+const mockLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }))
+vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLogger }))
+
 const {
   subscribe,
   confirmSubscription,
@@ -45,6 +48,34 @@ describe('subscribe service', () => {
     mockPlunk.createContact.mockResolvedValue({ id: 'contact-1' })
     mockPlunk.sendTransactional.mockResolvedValue(undefined)
     mockPlunk.verifyEmail.mockResolvedValue({ valid: true, domainExists: true, isDisposable: false })
+  })
+
+  describe('logging', () => {
+    const allLogged = () => JSON.stringify(
+      [mockLogger.info, mockLogger.warn, mockLogger.error, mockLogger.debug].flatMap(fn => fn.mock.calls),
+    )
+
+    it('logs no email address on signup, a failed send or a failed verification', async () => {
+      await subscribe({ email: 'person@example.com' })
+      mockPlunk.verifyEmail.mockRejectedValueOnce(new Error('verify down'))
+      mockPlunk.sendTransactional.mockRejectedValueOnce(new Error('send down'))
+      await subscribe({ email: 'person@example.com' }).catch(() => {})
+
+      expect(mockLogger.info).toHaveBeenCalled()
+      expect(mockLogger.error).toHaveBeenCalled()
+      expect(allLogged()).not.toContain('person@example.com')
+    })
+
+    it('logs no email address when confirming, logging the subscription id instead', async () => {
+      mockPrisma.pendingSubscription.findFirst.mockResolvedValue({
+        id: 'sub-1', email: 'person@example.com', confirmedAt: null, expiresAt: new Date(Date.now() + 60_000), plunkContactId: null,
+      })
+      mockPlunk.createContact.mockRejectedValueOnce(new Error('plunk down'))
+      await confirmSubscription('token', 'person@example.com')
+
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: 'sub-1' }), 'subscription confirmed')
+      expect(allLogged()).not.toContain('person@example.com')
+    })
   })
 
   describe('subscribe() — no explicit createContact at signup', () => {

@@ -33,7 +33,3 @@ export function markAsRead(slug: string): void {
 export function isRead(slug: string): boolean {
   return getReadSet().has(slug)
 }
-
-export function getReadSlugs(): Set<string> {
-  return getReadSet()
-}

@@ -33,6 +33,41 @@ export function parseSameSite(value: string | undefined, varName: string): Cooki
   return sameSite
 }
 
+/**
+ * Parse a whole-number env override (a count, a size, a duration in ms or hours). Unset or empty →
+ * fallback; anything but plain digits, or a value below `min`, throws at startup. A bare parseInt
+ * would turn a typo such as `60s` into NaN (or quietly read `60`), and the setting would misbehave
+ * at run time instead of refusing the deploy. `min` is 1 unless 0 is a meaningful value (a delay,
+ * a cache max-age, a disabled grace window).
+ */
+export function parseWholeNumber(value: string | undefined, fallback: number, varName: string, min = 1): number {
+  if (value === undefined || value === '') return fallback
+  if (!/^\d+$/.test(value) || Number(value) < min) {
+    throw new Error(`${varName}="${value}" is not a whole number of at least ${min}`)
+  }
+  return Number(value)
+}
+
+/** Parse a fraction override between 0 and 1 inclusive (a ratio). Unset or empty → fallback; else throws at startup. */
+export function parseFraction(value: string | undefined, fallback: number, varName: string): number {
+  if (value === undefined || value === '') return fallback
+  const n = Number(value)
+  if (!/^\d*\.?\d+$/.test(value) || n > 1) {
+    throw new Error(`${varName}="${value}" is not a number between 0 and 1`)
+  }
+  return n
+}
+
+/** Parse an override that must be one of a fixed set of values. Unset or empty → fallback; else throws at startup. */
+export function parseOneOf<T extends string>(value: string | undefined, fallback: T, allowed: readonly T[], varName: string): T {
+  if (value === undefined || value === '') return fallback
+  const match = allowed.find(v => v === value)
+  if (!match) {
+    throw new Error(`${varName}="${value}" is not one of ${allowed.join(', ')}`)
+  }
+  return match
+}
+
 export interface JobLeaseTiming {
   leaseSeconds: number
   leaseRenewMs: number
@@ -92,13 +127,21 @@ export const config = {
      * treated as a lost response (reload mid-refresh, two tabs, network drop) and
      * gets a fresh token in the same family; later reuse still revokes the family.
      */
-    refreshReuseGraceMs: parseInt(process.env.AUTH_REFRESH_REUSE_GRACE_MS || "60000", 10),
+    refreshReuseGraceMs: parseWholeNumber(process.env.AUTH_REFRESH_REUSE_GRACE_MS, 60_000, 'AUTH_REFRESH_REUSE_GRACE_MS', 0),
     /**
      * SameSite for the refresh cookie. Unset: 'none' in production (API on a
      * different site from the admin), 'strict' in development. Set 'strict' once
      * the API is served from the same site as the admin (see .context/authentication.md).
      */
     cookieSameSite: parseSameSite(process.env.AUTH_COOKIE_SAMESITE, 'AUTH_COOKIE_SAMESITE'),
+    // The settings below are security choices with no env override on purpose: changing one is a
+    // reviewed code change (.context/authentication.md), not a dashboard edit.
+    /** Lifetime of an access token (jsonwebtoken `expiresIn`). */
+    accessTokenExpiry: '15m',
+    /** Lifetime of a refresh token, and the refresh cookie's maxAge. */
+    refreshTokenLifetimeMs: 24 * 60 * 60 * 1000,
+    /** bcrypt cost for stored password hashes. */
+    bcryptRounds: 12,
   },
   /** Canonical public URL for the site — used in social media posts, RSS feeds, sitemaps, etc. */
   siteUrl: process.env.SITE_URL || 'https://actuallyrelevant.news',
@@ -109,7 +152,7 @@ export const config = {
     // bulk publish path exceeded on the remote DB when the `selected` backlog was large.
     // 15s is generous headroom for the (now single-statement) slug + status writes while
     // still failing fast rather than pinning a connection from the small pool for too long.
-    transactionTimeoutMs: parseInt(process.env.DB_TRANSACTION_TIMEOUT_MS || "15000", 10),
+    transactionTimeoutMs: parseWholeNumber(process.env.DB_TRANSACTION_TIMEOUT_MS, 15_000, 'DB_TRANSACTION_TIMEOUT_MS'),
   },
   llm: {
     // GPT-6 defaults from the 2026-09-24 model eval (.context/model-eval.md). The
@@ -130,7 +173,7 @@ export const config = {
         reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_LARGE, "medium", "OPENAI_EFFORT_LARGE"),
       },
     },
-    delayMs: parseInt(process.env.LLM_DELAY_MS || "500", 10),
+    delayMs: parseWholeNumber(process.env.LLM_DELAY_MS, 500, 'LLM_DELAY_MS', 0),
   },
   preassess: {
     batchSize: 10,
@@ -143,72 +186,58 @@ export const config = {
     modelTier: "medium" as const,
   },
   selection: {
-    maxGroupSize: parseInt(process.env.SELECT_MAX_GROUP_SIZE || "20", 10),
-    ratio: parseFloat(process.env.SELECT_RATIO || "0.5"),
-    relevanceMin: parseInt(process.env.SELECT_RELEVANCE_MIN || "5", 10),
+    maxGroupSize: parseWholeNumber(process.env.SELECT_MAX_GROUP_SIZE, 20, 'SELECT_MAX_GROUP_SIZE'),
+    ratio: parseFraction(process.env.SELECT_RATIO, 0.5, 'SELECT_RATIO'),
+    relevanceMin: parseWholeNumber(process.env.SELECT_RELEVANCE_MIN, 5, 'SELECT_RELEVANCE_MIN', 0),
     modelTier: "large" as const,
   },
   publish: {
     // Bulk publish processes the `selected` backlog in chunks of this size so the
     // per-chunk embedding fetch and slug-locked transaction stay bounded — a large
     // backlog publishes over several bounded passes rather than one unbounded one.
-    chunkSize: parseInt(process.env.PUBLISH_CHUNK_SIZE || "100", 10),
+    chunkSize: parseWholeNumber(process.env.PUBLISH_CHUNK_SIZE, 100, 'PUBLISH_CHUNK_SIZE'),
   },
   embedding: {
     model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
     // Changing dimensions requires a DB migration to alter the vector(1536) column and rebuild the index
     dimensions: 1536,
-    batchSize: parseInt(process.env.EMBEDDING_BATCH_SIZE || '100', 10),
-    concurrency: parseInt(process.env.EMBEDDING_CONCURRENCY || '5', 10),
-    delayMs: parseInt(process.env.EMBEDDING_DELAY_MS || '100', 10),
+    batchSize: parseWholeNumber(process.env.EMBEDDING_BATCH_SIZE, 100, 'EMBEDDING_BATCH_SIZE'),
+    concurrency: parseWholeNumber(process.env.EMBEDDING_CONCURRENCY, 5, 'EMBEDDING_CONCURRENCY'),
+    delayMs: parseWholeNumber(process.env.EMBEDDING_DELAY_MS, 100, 'EMBEDDING_DELAY_MS', 0),
   },
   crawl: {
-    rssItemLimit: parseInt(process.env.RSS_ITEM_LIMIT || "30", 10),
-    httpTimeoutMs: parseInt(process.env.HTTP_TIMEOUT_MS || "10000", 10),
-    minContentLength: parseInt(process.env.MIN_CONTENT_LENGTH || "300", 10),
+    rssItemLimit: parseWholeNumber(process.env.RSS_ITEM_LIMIT, 30, 'RSS_ITEM_LIMIT'),
+    httpTimeoutMs: parseWholeNumber(process.env.HTTP_TIMEOUT_MS, 10_000, 'HTTP_TIMEOUT_MS'),
+    minContentLength: parseWholeNumber(process.env.MIN_CONTENT_LENGTH, 300, 'MIN_CONTENT_LENGTH', 0),
     // Skip local JSDOM/cheerio parsing for pages larger than this (bytes) and defer
     // to the API extraction tier. A multi-MB HTML string expands ~10-20x as a DOM,
     // and that native memory counts against Render's RSS limit — so a single huge
     // page can OOM the crawl regardless of concurrency. The HTTP fetch is separately
     // capped at 5 MB; this bounds what we hand to the parser. Default 2 MB.
-    maxParseBytes: parseInt(process.env.MAX_PARSE_BYTES || String(2 * 1024 * 1024), 10),
-    staleAfterEmptyCrawls: parseInt(
-      process.env.STALE_AFTER_EMPTY_CRAWLS || "5",
-      10
-    ),
-    extractionApi: (process.env.EXTRACTION_API || "diffbot") as
-      | "diffbot"
-      | "pipfeed",
-    diffbotTimeoutMs: parseInt(process.env.DIFFBOT_TIMEOUT_MS || "15000", 10),
-    diffbotRateLimit: parseInt(process.env.DIFFBOT_RATE_LIMIT || "5", 10),
-    pipfeedTimeoutMs: parseInt(process.env.PIPFEED_TIMEOUT_MS || "15000", 10),
-    maxConcurrencyPerDomain: parseInt(
-      process.env.MAX_CONCURRENCY_PER_DOMAIN || "2",
-      10
-    ),
-    minDelayPerDomainMs: parseInt(
-      process.env.MIN_DELAY_PER_DOMAIN_MS || "200",
-      10
-    ),
-    localFailThreshold: parseInt(process.env.LOCAL_FAIL_THRESHOLD || "3", 10),
-    totalFailThreshold: parseInt(process.env.TOTAL_FAIL_THRESHOLD || "3", 10),
+    maxParseBytes: parseWholeNumber(process.env.MAX_PARSE_BYTES, 2 * 1024 * 1024, 'MAX_PARSE_BYTES'),
+    staleAfterEmptyCrawls: parseWholeNumber(process.env.STALE_AFTER_EMPTY_CRAWLS, 5, 'STALE_AFTER_EMPTY_CRAWLS'),
+    extractionApi: parseOneOf(process.env.EXTRACTION_API, 'diffbot', ['diffbot', 'pipfeed'] as const, 'EXTRACTION_API'),
+    diffbotTimeoutMs: parseWholeNumber(process.env.DIFFBOT_TIMEOUT_MS, 15_000, 'DIFFBOT_TIMEOUT_MS'),
+    diffbotRateLimit: parseWholeNumber(process.env.DIFFBOT_RATE_LIMIT, 5, 'DIFFBOT_RATE_LIMIT'),
+    pipfeedTimeoutMs: parseWholeNumber(process.env.PIPFEED_TIMEOUT_MS, 15_000, 'PIPFEED_TIMEOUT_MS'),
+    maxConcurrencyPerDomain: parseWholeNumber(process.env.MAX_CONCURRENCY_PER_DOMAIN, 2, 'MAX_CONCURRENCY_PER_DOMAIN'),
+    minDelayPerDomainMs: parseWholeNumber(process.env.MIN_DELAY_PER_DOMAIN_MS, 200, 'MIN_DELAY_PER_DOMAIN_MS', 0),
+    localFailThreshold: parseWholeNumber(process.env.LOCAL_FAIL_THRESHOLD, 3, 'LOCAL_FAIL_THRESHOLD'),
+    totalFailThreshold: parseWholeNumber(process.env.TOTAL_FAIL_THRESHOLD, 3, 'TOTAL_FAIL_THRESHOLD'),
   },
   // Access classification at extraction (.context/content-extraction.md, "Access classification").
   // A page the publisher marks as not free is `locked` only with evidence of truncation: the
   // extracted words fall below minWordRatio x the page's JSON-LD wordCount, or the extracted text
   // (whitespace collapsed) is shorter than lockedMaxChars. Otherwise it is `metered`.
   paywall: {
-    lockedMaxChars: parseInt(process.env.PAYWALL_LOCKED_MAX_CHARS || "1500", 10),
-    minWordRatio: parseFloat(process.env.PAYWALL_MIN_WORD_RATIO || "0.3"),
+    lockedMaxChars: parseWholeNumber(process.env.PAYWALL_LOCKED_MAX_CHARS, 1500, 'PAYWALL_LOCKED_MAX_CHARS', 0),
+    minWordRatio: parseFraction(process.env.PAYWALL_MIN_WORD_RATIO, 0.3, 'PAYWALL_MIN_WORD_RATIO'),
   },
   content: {
-    storyAssignmentDays: parseInt(process.env.STORY_ASSIGNMENT_DAYS || "7", 10),
+    storyAssignmentDays: parseWholeNumber(process.env.STORY_ASSIGNMENT_DAYS, 7, 'STORY_ASSIGNMENT_DAYS'),
   },
   newsletter: {
-    storiesPerIssue: parseInt(
-      process.env.NEWSLETTER_STORIES_PER_ISSUE || "2",
-      10
-    ),
+    storiesPerIssue: parseWholeNumber(process.env.NEWSLETTER_STORIES_PER_ISSUE, 2, 'NEWSLETTER_STORIES_PER_ISSUE'),
     selectModelTier: "large" as const,
     contentModelTier: "large" as const,
     // Weekly job guard: a built automatic issue newer than this blocks the next run.
@@ -336,39 +365,39 @@ export const config = {
     ...parseJobLeaseTiming(process.env.JOB_LEASE_SECONDS, process.env.JOB_LEASE_RENEW_SECONDS),
   },
   feed: {
-    size: parseInt(process.env.RSS_FEED_SIZE || "50", 10),
-    cacheMaxAge: parseInt(process.env.RSS_CACHE_MAX_AGE || "900", 10),
+    size: parseWholeNumber(process.env.RSS_FEED_SIZE, 50, 'RSS_FEED_SIZE'),
+    cacheMaxAge: parseWholeNumber(process.env.RSS_CACHE_MAX_AGE, 900, 'RSS_CACHE_MAX_AGE', 0),
   },
   sitemap: {
-    cacheMaxAge: parseInt(process.env.SITEMAP_CACHE_MAX_AGE || "3600", 10),
+    cacheMaxAge: parseWholeNumber(process.env.SITEMAP_CACHE_MAX_AGE, 3600, 'SITEMAP_CACHE_MAX_AGE', 0),
   },
   rateLimit: {
-    publicWindowMs: parseInt(
-      process.env.RATE_LIMIT_PUBLIC_WINDOW_MS || String(15 * 60 * 1000),
-      10
-    ),
-    publicMax: parseInt(process.env.RATE_LIMIT_PUBLIC_MAX || "100", 10),
-    expensiveWindowMs: parseInt(
-      process.env.RATE_LIMIT_EXPENSIVE_WINDOW_MS || String(60 * 60 * 1000),
-      10
-    ),
-    expensiveMax: parseInt(process.env.RATE_LIMIT_EXPENSIVE_MAX || "1000", 10),
-    searchWindowMs: parseInt(process.env.RATE_LIMIT_SEARCH_WINDOW_MS || String(15 * 60 * 1000), 10),
-    searchMax: parseInt(process.env.RATE_LIMIT_SEARCH_MAX || "20", 10),
+    publicWindowMs: parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_WINDOW_MS, 15 * 60 * 1000, 'RATE_LIMIT_PUBLIC_WINDOW_MS'),
+    publicMax: parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_MAX, 100, 'RATE_LIMIT_PUBLIC_MAX'),
+    expensiveWindowMs: parseWholeNumber(process.env.RATE_LIMIT_EXPENSIVE_WINDOW_MS, 60 * 60 * 1000, 'RATE_LIMIT_EXPENSIVE_WINDOW_MS'),
+    expensiveMax: parseWholeNumber(process.env.RATE_LIMIT_EXPENSIVE_MAX, 1000, 'RATE_LIMIT_EXPENSIVE_MAX'),
+    searchWindowMs: parseWholeNumber(process.env.RATE_LIMIT_SEARCH_WINDOW_MS, 15 * 60 * 1000, 'RATE_LIMIT_SEARCH_WINDOW_MS'),
+    searchMax: parseWholeNumber(process.env.RATE_LIMIT_SEARCH_MAX, 20, 'RATE_LIMIT_SEARCH_MAX'),
+    // Login and token refresh, per IP. Brute-force protection, so no env override (see config.auth).
+    loginWindowMs: 15 * 60 * 1000,
+    loginMax: 5,
+    // More lenient: the admin client refreshes automatically
+    refreshWindowMs: 15 * 60 * 1000,
+    refreshMax: 30,
   },
   concurrency: {
-    preassess: parseInt(process.env.CONCURRENCY_PREASSESS || "10", 10),
-    assess: parseInt(process.env.CONCURRENCY_ASSESS || "10", 10),
-    select: parseInt(process.env.CONCURRENCY_SELECT || "10", 10),
-    reclassify: parseInt(process.env.CONCURRENCY_RECLASSIFY || "10", 10),
+    preassess: parseWholeNumber(process.env.CONCURRENCY_PREASSESS, 10, 'CONCURRENCY_PREASSESS'),
+    assess: parseWholeNumber(process.env.CONCURRENCY_ASSESS, 10, 'CONCURRENCY_ASSESS'),
+    select: parseWholeNumber(process.env.CONCURRENCY_SELECT, 10, 'CONCURRENCY_SELECT'),
+    reclassify: parseWholeNumber(process.env.CONCURRENCY_RECLASSIFY, 10, 'CONCURRENCY_RECLASSIFY'),
     // Heavy: each concurrent crawl runs a JSDOM parse, which both saturates the
     // 0.5 vCPU AND allocates native/CSSOM memory counted against Render's ~512 MiB
     // RSS limit (NOT the V8 heap that --max-old-space-size bounds). Peak concurrent
     // parses = crawlFeeds * crawlArticles; keep it <= 2. Production runs 2 x 1 and
     // the defaults mirror that. The extractor's maxParseBytes guard bounds each
     // parse's peak so a single oversized page can't blow RSS on its own.
-    crawlFeeds: parseInt(process.env.CONCURRENCY_CRAWL_FEEDS || "2", 10),
-    crawlArticles: parseInt(process.env.CONCURRENCY_CRAWL_ARTICLES || "1", 10),
+    crawlFeeds: parseWholeNumber(process.env.CONCURRENCY_CRAWL_FEEDS, 2, 'CONCURRENCY_CRAWL_FEEDS'),
+    crawlArticles: parseWholeNumber(process.env.CONCURRENCY_CRAWL_ARTICLES, 1, 'CONCURRENCY_CRAWL_ARTICLES'),
   },
   plunk: {
     secretKey: process.env.PLUNK_SECRET_KEY || "",
@@ -389,7 +418,8 @@ export const config = {
   storyRetention: {
     // The cleanup_old_stories job (.context/story-retention.md): stories crawled longer ago than this
     // are deleted (unkept statuses only) or lose their embedding (every other unpublished story).
-    // Shown on the admin Jobs page (jobs/jobSettings.ts).
+    // Shown on the admin Jobs page (jobs/jobSettings.ts). Owner-set (ADR-0042), so deliberately no env
+    // override: what the site deletes is a reviewed decision, not a deploy setting.
     maxAgeMonths: 6,
     // Rows per statement; each delete batch and its roll-up commit together.
     batchSize: 500,
@@ -399,28 +429,18 @@ export const config = {
     retentionDays: 90,
   },
   subscribe: {
-    confirmTokenExpiryHours: parseInt(
-      process.env.SUBSCRIBE_TOKEN_EXPIRY_HOURS || "24",
-      10
-    ),
+    confirmTokenExpiryHours: parseWholeNumber(process.env.SUBSCRIBE_TOKEN_EXPIRY_HOURS, 24, 'SUBSCRIBE_TOKEN_EXPIRY_HOURS'),
     // Burst limiter: requests per short window per IP.
-    rateLimitWindowMs: parseInt(
-      process.env.SUBSCRIBE_RATE_LIMIT_WINDOW_MS || String(60 * 1000),
-      10
-    ),
-    rateLimitMax: parseInt(process.env.SUBSCRIBE_RATE_LIMIT_MAX || "3", 10),
+    rateLimitWindowMs: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_WINDOW_MS, 60 * 1000, 'SUBSCRIBE_RATE_LIMIT_WINDOW_MS'),
+    rateLimitMax: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_MAX, 3, 'SUBSCRIBE_RATE_LIMIT_MAX'),
     // Sustained limiter: caps signups per IP over a long window (blunts rotating-burst bots).
-    rateLimitDailyWindowMs: parseInt(
-      process.env.SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS || String(24 * 60 * 60 * 1000),
-      10
+    rateLimitDailyWindowMs: parseWholeNumber(
+      process.env.SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS, 24 * 60 * 60 * 1000, 'SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS'
     ),
-    rateLimitDailyMax: parseInt(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_MAX || "20", 10),
+    rateLimitDailyMax: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_MAX, 20, 'SUBSCRIBE_RATE_LIMIT_DAILY_MAX'),
     // Form-token anti-bot gate. Min fill time trips instant submitters; max age bounds replay.
-    minFormFillMs: parseInt(process.env.SUBSCRIBE_MIN_FORM_FILL_MS || "1500", 10),
-    formTokenMaxAgeMs: parseInt(
-      process.env.SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS || String(30 * 60 * 1000),
-      10
-    ),
+    minFormFillMs: parseWholeNumber(process.env.SUBSCRIBE_MIN_FORM_FILL_MS, 1500, 'SUBSCRIBE_MIN_FORM_FILL_MS', 0),
+    formTokenMaxAgeMs: parseWholeNumber(process.env.SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS, 30 * 60 * 1000, 'SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS'),
     // HMAC key for form tokens. Dedicated secret, falling back to JWT_SECRET so it works out of the box.
     formTokenSecret: process.env.FORM_TOKEN_SECRET || process.env.JWT_SECRET || "",
     // The one signup switch. Closed unless explicitly 'true': a missing value means paused.
@@ -428,9 +448,9 @@ export const config = {
     // Cloudflare Turnstile secret. Missing in production refuses every signup (fail closed).
     turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || "",
     // At most one confirmation email per normalized address within this window.
-    perAddressWindowHours: parseInt(process.env.SUBSCRIBE_PER_ADDRESS_WINDOW_HOURS || "24", 10),
+    perAddressWindowHours: parseWholeNumber(process.env.SUBSCRIBE_PER_ADDRESS_WINDOW_HOURS, 24, 'SUBSCRIBE_PER_ADDRESS_WINDOW_HOURS'),
     // At most this many confirmation emails per rolling hour across all addresses.
-    globalHourlyMax: parseInt(process.env.SUBSCRIBE_GLOBAL_HOURLY_MAX || "30", 10),
+    globalHourlyMax: parseWholeNumber(process.env.SUBSCRIBE_GLOBAL_HOURLY_MAX, 30, 'SUBSCRIBE_GLOBAL_HOURLY_MAX'),
   },
   relatedStories: {
     displayCount: 4,
@@ -443,8 +463,8 @@ export const config = {
     cacheMinutes: 10,
   },
   dedup: {
-    maxCandidates: parseInt(process.env.DEDUP_MAX_CANDIDATES || '6', 10),
-    timeWindowDays: parseInt(process.env.DEDUP_TIME_WINDOW_DAYS || '14', 10),
+    maxCandidates: parseWholeNumber(process.env.DEDUP_MAX_CANDIDATES, 6, 'DEDUP_MAX_CANDIDATES'),
+    timeWindowDays: parseWholeNumber(process.env.DEDUP_TIME_WINDOW_DAYS, 14, 'DEDUP_TIME_WINDOW_DAYS'),
     enabled: process.env.DEDUP_ENABLED !== 'false',
     modelTier: 'small' as const,
   },
@@ -454,12 +474,12 @@ export const config = {
     serviceUrl: process.env.BLUESKY_SERVICE_URL || 'https://bsky.social',
     autoPost: {
       enabled: process.env.BLUESKY_AUTO_POST_ENABLED === 'true',
-      lookbackHours: parseInt(process.env.BLUESKY_LOOKBACK_HOURS || '25', 10),
+      lookbackHours: parseWholeNumber(process.env.BLUESKY_LOOKBACK_HOURS, 25, 'BLUESKY_LOOKBACK_HOURS'),
     },
     metrics: {
-      maxAgeDays: parseInt(process.env.BLUESKY_METRICS_MAX_AGE_DAYS || '30', 10),
+      maxAgeDays: parseWholeNumber(process.env.BLUESKY_METRICS_MAX_AGE_DAYS, 30, 'BLUESKY_METRICS_MAX_AGE_DAYS'),
     },
-    postDelayMs: parseInt(process.env.BLUESKY_POST_DELAY_MS || '2000', 10),
+    postDelayMs: parseWholeNumber(process.env.BLUESKY_POST_DELAY_MS, 2000, 'BLUESKY_POST_DELAY_MS', 0),
     postModelTier: 'medium' as const,
     pickModelTier: 'medium' as const,
   },
@@ -470,16 +490,16 @@ export const config = {
       enabled: process.env.MASTODON_AUTO_POST_ENABLED === 'true',
     },
     metrics: {
-      maxAgeDays: parseInt(process.env.MASTODON_METRICS_MAX_AGE_DAYS || '30', 10),
+      maxAgeDays: parseWholeNumber(process.env.MASTODON_METRICS_MAX_AGE_DAYS, 30, 'MASTODON_METRICS_MAX_AGE_DAYS'),
     },
-    postDelayMs: parseInt(process.env.MASTODON_POST_DELAY_MS || '2000', 10),
+    postDelayMs: parseWholeNumber(process.env.MASTODON_POST_DELAY_MS, 2000, 'MASTODON_POST_DELAY_MS', 0),
     postModelTier: 'medium' as const,
-    visibility: (process.env.MASTODON_VISIBILITY || 'unlisted') as 'public' | 'unlisted' | 'private',
-    charLimit: parseInt(process.env.MASTODON_CHAR_LIMIT || '500', 10),
+    visibility: parseOneOf(process.env.MASTODON_VISIBILITY, 'unlisted', ['public', 'unlisted', 'private'] as const, 'MASTODON_VISIBILITY'),
+    charLimit: parseWholeNumber(process.env.MASTODON_CHAR_LIMIT, 500, 'MASTODON_CHAR_LIMIT'),
   },
   feedback: {
-    rateLimitWindowMs: parseInt(process.env.FEEDBACK_RATE_LIMIT_WINDOW_MS || String(60 * 60 * 1000), 10),
-    rateLimitMax: parseInt(process.env.FEEDBACK_RATE_LIMIT_MAX || '3', 10),
+    rateLimitWindowMs: parseWholeNumber(process.env.FEEDBACK_RATE_LIMIT_WINDOW_MS, 60 * 60 * 1000, 'FEEDBACK_RATE_LIMIT_WINDOW_MS'),
+    rateLimitMax: parseWholeNumber(process.env.FEEDBACK_RATE_LIMIT_MAX, 3, 'FEEDBACK_RATE_LIMIT_MAX'),
     messageMaxLength: 2000,
     /**
      * Key for the HMAC of the visitor IP stored with feedback (ADR-0037). Unset: every
@@ -488,7 +508,33 @@ export const config = {
     ipHashSecret: process.env.FEEDBACK_IP_HASH_SECRET || '',
   },
   socialAutoPost: {
-    lookbackHours: parseInt(process.env.SOCIAL_LOOKBACK_HOURS || process.env.BLUESKY_LOOKBACK_HOURS || '25', 10),
+    lookbackHours: parseWholeNumber(
+      process.env.SOCIAL_LOOKBACK_HOURS || process.env.BLUESKY_LOOKBACK_HOURS, 25,
+      process.env.SOCIAL_LOOKBACK_HOURS ? 'SOCIAL_LOOKBACK_HOURS' : 'BLUESKY_LOOKBACK_HOURS'
+    ),
     pickModelTier: 'medium' as const,
+  },
+  /** Story link previews: the og:image endpoint and the story-page shell route (.context/seo.md). */
+  storyPreview: {
+    /** Public API origin that serves `/api/stories/:slug/og.png`; absolute because crawlers need it. */
+    apiUrl: process.env.API_URL || 'https://api.actuallyrelevant.news',
+    /** The built client's index.html on the static site; the story-page route injects meta tags into it. */
+    shellUrl: `${process.env.SITE_URL || 'https://actuallyrelevant.news'}/index.html`,
+    /** How long the fetched shell is reused before it is revalidated (short: it names the build's hashed assets). */
+    shellCacheSeconds: parseWholeNumber(process.env.STORY_PAGE_SHELL_CACHE_SECONDS, 60, 'STORY_PAGE_SHELL_CACHE_SECONDS', 0),
+    shellFetchTimeoutMs: 5000,
+    /** Browser and CDN cache of the story-page HTML. */
+    pageCacheSeconds: 60,
+    /** In-memory cache of rendered pages, per slug. */
+    pageCacheEntries: 200,
+    /** HTTP cache lifetime of a story's og.png. */
+    imageCacheSeconds: parseWholeNumber(process.env.STORY_OG_IMAGE_CACHE_SECONDS, 86400, 'STORY_OG_IMAGE_CACHE_SECONDS', 0),
+    /** In-memory cache of rendered og.png images (about 50-150 KB each). */
+    imageCacheEntries: 50,
+    imageCacheTtlSeconds: 6 * 60 * 60,
+  },
+  /** Public newsletter archive (`/newsletter/archive`, `.context/newsletter-podcast.md`). */
+  newsletterArchive: {
+    cacheMaxAge: 300,
   },
 } as const;

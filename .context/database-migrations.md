@@ -52,6 +52,23 @@ Code: `server/src/scripts/db-prepare/` (`index.ts` orchestrates; `gate.ts` and `
 4. **Don't run `db:generate` while the dev server is running.** `prisma generate` replaces the query-engine DLL, which the running server locks (`EPERM`). Agents ask the user to stop their dev server first; usually just restarting the dev server is simpler, since `db:prepare` regenerates when needed.
 5. **Never point `db:prepare` at a non-local database by widening the guard.** To migrate a remote database deliberately, run `npm run db:migrate:deploy --prefix server` against it on purpose.
 
+## Integration Tests (PostgreSQL)
+
+Most server tests mock Prisma. Logic whose guarantee lives in SQL (retention keep rules and cluster repair, the job lease, pgvector search, the issue filter, the signup send limits) also has `*.db.test.ts` files that run against a real database. They are the `db` project in `server/vitest.config.ts`; every other test is the `unit` project.
+
+- **Opt-in by `TEST_DATABASE_URL`.** Unset, the db tests are skipped (`describeDb` is `describe.skip`) and `npm run test --prefix server` needs no database. Set, `npm run test` runs them too, and `npm run test:db --prefix server` runs only them.
+- **Guarded.** The URL must be local (the `db:prepare` host rule) and its database name must contain `test`; anything else fails the run before a query (`src/test/db/guard.ts`). The db project hands that URL to Prisma as `DATABASE_URL`, and the truncate refuses to run unless the two match.
+- **Migrated once per run.** The project's global setup runs `prisma migrate deploy` on the test database with the project's own CLI (`src/test/db/globalSetup.ts`). pgvector must be available to the database (the Docker image has it).
+- **Empty before each test.** `useTestDatabase()` truncates every table except `_prisma_migrations` before each test, seeded `job_runs` rows included, so tests insert what they need with the fixtures in `src/test/db/harness.ts`. Db test files run one at a time (`fileParallelism: false`).
+- **No external calls.** Mock the OpenAI-backed modules (`services/embedding.js`, `services/llm.js`) as the unit tests do; `harness.ts` has unit vectors (`axisVector`, `setEmbedding`) for pgvector queries.
+
+Against the Docker database, create a test database once and point the variable at it:
+
+```bash
+docker exec actually-relevant-db psql -U ardev -d actually_relevant_dev -c "CREATE DATABASE actually_relevant_test"
+TEST_DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevant_test npm run test:db --prefix server
+```
+
 ## Production Migrations
 
 On Render (Linux), none of the Windows DLL-locking issues apply. Migrations run automatically during the build step:

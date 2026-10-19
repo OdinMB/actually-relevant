@@ -82,4 +82,56 @@ describe('RSS feeds', () => {
     // A story without a summary has no description to label
     expect(itemDescriptions(res.text)).toEqual(['[AI-generated] Issue summary.', null])
   })
+
+  describe('minRelevance', () => {
+    it('filters the global feed, names the floor in the title and caches it apart from the unfiltered feed', async () => {
+      mockStoryService.getPublishedStories.mockReset()
+      mockStoryService.getPublishedStories
+        .mockResolvedValueOnce({ data: [story('5', 'High signal.')] })
+        .mockResolvedValueOnce({ data: [story('6', 'Medium signal.')] })
+
+      const filtered = await request(app).get('/api/feed?minRelevance=8')
+      const otherFloor = await request(app).get('/api/feed?minRelevance=5')
+      // Both variants now come from the cache, each under its own key
+      const filteredAgain = await request(app).get('/api/feed?minRelevance=8')
+
+      expect(filtered.status).toBe(200)
+      expect(mockStoryService.getPublishedStories).toHaveBeenNthCalledWith(1, expect.objectContaining({ minRelevance: 8 }))
+      expect(mockStoryService.getPublishedStories).toHaveBeenNthCalledWith(2, expect.objectContaining({ minRelevance: 5 }))
+      expect(mockStoryService.getPublishedStories).toHaveBeenCalledTimes(2)
+      expect(filtered.text).toContain('<title>Actually Relevant (relevance 8+)</title>')
+      expect(filtered.text).toContain('/api/feed?minRelevance=8')
+      expect(itemDescriptions(filtered.text)).toEqual(['[AI-generated] High signal.'])
+      expect(itemDescriptions(otherFloor.text)).toEqual(['[AI-generated] Medium signal.'])
+      expect(filteredAgain.text).toBe(filtered.text)
+      // The unfiltered feed was cached by the first test; a filtered one never replaces it
+      const unfiltered = await request(app).get('/api/feed')
+      expect(itemDescriptions(unfiltered.text)).toEqual([
+        '[AI-generated] First summary.',
+        '[AI-generated] Second summary.',
+      ])
+    })
+
+    it('filters a per-issue feed', async () => {
+      mockStoryService.getPublishedStories.mockReset()
+      mockIssueService.getIssueBySlug.mockResolvedValueOnce({ name: 'Planet & Climate' })
+      mockStoryService.getPublishedStories.mockResolvedValueOnce({ data: [story('7', 'Issue high signal.')] })
+
+      const res = await request(app).get('/api/feed/planet-climate?minRelevance=7')
+
+      expect(res.status).toBe(200)
+      expect(mockStoryService.getPublishedStories).toHaveBeenCalledWith(
+        expect.objectContaining({ issueSlug: 'planet-climate', minRelevance: 7 }),
+      )
+      expect(itemDescriptions(res.text)).toEqual(['[AI-generated] Issue high signal.'])
+    })
+
+    it.each(['0', '11', 'abc'])('rejects minRelevance=%s with a 400', async (value) => {
+      mockStoryService.getPublishedStories.mockReset()
+      const res = await request(app).get(`/api/feed?minRelevance=${value}`)
+      expect(res.status).toBe(400)
+      expect(res.body.details.fieldErrors.minRelevance).toEqual(['Must be a whole number from 1 to 10'])
+      expect(mockStoryService.getPublishedStories).not.toHaveBeenCalled()
+    })
+  })
 })

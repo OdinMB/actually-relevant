@@ -321,13 +321,37 @@ describe('publishPost', () => {
     expect(mockBlueskyClient.createPost).toHaveBeenCalled()
   })
 
-  it('points the link-card thumbnail at an image the client actually ships', async () => {
+  it('points the link-card thumbnail at the story\'s own preview image', async () => {
     mockPrisma.blueskyPost.findUnique.mockResolvedValue({
       id: 'post-1',
       status: 'draft',
       postText: 'Great post',
       story: {
         slug: 'test-story',
+        title: 'Test',
+        sourceTitle: 'Original',
+        sourceUrl: 'https://example.com',
+        marketingBlurb: 'Blurb',
+        summary: 'Summary',
+        feed: { title: 'Feed', displayTitle: 'Feed Name' },
+      },
+    })
+    mockBlueskyClient.createPost.mockResolvedValue({ uri: 'at://did/post/1', cid: 'cid123' })
+    mockPrisma.blueskyPost.update.mockResolvedValue({ id: 'post-1', status: 'published' })
+
+    await publishPost('post-1')
+
+    const linkCard = mockBlueskyClient.createPost.mock.calls[0][1] as { thumbUrl?: string }
+    expect(linkCard.thumbUrl).toBe(`${config.storyPreview.apiUrl}/api/stories/test-story/og.png`)
+  })
+
+  it('falls back to an image the client actually ships for a story without a slug', async () => {
+    mockPrisma.blueskyPost.findUnique.mockResolvedValue({
+      id: 'post-1',
+      status: 'draft',
+      postText: 'Great post',
+      story: {
+        slug: null,
         title: 'Test',
         sourceTitle: 'Original',
         sourceUrl: 'https://example.com',

@@ -15,7 +15,8 @@ const mockRemoveFromCluster = vi.hoisted(() => vi.fn())
 const mockMergeClusters = vi.hoisted(() => vi.fn())
 const mockDissolveCluster = vi.hoisted(() => vi.fn())
 
-vi.mock('../../services/cluster.js', () => ({
+vi.mock('../../services/cluster.js', async importOriginal => ({
+  StoriesAlreadyClusteredError: (await importOriginal<typeof import('../../services/cluster.js')>()).StoriesAlreadyClusteredError,
   getAllClusters: mockGetAllClusters,
   getClusterById: mockGetClusterById,
   createManualCluster: mockCreateManualCluster,
@@ -37,6 +38,8 @@ vi.mock('../../lib/prisma.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
+const { StoriesAlreadyClusteredError } = await import('../../services/cluster.js')
+const { BadRequestError, NotFoundError } = await import('../../utils/errors.js')
 
 // Valid UUIDs for Zod validation
 const CLUSTER_ID = '00000000-0000-4000-8000-000000000001'
@@ -120,13 +123,36 @@ describe('Admin Clusters API', () => {
     })
 
     it('returns 400 when story not in cluster', async () => {
-      mockSetClusterPrimary.mockRejectedValue(new Error('Story is not a member of this cluster'))
+      mockSetClusterPrimary.mockRejectedValue(new BadRequestError('Story is not a member of this cluster'))
 
       const res = await request(app)
         .put(`/api/admin/clusters/${CLUSTER_ID}/primary`)
         .set(authHeader())
         .send({ storyId: '00000000-0000-4000-8000-000000000099' })
       expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'Story is not a member of this cluster' })
+    })
+
+    it('returns 404 when the cluster does not exist (Prisma P2025)', async () => {
+      mockSetClusterPrimary.mockRejectedValue(Object.assign(new Error('No record'), { code: 'P2025' }))
+
+      const res = await request(app)
+        .put(`/api/admin/clusters/${CLUSTER_ID}/primary`)
+        .set(authHeader())
+        .send({ storyId: STORY_ID_2 })
+      expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Cluster not found' })
+    })
+
+    it('returns 500 with the route text on an unexpected failure', async () => {
+      mockSetClusterPrimary.mockRejectedValue(new Error('db down'))
+
+      const res = await request(app)
+        .put(`/api/admin/clusters/${CLUSTER_ID}/primary`)
+        .set(authHeader())
+        .send({ storyId: STORY_ID_2 })
+      expect(res.status).toBe(500)
+      expect(res.body).toEqual({ error: 'Failed to set cluster primary' })
     })
   })
 
@@ -164,13 +190,14 @@ describe('Admin Clusters API', () => {
     })
 
     it('returns 400 for self-merge', async () => {
-      mockMergeClusters.mockRejectedValue(new Error('Cannot merge a cluster with itself'))
+      mockMergeClusters.mockRejectedValue(new BadRequestError('Cannot merge a cluster with itself'))
 
       const res = await request(app)
         .post(`/api/admin/clusters/${CLUSTER_ID}/merge`)
         .set(authHeader())
         .send({ sourceId: CLUSTER_ID })
       expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'Cannot merge a cluster with itself' })
     })
   })
 
@@ -186,12 +213,13 @@ describe('Admin Clusters API', () => {
     })
 
     it('returns 404 when cluster not found', async () => {
-      mockDissolveCluster.mockRejectedValue(new Error('Cluster not found'))
+      mockDissolveCluster.mockRejectedValue(new NotFoundError('Cluster not found'))
 
       const res = await request(app)
         .delete('/api/admin/clusters/nonexistent')
         .set(authHeader())
       expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Cluster not found' })
     })
   })
 
@@ -227,21 +255,18 @@ describe('Admin Clusters API', () => {
     })
 
     it('returns 409 when stories already clustered', async () => {
-      const error = new Error('Stories already in a cluster: Test Article')
-      ;(error as any).code = 'ALREADY_CLUSTERED'
-      ;(error as any).storyIds = [STORY_ID_1]
-      mockCreateManualCluster.mockRejectedValue(error)
+      mockCreateManualCluster.mockRejectedValue(new StoriesAlreadyClusteredError('Stories already in a cluster: Test Article', [STORY_ID_1]))
 
       const res = await request(app)
         .post('/api/admin/clusters')
         .set(authHeader())
         .send({ storyIds: [STORY_ID_1, STORY_ID_2], primaryStoryId: STORY_ID_1 })
       expect(res.status).toBe(409)
-      expect(res.body.storyIds).toEqual([STORY_ID_1])
+      expect(res.body).toEqual({ error: 'Stories already in a cluster: Test Article', storyIds: [STORY_ID_1] })
     })
 
     it('returns 404 when stories not found', async () => {
-      mockCreateManualCluster.mockRejectedValue(new Error('Stories not found: missing-id'))
+      mockCreateManualCluster.mockRejectedValue(new NotFoundError('Stories not found: missing-id'))
 
       const res = await request(app)
         .post('/api/admin/clusters')
