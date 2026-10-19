@@ -10,11 +10,16 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // `npm run test:coverage` (CI) measures the unit project. A ratchet set just below the coverage
+    // measured when it was introduced: raise a threshold when coverage rises; never lower one to
+    // land a change.
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text-summary', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/index.ts']
+      exclude: ['src/**/*.test.ts', 'src/index.ts'],
+      // Measured 2026-10-19: statements 69.54, branches 65.12, functions 63.99, lines 71.12
+      thresholds: { statements: 69, branches: 65, functions: 63, lines: 71 },
     },
     projects: [
       {
