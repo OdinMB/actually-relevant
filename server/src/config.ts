@@ -134,6 +134,14 @@ export const config = {
      * the API is served from the same site as the admin (see .context/authentication.md).
      */
     cookieSameSite: parseSameSite(process.env.AUTH_COOKIE_SAMESITE, 'AUTH_COOKIE_SAMESITE'),
+    // The settings below are security choices with no env override on purpose: changing one is a
+    // reviewed code change (.context/authentication.md), not a dashboard edit.
+    /** Lifetime of an access token (jsonwebtoken `expiresIn`). */
+    accessTokenExpiry: '15m',
+    /** Lifetime of a refresh token, and the refresh cookie's maxAge. */
+    refreshTokenLifetimeMs: 24 * 60 * 60 * 1000,
+    /** bcrypt cost for stored password hashes. */
+    bcryptRounds: 12,
   },
   /** Canonical public URL for the site — used in social media posts, RSS feeds, sitemaps, etc. */
   siteUrl: process.env.SITE_URL || 'https://actuallyrelevant.news',
@@ -370,6 +378,12 @@ export const config = {
     expensiveMax: parseWholeNumber(process.env.RATE_LIMIT_EXPENSIVE_MAX, 1000, 'RATE_LIMIT_EXPENSIVE_MAX'),
     searchWindowMs: parseWholeNumber(process.env.RATE_LIMIT_SEARCH_WINDOW_MS, 15 * 60 * 1000, 'RATE_LIMIT_SEARCH_WINDOW_MS'),
     searchMax: parseWholeNumber(process.env.RATE_LIMIT_SEARCH_MAX, 20, 'RATE_LIMIT_SEARCH_MAX'),
+    // Login and token refresh, per IP. Brute-force protection, so no env override (see config.auth).
+    loginWindowMs: 15 * 60 * 1000,
+    loginMax: 5,
+    // More lenient: the admin client refreshes automatically
+    refreshWindowMs: 15 * 60 * 1000,
+    refreshMax: 30,
   },
   concurrency: {
     preassess: parseWholeNumber(process.env.CONCURRENCY_PREASSESS, 10, 'CONCURRENCY_PREASSESS'),
@@ -404,7 +418,8 @@ export const config = {
   storyRetention: {
     // The cleanup_old_stories job (.context/story-retention.md): stories crawled longer ago than this
     // are deleted (unkept statuses only) or lose their embedding (every other unpublished story).
-    // Shown on the admin Jobs page (jobs/jobSettings.ts).
+    // Shown on the admin Jobs page (jobs/jobSettings.ts). Owner-set (ADR-0040), so deliberately no env
+    // override: what the site deletes is a reviewed decision, not a deploy setting.
     maxAgeMonths: 6,
     // Rows per statement; each delete batch and its roll-up commit together.
     batchSize: 500,

@@ -135,9 +135,9 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
 
 1. Set backend `FRONTEND_URL` to match the frontend URL (and vice versa for `VITE_API_URL`)
 2. Database migrations run automatically during the build step — no manual action needed
-3. Create the first admin user from the Render shell:
+3. Create the first admin user from the Render shell (in the service's root, `server/`):
    ```bash
-   npx tsx src/scripts/create-admin.ts
+   npm run admin:create
    ```
 4. Verify the health endpoint: `curl https://<backend-url>/health`
 5. Verify the sitemap: `curl https://<frontend-url>/sitemap.xml`

@@ -11,10 +11,6 @@ import { UnauthorizedError } from '../utils/errors.js'
  */
 export class RefreshTokenRejectedError extends UnauthorizedError {}
 
-const BCRYPT_ROUNDS = 12
-const ACCESS_TOKEN_EXPIRY = '15m'
-const REFRESH_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
-
 export interface AccessTokenPayload {
   userId: string
   email: string
@@ -28,11 +24,26 @@ function getJwtSecret(): string {
 }
 
 export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, BCRYPT_ROUNDS)
+  return bcrypt.hash(plain, config.auth.bcryptRounds)
 }
 
 export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
   return bcrypt.compare(plain, hash)
+}
+
+// A hash of a random password at the same cost, computed once, so a login for an unknown email
+// spends the same bcrypt time as one for a known email and cannot reveal which emails have accounts.
+let dummyHash: Promise<string> | null = null
+
+/**
+ * Check a login password against the account's hash, or against a dummy hash when there is no
+ * account (always false then), so both cases take the same time.
+ */
+export async function verifyLoginPassword(plain: string, hash: string | null | undefined): Promise<boolean> {
+  if (hash) return bcrypt.compare(plain, hash)
+  dummyHash ??= bcrypt.hash(randomBytes(16).toString('hex'), config.auth.bcryptRounds)
+  await bcrypt.compare(plain, await dummyHash)
+  return false
 }
 
 export function generateAccessToken(user: { id: string; email: string; role: string }): string {
@@ -41,7 +52,7 @@ export function generateAccessToken(user: { id: string; email: string; role: str
     email: user.email,
     role: user.role,
   }
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: ACCESS_TOKEN_EXPIRY })
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: config.auth.accessTokenExpiry })
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
@@ -50,7 +61,7 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
 
 export async function generateRefreshToken(userId: string, familyId?: string): Promise<string> {
   const token = randomBytes(40).toString('hex')
-  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS)
+  const expiresAt = new Date(Date.now() + config.auth.refreshTokenLifetimeMs)
   const family = familyId ?? randomUUID()
 
   await prisma.refreshToken.create({

@@ -5,7 +5,7 @@ import { authLimiter, refreshLimiter } from '../middleware/rateLimit.js'
 import { loginSchema, changePasswordSchema } from '../schemas/auth.js'
 import { getUserByEmail, changePassword } from '../services/user.js'
 import {
-  verifyPassword,
+  verifyLoginPassword,
   generateAccessToken,
   generateRefreshToken,
   rotateRefreshToken,
@@ -23,7 +23,6 @@ const log = createLogger('auth')
 const router = Router()
 
 const REFRESH_COOKIE = 'refresh_token'
-const COOKIE_MAX_AGE = 24 * 60 * 60 * 1000 // 24 hours
 
 function isSecureEnv(): boolean {
   return process.env.NODE_ENV === 'production'
@@ -39,7 +38,7 @@ function setRefreshCookie(res: any, token: string) {
     httpOnly: true,
     secure: isSecureEnv(),
     sameSite: cookieSameSite(),
-    maxAge: COOKIE_MAX_AGE,
+    maxAge: config.auth.refreshTokenLifetimeMs, // the cookie lives as long as the token it carries
     path: '/api/auth',
   })
 }
@@ -57,13 +56,9 @@ router.post('/login', failsWith('Login failed'), authLimiter, validateBody(login
   const { email, password } = req.body
 
   const user = await getUserByEmail(email)
-  if (!user) {
-    res.status(401).json({ error: 'Invalid email or password' })
-    return
-  }
-
-  const valid = await verifyPassword(password, user.passwordHash)
-  if (!valid) {
+  // Runs bcrypt even without an account, so response time does not reveal which emails exist
+  const valid = await verifyLoginPassword(password, user?.passwordHash)
+  if (!user || !valid) {
     res.status(401).json({ error: 'Invalid email or password' })
     return
   }

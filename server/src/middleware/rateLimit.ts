@@ -47,12 +47,12 @@ export const searchLimiter = rateLimit({
 })
 
 /**
- * Strict rate limiter for login endpoint.
- * 5 attempts per 15 minutes per IP to prevent brute-force attacks.
+ * Strict rate limiter for login endpoint, per IP, against brute-force attacks
+ * (config.rateLimit.loginMax per loginWindowMs).
  */
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  windowMs: config.rateLimit.loginWindowMs,
+  max: config.rateLimit.loginMax,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -65,8 +65,8 @@ export const authLimiter = rateLimit({
  * More lenient than login since refresh is called automatically by the client.
  */
 export const refreshLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30,
+  windowMs: config.rateLimit.refreshWindowMs,
+  max: config.rateLimit.refreshMax,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

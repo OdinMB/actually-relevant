@@ -77,9 +77,14 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '100kb' }))
 app.use(cookieParser())
 
-// Request ID — inherit from header or generate
+// Request ID: inherit a well-formed one from the header (a proxy's trace id), else generate. The
+// value is echoed in a response header and written to logs, so anything else is replaced.
+const REQUEST_ID_RE = /^[A-Za-z0-9._-]{1,64}$/
+export function requestIdFrom(header: string | string[] | undefined): string {
+  return typeof header === 'string' && REQUEST_ID_RE.test(header) ? header : randomUUID()
+}
 app.use((req, res, next) => {
-  req.id = (req.headers['x-request-id'] as string) || randomUUID()
+  req.id = requestIdFrom(req.headers['x-request-id'])
   res.set('X-Request-Id', req.id)
   next()
 })

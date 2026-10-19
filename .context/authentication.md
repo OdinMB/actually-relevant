@@ -7,10 +7,10 @@ The admin panel uses JWT-only authentication: access tokens (15 min) with httpOn
 ### Server
 
 - **Auth middleware** (`server/src/middleware/auth.ts`): `requireAuth` accepts JWT only (used on admin routes). `requireApiKey` accepts the static `PUBLIC_API_KEY` (used on public API routes that need authenticated access). `requireRole(...roles)` checks user role after auth. `requireApiKey` compares the presented key to `PUBLIC_API_KEY` in constant time (`crypto.timingSafeEqual`) to prevent timing attacks. `requireAuth` has no API-key fallback.
-- **Auth service** (`server/src/services/auth.ts`): Password hashing (bcryptjs, 12 rounds), JWT generation/verification (`JWT_SECRET` env var, 15 min expiry), refresh token creation/rotation/revocation (stored in `refresh_tokens` DB table, 24h expiry). Includes token reuse detection via family tracking, with a short grace window (see Session and Token Rules).
+- **Auth service** (`server/src/services/auth.ts`): Password hashing (bcryptjs, 12 rounds), JWT generation/verification (`JWT_SECRET` env var, 15 min expiry), refresh token creation/rotation/revocation (stored in `refresh_tokens` DB table, 24h expiry). The cost, both lifetimes and the login/refresh rate limits live in `config.auth` and `config.rateLimit` (`server/src/config.ts`) with no env override on purpose: changing one is a reviewed code change. Includes token reuse detection via family tracking, with a short grace window (see Session and Token Rules).
 - **User service** (`server/src/services/user.ts`): CRUD operations for user management. Returns sanitized objects (no `passwordHash`).
 - **Auth routes** (`server/src/routes/auth.ts`): Public routes at `/api/auth` — login, refresh, logout, me. Login and refresh endpoints are rate-limited (`authLimiter`: 5 req/15 min, `refreshLimiter`: 30 req/15 min) via `server/src/middleware/rateLimit.ts`. Both limits are counted per client IP and are checked before any auth logic runs.
-- **User routes** (`server/src/routes/admin/users.ts`): Admin-only CRUD at `/api/admin/users`. Blocks self-delete, revokes tokens on user deletion. Includes `PUT /api/admin/users/:id/password` for password changes (self-change requires current password; admins can reset any user's password).
+- **User routes** (`server/src/routes/admin/users.ts`): Admin-only CRUD at `/api/admin/users`. Blocks self-delete, revokes tokens on user deletion. `PUT /api/admin/users/:id/password` is the admin reset: it sets any user's password without asking for the current one. A user changes their own password with `PUT /api/auth/password` (`server/src/routes/auth.ts`), which requires the current password.
 
 ### Client
 
@@ -32,7 +32,7 @@ The admin panel uses JWT-only authentication: access tokens (15 min) with httpOn
 
 All in `server/src/services/auth.ts` unless noted.
 
-- **Login** fails unless the email belongs to an existing user and the password matches the bcrypt hash. Each successful login starts a new token family: a fresh `randomUUID()` `familyId`, and a refresh token of 40 random bytes, hex-encoded. Access tokens carry `userId`, `email` and `role`.
+- **Login** fails unless the email belongs to an existing user and the password matches the bcrypt hash. Both failures answer the same 401 ("Invalid email or password") in the same time: for an unknown email, `verifyLoginPassword()` compares against a dummy hash of the same cost, so timing does not reveal which emails have accounts. Each successful login starts a new token family: a fresh `randomUUID()` `familyId`, and a refresh token of 40 random bytes, hex-encoded. Access tokens carry `userId`, `email` and `role`.
 - **Refresh** accepts a token that exists, has not expired and has not been rotated, or was rotated within the grace window (below). It soft-rotates the presented token: it sets `rotatedAt` and does not delete the row, which is kept for forensics. The claim is atomic (`updateMany where { id, rotatedAt: null }`), so of two simultaneous requests only one rotates; the other re-reads the row and is served only if the row still exists and was rotated within the window (a session revoked in between is not revived). It then issues a new access token and a new refresh token in the **same family**.
 - **Expired token presented**: the request is rejected and that token row is deleted. Expiry is checked before rotation, so an expired token that was also rotated is deleted on its own rather than triggering family revocation.
 - **Reuse grace window** (ADR-0014): a rotated token presented again within `config.auth.refreshReuseGraceMs` (60 s, `AUTH_REFRESH_REUSE_GRACE_MS`) of its rotation is a lost response (reload mid-refresh, sleep, network drop, deploy restart) or a second tab, not theft: it gets a new token in the same family and nothing is revoked. The cost: a stolen token replayed inside that minute gets a session instead of tripping revocation.
@@ -53,7 +53,7 @@ All in `server/src/services/auth.ts` unless noted.
 - `secure: true` — only in production (HTTPS)
 - `sameSite`: `AUTH_COOKIE_SAMESITE` (`strict` | `lax` | `none`; an unknown value stops the server at startup) when set; otherwise `'none'` in production and `'strict'` in development (`server/src/routes/auth.ts`, `config.auth.cookieSameSite`)
 - `path: /api/auth` — only sent to auth endpoints
-- `maxAge: 24 hours`
+- `maxAge`: the refresh token's lifetime, 24 hours (`config.auth.refreshTokenLifetimeMs`)
 
 ### Cross-site cookie in production
 
@@ -84,8 +84,10 @@ A static-site rewrite of `/api/*` to the API would also work, but every request 
 ## Creating the First Admin
 
 ```bash
-npx tsx server/src/scripts/create-admin.ts
+npm run admin:create --prefix server
 ```
+
+It prompts for email, name and password (`server/src/scripts/create-admin.ts`). On Render, run `npm run admin:create` from the service shell, whose working directory is `server/`.
 
 ## Key Files
 

@@ -45,6 +45,10 @@ A module that holds process state exports a `_reset…()` function (or another `
 
 `app.ts` opens CORS to any origin (GET only) for the public read paths in `publicReadPaths` (`/api/stories`, `/api/issues`, `/api/homepage`, `/api/feed`, `/api/docs`, `/api/subscribe/token`, `/api/podcast`), matching a listed path or its sub-paths, never a bare string prefix: `/api/feedback` and `/api/subscribe` stay restricted to `FRONTEND_URL` and the local dev origins. A new public read endpoint is added to the list; anything that writes or reads per-user state is not. `app.test.ts` covers both sides.
 
+## Request IDs
+
+Every request gets `req.id`, echoed as the `X-Request-Id` response header and logged on the request line and on any 500. An incoming `X-Request-Id` (a proxy's trace id) is kept only when it is 1 to 64 characters of letters, digits, `.`, `_` and `-` (`requestIdFrom()` in `app.ts`); anything else is replaced by a fresh UUID, so a caller cannot write arbitrary text into logs or response headers.
+
 ## Key Files
 
 | File | What |

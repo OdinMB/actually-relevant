@@ -22,6 +22,7 @@
     "db:prepare": "tsx src/scripts/db-prepare/index.ts",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "admin:create": "tsx src/scripts/create-admin.ts",
     "backup:plunk-contacts": "tsx src/scripts/backup-plunk-contacts.ts",
     "restore:plunk-contacts": "tsx src/scripts/restore-plunk-contacts.ts",
     "restore:plunk-contacts:apply": "tsx src/scripts/restore-plunk-contacts.ts --apply",

@@ -92,6 +92,25 @@ describe('App error handling', () => {
   })
 })
 
+describe('X-Request-Id', () => {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+  it('keeps a well-formed incoming id', async () => {
+    const res = await request(app).get('/api/nonexistent-route').set('X-Request-Id', 'cf-trace.123_abc-XYZ')
+    expect(res.headers['x-request-id']).toBe('cf-trace.123_abc-XYZ')
+  })
+
+  it.each(['has spaces in it', 'a'.repeat(65), 'x"}{"injected":"1', 'line\tbreak'])('replaces %j with a fresh UUID', async (value) => {
+    const res = await request(app).get('/api/nonexistent-route').set('X-Request-Id', value)
+    expect(res.headers['x-request-id']).toMatch(UUID)
+  })
+
+  it('generates one when none is sent', async () => {
+    const res = await request(app).get('/api/nonexistent-route')
+    expect(res.headers['x-request-id']).toMatch(UUID)
+  })
+})
+
 describe('CORS', () => {
   it.each(['/api/feed', '/api/feed/some-issue', '/api/stories', '/api/subscribe/token', '/api/podcast/feed.xml'])(
     'opens %s to any origin', async (path) => {
