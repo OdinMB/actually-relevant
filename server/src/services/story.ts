@@ -981,19 +981,6 @@ export async function getStoryIdsByStatus(
   return stories.map(s => s.id)
 }
 
-export async function getStoriesByStatus(
-  status: string,
-  options: StatusFilterOptions = {},
-) {
-  const where = buildStatusWhereClause(status, options)
-  return prisma.story.findMany({
-    where,
-    include: { feed: { include: { issue: true } } },
-    orderBy: { dateCrawled: 'desc' },
-    take: options.limit ?? 200,
-  })
-}
-
 export async function publishStory(id: string): Promise<Story> {
   // ensureEmbedding makes slow external calls, so it stays OUTSIDE the lock/tx.
   await ensureEmbedding(id)
