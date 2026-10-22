@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import type { PublicPodcastResponse } from '@shared/types'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
+import { APPLE_PODCASTS_URL } from '../config'
 
 const mockApi = vi.hoisted(() => ({ podcast: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -122,6 +123,14 @@ describe('PodcastPage', () => {
     expect(audio?.getAttribute('src')).toBe(AUDIO_URL)
     expect(audio?.getAttribute('preload')).toBe('none')
     expect(screen.getByRole('link', { name: PODCAST_FEED_URL }).getAttribute('href')).toBe(PODCAST_FEED_URL)
+  })
+
+  it('links the Apple Podcasts listing with its badge before the feed address', () => {
+    renderPage()
+    const apple = screen.getByRole('link', { name: /Listen on Apple Podcasts/ })
+    expect(apple.getAttribute('href')).toBe(APPLE_PODCASTS_URL)
+    const feed = screen.getByRole('link', { name: PODCAST_FEED_URL })
+    expect(apple.compareDocumentPosition(feed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('links our analysis only for stories that have a page', async () => {

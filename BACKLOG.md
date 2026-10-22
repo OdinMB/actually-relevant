@@ -26,7 +26,6 @@
 
 Wait until the first episode has been generated automatically and successfully (`generate_podcast` enabled, Friday run), then submit the feed `https://actuallyrelevant.news/podcast.xml`. Afterwards, send the listing URLs so "Listen on…" links can go on `/podcast` (`config.podcast.listenLinks`).
 
-- Apple Podcasts: podcastsconnect.apple.com → "+" → New Show → "Add a show with an RSS feed"; review takes hours to days
 - Spotify: creators.spotify.com → "Add your podcast" → "Find an existing show" / "Somewhere else"; verification code goes to contact@actuallyrelevant.news
 - Podcast Index (podcastindex.org/add, no account) and Amazon Music for Podcasters (podcasters.amazon.com)
 

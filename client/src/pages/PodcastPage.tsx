@@ -1,5 +1,6 @@
 import { Helmet } from 'react-helmet-async'
 import { SEO, CommonOgTags } from '../lib/seo'
+import { APPLE_PODCASTS_URL } from '../config'
 import { buildBreadcrumbSchema } from '../lib/structured-data'
 import StructuredData from '../components/StructuredData'
 import AiBadge from '../components/ai/AiBadge'
@@ -74,8 +75,23 @@ export default function PodcastPage() {
 
         <section aria-labelledby="podcast-subscribe-heading" className="mt-10 prose">
           <h2 id="podcast-subscribe-heading" className="section-heading">Subscribe</h2>
+          <a
+            href={APPLE_PODCASTS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="not-prose inline-block rounded-lg focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            {/* Apple's official badge, used unmodified (Apple Podcasts identity guidelines). */}
+            <img
+              src="/images/social/apple-podcasts-badge.svg"
+              alt="Listen on Apple Podcasts (opens in new tab)"
+              width={158}
+              height={50}
+              className="h-[50px] w-auto"
+            />
+          </a>
           <p>
-            Add the feed to any podcast app that accepts an RSS address:{' '}
+            Or add the feed to any podcast app that accepts an RSS address:{' '}
             <a href={PODCAST_FEED_URL} className={LINK_CLASS}>{PODCAST_FEED_URL}</a>
           </p>
         </section>
