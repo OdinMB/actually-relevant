@@ -222,7 +222,7 @@ Exactly three variables, on Render (API service) and in the local `server/.env`,
 1. **Render static site rewrite**, above the `/*` → `/index.html` catch-all (first match wins), beside the `/sitemap.xml` rule: Source `/podcast.xml`, Destination `https://api.actuallyrelevant.news/api/podcast/feed.xml` (the same backend host as the sitemap rule, whose destination is `https://api.actuallyrelevant.news/api/sitemap.xml`; both target the API's custom domain rather than the `*.onrender.com` host — owner changing them in the dashboard, 2026-10-07), Action **Rewrite**. No static `podcast.xml` may exist in `client/public/`.
 2. Publish the first episode, then validate the feed at `https://actuallyrelevant.news/podcast.xml` (Apple Podcasts Connect's validator, Podbase, or castfeedvalidator.com).
 3. Submit the feed URL to Apple Podcasts Connect, Spotify for Creators ("Add an existing podcast" via RSS; the claim code goes to `contact@actuallyrelevant.news`), Podcast Index and Amazon Music for Podcasters.
-4. Put the listing URLs into `config.podcast.listenLinks` (`{ name, url }`), so `/podcast` shows them. Apple Podcasts is done (listed 2026-10-22) and is not in `listenLinks`: its badge is static on the page and in the footer.
+4. Put the listing URLs into `config.podcast.listenLinks` (`{ name, url }`), so `/podcast` shows them, in the owner's priority order: Apple, Spotify, YouTube Music, Amazon Music, Pocket Casts, then the rest. Apple Podcasts and Pocket Casts are in (2026-10-22); Spotify is being verified. Apple also has its static badge on the page and its icon in the footer.
 5. ~~Unpublish the old Buzzsprout show~~ Done (owner, 2026-10-07): the show and its listings are deleted (no redirect, no back catalogue migration).
 
 ## Evaluating prompt changes
