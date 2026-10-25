@@ -59,6 +59,8 @@ Prompt templates live in `server/src/prompts/`:
 | `podcast-select.ts` | `buildPodcastSelectPrompt()` — the week's 4-5 stories for audio |
 | `index.ts` | Barrel re-exports all builders and types |
 
+A service turns its loaded rows into a builder's input with an exported pure function in `server/src/services/promptInputs.ts` (the Bluesky and Mastodon draft inputs live in those services), and the model-eval harness calls the same functions (`.context/model-eval.md`). Change a call site's input there, never inline in the service; `promptInputs.test.ts` pins the prompts each one sends, so update its snapshot only for an intended change.
+
 ## Schema-Driven Format Guidance
 
 The Zod schemas in `server/src/schemas/llm.ts` use `.describe()` to tell the LLM how to format each field. Key format decisions:
