@@ -1,16 +1,15 @@
 import { access, writeFile, mkdir } from 'fs/promises'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { join } from 'path'
 import type { Readable } from 'stream'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
+import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { isAllowedUrl, ssrfGuard } from '../utils/urlValidation.js'
 import * as feedService from './feed.js'
 
 const log = createLogger('favicon')
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const FAVICON_DIR = process.env.FAVICON_DIR || join(__dirname, '..', '..', '..', 'client', 'public', 'images', 'feeds')
+const FAVICON_DIR = config.crawl.faviconDir
 const MAX_FAVICON_BYTES = 100_000
 const FETCH_TIMEOUT_MS = 10_000
 const CONCURRENCY = 5

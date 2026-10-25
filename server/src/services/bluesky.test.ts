@@ -353,7 +353,7 @@ describe('publishPost', () => {
     await publishPost('post-1')
 
     const linkCard = mockBlueskyClient.createPost.mock.calls[0][1] as { thumbUrl?: string }
-    expect(linkCard.thumbUrl).toBe(`${config.storyPreview.apiUrl}/api/stories/test-story/og.png`)
+    expect(linkCard.thumbUrl).toBe(`${config.apiUrl}/api/stories/test-story/og.png`)
   })
 
   it('falls back to an image the client actually ships for a story without a slug', async () => {

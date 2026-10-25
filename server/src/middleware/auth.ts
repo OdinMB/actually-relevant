@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { timingSafeEqual } from 'crypto'
+import { config } from '../config.js'
 import { verifyAccessToken, type AccessTokenPayload } from '../services/auth.js'
 
 export interface AuthUser {
@@ -36,7 +37,7 @@ function tryJwtAuth(token: string): AccessTokenPayload | null {
  * Returns true if the token matches the PUBLIC_API_KEY env var.
  */
 function tryApiKeyAuth(token: string): boolean {
-  const apiKey = process.env.PUBLIC_API_KEY
+  const apiKey = config.auth.publicApiKey
   if (!apiKey) return false
 
   const tokenBuf = Buffer.from(token)

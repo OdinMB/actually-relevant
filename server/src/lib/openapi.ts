@@ -8,6 +8,7 @@ import {
   AI_GENERATED_STORY_FIELDS,
   IPTC_TRAINED_ALGORITHMIC_MEDIA,
 } from './aiProvenance.js'
+import { config } from '../config.js'
 import { OPENAPI_AI_FIELD_PREFIX, OPENAPI_REPUBLISHER_NOTE } from './aiLabelCopy.js'
 import { minRelevanceParam, publishedBeforeParam, publishedSinceParam } from '../schemas/story.js'
 
@@ -382,7 +383,7 @@ export function getOpenAPIDocument(): any {
         url: 'https://actuallyrelevant.news',
       },
     },
-    servers: [{ url: process.env.API_URL || 'https://api.actuallyrelevant.news', description: 'Production' }],
+    servers: [{ url: config.apiUrl, description: 'Production' }],
     paths: {
       '/api/homepage': {
         get: {

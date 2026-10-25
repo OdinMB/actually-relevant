@@ -43,7 +43,7 @@ app.use(
 // Dev ports 5173-5180 (Vite increments when a port is taken) and preview ports
 // 4173-4174, on both localhost and 127.0.0.1.
 const devPorts = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 4173, 4174]
-const allowedOrigins = [...devPorts.flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]), process.env.FRONTEND_URL].filter(
+const allowedOrigins = [...devPorts.flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]), config.frontendUrl].filter(
   Boolean,
 ) as string[]
 

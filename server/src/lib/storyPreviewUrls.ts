@@ -6,5 +6,5 @@ import { config } from '../config.js'
  * the Bluesky link-card thumbnail (.context/seo.md, "Story link previews").
  */
 export function storyOgImageUrl(slug: string): string {
-  return `${config.storyPreview.apiUrl}/api/stories/${encodeURIComponent(slug)}/og.png`
+  return `${config.apiUrl}/api/stories/${encodeURIComponent(slug)}/og.png`
 }

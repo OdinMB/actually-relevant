@@ -25,7 +25,7 @@ const router = Router()
 const REFRESH_COOKIE = 'refresh_token'
 
 function isSecureEnv(): boolean {
-  return process.env.NODE_ENV === 'production'
+  return config.isProduction
 }
 
 /** 'none' only while the API sits on a different site from the admin; see config.auth.cookieSameSite. */

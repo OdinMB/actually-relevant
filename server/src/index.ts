@@ -10,7 +10,7 @@ import { checkPodcastConfigAtBoot } from './jobs/podcastBootCheck.js'
 import app from './app.js'
 
 const log = createLogger('server')
-const PORT = process.env.PORT || 3001
+const PORT = config.port
 
 const DRAIN_POLL_MS = 500
 const FORCE_EXIT_MS = 10_000

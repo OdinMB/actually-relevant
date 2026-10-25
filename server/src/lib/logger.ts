@@ -1,9 +1,8 @@
 import pino from 'pino'
-import { parseWholeNumber } from '../config.js'
+import { config } from '../config.js'
 
-const isProduction = process.env.NODE_ENV === 'production'
-const logDir = process.env.LOG_DIR || 'logs'
-const retentionDays = parseWholeNumber(process.env.LOG_RETENTION_DAYS, 14, 'LOG_RETENTION_DAYS')
+const isProduction = config.isProduction
+const { dir: logDir, retentionDays } = config.log
 
 const transports = pino.transport({
   targets: [
@@ -60,7 +59,7 @@ export function serializeError(err: any) {
 
 export const logger = pino(
   {
-    level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+    level: config.log.level || (isProduction ? 'info' : 'debug'),
     timestamp: pino.stdTimeFunctions.isoTime,
     redact: {
       paths: ['req.headers.authorization', 'req.headers.cookie'],

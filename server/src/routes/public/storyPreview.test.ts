@@ -108,8 +108,8 @@ describe('GET /api/story-page/:slug', () => {
     expect(html).toContain('<meta data-rh="true" name="description" content="A summary that is AI-written." />')
     expect(html).toContain('<link data-rh="true" rel="canonical" href="https://actuallyrelevant.news/stories/clean-air" />')
     expect(html).toContain('<meta data-rh="true" property="og:url" content="https://actuallyrelevant.news/stories/clean-air" />')
-    expect(html).toContain(`<meta data-rh="true" property="og:image" content="${config.storyPreview.apiUrl}/api/stories/clean-air/og.png" />`)
-    expect(html).toContain(`<meta data-rh="true" name="twitter:image" content="${config.storyPreview.apiUrl}/api/stories/clean-air/og.png" />`)
+    expect(html).toContain(`<meta data-rh="true" property="og:image" content="${config.apiUrl}/api/stories/clean-air/og.png" />`)
+    expect(html).toContain(`<meta data-rh="true" name="twitter:image" content="${config.apiUrl}/api/stories/clean-air/og.png" />`)
     expect(html).toContain('<meta data-rh="true" property="og:type" content="article" />')
     expect(html).toContain('<meta data-rh="true" name="twitter:card" content="summary_large_image" />')
     // The homepage's own tags are gone, so each tag appears once

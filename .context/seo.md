@@ -72,8 +72,8 @@ The newsletter's web edition follows the same split: `/newsletter`, which lists 
 | `config.sitemap.cacheMaxAge` | `SITEMAP_CACHE_MAX_AGE` | `3600` | Cache TTL in seconds |
 | `config.storyPreview.shellCacheSeconds` | `STORY_PAGE_SHELL_CACHE_SECONDS` | `60` | How long the fetched `index.html` is reused before revalidation |
 | `config.storyPreview.imageCacheSeconds` | `STORY_OG_IMAGE_CACHE_SECONDS` | `86400` | `Cache-Control` max-age of a story's `og.png` |
-| `config.storyPreview.apiUrl` | `API_URL` | `https://api.actuallyrelevant.news` | Origin in the absolute og:image URL |
-| `config.storyPreview.shellUrl` | `SITE_URL` | `https://actuallyrelevant.news/index.html` | Where the shell is fetched from |
+| `config.apiUrl` | `API_URL` | `https://api.actuallyrelevant.news` | Origin in the absolute og:image URL (also the OpenAPI spec's server) |
+| `config.storyPreview.shellUrl` | `SITE_URL` | `https://actuallyrelevant.news/index.html` | Where the shell is fetched from (`config.siteUrl` + `/index.html`) |
 
 ### Legacy Build-Time Generation
 
