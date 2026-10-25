@@ -9,7 +9,7 @@ import type { StoryForMastodonPost } from '../prompts/index.js'
 import { mastodonPostTextSchema } from '../schemas/mastodon.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import type { AccountStatusesResult } from '../lib/mastodon.js'
-import { buildMetaLine } from './socialPostFormat.js'
+import { buildMetaLine, draftMetaParts, type MetaLineParts, type SocialDraftStory } from './socialPostFormat.js'
 import { pickBestStoryForSocial } from './socialMedia.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
@@ -46,20 +46,35 @@ export function assemblePostText(parts: {
   return `${parts.blurb}\n${metaLine}\n${parts.sourceUrl}\n${parts.storyUrl}`
 }
 
-/**
- * Calculate max chars for the LLM editorial text given the metadata line and both URLs.
- * Exported for the model-eval harness, which must compute the same limit.
- */
-export function calcMaxBlurbChars(parts: {
-  issueName: string | null
-  emotionTag: string | null
-  publisherName: string
-  sourceUrl: string
-  storyUrl: string
-}): number {
+type MastodonPostParts = MetaLineParts & { sourceUrl: string; storyUrl: string }
+
+/** Calculate max chars for the LLM editorial text given the metadata line and both URLs. */
+export function calcMaxBlurbChars(parts: MastodonPostParts): number {
   const metaLine = buildMetaLine(parts)
   // charLimit minus metadata line, source URL, story URL, and three newlines
   return Math.max(50, config.mastodon.charLimit - metaLine.length - parts.sourceUrl.length - parts.storyUrl.length - 3)
+}
+
+/**
+ * The draft prompt's input and the post's other parts (metadata line, both URLs) for a story; the
+ * blurb budget is what those leave. The model-eval harness builds its post inputs with this too.
+ */
+export function mastodonDraftInput(story: SocialDraftStory & { sourceUrl: string; slug: string | null }): {
+  parts: MastodonPostParts
+  prompt: StoryForMastodonPost
+} {
+  const parts = { ...draftMetaParts(story), sourceUrl: story.sourceUrl, storyUrl: `${config.siteUrl}/stories/${story.slug}` }
+  return {
+    parts,
+    prompt: {
+      id: story.id,
+      title: story.title,
+      titleLabel: story.titleLabel || '',
+      summary: story.summary,
+      relevanceSummary: story.relevanceSummary,
+      maxChars: calcMaxBlurbChars(parts),
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -88,28 +103,8 @@ export async function generateDraft(storyId: string) {
   })
   if (existingPost) throw new BadRequestError('Story already has a Mastodon post')
 
-  const publisherName = story.feed.displayTitle || story.feed.title
-  const issueName = story.issue?.name ?? null
-  const emotionTag = story.emotionTag
-  const sourceUrl = story.sourceUrl
-  const storyUrl = `${config.siteUrl}/stories/${story.slug}`
-
-  const maxChars = calcMaxBlurbChars({
-    issueName,
-    emotionTag,
-    publisherName,
-    sourceUrl,
-    storyUrl,
-  })
-
-  const storyForPrompt: StoryForMastodonPost = {
-    id: story.id,
-    title: story.title,
-    titleLabel: story.titleLabel || '',
-    summary: story.summary,
-    relevanceSummary: story.relevanceSummary,
-    maxChars,
-  }
+  const { parts, prompt: storyForPrompt } = mastodonDraftInput({ ...story, title: story.title, summary: story.summary })
+  const { maxChars } = storyForPrompt
 
   const prompt = buildMastodonPostPrompt(storyForPrompt)
   const llm = getLLMByTier(config.mastodon.postModelTier)
@@ -126,14 +121,7 @@ export async function generateDraft(storyId: string) {
     blurb = blurb.slice(0, maxChars - 1) + '\u2026'
   }
 
-  const fullText = assemblePostText({
-    blurb,
-    issueName,
-    emotionTag,
-    publisherName,
-    sourceUrl,
-    storyUrl,
-  })
+  const fullText = assemblePostText({ blurb, ...parts })
 
   // Character count safety check
   if (fullText.length > config.mastodon.charLimit) {

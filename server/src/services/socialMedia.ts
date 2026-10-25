@@ -4,8 +4,8 @@ import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { buildBlueskyPickBestPrompt } from '../prompts/index.js'
-import type { StoryForBlueskyPick } from '../prompts/index.js'
 import { blueskyPickBestSchema } from '../schemas/bluesky.js'
+import { socialPickStory } from './promptInputs.js'
 import { BadRequestError } from '../utils/errors.js'
 
 const log = createLogger('social-media')
@@ -91,21 +91,9 @@ export async function pickBestStoryForSocial(storyIds: string[], channel?: Socia
     return { storyId: stories[0]!.id, reasoning: channel ? 'Only one unposted story in the selection.' : 'Only one candidate story.' }
   }
 
-  const storiesForPrompt: StoryForBlueskyPick[] = stories.map(s => ({
-    id: s.id,
-    title: s.title || s.sourceTitle,
-    titleLabel: s.titleLabel || '',
-    summary: s.summary || '',
-    relevanceSummary: s.relevanceSummary,
-    relevance: s.relevance,
-    emotionTag: s.emotionTag,
-    issueName: s.issue?.name ?? null,
-    datePublished: s.datePublished?.toISOString() ?? null,
-  }))
-
   // Reuse the Bluesky pick-best prompt — the criteria (timeliness, emotional appeal,
   // broad relevance, shareability, uniqueness) are universal across social platforms.
-  const prompt = buildBlueskyPickBestPrompt(storiesForPrompt)
+  const prompt = buildBlueskyPickBestPrompt(stories.map(socialPickStory))
   const llm = getLLMByTier(config.socialAutoPost.pickModelTier)
   const structuredLlm = llm.withStructuredOutput(blueskyPickBestSchema)
 

@@ -18,6 +18,7 @@ import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { escapeHtml } from '../lib/xml.js'
 import { parseStoryHeading, storyHeading } from './newsletterContent.js'
+import { newsletterIntroInput, newsletterIssue, newsletterOrder, newsletterSelectInput } from './promptInputs.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
@@ -33,16 +34,8 @@ const ISSUE_DOT_COLORS: Record<string, string> = {
 }
 const DEFAULT_DOT_COLOR = '#f472b6'
 
-/** Fixed display order for top-level issues in the newsletter */
-const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
-
 function getIssueDotColor(slug: string): string {
   return ISSUE_DOT_COLORS[slug] ?? DEFAULT_DOT_COLOR
-}
-
-function getIssueSortIndex(slug: string): number {
-  const idx = ISSUE_ORDER.indexOf(slug)
-  return idx >= 0 ? idx : ISSUE_ORDER.length
 }
 
 interface NewsletterFilters {
@@ -116,21 +109,8 @@ export async function pickShortlist(newsletter: { id: string; storyIds: string[]
     },
   })
 
-  // Resolve top-level issue name for each story
-  const storiesForPrompt = stories.map(s => {
-    const issue = s.issue ?? s.feed?.issue
-    const issueName = issue?.parentId && issue.parent ? issue.parent.name : (issue?.name ?? 'General')
-    return {
-      id: s.id,
-      title: s.title || s.sourceTitle,
-      summary: s.summary,
-      issueName,
-      emotionTag: s.emotionTag,
-    }
-  })
-
-  // Get distinct top-level issue names
-  const issueNames = [...new Set(storiesForPrompt.map(s => s.issueName))].sort()
+  // Each story under its top-level issue name, and the distinct names
+  const { stories: storiesForPrompt, issueNames } = newsletterSelectInput(stories)
 
   log.info({ newsletterId, storyCount: stories.length, issueCount: issueNames.length }, 'selecting stories for newsletter')
 
@@ -158,7 +138,7 @@ export async function pickShortlist(newsletter: { id: string; storyIds: string[]
 export async function buildContent(newsletter: { id: string; selectedStoryIds: string[] }): Promise<string> {
   const newsletterId = newsletter.id
 
-  const stories = await prisma.story.findMany({
+  const loaded = await prisma.story.findMany({
     where: { id: { in: newsletter.selectedStoryIds } },
     select: {
       id: true,
@@ -187,39 +167,11 @@ export async function buildContent(newsletter: { id: string; selectedStoryIds: s
     orderBy: { dateCrawled: 'desc' },
   })
 
-  // Resolve each story's top-level (parent) issue
-  function resolveIssue(story: (typeof stories)[number]) {
-    const issue = story.issue ?? story.feed?.issue
-    if (!issue) return { name: 'General', slug: 'general-news' }
-    if (issue.parentId && issue.parent) {
-      return { name: issue.parent.name, slug: issue.parent.slug }
-    }
-    return { name: issue.name, slug: issue.slug }
-  }
-
   // Sort by fixed issue order, then by title within each group
-  stories.sort((a, b) => {
-    const slugA = resolveIssue(a).slug
-    const slugB = resolveIssue(b).slug
-    const orderDiff = getIssueSortIndex(slugA) - getIssueSortIndex(slugB)
-    if (orderDiff !== 0) return orderDiff
-    const titleA = a.title || a.sourceTitle || ''
-    const titleB = b.title || b.sourceTitle || ''
-    return titleA.localeCompare(titleB)
-  })
+  const stories = newsletterOrder(loaded)
 
   // Generate editorial intro via LLM
-  const issueNames = [...new Set(stories.map(s => resolveIssue(s).name))].sort((a, b) => {
-    const slugA = stories.find(s => resolveIssue(s).name === a)!
-    const slugB = stories.find(s => resolveIssue(s).name === b)!
-    return getIssueSortIndex(resolveIssue(slugA).slug) - getIssueSortIndex(resolveIssue(slugB).slug)
-  })
-  const storiesForIntro = stories.map(s => ({
-    title: s.title || s.sourceTitle,
-    issueName: resolveIssue(s).name,
-    blurb: s.marketingBlurb || s.summary || '',
-    emotionTag: s.emotionTag || 'calm',
-  }))
+  const { stories: storiesForIntro, issueNames } = newsletterIntroInput(stories)
 
   let intro = ''
   try {
@@ -242,7 +194,7 @@ export async function buildContent(newsletter: { id: string; selectedStoryIds: s
 
   let currentIssue = ''
   for (const [i, story] of stories.entries()) {
-    const resolved = resolveIssue(story)
+    const resolved = newsletterIssue(story)
     const issueName = resolved.name
     const issueSlug = resolved.slug
     const publisher = story.feed?.displayTitle || story.feed?.title || 'Unknown'

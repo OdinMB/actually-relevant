@@ -12,6 +12,7 @@ import { buildRelatedStoriesPrompt } from '../prompts/related-stories.js'
 import { relatedStoriesResultSchema } from '../schemas/llm.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { PUBLIC_STORY_SELECT } from './storySelect.js'
+import { relatedCandidate, relatedNeedsRanking, relatedSource, type RelatedRow } from './promptInputs.js'
 
 const log = createLogger('story')
 
@@ -68,7 +69,7 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
   const displayCount = config.relatedStories.displayCount
 
   // 2. Find the source story and verify it has an embedding
-  const rows = await prisma.$queryRaw<{ id: string; title: string | null; title_label: string | null }[]>`
+  const rows = await prisma.$queryRaw<RelatedRow[]>`
     SELECT id, title, title_label FROM stories
     WHERE slug = ${slug} AND status = 'published' AND embedding IS NOT NULL
     LIMIT 1
@@ -78,7 +79,7 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
   const candidateCount = displayCount * config.relatedStories.candidateMultiplier
 
   // 3. Get a larger candidate pool via cosine distance
-  const candidates = await prisma.$queryRaw<{ id: string; title: string | null; title_label: string | null }[]>`
+  const candidates = await prisma.$queryRaw<RelatedRow[]>`
     SELECT s.id, s.title, s.title_label
     FROM stories s
     WHERE s.id != ${source.id}
@@ -91,16 +92,12 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
 
   // 4. If we have fewer candidates than needed, skip LLM and return all
   let selectedIds: string[]
-  if (candidates.length <= displayCount) {
+  if (!relatedNeedsRanking(candidates.length)) {
     selectedIds = candidates.map(c => c.id)
   } else {
     // 5. LLM re-ranking
     try {
-      const prompt = buildRelatedStoriesPrompt(
-        { titleLabel: source.title_label, title: source.title },
-        candidates.map(c => ({ id: c.id, titleLabel: c.title_label, title: c.title })),
-        displayCount,
-      )
+      const prompt = buildRelatedStoriesPrompt(relatedSource(source), candidates.map(relatedCandidate), displayCount)
 
       await rateLimitDelay()
       const llm = getLLMByTier(config.relatedStories.modelTier)

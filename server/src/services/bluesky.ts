@@ -11,7 +11,7 @@ import { blueskyPostTextSchema } from '../schemas/bluesky.js'
 import { pickBestStoryForSocial } from './socialMedia.js'
 import type { AuthorFeedResult } from '../lib/bluesky.js'
 import { TTLCache, cached } from '../lib/cache.js'
-import { buildMetaLine } from './socialPostFormat.js'
+import { buildMetaLine, draftMetaParts, type MetaLineParts, type SocialDraftStory } from './socialPostFormat.js'
 import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
@@ -44,14 +44,30 @@ export function assemblePostText(parts: { blurb: string; issueName: string | nul
   return `${parts.blurb}\n${metaLine}`
 }
 
-/**
- * Calculate max chars for the LLM editorial text given the metadata line.
- * Exported for the model-eval harness, which must compute the same limit.
- */
-export function calcMaxBlurbChars(parts: { issueName: string | null; emotionTag: string | null; publisherName: string }): number {
+/** Calculate max chars for the LLM editorial text given the metadata line. */
+export function calcMaxBlurbChars(parts: MetaLineParts): number {
   const metaLine = buildMetaLine(parts)
   // 300 grapheme limit minus metadata line and newline
   return Math.max(50, 300 - metaLine.length - 1)
+}
+
+/**
+ * The draft prompt's input and the metadata line's parts for a story; the blurb budget is what
+ * the metadata line leaves. The model-eval harness builds its post inputs with this too.
+ */
+export function blueskyDraftInput(story: SocialDraftStory): { parts: MetaLineParts; prompt: StoryForBlueskyPost } {
+  const parts = draftMetaParts(story)
+  return {
+    parts,
+    prompt: {
+      id: story.id,
+      title: story.title,
+      titleLabel: story.titleLabel || '',
+      summary: story.summary,
+      relevanceSummary: story.relevanceSummary,
+      maxChars: calcMaxBlurbChars(parts),
+    },
+  }
 }
 
 /**
@@ -88,25 +104,8 @@ export async function generateDraft(storyId: string) {
   })
   if (existingPost) throw new BadRequestError('Story already has a Bluesky post')
 
-  const publisherName = story.feed.displayTitle || story.feed.title
-  const issueName = story.issue?.name ?? null
-  const emotionTag = story.emotionTag
-  const titleLabel = story.titleLabel || ''
-
-  const maxChars = calcMaxBlurbChars({
-    issueName,
-    emotionTag,
-    publisherName,
-  })
-
-  const storyForPrompt: StoryForBlueskyPost = {
-    id: story.id,
-    title: story.title,
-    titleLabel,
-    summary: story.summary,
-    relevanceSummary: story.relevanceSummary,
-    maxChars,
-  }
+  const { parts, prompt: storyForPrompt } = blueskyDraftInput({ ...story, title: story.title, summary: story.summary })
+  const { maxChars } = storyForPrompt
 
   const prompt = buildBlueskyPostPrompt(storyForPrompt)
   const llm = getLLMByTier(config.bluesky.postModelTier)
@@ -123,12 +122,7 @@ export async function generateDraft(storyId: string) {
     blurb = blurb.slice(0, maxChars - 1) + '\u2026'
   }
 
-  const fullText = assemblePostText({
-    blurb,
-    issueName,
-    emotionTag,
-    publisherName,
-  })
+  const fullText = assemblePostText({ blurb, ...parts })
 
   // Final grapheme count safety check
   const graphemeCount = countGraphemes(fullText)
