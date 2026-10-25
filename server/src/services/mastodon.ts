@@ -380,8 +380,7 @@ export async function getFeed(options: { maxId?: string; limit?: number }) {
       : Promise.resolve([]),
   ])
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma type not generated until migration applied
-  const trackedByStatusId = new Map((trackedPosts as any[]).map(p => [p.statusId, p]))
+  const trackedByStatusId = new Map(trackedPosts.map(p => [p.statusId, p]))
 
   // Enrich API items with DB data
   const feed = apiResult.items.map(item => {
@@ -396,8 +395,7 @@ export async function getFeed(options: { maxId?: string; limit?: number }) {
     }
   })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma type not generated until migration applied
-  const dbOnlyPosts = (pendingPosts as any[]).map(p => ({
+  const dbOnlyPosts = pendingPosts.map(p => ({
     id: p.id,
     postText: p.postText,
     status: p.status,

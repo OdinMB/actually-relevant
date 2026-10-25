@@ -3,7 +3,8 @@ import { getOpenAPIDocument } from './openapi.js'
 import { AI_GENERATED_NEWSLETTER_FIELDS, AI_GENERATED_PODCAST_DETAIL_FIELDS, AI_GENERATED_PODCAST_FIELDS, AI_GENERATED_STORY_FIELDS } from './aiProvenance.js'
 
 describe('getOpenAPIDocument', () => {
-  const doc = getOpenAPIDocument()
+  // Read loosely: the assertions walk nested schemas by name, which the OpenAPI types keep optional
+  const doc: any = getOpenAPIDocument()
   const schemas = doc.components.schemas
 
   it('documents the aiGenerated marker on every public story', () => {

@@ -367,8 +367,7 @@ const errorResponseSchema = z
 // Only include public endpoints advertised on the /free-api landing page.
 // Internal endpoints (subscribe, sitemap, etc.) should not appear here.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getOpenAPIDocument(): any {
+export function getOpenAPIDocument(): ReturnType<typeof createDocument> {
   return createDocument({
     openapi: '3.1.0',
     info: {
