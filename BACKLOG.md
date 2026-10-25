@@ -31,6 +31,9 @@ Wait until the first episode has been generated automatically and successfully (
 
 ## Ideas
 
+- Announce each published podcast episode and newsletter issue on Bluesky and Mastodon. Owner, 2026-10-25: build it after the two social services are merged into one channel abstraction, since social posts are keyed to stories today and need a schema change (`/mnt/project-files/codebase-scans/2026-10-25_find-opps.md`, item 4)
+- Signed C2PA Content Credentials on generated images (`og.png`, carousel). Parked by the owner 2026-10-25: a self-signed certificate shows "unrecognized signer", a trusted one costs money and renewal
+
 - Library of static "always true" snippets in the four issue areas that are included randomly (per day) on the frontpage and issue pages
 - Compare: relevance stats against SPIEGEL, BBC, etc.
 
