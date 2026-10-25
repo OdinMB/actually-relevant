@@ -78,58 +78,72 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     timersRef.current.delete(id)
   }, [])
 
-  const startAutoDismiss = useCallback((id: string) => {
-    clearTimer(id)
-    const timer = setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id))
-      timersRef.current.delete(id)
-    }, 4000)
-    timersRef.current.set(id, timer)
-  }, [clearTimer])
+  const startAutoDismiss = useCallback(
+    (id: string) => {
+      clearTimer(id)
+      const timer = setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id))
+        timersRef.current.delete(id)
+      }, 4000)
+      timersRef.current.set(id, timer)
+    },
+    [clearTimer],
+  )
 
-  const addToast = useCallback((type: 'success' | 'error', message: string) => {
-    const id = `auto-${nextId++}`
-    setToasts(prev => [...prev, { id, type, message }])
-    startAutoDismiss(id)
-  }, [startAutoDismiss])
+  const addToast = useCallback(
+    (type: 'success' | 'error', message: string) => {
+      const id = `auto-${nextId++}`
+      setToasts(prev => [...prev, { id, type, message }])
+      startAutoDismiss(id)
+    },
+    [startAutoDismiss],
+  )
 
-  const addProgressToast = useCallback((id: string, message: string, opts: { href?: string; detail?: string } = {}) => {
-    clearTimer(id)
-    setToasts(prev => {
-      if (prev.some(t => t.id === id)) {
-        return prev.map(t => t.id === id ? { ...t, type: 'progress' as const, message, detail: opts.detail, href: opts.href ?? t.href } : t)
+  const addProgressToast = useCallback(
+    (id: string, message: string, opts: { href?: string; detail?: string } = {}) => {
+      clearTimer(id)
+      setToasts(prev => {
+        if (prev.some(t => t.id === id)) {
+          return prev.map(t => (t.id === id ? { ...t, type: 'progress' as const, message, detail: opts.detail, href: opts.href ?? t.href } : t))
+        }
+        return [...prev, { id, type: 'progress' as const, message, detail: opts.detail, href: opts.href }]
+      })
+    },
+    [clearTimer],
+  )
+
+  const updateToast = useCallback(
+    (id: string, { sticky, ...updates }: ToastUpdate) => {
+      setToasts(prev =>
+        prev.map(t => {
+          if (t.id !== id) return t
+          const updated = { ...t, ...updates }
+          // An outcome is announced whole: a progress detail does not carry over into it.
+          return updates.type && updates.type !== 'progress' ? { ...updated, detail: undefined } : updated
+        }),
+      )
+      if (updates.type && updates.type !== 'progress') {
+        if (sticky) clearTimer(id)
+        else startAutoDismiss(id)
       }
-      return [...prev, { id, type: 'progress' as const, message, detail: opts.detail, href: opts.href }]
-    })
-  }, [clearTimer])
+    },
+    [startAutoDismiss, clearTimer],
+  )
 
-  const updateToast = useCallback((id: string, { sticky, ...updates }: ToastUpdate) => {
-    setToasts(prev => prev.map(t => {
-      if (t.id !== id) return t
-      const updated = { ...t, ...updates }
-      // An outcome is announced whole: a progress detail does not carry over into it.
-      return updates.type && updates.type !== 'progress' ? { ...updated, detail: undefined } : updated
-    }))
-    if (updates.type && updates.type !== 'progress') {
-      if (sticky) clearTimer(id)
-      else startAutoDismiss(id)
-    }
-  }, [startAutoDismiss, clearTimer])
-
-  const removeToast = useCallback((id: string) => {
-    clearTimer(id)
-    setToasts(prev => prev.filter(t => t.id !== id))
-  }, [clearTimer])
+  const removeToast = useCallback(
+    (id: string) => {
+      clearTimer(id)
+      setToasts(prev => prev.filter(t => t.id !== id))
+    },
+    [clearTimer],
+  )
 
   return (
     <ToastContext.Provider value={{ toast: addToast, addProgressToast, updateToast, removeToast }}>
       {children}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" aria-live="polite">
         {toasts.map(t => (
-          <div
-            key={t.id}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg text-sm font-medium ${TOAST_STYLES[t.type]}`}
-          >
+          <div key={t.id} className={`flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg text-sm font-medium ${TOAST_STYLES[t.type]}`}>
             <ToastIcon type={t.type} />
             {t.href ? (
               <Link
@@ -141,7 +155,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 <ToastText toast={t} />
               </Link>
             ) : (
-              <span><ToastText toast={t} /></span>
+              <span>
+                <ToastText toast={t} />
+              </span>
             )}
             <button
               onClick={() => removeToast(t.id)}

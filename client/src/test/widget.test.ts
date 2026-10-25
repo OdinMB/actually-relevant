@@ -7,7 +7,9 @@ const AI_HEADER = 'AI-generated headlines from Actually Relevant'
 class FakeXhr {
   status = 200
   responseText = JSON.stringify({
-    data: [{ id: 's1', slug: 's1', title: 'AI headline', sourceTitle: 'Source', feed: { title: 'Feed' }, datePublished: null, dateCrawled: '2026-09-20T00:00:00Z' }],
+    data: [
+      { id: 's1', slug: 's1', title: 'AI headline', sourceTitle: 'Source', feed: { title: 'Feed' }, datePublished: null, dateCrawled: '2026-09-20T00:00:00Z' },
+    ],
   })
   onload: (() => void) | null = null
   onerror: (() => void) | null = null

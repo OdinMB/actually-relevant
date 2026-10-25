@@ -34,7 +34,10 @@ export function batchStories(stories: PreassessItem[]): PreassessItem[][] {
 const batches = (fx: Fixtures, limit?: number) => limited(batchStories(fx.preassess), limit)
 
 export function preassessPrompt(batch: PreassessItem[], issues: IssueForPrompt[]): string {
-  return buildPreassessPrompt(batch.map(s => ({ id: s.id, title: s.title, content: s.content })), issues)
+  return buildPreassessPrompt(
+    batch.map(s => ({ id: s.id, title: s.title, content: s.content })),
+    issues,
+  )
 }
 
 export interface PreassessArmMetrics {
@@ -57,11 +60,7 @@ export interface PreassessArmMetrics {
   publishedRecallOneLower: number | null
 }
 
-export function scorePreassess(
-  bs: PreassessItem[][],
-  records: CallRecord<PreAssessResult>[],
-  issues: IssueForPrompt[],
-): PreassessArmMetrics {
+export function scorePreassess(bs: PreassessItem[][], records: CallRecord<PreAssessResult>[], issues: IssueForPrompt[]): PreassessArmMetrics {
   const slugs = new Set(issues.map(i => i.slug))
   const pairs: { item: PreassessItem; out: PreAssessResult['articles'][number] }[] = []
   let omitted = 0
@@ -90,7 +89,7 @@ export function scorePreassess(
     returned: pairs.length,
     issueAgreement: rate(pairs.map(p => p.out.issueSlug === p.item.stored.issueSlug)),
     emotionAgreement: rate(pairs.map(p => p.out.emotionTag === p.item.stored.emotion)),
-    gateAgreement: rate(pairs.map(p => (p.out.rating >= GATE) === (p.item.stored.rating >= GATE))),
+    gateAgreement: rate(pairs.map(p => p.out.rating >= GATE === p.item.stored.rating >= GATE)),
     publishedRecall: rate(published.map(p => p.out.rating >= GATE)),
     passRate: rate(pairs.map(p => p.out.rating >= GATE)),
     storedPassRate: rate(pairs.map(p => p.item.stored.rating >= GATE)),
@@ -113,30 +112,31 @@ export function decidePreassess(metrics: Record<string, PreassessArmMetrics>, ba
     gate: effectiveBar(0.85, b.gateAgreement),
     published: effectiveBar(0.95, b.publishedRecall),
   }
-  const atLeast = (label: string, value: number | null, bar: number) =>
-    (value ?? 0) >= bar ? [] : [`${label} ${pct(value)} < ${pct(bar)}`]
+  const atLeast = (label: string, value: number | null, bar: number) => ((value ?? 0) >= bar ? [] : [`${label} ${pct(value)} < ${pct(bar)}`])
   return pickLowestPassing(
-    candidates.filter(c => metrics[c]).map(c => {
-      const m = metrics[c]!
-      const drift = m.passRate != null && m.storedPassRate ? Math.abs(m.passRate - m.storedPassRate) / m.storedPassRate : 0
-      return {
-        arm: c,
-        failures: [
-          ...atLeast('issue agreement', m.issueAgreement, bars.issue),
-          ...atLeast('emotion agreement', m.emotionAgreement, bars.emotion),
-          ...atLeast(`≥${GATE} gate agreement`, m.gateAgreement, bars.gate),
-          ...atLeast('published stories passing the gate', m.publishedRecall, bars.published),
-          ...(drift > 0.2 ? [`≥${GATE} pass rate ${pct(m.passRate)} is ${pct(drift)} off stored ${pct(m.storedPassRate)}`] : []),
-          ...(m.omitted > b.omitted ? [`omitted ${m.omitted} articles (baseline ${b.omitted})`] : []),
-          ...(m.failures > b.failures ? [`${m.failures} failed batches (baseline ${b.failures})`] : []),
-          ...(m.junk.length > 0 ? [`foreign-script junk in ${m.junk.length} fields`] : []),
-        ],
-        evidence: [
-          `issue ${pct(m.issueAgreement)}, emotion ${pct(m.emotionAgreement)}, gate ${pct(m.gateAgreement)} agreement with stored values`,
-          `baseline rerun (noise floor): issue ${pct(b.issueAgreement)}, emotion ${pct(b.emotionAgreement)}, gate ${pct(b.gateAgreement)}`,
-        ],
-      }
-    }),
+    candidates
+      .filter(c => metrics[c])
+      .map(c => {
+        const m = metrics[c]!
+        const drift = m.passRate != null && m.storedPassRate ? Math.abs(m.passRate - m.storedPassRate) / m.storedPassRate : 0
+        return {
+          arm: c,
+          failures: [
+            ...atLeast('issue agreement', m.issueAgreement, bars.issue),
+            ...atLeast('emotion agreement', m.emotionAgreement, bars.emotion),
+            ...atLeast(`≥${GATE} gate agreement`, m.gateAgreement, bars.gate),
+            ...atLeast('published stories passing the gate', m.publishedRecall, bars.published),
+            ...(drift > 0.2 ? [`≥${GATE} pass rate ${pct(m.passRate)} is ${pct(drift)} off stored ${pct(m.storedPassRate)}`] : []),
+            ...(m.omitted > b.omitted ? [`omitted ${m.omitted} articles (baseline ${b.omitted})`] : []),
+            ...(m.failures > b.failures ? [`${m.failures} failed batches (baseline ${b.failures})`] : []),
+            ...(m.junk.length > 0 ? [`foreign-script junk in ${m.junk.length} fields`] : []),
+          ],
+          evidence: [
+            `issue ${pct(m.issueAgreement)}, emotion ${pct(m.emotionAgreement)}, gate ${pct(m.gateAgreement)} agreement with stored values`,
+            `baseline rerun (noise floor): issue ${pct(b.issueAgreement)}, emotion ${pct(b.emotionAgreement)}, gate ${pct(b.gateAgreement)}`,
+          ],
+        }
+      }),
   )
 }
 
@@ -154,7 +154,8 @@ export const preassessSuite: Suite = {
   },
   plan(fx, limit) {
     return batches(fx, limit).flatMap(b =>
-      ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: preassessPrompt(b, fx.issues), baseOutputTokens: PREASSESS_OUTPUT_TOKENS })))
+      ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: preassessPrompt(b, fx.issues), baseOutputTokens: PREASSESS_OUTPUT_TOKENS })),
+    )
   },
   async run(fx, ctx) {
     const bs = batches(fx, ctx.limit)
@@ -162,35 +163,77 @@ export const preassessSuite: Suite = {
     const metrics = Object.fromEntries([...records].map(([k, recs]) => [k, scorePreassess(bs, recs, fx.issues)]))
     const stats = statsFor(records)
     return {
-      callSites: [{
-        id: 'preassess',
-        title: 'Pre-assessment (also the proxy for reclassify and emotion-only tagging)',
-        baseline: armKey(BASELINE),
-        candidates: CANDIDATES.map(armKey),
-        stats,
-        metrics: [
-          metricRow('Articles returned', metrics, m => m.returned, v => String(v ?? 0)),
-          metricRow('Issue agreement with stored', metrics, m => m.issueAgreement, pct, 'higher'),
-          metricRow('Emotion agreement with stored', metrics, m => m.emotionAgreement, pct, 'higher'),
-          metricRow(`≥${GATE} gate agreement with stored`, metrics, m => m.gateAgreement, pct, 'higher'),
-          metricRow('Published stories passing the gate', metrics, m => m.publishedRecall, pct, 'higher'),
-          metricRow(`≥${GATE} pass rate`, metrics, m => m.passRate, pct),
-          metricRow(`Stored ≥${GATE} pass rate (same stories)`, metrics, m => m.storedPassRate, pct),
-          metricRow('Mean pre-rating shift vs stored (calibration)', metrics, m => m.meanShift, v => num(v)),
-          metricRow(`≥${GATE - 1} pass rate (gate one point lower)`, metrics, m => m.passRateOneLower, pct),
-          metricRow(`Published stories passing at ≥${GATE - 1}`, metrics, m => m.publishedRecallOneLower, pct),
-          metricRow('Omitted articles', metrics, m => m.omitted, v => String(v ?? 0), 'lower'),
-          metricRow('Unknown article IDs', metrics, m => m.unknownIds, v => String(v ?? 0), 'lower'),
-          metricRow('Invalid issue slugs', metrics, m => m.invalidSlugs, v => String(v ?? 0), 'lower'),
-          metricRow('Failed batches', metrics, m => m.failures, v => String(v ?? 0), 'lower'),
-          metricRow('Foreign-script junk fields', metrics, m => m.junk.length, v => String(v ?? 0), 'lower'),
-        ],
-        decision: decidePreassess(metrics, armKey(BASELINE), CANDIDATES.map(armKey)),
-        notes: [
-          `Stored values are what production wrote (gpt-5-mini, plus any admin edits or reclassify runs); the gpt-5-mini rerun against them is the noise floor.`,
-          ...stats.filter(s => failureCount(s) > 0).map(s => `${s.arm}: ${failureCount(s)} batch calls did not return a parsed result.`),
-        ],
-      }],
+      callSites: [
+        {
+          id: 'preassess',
+          title: 'Pre-assessment (also the proxy for reclassify and emotion-only tagging)',
+          baseline: armKey(BASELINE),
+          candidates: CANDIDATES.map(armKey),
+          stats,
+          metrics: [
+            metricRow(
+              'Articles returned',
+              metrics,
+              m => m.returned,
+              v => String(v ?? 0),
+            ),
+            metricRow('Issue agreement with stored', metrics, m => m.issueAgreement, pct, 'higher'),
+            metricRow('Emotion agreement with stored', metrics, m => m.emotionAgreement, pct, 'higher'),
+            metricRow(`≥${GATE} gate agreement with stored`, metrics, m => m.gateAgreement, pct, 'higher'),
+            metricRow('Published stories passing the gate', metrics, m => m.publishedRecall, pct, 'higher'),
+            metricRow(`≥${GATE} pass rate`, metrics, m => m.passRate, pct),
+            metricRow(`Stored ≥${GATE} pass rate (same stories)`, metrics, m => m.storedPassRate, pct),
+            metricRow(
+              'Mean pre-rating shift vs stored (calibration)',
+              metrics,
+              m => m.meanShift,
+              v => num(v),
+            ),
+            metricRow(`≥${GATE - 1} pass rate (gate one point lower)`, metrics, m => m.passRateOneLower, pct),
+            metricRow(`Published stories passing at ≥${GATE - 1}`, metrics, m => m.publishedRecallOneLower, pct),
+            metricRow(
+              'Omitted articles',
+              metrics,
+              m => m.omitted,
+              v => String(v ?? 0),
+              'lower',
+            ),
+            metricRow(
+              'Unknown article IDs',
+              metrics,
+              m => m.unknownIds,
+              v => String(v ?? 0),
+              'lower',
+            ),
+            metricRow(
+              'Invalid issue slugs',
+              metrics,
+              m => m.invalidSlugs,
+              v => String(v ?? 0),
+              'lower',
+            ),
+            metricRow(
+              'Failed batches',
+              metrics,
+              m => m.failures,
+              v => String(v ?? 0),
+              'lower',
+            ),
+            metricRow(
+              'Foreign-script junk fields',
+              metrics,
+              m => m.junk.length,
+              v => String(v ?? 0),
+              'lower',
+            ),
+          ],
+          decision: decidePreassess(metrics, armKey(BASELINE), CANDIDATES.map(armKey)),
+          notes: [
+            `Stored values are what production wrote (gpt-5-mini, plus any admin edits or reclassify runs); the gpt-5-mini rerun against them is the noise floor.`,
+            ...stats.filter(s => failureCount(s) > 0).map(s => `${s.arm}: ${failureCount(s)} batch calls did not return a parsed result.`),
+          ],
+        },
+      ],
       ratingItems: [],
       notes: [],
     }

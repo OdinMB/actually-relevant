@@ -93,11 +93,7 @@ export function isPrivateAddress(address: string): boolean {
 
 /** Names that only resolve inside a network: localhost, mDNS, internal zones, and dotless names (Render's private service names). */
 function isInternalHostname(hostname: string): boolean {
-  return (
-    !hostname.includes('.') ||
-    /(^|\.)localhost$/i.test(hostname) ||
-    /\.(local|internal|localdomain|home\.arpa)$/i.test(hostname)
-  )
+  return !hostname.includes('.') || /(^|\.)localhost$/i.test(hostname) || /\.(local|internal|localdomain|home\.arpa)$/i.test(hostname)
 }
 
 /**
@@ -136,11 +132,7 @@ export class BlockedUrlError extends Error {
  * option, which adapts the answer to what Node asks for. Node does not call it for IP literals;
  * `isAllowedUrl` covers those.
  */
-export function safeLookup(
-  hostname: string,
-  options: object,
-  callback: (err: Error | null, address: LookupAddress | LookupAddress[]) => void,
-): void {
+export function safeLookup(hostname: string, options: object, callback: (err: Error | null, address: LookupAddress | LookupAddress[]) => void): void {
   const opts: LookupAllOptions = { ...(options as Omit<LookupAllOptions, 'all'>), all: true }
   dnsLookup(hostname, opts, (err, addresses) => {
     if (err) return callback(err, [])
@@ -155,8 +147,7 @@ export function safeLookup(
 
 /** axios `beforeRedirect`: refuses a redirect to a URL `isAllowedUrl` rejects (IP literals included). */
 export function assertRedirectAllowed(options: Record<string, unknown>): void {
-  const redirectUrl = typeof options.href === 'string' ? options.href
-    : `${String(options.protocol)}//${String(options.hostname)}${String(options.path ?? '')}`
+  const redirectUrl = typeof options.href === 'string' ? options.href : `${String(options.protocol)}//${String(options.hostname)}${String(options.path ?? '')}`
   if (!isAllowedUrl(redirectUrl)) {
     throw new BlockedUrlError(`Blocked redirect to disallowed URL: ${redirectUrl}`)
   }

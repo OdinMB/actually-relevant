@@ -27,13 +27,13 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
   },
   $disconnect: vi.fn(),
-  $transaction: vi.fn((args: any) => Array.isArray(args) ? Promise.all(args) : args()),
+  $transaction: vi.fn((args: any) => (Array.isArray(args) ? Promise.all(args) : args())),
 }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
 const mockLifecycleDissolve = vi.hoisted(() => vi.fn())
-vi.mock('./storyLifecycle.js', async (importOriginal) => ({
+vi.mock('./storyLifecycle.js', async importOriginal => ({
   ...(await importOriginal<typeof import('./storyLifecycle.js')>()),
   dissolveCluster: mockLifecycleDissolve,
 }))
@@ -85,10 +85,7 @@ describe('getStories', () => {
     // Both should be combined via AND
     expect(call.where.AND).toHaveLength(2)
     // Rating condition
-    expect(call.where.AND[0].OR).toEqual([
-      { relevance: { gte: 5 } },
-      { relevance: null, relevancePre: { gte: 5 } },
-    ])
+    expect(call.where.AND[0].OR).toEqual([{ relevance: { gte: 5 } }, { relevance: null, relevancePre: { gte: 5 } }])
     // Search condition
     expect(call.where.AND[1].OR).toEqual([
       { title: { contains: 'AI', mode: 'insensitive' } },
@@ -136,7 +133,7 @@ describe('createStory', () => {
     expect(mockPrisma.story.create.mock.calls[0][0].data).toMatchObject({ status: 'rejected', accessTier: 'locked' })
   })
 
-  it.each([['metered'], ['unknown'], ['free'], [undefined]] as const)('stores a %s story as fetched', async (accessTier) => {
+  it.each([['metered'], ['unknown'], ['free'], [undefined]] as const)('stores a %s story as fetched', async accessTier => {
     await createStory({ ...base, accessTier })
 
     expect(mockPrisma.story.create.mock.calls[0][0].data).toMatchObject({ status: 'fetched', accessTier: accessTier ?? null })
@@ -149,10 +146,7 @@ describe('getStoryIdsByStatus', () => {
   })
 
   it('returns story IDs filtered by status', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'id-1' },
-      { id: 'id-2' },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 'id-1' }, { id: 'id-2' }])
 
     const result = await getStoryIdsByStatus('analyzed')
 
@@ -278,12 +272,8 @@ describe('deleteStory', () => {
 
   it('deletes story and removes its ID from newsletters and podcasts', async () => {
     mockPrisma.story.delete.mockResolvedValue({})
-    mockPrisma.newsletter.findMany.mockResolvedValue([
-      { id: 'nl-1', storyIds: ['s1', 's2', 's3'] },
-    ])
-    mockPrisma.podcast.findMany.mockResolvedValue([
-      { id: 'p-1', storyIds: ['s1', 's3'] },
-    ])
+    mockPrisma.newsletter.findMany.mockResolvedValue([{ id: 'nl-1', storyIds: ['s1', 's2', 's3'] }])
+    mockPrisma.podcast.findMany.mockResolvedValue([{ id: 'p-1', storyIds: ['s1', 's3'] }])
     mockPrisma.newsletter.update.mockResolvedValue({})
     mockPrisma.podcast.update.mockResolvedValue({})
 

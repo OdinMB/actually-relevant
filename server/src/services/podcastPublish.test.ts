@@ -10,7 +10,8 @@ const mockFeed = vi.hoisted(() => ({ invalidateFeedCache: vi.fn() }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastFeed.js', () => mockFeed)
 
-const { publishEpisode, unpublishEpisode, getPublishedEpisodes, getPublishedEpisode, pickAutoPublishCandidate, publishBlockedReason } = await import('./podcastPublish.js')
+const { publishEpisode, unpublishEpisode, getPublishedEpisodes, getPublishedEpisode, pickAutoPublishCandidate, publishBlockedReason } =
+  await import('./podcastPublish.js')
 const { PodcastRefusedError, wasPublished, standaloneCopyRefusal } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-12T07:00:00Z') // Monday of 2026-W42
@@ -81,7 +82,14 @@ describe('publishBlockedReason', () => {
 
   it('is null for an episode generated before the review modes and the publish columns existed', () => {
     // A Phase 2 row after the later migrations: automated mode, never edited, a draft never published.
-    const phase2 = ready({ mode: 'automated', humanEdited: false, status: 'draft', publishedAt: null, unpublishedAt: null, readyAt: new Date('2026-10-06T10:00:00Z') })
+    const phase2 = ready({
+      mode: 'automated',
+      humanEdited: false,
+      status: 'draft',
+      publishedAt: null,
+      unpublishedAt: null,
+      readyAt: new Date('2026-10-06T10:00:00Z'),
+    })
     expect(publishBlockedReason(phase2, false)).toBeNull()
   })
 
@@ -158,16 +166,38 @@ describe('getPublishedEpisodes', () => {
   it('maps rows to the public shape with the frozen story snapshot', async () => {
     const publishedAt = new Date('2026-10-12T08:00:00Z')
     const stories = [{ ref: 1, id: 's1', title: 'T', publisher: 'P', sourceUrl: 'https://x.example/1', slug: 't', issue: 'I' }]
-    mockPrisma.podcast.findMany.mockResolvedValueOnce([{
-      id: 'podcast-1', title: 'W42: T', kind: 'weekly', episodeSummary: 'S.', episodeStories: stories, humanEdited: true,
-      audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null,
-      chaptersUrl: 'https://audio.example/e.chapters.json', publishedAt,
-    }])
-    expect(await getPublishedEpisodes()).toEqual([{
-      id: 'podcast-1', title: 'W42: T', kind: 'weekly', summary: 'S.', stories, humanEdited: true,
-      audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null,
-      chaptersUrl: 'https://audio.example/e.chapters.json', publishedAt,
-    }])
+    mockPrisma.podcast.findMany.mockResolvedValueOnce([
+      {
+        id: 'podcast-1',
+        title: 'W42: T',
+        kind: 'weekly',
+        episodeSummary: 'S.',
+        episodeStories: stories,
+        humanEdited: true,
+        audioUrl: 'https://audio.example/e.mp3',
+        audioBytes: 123,
+        durationSec: 360,
+        transcriptUrl: null,
+        chaptersUrl: 'https://audio.example/e.chapters.json',
+        publishedAt,
+      },
+    ])
+    expect(await getPublishedEpisodes()).toEqual([
+      {
+        id: 'podcast-1',
+        title: 'W42: T',
+        kind: 'weekly',
+        summary: 'S.',
+        stories,
+        humanEdited: true,
+        audioUrl: 'https://audio.example/e.mp3',
+        audioBytes: 123,
+        durationSec: 360,
+        transcriptUrl: null,
+        chaptersUrl: 'https://audio.example/e.chapters.json',
+        publishedAt,
+      },
+    ])
     expect(mockPrisma.podcast.findMany.mock.calls.at(-1)![0].select).toMatchObject({ chaptersUrl: true })
   })
 })
@@ -178,7 +208,12 @@ describe('getPublishedEpisode', () => {
     expect(await getPublishedEpisode('podcast-1')).toBeNull()
     const query = mockPrisma.podcast.findFirst.mock.calls[0][0]
     expect(query.where).toMatchObject({
-      id: 'podcast-1', status: 'published', stage: 'ready', dryRun: false, publishedAt: { not: null }, audioUrl: { not: null },
+      id: 'podcast-1',
+      status: 'published',
+      stage: 'ready',
+      dryRun: false,
+      publishedAt: { not: null },
+      audioUrl: { not: null },
     })
   })
 
@@ -186,8 +221,18 @@ describe('getPublishedEpisode', () => {
     const publishedAt = new Date('2026-10-12T08:00:00Z')
     const dialogue = { episodeTitle: 'T', episodeSummary: 'S.', segments: [] }
     mockPrisma.podcast.findFirst.mockResolvedValueOnce({
-      id: 'podcast-1', title: 'W42: T', kind: 'weekly', episodeSummary: 'S.', episodeStories: [], humanEdited: false,
-      audioUrl: 'https://audio.example/e.mp3', audioBytes: 123, durationSec: 360, transcriptUrl: null, publishedAt, dialogue,
+      id: 'podcast-1',
+      title: 'W42: T',
+      kind: 'weekly',
+      episodeSummary: 'S.',
+      episodeStories: [],
+      humanEdited: false,
+      audioUrl: 'https://audio.example/e.mp3',
+      audioBytes: 123,
+      durationSec: 360,
+      transcriptUrl: null,
+      publishedAt,
+      dialogue,
     })
     expect(await getPublishedEpisode('podcast-1')).toMatchObject({ id: 'podcast-1', summary: 'S.', publishedAt, dialogue })
   })

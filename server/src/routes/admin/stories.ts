@@ -165,9 +165,14 @@ router.get('/:id', failsWith('Failed to fetch story'), async (req, res) => {
 })
 
 // A feedId naming no feed is a 400 (BadRequestError from createStory)
-router.post('/', failsWith('Failed to create story', { duplicate: 'A story with this URL already exists' }), validateBody(createStorySchema), async (req, res) => {
-  res.status(201).json(await storyService.createStory(req.body))
-})
+router.post(
+  '/',
+  failsWith('Failed to create story', { duplicate: 'A story with this URL already exists' }),
+  validateBody(createStorySchema),
+  async (req, res) => {
+    res.status(201).json(await storyService.createStory(req.body))
+  },
+)
 
 router.put('/:id', failsWith('Failed to update story', storyNotFound), validateBody(updateStorySchema), async (req, res) => {
   res.json(await storyService.updateStory(req.params.id!, req.body))
@@ -183,9 +188,7 @@ router.post('/bulk-status', failsWith('Failed to bulk update story status'), val
 })
 
 router.post('/preassess', failsWith('Failed to pre-assess stories'), expensiveOpLimiter, validateBody(preassessBodySchema), async (req, res) => {
-  const storyIds: string[] = req.body.storyIds && req.body.storyIds.length > 0
-    ? req.body.storyIds
-    : await storyService.getStoryIdsByStatus('fetched')
+  const storyIds: string[] = req.body.storyIds && req.body.storyIds.length > 0 ? req.body.storyIds : await storyService.getStoryIdsByStatus('fetched')
 
   if (storyIds.length === 0) {
     res.json({ processed: 0, results: [] })

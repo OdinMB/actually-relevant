@@ -21,7 +21,7 @@ function serve(routes: Record<string, Reply>) {
   mockAxiosGet.mockImplementation(async (url: string) => {
     const reply = routes[url] ?? Object.entries(routes).find(([prefix]) => url.startsWith(prefix))?.[1]
     if (!reply) return { status: 404, headers: {}, data: Readable.from([]) }
-    const body = typeof reply.body === 'string' ? Buffer.from(reply.body) : reply.body ?? Buffer.alloc(0)
+    const body = typeof reply.body === 'string' ? Buffer.from(reply.body) : (reply.body ?? Buffer.alloc(0))
     return { status: reply.status ?? 200, headers: { 'content-type': reply.type ?? 'image/png' }, data: Readable.from([body]) }
   })
 }

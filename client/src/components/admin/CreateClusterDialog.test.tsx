@@ -26,10 +26,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof CreateClusterDi
   const defaultProps = {
     open: true,
     onClose: vi.fn(),
-    stories: [
-      makeStory({ id: 's1', title: 'Story One' }),
-      makeStory({ id: 's2', title: 'Story Two' }),
-    ],
+    stories: [makeStory({ id: 's1', title: 'Story One' }), makeStory({ id: 's2', title: 'Story Two' })],
     onSuccess: vi.fn(),
     ...props,
   }
@@ -57,10 +54,7 @@ describe('CreateClusterDialog', () => {
 
   it('shows conflict warning for already-clustered stories', () => {
     renderDialog({
-      stories: [
-        makeStory({ id: 's1', title: 'Story One' }),
-        makeStory({ id: 's2', title: 'Conflicting Story', clusterId: 'existing-cluster' }),
-      ],
+      stories: [makeStory({ id: 's1', title: 'Story One' }), makeStory({ id: 's2', title: 'Conflicting Story', clusterId: 'existing-cluster' })],
     })
     expect(screen.getByText('Some stories are already in a cluster:')).toBeInTheDocument()
     expect(screen.getByText(/Remove these stories/)).toBeInTheDocument()
@@ -70,10 +64,7 @@ describe('CreateClusterDialog', () => {
 
   it('disables Create button when stories have conflicts', () => {
     renderDialog({
-      stories: [
-        makeStory({ id: 's1', title: 'Story One' }),
-        makeStory({ id: 's2', title: 'Conflicting Story', clusterId: 'existing-cluster' }),
-      ],
+      stories: [makeStory({ id: 's1', title: 'Story One' }), makeStory({ id: 's2', title: 'Conflicting Story', clusterId: 'existing-cluster' })],
     })
     expect(screen.getByRole('button', { name: 'Create Cluster' })).toBeDisabled()
   })

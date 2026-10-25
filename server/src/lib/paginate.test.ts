@@ -49,7 +49,7 @@ describe('paginate', () => {
     const callOrder: string[] = []
 
     const findMany = () =>
-      new Promise<string[]>((resolve) => {
+      new Promise<string[]>(resolve => {
         callOrder.push('findMany-start')
         setTimeout(() => {
           callOrder.push('findMany-end')
@@ -58,7 +58,7 @@ describe('paginate', () => {
       })
 
     const count = () =>
-      new Promise<number>((resolve) => {
+      new Promise<number>(resolve => {
         callOrder.push('count-start')
         setTimeout(() => {
           callOrder.push('count-end')

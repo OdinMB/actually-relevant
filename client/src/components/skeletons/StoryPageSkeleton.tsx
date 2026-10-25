@@ -54,7 +54,7 @@ export default function StoryPageSkeleton() {
             <div className="flex-1 border-t border-neutral-200" />
           </div>
           <div className="space-y-6">
-            {[1, 2, 3].map((i) => (
+            {[1, 2, 3].map(i => (
               <div key={i} className="flex gap-4">
                 <div className="w-8 h-8 bg-neutral-100 rounded" />
                 <div className="flex-1 space-y-2">

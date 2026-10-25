@@ -23,7 +23,7 @@ const ACCESS_TIER_LABELS: Record<string, string> = {
 }
 
 function formatAccessTier(tier: string | null): string {
-  return tier ? ACCESS_TIER_LABELS[tier] ?? tier : 'Not classified'
+  return tier ? (ACCESS_TIER_LABELS[tier] ?? tier) : 'Not classified'
 }
 
 interface StoryEditFormProps {
@@ -68,7 +68,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
     entityId: story.id,
     initialState,
     mutation: updateStory,
-    toPayload: (f) => ({
+    toPayload: f => ({
       titleLabel: f.titleLabel || null,
       title: f.title || null,
       slug: f.slug || undefined,
@@ -99,11 +99,12 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
     <>
       <Input id="edit-title-label" label="Title Label" value={form.titleLabel} onChange={e => set('titleLabel', e.target.value)} placeholder="e.g. EU AI Act" />
       <Input id="edit-title" label="Title" value={form.title} onChange={e => set('title', e.target.value)} />
-      {story.slug && (
-        story.datePublished
-          ? <Input id="edit-slug" label="Slug" value={form.slug} readOnly className="bg-neutral-50 text-neutral-500 cursor-not-allowed" />
-          : <Input id="edit-slug" label="Slug" value={form.slug} onChange={e => set('slug', e.target.value)} placeholder="auto-generated-on-publish" />
-      )}
+      {story.slug &&
+        (story.datePublished ? (
+          <Input id="edit-slug" label="Slug" value={form.slug} readOnly className="bg-neutral-50 text-neutral-500 cursor-not-allowed" />
+        ) : (
+          <Input id="edit-slug" label="Slug" value={form.slug} onChange={e => set('slug', e.target.value)} placeholder="auto-generated-on-publish" />
+        ))}
       <div className="grid grid-cols-2 gap-3">
         <Select
           id="edit-status"
@@ -130,17 +131,43 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
         options={buildIssueOptions(issues)}
       />
       <div className="grid grid-cols-2 gap-3">
-        <Input id="edit-rating-pre" label="Pre-rating" type="number" min="1" max="10" value={String(form.relevancePre)} onChange={e => set('relevancePre', e.target.value)} />
+        <Input
+          id="edit-rating-pre"
+          label="Pre-rating"
+          type="number"
+          min="1"
+          max="10"
+          value={String(form.relevancePre)}
+          onChange={e => set('relevancePre', e.target.value)}
+        />
         <Input id="edit-rating" label="Rating" type="number" min="1" max="10" value={String(form.relevance)} onChange={e => set('relevance', e.target.value)} />
       </div>
       <Textarea id="edit-summary" label="Summary" rows={3} value={form.summary} onChange={e => set('summary', e.target.value)} />
       <Input id="edit-quote" label="Quote" value={form.quote} onChange={e => set('quote', e.target.value)} />
-      <Input id="edit-quote-attribution" label="Quote Attribution" value={form.quoteAttribution} onChange={e => set('quoteAttribution', e.target.value)} placeholder="e.g. Dr. Smith, University of Oxford" />
+      <Input
+        id="edit-quote-attribution"
+        label="Quote Attribution"
+        value={form.quoteAttribution}
+        onChange={e => set('quoteAttribution', e.target.value)}
+        placeholder="e.g. Dr. Smith, University of Oxford"
+      />
       <Textarea id="edit-blurb" label="Marketing Blurb" rows={3} value={form.marketingBlurb} onChange={e => set('marketingBlurb', e.target.value)} />
       <Textarea id="edit-reasons" label="Relevance Reasons" rows={3} value={form.relevanceReasons} onChange={e => set('relevanceReasons', e.target.value)} />
-      <Textarea id="edit-relevance-summary" label="Relevance Summary" rows={2} value={form.relevanceSummary} onChange={e => set('relevanceSummary', e.target.value)} />
+      <Textarea
+        id="edit-relevance-summary"
+        label="Relevance Summary"
+        rows={2}
+        value={form.relevanceSummary}
+        onChange={e => set('relevanceSummary', e.target.value)}
+      />
       <Textarea id="edit-antifactors" label="Antifactors" rows={3} value={form.antifactors} onChange={e => set('antifactors', e.target.value)} />
-      <Textarea id="edit-calculation" label="Relevance Calculation" rows={3} value={form.relevanceCalculation} onChange={e => set('relevanceCalculation', e.target.value)} />
+      <Textarea
+        id="edit-calculation"
+        label="Relevance Calculation"
+        rows={3}
+        value={form.relevanceCalculation}
+        onChange={e => set('relevanceCalculation', e.target.value)}
+      />
 
       {/* Source info (read-only) */}
       <div className="border-t border-neutral-200 pt-4 space-y-2">
@@ -163,11 +190,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
         </dl>
         {story.sourceContent && (
           <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => setContentExpanded(!contentExpanded)}
-              className="text-sm text-brand-700 hover:text-brand-800 font-medium"
-            >
+            <button type="button" onClick={() => setContentExpanded(!contentExpanded)} className="text-sm text-brand-700 hover:text-brand-800 font-medium">
               {contentExpanded ? 'Hide content' : 'Show source content'}
             </button>
             {contentExpanded && (
@@ -203,19 +226,14 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
                 .map(s => (
                   <li key={s.id} className="text-sm text-neutral-700 flex items-center gap-1.5">
                     <span className="truncate">{s.title || s.sourceTitle}</span>
-                    {s.id === story.cluster!.primaryStoryId && (
-                      <span className="text-xs text-green-600 font-medium shrink-0">(Primary)</span>
-                    )}
+                    {s.id === story.cluster!.primaryStoryId && <span className="text-xs text-green-600 font-medium shrink-0">(Primary)</span>}
                     <span className="text-xs text-neutral-400 shrink-0">{formatStatus(s.status as StoryStatus)}</span>
                   </li>
                 ))}
             </ul>
           </div>
           <div className="pt-2 flex items-center gap-3">
-            <Link
-              to={`/admin/clusters?open=${story.clusterId}`}
-              className="text-sm text-brand-700 hover:text-brand-800 font-medium"
-            >
+            <Link to={`/admin/clusters?open=${story.clusterId}`} className="text-sm text-brand-700 hover:text-brand-800 font-medium">
               Manage cluster
             </Link>
             {confirmDissolve ? (
@@ -231,20 +249,12 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
                 >
                   {dissolveCluster.isPending ? 'Dissolving...' : 'Confirm'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDissolve(false)}
-                  className="text-sm text-neutral-500 hover:text-neutral-700"
-                >
+                <button type="button" onClick={() => setConfirmDissolve(false)} className="text-sm text-neutral-500 hover:text-neutral-700">
                   Cancel
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDissolve(true)}
-                className="text-sm text-red-600 hover:text-red-700 font-medium"
-              >
+              <button type="button" onClick={() => setConfirmDissolve(true)} className="text-sm text-red-600 hover:text-red-700 font-medium">
                 Dissolve cluster
               </button>
             )}
@@ -253,10 +263,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
       ) : (
         <div className="border-t border-neutral-200 pt-4">
           <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Cluster</h3>
-          <Link
-            to={`/admin/clusters?create=${story.id}`}
-            className="text-sm text-brand-700 hover:text-brand-800 font-medium"
-          >
+          <Link to={`/admin/clusters?create=${story.id}`} className="text-sm text-brand-700 hover:text-brand-800 font-medium">
             Create cluster with this story
           </Link>
         </div>
@@ -269,26 +276,28 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
           {(story._count?.blueskyPosts ?? 0) > 0 ? (
             <p className="text-sm text-neutral-500">
               This story has been posted to Bluesky.
-              {story.blueskyPosts?.[0]?.postUri && (() => {
-                const match = story.blueskyPosts![0].postUri!.match(/^at:\/\/(did:[^/]+)\/app\.bsky\.feed\.post\/(.+)$/)
-                if (!match) return null
-                const url = `https://bsky.app/profile/${match[1]}/post/${match[2]}`
-                return (
-                  <>
-                    {' '}
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
-                      View post
-                    </a>
-                  </>
-                )
-              })()}
+              {story.blueskyPosts?.[0]?.postUri &&
+                (() => {
+                  const match = story.blueskyPosts![0].postUri!.match(/^at:\/\/(did:[^/]+)\/app\.bsky\.feed\.post\/(.+)$/)
+                  if (!match) return null
+                  const url = `https://bsky.app/profile/${match[1]}/post/${match[2]}`
+                  return (
+                    <>
+                      {' '}
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                      >
+                        View post
+                      </a>
+                    </>
+                  )
+                })()}
             </p>
           ) : (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => onBlueskyGenerate(story.id)}
-            >
+            <Button type="button" variant="secondary" onClick={() => onBlueskyGenerate(story.id)}>
               Generate Bluesky Post
             </Button>
           )}
@@ -305,18 +314,19 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
               {story.mastodonPosts?.[0]?.statusUrl && (
                 <>
                   {' '}
-                  <a href={story.mastodonPosts[0].statusUrl} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
+                  <a
+                    href={story.mastodonPosts[0].statusUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                  >
                     View post
                   </a>
                 </>
               )}
             </p>
           ) : (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => onMastodonGenerate(story.id)}
-            >
+            <Button type="button" variant="secondary" onClick={() => onMastodonGenerate(story.id)}>
               Generate Mastodon Post
             </Button>
           )}
@@ -339,8 +349,12 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
     <form onSubmit={handleSubmit} className="space-y-4 pb-16">
       {fields}
       <div className="fixed bottom-0 left-0 right-0 lg:left-60 bg-white border-t border-neutral-200 px-4 lg:px-6 py-3 flex gap-3 z-10">
-        <Button type="submit" loading={isPending} disabled={!isDirty}>Save</Button>
-        <Button type="button" variant="secondary" onClick={onDone}>Cancel</Button>
+        <Button type="submit" loading={isPending} disabled={!isDirty}>
+          Save
+        </Button>
+        <Button type="button" variant="secondary" onClick={onDone}>
+          Cancel
+        </Button>
       </div>
       <UnsavedChangesDialog leave={leave} />
     </form>

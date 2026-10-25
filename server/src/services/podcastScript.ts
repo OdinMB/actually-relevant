@@ -162,7 +162,10 @@ export function loadStoriesByIds(ids: string[]): Promise<PoolStory[]> {
 
 /** The pool holds fewer stories than an episode needs; the model is not asked. */
 export class TooFewStoriesError extends Error {
-  constructor(readonly available: number, readonly needed: number) {
+  constructor(
+    readonly available: number,
+    readonly needed: number,
+  ) {
     super(`only ${available} stories to choose from; an episode needs ${needed}`)
     this.name = 'TooFewStoriesError'
   }
@@ -177,7 +180,14 @@ export async function chooseStories<S extends PoolStory>(pool: S[], kind: Podcas
   const { minStories, maxStories, selectModelTier } = config.podcast
   if (pool.length < minStories) throw new TooFewStoriesError(pool.length, minStories)
   const prompt = buildPodcastSelectPrompt(
-    pool.map(s => ({ id: s.id, issue: topIssueName(s), title: s.title || s.sourceTitle, summary: s.summary || '', relevance: s.relevance, emotionTag: s.emotionTag })),
+    pool.map(s => ({
+      id: s.id,
+      issue: topIssueName(s),
+      title: s.title || s.sourceTitle,
+      summary: s.summary || '',
+      relevance: s.relevance,
+      emotionTag: s.emotionTag,
+    })),
     minStories,
     maxStories,
     kind,
@@ -216,7 +226,12 @@ export async function writeEpisodeScript(stories: SelectedStory[], kind: Podcast
   const refs = stories.map(s => ({ ref: s.snapshot.ref, title: s.snapshot.title, publisher: s.snapshot.publisher }))
   let problems: string[] = []
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const prompt = buildPodcastPrompt(stories.map(s => s.prompt), dialogueCharBudget(kind), kind, problems)
+    const prompt = buildPodcastPrompt(
+      stories.map(s => s.prompt),
+      dialogueCharBudget(kind),
+      kind,
+      problems,
+    )
     const dialogue = await invokeStructured(podcastDialogueSchemaFor(kind), tier, prompt, 'podcast-script')
     if (!dialogue) {
       problems = ['the previous answer did not match the output schema']
@@ -235,10 +250,10 @@ export async function writeEpisodeScript(stories: SelectedStory[], kind: Podcast
  * the script), the summary, then each story with our analysis and its source.
  */
 export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEdited: boolean, kind: PodcastKind): string {
-  const items = stories.map(s => [
-    `${s.ref}. ${s.title} (${s.publisher})`,
-    ...(s.slug ? [`   Our AI analysis: ${config.siteUrl}/stories/${s.slug}`] : []),
-    `   Source: ${s.sourceUrl}`,
-  ].join('\n'))
+  const items = stories.map(s =>
+    [`${s.ref}. ${s.title} (${s.publisher})`, ...(s.slug ? [`   Our AI analysis: ${config.siteUrl}/stories/${s.slug}`] : []), `   Source: ${s.sourceUrl}`].join(
+      '\n',
+    ),
+  )
   return [podcastEpisodeAiLine(humanEdited, kind), '', summary.trim(), '', 'Stories in this episode:', ...items].join('\n')
 }

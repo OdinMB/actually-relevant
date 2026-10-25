@@ -9,9 +9,7 @@ import { assessResultSchema, type AssessResult } from '../../../schemas/llm.js'
 import type { AssessItem, Fixtures } from '../fixtures.js'
 import { TARGETS } from '../fixtures.js'
 import { arm, armKey } from '../models.js'
-import {
-  ASSESS_FORMAT_CHECKS, checkAssessFormat, findJunk, mean, num, pct, rate, type AssessFormatCheck,
-} from '../checks.js'
+import { ASSESS_FORMAT_CHECKS, checkAssessFormat, findJunk, mean, num, pct, rate, type AssessFormatCheck } from '../checks.js'
 import { findAssessMetaCommentary } from '../metaCommentary.js'
 import { findUnsupportedNumbers } from '../numbers.js'
 import { effectiveBar, pickLowestPassing } from '../decide.js'
@@ -57,13 +55,12 @@ function compareRatings(pairs: [number, number][]): RatingComparison {
   return {
     mad: mean(pairs.map(([a, b]) => Math.abs(a - b))),
     shift: mean(pairs.map(([a, b]) => a - b)),
-    splitAgreement: rate(pairs.map(([a, b]) => (a >= SPLIT) === (b >= SPLIT))),
+    splitAgreement: rate(pairs.map(([a, b]) => a >= SPLIT === b >= SPLIT)),
     n: pairs.length,
   }
 }
 
-const NUMBER_FIELDS = (a: AssessResult) =>
-  [a.summary, ...a.factors, ...a.limitingFactors, a.relevanceSummary, a.marketingBlurb].join('\n')
+const NUMBER_FIELDS = (a: AssessResult) => [a.summary, ...a.factors, ...a.limitingFactors, a.relevanceSummary, a.marketingBlurb].join('\n')
 
 export function scoreAssess(stories: AssessItem[], records: CallRecord<AssessResult>[], baseline: CallRecord<AssessResult>[]): AssessArmMetrics {
   const outputs = stories.map((s, i) => ({ s, a: parsedOf(records[i]), b: parsedOf(baseline[i]) }))
@@ -92,30 +89,33 @@ export function decideAssess(metrics: Record<string, AssessArmMetrics>, baseline
   const madBar = b.vsStored.mad != null && b.vsStored.mad > 1 ? b.vsStored.mad : 1
   const splitBar = effectiveBar(0.85, b.vsStored.splitAgreement)
   return pickLowestPassing(
-    candidates.filter(c => metrics[c]).map(c => {
-      const m = metrics[c]!
-      const formatFailures = ASSESS_FORMAT_CHECKS
-        .filter(k => (m.format[k] ?? 0) < (b.format[k] ?? 0) - 0.05)
-        .map(k => `format ${k} ${pct(m.format[k])} < baseline ${pct(b.format[k])} − 5 pts`)
-      const failures = [
-        ...formatFailures,
-        ...((m.vsBaseline.mad ?? Infinity) > madBar ? [`mean absolute rating difference ${num(m.vsBaseline.mad)} > ${num(madBar)}`] : []),
-        ...(Math.abs(m.vsBaseline.shift ?? Infinity) > 0.5 ? [`mean shift ${num(m.vsBaseline.shift)} outside ±0.5`] : []),
-        ...((m.vsBaseline.splitAgreement ?? 0) < splitBar ? [`≥${SPLIT} split agreement ${pct(m.vsBaseline.splitAgreement)} < ${pct(splitBar)}`] : []),
-        ...((m.unsupportedPerOutput ?? 0) > 1.5 * (b.unsupportedPerOutput ?? 0)
-          ? [`unsupported numbers ${num(m.unsupportedPerOutput)}/output > 1.5 × baseline ${num(b.unsupportedPerOutput)}`] : []),
-        ...(m.junk.length > 0 ? [`foreign-script junk in ${m.junk.length} fields`] : []),
-        ...(m.failures > b.failures ? [`${m.failures} failed calls (baseline ${b.failures})`] : []),
-      ]
-      return {
-        arm: c,
-        failures,
-        evidence: [
-          `vs gpt-5-mini rerun: MAD ${num(m.vsBaseline.mad)}, shift ${num(m.vsBaseline.shift)}, ≥${SPLIT} split agreement ${pct(m.vsBaseline.splitAgreement)} (n=${m.vsBaseline.n})`,
-          `noise floor (mini rerun vs stored): MAD ${num(b.vsStored.mad)}, split agreement ${pct(b.vsStored.splitAgreement)}`,
-        ],
-      }
-    }),
+    candidates
+      .filter(c => metrics[c])
+      .map(c => {
+        const m = metrics[c]!
+        const formatFailures = ASSESS_FORMAT_CHECKS.filter(k => (m.format[k] ?? 0) < (b.format[k] ?? 0) - 0.05).map(
+          k => `format ${k} ${pct(m.format[k])} < baseline ${pct(b.format[k])} − 5 pts`,
+        )
+        const failures = [
+          ...formatFailures,
+          ...((m.vsBaseline.mad ?? Infinity) > madBar ? [`mean absolute rating difference ${num(m.vsBaseline.mad)} > ${num(madBar)}`] : []),
+          ...(Math.abs(m.vsBaseline.shift ?? Infinity) > 0.5 ? [`mean shift ${num(m.vsBaseline.shift)} outside ±0.5`] : []),
+          ...((m.vsBaseline.splitAgreement ?? 0) < splitBar ? [`≥${SPLIT} split agreement ${pct(m.vsBaseline.splitAgreement)} < ${pct(splitBar)}`] : []),
+          ...((m.unsupportedPerOutput ?? 0) > 1.5 * (b.unsupportedPerOutput ?? 0)
+            ? [`unsupported numbers ${num(m.unsupportedPerOutput)}/output > 1.5 × baseline ${num(b.unsupportedPerOutput)}`]
+            : []),
+          ...(m.junk.length > 0 ? [`foreign-script junk in ${m.junk.length} fields`] : []),
+          ...(m.failures > b.failures ? [`${m.failures} failed calls (baseline ${b.failures})`] : []),
+        ]
+        return {
+          arm: c,
+          failures,
+          evidence: [
+            `vs gpt-5-mini rerun: MAD ${num(m.vsBaseline.mad)}, shift ${num(m.vsBaseline.shift)}, ≥${SPLIT} split agreement ${pct(m.vsBaseline.splitAgreement)} (n=${m.vsBaseline.n})`,
+            `noise floor (mini rerun vs stored): MAD ${num(b.vsStored.mad)}, split agreement ${pct(b.vsStored.splitAgreement)}`,
+          ],
+        }
+      }),
   )
 }
 
@@ -164,21 +164,23 @@ export function assessRatingDrafts(stories: AssessItem[], baseline: ArmOutputs, 
     const a = parsedOf(baseline.records[i])
     const b = parsedOf(candidate.records[i])
     if (!a || !b) return []
-    return [{
-      set: 'full-assessment' as const,
-      key: s.id,
-      context_md: contextFor(s),
-      options: [
-        { arm: baseline.arm, content_md: renderAssessment(a) },
-        { arm: candidate.arm, content_md: renderAssessment(b) },
-      ],
-      tags: {
-        differ: a.conservativeRating !== b.conservativeRating,
-        nonEnglish: s.language !== 'en',
-        han: s.han,
-        band46: s.stored.rating >= 4 && s.stored.rating <= 6,
+    return [
+      {
+        set: 'full-assessment' as const,
+        key: s.id,
+        context_md: contextFor(s),
+        options: [
+          { arm: baseline.arm, content_md: renderAssessment(a) },
+          { arm: candidate.arm, content_md: renderAssessment(b) },
+        ],
+        tags: {
+          differ: a.conservativeRating !== b.conservativeRating,
+          nonEnglish: s.language !== 'en',
+          han: s.han,
+          band46: s.stored.rating >= 4 && s.stored.rating <= 6,
+        },
       },
-    }]
+    ]
   })
 }
 
@@ -206,37 +208,91 @@ export const assessSuite: Suite = {
     const tasteArm = decision.verdict.kind === 'winner' ? decision.verdict.arm : armKey(arm('gpt-6-luna', 'high'))
     const flagged = CANDIDATES.map(armKey).flatMap(k => (metrics[k]?.unsupported ?? []).map(u => `${k} | story ${u.storyId} | ${u.numbers.join(', ')}`))
     return {
-      callSites: [{
-        id: 'assess',
-        title: 'Full assessment',
-        baseline: armKey(BASELINE),
-        candidates: CANDIDATES.map(armKey),
-        stats: statsFor(records),
-        metrics: [
-          metricRow('Parsed assessments', metrics, m => m.ok, v => String(v ?? 0), 'higher'),
-          ...ASSESS_FORMAT_CHECKS.map(k => metricRow(`Format: ${k}`, metrics, m => m.format[k], pct, 'higher')),
-          metricRow('Rating MAD vs gpt-5-mini rerun', metrics, m => m.vsBaseline.mad, v => num(v), 'lower'),
-          metricRow('Rating shift vs gpt-5-mini rerun', metrics, m => m.vsBaseline.shift, v => num(v)),
-          metricRow(`≥${SPLIT} split agreement vs gpt-5-mini rerun`, metrics, m => m.vsBaseline.splitAgreement, pct, 'higher'),
-          metricRow('Rating MAD vs stored', metrics, m => m.vsStored.mad, v => num(v), 'lower'),
-          metricRow(`≥${SPLIT} split agreement vs stored`, metrics, m => m.vsStored.splitAgreement, pct, 'higher'),
-          metricRow('Rating shift vs stored (calibration)', metrics, m => m.vsStored.shift, v => num(v)),
-          metricRow(`Rated ≥${SPLIT} (selection threshold)`, metrics, m => m.atLeastSplit, pct),
-          metricRow(`Stored rating ≥${SPLIT} (same stories)`, metrics, m => m.storedAtLeastSplit, pct),
-          metricRow('Unsupported numbers per output', metrics, m => m.unsupportedPerOutput, v => num(v), 'lower'),
-          metricRow('Outputs with meta-commentary about the input', metrics, m => m.metaCommentary.length, v => String(v ?? 0), 'lower'),
-          metricRow('Foreign-script junk fields', metrics, m => m.junk.length, v => String(v ?? 0), 'lower'),
-          metricRow('Failed calls', metrics, m => m.failures, v => String(v ?? 0), 'lower'),
-        ],
-        decision,
-        ratingSet: 'full-assessment',
-        notes: [
-          `Taste set compares ${armKey(BASELINE)} with ${tasteArm}.` +
-            (decision.verdict.kind === 'winner' ? '' : ' Neither Luna arm passed the automated gate, so the set shows Luna@high.'),
-          `Numbers flagged as absent from the article (for the fabricated-number spot check; the prompt also allows outside knowledge):`,
-          ...(flagged.length > 0 ? flagged.map(f => `- ${f}`) : ['- none']),
-        ],
-      }],
+      callSites: [
+        {
+          id: 'assess',
+          title: 'Full assessment',
+          baseline: armKey(BASELINE),
+          candidates: CANDIDATES.map(armKey),
+          stats: statsFor(records),
+          metrics: [
+            metricRow(
+              'Parsed assessments',
+              metrics,
+              m => m.ok,
+              v => String(v ?? 0),
+              'higher',
+            ),
+            ...ASSESS_FORMAT_CHECKS.map(k => metricRow(`Format: ${k}`, metrics, m => m.format[k], pct, 'higher')),
+            metricRow(
+              'Rating MAD vs gpt-5-mini rerun',
+              metrics,
+              m => m.vsBaseline.mad,
+              v => num(v),
+              'lower',
+            ),
+            metricRow(
+              'Rating shift vs gpt-5-mini rerun',
+              metrics,
+              m => m.vsBaseline.shift,
+              v => num(v),
+            ),
+            metricRow(`≥${SPLIT} split agreement vs gpt-5-mini rerun`, metrics, m => m.vsBaseline.splitAgreement, pct, 'higher'),
+            metricRow(
+              'Rating MAD vs stored',
+              metrics,
+              m => m.vsStored.mad,
+              v => num(v),
+              'lower',
+            ),
+            metricRow(`≥${SPLIT} split agreement vs stored`, metrics, m => m.vsStored.splitAgreement, pct, 'higher'),
+            metricRow(
+              'Rating shift vs stored (calibration)',
+              metrics,
+              m => m.vsStored.shift,
+              v => num(v),
+            ),
+            metricRow(`Rated ≥${SPLIT} (selection threshold)`, metrics, m => m.atLeastSplit, pct),
+            metricRow(`Stored rating ≥${SPLIT} (same stories)`, metrics, m => m.storedAtLeastSplit, pct),
+            metricRow(
+              'Unsupported numbers per output',
+              metrics,
+              m => m.unsupportedPerOutput,
+              v => num(v),
+              'lower',
+            ),
+            metricRow(
+              'Outputs with meta-commentary about the input',
+              metrics,
+              m => m.metaCommentary.length,
+              v => String(v ?? 0),
+              'lower',
+            ),
+            metricRow(
+              'Foreign-script junk fields',
+              metrics,
+              m => m.junk.length,
+              v => String(v ?? 0),
+              'lower',
+            ),
+            metricRow(
+              'Failed calls',
+              metrics,
+              m => m.failures,
+              v => String(v ?? 0),
+              'lower',
+            ),
+          ],
+          decision,
+          ratingSet: 'full-assessment',
+          notes: [
+            `Taste set compares ${armKey(BASELINE)} with ${tasteArm}.` +
+              (decision.verdict.kind === 'winner' ? '' : ' Neither Luna arm passed the automated gate, so the set shows Luna@high.'),
+            `Numbers flagged as absent from the article (for the fabricated-number spot check; the prompt also allows outside knowledge):`,
+            ...(flagged.length > 0 ? flagged.map(f => `- ${f}`) : ['- none']),
+          ],
+        },
+      ],
       ratingItems: assessRatingDrafts(stories, { arm: armKey(BASELINE), records: baseRecs }, { arm: tasteArm, records: records.get(tasteArm) ?? [] }),
       notes: [],
     }

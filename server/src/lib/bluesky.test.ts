@@ -16,7 +16,7 @@ const AgentCtor = vi.hoisted(() => vi.fn())
 vi.mock('../config.js', () => ({ config: mockConfig }))
 vi.mock('./logger.js', () => ({ createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }) }))
 vi.mock('./retry.js', () => ({ withRetry: (fn: () => Promise<unknown>) => fn() }))
-vi.mock('@atproto/api', async (importOriginal) => {
+vi.mock('@atproto/api', async importOriginal => {
   const actual = await importOriginal<typeof import('@atproto/api')>()
   return {
     ...actual, // real RichText and the AppBsky* type guards
@@ -162,7 +162,10 @@ describe('getAuthorFeed', () => {
         feed: [
           {
             post: {
-              uri: 'at://1', cid: 'c1', indexedAt: '2026-10-01T00:00:00Z', likeCount: 3,
+              uri: 'at://1',
+              cid: 'c1',
+              indexedAt: '2026-10-01T00:00:00Z',
+              likeCount: 3,
               record: { text: 'Hello', createdAt: '2026-09-30T23:59:00Z' },
               embed: { $type: 'app.bsky.embed.external#view', external: { uri: 'https://x', title: 'T', description: 'D', thumb: 'https://cdn/t.jpg' } },
             },
@@ -180,8 +183,16 @@ describe('getAuthorFeed', () => {
     expect(agent.getAuthorFeed).toHaveBeenCalledWith({ actor: 'bot.example.com', limit: 10, filter: 'posts_no_replies' })
     expect(result.cursor).toBe('next')
     expect(result.items[0]).toEqual({
-      uri: 'at://1', cid: 'c1', text: 'Hello', createdAt: '2026-09-30T23:59:00Z', indexedAt: '2026-10-01T00:00:00Z',
-      likeCount: 3, repostCount: 0, replyCount: 0, quoteCount: 0, isRepost: false,
+      uri: 'at://1',
+      cid: 'c1',
+      text: 'Hello',
+      createdAt: '2026-09-30T23:59:00Z',
+      indexedAt: '2026-10-01T00:00:00Z',
+      likeCount: 3,
+      repostCount: 0,
+      replyCount: 0,
+      quoteCount: 0,
+      isRepost: false,
       embed: { uri: 'https://x', title: 'T', description: 'D', thumbUrl: 'https://cdn/t.jpg' },
     })
     expect(result.items[1]).toMatchObject({ text: '', createdAt: '2026-10-02T00:00:00Z', isRepost: true, embed: undefined })

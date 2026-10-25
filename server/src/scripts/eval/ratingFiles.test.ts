@@ -7,8 +7,14 @@ import type { RatingSetsFile } from './ratingSets.js'
 import type { RatingItemDraft, RatingSetSlug } from './types.js'
 
 const draft = (set: RatingSetSlug, key: string, context = `Context ${key}`): RatingItemDraft => ({
-  set, key, context_md: context, tags: {},
-  options: [{ arm: 'gpt-5-mini@medium', content_md: `base ${key}` }, { arm: 'gpt-6-luna@medium', content_md: `cand ${key}` }],
+  set,
+  key,
+  context_md: context,
+  tags: {},
+  options: [
+    { arm: 'gpt-5-mini@medium', content_md: `base ${key}` },
+    { arm: 'gpt-6-luna@medium', content_md: `cand ${key}` },
+  ],
 })
 const many = (set: RatingSetSlug, n: number, prefix: string = set) => Array.from({ length: n }, (_, i) => draft(set, `${prefix}-${i}`))
 const socialPosts = many('social-post', 2).map((d, i) => ({ ...d, tags: { platform: i === 0 ? 'bluesky' : 'mastodon' } }))
@@ -49,7 +55,11 @@ describe('writeRatingDeliverable', () => {
 describe('replaceRatingSetFiles', () => {
   const others = (text: string) => {
     const file = JSON.parse(text) as RatingSetsFile
-    return JSON.stringify(file.sets.filter(s => !s.id.includes('full-assessment')), null, 2)
+    return JSON.stringify(
+      file.sets.filter(s => !s.id.includes('full-assessment')),
+      null,
+      2,
+    )
   }
 
   it('swaps in the new version and leaves every other set exactly as it was', () => {
@@ -63,8 +73,10 @@ describe('replaceRatingSetFiles', () => {
     expect(others(after)).toBe(others(before))
     expect(after).not.toContain('actually-relevant-full-assessment-01')
     expect(Object.keys(JSON.parse(read(out, KEY_FILE)) as object).filter(id => id.includes('full-assessment'))).toEqual([
-      'actually-relevant-full-assessment-v2-01', 'actually-relevant-full-assessment-v2-02',
-      'actually-relevant-full-assessment-v2-03', 'actually-relevant-full-assessment-v2-04',
+      'actually-relevant-full-assessment-v2-01',
+      'actually-relevant-full-assessment-v2-02',
+      'actually-relevant-full-assessment-v2-03',
+      'actually-relevant-full-assessment-v2-04',
     ])
   })
 

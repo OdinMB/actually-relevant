@@ -13,8 +13,7 @@ const SERVER_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 const PRISMA_CLI = path.join(SERVER_DIR, 'node_modules/prisma/build/index.js')
 
 export const MISSING_TEST_DATABASE =
-  'TEST_DATABASE_URL is not set: the db tests need a local database whose name ends in "_test" ' +
-  '(see .context/database-migrations.md, "Integration Tests")'
+  'TEST_DATABASE_URL is not set: the db tests need a local database whose name ends in "_test" ' + '(see .context/database-migrations.md, "Integration Tests")'
 
 function migrateDeploy(url: string): void {
   const result = spawnSync(process.execPath, [PRISMA_CLI, 'migrate', 'deploy'], {
@@ -32,10 +31,7 @@ function migrateDeploy(url: string): void {
  * Check the test database and migrate it. `env` is the shell's environment: here, unlike inside the
  * test workers, DATABASE_URL is still the development database, which the test database must not be.
  */
-export function prepareTestDatabase(
-  env: NodeJS.ProcessEnv,
-  migrate: (url: string) => void = migrateDeploy,
-): void {
+export function prepareTestDatabase(env: NodeJS.ProcessEnv, migrate: (url: string) => void = migrateDeploy): void {
   const url = env.TEST_DATABASE_URL
   if (!url) throw new Error(MISSING_TEST_DATABASE)
 

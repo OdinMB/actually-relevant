@@ -57,9 +57,7 @@ describe('Admin Jobs API', () => {
       ]
       mockPrisma.jobRun.findMany.mockResolvedValue(jobs)
 
-      const res = await request(app)
-        .get('/api/admin/jobs')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/jobs').set(authHeader())
 
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(2)
@@ -93,20 +91,14 @@ describe('Admin Jobs API', () => {
       const updatedJob = { jobName: 'crawl_feeds', enabled: false, cronExpression: '0 */6 * * *' }
       mockPrisma.jobRun.update.mockResolvedValue(updatedJob)
 
-      const res = await request(app)
-        .put('/api/admin/jobs/crawl_feeds')
-        .set(authHeader())
-        .send({ enabled: false })
+      const res = await request(app).put('/api/admin/jobs/crawl_feeds').set(authHeader()).send({ enabled: false })
 
       expect(res.status).toBe(200)
       expect(res.body.enabled).toBe(false)
     })
 
     it('validates cron expression', async () => {
-      const res = await request(app)
-        .put('/api/admin/jobs/crawl_feeds')
-        .set(authHeader())
-        .send({ cronExpression: 'not-a-cron' })
+      const res = await request(app).put('/api/admin/jobs/crawl_feeds').set(authHeader()).send({ cronExpression: 'not-a-cron' })
 
       expect(res.status).toBe(400)
       expect(res.body.error).toBe('Invalid cron expression')
@@ -115,10 +107,7 @@ describe('Admin Jobs API', () => {
     it('returns 404 for unknown job', async () => {
       mockPrisma.jobRun.update.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .put('/api/admin/jobs/nonexistent')
-        .set(authHeader())
-        .send({ enabled: true })
+      const res = await request(app).put('/api/admin/jobs/nonexistent').set(authHeader()).send({ enabled: true })
 
       expect(res.status).toBe(404)
     })
@@ -126,10 +115,7 @@ describe('Admin Jobs API', () => {
     it('refuses to enable a job whose precondition fails, naming what is missing, and saves nothing', async () => {
       mockJobEnableRefusal.mockReturnValueOnce('podcast configuration missing: ELEVENLABS_API_KEY')
 
-      const res = await request(app)
-        .put('/api/admin/jobs/generate_podcast')
-        .set(authHeader())
-        .send({ enabled: true })
+      const res = await request(app).put('/api/admin/jobs/generate_podcast').set(authHeader()).send({ enabled: true })
 
       expect(res.status).toBe(422)
       expect(res.body.error).toContain('ELEVENLABS_API_KEY')
@@ -150,9 +136,7 @@ describe('Admin Jobs API', () => {
     it('answers 409 and starts nothing while the job is already running', async () => {
       mockIsJobRunning.mockResolvedValueOnce(true)
 
-      const res = await request(app)
-        .post('/api/admin/jobs/crawl_feeds/run')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/jobs/crawl_feeds/run').set(authHeader())
 
       expect(res.status).toBe(409)
       expect(mockIsJobRunning).toHaveBeenCalledWith('crawl_feeds')
@@ -162,9 +146,7 @@ describe('Admin Jobs API', () => {
     it('triggers a known job', async () => {
       mockRunJob.mockResolvedValue(undefined)
 
-      const res = await request(app)
-        .post('/api/admin/jobs/crawl_feeds/run')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/jobs/crawl_feeds/run').set(authHeader())
 
       expect(res.status).toBe(200)
       expect(res.body.message).toContain('crawl_feeds')
@@ -172,9 +154,7 @@ describe('Admin Jobs API', () => {
     })
 
     it('returns 404 for unknown job', async () => {
-      const res = await request(app)
-        .post('/api/admin/jobs/nonexistent/run')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/jobs/nonexistent/run').set(authHeader())
 
       expect(res.status).toBe(404)
     })

@@ -11,20 +11,16 @@ describe('normalizeUrl', () => {
   })
 
   it('removes utm tracking parameters', () => {
-    expect(normalizeUrl('https://example.com/article?utm_source=rss&utm_medium=feed'))
-      .toBe('https://example.com/article')
+    expect(normalizeUrl('https://example.com/article?utm_source=rss&utm_medium=feed')).toBe('https://example.com/article')
   })
 
   it('removes fbclid and gclid', () => {
-    expect(normalizeUrl('https://example.com/article?fbclid=abc123'))
-      .toBe('https://example.com/article')
-    expect(normalizeUrl('https://example.com/article?gclid=xyz'))
-      .toBe('https://example.com/article')
+    expect(normalizeUrl('https://example.com/article?fbclid=abc123')).toBe('https://example.com/article')
+    expect(normalizeUrl('https://example.com/article?gclid=xyz')).toBe('https://example.com/article')
   })
 
   it('removes ref and source parameters', () => {
-    expect(normalizeUrl('https://example.com/article?ref=homepage&source=twitter'))
-      .toBe('https://example.com/article')
+    expect(normalizeUrl('https://example.com/article?ref=homepage&source=twitter')).toBe('https://example.com/article')
   })
 
   it('normalizes http to https', () => {
@@ -36,18 +32,15 @@ describe('normalizeUrl', () => {
   })
 
   it('sorts remaining query parameters', () => {
-    expect(normalizeUrl('https://example.com/article?z=1&a=2'))
-      .toBe('https://example.com/article?a=2&z=1')
+    expect(normalizeUrl('https://example.com/article?z=1&a=2')).toBe('https://example.com/article?a=2&z=1')
   })
 
   it('preserves meaningful query parameters', () => {
-    expect(normalizeUrl('https://example.com/search?q=test&page=2'))
-      .toBe('https://example.com/search?page=2&q=test')
+    expect(normalizeUrl('https://example.com/search?q=test&page=2')).toBe('https://example.com/search?page=2&q=test')
   })
 
   it('removes tracking but keeps other params', () => {
-    expect(normalizeUrl('https://example.com/article?id=123&utm_source=rss'))
-      .toBe('https://example.com/article?id=123')
+    expect(normalizeUrl('https://example.com/article?id=123&utm_source=rss')).toBe('https://example.com/article?id=123')
   })
 
   it('lowercases hostname', () => {

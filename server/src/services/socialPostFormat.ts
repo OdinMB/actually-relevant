@@ -17,11 +17,8 @@ function capitalize(s: string): string {
  * (AI Act Art. 50(4)). Each channel's blurb limit is computed from this line's length.
  */
 export function buildMetaLine(parts: MetaLineParts): string {
-  const segments = [
-    parts.issueName,
-    parts.emotionTag ? capitalize(parts.emotionTag) : null,
-    `found on ${parts.publisherName}`,
-    SOCIAL_POST_AI_SEGMENT,
-  ].filter(Boolean)
+  const segments = [parts.issueName, parts.emotionTag ? capitalize(parts.emotionTag) : null, `found on ${parts.publisherName}`, SOCIAL_POST_AI_SEGMENT].filter(
+    Boolean,
+  )
   return segments.join(' | ')
 }

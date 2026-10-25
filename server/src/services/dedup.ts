@@ -59,8 +59,7 @@ export async function findNearestCandidates(
   `
 
   return rows
-    .filter((r): r is RawCandidateRow & { title: string; summary: string } =>
-      r.title != null && r.summary != null)
+    .filter((r): r is RawCandidateRow & { title: string; summary: string } => r.title != null && r.summary != null)
     .map(r => ({
       id: r.id,
       distance: Number(r.distance),
@@ -89,18 +88,20 @@ export async function confirmDuplicates(
   const confirmed = response.assessments.filter(a => a.isDuplicate).length
   log.info({ candidateCount: candidates.length, confirmedCount: confirmed }, 'LLM dedup confirmation complete')
 
-  return response.assessments.map(a => {
-    const candidate = candidates[a.candidateNumber - 1]
-    if (!candidate) {
-      log.warn({ candidateNumber: a.candidateNumber, total: candidates.length }, 'LLM returned out-of-range candidate number')
-      return null
-    }
-    return {
-      id: candidate.id,
-      isDuplicate: a.isDuplicate,
-      reason: a.reason,
-    }
-  }).filter((r): r is NonNullable<typeof r> => r != null)
+  return response.assessments
+    .map(a => {
+      const candidate = candidates[a.candidateNumber - 1]
+      if (!candidate) {
+        log.warn({ candidateNumber: a.candidateNumber, total: candidates.length }, 'LLM returned out-of-range candidate number')
+        return null
+      }
+      return {
+        id: candidate.id,
+        isDuplicate: a.isDuplicate,
+        reason: a.reason,
+      }
+    })
+    .filter((r): r is NonNullable<typeof r> => r != null)
 }
 
 // ──── Stage 3: Cluster management ────────────────────────────────────────────
@@ -127,7 +128,7 @@ export async function findExistingCluster(storyIds: string[]): Promise<{ id: str
   if (otherClusterIds.length > 0) {
     log.warn(
       { targetCluster: primaryClusterId, otherClusters: otherClusterIds, duplicateIds: storyIds },
-      'multi-cluster collision: duplicates span multiple clusters, joining newest'
+      'multi-cluster collision: duplicates span multiple clusters, joining newest',
     )
   }
 
@@ -200,10 +201,7 @@ export async function detectAndCluster(storyId: string): Promise<DetectResult> {
   log.info({ storyId, candidateCount: candidates.length, nearestDistance: candidates[0]!.distance }, 'found dedup candidates')
 
   // Stage 2: LLM confirmation
-  const results = await confirmDuplicates(
-    { title: story.title, summary: story.summary },
-    candidates,
-  )
+  const results = await confirmDuplicates({ title: story.title, summary: story.summary }, candidates)
   const duplicateIds = results.filter(r => r.isDuplicate).map(r => r.id)
 
   if (duplicateIds.length === 0) {

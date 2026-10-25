@@ -120,7 +120,10 @@ function estimateCronIntervalMs(cronExpr: string): number | null {
 
   // "H1,H2,H3" pattern → interval between entries
   if (baseHours === null) {
-    const hours = hourPart.split(',').map(Number).filter(n => !isNaN(n))
+    const hours = hourPart
+      .split(',')
+      .map(Number)
+      .filter(n => !isNaN(n))
     if (hours.length >= 2) {
       baseHours = 24 / hours.length
     }

@@ -5,9 +5,7 @@ import { Pagination } from './Pagination'
 
 describe('Pagination', () => {
   it('renders nothing when totalPages <= 1 and no page size selector', () => {
-    const { container } = render(
-      <Pagination page={1} totalPages={1} onPageChange={vi.fn()} />,
-    )
+    const { container } = render(<Pagination page={1} totalPages={1} onPageChange={vi.fn()} />)
     expect(container.querySelector('nav')).not.toBeInTheDocument()
   })
 
@@ -72,15 +70,7 @@ describe('Pagination', () => {
 
   describe('page size selector', () => {
     it('renders page size selector when onPageSizeChange is provided', () => {
-      render(
-        <Pagination
-          page={1}
-          totalPages={3}
-          onPageChange={vi.fn()}
-          pageSize={25}
-          onPageSizeChange={vi.fn()}
-        />,
-      )
+      render(<Pagination page={1} totalPages={3} onPageChange={vi.fn()} pageSize={25} onPageSizeChange={vi.fn()} />)
       expect(screen.getByLabelText('Show')).toBeInTheDocument()
       expect(screen.getByRole('combobox')).toHaveValue('25')
     })
@@ -91,15 +81,7 @@ describe('Pagination', () => {
     })
 
     it('renders all page size options', () => {
-      render(
-        <Pagination
-          page={1}
-          totalPages={3}
-          onPageChange={vi.fn()}
-          pageSize={25}
-          onPageSizeChange={vi.fn()}
-        />,
-      )
+      render(<Pagination page={1} totalPages={3} onPageChange={vi.fn()} pageSize={25} onPageSizeChange={vi.fn()} />)
       const select = screen.getByRole('combobox')
       const options = Array.from(select.querySelectorAll('option')).map(o => o.textContent)
       expect(options).toEqual(['10', '25', '50', '100'])
@@ -108,29 +90,13 @@ describe('Pagination', () => {
     it('calls onPageSizeChange when a new size is selected', async () => {
       const user = userEvent.setup()
       const onPageSizeChange = vi.fn()
-      render(
-        <Pagination
-          page={1}
-          totalPages={3}
-          onPageChange={vi.fn()}
-          pageSize={25}
-          onPageSizeChange={onPageSizeChange}
-        />,
-      )
+      render(<Pagination page={1} totalPages={3} onPageChange={vi.fn()} pageSize={25} onPageSizeChange={onPageSizeChange} />)
       await user.selectOptions(screen.getByRole('combobox'), '50')
       expect(onPageSizeChange).toHaveBeenCalledWith(50)
     })
 
     it('renders page size selector even when totalPages is 1', () => {
-      render(
-        <Pagination
-          page={1}
-          totalPages={1}
-          onPageChange={vi.fn()}
-          pageSize={100}
-          onPageSizeChange={vi.fn()}
-        />,
-      )
+      render(<Pagination page={1} totalPages={1} onPageChange={vi.fn()} pageSize={100} onPageSizeChange={vi.fn()} />)
       expect(screen.getByLabelText('Show')).toBeInTheDocument()
       expect(screen.getByRole('combobox')).toHaveValue('100')
       // Page buttons should not be shown

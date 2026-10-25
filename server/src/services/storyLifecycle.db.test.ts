@@ -11,9 +11,7 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import {
-  axisVector, createCluster, createFeed, createIssue, createStory, describeDb, setEmbedding, statusesOf, useTestDatabase,
-} from '../test/db/harness.js'
+import { axisVector, createCluster, createFeed, createIssue, createStory, describeDb, setEmbedding, statusesOf, useTestDatabase } from '../test/db/harness.js'
 
 const mockInvoke = vi.hoisted(() => vi.fn())
 vi.mock('./llm.js', () => ({
@@ -32,7 +30,11 @@ vi.mock('./embedding.js', () => ({
 }))
 
 const {
-  publishStory, rejectStory, updateStoryStatus, dissolveCluster: dissolveStoryCluster, getPublishedStoryBySlug,
+  publishStory,
+  rejectStory,
+  updateStoryStatus,
+  dissolveCluster: dissolveStoryCluster,
+  getPublishedStoryBySlug,
   createStory: createStoryViaService,
 } = await import('./story.js')
 const { runPublishStories } = await import('../jobs/publishStories.js')
@@ -52,9 +54,18 @@ const primaryOf = async (clusterId: string) =>
 const promptOf = (messages: BaseMessage[]) => messages.map(m => String(m.content)).join('\n')
 
 const assessAnswer = (rating = 7) => ({
-  publicationDate: '1970-01-01 00:00:00', quote: 'q', quoteAttribution: 'Original article', summary: 'New summary',
-  factors: ['- f'], limitingFactors: ['- l'], relevanceCalculation: ['- c'], conservativeRating: rating,
-  relevanceSummary: 'rs', titleLabel: 'Label', relevanceTitle: 'New title', marketingBlurb: 'mb',
+  publicationDate: '1970-01-01 00:00:00',
+  quote: 'q',
+  quoteAttribution: 'Original article',
+  summary: 'New summary',
+  factors: ['- f'],
+  limitingFactors: ['- l'],
+  relevanceCalculation: ['- c'],
+  conservativeRating: rating,
+  relevanceSummary: 'rs',
+  titleLabel: 'Label',
+  relevanceTitle: 'New title',
+  marketingBlurb: 'mb',
 })
 
 const dedupWasEnabled = config.dedup.enabled
@@ -62,8 +73,12 @@ const dedupWasEnabled = config.dedup.enabled
 describeDb('story lifecycle (PostgreSQL)', () => {
   useTestDatabase()
   // Dedup after assessment is fire-and-forget; its own cases call it directly
-  beforeAll(() => { config.dedup.enabled = false })
-  afterAll(() => { config.dedup.enabled = dedupWasEnabled })
+  beforeAll(() => {
+    config.dedup.enabled = false
+  })
+  afterAll(() => {
+    config.dedup.enabled = dedupWasEnabled
+  })
 
   beforeEach(async () => {
     mockInvoke.mockReset()
@@ -212,7 +227,8 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const byEditor = await story({ status: 'rejected', rejectionReason: 'paywall' })
     const byJob = await story({ status: 'rejected', rejectionReason: 'paywall' })
     mockInvoke.mockImplementation(async (messages: BaseMessage[]) => ({
-      articles: [byEditor.id, byJob.id].filter(id => promptOf(messages).includes(id))
+      articles: [byEditor.id, byJob.id]
+        .filter(id => promptOf(messages).includes(id))
         .map(articleId => ({ articleId, issueSlug, rating: 6, emotionTag: 'calm' })),
     }))
 
@@ -271,7 +287,10 @@ describeDb('story lifecycle (PostgreSQL)', () => {
       await runPublishStories()
 
       expect(mockEnsureEmbeddings).toHaveBeenCalledTimes(3)
-      const slugs = [...(await statusesOf(ids)).values()].map(r => { expect(r.status).toBe('published'); return r.slug })
+      const slugs = [...(await statusesOf(ids)).values()].map(r => {
+        expect(r.status).toBe('published')
+        return r.slug
+      })
       expect(new Set(slugs).size).toBe(5)
     } finally {
       config.publish.chunkSize = chunkSize
@@ -348,9 +367,9 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const primary = await story({ status: 'published', slug: 'primary', datePublished: date })
     const dup = await story({ status: 'rejected', rejectionReason: 'duplicate', slug: 'dup', datePublished: date })
     const fresh = await story({ status: 'rejected', rejectionReason: 'duplicate' })
-    const kept = await Promise.all(([null, 'editor', 'assess_threshold', 'selection'] as const).map(
-      rejectionReason => story({ status: 'rejected', rejectionReason }),
-    ))
+    const kept = await Promise.all(
+      ([null, 'editor', 'assess_threshold', 'selection'] as const).map(rejectionReason => story({ status: 'rejected', rejectionReason })),
+    )
     const clusterId = await createCluster([primary.id, dup.id, fresh.id, ...kept.map(k => k.id)], primary.id)
 
     await dissolveCluster(clusterId)
@@ -516,10 +535,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
   it('two manual clusters claiming one story: one wins, the other leaves nothing behind', async () => {
     const [a, b, c] = await Promise.all([story({ status: 'analyzed' }), story({ status: 'analyzed' }), story({ status: 'analyzed' })])
 
-    const results = await Promise.allSettled([
-      createManualCluster([a.id, b.id], a.id),
-      createManualCluster([b.id, c.id], c.id),
-    ])
+    const results = await Promise.allSettled([createManualCluster([a.id, b.id], a.id), createManualCluster([b.id, c.id], c.id)])
 
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
     expect(await prisma.storyCluster.count()).toBe(1)
@@ -545,7 +561,13 @@ describeDb('story lifecycle (PostgreSQL)', () => {
   // ──── Rejection reasons ─────────────────────────────────────────────────
 
   it('a paywall-locked story is created rejected for the paywall', async () => {
-    const s = await createStoryViaService({ sourceUrl: 'https://news.example/locked', sourceTitle: 'Locked', sourceContent: 'teaser', feedId, accessTier: 'locked' })
+    const s = await createStoryViaService({
+      sourceUrl: 'https://news.example/locked',
+      sourceTitle: 'Locked',
+      sourceContent: 'teaser',
+      feedId,
+      accessTier: 'locked',
+    })
     expect(await row(s.id)).toMatchObject({ status: 'rejected', rejectionReason: 'paywall' })
     const free = await createStoryViaService({ sourceUrl: 'https://news.example/free', sourceTitle: 'Free', sourceContent: 'text', feedId, accessTier: 'free' })
     expect(await row(free.id)).toMatchObject({ status: 'fetched', rejectionReason: null })
@@ -568,9 +590,15 @@ describeDb('story lifecycle (PostgreSQL)', () => {
   })
 
   it('the migration backfill marks only never-published rejected non-primaries as duplicates', async () => {
-    const migration = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'prisma', 'migrations',
-      '20261025130000_story_rejection_reason', 'migration.sql'), 'utf8')
-    const backfills = migration.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(s => /^UPDATE\b/i.test(s))
+    const migration = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'prisma', 'migrations', '20261025130000_story_rejection_reason', 'migration.sql'),
+      'utf8',
+    )
+    const backfills = migration
+      .replace(/--[^\n]*/g, '')
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => /^UPDATE\b/i.test(s))
     expect(backfills).toHaveLength(2)
 
     const primary = await story({ status: 'published', slug: 'p', datePublished: new Date() })
@@ -591,8 +619,9 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   it('the database refuses a rejection reason on a story that is not rejected', async () => {
     const s = await story({ status: 'analyzed' })
-    await expect(prisma.$executeRaw`UPDATE stories SET rejection_reason = 'editor' WHERE id = ${s.id}`)
-      .rejects.toThrow(/stories_rejection_reason_only_when_rejected/)
+    await expect(prisma.$executeRaw`UPDATE stories SET rejection_reason = 'editor' WHERE id = ${s.id}`).rejects.toThrow(
+      /stories_rejection_reason_only_when_rejected/,
+    )
   })
 
   // ──── Concurrency ───────────────────────────────────────────────────────
@@ -629,8 +658,12 @@ describeDb('story lifecycle (PostgreSQL)', () => {
         removeFromCluster(clusterId, ids[2]),
       ])
 
-      expect(results.filter(r => r.status === 'rejected').map(r => String((r as PromiseRejectedResult).reason))
-        .filter(e => /deadlock/i.test(e))).toEqual([])
+      expect(
+        results
+          .filter(r => r.status === 'rejected')
+          .map(r => String((r as PromiseRejectedResult).reason))
+          .filter(e => /deadlock/i.test(e)),
+      ).toEqual([])
     }
   })
 

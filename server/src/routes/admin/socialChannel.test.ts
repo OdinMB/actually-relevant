@@ -121,14 +121,20 @@ describe.each([
   describe('POST /posts/pick-and-draft', () => {
     it('picks and drafts (201)', async () => {
       service.pickAndDraft.mockResolvedValue({ post: { id: 'p1' }, reasoning: 'r' })
-      const res = await request(app).post(`${base}/posts/pick-and-draft`).set(authHeader()).send({ storyIds: [STORY_1, STORY_2] })
+      const res = await request(app)
+        .post(`${base}/posts/pick-and-draft`)
+        .set(authHeader())
+        .send({ storyIds: [STORY_1, STORY_2] })
       expect(res.status).toBe(201)
       expect(service.pickAndDraft).toHaveBeenCalledWith([STORY_1, STORY_2])
     })
 
     it('answers 400 when no story can be drafted', async () => {
       service.pickAndDraft.mockRejectedValue(new BadRequestError('No stories found'))
-      const res = await request(app).post(`${base}/posts/pick-and-draft`).set(authHeader()).send({ storyIds: [STORY_1, STORY_2] })
+      const res = await request(app)
+        .post(`${base}/posts/pick-and-draft`)
+        .set(authHeader())
+        .send({ storyIds: [STORY_1, STORY_2] })
       expect(res.status).toBe(400)
       expect(res.body).toEqual({ error: 'No stories found' })
     })

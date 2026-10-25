@@ -80,7 +80,14 @@ async function storeChunkFenced(id: string, chunk: VoicedChunk): Promise<void> {
       SELECT "id" FROM "podcasts" WHERE "id" = ${id} AND "lease_owner" = ${PROCESS_ID} FOR UPDATE`
     if (held.length === 0) throw new LeaseLostError(id)
     await tx.podcastAudioChunk.create({
-      data: { podcastId: id, index: chunk.index, bytes: new Uint8Array(chunk.bytes), requestId: chunk.requestId, chars: chunk.chars, durationMs: chunk.durationMs },
+      data: {
+        podcastId: id,
+        index: chunk.index,
+        bytes: new Uint8Array(chunk.bytes),
+        requestId: chunk.requestId,
+        chars: chunk.chars,
+        durationMs: chunk.durationMs,
+      },
     })
   })
 }
@@ -251,16 +258,33 @@ export interface RewindOptions {
 }
 
 const AUDIO_CLEARED = {
-  ttsModelId: null, voiceIds: Prisma.DbNull, audioUrl: null, audioPath: null, transcriptUrl: null, transcriptPath: null,
-  chaptersUrl: null, chaptersPath: null, audioBytes: null, durationSec: null, readyAt: null,
+  ttsModelId: null,
+  voiceIds: Prisma.DbNull,
+  audioUrl: null,
+  audioPath: null,
+  transcriptUrl: null,
+  transcriptPath: null,
+  chaptersUrl: null,
+  chaptersPath: null,
+  audioBytes: null,
+  durationSec: null,
+  readyAt: null,
 } satisfies Prisma.PodcastUpdateManyMutationInput
 
 const SCRIPT_CLEARED = {
-  dialogue: Prisma.DbNull, script: '', episodeSummary: '', showNotes: '', scriptModelId: null, ttsSeed: null,
+  dialogue: Prisma.DbNull,
+  script: '',
+  episodeSummary: '',
+  showNotes: '',
+  scriptModelId: null,
+  ttsSeed: null,
 } satisfies Prisma.PodcastUpdateManyMutationInput
 
 const STORIES_CLEARED = {
-  episodeStories: Prisma.DbNull, storyIds: [], storiesSelectedAt: null, humanEdited: false,
+  episodeStories: Prisma.DbNull,
+  storyIds: [],
+  storiesSelectedAt: null,
+  humanEdited: false,
 } satisfies Prisma.PodcastUpdateManyMutationInput
 
 /** ElevenLabs takes a 32-bit seed; this stays inside Postgres' integer. */

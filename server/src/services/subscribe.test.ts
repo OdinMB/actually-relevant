@@ -28,13 +28,7 @@ vi.mock('./subscribeLimits.js', () => ({
 const mockLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }))
 vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLogger }))
 
-const {
-  subscribe,
-  confirmSubscription,
-  EmailValidationError,
-  ConfirmationEmailError,
-  SignupUnavailableError,
-} = await import('./subscribe.js')
+const { subscribe, confirmSubscription, EmailValidationError, ConfirmationEmailError, SignupUnavailableError } = await import('./subscribe.js')
 
 describe('subscribe service', () => {
   beforeEach(() => {
@@ -51,9 +45,7 @@ describe('subscribe service', () => {
   })
 
   describe('logging', () => {
-    const allLogged = () => JSON.stringify(
-      [mockLogger.info, mockLogger.warn, mockLogger.error, mockLogger.debug].flatMap(fn => fn.mock.calls),
-    )
+    const allLogged = () => JSON.stringify([mockLogger.info, mockLogger.warn, mockLogger.error, mockLogger.debug].flatMap(fn => fn.mock.calls))
 
     it('logs no email address on signup, a failed send or a failed verification', async () => {
       await subscribe({ email: 'person@example.com' })
@@ -68,7 +60,11 @@ describe('subscribe service', () => {
 
     it('logs no email address when confirming, logging the subscription id instead', async () => {
       mockPrisma.pendingSubscription.findFirst.mockResolvedValue({
-        id: 'sub-1', email: 'person@example.com', confirmedAt: null, expiresAt: new Date(Date.now() + 60_000), plunkContactId: null,
+        id: 'sub-1',
+        email: 'person@example.com',
+        confirmedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+        plunkContactId: null,
       })
       mockPlunk.createContact.mockRejectedValueOnce(new Error('plunk down'))
       await confirmSubscription('token', 'person@example.com')

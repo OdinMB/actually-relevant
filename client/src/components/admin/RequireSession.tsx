@@ -33,10 +33,13 @@ export function RequireSession({ children }: { children: ReactNode }) {
       <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
         <div className="w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-6 text-center shadow-sm" role="alert">
           <h1 className="text-lg font-semibold text-neutral-900">Can't reach the server</h1>
-          <p className="mt-2 text-sm text-neutral-600">
-            You may still be signed in. Check your connection, or wait a moment if the site is being updated.
-          </p>
-          <Button className="mt-4 w-full" onClick={() => { retryRestoreSession() }}>
+          <p className="mt-2 text-sm text-neutral-600">You may still be signed in. Check your connection, or wait a moment if the site is being updated.</p>
+          <Button
+            className="mt-4 w-full"
+            onClick={() => {
+              retryRestoreSession()
+            }}
+          >
             Try again
           </Button>
         </div>

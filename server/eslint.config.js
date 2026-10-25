@@ -11,10 +11,7 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
     rules: {
       // `_`-prefixed names are deliberate: unused parameters, and keys dropped by a rest spread
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none', ignoreRestSiblings: true },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none', ignoreRestSiblings: true }],
       // Regexes that match no-break spaces and a BOM spell those characters out
       'no-irregular-whitespace': ['error', { skipRegExps: true }],
       // `declare global { namespace Express { … } }` is how Express's Request is augmented

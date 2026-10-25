@@ -46,7 +46,9 @@ async function seedMatrix() {
 
 describeDb('issue filter (PostgreSQL)', () => {
   useTestDatabase()
-  beforeEach(() => { mockSearchEmbedding.mockReset() })
+  beforeEach(() => {
+    mockSearchEmbedding.mockReset()
+  })
 
   it('the Prisma and SQL forms select the same stories, for a parent and for a child slug', async () => {
     const stories = await seedMatrix()
@@ -58,7 +60,12 @@ describeDb('issue filter (PostgreSQL)', () => {
     }
 
     const climate = await prisma.story.findMany({ where: storyInIssueWhere('climate'), select: { id: true } })
-    expect(climate.map(r => r.id).sort()).toEqual(stories.filter(s => s.inClimate).map(s => s.id).sort())
+    expect(climate.map(r => r.id).sort()).toEqual(
+      stories
+        .filter(s => s.inClimate)
+        .map(s => s.id)
+        .sort(),
+    )
   })
 
   it('searchByEmbedding orders published stories by cosine distance and applies the issue filter', async () => {
@@ -75,16 +82,26 @@ describeDb('issue filter (PostgreSQL)', () => {
     expect(all.map(r => r.id)).not.toContain(draft.id)
 
     const inHealth = await searchByEmbedding(query, { issueFilter: Prisma.sql`AND ${storyInIssueSql('health')}` })
-    expect(inHealth.map(r => r.id).sort()).toEqual(stories.filter(s => !s.inClimate).map(s => s.id).sort())
+    expect(inHealth.map(r => r.id).sort()).toEqual(
+      stories
+        .filter(s => !s.inClimate)
+        .map(s => s.id)
+        .sort(),
+    )
   })
 
-  it("hybrid search keeps both legs inside the issue", async () => {
+  it('hybrid search keeps both legs inside the issue', async () => {
     const stories = await seedMatrix()
     // The semantic leg is nearest to an out-of-issue story; the filter must still drop it
     mockSearchEmbedding.mockResolvedValue(axisVector(stories.find(s => !s.inClimate)!.axis))
 
     const result = await getPublishedStories({ search: 'climate', issueSlug: 'climate', pageSize: 50 })
 
-    expect(result.data.map(s => s.id).sort()).toEqual(stories.filter(s => s.inClimate).map(s => s.id).sort())
+    expect(result.data.map(s => s.id).sort()).toEqual(
+      stories
+        .filter(s => s.inClimate)
+        .map(s => s.id)
+        .sort(),
+    )
   })
 })

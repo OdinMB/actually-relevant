@@ -14,7 +14,7 @@ const mockPrisma = vi.hoisted(() => ({
   issue: {
     findMany: vi.fn(),
   },
-  $transaction: vi.fn((args: any) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
+  $transaction: vi.fn((args: any) => (Array.isArray(args) ? Promise.all(args) : args(mockPrisma))),
 }))
 
 const mockGetSmallLLM = vi.hoisted(() => vi.fn())
@@ -32,9 +32,12 @@ vi.mock('./llm.js', () => ({
   getLargeLLM: mockGetLargeLLM,
   getLLMByTier: vi.fn((tier: string) => {
     switch (tier) {
-      case 'small': return mockGetSmallLLM()
-      case 'medium': return mockGetMediumLLM()
-      case 'large': return mockGetLargeLLM()
+      case 'small':
+        return mockGetSmallLLM()
+      case 'medium':
+        return mockGetMediumLLM()
+      case 'large':
+        return mockGetLargeLLM()
     }
   }),
   rateLimitDelay: mockRateLimitDelay,
@@ -51,7 +54,7 @@ vi.mock('./dedup.js', () => ({
 // Status writes go through the lifecycle module, tested on PostgreSQL (storyLifecycle.db.test.ts)
 const mockTransition = vi.hoisted(() => vi.fn())
 const mockRecordAnalysis = vi.hoisted(() => vi.fn())
-vi.mock('./storyLifecycle.js', async (importOriginal) => ({
+vi.mock('./storyLifecycle.js', async importOriginal => ({
   ...(await importOriginal<typeof import('./storyLifecycle.js')>()),
   transition: mockTransition,
   recordAnalysis: mockRecordAnalysis,
@@ -106,16 +109,19 @@ describe('preAssessStories', () => {
     expect(results[1]).toEqual({ storyId: 'story-2', rating: 2, emotionTag: 'calm' })
 
     // The status move is the lifecycle module's: these are the fields it writes with it
-    expect(mockRecordAnalysis).toHaveBeenCalledWith('preassess', 'pipeline', [
-      { id: 'story-1', data: { issueId: issue.id, relevancePre: 4, emotionTag: 'calm' } },
-      { id: 'story-2', data: { issueId: issue.id, relevancePre: 2, emotionTag: 'calm' } },
-    ], expect.any(Map))
+    expect(mockRecordAnalysis).toHaveBeenCalledWith(
+      'preassess',
+      'pipeline',
+      [
+        { id: 'story-1', data: { issueId: issue.id, relevancePre: 4, emotionTag: 'calm' } },
+        { id: 'story-2', data: { issueId: issue.id, relevancePre: 2, emotionTag: 'calm' } },
+      ],
+      expect.any(Map),
+    )
   })
 
   it('falls back to feed issueId for invalid slugs', async () => {
-    const issues = [
-      sampleIssue({ id: 'issue-1', slug: 'ai-technology', name: 'AI', description: 'AI topics' }),
-    ]
+    const issues = [sampleIssue({ id: 'issue-1', slug: 'ai-technology', name: 'AI', description: 'AI topics' })]
     mockPrisma.issue.findMany.mockResolvedValue(issues)
 
     const story = storyWithRelations({ id: 'story-1' })
@@ -124,9 +130,7 @@ describe('preAssessStories', () => {
 
     const mockStructuredLlm = {
       invoke: vi.fn().mockResolvedValue({
-        articles: [
-          { articleId: 'story-1', issueSlug: 'nonexistent-slug', rating: 5, emotionTag: 'calm' },
-        ],
+        articles: [{ articleId: 'story-1', issueSlug: 'nonexistent-slug', rating: 5, emotionTag: 'calm' }],
       }),
     }
     mockGetMediumLLM.mockReturnValue({
@@ -137,9 +141,7 @@ describe('preAssessStories', () => {
 
     expect(results).toHaveLength(1)
     // Falls back to feed's issueId
-    expect(recordedRows()).toEqual([
-      { id: 'story-1', data: { issueId: story.feed.issue.id, relevancePre: 5, emotionTag: 'calm' } },
-    ])
+    expect(recordedRows()).toEqual([{ id: 'story-1', data: { issueId: story.feed.issue.id, relevancePre: 5, emotionTag: 'calm' } }])
   })
 })
 
@@ -157,9 +159,7 @@ describe('reclassifyStories', () => {
 
     const mockStructuredLlm = {
       invoke: vi.fn().mockResolvedValue({
-        articles: [
-          { articleId: 'story-1', issueSlug: 'ai-technology', emotionTag: 'uplifting' },
-        ],
+        articles: [{ articleId: 'story-1', issueSlug: 'ai-technology', emotionTag: 'uplifting' }],
       }),
     }
     mockGetSmallLLM.mockReturnValue({
@@ -180,9 +180,7 @@ describe('reclassifyStories', () => {
   })
 
   it('falls back to feed issueId for invalid slugs', async () => {
-    const issues = [
-      sampleIssue({ id: 'issue-1', slug: 'ai-technology', name: 'AI', description: 'AI topics' }),
-    ]
+    const issues = [sampleIssue({ id: 'issue-1', slug: 'ai-technology', name: 'AI', description: 'AI topics' })]
     mockPrisma.issue.findMany.mockResolvedValue(issues)
 
     const story = storyWithRelations({ id: 'story-1' })
@@ -191,9 +189,7 @@ describe('reclassifyStories', () => {
 
     const mockStructuredLlm = {
       invoke: vi.fn().mockResolvedValue({
-        articles: [
-          { articleId: 'story-1', issueSlug: 'nonexistent-slug', emotionTag: 'calm' },
-        ],
+        articles: [{ articleId: 'story-1', issueSlug: 'nonexistent-slug', emotionTag: 'calm' }],
       }),
     }
     mockGetSmallLLM.mockReturnValue({
@@ -213,8 +209,7 @@ describe('assessStory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockDetectAndCluster.mockResolvedValue({ clusterId: null, newCluster: false, memberCount: 0, rejectedIds: [] })
-    mockRecordAnalysis.mockImplementation(async (_stage: string, _actor: string, rows: { id: string }[]) =>
-      new Map(rows.map(r => [r.id, 'advanced'])))
+    mockRecordAnalysis.mockImplementation(async (_stage: string, _actor: string, rows: { id: string }[]) => new Map(rows.map(r => [r.id, 'advanced'])))
   })
 
   it('generates the embedding from the analysis and hands both to the lifecycle write', async () => {
@@ -255,11 +250,18 @@ describe('assessStory', () => {
     })
 
     // One write: the analysis fields and the embedding together
-    expect(mockRecordAnalysis).toHaveBeenCalledWith('assess', 'pipeline', [{
-      id: 'story-1',
-      data: expect.objectContaining({ titleLabel: 'Test topic', summary: 'Test summary with key information.' }),
-      embedding: { embedding: [0.1, 0.2], hash: 'abc123' },
-    }], expect.any(Map))
+    expect(mockRecordAnalysis).toHaveBeenCalledWith(
+      'assess',
+      'pipeline',
+      [
+        {
+          id: 'story-1',
+          data: expect.objectContaining({ titleLabel: 'Test topic', summary: 'Test summary with key information.' }),
+          embedding: { embedding: [0.1, 0.2], hash: 'abc123' },
+        },
+      ],
+      expect.any(Map),
+    )
     // Written against the status read before the model call
     expect([...mockRecordAnalysis.mock.calls.at(-1)![3]]).toEqual([['story-1', expect.any(String)]])
   })
@@ -346,12 +348,14 @@ describe('AI-generated field registry', () => {
 
   /** A model response with recognisable text in every field of the live assess schema. */
   function sentinelResponse(): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(assessResultSchema.shape).map(([key, field]) => {
-      if (field instanceof z.ZodString) return [key, `${SENTINEL} ${key}`]
-      if (field instanceof z.ZodArray) return [key, [`${SENTINEL} ${key}`]]
-      if (field instanceof z.ZodNumber) return [key, 5]
-      throw new Error(`sentinelResponse: add a case for the schema type of "${key}"`)
-    }))
+    return Object.fromEntries(
+      Object.entries(assessResultSchema.shape).map(([key, field]) => {
+        if (field instanceof z.ZodString) return [key, `${SENTINEL} ${key}`]
+        if (field instanceof z.ZodArray) return [key, [`${SENTINEL} ${key}`]]
+        if (field instanceof z.ZodNumber) return [key, 5]
+        throw new Error(`sentinelResponse: add a case for the schema type of "${key}"`)
+      }),
+    )
   }
 
   beforeEach(() => {
@@ -370,11 +374,9 @@ describe('AI-generated field registry', () => {
     await assessStory('story-1')
 
     const written = recordedRows()[0].data
-    const modelWritten = Object.keys(written).filter(
-      (key) => typeof written[key] === 'string' && (written[key] as string).includes(SENTINEL),
-    )
+    const modelWritten = Object.keys(written).filter(key => typeof written[key] === 'string' && (written[key] as string).includes(SENTINEL))
     const publicFields = new Set(Object.keys(PUBLIC_STORY_SELECT))
-    const modelWrittenAndServed = modelWritten.filter((key) => publicFields.has(key))
+    const modelWrittenAndServed = modelWritten.filter(key => publicFields.has(key))
 
     expect(modelWrittenAndServed.length).toBeGreaterThan(0)
     expect([...modelWrittenAndServed].sort()).toEqual([...AI_GENERATED_STORY_FIELDS].sort())
@@ -394,7 +396,7 @@ describe('selectStories', () => {
     expect(mockGetLargeLLM).not.toHaveBeenCalled()
   })
 
-  it('shows the model when each candidate\'s source was published', async () => {
+  it("shows the model when each candidate's source was published", async () => {
     mockPrisma.story.findMany.mockResolvedValue([
       sampleStory({ id: 'story-1', status: 'analyzed', sourceDatePublished: new Date('2023-05-01T08:00:00Z') }),
       sampleStory({ id: 'story-2', status: 'analyzed', sourceDatePublished: null }),

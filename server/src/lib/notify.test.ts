@@ -86,7 +86,11 @@ describe('jobFailureNotice', () => {
 
   it('files every other job under jobs, keyed by job name', () => {
     expect(jobFailureNotice('crawl_feeds', 'timeout')).toMatchObject({
-      source: 'jobs', severity: 'warning', link: '/admin/jobs', message: 'timeout', dedupeKey: 'job-failure:crawl_feeds',
+      source: 'jobs',
+      severity: 'warning',
+      link: '/admin/jobs',
+      message: 'timeout',
+      dedupeKey: 'job-failure:crawl_feeds',
     })
   })
 })

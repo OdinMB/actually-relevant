@@ -24,10 +24,7 @@ interface RelatedEntry {
 // Per source slug. Every read re-checks that the source and each related story are still published,
 // so the cache never serves an unpublished story; unpublishing also drops the story's own entry.
 const MAX_RELATED_CACHE_SIZE = 500
-const relatedCache = new TTLCache<RelatedEntry | null>(
-  config.relatedStories.cacheHours * 60 * 60 * 1000,
-  { maxEntries: MAX_RELATED_CACHE_SIZE },
-)
+const relatedCache = new TTLCache<RelatedEntry | null>(config.relatedStories.cacheHours * 60 * 60 * 1000, { maxEntries: MAX_RELATED_CACHE_SIZE })
 
 /** Drop the cached related lists of these stories, which left `published` or were deleted. */
 export function forgetRelatedStories(storyIds: string[]): void {
@@ -42,7 +39,12 @@ export function forgetRelatedStories(storyIds: string[]): void {
  * one computation (one LLM call); only the published ones of the cached ids are returned.
  */
 export async function getRelatedStories(slug: string, limit: number = config.relatedStories.displayCount) {
-  const entry = await cached(relatedCache, slug, () => rankRelatedStories(slug), e => e !== null && e.ids.length > 0)
+  const entry = await cached(
+    relatedCache,
+    slug,
+    () => rankRelatedStories(slug),
+    e => e !== null && e.ids.length > 0,
+  )
   if (!entry || entry.ids.length === 0) return []
 
   // One query checks the source is still published and fetches the published related stories
@@ -50,13 +52,13 @@ export async function getRelatedStories(slug: string, limit: number = config.rel
     where: { id: { in: [entry.sourceId, ...entry.ids] }, status: 'published' },
     select: PUBLIC_STORY_SELECT,
   })
-  const storyMap = new Map(rows.map((s) => [s.id, s]))
+  const storyMap = new Map(rows.map(s => [s.id, s]))
   if (!storyMap.has(entry.sourceId)) {
     relatedCache.invalidate(slug)
     return []
   }
   return entry.ids
-    .map((id) => storyMap.get(id))
+    .map(id => storyMap.get(id))
     .filter((s): s is NonNullable<typeof s> => s != null)
     .slice(0, limit)
 }
@@ -90,13 +92,13 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
   // 4. If we have fewer candidates than needed, skip LLM and return all
   let selectedIds: string[]
   if (candidates.length <= displayCount) {
-    selectedIds = candidates.map((c) => c.id)
+    selectedIds = candidates.map(c => c.id)
   } else {
     // 5. LLM re-ranking
     try {
       const prompt = buildRelatedStoriesPrompt(
         { titleLabel: source.title_label, title: source.title },
-        candidates.map((c) => ({ id: c.id, titleLabel: c.title_label, title: c.title })),
+        candidates.map(c => ({ id: c.id, titleLabel: c.title_label, title: c.title })),
         displayCount,
       )
 
@@ -106,8 +108,8 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
       const response = await structuredLlm.invoke([new HumanMessage(prompt)])
 
       // Validate returned IDs against candidate pool
-      const candidateIdSet = new Set(candidates.map((c) => c.id))
-      const validIds = response.selectedIds.filter((id) => candidateIdSet.has(id))
+      const candidateIdSet = new Set(candidates.map(c => c.id))
+      const validIds = response.selectedIds.filter(id => candidateIdSet.has(id))
 
       if (validIds.length > 0) {
         selectedIds = validIds.slice(0, displayCount)
@@ -115,12 +117,12 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
       } else {
         // LLM returned no valid IDs — fall back to cosine order
         log.warn({ slug }, 'LLM returned no valid IDs for related stories, falling back to cosine')
-        selectedIds = candidates.slice(0, displayCount).map((c) => c.id)
+        selectedIds = candidates.slice(0, displayCount).map(c => c.id)
       }
     } catch (err) {
       // LLM failed — fall back to cosine order
       log.warn({ err, slug }, 'LLM re-ranking failed for related stories, falling back to cosine')
-      selectedIds = candidates.slice(0, displayCount).map((c) => c.id)
+      selectedIds = candidates.slice(0, displayCount).map(c => c.id)
     }
   }
 

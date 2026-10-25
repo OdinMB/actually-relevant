@@ -22,9 +22,6 @@ describe('testDatabaseRefusal', () => {
   })
 
   it('accepts a test database next to a different development database', () => {
-    expect(testDatabaseRefusal(
-      'postgresql://u:p@localhost:5433/actually_relevant_test',
-      'postgresql://u:p@localhost:5433/actually_relevant_dev',
-    )).toBeNull()
+    expect(testDatabaseRefusal('postgresql://u:p@localhost:5433/actually_relevant_test', 'postgresql://u:p@localhost:5433/actually_relevant_dev')).toBeNull()
   })
 })

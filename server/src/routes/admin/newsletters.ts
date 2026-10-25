@@ -6,12 +6,7 @@ import { generateCarouselForNewsletter } from '../../services/newsletter.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
-import {
-  createNewsletterSchema,
-  updateNewsletterSchema,
-  newsletterQuerySchema,
-  sendLiveSchema,
-} from '../../schemas/newsletter.js'
+import { createNewsletterSchema, updateNewsletterSchema, newsletterQuerySchema, sendLiveSchema } from '../../schemas/newsletter.js'
 
 // Errors: the service throws ServiceErrors ("Newsletter not found" 404, "No stories selected" 400,
 // TestSegmentNotConfiguredError 409, …) and the global handler in app.ts answers;
@@ -69,7 +64,11 @@ router.post('/:id/carousel', failsWith('Failed to generate carousel images', new
   })
   stream.pipe(res)
   stream.on('end', () => {
-    try { unlinkSync(zipPath) } catch { /* ignore */ }
+    try {
+      unlinkSync(zipPath)
+    } catch {
+      /* ignore */
+    }
   })
 })
 

@@ -56,8 +56,7 @@ describe('PublicLayout', () => {
   })
 
   describe('Saved link', () => {
-    const savedLinks = () =>
-      within(screen.getByRole('banner')).queryAllByRole('link', { name: /^Saved/, hidden: true })
+    const savedLinks = () => within(screen.getByRole('banner')).queryAllByRole('link', { name: /^Saved/, hidden: true })
 
     beforeEach(() => {
       localStorage.clear()
@@ -92,7 +91,7 @@ describe('PublicLayout', () => {
         ...within(header).getAllByRole('link', { name: /^(Podcast|Saved)/, hidden: true }),
       ]
         .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
-        .map((el) => el.textContent?.replace(/\s*\(\d+\)$/, '').trim())
+        .map(el => el.textContent?.replace(/\s*\(\d+\)$/, '').trim())
       expect(order).toEqual(['Newsletter', 'Podcast', 'Saved', 'Newsletter', 'Podcast', 'Saved Stories'])
     })
   })
@@ -115,8 +114,7 @@ describe('PublicLayout', () => {
   })
 
   describe('Search panel', () => {
-    const openSearch = () =>
-      fireEvent.click(within(screen.getByRole('navigation', { name: 'Issue categories' })).getByRole('button', { name: 'Open search' }))
+    const openSearch = () => fireEvent.click(within(screen.getByRole('navigation', { name: 'Issue categories' })).getByRole('button', { name: 'Open search' }))
     const searchBox = () => screen.queryByRole('textbox', { name: 'Search stories' })
 
     it('clears the query on the first Escape and closes on the second', () => {

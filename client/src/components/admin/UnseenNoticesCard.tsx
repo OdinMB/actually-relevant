@@ -26,7 +26,9 @@ export function UnseenNoticesCard() {
             <li key={notice.id} className="flex items-center gap-3 px-4 py-2 text-sm">
               <NoticeSeverityBadge severity={notice.severity} />
               <span className="flex-1 min-w-0 truncate text-neutral-900">{notice.title}</span>
-              <span className="text-neutral-500"><NoticeTime dateStr={notice.lastOccurredAt} /></span>
+              <span className="text-neutral-500">
+                <NoticeTime dateStr={notice.lastOccurredAt} />
+              </span>
             </li>
           ))}
         </ul>

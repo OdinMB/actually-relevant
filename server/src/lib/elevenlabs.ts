@@ -34,7 +34,10 @@ export interface DialogueAudio {
 
 /** ElevenLabs refused for credits, quota, auth or a paused account: retrying will not help. */
 export class ElevenLabsQuotaError extends Error {
-  constructor(message: string, readonly status: number | undefined) {
+  constructor(
+    message: string,
+    readonly status: number | undefined,
+  ) {
     super(message)
     this.name = 'ElevenLabsQuotaError'
   }
@@ -73,13 +76,16 @@ function retryableAnswer(err: unknown): boolean {
 }
 
 async function call<T>(request: () => Promise<AxiosResponse<T>>): Promise<AxiosResponse<T>> {
-  return withRetry(async () => {
-    try {
-      return await request()
-    } catch (err) {
-      throw classify(err)
-    }
-  }, { retries: 1, retryOn: retryableAnswer })
+  return withRetry(
+    async () => {
+      try {
+        return await request()
+      } catch (err) {
+        throw classify(err)
+      }
+    },
+    { retries: 1, retryOn: retryableAnswer },
+  )
 }
 
 function headers(accept: string): Record<string, string> {
@@ -96,16 +102,14 @@ export async function textToDialogue(req: DialogueRequest): Promise<DialogueAudi
     ...(req.previousText ? { previous_text: req.previousText } : {}),
     ...(req.futureText ? { future_text: req.futureText } : {}),
   }
-  const res = await call(() => axios.post<ArrayBuffer>(
-    `${config.elevenlabs.baseUrl}/v1/text-to-dialogue?output_format=${config.podcast.ttsOutputFormat}`,
-    body,
-    {
+  const res = await call(() =>
+    axios.post<ArrayBuffer>(`${config.elevenlabs.baseUrl}/v1/text-to-dialogue?output_format=${config.podcast.ttsOutputFormat}`, body, {
       headers: headers('audio/mpeg'),
       responseType: 'arraybuffer',
       timeout: config.elevenlabs.timeoutMs,
       maxContentLength: config.elevenlabs.maxResponseBytes,
-    },
-  ))
+    }),
+  )
   const cost = res.headers['character-cost']
   const requestId = res.headers['request-id']
   return {
@@ -123,9 +127,11 @@ interface Subscription {
 
 /** Credits left on the subscription: GET /v1/user/subscription (lags a few calls behind usage). */
 export async function getRemainingCharacters(): Promise<number> {
-  const res = await call(() => axios.get<Subscription>(`${config.elevenlabs.baseUrl}/v1/user/subscription`, {
-    headers: headers('application/json'),
-    timeout: 30_000,
-  }))
+  const res = await call(() =>
+    axios.get<Subscription>(`${config.elevenlabs.baseUrl}/v1/user/subscription`, {
+      headers: headers('application/json'),
+      timeout: 30_000,
+    }),
+  )
   return res.data.character_limit - res.data.character_count
 }

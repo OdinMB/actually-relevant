@@ -14,16 +14,36 @@ import { PodcastStoryFinder, toStoryFilters } from './PodcastStoryFinder'
 import { moveStory } from './podcastStoryDraft'
 
 const candidate = (n: number): PodcastStoryCandidate => ({
-  id: `s${n}`, title: `Story ${n}`, publisher: `Pub ${n}`, sourceUrl: `https://x.example/${n}`, slug: null, issue: `Issue ${n}`, relevance: 8, dateCrawled: '2026-09-01T10:00:00.000Z',
+  id: `s${n}`,
+  title: `Story ${n}`,
+  publisher: `Pub ${n}`,
+  sourceUrl: `https://x.example/${n}`,
+  slug: null,
+  issue: `Issue ${n}`,
+  relevance: 8,
+  dateCrawled: '2026-09-01T10:00:00.000Z',
 })
 
 const chosenList = () => screen.queryByRole('list', { name: 'Chosen stories' })
-const chosenTitles = () => (chosenList() ? within(chosenList()!).getAllByRole('listitem').map(li => li.textContent ?? '') : [])
+const chosenTitles = () =>
+  chosenList()
+    ? within(chosenList()!)
+        .getAllByRole('listitem')
+        .map(li => li.textContent ?? '')
+    : []
 
 beforeEach(() => {
   vi.clearAllMocks()
   mockApi.active.mockResolvedValue([])
-  mockApi.storySearch.mockResolvedValue({ data: [1, 2, 3, 4, 5, 6].map(candidate), total: 6, page: 1, pageSize: 20, totalPages: 1, minStories: 4, maxStories: 5 })
+  mockApi.storySearch.mockResolvedValue({
+    data: [1, 2, 3, 4, 5, 6].map(candidate),
+    total: 6,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1,
+    minStories: 4,
+    maxStories: 5,
+  })
   mockApi.saveStories.mockImplementation(async (_id: string, storyIds: string[]) => makeStandalonePodcast({ stage: 'selected', storyIds }))
 })
 
@@ -39,7 +59,8 @@ describe('moveStory', () => {
 describe('toStoryFilters', () => {
   it('sends whole UTC days and only the filters that are set', () => {
     expect(toStoryFilters({ from: '2026-09-01', to: '2026-09-30', issueId: '', search: '  ' })).toEqual({
-      crawledAfter: '2026-09-01T00:00:00.000Z', crawledBefore: '2026-09-30T23:59:59.999Z',
+      crawledAfter: '2026-09-01T00:00:00.000Z',
+      crawledBefore: '2026-09-30T23:59:59.999Z',
     })
   })
 })
@@ -87,9 +108,18 @@ describe('PodcastStoryFinder', () => {
     expect(chosenTitles()).toEqual([])
   })
 
-  it('shows each result\'s relevance rating, and a dash where a story has none', async () => {
+  it("shows each result's relevance rating, and a dash where a story has none", async () => {
     mockApi.storySearch.mockResolvedValue({
-      data: [{ ...candidate(1), relevance: 9 }, { ...candidate(2), relevance: null }], total: 2, page: 1, pageSize: 20, totalPages: 1, minStories: 4, maxStories: 5,
+      data: [
+        { ...candidate(1), relevance: 9 },
+        { ...candidate(2), relevance: null },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+      minStories: 4,
+      maxStories: 5,
     })
     renderInAdmin(<PodcastStoryFinder podcast={makeStandalonePodcast()} />)
     await screen.findByRole('button', { name: 'Add Story 1' })

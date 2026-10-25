@@ -22,12 +22,7 @@ const CATEGORIES = [
 // Must match config.feedback.messageMaxLength on the server
 const MAX_MESSAGE_LENGTH = 2000
 
-export default function FeedbackForm({
-  onSuccess,
-  autoFocus = false,
-  idPrefix = 'feedback',
-  hideHeading = false,
-}: FeedbackFormProps) {
+export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 'feedback', hideHeading = false }: FeedbackFormProps) {
   const [category, setCategory] = useState<string>('general')
   const [message, setMessage] = useState('')
   const [email, setEmail] = useState('')
@@ -71,9 +66,7 @@ export default function FeedbackForm({
           </svg>
         </div>
         <h2 className="text-xl font-bold text-neutral-900 mb-2">Thanks for your feedback!</h2>
-        <p className="text-neutral-600 text-sm mb-6">
-          We appreciate you taking the time to share your thoughts.
-        </p>
+        <p className="text-neutral-600 text-sm mb-6">We appreciate you taking the time to share your thoughts.</p>
         {onSuccess && (
           <button
             onClick={onSuccess}
@@ -101,7 +94,7 @@ export default function FeedbackForm({
         <fieldset>
           <legend className="sr-only">Category</legend>
           <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => (
+            {CATEGORIES.map(cat => (
               <label
                 key={cat.value}
                 className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors border ${
@@ -126,12 +119,14 @@ export default function FeedbackForm({
 
         {/* Message */}
         <div>
-          <label htmlFor={`${idPrefix}-message`} className="sr-only">Message</label>
+          <label htmlFor={`${idPrefix}-message`} className="sr-only">
+            Message
+          </label>
           <textarea
             ref={messageRef}
             id={`${idPrefix}-message`}
             value={message}
-            onChange={(e) => setMessage(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
+            onChange={e => setMessage(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
             placeholder="What's on your mind?"
             required
             rows={4}
@@ -152,7 +147,7 @@ export default function FeedbackForm({
             id={`${idPrefix}-email`}
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={e => setEmail(e.target.value)}
             placeholder="your@email.com — if you'd like a response"
             autoComplete="email"
             className="w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-200 outline-none transition-colors"
@@ -162,14 +157,7 @@ export default function FeedbackForm({
         {/* Honeypot — hidden from humans */}
         <div aria-hidden="true" className="absolute -left-[9999px] -top-[9999px]">
           <label htmlFor={`${idPrefix}-website`}>Website</label>
-          <input
-            id={`${idPrefix}-website`}
-            type="text"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-            tabIndex={-1}
-            autoComplete="off"
-          />
+          <input id={`${idPrefix}-website`} type="text" value={website} onChange={e => setWebsite(e.target.value)} tabIndex={-1} autoComplete="off" />
         </div>
 
         {status === 'error' && (

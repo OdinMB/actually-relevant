@@ -19,8 +19,7 @@ const META_PATTERNS = [
 
 /** Phrases in `text` that refer to the input itself, in reading order. */
 export function findMetaCommentary(text: string): string[] {
-  return META_PATTERNS
-    .flatMap(re => [...text.matchAll(re)].map(m => ({ at: m.index ?? 0, phrase: m[0] })))
+  return META_PATTERNS.flatMap(re => [...text.matchAll(re)].map(m => ({ at: m.index ?? 0, phrase: m[0] })))
     .sort((a, b) => a.at - b.at)
     .map(m => m.phrase)
 }

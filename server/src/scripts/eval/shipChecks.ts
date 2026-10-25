@@ -22,12 +22,18 @@ import { arm, armKey, versionedSchemaName } from './models.js'
 import type { RecalibrationStep } from './options.js'
 import { monthlyAt, runOne, type RecalibrationStepDef, type StepInput } from './recalibrationChecks.js'
 import {
-  checkShipPost, datedForReplay, podcastCriteria, selectionCriteria, socialPostCriteria, STALE_DATE, staleProbeId, staleProbesKept, type ShipPostCheck,
+  checkShipPost,
+  datedForReplay,
+  podcastCriteria,
+  selectionCriteria,
+  socialPostCriteria,
+  STALE_DATE,
+  staleProbeId,
+  staleProbesKept,
+  type ShipPostCheck,
 } from './shipRules.js'
 import { scoreSelection } from './suites/largeTier.js'
-import {
-  checkPodcastSelection, podcastEpisodeStories, podcastPool, podcastPrompt, podcastSelectPrompt, scoreDialogue,
-} from './suites/podcast.js'
+import { checkPodcastSelection, podcastEpisodeStories, podcastPool, podcastPrompt, podcastSelectPrompt, scoreDialogue } from './suites/podcast.js'
 import { buildPhase1SelectPrompt } from './suites/selectPhase1Prompt.js'
 import { limited, parsedOf } from './suites/shared.js'
 import { POST_TOKENS, postPrompt } from './suites/social.js'
@@ -49,8 +55,14 @@ const SELECT_OUTPUT_TOKENS = 1100
 
 /** Every cached post story, `--limit` applying per platform. */
 const socialPosts = ({ fx, opts }: StepInput): SocialPostItem[] => [
-  ...limited(fx.socialPost.filter(p => p.platform === 'bluesky'), opts.limit),
-  ...limited(fx.socialPost.filter(p => p.platform === 'mastodon'), opts.limit),
+  ...limited(
+    fx.socialPost.filter(p => p.platform === 'bluesky'),
+    opts.limit,
+  ),
+  ...limited(
+    fx.socialPost.filter(p => p.platform === 'mastodon'),
+    opts.limit,
+  ),
 ]
 
 const listSeparated = (items: string[]) => (items.length > 0 ? items.join(', ') : 'none')
@@ -67,9 +79,13 @@ function postLine(c: ShipPostCheck): string {
 
 const socialPostStep: RecalibrationStepDef = {
   name: 'social-post',
-  plan: input => socialPosts(input).map(p => ({
-    arm: arm('gpt-6-luna', input.opts.effort), schemaName: POST_SCHEMA[p.platform], prompt: postPrompt(p), baseOutputTokens: POST_TOKENS,
-  })),
+  plan: input =>
+    socialPosts(input).map(p => ({
+      arm: arm('gpt-6-luna', input.opts.effort),
+      schemaName: POST_SCHEMA[p.platform],
+      prompt: postPrompt(p),
+      baseOutputTokens: POST_TOKENS,
+    })),
   async run(input, ctx) {
     const a = arm('gpt-6-luna', input.opts.effort)
     const items = socialPosts(input)
@@ -91,7 +107,7 @@ const socialPostStep: RecalibrationStepDef = {
       arm: armKey(a),
       sample: `${bluesky.length} Bluesky and ${mastodon.length} Mastodon stories (every cached post story)`,
       criteria: socialPostCriteria(checks, failed),
-      details: ['Every draft, for the spot check against the story (text before production\'s ellipsis trim):', ...checks.map(postLine)],
+      details: ["Every draft, for the spot check against the story (text before production's ellipsis trim):", ...checks.map(postLine)],
       stats: [stats],
       monthly: monthlyAt('social-post', stats),
     }
@@ -110,9 +126,13 @@ const phase1Prompt = (g: SelectionGroup) => buildPhase1SelectPrompt(g.stories, g
 
 const selectionStep: RecalibrationStepDef = {
   name: 'selection',
-  plan: input => selectionGroups(input).map(g => ({
-    arm: SOL, schemaName: SELECT_SCHEMA, prompt: replayPrompt(replayGroup(g)), baseOutputTokens: SELECT_OUTPUT_TOKENS,
-  })),
+  plan: input =>
+    selectionGroups(input).map(g => ({
+      arm: SOL,
+      schemaName: SELECT_SCHEMA,
+      prompt: replayPrompt(replayGroup(g)),
+      baseOutputTokens: SELECT_OUTPUT_TOKENS,
+    })),
   async preflight(input, phase1) {
     const gs = selectionGroups(input)
     await runOne(phase1, SOL, gs, PHASE1_SELECT_SCHEMA, selectResultSchema, phase1Prompt)
@@ -162,10 +182,11 @@ const podcastItems = ({ fx }: StepInput): PodcastItem[] => (fx.podcast ? [fx.pod
 
 const podcastStep: RecalibrationStepDef = {
   name: 'podcast',
-  plan: input => podcastItems(input).flatMap(p => [
-    { arm: SOL, schemaName: PODCAST_SELECT_SCHEMA, prompt: podcastSelectPrompt(p), baseOutputTokens: SELECT_OUTPUT_TOKENS },
-    { arm: SOL, schemaName: PODCAST_SCHEMA, prompt: podcastPrompt(p), baseOutputTokens: PODCAST_OUTPUT_TOKENS },
-  ]),
+  plan: input =>
+    podcastItems(input).flatMap(p => [
+      { arm: SOL, schemaName: PODCAST_SELECT_SCHEMA, prompt: podcastSelectPrompt(p), baseOutputTokens: SELECT_OUTPUT_TOKENS },
+      { arm: SOL, schemaName: PODCAST_SCHEMA, prompt: podcastPrompt(p), baseOutputTokens: PODCAST_OUTPUT_TOKENS },
+    ]),
   async run(input, ctx) {
     const items = podcastItems(input)
     if (items.length === 0) throw new Error('the cached fixtures have no podcast pool')
@@ -189,7 +210,7 @@ const podcastStep: RecalibrationStepDef = {
       criteria: podcastCriteria(dialogueCheck, selectionCheck, failed),
       details: [
         ...(dialogueCheck?.errors.length ? ['Validation errors:', ...dialogueCheck.errors.map(e => `- ${e}`)] : []),
-        'Segue report (each segment\'s opening turn after the intro; check they connect rather than read as templates):',
+        "Segue report (each segment's opening turn after the intro; check they connect rather than read as templates):",
         ...(dialogueCheck?.segues.map(s => `- ${s.segment}: ${s.opening}`) ?? ['- no dialogue']),
         'Selection:',
         ...(selectionCheck?.picks.map(id => `- ${titleOf.get(id) ?? id}`) ?? ['- no selection']),

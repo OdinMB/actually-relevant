@@ -63,12 +63,7 @@ export default defineConfig({
         maxConcurrentRoutes: 1,
         renderAfterDocumentEvent: 'render-complete',
         launchOptions: {
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-          ],
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
         },
       },
       postProcess(renderedRoute) {
@@ -95,7 +90,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-rollupOptions: {
+    rollupOptions: {
       output: {
         // Let Rollup handle chunking automatically. Admin code will be
         // code-split via React.lazy() dynamic imports in App.tsx.

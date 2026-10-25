@@ -1,11 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { config } from '../config.js'
-import {
-  AI_GENERATED_STORY_FIELDS,
-  IPTC_TRAINED_ALGORITHMIC_MEDIA,
-  aiGeneratedMarker,
-  withAiGeneratedMarker,
-} from './aiProvenance.js'
+import { AI_GENERATED_STORY_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA, aiGeneratedMarker, withAiGeneratedMarker } from './aiProvenance.js'
 
 const assessModel = config.llm.models[config.assess.modelTier]
 const originalModelName = assessModel.name
@@ -15,7 +10,7 @@ afterEach(() => {
 })
 
 function storyWithAllAiFields(): Record<string, string | null> {
-  return Object.fromEntries(AI_GENERATED_STORY_FIELDS.map((field) => [field, `text of ${field}`]))
+  return Object.fromEntries(AI_GENERATED_STORY_FIELDS.map(field => [field, `text of ${field}`]))
 }
 
 describe('aiGeneratedMarker', () => {

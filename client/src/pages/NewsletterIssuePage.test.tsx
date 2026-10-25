@@ -39,7 +39,15 @@ const ISSUE: PublicNewsletterIssue = {
     '> — Someone',
   ].join('\n'),
   stories: [
-    { headline: 'Cities cut smog', title: 'Cities cut smog', titleLabel: 'Air Quality', sourceTitle: 'Smog falls', sourceUrl: 'https://news.example/1', publisher: 'Nation', slug: 'clean-air' },
+    {
+      headline: 'Cities cut smog',
+      title: 'Cities cut smog',
+      titleLabel: 'Air Quality',
+      sourceTitle: 'Smog falls',
+      sourceUrl: 'https://news.example/1',
+      publisher: 'Nation',
+      slug: 'clean-air',
+    },
     { headline: 'Old story', title: null, titleLabel: null, sourceTitle: 'Old story', sourceUrl: 'https://news.example/2', publisher: 'Other', slug: null },
   ],
   aiGenerated: { fields: ['content', 'stories'], digitalSourceType: 'x' },
@@ -66,7 +74,7 @@ beforeEach(() => {
 })
 
 describe('NewsletterIssuePage', () => {
-  it('shows the issue\'s AI label before any AI-written text', async () => {
+  it("shows the issue's AI label before any AI-written text", async () => {
     renderPage()
     const label = await screen.findByText(ISSUE.aiLabel.text, { exact: false })
     const intro = screen.getByText('A hopeful week for clean air.')

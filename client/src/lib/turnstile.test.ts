@@ -21,7 +21,7 @@ describe('runTurnstileChallenge', () => {
 
   beforeEach(() => {
     delete window.turnstile
-    scriptTags().forEach((s) => s.remove())
+    scriptTags().forEach(s => s.remove())
     container = document.createElement('div')
   })
 
@@ -61,20 +61,17 @@ describe('runTurnstileChallenge', () => {
     expect(api.remove).toHaveBeenCalledWith('widget-1')
   })
 
-  it.each(['error-callback', 'timeout-callback', 'unsupported-callback'] as const)(
-    'rejects and removes the widget on %s',
-    async (event) => {
-      const { api, rendered } = stubTurnstile()
-      window.turnstile = api
+  it.each(['error-callback', 'timeout-callback', 'unsupported-callback'] as const)('rejects and removes the widget on %s', async event => {
+    const { api, rendered } = stubTurnstile()
+    window.turnstile = api
 
-      const { token } = runTurnstileChallenge(container, 'k')
-      await vi.waitFor(() => expect(rendered).toHaveLength(1))
-      rendered[0]![event]()
+    const { token } = runTurnstileChallenge(container, 'k')
+    await vi.waitFor(() => expect(rendered).toHaveLength(1))
+    rendered[0]![event]()
 
-      await expect(token).rejects.toThrow()
-      expect(api.remove).toHaveBeenCalledWith('widget-1')
-    },
-  )
+    await expect(token).rejects.toThrow()
+    expect(api.remove).toHaveBeenCalledWith('widget-1')
+  })
 
   it('rejects when the script fails to load, and a later challenge tries again', async () => {
     const first = runTurnstileChallenge(container, 'k')
@@ -136,7 +133,7 @@ describe('runTurnstileChallenge', () => {
 
     window.turnstile = api
     scriptTags()[0]!.dispatchEvent(new Event('load'))
-    await new Promise((r) => setTimeout(r, 0))
+    await new Promise(r => setTimeout(r, 0))
     expect(api.render).not.toHaveBeenCalled()
   })
 })

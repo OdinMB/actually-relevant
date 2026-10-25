@@ -7,8 +7,7 @@ interface ShareButtonsProps {
   description: string
 }
 
-const btnClass =
-  'p-1 rounded text-neutral-400 hover:text-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500'
+const btnClass = 'p-1 rounded text-neutral-400 hover:text-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500'
 
 export default function ShareButtons({ url, title, description }: ShareButtonsProps) {
   const [copied, setCopied] = useState(false)
@@ -25,10 +24,13 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
   }
 
   function handleCopy() {
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }).catch(() => {})
+    navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+      .catch(() => {})
   }
 
   const encodedUrl = encodeURIComponent(url)
@@ -74,13 +76,13 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
       </a>
 
       {/* Email */}
-      <a
-        href={`mailto:?subject=${encodedTitle}&body=${encodedDesc}%0A%0A${encodedUrl}`}
-        className={btnClass}
-        aria-label="Share via email"
-      >
+      <a href={`mailto:?subject=${encodedTitle}&body=${encodedDesc}%0A%0A${encodedUrl}`} className={btnClass} aria-label="Share via email">
         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+          />
         </svg>
       </a>
 
@@ -92,12 +94,18 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
           </svg>
         ) : (
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+            />
           </svg>
         )}
       </button>
       {copied && (
-        <span className="text-xs text-green-600" role="status">Copied!</span>
+        <span className="text-xs text-green-600" role="status">
+          Copied!
+        </span>
       )}
     </>
   )

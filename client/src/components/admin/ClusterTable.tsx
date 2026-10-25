@@ -1,9 +1,5 @@
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
-import {
-  EllipsisVerticalIcon,
-  PencilSquareIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline'
+import { EllipsisVerticalIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type { StoryCluster } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
 import { TimeWithRelative } from './TimeWithRelative'
@@ -20,10 +16,18 @@ export function ClusterTable({ clusters, onEdit, onDissolve }: ClusterTableProps
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Primary Story</th>
-            <th scope="col" className="hidden md:table-cell text-center px-3 py-2 font-medium text-neutral-500">Members</th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">Created</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">Actions</th>
+            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+              Primary Story
+            </th>
+            <th scope="col" className="hidden md:table-cell text-center px-3 py-2 font-medium text-neutral-500">
+              Members
+            </th>
+            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Created
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -43,7 +47,9 @@ export function ClusterTable({ clusters, onEdit, onDissolve }: ClusterTableProps
                     <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
                       {cluster._count.stories} stories
                     </span>
-                    <span className="text-neutral-500 text-xs"><TimeWithRelative dateStr={cluster.createdAt} /></span>
+                    <span className="text-neutral-500 text-xs">
+                      <TimeWithRelative dateStr={cluster.createdAt} />
+                    </span>
                   </div>
                 </td>
                 <td className="hidden md:table-cell px-3 py-2 text-center">
@@ -57,17 +63,8 @@ export function ClusterTable({ clusters, onEdit, onDissolve }: ClusterTableProps
                 <td className="px-3 py-2">
                   {/* Desktop actions */}
                   <div className="hidden md:flex items-center justify-end gap-0.5">
-                    <ActionIconButton
-                      icon={PencilSquareIcon}
-                      label="Edit"
-                      onClick={() => onEdit(cluster.id)}
-                    />
-                    <ActionIconButton
-                      icon={TrashIcon}
-                      label="Dissolve"
-                      variant="danger"
-                      onClick={() => onDissolve(cluster.id)}
-                    />
+                    <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => onEdit(cluster.id)} />
+                    <ActionIconButton icon={TrashIcon} label="Dissolve" variant="danger" onClick={() => onDissolve(cluster.id)} />
                   </div>
 
                   {/* Mobile overflow menu */}

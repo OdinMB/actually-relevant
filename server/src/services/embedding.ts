@@ -3,12 +3,7 @@ import OpenAI from 'openai'
 import { TTLCache, cached } from '../lib/cache.js'
 import { createLogger } from '../lib/logger.js'
 import { config } from '../config.js'
-import {
-  fetchStoryForEmbedding,
-  fetchStoriesForEmbedding,
-  saveEmbedding,
-  type StoryEmbeddingRow,
-} from '../lib/vectors.js'
+import { fetchStoryForEmbedding, fetchStoriesForEmbedding, saveEmbedding, type StoryEmbeddingRow } from '../lib/vectors.js'
 
 const log = createLogger('embedding')
 
@@ -39,10 +34,7 @@ export function computeContentHash(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex')
 }
 
-export function needsEmbeddingUpdate(
-  story: Pick<StoryForEmbedding, 'embeddingContentHash'>,
-  currentHash: string,
-): boolean {
+export function needsEmbeddingUpdate(story: Pick<StoryForEmbedding, 'embeddingContentHash'>, currentHash: string): boolean {
   return story.embeddingContentHash !== currentHash
 }
 
@@ -76,16 +68,14 @@ export async function generateSearchEmbedding(query: string): Promise<number[]> 
   return cached(searchEmbeddingCache, query.trim().toLowerCase(), () => generateEmbedding(query))
 }
 
-export async function generateEmbeddingsBatch(
-  texts: string[],
-): Promise<number[][]> {
+export async function generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
   const response = await openai.embeddings.create({
     model: config.embedding.model,
     input: texts,
     dimensions: config.embedding.dimensions,
   })
   // OpenAI returns embeddings in order of input, but sort by index to be safe
-  return response.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
+  return response.data.sort((a, b) => a.index - b.index).map(d => d.embedding)
 }
 
 /**
@@ -119,10 +109,7 @@ export interface EmbeddingResult {
  * Returns per-story results (success/failure) so callers can decide
  * which stories to proceed with.
  */
-export async function batchGenerateEmbeddings(
-  storyIds: string[],
-  statusFilter?: 'published' | 'selected' | 'analyzed',
-): Promise<EmbeddingResult[]> {
+export async function batchGenerateEmbeddings(storyIds: string[], statusFilter?: 'published' | 'selected' | 'analyzed'): Promise<EmbeddingResult[]> {
   if (storyIds.length === 0) return []
 
   const stories = await fetchStoriesForEmbedding(storyIds, statusFilter)

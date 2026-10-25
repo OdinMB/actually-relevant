@@ -4,9 +4,12 @@
  */
 
 const SCALE: Record<string, number> = {
-  trillion: 1e12, tn: 1e12,
-  billion: 1e9, bn: 1e9,
-  million: 1e6, mn: 1e6,
+  trillion: 1e12,
+  tn: 1e12,
+  billion: 1e9,
+  bn: 1e9,
+  million: 1e6,
+  mn: 1e6,
   thousand: 1e3,
 }
 
@@ -15,7 +18,8 @@ const SCALE: Record<string, number> = {
  * grouped with commas, dots, or (French/South African style) a space, no-break
  * space or narrow no-break space: "147 000".
  */
-const NUMBER_RE = /(?<![\p{L}\d])([$€£¥]\s?)?(\d{1,3}(?:[   ]\d{3})+(?!\d)|\d[\d,.]*\d|\d)(?:\s*(%)|\s*(percent|per cent|trillion|billion|million|thousand|bn|tn|mn)\b)?/giu
+const NUMBER_RE =
+  /(?<![\p{L}\d])([$€£¥]\s?)?(\d{1,3}(?:[   ]\d{3})+(?!\d)|\d[\d,.]*\d|\d)(?:\s*(%)|\s*(percent|per cent|trillion|billion|million|thousand|bn|tn|mn)\b)?/giu
 const GROUP_SPACE = /[   ]/g
 /** Spelled-out English counts before a scale word: "two million", "a billion". */
 const WORD_NUMBER_RE = /\b(a|one|two|three|four|five|six|seven|eight|nine|ten)\s+(trillion|billion|million|thousand)\b/giu
@@ -45,7 +49,7 @@ export function readNumbers(text: string): NumberToken[] {
   for (const m of text.matchAll(NUMBER_RE)) {
     const [raw, currency, digits, percent, scaleWord] = m
     const base = readNumber(digits!.replace(GROUP_SPACE, '').replace(/[.,]$/, ''))
-    const scale = scaleWord ? SCALE[scaleWord.toLowerCase()] ?? 1 : 1
+    const scale = scaleWord ? (SCALE[scaleWord.toLowerCase()] ?? 1) : 1
     const values = scale === 1 ? base : [...base.map(v => v * scale), ...base]
     tokens.push({ raw: raw.trim(), values, marked: Boolean(currency || percent || scaleWord), index: m.index ?? 0 })
   }

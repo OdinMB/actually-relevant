@@ -34,14 +34,7 @@ const strokeProps = {
 
 export function HumanDevelopmentIllustration({ color, className = '', size = 200 }: IllustrationProps) {
   return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden="true" className={className} width={size} height={size} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       {/* Two linked figures holding hands */}
       {/* Left figure — head */}
       <circle cx="18" cy="16" r="5" stroke={color} {...strokeProps} />
@@ -74,28 +67,13 @@ export function HumanDevelopmentIllustration({ color, className = '', size = 200
 
 export function PlanetClimateIllustration({ color, className = '', size = 200 }: IllustrationProps) {
   return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden="true" className={className} width={size} height={size} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       {/* Globe outline */}
       <circle cx="32" cy="32" r="26" stroke={color} {...strokeProps} />
       {/* Upper landmass — irregular continent blob */}
-      <path
-        d="M 18 20 C 20 16 26 15 30 17 C 34 19 40 16 44 19 C 48 22 46 28 42 28 C 38 28 34 24 28 26 C 22 28 16 24 18 20 Z"
-        stroke={color}
-        {...strokeProps}
-      />
+      <path d="M 18 20 C 20 16 26 15 30 17 C 34 19 40 16 44 19 C 48 22 46 28 42 28 C 38 28 34 24 28 26 C 22 28 16 24 18 20 Z" stroke={color} {...strokeProps} />
       {/* Lower landmass — smaller blob, offset right */}
-      <path
-        d="M 30 38 C 34 36 40 36 44 39 C 47 42 44 46 40 47 C 36 48 30 46 28 43 C 26 40 28 38 30 38 Z"
-        stroke={color}
-        {...strokeProps}
-      />
+      <path d="M 30 38 C 34 36 40 36 44 39 C 47 42 44 46 40 47 C 36 48 30 46 28 43 C 26 40 28 38 30 38 Z" stroke={color} {...strokeProps} />
     </svg>
   )
 }
@@ -106,14 +84,7 @@ export function PlanetClimateIllustration({ color, className = '', size = 200 }:
 
 export function ExistentialThreatsIllustration({ color, className = '', size = 200 }: IllustrationProps) {
   return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden="true" className={className} width={size} height={size} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       <path
         d={[
           'M 8 20',
@@ -139,25 +110,13 @@ export function ExistentialThreatsIllustration({ color, className = '', size = 2
 
 export function ScienceTechnologyIllustration({ color, className = '', size = 200 }: IllustrationProps) {
   return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden="true" className={className} width={size} height={size} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       {/* Nucleus dot */}
       <circle cx="32" cy="32" r="3" stroke={color} {...strokeProps} />
       {/* Orbit 1: horizontal ellipse */}
       <ellipse cx="32" cy="32" rx="26" ry="10" stroke={color} {...strokeProps} />
       {/* Orbit 2: tilted 60° */}
-      <ellipse
-        cx="32" cy="32" rx="26" ry="10"
-        transform="rotate(60 32 32)"
-        stroke={color}
-        {...strokeProps}
-      />
+      <ellipse cx="32" cy="32" rx="26" ry="10" transform="rotate(60 32 32)" stroke={color} {...strokeProps} />
     </svg>
   )
 }

@@ -27,7 +27,11 @@ describe('AiBadge', () => {
   })
 
   it('has no accessibility violations', async () => {
-    const { container } = render(<p>Headline <AiBadge /></p>)
+    const { container } = render(
+      <p>
+        Headline <AiBadge />
+      </p>,
+    )
     expect(await axe(container)).toHaveNoViolations()
   })
 })
@@ -77,9 +81,7 @@ describe('HeaderAiLine', () => {
 
 describe('quoteAttributionLine', () => {
   it('follows the attribution with the AI selection note', () => {
-    expect(quoteAttributionLine('Dr. Jane Doe, WHO')).toBe(
-      '— Dr. Jane Doe, WHO · selected and potentially translated by AI',
-    )
+    expect(quoteAttributionLine('Dr. Jane Doe, WHO')).toBe('— Dr. Jane Doe, WHO · selected and potentially translated by AI')
   })
 
   it('shows the note on its own when a quote has no attribution', () => {

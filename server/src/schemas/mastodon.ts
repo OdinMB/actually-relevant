@@ -3,15 +3,17 @@ import { z } from 'zod'
 // --- LLM output schemas ---
 
 export const mastodonPostTextSchema = z.object({
-  postText: z.string().describe(
-    'Short, informal editorial post for Mastodon that stands on its own: what happened, ' +
-    'naming the story\'s main actor or one key number, and why it matters. ' +
-    'Use only names, numbers and claims from the story. ' +
-    'Do NOT repeat the title. ' +
-    'Do NOT include any URLs or links (they are added automatically). ' +
-    'Write in a warm, conversational voice like a knowledgeable friend. Avoid clickbait. ' +
-    'You may include 1-2 relevant hashtags at the end if they add value.'
-  ),
+  postText: z
+    .string()
+    .describe(
+      'Short, informal editorial post for Mastodon that stands on its own: what happened, ' +
+        "naming the story's main actor or one key number, and why it matters. " +
+        'Use only names, numbers and claims from the story. ' +
+        'Do NOT repeat the title. ' +
+        'Do NOT include any URLs or links (they are added automatically). ' +
+        'Write in a warm, conversational voice like a knowledgeable friend. Avoid clickbait. ' +
+        'You may include 1-2 relevant hashtags at the end if they add value.',
+    ),
 })
 
 export type MastodonPostText = z.infer<typeof mastodonPostTextSchema>

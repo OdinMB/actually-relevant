@@ -23,11 +23,7 @@ const prisma = new PrismaClient()
 const structuredLlm = getMediumLLM().withStructuredOutput(extractTitleLabelSchema)
 const semaphore = new Semaphore(CONCURRENCY)
 
-async function processSingle(story: {
-  id: string
-  title: string
-  summary: string | null
-}): Promise<{
+async function processSingle(story: { id: string; title: string; summary: string | null }): Promise<{
   id: string
   originalTitle: string
   titleLabel: string
@@ -81,9 +77,7 @@ async function main() {
 
   while (true) {
     const stories = await prisma.story.findMany({
-      where: OVERRIDE_MODE
-        ? { status: 'published', title: { not: null } }
-        : { title: { not: null, contains: ':' } },
+      where: OVERRIDE_MODE ? { status: 'published', title: { not: null } } : { title: { not: null, contains: ':' } },
       select: { id: true, title: true, titleLabel: true, summary: true },
       take: TEST_MODE ? 3 : BATCH_SIZE,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -93,11 +87,9 @@ async function main() {
     if (stories.length === 0) break
 
     const results = await Promise.allSettled(
-      stories.map((story) =>
+      stories.map(story =>
         semaphore.run(async () => {
-          const result = await processSingle(
-            story as { id: string; title: string; summary: string | null },
-          )
+          const result = await processSingle(story as { id: string; title: string; summary: string | null })
 
           const labelChanged = result.titleLabel !== story.titleLabel
           const titleChanged = result.title !== result.originalTitle
@@ -135,7 +127,7 @@ async function main() {
   await prisma.$disconnect()
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Fatal error:', err)
   process.exit(1)
 })

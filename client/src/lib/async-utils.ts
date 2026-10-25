@@ -28,10 +28,7 @@ export async function parallelMap<T, R>(
     }
   }
 
-  const workers = Array.from(
-    { length: Math.min(concurrency, items.length) },
-    () => runNext(),
-  )
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => runNext())
   await Promise.all(workers)
 
   return { results, errors }

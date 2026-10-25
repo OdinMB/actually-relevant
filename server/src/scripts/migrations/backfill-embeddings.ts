@@ -10,17 +10,8 @@
 import { PrismaClient } from '@prisma/client'
 import { Semaphore } from '../../lib/semaphore.js'
 import { config } from '../../config.js'
-import {
-  buildEmbeddingContent,
-  computeContentHash,
-  needsEmbeddingUpdate,
-  generateEmbeddingsBatch,
-} from '../../services/embedding.js'
-import {
-  fetchEmbeddingBackfillBatch,
-  saveEmbeddingWithClient,
-  type StoryEmbeddingRow,
-} from '../../lib/vectors.js'
+import { buildEmbeddingContent, computeContentHash, needsEmbeddingUpdate, generateEmbeddingsBatch } from '../../services/embedding.js'
+import { fetchEmbeddingBackfillBatch, saveEmbeddingWithClient, type StoryEmbeddingRow } from '../../lib/vectors.js'
 
 const TEST_MODE = process.argv.includes('--test')
 const OVERRIDE_MODE = process.argv.includes('--override')
@@ -69,7 +60,7 @@ async function main() {
 
         await semaphore.run(async () => {
           try {
-            const embeddings = await generateEmbeddingsBatch(chunk.map((c) => c.content))
+            const embeddings = await generateEmbeddingsBatch(chunk.map(c => c.content))
 
             for (let j = 0; j < chunk.length; j++) {
               const { story, hash } = chunk[j]!
@@ -98,7 +89,7 @@ async function main() {
 
         // Rate limit delay between API calls
         if (i + apiChunkSize < toProcess.length) {
-          await new Promise((resolve) => setTimeout(resolve, config.embedding.delayMs))
+          await new Promise(resolve => setTimeout(resolve, config.embedding.delayMs))
         }
       }
     }
@@ -112,7 +103,7 @@ async function main() {
   await prisma.$disconnect()
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Fatal error:', err)
   process.exit(1)
 })

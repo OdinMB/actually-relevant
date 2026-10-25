@@ -56,10 +56,13 @@ export function usePodcastStoryDraft(podcast: Podcast, onDirtyChange?: (dirty: b
 
   const save = () => {
     setErrors([])
-    saveStories.mutate({ id: podcast.id, storyIds: chosen }, {
-      onSuccess: () => toast('success', 'Stories saved'),
-      onError: err => setErrors(saveErrors(err)),
-    })
+    saveStories.mutate(
+      { id: podcast.id, storyIds: chosen },
+      {
+        onSuccess: () => toast('success', 'Stories saved'),
+        onError: err => setErrors(saveErrors(err)),
+      },
+    )
   }
   const discard = () => {
     setChosen(podcast.storyIds)

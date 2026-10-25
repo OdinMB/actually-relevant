@@ -35,10 +35,7 @@ function HeroSection({ story }: { story: PublicStory }) {
       <div className="hero-section-inner">
         <StoryTitleLabel story={story} className="mb-2" />
         <h1 className="text-3xl md:text-5xl font-bold font-nexa text-neutral-900 mb-4 leading-tight">
-          <Link
-            to={`/stories/${story.slug}`}
-            className="hover:text-brand-800 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-          >
+          <Link to={`/stories/${story.slug}`} className="hover:text-brand-800 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
             {getHeadline(story)}
           </Link>
         </h1>
@@ -63,15 +60,11 @@ function HeroSection({ story }: { story: PublicStory }) {
         ) : story.quote ? (
           <blockquote className="decorative-quote max-w-2xl">
             {/* No italic class here — avoids loading Roboto-Italic in critical path */}
-            <p className="text-lg md:text-xl text-neutral-700 leading-relaxed">
-              &ldquo;{story.quote}&rdquo;
-            </p>
+            <p className="text-lg md:text-xl text-neutral-700 leading-relaxed">&ldquo;{story.quote}&rdquo;</p>
             <p className="text-xs text-neutral-500 mt-1">{quoteAttributionLine(story.quoteAttribution)}</p>
           </blockquote>
         ) : story.summary ? (
-          <p className="text-lg text-neutral-600 leading-relaxed max-w-2xl">
-            {story.summary}
-          </p>
+          <p className="text-lg text-neutral-600 leading-relaxed max-w-2xl">{story.summary}</p>
         ) : null}
       </div>
     </section>
@@ -124,9 +117,7 @@ function IssueSection({
   quoteVariantIndex?: number
 }) {
   // Exclude the hero story from this section
-  const stories = heroStoryId
-    ? allStories.filter((s) => s.id !== heroStoryId)
-    : allStories
+  const stories = heroStoryId ? allStories.filter(s => s.id !== heroStoryId) : allStories
 
   const [featured, ...rest] = stories
   if (!featured) return null
@@ -150,7 +141,7 @@ function IssueSection({
               </div>
               {rest.length > 0 && (
                 <div className="space-y-3">
-                  {rest.slice(0, 3).map((story) => (
+                  {rest.slice(0, 3).map(story => (
                     <StoryCard key={story.id} story={story} variant="compact" />
                   ))}
                 </div>
@@ -164,7 +155,7 @@ function IssueSection({
               <StoryCard story={featured} variant="horizontal" />
               {rest.length > 0 && (
                 <div className="grid gap-5 md:grid-cols-3">
-                  {rest.slice(0, 3).map((story) => (
+                  {rest.slice(0, 3).map(story => (
                     <StoryCard key={story.id} story={story} variant="compact" />
                   ))}
                 </div>
@@ -176,13 +167,13 @@ function IssueSection({
           {layout === 'C' && (
             <div className="space-y-5">
               <div className="grid gap-5 md:grid-cols-3">
-                {stories.slice(0, 3).map((story) => (
+                {stories.slice(0, 3).map(story => (
                   <StoryCard key={story.id} story={story} variant="equal" />
                 ))}
               </div>
               {stories.length > 3 && (
                 <div className="grid gap-5 md:grid-cols-3">
-                  {stories.slice(3, 6).map((story) => (
+                  {stories.slice(3, 6).map(story => (
                     <StoryCard key={story.id} story={story} variant="compact" />
                   ))}
                 </div>
@@ -193,9 +184,7 @@ function IssueSection({
       </section>
 
       {/* Section divider */}
-      {divider === 'quote' && (
-        <QuoteDivider stories={allStories} variantIndex={quoteVariantIndex ?? 0} />
-      )}
+      {divider === 'quote' && <QuoteDivider stories={allStories} variantIndex={quoteVariantIndex ?? 0} />}
       {divider === 'diamond' && <hr className="section-divider" />}
     </>
   )
@@ -206,7 +195,7 @@ function IssueSection({
 // ---------------------------------------------------------------------------
 
 function QuoteDivider({ stories, variantIndex }: { stories: PublicStory[]; variantIndex: number }) {
-  const storyWithQuote = stories.find((s) => s.quote)
+  const storyWithQuote = stories.find(s => s.quote)
   if (!storyWithQuote) return null
 
   return <PullQuote story={storyWithQuote} variant={getQuoteVariant(variantIndex)} />
@@ -216,12 +205,7 @@ function QuoteDivider({ stories, variantIndex }: { stories: PublicStory[]; varia
 // Home page
 // ---------------------------------------------------------------------------
 
-const ISSUE_ORDER = [
-  'human-development',
-  'planet-climate',
-  'existential-threats',
-  'science-technology',
-]
+const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
 
 const LAYOUTS: LayoutVariant[] = ['A', 'B', 'C']
 
@@ -236,9 +220,7 @@ export default function HomePage() {
   // Pick hero client-side from the issue buckets based on positivity
   const heroStory = pickHero(storiesByIssueBuckets, positivity)
 
-  const sortedIssues = [...issues]
-    .filter((i) => ISSUE_ORDER.includes(i.slug))
-    .sort((a, b) => ISSUE_ORDER.indexOf(a.slug) - ISSUE_ORDER.indexOf(b.slug))
+  const sortedIssues = [...issues].filter(i => ISSUE_ORDER.includes(i.slug)).sort((a, b) => ISSUE_ORDER.indexOf(a.slug) - ISSUE_ORDER.indexOf(b.slug))
 
   let quoteIdx = 0
 
@@ -252,12 +234,8 @@ export default function HomePage() {
         <meta property="og:type" content="website" />
         <meta property="og:url" content={`${SEO.siteUrl}/`} />
         {CommonOgTags({})}
-        <script type="application/ld+json">
-          {toJsonLd(buildWebSiteSchema())}
-        </script>
-        <script type="application/ld+json">
-          {toJsonLd(buildOrganizationSchema())}
-        </script>
+        <script type="application/ld+json">{toJsonLd(buildWebSiteSchema())}</script>
+        <script type="application/ld+json">{toJsonLd(buildOrganizationSchema())}</script>
       </Helmet>
 
       {/* Hero — show skeleton while loading */}
@@ -274,53 +252,43 @@ export default function HomePage() {
             <IssueSectionSkeleton layout="A" />
           </>
         ) : sortedIssues.length > 0 ? (
-          sortedIssues.map((issue, idx) => {
-            const layout = LAYOUTS[idx % LAYOUTS.length]!
-            const isLast = idx === sortedIssues.length - 1
-            const divider: 'quote' | 'diamond' | 'none' = isLast
-              ? 'none'
-              : idx % 2 === 0
-                ? 'quote'
-                : 'none'
+          sortedIssues
+            .map((issue, idx) => {
+              const layout = LAYOUTS[idx % LAYOUTS.length]!
+              const isLast = idx === sortedIssues.length - 1
+              const divider: 'quote' | 'diamond' | 'none' = isLast ? 'none' : idx % 2 === 0 ? 'quote' : 'none'
 
-            const currentQuoteIdx = divider === 'quote' ? quoteIdx++ : 0
+              const currentQuoteIdx = divider === 'quote' ? quoteIdx++ : 0
 
-            const buckets = storiesByIssueBuckets[issue.slug]
-            const mixed = buckets
-              ? mixHomepageStories(buckets, 7, positivity)
-              : []
+              const buckets = storiesByIssueBuckets[issue.slug]
+              const mixed = buckets ? mixHomepageStories(buckets, 7, positivity) : []
 
-            return (
-              <IssueSection
-                key={issue.id}
-                issue={issue}
-                allStories={mixed}
-                heroStoryId={heroStory?.id ?? null}
-                layout={layout}
-                divider={divider}
-                quoteVariantIndex={currentQuoteIdx}
-              />
-            )
-          }).reduce<React.ReactNode[]>((acc, section, idx) => {
-            acc.push(section)
-            // Insert newsletter banner after the 1st issue section (Human Development)
-            if (idx === 0) {
-              acc.push(
-                <NewsletterBanner key="newsletter-banner" />
+              return (
+                <IssueSection
+                  key={issue.id}
+                  issue={issue}
+                  allStories={mixed}
+                  heroStoryId={heroStory?.id ?? null}
+                  layout={layout}
+                  divider={divider}
+                  quoteVariantIndex={currentQuoteIdx}
+                />
               )
-            }
-            // Insert support banner after the 2nd issue section
-            if (idx === 1) {
-              acc.push(
-                <SupportBanner key="support-banner" />
-              )
-            }
-            return acc
-          }, [])
+            })
+            .reduce<React.ReactNode[]>((acc, section, idx) => {
+              acc.push(section)
+              // Insert newsletter banner after the 1st issue section (Human Development)
+              if (idx === 0) {
+                acc.push(<NewsletterBanner key="newsletter-banner" />)
+              }
+              // Insert support banner after the 2nd issue section
+              if (idx === 1) {
+                acc.push(<SupportBanner key="support-banner" />)
+              }
+              return acc
+            }, [])
         ) : (
-          <p className="text-center text-neutral-500 py-12">
-            No stories published yet. Check back soon.
-          </p>
+          <p className="text-center text-neutral-500 py-12">No stories published yet. Check back soon.</p>
         )}
       </div>
     </>

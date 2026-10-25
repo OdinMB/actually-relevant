@@ -15,9 +15,7 @@ import { assembleEpisodeMp3, cbrDurationMs, silentMp3 } from '../lib/podcastAudi
 import { deleteObject, isBunnyConfigured, publicUrl, putObject } from '../lib/bunnyStorage.js'
 import type { PodcastDialogue } from '../schemas/llm.js'
 import { assembleSpokenSegments, type SpokenSegment } from './podcastDialogue.js'
-import {
-  buildChapters, buildTranscriptVtt, chunkChars, chunkContinuity, chunkTurns, type ChapterStory, type Chunk,
-} from './podcastChunks.js'
+import { buildChapters, buildTranscriptVtt, chunkChars, chunkContinuity, chunkTurns, type ChapterStory, type Chunk } from './podcastChunks.js'
 import type { EpisodeStory } from './podcastScript.js'
 import { assertBalanceCovers, assertJobEnabled, PodcastBlockedError, reserveTtsChars, standaloneCopyRefusal } from './podcastGuards.js'
 
@@ -169,8 +167,17 @@ export async function finishEpisode(episode: Podcast, ctx: AudioStageContext): P
   }
 
   const pauseMs = config.podcast.segmentPauseMs
-  const tags = { title: episode.title, artist: config.podcast.showTitle, album: config.podcast.showTitle, comment: podcastEpisodeAiLine(episode.humanEdited, episode.kind) }
-  const { buffer, durationSec } = await assembleEpisodeMp3(rows.map(r => Buffer.from(r.bytes)), tags, { pauseMs, loudnorm: !episode.dryRun })
+  const tags = {
+    title: episode.title,
+    artist: config.podcast.showTitle,
+    album: config.podcast.showTitle,
+    comment: podcastEpisodeAiLine(episode.humanEdited, episode.kind),
+  }
+  const { buffer, durationSec } = await assembleEpisodeMp3(
+    rows.map(r => Buffer.from(r.bytes)),
+    tags,
+    { pauseMs, loudnorm: !episode.dryRun },
+  )
   const durationsMs = rows.map(r => r.durationMs)
   const vtt = buildTranscriptVtt(chunks, durationsMs, pauseMs)
   const chapters = buildChapters(segments, chunks, durationsMs, pauseMs, chapterStories(episode))

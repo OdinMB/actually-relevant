@@ -1,9 +1,4 @@
-import {
-  SocialDraftPanel,
-  type SocialDraft,
-  type SocialDraftChannel,
-  type SocialDraftPanelProps,
-} from './social/SocialDraftPanel'
+import { SocialDraftPanel, type SocialDraft, type SocialDraftChannel, type SocialDraftPanelProps } from './social/SocialDraftPanel'
 
 export type MastodonDraft = SocialDraft
 
@@ -14,7 +9,7 @@ const mastodonDraftChannel: SocialDraftChannel = {
   textareaId: 'mastodon-post-text',
   textareaRows: 7,
   limit: CHAR_LIMIT,
-  count: (text) => text.length,
+  count: text => text.length,
   nearLimit: CHAR_LIMIT - 20,
   hint: 'Link preview auto-generated from URL',
   renderDetails: () => (

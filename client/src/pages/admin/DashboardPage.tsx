@@ -31,9 +31,7 @@ function StatsGrid({ stats }: { stats: Record<string, number> }) {
       ))}
       <div className="bg-white rounded-lg border border-neutral-200 shadow-sm p-4">
         <p className="text-xs font-medium text-neutral-500 mb-1">Total</p>
-        <p className="text-2xl font-bold text-neutral-900">
-          {Object.values(stats).reduce((sum, n) => sum + n, 0)}
-        </p>
+        <p className="text-2xl font-bold text-neutral-900">{Object.values(stats).reduce((sum, n) => sum + n, 0)}</p>
       </div>
     </div>
   )
@@ -75,22 +73,22 @@ export default function DashboardPage() {
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-neutral-900 mb-3">Stories by Status</h2>
         {statsQuery.isLoading && (
-          <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          <div className="flex justify-center py-8">
+            <LoadingSpinner />
+          </div>
         )}
-        {statsQuery.error && (
-          <ErrorState message="Failed to load stats" onRetry={() => statsQuery.refetch()} />
-        )}
+        {statsQuery.error && <ErrorState message="Failed to load stats" onRetry={() => statsQuery.refetch()} />}
         {statsQuery.data && <StatsGrid stats={statsQuery.data} />}
       </section>
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-neutral-900 mb-3">Lifetime Totals</h2>
         {lifetimeQuery.isLoading && (
-          <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          <div className="flex justify-center py-8">
+            <LoadingSpinner />
+          </div>
         )}
-        {lifetimeQuery.error && (
-          <ErrorState message="Failed to load lifetime totals" onRetry={() => lifetimeQuery.refetch()} />
-        )}
+        {lifetimeQuery.error && <ErrorState message="Failed to load lifetime totals" onRetry={() => lifetimeQuery.refetch()} />}
         {lifetimeQuery.data && <LifetimeSummary stats={lifetimeQuery.data} />}
       </section>
 
@@ -98,72 +96,81 @@ export default function DashboardPage() {
       <section>
         <Card title="Jobs">
           {jobsQuery.isLoading && (
-            <div className="flex justify-center py-4"><LoadingSpinner /></div>
+            <div className="flex justify-center py-4">
+              <LoadingSpinner />
+            </div>
           )}
-          {jobsQuery.error && (
-            <ErrorState message="Failed to load jobs" onRetry={() => jobsQuery.refetch()} />
-          )}
+          {jobsQuery.error && <ErrorState message="Failed to load jobs" onRetry={() => jobsQuery.refetch()} />}
           {jobsQuery.data && (
             <div className="overflow-x-auto -mx-4 -my-3">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b border-neutral-200">
-                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">Job</th>
-                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">Status</th>
-                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">Last Run</th>
-                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500 hidden sm:table-cell">Error</th>
+                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">
+                      Job
+                    </th>
+                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">
+                      Status
+                    </th>
+                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">
+                      Last Run
+                    </th>
+                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500 hidden sm:table-cell">
+                      Error
+                    </th>
                     <th scope="col" className="py-2 px-4"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...jobsQuery.data].sort((a, b) => {
-                    const ai = JOB_PIPELINE_ORDER.indexOf(a.jobName)
-                    const bi = JOB_PIPELINE_ORDER.indexOf(b.jobName)
-                    return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi)
-                  }).map(job => (
-                    <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : ''}`}>
-                      <td className="py-2 px-4 font-medium text-neutral-900">
-                        {jobDisplayName(job.jobName)}
-                      </td>
-                      <td className="py-2 px-4">
-                        <JobStatusBadge job={job} variant="dot" />
-                      </td>
-                      <td className="py-2 px-4 text-neutral-500 whitespace-nowrap">
-                        <TimeWithRelative dateStr={job.lastCompletedAt} />
-                      </td>
-                      <td className="py-2 px-4 text-neutral-500 max-w-xs truncate hidden sm:table-cell">
-                        {job.lastError ? (
-                          <a
-                            href="/admin/jobs"
-                            className="text-red-600 hover:text-red-800"
-                            title={job.lastError}
-                          >
-                            {job.lastError.slice(0, 80)}{job.lastError.length > 80 ? '...' : ''}
-                          </a>
-                        ) : '—'}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {job.running ? (
-                          <span className="inline-block p-1">
-                            <svg className="h-5 w-5 animate-spin text-yellow-600" viewBox="0 0 24 24" fill="none" aria-label="Running">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                          </span>
-                        ) : (
-                          <ActionIconButton
-                            icon={PlayIcon}
-                            label={`Run ${jobDisplayName(job.jobName)}`}
-                            onClick={() => runJob.mutate(job.jobName, {
-                              // 409 when a run is already under way: the server's answer says so.
-                              onError: (err) => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
-                            })}
-                            disabled={runJob.isPending && runJob.variables === job.jobName}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {[...jobsQuery.data]
+                    .sort((a, b) => {
+                      const ai = JOB_PIPELINE_ORDER.indexOf(a.jobName)
+                      const bi = JOB_PIPELINE_ORDER.indexOf(b.jobName)
+                      return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi)
+                    })
+                    .map(job => (
+                      <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : ''}`}>
+                        <td className="py-2 px-4 font-medium text-neutral-900">{jobDisplayName(job.jobName)}</td>
+                        <td className="py-2 px-4">
+                          <JobStatusBadge job={job} variant="dot" />
+                        </td>
+                        <td className="py-2 px-4 text-neutral-500 whitespace-nowrap">
+                          <TimeWithRelative dateStr={job.lastCompletedAt} />
+                        </td>
+                        <td className="py-2 px-4 text-neutral-500 max-w-xs truncate hidden sm:table-cell">
+                          {job.lastError ? (
+                            <a href="/admin/jobs" className="text-red-600 hover:text-red-800" title={job.lastError}>
+                              {job.lastError.slice(0, 80)}
+                              {job.lastError.length > 80 ? '...' : ''}
+                            </a>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="py-2 px-4 text-right">
+                          {job.running ? (
+                            <span className="inline-block p-1">
+                              <svg className="h-5 w-5 animate-spin text-yellow-600" viewBox="0 0 24 24" fill="none" aria-label="Running">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                            </span>
+                          ) : (
+                            <ActionIconButton
+                              icon={PlayIcon}
+                              label={`Run ${jobDisplayName(job.jobName)}`}
+                              onClick={() =>
+                                runJob.mutate(job.jobName, {
+                                  // 409 when a run is already under way: the server's answer says so.
+                                  onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
+                                })
+                              }
+                              disabled={runJob.isPending && runJob.variables === job.jobName}
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

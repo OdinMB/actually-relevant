@@ -48,12 +48,9 @@ function PasswordResetSection({ userId }: { userId: string }) {
     [userId, password, confirm, resetPassword, toast, reset],
   )
 
-  const preventParentSubmit = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') e.preventDefault()
-    },
-    [],
-  )
+  const preventParentSubmit = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') e.preventDefault()
+  }, [])
 
   if (!open) {
     return (
@@ -75,7 +72,10 @@ function PasswordResetSection({ userId }: { userId: string }) {
         label="New password"
         type="password"
         value={password}
-        onChange={e => { setPassword(e.target.value); setMismatch(false) }}
+        onChange={e => {
+          setPassword(e.target.value)
+          setMismatch(false)
+        }}
         onKeyDown={preventParentSubmit}
         minLength={8}
         autoComplete="new-password"
@@ -85,7 +85,10 @@ function PasswordResetSection({ userId }: { userId: string }) {
         label="Confirm password"
         type="password"
         value={confirm}
-        onChange={e => { setConfirm(e.target.value); setMismatch(false) }}
+        onChange={e => {
+          setConfirm(e.target.value)
+          setMismatch(false)
+        }}
         onKeyDown={preventParentSubmit}
         error={mismatch ? 'Passwords do not match' : undefined}
         minLength={8}
@@ -116,16 +119,13 @@ function UserEditForm({ userId, onClose }: { userId: string; onClose: () => void
   const { data: user } = useUser(userId)
   const updateUser = useUpdateUser()
 
-  const initialState = useMemo(
-    () => ({ email: user!.email, name: user!.name, role: user!.role }),
-    [user],
-  )
+  const initialState = useMemo(() => ({ email: user!.email, name: user!.name, role: user!.role }), [user])
 
   const { form, set, isDirty, isPending, handleSubmit } = useEditForm({
     entityId: userId,
     initialState,
     mutation: updateUser,
-    toPayload: (f) => ({ email: f.email, name: f.name, role: f.role }),
+    toPayload: f => ({ email: f.email, name: f.name, role: f.role }),
     successMessage: 'User updated',
     entityName: 'user',
     onSuccess: onClose,
@@ -134,28 +134,9 @@ function UserEditForm({ userId, onClose }: { userId: string; onClose: () => void
   return (
     <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
       <div className={PANEL_BODY}>
-        <Input
-          id="edit-name"
-          label="Name"
-          value={form.name}
-          onChange={e => set('name', e.target.value)}
-          required
-        />
-        <Input
-          id="edit-email"
-          label="Email"
-          type="email"
-          value={form.email}
-          onChange={e => set('email', e.target.value)}
-          required
-        />
-        <Select
-          id="edit-role"
-          label="Role"
-          options={ROLE_OPTIONS}
-          value={form.role}
-          onChange={e => set('role', e.target.value as UserRole)}
-        />
+        <Input id="edit-name" label="Name" value={form.name} onChange={e => set('name', e.target.value)} required />
+        <Input id="edit-email" label="Email" type="email" value={form.email} onChange={e => set('email', e.target.value)} required />
+        <Select id="edit-role" label="Role" options={ROLE_OPTIONS} value={form.role} onChange={e => set('role', e.target.value as UserRole)} />
         <PasswordResetSection userId={userId} />
       </div>
       <PanelFooter isPending={isPending} isDirty={isDirty} onCancel={onClose} />
@@ -172,13 +153,7 @@ export function UserEditPanel({ userId, onClose }: UserEditPanelProps) {
   const { data: user, isLoading, error } = useUser(userId || '')
 
   return (
-    <EditPanel
-      open={!!userId}
-      onClose={onClose}
-      title={user?.name || 'User'}
-      loading={isLoading}
-      error={!!error}
-    >
+    <EditPanel open={!!userId} onClose={onClose} title={user?.name || 'User'} loading={isLoading} error={!!error}>
       {user && <UserEditForm userId={userId!} onClose={onClose} />}
     </EditPanel>
   )

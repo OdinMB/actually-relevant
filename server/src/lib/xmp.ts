@@ -62,10 +62,6 @@ export function embedXmpInPng(png: Buffer, xmp: string): Buffer {
   }
   const ihdrEnd = 8 + 12 + png.readUInt32BE(8)
   // keyword, null separator, compression flag, compression method, empty language tag + null, empty translated keyword + null
-  const itxtData = Buffer.concat([
-    Buffer.from(XMP_ITXT_KEYWORD, 'latin1'),
-    Buffer.from([0, 0, 0, 0, 0]),
-    Buffer.from(xmp, 'utf8'),
-  ])
+  const itxtData = Buffer.concat([Buffer.from(XMP_ITXT_KEYWORD, 'latin1'), Buffer.from([0, 0, 0, 0, 0]), Buffer.from(xmp, 'utf8')])
   return Buffer.concat([png.subarray(0, ihdrEnd), pngChunk('iTXt', itxtData), png.subarray(ihdrEnd)])
 }

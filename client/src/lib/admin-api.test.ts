@@ -102,9 +102,7 @@ describe('adminApi on an expired access token', () => {
   it('signals the end of the session when the refresh is rejected', async () => {
     const expired = vi.fn()
     const unsubscribe = onSessionExpired(expired)
-    mockFetch
-      .mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401))
-      .mockReturnValueOnce(jsonResponse({ error: 'Refresh token reuse detected' }, 401))
+    mockFetch.mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401)).mockReturnValueOnce(jsonResponse({ error: 'Refresh token reuse detected' }, 401))
 
     await expect(adminApi.stories.stats()).rejects.toBeInstanceOf(ApiError)
     expect(expired).toHaveBeenCalledTimes(1)
@@ -114,9 +112,7 @@ describe('adminApi on an expired access token', () => {
   it('keeps the session when the server cannot answer the refresh', async () => {
     const expired = vi.fn()
     const unsubscribe = onSessionExpired(expired)
-    mockFetch
-      .mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401))
-      .mockReturnValue(jsonResponse({ error: 'Too many refresh attempts' }, 429))
+    mockFetch.mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401)).mockReturnValue(jsonResponse({ error: 'Too many refresh attempts' }, 429))
 
     await expect(adminApi.stories.stats()).rejects.toBeInstanceOf(ApiError)
     expect(expired).not.toHaveBeenCalled()

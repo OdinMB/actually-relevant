@@ -35,7 +35,13 @@ function renderList() {
     [
       {
         path: '/admin/issues',
-        element: <><Link to="/admin/feeds">Feeds</Link><IssueEditPanel issueId="issue-1" onClose={() => {}} /><Where /></>,
+        element: (
+          <>
+            <Link to="/admin/feeds">Feeds</Link>
+            <IssueEditPanel issueId="issue-1" onClose={() => {}} />
+            <Where />
+          </>
+        ),
       },
       { path: '*', element: <Where /> },
     ],

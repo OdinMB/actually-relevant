@@ -3,13 +3,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { failsWith } from '../../middleware/routeErrors.js'
-import {
-  NOTICE_SOURCES,
-  countUnseenNotices,
-  listNotices,
-  markNoticeSeen,
-  markNoticesSeen,
-} from '../../services/adminNotices.js'
+import { NOTICE_SOURCES, countUnseenNotices, listNotices, markNoticeSeen, markNoticesSeen } from '../../services/adminNotices.js'
 
 const router = Router()
 

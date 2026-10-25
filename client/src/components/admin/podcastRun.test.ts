@@ -21,7 +21,7 @@ describe('nextAction', () => {
     expect(nextAction(makePodcast({ stage: 'legacy' }))).toBeNull()
   })
 
-  it('asks a person to choose a standalone episode\'s stories at created, whatever its mode', () => {
+  it("asks a person to choose a standalone episode's stories at created, whatever its mode", () => {
     expect(nextAction(makeStandalonePodcast())).toBe('choose-stories')
     expect(nextAction(makeStandalonePodcast({ mode: 'interactive' }))).toBe('choose-stories')
     expect(nextAction(makeStandalonePodcast({ mode: 'automated', lastError: 'x' }))).toBe('choose-stories')
@@ -70,7 +70,7 @@ describe('stepRunState', () => {
     expect(stepRunState(stopped, 'write-script', false)?.reason).toMatch(/Resume/)
   })
 
-  it('is hidden once the step\'s work exists, and on a published or legacy episode', () => {
+  it("is hidden once the step's work exists, and on a published or legacy episode", () => {
     expect(stepRunState(makePodcast(), 'write-script', false)).toBeNull()
     expect(stepRunState(makePodcast({ stage: 'voiced' }), 'voice-script', false)).toBeNull()
     expect(stepRunState(makePodcast({ stage: 'ready' }), 'voice-script', false)).toBeNull()

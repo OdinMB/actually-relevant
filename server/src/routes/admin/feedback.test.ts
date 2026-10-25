@@ -57,9 +57,7 @@ describe('Admin Feedback API', () => {
         .mockResolvedValueOnce(1) // total
         .mockResolvedValueOnce(1) // unreadCount
 
-      const res = await request(app)
-        .get('/api/admin/feedback')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/feedback').set(authHeader())
 
       expect(res.status).toBe(200)
       expect(res.body.items).toHaveLength(1)
@@ -72,14 +70,12 @@ describe('Admin Feedback API', () => {
       mockPrisma.feedback.findMany.mockResolvedValue([])
       mockPrisma.feedback.count.mockResolvedValue(0)
 
-      await request(app)
-        .get('/api/admin/feedback?status=archived')
-        .set(authHeader())
+      await request(app).get('/api/admin/feedback?status=archived').set(authHeader())
 
       expect(mockPrisma.feedback.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ status: 'archived' }),
-        })
+        }),
       )
     })
 
@@ -87,14 +83,12 @@ describe('Admin Feedback API', () => {
       mockPrisma.feedback.findMany.mockResolvedValue([])
       mockPrisma.feedback.count.mockResolvedValue(0)
 
-      await request(app)
-        .get('/api/admin/feedback?category=bug')
-        .set(authHeader())
+      await request(app).get('/api/admin/feedback?category=bug').set(authHeader())
 
       expect(mockPrisma.feedback.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ category: 'bug' }),
-        })
+        }),
       )
     })
   })
@@ -103,9 +97,7 @@ describe('Admin Feedback API', () => {
     it('returns unread count', async () => {
       mockPrisma.feedback.count.mockResolvedValue(5)
 
-      const res = await request(app)
-        .get('/api/admin/feedback/count')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/feedback/count').set(authHeader())
 
       expect(res.status).toBe(200)
       expect(res.body.unreadCount).toBe(5)
@@ -116,20 +108,14 @@ describe('Admin Feedback API', () => {
     it('updates feedback status', async () => {
       mockPrisma.feedback.update.mockResolvedValue({ ...sampleFeedback, status: 'read' })
 
-      const res = await request(app)
-        .patch('/api/admin/feedback/fb-1')
-        .set(authHeader())
-        .send({ status: 'read' })
+      const res = await request(app).patch('/api/admin/feedback/fb-1').set(authHeader()).send({ status: 'read' })
 
       expect(res.status).toBe(200)
       expect(res.body.status).toBe('read')
     })
 
     it('returns 400 for invalid status', async () => {
-      const res = await request(app)
-        .patch('/api/admin/feedback/fb-1')
-        .set(authHeader())
-        .send({ status: 'invalid' })
+      const res = await request(app).patch('/api/admin/feedback/fb-1').set(authHeader()).send({ status: 'invalid' })
 
       expect(res.status).toBe(400)
     })
@@ -137,10 +123,7 @@ describe('Admin Feedback API', () => {
     it('returns 404 for non-existent feedback', async () => {
       mockPrisma.feedback.update.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .patch('/api/admin/feedback/nonexistent')
-        .set(authHeader())
-        .send({ status: 'read' })
+      const res = await request(app).patch('/api/admin/feedback/nonexistent').set(authHeader()).send({ status: 'read' })
 
       expect(res.status).toBe(404)
     })
@@ -150,9 +133,7 @@ describe('Admin Feedback API', () => {
     it('deletes feedback', async () => {
       mockPrisma.feedback.delete.mockResolvedValue(sampleFeedback)
 
-      const res = await request(app)
-        .delete('/api/admin/feedback/fb-1')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/feedback/fb-1').set(authHeader())
 
       expect(res.status).toBe(204)
     })
@@ -160,9 +141,7 @@ describe('Admin Feedback API', () => {
     it('returns 404 for non-existent feedback', async () => {
       mockPrisma.feedback.delete.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .delete('/api/admin/feedback/nonexistent')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/feedback/nonexistent').set(authHeader())
 
       expect(res.status).toBe(404)
     })
@@ -194,10 +173,7 @@ describe('Admin Feedback API', () => {
     })
 
     it('returns 400 for empty ids', async () => {
-      const res = await request(app)
-        .post('/api/admin/feedback/bulk')
-        .set(authHeader())
-        .send({ ids: [], action: 'read' })
+      const res = await request(app).post('/api/admin/feedback/bulk').set(authHeader()).send({ ids: [], action: 'read' })
 
       expect(res.status).toBe(400)
     })

@@ -67,10 +67,7 @@ export function displayTitleOf(story: PreviewStory): string {
 
 // --- og:image ---
 
-const imageCache = new BoundedCache<Buffer>(
-  config.storyPreview.imageCacheEntries,
-  config.storyPreview.imageCacheTtlSeconds * 1000,
-)
+const imageCache = new BoundedCache<Buffer>(config.storyPreview.imageCacheEntries, config.storyPreview.imageCacheTtlSeconds * 1000)
 
 /** The story's 1200x630 preview PNG (AI-marked in pixels and XMP), or null if it is not published. */
 export async function getStoryOgImage(slug: string): Promise<Buffer | null> {
@@ -142,11 +139,11 @@ export async function getShell(): Promise<string | null> {
   if (shell && fresh) return shell.html
   if (!inflight) {
     inflight = fetchShell(shell)
-      .then((next) => {
+      .then(next => {
         shell = next
         return next.html
       })
-      .catch((err) => {
+      .catch(err => {
         log.warn({ err, url: config.storyPreview.shellUrl, haveStale: Boolean(shell) }, 'failed to fetch the client shell')
         if (shell) shell = { ...shell, fetchedAt: Date.now() } // retry after another TTL, not on every request
         return shell?.html ?? null
@@ -169,12 +166,7 @@ export function resetStoryPreviewCaches(): void {
 // --- Meta tags ---
 
 export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
 /** The head tags the story page's Helmet sets, as HTML. Marked data-rh so Helmet takes them over. */
@@ -183,8 +175,7 @@ export function buildStoryHeadTags(story: PreviewStory): string {
   const description = story.summary || displayTitle
   const url = `${config.siteUrl}/stories/${story.slug}`
   const image = storyOgImageUrl(story.slug!)
-  const meta = (attr: 'name' | 'property', key: string, content: string) =>
-    `<meta data-rh="true" ${attr}="${key}" content="${escapeHtml(content)}" />`
+  const meta = (attr: 'name' | 'property', key: string, content: string) => `<meta data-rh="true" ${attr}="${key}" content="${escapeHtml(content)}" />`
   const tags = [
     `<title>${escapeHtml(`${displayTitle} - ${SITE_NAME}`)}</title>`,
     meta('name', 'description', description.slice(0, 160)),

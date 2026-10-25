@@ -37,9 +37,7 @@ export function findJunk(value: unknown, skipKeys: string[] = [], path = ''): st
   }
   if (Array.isArray(value)) return value.flatMap((v, i) => findJunk(v, skipKeys, `${path}[${i}]`))
   if (value && typeof value === 'object') {
-    return Object.entries(value).flatMap(([k, v]) =>
-      skipKeys.includes(k) ? [] : findJunk(v, skipKeys, path ? `${path}.${k}` : k),
-    )
+    return Object.entries(value).flatMap(([k, v]) => (skipKeys.includes(k) ? [] : findJunk(v, skipKeys, path ? `${path}.${k}` : k)))
   }
   return []
 }
@@ -162,7 +160,10 @@ export interface DialogueCheck {
 }
 
 export function checkDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): DialogueCheck {
-  const spoken = dialogue.segments.flatMap(s => s.turns).map(t => t.text.replace(/\[[^\]\n]*\]/g, ' ')).join(' ')
+  const spoken = dialogue.segments
+    .flatMap(s => s.turns)
+    .map(t => t.text.replace(/\[[^\]\n]*\]/g, ' '))
+    .join(' ')
   const sentences = splitSentences(spoken.replace(/\s+/g, ' '))
   const distinct = [...new Set(stories.map(s => s.publisher).filter(p => p && p !== 'Unknown'))]
   return {

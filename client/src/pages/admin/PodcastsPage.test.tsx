@@ -23,15 +23,18 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
 const FREE: PodcastWeekSlot = { weekKey: '2026-W41', episode: null, fridayRun: 'create', fridayWindow: 'ahead', automaticRunEnabled: true }
 
 function renderPage() {
-  return renderAdminRoutes([
-    { path: '/admin/podcasts', element: <PodcastsPage /> },
-    { path: '/admin/podcasts/:id', element: <Where /> },
-  ], { history: ['/admin/podcasts'] })
+  return renderAdminRoutes(
+    [
+      { path: '/admin/podcasts', element: <PodcastsPage /> },
+      { path: '/admin/podcasts/:id', element: <Where /> },
+    ],
+    { history: ['/admin/podcasts'] },
+  )
 }
 
 const weeklyButton = () => screen.findByRole('button', { name: /this week's episode/i })
 
-describe('PodcastsPage: this week\'s slot', () => {
+describe("PodcastsPage: this week's slot", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.podcasts.list.mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 25, totalPages: 0 })
@@ -69,7 +72,7 @@ describe('PodcastsPage: this week\'s slot', () => {
     expect(mockApi.podcasts.startWeekly).toHaveBeenCalledTimes(1)
   })
 
-  it('opens a claimed slot\'s episode directly, with no dialog and no claim', async () => {
+  it("opens a claimed slot's episode directly, with no dialog and no claim", async () => {
     mockApi.podcasts.weekSlot.mockResolvedValue({ ...FREE, episode: makePodcast({ id: 'pod-7', title: 'Midweek test' }), fridayRun: 'waiting-for-person' })
     renderPage()
     await screen.findByRole('link', { name: 'Midweek test' })

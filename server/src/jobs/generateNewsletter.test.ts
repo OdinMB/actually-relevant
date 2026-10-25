@@ -98,20 +98,28 @@ describe('runGenerateNewsletter', () => {
       callOrder.push('create')
       return { id: 'nl-1' }
     })
-    mockAssignStories.mockImplementation(async () => { callOrder.push('assign') })
-    mockSelectStoriesForNewsletter.mockImplementation(async () => { callOrder.push('select') })
-    mockGenerateContent.mockImplementation(async () => { callOrder.push('generateContent') })
-    mockGenerateHtmlContent.mockImplementation(async () => { callOrder.push('generateHtml') })
-    mockSendTest.mockImplementation(async () => { callOrder.push('sendTest') })
+    mockAssignStories.mockImplementation(async () => {
+      callOrder.push('assign')
+    })
+    mockSelectStoriesForNewsletter.mockImplementation(async () => {
+      callOrder.push('select')
+    })
+    mockGenerateContent.mockImplementation(async () => {
+      callOrder.push('generateContent')
+    })
+    mockGenerateHtmlContent.mockImplementation(async () => {
+      callOrder.push('generateHtml')
+    })
+    mockSendTest.mockImplementation(async () => {
+      callOrder.push('sendTest')
+    })
 
     await runGenerateNewsletter()
 
-    expect(callOrder).toEqual([
-      'create', 'assign', 'select', 'generateContent', 'generateHtml', 'sendTest',
-    ])
+    expect(callOrder).toEqual(['create', 'assign', 'select', 'generateContent', 'generateHtml', 'sendTest'])
   })
 
-  it('creates the issue with this week\'s title and key', async () => {
+  it("creates the issue with this week's title and key", async () => {
     await runGenerateNewsletter()
 
     expect(mockCreateNewsletter).toHaveBeenCalledWith({ title: 'Week 8, 2026', weekKey: '2026-W08' })
@@ -136,9 +144,13 @@ describe('runGenerateNewsletter', () => {
 
     expect(mockCreateNewsletter).not.toHaveBeenCalled()
     expect(mockNotify).toHaveBeenCalledOnce()
-    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
-      source: 'newsletter', severity: 'warning', dedupeKey: 'newsletter-no-stories:2026-W08',
-    }))
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'newsletter',
+        severity: 'warning',
+        dedupeKey: 'newsletter-no-stories:2026-W08',
+      }),
+    )
   })
 
   it('records no notice when it builds the issue', async () => {
@@ -146,7 +158,7 @@ describe('runGenerateNewsletter', () => {
     expect(mockNotify).not.toHaveBeenCalled()
   })
 
-  it('skips when a built issue already has this week\'s key', async () => {
+  it("skips when a built issue already has this week's key", async () => {
     rows = [row({ weekKey: '2026-W08', createdAt: new Date(SATURDAY.getTime() - 3 * DAY) })]
 
     await runGenerateNewsletter()
@@ -173,7 +185,7 @@ describe('runGenerateNewsletter', () => {
     expect(mockCreateNewsletter).not.toHaveBeenCalled()
   })
 
-  it('proceeds when the previous Saturday\'s issue was built late, at 12:00 (160 h earlier)', async () => {
+  it("proceeds when the previous Saturday's issue was built late, at 12:00 (160 h earlier)", async () => {
     const lateSaturday = new Date('2026-02-14T12:00:00Z')
     rows = [row({ weekKey: getWeekKey(lateSaturday), createdAt: lateSaturday })]
 
@@ -199,7 +211,7 @@ describe('runGenerateNewsletter', () => {
     expect(mockCreateNewsletter).toHaveBeenCalledTimes(1)
   })
 
-  it('skips when this week\'s unbuilt draft is fresh (another run is building it)', async () => {
+  it("skips when this week's unbuilt draft is fresh (another run is building it)", async () => {
     rows = [row({ id: 'nl-draft', weekKey: '2026-W08', html: '', createdAt: new Date(SATURDAY.getTime() - 5 * MIN) })]
 
     await runGenerateNewsletter()

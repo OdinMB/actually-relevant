@@ -53,7 +53,7 @@ async function fetchStorySlugs(): Promise<string[]> {
 async function main() {
   const storySlugs = await fetchStorySlugs()
 
-  const storyRoutes: RouteConfig[] = storySlugs.map((slug) => ({
+  const storyRoutes: RouteConfig[] = storySlugs.map(slug => ({
     path: `/stories/${slug}`,
     priority: 0.6,
     changefreq: 'monthly',

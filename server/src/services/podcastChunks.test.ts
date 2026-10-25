@@ -33,7 +33,11 @@ describe('chunkTurns', () => {
 })
 
 describe('chunkContinuity', () => {
-  const chunks: Chunk[] = [[{ speaker: 'HOST_A', text: 'First chunk ends here.' }], [{ speaker: 'HOST_B', text: 'Middle.' }], [{ speaker: 'HOST_A', text: 'Last chunk starts here.' }]]
+  const chunks: Chunk[] = [
+    [{ speaker: 'HOST_A', text: 'First chunk ends here.' }],
+    [{ speaker: 'HOST_B', text: 'Middle.' }],
+    [{ speaker: 'HOST_A', text: 'Last chunk starts here.' }],
+  ]
 
   it('gives no previous text to the first chunk and no future text to the last', () => {
     expect(chunkContinuity(chunks, 0, 100)).toEqual({ futureText: 'Middle.' })
@@ -47,7 +51,10 @@ describe('chunkContinuity', () => {
 
 describe('buildTranscriptVtt', () => {
   const chunks: Chunk[] = [
-    [{ speaker: 'HOST_A', text: 'a'.repeat(30) }, { speaker: 'HOST_B', text: '[calm] ' + 'b'.repeat(3) }],
+    [
+      { speaker: 'HOST_A', text: 'a'.repeat(30) },
+      { speaker: 'HOST_B', text: '[calm] ' + 'b'.repeat(3) },
+    ],
     [{ speaker: 'HOST_A', text: 'c'.repeat(10) }],
   ]
 

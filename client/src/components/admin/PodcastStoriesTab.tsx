@@ -11,19 +11,20 @@ import { atRestAndChangeable, nextAction } from './podcastRun'
 
 function EpisodeStoriesList({ podcast }: { podcast: Podcast }) {
   if (!podcast.episodeStories || podcast.episodeStories.length === 0) {
-    return (
-      <p className="text-sm italic text-neutral-500">
-        {podcast.inProgress ? 'The stories are being selected.' : 'No stories selected yet.'}
-      </p>
-    )
+    return <p className="text-sm italic text-neutral-500">{podcast.inProgress ? 'The stories are being selected.' : 'No stories selected yet.'}</p>
   }
   return (
     <section aria-labelledby="podcast-stories-heading" className="bg-white rounded-lg border border-neutral-200 p-4">
-      <h2 id="podcast-stories-heading" className="text-sm font-semibold text-neutral-900 mb-3">Stories in this episode</h2>
+      <h2 id="podcast-stories-heading" className="text-sm font-semibold text-neutral-900 mb-3">
+        Stories in this episode
+      </h2>
       <ol className="list-decimal pl-5 space-y-1 text-sm text-neutral-700">
         {podcast.episodeStories.map(s => (
           <li key={s.ref}>
-            {s.title} <span className="text-neutral-500">({s.publisher}, {s.issue})</span>
+            {s.title}{' '}
+            <span className="text-neutral-500">
+              ({s.publisher}, {s.issue})
+            </span>
           </li>
         ))}
       </ol>
@@ -34,13 +35,20 @@ function EpisodeStoriesList({ podcast }: { podcast: Podcast }) {
 function ModeChoice({ podcast }: { podcast: Podcast }) {
   return (
     <section aria-labelledby="podcast-mode-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-3">
-      <h2 id="podcast-mode-heading" className="text-sm font-semibold text-neutral-900">How should this episode be made?</h2>
+      <h2 id="podcast-mode-heading" className="text-sm font-semibold text-neutral-900">
+        How should this episode be made?
+      </h2>
       <div className="flex flex-wrap gap-2">
-        <PodcastRunButton podcast={podcast} mode="interactive">Interactive (review each step)</PodcastRunButton>
-        <PodcastRunButton podcast={podcast} mode="automated" variant="secondary" confirmTitle="Write and voice the whole episode?">Fully automated</PodcastRunButton>
+        <PodcastRunButton podcast={podcast} mode="interactive">
+          Interactive (review each step)
+        </PodcastRunButton>
+        <PodcastRunButton podcast={podcast} mode="automated" variant="secondary" confirmTitle="Write and voice the whole episode?">
+          Fully automated
+        </PodcastRunButton>
       </div>
       <p className="text-xs text-neutral-600">
-        Interactive stops after the stories are chosen and after the script is written, so you can change them. Fully automated selects, writes, voices and assembles in one go.
+        Interactive stops after the stories are chosen and after the script is written, so you can change them. Fully automated selects, writes, voices and
+        assembles in one go.
       </p>
     </section>
   )
@@ -84,9 +92,11 @@ function storyEditor(podcast: Podcast, onDirtyChange: (dirty: boolean) => void):
   const standalone = podcast.kind === 'standalone'
   const editable = atRestAndChangeable(podcast) && (podcast.stage === 'selected' || (standalone && podcast.stage === 'created'))
   if (!editable) return null
-  return standalone
-    ? <PodcastStoryFinder podcast={podcast} onDirtyChange={onDirtyChange} />
-    : <PodcastStoryPicker podcast={podcast} onDirtyChange={onDirtyChange} />
+  return standalone ? (
+    <PodcastStoryFinder podcast={podcast} onDirtyChange={onDirtyChange} />
+  ) : (
+    <PodcastStoryPicker podcast={podcast} onDirtyChange={onDirtyChange} />
+  )
 }
 
 /**
@@ -105,10 +115,13 @@ export function PodcastStoriesTab({ podcast, pendingEdits, onDirtyChange }: Podc
 
   const handleRewind = () => {
     if (!confirm) return
-    rewind.mutate({ id: podcast.id, ...REWIND_TARGET[confirm] }, {
-      onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
-      onSettled: () => setConfirm(null),
-    })
+    rewind.mutate(
+      { id: podcast.id, ...REWIND_TARGET[confirm] },
+      {
+        onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
+        onSettled: () => setConfirm(null),
+      },
+    )
   }
   const startOver: Rewind = podcast.kind === 'standalone' ? 'start-over-standalone' : 'start-over'
 
@@ -118,18 +131,22 @@ export function PodcastStoriesTab({ podcast, pendingEdits, onDirtyChange }: Podc
 
       <div className="flex flex-wrap items-center gap-2">
         {action === 'approve-stories' && (
-          <PodcastRunButton podcast={podcast} disabled={pendingEdits}>Approve stories and write the script</PodcastRunButton>
+          <PodcastRunButton podcast={podcast} disabled={pendingEdits}>
+            Approve stories and write the script
+          </PodcastRunButton>
         )}
         {podcast.stage === 'scripted' && changeable && (
-          <Button variant="secondary" size="sm" onClick={() => setConfirm('change-stories')} disabled={rewind.isPending}>Change stories</Button>
+          <Button variant="secondary" size="sm" onClick={() => setConfirm('change-stories')} disabled={rewind.isPending}>
+            Change stories
+          </Button>
         )}
         {changeable && podcast.stage !== 'created' && (
-          <Button variant="ghost" size="sm" onClick={() => setConfirm(startOver)} disabled={rewind.isPending}>Start over</Button>
+          <Button variant="ghost" size="sm" onClick={() => setConfirm(startOver)} disabled={rewind.isPending}>
+            Start over
+          </Button>
         )}
       </div>
-      {action === 'approve-stories' && (
-        <p className="min-h-[1rem] text-xs text-neutral-600">{pendingEdits ? 'Save or discard your changes first.' : ''}</p>
-      )}
+      {action === 'approve-stories' && <p className="min-h-[1rem] text-xs text-neutral-600">{pendingEdits ? 'Save or discard your changes first.' : ''}</p>}
 
       <ConfirmDialog
         open={confirm !== null}

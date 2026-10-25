@@ -56,9 +56,7 @@ describe('Auth Routes', () => {
       mockPrisma.user.findUnique.mockResolvedValue(user)
       mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-1', token: 'rt' })
 
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ email: 'admin@test.com', password: 'testpassword' })
+      const res = await request(app).post('/api/auth/login').send({ email: 'admin@test.com', password: 'testpassword' })
 
       expect(res.status).toBe(200)
       expect(res.body.accessToken).toBeDefined()
@@ -72,9 +70,7 @@ describe('Auth Routes', () => {
     it('returns 401 for unknown email', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ email: 'nobody@test.com', password: 'testpassword' })
+      const res = await request(app).post('/api/auth/login').send({ email: 'nobody@test.com', password: 'testpassword' })
 
       expect(res.status).toBe(401)
       expect(res.body.error).toBe('Invalid email or password')
@@ -84,18 +80,14 @@ describe('Auth Routes', () => {
       const user = sampleUser({ passwordHash: testPasswordHash })
       mockPrisma.user.findUnique.mockResolvedValue(user)
 
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ email: 'admin@test.com', password: 'wrongpassword' })
+      const res = await request(app).post('/api/auth/login').send({ email: 'admin@test.com', password: 'wrongpassword' })
 
       expect(res.status).toBe(401)
       expect(res.body.error).toBe('Invalid email or password')
     })
 
     it('returns 400 for missing fields', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({})
+      const res = await request(app).post('/api/auth/login').send({})
 
       expect(res.status).toBe(400)
     })
@@ -105,9 +97,7 @@ describe('Auth Routes', () => {
       mockPrisma.user.findUnique.mockResolvedValue(user)
       mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-1', token: 'rt' })
 
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ email: 'admin@test.com', password: 'testpassword' })
+      const res = await request(app).post('/api/auth/login').send({ email: 'admin@test.com', password: 'testpassword' })
 
       expect(res.status).toBe(200)
       const cookies = res.headers['set-cookie']
@@ -121,8 +111,7 @@ describe('Auth Routes', () => {
 
   describe('POST /api/auth/refresh', () => {
     it('returns 401 without refresh cookie', async () => {
-      const res = await request(app)
-        .post('/api/auth/refresh')
+      const res = await request(app).post('/api/auth/refresh')
 
       expect(res.status).toBe(401)
       expect(res.body.error).toBe('No refresh token')
@@ -142,9 +131,7 @@ describe('Auth Routes', () => {
       mockPrisma.refreshToken.updateMany.mockResolvedValue({ count: 1 })
       mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-2', token: 'new-refresh' })
 
-      const res = await request(app)
-        .post('/api/auth/refresh')
-        .set('Cookie', 'refresh_token=valid-refresh')
+      const res = await request(app).post('/api/auth/refresh').set('Cookie', 'refresh_token=valid-refresh')
 
       expect(res.status).toBe(200)
       expect(res.body.accessToken).toBeDefined()
@@ -153,9 +140,7 @@ describe('Auth Routes', () => {
     it('returns 401 for invalid refresh token', async () => {
       mockPrisma.refreshToken.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .post('/api/auth/refresh')
-        .set('Cookie', 'refresh_token=invalid-token')
+      const res = await request(app).post('/api/auth/refresh').set('Cookie', 'refresh_token=invalid-token')
 
       expect(res.status).toBe(401)
     })
@@ -172,9 +157,7 @@ describe('Auth Routes', () => {
       })
       mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 })
 
-      const res = await request(app)
-        .post('/api/auth/refresh')
-        .set('Cookie', 'refresh_token=reused-token')
+      const res = await request(app).post('/api/auth/refresh').set('Cookie', 'refresh_token=reused-token')
 
       expect(res.status).toBe(401)
       expect(res.body.error).toBe('Refresh token reuse detected')
@@ -184,9 +167,7 @@ describe('Auth Routes', () => {
     it('keeps the cookie when the refresh fails for a server reason', async () => {
       mockPrisma.refreshToken.findUnique.mockRejectedValue(new Error('connection reset'))
 
-      const res = await request(app)
-        .post('/api/auth/refresh')
-        .set('Cookie', 'refresh_token=valid-refresh')
+      const res = await request(app).post('/api/auth/refresh').set('Cookie', 'refresh_token=valid-refresh')
 
       expect(res.status).toBe(500)
       expect(setCookieHeader(res)).not.toContain('refresh_token')
@@ -197,17 +178,14 @@ describe('Auth Routes', () => {
     it('clears refresh cookie', async () => {
       mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 1 })
 
-      const res = await request(app)
-        .post('/api/auth/logout')
-        .set('Cookie', 'refresh_token=some-token')
+      const res = await request(app).post('/api/auth/logout').set('Cookie', 'refresh_token=some-token')
 
       expect(res.status).toBe(200)
       expect(res.body.message).toBe('Logged out')
     })
 
     it('succeeds even without cookie', async () => {
-      const res = await request(app)
-        .post('/api/auth/logout')
+      const res = await request(app).post('/api/auth/logout')
 
       expect(res.status).toBe(200)
       expect(res.body.message).toBe('Logged out')
@@ -226,25 +204,20 @@ describe('Auth Routes', () => {
         updatedAt: new Date(),
       })
 
-      const res = await request(app)
-        .get('/api/auth/me')
-        .set('Authorization', `Bearer ${token}`)
+      const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)
 
       expect(res.status).toBe(200)
       expect(res.body.email).toBe('admin@test.com')
     })
 
     it('returns 401 without authorization header', async () => {
-      const res = await request(app)
-        .get('/api/auth/me')
+      const res = await request(app).get('/api/auth/me')
 
       expect(res.status).toBe(401)
     })
 
     it('returns 401 for invalid JWT', async () => {
-      const res = await request(app)
-        .get('/api/auth/me')
-        .set('Authorization', 'Bearer invalid-token')
+      const res = await request(app).get('/api/auth/me').set('Authorization', 'Bearer invalid-token')
 
       expect(res.status).toBe(401)
     })
@@ -286,9 +259,7 @@ describe('Auth Routes', () => {
     })
 
     it('returns 401 without auth', async () => {
-      const res = await request(app)
-        .put('/api/auth/password')
-        .send({ currentPassword: 'old', newPassword: 'newpassword123' })
+      const res = await request(app).put('/api/auth/password').send({ currentPassword: 'old', newPassword: 'newpassword123' })
 
       expect(res.status).toBe(401)
     })
@@ -296,10 +267,7 @@ describe('Auth Routes', () => {
     it('returns 400 for missing fields', async () => {
       const token = generateAccessToken({ id: 'user-1', email: 'admin@test.com', role: 'admin' })
 
-      const res = await request(app)
-        .put('/api/auth/password')
-        .set('Authorization', `Bearer ${token}`)
-        .send({})
+      const res = await request(app).put('/api/auth/password').set('Authorization', `Bearer ${token}`).send({})
 
       expect(res.status).toBe(400)
     })

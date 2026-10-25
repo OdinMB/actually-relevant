@@ -19,14 +19,41 @@ const { PodcastRefusedError } = await import('./podcastGuards.js')
 const { PODCAST_EPISODE_AI_LINE, PODCAST_EPISODE_AI_LINE_EDITED } = await import('../lib/aiLabelCopy.js')
 
 const SELECTED_AT = new Date('2026-10-10T06:00:00Z')
-const poolEntry = (n: number) => ({ id: `s${n}`, title: `Story ${n}`, publisher: `Pub ${n}`, sourceUrl: `https://news.example/${n}`, slug: `story-${n}`, issue: `Issue ${n}`, relevance: 8 })
+const poolEntry = (n: number) => ({
+  id: `s${n}`,
+  title: `Story ${n}`,
+  publisher: `Pub ${n}`,
+  sourceUrl: `https://news.example/${n}`,
+  slug: `story-${n}`,
+  issue: `Issue ${n}`,
+  relevance: 8,
+})
 const POOL = [1, 2, 3, 4, 5, 6, 7].map(poolEntry)
-const snapshots = fixtureStories.map(s => ({ ref: s.ref, id: `s${s.ref}`, title: s.title, publisher: s.publisher, sourceUrl: `https://news.example/${s.ref}`, slug: null, issue: 'I' }))
+const snapshots = fixtureStories.map(s => ({
+  ref: s.ref,
+  id: `s${s.ref}`,
+  title: s.title,
+  publisher: s.publisher,
+  sourceUrl: `https://news.example/${s.ref}`,
+  slug: null,
+  issue: 'I',
+}))
 
 function episode(stage: string, overrides: Record<string, unknown> = {}) {
   return {
-    id: 'pod-1', stage, status: 'draft', kind: 'weekly', humanEdited: false, createdAt: new Date('2026-10-05T06:00:00Z'), storiesSelectedAt: SELECTED_AT,
-    storyIds: ['s1', 's2', 's3', 's4'], episodeStories: snapshots, dialogue: null, episodeSummary: 'Summary.', showNotes: '', ...overrides,
+    id: 'pod-1',
+    stage,
+    status: 'draft',
+    kind: 'weekly',
+    humanEdited: false,
+    createdAt: new Date('2026-10-05T06:00:00Z'),
+    storiesSelectedAt: SELECTED_AT,
+    storyIds: ['s1', 's2', 's3', 's4'],
+    episodeStories: snapshots,
+    dialogue: null,
+    episodeSummary: 'Summary.',
+    showNotes: '',
+    ...overrides,
   }
 }
 
@@ -48,13 +75,17 @@ beforeEach(() => {
 
 describe('replaceEpisodeStories', () => {
   it('refuses fewer than the minimum, more than the maximum and duplicates, before taking the lease', async () => {
-    for (const ids of [['s1', 's2', 's3'], ['s1', 's2', 's3', 's4', 's5', 's6'], ['s1', 's1', 's2', 's3']]) {
+    for (const ids of [
+      ['s1', 's2', 's3'],
+      ['s1', 's2', 's3', 's4', 's5', 's6'],
+      ['s1', 's1', 's2', 's3'],
+    ]) {
       await expect(replaceEpisodeStories('pod-1', ids)).rejects.toBeInstanceOf(PodcastEditRejectedError)
     }
     expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
   })
 
-  it('refuses a story outside the week\'s pool and saves nothing', async () => {
+  it("refuses a story outside the week's pool and saves nothing", async () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('selected'))
     await expect(replaceEpisodeStories('pod-1', ['s1', 's2', 's3', 'elsewhere'])).rejects.toThrow(/not in this week's pool: elsewhere/)
     expect(writes()).toHaveLength(0)
@@ -73,8 +104,22 @@ describe('replaceEpisodeStories', () => {
     await replaceEpisodeStories('pod-1', ['s5', 's2', 's3', 's4', 's1'])
     const [data] = writes()
     expect(data.storyIds).toEqual(['s5', 's2', 's3', 's4', 's1'])
-    expect(data.episodeStories.map((s: { ref: number; id: string }) => [s.ref, s.id])).toEqual([[1, 's5'], [2, 's2'], [3, 's3'], [4, 's4'], [5, 's1']])
-    expect(data.episodeStories[0]).toEqual({ ref: 1, id: 's5', title: 'Story 5', publisher: 'Pub 5', sourceUrl: 'https://news.example/5', slug: 'story-5', issue: 'Issue 5' })
+    expect(data.episodeStories.map((s: { ref: number; id: string }) => [s.ref, s.id])).toEqual([
+      [1, 's5'],
+      [2, 's2'],
+      [3, 's3'],
+      [4, 's4'],
+      [5, 's1'],
+    ])
+    expect(data.episodeStories[0]).toEqual({
+      ref: 1,
+      id: 's5',
+      title: 'Story 5',
+      publisher: 'Pub 5',
+      sourceUrl: 'https://news.example/5',
+      slug: 'story-5',
+      issue: 'Issue 5',
+    })
     expect(data.humanEdited).toBe(true)
   })
 
@@ -149,8 +194,7 @@ describe('saveEpisodeScript', () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(scripted({ lastError: 'chunk 3 failed' }))
     await saveEpisodeScript('pod-1', asEdit(withTurn(goodDialogue(), 1, 0, 'A rewritten line for the first story.')))
     expect(mockPrisma.podcastAudioChunk.deleteMany).toHaveBeenCalledWith({ where: { podcastId: 'pod-1' } })
-    expect(mockPrisma.podcastAudioChunk.deleteMany.mock.invocationCallOrder[0])
-      .toBeGreaterThan(mockPrisma.podcast.updateMany.mock.invocationCallOrder[0])
+    expect(mockPrisma.podcastAudioChunk.deleteMany.mock.invocationCallOrder[0]).toBeGreaterThan(mockPrisma.podcast.updateMany.mock.invocationCallOrder[0])
   })
 
   it('clears the failure a voicing left, so the page offers the review action again', async () => {
@@ -180,7 +224,7 @@ describe('updateEpisodeMeta', () => {
     await expect(updateEpisodeMeta('pod-1', { title: 'Too early' })).rejects.toBeInstanceOf(PodcastRefusedError)
   })
 
-  it('ticks and unticks the flag, and the show notes\' AI line follows it', async () => {
+  it("ticks and unticks the flag, and the show notes' AI line follows it", async () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('scripted', { showNotes: 'old notes' }))
     await updateEpisodeMeta('pod-1', { humanEdited: true })
     expect(writes()[0].humanEdited).toBe(true)
@@ -204,7 +248,9 @@ describe('updateEpisodeMeta', () => {
   })
 
   it('toggles the flag on a published episode, rebuilds its show notes and its feed', async () => {
-    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'published', publishedAt: new Date(), humanEdited: true, showNotes: 'old notes' }))
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(
+      episode('ready', { status: 'published', publishedAt: new Date(), humanEdited: true, showNotes: 'old notes' }),
+    )
     await updateEpisodeMeta('pod-1', { humanEdited: false })
     expect(writes()[0].showNotes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE)
     expect(mockFeed.invalidateFeedCache).toHaveBeenCalledOnce()
@@ -219,7 +265,9 @@ describe('updateEpisodeMeta', () => {
   })
 
   it('allows ticking the flag on an episode that was taken down', async () => {
-    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('ready', { status: 'draft', publishedAt: new Date(), unpublishedAt: new Date(), showNotes: 'old notes' }))
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(
+      episode('ready', { status: 'draft', publishedAt: new Date(), unpublishedAt: new Date(), showNotes: 'old notes' }),
+    )
     await updateEpisodeMeta('pod-1', { humanEdited: true })
     expect(writes()[0].humanEdited).toBe(true)
   })

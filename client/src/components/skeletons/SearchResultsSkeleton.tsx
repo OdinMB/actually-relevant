@@ -7,7 +7,7 @@ import StoryCardSkeleton from './StoryCardSkeleton'
 export default function SearchResultsSkeleton() {
   return (
     <div className="grid gap-5 md:grid-cols-3">
-      {[1, 2, 3, 4, 5, 6].map((i) => (
+      {[1, 2, 3, 4, 5, 6].map(i => (
         <StoryCardSkeleton key={i} variant="equal" />
       ))}
     </div>

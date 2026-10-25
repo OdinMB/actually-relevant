@@ -20,8 +20,7 @@ const dbRow = (email: string, confirmedAt: Date | null, createdAt = D('2026-01-0
 })
 const plunkContact = (email: string, subscribed: boolean, id = `id-${email}`) => ({ email, subscribed, id })
 
-const rowFor = (rows: { email: string }[], email: string) =>
-  rows.find((r) => r.email.toLowerCase() === email.toLowerCase())
+const rowFor = (rows: { email: string }[], email: string) => rows.find(r => r.email.toLowerCase() === email.toLowerCase())
 
 // --- reconcile (pure) ----------------------------------------------------
 
@@ -75,7 +74,7 @@ describe('reconcile', () => {
       [plunkContact('sub@x.com', true), plunkContact('unsub@x.com', false)],
       true,
     )
-    expect(r.rows.map((row) => row.email)).toEqual(['sub@x.com', 'unsub@x.com', 'dbonly@x.com'])
+    expect(r.rows.map(row => row.email)).toEqual(['sub@x.com', 'unsub@x.com', 'dbonly@x.com'])
   })
 
   it('dedupes duplicate DB rows for one email, preferring the confirmed row', () => {
@@ -96,20 +95,12 @@ describe('reconcile', () => {
   })
 
   it('counts plunk subscribed/unsubscribed totals over distinct emails', () => {
-    const r = reconcile(
-      [],
-      [plunkContact('a@x.com', true), plunkContact('b@x.com', true), plunkContact('c@x.com', false)],
-      true,
-    )
+    const r = reconcile([], [plunkContact('a@x.com', true), plunkContact('b@x.com', true), plunkContact('c@x.com', false)], true)
     expect(r.plunkCounts).toMatchObject({ total: 3, subscribed: 2, unsubscribed: 1, unsubscribedNotInDb: 1 })
   })
 
   it('when Plunk is unavailable, shows DB-only rows with unknown plunk status and no mismatches', () => {
-    const r = reconcile(
-      [dbRow('a@x.com', D('2026-02-01T00:00:00Z')), dbRow('b@x.com', null)],
-      [],
-      false,
-    )
+    const r = reconcile([dbRow('a@x.com', D('2026-02-01T00:00:00Z')), dbRow('b@x.com', null)], [], false)
     expect(r.rows).toHaveLength(2)
     for (const row of r.rows) expect(row.plunkStatus).toBeNull()
     expect(r.mismatches).toBe(0)
@@ -127,10 +118,12 @@ describe('getSubscriberReconciliation', () => {
 
   it('marks plunk unavailable and still returns the DB side when the first listContacts call throws', async () => {
     mockPrisma.pendingSubscription.findMany.mockResolvedValue([dbRow('a@x.com', D('2026-02-01T00:00:00Z'))])
-    mockPlunk.listContacts.mockRejectedValue(Object.assign(new Error('Request failed with status code 403'), {
-      isAxiosError: true,
-      response: { status: 403, data: { code: 'PROJECT_DISABLED' } },
-    }))
+    mockPlunk.listContacts.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 403'), {
+        isAxiosError: true,
+        response: { status: 403, data: { code: 'PROJECT_DISABLED' } },
+      }),
+    )
 
     const result = await getSubscriberReconciliation()
 

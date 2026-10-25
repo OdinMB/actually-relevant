@@ -58,7 +58,7 @@ describe('SubscribeForm', () => {
     mockGetToken.mockResolvedValue({ token: 'test-token' })
     vi.stubEnv('VITE_TURNSTILE_SITE_KEY', '')
     delete window.turnstile
-    scriptTags().forEach((s) => s.remove())
+    scriptTags().forEach(s => s.remove())
   })
 
   afterEach(() => {
@@ -83,9 +83,7 @@ describe('SubscribeForm', () => {
 
   it('retries the token fetch once and submits the retried token', async () => {
     mockGetToken.mockReset()
-    mockGetToken
-      .mockRejectedValueOnce(new Error('network blip'))
-      .mockResolvedValueOnce({ token: 'retry-token' })
+    mockGetToken.mockRejectedValueOnce(new Error('network blip')).mockResolvedValueOnce({ token: 'retry-token' })
     mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
     const user = userEvent.setup()
 

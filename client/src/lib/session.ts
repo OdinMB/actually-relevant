@@ -31,7 +31,7 @@ if (import.meta.hot) {
   if (import.meta.hot.data?.accessToken) {
     accessToken = import.meta.hot.data.accessToken
   }
-  import.meta.hot.dispose((data) => {
+  import.meta.hot.dispose(data => {
     data.accessToken = accessToken
   })
 }

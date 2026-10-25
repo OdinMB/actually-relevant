@@ -24,9 +24,7 @@ export function EditPanel({ open, onClose, title, loading, error, children }: Ed
       <div className="fixed inset-y-0 right-0 flex max-w-full">
         <DialogPanel className="w-screen max-w-lg bg-white shadow-xl flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 shrink-0">
-            <DialogTitle className="text-lg font-semibold text-neutral-900 truncate pr-4">
-              {title}
-            </DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-neutral-900 truncate pr-4">{title}</DialogTitle>
             <button
               onClick={onClose}
               className="rounded p-1 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
@@ -36,10 +34,14 @@ export function EditPanel({ open, onClose, title, loading, error, children }: Ed
             </button>
           </div>
           {loading && (
-            <div className="flex-1 flex justify-center items-start pt-12"><LoadingSpinner /></div>
+            <div className="flex-1 flex justify-center items-start pt-12">
+              <LoadingSpinner />
+            </div>
           )}
           {error && (
-            <div className="flex-1 p-4"><p className="text-sm text-red-600">Failed to load data.</p></div>
+            <div className="flex-1 p-4">
+              <p className="text-sm text-red-600">Failed to load data.</p>
+            </div>
           )}
           {!loading && !error && children}
         </DialogPanel>

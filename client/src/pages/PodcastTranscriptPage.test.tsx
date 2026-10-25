@@ -38,7 +38,10 @@ const EPISODE: PublicPodcastEpisodeDetail = {
     { story: null, turns: [{ speaker: 'Host A', text: 'Welcome to the week.' }] },
     {
       story: { title: 'Air data ruling', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air' },
-      turns: [{ speaker: 'Host B', text: 'A court ruled on air data.' }, { speaker: 'Host A', text: 'It matters for millions.' }],
+      turns: [
+        { speaker: 'Host B', text: 'A court ruled on air data.' },
+        { speaker: 'Host A', text: 'It matters for millions.' },
+      ],
     },
     {
       story: { title: 'Vaccine rollout', publisher: 'Phys.org', sourceUrl: 'https://news.example/2', slug: null },

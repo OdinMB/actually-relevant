@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  shouldPurgeContact,
-  classifyContact,
-  parseArgs,
-  countByCreatedDay,
-  DEFAULT_PROTECTED_WINDOWS,
-  type PurgeRules,
-} from './cleanup-plunk-contacts.js'
+import { shouldPurgeContact, classifyContact, parseArgs, countByCreatedDay, DEFAULT_PROTECTED_WINDOWS, type PurgeRules } from './cleanup-plunk-contacts.js'
 
 describe('shouldPurgeContact', () => {
   const rules: PurgeRules = {
@@ -96,10 +89,7 @@ describe('parseArgs', () => {
   })
 
   it('replaces the default window with one or more --protect-created flags', () => {
-    const args = parseArgs([
-      '--protect-created=2026-03-01T00:00Z..2026-03-02T00:00Z',
-      '--protect-created=2026-04-01..2026-04-02',
-    ])
+    const args = parseArgs(['--protect-created=2026-03-01T00:00Z..2026-03-02T00:00Z', '--protect-created=2026-04-01..2026-04-02'])
     expect(args.protectedWindows).toEqual([
       { start: new Date('2026-03-01T00:00:00.000Z'), end: new Date('2026-03-02T00:00:00.000Z') },
       { start: new Date('2026-04-01T00:00:00.000Z'), end: new Date('2026-04-02T00:00:00.000Z') },
@@ -116,9 +106,7 @@ describe('parseArgs', () => {
 
   it('rejects a date-time without a zone, which would parse in local time', () => {
     expect(() => parseArgs(['--protect-created=2026-02-15T00:00..2026-02-16T00:00Z'])).toThrow()
-    expect(parseArgs(['--protect-created=2026-02-15T00:00+01:00..2026-02-16T00:00Z']).protectedWindows[0].start).toEqual(
-      new Date('2026-02-14T23:00:00.000Z'),
-    )
+    expect(parseArgs(['--protect-created=2026-02-15T00:00+01:00..2026-02-16T00:00Z']).protectedWindows[0].start).toEqual(new Date('2026-02-14T23:00:00.000Z'))
   })
 
   it('rejects unknown flags', () => {
@@ -128,14 +116,7 @@ describe('parseArgs', () => {
 
 describe('countByCreatedDay', () => {
   it('groups by UTC day, most first, ties by day', () => {
-    expect(
-      countByCreatedDay([
-        '2026-03-01T10:00:00Z',
-        '2026-03-02T23:30:00Z',
-        '2026-03-02T00:10:00Z',
-        '2026-02-28T05:00:00Z',
-      ]),
-    ).toEqual([
+    expect(countByCreatedDay(['2026-03-01T10:00:00Z', '2026-03-02T23:30:00Z', '2026-03-02T00:10:00Z', '2026-02-28T05:00:00Z'])).toEqual([
       { day: '2026-03-02', count: 2 },
       { day: '2026-02-28', count: 1 },
       { day: '2026-03-01', count: 1 },

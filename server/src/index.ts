@@ -62,7 +62,7 @@ export async function shutdown(): Promise<void> {
   clearInterval(tokenCleanupTimer)
 
   // 2. Close HTTP server (stop accepting new connections)
-  await new Promise<void>((resolve) => {
+  await new Promise<void>(resolve => {
     server.close(() => resolve())
   })
 
@@ -74,7 +74,7 @@ export async function shutdown(): Promise<void> {
       break
     }
     log.info({ running: taskRegistry.getProcessingStoryIds().length }, 'waiting for tasks to drain')
-    await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS))
+    await new Promise(resolve => setTimeout(resolve, DRAIN_POLL_MS))
   }
 
   // 4. Wait for scheduled jobs this process is running (a crawl, a newsletter build, a cleanup batch),

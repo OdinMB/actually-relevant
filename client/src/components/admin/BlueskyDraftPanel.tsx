@@ -1,9 +1,4 @@
-import {
-  SocialDraftPanel,
-  type SocialDraft,
-  type SocialDraftChannel,
-  type SocialDraftPanelProps,
-} from './social/SocialDraftPanel'
+import { SocialDraftPanel, type SocialDraft, type SocialDraftChannel, type SocialDraftPanelProps } from './social/SocialDraftPanel'
 
 import { SITE_URL } from '../../config'
 
@@ -34,7 +29,7 @@ const blueskyDraftChannel: SocialDraftChannel = {
   count: countGraphemes,
   nearLimit: LIMIT - 20,
   hint: 'Links are added automatically',
-  renderDetails: (draft) => (
+  renderDetails: draft => (
     /* Link preview */
     <div>
       <p className="text-sm font-medium text-neutral-700 mb-2">Links</p>

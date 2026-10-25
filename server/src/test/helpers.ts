@@ -7,11 +7,7 @@ export const TEST_JWT_SECRET = 'test-jwt-secret-for-helpers'
 process.env.JWT_SECRET = TEST_JWT_SECRET
 
 export function authHeader() {
-  const token = jwt.sign(
-    { userId: 'test-admin-id', email: 'admin@test.com', role: 'admin' },
-    TEST_JWT_SECRET,
-    { expiresIn: '15m' },
-  )
+  const token = jwt.sign({ userId: 'test-admin-id', email: 'admin@test.com', role: 'admin' }, TEST_JWT_SECRET, { expiresIn: '15m' })
   return { Authorization: `Bearer ${token}` }
 }
 

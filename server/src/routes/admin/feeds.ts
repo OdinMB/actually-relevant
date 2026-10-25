@@ -45,9 +45,7 @@ router.put('/:id', failsWith('Failed to update feed', feedErrors), validateBody(
 
 router.delete('/:id', failsWith('Failed to delete feed', feedErrors), async (req, res) => {
   const result = await feedService.deleteFeed(req.params.id!)
-  const message = result.action === 'deleted'
-    ? 'Feed deleted'
-    : 'Feed deactivated (has linked stories)'
+  const message = result.action === 'deleted' ? 'Feed deleted' : 'Feed deactivated (has linked stories)'
   res.json({ action: result.action, message })
 })
 

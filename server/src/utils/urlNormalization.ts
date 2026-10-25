@@ -1,7 +1,4 @@
-const TRACKING_PARAMS = [
-  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-  'fbclid', 'gclid', 'ref', 'source',
-]
+const TRACKING_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'ref', 'source']
 
 export function normalizeUrl(url: string): string {
   const parsed = new URL(url)

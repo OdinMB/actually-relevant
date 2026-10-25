@@ -13,10 +13,7 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
     rules: {
       // `_`-prefixed names are deliberate: unused parameters, and keys dropped by a rest spread
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none', ignoreRestSiblings: true },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none', ignoreRestSiblings: true }],
       // Off: React Compiler rules from react-hooks 7 that would need effect rewrites (.context/ci.md).
       // set-state-in-effect: 9 effects sync state from storage, the URL or loaded data on mount;
       // moving each into an initializer or a key is a behavior change to test one by one.

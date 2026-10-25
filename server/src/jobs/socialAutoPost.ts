@@ -4,14 +4,8 @@ import { isBlueskyConfigured } from '../lib/bluesky.js'
 import { isMastodonConfigured } from '../lib/mastodon.js'
 import { findAutoPostCandidates, pickBestStoryForSocial } from '../services/socialMedia.js'
 import type { SocialChannelName } from '../services/socialMedia.js'
-import {
-  generateDraft as generateBlueskyDraft,
-  publishPost as publishBlueskyPost,
-} from '../services/bluesky.js'
-import {
-  generateDraft as generateMastodonDraft,
-  publishPost as publishMastodonPost,
-} from '../services/mastodon.js'
+import { generateDraft as generateBlueskyDraft, publishPost as publishBlueskyPost } from '../services/bluesky.js'
+import { generateDraft as generateMastodonDraft, publishPost as publishMastodonPost } from '../services/mastodon.js'
 import prisma from '../lib/prisma.js'
 
 const log = createLogger('social_auto_post')
@@ -34,12 +28,12 @@ function getEnabledChannels(): ChannelConfig[] {
       name: 'bluesky',
       enabled: true,
       configured: true,
-      hasPost: async (storyId) => {
+      hasPost: async storyId => {
         const existing = await prisma.blueskyPost.findFirst({ where: { storyId } })
         return existing !== null
       },
-      generateDraft: async (storyId) => generateBlueskyDraft(storyId),
-      publishPost: async (postId) => publishBlueskyPost(postId),
+      generateDraft: async storyId => generateBlueskyDraft(storyId),
+      publishPost: async postId => publishBlueskyPost(postId),
     })
   }
 
@@ -48,12 +42,12 @@ function getEnabledChannels(): ChannelConfig[] {
       name: 'mastodon',
       enabled: true,
       configured: true,
-      hasPost: async (storyId) => {
+      hasPost: async storyId => {
         const existing = await prisma.mastodonPost.findFirst({ where: { storyId } })
         return existing !== null
       },
-      generateDraft: async (storyId) => generateMastodonDraft(storyId),
-      publishPost: async (postId) => publishMastodonPost(postId),
+      generateDraft: async storyId => generateMastodonDraft(storyId),
+      publishPost: async postId => publishMastodonPost(postId),
     })
   }
 
@@ -69,11 +63,14 @@ export async function runSocialAutoPost(): Promise<void> {
     return
   }
 
-  log.info({ channels: channels.map((c) => c.name) }, 'enabled channels')
+  log.info({ channels: channels.map(c => c.name) }, 'enabled channels')
 
   // Find candidates across the enabled channels only
   const lookbackHours = config.socialAutoPost.lookbackHours
-  const candidates = await findAutoPostCandidates(lookbackHours, channels.map((c) => c.name))
+  const candidates = await findAutoPostCandidates(
+    lookbackHours,
+    channels.map(c => c.name),
+  )
 
   if (candidates.length === 0) {
     log.info('no candidate stories found for social posting')
@@ -93,7 +90,7 @@ export async function runSocialAutoPost(): Promise<void> {
   const failures: string[] = []
   for (const channel of channels) {
     try {
-      if (await postToChannel(channel, storyId) === 'skipped') continue
+      if ((await postToChannel(channel, storyId)) === 'skipped') continue
       attempts++
     } catch (err) {
       attempts++
@@ -125,6 +122,6 @@ async function postToChannel(channel: ChannelConfig, storyId: string): Promise<'
   await channel.publishPost(draft.id)
 
   log.info({ channel: channel.name, storyId }, 'auto-post published successfully')
-  await new Promise((resolve) => setTimeout(resolve, PUBLISH_PAUSE_MS))
+  await new Promise(resolve => setTimeout(resolve, PUBLISH_PAUSE_MS))
   return 'posted'
 }

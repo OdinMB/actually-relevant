@@ -54,10 +54,7 @@ export function publishRefusal(episode: Pick<Podcast, PublishFields>): string | 
  * never missing without a reason; null when it can be published, and for a listed episode, which can
  * always be unpublished. `inProgress` is a live lease: publishing would be refused until the run ends.
  */
-export function publishBlockedReason(
-  episode: Pick<Podcast, 'status' | PublishFields>,
-  inProgress: boolean,
-): string | null {
+export function publishBlockedReason(episode: Pick<Podcast, 'status' | PublishFields>, inProgress: boolean): string | null {
   if (episode.status === ContentStatus.published) return null
   if (inProgress) return 'a run is working on the episode; publishing waits until it finishes'
   return publishRefusal(episode)
@@ -68,11 +65,15 @@ export function publishBlockedReason(
  * a rewind. Sets `publishedAt` the first time only and clears a previous takedown.
  */
 export async function publishEpisode(id: string, now: Date = new Date()): Promise<void> {
-  await withEpisodeLease(id, async ({ episode, update }) => {
-    const refusal = publishRefusal(episode)
-    if (refusal) throw new PodcastRefusedError(refusal)
-    await update({ status: ContentStatus.published, publishedAt: episode.publishedAt ?? now, unpublishedAt: null })
-  }, 'published')
+  await withEpisodeLease(
+    id,
+    async ({ episode, update }) => {
+      const refusal = publishRefusal(episode)
+      if (refusal) throw new PodcastRefusedError(refusal)
+      await update({ status: ContentStatus.published, publishedAt: episode.publishedAt ?? now, unpublishedAt: null })
+    },
+    'published',
+  )
   invalidateFeedCache()
   log.info({ podcastId: id }, 'podcast episode published')
 }
@@ -104,8 +105,18 @@ const PUBLISHED_WHERE = {
 } satisfies Prisma.PodcastWhereInput
 
 const PUBLISHED_SELECT = {
-  id: true, title: true, kind: true, episodeSummary: true, episodeStories: true, humanEdited: true,
-  audioUrl: true, audioBytes: true, durationSec: true, transcriptUrl: true, chaptersUrl: true, publishedAt: true,
+  id: true,
+  title: true,
+  kind: true,
+  episodeSummary: true,
+  episodeStories: true,
+  humanEdited: true,
+  audioUrl: true,
+  audioBytes: true,
+  durationSec: true,
+  transcriptUrl: true,
+  chaptersUrl: true,
+  publishedAt: true,
 } satisfies Prisma.PodcastSelect
 
 type PublishedRow = Prisma.PodcastGetPayload<{ select: typeof PUBLISHED_SELECT }>

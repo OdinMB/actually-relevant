@@ -186,7 +186,7 @@ async function main() {
   }
 
   fs.mkdirSync(DOCS_DIR, { recursive: true })
-  const name = chooseBackupFileName(exportedAt, (n) => fs.existsSync(path.join(DOCS_DIR, n)))
+  const name = chooseBackupFileName(exportedAt, n => fs.existsSync(path.join(DOCS_DIR, n)))
   const filePath = path.join(DOCS_DIR, name)
   // 'wx' fails if the file appeared in the meantime: never overwrite.
   fs.writeFileSync(filePath, JSON.stringify(backup, null, 2) + '\n', { encoding: 'utf8', flag: 'wx' })
@@ -209,7 +209,7 @@ async function main() {
 
 // Only run when executed directly (so importing the file for tests has no side effects).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
+  main().catch(err => {
     console.error('Fatal error:', err instanceof Error ? err.message : err)
     process.exit(1)
   })

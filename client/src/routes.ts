@@ -48,6 +48,6 @@ export const routes: RouteConfig[] = [
   // which fetches published story slugs from the API
 ]
 
-export const routePaths = routes.map((r) => r.path)
+export const routePaths = routes.map(r => r.path)
 
 export type Route = (typeof routePaths)[number]

@@ -71,9 +71,7 @@ export async function generateRefreshToken(userId: string, familyId?: string): P
   return token
 }
 
-export async function rotateRefreshToken(
-  oldToken: string
-): Promise<{ accessToken: string; refreshToken: string }> {
+export async function rotateRefreshToken(oldToken: string): Promise<{ accessToken: string; refreshToken: string }> {
   const record = await prisma.refreshToken.findUnique({
     where: { token: oldToken },
     include: { user: true },
@@ -116,10 +114,7 @@ function isWithinReuseGrace(rotatedAt: Date): boolean {
   return Date.now() - rotatedAt.getTime() <= config.auth.refreshReuseGraceMs
 }
 
-async function issueTokenPair(
-  user: { id: string; email: string; role: string },
-  familyId: string,
-): Promise<{ accessToken: string; refreshToken: string }> {
+async function issueTokenPair(user: { id: string; email: string; role: string }, familyId: string): Promise<{ accessToken: string; refreshToken: string }> {
   const accessToken = generateAccessToken(user)
   const refreshToken = await generateRefreshToken(user.id, familyId)
   return { accessToken, refreshToken }

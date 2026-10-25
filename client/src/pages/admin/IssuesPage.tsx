@@ -43,21 +43,16 @@ export default function IssuesPage() {
         actions={<Button onClick={() => navigate('/admin/issues/new')}>Add Issue</Button>}
       />
 
-      {issuesQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {issuesQuery.isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {issuesQuery.error && <ErrorState message="Failed to load issues" onRetry={() => issuesQuery.refetch()} />}
       {issuesQuery.data && issuesQuery.data.length === 0 && <EmptyState title="No issues yet" description="Create your first issue." />}
-      {issuesQuery.data && issuesQuery.data.length > 0 && (
-        <IssueTable
-          issues={issuesQuery.data}
-          onEdit={setEditingIssueId}
-          onDelete={setDeleteId}
-        />
-      )}
+      {issuesQuery.data && issuesQuery.data.length > 0 && <IssueTable issues={issuesQuery.data} onEdit={setEditingIssueId} onDelete={setDeleteId} />}
 
-      <IssueEditPanel
-        issueId={editingIssueId}
-        onClose={() => setEditingIssueId(null)}
-      />
+      <IssueEditPanel issueId={editingIssueId} onClose={() => setEditingIssueId(null)} />
 
       <ConfirmDialog
         open={!!deleteId}

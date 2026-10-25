@@ -23,7 +23,7 @@ export function subscribersToCsv(rows: SubscriberRow[]): string {
   for (const r of rows) {
     lines.push(
       [r.email, r.dbStatus ?? '', r.dbConfirmedAt ?? '', r.dbCreatedAt ?? '', r.plunkStatus ?? '', r.plunkContactId ?? '']
-        .map((v) => escapeCsv(String(v)))
+        .map(v => escapeCsv(String(v)))
         .join(','),
     )
   }

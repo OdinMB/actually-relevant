@@ -72,9 +72,7 @@ export function assembleSpokenSegments(dialogue: PodcastDialogue, kind: PodcastK
 
 /** The admin's read-only script view: "HOST A: …" per turn, a blank line between segments. */
 export function renderScript(segments: SpokenSegment[]): string {
-  return segments
-    .map(s => s.turns.map(t => `${t.speaker === 'HOST_A' ? 'HOST A' : 'HOST B'}: ${t.text}`).join('\n'))
-    .join('\n\n')
+  return segments.map(s => s.turns.map(t => `${t.speaker === 'HOST_A' ? 'HOST A' : 'HOST B'}: ${t.text}`).join('\n')).join('\n\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -96,11 +94,18 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&
  * from a publisher's name is still caught. A sentence-ending period after the name ("Vox.com.") is fine.
  */
 function urlChecker(stories: DialogueStoryRef[]): (text: string) => boolean {
-  const names = stories.map(s => s.publisher.trim()).filter(p => p !== '').map(escapeRegExp)
+  const names = stories
+    .map(s => s.publisher.trim())
+    .filter(p => p !== '')
+    .map(escapeRegExp)
   const publisherRe = names.length > 0 ? new RegExp(`(?<![\\w.\\-/@])(?:${names.join('|')})(?![\\w\\-/@]|\\.\\w)`, 'gi') : null
   return text => URL_RE.test(publisherRe ? text.replace(publisherRe, ' ') : text)
 }
-const normalize = (text: string) => stripTags(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+const normalize = (text: string) =>
+  stripTags(text)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
 const firstWords = (text: string, n: number) => normalize(text).split(' ').slice(0, n).join(' ')
 
 function label(segment: PodcastDialogue['segments'][number], index: number): string {
@@ -152,7 +157,10 @@ function metadataErrors(dialogue: PodcastDialogue, hasUrl: (text: string) => boo
   const errors: string[] = []
   if (title === '') errors.push('the episode title is empty')
   if (title.length > max) errors.push(`the episode title has ${title.length} characters, over the ${max}-character limit`)
-  for (const [name, text] of [['title', dialogue.episodeTitle], ['summary', dialogue.episodeSummary]] as const) {
+  for (const [name, text] of [
+    ['title', dialogue.episodeTitle],
+    ['summary', dialogue.episodeSummary],
+  ] as const) {
     if (hasUrl(text)) errors.push(`the episode ${name} contains a URL`)
     if (MARKDOWN_RE.test(text)) errors.push(`the episode ${name} contains markdown`)
   }
@@ -161,19 +169,23 @@ function metadataErrors(dialogue: PodcastDialogue, hasUrl: (text: string) => boo
 
 function turnErrors(dialogue: PodcastDialogue, hasUrl: (text: string) => boolean): string[] {
   const allowed = new Set<string>(PODCAST_AUDIO_TAGS)
-  return dialogue.segments.flatMap((s, i) => s.turns.flatMap((t, j) => {
-    const where = `${label(s, i)}, turn ${j + 1}`
-    const tags = t.text.match(TAG_RE) ?? []
-    const plain = stripTags(t.text)
-    return [
-      ...(t.text.length > config.podcast.maxTurnChars ? [`${where}: ${t.text.length} characters, over the ${config.podcast.maxTurnChars}-character limit`] : []),
-      ...tags.filter(tag => !allowed.has(tag)).map(tag => `${where}: audio tag ${tag} is not allowed`),
-      ...(tags.length > config.podcast.maxTagsPerTurn ? [`${where}: ${tags.length} audio tags, at most ${config.podcast.maxTagsPerTurn}`] : []),
-      ...(hasUrl(plain) ?[`${where}: contains a URL`] : []),
-      ...(MARKDOWN_RE.test(plain) ? [`${where}: contains markdown`] : []),
-      ...(PREFIX_RE.test(plain) ? [`${where}: starts with a speaker prefix`] : []),
-    ]
-  }))
+  return dialogue.segments.flatMap((s, i) =>
+    s.turns.flatMap((t, j) => {
+      const where = `${label(s, i)}, turn ${j + 1}`
+      const tags = t.text.match(TAG_RE) ?? []
+      const plain = stripTags(t.text)
+      return [
+        ...(t.text.length > config.podcast.maxTurnChars
+          ? [`${where}: ${t.text.length} characters, over the ${config.podcast.maxTurnChars}-character limit`]
+          : []),
+        ...tags.filter(tag => !allowed.has(tag)).map(tag => `${where}: audio tag ${tag} is not allowed`),
+        ...(tags.length > config.podcast.maxTagsPerTurn ? [`${where}: ${tags.length} audio tags, at most ${config.podcast.maxTagsPerTurn}`] : []),
+        ...(hasUrl(plain) ? [`${where}: contains a URL`] : []),
+        ...(MARKDOWN_RE.test(plain) ? [`${where}: contains markdown`] : []),
+        ...(PREFIX_RE.test(plain) ? [`${where}: starts with a speaker prefix`] : []),
+      ]
+    }),
+  )
 }
 
 /** The segue rule: every segment after the intro opens with a real spoken bridge, never templated. */
@@ -188,7 +200,9 @@ function segueErrors(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): st
     const title = s.storyRef === null ? undefined : headline.get(s.storyRef)
     const restated = title !== undefined && title !== '' && (normalize(opening) === title || title.includes(normalize(opening)))
     if (plain.length < config.podcast.minBridgeChars || restated) {
-      errors.push(`${label(s, i)}: the first turn must carry a spoken bridge of at least ${config.podcast.minBridgeChars} characters that is not just the headline`)
+      errors.push(
+        `${label(s, i)}: the first turn must carry a spoken bridge of at least ${config.podcast.minBridgeChars} characters that is not just the headline`,
+      )
     }
     if (s.kind !== 'story') return
     const words = firstWords(opening, 5)
@@ -204,12 +218,15 @@ function segueErrors(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): st
  * A closing thank-you or sign-off: thanks to the listeners ("Thanks for listening", "Thank you,
  * everyone") or a goodbye line. Thanks for something else ("thanks to that court") is not one.
  */
-const CLOSING_RE = new RegExp([
-  String.raw`\b(?:thanks|thank you)(?: (?:so|very) much)?,? (?:for (?:listening|joining|tuning in|spending|being (?:here|with)|your time|having)|(?:to )?(?:you|everyone|all|listeners|folks)\b)`,
-  String.raw`\b(?:thanks|thank you)(?: (?:so|very) much)?[.!]`,
-  String.raw`\b(?:see you (?:next|soon|then)|until next time|good-?bye|bye for now|signing off)\b`,
-  String.raw`\bthat'?s (?:it|all) for (?:this|today|now)\b`,
-].join('|'), 'i')
+const CLOSING_RE = new RegExp(
+  [
+    String.raw`\b(?:thanks|thank you)(?: (?:so|very) much)?,? (?:for (?:listening|joining|tuning in|spending|being (?:here|with)|your time|having)|(?:to )?(?:you|everyone|all|listeners|folks)\b)`,
+    String.raw`\b(?:thanks|thank you)(?: (?:so|very) much)?[.!]`,
+    String.raw`\b(?:see you (?:next|soon|then)|until next time|good-?bye|bye for now|signing off)\b`,
+    String.raw`\bthat'?s (?:it|all) for (?:this|today|now)\b`,
+  ].join('|'),
+  'i',
+)
 
 /**
  * The outro never thanks listeners or signs off: code appends the kind's fixed sign-off, which
@@ -222,7 +239,9 @@ function closingErrors(dialogue: PodcastDialogue): string[] {
     if (s.kind !== 'outro') return []
     return closingTurnIndexes(s.turns).flatMap(j => {
       const phrase = stripTags(s.turns[j]!.text).match(CLOSING_RE)?.[0]
-      return phrase ? [`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the outro must not thank listeners or sign off, because code adds the sign-off after it`] : []
+      return phrase
+        ? [`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the outro must not thank listeners or sign off, because code adds the sign-off after it`]
+        : []
     })
   })
 }
@@ -269,14 +288,19 @@ function relativeTimeErrors(dialogue: PodcastDialogue, kind: PodcastKind): strin
   if (kind !== 'standalone') return []
   const found = (text: string) => text.match(RELATIVE_TIME_RE)?.[0]
   const errors: string[] = []
-  for (const [name, text] of [['title', dialogue.episodeTitle], ['summary', dialogue.episodeSummary]] as const) {
+  for (const [name, text] of [
+    ['title', dialogue.episodeTitle],
+    ['summary', dialogue.episodeSummary],
+  ] as const) {
     const phrase = found(text)
     if (phrase) errors.push(`the episode ${name} says "${phrase}"; the stories may come from different weeks, so never date them relative to now`)
   }
-  dialogue.segments.forEach((s, i) => s.turns.forEach((t, j) => {
-    const phrase = found(stripTags(t.text))
-    if (phrase) errors.push(`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the stories may come from different weeks, so never date them relative to now`)
-  }))
+  dialogue.segments.forEach((s, i) =>
+    s.turns.forEach((t, j) => {
+      const phrase = found(stripTags(t.text))
+      if (phrase) errors.push(`${label(s, i)}, turn ${j + 1}: says "${phrase}"; the stories may come from different weeks, so never date them relative to now`)
+    }),
+  )
   return errors
 }
 

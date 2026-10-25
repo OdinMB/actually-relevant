@@ -38,12 +38,7 @@ function buildTitleLine(titleLabel: string, title: string): string {
  * Assemble the structured post text from parts.
  * Format: editorial text\nmetadata
  */
-export function assemblePostText(parts: {
-  blurb: string
-  issueName: string | null
-  emotionTag: string | null
-  publisherName: string
-}): string {
+export function assemblePostText(parts: { blurb: string; issueName: string | null; emotionTag: string | null; publisherName: string }): string {
   const metaLine = buildMetaLine(parts)
   return `${parts.blurb}\n${metaLine}`
 }
@@ -52,11 +47,7 @@ export function assemblePostText(parts: {
  * Calculate max chars for the LLM editorial text given the metadata line.
  * Exported for the model-eval harness, which must compute the same limit.
  */
-export function calcMaxBlurbChars(parts: {
-  issueName: string | null
-  emotionTag: string | null
-  publisherName: string
-}): number {
+export function calcMaxBlurbChars(parts: { issueName: string | null; emotionTag: string | null; publisherName: string }): number {
   const metaLine = buildMetaLine(parts)
   // 300 grapheme limit minus metadata line and newline
   return Math.max(50, 300 - metaLine.length - 1)
@@ -180,7 +171,7 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
     select: { storyId: true },
   })
   const postedSet = new Set(alreadyHavePost.map((p: { storyId: string }) => p.storyId))
-  const candidates = stories.filter((s) => !postedSet.has(s.id))
+  const candidates = stories.filter(s => !postedSet.has(s.id))
 
   if (candidates.length === 0) throw new BadRequestError('All selected stories already have a Bluesky post')
 
@@ -189,7 +180,7 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
     return { storyId: candidates[0]!.id, reasoning: 'Only one unposted story in the selection.' }
   }
 
-  const storiesForPrompt: StoryForBlueskyPick[] = candidates.map((s) => ({
+  const storiesForPrompt: StoryForBlueskyPick[] = candidates.map(s => ({
     id: s.id,
     title: s.title || s.sourceTitle,
     titleLabel: s.titleLabel || '',
@@ -210,7 +201,7 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
   const result = await structuredLlm.invoke([new HumanMessage(prompt)])
 
   // Validate the returned storyId exists in candidates
-  const valid = candidates.find((s) => s.id === result.storyId)
+  const valid = candidates.find(s => s.id === result.storyId)
   if (!valid) {
     log.warn({ returnedId: result.storyId }, 'LLM returned invalid storyId, falling back to first candidate')
     return { storyId: candidates[0]!.id, reasoning: 'LLM returned invalid ID; selected first candidate.' }
@@ -440,7 +431,7 @@ export async function getFeed(options: { cursor?: string; limit?: number }) {
   const apiResult = await cached(feedCache, cacheKey, () => getAuthorFeed(cursor, limit))
 
   // Cross-reference API post URIs with DB + fetch draft/failed in parallel
-  const apiUris = apiResult.items.map((item) => item.uri)
+  const apiUris = apiResult.items.map(item => item.uri)
 
   const [trackedPosts, pendingPosts] = await Promise.all([
     apiUris.length > 0
@@ -458,10 +449,10 @@ export async function getFeed(options: { cursor?: string; limit?: number }) {
       : Promise.resolve([]),
   ])
 
-  const trackedByUri = new Map(trackedPosts.map((p) => [p.postUri, p]))
+  const trackedByUri = new Map(trackedPosts.map(p => [p.postUri, p]))
 
   // Enrich API items with DB data
-  const feed = apiResult.items.map((item) => {
+  const feed = apiResult.items.map(item => {
     const tracked = trackedByUri.get(item.uri)
     return {
       ...item,
@@ -473,7 +464,7 @@ export async function getFeed(options: { cursor?: string; limit?: number }) {
     }
   })
 
-  const dbOnlyPosts = pendingPosts.map((p) => ({
+  const dbOnlyPosts = pendingPosts.map(p => ({
     id: p.id,
     postText: p.postText,
     status: p.status,

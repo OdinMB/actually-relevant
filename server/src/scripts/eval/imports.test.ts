@@ -40,7 +40,18 @@ function importsOf(text: string): ImportStatement[] {
     out.push({
       specifier: m[3],
       typeOnly: Boolean(m[1]),
-      names: named ? named[1].split(',').map(n => n.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0]).filter(Boolean) : null,
+      names: named
+        ? named[1]
+            .split(',')
+            .map(
+              n =>
+                n
+                  .trim()
+                  .replace(/^type\s+/, '')
+                  .split(/\s+as\s+/)[0],
+            )
+            .filter(Boolean)
+        : null,
     })
   }
   for (const m of text.matchAll(/import\s+['"]([^'"]+)['"]/g)) out.push({ specifier: m[1], typeOnly: false, names: null })
@@ -62,20 +73,24 @@ describe('eval harness has no write path', () => {
 
   it('imports @prisma/client only from the two database modules, and never lib/prisma', () => {
     const dbModules = ['readOnlyDb.ts', 'fixtures.ts']
-    const offenders = files.flatMap(f => importsOf(f.text)
-      .filter(i => (i.specifier === '@prisma/client' && !i.typeOnly && !dbModules.includes(f.name)) || /lib\/prisma(\.js)?$/.test(i.specifier))
-      .map(i => `${f.name}: ${i.specifier}`))
+    const offenders = files.flatMap(f =>
+      importsOf(f.text)
+        .filter(i => (i.specifier === '@prisma/client' && !i.typeOnly && !dbModules.includes(f.name)) || /lib\/prisma(\.js)?$/.test(i.specifier))
+        .map(i => `${f.name}: ${i.specifier}`),
+    )
     expect(offenders).toEqual([])
   })
 
   it('imports only createChatModel, calcMaxBlurbChars and the pure dialogue rules from services', () => {
-    const offenders = files.flatMap(f => importsOf(f.text)
-      .filter(i => i.specifier.includes('/services/'))
-      .flatMap(i => {
-        const allowed = Object.entries(ALLOWED_SERVICE_IMPORTS).find(([suffix]) => i.specifier.endsWith(suffix))?.[1]
-        if (!allowed || i.names === null) return [`${f.name}: ${i.specifier}`]
-        return i.names.filter(n => !allowed.includes(n)).map(n => `${f.name}: ${n} from ${i.specifier}`)
-      }))
+    const offenders = files.flatMap(f =>
+      importsOf(f.text)
+        .filter(i => i.specifier.includes('/services/'))
+        .flatMap(i => {
+          const allowed = Object.entries(ALLOWED_SERVICE_IMPORTS).find(([suffix]) => i.specifier.endsWith(suffix))?.[1]
+          if (!allowed || i.names === null) return [`${f.name}: ${i.specifier}`]
+          return i.names.filter(n => !allowed.includes(n)).map(n => `${f.name}: ${n} from ${i.specifier}`)
+        }),
+    )
     expect(offenders).toEqual([])
   })
 

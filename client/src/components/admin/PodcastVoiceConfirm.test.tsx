@@ -44,7 +44,16 @@ describe('PodcastVoiceConfirm', () => {
   it('shows the figures and calls nothing but close on cancel', async () => {
     const onConfirm = vi.fn()
     const onClose = vi.fn()
-    renderInAdmin(<PodcastVoiceConfirm open podcast={makePodcast({ ttsCharsEstimate: 5432 })} title="Voice it?" confirmLabel="Voice it" onClose={onClose} onConfirm={onConfirm} />)
+    renderInAdmin(
+      <PodcastVoiceConfirm
+        open
+        podcast={makePodcast({ ttsCharsEstimate: 5432 })}
+        title="Voice it?"
+        confirmLabel="Voice it"
+        onClose={onClose}
+        onConfirm={onConfirm}
+      />,
+    )
     expect(await screen.findByText(/10,800 of 32,000/)).toBeTruthy()
     expect(screen.getByText(/5,432 characters/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))

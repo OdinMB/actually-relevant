@@ -19,9 +19,8 @@ export function useCluster(id: string) {
 export function useSetClusterPrimary() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, storyId }: { id: string; storyId: string }) =>
-      adminApi.clusters.setPrimary(id, storyId),
-    onSuccess: (cluster) => {
+    mutationFn: ({ id, storyId }: { id: string; storyId: string }) => adminApi.clusters.setPrimary(id, storyId),
+    onSuccess: cluster => {
       queryClient.setQueryData(['cluster', cluster.id], cluster)
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
       queryClient.invalidateQueries({ queryKey: ['stories'] })
@@ -32,8 +31,7 @@ export function useSetClusterPrimary() {
 export function useRemoveClusterMember() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, storyId }: { id: string; storyId: string }) =>
-      adminApi.clusters.removeMember(id, storyId),
+    mutationFn: ({ id, storyId }: { id: string; storyId: string }) => adminApi.clusters.removeMember(id, storyId),
     onSuccess: (_result, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['cluster', id] })
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
@@ -45,9 +43,8 @@ export function useRemoveClusterMember() {
 export function useMergeClusters() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ targetId, sourceId }: { targetId: string; sourceId: string }) =>
-      adminApi.clusters.merge(targetId, sourceId),
-    onSuccess: (cluster) => {
+    mutationFn: ({ targetId, sourceId }: { targetId: string; sourceId: string }) => adminApi.clusters.merge(targetId, sourceId),
+    onSuccess: cluster => {
       queryClient.setQueryData(['cluster', cluster.id], cluster)
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
       queryClient.invalidateQueries({ queryKey: ['stories'] })
@@ -69,8 +66,7 @@ export function useDissolveClusterById() {
 export function useCreateCluster() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ storyIds, primaryStoryId }: { storyIds: string[]; primaryStoryId: string }) =>
-      adminApi.clusters.create(storyIds, primaryStoryId),
+    mutationFn: ({ storyIds, primaryStoryId }: { storyIds: string[]; primaryStoryId: string }) => adminApi.clusters.create(storyIds, primaryStoryId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
       queryClient.invalidateQueries({ queryKey: ['stories'] })

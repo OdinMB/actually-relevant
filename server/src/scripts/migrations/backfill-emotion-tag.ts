@@ -41,12 +41,9 @@ const resultSchema = z.object({
 const structuredLlm = getSmallLLM().withStructuredOutput(resultSchema)
 const semaphore = new Semaphore(CONCURRENCY)
 
-function buildPrompt(
-  stories: { id: string; sourceTitle: string; sourceContent: string }[],
-  fallbackSlug: string,
-): string {
+function buildPrompt(stories: { id: string; sourceTitle: string; sourceContent: string }[], fallbackSlug: string): string {
   // Map DB field names to the shared prompt format
-  const mapped = stories.map((s) => ({ id: s.id, title: s.sourceTitle, content: s.sourceContent }))
+  const mapped = stories.map(s => ({ id: s.id, title: s.sourceTitle, content: s.sourceContent }))
 
   return `<ROLE>
 You are an emotion classifier analyzing news articles.
@@ -77,9 +74,7 @@ async function main() {
     )
     console.log(`\nStep 1: Would set ${count[0].count} published stories with 'surprising' emotion to null (test mode, no writes)`)
   } else {
-    const nulled = await prisma.$executeRawUnsafe(
-      `UPDATE "stories" SET "emotion_tag" = NULL WHERE "emotion_tag" = 'surprising' AND "status" = 'published'`,
-    )
+    const nulled = await prisma.$executeRawUnsafe(`UPDATE "stories" SET "emotion_tag" = NULL WHERE "emotion_tag" = 'surprising' AND "status" = 'published'`)
     console.log(`\nStep 1: Set ${nulled} published stories with 'surprising' emotion to null`)
   }
 
@@ -117,12 +112,12 @@ async function main() {
     }
 
     const results = await Promise.allSettled(
-      batches.map((batch) =>
+      batches.map(batch =>
         semaphore.run(async () => {
           const prompt = buildPrompt(batch, fallbackSlug)
           const response = await structuredLlm.invoke([new HumanMessage(prompt)])
 
-          const storyMap = new Map(batch.map((s) => [s.id, s]))
+          const storyMap = new Map(batch.map(s => [s.id, s]))
 
           for (const item of response.articles) {
             const story = storyMap.get(item.articleId)
@@ -152,7 +147,7 @@ async function main() {
           }
 
           // Track stories the LLM didn't return
-          const returnedIds = new Set(response.articles.map((a) => a.articleId))
+          const returnedIds = new Set(response.articles.map(a => a.articleId))
           for (const story of batch) {
             if (!returnedIds.has(story.id)) {
               console.warn(`  LLM did not return result for: ${story.sourceTitle.slice(0, 50)}`)
@@ -179,7 +174,7 @@ async function main() {
   await prisma.$disconnect()
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Fatal error:', err)
   process.exit(1)
 })

@@ -76,10 +76,7 @@ function buildWhereClause(filters: StoryFilters): Prisma.StoryWhereInput {
       const val = parseInt(match[2]!, 10)
       const condition = { [op]: val }
       conditions.push({
-        OR: [
-          { relevance: condition },
-          { relevance: null, relevancePre: condition },
-        ],
+        OR: [{ relevance: condition }, { relevance: null, relevancePre: condition }],
       })
     }
   }
@@ -251,10 +248,13 @@ export async function getStoryStats() {
     by: ['status'],
     _count: { status: true },
   })
-  return stats.reduce((acc, row) => {
-    acc[row.status] = row._count.status
-    return acc
-  }, {} as Record<string, number>)
+  return stats.reduce(
+    (acc, row) => {
+      acc[row.status] = row._count.status
+      return acc
+    },
+    {} as Record<string, number>,
+  )
 }
 
 interface StatusFilterOptions {
@@ -265,10 +265,7 @@ interface StatusFilterOptions {
   limit?: number
 }
 
-function buildStatusWhereClause(
-  status: string,
-  options: StatusFilterOptions = {},
-): Prisma.StoryWhereInput {
+function buildStatusWhereClause(status: string, options: StatusFilterOptions = {}): Prisma.StoryWhereInput {
   const where: Prisma.StoryWhereInput = { status: status as StoryStatus }
   if (options.ratingMin !== undefined) {
     where.relevancePre = { gte: options.ratingMin }
@@ -285,10 +282,7 @@ function buildStatusWhereClause(
   return where
 }
 
-export async function getStoryIdsByStatus(
-  status: string,
-  options: StatusFilterOptions = {},
-): Promise<string[]> {
+export async function getStoryIdsByStatus(status: string, options: StatusFilterOptions = {}): Promise<string[]> {
   const where = buildStatusWhereClause(status, options)
   const stories = await prisma.story.findMany({
     where,

@@ -54,11 +54,7 @@ export function PositivityProvider({ children }: { children: React.ReactNode }) 
     }
   }, [positivity])
 
-  return (
-    <PositivityContext.Provider value={{ positivity, setPositivity }}>
-      {children}
-    </PositivityContext.Provider>
-  )
+  return <PositivityContext.Provider value={{ positivity, setPositivity }}>{children}</PositivityContext.Provider>
 }
 
 export function usePositivity() {

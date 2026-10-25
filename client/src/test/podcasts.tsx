@@ -16,7 +16,16 @@ export function renderInAdmin(ui: ReactElement, { route = '/', history }: { rout
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const entries = history ?? [route]
   const router = createMemoryRouter(
-    [{ path: '*', element: <ToastProvider><PodcastProgressProvider>{ui}</PodcastProgressProvider></ToastProvider> }],
+    [
+      {
+        path: '*',
+        element: (
+          <ToastProvider>
+            <PodcastProgressProvider>{ui}</PodcastProgressProvider>
+          </ToastProvider>
+        ),
+      },
+    ],
     { initialEntries: entries, initialIndex: entries.length - 1 },
   )
   const result = render(
@@ -34,8 +43,22 @@ export function makeDialogue(): PodcastDialogue {
     episodeSummary: 'Two stories from this week.',
     segments: [
       { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'Welcome to the week.' }] },
-      { kind: 'story', storyRef: 1, turns: [{ speaker: 'HOST_B', text: 'A court in Nairobi ruled on air data.' }, { speaker: 'HOST_A', text: 'It matters for millions.' }] },
-      { kind: 'story', storyRef: 2, turns: [{ speaker: 'HOST_A', text: 'From air to health: vaccines.' }, { speaker: 'HOST_B', text: 'Ten more countries.' }] },
+      {
+        kind: 'story',
+        storyRef: 1,
+        turns: [
+          { speaker: 'HOST_B', text: 'A court in Nairobi ruled on air data.' },
+          { speaker: 'HOST_A', text: 'It matters for millions.' },
+        ],
+      },
+      {
+        kind: 'story',
+        storyRef: 2,
+        turns: [
+          { speaker: 'HOST_A', text: 'From air to health: vaccines.' },
+          { speaker: 'HOST_B', text: 'Ten more countries.' },
+        ],
+      },
       { kind: 'outro', storyRef: null, turns: [{ speaker: 'HOST_B', text: 'That was the week.' }] },
     ],
   }

@@ -41,9 +41,17 @@ describe('PodcastDetail publishing', () => {
   it('offers an enabled Publish for an episode generated before review modes and publishing existed', () => {
     // The production episode of 2026-10-06: automated mode, never edited, a ready draft with audio.
     const phase2 = makePodcast({
-      stage: 'ready', mode: 'automated', awaitingReview: false, humanEdited: false, status: 'draft',
-      audioUrl: 'https://audio.example/e.mp3', audioBytes: 5_000_000, readyAt: '2026-10-06T10:00:00.000Z',
-      publishedAt: null, unpublishedAt: null, publishBlockedReason: null,
+      stage: 'ready',
+      mode: 'automated',
+      awaitingReview: false,
+      humanEdited: false,
+      status: 'draft',
+      audioUrl: 'https://audio.example/e.mp3',
+      audioBytes: 5_000_000,
+      readyAt: '2026-10-06T10:00:00.000Z',
+      publishedAt: null,
+      unpublishedAt: null,
+      publishBlockedReason: null,
     })
     renderInAdmin(<PodcastDetail podcast={phase2} />)
     const publish = screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement
@@ -51,8 +59,13 @@ describe('PodcastDetail publishing', () => {
     expect(publish.getAttribute('aria-disabled')).toBeNull()
   })
 
-  it('keeps Publish visible but inert, with the server\'s reason, while a run works on the episode', () => {
-    const running = makePodcast({ stage: 'ready', inProgress: true, awaitingReview: false, publishBlockedReason: 'a run is working on the episode; publishing waits until it finishes' })
+  it("keeps Publish visible but inert, with the server's reason, while a run works on the episode", () => {
+    const running = makePodcast({
+      stage: 'ready',
+      inProgress: true,
+      awaitingReview: false,
+      publishBlockedReason: 'a run is working on the episode; publishing waits until it finishes',
+    })
     renderInAdmin(<PodcastDetail podcast={running} />)
     const publish = screen.getByRole('button', { name: 'Publish' })
     expect(publish.getAttribute('aria-disabled')).toBe('true')
@@ -62,7 +75,9 @@ describe('PodcastDetail publishing', () => {
   })
 
   it('gives the reason on Publish before the episode is ready', () => {
-    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'scripted', publishBlockedReason: 'only a ready episode can be published; this one is at scripted' })} />)
+    renderInAdmin(
+      <PodcastDetail podcast={makePodcast({ stage: 'scripted', publishBlockedReason: 'only a ready episode can be published; this one is at scripted' })} />,
+    )
     expect(describedBy(screen.getByRole('button', { name: 'Publish' }))?.textContent).toContain('this one is at scripted')
   })
 })

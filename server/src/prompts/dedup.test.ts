@@ -39,10 +39,7 @@ describe('buildDedupPrompt', () => {
     it('includes source title and summary in SOURCE block', () => {
       const prompt = buildDedupPrompt(source, candidates)
       // Extract the SOURCE block
-      const sourceBlock = prompt.substring(
-        prompt.indexOf('<SOURCE>'),
-        prompt.indexOf('</SOURCE>') + '</SOURCE>'.length,
-      )
+      const sourceBlock = prompt.substring(prompt.indexOf('<SOURCE>'), prompt.indexOf('</SOURCE>') + '</SOURCE>'.length)
       expect(sourceBlock).toContain('FDA Approves New Cancer Drug')
       expect(sourceBlock).toContain('The FDA has approved a groundbreaking new cancer treatment drug.')
     })
@@ -114,9 +111,7 @@ describe('buildDedupPrompt', () => {
     })
 
     it('escapes quotes and apostrophes in candidate content', () => {
-      const specialCandidates: CandidateForDedup[] = [
-        { id: 'c1', title: 'He said "hello"', summary: "It's a test" },
-      ]
+      const specialCandidates: CandidateForDedup[] = [{ id: 'c1', title: 'He said "hello"', summary: "It's a test" }]
       const prompt = buildDedupPrompt(source, specialCandidates)
       expect(prompt).toContain('&quot;hello&quot;')
       expect(prompt).toContain('It&apos;s a test')
@@ -148,5 +143,4 @@ describe('buildDedupPrompt', () => {
       expect(prompt).not.toContain('<CANDIDATE number=')
     })
   })
-
 })

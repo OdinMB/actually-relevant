@@ -15,8 +15,13 @@ const listQuerySchema = z.object({
 })
 
 const feedbackSelect = {
-  id: true, category: true, message: true, email: true,
-  status: true, createdAt: true, updatedAt: true,
+  id: true,
+  category: true,
+  message: true,
+  email: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
 } as const
 
 // List feedback with filters and pagination

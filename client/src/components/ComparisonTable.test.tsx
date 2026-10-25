@@ -45,9 +45,7 @@ describe('ComparisonTable', () => {
   })
 
   it('renders green checkmark SVG when cell has check: true', () => {
-    const rows = [
-      { feature: 'Speed', cells: [{ text: 'Fast', check: true }, 'Slow'] },
-    ]
+    const rows = [{ feature: 'Speed', cells: [{ text: 'Fast', check: true }, 'Slow'] }]
     const { container } = render(<ComparisonTable headers={HEADERS} rows={rows} />)
     const checkmarks = container.querySelectorAll('svg.text-green-600')
     expect(checkmarks.length).toBeGreaterThanOrEqual(1)

@@ -23,7 +23,7 @@ const ALLOWED = new Set([join('services', 'storyLifecycle.ts')])
 const SKIPPED_DIRS = new Set([join('scripts'), join('test')])
 
 function sourceFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
+  return readdirSync(dir).flatMap(name => {
     const path = join(dir, name)
     const rel = relative(SRC, path)
     if (statSync(path).isDirectory()) return SKIPPED_DIRS.has(rel) ? [] : sourceFiles(path)
@@ -105,8 +105,7 @@ export function statusWrites(src: string): string[] {
 
 describe('story status writers', () => {
   it('only the lifecycle module writes stories.status or rejection_reason', () => {
-    const offenders = sourceFiles(SRC).flatMap((path) =>
-      statusWrites(readFileSync(path, 'utf8')).map(w => `${relative(SRC, path).split(sep).join('/')}: ${w}`))
+    const offenders = sourceFiles(SRC).flatMap(path => statusWrites(readFileSync(path, 'utf8')).map(w => `${relative(SRC, path).split(sep).join('/')}: ${w}`))
     expect(offenders).toEqual([])
   })
 
@@ -115,7 +114,7 @@ describe('story status writers', () => {
     expect(statusWrites(`await tx.story.updateMany({ where: { id: { in: ids } }, data: { title, rejectionReason: 'editor' } })`)).toHaveLength(1)
     expect(statusWrites(`await prisma.story.create({ data: { feedId, status: StoryStatus.fetched } })`)).toHaveLength(1)
     expect(statusWrites(`await prisma.story.upsert({ where: { id }, create: { id }, update: { status } })`)).toHaveLength(1)
-    expect(statusWrites('await prisma.$executeRaw`UPDATE stories SET status = \'trashed\' WHERE id = ${id}`')).toHaveLength(1)
+    expect(statusWrites("await prisma.$executeRaw`UPDATE stories SET status = 'trashed' WHERE id = ${id}`")).toHaveLength(1)
     expect(statusWrites('await prisma.$executeRaw`UPDATE "stories" s SET rejection_reason = NULL FROM x`')).toHaveLength(1)
   })
 
@@ -123,6 +122,6 @@ describe('story status writers', () => {
     expect(statusWrites(`await prisma.story.updateMany({ where: { status: 'analyzed' }, data: { relevance: 3 } })`)).toEqual([])
     expect(statusWrites(`await prisma.story.update({ where: { id }, data: { feed: { connect: { id: f } } } })`)).toEqual([])
     expect(statusWrites(`await prisma.newsletter.update({ where: { id }, data: { status: 'sent' } })`)).toEqual([])
-    expect(statusWrites('await prisma.$executeRaw`UPDATE stories SET embedding = NULL WHERE status = \'rejected\'`')).toEqual([])
+    expect(statusWrites("await prisma.$executeRaw`UPDATE stories SET embedding = NULL WHERE status = 'rejected'`")).toEqual([])
   })
 })

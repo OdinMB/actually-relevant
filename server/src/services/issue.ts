@@ -24,11 +24,7 @@ function parseJsonFields(issue: Issue) {
 }
 
 function deriveSourceNames(feeds: { title: string; displayTitle: string | null; active: boolean }[]): string[] {
-  return [...new Set(
-    feeds
-      .filter(f => f.active)
-      .map(f => f.displayTitle || f.title)
-  )].sort()
+  return [...new Set(feeds.filter(f => f.active).map(f => f.displayTitle || f.title))].sort()
 }
 
 function safeParseJson<T>(value: string, fallback: T): T {
@@ -53,10 +49,10 @@ export async function getAllIssues() {
           title: true,
           displayTitle: true,
           active: true,
-          _count: { select: { stories: { where: { status: 'published' } } } }
-        }
-      }
-    }
+          _count: { select: { stories: { where: { status: 'published' } } } },
+        },
+      },
+    },
   })
   return issues.map(({ feeds, ...issue }) => ({
     ...parseJsonFields(issue as unknown as Issue),
@@ -110,19 +106,22 @@ export async function createIssue(data: {
   return parseJsonFields(issue)
 }
 
-export async function updateIssue(id: string, data: Partial<{
-  name: string
-  slug: string
-  description: string
-  promptFactors: string
-  promptAntifactors: string
-  promptRatings: string
-  parentId: string | null
-  intro: string
-  evaluationIntro: string
-  evaluationCriteria: string[]
-  makeADifference: { label: string; url: string }[]
-}>) {
+export async function updateIssue(
+  id: string,
+  data: Partial<{
+    name: string
+    slug: string
+    description: string
+    promptFactors: string
+    promptAntifactors: string
+    promptRatings: string
+    parentId: string | null
+    intro: string
+    evaluationIntro: string
+    evaluationCriteria: string[]
+    makeADifference: { label: string; url: string }[]
+  }>,
+) {
   if ('parentId' in data && data.parentId !== undefined) {
     if (data.parentId !== null) {
       await validateParent(data.parentId, id)
@@ -191,10 +190,7 @@ export async function getPublicIssues() {
   })
   return issues.map(({ feeds, ...issue }) => ({
     ...parsePublicIssueJson(issue),
-    sourceNames: deriveSourceNames([
-      ...feeds,
-      ...issue.children.flatMap(c => c.feeds),
-    ]),
+    sourceNames: deriveSourceNames([...feeds, ...issue.children.flatMap(c => c.feeds)]),
     children: issue.children.map(({ feeds: childFeeds, ...child }) => ({
       ...parsePublicIssueJson(child),
       sourceNames: deriveSourceNames(childFeeds),
@@ -231,15 +227,13 @@ export async function getPublicIssueBySlug(slug: string) {
   const { feeds, ...rest } = issue
   return {
     ...parsePublicIssueJson(rest),
-    sourceNames: deriveSourceNames([
-      ...feeds,
-      ...(issue.children?.flatMap(c => c.feeds) ?? []),
-    ]),
-    children: issue.children?.map(({ feeds: childFeeds, ...child }) => ({
-      ...parsePublicIssueJson(child),
-      sourceNames: deriveSourceNames(childFeeds),
-      publishedStoryCount: childFeeds.reduce((sum, f) => sum + f._count.stories, 0),
-    })) ?? [],
+    sourceNames: deriveSourceNames([...feeds, ...(issue.children?.flatMap(c => c.feeds) ?? [])]),
+    children:
+      issue.children?.map(({ feeds: childFeeds, ...child }) => ({
+        ...parsePublicIssueJson(child),
+        sourceNames: deriveSourceNames(childFeeds),
+        publishedStoryCount: childFeeds.reduce((sum, f) => sum + f._count.stories, 0),
+      })) ?? [],
     parent: issue.parent,
   }
 }
@@ -247,10 +241,7 @@ export async function getPublicIssueBySlug(slug: string) {
 // --- Delete ---
 
 export async function deleteIssue(id: string): Promise<void> {
-  const [feedCount, childCount] = await Promise.all([
-    prisma.feed.count({ where: { issueId: id } }),
-    prisma.issue.count({ where: { parentId: id } }),
-  ])
+  const [feedCount, childCount] = await Promise.all([prisma.feed.count({ where: { issueId: id } }), prisma.issue.count({ where: { parentId: id } })])
   if (feedCount > 0) {
     throw new ConflictError('Cannot delete issue with existing feeds')
   }

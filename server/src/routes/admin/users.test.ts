@@ -49,9 +49,7 @@ describe('Admin Users API', () => {
       ]
       mockPrisma.user.findMany.mockResolvedValue(users)
 
-      const res = await request(app)
-        .get('/api/admin/users')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/users').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(2)
     })
@@ -71,28 +69,19 @@ describe('Admin Users API', () => {
     })
 
     it('returns 400 for missing fields', async () => {
-      const res = await request(app)
-        .post('/api/admin/users')
-        .set(authHeader())
-        .send({})
+      const res = await request(app).post('/api/admin/users').set(authHeader()).send({})
       expect(res.status).toBe(400)
     })
 
     it('returns 400 for password too short', async () => {
-      const res = await request(app)
-        .post('/api/admin/users')
-        .set(authHeader())
-        .send({ email: 'new@test.com', name: 'New User', password: 'short' })
+      const res = await request(app).post('/api/admin/users').set(authHeader()).send({ email: 'new@test.com', name: 'New User', password: 'short' })
       expect(res.status).toBe(400)
     })
 
     it('returns 409 for duplicate email', async () => {
       mockPrisma.user.create.mockRejectedValue({ code: 'P2002' })
 
-      const res = await request(app)
-        .post('/api/admin/users')
-        .set(authHeader())
-        .send({ email: 'dupe@test.com', name: 'Dupe', password: 'securepass123' })
+      const res = await request(app).post('/api/admin/users').set(authHeader()).send({ email: 'dupe@test.com', name: 'Dupe', password: 'securepass123' })
       expect(res.status).toBe(409)
       expect(res.body.error).toContain('already exists')
     })
@@ -103,10 +92,7 @@ describe('Admin Users API', () => {
       const updated = { id: 'u1', email: 'a@b.com', name: 'Updated', role: 'admin', createdAt: new Date(), updatedAt: new Date() }
       mockPrisma.user.update.mockResolvedValue(updated)
 
-      const res = await request(app)
-        .put('/api/admin/users/u1')
-        .set(authHeader())
-        .send({ name: 'Updated' })
+      const res = await request(app).put('/api/admin/users/u1').set(authHeader()).send({ name: 'Updated' })
       expect(res.status).toBe(200)
       expect(res.body.name).toBe('Updated')
     })
@@ -115,29 +101,20 @@ describe('Admin Users API', () => {
       const updated = { id: 'u1', email: 'a@b.com', name: 'Alice', role: 'viewer', createdAt: new Date(), updatedAt: new Date() }
       mockPrisma.user.update.mockResolvedValue(updated)
 
-      const res = await request(app)
-        .put('/api/admin/users/u1')
-        .set(authHeader())
-        .send({ role: 'viewer' })
+      const res = await request(app).put('/api/admin/users/u1').set(authHeader()).send({ role: 'viewer' })
       expect(res.status).toBe(200)
       expect(res.body.role).toBe('viewer')
     })
 
     it('returns 400 for empty body', async () => {
-      const res = await request(app)
-        .put('/api/admin/users/u1')
-        .set(authHeader())
-        .send({})
+      const res = await request(app).put('/api/admin/users/u1').set(authHeader()).send({})
       expect(res.status).toBe(400)
     })
 
     it('returns 404 for unknown user', async () => {
       mockPrisma.user.update.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .put('/api/admin/users/unknown')
-        .set(authHeader())
-        .send({ name: 'Ghost' })
+      const res = await request(app).put('/api/admin/users/unknown').set(authHeader()).send({ name: 'Ghost' })
       expect(res.status).toBe(404)
     })
   })
@@ -147,9 +124,7 @@ describe('Admin Users API', () => {
       mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 0 })
       mockPrisma.user.delete.mockResolvedValue(sampleUser())
 
-      const res = await request(app)
-        .delete('/api/admin/users/u1')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/users/u1').set(authHeader())
       expect(res.status).toBe(204)
     })
 
@@ -157,9 +132,7 @@ describe('Admin Users API', () => {
       mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 2 })
       mockPrisma.user.delete.mockResolvedValue(sampleUser())
 
-      await request(app)
-        .delete('/api/admin/users/u1')
-        .set(authHeader())
+      await request(app).delete('/api/admin/users/u1').set(authHeader())
 
       expect(mockPrisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } })
     })
@@ -168,17 +141,13 @@ describe('Admin Users API', () => {
       mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 0 })
       mockPrisma.user.delete.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .delete('/api/admin/users/unknown')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/users/unknown').set(authHeader())
       expect(res.status).toBe(404)
     })
 
     it('blocks self-delete', async () => {
       // authHeader() generates a JWT with userId 'test-admin-id'
-      const res = await request(app)
-        .delete('/api/admin/users/test-admin-id')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/users/test-admin-id').set(authHeader())
       expect(res.status).toBe(400)
       expect(res.body.error).toContain('Cannot delete your own account')
     })
@@ -189,37 +158,26 @@ describe('Admin Users API', () => {
       mockPrisma.user.update.mockResolvedValue({})
       mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 1 })
 
-      const res = await request(app)
-        .put('/api/admin/users/u1/password')
-        .set(authHeader())
-        .send({ password: 'newsecurepass123' })
+      const res = await request(app).put('/api/admin/users/u1/password').set(authHeader()).send({ password: 'newsecurepass123' })
 
       expect(res.status).toBe(200)
       expect(res.body.message).toBe('Password reset')
     })
 
     it('returns 400 for password too short', async () => {
-      const res = await request(app)
-        .put('/api/admin/users/u1/password')
-        .set(authHeader())
-        .send({ password: 'short' })
+      const res = await request(app).put('/api/admin/users/u1/password').set(authHeader()).send({ password: 'short' })
 
       expect(res.status).toBe(400)
     })
 
     it('returns 400 for missing password', async () => {
-      const res = await request(app)
-        .put('/api/admin/users/u1/password')
-        .set(authHeader())
-        .send({})
+      const res = await request(app).put('/api/admin/users/u1/password').set(authHeader()).send({})
 
       expect(res.status).toBe(400)
     })
 
     it('returns 401 without auth', async () => {
-      const res = await request(app)
-        .put('/api/admin/users/u1/password')
-        .send({ password: 'newsecurepass123' })
+      const res = await request(app).put('/api/admin/users/u1/password').send({ password: 'newsecurepass123' })
 
       expect(res.status).toBe(401)
     })
@@ -228,10 +186,7 @@ describe('Admin Users API', () => {
       mockPrisma.user.update.mockResolvedValue({})
       mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 })
 
-      await request(app)
-        .put('/api/admin/users/u1/password')
-        .set(authHeader())
-        .send({ password: 'newsecurepass123' })
+      await request(app).put('/api/admin/users/u1/password').set(authHeader()).send({ password: 'newsecurepass123' })
 
       expect(mockPrisma.refreshToken.deleteMany).toHaveBeenCalledWith({
         where: { userId: 'u1' },

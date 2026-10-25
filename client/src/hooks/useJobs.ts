@@ -7,7 +7,7 @@ export function useJobs(options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['jobs'],
     queryFn: () => adminApi.jobs.list(),
-    refetchInterval: (query) => {
+    refetchInterval: query => {
       if (options?.refetchInterval) return options.refetchInterval
       // Auto-poll every 3s while any job is running
       const hasRunning = query.state.data?.some(j => j.running)
@@ -19,8 +19,7 @@ export function useJobs(options?: { refetchInterval?: number }) {
 export function useUpdateJob() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ jobName, data }: { jobName: string; data: Partial<JobRun> }) =>
-      adminApi.jobs.update(jobName, data),
+    mutationFn: ({ jobName, data }: { jobName: string; data: Partial<JobRun> }) => adminApi.jobs.update(jobName, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
     },

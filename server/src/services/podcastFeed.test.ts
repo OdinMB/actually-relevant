@@ -140,7 +140,10 @@ describe('getFeed', () => {
 
   it('caches the document until it is invalidated', async () => {
     let calls = 0
-    const load = async () => { calls++; return [] }
+    const load = async () => {
+      calls++
+      return []
+    }
     await getFeed(load)
     await getFeed(load)
     expect(calls).toBe(1)

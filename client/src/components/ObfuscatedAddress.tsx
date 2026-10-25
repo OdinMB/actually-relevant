@@ -14,13 +14,7 @@ export default function ObfuscatedAddress({ className }: { className?: string })
     const s = ['\u0053\u006F\u006E\u006E\u0065\u006E\u0061\u006C\u006C\u0065\u0065', '50']
     const c = ['12045', '\u0042\u0065\u0072\u006C\u0069\u006E']
     ref.current.innerHTML = ''
-    ref.current.append(
-      `${n[0]} ${n[1]}`,
-      document.createElement('br'),
-      `${s[0]} ${s[1]}`,
-      document.createElement('br'),
-      `${c[0]} ${c[1]}`,
-    )
+    ref.current.append(`${n[0]} ${n[1]}`, document.createElement('br'), `${s[0]} ${s[1]}`, document.createElement('br'), `${c[0]} ${c[1]}`)
   }, [])
 
   return (

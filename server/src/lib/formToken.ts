@@ -32,9 +32,7 @@ function sign(payload: string): string {
 
 /** Issue a fresh signed form token stamped with the current time. */
 export function issueFormToken(): string {
-  const payload = Buffer.from(
-    JSON.stringify({ ts: Date.now(), nonce: randomBytes(8).toString('hex') }),
-  ).toString('base64url')
+  const payload = Buffer.from(JSON.stringify({ ts: Date.now(), nonce: randomBytes(8).toString('hex') })).toString('base64url')
   return `${payload}.${sign(payload)}`
 }
 

@@ -65,9 +65,15 @@ export function socialChannelRouter(service: SocialChannelService, schemas: Soci
   })
 
   // Pick best from multiple stories and generate draft
-  router.post('/posts/pick-and-draft', failsWith('Failed to pick and draft post'), expensiveOpLimiter, validateBody(schemas.pickAndDraftBody), async (req, res) => {
-    res.status(201).json(await service.pickAndDraft(req.body.storyIds))
-  })
+  router.post(
+    '/posts/pick-and-draft',
+    failsWith('Failed to pick and draft post'),
+    expensiveOpLimiter,
+    validateBody(schemas.pickAndDraftBody),
+    async (req, res) => {
+      res.status(201).json(await service.pickAndDraft(req.body.storyIds))
+    },
+  )
 
   // Update draft text
   router.put('/posts/:id', failsWith('Failed to update draft'), validateBody(schemas.updateDraftBody), async (req, res) => {

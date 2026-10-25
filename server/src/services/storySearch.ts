@@ -15,12 +15,7 @@ const log = createLogger('story')
 const RRF_FETCH_LIMIT = 50
 const RRF_K = 60
 
-export async function hybridSearch(options: {
-  query: string
-  issueSlug?: string
-  page: number
-  pageSize: number
-}) {
+export async function hybridSearch(options: { query: string; issueSlug?: string; page: number; pageSize: number }) {
   const { query, issueSlug, page, pageSize } = options
 
   // The same issue rule as the text leg, as SQL for the semantic leg
@@ -36,7 +31,7 @@ export async function hybridSearch(options: {
           limit: RRF_FETCH_LIMIT,
           issueFilter,
         })
-        return rows.map((r) => r.id)
+        return rows.map(r => r.id)
       } catch (err) {
         log.warn({ err }, 'semantic search failed, falling back to text-only')
         return []
@@ -46,10 +41,7 @@ export async function hybridSearch(options: {
     (async () => {
       const conditions: Prisma.StoryWhereInput[] = []
       conditions.push({
-        OR: [
-          { title: { contains: query, mode: 'insensitive' } },
-          { summary: { contains: query, mode: 'insensitive' } },
-        ],
+        OR: [{ title: { contains: query, mode: 'insensitive' } }, { summary: { contains: query, mode: 'insensitive' } }],
       })
       if (issueSlug) {
         conditions.push(storyInIssueWhere(issueSlug))
@@ -60,7 +52,7 @@ export async function hybridSearch(options: {
         orderBy: [{ datePublished: 'desc' }, { dateCrawled: 'desc' }],
         take: RRF_FETCH_LIMIT,
       })
-      return rows.map((r) => r.id)
+      return rows.map(r => r.id)
     })(),
   ])
 
@@ -74,9 +66,7 @@ export async function hybridSearch(options: {
   })
 
   // Sort by RRF score
-  const rankedIds = [...scores.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([id]) => id)
+  const rankedIds = [...scores.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id)
 
   const total = rankedIds.length
   const pageIds = rankedIds.slice((page - 1) * pageSize, page * pageSize)
@@ -92,8 +82,8 @@ export async function hybridSearch(options: {
   })
 
   // Restore RRF rank order
-  const storyMap = new Map(stories.map((s) => [s.id, s]))
-  const ordered = pageIds.map((id) => storyMap.get(id)).filter((s): s is NonNullable<typeof s> => s != null)
+  const storyMap = new Map(stories.map(s => [s.id, s]))
+  const ordered = pageIds.map(id => storyMap.get(id)).filter((s): s is NonNullable<typeof s> => s != null)
 
   return {
     data: ordered,

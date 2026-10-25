@@ -59,17 +59,20 @@ export function PodcastProgressProvider({ children }: { children: ReactNode }) {
   const pollAgain = useRef(false)
   const [followedCount, setFollowedCount] = useState(0)
 
-  const finish = useCallback(async (id: string) => {
-    try {
-      const outcome = runOutcome(await adminApi.podcasts.get(id))
-      updateToast(toastId(id), { ...outcome, href: podcastPath(id) })
-    } catch {
-      updateToast(toastId(id), { type: 'error', message: 'Could not read how the episode run ended; open the episode to check', sticky: true })
-    }
-    queryClient.invalidateQueries({ queryKey: ['podcast', id] })
-    queryClient.invalidateQueries({ queryKey: ['podcasts'] })
-    queryClient.invalidateQueries({ queryKey: ['podcast-usage'] })
-  }, [updateToast, queryClient])
+  const finish = useCallback(
+    async (id: string) => {
+      try {
+        const outcome = runOutcome(await adminApi.podcasts.get(id))
+        updateToast(toastId(id), { ...outcome, href: podcastPath(id) })
+      } catch {
+        updateToast(toastId(id), { type: 'error', message: 'Could not read how the episode run ended; open the episode to check', sticky: true })
+      }
+      queryClient.invalidateQueries({ queryKey: ['podcast', id] })
+      queryClient.invalidateQueries({ queryKey: ['podcasts'] })
+      queryClient.invalidateQueries({ queryKey: ['podcast-usage'] })
+    },
+    [updateToast, queryClient],
+  )
 
   const poll = useCallback(async (): Promise<void> => {
     if (polling.current) {
@@ -103,12 +106,15 @@ export function PodcastProgressProvider({ children }: { children: ReactNode }) {
     } while (pollAgain.current)
   }, [addProgressToast, finish])
 
-  const track = useCallback((id: string) => {
-    followed.current.set(id, Date.now())
-    addProgressToast(toastId(id), 'Starting…', { href: podcastPath(id) })
-    setFollowedCount(followed.current.size)
-    void poll()
-  }, [addProgressToast, poll])
+  const track = useCallback(
+    (id: string) => {
+      followed.current.set(id, Date.now())
+      addProgressToast(toastId(id), 'Starting…', { href: podcastPath(id) })
+      setFollowedCount(followed.current.size)
+      void poll()
+    },
+    [addProgressToast, poll],
+  )
 
   useEffect(() => {
     void poll()

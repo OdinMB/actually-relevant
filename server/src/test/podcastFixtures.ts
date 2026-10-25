@@ -18,7 +18,10 @@ export const fixtureStories: DialogueStoryRef[] = [
 /** Plain sentences of about `chars` characters, so the episode lands inside the band. */
 export function filler(chars: number, seed: string): string {
   const sentence = `The ${seed} detail matters because people can check it. `
-  return sentence.repeat(Math.ceil(chars / sentence.length)).slice(0, chars).trim()
+  return sentence
+    .repeat(Math.ceil(chars / sentence.length))
+    .slice(0, chars)
+    .trim()
 }
 
 const bridges = [
@@ -40,8 +43,9 @@ export function storySegment(ref: number, overrides: Partial<Segment> = {}): Seg
   return { kind: 'story', storyRef: ref, turns, ...overrides }
 }
 
-export const INTRO_TEXT = 'Welcome to Actually Relevant, the stories rated most relevant for humanity this week. '
-  + 'We start in Nairobi, where a court has ordered the city to publish its air quality data, The Guardian reports.'
+export const INTRO_TEXT =
+  'Welcome to Actually Relevant, the stories rated most relevant for humanity this week. ' +
+  'We start in Nairobi, where a court has ordered the city to publish its air quality data, The Guardian reports.'
 
 export function goodDialogue(): PodcastDialogue {
   return {
@@ -53,10 +57,14 @@ export function goodDialogue(): PodcastDialogue {
       storySegment(2),
       storySegment(3),
       storySegment(4),
-      { kind: 'outro', storyRef: null, turns: [
-        { speaker: 'HOST_A', text: 'From a courtroom in Nairobi to export rules for chips, that was the week in four stories.' },
-        { speaker: 'HOST_B', text: 'Each one reaches further than its headline.' },
-      ] },
+      {
+        kind: 'outro',
+        storyRef: null,
+        turns: [
+          { speaker: 'HOST_A', text: 'From a courtroom in Nairobi to export rules for chips, that was the week in four stories.' },
+          { speaker: 'HOST_B', text: 'Each one reaches further than its headline.' },
+        ],
+      },
     ],
   }
 }

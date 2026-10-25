@@ -61,15 +61,23 @@ describe('classifyAddresses', () => {
   })
 
   it('treats an unreadable flag or a missing id as unknown, never as subscribed', () => {
-    expect(classifyAddresses(['odd@x.org', 'noid@x.org'], contacts).map((a) => a.status)).toEqual(['unknown', 'unknown'])
+    expect(classifyAddresses(['odd@x.org', 'noid@x.org'], contacts).map(a => a.status)).toEqual(['unknown', 'unknown'])
   })
 
   it('never returns a contact that is not on the list', () => {
-    expect(classifyAddresses(['sub@x.org'], contacts).map((a) => a.id)).toEqual(['s1'])
+    expect(classifyAddresses(['sub@x.org'], contacts).map(a => a.id)).toEqual(['s1'])
   })
 
   it('refuses when two contacts share an address', () => {
-    expect(() => classifyAddresses(['a@x.org'], [{ id: '1', email: 'a@x.org' }, { id: '2', email: 'A@x.org' }])).toThrow(/share/)
+    expect(() =>
+      classifyAddresses(
+        ['a@x.org'],
+        [
+          { id: '1', email: 'a@x.org' },
+          { id: '2', email: 'A@x.org' },
+        ],
+      ),
+    ).toThrow(/share/)
   })
 
   it('counts the statuses', () => {
@@ -98,7 +106,7 @@ describe('applyUnsubscribes', () => {
   it('changes only the subscribed and snoozed contacts on the list, by id', async () => {
     const unsubscribe = vi.fn().mockResolvedValue({ subscribed: false, snoozedUntil: null })
     const result = await applyUnsubscribes(listed, { apply: true, unsubscribe, log: quiet })
-    expect(unsubscribe.mock.calls.map((c) => c[0])).toEqual(['a', 'c', 'f'])
+    expect(unsubscribe.mock.calls.map(c => c[0])).toEqual(['a', 'c', 'f'])
     expect(result).toEqual({ unsubscribed: 3, failed: 0, notAttempted: 0 })
   })
 
@@ -109,19 +117,19 @@ describe('applyUnsubscribes', () => {
       .mockResolvedValueOnce({ subscribed: true })
       .mockResolvedValueOnce({ subscribed: false, snoozedUntil: '2026-11-01' })
     const lines: string[] = []
-    const result = await applyUnsubscribes(listed, { apply: true, unsubscribe, log: (l) => lines.push(l) })
+    const result = await applyUnsubscribes(listed, { apply: true, unsubscribe, log: l => lines.push(l) })
     expect(result).toEqual({ unsubscribed: 1, failed: 2, notAttempted: 0 })
     expect(lines.join('\n')).toMatch(/did not confirm/)
     expect(lines.join('\n')).toMatch(/snooze/)
   })
 
-  it('stops after the first change fails and prints Plunk\'s error', async () => {
+  it("stops after the first change fails and prints Plunk's error", async () => {
     const err = Object.assign(new Error('Request failed with status code 403'), {
       response: { status: 403, data: { success: false, error: { code: 'PROJECT_DISABLED', message: 'Project is disabled' } } },
     })
     const unsubscribe = vi.fn().mockRejectedValue(err)
     const lines: string[] = []
-    const result = await applyUnsubscribes(listed, { apply: true, unsubscribe, log: (l) => lines.push(l) })
+    const result = await applyUnsubscribes(listed, { apply: true, unsubscribe, log: l => lines.push(l) })
     expect(unsubscribe).toHaveBeenCalledTimes(1)
     expect(result).toEqual({ unsubscribed: 0, failed: 1, notAttempted: 2 })
     expect(lines.join('\n')).toContain('HTTP 403: PROJECT_DISABLED: Project is disabled')

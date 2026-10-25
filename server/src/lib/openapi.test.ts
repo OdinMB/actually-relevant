@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { getOpenAPIDocument } from './openapi.js'
-import {
-  AI_GENERATED_NEWSLETTER_FIELDS,
-  AI_GENERATED_PODCAST_DETAIL_FIELDS,
-  AI_GENERATED_PODCAST_FIELDS,
-  AI_GENERATED_STORY_FIELDS,
-} from './aiProvenance.js'
+import { AI_GENERATED_NEWSLETTER_FIELDS, AI_GENERATED_PODCAST_DETAIL_FIELDS, AI_GENERATED_PODCAST_FIELDS, AI_GENERATED_STORY_FIELDS } from './aiProvenance.js'
 
 describe('getOpenAPIDocument', () => {
   const doc = getOpenAPIDocument()
@@ -47,17 +42,17 @@ describe('getOpenAPIDocument', () => {
   })
 
   it('documents the incremental-sync filters on the story list and minRelevance on both feeds', () => {
-    const names =(path: string) => doc.paths[path].get.parameters.map((p: any) => p.name)
+    const names = (path: string) => doc.paths[path].get.parameters.map((p: any) => p.name)
     expect(names('/api/stories')).toEqual(expect.arrayContaining(['publishedSince', 'publishedBefore', 'minRelevance', 'page', 'search']))
     expect(names('/api/feed')).toEqual(['minRelevance'])
     expect(names('/api/feed/{issueSlug}')).toEqual(expect.arrayContaining(['issueSlug', 'minRelevance']))
-    const minRelevance =doc.paths['/api/stories'].get.parameters.find((p: any) => p.name === 'minRelevance')
+    const minRelevance = doc.paths['/api/stories'].get.parameters.find((p: any) => p.name === 'minRelevance')
     expect(minRelevance.schema).toMatchObject({ minimum: 1, maximum: 10 })
     expect(minRelevance.description).toContain('relevance rating')
     expect(doc.paths['/api/stories'].get.responses['400']).toBeDefined()
   })
 
-  it('labels the newsletter issue\'s AI fields and lists them in its marker', () => {
+  it("labels the newsletter issue's AI fields and lists them in its marker", () => {
     const issue = schemas.NewsletterIssue
     expect(issue.properties.aiGenerated.properties.fields.items.enum).toEqual([...AI_GENERATED_NEWSLETTER_FIELDS])
     for (const field of AI_GENERATED_NEWSLETTER_FIELDS) {

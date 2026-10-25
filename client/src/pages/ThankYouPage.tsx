@@ -51,14 +51,9 @@ function CreditList({ title, credits }: { title: string; credits: Credit[] }) {
     <>
       <h2 className="section-heading mt-8">{title}</h2>
       <ul className="space-y-1.5 my-4">
-        {credits.map((credit) => (
+        {credits.map(credit => (
           <li key={credit.name}>
-            <a
-              href={credit.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-brand-700 hover:text-brand-800 font-medium"
-            >
+            <a href={credit.url} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:text-brand-800 font-medium">
               {credit.name}
               <span className="sr-only"> (opens in new tab)</span>
             </a>
@@ -83,26 +78,24 @@ export default function ThankYouPage() {
         <meta property="og:url" content={`${SEO.siteUrl}/thank-you`} />
         {CommonOgTags({})}
       </Helmet>
-      <StructuredData data={[
-        {
-          '@context': 'https://schema.org',
-          '@type': 'WebPage',
-          name: `Thank You - ${SEO.siteName}`,
-          description: 'Credits and acknowledgments for the open-source projects and people behind Actually Relevant.',
-          url: `${SEO.siteUrl}/thank-you`,
-          isPartOf: { '@type': 'WebSite', name: SEO.siteName, url: SEO.siteUrl },
-        },
-        buildBreadcrumbSchema([
-          { name: 'Home', url: SEO.siteUrl },
-          { name: 'Thank You' },
-        ]),
-      ]} />
+      <StructuredData
+        data={[
+          {
+            '@context': 'https://schema.org',
+            '@type': 'WebPage',
+            name: `Thank You - ${SEO.siteName}`,
+            description: 'Credits and acknowledgments for the open-source projects and people behind Actually Relevant.',
+            url: `${SEO.siteUrl}/thank-you`,
+            isPartOf: { '@type': 'WebSite', name: SEO.siteName, url: SEO.siteUrl },
+          },
+          buildBreadcrumbSchema([{ name: 'Home', url: SEO.siteUrl }, { name: 'Thank You' }]),
+        ]}
+      />
 
       <div className="page-section">
         <h1 className="page-title">Thank You</h1>
         <p className="page-intro">
-          Actually Relevant is built on the work of many talented people and open-source communities.
-          The platform itself is{' '}
+          Actually Relevant is built on the work of many talented people and open-source communities. The platform itself is{' '}
           <a
             href={GITHUB_REPO_URL}
             target="_blank"
@@ -128,12 +121,7 @@ export default function ThankYouPage() {
 
           <p>
             Listed on{' '}
-            <a
-              href="https://www.toolpilot.ai"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-brand-700 hover:text-brand-800"
-            >
+            <a href="https://www.toolpilot.ai" target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:text-brand-800">
               ToolPilot.ai
               <span className="sr-only"> (opens in new tab)</span>
             </a>

@@ -15,7 +15,11 @@ function app(body = BODY) {
   return { rep, server: express().get('/f', (req, res) => sendRepresentation(req, res, rep, { 'Content-Type': 'application/rss+xml' })) }
 }
 
-interface RawResponse { status: number; headers: IncomingHttpHeaders; body: Buffer }
+interface RawResponse {
+  status: number
+  headers: IncomingHttpHeaders
+  body: Buffer
+}
 
 /** Raw request through node's client (supertest decompresses): headers and bytes as the server sent them. */
 async function raw(server: express.Express, headers: Record<string, string> = {}): Promise<RawResponse> {
@@ -24,11 +28,13 @@ async function raw(server: express.Express, headers: Record<string, string> = {}
   try {
     const { port } = listener.address() as AddressInfo
     return await new Promise<RawResponse>((resolve, reject) => {
-      http.get({ port, path: '/f', headers }, res => {
-        const chunks: Buffer[] = []
-        res.on('data', (c: Buffer) => chunks.push(c))
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks) }))
-      }).on('error', reject)
+      http
+        .get({ port, path: '/f', headers }, res => {
+          const chunks: Buffer[] = []
+          res.on('data', (c: Buffer) => chunks.push(c))
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks) }))
+        })
+        .on('error', reject)
     })
   } finally {
     listener.close()

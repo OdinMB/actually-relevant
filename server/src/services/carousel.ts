@@ -150,10 +150,7 @@ export function createStoryImage(story: CarouselStory, size: ImageSize = CAROUSE
   return embedXmpInPng(canvas.toBuffer('image/png'), aiGeneratedXmpPacket())
 }
 
-export async function generateCarouselZip(
-  stories: CarouselStory[],
-  outputDir: string,
-): Promise<string> {
+export async function generateCarouselZip(stories: CarouselStory[], outputDir: string): Promise<string> {
   mkdirSync(outputDir, { recursive: true })
 
   const imagePaths: string[] = []
@@ -182,7 +179,11 @@ export async function generateCarouselZip(
 
   // Clean up individual images, PDF and post text
   for (const filePath of [...imagePaths, pdfPath, postTextPath]) {
-    try { unlinkSync(filePath) } catch { /* ignore */ }
+    try {
+      unlinkSync(filePath)
+    } catch {
+      /* ignore */
+    }
   }
 
   return zipPath

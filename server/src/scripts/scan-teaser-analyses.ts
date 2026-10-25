@@ -114,8 +114,15 @@ async function main() {
         take: PAGE_SIZE,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
         select: {
-          id: true, slug: true, sourceTitle: true, sourceContent: true,
-          summary: true, relevanceReasons: true, relevanceSummary: true, antifactors: true, relevanceCalculation: true,
+          id: true,
+          slug: true,
+          sourceTitle: true,
+          sourceContent: true,
+          summary: true,
+          relevanceReasons: true,
+          relevanceSummary: true,
+          antifactors: true,
+          relevanceCalculation: true,
           feed: { select: { title: true } },
         },
       })
@@ -141,7 +148,7 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
+  main().catch(err => {
     console.error('Fatal error:', err)
     process.exit(1)
   })

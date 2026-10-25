@@ -50,9 +50,7 @@ describe('Admin Issues API', () => {
     })
 
     it('returns 401 with invalid auth', async () => {
-      const res = await request(app)
-        .get('/api/admin/issues')
-        .set('Authorization', 'Bearer wrong-key')
+      const res = await request(app).get('/api/admin/issues').set('Authorization', 'Bearer wrong-key')
       expect(res.status).toBe(401)
     })
 
@@ -62,7 +60,10 @@ describe('Admin Issues API', () => {
           ...sampleIssue(),
           parent: null,
           children: [],
-          feeds: [{ title: 'Feed A', active: true, _count: { stories: 3 } }, { title: 'Feed B', active: true, _count: { stories: 1 } }],
+          feeds: [
+            { title: 'Feed A', active: true, _count: { stories: 3 } },
+            { title: 'Feed B', active: true, _count: { stories: 1 } },
+          ],
         },
         {
           ...sampleIssue({ id: 'issue-2', name: 'Climate', slug: 'climate' }),
@@ -73,9 +74,7 @@ describe('Admin Issues API', () => {
       ]
       mockPrisma.issue.findMany.mockResolvedValue(issues)
 
-      const res = await request(app)
-        .get('/api/admin/issues')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/issues').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(2)
       expect(res.body[0].name).toBe('AI & Technology')
@@ -101,9 +100,7 @@ describe('Admin Issues API', () => {
       ]
       mockPrisma.issue.findMany.mockResolvedValue(issues)
 
-      const res = await request(app)
-        .get('/api/admin/issues')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/issues').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body[0].children).toHaveLength(1)
       expect(res.body[0].children[0].name).toBe('AI Alignment')
@@ -120,9 +117,7 @@ describe('Admin Issues API', () => {
         feeds: [{ title: 'Test Feed', active: true }],
       })
 
-      const res = await request(app)
-        .get('/api/admin/issues/issue-1')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/issues/issue-1').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.name).toBe('AI & Technology')
       expect(res.body.parent).toBeNull()
@@ -132,9 +127,7 @@ describe('Admin Issues API', () => {
     it('returns 404 for unknown issue', async () => {
       mockPrisma.issue.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .get('/api/admin/issues/unknown')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/issues/unknown').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -143,27 +136,23 @@ describe('Admin Issues API', () => {
     it('creates a new issue', async () => {
       mockPrisma.issue.create.mockResolvedValue(sampleIssue())
 
-      const res = await request(app)
-        .post('/api/admin/issues')
-        .set(authHeader())
-        .send({ name: 'AI & Technology', slug: 'ai-technology' })
+      const res = await request(app).post('/api/admin/issues').set(authHeader()).send({ name: 'AI & Technology', slug: 'ai-technology' })
       expect(res.status).toBe(201)
       expect(res.body.name).toBe('AI & Technology')
     })
 
     it('creates a child issue with parentId', async () => {
       mockPrisma.issue.findUnique.mockResolvedValue(sampleIssue({ id: PARENT_UUID, parentId: null }))
-      mockPrisma.issue.create.mockResolvedValue(sampleIssue({
-        id: CHILD_UUID,
-        name: 'AI Alignment',
-        slug: 'ai-alignment',
-        parentId: PARENT_UUID,
-      }))
+      mockPrisma.issue.create.mockResolvedValue(
+        sampleIssue({
+          id: CHILD_UUID,
+          name: 'AI Alignment',
+          slug: 'ai-alignment',
+          parentId: PARENT_UUID,
+        }),
+      )
 
-      const res = await request(app)
-        .post('/api/admin/issues')
-        .set(authHeader())
-        .send({ name: 'AI Alignment', slug: 'ai-alignment', parentId: PARENT_UUID })
+      const res = await request(app).post('/api/admin/issues').set(authHeader()).send({ name: 'AI Alignment', slug: 'ai-alignment', parentId: PARENT_UUID })
       expect(res.status).toBe(201)
       expect(res.body.parentId).toBe(PARENT_UUID)
     })
@@ -171,66 +160,52 @@ describe('Admin Issues API', () => {
     it('returns 400 when parent does not exist', async () => {
       mockPrisma.issue.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .post('/api/admin/issues')
-        .set(authHeader())
-        .send({ name: 'Test', slug: 'test', parentId: MISSING_UUID })
+      const res = await request(app).post('/api/admin/issues').set(authHeader()).send({ name: 'Test', slug: 'test', parentId: MISSING_UUID })
       expect(res.status).toBe(400)
       expect(res.body.error).toBe('Parent issue not found')
     })
 
     it('returns 400 when trying to nest more than one level', async () => {
-      mockPrisma.issue.findUnique.mockResolvedValue(
-        sampleIssue({ id: CHILD_UUID, parentId: PARENT_UUID })
-      )
+      mockPrisma.issue.findUnique.mockResolvedValue(sampleIssue({ id: CHILD_UUID, parentId: PARENT_UUID }))
 
-      const res = await request(app)
-        .post('/api/admin/issues')
-        .set(authHeader())
-        .send({ name: 'Deep', slug: 'deep', parentId: CHILD_UUID })
+      const res = await request(app).post('/api/admin/issues').set(authHeader()).send({ name: 'Deep', slug: 'deep', parentId: CHILD_UUID })
       expect(res.status).toBe(400)
       expect(res.body.error).toBe('Cannot nest more than one level deep')
     })
 
     it('returns 400 for missing required fields', async () => {
-      const res = await request(app)
-        .post('/api/admin/issues')
-        .set(authHeader())
-        .send({})
+      const res = await request(app).post('/api/admin/issues').set(authHeader()).send({})
       expect(res.status).toBe(400)
     })
 
     it('returns 400 for invalid slug format', async () => {
-      const res = await request(app)
-        .post('/api/admin/issues')
-        .set(authHeader())
-        .send({ name: 'Test', slug: 'Invalid Slug!' })
+      const res = await request(app).post('/api/admin/issues').set(authHeader()).send({ name: 'Test', slug: 'Invalid Slug!' })
       expect(res.status).toBe(400)
     })
 
     it('returns 409 for duplicate slug', async () => {
       mockPrisma.issue.create.mockRejectedValue({ code: 'P2002' })
 
-      const res = await request(app)
-        .post('/api/admin/issues')
-        .set(authHeader())
-        .send({ name: 'Test', slug: 'existing-slug' })
+      const res = await request(app).post('/api/admin/issues').set(authHeader()).send({ name: 'Test', slug: 'existing-slug' })
       expect(res.status).toBe(409)
     })
 
     it('accepts static content fields', async () => {
-      mockPrisma.issue.create.mockResolvedValue(sampleIssue({
-        intro: 'Intro text',
-        evaluationIntro: 'Eval intro',
-        evaluationCriteria: '["Criterion 1"]',
-        makeADifference: '[{"label":"Link","url":"https://example.com"}]',
-      }))
+      mockPrisma.issue.create.mockResolvedValue(
+        sampleIssue({
+          intro: 'Intro text',
+          evaluationIntro: 'Eval intro',
+          evaluationCriteria: '["Criterion 1"]',
+          makeADifference: '[{"label":"Link","url":"https://example.com"}]',
+        }),
+      )
 
       const res = await request(app)
         .post('/api/admin/issues')
         .set(authHeader())
         .send({
-          name: 'Test', slug: 'test',
+          name: 'Test',
+          slug: 'test',
           intro: 'Intro text',
           evaluationIntro: 'Eval intro',
           evaluationCriteria: ['Criterion 1'],
@@ -247,10 +222,7 @@ describe('Admin Issues API', () => {
       const updated = sampleIssue({ name: 'Updated Name' })
       mockPrisma.issue.update.mockResolvedValue(updated)
 
-      const res = await request(app)
-        .put('/api/admin/issues/issue-1')
-        .set(authHeader())
-        .send({ name: 'Updated Name' })
+      const res = await request(app).put('/api/admin/issues/issue-1').set(authHeader()).send({ name: 'Updated Name' })
       expect(res.status).toBe(200)
       expect(res.body.name).toBe('Updated Name')
     })
@@ -259,19 +231,13 @@ describe('Admin Issues API', () => {
       mockPrisma.issue.findUnique.mockResolvedValue(sampleIssue({ id: PARENT_UUID, parentId: null }))
       mockPrisma.issue.count.mockResolvedValue(2) // has 2 children
 
-      const res = await request(app)
-        .put(`/api/admin/issues/${ISSUE_UUID}`)
-        .set(authHeader())
-        .send({ parentId: PARENT_UUID })
+      const res = await request(app).put(`/api/admin/issues/${ISSUE_UUID}`).set(authHeader()).send({ parentId: PARENT_UUID })
       expect(res.status).toBe(400)
       expect(res.body.error).toBe('Cannot set parent on an issue that has children')
     })
 
     it('returns 400 when setting self as parent', async () => {
-      const res = await request(app)
-        .put(`/api/admin/issues/${ISSUE_UUID}`)
-        .set(authHeader())
-        .send({ parentId: ISSUE_UUID })
+      const res = await request(app).put(`/api/admin/issues/${ISSUE_UUID}`).set(authHeader()).send({ parentId: ISSUE_UUID })
       expect(res.status).toBe(400)
       expect(res.body.error).toBe('An issue cannot be its own parent')
     })
@@ -279,10 +245,7 @@ describe('Admin Issues API', () => {
     it('returns 404 for unknown issue', async () => {
       mockPrisma.issue.update.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .put('/api/admin/issues/unknown')
-        .set(authHeader())
-        .send({ name: 'Test' })
+      const res = await request(app).put('/api/admin/issues/unknown').set(authHeader()).send({ name: 'Test' })
       expect(res.status).toBe(404)
     })
   })
@@ -293,9 +256,7 @@ describe('Admin Issues API', () => {
       mockPrisma.issue.count.mockResolvedValue(0)
       mockPrisma.issue.delete.mockResolvedValue(sampleIssue())
 
-      const res = await request(app)
-        .delete('/api/admin/issues/issue-1')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/issues/issue-1').set(authHeader())
       expect(res.status).toBe(204)
     })
 
@@ -303,9 +264,7 @@ describe('Admin Issues API', () => {
       mockPrisma.feed.count.mockResolvedValue(3)
       mockPrisma.issue.count.mockResolvedValue(0)
 
-      const res = await request(app)
-        .delete('/api/admin/issues/issue-1')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/issues/issue-1').set(authHeader())
       expect(res.status).toBe(409)
       expect(res.body.error).toBe('Cannot delete issue with existing feeds')
     })
@@ -314,9 +273,7 @@ describe('Admin Issues API', () => {
       mockPrisma.feed.count.mockResolvedValue(0)
       mockPrisma.issue.count.mockResolvedValue(2)
 
-      const res = await request(app)
-        .delete('/api/admin/issues/issue-1')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/issues/issue-1').set(authHeader())
       expect(res.status).toBe(409)
       expect(res.body.error).toBe('Cannot delete issue with child issues')
     })

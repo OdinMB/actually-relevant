@@ -45,10 +45,7 @@ export function isConnectionNotEstablished(err: unknown): boolean {
   return typeof code === 'string' && NOT_CONNECTED_CODES.has(code)
 }
 
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {},
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const { retries = 3, baseDelayMs = 1000, retryOn = isRetryableError } = options
 
   let lastError: unknown

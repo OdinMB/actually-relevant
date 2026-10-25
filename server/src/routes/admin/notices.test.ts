@@ -25,8 +25,17 @@ process.env.PUBLIC_API_KEY = TEST_API_KEY
 const { default: app } = await import('../../app.js')
 
 const notice = {
-  id: 'n-1', source: 'plunk', severity: 'critical', title: 'Spam complaint in Plunk', message: 'm', link: '/admin/subscribers',
-  dedupeKey: 'plunk:e1_complaint', count: 1, firstOccurredAt: '2026-10-08T10:00:00.000Z', lastOccurredAt: '2026-10-08T10:00:00.000Z', seenAt: null,
+  id: 'n-1',
+  source: 'plunk',
+  severity: 'critical',
+  title: 'Spam complaint in Plunk',
+  message: 'm',
+  link: '/admin/subscribers',
+  dedupeKey: 'plunk:e1_complaint',
+  count: 1,
+  firstOccurredAt: '2026-10-08T10:00:00.000Z',
+  lastOccurredAt: '2026-10-08T10:00:00.000Z',
+  seenAt: null,
 }
 
 describe('Admin Notices API', () => {

@@ -9,10 +9,7 @@ import type { PublicIssue } from '../lib/api'
 function IssueAccordion({ issue }: { issue: PublicIssue }) {
   const colors = getCategoryColor(issue.slug)
 
-  const hasDetails =
-    (issue.evaluationCriteria?.length ?? 0) > 0 ||
-    (issue.sourceNames?.length ?? 0) > 0 ||
-    (issue.makeADifference?.length ?? 0) > 0
+  const hasDetails = (issue.evaluationCriteria?.length ?? 0) > 0 || (issue.sourceNames?.length ?? 0) > 0 || (issue.makeADifference?.length ?? 0) > 0
 
   return (
     <details className="group">
@@ -32,16 +29,12 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
 
       <div className="pl-11 pb-4 space-y-4">
         {/* Intro */}
-        {(issue.intro || issue.description) && (
-          <p className="text-neutral-600 text-sm leading-relaxed">
-            {issue.intro || issue.description}
-          </p>
-        )}
+        {(issue.intro || issue.description) && <p className="text-neutral-600 text-sm leading-relaxed">{issue.intro || issue.description}</p>}
 
         {/* Sub-topics */}
         {issue.children && issue.children.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {issue.children.map((child) => {
+            {issue.children.map(child => {
               const childColors = getCategoryColor(child.slug)
               return (
                 <Link
@@ -63,9 +56,7 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
             {issue.evaluationCriteria?.length > 0 && (
               <div>
                 <h3 className="font-bold text-neutral-700 mb-1.5">How We Evaluate</h3>
-                {issue.evaluationIntro && (
-                  <p className="text-neutral-500 mb-1.5">{issue.evaluationIntro}</p>
-                )}
+                {issue.evaluationIntro && <p className="text-neutral-500 mb-1.5">{issue.evaluationIntro}</p>}
                 <ol className="list-decimal list-inside space-y-0.5 text-neutral-600">
                   {issue.evaluationCriteria.map((criterion, i) => (
                     <li key={i}>{criterion}</li>
@@ -78,11 +69,8 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
               <div>
                 <h3 className="font-bold text-neutral-700 mb-1.5">Our Sources</h3>
                 <div className="flex flex-wrap gap-1.5">
-                  {issue.sourceNames.map((source) => (
-                    <span
-                      key={source}
-                      className="bg-neutral-100 text-neutral-600 text-xs px-2 py-0.5 rounded-full"
-                    >
+                  {issue.sourceNames.map(source => (
+                    <span key={source} className="bg-neutral-100 text-neutral-600 text-xs px-2 py-0.5 rounded-full">
                       {source}
                     </span>
                   ))}
@@ -94,7 +82,7 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
               <div>
                 <h3 className="font-bold text-neutral-700 mb-1.5">Make a Difference</h3>
                 <ul className="space-y-1">
-                  {issue.makeADifference.map((link) => (
+                  {issue.makeADifference.map(link => (
                     <li key={link.url}>
                       <a
                         href={link.url}
@@ -103,8 +91,7 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
                         className="text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                       >
                         {link.label}
-                        <span className="sr-only"> (opens in new tab)</span>
-                        {' '}&rarr;
+                        <span className="sr-only"> (opens in new tab)</span> &rarr;
                       </a>
                     </li>
                   ))}
@@ -128,27 +115,17 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
   )
 }
 
-const ISSUE_ORDER = [
-  'human-development',
-  'planet-climate',
-  'existential-threats',
-  'science-technology',
-]
+const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
 
 export default function IssuesPage() {
   const { data: issues, isLoading } = usePublicIssues()
-  const sorted = [...(issues ?? [])].sort(
-    (a, b) => ISSUE_ORDER.indexOf(a.slug) - ISSUE_ORDER.indexOf(b.slug),
-  )
+  const sorted = [...(issues ?? [])].sort((a, b) => ISSUE_ORDER.indexOf(a.slug) - ISSUE_ORDER.indexOf(b.slug))
 
   return (
     <>
       <Helmet>
         <title>All Issues - {SEO.siteName}</title>
-        <meta
-          name="description"
-          content="We cover issue areas critical to humanity, each evaluated with a rigorous framework."
-        />
+        <meta name="description" content="We cover issue areas critical to humanity, each evaluated with a rigorous framework." />
         <meta property="og:title" content={`All Issues - ${SEO.siteName}`} />
         <meta property="og:description" content="We cover issue areas critical to humanity." />
         <meta property="og:type" content="website" />
@@ -159,9 +136,7 @@ export default function IssuesPage() {
       <div className="page-section-wide">
         <header className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold mb-2">All Issues</h1>
-          <p className="text-sm text-neutral-500">
-            We cover the topics most relevant to humanity. Click an issue to explore.
-          </p>
+          <p className="text-sm text-neutral-500">We cover the topics most relevant to humanity. Click an issue to explore.</p>
         </header>
 
         <div className="divide-y divide-neutral-200">
@@ -174,9 +149,7 @@ export default function IssuesPage() {
               <IssueAccordionSkeleton />
             </>
           ) : (
-            sorted.map((issue) => (
-              <IssueAccordion key={issue.slug} issue={issue} />
-            ))
+            sorted.map(issue => <IssueAccordion key={issue.slug} issue={issue} />)
           )}
         </div>
       </div>

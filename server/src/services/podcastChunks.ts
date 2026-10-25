@@ -90,7 +90,7 @@ function timeTurns(chunks: Chunk[], durationsMs: number[], pauseMs: number): Tim
       timed.push({ turn, startMs: at, endMs: end })
       at = end
     }
-    offset += durationMs +(i < chunks.length - 1 ? pauseMs : 0)
+    offset += durationMs + (i < chunks.length - 1 ? pauseMs : 0)
   })
   return timed
 }
@@ -141,13 +141,7 @@ const seconds = (ms: number) => Math.round(ms) / 1000
  * Consecutive segments about the same story make one chapter; a story segment whose story is
  * unknown runs on as part of the chapter before it. No LLM call: titles come from the snapshot.
  */
-export function buildChapters(
-  segments: SpokenSegment[],
-  chunks: Chunk[],
-  durationsMs: number[],
-  pauseMs: number,
-  stories: ChapterStory[],
-): ChaptersDocument {
+export function buildChapters(segments: SpokenSegment[], chunks: Chunk[], durationsMs: number[], pauseMs: number, stories: ChapterStory[]): ChaptersDocument {
   const timed = timeTurns(chunks, durationsMs, pauseMs)
   const turnCount = segments.reduce((n, s) => n + s.turns.length, 0)
   if (turnCount !== timed.length) throw new Error(`${turnCount} turns in the segments but ${timed.length} in the chunks`)

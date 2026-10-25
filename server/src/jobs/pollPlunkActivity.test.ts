@@ -32,8 +32,7 @@ const activity = (id: string, type: string, metadata: Record<string, unknown> = 
   },
 })
 
-const page = (items: unknown[], more?: { cursor: string }) =>
-  ({ items, nextCursor: more?.cursor ?? null, hasMore: Boolean(more) })
+const page = (items: unknown[], more?: { cursor: string }) => ({ items, nextCursor: more?.cursor ?? null, hasMore: Boolean(more) })
 
 describe('runPollPlunkActivity', () => {
   const savedKey = config.plunk.secretKey
@@ -90,7 +89,10 @@ describe('runPollPlunkActivity', () => {
   it('makes a complaint critical and a bounce a warning', async () => {
     mockListActivity.mockResolvedValueOnce(page([activity('e1_complaint', 'email.complaint'), activity('e2_bounce', 'email.bounced')]))
     await runPollPlunkActivity(NOW)
-    expect(mockNotify.mock.calls.map(([n]) => [n.source, n.severity])).toEqual([['plunk', 'critical'], ['plunk', 'warning']])
+    expect(mockNotify.mock.calls.map(([n]) => [n.source, n.severity])).toEqual([
+      ['plunk', 'critical'],
+      ['plunk', 'warning'],
+    ])
   })
 
   it('keeps no address, contact id, body or bounce error in what it records', async () => {
@@ -116,7 +118,9 @@ describe('runPollPlunkActivity', () => {
 
 describe('activityNotice', () => {
   it('names a transactional email by its subject when it has no campaign', () => {
-    const notice = activityNotice(activity('e3_complaint', 'email.complaint', { campaignName: null, sourceType: 'TRANSACTIONAL', subject: 'Confirm your subscription' }))
+    const notice = activityNotice(
+      activity('e3_complaint', 'email.complaint', { campaignName: null, sourceType: 'TRANSACTIONAL', subject: 'Confirm your subscription' }),
+    )
     expect(notice?.message).toContain('transactional: "Confirm your subscription"')
   })
 

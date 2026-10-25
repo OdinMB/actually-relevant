@@ -62,8 +62,8 @@ function main() {
 
   const dir = path.join(SERVER_DIR, MIGRATIONS)
   const all: Migration[] = readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && existsSync(path.join(dir, d.name, 'migration.sql')))
-    .map((d) => ({ name: d.name, sql: readFileSync(path.join(dir, d.name, 'migration.sql'), 'utf8') }))
+    .filter(d => d.isDirectory() && existsSync(path.join(dir, d.name, 'migration.sql')))
+    .map(d => ({ name: d.name, sql: readFileSync(path.join(dir, d.name, 'migration.sql'), 'utf8') }))
 
   const problems = findProblems(all, added)
   const scope = `${all.length} migrations, ${added.size} added since ${base} (${mergeBase.slice(0, 8)})`

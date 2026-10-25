@@ -14,7 +14,6 @@ import authRouter from './routes/auth.js'
 import adminRouter from './routes/admin/index.js'
 import publicRouter from './routes/public/index.js'
 
-
 const httpLog = createLogger('http')
 
 const app = express()
@@ -25,27 +24,28 @@ const app = express()
 app.set('trust proxy', config.trustProxyHops)
 
 // Security headers
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
-    }
-  },
-  crossOriginEmbedderPolicy: false,
-}))
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }),
+)
 
 // CORS configuration.
 // Dev ports 5173-5180 (Vite increments when a port is taken) and preview ports
 // 4173-4174, on both localhost and 127.0.0.1.
 const devPorts = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 4173, 4174]
-const allowedOrigins = [
-  ...devPorts.flatMap((port) => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]),
-  process.env.FRONTEND_URL,
-].filter(Boolean) as string[]
+const allowedOrigins = [...devPorts.flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]), process.env.FRONTEND_URL].filter(
+  Boolean,
+) as string[]
 
 // Open CORS for public read-only endpoints (widget/embed API calls from any origin).
 // /api/subscribe/token is included: it's an anonymous, side-effect-free GET the
@@ -107,7 +107,6 @@ app.use('/health', healthRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api', publicRouter)
-
 
 // 404 handler for unmatched routes
 app.use((_req: Request, res: Response) => {

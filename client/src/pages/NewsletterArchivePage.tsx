@@ -11,8 +11,7 @@ import { useNewsletterArchive } from '../hooks/useNewsletterArchive'
 
 const META = {
   title: 'Newsletter Archive - Actually Relevant',
-  description:
-    'Read every past issue of the Actually Relevant weekly newsletter on the web: the stories that matter to humanity, one week at a time.',
+  description: 'Read every past issue of the Actually Relevant weekly newsletter on the web: the stories that matter to humanity, one week at a time.',
   url: `${SEO.siteUrl}/newsletter/archive`,
 }
 
@@ -47,11 +46,16 @@ export default function NewsletterArchivePage() {
         <h1 className="page-title">Newsletter Archive</h1>
         <p className="page-intro">
           Every past issue of the weekly newsletter, to read on the web.{' '}
-          <Link to="/newsletter" className={LINK_CLASS}>Subscribe</Link> to get the next one in your inbox.
+          <Link to="/newsletter" className={LINK_CLASS}>
+            Subscribe
+          </Link>{' '}
+          to get the next one in your inbox.
         </p>
 
         <section aria-labelledby="archive-heading" className="mt-10">
-          <h2 id="archive-heading" className="sr-only">Issues</h2>
+          <h2 id="archive-heading" className="sr-only">
+            Issues
+          </h2>
           {isLoading ? (
             <NewsletterArchiveSkeleton />
           ) : isError ? (
@@ -61,14 +65,19 @@ export default function NewsletterArchivePage() {
           ) : (
             <>
               <ul className="divide-y divide-neutral-100">
-                {data.data.map((issue) => (
+                {data.data.map(issue => (
                   <li key={issue.slug} className="py-5">
                     <Link to={`/newsletter/${issue.slug}`} className={`text-xl font-bold ${LINK_CLASS}`}>
                       {issue.title}
                     </Link>
                     <p className="mt-1 text-sm text-neutral-600">
                       <time dateTime={issue.publishedAt}>{formatEpisodeDate(issue.publishedAt)}</time>
-                      {issue.storyCount > 0 && <> · {issue.storyCount} {issue.storyCount === 1 ? 'story' : 'stories'}</>}
+                      {issue.storyCount > 0 && (
+                        <>
+                          {' '}
+                          · {issue.storyCount} {issue.storyCount === 1 ? 'story' : 'stories'}
+                        </>
+                      )}
                     </p>
                   </li>
                 ))}
@@ -76,7 +85,7 @@ export default function NewsletterArchivePage() {
               <Pagination
                 page={page}
                 totalPages={data.totalPages}
-                onPageChange={(next) => {
+                onPageChange={next => {
                   setPage(next)
                   window.scrollTo({ top: 0 })
                 }}

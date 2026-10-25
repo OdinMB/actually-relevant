@@ -58,7 +58,9 @@ describe('Toast', () => {
     renderWithProvider()
     fireEvent.click(screen.getByText('success'))
     expect(screen.getByText('Done!')).toBeInTheDocument()
-    act(() => { vi.advanceTimersByTime(4000) })
+    act(() => {
+      vi.advanceTimersByTime(4000)
+    })
     expect(screen.queryByText('Done!')).not.toBeInTheDocument()
     vi.useRealTimers()
   })
@@ -68,7 +70,9 @@ describe('Toast', () => {
     renderWithProvider()
     fireEvent.click(screen.getByText('progress'))
     expect(screen.getByText('Working...')).toBeInTheDocument()
-    act(() => { vi.advanceTimersByTime(10000) })
+    act(() => {
+      vi.advanceTimersByTime(10000)
+    })
     expect(screen.getByText('Working...')).toBeInTheDocument()
     vi.useRealTimers()
   })
@@ -88,7 +92,9 @@ describe('Toast', () => {
     fireEvent.click(screen.getByText('progress'))
     fireEvent.click(screen.getByText('finish'))
     expect(screen.getByText('All done')).toBeInTheDocument()
-    act(() => { vi.advanceTimersByTime(4000) })
+    act(() => {
+      vi.advanceTimersByTime(4000)
+    })
     expect(screen.queryByText('All done')).not.toBeInTheDocument()
     vi.useRealTimers()
   })
@@ -111,29 +117,48 @@ describe('Toast', () => {
 
   it('keeps a sticky outcome until it is dismissed', () => {
     vi.useFakeTimers()
-    render(<ToastProvider><LinkedConsumer /></ToastProvider>, { wrapper: MemoryRouter })
+    render(
+      <ToastProvider>
+        <LinkedConsumer />
+      </ToastProvider>,
+      { wrapper: MemoryRouter },
+    )
     fireEvent.click(screen.getByText('start'))
     fireEvent.click(screen.getByText('fail'))
-    act(() => { vi.advanceTimersByTime(10000) })
+    act(() => {
+      vi.advanceTimersByTime(10000)
+    })
     expect(screen.getByText('Episode failed')).toBeInTheDocument()
     vi.useRealTimers()
   })
 
   it('renders a toast with an href as a link to that page, kept on update', () => {
-    render(<ToastProvider><LinkedConsumer /></ToastProvider>, { wrapper: MemoryRouter })
+    render(
+      <ToastProvider>
+        <LinkedConsumer />
+      </ToastProvider>,
+      { wrapper: MemoryRouter },
+    )
     fireEvent.click(screen.getByText('start'))
     expect(screen.getByRole('link', { name: 'Voicing 1/5' }).getAttribute('href')).toBe('/admin/podcasts/pod-1')
     fireEvent.click(screen.getByText('fail'))
     expect(screen.getByRole('link', { name: 'Episode failed' }).getAttribute('href')).toBe('/admin/podcasts/pod-1')
   })
 
-  it('a progress toast restarted after an outcome is not dismissed by the outcome\'s timer', () => {
+  it("a progress toast restarted after an outcome is not dismissed by the outcome's timer", () => {
     vi.useFakeTimers()
-    render(<ToastProvider><LinkedConsumer /></ToastProvider>, { wrapper: MemoryRouter })
+    render(
+      <ToastProvider>
+        <LinkedConsumer />
+      </ToastProvider>,
+      { wrapper: MemoryRouter },
+    )
     fireEvent.click(screen.getByText('start'))
     fireEvent.click(screen.getByText('succeed'))
     fireEvent.click(screen.getByText('start'))
-    act(() => { vi.advanceTimersByTime(10000) })
+    act(() => {
+      vi.advanceTimersByTime(10000)
+    })
     expect(screen.getByText('Voicing 1/5')).toBeInTheDocument()
     vi.useRealTimers()
   })
@@ -150,7 +175,12 @@ describe('Toast', () => {
         </div>
       )
     }
-    const { container } = render(<ToastProvider><DetailConsumer /></ToastProvider>, { wrapper: MemoryRouter })
+    const { container } = render(
+      <ToastProvider>
+        <DetailConsumer />
+      </ToastProvider>,
+      { wrapper: MemoryRouter },
+    )
     const region = container.querySelector('[aria-live="polite"]')!
     /** The region's text as assistive technology reads it: aria-hidden content left out. */
     const spoken = () => {

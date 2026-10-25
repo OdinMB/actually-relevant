@@ -182,9 +182,7 @@ describe('cached', () => {
   })
 
   it('calls fn again after TTL expires', async () => {
-    const fn = vi.fn()
-      .mockResolvedValueOnce('first')
-      .mockResolvedValueOnce('second')
+    const fn = vi.fn().mockResolvedValueOnce('first').mockResolvedValueOnce('second')
 
     const first = await cached(cache, 'key', fn)
     expect(first).toBe('first')
@@ -208,9 +206,7 @@ describe('cached', () => {
   })
 
   it('does not cache if fn throws', async () => {
-    const fn = vi.fn()
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValueOnce('recovered')
+    const fn = vi.fn().mockRejectedValueOnce(new Error('fail')).mockResolvedValueOnce('recovered')
 
     await expect(cached(cache, 'key', fn)).rejects.toThrow('fail')
 
@@ -221,7 +217,12 @@ describe('cached', () => {
 
   it('coalesces concurrent misses for a key into one call', async () => {
     let resolve!: (v: string) => void
-    const fn = vi.fn(() => new Promise<string>(r => { resolve = r }))
+    const fn = vi.fn(
+      () =>
+        new Promise<string>(r => {
+          resolve = r
+        }),
+    )
 
     const first = cached(cache, 'key', fn)
     const second = cached(cache, 'key', fn)
@@ -233,8 +234,14 @@ describe('cached', () => {
 
   it('shares a rejection with concurrent callers, then retries', async () => {
     let reject!: (e: Error) => void
-    const fn = vi.fn()
-      .mockImplementationOnce(() => new Promise<string>((_, r) => { reject = r }))
+    const fn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((_, r) => {
+            reject = r
+          }),
+      )
       .mockResolvedValueOnce('ok')
 
     const first = cached(cache, 'key', fn)
@@ -248,7 +255,12 @@ describe('cached', () => {
 
   it('does not store a load that was invalidated while in flight', async () => {
     let resolve!: (v: string) => void
-    const fn = vi.fn(() => new Promise<string>(r => { resolve = r }))
+    const fn = vi.fn(
+      () =>
+        new Promise<string>(r => {
+          resolve = r
+        }),
+    )
 
     const pending = cached(cache, 'key', fn)
     cache.invalidate('key')

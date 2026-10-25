@@ -30,9 +30,7 @@ export function publicTranscript(dialogue: unknown, kind: PodcastKind, stories: 
   if (!hasSegments(dialogue)) return []
   const byRef = new Map(stories.map(s => [s.ref, s]))
   return assembleSpokenSegments(dialogue, kind).flatMap(segment => {
-    const turns = segment.turns
-      .map(t => ({ speaker: SPEAKER_LABEL[t.speaker], text: readableText(t.text) }))
-      .filter(t => t.text !== '')
+    const turns = segment.turns.map(t => ({ speaker: SPEAKER_LABEL[t.speaker], text: readableText(t.text) })).filter(t => t.text !== '')
     if (turns.length === 0) return []
     const s = segment.storyRef == null ? undefined : byRef.get(segment.storyRef)
     const story = s ? { title: s.title, publisher: s.publisher, sourceUrl: s.sourceUrl, slug: s.slug } : null

@@ -10,8 +10,14 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  buildRatingDeliverable, buildRatingSet, replaceRatingSet, slugOfSetId, validateRatingDeliverable,
-  type ExcludedDraft, type RatingKey, type RatingSetsFile,
+  buildRatingDeliverable,
+  buildRatingSet,
+  replaceRatingSet,
+  slugOfSetId,
+  validateRatingDeliverable,
+  type ExcludedDraft,
+  type RatingKey,
+  type RatingSetsFile,
 } from './ratingSets.js'
 import type { RatingItemDraft, RatingSetSlug } from './types.js'
 

@@ -51,9 +51,7 @@ function Problems({ podcast }: { podcast: Podcast }) {
           <p className="mt-1">{podcast.lastError}</p>
         </div>
       )}
-      {podcast.attempts > 0 && (
-        <p className="text-sm text-neutral-600">Automatic attempts this week: {podcast.attempts}</p>
-      )}
+      {podcast.attempts > 0 && <p className="text-sm text-neutral-600">Automatic attempts this week: {podcast.attempts}</p>}
     </>
   )
 }
@@ -63,12 +61,19 @@ function useEpisodeTab(podcast: Podcast) {
   const [params, setParams] = useSearchParams()
   const tab = resolveTab(params.get('tab'), podcast)
 
-  const setTab = useCallback((next: PodcastTab | null) => setParams(prev => {
-    const updated = new URLSearchParams(prev)
-    if (next) updated.set('tab', next)
-    else updated.delete('tab')
-    return updated
-  }, { replace: true }), [setParams])
+  const setTab = useCallback(
+    (next: PodcastTab | null) =>
+      setParams(
+        prev => {
+          const updated = new URLSearchParams(prev)
+          if (next) updated.set('tab', next)
+          else updated.delete('tab')
+          return updated
+        },
+        { replace: true },
+      ),
+    [setParams],
+  )
 
   // A run that starts (from any tab, the bar or another tab of the browser) shows its stage.
   const wasRunning = useRef(podcast.inProgress)
@@ -115,7 +120,9 @@ export function PodcastDetail({ podcast }: { podcast: Podcast }) {
             <PodcastStageTabs
               podcast={podcast}
               selected={tab}
-              onSelect={next => { if (next !== tab) leave.guard(() => setTab(next)) }}
+              onSelect={next => {
+                if (next !== tab) leave.guard(() => setTab(next))
+              }}
               panels={{
                 stories: <PodcastStoriesTab podcast={podcast} pendingEdits={pendingEdits} onDirtyChange={setPendingEdits} />,
                 script: <PodcastScriptTab podcast={podcast} pendingEdits={pendingEdits} onDirtyChange={setPendingEdits} />,

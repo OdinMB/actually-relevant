@@ -13,8 +13,14 @@ import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import {
-  updatePodcastSchema, podcastQuerySchema, resumePodcastSchema, rewindPodcastSchema, podcastStoriesSchema, podcastScriptEditSchema,
-  podcastStoryFiltersSchema, podcastStorySearchQuerySchema,
+  updatePodcastSchema,
+  podcastQuerySchema,
+  resumePodcastSchema,
+  rewindPodcastSchema,
+  podcastStoriesSchema,
+  podcastScriptEditSchema,
+  podcastStoryFiltersSchema,
+  podcastStorySearchQuerySchema,
 } from '../../schemas/podcast.js'
 
 // Errors: the refusals every change shares are ServiceErrors the global handler in app.ts answers:
@@ -94,25 +100,37 @@ router.get('/:id', failsWith('Failed to fetch podcast'), async (req, res) => {
 })
 
 /** Start (with a mode), approve a review stop, switch to automated, or resume after a failure; runs in the background. */
-router.post('/:id/resume', failsWith('Failed to start the podcast run', podcastNotFound), expensiveOpLimiter, validateBody(resumePodcastSchema), async (req, res) => {
-  if (!(await findOr404(req.params.id!, res))) return
-  await startInBackground(req.params.id!, { mode: req.body.mode }, res, 'podcast run')
-})
+router.post(
+  '/:id/resume',
+  failsWith('Failed to start the podcast run', podcastNotFound),
+  expensiveOpLimiter,
+  validateBody(resumePodcastSchema),
+  async (req, res) => {
+    if (!(await findOr404(req.params.id!, res))) return
+    await startInBackground(req.params.id!, { mode: req.body.mode }, res, 'podcast run')
+  },
+)
 
 /**
  * Go back to an earlier stage (Start over, Regenerate script, Change stories, Edit script after
  * voicing, Regenerate audio). With `advance` the episode continues from there in the background.
  */
-router.post('/:id/rewind', failsWith('Failed to rewind the podcast', podcastNotFound), expensiveOpLimiter, validateBody(rewindPodcastSchema), async (req, res) => {
-  const { to, advance } = req.body as { to: 'created' | 'selected' | 'scripted'; advance: boolean }
-  if (!(await findOr404(req.params.id!, res))) return
-  if (advance) {
-    await startInBackground(req.params.id!, { rewindTo: to }, res, 'podcast rewind')
-    return
-  }
-  await rewindEpisode(req.params.id!, to, { dryRun: config.podcast.dryRun, mode: 'interactive' })
-  res.json(await podcastService.getPodcastById(req.params.id!))
-})
+router.post(
+  '/:id/rewind',
+  failsWith('Failed to rewind the podcast', podcastNotFound),
+  expensiveOpLimiter,
+  validateBody(rewindPodcastSchema),
+  async (req, res) => {
+    const { to, advance } = req.body as { to: 'created' | 'selected' | 'scripted'; advance: boolean }
+    if (!(await findOr404(req.params.id!, res))) return
+    if (advance) {
+      await startInBackground(req.params.id!, { rewindTo: to }, res, 'podcast rewind')
+      return
+    }
+    await rewindEpisode(req.params.id!, to, { dryRun: config.podcast.dryRun, mode: 'interactive' })
+    res.json(await podcastService.getPodcastById(req.params.id!))
+  },
+)
 
 /** The week's story pool for the picker, marking the episode's stories. */
 router.get('/:id/story-pool', failsWith('Failed to load the story pool', podcastNotFound), async (req, res) => {
@@ -121,10 +139,16 @@ router.get('/:id/story-pool', failsWith('Failed to load the story pool', podcast
 })
 
 /** The selection model's advice for a standalone episode's stories (writes nothing): 409 unless choosable, 422 when too few match. */
-router.post('/:id/suggest-stories', failsWith('Failed to suggest stories', podcastNotFound), expensiveOpLimiter, validateBody(podcastStoryFiltersSchema), async (req, res) => {
-  if (!(await findOr404(req.params.id!, res))) return
-  res.json({ stories: await suggestStandaloneStories(req.params.id!, req.body) })
-})
+router.post(
+  '/:id/suggest-stories',
+  failsWith('Failed to suggest stories', podcastNotFound),
+  expensiveOpLimiter,
+  validateBody(podcastStoryFiltersSchema),
+  async (req, res) => {
+    if (!(await findOr404(req.params.id!, res))) return
+    res.json({ stories: await suggestStandaloneStories(req.params.id!, req.body) })
+  },
+)
 
 /** Save the episode's stories: from the week's pool for a weekly episode, from any published story for a standalone one. */
 router.put('/:id/stories', failsWith('Failed to save the stories', podcastNotFound), validateBody(podcastStoriesSchema), async (req, res) => {

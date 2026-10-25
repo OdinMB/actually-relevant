@@ -18,7 +18,7 @@ export function publishOption(podcast: Pick<Podcast, 'status' | 'publishedAt' | 
   return podcast.publishedAt ? 'republish' : 'publish'
 }
 
-const CONFIRM: Record<Exclude<PublishOption, 'blocked'>,{ button: string; title: string; description: string; danger?: boolean }> = {
+const CONFIRM: Record<Exclude<PublishOption, 'blocked'>, { button: string; title: string; description: string; danger?: boolean }> = {
   publish: {
     button: 'Publish',
     title: 'Publish this episode?',
@@ -57,11 +57,15 @@ export function PodcastPublishControls({ podcast }: { podcast: Podcast }) {
   }
 
   const copy = CONFIRM[option]
-  const handleConfirm = () => publish.mutate({ id: podcast.id, publish: option !== 'unpublish' }, {
-    onSuccess: () => toast('success', option === 'unpublish' ? 'Episode unpublished' : 'Episode published'),
-    onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
-    onSettled: () => setOpen(false),
-  })
+  const handleConfirm = () =>
+    publish.mutate(
+      { id: podcast.id, publish: option !== 'unpublish' },
+      {
+        onSuccess: () => toast('success', option === 'unpublish' ? 'Episode unpublished' : 'Episode published'),
+        onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
+        onSettled: () => setOpen(false),
+      },
+    )
 
   return (
     <>

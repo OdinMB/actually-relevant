@@ -11,21 +11,17 @@ const PAGE_DESCRIPTION = 'A page-specific description.'
 function seedTemplateHead() {
   const html = readFileSync(resolve(__dirname, '../../index.html'), 'utf8')
   const head = new DOMParser().parseFromString(html, 'text/html').head
-  head.querySelectorAll('script, link').forEach((el) => el.remove())
+  head.querySelectorAll('script, link').forEach(el => el.remove())
   document.head.innerHTML = head.innerHTML
 }
 
 function contents(selector: string): (string | null)[] {
-  return Array.from(document.head.querySelectorAll(selector)).map((el) =>
-    el.getAttribute('content'),
-  )
+  return Array.from(document.head.querySelectorAll(selector)).map(el => el.getAttribute('content'))
 }
 
 /** Meta name/property keys present more than once in <head>. */
 function duplicateMetaKeys(): string[] {
-  const keys = Array.from(document.head.querySelectorAll('meta[name], meta[property]')).map(
-    (el) => el.getAttribute('name') ?? el.getAttribute('property') ?? '',
-  )
+  const keys = Array.from(document.head.querySelectorAll('meta[name], meta[property]')).map(el => el.getAttribute('name') ?? el.getAttribute('property') ?? '')
   return [...new Set(keys.filter((key, i) => keys.indexOf(key) !== i))]
 }
 

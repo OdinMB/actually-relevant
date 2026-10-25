@@ -126,11 +126,11 @@ const BUCKETS: { label: string; upTo: number }[] = [
 
 /** Distribution of confirmation gaps over every confirmed row created before the cutoff. */
 export function bucketGaps(rows: SignupRow[], cutoff: Date): { label: string; count: number }[] {
-  const counts = BUCKETS.map((b) => ({ label: b.label, count: 0 }))
+  const counts = BUCKETS.map(b => ({ label: b.label, count: 0 }))
   for (const r of rows) {
     if (!r.confirmedAt || r.createdAt >= cutoff) continue
     const gap = gapSeconds(r)
-    const i = BUCKETS.findIndex((b) => gap < b.upTo)
+    const i = BUCKETS.findIndex(b => gap < b.upTo)
     counts[i]!.count++
   }
   return counts
@@ -141,11 +141,7 @@ export function bucketGaps(rows: SignupRow[], cutoff: Date): { label: string; co
  * than maxSeconds. Addresses with a confirmed signup created on or after the
  * cutoff are returned separately as `reconfirmed` and never become candidates.
  */
-export function selectFastConfirmations(
-  rows: SignupRow[],
-  cutoff: Date,
-  maxSeconds: number,
-): { candidates: Candidate[]; reconfirmed: string[] } {
+export function selectFastConfirmations(rows: SignupRow[], cutoff: Date, maxSeconds: number): { candidates: Candidate[]; reconfirmed: string[] } {
   const reconfirmed = new Set<string>()
   const humanPaced = new Set<string>()
   const fastest = new Map<string, number>()
@@ -184,7 +180,7 @@ export function planUnsubscribes(
   candidates: Candidate[],
   contacts: { id: string; email: string; subscribed: boolean }[],
 ): { toUnsubscribe: (Candidate & { id: string; plunkEmail: string })[]; notSubscribed: string[] } {
-  const byEmail = new Map(contacts.map((c) => [c.email.toLowerCase(), c]))
+  const byEmail = new Map(contacts.map(c => [c.email.toLowerCase(), c]))
   const toUnsubscribe: (Candidate & { id: string; plunkEmail: string })[] = []
   const notSubscribed: string[] = []
   for (const cand of candidates) {
@@ -224,7 +220,7 @@ async function main() {
     where: { confirmedAt: { not: null } },
     select: { email: true, createdAt: true, confirmedAt: true },
   })
-  const preCutoff = rows.filter((r) => r.createdAt < args.cutoff)
+  const preCutoff = rows.filter(r => r.createdAt < args.cutoff)
   console.log(`Confirmed signup rows: ${rows.length} total, ${preCutoff.length} created before the cutoff.\n`)
 
   console.log('Confirmation gap distribution (pre-cutoff confirmed rows):')
@@ -284,7 +280,7 @@ async function main() {
       failed++
       console.error(`  failed to unsubscribe ${c.email} (${c.id}):`, err instanceof Error ? err.message : err)
     }
-    await new Promise((resolve) => setTimeout(resolve, UPDATE_DELAY_MS))
+    await new Promise(resolve => setTimeout(resolve, UPDATE_DELAY_MS))
   }
 
   console.log(
@@ -296,7 +292,7 @@ async function main() {
 
 // Only run when executed directly (so importing the file for tests has no side effects).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
+  main().catch(err => {
     console.error('Fatal error:', err)
     process.exit(1)
   })

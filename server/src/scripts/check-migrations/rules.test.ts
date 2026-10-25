@@ -22,7 +22,7 @@ describe('destructiveStatements', () => {
     '/* TRUNCATE "stories"; */',
     'DROP INDEX "stories_url_idx";',
     'UPDATE "stories" SET "status" = \'rejected\';',
-  ])('does not flag %s', (sql) => {
+  ])('does not flag %s', sql => {
     expect(destructiveStatements(sql)).toEqual([])
   })
 

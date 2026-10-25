@@ -120,9 +120,7 @@ export function SocialDraftPanel({
             {/* Story context */}
             <div className="rounded-md bg-neutral-50 border border-neutral-200 p-3 space-y-1">
               <p className="text-sm font-medium text-neutral-900">
-                {draft.story.titleLabel && (
-                  <span className="text-brand-600">{draft.story.titleLabel} — </span>
-                )}
+                {draft.story.titleLabel && <span className="text-brand-600">{draft.story.titleLabel} — </span>}
                 {draft.story.title || 'Untitled'}
               </p>
               <p className="text-xs text-neutral-500">
@@ -140,19 +138,13 @@ export function SocialDraftPanel({
               <textarea
                 id={channel.textareaId}
                 value={currentText}
-                onChange={(e) => handleTextChange(e.target.value)}
+                onChange={e => handleTextChange(e.target.value)}
                 rows={channel.textareaRows}
                 className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 resize-none"
               />
               <div className="flex justify-between mt-1">
-                <span className="text-xs text-neutral-400">
-                  {channel.hint}
-                </span>
-                <span
-                  className={`text-xs font-medium ${
-                    isOverLimit ? 'text-red-600' : isNearLimit ? 'text-amber-600' : 'text-neutral-500'
-                  }`}
-                >
+                <span className="text-xs text-neutral-400">{channel.hint}</span>
+                <span className={`text-xs font-medium ${isOverLimit ? 'text-red-600' : isNearLimit ? 'text-amber-600' : 'text-neutral-500'}`}>
                   {count}/{channel.limit}
                 </span>
               </div>
@@ -162,11 +154,7 @@ export function SocialDraftPanel({
           </div>
 
           <div className={PANEL_FOOTER}>
-            <Button
-              onClick={handlePublish}
-              disabled={isOverLimit || publishing || saving || !currentText.trim()}
-              loading={publishing || saving}
-            >
+            <Button onClick={handlePublish} disabled={isOverLimit || publishing || saving || !currentText.trim()} loading={publishing || saving}>
               {publishing ? 'Publishing...' : saving ? 'Saving...' : `Post to ${channel.name}`}
             </Button>
             <Button variant="secondary" onClick={handleCancel} disabled={publishing || saving}>

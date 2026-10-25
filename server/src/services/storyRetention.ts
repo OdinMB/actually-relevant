@@ -14,8 +14,7 @@ import { config } from '../config.js'
 /** Statuses whose old stories are deleted. Every other unpublished status only loses its embedding. */
 export const DELETABLE_STATUSES = ['fetched', 'pre_analyzed', 'rejected', 'trashed'] as const
 
-const cutoff = (maxAgeMonths: number) =>
-  Prisma.sql`((now() AT TIME ZONE 'UTC') - make_interval(months => ${maxAgeMonths}::int))`
+const cutoff = (maxAgeMonths: number) => Prisma.sql`((now() AT TIME ZONE 'UTC') - make_interval(months => ${maxAgeMonths}::int))`
 
 /**
  * Delete up to `limit` stories crawled before the cutoff and add their counts to
@@ -203,7 +202,9 @@ function groupRows(rows: CombinedRow[], key: (r: CombinedRow) => [string, string
 }
 
 const ratingKey = (rating: number | null) => (rating === null ? 'none' : String(rating))
-const bump = (target: Record<string, number>, key: string, n: number) => { target[key] = (target[key] ?? 0) + n }
+const bump = (target: Record<string, number>, key: string, n: number) => {
+  target[key] = (target[key] ?? 0) + n
+}
 
 /** Lifetime totals: the live stories plus the archived counts, overall and by month, feed and issue. */
 export async function getLifetimeStoryStats(): Promise<LifetimeStoryStats> {

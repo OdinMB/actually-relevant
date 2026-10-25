@@ -16,9 +16,7 @@ export type SocialChannelName = 'bluesky' | 'mastodon'
 async function storiesWithPost(channel: SocialChannelName, storyIds: string[]): Promise<Set<string>> {
   const where = { storyId: { in: storyIds } }
   const select = { storyId: true }
-  const rows = channel === 'bluesky'
-    ? await prisma.blueskyPost.findMany({ where, select })
-    : await prisma.mastodonPost.findMany({ where, select })
+  const rows = channel === 'bluesky' ? await prisma.blueskyPost.findMany({ where, select }) : await prisma.mastodonPost.findMany({ where, select })
   return new Set(rows.map((p: { storyId: string }) => p.storyId))
 }
 
@@ -30,10 +28,7 @@ async function storiesWithPost(channel: SocialChannelName, storyIds: string[]): 
  *
  * @returns Array of candidate story IDs
  */
-export async function findAutoPostCandidates(
-  lookbackHours: number,
-  channels: SocialChannelName[],
-): Promise<string[]> {
+export async function findAutoPostCandidates(lookbackHours: number, channels: SocialChannelName[]): Promise<string[]> {
   if (channels.length === 0) return []
 
   const since = new Date()
@@ -52,13 +47,13 @@ export async function findAutoPostCandidates(
 
   if (publishedStories.length === 0) return []
 
-  const storyIds = publishedStories.map((s) => s.id)
+  const storyIds = publishedStories.map(s => s.id)
 
   // Only the enabled channels' tables: a disabled channel never posts, so its
   // missing rows must not keep an already-posted story a candidate.
-  const postedSets = await Promise.all(channels.map((c) => storiesWithPost(c, storyIds)))
+  const postedSets = await Promise.all(channels.map(c => storiesWithPost(c, storyIds)))
 
-  return storyIds.filter((id) => postedSets.some((posted) => !posted.has(id)))
+  return storyIds.filter(id => postedSets.some(posted => !posted.has(id)))
 }
 
 /**
@@ -80,7 +75,7 @@ export async function pickBestStoryForSocial(storyIds: string[]): Promise<{ stor
     return { storyId: stories[0]!.id, reasoning: 'Only one candidate story.' }
   }
 
-  const storiesForPrompt: StoryForBlueskyPick[] = stories.map((s) => ({
+  const storiesForPrompt: StoryForBlueskyPick[] = stories.map(s => ({
     id: s.id,
     title: s.title || s.sourceTitle,
     titleLabel: s.titleLabel || '',
@@ -103,7 +98,7 @@ export async function pickBestStoryForSocial(storyIds: string[]): Promise<{ stor
   const result = await structuredLlm.invoke([new HumanMessage(prompt)])
 
   // Validate the returned storyId exists in candidates
-  const valid = stories.find((s) => s.id === result.storyId)
+  const valid = stories.find(s => s.id === result.storyId)
   if (!valid) {
     log.warn({ returnedId: result.storyId }, 'LLM returned invalid storyId, falling back to first candidate')
     return { storyId: stories[0]!.id, reasoning: 'LLM returned invalid ID; selected first candidate.' }

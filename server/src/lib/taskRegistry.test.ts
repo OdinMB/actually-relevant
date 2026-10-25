@@ -86,7 +86,11 @@ describe('TaskRegistry', () => {
     })
 
     it('caps error messages at 20', () => {
-      const taskId = taskRegistry.create('assess', 30, Array.from({ length: 30 }, (_, i) => `s${i}`))
+      const taskId = taskRegistry.create(
+        'assess',
+        30,
+        Array.from({ length: 30 }, (_, i) => `s${i}`),
+      )
 
       for (let i = 0; i < 25; i++) {
         taskRegistry.increment(taskId, 'failed', `error ${i}`)

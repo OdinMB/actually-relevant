@@ -93,5 +93,5 @@ export function shiftHex(hex: string, amount: number): string {
   const target = amount > 0 ? 255 : 0
   const t = Math.abs(amount)
   const mix = (c: number) => Math.round(c + (target - c) * t)
-  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`
+  return `#${[mix(r), mix(g), mix(b)].map(c => c.toString(16).padStart(2, '0')).join('')}`
 }

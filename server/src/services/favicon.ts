@@ -162,7 +162,7 @@ export async function fetchFavicon(feedId: string, feedUrl: string, homeUrl?: st
     throw new Error(`Invalid feed ID format: ${feedId}`)
   }
 
-  if (!force && await faviconExists(feedId)) {
+  if (!force && (await faviconExists(feedId))) {
     log.debug({ feedId }, 'favicon already exists, skipping')
     return { success: true, message: 'Already exists' }
   }
@@ -182,10 +182,7 @@ export async function fetchFavicon(feedId: string, feedUrl: string, homeUrl?: st
   let buffer: Buffer | null = null
   for (const domain of domains) {
     const origin = `${primaryUrl.protocol}//${domain}`
-    buffer =
-      await tryGoogleApi(domain) ??
-      await tryHtmlParsing(origin) ??
-      await tryDirectFavicon(origin)
+    buffer = (await tryGoogleApi(domain)) ?? (await tryHtmlParsing(origin)) ?? (await tryDirectFavicon(origin))
     if (buffer) break
   }
 
@@ -210,11 +207,11 @@ export async function fetchAllFavicons(): Promise<{ succeeded: number; failed: n
   for (let i = 0; i < feeds.length; i += CONCURRENCY) {
     const batch = feeds.slice(i, i + CONCURRENCY)
     const results = await Promise.allSettled(
-      batch.map(async (feed) => {
+      batch.map(async feed => {
         if (await faviconExists(feed.id)) return 'skipped' as const
         const result = await fetchFavicon(feed.id, feed.rssUrl, feed.url)
-        return result.success ? 'fetched' as const : 'not_found' as const
-      })
+        return result.success ? ('fetched' as const) : ('not_found' as const)
+      }),
     )
     for (const [idx, result] of results.entries()) {
       const feed = batch[idx]!
