@@ -142,12 +142,3 @@ export function standaloneCopyRefusal(kind: PodcastKind, confirmed: boolean = PO
   if (kind !== 'standalone' || confirmed) return null
   return "a standalone episode cannot be voiced live or listed yet: its opener and AI line await the owner's confirmation (PODCAST_STANDALONE_COPY_CONFIRMED in server/src/lib/aiLabelCopy.ts)"
 }
-
-/**
- * An episode that was published keeps its audio and GUID for good, and one a process is working
- * on must not change underneath it.
- */
-export function assertChangeable(episode: Pick<Podcast, 'stage' | 'status' | 'publishedAt' | 'leaseUntil'>, action: string, now: Date = new Date()): void {
-  if (wasPublished(episode)) throw new PodcastRefusedError(`a published episode cannot be ${action}`)
-  if (episode.leaseUntil && episode.leaseUntil > now) throw new PodcastRefusedError(`the episode is in progress and cannot be ${action}`)
-}

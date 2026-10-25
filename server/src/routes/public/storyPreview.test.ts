@@ -13,7 +13,7 @@ vi.mock('../../middleware/rateLimit.js', () => ({
 
 const { storyImageRouter, storyPageRouter } = await import('./storyPreview.js')
 const { default: publicRouter } = await import('./index.js')
-const { resetStoryPreviewCaches } = await import('../../services/storyPreview.js')
+const { _resetStoryPreviewCaches } = await import('../../services/storyPreview.js')
 const { config } = await import('../../config.js')
 const { IPTC_TRAINED_ALGORITHMIC_MEDIA } = await import('../../lib/aiProvenance.js')
 
@@ -58,7 +58,7 @@ function shellResponse(html = SHELL, status = 200, headers: Record<string, strin
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resetStoryPreviewCaches()
+  _resetStoryPreviewCaches()
   vi.stubGlobal('fetch', fetchMock)
   fetchMock.mockResolvedValue(shellResponse())
   mockPrisma.story.findFirst.mockResolvedValue(STORY)

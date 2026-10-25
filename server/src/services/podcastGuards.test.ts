@@ -62,7 +62,7 @@ vi.mock('../lib/elevenlabs.js', () => mockElevenLabs)
 
 const guards = await import('./podcastGuards.js')
 const { config } = await import('../config.js')
-const { PodcastBlockedError, PodcastStoppedError, PodcastRefusedError } = guards
+const { PodcastBlockedError, PodcastStoppedError } = guards
 
 const CAP = config.podcast.monthlyTtsCharCap
 
@@ -189,22 +189,6 @@ describe('assertBalanceCovers', () => {
     await expect(guards.assertBalanceCovers(5500)).rejects.toBeInstanceOf(PodcastBlockedError)
     mockElevenLabs.getRemainingCharacters.mockRejectedValueOnce(new Error('socket hang up'))
     await expect(guards.assertBalanceCovers(5500)).rejects.not.toBeInstanceOf(PodcastBlockedError)
-  })
-})
-
-describe('assertChangeable', () => {
-  const now = new Date('2026-10-10T08:00:00Z')
-
-  it('refuses a published episode and one in progress', () => {
-    expect(() => guards.assertChangeable({ stage: 'ready', status: 'published', leaseUntil: null }, 'deleted', now)).toThrow(PodcastRefusedError)
-    expect(() => guards.assertChangeable({ stage: 'voiced', status: 'draft', leaseUntil: new Date('2026-10-10T08:10:00Z') }, 'deleted', now)).toThrow(
-      /in progress/,
-    )
-  })
-
-  it('allows a draft with an expired lease, and a published legacy row', () => {
-    expect(() => guards.assertChangeable({ stage: 'ready', status: 'draft', leaseUntil: new Date('2026-10-10T07:00:00Z') }, 'deleted', now)).not.toThrow()
-    expect(() => guards.assertChangeable({ stage: 'legacy', status: 'published', leaseUntil: null }, 'deleted', now)).not.toThrow()
   })
 })
 

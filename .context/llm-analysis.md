@@ -50,7 +50,7 @@ Prompt templates live in `server/src/prompts/`:
 
 | File | Contents |
 |------|----------|
-| `shared.ts` | `Guidelines` interface, `buildGuidelinesXml()`, `escapeXml()` (re-exported from `lib/xml.ts`), `containsChineseCharacters()` |
+| `shared.ts` | `Guidelines` interface, `buildGuidelinesXml()`, `escapeXml()` (re-exported from `lib/xml.ts`) |
 | `preassess.ts` | `buildPreassessPrompt()` — batch screening + issue classification |
 | `reclassify.ts` | `buildReclassifyPrompt()` — issue + emotion reclassification (no rating) |
 | `assess.ts` | `buildAssessPrompt()` — full analysis |

@@ -155,8 +155,8 @@ export async function getShell(): Promise<string | null> {
   return inflight
 }
 
-/** Test hook: forget the cached shell and pages. */
-export function resetStoryPreviewCaches(): void {
+/** Tests only: forget the cached shell and pages. */
+export function _resetStoryPreviewCaches(): void {
   shell = null
   inflight = null
   pageCache.clear()

@@ -59,14 +59,13 @@ export async function fetchStoryForEmbedding(storyId: string): Promise<(StoryEmb
   return { ...mapRow(row), status: row.status }
 }
 
-/** Fetch multiple stories' embedding-relevant fields. Optionally filter by status. */
-export async function fetchStoriesForEmbedding(storyIds: string[], statusFilter?: 'published' | 'selected' | 'analyzed'): Promise<StoryEmbeddingRow[]> {
+/** Fetch multiple stories' embedding-relevant fields. */
+export async function fetchStoriesForEmbedding(storyIds: string[]): Promise<StoryEmbeddingRow[]> {
   if (storyIds.length === 0) return []
-  const statusClause = statusFilter ? Prisma.sql`AND status = ${statusFilter}::"StoryStatus"` : Prisma.empty
   const rows = await prisma.$queryRaw<RawStoryRow[]>`
     SELECT id, title, title_label, summary, embedding_content_hash
     FROM stories
-    WHERE id IN (${Prisma.join(storyIds)}) ${statusClause}
+    WHERE id IN (${Prisma.join(storyIds)})
   `
   return rows.map(mapRow)
 }

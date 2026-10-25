@@ -109,10 +109,10 @@ export interface EmbeddingResult {
  * Returns per-story results (success/failure) so callers can decide
  * which stories to proceed with.
  */
-export async function batchGenerateEmbeddings(storyIds: string[], statusFilter?: 'published' | 'selected' | 'analyzed'): Promise<EmbeddingResult[]> {
+export async function batchGenerateEmbeddings(storyIds: string[]): Promise<EmbeddingResult[]> {
   if (storyIds.length === 0) return []
 
-  const stories = await fetchStoriesForEmbedding(storyIds, statusFilter)
+  const stories = await fetchStoriesForEmbedding(storyIds)
 
   // Identify which stories need embedding updates
   const results: EmbeddingResult[] = []
@@ -132,11 +132,11 @@ export async function batchGenerateEmbeddings(storyIds: string[], statusFilter?:
     toProcess.push({ story, content, hash })
   }
 
-  // Stories in storyIds but not returned by fetchStoriesForEmbedding (wrong status, not found)
+  // Stories in storyIds but not returned by fetchStoriesForEmbedding (deleted meanwhile)
   const foundIds = new Set(stories.map(s => s.id))
   for (const id of storyIds) {
     if (!foundIds.has(id)) {
-      results.push({ id, success: false, error: 'Story not found or wrong status' })
+      results.push({ id, success: false, error: 'Story not found' })
     }
   }
 
