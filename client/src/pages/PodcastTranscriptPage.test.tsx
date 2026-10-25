@@ -78,7 +78,7 @@ describe('PodcastTranscriptPage', () => {
   it('shows the AI subtitle before the transcript', async () => {
     renderPage()
     const firstTurn = await screen.findByText('Welcome to the week.')
-    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle)
+    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle.lead, { exact: false })
     expect(subtitle.compareDocumentPosition(firstTurn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 

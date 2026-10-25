@@ -5,9 +5,11 @@
 import { GENERATE_PODCAST_JOB } from '../services/podcastAudioStages.js'
 import { PUBLISH_PODCAST_JOB } from './publishPodcast.js'
 import { podcastConfigProblem } from './podcastBootCheck.js'
+import { PUBLISH_NEWSLETTER_JOB, newsletterSendProblem } from './publishNewsletter.js'
 
 /** Each check returns why the job cannot run, or null when it can. */
 const ENABLE_CHECKS: Record<string, () => string | null> = {
+  [PUBLISH_NEWSLETTER_JOB]: newsletterSendProblem,
   [GENERATE_PODCAST_JOB]: podcastConfigProblem,
   [PUBLISH_PODCAST_JOB]: podcastConfigProblem,
 }

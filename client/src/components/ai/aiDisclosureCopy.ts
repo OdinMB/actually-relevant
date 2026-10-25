@@ -30,11 +30,14 @@ export const AI_DISCLOSURE_COPY = {
   /** Appended to the AI blurb that the share buttons prefill. */
   shareSuffix: '(AI summary via Actually Relevant)',
   /**
-   * Subtitle under the /podcast page heading, after the "AI" badge (owner-approved 2026-10-07;
-   * replaced the label "Written and voiced by AI." and the separate intro paragraph).
+   * Subtitle under the /podcast and transcript page headings. The "AI" badge stands inline between
+   * lead and tail and is the subtitle's only "AI" (owner's request 2026-10-25; replaced the
+   * 2026-10-07 subtitle, which led with the badge and said "AI" three more times).
    */
-  podcastSubtitle:
-    "A weekly five-minute briefing on the news that matters most to humanity, written and voiced by AI. Two AI hosts talk through a handful of the week's stories, based on our AI analysis.",
+  podcastSubtitle: {
+    lead: 'A weekly five-minute briefing on the news that matters most to humanity, written and voiced by',
+    tail: ". Two hosts talk through a handful of the week's stories.",
+  },
 } as const
 
 /** The attribution line under an AI-selected quote: "— {attribution} · {note}", or the note alone. */

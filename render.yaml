@@ -71,7 +71,7 @@ services:
         value: production
       # Runtime: equal to .node-version (both services)
       - key: NODE_VERSION
-        value: "22.22.0"
+        value: "22.23.4"
       # URLs
       - key: API_URL
         sync: false
@@ -167,7 +167,7 @@ services:
         destination: /index.html
     envVars:
       - key: NODE_VERSION
-        value: "22.22.0"
+        value: "22.23.4"
       - key: VITE_API_URL
         sync: false
       - key: VITE_TURNSTILE_SITE_KEY

@@ -98,7 +98,7 @@ The build generates the Prisma client, applies any pending database migrations, 
 | `FRONTEND_URL` | Yes | Frontend URL for CORS (e.g. `https://actuallyrelevant.news`) |
 | `JWT_SECRET` | Yes | Random string (32+ chars) for signing auth tokens |
 | `NODE_ENV` | Fixed in `render.yaml` | `production` (enables secure cross-origin cookies) |
-| `NODE_VERSION` | Fixed in `render.yaml` | Exact Node version, equal to `.node-version` (`22.22.0`); set on both services |
+| `NODE_VERSION` | Fixed in `render.yaml` | Exact Node version, equal to `.node-version` (`22.23.4`); set on both services |
 | `PORT` | No | Render sets this automatically (defaults to 10000) |
 | `PUBLIC_API_KEY` | No | Static API key for public consumers (mobile apps, etc.) |
 | `LOG_LEVEL` | No | Logging verbosity (default: `info`) |

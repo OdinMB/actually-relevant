@@ -322,8 +322,12 @@ export const config = {
     // deterministically from the brand logo (not AI-generated). A new image gets a new file name,
     // because the CDN caches the old one for up to 30 days.
     artworkUrl: "https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg",
-    // Directory listings, set once the show is listed (owner step after the first publish).
-    listenLinks: [] as { name: string; url: string }[],
+    // Directory listings, in the owner's priority order: Apple, Spotify, YouTube Music, Amazon Music,
+    // Pocket Casts, then the rest. Add each as it is listed. Spotify is being verified (2026-10-22).
+    listenLinks: [
+      { name: "Apple Podcasts", url: "https://podcasts.apple.com/us/podcast/actually-relevant/id1751127139" },
+      { name: "Pocket Casts", url: "https://pca.st/mni05hsb" },
+    ] as { name: string; url: string }[],
     // The automatic publish job only takes an episode that has been ready this long: one finished by
     // Friday evening still goes out on Saturday morning, and the owner has the evening to listen.
     autoPublishMinAgeHours: 8,

@@ -50,6 +50,12 @@ async function main() {
       update: {},
       create: { jobName: 'generate_newsletter', cronExpression: '0 4 * * 6', enabled: false },
     }),
+    // 30 minutes after generate_newsletter: sends this week's issue to all subscribers
+    prisma.jobRun.upsert({
+      where: { jobName: 'publish_newsletter' },
+      update: {},
+      create: { jobName: 'publish_newsletter', cronExpression: '30 4 * * 6', enabled: false },
+    }),
     // Friday slots (UTC on Render); the handler does nothing outside its Friday window
     prisma.jobRun.upsert({
       where: { jobName: 'generate_podcast' },

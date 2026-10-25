@@ -45,15 +45,19 @@ export const PODCAST_OPENER = "Everything you're about to hear was written and v
 
 /**
  * First line of every episode's show notes (and, from publication on, its feed description).
- * Approved by the owner on 2026-10-06 (after the Phase 1 review), replacing the earlier 2026-10-06 wording.
+ * Kept short so podcast apps' episode previews show the episode's own summary after it (owner's
+ * request 2026-10-25; replaced the 2026-10-06 line "AI-generated: Everything in this episode was
+ * written and voiced by AI from this week's news. People built and oversee the system but don't
+ * write or edit individual episodes.").
  */
-export const PODCAST_EPISODE_AI_LINE = "AI-generated: Everything in this episode was written and voiced by AI from this week's news. People built and oversee the system but don't write or edit individual episodes."
+export const PODCAST_EPISODE_AI_LINE = 'Written and voiced by AI.'
 
 /**
  * The same line for an episode a person reviewed and edited ("Edited by a person" ticked).
- * Owner-approved wording (plan open question 5): approved by Odin Mühlenbein in session, 2026-10-06.
+ * Shortened with `PODCAST_EPISODE_AI_LINE` on 2026-10-25 (the 2026-10-06 wording was approved by
+ * Odin Mühlenbein in session, plan open question 5).
  */
-export const PODCAST_EPISODE_AI_LINE_EDITED = "AI-generated: Everything in this episode was written and voiced by AI from this week's news. A person reviewed and edited this episode."
+export const PODCAST_EPISODE_AI_LINE_EDITED = 'Written and voiced by AI, edited by a person.'
 
 /**
  * Whether the owner has confirmed `PODCAST_EPISODE_AI_LINE_EDITED` in his own words. While false, an
@@ -80,9 +84,10 @@ export interface PodcastEpisodeCopy {
 }
 
 /**
- * The episode copy by kind. Weekly: the owner-approved constants above, unchanged. Standalone (an
- * episode built by hand from any published stories, which may come from different weeks): the
- * wording the owner approved on 2026-10-07 (`PODCAST_STANDALONE_COPY_CONFIRMED`).
+ * The episode copy by kind. Weekly: the constants above, unchanged. Standalone (an episode built by
+ * hand from any published stories, which may come from different weeks): the opener and sign-off
+ * the owner approved on 2026-10-07 (`PODCAST_STANDALONE_COPY_CONFIRMED`); the AI lines shortened
+ * with the weekly ones on 2026-10-25.
  */
 export const PODCAST_EPISODE_COPY: Record<PodcastCopyKind, PodcastEpisodeCopy> = {
   weekly: {
@@ -94,8 +99,8 @@ export const PODCAST_EPISODE_COPY: Record<PodcastCopyKind, PodcastEpisodeCopy> =
   standalone: {
     opener: "Everything you're about to hear was written and voiced by AI from selected news stories.",
     signOff: "That's it for this episode. Tell us what you think on actuallyrelevant.news. Thanks for listening.",
-    aiLine: "AI-generated: Everything in this episode was written and voiced by AI from news stories a person selected. People built and oversee the system but don't write or edit individual episodes.",
-    aiLineEdited: 'AI-generated: Everything in this episode was written and voiced by AI from news stories a person selected. A person reviewed and edited this episode.',
+    aiLine: 'Written and voiced by AI. A person picked the stories.',
+    aiLineEdited: 'Written and voiced by AI. A person picked the stories and edited the episode.',
   },
 }
 

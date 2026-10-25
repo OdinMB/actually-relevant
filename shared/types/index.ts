@@ -55,6 +55,7 @@ export type JobName =
   | 'bluesky_update_metrics'
   | 'mastodon_update_metrics'
   | 'generate_newsletter'
+  | 'publish_newsletter'
   | 'generate_podcast'
   | 'publish_podcast'
   | 'poll_plunk_activity'

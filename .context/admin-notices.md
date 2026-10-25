@@ -15,7 +15,7 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 
 | Caller | Source / severity | Dedupe key | Link |
 |---|---|---|---|
-| `scheduler.ts` `runJob` failure (`jobFailureNotice`) | `generate_newsletter` → `newsletter`; `generate_podcast`, `publish_podcast` → `podcast`; else `jobs`; `warning` | `job-failure:<jobName>` | `/admin/newsletters`, `/admin/podcasts`, else `/admin/jobs` |
+| `scheduler.ts` `runJob` failure (`jobFailureNotice`) | `generate_newsletter`, `publish_newsletter` → `newsletter`; `generate_podcast`, `publish_podcast` → `podcast`; else `jobs`; `warning` | `job-failure:<jobName>` | `/admin/newsletters`, `/admin/podcasts`, else `/admin/jobs` |
 | `scheduler.ts` boot retry: cannot start | `jobs` / `critical` | `job-failure:scheduler` | `/admin/jobs` |
 | `scheduler.ts`: started after that alert | `jobs` / `warning` ("scheduler started after N failed attempts: …") | `job-failure:scheduler` | `/admin/jobs` |
 | `podcastWeekly.ts` episode ready | `podcast` / `info` | none | `/admin/podcasts/<id>` |
@@ -25,6 +25,9 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 | `podcastBootCheck.ts` configuration incomplete | `podcast` / `warning` | `podcast-config` | `/admin/jobs` |
 | `subscribeLimits.ts` signup cap | `subscriptions` / `warning` | `signup-cap` | `/admin/subscribers` |
 | `generateNewsletter.ts` no stories this week | `newsletter` / `warning` | `newsletter-no-stories:<weekKey>` | `/admin/jobs` |
+| `publishNewsletter.ts` issue sent | `newsletter` / `info` | none | `/admin/newsletters` |
+| `publishNewsletter.ts` already sent or published | `newsletter` / `info` | `newsletter-already-sent:<weekKey>` | `/admin/newsletters` |
+| `publishNewsletter.ts` no issue, issue not built, or its test email never went out, when the job ran | `newsletter` / `warning` | `newsletter-not-sent:<weekKey>` | `/admin/newsletters` |
 | `cleanupOldStories.ts` monthly result (`.context/story-retention.md`) | `jobs` / `info` | none (one per run) | `/admin/jobs` |
 | `pollPlunkActivity.ts` spam complaint | `plunk` / `critical` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |
 | `pollPlunkActivity.ts` permanent bounce | `plunk` / `warning` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |
