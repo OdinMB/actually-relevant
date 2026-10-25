@@ -14,7 +14,7 @@ const mastodonChannel: SocialChannel<MastodonFeedItem> = {
   itemKey: item => item.id,
   postedAt: item => item.createdAt,
   engagement: item => `${item.favouriteCount}F ${item.boostCount}B ${item.replyCount}R`,
-  averaged: { label: 'Avg Favourites', count: item => item.favouriteCount },
+  averaged: { label: 'Avg Favorites', count: item => item.favouriteCount },
   share: { label: 'Reblog', is: item => item.isReblog },
   webUrl: item => item.url || null,
   linkHoverClass: 'hover:text-purple-600',
