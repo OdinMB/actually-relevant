@@ -67,6 +67,15 @@ The repository is public, and GitHub Actions on standard GitHub-hosted runners (
 - REST: `gh api repos/OdinMB/actually-relevant/actions/runs/<id>/timing` returns `run_duration_ms` and per-OS `billable` milliseconds (zero for a public repository).
 - Account total: **Settings → Billing and licensing → Usage**, filtered to Actions.
 
+**Baseline** (first runs, 2026-10-25, warm npm cache, cold puppeteer cache; `billable` was 0 ms, the repository being public):
+
+| Run | `server` job | `client` job | Wall clock | Billed if private (each job rounded up to the minute) |
+|-----|--------------|--------------|------------|------|
+| Before the strictness checks (#39) | 2:01 | 2:24 | 2:25 | 6 min |
+| With lint, format, coverage and audit (#40) | 1:49 | 2:54 | 2:57 | 5 min |
+
+The heaviest steps are the client's unit tests (about 50 s) and its prerender build (about 45 s), and the server's unit tests (about 40–47 s). At about 6 billed minutes a run and two runs per merged change (its pull request and `main`), a private repository would spend roughly 12 minutes per merged change, plus 6 for every further push to an open pull request.
+
 **What starts a run.** One run (two jobs in parallel) per push to a pull request and per push to `main`. Merging a pull request is a push to `main`, so a merged change runs once on its pull request and once more on `main`; the second run is what Render waits for. Dependabot's own "Dependabot Updates" runs are a separate workflow GitHub manages, not this one.
 
 **Levers, if minutes ever matter** (none is needed while the repository is public):
