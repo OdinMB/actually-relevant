@@ -3,7 +3,8 @@ import { config } from '../config.js'
 import { StoryStatus } from '@prisma/client'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
-import { createNewsletter, assignStories, selectStoriesForNewsletter, generateContent, generateHtmlContent, sendTest } from '../services/newsletter.js'
+import { createNewsletter } from '../services/newsletter.js'
+import { assignStories, selectStories, generateContent, generateHtml, sendTest, deleteNewsletter } from '../services/newsletterLifecycle.js'
 
 const log = createLogger('generate_newsletter')
 
@@ -63,7 +64,7 @@ async function checkWeeklySlot(now: Date, weekKey: string): Promise<'proceed' | 
   }
 
   log.warn({ weekKey, newsletterId: draft.id, ageMs }, 'deleting abandoned unbuilt draft from a killed run')
-  await prisma.newsletter.delete({ where: { id: draft.id } })
+  await deleteNewsletter(draft.id)
   return 'proceed'
 }
 
@@ -71,7 +72,7 @@ export async function runGenerateNewsletter(): Promise<void> {
   const now = new Date()
   const weekKey = getWeekKey(now)
   const days = config.content.storyAssignmentDays
-  // Must match the query in newsletter.assignStories() to avoid false positives
+  // Must match the query in newsletter.recentStoryIds() to avoid false positives
   const count = await prisma.story.count({
     where: {
       status: StoryStatus.published,
@@ -106,17 +107,17 @@ export async function runGenerateNewsletter(): Promise<void> {
     await assignStories(newsletter.id)
     log.info({ newsletterId: newsletter.id }, 'stories assigned')
 
-    await selectStoriesForNewsletter(newsletter.id)
+    await selectStories(newsletter.id)
     log.info({ newsletterId: newsletter.id }, 'stories selected')
 
     await generateContent(newsletter.id)
     log.info({ newsletterId: newsletter.id }, 'content generated')
 
-    await generateHtmlContent(newsletter.id)
+    await generateHtml(newsletter.id)
     log.info({ newsletterId: newsletter.id }, 'HTML generated')
   } catch (err) {
     log.error({ newsletterId: newsletter.id, err }, 'pipeline failed, cleaning up')
-    await prisma.newsletter.delete({ where: { id: newsletter.id } }).catch(() => {})
+    await deleteNewsletter(newsletter.id).catch(() => {})
     throw err
   }
 

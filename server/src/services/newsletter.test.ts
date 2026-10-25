@@ -1,95 +1,14 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { JSDOM } from 'jsdom'
 
-// Mock prisma before importing the module
-const mockPrisma = vi.hoisted(() => ({
-  newsletter: {
-    findUnique: vi.fn(),
-    findUniqueOrThrow: vi.fn(),
-    findFirst: vi.fn(),
-    update: vi.fn(),
-  },
-  newsletterSend: {
-    create: vi.fn(),
-  },
-  story: {
-    findMany: vi.fn(),
-  },
-  $disconnect: vi.fn(),
-}))
-
-const mockPlunk = vi.hoisted(() => ({
-  createCampaign: vi.fn(),
-  sendCampaign: vi.fn(),
-}))
-
-vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
-vi.mock('./plunk.js', () => mockPlunk)
-vi.mock('./llm.js', () => ({
-  getLLMByTier: vi.fn(() => ({
-    withStructuredOutput: vi.fn(() => ({
-      invoke: vi.fn().mockResolvedValue({ intro: 'A warm editorial intro sentence.' }),
-    })),
-  })),
-  rateLimitDelay: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('../lib/retry.js', () => ({
-  withRetry: vi.fn((fn: () => Promise<any>) => fn()),
-}))
-
-const { generateHtmlContent, sendTest, TestSegmentNotConfiguredError } = await import('./newsletter.js')
+// renderHtml is pure; the write and the slug it links to are the lifecycle's (newsletterLifecycle.db.test.ts)
+const { renderHtml } = await import('./newsletter.js')
 const { config } = await import('../config.js')
 const NEWSLETTER_TOP_LABEL_TEXT = (await import('../lib/aiLabelCopy.js')).NEWSLETTER_TOP_LABEL.text
 
-describe('sendTest', () => {
-  const originalSegment = config.plunk.testSegmentId
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockPrisma.newsletter.findUniqueOrThrow.mockResolvedValue({ id: 'nl-1', title: 'Week 7, 2026', html: '<p>hi</p>' })
-    mockPlunk.createCampaign.mockResolvedValue({ id: 'camp-1' })
-    mockPlunk.sendCampaign.mockResolvedValue(undefined)
-    mockPrisma.newsletterSend.create.mockResolvedValue({ id: 'send-1' })
-  })
-
-  afterEach(() => {
-    config.plunk.testSegmentId = originalSegment
-  })
-
-  it('refuses without a test segment and never calls Plunk', async () => {
-    config.plunk.testSegmentId = ''
-
-    await expect(sendTest('nl-1')).rejects.toBeInstanceOf(TestSegmentNotConfiguredError)
-
-    expect(mockPlunk.createCampaign).not.toHaveBeenCalled()
-    expect(mockPlunk.sendCampaign).not.toHaveBeenCalled()
-  })
-
-  it('targets only the configured test segment', async () => {
-    config.plunk.testSegmentId = 'seg-test'
-
-    await sendTest('nl-1')
-
-    expect(mockPlunk.createCampaign).toHaveBeenCalledWith(expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-test' }))
-  })
-})
-
-describe('generateHtmlContent', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  const baseNewsletter = {
-    id: 'nl-1',
-    title: 'Week 1 — Jan 2025',
-    content: '',
-    html: '',
-    storyIds: [],
-    selectedStoryIds: [],
-    status: 'draft',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }
+describe('renderHtml', () => {
+  const baseNewsletter = { title: 'Week 1 — Jan 2025' }
+  const render = (content: string) => renderHtml({ ...baseNewsletter, content }, 'https://actuallyrelevant.news/newsletter/week-1')
 
   /** Helper to build markdown content for a single story */
   function storyBlock(opts: { issue?: string; issueSlug?: string; title: string; publisher: string; url: string; body: string; relevanceUrl?: string }) {
@@ -121,8 +40,7 @@ describe('generateHtmlContent', () => {
       }),
     ].join('\n')
 
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
-    const html = await generateHtmlContent('nl-1')
+    const html = render(content)
 
     const introIndex = html.indexOf('Something hopeful happened')
     const storyIndex = html.indexOf('AI makes progress')
@@ -135,11 +53,8 @@ describe('generateHtmlContent', () => {
     const original = config.siteUrl
     config.siteUrl = 'https://staging.example'
     try {
-      mockPrisma.newsletter.findUnique.mockResolvedValue({
-        ...baseNewsletter,
-        content: storyBlock({ issue: 'Technology', title: 'T', publisher: 'Nature', url: 'https://example.com/t', body: 'B.' }),
-      })
-      const html = await generateHtmlContent('nl-1')
+      const content = storyBlock({ issue: 'Technology', title: 'T', publisher: 'Nature', url: 'https://example.com/t', body: 'B.' })
+      const html = renderHtml({ ...baseNewsletter, content }, 'https://staging.example/newsletter/week-1')
 
       expect(html).toContain('href="https://staging.example"')
       expect(html).toContain('src="https://staging.example/images/logo-text-horizontal.png"')
@@ -159,8 +74,7 @@ describe('generateHtmlContent', () => {
       storyBlock({ title: 'First story', publisher: 'Nature', url: 'https://example.com/first', body: 'Summary.' }),
     ].join('\n')
 
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
-    const html = await generateHtmlContent('nl-1')
+    const html = render(content)
     const doc = new JSDOM(html).window.document
 
     const title = [...doc.querySelectorAll('p')].find(p => p.textContent === baseNewsletter.title)
@@ -181,8 +95,7 @@ describe('generateHtmlContent', () => {
       '> \u2014 Dr. Jane Smith, MIT',
     ].join('\n')
 
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
-    const html = await generateHtmlContent('nl-1')
+    const html = render(content)
 
     expect(html).toContain('This is a significant finding for the field.')
     expect(html).toContain('font-style: italic')
@@ -202,8 +115,7 @@ describe('generateHtmlContent', () => {
       '\n\n' +
       ['## Story two', 'Wired · [original article](https://example.com/two)', '', 'Second summary.'].join('\n')
 
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
-    const html = await generateHtmlContent('nl-1')
+    const html = render(content)
 
     expect(html).toContain('Story one')
     expect(html).toContain('Story two')
@@ -223,8 +135,7 @@ describe('generateHtmlContent', () => {
       body: 'Body text.',
     })
 
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
-    const html = await generateHtmlContent('nl-1')
+    const html = render(content)
 
     expect(html).toContain('<a href="https://example.com/linked" style="color: #171717; text-decoration: none;">Linked story title</a>')
   })
@@ -237,8 +148,7 @@ describe('generateHtmlContent', () => {
       'Body.',
     ].join('\n')
 
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
-    const html = await generateHtmlContent('nl-1')
+    const html = render(content)
 
     expect(html).toContain('>Marked headline</a>')
     expect(html).not.toContain('{story:')
@@ -249,36 +159,17 @@ describe('generateHtmlContent', () => {
       '\n',
     )
 
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
-    const html = await generateHtmlContent('nl-1')
+    const html = render(content)
 
     expect(html).toContain('&lt;tags&gt;')
     expect(html).toContain('&amp;')
     expect(html).toContain('&quot;quotes&quot;')
   })
 
-  it('links "View in browser" to the issue\'s web edition, assigning its slug once', async () => {
-    mockPrisma.newsletter.findFirst.mockResolvedValue(null)
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, title: 'Week 42, 2026', slug: null, content: 'Intro only.' })
-    const html = await generateHtmlContent('nl-1')
+  it('links "View in browser", above the AI label, to the web edition it is given', () => {
+    const html = renderHtml({ title: 'Week 42, 2026', content: 'Intro only.' }, 'https://actuallyrelevant.news/newsletter/week-42-2026')
     expect(html).toContain('<a href="https://actuallyrelevant.news/newsletter/week-42-2026"')
     expect(html.indexOf('View in browser')).toBeLessThan(html.indexOf(NEWSLETTER_TOP_LABEL_TEXT))
-    expect(mockPrisma.newsletter.update).toHaveBeenCalledWith({ where: { id: 'nl-1' }, data: { slug: 'week-42-2026' } })
-
-    vi.clearAllMocks()
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, slug: 'kept-slug', content: 'Intro only.' })
-    expect(await generateHtmlContent('nl-1')).toContain('https://actuallyrelevant.news/newsletter/kept-slug')
-    expect(mockPrisma.newsletter.findFirst).not.toHaveBeenCalled()
-  })
-
-  it('throws if newsletter not found', async () => {
-    mockPrisma.newsletter.findUnique.mockResolvedValue(null)
-    await expect(generateHtmlContent('bad-id')).rejects.toThrow('Newsletter not found')
-  })
-
-  it('throws if no content', async () => {
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content: '' })
-    await expect(generateHtmlContent('nl-1')).rejects.toThrow('No content to convert')
   })
 
   it('handles multiple issues with separate section headers', async () => {
@@ -304,8 +195,7 @@ describe('generateHtmlContent', () => {
       }),
     ].join('\n')
 
-    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
-    const html = await generateHtmlContent('nl-1')
+    const html = render(content)
 
     // Both section headers rendered
     expect(html).toContain('Climate')

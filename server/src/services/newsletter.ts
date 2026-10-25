@@ -1,9 +1,15 @@
+/**
+ * What a newsletter issue says: the reads, creating an issue, and the builders the lifecycle's
+ * moves write from (longlist, model-picked shortlist, markdown, the HTML email), plus the
+ * carousel, the send list and send stats. Nothing here writes an issue's lifecycle fields or its
+ * sends; that is `newsletterLifecycle.ts`.
+ */
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { HumanMessage } from '@langchain/core/messages'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { type Prisma, ContentStatus, StoryStatus, NewsletterSendStatus } from '@prisma/client'
+import { type Prisma, ContentStatus, StoryStatus } from '@prisma/client'
 import { paginate } from '../lib/paginate.js'
 import { generateCarouselZip, type CarouselStory } from './carousel.js'
 import * as plunk from './plunk.js'
@@ -11,11 +17,10 @@ import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { escapeHtml } from '../lib/xml.js'
-import { ensureNewsletterSlug, newsletterIssueUrl, publicationFields } from './newsletterArchive.js'
 import { parseStoryHeading, storyHeading } from './newsletterContent.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
-import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors.js'
+import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('newsletter')
 
@@ -75,21 +80,10 @@ export async function createNewsletter(data: { title: string; weekKey?: string }
   return prisma.newsletter.create({ data: { title: data.title, weekKey: data.weekKey } })
 }
 
-/** Setting `status: 'published'` also makes the issue public on the web (newsletterArchive.ts). */
-export async function updateNewsletter(id: string, data: Prisma.NewsletterUpdateInput) {
-  const publication = await publicationFields(id, data.status)
-  return prisma.newsletter.update({ where: { id }, data: { ...data, ...publication } })
-}
+// --- Content builders: they compute, and newsletterLifecycle.ts writes what they return ---
 
-export async function deleteNewsletter(id: string) {
-  await prisma.newsletter.delete({ where: { id } })
-}
-
-export async function assignStories(newsletterId: string) {
-  const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new NotFoundError('Newsletter not found')
-
-  // Find recently published stories from the last N days
+/** The longlist: ids of the stories published in the last `storyAssignmentDays` days, newest first. */
+export async function recentStoryIds(): Promise<string[]> {
   const stories = await prisma.story.findMany({
     where: {
       status: StoryStatus.published,
@@ -101,17 +95,12 @@ export async function assignStories(newsletterId: string) {
 
   const storyIds = stories.map(s => s.id)
   if (storyIds.length === 0) throw new Error('No recent stories to assign')
-
-  return prisma.newsletter.update({
-    where: { id: newsletterId },
-    data: { storyIds },
-  })
+  return storyIds
 }
 
-export async function selectStoriesForNewsletter(newsletterId: string) {
-  const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new NotFoundError('Newsletter not found')
-  if (newsletter.storyIds.length === 0) throw new BadRequestError('No stories in longlist')
+/** The shortlist the model picks from the issue's (non-empty) longlist; only longlist ids are kept. */
+export async function pickShortlist(newsletter: { id: string; storyIds: string[] }): Promise<string[]> {
+  const newsletterId = newsletter.id
 
   // Fetch stories with title, summary, and issue info
   const stories = await prisma.story.findMany({
@@ -162,16 +151,12 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
     'newsletter story selection complete',
   )
 
-  return prisma.newsletter.update({
-    where: { id: newsletterId },
-    data: { selectedStoryIds: selectedIds },
-  })
+  return selectedIds
 }
 
-export async function generateContent(newsletterId: string) {
-  const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new NotFoundError('Newsletter not found')
-  if (newsletter.selectedStoryIds.length === 0) throw new BadRequestError('No stories selected')
+/** The issue's markdown, built from its (non-empty) shortlist with a model-written intro. */
+export async function buildContent(newsletter: { id: string; selectedStoryIds: string[] }): Promise<string> {
+  const newsletterId = newsletter.id
 
   const stories = await prisma.story.findMany({
     where: { id: { in: newsletter.selectedStoryIds } },
@@ -288,10 +273,7 @@ export async function generateContent(newsletterId: string) {
     }
   }
 
-  return prisma.newsletter.update({
-    where: { id: newsletterId },
-    data: { content: content.trim() },
-  })
+  return content.trim()
 }
 
 export async function generateCarouselForNewsletter(newsletterId: string): Promise<string> {
@@ -328,20 +310,15 @@ export async function generateCarouselForNewsletter(newsletterId: string): Promi
 
 /**
  * Converts newsletter markdown content into an HTML email template.
- * Parses the markdown structure produced by generateContent():
+ * Parses the markdown structure produced by buildContent():
  * - Optional intro paragraph(s) at the top (before first # heading)
  * - Issue section headers (# IssueName)
  * - Story blocks: h2 heading, publisher + "Read original article" link row,
  *   body text (relevanceSummary or blockquote with quote + attribution)
+ *
+ * `webUrl` is the web edition's address, for "View in browser"; it opens once the issue is published.
  */
-export async function generateHtmlContent(newsletterId: string): Promise<string> {
-  const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new NotFoundError('Newsletter not found')
-  if (!newsletter.content) throw new BadRequestError('No content to convert')
-
-  // The web edition's address, for "View in browser"; it opens once the issue is published
-  const webUrl = newsletterIssueUrl(await ensureNewsletterSlug(newsletter))
-
+export function renderHtml(newsletter: { title: string; content: string }, webUrl: string): string {
   // Split on --- separators to get individual blocks
   const sections = newsletter.content.split(/\n---\n/).filter(s => s.trim())
 
@@ -598,11 +575,6 @@ ${introSection}
 </body>
 </html>`
 
-  await prisma.newsletter.update({
-    where: { id: newsletterId },
-    data: { html },
-  })
-
   return html
 }
 
@@ -615,78 +587,7 @@ export async function getNewsletterSends(newsletterId: string) {
   })
 }
 
-/** A test send was refused because no test segment is configured (never falls back to all subscribers). */
-export class TestSegmentNotConfiguredError extends ConflictError {
-  constructor() {
-    super('Test send refused: PLUNK_TEST_SEGMENT_ID is not set, and a test email is never sent to all subscribers')
-    this.name = 'TestSegmentNotConfiguredError'
-  }
-}
-
-export async function sendTest(newsletterId: string) {
-  const segmentId = config.plunk.testSegmentId
-  if (!segmentId) {
-    const err = new TestSegmentNotConfiguredError()
-    log.error({ newsletterId }, err.message)
-    throw err
-  }
-
-  const newsletter = await prisma.newsletter.findUniqueOrThrow({ where: { id: newsletterId } })
-  if (!newsletter.html) throw new Error('No HTML content — generate HTML first')
-  const html = newsletter.html
-
-  log.info({ newsletterId }, 'creating test campaign in Plunk')
-  const campaign = await plunk.createCampaign({
-    name: `[TEST] ${newsletter.title}`,
-    subject: `[TEST] ${newsletter.title}`,
-    body: html,
-    audienceType: 'SEGMENT',
-    segmentId,
-  })
-
-  await plunk.sendCampaign(campaign.id)
-
-  return prisma.newsletterSend.create({
-    data: {
-      newsletterId,
-      plunkCampaignId: campaign.id,
-      isTest: true,
-      status: 'sent' as NewsletterSendStatus,
-      htmlContent: html,
-      sentAt: new Date(),
-    },
-  })
-}
-
-export async function sendLive(newsletterId: string, scheduledFor?: string) {
-  const newsletter = await prisma.newsletter.findUniqueOrThrow({ where: { id: newsletterId } })
-  if (!newsletter.html) throw new Error('No HTML content — generate HTML first')
-  const html = newsletter.html
-
-  log.info({ newsletterId, scheduledFor }, 'creating live campaign in Plunk')
-  const campaign = await plunk.createCampaign({
-    name: newsletter.title,
-    subject: newsletter.title,
-    body: html,
-    audienceType: 'ALL',
-  })
-
-  await plunk.sendCampaign(campaign.id, scheduledFor)
-
-  const status: NewsletterSendStatus = scheduledFor ? 'scheduled' : 'sending'
-
-  return prisma.newsletterSend.create({
-    data: {
-      newsletterId,
-      plunkCampaignId: campaign.id,
-      isTest: false,
-      status,
-      htmlContent: html,
-      sentAt: scheduledFor ? null : new Date(),
-    },
-  })
-}
-
+/** Fetch a send's Plunk campaign stats and store them (`stats` only: not a lifecycle field). */
 export async function refreshSendStats(sendId: string) {
   const send = await prisma.newsletterSend.findUniqueOrThrow({ where: { id: sendId } })
   if (!send.plunkCampaignId) throw new BadRequestError('No Plunk campaign ID')

@@ -21,8 +21,9 @@ export default defineConfig({
       exclude: ['src/**/*.test.ts', 'src/index.ts'],
       // Re-baselined once on 2026-10-25, when the db project joined the measurement (owner decision):
       // unit and db together measured statements 73.86, branches 69.69, functions 68.52, lines 75.22
-      // (unit alone had been 69.78, 65.24, 64.09, 71.28)
-      thresholds: { statements: 73, branches: 69, functions: 68, lines: 75 },
+      // (unit alone had been 69.78, 65.24, 64.09, 71.28). Raised 2026-10-25 with the newsletter
+      // lifecycle's db tests: measured 74.83, 70.83, 69.65, 76.21
+      thresholds: { statements: 74, branches: 70, functions: 69, lines: 76 },
     },
     projects: [
       {

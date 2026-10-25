@@ -2,19 +2,17 @@
  * The newsletter's public web edition (.context/newsletter-podcast.md, "Web edition"): an issue
  * is public once its admin status is `published`, at `/newsletter/<slug>`, listed on
  * `/newsletter` (whose old `/newsletter/archive` URL redirects there) and in the sitemap. Unpublishing takes it off the web again; its slug
- * and first publication date stay, so republishing restores the same URL.
+ * and first publication date stay, so republishing restores the same URL. Publishing and
+ * unpublishing are moves of `newsletterLifecycle.ts`; this module holds slugs and the public reads.
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { createLogger } from '../lib/logger.js'
 import { paginate } from '../lib/paginate.js'
 import { isUniqueViolation } from '../utils/errors.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { AI_GENERATED_NEWSLETTER_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
 import { storyHeadlines, toWebMarkdown } from './newsletterContent.js'
-
-const log = createLogger('newsletter-archive')
 
 /** Path segments under /newsletter/ that belong to pages or redirects, never to an issue. */
 const RESERVED_SLUGS = new Set(['archive'])
@@ -48,35 +46,6 @@ export async function ensureNewsletterSlug(newsletter: { id: string; title: stri
     }
   }
   throw new Error('Could not find a free newsletter slug')
-}
-
-/**
- * When an issue first went out: its earliest live (non-test, not failed) send, by `sentAt`, or
- * `createdAt` for a scheduled send, which records no time of its own. Null if it was never sent.
- */
-async function firstLiveSendDate(newsletterId: string): Promise<Date | null> {
-  const sends = await prisma.newsletterSend.findMany({
-    where: { newsletterId, isTest: false, status: { not: 'failed' } },
-    select: { sentAt: true, createdAt: true },
-  })
-  const dates = sends.map(send => (send.sentAt ?? send.createdAt).getTime())
-  return dates.length > 0 ? new Date(Math.min(...dates)) : null
-}
-
-/**
- * Extra fields for an admin update that publishes an issue: its slug (if it has none yet) and
- * `publishedAt` the first time, which is the date the issue was first emailed if it was, so an
- * older issue published on the web later keeps its own week. Called by updateNewsletter before
- * it writes.
- */
-export async function publicationFields(id: string, status: unknown): Promise<Prisma.NewsletterUpdateInput> {
-  if (status !== 'published') return {}
-  const current = await prisma.newsletter.findUnique({ where: { id }, select: { id: true, title: true, slug: true, publishedAt: true } })
-  if (!current) return {} // the update itself answers 404
-  const slug = await ensureNewsletterSlug(current)
-  log.info({ newsletterId: id, slug }, 'newsletter published on the web')
-  if (current.publishedAt) return {}
-  return { publishedAt: (await firstLiveSendDate(id)) ?? new Date() }
 }
 
 /** Public web address of an issue. */
