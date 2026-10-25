@@ -8,7 +8,7 @@
 import { writeFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { routes, type RouteConfig } from '../src/routes.js'
+import { sitemapRoutes as routes, type RouteConfig } from '../src/routes.js'
 import { generateSitemapXml } from '../src/lib/sitemap.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

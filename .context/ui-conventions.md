@@ -9,7 +9,7 @@ Each page should:
 - [ ] Use Helmet with title, description
 - [ ] Have unique, descriptive title
 - [ ] Have unique meta description (150-160 chars)
-- [ ] Be listed in `client/src/routes.ts` for prerendering
+- [ ] Be listed in `shared/routes.json` for prerendering and the sitemap (`.context/seo.md`)
 - [ ] Render JSON-LD through `<StructuredData>` or, inside Helmet, `toJsonLd()` (`client/src/lib/structured-data.ts`), never plain `JSON.stringify`: story and episode text comes from crawled pages, and an unescaped `</script>` would break out of the element in prerendered HTML
 - [ ] No hardcoded counts (source count, story count, language count) -- use `useSources()` hook or omit. These values change as feeds are added/removed.
 

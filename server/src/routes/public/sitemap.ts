@@ -6,6 +6,7 @@ import { failsWith } from '../../middleware/routeErrors.js'
 import prisma from '../../lib/prisma.js'
 import { listPublishedEpisodeDates } from '../../services/podcastPublish.js'
 import { listPublishedIssueDates } from '../../services/newsletterArchive.js'
+import { loadSitemapRoutes } from '../../lib/staticRoutes.js'
 
 const router = Router()
 const log = createLogger('sitemap')
@@ -16,34 +17,9 @@ function getSiteUrl(): string {
   return config.siteUrl
 }
 
-type ChangeFreq = 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'
-
-// Duplicated from client/src/routes.ts — server shouldn't import from client.
-// When adding a new page, update both files.
-const STATIC_ROUTES: { path: string; priority: number; changefreq: ChangeFreq }[] = [
-  { path: '/', priority: 1.0, changefreq: 'daily' },
-  { path: '/issues', priority: 0.8, changefreq: 'monthly' },
-  { path: '/issues/existential-threats', priority: 0.8, changefreq: 'weekly' },
-  { path: '/issues/planet-climate', priority: 0.8, changefreq: 'weekly' },
-  { path: '/issues/human-development', priority: 0.8, changefreq: 'weekly' },
-  { path: '/issues/science-technology', priority: 0.8, changefreq: 'weekly' },
-  { path: '/methodology', priority: 0.7, changefreq: 'monthly' },
-  { path: '/about', priority: 0.7, changefreq: 'monthly' },
-  { path: '/imprint', priority: 0.5, changefreq: 'yearly' },
-  { path: '/privacy', priority: 0.5, changefreq: 'yearly' },
-  { path: '/search', priority: 0.3, changefreq: 'daily' },
-  { path: '/developers', priority: 0.5, changefreq: 'monthly' },
-  { path: '/compare', priority: 0.7, changefreq: 'monthly' },
-  { path: '/no-ads-no-tracking', priority: 0.7, changefreq: 'monthly' },
-  { path: '/news-fatigue', priority: 0.7, changefreq: 'monthly' },
-  { path: '/free-api', priority: 0.7, changefreq: 'monthly' },
-  { path: '/stewardship', priority: 0.6, changefreq: 'monthly' },
-  { path: '/podcast', priority: 0.7, changefreq: 'weekly' },
-  { path: '/newsletter', priority: 0.7, changefreq: 'weekly' },
-  { path: '/widgets', priority: 0.4, changefreq: 'monthly' },
-  { path: '/subscribed', priority: 0.2, changefreq: 'yearly' },
-  { path: '/thank-you', priority: 0.3, changefreq: 'yearly' },
-]
+// The static pages, from shared/routes.json (the list the client prerenders), read once at
+// startup. Entries marked "sitemap": false (/saved) are left out.
+const STATIC_ROUTES = loadSitemapRoutes()
 
 function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10)

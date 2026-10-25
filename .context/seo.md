@@ -25,7 +25,7 @@ Served dynamically by the backend at `GET /api/sitemap.xml`. In production, a Re
 ### How It Works
 
 1. `GET /api/sitemap.xml` queries all published stories (slug + datePublished) and the published podcast episodes (`listPublishedEpisodeDates()`, the same "published" rule as the feed) from the database
-2. Combines with hardcoded static routes (same list as `client/src/routes.ts`)
+2. Combines with the static routes from `shared/routes.json`, the same list the client prerenders (see "The static route list" below)
 3. Generates XML with `<lastmod>` for stories using `datePublished`, one `/podcast/<id>/transcript` entry per published episode (`lastmod` = first publication, priority 0.5), and one `/newsletter/<slug>` entry per published newsletter issue (`listPublishedIssueDates()`, `lastmod` = first publication, priority 0.5; `.context/newsletter-podcast.md`, "Web edition")
 4. Response is cached in-memory (TTL: `config.sitemap.cacheMaxAge`, default 1 hour)
 5. `Cache-Control: public, max-age=3600` header allows CDN/proxy caching
@@ -61,9 +61,9 @@ The podcast's RSS feed is served the same way, at the canonical `https://actuall
 | Destination | `https://api.actuallyrelevant.news/api/podcast/feed.xml` |
 | Action | **Rewrite** |
 
-Same rules as the sitemap: above the SPA catch-all, and no static `podcast.xml` in `client/public/`. The `/podcast` page is an ordinary prerendered route (in both route lists below). Each episode's transcript page, `/podcast/<id>/transcript`, is dynamic like a story page: not prerendered and not in either static list, but in the server sitemap; its Helmet sets title, description, canonical and `og:*`, and it carries `PodcastEpisode` and breadcrumb JSON-LD (`buildPodcastEpisodeSchema` in `client/src/lib/structured-data.ts`); its not-found state is `noindex`. Details: `.context/podcast.md`, "Publishing, feed and page".
+Same rules as the sitemap: above the SPA catch-all, and no static `podcast.xml` in `client/public/`. The `/podcast` page is an ordinary prerendered route (in `shared/routes.json`, below). Each episode's transcript page, `/podcast/<id>/transcript`, is dynamic like a story page: not prerendered and not in the static list, but in the server sitemap; its Helmet sets title, description, canonical and `og:*`, and it carries `PodcastEpisode` and breadcrumb JSON-LD (`buildPodcastEpisodeSchema` in `client/src/lib/structured-data.ts`); its not-found state is `noindex`. Details: `.context/podcast.md`, "Publishing, feed and page".
 
-The newsletter's web edition follows the same split: `/newsletter`, which lists the published issues, is an ordinary prerendered route (in both route lists; `/newsletter/archive` only redirects there client-side and is in neither), and each issue page, `/newsletter/<slug>`, is dynamic (only in `App.tsx` and the server sitemap), with title, description, canonical, `og:*`, breadcrumb JSON-LD and a `noindex` not-found state (`.context/newsletter-podcast.md`, "Web edition").
+The newsletter's web edition follows the same split: `/newsletter`, which lists the published issues, is an ordinary prerendered route (in `shared/routes.json`; `/newsletter/archive` only redirects there client-side and is not listed), and each issue page, `/newsletter/<slug>`, is dynamic (only in `App.tsx` and the server sitemap), with title, description, canonical, `og:*`, breadcrumb JSON-LD and a `noindex` not-found state (`.context/newsletter-podcast.md`, "Web edition").
 
 ### Configuration
 
@@ -81,10 +81,17 @@ The build-time sitemap generator (`client/scripts/generate-sitemap.ts`) is kept 
 
 ## Adding a New Route
 
-When adding a page, add sitemap metadata in **two places**:
+When adding a page, add its entry (`path`, `priority`, `changefreq`) to **`shared/routes.json`**, and its route to `App.tsx`. That one file feeds both the prerender and the sitemap.
 
-1. `client/src/routes.ts` — for prerendering
-2. `server/src/routes/public/sitemap.ts` `STATIC_ROUTES` array — for the dynamic sitemap
+### The static route list
+
+`shared/routes.json` is the only list of static pages (it replaced two hand-kept copies, which had drifted: the sitemap lacked `/feedback` and gave `/widgets` 0.4 against the client's 0.5; 0.4 was kept).
+
+- **Client:** `client/src/routes.ts` imports it: `routePaths` (every entry) goes to the prerender in `vite.config.ts`; `sitemapRoutes` feeds the legacy `generate-sitemap.ts`.
+- **Server:** the server's tsconfig cannot import files outside `server/src`, so `server/src/lib/staticRoutes.ts` reads the file at startup (`loadSitemapRoutes()`, the path resolves the same from `src/lib/` and `dist/lib/`) and validates it with Zod. A missing or malformed file stops the server at boot, so Render keeps the previous instance serving. This relies on the repository root being on disk beside `server/` at runtime on Render, as it is at build time (the build runs `../scripts/install-dev-deps.mjs`); if a deploy ever fails at boot on `shared/routes.json`, that assumption broke.
+- **Prerendered but not in the sitemap:** an entry with `"sitemap": false` and its reason in `"sitemapNote"`. Only `/saved`, on purpose: a personal page whose saved stories live in the visitor's browser, so there is nothing to index.
+- **Deploys:** with a root directory set, Render auto-deploys a service only for changes inside it, so a commit that changes only `shared/routes.json` redeploys neither service (`BACKLOG.md`, `buildFilter.paths`). Ship such a change with a commit that touches both, or deploy both by hand.
+- Held by `server/src/lib/staticRoutes.test.ts`, `server/src/routes/public/sitemap.test.ts` and `client/src/routes.test.ts`.
 
 ### Priority Guidelines
 
