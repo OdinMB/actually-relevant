@@ -8,8 +8,7 @@
 | Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error; both tsconfigs set `strict` and `noUncheckedIndexedAccess` |
 | Lint | `npm run lint --prefix server` | `… client` | any ESLint error or warning (`--max-warnings 0`) |
 | Format | `npm run format:check --prefix server` | `… client` | a file Prettier would change; fix with `npm run format --prefix <pkg>` |
-| Unit tests and coverage | `npm run test:coverage --prefix server` | `… client` | a failing test, or coverage below a threshold |
-| PostgreSQL tests | `npm run test:db --prefix server` | | a failing db test (`database-migrations.md`, "Integration Tests") |
+| Tests and coverage | `npm run test:coverage --prefix server` (unit and db projects, needs `TEST_DATABASE_URL`) | `… client` | a failing unit or db test (`database-migrations.md`, "Integration Tests"), or coverage below a threshold |
 | Build | `npm run build --prefix server` | `… client` | the production build fails; the client's includes the puppeteer prerender |
 | Dependency audit | `npm run audit:prod --prefix server` | `… client` | a production advisory at high or above that the allowlist does not excuse |
 
@@ -35,7 +34,9 @@ Prettier 3, one config at the repository root (`.prettierrc.json`): no semicolon
 
 ## Coverage floor
 
-`test:coverage` runs the unit tests (the server's `unit` project only) with v8 coverage and global thresholds: server statements 69, branches 65, functions 63, lines 70; client 53, 53, 44, 53, each set just below the value measured on 2026-10-19 after the Prettier reformat (which moves the line count, not the statement count), client functions raised on 2026-10-25 after dead code was removed (recorded beside the thresholds in `server/vitest.config.ts` and `client/vite.config.ts`). It is a ratchet: when coverage rises, raise the threshold in the same change; never lower one to land a change. Reports go to `coverage/` (gitignored).
+`test:coverage` runs the tests with v8 coverage and global thresholds. On the server it runs **both vitest projects, `unit` and `db`, in one run**, so the PostgreSQL tests count: a module whose guarantee lives in SQL is tested against the database and its mock test deleted ("replace, don't layer") without the figure dropping. Thresholds: server statements 73, branches 69, functions 68, lines 75, re-baselined once on 2026-10-25 when the db project joined the measurement (owner decision; unit alone had measured 69.78, 65.24, 64.09, 71.28, and the floor had been 69, 65, 63, 70); client 53, 53, 44, 53, set just below the value measured on 2026-10-19 after the Prettier reformat (which moves the line count, not the statement count), client functions raised on 2026-10-25 after dead code was removed. The measured values sit beside the thresholds in `server/vitest.config.ts` and `client/vite.config.ts`. It is a ratchet: when coverage rises, raise the threshold in the same change; never lower one to land a change. Reports go to `coverage/` (gitignored).
+
+**The server's `test:coverage` needs `TEST_DATABASE_URL`** (`database-migrations.md`, "Integration Tests") and fails at once without it, with the same message as `test:db`, before any test runs. That is deliberate: a unit-only figure would sit below the floor and read as a regression, and CI, which has the database, is what enforces the floor. Without a database, `npm run test --prefix server` still runs the unit tests. In CI the one step replaces the separate unit-coverage and `test:db` steps; `test:db` stays as the quick local command for the db tests alone.
 
 ## Dependency audit
 
@@ -81,7 +82,7 @@ The heaviest steps are the client's unit tests (about 50 s) and its prerender bu
 **Levers, if minutes ever matter** (none is needed while the repository is public):
 
 1. Path filters on `pull_request` only (for example skip a docs-only pull request with `paths-ignore: ['**/*.md', '.plans/**']`), never on `push` to `main`. A required check that is skipped by a path filter never reports, so the ruleset would block the pull request; pair a filter with a stub job of the same name or drop the requirement first.
-2. Run `test:db` (the Postgres service and its tests) only on `main`, or on pull requests that touch `server/`, accepting that a pull request can then merge with a db test red.
+2. Run the db project (the Postgres service and its tests) only on `main`, or on pull requests that touch `server/`, accepting that a pull request can then merge with a db test red. The coverage floor now counts the db tests, so the runs without them would need their own, lower floor or none.
 3. Skip the client's prerender on pull requests (build without it) and keep it on `main`, where Render's build would otherwise be the first to run it.
 4. Draft pull requests: add `if: github.event.pull_request.draft == false` to the jobs and `types: [opened, synchronize, reopened, ready_for_review]` to the trigger.
 5. Run lint and the format check in one short job ahead of the rest, so a formatting slip fails in a minute instead of after the tests.

@@ -3,24 +3,26 @@ import { configDefaults, defineConfig } from 'vitest/config'
 // PostgreSQL integration tests (`*.db.test.ts`, `.context/database-migrations.md` "Integration
 // Tests"): the `db` project runs against TEST_DATABASE_URL, which it hands to Prisma as
 // DATABASE_URL, and fails without it (globalSetup). `npm run test` runs the `unit` project only;
-// `npm run test:db` runs the `db` project.
+// `npm run test:db` runs the `db` project; `npm run test:coverage` runs both.
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
 
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    // `npm run test:coverage` (CI) measures the unit project. A ratchet set just below the coverage
-    // measured when it was introduced: raise a threshold when coverage rises; never lower one to
-    // land a change.
+    // `npm run test:coverage` (CI) measures the unit and db projects together, so a db test that
+    // replaces a mock test keeps the lines it covers counted (.context/ci.md, "Coverage floor").
+    // A ratchet set just below the coverage measured: raise a threshold when coverage rises; never
+    // lower one to land a change.
     coverage: {
       provider: 'v8',
       reporter: ['text-summary', 'html'],
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/index.ts'],
-      // Measured 2026-10-19: statements 69.54, branches 65.12, functions 63.99, lines 71.12 (71.00
-      // once the Prettier reformat re-wrapped the code, which changes the line count but not statements)
-      thresholds: { statements: 69, branches: 65, functions: 63, lines: 70 },
+      // Re-baselined once on 2026-10-25, when the db project joined the measurement (owner decision):
+      // unit and db together measured statements 73.86, branches 69.69, functions 68.52, lines 75.22
+      // (unit alone had been 69.78, 65.24, 64.09, 71.28)
+      thresholds: { statements: 73, branches: 69, functions: 68, lines: 75 },
     },
     projects: [
       {
