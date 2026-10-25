@@ -1,11 +1,10 @@
 import { Router } from 'express'
 import prisma from '../../lib/prisma.js'
 import { TTLCache, cached } from '../../lib/cache.js'
-import { createLogger } from '../../lib/logger.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import type { FeedRegion } from '@prisma/client'
 
 const router = Router()
-const log = createLogger('public:sources')
 
 const SOURCES_TTL = 5 * 60 * 1000 // 5 minutes
 const sourcesCache = new TTLCache<unknown>(SOURCES_TTL)
@@ -66,15 +65,10 @@ async function fetchSources(): Promise<SourcesResponse> {
   return { byRegion, byIssue, totalCount: feeds.length }
 }
 
-router.get('/', async (_req, res) => {
-  try {
-    const sources = await cached(sourcesCache, 'public-sources', fetchSources)
-    res.set('Cache-Control', 'public, max-age=300')
-    res.json(sources)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch sources')
-    res.status(500).json({ error: 'Failed to fetch sources' })
-  }
+router.get('/', failsWith('Failed to fetch sources'), async (_req, res) => {
+  const sources = await cached(sourcesCache, 'public-sources', fetchSources)
+  res.set('Cache-Control', 'public, max-age=300')
+  res.json(sources)
 })
 
 export default router

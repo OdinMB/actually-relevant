@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { config } from '../../config.js'
 import { createLogger } from '../../lib/logger.js'
 import { TTLCache, cached } from '../../lib/cache.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import prisma from '../../lib/prisma.js'
 import { listPublishedEpisodeDates } from '../../services/podcastPublish.js'
 import { listPublishedIssueDates } from '../../services/newsletterArchive.js'
@@ -98,29 +99,24 @@ ${[...staticUrls, ...storyUrls, ...transcriptUrls, ...issueUrls].join('\n')}
 `
 }
 
-router.get('/', async (_req, res) => {
-  try {
-    const xml = await cached(sitemapCache, 'sitemap', async () => {
-      const stories = await prisma.story.findMany({
-        where: { status: 'published', slug: { not: null } },
-        select: { slug: true, datePublished: true },
-        orderBy: { datePublished: 'desc' },
-      })
-
-      const episodes = await listPublishedEpisodeDates()
-      const issues = await listPublishedIssueDates()
-
-      log.info({ storyCount: stories.length, episodeCount: episodes.length, issueCount: issues.length }, 'generated sitemap')
-      return buildSitemapXml(getSiteUrl(), stories as { slug: string; datePublished: Date | null }[], episodes, issues)
+router.get('/', failsWith('Failed to generate sitemap'), async (_req, res) => {
+  const xml = await cached(sitemapCache, 'sitemap', async () => {
+    const stories = await prisma.story.findMany({
+      where: { status: 'published', slug: { not: null } },
+      select: { slug: true, datePublished: true },
+      orderBy: { datePublished: 'desc' },
     })
 
-    res.set('Content-Type', 'application/xml; charset=utf-8')
-    res.set('Cache-Control', `public, max-age=${config.sitemap.cacheMaxAge}`)
-    res.send(xml)
-  } catch (err) {
-    log.error({ err }, 'failed to generate sitemap')
-    res.status(500).json({ error: 'Failed to generate sitemap' })
-  }
+    const episodes = await listPublishedEpisodeDates()
+    const issues = await listPublishedIssueDates()
+
+    log.info({ storyCount: stories.length, episodeCount: episodes.length, issueCount: issues.length }, 'generated sitemap')
+    return buildSitemapXml(getSiteUrl(), stories as { slug: string; datePublished: Date | null }[], episodes, issues)
+  })
+
+  res.set('Content-Type', 'application/xml; charset=utf-8')
+  res.set('Cache-Control', `public, max-age=${config.sitemap.cacheMaxAge}`)
+  res.send(xml)
 })
 
 export default router

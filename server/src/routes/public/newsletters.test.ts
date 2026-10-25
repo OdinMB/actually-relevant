@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import 'express-async-errors'
 import express from 'express'
 import request from 'supertest'
 
@@ -11,8 +12,9 @@ vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 const { default: newslettersRouter } = await import('./newsletters.js')
 const { NEWSLETTER_TOP_LABEL } = await import('../../lib/aiLabelCopy.js')
 const { IPTC_TRAINED_ALGORITHMIC_MEDIA } = await import('../../lib/aiProvenance.js')
+const { errorHandler } = await import('../../middleware/routeErrors.js')
 
-const app = express().use('/api/newsletters', newslettersRouter)
+const app = express().use('/api/newsletters', newslettersRouter).use(errorHandler)
 
 const CONTENT = [
   'A hopeful week.',
@@ -64,6 +66,13 @@ describe('GET /api/newsletters', () => {
 
   it('rejects a page size above the limit', async () => {
     expect((await request(app).get('/api/newsletters?pageSize=500')).status).toBe(400)
+  })
+
+  it('answers 500 with its own text when the archive cannot be read', async () => {
+    mockPrisma.newsletter.findMany.mockRejectedValue(new Error('db down'))
+    const res = await request(app).get('/api/newsletters')
+    expect(res.status).toBe(500)
+    expect(res.body).toEqual({ error: 'Failed to load the newsletter archive' })
   })
 })
 
@@ -130,5 +139,12 @@ describe('GET /api/newsletters/:slug', () => {
     const res = await request(app).get('/api/newsletters/week-43-2026')
     expect(res.status).toBe(404)
     expect(mockPrisma.story.findMany).not.toHaveBeenCalled()
+  })
+
+  it('answers 500 with its own text when the issue cannot be read', async () => {
+    mockPrisma.newsletter.findFirst.mockRejectedValue(new Error('db down'))
+    const res = await request(app).get('/api/newsletters/week-42-2026')
+    expect(res.status).toBe(500)
+    expect(res.body).toEqual({ error: 'Failed to load the issue' })
   })
 })

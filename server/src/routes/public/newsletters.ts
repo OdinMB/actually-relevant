@@ -5,39 +5,28 @@
  */
 import { Router } from 'express'
 import { config } from '../../config.js'
-import { createLogger } from '../../lib/logger.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import { validateQuery } from '../../middleware/validate.js'
 import { publicNewsletterQuerySchema } from '../../schemas/newsletter.js'
 import { getPublishedIssue, listPublishedIssues } from '../../services/newsletterArchive.js'
 
 const router = Router()
-const log = createLogger('public:newsletters')
 
-router.get('/', validateQuery(publicNewsletterQuerySchema), async (req, res) => {
-  try {
-    const query = req.parsedQuery!
-    const result = await listPublishedIssues(query.page ?? 1, query.pageSize ?? 20)
-    res.set('Cache-Control', `public, max-age=${config.newsletterArchive.cacheMaxAge}`)
-    res.json(result)
-  } catch (err) {
-    log.error({ err }, 'failed to list newsletter issues')
-    res.status(500).json({ error: 'Failed to load the newsletter archive' })
-  }
+router.get('/', failsWith('Failed to load the newsletter archive'), validateQuery(publicNewsletterQuerySchema), async (req, res) => {
+  const query = req.parsedQuery!
+  const result = await listPublishedIssues(query.page ?? 1, query.pageSize ?? 20)
+  res.set('Cache-Control', `public, max-age=${config.newsletterArchive.cacheMaxAge}`)
+  res.json(result)
 })
 
-router.get('/:slug', async (req, res) => {
-  try {
-    const issue = await getPublishedIssue(req.params.slug)
-    if (!issue) {
-      res.status(404).json({ error: 'Issue not found' })
-      return
-    }
-    res.set('Cache-Control', `public, max-age=${config.newsletterArchive.cacheMaxAge}`)
-    res.json(issue)
-  } catch (err) {
-    log.error({ err, slug: req.params.slug }, 'failed to load a newsletter issue')
-    res.status(500).json({ error: 'Failed to load the issue' })
+router.get('/:slug', failsWith('Failed to load the issue'), async (req, res) => {
+  const issue = await getPublishedIssue(req.params.slug!)
+  if (!issue) {
+    res.status(404).json({ error: 'Issue not found' })
+    return
   }
+  res.set('Cache-Control', `public, max-age=${config.newsletterArchive.cacheMaxAge}`)
+  res.json(issue)
 })
 
 export default router

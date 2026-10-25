@@ -1,16 +1,15 @@
 import { Router } from 'express'
 import { config } from '../../config.js'
-import { createLogger } from '../../lib/logger.js'
 import { TTLCache, cached } from '../../lib/cache.js'
 import { RSS_ITEM_PREFIX, rssChannelDescription } from '../../lib/aiLabelCopy.js'
 import { Feed } from 'feed'
 import * as storyService from '../../services/story.js'
 import * as issueService from '../../services/issue.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import { validateQuery } from '../../middleware/validate.js'
 import { feedQuerySchema } from '../../schemas/story.js'
 
 const router = Router()
-const log = createLogger('feed')
 
 const feedCache = new TTLCache<string>(config.feed.cacheMaxAge * 1000)
 
@@ -72,67 +71,57 @@ function feedVariant(minRelevance: number | undefined) {
 }
 
 // Global feed — all published stories
-router.get('/', validateQuery(feedQuerySchema), async (req, res) => {
-  try {
-    const { minRelevance } = req.parsedQuery as { minRelevance?: number }
-    const variant = feedVariant(minRelevance)
-    const xml = await cached(feedCache, `feed:global${variant.cacheSuffix}`, async () => {
-      const result = await storyService.getPublishedStories({ page: 1, pageSize: config.feed.size, minRelevance })
+router.get('/', failsWith('Failed to generate feed'), validateQuery(feedQuerySchema), async (req, res) => {
+  const { minRelevance } = req.parsedQuery as { minRelevance?: number }
+  const variant = feedVariant(minRelevance)
+  const xml = await cached(feedCache, `feed:global${variant.cacheSuffix}`, async () => {
+    const result = await storyService.getPublishedStories({ page: 1, pageSize: config.feed.size, minRelevance })
 
-      const feed = buildFeed({
-        title: `Actually Relevant${variant.titleSuffix}`,
-        description: rssChannelDescription(),
-        feedPath: `/api/feed${variant.query}`,
-      })
-      addStoryItems(feed, result.data)
-
-      return feed.rss2()
+    const feed = buildFeed({
+      title: `Actually Relevant${variant.titleSuffix}`,
+      description: rssChannelDescription(),
+      feedPath: `/api/feed${variant.query}`,
     })
+    addStoryItems(feed, result.data)
 
-    setRssHeaders(res)
-    res.send(xml)
-  } catch (err) {
-    log.error({ err }, 'failed to generate global RSS feed')
-    res.status(500).json({ error: 'Failed to generate feed' })
-  }
+    return feed.rss2()
+  })
+
+  setRssHeaders(res)
+  res.send(xml)
 })
 
 // Per-issue feed
-router.get('/:issueSlug', validateQuery(feedQuerySchema), async (req, res) => {
-  try {
-    const { issueSlug } = req.params
-    const { minRelevance } = req.parsedQuery as { minRelevance?: number }
-    const issue = await issueService.getIssueBySlug(issueSlug!)
-    if (!issue) {
-      res.status(404).json({ error: 'Issue not found' })
-      return
-    }
+router.get('/:issueSlug', failsWith('Failed to generate feed'), validateQuery(feedQuerySchema), async (req, res) => {
+  const { issueSlug } = req.params
+  const { minRelevance } = req.parsedQuery as { minRelevance?: number }
+  const issue = await issueService.getIssueBySlug(issueSlug!)
+  if (!issue) {
+    res.status(404).json({ error: 'Issue not found' })
+    return
+  }
 
-    const variant = feedVariant(minRelevance)
-    const xml = await cached(feedCache, `feed:issue:${issueSlug}${variant.cacheSuffix}`, async () => {
-      const result = await storyService.getPublishedStories({
-        page: 1,
-        pageSize: config.feed.size,
-        issueSlug,
-        minRelevance,
-      })
-
-      const feed = buildFeed({
-        title: `Actually Relevant — ${issue.name}${variant.titleSuffix}`,
-        description: rssChannelDescription(issue.name),
-        feedPath: `/api/feed/${issueSlug}${variant.query}`,
-      })
-      addStoryItems(feed, result.data)
-
-      return feed.rss2()
+  const variant = feedVariant(minRelevance)
+  const xml = await cached(feedCache, `feed:issue:${issueSlug}${variant.cacheSuffix}`, async () => {
+    const result = await storyService.getPublishedStories({
+      page: 1,
+      pageSize: config.feed.size,
+      issueSlug,
+      minRelevance,
     })
 
-    setRssHeaders(res)
-    res.send(xml)
-  } catch (err) {
-    log.error({ err }, 'failed to generate issue RSS feed')
-    res.status(500).json({ error: 'Failed to generate feed' })
-  }
+    const feed = buildFeed({
+      title: `Actually Relevant — ${issue.name}${variant.titleSuffix}`,
+      description: rssChannelDescription(issue.name),
+      feedPath: `/api/feed/${issueSlug}${variant.query}`,
+    })
+    addStoryItems(feed, result.data)
+
+    return feed.rss2()
+  })
+
+  setRssHeaders(res)
+  res.send(xml)
 })
 
 export default router

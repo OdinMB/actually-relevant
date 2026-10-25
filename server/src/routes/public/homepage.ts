@@ -2,11 +2,10 @@ import { Router } from 'express'
 import * as storyService from '../../services/story.js'
 import * as issueService from '../../services/issue.js'
 import { TTLCache, cached } from '../../lib/cache.js'
-import { createLogger } from '../../lib/logger.js'
 import { withAiGeneratedMarker, type AiStoryText } from '../../lib/aiProvenance.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 
 const router = Router()
-const log = createLogger('public:homepage')
 
 // Cache homepage data for 1 minute
 const HOMEPAGE_TTL = 60 * 1000
@@ -35,24 +34,19 @@ function markBuckets<S extends AiStoryText>(storiesByIssue: Record<string, Emoti
   )
 }
 
-router.get('/', async (req, res) => {
-  try {
-    const data = await cached(homepageCache, 'homepage-data', async () => {
-      // Fetch issues and stories in parallel
-      const [issues, storyData] = await Promise.all([issueService.getPublicIssues(), storyService.getHomepageData(HOMEPAGE_ISSUE_SLUGS, 7)])
+router.get('/', failsWith('Failed to fetch homepage data'), async (_req, res) => {
+  const data = await cached(homepageCache, 'homepage-data', async () => {
+    // Fetch issues and stories in parallel
+    const [issues, storyData] = await Promise.all([issueService.getPublicIssues(), storyService.getHomepageData(HOMEPAGE_ISSUE_SLUGS, 7)])
 
-      return {
-        issues,
-        storiesByIssue: markBuckets(storyData.storiesByIssue),
-      }
-    })
+    return {
+      issues,
+      storiesByIssue: markBuckets(storyData.storiesByIssue),
+    }
+  })
 
-    res.set('Cache-Control', 'public, max-age=60')
-    res.json(data)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch homepage data')
-    res.status(500).json({ error: 'Failed to fetch homepage data' })
-  }
+  res.set('Cache-Control', 'public, max-age=60')
+  res.json(data)
 })
 
 export default router
