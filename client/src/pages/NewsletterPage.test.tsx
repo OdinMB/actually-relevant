@@ -4,14 +4,15 @@ import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
+import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 
-const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn() }))
+const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
 }))
 
-import NewsletterArchivePage from './NewsletterArchivePage'
+import NewsletterPage from './NewsletterPage'
 import { PublishHint } from '../components/admin/NewsletterDetail'
 
 function renderPage() {
@@ -20,7 +21,7 @@ function renderPage() {
     <HelmetProvider>
       <MemoryRouter>
         <QueryClientProvider client={client}>
-          <NewsletterArchivePage />
+          <NewsletterPage />
         </QueryClientProvider>
       </MemoryRouter>
     </HelmetProvider>,
@@ -29,6 +30,7 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockApi.getSubscribeToken.mockResolvedValue({ token: 'form-token' })
   mockApi.newsletterArchive.mockResolvedValue({
     data: [
       { slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: '2026-10-18T09:00:00.000Z', storyCount: 8 },
@@ -41,7 +43,17 @@ beforeEach(() => {
   })
 })
 
-describe('NewsletterArchivePage', () => {
+describe('NewsletterPage', () => {
+  it('shows the AI subtitle, then the signup form, then the past issues', async () => {
+    renderPage()
+    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.newsletterSubtitle.lead, { exact: false })
+    const email = screen.getByRole('textbox', { name: /email/i })
+    const firstIssue = await screen.findByRole('link', { name: 'Week 42, 2026' })
+    expect(subtitle.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(email.compareDocumentPosition(firstIssue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(subtitle.textContent).toContain(AI_DISCLOSURE_COPY.newsletterSubtitle.tail)
+  })
+
   it('shows a skeleton while loading, then links each issue with its date and story count', async () => {
     const { container } = renderPage()
     expect(container.querySelector('.animate-pulse')).not.toBeNull()
@@ -51,11 +63,6 @@ describe('NewsletterArchivePage', () => {
     expect(screen.getByText(/8 stories/)).toBeInTheDocument()
     expect(screen.getByText(/1 story$/)).toBeInTheDocument()
     expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1)
-  })
-
-  it('links to the signup page', async () => {
-    renderPage()
-    expect(screen.getByRole('link', { name: 'Subscribe' }).getAttribute('href')).toBe('/newsletter')
   })
 
   it('says so when no issue is published yet', async () => {

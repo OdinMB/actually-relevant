@@ -86,10 +86,7 @@ describe('PublicLayout', () => {
       localStorage.setItem('ar-saved-stories', JSON.stringify(['a-story']))
       renderLayout()
       const header = screen.getByRole('banner')
-      const order = [
-        ...within(header).getAllByRole('button', { name: 'Newsletter', hidden: true }),
-        ...within(header).getAllByRole('link', { name: /^(Podcast|Saved)/, hidden: true }),
-      ]
+      const order = [...within(header).getAllByRole('link', { name: /^(Newsletter|Podcast|Saved)/, hidden: true })]
         .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
         .map(el => el.textContent?.replace(/\s*\(\d+\)$/, '').trim())
       expect(order).toEqual(['Newsletter', 'Podcast', 'Saved', 'Newsletter', 'Podcast', 'Saved Stories'])

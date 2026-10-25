@@ -36,9 +36,9 @@ export const routes: RouteConfig[] = [
   { path: '/news-fatigue', priority: 0.7, changefreq: 'monthly' },
   { path: '/free-api', priority: 0.7, changefreq: 'monthly' },
   { path: '/stewardship', priority: 0.6, changefreq: 'monthly' },
-  { path: '/newsletter', priority: 0.7, changefreq: 'monthly' },
-  // Issue pages (/newsletter/:slug) are dynamic: server sitemap only, not prerendered
-  { path: '/newsletter/archive', priority: 0.6, changefreq: 'weekly' },
+  { path: '/newsletter', priority: 0.7, changefreq: 'weekly' },
+  // Issue pages (/newsletter/:slug) are dynamic: server sitemap only, not prerendered.
+  // /newsletter/archive only redirects to /newsletter (App.tsx), so it is in neither list.
   { path: '/podcast', priority: 0.7, changefreq: 'weekly' },
   { path: '/feedback', priority: 0.5, changefreq: 'yearly' },
   { path: '/thank-you', priority: 0.3, changefreq: 'yearly' },

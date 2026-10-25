@@ -530,7 +530,7 @@ export const config = {
     imageCacheEntries: 50,
     imageCacheTtlSeconds: 6 * 60 * 60,
   },
-  /** Public newsletter archive (`/newsletter/archive`, `.context/newsletter-podcast.md`). */
+  /** Public newsletter archive (the issue list on `/newsletter`, `.context/newsletter-podcast.md`). */
   newsletterArchive: {
     cacheMaxAge: 300,
   },

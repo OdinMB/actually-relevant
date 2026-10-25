@@ -91,12 +91,7 @@ function IssueHead({ issue }: { issue: PublicNewsletterIssue }) {
         {CommonOgTags({})}
       </Helmet>
       <StructuredData
-        data={buildBreadcrumbSchema([
-          { name: 'Home', url: SEO.siteUrl },
-          { name: 'Newsletter', url: `${SEO.siteUrl}/newsletter` },
-          { name: 'Archive', url: `${SEO.siteUrl}/newsletter/archive` },
-          { name: issue.title },
-        ])}
+        data={buildBreadcrumbSchema([{ name: 'Home', url: SEO.siteUrl }, { name: 'Newsletter', url: `${SEO.siteUrl}/newsletter` }, { name: issue.title }])}
       />
     </>
   )
@@ -104,7 +99,7 @@ function IssueHead({ issue }: { issue: PublicNewsletterIssue }) {
 
 function BackToArchive() {
   return (
-    <Link to="/newsletter/archive" className={LINK_CLASS}>
+    <Link to="/newsletter" className={LINK_CLASS}>
       &larr; All issues
     </Link>
   )

@@ -1,7 +1,7 @@
 /**
  * The newsletter's public web edition (.context/newsletter-podcast.md, "Web edition"): an issue
  * is public once its admin status is `published`, at `/newsletter/<slug>`, listed on
- * `/newsletter/archive` and in the sitemap. Unpublishing takes it off the web again; its slug
+ * `/newsletter` (whose old `/newsletter/archive` URL redirects there) and in the sitemap. Unpublishing takes it off the web again; its slug
  * and first publication date stay, so republishing restores the same URL.
  */
 import { Prisma } from '@prisma/client'
@@ -14,7 +14,7 @@ import { AI_GENERATED_NEWSLETTER_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '
 
 const log = createLogger('newsletter-archive')
 
-/** Path segments under /newsletter/ that belong to pages, never to an issue. */
+/** Path segments under /newsletter/ that belong to pages or redirects, never to an issue. */
 const RESERVED_SLUGS = new Set(['archive'])
 const SLUG_MAX_LENGTH = 80
 

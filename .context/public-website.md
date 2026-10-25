@@ -14,8 +14,8 @@ Saved appears only once the visitor has saved a story, and goes when the last is
 | `/methodology` | `MethodologyPage` | Three-criteria framework explanation |
 | `/about` | `AboutPage` | Mission and approach |
 | `/contact` | `ContactPage` | Email + bilingual imprint (EN/DE) |
-| `/newsletter` | `NewsletterPage` | Inline subscribe form (reuses `SubscribeForm`), and a link to the archive |
-| `/newsletter/archive` | `NewsletterArchivePage` | Published newsletter issues, newest first, paginated (skeleton while loading) |
+| `/newsletter` | `NewsletterPage` | Laid out like `/podcast`: heading, AI subtitle with the inline badge (`AiSubtitle`, `AI_DISCLOSURE_COPY.newsletterSubtitle`), a Subscribe section (`SubscribeForm`), then Past issues: every published issue, newest first, paginated, loaded client-side (`NewsletterArchiveSkeleton` while loading). The header's and the footer's Newsletter links both lead here |
+| `/newsletter/archive` | redirect | `<Navigate replace>` to `/newsletter`, where the archive now lives; kept so old links work. In neither route list nor the sitemap. Its route must stay above `/newsletter/:slug`, and `archive` stays a reserved issue slug |
 | `/newsletter/:slug` | `NewsletterIssuePage` | One published issue's web edition: title and date, the issue's AI label, then its stored markdown with each story heading through `StoryTitleLabel` and linked to the story page; not-found state is `noindex` (`.context/newsletter-podcast.md`, "Web edition") |
 | `/podcast` | `PodcastPage` | Weekly AI podcast: AI subtitle, Apple Podcasts badge and feed link, listen links and episodes with `<audio preload="none">` on the CDN (`.context/podcast.md`) |
 | `/podcast/:id/transcript` | `PodcastTranscriptPage` | One published episode's readable transcript: "AI" badge and title, the `/podcast` AI subtitle, player, the conversation by "Host A"/"Host B" with a heading per story, the story list. `:id` is the episode's row id (the feed GUID), which never changes once published (`.context/podcast.md`) |
