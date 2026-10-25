@@ -41,8 +41,10 @@ Prettier 3, one config at the repository root (`.prettierrc.json`): no semicolon
 
 `audit:prod` (`scripts/audit-check.mjs`) runs `npm audit --omit=dev` and fails on any advisory at high or above unless the package's `audit-allowlist.json` excuses it. An entry names one advisory (GHSA id) in one package, a `via` package, a reason and a review date; it holds only while every production path to the package runs through `via`, and an entry that matches nothing fails the check so that it is deleted once the fix lands.
 
-- **Server:** no entries.
-- **Client:** `braces` (GHSA-vfj7-8cjw-p6xm, high) via `@headlessui/tailwindcss`: `@scalar/api-reference-react` pulls in tailwindcss 3 through it, with chokidar and micromatch. `postcss-selector-parser` (GHSA-rj75-hqrm-r3gf) on the same path is moderate, below the bar, so it needs no entry. Both go when @scalar moves off tailwindcss 3.
+Entries on 2026-10-25 (the 2026-10-19 `braces` entry was deleted once the @scalar update no longer reported it; `body-parser` and `undici` were fixed by `npm audit fix` the same day):
+
+- **Server:** `zod` (GHSA-mrhx-c7xc-m3w5, high; memory exhaustion validating a large array, fixed only in zod 4.6.6). zod 3 is a direct dependency, so the entry's `via` is `zod` itself and does not narrow anything; the reason is that request bodies are capped at 100kb by `express.json` and model output is bounded. It goes with a move to zod 4, which is the owner's call (every schema, `zod-openapi`, LangChain structured output).
+- **Client:** `zod` (same advisory) via `@scalar/api-reference-react`, whose agent chat pulls in `ai` with zod 3.25; it runs in the visitor's browser on our own OpenAPI spec. `postcss-selector-parser` (GHSA-rj75-hqrm-r3gf) on @scalar's tailwindcss 3 path is moderate, below the bar, so it needs no entry.
 
 **A new advisory can turn `main` red with no code change**, and while it is red nothing deploys. Then either update the dependency, or, after reviewing that the advisory does not reach the running app, add an allowlist entry with its reason; both are a commit to `main`, which deploys once green.
 

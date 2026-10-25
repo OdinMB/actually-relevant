@@ -79,7 +79,8 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **CI must pass before Render deploys.** Both services use `autoDeployTrigger: checksPass`: a `main` commit deploys only once the `server` and `client` jobs of `.github/workflows/ci.yml` are green; a red `main` deploys nothing.
 - **Pushes to `main` need green checks or the admin bypass** of the GitHub ruleset `no-nonsense-main` (required checks `server` and `client`, Repository admin bypass). A bypassing push prints `remote: Bypassed rule violations for refs/heads/main`; for this rule that is expected, not a broken pull-request rule.
 - **Never rename a CI job** without changing the ruleset in the same step (the rule would wait for a check that never comes), and never path-filter or `[skip ci]` a push to `main`.
-- **Before pushing, run what CI runs:** `check:migrations`, both typechecks, `test`, `test:db`, both builds.
+- **Before pushing, run what CI runs:** `npm run lint`, `npm run format` (CI runs `format:check`), `npm run test:coverage` (a floor; raise it, never lower it) in both packages, plus `check:migrations`, both typechecks, `test:db` and both builds.
+- **`audit:prod` can turn `main` red with no code change.** Update the dependency, or add a reviewed entry to `server/audit-allowlist.json` / `client/audit-allowlist.json` (`.context/ci.md`, "Dependency audit").
 - **A destructive migration statement** (DROP, TRUNCATE, ALTER … DROP) needs a `-- reviewed-destructive: <reason>` line, or `check:migrations` fails.
 - Details: `.context/ci.md` (checks, triggers, minutes) and `.context/deployment.md`, "CI gate".
 
