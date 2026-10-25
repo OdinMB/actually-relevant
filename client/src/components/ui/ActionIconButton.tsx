@@ -14,14 +14,7 @@ const VARIANT_CLASSES = {
   danger: 'text-neutral-400 hover:text-red-600',
 }
 
-export function ActionIconButton({
-  icon: Icon,
-  label,
-  onClick,
-  variant = 'default',
-  disabled = false,
-  className = '',
-}: ActionIconButtonProps) {
+export function ActionIconButton({ icon: Icon, label, onClick, variant = 'default', disabled = false, className = '' }: ActionIconButtonProps) {
   return (
     <button
       type="button"

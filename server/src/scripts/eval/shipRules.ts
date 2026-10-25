@@ -61,7 +61,7 @@ export function socialPostCriteria(checks: ShipPostCheck[], failedCalls: number)
   const anchored = checks.filter(c => c.anchors.length > 0).length
   return [
     {
-      name: 'Posts naming the story\'s actor or a key number',
+      name: "Posts naming the story's actor or a key number",
       value: `${anchored} of ${checks.length}`,
       bar: 'all (owner, phase 2)',
       pass: checks.length > 0 && anchored === checks.length,

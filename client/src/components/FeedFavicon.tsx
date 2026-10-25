@@ -38,13 +38,7 @@ export function FeedFaviconPreview({ feedId, imgKey = 0, size = 20 }: { feedId: 
   const [failed, setFailed] = useState(false)
 
   if (failed) {
-    return (
-      <span
-        className="inline-block rounded-sm bg-neutral-100 border border-neutral-200"
-        style={{ width: size, height: size }}
-        aria-hidden="true"
-      />
-    )
+    return <span className="inline-block rounded-sm bg-neutral-100 border border-neutral-200" style={{ width: size, height: size }} aria-hidden="true" />
   }
 
   return (

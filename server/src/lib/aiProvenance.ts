@@ -7,8 +7,7 @@ import { config } from '../config.js'
  */
 
 /** IPTC Digital Source Type term for content created by a trained model (cv.iptc.org/newscodes/digitalsourcetype). */
-export const IPTC_TRAINED_ALGORITHMIC_MEDIA =
-  'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
+export const IPTC_TRAINED_ALGORITHMIC_MEDIA = 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
 
 /**
  * Story fields whose text the assessment model writes (analysis.ts assessStory).
@@ -41,7 +40,7 @@ export interface AiGeneratedMarker {
 
 export function aiGeneratedMarker(story: AiStoryText): AiGeneratedMarker {
   return {
-    fields: AI_GENERATED_STORY_FIELDS.filter((field) => Boolean(story[field])),
+    fields: AI_GENERATED_STORY_FIELDS.filter(field => Boolean(story[field])),
     model: config.llm.models[config.assess.modelTier].name,
     digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA,
   }

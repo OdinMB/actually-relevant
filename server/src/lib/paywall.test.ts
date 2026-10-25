@@ -31,11 +31,13 @@ describe('classifyAccess', () => {
 
   it('reads a "False" string inside hasPart and compares the wordCount (ZEIT style) as locked', () => {
     const html = page({
-      jsonLd: [{
-        '@type': 'NewsArticle',
-        wordCount: 7008,
-        hasPart: [{ '@type': 'WebPageElement', isAccessibleForFree: 'False', cssSelector: '.paywall' }],
-      }],
+      jsonLd: [
+        {
+          '@type': 'NewsArticle',
+          wordCount: 7008,
+          hasPart: [{ '@type': 'WebPageElement', isAccessibleForFree: 'False', cssSelector: '.paywall' }],
+        },
+      ],
     })
     // 2,000 words is long enough to pass the length clause, but far below 0.3 x 7008
     expect(classifyAccess({ html, extractedText: words(2000), title: null, policy: AUTO }).accessTier).toBe('locked')

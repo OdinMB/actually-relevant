@@ -362,7 +362,7 @@ export async function getFeed(options: { maxId?: string; limit?: number }) {
   const apiResult = await cached(feedCache, cacheKey, () => getAccountStatuses({ maxId, limit }))
 
   // Cross-reference API status IDs with DB + fetch draft/failed in parallel
-  const apiStatusIds = apiResult.items.map((item) => item.id)
+  const apiStatusIds = apiResult.items.map(item => item.id)
 
   const [trackedPosts, pendingPosts] = await Promise.all([
     apiStatusIds.length > 0
@@ -381,10 +381,10 @@ export async function getFeed(options: { maxId?: string; limit?: number }) {
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma type not generated until migration applied
-  const trackedByStatusId = new Map((trackedPosts as any[]).map((p) => [p.statusId, p]))
+  const trackedByStatusId = new Map((trackedPosts as any[]).map(p => [p.statusId, p]))
 
   // Enrich API items with DB data
-  const feed = apiResult.items.map((item) => {
+  const feed = apiResult.items.map(item => {
     const tracked = trackedByStatusId.get(item.id)
     return {
       ...item,
@@ -397,7 +397,7 @@ export async function getFeed(options: { maxId?: string; limit?: number }) {
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma type not generated until migration applied
-  const dbOnlyPosts = (pendingPosts as any[]).map((p) => ({
+  const dbOnlyPosts = (pendingPosts as any[]).map(p => ({
     id: p.id,
     postText: p.postText,
     status: p.status,

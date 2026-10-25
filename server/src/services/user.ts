@@ -12,12 +12,7 @@ const userSelect = {
   updatedAt: true,
 }
 
-export async function createUser(data: {
-  email: string
-  name: string
-  password: string
-  role?: UserRole
-}) {
+export async function createUser(data: { email: string; name: string; password: string; role?: UserRole }) {
   const passwordHash = await hashPassword(data.password)
   return prisma.user.create({
     data: {
@@ -62,11 +57,7 @@ export async function deleteUser(id: string) {
   return prisma.user.delete({ where: { id } })
 }
 
-export async function changePassword(
-  userId: string,
-  currentPassword: string,
-  newPassword: string,
-): Promise<void> {
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) throw new Error('User not found')
 

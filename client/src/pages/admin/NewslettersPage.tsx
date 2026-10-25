@@ -57,10 +57,7 @@ export default function NewslettersPage() {
         <title>Newsletters — Admin — Actually Relevant</title>
       </Helmet>
 
-      <PageHeader
-        title="Newsletters"
-        actions={<Button onClick={() => setCreateOpen(true)}>New Newsletter</Button>}
-      />
+      <PageHeader title="Newsletters" actions={<Button onClick={() => setCreateOpen(true)}>New Newsletter</Button>} />
 
       <div className="flex gap-1 mb-4">
         {tabs.map(tab => (
@@ -68,9 +65,7 @@ export default function NewslettersPage() {
             key={tab.value}
             onClick={() => setStatusFilter(tab.value)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              statusFilter === tab.value
-                ? 'bg-brand-50 text-brand-700'
-                : 'text-neutral-600 hover:bg-neutral-100'
+              statusFilter === tab.value ? 'bg-brand-50 text-brand-700' : 'text-neutral-600 hover:bg-neutral-100'
             }`}
           >
             {tab.label}
@@ -78,15 +73,17 @@ export default function NewslettersPage() {
         ))}
       </div>
 
-      {newslettersQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {newslettersQuery.isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {newslettersQuery.error && <ErrorState message="Failed to load newsletters" onRetry={() => newslettersQuery.refetch()} />}
-      {newslettersQuery.data && newslettersQuery.data.data.length === 0 && <EmptyState title="No newsletters yet" description="Create your first newsletter." />}
+      {newslettersQuery.data && newslettersQuery.data.data.length === 0 && (
+        <EmptyState title="No newsletters yet" description="Create your first newsletter." />
+      )}
       {newslettersQuery.data && newslettersQuery.data.data.length > 0 && (
-        <NewsletterTable
-          newsletters={newslettersQuery.data.data}
-          onView={id => navigate(`/admin/newsletters/${id}`)}
-          onDelete={setDeleteId}
-        />
+        <NewsletterTable newsletters={newslettersQuery.data.data} onView={id => navigate(`/admin/newsletters/${id}`)} onDelete={setDeleteId} />
       )}
 
       <CreateContentDialog

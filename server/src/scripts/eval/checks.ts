@@ -37,9 +37,7 @@ export function findJunk(value: unknown, skipKeys: string[] = [], path = ''): st
   }
   if (Array.isArray(value)) return value.flatMap((v, i) => findJunk(v, skipKeys, `${path}[${i}]`))
   if (value && typeof value === 'object') {
-    return Object.entries(value).flatMap(([k, v]) =>
-      skipKeys.includes(k) ? [] : findJunk(v, skipKeys, path ? `${path}.${k}` : k),
-    )
+    return Object.entries(value).flatMap(([k, v]) => (skipKeys.includes(k) ? [] : findJunk(v, skipKeys, path ? `${path}.${k}` : k)))
   }
   return []
 }
@@ -162,7 +160,10 @@ export interface DialogueCheck {
 }
 
 export function checkDialogue(dialogue: PodcastDialogue, stories: DialogueStoryRef[]): DialogueCheck {
-  const spoken = dialogue.segments.flatMap(s => s.turns).map(t => t.text.replace(/\[[^\]\n]*\]/g, ' ')).join(' ')
+  const spoken = dialogue.segments
+    .flatMap(s => s.turns)
+    .map(t => t.text.replace(/\[[^\]\n]*\]/g, ' '))
+    .join(' ')
   const sentences = splitSentences(spoken.replace(/\s+/g, ' '))
   const distinct = [...new Set(stories.map(s => s.publisher).filter(p => p && p !== 'Unknown'))]
   return {
@@ -171,7 +172,7 @@ export function checkDialogue(dialogue: PodcastDialogue, stories: DialogueStoryR
     publisherCoverage: rate(distinct.map(p => spoken.toLowerCase().includes(p.toLowerCase()))),
     segues: dialogue.segments
       .filter(s => s.kind !== 'intro' && s.turns.length > 0)
-      .map(s => ({ segment: s.kind === 'story' ? `story ${s.storyRef}` : s.kind, opening: s.turns[0].text })),
+      .map(s => ({ segment: s.kind === 'story' ? `story ${s.storyRef}` : s.kind, opening: s.turns[0]!.text })),
   }
 }
 
@@ -184,7 +185,7 @@ export function percentile(values: number[], p: number): number | null {
   if (values.length === 0) return null
   const sorted = [...values].sort((a, b) => a - b)
   const rank = Math.ceil((p / 100) * sorted.length)
-  return sorted[Math.max(0, rank - 1)]
+  return sorted[Math.max(0, rank - 1)]!
 }
 
 export function jaccard(a: readonly string[], b: readonly string[]): number {

@@ -16,16 +16,11 @@ import type { Guidelines } from '../prompts/shared.js'
 import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
 import { NotFoundError } from '../utils/errors.js'
-import {
-  analysisFrom, partition, recordAnalysis, transition,
-  type Actor, type AnalysisOutcome, type AnalysisRow, type MoveResult,
-} from './storyLifecycle.js'
+import { analysisFrom, partition, recordAnalysis, transition, type Actor, type AnalysisOutcome, type AnalysisRow, type MoveResult } from './storyLifecycle.js'
 
 const log = createLogger('analysis')
 
-export type ProgressCallback = (
-  event: { type: 'completed'; count: number } | { type: 'failed'; count: number; error: string }
-) => void
+export type ProgressCallback = (event: { type: 'completed'; count: number } | { type: 'failed'; count: number; error: string }) => void
 
 function getGuidelines(issue: { promptFactors: string; promptAntifactors: string; promptRatings: string }): Guidelines {
   return {
@@ -56,14 +51,23 @@ interface BatchClassificationOptions<T extends { articleId: string; issueSlug: s
   label: string
 }
 
-const updateFields = (rows: AnalysisRow[]) =>
-  prisma.$transaction(rows.map(r => prisma.story.update({ where: { id: r.id }, data: r.data })))
+const updateFields = (rows: AnalysisRow[]) => prisma.$transaction(rows.map(r => prisma.story.update({ where: { id: r.id }, data: r.data })))
 
 async function runBatchClassification<T extends { articleId: string; issueSlug: string; emotionTag: string }>(
   options: BatchClassificationOptions<T>,
 ): Promise<{ storyId: string; item: T }[]> {
   const {
-    storyIds, llm, schema, buildPrompt, buildUpdate, persist = updateFields, fallbackToFeedIssue = true, onProgress, batchSize, concurrency, label,
+    storyIds,
+    llm,
+    schema,
+    buildPrompt,
+    buildUpdate,
+    persist = updateFields,
+    fallbackToFeedIssue = true,
+    onProgress,
+    batchSize,
+    concurrency,
+    label,
   } = options
 
   const issues = await prisma.issue.findMany({
@@ -222,10 +226,7 @@ export async function preAssessStories(
 
 // --- Reclassification ---
 
-export async function reclassifyStories(
-  storyIds: string[],
-  onProgress?: ProgressCallback,
-): Promise<{ storyId: string; emotionTag: string }[]> {
+export async function reclassifyStories(storyIds: string[], onProgress?: ProgressCallback): Promise<{ storyId: string; emotionTag: string }[]> {
   const results = await runBatchClassification({
     storyIds,
     llm: getSmallLLM(),
@@ -250,16 +251,13 @@ export async function reclassifyStories(
 
 // --- Emotion-only tagging ---
 
-export async function tagEmotionOnly(
-  storyIds: string[],
-  onProgress?: ProgressCallback,
-): Promise<{ storyId: string; emotionTag: string }[]> {
+export async function tagEmotionOnly(storyIds: string[], onProgress?: ProgressCallback): Promise<{ storyId: string; emotionTag: string }[]> {
   const results = await runBatchClassification({
     storyIds,
     llm: getSmallLLM(),
     schema: reclassifyResultSchema,
     buildPrompt: buildEmotionTagPrompt,
-    buildUpdate: (item) => ({
+    buildUpdate: item => ({
       emotionTag: item.emotionTag as EmotionTag,
     }),
     fallbackToFeedIssue: false,
@@ -331,8 +329,7 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
 
   // Save analysis + embedding atomically, unless the status changed during the call
   // Written against the status read before the model call: a move made meanwhile wins
-  const outcomes = await recordAnalysis('assess', actor, [{ id: storyId, data: analysisData, embedding: embeddingData }],
-    new Map([[storyId, story.status]]))
+  const outcomes = await recordAnalysis('assess', actor, [{ id: storyId, data: analysisData, embedding: embeddingData }], new Map([[storyId, story.status]]))
   const outcome = outcomes.get(storyId) ?? 'skipped'
   if (outcome === 'skipped') return outcome
 
@@ -414,9 +411,7 @@ export async function selectStories(storyIds: string[]): Promise<SelectionResult
     if (!s.cluster) return true // no cluster — keep
     return s.cluster.primaryStoryId === s.id // only primary
   })
-  const nonPrimaryIds = stories
-    .filter(s => s.cluster && s.cluster.primaryStoryId !== s.id)
-    .map(s => s.id)
+  const nonPrimaryIds = stories.filter(s => s.cluster && s.cluster.primaryStoryId !== s.id).map(s => s.id)
 
   // Safety net: re-reject non-primary stories that may have been manually un-rejected
   const dedup = await transition(nonPrimaryIds, { to: 'rejected', reason: 'duplicate' }, 'pipeline')
@@ -522,7 +517,7 @@ export async function selectStoriesInGroups(
 // --- Bulk wrappers with task progress tracking ---
 
 function taskProgressCallback(taskId: string): ProgressCallback {
-  return (event) => {
+  return event => {
     if (event.type === 'completed') {
       for (let i = 0; i < event.count; i++) taskRegistry.increment(taskId, 'completed')
     } else {

@@ -1,352 +1,291 @@
-import { z } from "zod";
-import { config } from "../config.js";
-import { EMOTION_TAG_SCHEMA_DESCRIPTION } from "../prompts/shared.js";
+import { z } from 'zod'
+import { config } from '../config.js'
+import { EMOTION_TAG_SCHEMA_DESCRIPTION } from '../prompts/shared.js'
 
-const EMOTION_TAG_SCHEMA = z
-  .enum(["uplifting", "frustrating", "scary", "calm"])
-  .describe(EMOTION_TAG_SCHEMA_DESCRIPTION);
+const EMOTION_TAG_SCHEMA = z.enum(['uplifting', 'frustrating', 'scary', 'calm']).describe(EMOTION_TAG_SCHEMA_DESCRIPTION)
 
 export const preAssessItemSchema = z.object({
-  articleId: z
-    .string()
-    .describe("The article ID exactly as provided in the input"),
-  issueSlug: z
-    .string()
-    .describe("The slug of the most relevant issue from the <ISSUES> list"),
-  rating: z
-    .number()
-    .int()
-    .min(1)
-    .max(10)
-    .describe(
-      "Relevance rating 1-10 as per the <RATING GUIDELINES>."
-    ),
+  articleId: z.string().describe('The article ID exactly as provided in the input'),
+  issueSlug: z.string().describe('The slug of the most relevant issue from the <ISSUES> list'),
+  rating: z.number().int().min(1).max(10).describe('Relevance rating 1-10 as per the <RATING GUIDELINES>.'),
   emotionTag: EMOTION_TAG_SCHEMA,
-});
+})
 
 export const preAssessResultSchema = z.object({
-  articles: z
-    .array(preAssessItemSchema)
-    .describe("One entry per article in the input batch"),
-});
+  articles: z.array(preAssessItemSchema).describe('One entry per article in the input batch'),
+})
 
 export const assessResultSchema = z.object({
-  publicationDate: z
-    .string()
-    .describe(
-      "Publication date in YYYY-MM-DD 00:00:00 format, or 1970-01-01 00:00:00 if unknown"
-    ),
+  publicationDate: z.string().describe('Publication date in YYYY-MM-DD 00:00:00 format, or 1970-01-01 00:00:00 if unknown'),
   quote: z
     .string()
     .describe(
-      "Key quote from the article, translated to English if needed. " +
-        "No speaker/publication name — attribution is a separate field. " +
-        "No surrounding quotation marks — the UI adds those. " +
-        "Use single quotes (' ') for any nested quotation within the text."
+      'Key quote from the article, translated to English if needed. ' +
+        'No speaker/publication name — attribution is a separate field. ' +
+        'No surrounding quotation marks — the UI adds those. ' +
+        "Use single quotes (' ') for any nested quotation within the text.",
     ),
   quoteAttribution: z
     .string()
     .describe(
-      "Attribution for the key quote. If quoting a person, use their full name and title/role " +
+      'Attribution for the key quote. If quoting a person, use their full name and title/role ' +
         "(e.g. 'Maria Helena Semedo, FAO Deputy Director'). If quoting an organization or publication, " +
         "use the organization name (e.g. 'World Health Organization'). If the quote is a striking " +
-        "sentence from the article rather than a direct quote, use 'Original article'."
+        "sentence from the article rather than a direct quote, use 'Original article'.",
     ),
   summary: z
     .string()
     .describe(
-      "Plain text summary of the article, 40-70 words. " +
-        "Use plain language a general audience can understand. " +
-        "Avoid redundancy with the title. " +
-        "Tell the development itself ('The WHO cut its budget…'), not what the article says ('The article reports…')."
+      'Plain text summary of the article, 40-70 words. ' +
+        'Use plain language a general audience can understand. ' +
+        'Avoid redundancy with the title. ' +
+        "Tell the development itself ('The WHO cut its budget…'), not what the article says ('The article reports…').",
     ),
   factors: z
     .array(z.string())
     .describe(
-      "4 Markdown bullet points explaining why the article is relevant for humanity. " +
-        "Use plain, concrete language — explain mechanisms in everyday terms. " +
+      '4 Markdown bullet points explaining why the article is relevant for humanity. ' +
+        'Use plain, concrete language — explain mechanisms in everyday terms. ' +
         'Each bullet: "- **[Factor name from article context]:** [1 sentence: assessment.] ' +
-        "[for the first two bullets only: 1 additional sentence, e.g. quantification or additional detail.] " +
+        '[for the first two bullets only: 1 additional sentence, e.g. quantification or additional detail.] ' +
         '[for the first bullet only: 1 additional sentence, e.g. on the mechanism or context of the impact.]" ' +
-        "Order by importance, key factor first."
+        'Order by importance, key factor first.',
     ),
   limitingFactors: z
     .array(z.string())
     .describe(
-      "Markdown bullet points on why the article might not be so relevant. " +
-        "Use plain, specific language anyone can understand. " +
+      'Markdown bullet points on why the article might not be so relevant. ' +
+        'Use plain, specific language anyone can understand. ' +
         'Each bullet: "- **[Limiting factor]:** [1 sentence: assessment.] ' +
         '[for the first bullet only: 1 additional sentence, e.g. context or further detail.]" ' +
-        "Include applicable generic limiting factors (opinion piece, click-bait, early-stage tech, etc.) " +
-        "and topic-specific limiting factors. Order by importance."
+        'Include applicable generic limiting factors (opinion piece, click-bait, early-stage tech, etc.) ' +
+        'and topic-specific limiting factors. Order by importance.',
     ),
   relevanceCalculation: z
     .array(z.string())
     .describe(
-      "Markdown bullet points showing the rating calculation steps. " +
+      'Markdown bullet points showing the rating calculation steps. ' +
         'Format: "- **[Key factor]:** [rating 1-10]", ' +
         '"- **[Generic limiting factor]:** [modifier +0 to -4]", ' +
-        '"- **[Other factors combined]:** [modifier +/- 0-2]".'
+        '"- **[Other factors combined]:** [modifier +/- 0-2]".',
     ),
-  conservativeRating: z
-    .number()
-    .int()
-    .min(1)
-    .max(10)
-    .describe(
-      "Final relevance rating 1-10: the result of the relevance calculation"
-    ),
+  conservativeRating: z.number().int().min(1).max(10).describe('Final relevance rating 1-10: the result of the relevance calculation'),
   relevanceSummary: z
     .string()
     .describe(
-      "20-25 word summary of the relevance analysis. " +
+      '20-25 word summary of the relevance analysis. ' +
         'Do not refer to "the article"; focus on the subject matter. ' +
-        "Plain language, no jargon. Include concrete numbers when available. "
+        'Plain language, no jargon. Include concrete numbers when available. ',
     ),
   titleLabel: z
     .string()
     .describe(
-      "Ultra-short topic label (1-3 short words, sentence case). " +
+      'Ultra-short topic label (1-3 short words, sentence case). ' +
         "A tight noun phrase — no conjunctions, no 'and'. Keep words simple and short. " +
-        "The label and title work as a pair: the label sets the topic, the title tells the story. " +
-        "No word or phrase should appear in both. " +
+        'The label and title work as a pair: the label sets the topic, the title tells the story. ' +
+        'No word or phrase should appear in both. ' +
         "Good: 'EU AI Act', 'Carbon inequality', 'Deepfake laws'. " +
         "Bad: 'Carbon inequality and climate policy' (too long). " +
-        "Bad: 'Non-consensual deepfake nudification' (too complex — use 'Deepfake laws')."
+        "Bad: 'Non-consensual deepfake nudification' (too complex — use 'Deepfake laws').",
     ),
   relevanceTitle: z
     .string()
     .describe(
-      "Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). " +
-        "Write for a smart 16-year-old — no jargon or insider terms. " +
-        "Must make sense to someone with no background. " +
+      'Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). ' +
+        'Write for a smart 16-year-old — no jargon or insider terms. ' +
+        'Must make sense to someone with no background. ' +
         "One story per headline. Don't echo the label — use that word budget to say something new. " +
-        "No word or phrase should appear in both the label and the title. " +
+        'No word or phrase should appear in both the label and the title. ' +
         "Be concrete: name the actor, action, or stakes. Cut hedge words like 'could shape' or 'may impact'. " +
-        "NEVER use the 'Label: headline' colon pattern — the label is a separate field."
+        "NEVER use the 'Label: headline' colon pattern — the label is a separate field.",
     ),
   marketingBlurb: z
     .string()
     .describe(
-      "Plain text, 25-30 words and never more than 230 characters including spaces, summarizing the key point of the original article and the relevance analysis."
+      'Plain text, 25-30 words and never more than 230 characters including spaces, summarizing the key point of the original article and the relevance analysis.',
     ),
-});
+})
 
 export const selectResultSchema = z.object({
-  selectedIds: z
-    .array(z.string())
-    .describe(
-      "IDs of the selected articles. Must contain exactly the number of articles requested."
-    ),
-});
+  selectedIds: z.array(z.string()).describe('IDs of the selected articles. Must contain exactly the number of articles requested.'),
+})
 
 export const newsletterSelectResultSchema = z.object({
-  selectedIds: z
-    .array(z.string())
-    .describe(
-      "IDs of the selected articles. Must contain exactly the number of articles requested."
-    ),
-});
+  selectedIds: z.array(z.string()).describe('IDs of the selected articles. Must contain exactly the number of articles requested.'),
+})
 
 export const newsletterIntroSchema = z.object({
   intro: z
     .string()
-    .describe(
-      "A 2-3 sentence editorial introduction for the newsletter edition. " +
-        "Warm and conversational tone. Plain text only, under 60 words."
-    ),
-});
+    .describe('A 2-3 sentence editorial introduction for the newsletter edition. ' + 'Warm and conversational tone. Plain text only, under 60 words.'),
+})
 
 /** Audio tags the dialogue may use (ElevenLabs eleven_v4; billed as characters, Phase 0 S3). */
-export const PODCAST_AUDIO_TAGS = [
-  "[calm]",
-  "[thoughtful]",
-  "[serious]",
-  "[warmly]",
-  "[curious]",
-  "[short pause]",
-] as const;
+export const PODCAST_AUDIO_TAGS = ['[calm]', '[thoughtful]', '[serious]', '[warmly]', '[curious]', '[short pause]'] as const
 
 const podcastTurnSchema = z.object({
   speaker: z
-    .enum(["HOST_A", "HOST_B"])
+    .enum(['HOST_A', 'HOST_B'])
     .describe(
-      "HOST_A frames each story: what happened, where, who reported it. " +
-        "HOST_B explains why it matters for humanity and names the caveats and limits."
+      'HOST_A frames each story: what happened, where, who reported it. ' + 'HOST_B explains why it matters for humanity and names the caveats and limits.',
     ),
   text: z
     .string()
     .describe(
       `One spoken turn in plain text, at most ${config.podcast.maxTurnChars} characters. ` +
-        "Short spoken sentences, mostly under 18 words. " +
-        "Numbers, units and symbols written out as a listener hears them: \"$4.2bn\" becomes \"4.2 billion dollars\", " +
-        "\"km²\" becomes \"square kilometers\", \"CO2\" becomes \"carbon dioxide\"; acronyms read letter by letter stay as letters (\"UN\"). " +
-        "No speaker names or prefixes, no URLs, no markdown, no stage directions. " +
-        `At most ${config.podcast.maxTagsPerTurn} audio tags, only from: ${PODCAST_AUDIO_TAGS.join(" ")}; ` +
-        "a tag goes at the start of the sentence it colors, and most turns have none."
+        'Short spoken sentences, mostly under 18 words. ' +
+        'Numbers, units and symbols written out as a listener hears them: "$4.2bn" becomes "4.2 billion dollars", ' +
+        '"km²" becomes "square kilometers", "CO2" becomes "carbon dioxide"; acronyms read letter by letter stay as letters ("UN"). ' +
+        'No speaker names or prefixes, no URLs, no markdown, no stage directions. ' +
+        `At most ${config.podcast.maxTagsPerTurn} audio tags, only from: ${PODCAST_AUDIO_TAGS.join(' ')}; ` +
+        'a tag goes at the start of the sentence it colors, and most turns have none.',
     ),
-});
+})
 
 const podcastSegmentSchema = z.object({
   kind: z
-    .enum(["intro", "story", "outro"])
+    .enum(['intro', 'story', 'outro'])
     .describe(
-      "One intro first, then one story segment per story in the given order, then one short outro last. " +
-        "The intro is exactly one HOST_A turn that welcomes listeners and leads straight into the first story; HOST_B does not speak in the intro."
+      'One intro first, then one story segment per story in the given order, then one short outro last. ' +
+        'The intro is exactly one HOST_A turn that welcomes listeners and leads straight into the first story; HOST_B does not speak in the intro.',
     ),
-  storyRef: z
-    .number()
-    .int()
-    .nullable()
-    .describe("The story's ref for a story segment; null for the intro and the outro."),
+  storyRef: z.number().int().nullable().describe("The story's ref for a story segment; null for the intro and the outro."),
   turns: z
     .array(podcastTurnSchema)
     .describe(
-      "The turns of this segment. " +
-        "The first story segment opens with HOST_B picking up the story the intro led into. " +
-        "In every later story segment, the first turn opens with a spoken bridge from the story before " +
-        "that connects or contrasts it with this story and leads into it. " +
+      'The turns of this segment. ' +
+        'The first story segment opens with HOST_B picking up the story the intro led into. ' +
+        'In every later story segment, the first turn opens with a spoken bridge from the story before ' +
+        'that connects or contrasts it with this story and leads into it. ' +
         `Every story segment's first turn is at least ${config.podcast.minBridgeChars} characters and is not just the headline. ` +
         "The outro's first turn bridges back from the last story. " +
-        "The outro does not thank listeners or say goodbye; code adds the sign-off after it."
+        'The outro does not thank listeners or say goodbye; code adds the sign-off after it.',
     ),
-});
+})
 
 /** The dialogue schema whose title asks for the themes of `themesOf` ("the week's", "the episode's"). */
 function buildPodcastDialogueSchema(themesOf: string) {
   return z.object({
-    episodeTitle: z
-      .string()
-      .describe(`Episode title in plain text, at most ${config.podcast.maxTitleChars} characters, naming ${themesOf} main themes.`),
-    episodeSummary: z
-      .string()
-      .describe("Two plain sentences describing the episode for a podcast app. No URLs, no markdown."),
+    episodeTitle: z.string().describe(`Episode title in plain text, at most ${config.podcast.maxTitleChars} characters, naming ${themesOf} main themes.`),
+    episodeSummary: z.string().describe('Two plain sentences describing the episode for a podcast app. No URLs, no markdown.'),
     segments: z
       .array(podcastSegmentSchema)
       .describe(
-        "The whole conversation, in spoken order. Across the whole conversation, segment boundaries included, " +
-          "the same speaker never speaks more than twice in a row."
+        'The whole conversation, in spoken order. Across the whole conversation, segment boundaries included, ' +
+          'the same speaker never speaks more than twice in a row.',
       ),
-  });
+  })
 }
 
 /** The weekly episode's dialogue schema (the eval harness and the ship checks version it by name). */
-export const podcastDialogueSchema = buildPodcastDialogueSchema("the week's");
+export const podcastDialogueSchema = buildPodcastDialogueSchema("the week's")
 
-const standalonePodcastDialogueSchema = buildPodcastDialogueSchema("the episode's");
+const standalonePodcastDialogueSchema = buildPodcastDialogueSchema("the episode's")
 
 /** The dialogue schema for an episode of this kind: the weekly one unchanged, or one without "the week". */
-export function podcastDialogueSchemaFor(kind: "weekly" | "standalone"): typeof podcastDialogueSchema {
-  return kind === "standalone" ? standalonePodcastDialogueSchema : podcastDialogueSchema;
+export function podcastDialogueSchemaFor(kind: 'weekly' | 'standalone'): typeof podcastDialogueSchema {
+  return kind === 'standalone' ? standalonePodcastDialogueSchema : podcastDialogueSchema
 }
 
 export const podcastSelectResultSchema = z.object({
   selectedIds: z
     .array(z.string())
-    .describe(
-      `IDs of the selected stories, ${config.podcast.minStories} or ${config.podcast.maxStories}, in the order the episode should cover them.`
-    ),
-});
+    .describe(`IDs of the selected stories, ${config.podcast.minStories} or ${config.podcast.maxStories}, in the order the episode should cover them.`),
+})
 
 export const reclassifyItemSchema = z.object({
-  articleId: z
-    .string()
-    .describe("The article ID exactly as provided in the input"),
-  issueSlug: z
-    .string()
-    .describe("The slug of the most relevant issue from the <ISSUES> list"),
+  articleId: z.string().describe('The article ID exactly as provided in the input'),
+  issueSlug: z.string().describe('The slug of the most relevant issue from the <ISSUES> list'),
   emotionTag: EMOTION_TAG_SCHEMA,
-});
+})
 
 export const reclassifyResultSchema = z.object({
-  articles: z
-    .array(reclassifyItemSchema)
-    .describe("One entry per article in the input batch"),
-});
+  articles: z.array(reclassifyItemSchema).describe('One entry per article in the input batch'),
+})
 
 export const extractTitleLabelSchema = z.object({
   titleLabel: z
     .string()
     .describe(
       "Ultra-short topic label (1-3 short words, sentence case). Must be a tight noun phrase — no conjunctions, no 'and'. " +
-        "Keep words simple and short. " +
-        "The label and title work as a pair: the label sets the topic, the title tells the story. " +
-        "No word or phrase should appear in both. " +
+        'Keep words simple and short. ' +
+        'The label and title work as a pair: the label sets the topic, the title tells the story. ' +
+        'No word or phrase should appear in both. ' +
         "Good: 'EU AI Act', 'Carbon inequality', 'Deepfake laws', 'Nuclear risk', 'Ocean health'. " +
         "Bad: 'Carbon inequality and climate policy' (too long). " +
-        "Bad: 'Non-consensual deepfake nudification' (words too long/complex, use 'Deepfake laws')."
+        "Bad: 'Non-consensual deepfake nudification' (words too long/complex, use 'Deepfake laws').",
     ),
   title: z
     .string()
     .describe(
-      "Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). " +
-        "Write for a smart 16-year-old — no jargon or insider terms. " +
-        "Must make sense to someone with no background. " +
+      'Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). ' +
+        'Write for a smart 16-year-old — no jargon or insider terms. ' +
+        'Must make sense to someone with no background. ' +
         "One story per headline. Don't echo the label — use that word budget to say something new. " +
-        "No word or phrase should appear in both the label and the title. " +
+        'No word or phrase should appear in both the label and the title. ' +
         "Be concrete: name the actor, action, or stakes. Cut hedge words like 'could shape' or 'may impact'. " +
-        "NEVER use the 'Label: headline' colon pattern — the label is a separate field."
+        "NEVER use the 'Label: headline' colon pattern — the label is a separate field.",
     ),
-});
+})
 
 export const extractQuoteAttributionSchema = z.object({
   quote: z
     .string()
     .describe(
-      "The key quote, cleaned up. Strip embedded speaker/publication name, surrounding quotation marks, and leftover punctuation. Replace any inner double quotes with single quotes (' ')."
+      "The key quote, cleaned up. Strip embedded speaker/publication name, surrounding quotation marks, and leftover punctuation. Replace any inner double quotes with single quotes (' ').",
     ),
   quoteAttribution: z
     .string()
     .describe(
-      "Attribution for the key quote. If quoting a person, use their full name and title/role " +
+      'Attribution for the key quote. If quoting a person, use their full name and title/role ' +
         "(e.g. 'Maria Helena Semedo, FAO Deputy Director'). If quoting an organization or publication, " +
         "use the organization name (e.g. 'World Health Organization'). If the quote is a striking " +
-        "sentence from the article rather than a direct quote, use 'Original article'."
+        "sentence from the article rather than a direct quote, use 'Original article'.",
     ),
-});
+})
 
-export type ExtractQuoteAttribution = z.infer<
-  typeof extractQuoteAttributionSchema
->;
+export type ExtractQuoteAttribution = z.infer<typeof extractQuoteAttributionSchema>
 export const extractRelevanceSummarySchema = z.object({
   relevanceSummary: z
     .string()
     .describe(
-      "20-25 word summary of the relevance analysis. " +
+      '20-25 word summary of the relevance analysis. ' +
         'Do not refer to "the article"; focus on the subject matter. ' +
-        "Plain language, no jargon. Include concrete numbers when available. "
+        'Plain language, no jargon. Include concrete numbers when available. ',
     ),
-});
-export type ExtractRelevanceSummary = z.infer<
-  typeof extractRelevanceSummarySchema
->;
+})
+export type ExtractRelevanceSummary = z.infer<typeof extractRelevanceSummarySchema>
 export const relatedStoriesResultSchema = z.object({
   selectedIds: z
     .array(z.string())
-    .describe(
-      "IDs of the most related candidates, in order of relatedness. Must contain exactly the number of articles requested."
-    ),
-});
+    .describe('IDs of the most related candidates, in order of relatedness. Must contain exactly the number of articles requested.'),
+})
 
-export type RelatedStoriesResult = z.infer<typeof relatedStoriesResultSchema>;
+export type RelatedStoriesResult = z.infer<typeof relatedStoriesResultSchema>
 
 export const dedupConfirmationSchema = z.object({
-  assessments: z.array(z.object({
-    candidateNumber: z.number().int().describe("The candidate number from the input list"),
-    isDuplicate: z.boolean().describe("True ONLY if this candidate reports on the exact same specific event as the source. False if they merely share the same topic, conflict, ongoing story, or field."),
-    reason: z.string().describe("Brief explanation identifying the specific event in each article and why they are or are not the same event"),
-  })).describe("One entry per candidate in the input list"),
-});
+  assessments: z
+    .array(
+      z.object({
+        candidateNumber: z.number().int().describe('The candidate number from the input list'),
+        isDuplicate: z
+          .boolean()
+          .describe(
+            'True ONLY if this candidate reports on the exact same specific event as the source. False if they merely share the same topic, conflict, ongoing story, or field.',
+          ),
+        reason: z.string().describe('Brief explanation identifying the specific event in each article and why they are or are not the same event'),
+      }),
+    )
+    .describe('One entry per candidate in the input list'),
+})
 
-export type DedupConfirmation = z.infer<typeof dedupConfirmationSchema>;
-export type ExtractTitleLabel = z.infer<typeof extractTitleLabelSchema>;
-export type PreAssessResult = z.infer<typeof preAssessResultSchema>;
-export type AssessResult = z.infer<typeof assessResultSchema>;
-export type SelectResult = z.infer<typeof selectResultSchema>;
-export type ReclassifyResult = z.infer<typeof reclassifyResultSchema>;
-export type NewsletterSelectResult = z.infer<
-  typeof newsletterSelectResultSchema
->;
-export type NewsletterIntro = z.infer<typeof newsletterIntroSchema>;
-export type PodcastDialogue = z.infer<typeof podcastDialogueSchema>;
-export type PodcastSelectResult = z.infer<typeof podcastSelectResultSchema>;
+export type DedupConfirmation = z.infer<typeof dedupConfirmationSchema>
+export type ExtractTitleLabel = z.infer<typeof extractTitleLabelSchema>
+export type PreAssessResult = z.infer<typeof preAssessResultSchema>
+export type AssessResult = z.infer<typeof assessResultSchema>
+export type SelectResult = z.infer<typeof selectResultSchema>
+export type ReclassifyResult = z.infer<typeof reclassifyResultSchema>
+export type NewsletterSelectResult = z.infer<typeof newsletterSelectResultSchema>
+export type NewsletterIntro = z.infer<typeof newsletterIntroSchema>
+export type PodcastDialogue = z.infer<typeof podcastDialogueSchema>
+export type PodcastSelectResult = z.infer<typeof podcastSelectResultSchema>

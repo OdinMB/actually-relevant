@@ -45,7 +45,7 @@ router.get('/', apiLimiter, async (_req, res) => {
 // One published episode with its readable transcript, for its transcript page; 404 unless published.
 router.get('/episodes/:id', apiLimiter, async (req, res) => {
   try {
-    const episode = await getPublishedEpisode(req.params.id)
+    const episode = await getPublishedEpisode(req.params.id!)
     if (episode) res.json(toPublicEpisodeDetail(episode))
     else res.status(404).json({ error: 'Episode not found' })
   } catch (err) {

@@ -34,7 +34,7 @@ describe('EmbedPage AI header', () => {
     }
   })
 
-  it.each(['', '?theme=dark'])('labels the embedded headlines at the top, before the first story (%s)', async (query) => {
+  it.each(['', '?theme=dark'])('labels the embedded headlines at the top, before the first story (%s)', async query => {
     renderEmbed(query)
     const headline = await screen.findByText('AI label: AI headline')
     const header = screen.getByText('AI-generated headlines from Actually Relevant').closest('p')!

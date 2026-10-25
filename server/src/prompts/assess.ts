@@ -1,18 +1,9 @@
-import { config } from "../config.js";
-import { Guidelines, buildGuidelinesXml } from "./shared.js";
+import { config } from '../config.js'
+import { Guidelines, buildGuidelinesXml } from './shared.js'
 
-export function buildAssessPrompt(
-  title: string,
-  content: string,
-  publisher: string,
-  url: string,
-  guidelines: Guidelines
-): string {
-  const guidelinesXml = buildGuidelinesXml(guidelines);
-  const truncatedContent = content.substring(
-    0,
-    config.assess.contentMaxLength
-  );
+export function buildAssessPrompt(title: string, content: string, publisher: string, url: string, guidelines: Guidelines): string {
+  const guidelinesXml = buildGuidelinesXml(guidelines)
+  const truncatedContent = content.substring(0, config.assess.contentMaxLength)
 
   return `<ROLE>
 You are a relevance analyst evaluating a news article for its importance to humanity and its long-term future. You produce structured assessments that are clear, evidence-based, and written for a general audience.
@@ -158,5 +149,5 @@ Some variation of "[Publisher] reports [key point]. [Relevance summary]."
   Attributing a claim to a named source or the publisher ("according to Reuters") is fine.
 - Always respond in English, no matter the language of the article.
 </GUIDELINES>
-`;
+`
 }

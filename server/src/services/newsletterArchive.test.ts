@@ -29,7 +29,7 @@ describe('ensureNewsletterSlug', () => {
     expect(mockPrisma.newsletter.update).not.toHaveBeenCalled()
   })
 
-  it('takes the next free suffix when the title\'s slug is taken', async () => {
+  it("takes the next free suffix when the title's slug is taken", async () => {
     mockPrisma.newsletter.findFirst.mockResolvedValueOnce({ id: 'other' }).mockResolvedValueOnce(null)
     expect(await ensureNewsletterSlug({ id: 'n1', title: 'Week 42, 2026', slug: null })).toBe('week-42-2026-2')
     expect(mockPrisma.newsletter.update).toHaveBeenCalledWith({ where: { id: 'n1' }, data: { slug: 'week-42-2026-2' } })
@@ -64,7 +64,7 @@ describe('publicationFields', () => {
 })
 
 describe('toWebMarkdown', () => {
-  it('drops the email template\'s favicon and section-color markers', () => {
+  it("drops the email template's favicon and section-color markers", () => {
     const md = '# Human Development {human-development}\n\n## Title\n{feed:abc-123} Publisher · [original article](https://x)\n'
     expect(toWebMarkdown(md)).toBe('# Human Development\n\n## Title\nPublisher · [original article](https://x)\n')
   })

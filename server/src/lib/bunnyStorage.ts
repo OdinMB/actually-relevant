@@ -34,11 +34,13 @@ export function publicUrl(path: string): string {
 export async function putObject(path: string, body: Buffer, contentType: string): Promise<void> {
   const url = objectUrl(path)
   const checksum = createHash('sha256').update(body).digest('hex').toUpperCase()
-  await withRetry(() => axios.put(url, body, {
-    headers: { AccessKey: config.bunny.storagePassword, 'Content-Type': contentType, Checksum: checksum },
-    timeout: config.bunny.timeoutMs,
-    maxBodyLength: Infinity,
-  }))
+  await withRetry(() =>
+    axios.put(url, body, {
+      headers: { AccessKey: config.bunny.storagePassword, 'Content-Type': contentType, Checksum: checksum },
+      timeout: config.bunny.timeoutMs,
+      maxBodyLength: Infinity,
+    }),
+  )
 }
 
 /** Delete an object; one that is already gone counts as deleted. Idempotent, so retried. */

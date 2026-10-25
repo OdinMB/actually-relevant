@@ -24,8 +24,7 @@ export default function PullQuote({ story, variant = 'centered' }: PullQuoteProp
   // AI picked (and may have translated) a real person's words, so the badge says "Selected by AI"
   const attribution = (
     <footer className="mt-3 text-sm text-neutral-500">
-      <AiBadge accessibleName={AI_DISCLOSURE_COPY.quoteBadgeAccessibleName} className="mr-1 align-middle" />{' '}
-      &mdash;{' '}
+      <AiBadge accessibleName={AI_DISCLOSURE_COPY.quoteBadgeAccessibleName} className="mr-1 align-middle" /> &mdash;{' '}
       {hasPersonAttribution ? (
         <>
           {story.quoteAttribution}, via{' '}
@@ -67,9 +66,7 @@ export default function PullQuote({ story, variant = 'centered' }: PullQuoteProp
           </span>
           <blockquote className="-mt-8">
             {/* No italic — avoids loading Roboto-Italic; decorative quotes provide visual distinction */}
-            <p className="text-xl md:text-2xl text-neutral-700 leading-relaxed px-4">
-              {story.quote}
-            </p>
+            <p className="text-xl md:text-2xl text-neutral-700 leading-relaxed px-4">{story.quote}</p>
           </blockquote>
           {attribution}
         </div>

@@ -230,11 +230,7 @@ async function fetchAllPlunkContacts(): Promise<PlunkFetch> {
 
     // listContacts is declared to return { items }, but the live shape is unverified
     // (it may return { contacts }). Normalize defensively before iterating.
-    const items: unknown = Array.isArray(page?.items)
-      ? page.items
-      : Array.isArray(page?.contacts)
-        ? page.contacts
-        : []
+    const items: unknown = Array.isArray(page?.items) ? page.items : Array.isArray(page?.contacts) ? page.contacts : []
     for (const raw of items as unknown[]) {
       const c = raw as { email?: unknown; subscribed?: unknown; id?: unknown }
       if (typeof c?.email === 'string' && c.email) {

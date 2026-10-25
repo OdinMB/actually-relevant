@@ -27,11 +27,12 @@ export function useUnsavedChangesGuard(dirty: boolean) {
 
   // Read when a navigation is checked, so `markSaved` takes effect before the next render.
   const dirtyRef = useRef(dirty)
-  useLayoutEffect(() => { dirtyRef.current = dirty })
+  useLayoutEffect(() => {
+    dirtyRef.current = dirty
+  })
 
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) =>
-      dirtyRef.current && currentLocation.pathname !== nextLocation.pathname && !leavesUnsaved(nextLocation.state),
+    ({ currentLocation, nextLocation }) => dirtyRef.current && currentLocation.pathname !== nextLocation.pathname && !leavesUnsaved(nextLocation.state),
     [],
   )
   const blocker = useBlocker(shouldBlock)
@@ -41,19 +42,26 @@ export function useUnsavedChangesGuard(dirty: boolean) {
    * leaves without asking, though the form has not re-rendered as clean yet. The next render
    * guards by `dirty` again.
    */
-  const markSaved = useCallback(() => { dirtyRef.current = false }, [])
+  const markSaved = useCallback(() => {
+    dirtyRef.current = false
+  }, [])
 
   useEffect(() => {
     if (!dirty) return
-    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [dirty])
 
-  const guard = useCallback((action: () => void) => {
-    if (dirty) setPending(() => action)
-    else action()
-  }, [dirty])
+  const guard = useCallback(
+    (action: () => void) => {
+      if (dirty) setPending(() => action)
+      else action()
+    },
+    [dirty],
+  )
 
   const confirm = useCallback(() => {
     if (blocker.state === 'blocked') {

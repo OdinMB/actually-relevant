@@ -22,9 +22,7 @@ describe('generateUniqueSlugs', () => {
   it('generates slugs from titles', async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
 
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'Hello World', sourceTitle: 'Source Title' },
-    ])
+    const result = await generateUniqueSlugs([{ id: 's1', title: 'Hello World', sourceTitle: 'Source Title' }])
 
     expect(result.get('s1')).toBe('hello-world')
   })
@@ -32,21 +30,15 @@ describe('generateUniqueSlugs', () => {
   it('falls back to sourceTitle when title is null', async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
 
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: null, sourceTitle: 'My Source Article' },
-    ])
+    const result = await generateUniqueSlugs([{ id: 's1', title: null, sourceTitle: 'My Source Article' }])
 
     expect(result.get('s1')).toBe('my-source-article')
   })
 
   it('resolves conflicts with existing slugs in database', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { slug: 'hello-world' },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ slug: 'hello-world' }])
 
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'Hello World', sourceTitle: 'Source' },
-    ])
+    const result = await generateUniqueSlugs([{ id: 's1', title: 'Hello World', sourceTitle: 'Source' }])
 
     expect(result.get('s1')).toBe('hello-world-2')
   })
@@ -66,10 +58,7 @@ describe('generateUniqueSlugs', () => {
   })
 
   it('resolves conflicts with both existing and batch slugs', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { slug: 'hello-world' },
-      { slug: 'hello-world-2' },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ slug: 'hello-world' }, { slug: 'hello-world-2' }])
 
     const result = await generateUniqueSlugs([
       { id: 's1', title: 'Hello World', sourceTitle: 'Source' },
@@ -83,9 +72,7 @@ describe('generateUniqueSlugs', () => {
   it('excludes the stories being processed from the conflict check', async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
 
-    await generateUniqueSlugs([
-      { id: 's1', title: 'Test Article', sourceTitle: 'Source' },
-    ])
+    await generateUniqueSlugs([{ id: 's1', title: 'Test Article', sourceTitle: 'Source' }])
 
     expect(mockPrisma.story.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,20 +96,13 @@ describe('generateUniqueSlugs', () => {
     const call = mockPrisma.story.findMany.mock.calls[0][0]
     // Should have OR conditions for unique bases only (alpha and beta)
     expect(call.where.OR).toHaveLength(2)
-    expect(call.where.OR).toEqual(
-      expect.arrayContaining([
-        { slug: { startsWith: 'alpha' } },
-        { slug: { startsWith: 'beta' } },
-      ]),
-    )
+    expect(call.where.OR).toEqual(expect.arrayContaining([{ slug: { startsWith: 'alpha' } }, { slug: { startsWith: 'beta' } }]))
   })
 
   it('handles special characters in titles', async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
 
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'AI & Machine Learning: 2024 Update!', sourceTitle: 'Source' },
-    ])
+    const result = await generateUniqueSlugs([{ id: 's1', title: 'AI & Machine Learning: 2024 Update!', sourceTitle: 'Source' }])
 
     // slugify converts special chars to hyphens
     expect(result.get('s1')).toBe('ai-machine-learning-2024-update')

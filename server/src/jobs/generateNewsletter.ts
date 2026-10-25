@@ -3,14 +3,7 @@ import { config } from '../config.js'
 import { StoryStatus } from '@prisma/client'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
-import {
-  createNewsletter,
-  assignStories,
-  selectStoriesForNewsletter,
-  generateContent,
-  generateHtmlContent,
-  sendTest,
-} from '../services/newsletter.js'
+import { createNewsletter, assignStories, selectStoriesForNewsletter, generateContent, generateHtmlContent, sendTest } from '../services/newsletter.js'
 
 const log = createLogger('generate_newsletter')
 
@@ -65,7 +58,7 @@ async function checkWeeklySlot(now: Date, weekKey: string): Promise<'proceed' | 
 
   const ageMs = now.getTime() - draft.updatedAt.getTime()
   if (ageMs < config.newsletter.abandonedDraftMinutes * 60 * 1000) {
-    log.info({ weekKey, newsletterId: draft.id }, 'this week\'s issue is being built by another run, skipping')
+    log.info({ weekKey, newsletterId: draft.id }, "this week's issue is being built by another run, skipping")
     return 'skip'
   }
 
@@ -102,7 +95,7 @@ export async function runGenerateNewsletter(): Promise<void> {
 
   const title = getWeekTitle(now)
 
-  if (await checkWeeklySlot(now, weekKey) === 'skip') return
+  if ((await checkWeeklySlot(now, weekKey)) === 'skip') return
 
   log.info({ title, weekKey, recentStoryCount: count }, 'starting newsletter generation')
 

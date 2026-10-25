@@ -65,7 +65,8 @@ export default function SearchPanel({ query, onQueryChange, onClose }: SearchPan
           <button
             type="button"
             onClick={() => {
-              query ? onQueryChange("") : onClose();
+              if (query) onQueryChange("");
+              else onClose();
             }}
             className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
             aria-label="Close search"

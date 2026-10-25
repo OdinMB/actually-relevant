@@ -84,11 +84,11 @@ export default function IssueEditPage() {
     }
   }, [issueQuery.data])
 
-  const set = (key: string, value: any) => {
+  const set = <K extends keyof IssueForm>(key: K, value: IssueForm[K]) => {
     setForm(f => {
       const next = { ...f, [key]: value }
       if (key === 'name' && !slugManual) {
-        next.slug = slugify(value)
+        next.slug = slugify(next.name)
       }
       return next
     })
@@ -98,9 +98,7 @@ export default function IssueEditPage() {
   const hasChildren = issueQuery.data?.children && issueQuery.data.children.length > 0
 
   // Build parent options: only top-level issues that aren't this issue and have no parent
-  const parentOptions = (issuesQuery.data || [])
-    .filter(i => !i.parentId && i.id !== id)
-    .map(i => ({ value: i.id, label: i.name }))
+  const parentOptions = (issuesQuery.data || []).filter(i => !i.parentId && i.id !== id).map(i => ({ value: i.id, label: i.name }))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -122,7 +120,11 @@ export default function IssueEditPage() {
   const isPending = createIssue.isPending || updateIssue.isPending
 
   if (!isNew && issueQuery.isLoading) {
-    return <div className="flex justify-center py-12"><LoadingSpinner /></div>
+    return (
+      <div className="flex justify-center py-12">
+        <LoadingSpinner />
+      </div>
+    )
   }
 
   return (
@@ -147,7 +149,10 @@ export default function IssueEditPage() {
             id="issue-slug"
             label="Slug"
             value={form.slug}
-            onChange={e => { setSlugManual(true); set('slug', e.target.value) }}
+            onChange={e => {
+              setSlugManual(true)
+              set('slug', e.target.value)
+            }}
             required
           />
           <Textarea id="issue-desc" label="Description" rows={3} value={form.description} onChange={e => set('description', e.target.value)} />
@@ -161,9 +166,7 @@ export default function IssueEditPage() {
               options={parentOptions}
               disabled={!!hasChildren}
             />
-            {hasChildren && (
-              <p className="mt-1 text-xs text-neutral-500">This issue has child issues and cannot be made a child itself.</p>
-            )}
+            {hasChildren && <p className="mt-1 text-xs text-neutral-500">This issue has child issues and cannot be made a child itself.</p>}
           </div>
         </div>
 
@@ -234,7 +237,12 @@ export default function IssueEditPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => set('evaluationCriteria', form.evaluationCriteria.filter((_, j) => j !== i))}
+                    onClick={() =>
+                      set(
+                        'evaluationCriteria',
+                        form.evaluationCriteria.filter((_, j) => j !== i),
+                      )
+                    }
                     className="p-1.5 text-neutral-400 hover:text-red-500"
                   >
                     <TrashIcon className="h-4 w-4" />
@@ -258,10 +266,7 @@ export default function IssueEditPage() {
               <p className="text-xs text-neutral-500 mb-2">Derived from active feed titles. Edit feed names to change these.</p>
               <div className="flex flex-wrap gap-1.5">
                 {issueQuery.data.sourceNames.map((source: string) => (
-                  <span
-                    key={source}
-                    className="bg-neutral-100 text-neutral-600 text-xs px-2 py-0.5 rounded-full"
-                  >
+                  <span key={source} className="bg-neutral-100 text-neutral-600 text-xs px-2 py-0.5 rounded-full">
                     {source}
                   </span>
                 ))}
@@ -281,7 +286,7 @@ export default function IssueEditPage() {
                     placeholder="Label"
                     onChange={e => {
                       const updated = [...form.makeADifference]
-                      updated[i] = { ...updated[i], label: e.target.value }
+                      updated[i] = { ...link, label: e.target.value }
                       set('makeADifference', updated)
                     }}
                     className="w-1/3 rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:ring-brand-500"
@@ -292,14 +297,19 @@ export default function IssueEditPage() {
                     placeholder="URL"
                     onChange={e => {
                       const updated = [...form.makeADifference]
-                      updated[i] = { ...updated[i], url: e.target.value }
+                      updated[i] = { ...link, url: e.target.value }
                       set('makeADifference', updated)
                     }}
                     className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:ring-brand-500"
                   />
                   <button
                     type="button"
-                    onClick={() => set('makeADifference', form.makeADifference.filter((_, j) => j !== i))}
+                    onClick={() =>
+                      set(
+                        'makeADifference',
+                        form.makeADifference.filter((_, j) => j !== i),
+                      )
+                    }
                     className="p-1.5 text-neutral-400 hover:text-red-500"
                   >
                     <TrashIcon className="h-4 w-4" />
@@ -318,8 +328,12 @@ export default function IssueEditPage() {
         </div>
 
         <div className="flex gap-3">
-          <Button type="submit" loading={isPending}>{isNew ? 'Create Issue' : 'Save Changes'}</Button>
-          <Button type="button" variant="secondary" onClick={() => navigate('/admin/issues')}>Cancel</Button>
+          <Button type="submit" loading={isPending}>
+            {isNew ? 'Create Issue' : 'Save Changes'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => navigate('/admin/issues')}>
+            Cancel
+          </Button>
         </div>
       </form>
 

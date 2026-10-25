@@ -6,7 +6,9 @@ import { axisVector, createFeed, createIssue, createStory, describeDb, useTestDa
 const mockGenerate = vi.hoisted(() => vi.fn())
 const mockEnsureEmbeddings = vi.hoisted(() => vi.fn())
 vi.mock('./embedding.js', () => ({
-  generateEmbeddingForContent: mockGenerate, generateSearchEmbedding: vi.fn(), ensureEmbedding: vi.fn(),
+  generateEmbeddingForContent: mockGenerate,
+  generateSearchEmbedding: vi.fn(),
+  ensureEmbedding: vi.fn(),
   ensureEmbeddings: mockEnsureEmbeddings,
 }))
 
@@ -19,8 +21,10 @@ async function story(status: 'analyzed' | 'published', title = 'A title') {
 }
 
 const embeddingOf = async (id: string) =>
-  (await prisma.$queryRaw<{ has: boolean; hash: string | null }[]>`
-    SELECT embedding IS NOT NULL AS has, embedding_content_hash AS hash FROM stories WHERE id = ${id}`)[0]
+  (
+    await prisma.$queryRaw<{ has: boolean; hash: string | null }[]>`
+    SELECT embedding IS NOT NULL AS has, embedding_content_hash AS hash FROM stories WHERE id = ${id}`
+  )[0]
 
 describeDb('updateStory (PostgreSQL)', () => {
   useTestDatabase()
@@ -76,7 +80,6 @@ describeDb('updateStory (PostgreSQL)', () => {
   })
 
   it('an unknown story fails as not found', async () => {
-    await expect(updateStory('00000000-0000-0000-0000-000000000000', { status: 'published' }))
-      .rejects.toBeInstanceOf(NotFoundError)
+    await expect(updateStory('00000000-0000-0000-0000-000000000000', { status: 'published' })).rejects.toBeInstanceOf(NotFoundError)
   })
 })

@@ -25,9 +25,20 @@ const CRAWLED = new Date('2026-09-01T10:00:00Z')
 
 function story(n: number) {
   return {
-    id: `story-${n}`, title: `Headline ${n}`, sourceTitle: `Source ${n}`, sourceUrl: `https://news.example/${n}`, slug: `headline-${n}`,
-    summary: `Summary ${n}`, relevanceSummary: null, relevanceReasons: null, antifactors: null, relevance: 7, emotionTag: null, dateCrawled: CRAWLED,
-    issue: { name: `Issue ${n}`, parent: null }, feed: { title: `Publisher ${n}`, displayTitle: null, issue: null },
+    id: `story-${n}`,
+    title: `Headline ${n}`,
+    sourceTitle: `Source ${n}`,
+    sourceUrl: `https://news.example/${n}`,
+    slug: `headline-${n}`,
+    summary: `Summary ${n}`,
+    relevanceSummary: null,
+    relevanceReasons: null,
+    antifactors: null,
+    relevance: 7,
+    emotionTag: null,
+    dateCrawled: CRAWLED,
+    issue: { name: `Issue ${n}`, parent: null },
+    feed: { title: `Publisher ${n}`, displayTitle: null, issue: null },
   }
 }
 
@@ -53,7 +64,7 @@ describe('createStandaloneEpisode', () => {
 })
 
 describe('searchStandaloneStories', () => {
-  it('filters through the admin list\'s published where clause and pages the result', async () => {
+  it("filters through the admin list's published where clause and pages the result", async () => {
     mockPrisma.story.findMany.mockResolvedValueOnce([story(3)])
     mockPrisma.story.count.mockResolvedValueOnce(41)
     const filters = { issueId: 'issue-1', search: 'water', crawledAfter: '2026-09-01T00:00:00.000Z' }
@@ -62,8 +73,26 @@ describe('searchStandaloneStories', () => {
     expect(query.where).toEqual(publishedStoryWhere(filters))
     expect(query.where.status).toBe('published')
     expect(query).toMatchObject({ skip: 40, take: 20 })
-    expect(result).toMatchObject({ total: 41, page: 3, pageSize: 20, totalPages: 3, minStories: config.podcast.minStories, maxStories: config.podcast.maxStories })
-    expect(result.data).toEqual([{ id: 'story-3', title: 'Headline 3', publisher: 'Publisher 3', sourceUrl: 'https://news.example/3', slug: 'headline-3', issue: 'Issue 3', relevance: 7, dateCrawled: CRAWLED }])
+    expect(result).toMatchObject({
+      total: 41,
+      page: 3,
+      pageSize: 20,
+      totalPages: 3,
+      minStories: config.podcast.minStories,
+      maxStories: config.podcast.maxStories,
+    })
+    expect(result.data).toEqual([
+      {
+        id: 'story-3',
+        title: 'Headline 3',
+        publisher: 'Publisher 3',
+        sourceUrl: 'https://news.example/3',
+        slug: 'headline-3',
+        issue: 'Issue 3',
+        relevance: 7,
+        dateCrawled: CRAWLED,
+      },
+    ])
   })
 
   it('lists the most relevant first with unrated stories last, then the newest', async () => {
@@ -75,7 +104,7 @@ describe('searchStandaloneStories', () => {
 })
 
 describe('suggestStandaloneStories', () => {
-  it('returns the model\'s choice in its order from the filtered pool, capped at suggestPoolMax, and writes nothing', async () => {
+  it("returns the model's choice in its order from the filtered pool, capped at suggestPoolMax, and writes nothing", async () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(standalone())
     mockPrisma.story.findMany.mockResolvedValueOnce([1, 2, 3, 4, 5].map(story))
     mockInvoke.mockResolvedValueOnce({ raw: {}, parsed: { selectedIds: ['story-4', 'story-1', 'story-5', 'story-2'] } })
@@ -121,7 +150,12 @@ describe('saveStandaloneStories', () => {
     const [write] = writes()
     expect(write).toMatchObject({ storyIds: ids, storiesSelectedAt: NOW, stage: 'selected', mode: 'interactive' })
     expect(write).not.toHaveProperty('humanEdited')
-    expect(write.episodeStories.map((s: { ref: number; id: string }) => [s.ref, s.id])).toEqual([[1, 'story-3'], [2, 'story-1'], [3, 'story-4'], [4, 'story-2']])
+    expect(write.episodeStories.map((s: { ref: number; id: string }) => [s.ref, s.id])).toEqual([
+      [1, 'story-3'],
+      [2, 'story-1'],
+      [3, 'story-4'],
+      [4, 'story-2'],
+    ])
     expect(mockPrisma.story.findMany.mock.calls[0][0].where).toEqual({ id: { in: ids }, status: 'published' })
   })
 

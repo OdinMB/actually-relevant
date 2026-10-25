@@ -1,10 +1,10 @@
 import prisma from '../lib/prisma.js'
-import type { Issue } from '@prisma/client'
+import type { Issue, Prisma } from '@prisma/client'
 import { BadRequestError, ConflictError } from '../utils/errors.js'
 
 // --- JSON field helpers ---
 
-function serializeJsonFields(data: Record<string, any>): Record<string, any> {
+function serializeJsonFields(data: Record<string, unknown>): Record<string, unknown> {
   const result = { ...data }
   if ('evaluationCriteria' in result) {
     result.evaluationCriteria = JSON.stringify(result.evaluationCriteria ?? [])
@@ -24,11 +24,7 @@ function parseJsonFields(issue: Issue) {
 }
 
 function deriveSourceNames(feeds: { title: string; displayTitle: string | null; active: boolean }[]): string[] {
-  return [...new Set(
-    feeds
-      .filter(f => f.active)
-      .map(f => f.displayTitle || f.title)
-  )].sort()
+  return [...new Set(feeds.filter(f => f.active).map(f => f.displayTitle || f.title))].sort()
 }
 
 function safeParseJson<T>(value: string, fallback: T): T {
@@ -53,10 +49,10 @@ export async function getAllIssues() {
           title: true,
           displayTitle: true,
           active: true,
-          _count: { select: { stories: { where: { status: 'published' } } } }
-        }
-      }
-    }
+          _count: { select: { stories: { where: { status: 'published' } } } },
+        },
+      },
+    },
   })
   return issues.map(({ feeds, ...issue }) => ({
     ...parseJsonFields(issue as unknown as Issue),
@@ -106,23 +102,26 @@ export async function createIssue(data: {
   if (data.parentId) {
     await validateParent(data.parentId)
   }
-  const issue = await prisma.issue.create({ data: serializeJsonFields(data) as any })
+  const issue = await prisma.issue.create({ data: serializeJsonFields(data) as Prisma.IssueUncheckedCreateInput })
   return parseJsonFields(issue)
 }
 
-export async function updateIssue(id: string, data: Partial<{
-  name: string
-  slug: string
-  description: string
-  promptFactors: string
-  promptAntifactors: string
-  promptRatings: string
-  parentId: string | null
-  intro: string
-  evaluationIntro: string
-  evaluationCriteria: string[]
-  makeADifference: { label: string; url: string }[]
-}>) {
+export async function updateIssue(
+  id: string,
+  data: Partial<{
+    name: string
+    slug: string
+    description: string
+    promptFactors: string
+    promptAntifactors: string
+    promptRatings: string
+    parentId: string | null
+    intro: string
+    evaluationIntro: string
+    evaluationCriteria: string[]
+    makeADifference: { label: string; url: string }[]
+  }>,
+) {
   if ('parentId' in data && data.parentId !== undefined) {
     if (data.parentId !== null) {
       await validateParent(data.parentId, id)
@@ -164,7 +163,7 @@ const PUBLIC_ISSUE_SELECT = {
   parentId: true,
 } as const
 
-function parsePublicIssueJson(issue: any) {
+function parsePublicIssueJson<T extends Pick<Issue, 'evaluationCriteria' | 'makeADifference'>>(issue: T) {
   return {
     ...issue,
     evaluationCriteria: safeParseJson(issue.evaluationCriteria, []),
@@ -191,10 +190,7 @@ export async function getPublicIssues() {
   })
   return issues.map(({ feeds, ...issue }) => ({
     ...parsePublicIssueJson(issue),
-    sourceNames: deriveSourceNames([
-      ...feeds,
-      ...issue.children.flatMap(c => c.feeds),
-    ]),
+    sourceNames: deriveSourceNames([...feeds, ...issue.children.flatMap(c => c.feeds)]),
     children: issue.children.map(({ feeds: childFeeds, ...child }) => ({
       ...parsePublicIssueJson(child),
       sourceNames: deriveSourceNames(childFeeds),
@@ -231,15 +227,13 @@ export async function getPublicIssueBySlug(slug: string) {
   const { feeds, ...rest } = issue
   return {
     ...parsePublicIssueJson(rest),
-    sourceNames: deriveSourceNames([
-      ...feeds,
-      ...(issue.children?.flatMap(c => c.feeds) ?? []),
-    ]),
-    children: issue.children?.map(({ feeds: childFeeds, ...child }) => ({
-      ...parsePublicIssueJson(child),
-      sourceNames: deriveSourceNames(childFeeds),
-      publishedStoryCount: childFeeds.reduce((sum, f) => sum + f._count.stories, 0),
-    })) ?? [],
+    sourceNames: deriveSourceNames([...feeds, ...(issue.children?.flatMap(c => c.feeds) ?? [])]),
+    children:
+      issue.children?.map(({ feeds: childFeeds, ...child }) => ({
+        ...parsePublicIssueJson(child),
+        sourceNames: deriveSourceNames(childFeeds),
+        publishedStoryCount: childFeeds.reduce((sum, f) => sum + f._count.stories, 0),
+      })) ?? [],
     parent: issue.parent,
   }
 }
@@ -247,10 +241,7 @@ export async function getPublicIssueBySlug(slug: string) {
 // --- Delete ---
 
 export async function deleteIssue(id: string): Promise<void> {
-  const [feedCount, childCount] = await Promise.all([
-    prisma.feed.count({ where: { issueId: id } }),
-    prisma.issue.count({ where: { parentId: id } }),
-  ])
+  const [feedCount, childCount] = await Promise.all([prisma.feed.count({ where: { issueId: id } }), prisma.issue.count({ where: { parentId: id } })])
   if (feedCount > 0) {
     throw new ConflictError('Cannot delete issue with existing feeds')
   }

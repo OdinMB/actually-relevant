@@ -47,7 +47,7 @@ function migrationNames(paths: string): Set<string> {
   const names = new Set<string>()
   for (const line of paths.split('\n')) {
     const match = /^prisma\/migrations\/([^/]+)\/migration\.sql$/.exec(line.trim())
-    if (match) names.add(match[1])
+    if (match) names.add(match[1]!)
   }
   return names
 }
@@ -62,8 +62,8 @@ function main() {
 
   const dir = path.join(SERVER_DIR, MIGRATIONS)
   const all: Migration[] = readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && existsSync(path.join(dir, d.name, 'migration.sql')))
-    .map((d) => ({ name: d.name, sql: readFileSync(path.join(dir, d.name, 'migration.sql'), 'utf8') }))
+    .filter(d => d.isDirectory() && existsSync(path.join(dir, d.name, 'migration.sql')))
+    .map(d => ({ name: d.name, sql: readFileSync(path.join(dir, d.name, 'migration.sql'), 'utf8') }))
 
   const problems = findProblems(all, added)
   const scope = `${all.length} migrations, ${added.size} added since ${base} (${mergeBase.slice(0, 8)})`

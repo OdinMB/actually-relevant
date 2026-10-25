@@ -10,8 +10,7 @@ const { lead, tail } = AI_DISCLOSURE_COPY.podcastSubtitle
 export default function PodcastSubtitle({ className = 'page-intro' }: { className?: string }) {
   return (
     <p className={className} data-podcast-subtitle>
-      {lead}{' '}
-      <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle text-neutral-700" />
+      {lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle text-neutral-700" />
       {tail}
     </p>
   )

@@ -14,7 +14,7 @@ const router = createBrowserRouter(appRoutes)
 
 // Accessibility: log a11y violations to console during development
 if (import.meta.env.DEV) {
-  import('@axe-core/react').then((axe) => {
+  import('@axe-core/react').then(axe => {
     axe.default(React, ReactDOM, 1000)
   })
 }

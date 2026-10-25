@@ -40,7 +40,7 @@ const mockPrisma = vi.hoisted(() => ({
   $disconnect: vi.fn(),
   $executeRaw: vi.fn(),
   $queryRaw: vi.fn().mockResolvedValue([]),
-  $transaction: vi.fn((args: any) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
+  $transaction: vi.fn((args: any) => (Array.isArray(args) ? Promise.all(args) : args(mockPrisma))),
 }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
@@ -59,9 +59,16 @@ vi.mock('../../services/embedding.js', () => ({
   ensureEmbedding: mockEnsureEmbedding,
   ensureEmbeddings: mockEnsureEmbeddings,
 }))
-const mockFetchStoryForEmbedding = vi.hoisted(() => vi.fn().mockResolvedValue({
-  id: 'story-1', title: 'Test', titleLabel: null, summary: null, embeddingContentHash: null, status: 'selected',
-}))
+const mockFetchStoryForEmbedding = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    id: 'story-1',
+    title: 'Test',
+    titleLabel: null,
+    summary: null,
+    embeddingContentHash: null,
+    status: 'selected',
+  }),
+)
 vi.mock('../../lib/vectors.js', () => ({
   fetchStoryForEmbedding: mockFetchStoryForEmbedding,
   saveEmbeddingTx: vi.fn(),
@@ -89,7 +96,7 @@ vi.mock('../../services/analysis.js', () => ({
 const mockTransition = vi.hoisted(() => vi.fn())
 const mockPartition = vi.hoisted(() => vi.fn())
 const mockLifecycleDissolve = vi.hoisted(() => vi.fn())
-vi.mock('../../services/storyLifecycle.js', async (importOriginal) => ({
+vi.mock('../../services/storyLifecycle.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../../services/storyLifecycle.js')>()),
   transition: mockTransition,
   partition: mockPartition,
@@ -126,9 +133,7 @@ describe('Admin Stories API', () => {
       mockPrisma.story.findMany.mockResolvedValue([storyWithRelations])
       mockPrisma.story.count.mockResolvedValue(1)
 
-      const res = await request(app)
-        .get('/api/admin/stories')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.data).toHaveLength(1)
       expect(res.body.total).toBe(1)
@@ -140,14 +145,12 @@ describe('Admin Stories API', () => {
       mockPrisma.story.findMany.mockResolvedValue([storyWithRelations])
       mockPrisma.story.count.mockResolvedValue(1)
 
-      const res = await request(app)
-        .get('/api/admin/stories')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories').set(authHeader())
       expect(res.status).toBe(200)
       expect(mockPrisma.story.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ status: { not: 'trashed' } }),
-        })
+        }),
       )
     })
 
@@ -155,14 +158,12 @@ describe('Admin Stories API', () => {
       mockPrisma.story.findMany.mockResolvedValue([])
       mockPrisma.story.count.mockResolvedValue(0)
 
-      const res = await request(app)
-        .get('/api/admin/stories?status=fetched')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories?status=fetched').set(authHeader())
       expect(res.status).toBe(200)
       expect(mockPrisma.story.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ status: 'fetched' }),
-        })
+        }),
       )
     })
 
@@ -170,14 +171,12 @@ describe('Admin Stories API', () => {
       mockPrisma.story.findMany.mockResolvedValue([])
       mockPrisma.story.count.mockResolvedValue(0)
 
-      const res = await request(app)
-        .get('/api/admin/stories?status=all')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories?status=all').set(authHeader())
       expect(res.status).toBe(200)
       expect(mockPrisma.story.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.not.objectContaining({ status: expect.anything() }),
-        })
+        }),
       )
     })
 
@@ -185,9 +184,7 @@ describe('Admin Stories API', () => {
       mockPrisma.story.findMany.mockResolvedValue([])
       mockPrisma.story.count.mockResolvedValue(50)
 
-      const res = await request(app)
-        .get('/api/admin/stories?page=2&pageSize=10')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories?page=2&pageSize=10').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.page).toBe(2)
       expect(res.body.pageSize).toBe(10)
@@ -197,16 +194,12 @@ describe('Admin Stories API', () => {
       mockPrisma.story.findMany.mockResolvedValue([])
       mockPrisma.story.count.mockResolvedValue(0)
 
-      const res = await request(app)
-        .get('/api/admin/stories?sort=rating_desc')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories?sort=rating_desc').set(authHeader())
       expect(res.status).toBe(200)
     })
 
     it('rejects invalid query params', async () => {
-      const res = await request(app)
-        .get('/api/admin/stories?status=invalid')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories?status=invalid').set(authHeader())
       expect(res.status).toBe(400)
     })
   })
@@ -218,9 +211,7 @@ describe('Admin Stories API', () => {
         { status: 'published', _count: { status: 5 } },
       ])
 
-      const res = await request(app)
-        .get('/api/admin/stories/stats')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories/stats').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.fetched).toBe(10)
       expect(res.body.published).toBe(5)
@@ -231,9 +222,7 @@ describe('Admin Stories API', () => {
     it('returns a single story with relations', async () => {
       mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations)
 
-      const res = await request(app)
-        .get('/api/admin/stories/story-1')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories/story-1').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.sourceTitle).toBe('Test Article')
       expect(res.body.feed).toBeDefined()
@@ -242,9 +231,7 @@ describe('Admin Stories API', () => {
     it('returns 404 for unknown story', async () => {
       mockPrisma.story.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .get('/api/admin/stories/unknown')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories/unknown').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -254,38 +241,29 @@ describe('Admin Stories API', () => {
       mockPrisma.feed.findUnique.mockResolvedValue(sampleFeed())
       mockPrisma.story.create.mockResolvedValue(sampleStory())
 
-      const res = await request(app)
-        .post('/api/admin/stories')
-        .set(authHeader())
-        .send({
-          sourceUrl: 'https://example.com/article',
-          sourceTitle: 'Test Article',
-          sourceContent: 'Test content',
-          feedId: '00000000-0000-0000-0000-000000000001',
-        })
+      const res = await request(app).post('/api/admin/stories').set(authHeader()).send({
+        sourceUrl: 'https://example.com/article',
+        sourceTitle: 'Test Article',
+        sourceContent: 'Test content',
+        feedId: '00000000-0000-0000-0000-000000000001',
+      })
       expect(res.status).toBe(201)
     })
 
     it('returns 400 for missing fields', async () => {
-      const res = await request(app)
-        .post('/api/admin/stories')
-        .set(authHeader())
-        .send({})
+      const res = await request(app).post('/api/admin/stories').set(authHeader()).send({})
       expect(res.status).toBe(400)
     })
 
     it('returns 400 when feed not found', async () => {
       mockPrisma.feed.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .post('/api/admin/stories')
-        .set(authHeader())
-        .send({
-          sourceUrl: 'https://example.com/article',
-          sourceTitle: 'Test',
-          sourceContent: 'Content',
-          feedId: '00000000-0000-0000-0000-000000000000',
-        })
+      const res = await request(app).post('/api/admin/stories').set(authHeader()).send({
+        sourceUrl: 'https://example.com/article',
+        sourceTitle: 'Test',
+        sourceContent: 'Content',
+        feedId: '00000000-0000-0000-0000-000000000000',
+      })
       expect(res.status).toBe(400)
       expect(res.body.error).toBe('Feed not found')
     })
@@ -294,15 +272,12 @@ describe('Admin Stories API', () => {
       mockPrisma.feed.findUnique.mockResolvedValue(sampleFeed())
       mockPrisma.story.create.mockRejectedValue({ code: 'P2002' })
 
-      const res = await request(app)
-        .post('/api/admin/stories')
-        .set(authHeader())
-        .send({
-          sourceUrl: 'https://example.com/article',
-          sourceTitle: 'Test',
-          sourceContent: 'Content',
-          feedId: '00000000-0000-0000-0000-000000000001',
-        })
+      const res = await request(app).post('/api/admin/stories').set(authHeader()).send({
+        sourceUrl: 'https://example.com/article',
+        sourceTitle: 'Test',
+        sourceContent: 'Content',
+        feedId: '00000000-0000-0000-0000-000000000001',
+      })
       expect(res.status).toBe(409)
     })
   })
@@ -312,10 +287,7 @@ describe('Admin Stories API', () => {
       mockPrisma.story.update.mockResolvedValue(sampleStory({ title: 'Updated' }))
       mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ title: 'Updated' }))
 
-      const res = await request(app)
-        .put('/api/admin/stories/story-1')
-        .set(authHeader())
-        .send({ title: 'Updated' })
+      const res = await request(app).put('/api/admin/stories/story-1').set(authHeader()).send({ title: 'Updated' })
       expect(res.status).toBe(200)
       expect(mockTransition).not.toHaveBeenCalled()
     })
@@ -324,10 +296,7 @@ describe('Admin Stories API', () => {
       mockPrisma.story.update.mockResolvedValue(sampleStory())
       mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'rejected' }))
 
-      const res = await request(app)
-        .put('/api/admin/stories/story-1')
-        .set(authHeader())
-        .send({ title: 'Edited', status: 'rejected' })
+      const res = await request(app).put('/api/admin/stories/story-1').set(authHeader()).send({ title: 'Edited', status: 'rejected' })
 
       expect(res.status).toBe(200)
       expect(mockPrisma.story.update).toHaveBeenCalledWith({ where: { id: 'story-1' }, data: { title: 'Edited' } })
@@ -337,10 +306,7 @@ describe('Admin Stories API', () => {
     it('returns 404 for unknown story', async () => {
       mockPrisma.story.update.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .put('/api/admin/stories/unknown')
-        .set(authHeader())
-        .send({ title: 'Updated' })
+      const res = await request(app).put('/api/admin/stories/unknown').set(authHeader()).send({ title: 'Updated' })
       expect(res.status).toBe(404)
     })
   })
@@ -349,10 +315,7 @@ describe('Admin Stories API', () => {
     it('moves the story as the editor and answers with it', async () => {
       mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'published' }))
 
-      const res = await request(app)
-        .put('/api/admin/stories/story-1/status')
-        .set(authHeader())
-        .send({ status: 'published' })
+      const res = await request(app).put('/api/admin/stories/story-1/status').set(authHeader()).send({ status: 'published' })
       expect(res.status).toBe(200)
       expect(res.body.status).toBe('published')
       expect(mockTransition).toHaveBeenCalledWith(['story-1'], { to: 'published' }, 'editor')
@@ -362,19 +325,13 @@ describe('Admin Stories API', () => {
       mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: 'story-1', status: 'trashed' }] })
       mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'trashed' }))
 
-      const res = await request(app)
-        .put('/api/admin/stories/story-1/status')
-        .set(authHeader())
-        .send({ status: 'trashed' })
+      const res = await request(app).put('/api/admin/stories/story-1/status').set(authHeader()).send({ status: 'trashed' })
       expect(res.status).toBe(200)
       expect(res.body.status).toBe('trashed')
     })
 
     it('rejects invalid status', async () => {
-      const res = await request(app)
-        .put('/api/admin/stories/story-1/status')
-        .set(authHeader())
-        .send({ status: 'invalid' })
+      const res = await request(app).put('/api/admin/stories/story-1/status').set(authHeader()).send({ status: 'invalid' })
       expect(res.status).toBe(400)
     })
   })
@@ -395,20 +352,14 @@ describe('Admin Stories API', () => {
     })
 
     it('rejects empty ids array', async () => {
-      const res = await request(app)
-        .post('/api/admin/stories/bulk-status')
-        .set(authHeader())
-        .send({ ids: [], status: 'published' })
+      const res = await request(app).post('/api/admin/stories/bulk-status').set(authHeader()).send({ ids: [], status: 'published' })
       expect(res.status).toBe(400)
     })
-
   })
 
   describe('POST /api/admin/stories/preassess', () => {
     it('pre-assesses stories with given IDs', async () => {
-      mockPreAssessStories.mockResolvedValue([
-        { storyId: '00000000-0000-0000-0000-000000000001', rating: 4, emotionTag: 'calm' },
-      ])
+      mockPreAssessStories.mockResolvedValue([{ storyId: '00000000-0000-0000-0000-000000000001', rating: 4, emotionTag: 'calm' }])
 
       const res = await request(app)
         .post('/api/admin/stories/preassess')
@@ -420,17 +371,10 @@ describe('Admin Stories API', () => {
     })
 
     it('pre-assesses all fetched stories when no IDs given', async () => {
-      mockPrisma.story.findMany.mockResolvedValue([
-        { ...sampleStory({ id: 'story-1' }), feed: { ...sampleFeed(), issue: sampleIssue() } },
-      ])
-      mockPreAssessStories.mockResolvedValue([
-        { storyId: 'story-1', rating: 3, emotionTag: 'calm' },
-      ])
+      mockPrisma.story.findMany.mockResolvedValue([{ ...sampleStory({ id: 'story-1' }), feed: { ...sampleFeed(), issue: sampleIssue() } }])
+      mockPreAssessStories.mockResolvedValue([{ storyId: 'story-1', rating: 3, emotionTag: 'calm' }])
 
-      const res = await request(app)
-        .post('/api/admin/stories/preassess')
-        .set(authHeader())
-        .send({})
+      const res = await request(app).post('/api/admin/stories/preassess').set(authHeader()).send({})
       expect(res.status).toBe(200)
       expect(res.body.processed).toBe(1)
     })
@@ -438,10 +382,7 @@ describe('Admin Stories API', () => {
     it('returns empty results when no fetched stories', async () => {
       mockPrisma.story.findMany.mockResolvedValue([])
 
-      const res = await request(app)
-        .post('/api/admin/stories/preassess')
-        .set(authHeader())
-        .send({})
+      const res = await request(app).post('/api/admin/stories/preassess').set(authHeader()).send({})
       expect(res.status).toBe(200)
       expect(res.body.processed).toBe(0)
     })
@@ -452,9 +393,7 @@ describe('Admin Stories API', () => {
       mockAssessStory.mockResolvedValue('advanced')
       mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations)
 
-      const res = await request(app)
-        .post('/api/admin/stories/story-1/assess')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/story-1/assess').set(authHeader())
       expect(res.status).toBe(200)
       expect(mockAssessStory).toHaveBeenCalledWith('story-1', 'editor')
     })
@@ -462,9 +401,7 @@ describe('Admin Stories API', () => {
     it('returns 409 for a trashed story', async () => {
       mockAssessStory.mockResolvedValue('skipped')
 
-      const res = await request(app)
-        .post('/api/admin/stories/story-1/assess')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/story-1/assess').set(authHeader())
       expect(res.status).toBe(409)
       expect(res.body.error).toMatch(/trashed/)
     })
@@ -472,9 +409,7 @@ describe('Admin Stories API', () => {
     it('returns 404 when story not found', async () => {
       mockAssessStory.mockRejectedValue(new NotFoundError('Story not found'))
 
-      const res = await request(app)
-        .post('/api/admin/stories/unknown/assess')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/unknown/assess').set(authHeader())
       expect(res.status).toBe(404)
       expect(res.body).toEqual({ error: 'Story not found' })
     })
@@ -482,9 +417,7 @@ describe('Admin Stories API', () => {
     it('returns 500 with the route text on an unexpected failure', async () => {
       mockAssessStory.mockRejectedValue(new Error('model down'))
 
-      const res = await request(app)
-        .post('/api/admin/stories/story-1/assess')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/story-1/assess').set(authHeader())
       expect(res.status).toBe(500)
       expect(res.body).toEqual({ error: 'Failed to assess story' })
     })
@@ -501,10 +434,7 @@ describe('Admin Stories API', () => {
         .post('/api/admin/stories/select')
         .set(authHeader())
         .send({
-          storyIds: [
-            '00000000-0000-0000-0000-000000000001',
-            '00000000-0000-0000-0000-000000000002',
-          ],
+          storyIds: ['00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002'],
         })
       expect(res.status).toBe(200)
       expect(res.body.selected).toHaveLength(1)
@@ -512,10 +442,7 @@ describe('Admin Stories API', () => {
     })
 
     it('rejects empty storyIds', async () => {
-      const res = await request(app)
-        .post('/api/admin/stories/select')
-        .set(authHeader())
-        .send({ storyIds: [] })
+      const res = await request(app).post('/api/admin/stories/select').set(authHeader()).send({ storyIds: [] })
       expect(res.status).toBe(400)
     })
   })
@@ -524,9 +451,7 @@ describe('Admin Stories API', () => {
     it('publishes a story', async () => {
       mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'published' }))
 
-      const res = await request(app)
-        .post('/api/admin/stories/story-1/publish')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/story-1/publish').set(authHeader())
       expect(res.status).toBe(200)
       expect(mockTransition).toHaveBeenCalledWith(['story-1'], { to: 'published' }, 'editor')
     })
@@ -534,9 +459,7 @@ describe('Admin Stories API', () => {
     it('returns 404 for unknown story', async () => {
       mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: 'unknown', status: null }] })
 
-      const res = await request(app)
-        .post('/api/admin/stories/unknown/publish')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/unknown/publish').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -545,9 +468,7 @@ describe('Admin Stories API', () => {
     it('rejects a story as the editor', async () => {
       mockPrisma.story.findUniqueOrThrow.mockResolvedValue(sampleStory({ status: 'rejected' }))
 
-      const res = await request(app)
-        .post('/api/admin/stories/story-1/reject')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/story-1/reject').set(authHeader())
       expect(res.status).toBe(200)
       expect(mockTransition).toHaveBeenCalledWith(['story-1'], { to: 'rejected', reason: 'editor' }, 'editor')
     })
@@ -555,9 +476,7 @@ describe('Admin Stories API', () => {
     it('returns 404 for unknown story', async () => {
       mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: 'unknown', status: null }] })
 
-      const res = await request(app)
-        .post('/api/admin/stories/unknown/reject')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/unknown/reject').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -568,18 +487,14 @@ describe('Admin Stories API', () => {
       mockPrisma.newsletter.findMany.mockResolvedValue([])
       mockPrisma.podcast.findMany.mockResolvedValue([])
 
-      const res = await request(app)
-        .delete('/api/admin/stories/story-1')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/stories/story-1').set(authHeader())
       expect(res.status).toBe(204)
     })
 
     it('returns 404 for unknown story', async () => {
       mockPrisma.story.delete.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .delete('/api/admin/stories/unknown')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/stories/unknown').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -601,19 +516,13 @@ describe('Admin Stories API', () => {
       mockBulkPreAssess.mockResolvedValue(undefined)
       const ids = ['00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002']
 
-      const res = await request(app)
-        .post('/api/admin/stories/bulk-preassess')
-        .set(authHeader())
-        .send({ storyIds: ids })
+      const res = await request(app).post('/api/admin/stories/bulk-preassess').set(authHeader()).send({ storyIds: ids })
       expect(res.status).toBe(202)
       expect(mockBulkPreAssess).toHaveBeenCalledWith(ids, res.body.taskId)
     })
 
     it('rejects empty storyIds', async () => {
-      const res = await request(app)
-        .post('/api/admin/stories/bulk-preassess')
-        .set(authHeader())
-        .send({ storyIds: [] })
+      const res = await request(app).post('/api/admin/stories/bulk-preassess').set(authHeader()).send({ storyIds: [] })
       expect(res.status).toBe(400)
     })
 
@@ -639,10 +548,7 @@ describe('Admin Stories API', () => {
     })
 
     it('rejects empty storyIds', async () => {
-      const res = await request(app)
-        .post('/api/admin/stories/bulk-assess')
-        .set(authHeader())
-        .send({ storyIds: [] })
+      const res = await request(app).post('/api/admin/stories/bulk-assess').set(authHeader()).send({ storyIds: [] })
       expect(res.status).toBe(400)
     })
 
@@ -688,10 +594,7 @@ describe('Admin Stories API', () => {
     })
 
     it('rejects empty storyIds', async () => {
-      const res = await request(app)
-        .post('/api/admin/stories/bulk-select')
-        .set(authHeader())
-        .send({ storyIds: [] })
+      const res = await request(app).post('/api/admin/stories/bulk-select').set(authHeader()).send({ storyIds: [] })
       expect(res.status).toBe(400)
     })
 
@@ -738,16 +641,10 @@ describe('Admin Stories API', () => {
       const ids = ['00000000-0000-0000-0000-000000000001']
 
       // First request: creates task
-      await request(app)
-        .post('/api/admin/stories/bulk-preassess')
-        .set(authHeader())
-        .send({ storyIds: ids })
+      await request(app).post('/api/admin/stories/bulk-preassess').set(authHeader()).send({ storyIds: ids })
 
       // Second request: same IDs, should be rejected
-      const res = await request(app)
-        .post('/api/admin/stories/bulk-preassess')
-        .set(authHeader())
-        .send({ storyIds: ids })
+      const res = await request(app).post('/api/admin/stories/bulk-preassess').set(authHeader()).send({ storyIds: ids })
       expect(res.status).toBe(409)
       expect(res.body.error).toContain('already being processed')
       expect(res.body.skipped).toEqual(ids)
@@ -787,9 +684,7 @@ describe('Admin Stories API', () => {
         .send({ storyIds: ['00000000-0000-0000-0000-000000000001'] })
       const taskId = createRes.body.taskId
 
-      const res = await request(app)
-        .get(`/api/admin/stories/tasks/${taskId}`)
-        .set(authHeader())
+      const res = await request(app).get(`/api/admin/stories/tasks/${taskId}`).set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.id).toBe(taskId)
       expect(res.body.type).toBe('assess')
@@ -799,9 +694,7 @@ describe('Admin Stories API', () => {
     })
 
     it('returns 404 for unknown task', async () => {
-      const res = await request(app)
-        .get('/api/admin/stories/tasks/nonexistent')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories/tasks/nonexistent').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -815,9 +708,7 @@ describe('Admin Stories API', () => {
         .set(authHeader())
         .send({ storyIds: ['00000000-0000-0000-0000-000000000001'] })
 
-      const res = await request(app)
-        .get('/api/admin/stories/processing')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/stories/processing').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.storyIds).toContain('00000000-0000-0000-0000-000000000001')
     })
@@ -825,17 +716,14 @@ describe('Admin Stories API', () => {
 
   describe('POST /api/admin/stories/:id/dissolve-cluster', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app)
-        .post('/api/admin/stories/story-1/dissolve-cluster')
+      const res = await request(app).post('/api/admin/stories/story-1/dissolve-cluster')
       expect(res.status).toBe(401)
     })
 
     it('returns 400 when story is not in a cluster', async () => {
       mockPrisma.story.findUnique.mockResolvedValue({ clusterId: null })
 
-      const res = await request(app)
-        .post('/api/admin/stories/story-1/dissolve-cluster')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/story-1/dissolve-cluster').set(authHeader())
       expect(res.status).toBe(400)
       expect(res.body.error).toBe('Story is not in a cluster')
     })
@@ -846,9 +734,7 @@ describe('Admin Stories API', () => {
         .mockResolvedValueOnce(storyWithRelations) // getStoryById after dissolution
       mockLifecycleDissolve.mockResolvedValue({ restored: [] })
 
-      const res = await request(app)
-        .post('/api/admin/stories/story-1/dissolve-cluster')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/stories/story-1/dissolve-cluster').set(authHeader())
       expect(res.status).toBe(200)
       expect(mockLifecycleDissolve).toHaveBeenCalledWith('cluster-1')
       expect(res.body.sourceTitle).toBe('Test Article')

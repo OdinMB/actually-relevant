@@ -17,14 +17,18 @@ import { arm, armKey, versionedSchemaName } from './models.js'
 import type { RecalibrationOptions, RecalibrationStep } from './options.js'
 import { replaceRatingSetFiles } from './ratingFiles.js'
 import {
-  assessCriteria, dedupCounts, dedupCriteria, dedupMistakes, preassessCriteria,
-  type Criterion, type DedupPair, type RecalibrationSample,
+  assessCriteria,
+  dedupCounts,
+  dedupCriteria,
+  dedupMistakes,
+  preassessCriteria,
+  type Criterion,
+  type DedupPair,
+  type RecalibrationSample,
 } from './recalibration.js'
 import { VOLUMES } from './resultsReport.js'
 import { ASSESS_OUTPUT_TOKENS, assessPrompt, assessRatingDrafts, scoreAssess } from './suites/assess.js'
-import {
-  DEDUP_BASELINE, DEDUP_OUTPUT_TOKENS, dedupPrompt, labelDedupSets, phase1DedupPrompt, votesFrom,
-} from './suites/dedup.js'
+import { DEDUP_BASELINE, DEDUP_OUTPUT_TOKENS, dedupPrompt, labelDedupSets, phase1DedupPrompt, votesFrom } from './suites/dedup.js'
 import { PREASSESS_OUTPUT_TOKENS, batchStories, preassessPrompt, scorePreassess } from './suites/preassess.js'
 import { limited, parsedOf, runArms } from './suites/shared.js'
 import type { Arm, ArmStats, CallRecord, CallSiteId, PlannedCall, SuiteContext } from './types.js'
@@ -70,7 +74,14 @@ export function monthlyAt(site: CallSiteId, stats: ArmStats): { low: number; hig
 }
 
 /** One arm over every item. */
-export async function runOne<I, T>(ctx: SuiteContext, a: Arm, items: I[], schemaName: string, schema: z.ZodType<T>, prompt: (i: I) => string): Promise<CallRecord<T>[]> {
+export async function runOne<I, T>(
+  ctx: SuiteContext,
+  a: Arm,
+  items: I[],
+  schemaName: string,
+  schema: z.ZodType<T>,
+  prompt: (i: I) => string,
+): Promise<CallRecord<T>[]> {
   return (await runArms(ctx, [a], items, schemaName, schema, prompt)).get(armKey(a)) ?? []
 }
 
@@ -85,9 +96,13 @@ const preassessBatches = ({ sample, opts }: StepInput) => limited(batchStories(s
 
 const preassessStep: RecalibrationStepDef = {
   name: 'preassess',
-  plan: input => preassessBatches(input).map(b => ({
-    arm: luna(input.opts.effort), schemaName: PREASSESS_SCHEMA, prompt: preassessPrompt(b, input.fx.issues), baseOutputTokens: PREASSESS_OUTPUT_TOKENS,
-  })),
+  plan: input =>
+    preassessBatches(input).map(b => ({
+      arm: luna(input.opts.effort),
+      schemaName: PREASSESS_SCHEMA,
+      prompt: preassessPrompt(b, input.fx.issues),
+      baseOutputTokens: PREASSESS_OUTPUT_TOKENS,
+    })),
   async run(input, ctx) {
     const a = luna(input.opts.effort)
     const bs = preassessBatches(input)
@@ -113,9 +128,13 @@ const assessStories = ({ sample, opts }: StepInput) => limited(sample.assess, op
 
 const assessStep: RecalibrationStepDef = {
   name: 'assess',
-  plan: input => assessStories(input).map(s => ({
-    arm: luna(input.opts.effort), schemaName: ASSESS_SCHEMA, prompt: assessPrompt(s), baseOutputTokens: ASSESS_OUTPUT_TOKENS,
-  })),
+  plan: input =>
+    assessStories(input).map(s => ({
+      arm: luna(input.opts.effort),
+      schemaName: ASSESS_SCHEMA,
+      prompt: assessPrompt(s),
+      baseOutputTokens: ASSESS_OUTPUT_TOKENS,
+    })),
   async run(input, ctx) {
     const a = luna(input.opts.effort)
     const stories = assessStories(input)
@@ -143,9 +162,13 @@ const dedupSets = ({ sample, opts }: StepInput) => limited(sample.dedup, opts.li
 
 const dedupStep: RecalibrationStepDef = {
   name: 'dedup',
-  plan: input => dedupSets(input).map(s => ({
-    arm: luna(input.opts.dedupEffort), schemaName: DEDUP_SCHEMA, prompt: dedupPrompt(s), baseOutputTokens: DEDUP_OUTPUT_TOKENS,
-  })),
+  plan: input =>
+    dedupSets(input).map(s => ({
+      arm: luna(input.opts.dedupEffort),
+      schemaName: DEDUP_SCHEMA,
+      prompt: dedupPrompt(s),
+      baseOutputTokens: DEDUP_OUTPUT_TOKENS,
+    })),
   async preflight(input, phase1) {
     const labels = (await labelDedupSets(phase1, dedupSets(input), phase1DedupPrompt)).labels.flat()
     return `phase 1's labelled set read from the ledger: ${labels.filter(l => l === 'dup').length} duplicate and ${labels.filter(l => l === 'not').length} distinct pairs`
@@ -173,13 +196,19 @@ const dedupStep: RecalibrationStepDef = {
 }
 
 /** Every story of the phase-1 sample (not a half): the set is for taste, not calibration. */
-const ratingSetArms = (effort: ReasoningEffort) => [MINI, luna(effort)]
+const ratingSetArms = (effort: ReasoningEffort): [Arm, Arm] => [MINI, luna(effort)]
 
 const ratingSetStep: RecalibrationStepDef = {
   name: 'rating-set',
-  plan: ({ fx, opts }) => fx.assess.flatMap(s => ratingSetArms(opts.effort).map(a => ({
-    arm: a, schemaName: ASSESS_SCHEMA, prompt: assessPrompt(s), baseOutputTokens: ASSESS_OUTPUT_TOKENS,
-  }))),
+  plan: ({ fx, opts }) =>
+    fx.assess.flatMap(s =>
+      ratingSetArms(opts.effort).map(a => ({
+        arm: a,
+        schemaName: ASSESS_SCHEMA,
+        prompt: assessPrompt(s),
+        baseOutputTokens: ASSESS_OUTPUT_TOKENS,
+      })),
+    ),
   async run({ fx, opts }, ctx) {
     const [base, cand] = ratingSetArms(opts.effort)
     const records = await runArms(ctx, [base, cand], fx.assess, ASSESS_SCHEMA, assessResultSchema, assessPrompt)

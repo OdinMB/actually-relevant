@@ -48,15 +48,19 @@ export function votesFrom(parsed: DedupConfirmation | null, candidateCount: numb
   return { votes, outOfRange }
 }
 
-const unanimous = (votes: Vote[]): Vote => (votes.every(v => v !== null && v === votes[0]) ? votes[0] : null)
+/** The vote every arm cast, or null; a missing vote counts as null. */
+const unanimous = (votes: (Vote | undefined)[]): Vote => {
+  const [first = null] = votes
+  return votes.every(v => v !== undefined && v !== null && v === first) ? first : null
+}
 
 /** Arm votes per candidate (outer index: arm). */
 export function isDisputed(armVotes: Vote[][]): boolean {
-  return armVotes[0].some((_, i) => unanimous(armVotes.map(v => v[i])) === null)
+  return (armVotes[0] ?? []).some((_, i) => unanimous(armVotes.map(v => v[i])) === null)
 }
 
 export function labelSet(armVotes: Vote[][], judgeVotes?: Vote[][]): PairLabel[] {
-  return armVotes[0].map((_, i) => {
+  return (armVotes[0] ?? []).map((_, i) => {
     const agreed = unanimous(armVotes.map(v => v[i]))
     if (agreed !== null) return agreed ? 'dup' : 'not'
     if (!judgeVotes) return 'disputed'
@@ -82,22 +86,27 @@ export interface DedupArmMetrics {
 }
 
 /** FP rate and recall over labelled pairs only; a missing verdict counts as "not a duplicate" (production behaviour). */
-export function scoreDedupArm(votes: Vote[][], labels: PairLabel[][]): Pick<DedupArmMetrics, 'fpRate' | 'recall' | 'labelledPairs' | 'falsePositives' | 'missedDuplicates'> {
+export function scoreDedupArm(
+  votes: Vote[][],
+  labels: PairLabel[][],
+): Pick<DedupArmMetrics, 'fpRate' | 'recall' | 'labelledPairs' | 'falsePositives' | 'missedDuplicates'> {
   let fp = 0
   let tn = 0
   let tp = 0
   let fn = 0
-  votes.forEach((setVotes, s) => setVotes.forEach((vote, i) => {
-    const label = labels[s]?.[i]
-    const said = vote === true
-    if (label === 'dup') {
-      if (said) tp++
-      else fn++
-    } else if (label === 'not') {
-      if (said) fp++
-      else tn++
-    }
-  }))
+  votes.forEach((setVotes, s) =>
+    setVotes.forEach((vote, i) => {
+      const label = labels[s]?.[i]
+      const said = vote === true
+      if (label === 'dup') {
+        if (said) tp++
+        else fn++
+      } else if (label === 'not') {
+        if (said) fp++
+        else tn++
+      }
+    }),
+  )
   return {
     fpRate: fp + tn === 0 ? null : fp / (fp + tn),
     recall: tp + fn === 0 ? null : tp / (tp + fn),
@@ -108,19 +117,23 @@ export function scoreDedupArm(votes: Vote[][], labels: PairLabel[][]): Pick<Dedu
 }
 
 export function decideDedup(metrics: Record<string, DedupArmMetrics>, baseline: string, candidates: string[]): Decision {
-  const b = metrics[baseline]
+  const b = metrics[baseline]!
   return pickLowestPassing(
-    candidates.filter(c => metrics[c]).map(c => {
-      const m = metrics[c]
-      return {
-        arm: c,
-        failures: [
-          ...((m.fpRate ?? 1) > (b.fpRate ?? 0) ? [`false-positive rate ${pct(m.fpRate)} > nano ${pct(b.fpRate)}`] : []),
-          ...((m.recall ?? 0) < (b.recall ?? 0) - 0.05 ? [`recall ${pct(m.recall)} < nano ${pct(b.recall)} − 5 pts`] : []),
-        ],
-        evidence: [`FP rate ${pct(m.fpRate)} (nano ${pct(b.fpRate)}), recall ${pct(m.recall)} (nano ${pct(b.recall)}) over ${m.labelledPairs} labelled pairs`],
-      }
-    }),
+    candidates
+      .filter(c => metrics[c])
+      .map(c => {
+        const m = metrics[c]!
+        return {
+          arm: c,
+          failures: [
+            ...((m.fpRate ?? 1) > (b.fpRate ?? 0) ? [`false-positive rate ${pct(m.fpRate)} > nano ${pct(b.fpRate)}`] : []),
+            ...((m.recall ?? 0) < (b.recall ?? 0) - 0.05 ? [`recall ${pct(m.recall)} < nano ${pct(b.recall)} − 5 pts`] : []),
+          ],
+          evidence: [
+            `FP rate ${pct(m.fpRate)} (nano ${pct(b.fpRate)}), recall ${pct(m.recall)} (nano ${pct(b.recall)}) over ${m.labelledPairs} labelled pairs`,
+          ],
+        }
+      }),
   )
 }
 
@@ -130,15 +143,15 @@ async function judgeDisputed(
   armVotes: Vote[][][],
   prompt: DedupPrompt,
 ): Promise<{ labels: PairLabel[][]; judgeRecords: Map<string, CallRecord<DedupConfirmation>[]> }> {
-  const disputed = all.map((_, s) => isDisputed(armVotes[s]))
+  const disputed = all.map((_, s) => isDisputed(armVotes[s]!))
   const judged = all.filter((_, s) => disputed[s])
   const judgeRecords = await runArms(ctx, JUDGES, judged, SCHEMA, dedupConfirmationSchema, prompt)
   let j = 0
   const labels = all.map((set, s) => {
-    if (!disputed[s]) return labelSet(armVotes[s])
+    if (!disputed[s]) return labelSet(armVotes[s]!)
     const idx = j++
     const judgeVotes = JUDGES.map(a => votesFrom(parsedOf(judgeRecords.get(armKey(a))?.[idx]), set.candidates.length).votes)
-    return labelSet(armVotes[s], judgeVotes)
+    return labelSet(armVotes[s]!, judgeVotes)
   })
   return { labels, judgeRecords }
 }
@@ -165,9 +178,9 @@ export interface LabelledSets {
 export async function labelDedupSets(ctx: SuiteContext, all: DedupSet[], prompt: DedupPrompt): Promise<LabelledSets> {
   const armRecords = await runArms(ctx, ARMS, all, SCHEMA, dedupConfirmationSchema, prompt)
   const perArm = new Map(ARMS.map(a => [armKey(a), votesByArm(all, armRecords, a)]))
-  const armVotes = all.map((_, s) => ARMS.map(a => perArm.get(armKey(a))?.[s].votes ?? []))
+  const armVotes = all.map((_, s) => ARMS.map(a => perArm.get(armKey(a))?.[s]?.votes ?? []))
   const { labels, judgeRecords } = await judgeDisputed(ctx, all, armVotes, prompt)
-  return { labels, perArm, armRecords, judgeRecords, disputedSets: all.filter((_, s) => isDisputed(armVotes[s])).length }
+  return { labels, perArm, armRecords, judgeRecords, disputedSets: all.filter((_, s) => isDisputed(armVotes[s]!)).length }
 }
 
 export const dedupSuite: Suite = {
@@ -186,7 +199,8 @@ export const dedupSuite: Suite = {
     return sets(fx, limit).flatMap(s => ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: dedupPrompt(s), baseOutputTokens: DEDUP_OUTPUT_TOKENS })))
   },
   extraEstimateUsd(fx, limit) {
-    const perSet = (s: DedupSet) => JUDGES.reduce((sum, a) => sum + estimateCallUsd({ arm: a, schemaName: SCHEMA, prompt: dedupPrompt(s), baseOutputTokens: DEDUP_OUTPUT_TOKENS }), 0)
+    const perSet = (s: DedupSet) =>
+      JUDGES.reduce((sum, a) => sum + estimateCallUsd({ arm: a, schemaName: SCHEMA, prompt: dedupPrompt(s), baseOutputTokens: DEDUP_OUTPUT_TOKENS }), 0)
     return sets(fx, limit).reduce((sum, s) => sum + perSet(s), 0) * ASSUMED_DISPUTED_SHARE
   },
   async run(fx, ctx) {
@@ -194,47 +208,85 @@ export const dedupSuite: Suite = {
     const { labels, perArm, armRecords: records, judgeRecords, disputedSets } = await labelDedupSets(ctx, all, dedupPrompt)
     const baseVotes = perArm.get(armKey(BASELINE)) ?? []
 
-    const metrics: Record<string, DedupArmMetrics> = Object.fromEntries(ARMS.map(a => {
-      const v = perArm.get(armKey(a)) ?? []
-      const flat = v.flatMap(x => x.votes)
-      const base = baseVotes.flatMap(x => x.votes)
-      const clusterTruth = all.flatMap(set => set.candidates.map(c => c.sameCluster))
-      return [armKey(a), {
-        ...scoreDedupArm(v.map(x => x.votes), labels),
-        missing: flat.filter(x => x === null).length,
-        outOfRange: v.reduce((n, x) => n + x.outOfRange, 0),
-        failures: (records.get(armKey(a)) ?? []).filter(r => r.outcome !== 'ok' && r.outcome !== 'skipped').length,
-        agreementWithBaseline: rate(flat.map((x, i) => (x === true) === (base[i] === true))),
-        clusterAgreement: rate(flat.map((x, i) => (x === true) === clusterTruth[i])),
-      }]
-    }))
+    const metrics: Record<string, DedupArmMetrics> = Object.fromEntries(
+      ARMS.map(a => {
+        const v = perArm.get(armKey(a)) ?? []
+        const flat = v.flatMap(x => x.votes)
+        const base = baseVotes.flatMap(x => x.votes)
+        const clusterTruth = all.flatMap(set => set.candidates.map(c => c.sameCluster))
+        return [
+          armKey(a),
+          {
+            ...scoreDedupArm(
+              v.map(x => x.votes),
+              labels,
+            ),
+            missing: flat.filter(x => x === null).length,
+            outOfRange: v.reduce((n, x) => n + x.outOfRange, 0),
+            failures: (records.get(armKey(a)) ?? []).filter(r => r.outcome !== 'ok' && r.outcome !== 'skipped').length,
+            agreementWithBaseline: rate(flat.map((x, i) => (x === true) === (base[i] === true))),
+            clusterAgreement: rate(flat.map((x, i) => (x === true) === clusterTruth[i])),
+          },
+        ]
+      }),
+    )
     const flatLabels = labels.flat()
     return {
-      callSites: [{
-        id: 'dedup',
-        title: 'Dedup confirmation',
-        baseline: armKey(BASELINE),
-        candidates: CANDIDATES.map(armKey),
-        stats: [...statsFor(records), ...statsFor(judgeRecords)],
-        metrics: [
-          metricRow('False-positive rate (labelled pairs)', metrics, m => m.fpRate, pct, 'lower'),
-          metricRow('Recall (labelled pairs)', metrics, m => m.recall, pct, 'higher'),
-          metricRow('False positives (pairs; each an auto-reject in production)', metrics, m => m.falsePositives, v => String(v ?? 0)),
-          metricRow('Missed duplicates (pairs)', metrics, m => m.missedDuplicates, v => String(v ?? 0)),
-          metricRow('Pair agreement with nano', metrics, m => m.agreementWithBaseline, pct),
-          metricRow('Agreement with existing clusters (secondary)', metrics, m => m.clusterAgreement, pct),
-          metricRow('Candidates without a verdict', metrics, m => m.missing, v => String(v ?? 0), 'lower'),
-          metricRow('Out-of-range candidate numbers', metrics, m => m.outOfRange, v => String(v ?? 0), 'lower'),
-          metricRow('Failed calls', metrics, m => m.failures, v => String(v ?? 0), 'lower'),
-        ],
-        decision: decideDedup(metrics, armKey(BASELINE), CANDIDATES.map(armKey)),
-        notes: [
-          `${flatLabels.length} pairs in ${all.length} sets: ${flatLabels.filter(l => l === 'dup').length} labelled duplicate, ` +
-            `${flatLabels.filter(l => l === 'not').length} labelled distinct, ${flatLabels.filter(l => l === 'contested').length} excluded because the judges split.`,
-          `${disputedSets} sets (${pct(all.length ? disputedSets / all.length : null)}) went to the judges (${JUDGES.map(armKey).join(', ')}).`,
-          'Candidates include auto-rejected duplicates and stories up to 14 days after the source, so later duplicates of an earlier story are present.',
-        ],
-      }],
+      callSites: [
+        {
+          id: 'dedup',
+          title: 'Dedup confirmation',
+          baseline: armKey(BASELINE),
+          candidates: CANDIDATES.map(armKey),
+          stats: [...statsFor(records), ...statsFor(judgeRecords)],
+          metrics: [
+            metricRow('False-positive rate (labelled pairs)', metrics, m => m.fpRate, pct, 'lower'),
+            metricRow('Recall (labelled pairs)', metrics, m => m.recall, pct, 'higher'),
+            metricRow(
+              'False positives (pairs; each an auto-reject in production)',
+              metrics,
+              m => m.falsePositives,
+              v => String(v ?? 0),
+            ),
+            metricRow(
+              'Missed duplicates (pairs)',
+              metrics,
+              m => m.missedDuplicates,
+              v => String(v ?? 0),
+            ),
+            metricRow('Pair agreement with nano', metrics, m => m.agreementWithBaseline, pct),
+            metricRow('Agreement with existing clusters (secondary)', metrics, m => m.clusterAgreement, pct),
+            metricRow(
+              'Candidates without a verdict',
+              metrics,
+              m => m.missing,
+              v => String(v ?? 0),
+              'lower',
+            ),
+            metricRow(
+              'Out-of-range candidate numbers',
+              metrics,
+              m => m.outOfRange,
+              v => String(v ?? 0),
+              'lower',
+            ),
+            metricRow(
+              'Failed calls',
+              metrics,
+              m => m.failures,
+              v => String(v ?? 0),
+              'lower',
+            ),
+          ],
+          decision: decideDedup(metrics, armKey(BASELINE), CANDIDATES.map(armKey)),
+          notes: [
+            `${flatLabels.length} pairs in ${all.length} sets: ${flatLabels.filter(l => l === 'dup').length} labelled duplicate, ` +
+              `${flatLabels.filter(l => l === 'not').length} labelled distinct, ${flatLabels.filter(l => l === 'contested').length} excluded because the judges split.`,
+            `${disputedSets} sets (${pct(all.length ? disputedSets / all.length : null)}) went to the judges (${JUDGES.map(armKey).join(', ')}).`,
+            'Candidates include auto-rejected duplicates and stories up to 14 days after the source, so later duplicates of an earlier story are present.',
+          ],
+        },
+      ],
       ratingItems: [],
       notes: [],
     }

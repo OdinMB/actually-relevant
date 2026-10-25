@@ -86,13 +86,8 @@ export interface CreatePostResult {
  * @param publisherName - Publisher display name to link in the footer
  * @param publisherUrl - Original article URL for the publisher link
  */
-export async function createPost(
-  fullText: string,
-  linkCard: LinkCardMeta,
-  publisherName: string,
-  publisherUrl: string,
-): Promise<CreatePostResult> {
-  return withSessionRetry(async (a) => {
+export async function createPost(fullText: string, linkCard: LinkCardMeta, publisherName: string, publisherUrl: string): Promise<CreatePostResult> {
+  return withSessionRetry(async a => {
     // Parse rich text to detect facets
     const rt = new RichText({ text: fullText })
     await rt.detectFacets(a)
@@ -103,9 +98,7 @@ export async function createPost(
       const encoder = new TextEncoder()
       const byteStart = encoder.encode(fullText.substring(0, pubStart)).length
       const byteEnd = byteStart + encoder.encode(publisherName).length
-      const existingFacet = rt.facets?.find(
-        (f) => f.index.byteStart === byteStart && f.index.byteEnd === byteEnd,
-      )
+      const existingFacet = rt.facets?.find(f => f.index.byteStart === byteStart && f.index.byteEnd === byteEnd)
       if (!existingFacet) {
         if (!rt.facets) {
           rt.facets = []
@@ -193,7 +186,7 @@ export interface PostMetrics {
  * Fetch engagement metrics for a post by its AT URI.
  */
 export async function getPostMetrics(postUri: string): Promise<PostMetrics> {
-  return withSessionRetry(async (a) => {
+  return withSessionRetry(async a => {
     const response = await a.getPostThread({ uri: postUri, depth: 0 })
     const thread = response.data.thread
 
@@ -219,7 +212,7 @@ export async function getPostMetrics(postUri: string): Promise<PostMetrics> {
  * Delete a post from Bluesky by its AT URI.
  */
 export async function deletePost(postUri: string): Promise<void> {
-  return withSessionRetry(async (a) => {
+  return withSessionRetry(async a => {
     log.info({ postUri }, 'deleting Bluesky post')
     await a.deletePost(postUri)
     log.info({ postUri }, 'Bluesky post deleted')
@@ -257,11 +250,8 @@ export interface AuthorFeedResult {
 /**
  * Fetch the authenticated user's feed from Bluesky.
  */
-export async function getAuthorFeed(
-  cursor?: string,
-  limit = 25,
-): Promise<AuthorFeedResult> {
-  return withSessionRetry(async (a) => {
+export async function getAuthorFeed(cursor?: string, limit = 25): Promise<AuthorFeedResult> {
+  return withSessionRetry(async a => {
     const params: AppBskyFeedGetAuthorFeed.QueryParams = {
       actor: config.bluesky.handle,
       limit,
@@ -272,7 +262,7 @@ export async function getAuthorFeed(
     log.info({ limit, cursor: cursor ?? null }, 'fetching Bluesky author feed')
     const response = await a.getAuthorFeed(params)
 
-    const items: AuthorFeedItem[] = response.data.feed.map((entry) => {
+    const items: AuthorFeedItem[] = response.data.feed.map(entry => {
       const post = entry.post
       const record = post.record // an open record ({ [key]: unknown }): read only string fields
       const isRepost = AppBskyFeedDefs.isReasonRepost(entry.reason)

@@ -10,7 +10,8 @@ vi.mock('./llm.js', () => ({
   rateLimitDelay: vi.fn().mockResolvedValue(undefined),
 }))
 
-const { selectEpisodeStories, chooseStories, writeEpisodeScript, buildShowNotes, loadEpisodePool, loadEpisodeStories, TooFewStoriesError } = await import('./podcastScript.js')
+const { selectEpisodeStories, chooseStories, writeEpisodeScript, buildShowNotes, loadEpisodePool, loadEpisodeStories, TooFewStoriesError } =
+  await import('./podcastScript.js')
 const { PodcastBlockedError } = await import('./podcastGuards.js')
 const { PODCAST_EPISODE_AI_LINE, PODCAST_EPISODE_AI_LINE_EDITED, PODCAST_EPISODE_COPY } = await import('../lib/aiLabelCopy.js')
 const { config } = await import('../config.js')
@@ -39,7 +40,7 @@ const answer = <T>(parsed: T | null) => ({ raw, parsed })
 describe('selectEpisodeStories', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('keeps only ids from the pool, in the model\'s order, with 1-based refs', async () => {
+  it("keeps only ids from the pool, in the model's order, with 1-based refs", async () => {
     mockPrisma.story.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6].map(n => poolStory(n)))
     mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-3', 'made-up', 'story-1', 'story-6', 'story-2', 'story-3'] }))
 
@@ -47,7 +48,13 @@ describe('selectEpisodeStories', () => {
 
     expect(selected.map(s => s.snapshot.id)).toEqual(['story-3', 'story-1', 'story-6', 'story-2'])
     expect(selected.map(s => s.snapshot.ref)).toEqual([1, 2, 3, 4])
-    expect(selected[0].snapshot).toMatchObject({ title: 'Headline 3', publisher: 'Publisher 3', slug: 'headline-3', sourceUrl: 'https://news.example/3', issue: 'Issue 3' })
+    expect(selected[0].snapshot).toMatchObject({
+      title: 'Headline 3',
+      publisher: 'Publisher 3',
+      slug: 'headline-3',
+      sourceUrl: 'https://news.example/3',
+      issue: 'Issue 3',
+    })
     expect(selected[0].prompt).toMatchObject({ ref: 1, whyItMatters: 'Why 3 matters', limitingFactors: 'Limits 3' })
   })
 
@@ -87,18 +94,27 @@ describe('chooseStories', () => {
     expect(mockInvoke).not.toHaveBeenCalled()
   })
 
-  it('returns the pool stories in the model\'s order, without unknown or duplicate ids, capped at the maximum', async () => {
+  it("returns the pool stories in the model's order, without unknown or duplicate ids, capped at the maximum", async () => {
     mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-6', 'x', 'story-2', 'story-6', 'story-1', 'story-3', 'story-4', 'story-5'] }))
-    const chosen = await chooseStories([1, 2, 3, 4, 5, 6].map(n => poolStory(n)), 'standalone')
+    const chosen = await chooseStories(
+      [1, 2, 3, 4, 5, 6].map(n => poolStory(n)),
+      'standalone',
+    )
     expect(chosen.map(s => s.id)).toEqual(['story-6', 'story-2', 'story-1', 'story-3', 'story-4'])
   })
 
   it('builds the prompt variant of the kind', async () => {
     mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-1', 'story-2', 'story-3', 'story-4'] }))
-    await chooseStories([1, 2, 3, 4].map(n => poolStory(n)), 'standalone')
+    await chooseStories(
+      [1, 2, 3, 4].map(n => poolStory(n)),
+      'standalone',
+    )
     expect(promptOf()).not.toMatch(/this week/)
     vi.clearAllMocks()
-    await chooseStories([1, 2, 3, 4].map(n => poolStory(n)), 'weekly')
+    await chooseStories(
+      [1, 2, 3, 4].map(n => poolStory(n)),
+      'weekly',
+    )
     expect(promptOf()).toMatch(/this week's episode/)
   })
 })
@@ -107,7 +123,15 @@ describe('writeEpisodeScript', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const selected = [1, 2, 3, 4].map(n => ({
-    snapshot: { ref: n, id: `story-${n}`, title: `Headline ${n}`, publisher: `Publisher ${n}`, sourceUrl: `https://news.example/${n}`, slug: `headline-${n}`, issue: `Issue ${n}` },
+    snapshot: {
+      ref: n,
+      id: `story-${n}`,
+      title: `Headline ${n}`,
+      publisher: `Publisher ${n}`,
+      sourceUrl: `https://news.example/${n}`,
+      slug: `headline-${n}`,
+      issue: `Issue ${n}`,
+    },
     prompt: { ref: n, issue: `Issue ${n}`, title: `Headline ${n}`, publisher: `Publisher ${n}`, summary: 's', whyItMatters: 'w', limitingFactors: 'l' },
   }))
 
@@ -116,7 +140,11 @@ describe('writeEpisodeScript', () => {
     episodeTitle: 'Four stories',
     episodeSummary: 'Two sentences. Plain ones.',
     segments: [
-      { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'Welcome to Actually Relevant, with the stories rated most relevant this week. First up, Headline 1.' }] },
+      {
+        kind: 'intro',
+        storyRef: null,
+        turns: [{ speaker: 'HOST_A', text: 'Welcome to Actually Relevant, with the stories rated most relevant this week. First up, Headline 1.' }],
+      },
       ...[1, 2, 3, 4].map(n => {
         // After the HOST_A opener and intro, the first story opens with HOST_B.
         const [x, y] = n === 1 ? ['HOST_B' as const, 'HOST_A' as const] : ['HOST_A' as const, 'HOST_B' as const]
@@ -131,7 +159,14 @@ describe('writeEpisodeScript', () => {
           ],
         }
       }),
-      { kind: 'outro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'From the first story to the last, that was a week worth hearing about.' }, { speaker: 'HOST_B', text: 'Each one is worth a second look.' }] },
+      {
+        kind: 'outro',
+        storyRef: null,
+        turns: [
+          { speaker: 'HOST_A', text: 'From the first story to the last, that was a week worth hearing about.' },
+          { speaker: 'HOST_B', text: 'Each one is worth a second look.' },
+        ],
+      },
     ],
   }
   const invalid: PodcastDialogue = { ...valid, segments: valid.segments.filter(s => s.storyRef !== 4) }
@@ -216,13 +251,23 @@ describe('the story pool', () => {
     expect(where.status).toBe('published')
     expect(where.dateCrawled.lte).toEqual(anchor)
     expect(anchor.getTime() - where.dateCrawled.gte.getTime()).toBe(config.content.storyAssignmentDays * 24 * 60 * 60 * 1000)
-    expect(pool).toEqual([{ id: 'story-1', title: 'Headline 1', publisher: 'Publisher 1', sourceUrl: 'https://news.example/1', slug: 'headline-1', issue: 'Issue 1', relevance: 7 }])
+    expect(pool).toEqual([
+      { id: 'story-1', title: 'Headline 1', publisher: 'Publisher 1', sourceUrl: 'https://news.example/1', slug: 'headline-1', issue: 'Issue 1', relevance: 7 },
+    ])
   })
 })
 
 describe('loadEpisodeStories', () => {
   beforeEach(() => vi.clearAllMocks())
-  const snap = (ref: number, n: number) => ({ ref, id: `story-${n}`, title: `Frozen ${n}`, publisher: `Publisher ${n}`, sourceUrl: `https://news.example/${n}`, slug: `headline-${n}`, issue: `Issue ${n}` })
+  const snap = (ref: number, n: number) => ({
+    ref,
+    id: `story-${n}`,
+    title: `Frozen ${n}`,
+    publisher: `Publisher ${n}`,
+    sourceUrl: `https://news.example/${n}`,
+    slug: `headline-${n}`,
+    issue: `Issue ${n}`,
+  })
 
   it('keeps the snapshot order and refs, with the prompt material read fresh', async () => {
     mockPrisma.story.findMany.mockResolvedValue([poolStory(1), poolStory(3)])

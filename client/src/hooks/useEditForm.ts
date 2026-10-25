@@ -25,10 +25,7 @@ export function useEditForm<TForm extends Record<string, unknown>, TPayload>({
   const [form, setForm] = useState<TForm>(initialState)
   const { toast } = useToast()
 
-  const isDirty = useMemo(
-    () => JSON.stringify(form) !== JSON.stringify(initialState),
-    [form, initialState],
-  )
+  const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initialState), [form, initialState])
 
   const set = useCallback(
     <K extends keyof TForm>(key: K, value: TForm[K]) => {

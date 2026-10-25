@@ -53,9 +53,14 @@ describe('runPublishPodcast', () => {
     await runPublishPodcast(SATURDAY)
     expect(mockPublish.pickAutoPublishCandidate).toHaveBeenCalledWith(SATURDAY)
     expect(mockPublish.publishEpisode).toHaveBeenCalledWith('pod-1', SATURDAY)
-    expect(mockNotify.notify).toHaveBeenCalledWith(expect.objectContaining({
-      source: 'podcast', severity: 'info', link: '/admin/podcasts/pod-1', message: expect.stringContaining('W42: Water'),
-    }))
+    expect(mockNotify.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'podcast',
+        severity: 'info',
+        link: '/admin/podcasts/pod-1',
+        message: expect.stringContaining('W42: Water'),
+      }),
+    )
   })
 
   it('does nothing on a day other than Saturday in Berlin, so a boot catch-up never publishes on another day', async () => {
@@ -103,7 +108,9 @@ describe('runPublishPodcast', () => {
   })
 
   it('fails (so the scheduler alerts) when the configuration is incomplete, before looking for a candidate', async () => {
-    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => { throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE') })
+    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => {
+      throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE')
+    })
     await expect(runPublishPodcast(SATURDAY)).rejects.toThrow(/BUNNY_STORAGE_ZONE/)
     expect(mockPublish.pickAutoPublishCandidate).not.toHaveBeenCalled()
   })

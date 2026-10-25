@@ -11,10 +11,7 @@ export const ROUTE_FALLBACK_ATTR = 'data-route-fallback'
 /** Spread onto a route fallback's root element. */
 export const routeFallbackProps = { [ROUTE_FALLBACK_ATTR]: '' }
 
-export function signalRenderComplete(
-  doc: Document = document,
-  { initialDelayMs = 100, pollMs = 50, maxWaitMs = 5000 } = {},
-): void {
+export function signalRenderComplete(doc: Document = document, { initialDelayMs = 100, pollMs = 50, maxWaitMs = 5000 } = {}): void {
   const deadline = Date.now() + maxWaitMs
   const check = () => {
     if (doc.querySelector(`[${ROUTE_FALLBACK_ATTR}]`) && Date.now() < deadline) {

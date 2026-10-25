@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { decideSelection, type SelectionArmMetrics } from './largeTier.js'
 
 const base: SelectionArmMetrics = {
-  exactCount: 1, invalidIds: 0, declined: 0, failures: 0, jaccardStored: 0.6, jaccardOther: 0.7, upliftingShare: 0.3,
+  exactCount: 1,
+  invalidIds: 0,
+  declined: 0,
+  failures: 0,
+  jaccardStored: 0.6,
+  jaccardOther: 0.7,
+  upliftingShare: 0.3,
 }
 const B = 'gpt-5.2@medium'
 const S = 'gpt-6-sol@medium'

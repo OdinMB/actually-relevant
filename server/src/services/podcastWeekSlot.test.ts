@@ -14,9 +14,23 @@ const WEDNESDAY = new Date('2026-10-14T10:00:00Z')
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'pod-1', title: 'W42: Water', status: 'draft', stage: 'scripted', mode: 'automated', weekKey: '2026-W42', kind: 'weekly',
-    storyIds: [], attempts: 0, blockedAt: null, lastError: null, dryRun: false, leaseUntil: null, publishedAt: null,
-    createdAt: WEDNESDAY, updatedAt: WEDNESDAY, ...overrides,
+    id: 'pod-1',
+    title: 'W42: Water',
+    status: 'draft',
+    stage: 'scripted',
+    mode: 'automated',
+    weekKey: '2026-W42',
+    kind: 'weekly',
+    storyIds: [],
+    attempts: 0,
+    blockedAt: null,
+    lastError: null,
+    dryRun: false,
+    leaseUntil: null,
+    publishedAt: null,
+    createdAt: WEDNESDAY,
+    updatedAt: WEDNESDAY,
+    ...overrides,
   }
 }
 

@@ -68,7 +68,7 @@ const CATEGORY_COLORS: Record<string, CategoryColor> = {
   },
 }
 
-const DEFAULT_COLOR: CategoryColor = CATEGORY_COLORS['general-news']
+const DEFAULT_COLOR: CategoryColor = CATEGORY_COLORS['general-news']!
 
 export function getCategoryColor(issueSlug: string): CategoryColor {
   return CATEGORY_COLORS[issueSlug] ?? DEFAULT_COLOR
@@ -93,5 +93,5 @@ export function shiftHex(hex: string, amount: number): string {
   const target = amount > 0 ? 255 : 0
   const t = Math.abs(amount)
   const mix = (c: number) => Math.round(c + (target - c) * t)
-  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`
+  return `#${[mix(r), mix(g), mix(b)].map(c => c.toString(16).padStart(2, '0')).join('')}`
 }

@@ -8,14 +8,41 @@ import { occursIn, readNumbers, significant, type NumberToken } from './numbers.
 const WORD_RE = /\p{L}[\p{L}\p{M}\p{N}'’-]*/gu
 /** Capitalised mid-sentence without naming an actor: dates, and acronyms for topics rather than organisations. */
 const NOT_ACTORS = new Set([
-  'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December',
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
-  'AI', 'HIV', 'AIDS', 'COVID', 'GDP', 'LLM', 'LLMs', 'CO2', 'GHG', 'EV', 'EVs',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+  'AI',
+  'HIV',
+  'AIDS',
+  'COVID',
+  'GDP',
+  'LLM',
+  'LLMs',
+  'CO2',
+  'GHG',
+  'EV',
+  'EVs',
 ])
 const isAcronym = (w: string) => /^\p{Lu}[\p{Lu}\p{N}]+$/u.test(w)
 const bareWord = (w: string) => w.replace(/['’]s$/u, '').replace(/['’-]+$/u, '')
 /** "COVID-19" is judged by "COVID". */
-const notAnActor = (w: string) => NOT_ACTORS.has(w.split('-')[0])
+const notAnActor = (w: string) => NOT_ACTORS.has(w.split('-')[0]!)
 const capitalised = (w: string) => w.length >= 2 && /^\p{Lu}/u.test(w) && !notAnActor(w)
 
 /**

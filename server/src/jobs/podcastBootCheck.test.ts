@@ -21,7 +21,9 @@ describe('checkPodcastConfigAtBoot', () => {
 
   it('stays silent while both podcast jobs are disabled, whatever is missing', async () => {
     mockPrisma.jobRun.findMany.mockResolvedValueOnce([])
-    mockGuards.assertPodcastRunnable.mockImplementation(() => { throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY') })
+    mockGuards.assertPodcastRunnable.mockImplementation(() => {
+      throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY')
+    })
     await checkPodcastConfigAtBoot()
     expect(mockGuards.assertPodcastRunnable).not.toHaveBeenCalled()
     expect(mockNotify.notify).not.toHaveBeenCalled()
@@ -32,18 +34,27 @@ describe('checkPodcastConfigAtBoot', () => {
   it('asks only about the podcast job rows that are enabled', async () => {
     mockPrisma.jobRun.findMany.mockResolvedValueOnce([])
     await checkPodcastConfigAtBoot()
-    expect(mockPrisma.jobRun.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { jobName: { in: ['generate_podcast', 'publish_podcast'] }, enabled: true },
-    }))
+    expect(mockPrisma.jobRun.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { jobName: { in: ['generate_podcast', 'publish_podcast'] }, enabled: true },
+      }),
+    )
   })
 
   it('records a missing setting as one keyed podcast notice when a podcast job is enabled', async () => {
     mockPrisma.jobRun.findMany.mockResolvedValueOnce([{ jobName: 'generate_podcast' }])
-    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => { throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE') })
+    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => {
+      throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE')
+    })
     await checkPodcastConfigAtBoot()
-    expect(mockNotify.notify).toHaveBeenCalledWith(expect.objectContaining({
-      source: 'podcast', severity: 'warning', dedupeKey: 'podcast-config', message: expect.stringContaining('BUNNY_STORAGE_ZONE'),
-    }))
+    expect(mockNotify.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'podcast',
+        severity: 'warning',
+        dedupeKey: 'podcast-config',
+        message: expect.stringContaining('BUNNY_STORAGE_ZONE'),
+      }),
+    )
   })
 
   it('sends nothing when the configuration is complete', async () => {

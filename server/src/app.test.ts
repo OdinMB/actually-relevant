@@ -27,7 +27,7 @@ const mockPrisma = vi.hoisted(() => ({
   jobRun: { findMany: vi.fn(), findUnique: vi.fn() },
   refreshToken: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
   $disconnect: vi.fn(),
-  $transaction: vi.fn((args: any) => Array.isArray(args) ? Promise.all(args) : args()),
+  $transaction: vi.fn((args: any) => (Array.isArray(args) ? Promise.all(args) : args())),
 }))
 
 vi.mock('./lib/prisma.js', () => ({ default: mockPrisma }))
@@ -82,9 +82,7 @@ describe('App error handling', () => {
       // The CORS middleware throws "Not allowed by CORS" for disallowed origins
       // on non-public endpoints (subscribe, auth, admin).
       // Public read endpoints (stories, issues, homepage, feed, docs) allow all origins.
-      const res = await request(app)
-        .post('/api/subscribe')
-        .set('Origin', 'https://evil-site.com')
+      const res = await request(app).post('/api/subscribe').set('Origin', 'https://evil-site.com')
 
       expect(res.status).toBe(500)
       expect(res.body).toEqual({ error: 'Internal server error' })
@@ -100,7 +98,7 @@ describe('X-Request-Id', () => {
     expect(res.headers['x-request-id']).toBe('cf-trace.123_abc-XYZ')
   })
 
-  it.each(['has spaces in it', 'a'.repeat(65), 'x"}{"injected":"1', 'line\tbreak'])('replaces %j with a fresh UUID', async (value) => {
+  it.each(['has spaces in it', 'a'.repeat(65), 'x"}{"injected":"1', 'line\tbreak'])('replaces %j with a fresh UUID', async value => {
     const res = await request(app).get('/api/nonexistent-route').set('X-Request-Id', value)
     expect(res.headers['x-request-id']).toMatch(UUID)
   })
@@ -112,16 +110,23 @@ describe('X-Request-Id', () => {
 })
 
 describe('CORS', () => {
-  it.each(['/api/feed', '/api/feed/some-issue', '/api/stories', '/api/subscribe/token', '/api/podcast/feed.xml', '/api/newsletters', '/api/newsletters/week-42-2026'])(
-    'opens %s to any origin', async (path) => {
-      const res = await request(app).options(path).set('Origin', 'https://widget.example.com')
-      expect(res.status).toBe(204)
-      expect(res.headers['access-control-allow-origin']).toBe('*')
-    },
-  )
+  it.each([
+    '/api/feed',
+    '/api/feed/some-issue',
+    '/api/stories',
+    '/api/subscribe/token',
+    '/api/podcast/feed.xml',
+    '/api/newsletters',
+    '/api/newsletters/week-42-2026',
+  ])('opens %s to any origin', async path => {
+    const res = await request(app).options(path).set('Origin', 'https://widget.example.com')
+    expect(res.status).toBe(204)
+    expect(res.headers['access-control-allow-origin']).toBe('*')
+  })
 
   it.each(['/api/feedback', '/api/feeds', '/api/storiesx', '/api/subscribe', '/api/newslettersx', '/api/admin/newsletters'])(
-    'keeps %s restricted even though it starts like a public path', async (path) => {
+    'keeps %s restricted even though it starts like a public path',
+    async path => {
       const res = await request(app).post(path).set('Origin', 'https://evil-site.com')
       expect(res.headers['access-control-allow-origin']).toBeUndefined()
       expect(res.status).toBe(500) // "Not allowed by CORS"

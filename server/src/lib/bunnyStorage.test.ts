@@ -17,7 +17,13 @@ const { putObject, deleteObject, publicUrl, isBunnyConfigured } = await import('
 const { config } = await import('../config.js')
 
 function httpError(status: number): AxiosError {
-  return new AxiosError(`status ${status}`, 'ERR', undefined, undefined, { data: '', status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() } })
+  return new AxiosError(`status ${status}`, 'ERR', undefined, undefined, {
+    data: '',
+    status,
+    statusText: '',
+    headers: {},
+    config: { headers: new AxiosHeaders() },
+  })
 }
 
 describe('bunnyStorage', () => {

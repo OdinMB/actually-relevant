@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { SelectionGroup, SelectionStory, SocialPostItem } from './fixtures.js'
 import type { Criterion } from './recalibration.js'
-import {
-  checkShipPost, datedForReplay, selectionCriteria, socialPostCriteria, STALE_DATE, staleProbeId, staleProbesKept,
-} from './shipRules.js'
+import { checkShipPost, datedForReplay, selectionCriteria, socialPostCriteria, STALE_DATE, staleProbeId, staleProbesKept } from './shipRules.js'
 import type { SelectionArmMetrics } from './suites/largeTier.js'
 
 const item = (platform: SocialPostItem['platform'] = 'mastodon'): SocialPostItem => ({
@@ -13,7 +11,7 @@ const item = (platform: SocialPostItem['platform'] = 'mastodon'): SocialPostItem
     id: 's1',
     title: 'India pledges to buy $500 billion of US goods',
     titleLabel: 'Trade deal',
-    summary: 'The deal, announced by India\'s prime minister Narendra Modi, ends purchases of Russian oil.',
+    summary: "The deal, announced by India's prime minister Narendra Modi, ends purchases of Russian oil.",
     relevanceSummary: 'Cutting Russian oil purchases removes a major revenue source for the war in Ukraine.',
     maxChars: 120,
   },
@@ -47,7 +45,7 @@ describe('socialPostCriteria', () => {
     const vague = checkShipPost(item(), 'This could change how the world buys energy.')
     const long = checkShipPost(item(), `Modi ${'x'.repeat(120)}`)
     const inflated = checkShipPost(item(), 'Modi pledged $900 billion.')
-    expect(failing(socialPostCriteria([good, vague], 0))).toEqual(['Posts naming the story\'s actor or a key number'])
+    expect(failing(socialPostCriteria([good, vague], 0))).toEqual(["Posts naming the story's actor or a key number"])
     expect(failing(socialPostCriteria([good, long], 0))).toEqual(['Raw drafts over the length limit'])
     expect(failing(socialPostCriteria([good, inflated], 0))).toEqual(['Drafts with numbers the story does not state'])
   })
@@ -65,13 +63,23 @@ describe('socialPostCriteria', () => {
   })
 })
 
-const story = (id: string, sourceDatePublished?: string | null): SelectionStory => ({
-  id, title: id, summary: '', relevanceReasons: null, antifactors: null, relevanceCalculation: null, emotionTag: null, relevance: 6,
-  // Fixtures cached before the date field existed carry no key at all.
-  ...(sourceDatePublished === undefined ? {} : { sourceDatePublished }),
-} as SelectionStory)
+const story = (id: string, sourceDatePublished?: string | null): SelectionStory =>
+  ({
+    id,
+    title: id,
+    summary: '',
+    relevanceReasons: null,
+    antifactors: null,
+    relevanceCalculation: null,
+    emotionTag: null,
+    relevance: 6,
+    // Fixtures cached before the date field existed carry no key at all.
+    ...(sourceDatePublished === undefined ? {} : { sourceDatePublished }),
+  }) as SelectionStory
 const group = (storedPicked: string[]): SelectionGroup => ({
-  id: 'g1', day: '2026-02-05', toSelect: 2,
+  id: 'g1',
+  day: '2026-02-05',
+  toSelect: 2,
   stories: [story('a'), story('b', '2026-02-04T08:00:00.000Z'), story('c', null), story('d')],
   storedPicked,
 })
@@ -96,7 +104,14 @@ describe('stale-date probe', () => {
 
 describe('selectionCriteria', () => {
   const metrics = (over: Partial<SelectionArmMetrics> = {}): SelectionArmMetrics => ({
-    exactCount: 1, invalidIds: 0, declined: 0, failures: 0, jaccardStored: 0.5, jaccardOther: 0.6, upliftingShare: 0.2, ...over,
+    exactCount: 1,
+    invalidIds: 0,
+    declined: 0,
+    failures: 0,
+    jaccardStored: 0.5,
+    jaccardOther: 0.6,
+    upliftingShare: 0.2,
+    ...over,
   })
 
   it('requires the exact count in every group, with no invalid IDs, declines or failures', () => {

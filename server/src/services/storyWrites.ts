@@ -96,7 +96,7 @@ async function writeFields(id: string, input: StoryUpdate, updateData: Prisma.St
     return
   }
   const { embedding, hash } = embeddingData
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async tx => {
     await tx.story.update({ where: { id }, data: updateData })
     await saveEmbeddingTx(tx, id, embedding, hash)
   })
@@ -108,7 +108,7 @@ async function writeFields(id: string, input: StoryUpdate, updateData: Prisma.St
  */
 async function moveOne(id: string, status: StoryStatus): Promise<Story> {
   const { skipped } = await transition([id], editorMoveTo(status), 'editor')
-  if (skipped.length > 0 && skipped[0].status === null) throw new NotFoundError('Story not found')
+  if (skipped[0] && skipped[0].status === null) throw new NotFoundError('Story not found')
   return prisma.story.findUniqueOrThrow({ where: { id } })
 }
 
@@ -151,16 +151,20 @@ export async function deleteStory(id: string): Promise<void> {
 
   const updates: Promise<unknown>[] = []
   for (const nl of newsletters) {
-    updates.push(prisma.newsletter.update({
-      where: { id: nl.id },
-      data: { storyIds: nl.storyIds.filter(sid => sid !== id) },
-    }))
+    updates.push(
+      prisma.newsletter.update({
+        where: { id: nl.id },
+        data: { storyIds: nl.storyIds.filter(sid => sid !== id) },
+      }),
+    )
   }
   for (const pod of podcasts) {
-    updates.push(prisma.podcast.update({
-      where: { id: pod.id },
-      data: { storyIds: pod.storyIds.filter(sid => sid !== id) },
-    }))
+    updates.push(
+      prisma.podcast.update({
+        where: { id: pod.id },
+        data: { storyIds: pod.storyIds.filter(sid => sid !== id) },
+      }),
+    )
   }
   if (updates.length > 0) await Promise.all(updates)
 }

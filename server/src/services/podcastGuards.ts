@@ -93,7 +93,9 @@ export async function reserveTtsChars(podcastId: string, chars: number, now: Dat
     const { _sum } = await tx.podcastTtsUsage.aggregate({ _sum: { chars: true }, where: { createdAt: { gte: utcMonthStart(now) } } })
     const used = _sum.chars ?? 0
     if (used + chars > config.podcast.monthlyTtsCharCap) {
-      throw new PodcastBlockedError(`monthly TTS cap reached: ${used} of ${config.podcast.monthlyTtsCharCap} characters used this month, this call needs ${chars}`)
+      throw new PodcastBlockedError(
+        `monthly TTS cap reached: ${used} of ${config.podcast.monthlyTtsCharCap} characters used this month, this call needs ${chars}`,
+      )
     }
     await tx.podcastTtsUsage.create({ data: { podcastId, chars } })
   })

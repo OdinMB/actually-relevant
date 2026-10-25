@@ -147,7 +147,7 @@ router.get('/processing', failsWith('Failed to get processing story IDs'), (_req
 })
 
 router.get('/tasks/:taskId', failsWith('Failed to get task status'), (req, res) => {
-  const task = taskRegistry.get(req.params.taskId)
+  const task = taskRegistry.get(req.params.taskId!)
   if (!task) {
     res.status(404).json({ error: 'Task not found' })
     return
@@ -156,7 +156,7 @@ router.get('/tasks/:taskId', failsWith('Failed to get task status'), (req, res) 
 })
 
 router.get('/:id', failsWith('Failed to fetch story'), async (req, res) => {
-  const story = await storyService.getStoryById(req.params.id)
+  const story = await storyService.getStoryById(req.params.id!)
   if (!story) {
     res.status(404).json({ error: 'Story not found' })
     return
@@ -165,16 +165,21 @@ router.get('/:id', failsWith('Failed to fetch story'), async (req, res) => {
 })
 
 // A feedId naming no feed is a 400 (BadRequestError from createStory)
-router.post('/', failsWith('Failed to create story', { duplicate: 'A story with this URL already exists' }), validateBody(createStorySchema), async (req, res) => {
-  res.status(201).json(await storyService.createStory(req.body))
-})
+router.post(
+  '/',
+  failsWith('Failed to create story', { duplicate: 'A story with this URL already exists' }),
+  validateBody(createStorySchema),
+  async (req, res) => {
+    res.status(201).json(await storyService.createStory(req.body))
+  },
+)
 
 router.put('/:id', failsWith('Failed to update story', storyNotFound), validateBody(updateStorySchema), async (req, res) => {
-  res.json(await storyService.updateStory(req.params.id, req.body))
+  res.json(await storyService.updateStory(req.params.id!, req.body))
 })
 
 router.put('/:id/status', failsWith('Failed to update story status', storyNotFound), validateBody(updateStoryStatusSchema), async (req, res) => {
-  res.json(await storyService.updateStoryStatus(req.params.id, req.body.status))
+  res.json(await storyService.updateStoryStatus(req.params.id!, req.body.status))
 })
 
 router.post('/bulk-status', failsWith('Failed to bulk update story status'), validateBody(bulkUpdateStatusSchema), async (req, res) => {
@@ -183,9 +188,7 @@ router.post('/bulk-status', failsWith('Failed to bulk update story status'), val
 })
 
 router.post('/preassess', failsWith('Failed to pre-assess stories'), expensiveOpLimiter, validateBody(preassessBodySchema), async (req, res) => {
-  const storyIds: string[] = req.body.storyIds && req.body.storyIds.length > 0
-    ? req.body.storyIds
-    : await storyService.getStoryIdsByStatus('fetched')
+  const storyIds: string[] = req.body.storyIds && req.body.storyIds.length > 0 ? req.body.storyIds : await storyService.getStoryIdsByStatus('fetched')
 
   if (storyIds.length === 0) {
     res.json({ processed: 0, results: [] })
@@ -197,10 +200,10 @@ router.post('/preassess', failsWith('Failed to pre-assess stories'), expensiveOp
 })
 
 router.post('/:id/assess', failsWith('Failed to assess story'), expensiveOpLimiter, async (req, res) => {
-  const outcome = await analysisService.assessStory(req.params.id, 'editor')
+  const outcome = await analysisService.assessStory(req.params.id!, 'editor')
   // An editor's assessment skips only a trashed story (before the model call, or trashed during it)
   if (outcome === 'skipped') throw new ConflictError('A trashed story cannot be assessed: restore it first')
-  res.json(await storyService.getStoryById(req.params.id))
+  res.json(await storyService.getStoryById(req.params.id!))
 })
 
 router.post('/select', failsWith('Failed to select stories'), expensiveOpLimiter, validateBody(selectBodySchema), async (req, res) => {
@@ -208,16 +211,16 @@ router.post('/select', failsWith('Failed to select stories'), expensiveOpLimiter
 })
 
 router.post('/:id/publish', failsWith('Failed to publish story', storyNotFound), async (req, res) => {
-  res.json(await storyService.publishStory(req.params.id))
+  res.json(await storyService.publishStory(req.params.id!))
 })
 
 router.post('/:id/reject', failsWith('Failed to reject story', storyNotFound), async (req, res) => {
-  res.json(await storyService.rejectStory(req.params.id))
+  res.json(await storyService.rejectStory(req.params.id!))
 })
 
 router.post('/:id/dissolve-cluster', failsWith('Failed to dissolve cluster', storyNotFound), async (req, res) => {
-  await storyService.dissolveCluster(req.params.id)
-  res.json(await storyService.getStoryById(req.params.id))
+  await storyService.dissolveCluster(req.params.id!)
+  res.json(await storyService.getStoryById(req.params.id!))
 })
 
 router.post('/crawl-url', failsWith('Failed to crawl URL'), validateBody(crawlUrlSchema), async (req, res) => {
@@ -230,7 +233,7 @@ router.post('/crawl-url', failsWith('Failed to crawl URL'), validateBody(crawlUr
 })
 
 router.delete('/:id', failsWith('Failed to delete story', storyNotFound), async (req, res) => {
-  await storyService.deleteStory(req.params.id)
+  await storyService.deleteStory(req.params.id!)
   res.status(204).send()
 })
 

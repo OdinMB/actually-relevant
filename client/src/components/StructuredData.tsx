@@ -9,11 +9,7 @@ export default function StructuredData({ data }: { data: Record<string, unknown>
   return (
     <>
       {items.map((item, i) => (
-        <script
-          key={i}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: toJsonLd(item) }}
-        />
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(item) }} />
       ))}
     </>
   )

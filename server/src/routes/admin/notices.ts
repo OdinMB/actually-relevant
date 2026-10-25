@@ -3,13 +3,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { failsWith } from '../../middleware/routeErrors.js'
-import {
-  NOTICE_SOURCES,
-  countUnseenNotices,
-  listNotices,
-  markNoticeSeen,
-  markNoticesSeen,
-} from '../../services/adminNotices.js'
+import { NOTICE_SOURCES, countUnseenNotices, listNotices, markNoticeSeen, markNoticesSeen } from '../../services/adminNotices.js'
 
 const router = Router()
 
@@ -39,7 +33,7 @@ router.post('/seen', failsWith('Failed to mark notices seen'), validateBody(mark
 })
 
 router.post('/:id/seen', failsWith('Failed to mark notice seen'), async (req, res) => {
-  const notice = await markNoticeSeen(req.params.id)
+  const notice = await markNoticeSeen(req.params.id!)
   if (!notice) {
     res.status(404).json({ error: 'Notice not found' })
     return

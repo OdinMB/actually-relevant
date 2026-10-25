@@ -5,10 +5,48 @@
 | Check | Server | Client | Fails when |
 |---|---|---|---|
 | Migration check | `npm run check:migrations --prefix server` | | a migration drops `stories_embedding_idx`, or a new one holds an unmarked destructive statement (`database-migrations.md`, "Migration check") |
-| Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error |
-| Unit tests | `npm run test --prefix server` | `npm run test --prefix client -- --run` | a failing test |
+| Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error; both tsconfigs set `strict` and `noUncheckedIndexedAccess` |
+| Lint | `npm run lint --prefix server` | `… client` | any ESLint error or warning (`--max-warnings 0`) |
+| Format | `npm run format:check --prefix server` | `… client` | a file Prettier would change; fix with `npm run format --prefix <pkg>` |
+| Unit tests and coverage | `npm run test:coverage --prefix server` | `… client` | a failing test, or coverage below a threshold |
 | PostgreSQL tests | `npm run test:db --prefix server` | | a failing db test (`database-migrations.md`, "Integration Tests") |
 | Build | `npm run build --prefix server` | `… client` | the production build fails; the client's includes the puppeteer prerender |
+| Dependency audit | `npm run audit:prod --prefix server` | `… client` | a production advisory at high or above that the allowlist does not excuse |
+
+The build runs after the tests so a type or test failure is reported first; the audit runs last because it is the one check that can turn red without a code change (below).
+
+## Type-check: `noUncheckedIndexedAccess`
+
+An index into an array or a record is `T | undefined`. Guard it where the value can be missing (`const [first] = rows; if (!first) return null`, `.at(-1)?.id`, a destructuring default); use `!` only where an invariant makes it present (a bounded loop index, a regex group that always matches). Route params are the common case: `req.params.id!`. A typed middleware before the handler (`failsWith`, `validateBody`, a rate limiter) makes Express infer `ParamsDictionary` rather than the path's own params, so the type cannot see that `/:id` guarantees `id`.
+
+## Lint
+
+Flat configs in `server/eslint.config.js` and `client/eslint.config.js`: `@eslint/js` recommended, `typescript-eslint` recommended (not the type-checked presets), and on the client `eslint-plugin-react-hooks` 7 recommended. Deliberate departures, each commented in the config:
+
+- **Both:** `no-unused-vars` ignores `_`-prefixed names, caught errors and keys dropped by a rest spread. `no-explicit-any` is off in tests and test fixtures (mocks stand in for typed collaborators).
+- **Server:** `no-irregular-whitespace` skips regexes (number parsing matches no-break spaces, a CSV reader strips a BOM). `no-namespace` allows `declare global { namespace Express }`. Three inline `no-explicit-any` disables in source carry their reason (pino's error serializer, the recursive OpenAPI issue schema, `req.parsedQuery`).
+- **Client:** off, from react-hooks 7's React Compiler rules: `set-state-in-effect` (9 effects that sync state from storage, the URL or loaded data; each rewrite is a behavior change to test on its own) and `static-components` (3 false positives on `getCategoryPattern()`, which returns a module-level component). `preserve-caught-error` is off in `src/` because the client's ES2020 lib has no `Error` `cause`; it stays on for `scripts/`.
+
+Turning one of these back on is a follow-up, not a CI change: fix the findings in the same commit.
+
+## Format
+
+Prettier 3, one config at the repository root (`.prettierrc.json`): no semicolons, single quotes, width 160, `arrowParens: avoid`, trailing commas. These match the code as it was written, chosen by measuring the reformat diff. Each package's `.prettierignore` leaves out build output, lockfiles, Markdown, `server/prisma/migrations/` (applied migrations stay byte-for-byte) and `client/index.html` (build-time placeholders). Files outside the two packages (root `scripts/`, the workflow) are not checked.
+
+## Coverage floor
+
+`test:coverage` runs the unit tests (the server's `unit` project only) with v8 coverage and global thresholds: server statements 69, branches 65, functions 63, lines 70; client 53, 53, 43, 53, each set just below the value measured on 2026-10-19 after the Prettier reformat (which moves the line count, not the statement count) (recorded beside the thresholds in `server/vitest.config.ts` and `client/vite.config.ts`). It is a ratchet: when coverage rises, raise the threshold in the same change; never lower one to land a change. Reports go to `coverage/` (gitignored).
+
+## Dependency audit
+
+`audit:prod` (`scripts/audit-check.mjs`) runs `npm audit --omit=dev` and fails on any advisory at high or above unless the package's `audit-allowlist.json` excuses it. An entry names one advisory (GHSA id) in one package, a `via` package, a reason and a review date; it holds only while every production path to the package runs through `via`, and an entry that matches nothing fails the check so that it is deleted once the fix lands.
+
+Entries on 2026-10-25 (the 2026-10-19 `braces` entry was deleted once the @scalar update no longer reported it; `body-parser` and `undici` were fixed by `npm audit fix` the same day):
+
+- **Server:** `zod` (GHSA-mrhx-c7xc-m3w5, high; memory exhaustion validating a large array, fixed only in zod 4.6.6). zod 3 is a direct dependency, so the entry's `via` is `zod` itself and does not narrow anything; the reason is that request bodies are capped at 100kb by `express.json` and model output is bounded. It goes with a move to zod 4, which is the owner's call (every schema, `zod-openapi`, LangChain structured output).
+- **Client:** `zod` (same advisory) via `@scalar/api-reference-react`, whose agent chat pulls in `ai` with zod 3.25; it runs in the visitor's browser on our own OpenAPI spec. `postcss-selector-parser` (GHSA-rj75-hqrm-r3gf) on @scalar's tailwindcss 3 path is moderate, below the bar, so it needs no entry.
+
+**A new advisory can turn `main` red with no code change**, and while it is red nothing deploys. Then either update the dependency, or, after reviewing that the advisory does not reach the running app, add an allowlist entry with its reason; both are a commit to `main`, which deploys once green.
 
 ## Triggers and cancelling
 
@@ -29,6 +67,15 @@ The repository is public, and GitHub Actions on standard GitHub-hosted runners (
 - REST: `gh api repos/OdinMB/actually-relevant/actions/runs/<id>/timing` returns `run_duration_ms` and per-OS `billable` milliseconds (zero for a public repository).
 - Account total: **Settings → Billing and licensing → Usage**, filtered to Actions.
 
+**Baseline** (first runs, 2026-10-25, warm npm cache, cold puppeteer cache; `billable` was 0 ms, the repository being public):
+
+| Run | `server` job | `client` job | Wall clock | Billed if private (each job rounded up to the minute) |
+|-----|--------------|--------------|------------|------|
+| Before the strictness checks (#39) | 2:01 | 2:24 | 2:25 | 6 min |
+| With lint, format, coverage and audit (#40) | 1:49 | 2:54 | 2:57 | 5 min |
+
+The heaviest steps are the client's unit tests (about 50 s) and its prerender build (about 45 s), and the server's unit tests (about 40–47 s). At about 6 billed minutes a run and two runs per merged change (its pull request and `main`), a private repository would spend roughly 12 minutes per merged change, plus 6 for every further push to an open pull request.
+
 **What starts a run.** One run (two jobs in parallel) per push to a pull request and per push to `main`. Merging a pull request is a push to `main`, so a merged change runs once on its pull request and once more on `main`; the second run is what Render waits for. Dependabot's own "Dependabot Updates" runs are a separate workflow GitHub manages, not this one.
 
 **Levers, if minutes ever matter** (none is needed while the repository is public):
@@ -37,6 +84,7 @@ The repository is public, and GitHub Actions on standard GitHub-hosted runners (
 2. Run `test:db` (the Postgres service and its tests) only on `main`, or on pull requests that touch `server/`, accepting that a pull request can then merge with a db test red.
 3. Skip the client's prerender on pull requests (build without it) and keep it on `main`, where Render's build would otherwise be the first to run it.
 4. Draft pull requests: add `if: github.event.pull_request.draft == false` to the jobs and `types: [opened, synchronize, reopened, ready_for_review]` to the trigger.
-5. Cancel superseded runs (already on) and keep the caches warm (already on).
+5. Run lint and the format check in one short job ahead of the rest, so a formatting slip fails in a minute instead of after the tests.
+6. Cancel superseded runs (already on) and keep the caches warm (already on).
 
 Measure before and after any of these, and record the change here.

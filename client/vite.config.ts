@@ -63,12 +63,7 @@ export default defineConfig({
         maxConcurrentRoutes: 1,
         renderAfterDocumentEvent: 'render-complete',
         launchOptions: {
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-          ],
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
         },
       },
       postProcess(renderedRoute) {
@@ -95,7 +90,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-rollupOptions: {
+    rollupOptions: {
       output: {
         // Let Rollup handle chunking automatically. Admin code will be
         // code-split via React.lazy() dynamic imports in App.tsx.
@@ -108,5 +103,15 @@ rollupOptions: {
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // `npm run test:coverage` (CI): a ratchet set just below the coverage measured when it was
+    // introduced. Raise a threshold when coverage rises; never lower one to land a change.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'html'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/**/*.d.ts'],
+      // Measured 2026-10-19: statements 53.34, branches 53.45, functions 43.86, lines 53.43
+      thresholds: { statements: 53, branches: 53, functions: 43, lines: 53 },
+    },
   },
 })

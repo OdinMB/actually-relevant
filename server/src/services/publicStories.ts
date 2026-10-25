@@ -160,21 +160,27 @@ export async function getHomepageData(issueSlugs: string[], storiesPerIssue = 7)
   // Fetch three emotion buckets per issue for client-side mixing.
   // Three buckets allow the client to show uplifting-only at 100% positivity
   // while combining uplifting+calm as "positive" for all other settings.
-  const storiesPromises = issueSlugs.map(async (slug) => {
+  const storiesPromises = issueSlugs.map(async slug => {
     const baseWhere: Prisma.StoryWhereInput = { status: 'published', ...storyInIssueWhere(slug) }
 
     const [uplifting, calm, negative] = await Promise.all([
       prisma.story.findMany({
         where: { ...baseWhere, emotionTag: EmotionTag.uplifting },
-        select: PUBLIC_STORY_SELECT, orderBy, take: storiesPerIssue,
+        select: PUBLIC_STORY_SELECT,
+        orderBy,
+        take: storiesPerIssue,
       }),
       prisma.story.findMany({
         where: { ...baseWhere, emotionTag: EmotionTag.calm },
-        select: PUBLIC_STORY_SELECT, orderBy, take: storiesPerIssue,
+        select: PUBLIC_STORY_SELECT,
+        orderBy,
+        take: storiesPerIssue,
       }),
       prisma.story.findMany({
         where: { ...baseWhere, emotionTag: { in: NEGATIVE_EMOTIONS } },
-        select: PUBLIC_STORY_SELECT, orderBy, take: storiesPerIssue,
+        select: PUBLIC_STORY_SELECT,
+        orderBy,
+        take: storiesPerIssue,
       }),
     ])
 

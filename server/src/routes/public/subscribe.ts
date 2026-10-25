@@ -111,11 +111,7 @@ router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, va
     // Surface real failures to the visitor rather than falsely claiming the email
     // was sent. (An already-confirmed or throttled address returns success earlier,
     // so this path can't leak subscription status — these are genuine errors.)
-    if (
-      err instanceof EmailValidationError ||
-      err instanceof ConfirmationEmailError ||
-      err instanceof SignupUnavailableError
-    ) {
+    if (err instanceof EmailValidationError || err instanceof ConfirmationEmailError || err instanceof SignupUnavailableError) {
       res.json({ success: false, message: err.message })
       return
     }

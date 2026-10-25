@@ -25,20 +25,18 @@ function EpisodeDetails({ episode }: { episode: PublicPodcastEpisode }) {
       <div data-episode-actions className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {hasStories && (
           <>
-            <button
-              type="button"
-              className={ACTION_CLASS}
-              aria-expanded={open}
-              aria-controls={listId}
-              onClick={() => setOpen(o => !o)}
-            >
+            <button type="button" className={ACTION_CLASS} aria-expanded={open} aria-controls={listId} onClick={() => setOpen(o => !o)}>
               Stories ({episode.stories.length})
               <ChevronIcon open={open} className="h-4 w-4" />
             </button>
-            <span aria-hidden="true" className="text-neutral-400">·</span>
+            <span aria-hidden="true" className="text-neutral-400">
+              ·
+            </span>
           </>
         )}
-        <Link to={podcastTranscriptPath(episode.id)} className={ACTION_CLASS}>Transcript</Link>
+        <Link to={podcastTranscriptPath(episode.id)} className={ACTION_CLASS}>
+          Transcript
+        </Link>
       </div>
       {hasStories && <EpisodeStoryList stories={episode.stories} id={listId} hidden={!open} />}
     </div>
@@ -57,8 +55,7 @@ export default function PodcastEpisode({ episode }: { episode: PublicPodcastEpis
     <article aria-labelledby={headingId} className="border-t border-neutral-200 pt-6">
       <h3 id={headingId} className="text-xl font-semibold text-neutral-900">
         {/* Inline, not flex: a wrapped title flows back under the badge instead of indenting */}
-        <AiBadge className="mr-1 align-middle" />{' '}
-        {episode.title}
+        <AiBadge className="mr-1 align-middle" /> {episode.title}
       </h3>
       <p className="mt-1 text-sm text-neutral-600">
         <time dateTime={episode.publishedAt}>{formatEpisodeDate(episode.publishedAt)}</time>

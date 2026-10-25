@@ -56,9 +56,7 @@ describe('changePassword', () => {
   it('throws when user not found', async () => {
     mockPrisma.user.findUnique.mockResolvedValue(null)
 
-    await expect(changePassword('nonexistent', 'old', 'new12345')).rejects.toThrow(
-      'User not found',
-    )
+    await expect(changePassword('nonexistent', 'old', 'new12345')).rejects.toThrow('User not found')
     expect(mockPrisma.user.update).not.toHaveBeenCalled()
   })
 
@@ -69,9 +67,7 @@ describe('changePassword', () => {
     })
     mockBcrypt.compare.mockResolvedValue(false)
 
-    await expect(changePassword('user-1', 'wrongpass', 'newpass12')).rejects.toThrow(
-      'Current password is incorrect',
-    )
+    await expect(changePassword('user-1', 'wrongpass', 'newpass12')).rejects.toThrow('Current password is incorrect')
     expect(mockPrisma.user.update).not.toHaveBeenCalled()
     expect(mockPrisma.refreshToken.deleteMany).not.toHaveBeenCalled()
   })

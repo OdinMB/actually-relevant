@@ -1,9 +1,4 @@
-import {
-  SocialDraftPanel,
-  type SocialDraft,
-  type SocialDraftChannel,
-  type SocialDraftPanelProps,
-} from './social/SocialDraftPanel'
+import { SocialDraftPanel, type SocialDraft, type SocialDraftChannel, type SocialDraftPanelProps } from './social/SocialDraftPanel'
 
 import { SITE_URL } from '../../config'
 
@@ -15,10 +10,11 @@ const SITE_HOST = new URL(SITE_URL).host
 
 /** Count graphemes (user-perceived characters) using Intl.Segmenter. */
 function countGraphemes(text: string): number {
-  // Intl.Segmenter is widely supported but not in all TS lib targets
-  const IntlAny = Intl as any
-  if (typeof IntlAny.Segmenter === 'function') {
-    const segmenter = new IntlAny.Segmenter('en', { granularity: 'grapheme' })
+  // Intl.Segmenter is widely supported but not in the ES2020 lib this client targets
+  type GraphemeSegmenter = new (locale: string, options: { granularity: 'grapheme' }) => { segment(text: string): Iterable<unknown> }
+  const Segmenter = (Intl as unknown as { Segmenter?: GraphemeSegmenter }).Segmenter
+  if (typeof Segmenter === 'function') {
+    const segmenter = new Segmenter('en', { granularity: 'grapheme' })
     return [...segmenter.segment(text)].length
   }
   // Fallback: spread into array (handles most emoji correctly)
@@ -33,7 +29,7 @@ const blueskyDraftChannel: SocialDraftChannel = {
   count: countGraphemes,
   nearLimit: LIMIT - 20,
   hint: 'Links are added automatically',
-  renderDetails: (draft) => (
+  renderDetails: draft => (
     /* Link preview */
     <div>
       <p className="text-sm font-medium text-neutral-700 mb-2">Links</p>

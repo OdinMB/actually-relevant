@@ -114,9 +114,7 @@ describe('buildBlueskyPickBestPrompt', () => {
   })
 
   it('handles null optional fields', () => {
-    const prompt = buildBlueskyPickBestPrompt([
-      { ...stories[0], relevanceSummary: null, emotionTag: null, issueName: null, datePublished: null },
-    ])
+    const prompt = buildBlueskyPickBestPrompt([{ ...stories[0], relevanceSummary: null, emotionTag: null, issueName: null, datePublished: null }])
     expect(prompt).toContain('story-1')
     // Should not contain 'null' as literal text
     expect(prompt).not.toMatch(/: null/)

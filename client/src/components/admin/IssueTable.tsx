@@ -1,9 +1,5 @@
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
-import {
-  EllipsisVerticalIcon,
-  PencilSquareIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline'
+import { EllipsisVerticalIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type { Issue } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
 
@@ -45,19 +41,25 @@ export function IssueTable({ issues, onEdit, onDelete }: IssueTableProps) {
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Name</th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">Slug</th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">Published</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">Actions</th>
+            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+              Name
+            </th>
+            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Slug
+            </th>
+            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Published
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
           {rows.map(({ issue, isChild }) => (
             <tr key={issue.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
               <td className="px-3 py-2">
-                {isChild && (
-                  <span className="text-neutral-400 mr-1.5">└</span>
-                )}
+                {isChild && <span className="text-neutral-400 mr-1.5">└</span>}
                 <button
                   onClick={() => onEdit(issue.id)}
                   className="text-left font-medium text-neutral-900 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
@@ -75,17 +77,8 @@ export function IssueTable({ issues, onEdit, onDelete }: IssueTableProps) {
               <td className="px-3 py-2">
                 {/* Desktop actions */}
                 <div className="hidden md:flex items-center justify-end gap-0.5">
-                  <ActionIconButton
-                    icon={PencilSquareIcon}
-                    label="Edit"
-                    onClick={() => onEdit(issue.id)}
-                  />
-                  <ActionIconButton
-                    icon={TrashIcon}
-                    label="Delete"
-                    variant="danger"
-                    onClick={() => onDelete(issue.id)}
-                  />
+                  <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => onEdit(issue.id)} />
+                  <ActionIconButton icon={TrashIcon} label="Delete" variant="danger" onClick={() => onDelete(issue.id)} />
                 </div>
 
                 {/* Mobile overflow menu */}

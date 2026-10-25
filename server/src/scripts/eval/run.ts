@@ -37,7 +37,9 @@ async function getFixtures(opts: EvalOptions, cacheDir: string): Promise<Fixture
   if (existsSync(file) && !opts.refreshFixtures) {
     const fx = JSON.parse(readFileSync(file, 'utf8')) as Fixtures
     if (fx.floor === opts.floor) {
-      console.log(`fixtures: cached from ${fx.createdAt} (database ${fx.dbClass}, read-only ${fx.readOnlyMode} mode, floor ${fx.floor}); pass --refresh-fixtures to resample`)
+      console.log(
+        `fixtures: cached from ${fx.createdAt} (database ${fx.dbClass}, read-only ${fx.readOnlyMode} mode, floor ${fx.floor}); pass --refresh-fixtures to resample`,
+      )
       return fx
     }
     console.log(`fixtures: cached with floor ${fx.floor ?? 'unrecorded'}, requested ${opts.floor}; resampling`)
@@ -86,7 +88,9 @@ async function apiCheck(suites: Suite[], ctx: EvalContext): Promise<boolean> {
   const records = await Promise.all(arms.map(a => ctx.call(a, 'api-check', schema, 'Return a JSON object whose "ok" field is true.')))
   for (const r of records) {
     const u = r.usage
-    console.log(`  ${r.arm}: ${r.outcome}${r.finishReason ? ` (${r.finishReason})` : ''}, in ${u.input} / cached ${u.cached} / out ${u.output} / reasoning ${u.reasoning} tokens, ${usd(r.costUsd)}, ${r.latencyMs} ms${r.error ? `, error: ${r.error}` : ''}`)
+    console.log(
+      `  ${r.arm}: ${r.outcome}${r.finishReason ? ` (${r.finishReason})` : ''}, in ${u.input} / cached ${u.cached} / out ${u.output} / reasoning ${u.reasoning} tokens, ${usd(r.costUsd)}, ${r.latencyMs} ms${r.error ? `, error: ${r.error}` : ''}`,
+    )
   }
   return records.every(r => r.outcome === 'ok')
 }
@@ -155,7 +159,10 @@ async function main(): Promise<void> {
     console.log(`${s.name}: done; this run ${usd(ctx.spentThisRunUsd())}, ledger ${usd(ctx.spentUsd())}, live calls ${ctx.liveCalls()}`)
   }
 
-  const rating = writeRatingDeliverable(out, results.flatMap(r => r.result?.ratingItems ?? []))
+  const rating = writeRatingDeliverable(
+    out,
+    results.flatMap(r => r.result?.ratingItems ?? []),
+  )
   const report = renderResults({
     generatedAt: new Date().toISOString(),
     fixtures: fx,
@@ -167,7 +174,9 @@ async function main(): Promise<void> {
     rating,
   })
   writeFileSync(join(out, 'results.md'), report)
-  console.log(`wrote ${join(out, 'results.md')}${rating.written ? ', rating-sets.json, rating-key.json' : '; the existing rating deliverable was left as it was'}`)
+  console.log(
+    `wrote ${join(out, 'results.md')}${rating.written ? ', rating-sets.json, rating-key.json' : '; the existing rating deliverable was left as it was'}`,
+  )
   if (rating.validationErrors.length > 0) {
     console.error(`rating deliverable failed validation:\n${rating.validationErrors.map(e => `  - ${e}`).join('\n')}`)
     process.exitCode = 1

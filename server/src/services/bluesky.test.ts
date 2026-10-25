@@ -49,8 +49,19 @@ vi.mock('../prompts/index.js', () => ({
   buildBlueskyPickBestPrompt: vi.fn(() => 'pick prompt'),
 }))
 
-const { assemblePostText, calcMaxBlurbChars, generateDraft, pickBestStory, updateDraft, deletePostRecord, publishPost, updateMetrics, listPosts, getFeed, invalidateFeedCache } =
-  await import('./bluesky.js')
+const {
+  assemblePostText,
+  calcMaxBlurbChars,
+  generateDraft,
+  pickBestStory,
+  updateDraft,
+  deletePostRecord,
+  publishPost,
+  updateMetrics,
+  listPosts,
+  getFeed,
+  invalidateFeedCache,
+} = await import('./bluesky.js')
 
 describe('assemblePostText', () => {
   it('assembles metadata line and editorial text', () => {
@@ -321,7 +332,7 @@ describe('publishPost', () => {
     expect(mockBlueskyClient.createPost).toHaveBeenCalled()
   })
 
-  it('points the link-card thumbnail at the story\'s own preview image', async () => {
+  it("points the link-card thumbnail at the story's own preview image", async () => {
     mockPrisma.blueskyPost.findUnique.mockResolvedValue({
       id: 'post-1',
       status: 'draft',
@@ -486,8 +497,30 @@ describe('getFeed', () => {
     mockBlueskyClient.isBlueskyConfigured.mockReturnValue(true)
     mockBlueskyClient.getAuthorFeed.mockResolvedValue({
       items: [
-        { uri: 'at://did/post/1', cid: 'cid1', text: 'Tracked post', createdAt: '2025-01-01T00:00:00Z', indexedAt: '2025-01-01T00:00:00Z', likeCount: 5, repostCount: 1, replyCount: 0, quoteCount: 0, isRepost: false },
-        { uri: 'at://did/post/2', cid: 'cid2', text: 'Untracked post', createdAt: '2025-01-02T00:00:00Z', indexedAt: '2025-01-02T00:00:00Z', likeCount: 3, repostCount: 0, replyCount: 1, quoteCount: 0, isRepost: false },
+        {
+          uri: 'at://did/post/1',
+          cid: 'cid1',
+          text: 'Tracked post',
+          createdAt: '2025-01-01T00:00:00Z',
+          indexedAt: '2025-01-01T00:00:00Z',
+          likeCount: 5,
+          repostCount: 1,
+          replyCount: 0,
+          quoteCount: 0,
+          isRepost: false,
+        },
+        {
+          uri: 'at://did/post/2',
+          cid: 'cid2',
+          text: 'Untracked post',
+          createdAt: '2025-01-02T00:00:00Z',
+          indexedAt: '2025-01-02T00:00:00Z',
+          likeCount: 3,
+          repostCount: 0,
+          replyCount: 1,
+          quoteCount: 0,
+          isRepost: false,
+        },
       ],
       cursor: 'next-cursor',
     })
@@ -517,7 +550,14 @@ describe('getFeed', () => {
     mockPrisma.blueskyPost.findMany
       // Draft/failed query
       .mockResolvedValueOnce([
-        { id: 'draft-1', postText: 'Draft post', status: 'draft', error: null, createdAt: new Date(), story: { title: 'Draft Story', slug: 'draft-story', issue: { name: 'Tech' } } },
+        {
+          id: 'draft-1',
+          postText: 'Draft post',
+          status: 'draft',
+          error: null,
+          createdAt: new Date(),
+          story: { title: 'Draft Story', slug: 'draft-story', issue: { name: 'Tech' } },
+        },
       ])
 
     const result = await getFeed({})

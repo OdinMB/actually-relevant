@@ -28,7 +28,9 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   generate_podcast: () => runGeneratePodcast(),
   publish_podcast: () => runPublishPodcast(),
   poll_plunk_activity: () => runPollPlunkActivity(),
-  cleanup_old_stories: async () => { await runCleanupOldStories() },
+  cleanup_old_stories: async () => {
+    await runCleanupOldStories()
+  },
 }
 
 /**

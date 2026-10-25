@@ -32,12 +32,7 @@ function compliantAssessment(): AssessResult {
     quote: 'We will act now.',
     quoteAttribution: 'Jane Doe, Minister',
     summary: Array.from({ length: 50 }, (_, i) => `word${i}`).join(' '),
-    factors: [
-      '- **Scale:** One.',
-      '- **Policy:** Two.',
-      '- **Norms:** Three.',
-      '- **Science:** Four.',
-    ],
+    factors: ['- **Scale:** One.', '- **Policy:** Two.', '- **Norms:** Three.', '- **Science:** Four.'],
     limitingFactors: ['- **Early stage:** Not yet.'],
     relevanceCalculation: ['- **Scale:** 6', '- **Early stage:** -1', '- **Other:** +0'],
     conservativeRating: 5,
@@ -55,26 +50,106 @@ describe('checkAssessFormat', () => {
   })
 
   const cases: [string, (a: AssessResult) => void, string][] = [
-    ['3 factors', a => { a.factors = a.factors.slice(0, 3) }, 'factorCount'],
-    ['71-word summary', a => { a.summary = Array.from({ length: 71 }, () => 'w').join(' ') }, 'summaryWords'],
-    ['11-word title', a => { a.relevanceTitle = Array.from({ length: 11 }, (_, i) => `t${i}`).join(' ') }, 'titleWords'],
-    ['"Label: headline" title', a => { a.relevanceTitle = 'Reefs: coral recovers after ban' }, 'titleNoColon'],
-    ['4-word label', a => { a.titleLabel = 'Very long topic label' }, 'labelWords'],
-    ['label with "and"', a => { a.titleLabel = 'Fish and seas' }, 'labelWords'],
-    ['231-char blurb', a => { a.marketingBlurb = 'x'.repeat(231) }, 'blurbLength'],
-    ['label/title word overlap', a => { a.titleLabel = 'Coral reefs' }, 'labelTitleDistinct'],
-    ['bad date', a => { a.publicationDate = '2026-05-01' }, 'dateFormat'],
-    ['factor without bold label', a => { a.factors[0] = 'Scale matters.' }, 'factorFormat'],
-    ['no limiting factors', a => { a.limitingFactors = [] }, 'limitingCount'],
-    ['6 calculation bullets', a => { a.relevanceCalculation = Array(6).fill('- **x:** 1') }, 'calculationCount'],
-    ['19-word relevance summary', a => { a.relevanceSummary = Array(19).fill('w').join(' ') }, 'relevanceSummaryWords'],
+    [
+      '3 factors',
+      a => {
+        a.factors = a.factors.slice(0, 3)
+      },
+      'factorCount',
+    ],
+    [
+      '71-word summary',
+      a => {
+        a.summary = Array.from({ length: 71 }, () => 'w').join(' ')
+      },
+      'summaryWords',
+    ],
+    [
+      '11-word title',
+      a => {
+        a.relevanceTitle = Array.from({ length: 11 }, (_, i) => `t${i}`).join(' ')
+      },
+      'titleWords',
+    ],
+    [
+      '"Label: headline" title',
+      a => {
+        a.relevanceTitle = 'Reefs: coral recovers after ban'
+      },
+      'titleNoColon',
+    ],
+    [
+      '4-word label',
+      a => {
+        a.titleLabel = 'Very long topic label'
+      },
+      'labelWords',
+    ],
+    [
+      'label with "and"',
+      a => {
+        a.titleLabel = 'Fish and seas'
+      },
+      'labelWords',
+    ],
+    [
+      '231-char blurb',
+      a => {
+        a.marketingBlurb = 'x'.repeat(231)
+      },
+      'blurbLength',
+    ],
+    [
+      'label/title word overlap',
+      a => {
+        a.titleLabel = 'Coral reefs'
+      },
+      'labelTitleDistinct',
+    ],
+    [
+      'bad date',
+      a => {
+        a.publicationDate = '2026-05-01'
+      },
+      'dateFormat',
+    ],
+    [
+      'factor without bold label',
+      a => {
+        a.factors[0] = 'Scale matters.'
+      },
+      'factorFormat',
+    ],
+    [
+      'no limiting factors',
+      a => {
+        a.limitingFactors = []
+      },
+      'limitingCount',
+    ],
+    [
+      '6 calculation bullets',
+      a => {
+        a.relevanceCalculation = Array(6).fill('- **x:** 1')
+      },
+      'calculationCount',
+    ],
+    [
+      '19-word relevance summary',
+      a => {
+        a.relevanceSummary = Array(19).fill('w').join(' ')
+      },
+      'relevanceSummaryWords',
+    ],
   ]
 
   for (const [label, mutate, rule] of cases) {
     it(`detects ${label} on its own`, () => {
       const a = compliantAssessment()
       mutate(a)
-      const failing = Object.entries(checkAssessFormat(a)).filter(([, ok]) => !ok).map(([k]) => k)
+      const failing = Object.entries(checkAssessFormat(a))
+        .filter(([, ok]) => !ok)
+        .map(([k]) => k)
       expect(failing).toEqual([rule])
     })
   }
@@ -159,7 +234,16 @@ describe('checkDialogue', () => {
     episodeSummary: 'One. Two.',
     segments: [
       { kind: 'intro' as const, storyRef: null, turns: [{ speaker: 'HOST_A' as const, text: 'Welcome back.' }] },
-      { kind: 'story' as const, storyRef: 1, turns: [{ speaker: 'HOST_B' as const, text: '[calm] The Guardian reports that reefs are recovering across the whole Pacific region after many years of strict fishing bans.' }] },
+      {
+        kind: 'story' as const,
+        storyRef: 1,
+        turns: [
+          {
+            speaker: 'HOST_B' as const,
+            text: '[calm] The Guardian reports that reefs are recovering across the whole Pacific region after many years of strict fishing bans.',
+          },
+        ],
+      },
       { kind: 'outro' as const, storyRef: null, turns: [{ speaker: 'HOST_B' as const, text: 'From the reefs back to you: thanks.' }] },
     ],
   }
@@ -176,7 +260,7 @@ describe('checkDialogue', () => {
     expect(c.errors.some(e => /spoken characters/.test(e))).toBe(true)
   })
 
-  it('lists each segment\'s opening turn for the segue report', () => {
+  it("lists each segment's opening turn for the segue report", () => {
     expect(checkDialogue(dialogue, stories).segues).toEqual([
       { segment: 'story 1', opening: dialogue.segments[1].turns[0].text },
       { segment: 'outro', opening: 'From the reefs back to you: thanks.' },
@@ -187,8 +271,17 @@ describe('checkDialogue', () => {
 describe('summarizeCalls', () => {
   it('aggregates outcomes, latency and mean usage', () => {
     const rec = (outcome: CallRecord['outcome'], latencyMs: number, cost: number): CallRecord => ({
-      key: 'k', arm: 'a', schema: 's', outcome, parsed: null, content: '', finishReason: null,
-      usage: { input: 100, cached: 0, output: 50, reasoning: 20 }, costUsd: cost, latencyMs, at: '',
+      key: 'k',
+      arm: 'a',
+      schema: 's',
+      outcome,
+      parsed: null,
+      content: '',
+      finishReason: null,
+      usage: { input: 100, cached: 0, output: 50, reasoning: 20 },
+      costUsd: cost,
+      latencyMs,
+      at: '',
     })
     const s = summarizeCalls('a', [rec('ok', 100, 0.01), rec('empty', 300, 0.03), rec('skipped', 0, 0)])
     expect(s.calls).toBe(2)

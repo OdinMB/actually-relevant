@@ -1,4 +1,4 @@
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
+import { createCanvas, GlobalFonts, type SKRSContext2D } from '@napi-rs/canvas'
 import PDFDocument from 'pdfkit'
 import archiver from 'archiver'
 import { createWriteStream, mkdirSync, unlinkSync, existsSync } from 'fs'
@@ -35,7 +35,7 @@ function registerFonts() {
   }
 }
 
-function wrapText(ctx: any, text: string, maxWidth: number): string[] {
+function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): string[] {
   const words = text.split(' ')
   const lines: string[] = []
   let currentLine = ''
@@ -150,10 +150,7 @@ export function createStoryImage(story: CarouselStory, size: ImageSize = CAROUSE
   return embedXmpInPng(canvas.toBuffer('image/png'), aiGeneratedXmpPacket())
 }
 
-export async function generateCarouselZip(
-  stories: CarouselStory[],
-  outputDir: string,
-): Promise<string> {
+export async function generateCarouselZip(stories: CarouselStory[], outputDir: string): Promise<string> {
   mkdirSync(outputDir, { recursive: true })
 
   const imagePaths: string[] = []
@@ -162,8 +159,8 @@ export async function generateCarouselZip(
 
   // Generate PNG images
   for (let i = 0; i < stories.length; i++) {
-    const buffer = createStoryImage(stories[i])
-    const filepath = join(outputDir, filenames[i])
+    const buffer = createStoryImage(stories[i]!)
+    const filepath = join(outputDir, filenames[i]!)
     await fs.writeFile(filepath, buffer)
     imagePaths.push(filepath)
   }
@@ -182,7 +179,11 @@ export async function generateCarouselZip(
 
   // Clean up individual images, PDF and post text
   for (const filePath of [...imagePaths, pdfPath, postTextPath]) {
-    try { unlinkSync(filePath) } catch { /* ignore */ }
+    try {
+      unlinkSync(filePath)
+    } catch {
+      /* ignore */
+    }
   }
 
   return zipPath

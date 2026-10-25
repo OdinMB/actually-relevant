@@ -12,7 +12,14 @@ describe('buildArticleSchema', () => {
 })
 
 describe('buildPodcastEpisodeSchema', () => {
-  const episode = { id: 'ep-1', title: 'W42', summary: 'S.', publishedAt: '2026-10-12T07:30:00.000Z', durationSec: 372, audioUrl: 'https://audio.example/e.mp3' }
+  const episode = {
+    id: 'ep-1',
+    title: 'W42',
+    summary: 'S.',
+    publishedAt: '2026-10-12T07:30:00.000Z',
+    durationSec: 372,
+    audioUrl: 'https://audio.example/e.mp3',
+  }
 
   it('states the duration as ISO 8601 and points at the transcript page and the show', () => {
     const schema = buildPodcastEpisodeSchema(episode)

@@ -1,9 +1,5 @@
 import { useState } from 'react'
-import {
-  EllipsisVerticalIcon,
-  PlayIcon,
-  PencilSquareIcon,
-} from '@heroicons/react/24/outline'
+import { EllipsisVerticalIcon, PlayIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import type { JobRun } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
@@ -55,26 +51,34 @@ function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => void }) {
         {/* Last Started */}
         <div>
           <label className="block text-sm font-medium text-neutral-700 mb-1">Last Started</label>
-          <p className="text-sm text-neutral-600"><TimeWithRelative dateStr={job.lastStartedAt} /></p>
+          <p className="text-sm text-neutral-600">
+            <TimeWithRelative dateStr={job.lastStartedAt} />
+          </p>
         </div>
 
         {/* Last Finished (success or failure) */}
         <div>
           <label className="block text-sm font-medium text-neutral-700 mb-1">Last Finished</label>
-          <p className="text-sm text-neutral-600"><TimeWithRelative dateStr={job.lastCompletedAt} /></p>
+          <p className="text-sm text-neutral-600">
+            <TimeWithRelative dateStr={job.lastCompletedAt} />
+          </p>
         </div>
 
         {/* Last Success */}
         <div>
           <label className="block text-sm font-medium text-neutral-700 mb-1">Last Success</label>
-          <p className="text-sm text-neutral-600"><TimeWithRelative dateStr={job.lastSucceededAt} /></p>
+          <p className="text-sm text-neutral-600">
+            <TimeWithRelative dateStr={job.lastSucceededAt} />
+          </p>
         </div>
 
         {/* Error */}
         {job.lastError && (
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">Last Error</label>
-            <pre className="text-xs text-red-600 whitespace-pre-wrap break-words bg-red-50 rounded p-3 border border-red-200 max-h-64 overflow-y-auto font-mono">{job.lastError}</pre>
+            <pre className="text-xs text-red-600 whitespace-pre-wrap break-words bg-red-50 rounded p-3 border border-red-200 max-h-64 overflow-y-auto font-mono">
+              {job.lastError}
+            </pre>
           </div>
         )}
       </div>
@@ -105,7 +109,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
     runJob.mutate(jobName, {
       onSuccess: () => toast('success', `${jobDisplayName(jobName)} triggered`),
       // 409 when a run is already under way: the server's answer says so.
-      onError: (err) => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
+      onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
     })
   }
 
@@ -115,23 +119,38 @@ export function JobsTable({ jobs }: JobsTableProps) {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 bg-neutral-50">
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Job</th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Cron</th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Enabled</th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Status</th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Last Started</th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Last Finished</th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Last Success</th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">Error</th>
-              <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">Actions</th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+                Job
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
+                Cron
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+                Enabled
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+                Status
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
+                Last Started
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
+                Last Finished
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
+                Last Success
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
+                Error
+              </th>
+              <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
             {sortedJobs.map(job => (
-              <tr
-                key={job.jobName}
-                className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : 'hover:bg-neutral-50'}`}
-              >
+              <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : 'hover:bg-neutral-50'}`}>
                 <td className="px-3 py-2 font-medium text-neutral-900">
                   <button
                     onClick={() => setSelectedJob(job.jobName)}
@@ -151,10 +170,18 @@ export function JobsTable({ jobs }: JobsTableProps) {
                 <td className="px-3 py-2">
                   <EnabledToggle job={job} />
                 </td>
-                <td className="px-3 py-2"><JobStatusBadge job={job} /></td>
-                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell"><TimeWithRelative dateStr={job.lastStartedAt} /></td>
-                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell"><TimeWithRelative dateStr={job.lastCompletedAt} /></td>
-                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell"><TimeWithRelative dateStr={job.lastSucceededAt} /></td>
+                <td className="px-3 py-2">
+                  <JobStatusBadge job={job} />
+                </td>
+                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell">
+                  <TimeWithRelative dateStr={job.lastStartedAt} />
+                </td>
+                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell">
+                  <TimeWithRelative dateStr={job.lastCompletedAt} />
+                </td>
+                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell">
+                  <TimeWithRelative dateStr={job.lastSucceededAt} />
+                </td>
                 <td className="px-3 py-2 max-w-[200px] hidden lg:table-cell">
                   {job.lastError ? (
                     <button
@@ -162,7 +189,8 @@ export function JobsTable({ jobs }: JobsTableProps) {
                       className="text-left text-red-600 text-xs hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                       title="Click to view full error"
                     >
-                      {job.lastError.slice(0, 60)}{job.lastError.length > 60 ? '...' : ''}
+                      {job.lastError.slice(0, 60)}
+                      {job.lastError.length > 60 ? '...' : ''}
                     </button>
                   ) : (
                     <span className="text-neutral-400">—</span>
@@ -172,7 +200,9 @@ export function JobsTable({ jobs }: JobsTableProps) {
                   {/* Desktop actions */}
                   <div className="hidden lg:flex items-center justify-end gap-0.5">
                     {job.running ? (
-                      <span className="inline-block p-1"><RunningSpinner /></span>
+                      <span className="inline-block p-1">
+                        <RunningSpinner />
+                      </span>
                     ) : (
                       <ActionIconButton
                         icon={PlayIcon}
@@ -181,11 +211,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
                         disabled={runJob.isPending && runJob.variables === job.jobName}
                       />
                     )}
-                    <ActionIconButton
-                      icon={PencilSquareIcon}
-                      label="Edit"
-                      onClick={() => setSelectedJob(job.jobName)}
-                    />
+                    <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => setSelectedJob(job.jobName)} />
                   </div>
 
                   {/* Mobile overflow menu */}
@@ -231,9 +257,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
         </table>
       </div>
 
-      {panelJob && (
-        <JobEditPanel job={panelJob} onClose={() => setSelectedJob(null)} />
-      )}
+      {panelJob && <JobEditPanel job={panelJob} onClose={() => setSelectedJob(null)} />}
     </>
   )
 }
@@ -248,7 +272,7 @@ function EnabledToggle({ job }: { job: JobRun }) {
       {
         onSuccess: () => toast('success', `${jobDisplayName(job.jobName)} ${!job.enabled ? 'enabled' : 'disabled'}`),
         // 422 when enabling a job whose configuration is incomplete: the answer names what is missing.
-        onError: (err) => toast('error', err instanceof ApiError ? err.message : 'Failed to update job'),
+        onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to update job'),
       },
     )
   }

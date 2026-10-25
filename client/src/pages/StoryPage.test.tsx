@@ -77,9 +77,7 @@ describe('StoryPage', () => {
 
   it('follows the quote attribution with the AI selection note', () => {
     renderStory(story)
-    expect(
-      screen.getByText(`— ${AI_TEXT.quoteAttribution} · selected and potentially translated by AI`),
-    ).toBeInTheDocument()
+    expect(screen.getByText(`— ${AI_TEXT.quoteAttribution} · selected and potentially translated by AI`)).toBeInTheDocument()
   })
 
   it('shows the AI selection note under a quote that has no attribution', () => {
@@ -98,7 +96,7 @@ describe('StoryPage', () => {
     }
   })
 
-  it('points og:image and twitter:image at the story\'s own preview image', async () => {
+  it("points og:image and twitter:image at the story's own preview image", async () => {
     renderStory(story)
     await waitFor(() => {
       expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe('/api/stories/ai-story/og.png')

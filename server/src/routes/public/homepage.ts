@@ -13,12 +13,7 @@ const HOMEPAGE_TTL = 60 * 1000
 const homepageCache = new TTLCache<unknown>(HOMEPAGE_TTL)
 
 // Issue slugs in display order for homepage
-const HOMEPAGE_ISSUE_SLUGS = [
-  'human-development',
-  'planet-climate',
-  'existential-threats',
-  'science-technology',
-]
+const HOMEPAGE_ISSUE_SLUGS = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
 
 interface EmotionBuckets<S> {
   uplifting: S[]
@@ -44,10 +39,7 @@ router.get('/', async (req, res) => {
   try {
     const data = await cached(homepageCache, 'homepage-data', async () => {
       // Fetch issues and stories in parallel
-      const [issues, storyData] = await Promise.all([
-        issueService.getPublicIssues(),
-        storyService.getHomepageData(HOMEPAGE_ISSUE_SLUGS, 7),
-      ])
+      const [issues, storyData] = await Promise.all([issueService.getPublicIssues(), storyService.getHomepageData(HOMEPAGE_ISSUE_SLUGS, 7)])
 
       return {
         issues,

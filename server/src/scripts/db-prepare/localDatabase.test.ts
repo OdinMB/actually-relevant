@@ -7,7 +7,7 @@ describe('checkLocalDatabase', () => {
     'postgres://u:p@LOCALHOST:5432/db',
     'postgresql://u:p@127.0.0.1:5433/db?schema=public',
     'postgresql://u:p@[::1]:5433/db',
-  ])('treats %s as local', (url) => {
+  ])('treats %s as local', url => {
     expect(checkLocalDatabase(url)).toMatchObject({ kind: 'local' })
   })
 

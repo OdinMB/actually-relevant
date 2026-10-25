@@ -6,8 +6,7 @@ import FeedbackForm from '../components/FeedbackForm'
 
 const META = {
   title: 'Feedback - Actually Relevant',
-  description:
-    'Share your feedback, report bugs, or suggest improvements for Actually Relevant.',
+  description: 'Share your feedback, report bugs, or suggest improvements for Actually Relevant.',
   url: `${SEO.siteUrl}/feedback`,
 }
 

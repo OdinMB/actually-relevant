@@ -20,10 +20,7 @@ describe('formatArticlesBlock', () => {
   })
 
   it('renders every article when the batch contains Han-script text', () => {
-    const stories = [
-      ...Array.from({ length: 6 }, (_, i) => latinStory(i + 1)),
-      ...Array.from({ length: 4 }, (_, i) => hanStory(i + 1)),
-    ]
+    const stories = [...Array.from({ length: 6 }, (_, i) => latinStory(i + 1)), ...Array.from({ length: 4 }, (_, i) => hanStory(i + 1))]
     expect(articleIds(formatArticlesBlock(stories))).toHaveLength(10)
   })
 

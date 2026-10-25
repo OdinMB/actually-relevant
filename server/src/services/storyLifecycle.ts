@@ -32,14 +32,18 @@ type Tx = Prisma.TransactionClient
 /** `pipeline`: jobs and the bulk analysis and selection actions. `editor`: explicit admin actions. */
 export type Actor = 'pipeline' | 'editor'
 
-export type Move =
-  | { to: typeof StoryStatus.rejected; reason: RejectionReason }
-  | { to: Exclude<StoryStatus, typeof StoryStatus.rejected> }
+export type Move = { to: typeof StoryStatus.rejected; reason: RejectionReason } | { to: Exclude<StoryStatus, typeof StoryStatus.rejected> }
 
 /** A story a move left alone, with the status that kept it there (null: no such story). */
-export interface Skipped { id: string; status: StoryStatus | null }
+export interface Skipped {
+  id: string
+  status: StoryStatus | null
+}
 
-export interface MoveResult { moved: string[]; skipped: Skipped[] }
+export interface MoveResult {
+  moved: string[]
+  skipped: Skipped[]
+}
 
 // ──── Transition table ──────────────────────────────────────────────────
 
@@ -79,9 +83,7 @@ export function editorMoveTo(status: StoryStatus): Move {
 
 /** The status and reason a newly crawled story starts with: a paywall-locked one is rejected (ADR-0031). */
 export function initialStatus(accessTier: string | null | undefined): { status: StoryStatus; rejectionReason: RejectionReason | null } {
-  return accessTier === 'locked'
-    ? { status: rejected, rejectionReason: RejectionReason.paywall }
-    : { status: fetched, rejectionReason: null }
+  return accessTier === 'locked' ? { status: rejected, rejectionReason: RejectionReason.paywall } : { status: fetched, rejectionReason: null }
 }
 
 const moveData = (move: Move) => ({
@@ -137,26 +139,30 @@ export async function recordAnalysis(
   if (rows.length === 0) return outcomes
   const { to, advance, refresh } = ANALYSIS[stage]
 
-  await prisma.$transaction(async (tx) => {
-    await lockForMove(tx, rows.map(r => r.id))
-    for (const row of rows) {
-      const status = expected.get(row.id)
-      const outcome: AnalysisOutcome = status && advance[actor].includes(status) ? 'advanced'
-        : status && refresh.includes(status) ? 'refreshed'
-        : 'skipped'
-      outcomes.set(row.id, outcome)
-      if (outcome === 'skipped') continue
-      const { count } = await tx.story.updateMany({
-        where: { id: row.id, status },
-        data: outcome === 'advanced' ? { ...row.data, status: to, rejectionReason: null } : row.data,
-      })
-      if (count === 0) {
-        outcomes.set(row.id, 'skipped')
-        continue
+  await prisma.$transaction(
+    async tx => {
+      await lockForMove(
+        tx,
+        rows.map(r => r.id),
+      )
+      for (const row of rows) {
+        const status = expected.get(row.id)
+        const outcome: AnalysisOutcome = status && advance[actor].includes(status) ? 'advanced' : status && refresh.includes(status) ? 'refreshed' : 'skipped'
+        outcomes.set(row.id, outcome)
+        if (outcome === 'skipped') continue
+        const { count } = await tx.story.updateMany({
+          where: { id: row.id, status },
+          data: outcome === 'advanced' ? { ...row.data, status: to, rejectionReason: null } : row.data,
+        })
+        if (count === 0) {
+          outcomes.set(row.id, 'skipped')
+          continue
+        }
+        if (row.embedding) await saveEmbeddingTx(tx, row.id, row.embedding.embedding, row.embedding.hash)
       }
-      if (row.embedding) await saveEmbeddingTx(tx, row.id, row.embedding.embedding, row.embedding.hash)
-    }
-  }, { timeout: config.database.transactionTimeoutMs })
+    },
+    { timeout: config.database.transactionTimeoutMs },
+  )
 
   // A refreshed published story has new content: its cached related list is stale
   forgetRelatedStories(rows.filter(r => outcomes.get(r.id) === 'refreshed').map(r => r.id))
@@ -204,15 +210,21 @@ export async function transition(ids: string[], move: Move, actor: Actor): Promi
   if (unique.length === 0) return { moved: [], skipped: [] }
   const from = allowedFrom(move, actor)
 
-  const result = move.to === published
-    ? await publishIds(unique, from, actor)
-    : await inTransaction(tx => (actor === 'editor' ? editorMove(tx, unique, move, from) : pipelineMove(tx, unique, move, from)))
+  const result =
+    move.to === published
+      ? await publishIds(unique, from, actor)
+      : await inTransaction(tx => (actor === 'editor' ? editorMove(tx, unique, move, from) : pipelineMove(tx, unique, move, from)))
 
   if (actor === 'editor' && move.to !== published) forgetRelatedStories(result.moved)
-  log.info({
-    move: describeMove(move), actor, moved: result.moved.length,
-    ...(result.skipped.length > 0 ? { skipped: result.skipped } : {}),
-  }, 'story status move')
+  log.info(
+    {
+      move: describeMove(move),
+      actor,
+      moved: result.moved.length,
+      ...(result.skipped.length > 0 ? { skipped: result.skipped } : {}),
+    },
+    'story status move',
+  )
   return result
 }
 
@@ -225,9 +237,8 @@ async function pipelineMove(tx: Tx, ids: string[], move: Move, from: StoryStatus
 async function editorMove(tx: Tx, ids: string[], move: Move, from: StoryStatus[]): Promise<MoveResult> {
   const before = await lockForMove(tx, ids)
   // An editor's reject also overrides another reason (a duplicate stays rejected for good)
-  const fromRejected: Prisma.StoryWhereInput[] = move.to === rejected
-    ? [{ status: rejected, OR: [{ rejectionReason: null }, { rejectionReason: { not: move.reason } }] }]
-    : []
+  const fromRejected: Prisma.StoryWhereInput[] =
+    move.to === rejected ? [{ status: rejected, OR: [{ rejectionReason: null }, { rejectionReason: { not: move.reason } }] }] : []
   const moved = await moveWhere(tx, { id: { in: ids }, OR: [{ status: { in: from } }, ...fromRejected] }, move)
 
   // Moving a cluster's face (its primary, or a published member) changes who should lead it
@@ -297,7 +308,13 @@ async function publishChunk(tx: Tx, chunk: string[], from: StoryStatus[], actor:
   const moved = flipped.map(s => s.id)
 
   // Slugs and dates only for rows that actually moved; a slug or date already set is kept
-  await saveSlugs(tx, await generateUniqueSlugs(flipped.filter(s => !s.slug), tx))
+  await saveSlugs(
+    tx,
+    await generateUniqueSlugs(
+      flipped.filter(s => !s.slug),
+      tx,
+    ),
+  )
   if (moved.length > 0) {
     await tx.story.updateMany({ where: { id: { in: moved }, datePublished: null }, data: { datePublished: new Date() } })
   }
@@ -335,8 +352,7 @@ interface Member {
   datePublished: Date | null
 }
 
-const isDuplicate = (m: Pick<Member, 'status' | 'rejectionReason'>) =>
-  m.status === rejected && m.rejectionReason === RejectionReason.duplicate
+const isDuplicate = (m: Pick<Member, 'status' | 'rejectionReason'>) => m.status === rejected && m.rejectionReason === RejectionReason.duplicate
 
 /** Never a trashed member, nor one rejected for any reason but being a duplicate. */
 const electable = (m: Member) => m.status !== trashed && (m.status !== rejected || isDuplicate(m))
@@ -352,7 +368,11 @@ function byElectionRank(a: Member, b: Member): number {
   return a.dateCrawled.getTime() - b.dateCrawled.getTime()
 }
 
-export interface ElectionResult { primaryId: string | null; rejected: string[]; restored: string[] }
+export interface ElectionResult {
+  primaryId: string | null
+  rejected: string[]
+  restored: string[]
+}
 
 /**
  * Elect the cluster's primary (or take `chosenPrimaryId`), then auto-reject the other members as
@@ -371,9 +391,7 @@ export async function reelectPrimary(clusterId: string, mode: ElectionMode, tx: 
   })
   if (!cluster) return { primaryId: null, rejected: [], restored: [] }
 
-  const primary = chosenPrimaryId
-    ? cluster.stories.find(m => m.id === chosenPrimaryId)
-    : [...cluster.stories].filter(electable).sort(byElectionRank)[0]
+  const primary = chosenPrimaryId ? cluster.stories.find(m => m.id === chosenPrimaryId) : [...cluster.stories].filter(electable).sort(byElectionRank)[0]
   if (!primary) {
     const stale = cluster.primaryStoryId !== null && !cluster.stories.some(m => m.id === cluster.primaryStoryId)
     if (stale) await tx.storyCluster.update({ where: { id: clusterId }, data: { primaryStoryId: null } })
@@ -419,11 +437,14 @@ const republishedIn = new WeakMap<Tx, string[]>()
  */
 async function inTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   const republished: string[] = []
-  const result = await prisma.$transaction(async (tx) => {
-    republished.length = 0 // a retried callback starts over
-    republishedIn.set(tx, republished)
-    return fn(tx)
-  }, { timeout: config.database.transactionTimeoutMs })
+  const result = await prisma.$transaction(
+    async tx => {
+      republished.length = 0 // a retried callback starts over
+      republishedIn.set(tx, republished)
+      return fn(tx)
+    },
+    { timeout: config.database.transactionTimeoutMs },
+  )
   if (republished.length > 0) {
     try {
       await ensureEmbeddings([...new Set(republished)])
@@ -438,7 +459,7 @@ async function inTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
 
 /** Run `fn` in a transaction holding the row locks of these clusters; `locked` is those that exist. */
 export async function withClusterLocks<T>(clusterIds: string[], fn: (tx: Tx, locked: Set<string>) => Promise<T>): Promise<T> {
-  return inTransaction(async (tx) => fn(tx, await lockClusters(tx, clusterIds)))
+  return inTransaction(async tx => fn(tx, await lockClusters(tx, clusterIds)))
 }
 
 /** Restore duplicate members, unlink every member and delete the cluster. */
@@ -463,7 +484,7 @@ async function dissolveLocked(tx: Tx, clusterId: string): Promise<string[]> {
  * member is dissolved; otherwise its primary is re-elected (editor-cluster mode).
  */
 export async function removeFromCluster(clusterId: string, storyId: string): Promise<{ dissolved: boolean }> {
-  return withClusterLocks([clusterId], async (tx) => {
+  return withClusterLocks([clusterId], async tx => {
     const story = await tx.story.findUnique({ where: { id: storyId }, select: { clusterId: true } })
     if (!story || story.clusterId !== clusterId) throw new BadRequestError('Story is not a member of this cluster')
 
@@ -471,7 +492,7 @@ export async function removeFromCluster(clusterId: string, storyId: string): Pro
     await restoreDuplicates(tx, { id: storyId })
     log.info({ clusterId, storyId }, 'removed story from cluster')
 
-    if (await tx.story.count({ where: { clusterId } }) <= 1) {
+    if ((await tx.story.count({ where: { clusterId } })) <= 1) {
       await dissolveLocked(tx, clusterId)
       log.info({ clusterId }, 'dissolved cluster after member removal (<=1 remaining)')
       return { dissolved: true }
@@ -507,7 +528,10 @@ async function lockClusters(tx: Tx, clusterIds: string[]): Promise<Set<string>> 
 
 async function lockClustersOf(tx: Tx, storyIds: string[]): Promise<void> {
   const rows = await tx.story.findMany({ where: { id: { in: storyIds }, clusterId: { not: null } }, select: { clusterId: true } })
-  await lockClusters(tx, rows.map(r => r.clusterId!))
+  await lockClusters(
+    tx,
+    rows.map(r => r.clusterId!),
+  )
 }
 
 /** The lock order for moving stories: their clusters' rows by id, then the story rows by id. */
@@ -516,7 +540,11 @@ async function lockForMove(tx: Tx, ids: string[]): Promise<Map<string, LockedSto
   return lockStories(tx, ids)
 }
 
-interface LockedStory { status: StoryStatus; clusterId: string | null; isPrimary: boolean }
+interface LockedStory {
+  status: StoryStatus
+  clusterId: string | null
+  isPrimary: boolean
+}
 
 async function lockStories(tx: Tx, ids: string[]): Promise<Map<string, LockedStory>> {
   const rows = await tx.$queryRaw<{ id: string; status: StoryStatus; cluster_id: string | null; is_primary: boolean }[]>`

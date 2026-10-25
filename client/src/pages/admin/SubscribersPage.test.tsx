@@ -17,8 +17,24 @@ const baseReconciliation = {
   plunk: { available: true, partial: false, truncated: false, total: 3, subscribed: 2, unsubscribed: 1, unsubscribedNotInDb: 1, error: null },
   mismatches: 1,
   rows: [
-    { email: 'alice@example.com', dbStatus: 'confirmed' as const, dbConfirmedAt: '2026-02-01T00:00:00Z', dbCreatedAt: '2026-01-01T00:00:00Z', plunkStatus: 'subscribed' as const, plunkContactId: 'p1', mismatch: false },
-    { email: 'bob@example.com', dbStatus: 'confirmed' as const, dbConfirmedAt: '2026-02-01T00:00:00Z', dbCreatedAt: '2026-01-01T00:00:00Z', plunkStatus: null, plunkContactId: null, mismatch: true },
+    {
+      email: 'alice@example.com',
+      dbStatus: 'confirmed' as const,
+      dbConfirmedAt: '2026-02-01T00:00:00Z',
+      dbCreatedAt: '2026-01-01T00:00:00Z',
+      plunkStatus: 'subscribed' as const,
+      plunkContactId: 'p1',
+      mismatch: false,
+    },
+    {
+      email: 'bob@example.com',
+      dbStatus: 'confirmed' as const,
+      dbConfirmedAt: '2026-02-01T00:00:00Z',
+      dbCreatedAt: '2026-01-01T00:00:00Z',
+      plunkStatus: null,
+      plunkContactId: null,
+      mismatch: true,
+    },
   ],
 }
 
@@ -53,9 +69,28 @@ describe('SubscribersPage', () => {
   it('shows a "Plunk unavailable" notice when Plunk could not be read', async () => {
     listMock.mockResolvedValue({
       ...baseReconciliation,
-      plunk: { available: false, partial: false, truncated: false, total: null, subscribed: null, unsubscribed: null, unsubscribedNotInDb: null, error: 'PROJECT_DISABLED' },
+      plunk: {
+        available: false,
+        partial: false,
+        truncated: false,
+        total: null,
+        subscribed: null,
+        unsubscribed: null,
+        unsubscribedNotInDb: null,
+        error: 'PROJECT_DISABLED',
+      },
       mismatches: 0,
-      rows: [{ email: 'alice@example.com', dbStatus: 'confirmed' as const, dbConfirmedAt: null, dbCreatedAt: '2026-01-01T00:00:00Z', plunkStatus: null, plunkContactId: null, mismatch: false }],
+      rows: [
+        {
+          email: 'alice@example.com',
+          dbStatus: 'confirmed' as const,
+          dbConfirmedAt: null,
+          dbCreatedAt: '2026-01-01T00:00:00Z',
+          plunkStatus: null,
+          plunkContactId: null,
+          mismatch: false,
+        },
+      ],
     })
     renderPage()
 

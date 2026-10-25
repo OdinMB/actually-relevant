@@ -34,7 +34,13 @@ beforeEach(() => {
 describe('GET /api/newsletters', () => {
   it('lists published issues only, newest first, with caching headers', async () => {
     mockPrisma.newsletter.findMany.mockResolvedValue([
-      { slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: new Date('2026-10-18T09:00:00Z'), createdAt: new Date('2026-10-17T04:00:00Z'), selectedStoryIds: ['s1', 's2'] },
+      {
+        slug: 'week-42-2026',
+        title: 'Week 42, 2026',
+        publishedAt: new Date('2026-10-18T09:00:00Z'),
+        createdAt: new Date('2026-10-17T04:00:00Z'),
+        selectedStoryIds: ['s1', 's2'],
+      },
     ])
     mockPrisma.newsletter.count.mockResolvedValue(1)
 
@@ -44,7 +50,10 @@ describe('GET /api/newsletters', () => {
     expect(res.headers['cache-control']).toMatch(/^public, max-age=\d+$/)
     expect(res.body).toEqual({
       data: [{ slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: '2026-10-18T09:00:00.000Z', storyCount: 2 }],
-      total: 1, page: 1, pageSize: 10, totalPages: 1,
+      total: 1,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
     })
     const args = mockPrisma.newsletter.findMany.mock.calls[0][0]
     expect(args.where).toEqual({ status: 'published', slug: { not: null } })
@@ -61,12 +70,34 @@ describe('GET /api/newsletters', () => {
 describe('GET /api/newsletters/:slug', () => {
   it('returns a published issue with its AI label, web markdown, stories and AI marker', async () => {
     mockPrisma.newsletter.findFirst.mockResolvedValue({
-      slug: 'week-42-2026', title: 'Week 42, 2026', content: CONTENT,
-      publishedAt: new Date('2026-10-18T09:00:00Z'), createdAt: new Date(), selectedStoryIds: ['s1', 's2'],
+      slug: 'week-42-2026',
+      title: 'Week 42, 2026',
+      content: CONTENT,
+      publishedAt: new Date('2026-10-18T09:00:00Z'),
+      createdAt: new Date(),
+      selectedStoryIds: ['s1', 's2'],
     })
     mockPrisma.story.findMany.mockResolvedValue([
-      { id: 's1', slug: 'clean-air', status: 'published', title: 'Cities cut smog', titleLabel: 'Air', sourceTitle: 'Smog falls', sourceUrl: 'https://news.example/1', feed: { title: 'Nation Feed', displayTitle: 'Nation' } },
-      { id: 's2', slug: 'gone', status: 'rejected', title: null, titleLabel: null, sourceTitle: 'Old', sourceUrl: 'https://news.example/2', feed: { title: 'Other', displayTitle: null } },
+      {
+        id: 's1',
+        slug: 'clean-air',
+        status: 'published',
+        title: 'Cities cut smog',
+        titleLabel: 'Air',
+        sourceTitle: 'Smog falls',
+        sourceUrl: 'https://news.example/1',
+        feed: { title: 'Nation Feed', displayTitle: 'Nation' },
+      },
+      {
+        id: 's2',
+        slug: 'gone',
+        status: 'rejected',
+        title: null,
+        titleLabel: null,
+        sourceTitle: 'Old',
+        sourceUrl: 'https://news.example/2',
+        feed: { title: 'Other', displayTitle: null },
+      },
     ])
 
     const res = await request(app).get('/api/newsletters/week-42-2026')
@@ -79,7 +110,15 @@ describe('GET /api/newsletters/:slug', () => {
     expect(res.body.content).not.toContain('{planet-climate}')
     expect(res.body.content).toContain('Nation · [original article]')
     expect(res.body.stories).toEqual([
-      { headline: 'Cities cut smog', title: 'Cities cut smog', titleLabel: 'Air', sourceTitle: 'Smog falls', sourceUrl: 'https://news.example/1', publisher: 'Nation', slug: 'clean-air' },
+      {
+        headline: 'Cities cut smog',
+        title: 'Cities cut smog',
+        titleLabel: 'Air',
+        sourceTitle: 'Smog falls',
+        sourceUrl: 'https://news.example/1',
+        publisher: 'Nation',
+        slug: 'clean-air',
+      },
       // A story that is no longer published keeps its headline but loses its link
       { headline: 'Old', title: null, titleLabel: null, sourceTitle: 'Old', sourceUrl: 'https://news.example/2', publisher: 'Other', slug: null },
     ])

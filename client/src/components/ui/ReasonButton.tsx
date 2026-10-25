@@ -19,13 +19,7 @@ export function ReasonButton({ reason, placement = 'top', align = 'start', onCli
   return (
     <Tooltip content={reason} placement={placement} align={align}>
       {trigger => (
-        <Button
-          {...props}
-          {...trigger}
-          aria-disabled="true"
-          onClick={e => e.preventDefault()}
-          className={`opacity-50 cursor-not-allowed ${className}`}
-        />
+        <Button {...props} {...trigger} aria-disabled="true" onClick={e => e.preventDefault()} className={`opacity-50 cursor-not-allowed ${className}`} />
       )}
     </Tooltip>
   )

@@ -44,12 +44,14 @@ for (const [network, prefix] of [
   blocked.addSubnet(network, prefix, 'ipv6')
 }
 
+type IPv6Groups = [number, number, number, number, number, number, number, number]
+
 /** The eight 16-bit groups of an IPv6 address (with or without a trailing dotted quad), or null. */
-function ipv6Groups(address: string): number[] | null {
+function ipv6Groups(address: string): IPv6Groups | null {
   let addr = address.toLowerCase()
   const quad = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(addr)
   if (quad) {
-    const [a, b, c, d] = quad.slice(1).map(Number)
+    const [a = 0, b = 0, c = 0, d = 0] = quad.slice(1).map(Number)
     addr = addr.slice(0, quad.index) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`
   }
   const halves = addr.split('::')
@@ -59,7 +61,7 @@ function ipv6Groups(address: string): number[] | null {
   const missing = 8 - head.length - tail.length
   if (halves.length === 1 ? missing !== 0 : missing < 1) return null
   const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill('0'), ...tail].map(g => parseInt(g, 16))
-  return groups.length === 8 && groups.every(g => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null
+  return groups.length === 8 && groups.every(g => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? (groups as IPv6Groups) : null
 }
 
 /**
@@ -91,11 +93,7 @@ export function isPrivateAddress(address: string): boolean {
 
 /** Names that only resolve inside a network: localhost, mDNS, internal zones, and dotless names (Render's private service names). */
 function isInternalHostname(hostname: string): boolean {
-  return (
-    !hostname.includes('.') ||
-    /(^|\.)localhost$/i.test(hostname) ||
-    /\.(local|internal|localdomain|home\.arpa)$/i.test(hostname)
-  )
+  return !hostname.includes('.') || /(^|\.)localhost$/i.test(hostname) || /\.(local|internal|localdomain|home\.arpa)$/i.test(hostname)
 }
 
 /**
@@ -134,11 +132,7 @@ export class BlockedUrlError extends Error {
  * option, which adapts the answer to what Node asks for. Node does not call it for IP literals;
  * `isAllowedUrl` covers those.
  */
-export function safeLookup(
-  hostname: string,
-  options: object,
-  callback: (err: Error | null, address: LookupAddress | LookupAddress[]) => void,
-): void {
+export function safeLookup(hostname: string, options: object, callback: (err: Error | null, address: LookupAddress | LookupAddress[]) => void): void {
   const opts: LookupAllOptions = { ...(options as Omit<LookupAllOptions, 'all'>), all: true }
   dnsLookup(hostname, opts, (err, addresses) => {
     if (err) return callback(err, [])
@@ -153,8 +147,7 @@ export function safeLookup(
 
 /** axios `beforeRedirect`: refuses a redirect to a URL `isAllowedUrl` rejects (IP literals included). */
 export function assertRedirectAllowed(options: Record<string, unknown>): void {
-  const redirectUrl = typeof options.href === 'string' ? options.href
-    : `${String(options.protocol)}//${String(options.hostname)}${String(options.path ?? '')}`
+  const redirectUrl = typeof options.href === 'string' ? options.href : `${String(options.protocol)}//${String(options.hostname)}${String(options.path ?? '')}`
   if (!isAllowedUrl(redirectUrl)) {
     throw new BlockedUrlError(`Blocked redirect to disallowed URL: ${redirectUrl}`)
   }

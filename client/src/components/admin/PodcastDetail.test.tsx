@@ -71,7 +71,13 @@ describe('PodcastDetail tabs', () => {
   })
 
   it('keeps the tab named in the URL and writes a chosen tab back to it', () => {
-    renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { route: '/admin/podcasts/pod-1?tab=stories' })
+    renderInAdmin(
+      <>
+        <PodcastDetail podcast={makePodcast()} />
+        <Where />
+      </>,
+      { route: '/admin/podcasts/pod-1?tab=stories' },
+    )
     expect(tab('Stories').getAttribute('aria-selected')).toBe('true')
     fireEvent.click(tab('Audio'))
     expect(tab('Audio').getAttribute('aria-selected')).toBe('true')
@@ -88,7 +94,13 @@ describe('PodcastDetail tabs', () => {
     function Episode() {
       const [podcast, setPodcast] = useState(makePodcast())
       const start = () => setPodcast(makePodcast({ inProgress: true, awaitingReview: false, activity: 'Voicing' }))
-      return <><button onClick={start}>Simulate run start</button><PodcastDetail podcast={podcast} /><Where /></>
+      return (
+        <>
+          <button onClick={start}>Simulate run start</button>
+          <PodcastDetail podcast={podcast} />
+          <Where />
+        </>
+      )
     }
     renderInAdmin(<Episode />, { route: '/admin/podcasts/pod-1?tab=stories' })
     expect(tab('Stories').getAttribute('aria-selected')).toBe('true')
@@ -112,8 +124,10 @@ describe('PodcastDetail tabs', () => {
     expect(screen.queryByLabelText('Episode summary')).toBeNull()
   })
 
-  it('shows a blocked episode\'s reason with Resume in the bar', () => {
-    renderInAdmin(<PodcastDetail podcast={makePodcast({ awaitingReview: false, blockedAt: '2026-10-10T07:00:00.000Z', blockedReason: 'the dialogue is still invalid' })} />)
+  it("shows a blocked episode's reason with Resume in the bar", () => {
+    renderInAdmin(
+      <PodcastDetail podcast={makePodcast({ awaitingReview: false, blockedAt: '2026-10-10T07:00:00.000Z', blockedReason: 'the dialogue is still invalid' })} />,
+    )
     expect(screen.getByRole('alert').textContent).toContain('the dialogue is still invalid')
     expect(within(screen.getByRole('region', { name: 'Episode actions' })).getByRole('button', { name: 'Resume' })).toBeTruthy()
   })
@@ -132,7 +146,13 @@ describe('PodcastDetail unsaved changes', () => {
   })
 
   it('switches once the discard is confirmed, asking only once', async () => {
-    renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { route: '/admin/podcasts/pod-1' })
+    renderInAdmin(
+      <>
+        <PodcastDetail podcast={makePodcast()} />
+        <Where />
+      </>,
+      { route: '/admin/podcasts/pod-1' },
+    )
     fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
     fireEvent.click(tab('Stories'))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Discard changes' }))
@@ -149,7 +169,14 @@ describe('PodcastDetail unsaved changes', () => {
   })
 
   it('holds an in-app link while edits are unsaved, and follows it once confirmed', async () => {
-    renderInAdmin(<><Link to="/admin/podcasts">Back to Podcasts</Link><PodcastDetail podcast={makePodcast()} /><Where /></>, { route: '/admin/podcasts/pod-1' })
+    renderInAdmin(
+      <>
+        <Link to="/admin/podcasts">Back to Podcasts</Link>
+        <PodcastDetail podcast={makePodcast()} />
+        <Where />
+      </>,
+      { route: '/admin/podcasts/pod-1' },
+    )
     fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
     fireEvent.click(screen.getByRole('link', { name: 'Back to Podcasts' }))
     const dialog = await screen.findByRole('dialog')
@@ -159,7 +186,13 @@ describe('PodcastDetail unsaved changes', () => {
   })
 
   it('holds the browser Back button while edits are unsaved, staying on cancel and leaving once confirmed', async () => {
-    const { router } = renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { history: ['/admin/podcasts', '/admin/podcasts/pod-1'] })
+    const { router } = renderInAdmin(
+      <>
+        <PodcastDetail podcast={makePodcast()} />
+        <Where />
+      </>,
+      { history: ['/admin/podcasts', '/admin/podcasts/pod-1'] },
+    )
     fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
 
     await act(() => router.navigate(-1))
@@ -176,7 +209,13 @@ describe('PodcastDetail unsaved changes', () => {
   })
 
   it('lets Back through at once when nothing is unsaved', async () => {
-    const { router } = renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { history: ['/admin/podcasts', '/admin/podcasts/pod-1'] })
+    const { router } = renderInAdmin(
+      <>
+        <PodcastDetail podcast={makePodcast()} />
+        <Where />
+      </>,
+      { history: ['/admin/podcasts', '/admin/podcasts/pod-1'] },
+    )
     await act(() => router.navigate(-1))
     await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/admin/podcasts'))
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -184,7 +223,13 @@ describe('PodcastDetail unsaved changes', () => {
 
   it('leaves without asking after the episode is deleted, though its edits were unsaved', async () => {
     mockApi.delete.mockResolvedValue(undefined)
-    renderInAdmin(<><PodcastDetail podcast={makePodcast()} /><Where /></>, { route: '/admin/podcasts/pod-1' })
+    renderInAdmin(
+      <>
+        <PodcastDetail podcast={makePodcast()} />
+        <Where />
+      </>,
+      { route: '/admin/podcasts/pod-1' },
+    )
     fireEvent.change(screen.getByLabelText('Episode summary'), { target: { value: 'Changed.' } })
     fireEvent.click(within(screen.getByRole('region', { name: 'Episode actions' })).getByRole('button', { name: 'Delete' }))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }))
@@ -217,7 +262,9 @@ describe('PodcastDetail title', () => {
   })
 
   it('keeps the pencil inert, with its reason, on a published episode', () => {
-    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'ready', status: 'published', publishedAt: '2026-10-12T07:00:00.000Z', awaitingReview: false })} />)
+    renderInAdmin(
+      <PodcastDetail podcast={makePodcast({ stage: 'ready', status: 'published', publishedAt: '2026-10-12T07:00:00.000Z', awaitingReview: false })} />,
+    )
     const pencil = screen.getByRole('button', { name: 'Edit title' })
     expect(pencil.getAttribute('aria-disabled')).toBe('true')
     expect(describedBy(pencil)?.textContent).toBe(titleEditBlockedReason(makePodcast({ status: 'published' })))
@@ -247,7 +294,9 @@ describe('PodcastDetail "edited by a person" chip', () => {
   })
 
   it('stays changeable on a published episode', () => {
-    renderInAdmin(<PodcastDetail podcast={makePodcast({ stage: 'ready', status: 'published', publishedAt: '2026-10-12T07:00:00.000Z', awaitingReview: false })} />)
+    renderInAdmin(
+      <PodcastDetail podcast={makePodcast({ stage: 'ready', status: 'published', publishedAt: '2026-10-12T07:00:00.000Z', awaitingReview: false })} />,
+    )
     expect((screen.getByLabelText('Edited by a person') as HTMLInputElement).disabled).toBe(false)
   })
 })

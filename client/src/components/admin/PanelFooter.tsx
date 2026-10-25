@@ -10,8 +10,12 @@ interface PanelFooterProps {
 export function PanelFooter({ isPending, isDirty, onCancel }: PanelFooterProps) {
   return (
     <div className={PANEL_FOOTER}>
-      <Button type="submit" loading={isPending} disabled={!isDirty}>Save</Button>
-      <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+      <Button type="submit" loading={isPending} disabled={!isDirty}>
+        Save
+      </Button>
+      <Button type="button" variant="secondary" onClick={onCancel}>
+        Cancel
+      </Button>
     </div>
   )
 }

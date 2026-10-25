@@ -18,10 +18,7 @@ function paramsOf(llm: ChatOpenAI): Record<string, unknown> {
   return { ...llm.invocationParams() }
 }
 
-const TIER_ENV_VARS = [
-  'OPENAI_MODEL_SMALL', 'OPENAI_MODEL_MEDIUM', 'OPENAI_MODEL_LARGE',
-  'OPENAI_EFFORT_SMALL', 'OPENAI_EFFORT_MEDIUM', 'OPENAI_EFFORT_LARGE',
-]
+const TIER_ENV_VARS = ['OPENAI_MODEL_SMALL', 'OPENAI_MODEL_MEDIUM', 'OPENAI_MODEL_LARGE', 'OPENAI_EFFORT_SMALL', 'OPENAI_EFFORT_MEDIUM', 'OPENAI_EFFORT_LARGE']
 
 describe('llm client construction', () => {
   beforeEach(() => {

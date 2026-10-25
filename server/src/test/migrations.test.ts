@@ -26,7 +26,7 @@ describe('stories_embedding_idx detection', () => {
     'DROP INDEX CONCURRENTLY "Stories_Embedding_Idx";',
     'DROP INDEX "other_idx", "stories_embedding_idx";',
     'ALTER TABLE "x" ADD COLUMN "y" TEXT;\n-- comment\nDROP INDEX\n  "stories_embedding_idx";',
-  ])('flags a drop: %s', (sql) => {
+  ])('flags a drop: %s', sql => {
     expect(losesIndex(sql)).toBe(true)
   })
 
@@ -36,7 +36,7 @@ describe('stories_embedding_idx detection', () => {
     'DROP INDEX "stories_embedding_idx_old";',
     'DROP INDEX "stories_url_idx";',
     'CREATE INDEX "stories_embedding_idx" ON "stories" USING hnsw ("embedding" vector_cosine_ops);',
-  ])('does not flag: %s', (sql) => {
+  ])('does not flag: %s', sql => {
     expect(losesIndex(sql)).toBe(false)
   })
 
@@ -47,16 +47,15 @@ describe('stories_embedding_idx detection', () => {
   })
 
   it('flags a re-create that comes before the drop', () => {
-    const sql =
-      'CREATE INDEX "stories_embedding_idx" ON "stories" USING hnsw ("embedding" vector_cosine_ops);\nDROP INDEX "stories_embedding_idx";'
+    const sql = 'CREATE INDEX "stories_embedding_idx" ON "stories" USING hnsw ("embedding" vector_cosine_ops);\nDROP INDEX "stories_embedding_idx";'
     expect(losesIndex(sql)).toBe(true)
   })
 
   it('does not count a non-HNSW index or one on another table as re-creating it', () => {
     expect(losesIndex('DROP INDEX "stories_embedding_idx";\nCREATE INDEX "stories_embedding_idx" ON "stories" ("embedding");')).toBe(true)
-    expect(
-      losesIndex('DROP INDEX "stories_embedding_idx";\nCREATE INDEX "stories_embedding_idx" ON "other" USING hnsw ("embedding" vector_cosine_ops);'),
-    ).toBe(true)
+    expect(losesIndex('DROP INDEX "stories_embedding_idx";\nCREATE INDEX "stories_embedding_idx" ON "other" USING hnsw ("embedding" vector_cosine_ops);')).toBe(
+      true,
+    )
   })
 
   it('does not count an index on a column of that name as re-creating it', () => {
@@ -67,17 +66,17 @@ describe('stories_embedding_idx detection', () => {
 
 describe('committed migrations', () => {
   const migrations = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && existsSync(join(MIGRATIONS_DIR, d.name, 'migration.sql')))
-    .map((d) => ({ name: d.name, sql: readFileSync(join(MIGRATIONS_DIR, d.name, 'migration.sql'), 'utf8') }))
+    .filter(d => d.isDirectory() && existsSync(join(MIGRATIONS_DIR, d.name, 'migration.sql')))
+    .map(d => ({ name: d.name, sql: readFileSync(join(MIGRATIONS_DIR, d.name, 'migration.sql'), 'utf8') }))
 
   it('finds the migration that creates the index, so the scan cannot pass vacuously', () => {
-    const creator = migrations.find((m) => m.name === CREATING_MIGRATION)
+    const creator = migrations.find(m => m.name === CREATING_MIGRATION)
     expect(creator).toBeDefined()
     expect(createsEmbeddingIndex(creator?.sql ?? '')).toBe(true)
   })
 
   it('never drop stories_embedding_idx without re-creating it', () => {
-    const offenders = migrations.filter((m) => losesIndex(m.sql)).map((m) => m.name)
+    const offenders = migrations.filter(m => losesIndex(m.sql)).map(m => m.name)
     expect(offenders).toEqual([])
   })
 })

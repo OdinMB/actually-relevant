@@ -1,0 +1,8 @@
+dist/
+coverage/
+node_modules/
+package-lock.json
+public/
+# Docs are prose, not code; index.html carries build-time placeholders
+*.md
+index.html

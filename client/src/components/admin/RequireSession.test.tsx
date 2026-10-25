@@ -40,8 +40,23 @@ function renderAdmin(initialUrl: string) {
       <MemoryRouter initialEntries={[initialUrl]}>
         <AuthProvider>
           <Routes>
-            <Route path="/admin/login" element={<><LocationProbe label="login" /><LoginPage /></>} />
-            <Route path="/admin/*" element={<RequireSession><LocationProbe label="page" /></RequireSession>} />
+            <Route
+              path="/admin/login"
+              element={
+                <>
+                  <LocationProbe label="login" />
+                  <LoginPage />
+                </>
+              }
+            />
+            <Route
+              path="/admin/*"
+              element={
+                <RequireSession>
+                  <LocationProbe label="page" />
+                </RequireSession>
+              }
+            />
           </Routes>
         </AuthProvider>
       </MemoryRouter>

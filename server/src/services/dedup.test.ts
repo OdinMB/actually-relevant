@@ -58,10 +58,7 @@ describe('confirmDuplicates', () => {
   })
 
   it('returns empty array for empty candidates', async () => {
-    const result = await confirmDuplicates(
-      { title: 'Source Article', summary: 'Summary of source' },
-      [],
-    )
+    const result = await confirmDuplicates({ title: 'Source Article', summary: 'Summary of source' }, [])
 
     expect(result).toEqual([])
     expect(mockInvoke).not.toHaveBeenCalled()
@@ -82,10 +79,7 @@ describe('confirmDuplicates', () => {
       ],
     })
 
-    const result = await confirmDuplicates(
-      { title: 'Source Article', summary: 'Summary of source' },
-      candidates,
-    )
+    const result = await confirmDuplicates({ title: 'Source Article', summary: 'Summary of source' }, candidates)
 
     expect(result).toEqual([
       { id: 'cand-1', isDuplicate: true, reason: 'Same event' },
@@ -95,9 +89,7 @@ describe('confirmDuplicates', () => {
   })
 
   it('handles out-of-range candidateNumber from LLM (warns and filters)', async () => {
-    const candidates = [
-      { id: 'cand-1', title: 'Candidate One', summary: 'Summary one' },
-    ]
+    const candidates = [{ id: 'cand-1', title: 'Candidate One', summary: 'Summary one' }]
 
     mockInvoke.mockResolvedValue({
       assessments: [
@@ -107,15 +99,10 @@ describe('confirmDuplicates', () => {
       ],
     })
 
-    const result = await confirmDuplicates(
-      { title: 'Source Article', summary: 'Summary of source' },
-      candidates,
-    )
+    const result = await confirmDuplicates({ title: 'Source Article', summary: 'Summary of source' }, candidates)
 
     // Only candidateNumber 1 maps to a valid candidate
-    expect(result).toEqual([
-      { id: 'cand-1', isDuplicate: true, reason: 'Same event' },
-    ])
+    expect(result).toEqual([{ id: 'cand-1', isDuplicate: true, reason: 'Same event' }])
   })
 
   it('returns all as non-duplicate when LLM says none match', async () => {
@@ -131,10 +118,7 @@ describe('confirmDuplicates', () => {
       ],
     })
 
-    const result = await confirmDuplicates(
-      { title: 'Source Article', summary: 'Summary of source' },
-      candidates,
-    )
+    const result = await confirmDuplicates({ title: 'Source Article', summary: 'Summary of source' }, candidates)
 
     expect(result).toHaveLength(2)
     expect(result.every(r => !r.isDuplicate)).toBe(true)
@@ -157,9 +141,7 @@ describe('findExistingCluster', () => {
   })
 
   it('returns cluster of the single clustered story', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { clusterId: 'cluster-A', dateCrawled: new Date('2024-01-05') },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ clusterId: 'cluster-A', dateCrawled: new Date('2024-01-05') }])
 
     const result = await findExistingCluster(['story-1', 'story-2'])
 

@@ -27,9 +27,17 @@ function textOf(node: unknown): string {
 /** A site link in the stored issue (absolute, as in the email) becomes an in-app link. */
 function IssueLink({ href = '', children }: { href?: string; children?: ReactNode }) {
   if (href.startsWith(`${SEO.siteUrl}/`)) {
-    return <Link to={href.slice(SEO.siteUrl.length)} className={LINK_CLASS}>{children}</Link>
+    return (
+      <Link to={href.slice(SEO.siteUrl.length)} className={LINK_CLASS}>
+        {children}
+      </Link>
+    )
   }
-  return <a href={href} target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>{children}</a>
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
+      {children}
+    </a>
+  )
 }
 
 /**
@@ -38,7 +46,7 @@ function IssueLink({ href = '', children }: { href?: string; children?: ReactNod
  * story page, links to the site kept in the app.
  */
 function issueComponents(stories: IssueStory[]): Components {
-  const byHeadline = new Map(stories.map((story) => [story.headline.trim(), story]))
+  const byHeadline = new Map(stories.map(story => [story.headline.trim(), story]))
   return {
     h1: ({ children }) => <h2 className="section-heading mt-12 mb-6">{children}</h2>,
     h2: ({ node, children }) => {
@@ -47,7 +55,13 @@ function issueComponents(stories: IssueStory[]): Components {
         <div className="mt-8 mb-2">
           <StoryTitleLabel story={story ?? { titleLabel: null, title: null, sourceTitle: '' }} className="mb-2" />
           <h3 className="text-xl font-bold leading-snug text-neutral-900">
-            {story?.slug ? <Link to={`/stories/${story.slug}`} className={LINK_CLASS}>{children}</Link> : children}
+            {story?.slug ? (
+              <Link to={`/stories/${story.slug}`} className={LINK_CLASS}>
+                {children}
+              </Link>
+            ) : (
+              children
+            )}
           </h3>
         </div>
       )
@@ -55,9 +69,7 @@ function issueComponents(stories: IssueStory[]): Components {
     a: ({ href, children }) => <IssueLink href={href}>{children}</IssueLink>,
     hr: () => <hr className="my-10 border-neutral-200" />,
     p: ({ children }) => <p className="mb-4 text-neutral-700 leading-relaxed">{children}</p>,
-    blockquote: ({ children }) => (
-      <blockquote className="mb-4 border-l-4 border-neutral-200 pl-4 italic text-neutral-700">{children}</blockquote>
-    ),
+    blockquote: ({ children }) => <blockquote className="mb-4 border-l-4 border-neutral-200 pl-4 italic text-neutral-700">{children}</blockquote>,
   }
 }
 
@@ -91,7 +103,11 @@ function IssueHead({ issue }: { issue: PublicNewsletterIssue }) {
 }
 
 function BackToArchive() {
-  return <Link to="/newsletter/archive" className={LINK_CLASS}>&larr; All issues</Link>
+  return (
+    <Link to="/newsletter/archive" className={LINK_CLASS}>
+      &larr; All issues
+    </Link>
+  )
 }
 
 function NotFound() {
@@ -138,7 +154,9 @@ export default function NewsletterIssuePage() {
 
         <div className="border-t border-neutral-200 pt-6 mt-10 flex flex-wrap justify-between gap-4">
           <BackToArchive />
-          <Link to="/newsletter" className={LINK_CLASS}>Get the newsletter by email</Link>
+          <Link to="/newsletter" className={LINK_CLASS}>
+            Get the newsletter by email
+          </Link>
         </div>
       </article>
     </>

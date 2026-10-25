@@ -116,7 +116,7 @@ describe('generateSitemapXml', () => {
   describe('changefreq values', () => {
     const changefreqs = ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never'] as const
 
-    changefreqs.forEach((freq) => {
+    changefreqs.forEach(freq => {
       it(`handles changefreq "${freq}"`, () => {
         const routes: RouteConfig[] = [{ path: '/test', priority: 0.5, changefreq: freq }]
         const result = generateSitemapXml(routes, BASE_URL)

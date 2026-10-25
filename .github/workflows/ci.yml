@@ -1,6 +1,7 @@
-# Runs the check battery on every pull request and every push to main (.context/ci.md):
-# type-check, unit tests and the production build for both packages (the client's with its
-# prerender), the migration check, and the server's PostgreSQL integration tests against a
+# Runs the check battery on every pull request and every push to main (.context/ci.md): for
+# both packages type-check, lint, format check, unit tests with a coverage floor, the
+# production build (the client's with its prerender) and a production-dependency audit; for
+# the server also the migration check and the PostgreSQL integration tests against a
 # throwaway pgvector database (ADR-0044). Production deploys wait for it: render.yaml sets
 # `autoDeployTrigger: checksPass` on both services, so Render deploys a commit on main only
 # once every check on it has passed, and skips a red one (ADR-0047, .context/deployment.md).
@@ -80,13 +81,18 @@ jobs:
           # prisma.config.ts requires a value; generate never connects to it
           DATABASE_URL: postgresql://unused:unused@localhost:5432/unused
       - run: npm run typecheck --prefix server
-      - run: npm run test --prefix server
+      - run: npm run lint --prefix server
+      - run: npm run format:check --prefix server
+      - name: Unit tests with the coverage floor
+        run: npm run test:coverage --prefix server
       - name: PostgreSQL integration tests
         run: npm run test:db --prefix server
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/actually_relevant_test
       - name: Build (as Render does, minus the migrate step)
         run: npm run build --prefix server
+      - name: Production dependency audit (high and above, minus audit-allowlist.json)
+        run: npm run audit:prod --prefix server
 
   client:
     runs-on: ubuntu-latest
@@ -109,6 +115,11 @@ jobs:
       # does not stop it
       - run: npm ci --prefix client
       - run: npm run typecheck --prefix client
-      - run: npm run test --prefix client -- --run
+      - run: npm run lint --prefix client
+      - run: npm run format:check --prefix client
+      - name: Unit tests with the coverage floor
+        run: npm run test:coverage --prefix client
       - name: Build with prerender
         run: npm run build --prefix client
+      - name: Production dependency audit (high and above, minus audit-allowlist.json)
+        run: npm run audit:prod --prefix client

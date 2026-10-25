@@ -19,8 +19,8 @@ export function stripComments(sql: string): string {
 export function statements(sql: string): string[] {
   return stripComments(sql)
     .split(';')
-    .map((s) => s.trim())
-    .filter((s) => s !== '')
+    .map(s => s.trim())
+    .filter(s => s !== '')
 }
 
 const namesIndex = new RegExp(`(^|[^a-z0-9_$])${EMBEDDING_INDEX}([^a-z0-9_$]|$)`, 'i')
@@ -37,7 +37,7 @@ function dropsIndex(s: string): boolean {
 
 /** A HNSW index of that name on stories. */
 function createsIndexStatement(s: string): boolean {
-  const [head, ...rest] = s.split(/\bon\b/i)
+  const [head = '', ...rest] = s.split(/\bon\b/i)
   return (
     /^create\s+(unique\s+)?index\b/i.test(s) &&
     namesIndex.test(head) &&
@@ -61,17 +61,17 @@ export function createsEmbeddingIndex(sql: string): boolean {
 }
 
 const DESTRUCTIVE: { kind: string; test: (s: string) => boolean }[] = [
-  { kind: 'DROP TABLE', test: (s) => /^drop\s+table\b/i.test(s) },
-  { kind: 'TRUNCATE', test: (s) => /^truncate\b/i.test(s) },
+  { kind: 'DROP TABLE', test: s => /^drop\s+table\b/i.test(s) },
+  { kind: 'TRUNCATE', test: s => /^truncate\b/i.test(s) },
   // DROP COLUMN, DROP CONSTRAINT, DROP DEFAULT, DROP NOT NULL, ... on any ALTER
-  { kind: 'ALTER ... DROP', test: (s) => /^alter\b/i.test(s) && /\bdrop\b/i.test(s) },
+  { kind: 'ALTER ... DROP', test: s => /^alter\b/i.test(s) && /\bdrop\b/i.test(s) },
 ]
 
 /** The destructive statements in a migration, each named by its kind and first line. */
 export function destructiveStatements(sql: string): string[] {
-  return statements(sql).flatMap((s) => {
-    const rule = DESTRUCTIVE.find((r) => r.test(s))
-    return rule ? [`${rule.kind}: ${s.split('\n')[0].trim()}`] : []
+  return statements(sql).flatMap(s => {
+    const rule = DESTRUCTIVE.find(r => r.test(s))
+    return rule ? [`${rule.kind}: ${s.split('\n', 1)[0]!.trim()}`] : []
   })
 }
 

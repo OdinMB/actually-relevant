@@ -33,7 +33,7 @@ export async function runPublishNewsletter(now: Date = new Date()): Promise<void
   })
   // Every run that sends nothing records why; a failed send fails the run, which the scheduler alerts.
   const notSent = async (reason: string) => {
-    log.warn({ weekKey, reason }, 'not sending this week\'s newsletter')
+    log.warn({ weekKey, reason }, "not sending this week's newsletter")
     await notify({
       source: 'newsletter',
       severity: 'warning',
@@ -46,7 +46,9 @@ export async function runPublishNewsletter(now: Date = new Date()): Promise<void
 
   // sendTest records its row only after Plunk accepted the send, so a row means the test went out.
   if (issue && issue.sends.length === 0) {
-    await notSent(`${issue.title} (${weekKey}) has no successful test email, so it was not sent to subscribers. Send the test, then send it live from the newsletter page.`)
+    await notSent(
+      `${issue.title} (${weekKey}) has no successful test email, so it was not sent to subscribers. Send the test, then send it live from the newsletter page.`,
+    )
     return
   }
   if (!issue) {
@@ -55,7 +57,7 @@ export async function runPublishNewsletter(now: Date = new Date()): Promise<void
       select: { id: true, title: true, status: true, sends: { where: { isTest: false }, select: { id: true }, take: 1 } },
     })
     if (existing && (existing.status === 'published' || existing.sends.length > 0)) {
-      log.info({ weekKey, newsletterId: existing.id }, 'this week\'s issue was already sent or published')
+      log.info({ weekKey, newsletterId: existing.id }, "this week's issue was already sent or published")
       await notify({
         source: 'newsletter',
         severity: 'info',

@@ -38,7 +38,11 @@ export interface RelatedArmMetrics {
   failures: number
 }
 
-export function scoreRelated(stories: RelatedItem[], records: CallRecord<RelatedStoriesResult>[], baseline: CallRecord<RelatedStoriesResult>[]): RelatedArmMetrics {
+export function scoreRelated(
+  stories: RelatedItem[],
+  records: CallRecord<RelatedStoriesResult>[],
+  baseline: CallRecord<RelatedStoriesResult>[],
+): RelatedArmMetrics {
   const exact: boolean[] = []
   const overlap: number[] = []
   stories.forEach((s, i) => {
@@ -60,19 +64,23 @@ export function scoreRelated(stories: RelatedItem[], records: CallRecord<Related
 }
 
 export function decideRelated(metrics: Record<string, RelatedArmMetrics>, baseline: string, candidates: string[]): Decision {
-  const b = metrics[baseline]
+  const b = metrics[baseline]!
   return pickLowestPassing(
-    candidates.filter(c => metrics[c]).map(c => {
-      const m = metrics[c]
-      return {
-        arm: c,
-        failures: [
-          ...((m.exactCompliance ?? 0) < (b.exactCompliance ?? 0) ? [`exact-${SHOW} compliance ${pct(m.exactCompliance)} < nano ${pct(b.exactCompliance)}`] : []),
-          ...((m.overlapWithBaseline ?? 0) < 0.5 ? [`mean overlap with nano's picks ${pct(m.overlapWithBaseline)} < 50%`] : []),
-        ],
-        evidence: [`exact-${SHOW} ${pct(m.exactCompliance)} (nano ${pct(b.exactCompliance)}), overlap with nano ${pct(m.overlapWithBaseline)}`],
-      }
-    }),
+    candidates
+      .filter(c => metrics[c])
+      .map(c => {
+        const m = metrics[c]!
+        return {
+          arm: c,
+          failures: [
+            ...((m.exactCompliance ?? 0) < (b.exactCompliance ?? 0)
+              ? [`exact-${SHOW} compliance ${pct(m.exactCompliance)} < nano ${pct(b.exactCompliance)}`]
+              : []),
+            ...((m.overlapWithBaseline ?? 0) < 0.5 ? [`mean overlap with nano's picks ${pct(m.overlapWithBaseline)} < 50%`] : []),
+          ],
+          evidence: [`exact-${SHOW} ${pct(m.exactCompliance)} (nano ${pct(b.exactCompliance)}), overlap with nano ${pct(m.overlapWithBaseline)}`],
+        }
+      }),
   )
 }
 
@@ -80,7 +88,9 @@ export const relatedSuite: Suite = {
   name: 'related',
   arms: ARMS,
   describe(fx, limit) {
-    return [`related: ${items(fx, limit).length} published stories with ${SHOW * config.relatedStories.candidateMultiplier} candidates each (target ${TARGETS.related.total})`]
+    return [
+      `related: ${items(fx, limit).length} published stories with ${SHOW * config.relatedStories.candidateMultiplier} candidates each (target ${TARGETS.related.total})`,
+    ]
   },
   plan(fx, limit) {
     return items(fx, limit).flatMap(r => ARMS.map(a => ({ arm: a, schemaName: SCHEMA, prompt: promptFor(r), baseOutputTokens: BASE_OUTPUT_TOKENS })))
@@ -91,20 +101,28 @@ export const relatedSuite: Suite = {
     const base = records.get(armKey(BASELINE)) ?? []
     const metrics = Object.fromEntries([...records].map(([k, recs]) => [k, scoreRelated(stories, recs, base)]))
     return {
-      callSites: [{
-        id: 'related',
-        title: 'Related-stories re-rank',
-        baseline: armKey(BASELINE),
-        candidates: CANDIDATES.map(armKey),
-        stats: statsFor(records),
-        metrics: [
-          metricRow(`Exactly ${SHOW} valid, unique IDs`, metrics, m => m.exactCompliance, pct, 'higher'),
-          metricRow("Mean overlap with nano's picks", metrics, m => m.overlapWithBaseline, pct),
-          metricRow('Failed calls', metrics, m => m.failures, v => String(v ?? 0), 'lower'),
-        ],
-        decision: decideRelated(metrics, armKey(BASELINE), CANDIDATES.map(armKey)),
-        notes: ['Latency is measured with one call in flight at a time; production adds the shared LLM_DELAY_MS queue on top.'],
-      }],
+      callSites: [
+        {
+          id: 'related',
+          title: 'Related-stories re-rank',
+          baseline: armKey(BASELINE),
+          candidates: CANDIDATES.map(armKey),
+          stats: statsFor(records),
+          metrics: [
+            metricRow(`Exactly ${SHOW} valid, unique IDs`, metrics, m => m.exactCompliance, pct, 'higher'),
+            metricRow("Mean overlap with nano's picks", metrics, m => m.overlapWithBaseline, pct),
+            metricRow(
+              'Failed calls',
+              metrics,
+              m => m.failures,
+              v => String(v ?? 0),
+              'lower',
+            ),
+          ],
+          decision: decideRelated(metrics, armKey(BASELINE), CANDIDATES.map(armKey)),
+          notes: ['Latency is measured with one call in flight at a time; production adds the shared LLM_DELAY_MS queue on top.'],
+        },
+      ],
       ratingItems: [],
       notes: [],
     }

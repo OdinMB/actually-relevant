@@ -11,6 +11,6 @@ describe('StructuredData', () => {
     const reparsed = new DOMParser().parseFromString(`<body>${container.innerHTML}</body>`, 'text/html')
     const scripts = reparsed.querySelectorAll('script')
     expect(scripts).toHaveLength(2)
-    expect(JSON.parse(scripts[0].textContent ?? '')).toEqual(hostile)
+    expect(JSON.parse(scripts[0]!.textContent ?? '')).toEqual(hostile)
   })
 })

@@ -101,9 +101,7 @@ describe('generateAccessToken / verifyAccessToken', () => {
 
   it('throws when JWT_SECRET is missing', () => {
     delete process.env.JWT_SECRET
-    expect(() =>
-      generateAccessToken({ id: 'user-1', email: 'a@b.com', role: 'admin' })
-    ).toThrow('JWT_SECRET')
+    expect(() => generateAccessToken({ id: 'user-1', email: 'a@b.com', role: 'admin' })).toThrow('JWT_SECRET')
   })
 })
 
@@ -221,9 +219,7 @@ describe('rotateRefreshToken', () => {
     })
     mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 })
 
-    await expect(rotateRefreshToken('reused-token')).rejects.toThrow(
-      'Refresh token reuse detected'
-    )
+    await expect(rotateRefreshToken('reused-token')).rejects.toThrow('Refresh token reuse detected')
   })
 
   it('reuse detection revokes all tokens in the family via deleteMany', async () => {
@@ -286,9 +282,7 @@ describe('rotateRefreshToken', () => {
       user,
       expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     }
-    mockPrisma.refreshToken.findUnique
-      .mockResolvedValueOnce(row)
-      .mockResolvedValueOnce({ ...row, rotatedAt: new Date() })
+    mockPrisma.refreshToken.findUnique.mockResolvedValueOnce(row).mockResolvedValueOnce({ ...row, rotatedAt: new Date() })
     mockPrisma.refreshToken.updateMany.mockResolvedValue({ count: 0 })
     mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-3', token: 'newer' })
 
@@ -321,7 +315,7 @@ describe('rotateRefreshToken', () => {
 })
 
 describe('revokeRefreshToken', () => {
-  it('ends the whole login session: deletes every token of the presented token\'s family', async () => {
+  it("ends the whole login session: deletes every token of the presented token's family", async () => {
     mockPrisma.refreshToken.findUnique.mockResolvedValue({ id: 'rt-2', familyId: 'family-abc' })
     mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 })
     await revokeRefreshToken('some-token')

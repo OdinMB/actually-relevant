@@ -105,6 +105,6 @@ export async function readOnlyStatus(db: ReadOnlyDb): Promise<string> {
   return db.read(async q => {
     const rows = await q.$queryRaw<ShowRow[]>`SHOW transaction_read_only`
     assertReadOnly(rows[0]?.transaction_read_only)
-    return rows[0].transaction_read_only
+    return rows[0]!.transaction_read_only
   })
 }

@@ -11,32 +11,40 @@ const router = Router()
 const log = createLogger('public:stories')
 
 // Apply stricter rate limit when search triggers OpenAI embedding calls
-router.get('/', (req, res, next) => {
-  if (req.query.search) return searchLimiter(req, res, next)
-  next()
-}, validateQuery(publicStoryQuerySchema), async (req, res) => {
-  try {
-    const query = req.parsedQuery!
-    const emotionTags = query.emotionTags
-      ? query.emotionTags.split(',').map((t: string) => t.trim()).filter(Boolean)
-      : undefined
-    const result = await storyService.getPublishedStories({
-      page: query.page,
-      pageSize: query.pageSize,
-      issueSlug: query.issueSlug,
-      search: query.search,
-      emotionTags,
-      publishedSince: query.publishedSince ? new Date(query.publishedSince) : undefined,
-      publishedBefore: query.publishedBefore ? new Date(query.publishedBefore) : undefined,
-      minRelevance: query.minRelevance,
-    })
-    res.set('Cache-Control', 'public, max-age=60')
-    res.json({ ...result, data: result.data.map(withAiGeneratedMarker) })
-  } catch (err) {
-    log.error({ err }, 'failed to fetch stories')
-    res.status(500).json({ error: 'Failed to fetch stories' })
-  }
-})
+router.get(
+  '/',
+  (req, res, next) => {
+    if (req.query.search) return searchLimiter(req, res, next)
+    next()
+  },
+  validateQuery(publicStoryQuerySchema),
+  async (req, res) => {
+    try {
+      const query = req.parsedQuery!
+      const emotionTags = query.emotionTags
+        ? query.emotionTags
+            .split(',')
+            .map((t: string) => t.trim())
+            .filter(Boolean)
+        : undefined
+      const result = await storyService.getPublishedStories({
+        page: query.page,
+        pageSize: query.pageSize,
+        issueSlug: query.issueSlug,
+        search: query.search,
+        emotionTags,
+        publishedSince: query.publishedSince ? new Date(query.publishedSince) : undefined,
+        publishedBefore: query.publishedBefore ? new Date(query.publishedBefore) : undefined,
+        minRelevance: query.minRelevance,
+      })
+      res.set('Cache-Control', 'public, max-age=60')
+      res.json({ ...result, data: result.data.map(withAiGeneratedMarker) })
+    } catch (err) {
+      log.error({ err }, 'failed to fetch stories')
+      res.status(500).json({ error: 'Failed to fetch stories' })
+    }
+  },
+)
 
 router.get('/:slug/cluster', async (req, res) => {
   try {
@@ -51,7 +59,7 @@ router.get('/:slug/cluster', async (req, res) => {
 
 router.get('/:slug/related', validateQuery(relatedStoriesQuerySchema), async (req, res) => {
   try {
-    const stories = await storyService.getRelatedStories(req.params.slug, req.parsedQuery!.limit)
+    const stories = await storyService.getRelatedStories(req.params.slug!, req.parsedQuery!.limit)
     res.set('Cache-Control', `public, max-age=${config.relatedStories.httpCacheSeconds}`)
     res.json(stories.map(withAiGeneratedMarker))
   } catch (err) {

@@ -6,10 +6,7 @@ import { jobSetting } from '../jobs/jobSettings.js'
 
 /** Every job with its running state: a run in this process, or a live lease held by any process. */
 export async function getJobs() {
-  const [jobs, leased] = await Promise.all([
-    prisma.jobRun.findMany({ orderBy: { jobName: 'asc' } }),
-    jobsWithLiveLease(),
-  ])
+  const [jobs, leased] = await Promise.all([prisma.jobRun.findMany({ orderBy: { jobName: 'asc' } }), jobsWithLiveLease()])
   return jobs.map(({ lockedBy: _lockedBy, lockedUntil: _lockedUntil, ...job }) => ({
     ...job,
     running: runningJobs.has(job.jobName) || leased.has(job.jobName),

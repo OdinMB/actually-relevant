@@ -27,9 +27,7 @@ describe('runAssessStories', () => {
   })
 
   it('assesses pre-analyzed stories above threshold', async () => {
-    mockPrisma.issue.findMany.mockResolvedValue([
-      { id: 'issue-1', name: 'Test Issue', minPreRating: null },
-    ])
+    mockPrisma.issue.findMany.mockResolvedValue([{ id: 'issue-1', name: 'Test Issue', minPreRating: null }])
     mockGetStoryIdsByStatus
       .mockResolvedValueOnce([]) // snapshot: all pre_analyzed (for rejection)
       .mockResolvedValueOnce(['story-1', 'story-2']) // issue-1 stories
@@ -73,9 +71,7 @@ describe('runAssessStories', () => {
   })
 
   it('handles errors in assessment result', async () => {
-    mockPrisma.issue.findMany.mockResolvedValue([
-      { id: 'issue-1', name: 'Test', minPreRating: null },
-    ])
+    mockPrisma.issue.findMany.mockResolvedValue([{ id: 'issue-1', name: 'Test', minPreRating: null }])
     mockGetStoryIdsByStatus
       .mockResolvedValueOnce(['story-1', 'story-2']) // snapshot: all pre_analyzed
       .mockResolvedValueOnce(['story-1', 'story-2']) // issue-1: both qualify

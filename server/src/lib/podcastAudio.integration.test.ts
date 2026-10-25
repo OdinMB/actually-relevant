@@ -14,7 +14,9 @@ const tags = { title: 'Test episode', artist: 'Actually Relevant', album: 'Actua
 
 describe.skipIf(!binary)('podcastAudio with the real ffmpeg', () => {
   let dir = ''
-  beforeAll(() => { dir = mkdtempSync(path.join(os.tmpdir(), 'podcast-audio-test-')) })
+  beforeAll(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'podcast-audio-test-'))
+  })
   afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
   function readTags(buffer: Buffer): string {
@@ -26,7 +28,25 @@ describe.skipIf(!binary)('podcastAudio with the real ffmpeg', () => {
   /** A one-second tone, like a voiced chunk: something loudnorm can measure. */
   function toneChunk(): Buffer {
     const file = path.join(dir, 'tone.mp3')
-    spawnSync(binary!, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=1', '-ac', '1', '-ar', '44100', '-c:a', 'libmp3lame', '-b:a', '128k', file])
+    spawnSync(binary!, [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=220:duration=1',
+      '-ac',
+      '1',
+      '-ar',
+      '44100',
+      '-c:a',
+      'libmp3lame',
+      '-b:a',
+      '128k',
+      file,
+    ])
     return readFileSync(file)
   }
 

@@ -1,13 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { publicApi } from '../lib/api'
 
-export function usePublicStories(params?: {
-  page?: number
-  pageSize?: number
-  issueSlug?: string
-  search?: string
-  emotionTags?: string
-}) {
+export function usePublicStories(params?: { page?: number; pageSize?: number; issueSlug?: string; search?: string; emotionTags?: string }) {
   return useQuery({
     queryKey: ['public-stories', params],
     queryFn: () => publicApi.stories.list(params),

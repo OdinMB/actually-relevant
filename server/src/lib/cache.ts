@@ -22,7 +22,10 @@ export class TTLCache<T> {
   private sweepTimer: ReturnType<typeof setInterval> | null = null
   private readonly maxEntries: number
 
-  constructor(private readonly ttlMs: number, options: TTLCacheOptions = {}) {
+  constructor(
+    private readonly ttlMs: number,
+    options: TTLCacheOptions = {},
+  ) {
     this.maxEntries = options.maxEntries ?? Infinity
     this.sweepTimer = setInterval(() => this.sweep(), SWEEP_INTERVAL_MS)
     if (this.sweepTimer && typeof this.sweepTimer === 'object' && 'unref' in this.sweepTimer) {
@@ -131,11 +134,6 @@ export class TTLCache<T> {
  * Wrap an async function with caching. Concurrent misses for the same key share one call of `fn`;
  * a rejection is not cached. `shouldCache` can keep a result from being stored (it is still returned).
  */
-export function cached<T>(
-  cache: TTLCache<T>,
-  key: string,
-  fn: () => Promise<T>,
-  shouldCache?: (value: T) => boolean,
-): Promise<T> {
+export function cached<T>(cache: TTLCache<T>, key: string, fn: () => Promise<T>, shouldCache?: (value: T) => boolean): Promise<T> {
   return cache.load(key, fn, shouldCache)
 }

@@ -26,8 +26,14 @@ export const CRON_PRESETS: CronPreset[] = [
 ]
 
 const DAY_NAMES: Record<string, string> = {
-  '0': 'Sun', '1': 'Mon', '2': 'Tue', '3': 'Wed',
-  '4': 'Thu', '5': 'Fri', '6': 'Sat', '7': 'Sun',
+  '0': 'Sun',
+  '1': 'Mon',
+  '2': 'Tue',
+  '3': 'Wed',
+  '4': 'Thu',
+  '5': 'Fri',
+  '6': 'Sat',
+  '7': 'Sun',
 }
 
 function formatTime(hour: number, minute: number): string {
@@ -68,7 +74,7 @@ function parseDays(dayField: string): string | null {
 function formatHourRange(rangeStr: string): string | null {
   const match = rangeStr.match(/^(\d+)-(\d+)$/)
   if (!match) return null
-  return `${formatHourLabel(parseInt(match[1], 10))} \u2013 ${formatHourLabel(parseInt(match[2], 10))}`
+  return `${formatHourLabel(parseInt(match[1]!, 10))} \u2013 ${formatHourLabel(parseInt(match[2]!, 10))}`
 }
 
 /**
@@ -79,7 +85,7 @@ export function cronToHuman(expr: string): string {
   const parts = expr.trim().split(/\s+/)
   if (parts.length !== 5) return expr
 
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
+  const [minute = '', hour = '', dayOfMonth, month, dayOfWeek = ''] = parts
 
   // Only handle standard cases (no month/day-of-month specifics)
   if (dayOfMonth !== '*' || month !== '*') return expr
@@ -92,14 +98,12 @@ export function cronToHuman(expr: string): string {
 
   // Every N minutes: "*/N * * * *" or "*/N 9-17 * * *"
   if (everyNMin) {
-    const n = parseInt(everyNMin[1], 10)
+    const n = parseInt(everyNMin[1]!, 10)
     const minLabel = `${n} minute${n > 1 ? 's' : ''}`
 
     if (hourRange) {
       const range = formatHourRange(hour)
-      return dayStr
-        ? `${dayStr}, every ${minLabel}, ${range}`
-        : `Every ${minLabel}, ${range}`
+      return dayStr ? `${dayStr}, every ${minLabel}, ${range}` : `Every ${minLabel}, ${range}`
     }
 
     if (hour === '*') {
@@ -111,7 +115,7 @@ export function cronToHuman(expr: string): string {
 
   // Every N hours with non-zero minutes: "MM */N * * *"
   if (everyNHours && !isNaN(min)) {
-    const n = parseInt(everyNHours[1], 10)
+    const n = parseInt(everyNHours[1]!, 10)
     const hourLabel = `${n} hour${n > 1 ? 's' : ''}`
     if (min === 0) {
       const prefix = dayStr ? `${dayStr}, every` : 'Every'

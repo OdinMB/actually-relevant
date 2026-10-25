@@ -9,8 +9,12 @@ import { buildSelectPrompt } from '../../../prompts/select.js'
 import { buildNewsletterSelectPrompt } from '../../../prompts/newsletter-select.js'
 import { buildNewsletterIntroPrompt } from '../../../prompts/newsletter-intro.js'
 import {
-  newsletterIntroSchema, newsletterSelectResultSchema, podcastDialogueSchema, selectResultSchema,
-  type NewsletterIntro, type SelectResult,
+  newsletterIntroSchema,
+  newsletterSelectResultSchema,
+  podcastDialogueSchema,
+  selectResultSchema,
+  type NewsletterIntro,
+  type SelectResult,
 } from '../../../schemas/llm.js'
 import type { Fixtures, NewsletterItem, PodcastItem, SelectionGroup } from '../fixtures.js'
 import { TARGETS } from '../fixtures.js'
@@ -51,8 +55,7 @@ function picksOf(result: SelectResult | null, candidateIds: string[]): { picks: 
 }
 
 /** An empty response, or an empty pick list, is a decline. */
-const declined = (r: CallRecord<SelectResult> | undefined) =>
-  r?.outcome === 'empty' || (r?.outcome === 'ok' && (r.parsed?.selectedIds.length ?? 0) === 0)
+const declined = (r: CallRecord<SelectResult> | undefined) => r?.outcome === 'empty' || (r?.outcome === 'ok' && (r.parsed?.selectedIds.length ?? 0) === 0)
 
 // ---------------------------------------------------------------------------
 // Editorial selection
@@ -93,16 +96,18 @@ export function decideSelection(metrics: Record<string, SelectionArmMetrics>, ba
   const m = metrics[candidate]
   if (b?.exactCount == null || m?.exactCount == null) return { verdict: { kind: 'none', reasons: ['no selection groups were evaluated'] }, passing: [] }
   // Absolute bar 100%, relaxed to gpt-5.2's own rate only if gpt-5.2 misses it too.
-  const bar = (b.exactCount ?? 0) < 1 ? b.exactCount ?? 0 : 1
-  return pickLowestPassing([{
-    arm: candidate,
-    failures: [
-      ...((m.exactCount ?? 0) < bar ? [`exact-count compliance ${pct(m.exactCount)} < ${pct(bar)}`] : []),
-      ...(m.declined > b.declined ? [`${m.declined} declined/empty responses (gpt-5.2 ${b.declined})`] : []),
-      ...(m.failures > b.failures ? [`${m.failures} failed calls (gpt-5.2 ${b.failures})`] : []),
-    ],
-    evidence: [`exact count ${pct(m.exactCount)} (gpt-5.2 ${pct(b.exactCount)}), declines ${m.declined} (gpt-5.2 ${b.declined})`],
-  }])
+  const bar = (b.exactCount ?? 0) < 1 ? (b.exactCount ?? 0) : 1
+  return pickLowestPassing([
+    {
+      arm: candidate,
+      failures: [
+        ...((m.exactCount ?? 0) < bar ? [`exact-count compliance ${pct(m.exactCount)} < ${pct(bar)}`] : []),
+        ...(m.declined > b.declined ? [`${m.declined} declined/empty responses (gpt-5.2 ${b.declined})`] : []),
+        ...(m.failures > b.failures ? [`${m.failures} failed calls (gpt-5.2 ${b.failures})`] : []),
+      ],
+      evidence: [`exact count ${pct(m.exactCount)} (gpt-5.2 ${pct(b.exactCount)}), declines ${m.declined} (gpt-5.2 ${b.declined})`],
+    },
+  ])
 }
 
 function selectionDrafts(gs: SelectionGroup[], records: Map<string, CallRecord<SelectResult>[]>): RatingItemDraft[] {
@@ -117,20 +122,24 @@ function selectionDrafts(gs: SelectionGroup[], records: Map<string, CallRecord<S
     const pb = picksOf(b, ids).picks
     const title = new Map(g.stories.map(s => [s.id, s.title ?? '(untitled)']))
     const render = (picks: string[]) => picks.map(id => `- ${title.get(id)}`).join('\n') || '(no valid picks)'
-    return [{
-      set: 'story-selection' as const,
-      key: g.id,
-      context_md: [
-        `Pick ${g.toSelect} of ${g.stories.length} candidate stories.`,
-        '',
-        ...g.stories.map((s, n) => `${n + 1}. **${s.title ?? '(untitled)'}** (${s.emotionTag ?? 'calm'}, rated ${s.relevance ?? '?'}/10)\n   ${s.summary ?? ''}`),
-      ].join('\n'),
-      options: [
-        { arm: BASE_KEY, content_md: render(pa) },
-        { arm: CAND_KEY, content_md: render(pb) },
-      ],
-      tags: { jaccard: jaccard(pa, pb) },
-    }]
+    return [
+      {
+        set: 'story-selection' as const,
+        key: g.id,
+        context_md: [
+          `Pick ${g.toSelect} of ${g.stories.length} candidate stories.`,
+          '',
+          ...g.stories.map(
+            (s, n) => `${n + 1}. **${s.title ?? '(untitled)'}** (${s.emotionTag ?? 'calm'}, rated ${s.relevance ?? '?'}/10)\n   ${s.summary ?? ''}`,
+          ),
+        ].join('\n'),
+        options: [
+          { arm: BASE_KEY, content_md: render(pa) },
+          { arm: CAND_KEY, content_md: render(pb) },
+        ],
+        tags: { jaccard: jaccard(pa, pb) },
+      },
+    ]
   })
 }
 
@@ -148,7 +157,14 @@ export interface NewsletterSelectArmMetrics {
 }
 
 function scoreNewsletterSelect(ns: NewsletterItem[], recs: CallRecord<SelectResult>[]): NewsletterSelectArmMetrics {
-  const per = ns.map((n, i) => ({ n, parsed: parsedOf(recs[i]), ...picksOf(parsedOf(recs[i]), n.longlist.map(s => s.id)) }))
+  const per = ns.map((n, i) => ({
+    n,
+    parsed: parsedOf(recs[i]),
+    ...picksOf(
+      parsedOf(recs[i]),
+      n.longlist.map(s => s.id),
+    ),
+  }))
   const answered = per.filter(p => p.parsed != null)
   const compliant = (p: (typeof per)[number]) =>
     p.n.issueNames.every(issue => {
@@ -193,13 +209,13 @@ function scoreIntro(recs: CallRecord<NewsletterIntro>[]): IntroArmMetrics {
 /** Candidate must be no worse than the gpt-5.2 rerun on each listed "lower is better" count. */
 function noWorseThanBaseline(label: string, items: number, checks: { name: string; cand: number | null; base: number | null }[]): Decision {
   if (items === 0) return { verdict: { kind: 'none', reasons: [`${label}: no fixture items were evaluated`] }, passing: [] }
-  return pickLowestPassing([{
-    arm: CAND_KEY,
-    failures: checks
-      .filter(c => (c.cand ?? Infinity) > (c.base ?? 0))
-      .map(c => `${label} ${c.name}: ${num(c.cand)} > gpt-5.2 ${num(c.base)}`),
-    evidence: checks.map(c => `${c.name}: ${num(c.cand)} (gpt-5.2 ${num(c.base)})`),
-  }])
+  return pickLowestPassing([
+    {
+      arm: CAND_KEY,
+      failures: checks.filter(c => (c.cand ?? Infinity) > (c.base ?? 0)).map(c => `${label} ${c.name}: ${num(c.cand)} > gpt-5.2 ${num(c.base)}`),
+      evidence: checks.map(c => `${c.name}: ${num(c.cand)} (gpt-5.2 ${num(c.base)})`),
+    },
+  ])
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +234,18 @@ function textDrafts<T>(
     const a = parsedOf(base[i])
     const b = parsedOf(cand[i])
     if (!a || !b) return []
-    return [{ set, key: item.key, context_md: item.context_md, options: [{ arm: BASE_KEY, content_md: text(a) }, { arm: CAND_KEY, content_md: text(b) }], tags: {} }]
+    return [
+      {
+        set,
+        key: item.key,
+        context_md: item.context_md,
+        options: [
+          { arm: BASE_KEY, content_md: text(a) },
+          { arm: CAND_KEY, content_md: text(b) },
+        ],
+        tags: {},
+      },
+    ]
   })
 }
 
@@ -263,7 +290,11 @@ export const largeTierSuite: Suite = {
 
     const sites: CallSiteResult[] = [
       {
-        id: 'selection', title: 'Editorial selection', baseline: BASE_KEY, candidates: [CAND_KEY], stats: statsFor(sel),
+        id: 'selection',
+        title: 'Editorial selection',
+        baseline: BASE_KEY,
+        candidates: [CAND_KEY],
+        stats: statsFor(sel),
         metrics: [
           metricRow('Exact count, valid unique IDs', selM, m => m.exactCount, pct, 'higher'),
           metricRow('Invalid IDs returned', selM, m => m.invalidIds, count, 'lower'),
@@ -280,7 +311,11 @@ export const largeTierSuite: Suite = {
         ],
       },
       {
-        id: 'newsletter-select', title: 'Newsletter selection', baseline: BASE_KEY, candidates: [CAND_KEY], stats: statsFor(nsel),
+        id: 'newsletter-select',
+        title: 'Newsletter selection',
+        baseline: BASE_KEY,
+        candidates: [CAND_KEY],
+        stats: statsFor(nsel),
         metrics: [
           metricRow('Per-issue count compliance', nselM, m => m.perIssueCompliance, pct, 'higher'),
           metricRow('Invalid IDs returned', nselM, m => m.invalidIds, count, 'lower'),
@@ -297,11 +332,16 @@ export const largeTierSuite: Suite = {
         notes: [],
       },
       {
-        id: 'newsletter-intro', title: 'Newsletter intro', baseline: BASE_KEY, candidates: [CAND_KEY], stats: statsFor(intro),
+        id: 'newsletter-intro',
+        title: 'Newsletter intro',
+        baseline: BASE_KEY,
+        candidates: [CAND_KEY],
+        stats: statsFor(intro),
         metrics: [
           metricRow('Hard-rule violations (total)', introM, m => m.violations, count, 'lower'),
           ...(['over60Words', 'sentenceCount', 'bannedPhrase', 'emDash', 'markdown'] as const).map(rule =>
-            metricRow(`Violations: ${rule}`, introM, m => m.byRule[rule], count, 'lower')),
+            metricRow(`Violations: ${rule}`, introM, m => m.byRule[rule], count, 'lower'),
+          ),
           metricRow('Failed calls', introM, m => m.failures, count, 'lower'),
         ],
         decision: noWorseThanBaseline('intro', ns.length, [
@@ -312,7 +352,11 @@ export const largeTierSuite: Suite = {
         notes: ['Each newsletter uses one intro style, drawn once with pickIntroStyle() and stored in the fixture, so both arms get the same prompt.'],
       },
       {
-        id: 'podcast', title: 'Podcast script', baseline: BASE_KEY, candidates: [CAND_KEY], stats: statsFor(pod),
+        id: 'podcast',
+        title: 'Podcast script',
+        baseline: BASE_KEY,
+        candidates: [CAND_KEY],
+        stats: statsFor(pod),
         metrics: [
           metricRow('Dialogues failing validation', podM, m => m.invalid, count, 'lower'),
           metricRow('Validation errors (total)', podM, m => m.validationErrors, count, 'lower'),
@@ -326,20 +370,37 @@ export const largeTierSuite: Suite = {
           { name: 'failed calls', cand: podM[CAND_KEY]?.failures ?? null, base: podM[BASE_KEY]?.failures ?? null },
         ]),
         ratingSet: 'podcast-script',
-        notes: ['The dialogue covers a fixed pick from the week\'s published stories (the most relevant per issue, then by relevance); production picks with its own selection call.'],
+        notes: [
+          "The dialogue covers a fixed pick from the week's published stories (the most relevant per issue, then by relevance); production picks with its own selection call.",
+        ],
       },
     ]
 
     const ratingItems = [
       ...selectionDrafts(gs, sel),
-      ...textDrafts('newsletter-intro', ns.map(n => ({
-        key: n.id,
-        context_md: [`Style instruction: ${n.intro.style}`, '', 'Stories in this edition:', ...n.intro.stories.map(s => `- **${s.title}** (${s.issueName}, ${s.emotionTag}): ${s.blurb}`)].join('\n'),
-      })), intro, (t: NewsletterIntro) => t.intro),
-      ...textDrafts('podcast-script', ps.map(p => ({
-        key: p.id,
-        context_md: ['Stories to cover:', ...podcastEpisodeStories(p).map(s => `- ${s.issue}: **${s.title}** (${s.publisher})`)].join('\n'),
-      })), pod, renderDialogue),
+      ...textDrafts(
+        'newsletter-intro',
+        ns.map(n => ({
+          key: n.id,
+          context_md: [
+            `Style instruction: ${n.intro.style}`,
+            '',
+            'Stories in this edition:',
+            ...n.intro.stories.map(s => `- **${s.title}** (${s.issueName}, ${s.emotionTag}): ${s.blurb}`),
+          ].join('\n'),
+        })),
+        intro,
+        (t: NewsletterIntro) => t.intro,
+      ),
+      ...textDrafts(
+        'podcast-script',
+        ps.map(p => ({
+          key: p.id,
+          context_md: ['Stories to cover:', ...podcastEpisodeStories(p).map(s => `- ${s.issue}: **${s.title}** (${s.publisher})`)].join('\n'),
+        })),
+        pod,
+        renderDialogue,
+      ),
     ]
     return { callSites: sites, ratingItems, notes: [] }
   },

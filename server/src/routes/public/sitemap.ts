@@ -45,7 +45,7 @@ const STATIC_ROUTES: { path: string; priority: number; changefreq: ChangeFreq }[
 ]
 
 function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0]
+  return date.toISOString().slice(0, 10)
 }
 
 function buildSitemapXml(
@@ -55,14 +55,14 @@ function buildSitemapXml(
   issues: { slug: string; publishedAt: Date }[] = [],
 ): string {
   const staticUrls = STATIC_ROUTES.map(
-    (route) => `  <url>
+    route => `  <url>
     <loc>${baseUrl}${route.path}</loc>
     <changefreq>${route.changefreq}</changefreq>
     <priority>${route.priority.toFixed(1)}</priority>
-  </url>`
+  </url>`,
   )
 
-  const storyUrls = stories.map((story) => {
+  const storyUrls = stories.map(story => {
     const lastmod = story.datePublished ? `\n    <lastmod>${formatDate(story.datePublished)}</lastmod>` : ''
     return `  <url>
     <loc>${baseUrl}/stories/${story.slug}</loc>${lastmod}
@@ -72,20 +72,24 @@ function buildSitemapXml(
   })
 
   // Each published episode's transcript page (its id never changes once published)
-  const transcriptUrls = episodes.map((episode) => `  <url>
+  const transcriptUrls = episodes.map(
+    episode => `  <url>
     <loc>${baseUrl}/podcast/${episode.id}/transcript</loc>
     <lastmod>${formatDate(episode.publishedAt)}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
-  </url>`)
+  </url>`,
+  )
 
   // Each published newsletter issue's web edition (its slug never changes)
-  const issueUrls = issues.map((issue) => `  <url>
+  const issueUrls = issues.map(
+    issue => `  <url>
     <loc>${baseUrl}/newsletter/${issue.slug}</loc>
     <lastmod>${formatDate(issue.publishedAt)}</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
-  </url>`)
+  </url>`,
+  )
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

@@ -15,8 +15,17 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
 }))
 
 const notice = (i: number): AdminNotice => ({
-  id: `n-${i}`, source: 'jobs', severity: 'warning', title: `Notice ${i}`, message: 'm', link: null, dedupeKey: null, count: 1,
-  firstOccurredAt: '2026-10-08T10:00:00.000Z', lastOccurredAt: '2026-10-08T10:00:00.000Z', seenAt: null,
+  id: `n-${i}`,
+  source: 'jobs',
+  severity: 'warning',
+  title: `Notice ${i}`,
+  message: 'm',
+  link: null,
+  dedupeKey: null,
+  count: 1,
+  firstOccurredAt: '2026-10-08T10:00:00.000Z',
+  lastOccurredAt: '2026-10-08T10:00:00.000Z',
+  seenAt: null,
 })
 
 function renderCard() {

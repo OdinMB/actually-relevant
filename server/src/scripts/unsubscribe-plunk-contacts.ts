@@ -116,7 +116,7 @@ export function classifyAddresses(emails: string[], contacts: RawContact[]): Lis
     if (byEmail.has(e)) throw new Error(`two Plunk contacts share the address ${e}; resolve that in Plunk first`)
     byEmail.set(e, c)
   }
-  return emails.map((email) => {
+  return emails.map(email => {
     const c = byEmail.get(email)
     if (!c) return { email, status: 'not-found' as const }
     const id = typeof c.id === 'string' && c.id ? c.id : undefined
@@ -159,7 +159,7 @@ export function describePlunkError(err: unknown): string {
       const e = d.error as Record<string, unknown> | string | undefined
       if (typeof e === 'string') msg = e
       else if (e && typeof e === 'object') {
-        msg = [e.code, e.message].filter((v) => typeof v === 'string' && v).join(': ') || null
+        msg = [e.code, e.message].filter(v => typeof v === 'string' && v).join(': ') || null
       }
       if (!msg && typeof d.message === 'string') msg = d.message
       if (!msg) msg = JSON.stringify(d).slice(0, 500)
@@ -195,9 +195,9 @@ export async function applyUnsubscribes(
   const result: ApplyResult = { unsubscribed: 0, failed: 0, notAttempted: 0 }
   if (!opts.apply) return result
   const log = opts.log ?? ((line: string) => console.log(line))
-  const todo = listed.filter((a) => needsChange(a) && a.id)
+  const todo = listed.filter(a => needsChange(a) && a.id)
   for (let i = 0; i < todo.length; i++) {
-    const a = todo[i]
+    const a = todo[i]!
     try {
       const updated = (await opts.unsubscribe(a.id as string)) as { subscribed?: unknown; snoozedUntil?: unknown } | null
       if (!updated || typeof updated !== 'object' || updated.subscribed !== false) {
@@ -217,7 +217,7 @@ export async function applyUnsubscribes(
         return result
       }
     }
-    if (opts.delayMs && i < todo.length - 1) await new Promise((resolve) => setTimeout(resolve, opts.delayMs))
+    if (opts.delayMs && i < todo.length - 1) await new Promise(resolve => setTimeout(resolve, opts.delayMs))
   }
   return result
 }
@@ -242,9 +242,7 @@ async function main() {
   console.log(`Plunk unsubscribe — mode: ${args.apply ? 'APPLY (will unsubscribe)' : 'PREVIEW (no changes)'}`)
   console.log(`List: ${filePath} (${emails.length} addresses)`)
 
-  const fetched = await fetchAllContacts(
-    (cursor, limit) => plunk.listContacts(cursor, limit) as unknown as Promise<ContactsPage>,
-  )
+  const fetched = await fetchAllContacts((cursor, limit) => plunk.listContacts(cursor, limit) as unknown as Promise<ContactsPage>)
   console.log(`Plunk contacts listed: ${fetched.contacts.length}`)
   const problems = completenessProblems(fetched)
   if (problems.length > 0) {
@@ -263,7 +261,9 @@ async function main() {
   )
 
   if (!args.apply) {
-    console.log(`\nPreview complete; nothing changed. Apply would unsubscribe ${toChange}: npm run unsubscribe:plunk-contacts:apply --prefix server -- --file=${args.file}`)
+    console.log(
+      `\nPreview complete; nothing changed. Apply would unsubscribe ${toChange}: npm run unsubscribe:plunk-contacts:apply --prefix server -- --file=${args.file}`,
+    )
     return
   }
   if (toChange === 0) {
@@ -274,7 +274,7 @@ async function main() {
   console.log(`\nUnsubscribing ${toChange} through PATCH /contacts/:id ...`)
   const result = await applyUnsubscribes(listed, {
     apply: true,
-    unsubscribe: (id) => plunk.updateContact(id, { subscribed: false }),
+    unsubscribe: id => plunk.updateContact(id, { subscribed: false }),
     delayMs: UPDATE_DELAY_MS,
   })
   console.log(
@@ -288,7 +288,7 @@ async function main() {
 
 // Only run when executed directly (so importing the file for tests has no side effects).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
+  main().catch(err => {
     console.error('Fatal error:', describePlunkError(err))
     process.exit(1)
   })

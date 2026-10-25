@@ -6,11 +6,11 @@ import type { RouteConfig } from '../routes'
 export function generateSitemapXml(routes: RouteConfig[], baseUrl: string): string {
   const urls = routes
     .map(
-      (route) => `  <url>
+      route => `  <url>
     <loc>${baseUrl}${route.path}</loc>
     <changefreq>${route.changefreq}</changefreq>
     <priority>${route.priority.toFixed(1)}</priority>
-  </url>`
+  </url>`,
     )
     .join('\n')
 

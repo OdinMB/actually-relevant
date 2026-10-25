@@ -32,7 +32,8 @@ const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 
 function readCachedFixtures(cacheDir: string, floor?: string): Fixtures {
   const file = join(cacheDir, 'fixtures.json')
-  if (!existsSync(file)) throw new Error(`no cached fixtures in ${cacheDir}: the recalibration runs on the phase-1 sample, so eval:models must have sampled it there`)
+  if (!existsSync(file))
+    throw new Error(`no cached fixtures in ${cacheDir}: the recalibration runs on the phase-1 sample, so eval:models must have sampled it there`)
   const fx = JSON.parse(readFileSync(file, 'utf8')) as Fixtures
   if (floor !== undefined && fx.floor !== floor) throw new Error(`the cached fixtures use floor ${fx.floor}, not ${floor}; the recalibration never resamples`)
   return fx
@@ -54,13 +55,15 @@ async function main(): Promise<void> {
   console.log(`fixtures: phase-1 sample from ${fx.createdAt} (floor ${fx.floor}); half: ${opts.half}`)
   for (const s of steps) if (s.preflight) console.log(`${s.name}: ${await s.preflight(input, phase1)}`)
   console.log('estimates:')
-  const estimates = new Map(steps.map(s => {
-    const plan = s.plan(input)
-    const uncached = plan.filter(c => !ctx.isCached(c))
-    const est = uncached.reduce((sum, c) => sum + estimateCallUsd(c), 0)
-    console.log(`  ${s.name}: ${plan.length} calls (${uncached.length} uncached) ≈ ${usd(est)}`)
-    return [s.name, est] as const
-  }))
+  const estimates = new Map(
+    steps.map(s => {
+      const plan = s.plan(input)
+      const uncached = plan.filter(c => !ctx.isCached(c))
+      const est = uncached.reduce((sum, c) => sum + estimateCallUsd(c), 0)
+      console.log(`  ${s.name}: ${plan.length} calls (${uncached.length} uncached) ≈ ${usd(est)}`)
+      return [s.name, est] as const
+    }),
+  )
   console.log(`ledger so far ${usd(ctx.spentUsd())}; budget ${usd(opts.budget)} (a cap on the ledger total, so pass the ledger plus this run's allowance)`)
   if (opts.dryRun) {
     console.log('dry run: no API calls made')
@@ -90,17 +93,20 @@ async function main(): Promise<void> {
   }
 
   const file = join(out, recalibrationReportName(opts))
-  writeFileSync(file, renderRecalibration({
-    generatedAt: new Date().toISOString(),
-    half: opts.half,
-    fixtures: fx,
-    limit: opts.limit,
-    sections,
-    skipped,
-    thisRunUsd: ctx.spentThisRunUsd(),
-    ledgerUsd: ctx.spentUsd(),
-    budgetUsd: opts.budget,
-  }))
+  writeFileSync(
+    file,
+    renderRecalibration({
+      generatedAt: new Date().toISOString(),
+      half: opts.half,
+      fixtures: fx,
+      limit: opts.limit,
+      sections,
+      skipped,
+      thisRunUsd: ctx.spentThisRunUsd(),
+      ledgerUsd: ctx.spentUsd(),
+      budgetUsd: opts.budget,
+    }),
+  )
   for (const s of skipped) console.log(`${s.step}: ${s.reason}`)
   console.log(`wrote ${file}`)
 }

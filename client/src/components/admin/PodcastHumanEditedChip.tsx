@@ -18,9 +18,8 @@ export function PodcastHumanEditedChip({ podcast }: { podcast: Podcast }) {
     <Tooltip
       content={
         <>
-          Ticked automatically when someone changes the stories or the script; you can change it at any time, also after publishing.
-          It picks the AI line of the show notes, the podcast feed and the podcast page:{' '}
-          on, it adds that a person reviewed and edited the episode; off, it is the standard AI line.
+          Ticked automatically when someone changes the stories or the script; you can change it at any time, also after publishing. It picks the AI line of the
+          show notes, the podcast feed and the podcast page: on, it adds that a person reviewed and edited the episode; off, it is the standard AI line.
           {on ? ' It is on now.' : ' It is off now.'}
           {podcast.inProgress && ' It can be changed once the current run finishes.'}
         </>
@@ -36,9 +35,14 @@ export function PodcastHumanEditedChip({ podcast }: { podcast: Podcast }) {
             type="checkbox"
             checked={on}
             disabled={disabled}
-            onChange={e => update.mutate({ id: podcast.id, data: { humanEdited: e.target.checked } }, {
-              onError: err => toast('error', err instanceof Error ? err.message : 'Failed to update'),
-            })}
+            onChange={e =>
+              update.mutate(
+                { id: podcast.id, data: { humanEdited: e.target.checked } },
+                {
+                  onError: err => toast('error', err instanceof Error ? err.message : 'Failed to update'),
+                },
+              )
+            }
             className="h-3.5 w-3.5 rounded border-neutral-300 text-brand-600 focus:ring-0 focus-visible:outline-none"
             {...trigger}
           />

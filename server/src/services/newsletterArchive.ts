@@ -20,7 +20,11 @@ const SLUG_MAX_LENGTH = 80
 
 /** "Week 42, 2026" -> "week-42-2026". The migration that added slugs backfilled with the same rule. */
 export function newsletterSlugBase(title: string): string {
-  const base = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'issue'
+  const base =
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'issue'
   return RESERVED_SLUGS.has(base) ? `${base}-issue` : base.slice(0, SLUG_MAX_LENGTH)
 }
 
@@ -80,7 +84,7 @@ export async function listPublishedIssues(page: number, pageSize: number) {
   })
   return {
     ...result,
-    data: result.data.map((issue) => ({
+    data: result.data.map(issue => ({
       slug: issue.slug!,
       title: issue.title,
       publishedAt: (issue.publishedAt ?? issue.createdAt).toISOString(),
@@ -96,7 +100,7 @@ export async function listPublishedIssueDates(): Promise<{ slug: string; publish
     select: { slug: true, publishedAt: true, createdAt: true },
     orderBy: { publishedAt: 'desc' },
   })
-  return issues.map((issue) => ({ slug: issue.slug!, publishedAt: issue.publishedAt ?? issue.createdAt }))
+  return issues.map(issue => ({ slug: issue.slug!, publishedAt: issue.publishedAt ?? issue.createdAt }))
 }
 
 /**
@@ -105,9 +109,7 @@ export async function listPublishedIssueDates(): Promise<{ slug: string; publish
  * heading, which the email template turns into a favicon and a colored dot.
  */
 export function toWebMarkdown(content: string): string {
-  return content
-    .replace(/\{feed:[^}\s]*\}[ \t]*/g, '')
-    .replace(/^(#[ \t].*?)[ \t]*\{[a-z0-9-]+\}[ \t]*$/gm, '$1')
+  return content.replace(/\{feed:[^}\s]*\}[ \t]*/g, '').replace(/^(#[ \t].*?)[ \t]*\{[a-z0-9-]+\}[ \t]*$/gm, '$1')
 }
 
 /** One public issue with its stories, or null unless it is published. */
@@ -140,7 +142,7 @@ export async function getPublishedIssue(slug: string) {
     publishedAt: (issue.publishedAt ?? issue.createdAt).toISOString(),
     aiLabel: NEWSLETTER_TOP_LABEL,
     content: toWebMarkdown(issue.content),
-    stories: stories.map((story) => ({
+    stories: stories.map(story => ({
       // The `## ` heading generateContent wrote for this story, to match it in the content
       headline: story.title || story.sourceTitle,
       title: story.title,

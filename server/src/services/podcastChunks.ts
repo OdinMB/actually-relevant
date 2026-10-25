@@ -43,8 +43,8 @@ export function chunkTurns(segments: SpokenSegment[], maxChars: number): Chunk[]
 /** The text spoken around chunk `index`: the end of the one before and the start of the one after. */
 export function chunkContinuity(chunks: Chunk[], index: number, contextChars: number): { previousText?: string; futureText?: string } {
   return {
-    ...(index > 0 ? { previousText: chunkText(chunks[index - 1]).slice(-contextChars) } : {}),
-    ...(index < chunks.length - 1 ? { futureText: chunkText(chunks[index + 1]).slice(0, contextChars) } : {}),
+    ...(index > 0 ? { previousText: chunkText(chunks[index - 1]!).slice(-contextChars) } : {}),
+    ...(index < chunks.length - 1 ? { futureText: chunkText(chunks[index + 1]!).slice(0, contextChars) } : {}),
   }
 }
 
@@ -83,13 +83,14 @@ function timeTurns(chunks: Chunk[], durationsMs: number[], pauseMs: number): Tim
   let offset = 0
   chunks.forEach((chunk, i) => {
     const total = Math.max(1, chunkChars(chunk))
+    const durationMs = durationsMs[i]!
     let at = offset
     for (const turn of chunk) {
-      const end = at + (durationsMs[i] * turn.text.length) / total
+      const end = at + (durationMs * turn.text.length) / total
       timed.push({ turn, startMs: at, endMs: end })
       at = end
     }
-    offset += durationsMs[i] + (i < chunks.length - 1 ? pauseMs : 0)
+    offset += durationMs + (i < chunks.length - 1 ? pauseMs : 0)
   })
   return timed
 }
@@ -140,13 +141,7 @@ const seconds = (ms: number) => Math.round(ms) / 1000
  * Consecutive segments about the same story make one chapter; a story segment whose story is
  * unknown runs on as part of the chapter before it. No LLM call: titles come from the snapshot.
  */
-export function buildChapters(
-  segments: SpokenSegment[],
-  chunks: Chunk[],
-  durationsMs: number[],
-  pauseMs: number,
-  stories: ChapterStory[],
-): ChaptersDocument {
+export function buildChapters(segments: SpokenSegment[], chunks: Chunk[], durationsMs: number[], pauseMs: number, stories: ChapterStory[]): ChaptersDocument {
   const timed = timeTurns(chunks, durationsMs, pauseMs)
   const turnCount = segments.reduce((n, s) => n + s.turns.length, 0)
   if (turnCount !== timed.length) throw new Error(`${turnCount} turns in the segments but ${timed.length} in the chunks`)
@@ -156,7 +151,7 @@ export function buildChapters(
   let lastKey: string | null = null
   let turnIndex = 0
   for (const segment of segments) {
-    const startMs = segment.turns.length > 0 ? timed[turnIndex].startMs : null
+    const startMs = segment.turns.length > 0 ? timed[turnIndex]!.startMs : null
     turnIndex += segment.turns.length
     if (startMs === null) continue
 

@@ -45,14 +45,6 @@ export function PodcastVoiceConfirm({ open, podcast, title, confirmLabel, note, 
   const usage = usePodcastUsage()
   const description = [note, voiceCostText(podcast, usage.data)].filter(Boolean).join(' ')
   return (
-    <ConfirmDialog
-      open={open}
-      onClose={onClose}
-      onConfirm={onConfirm}
-      title={title}
-      description={description}
-      confirmLabel={confirmLabel}
-      loading={loading}
-    />
+    <ConfirmDialog open={open} onClose={onClose} onConfirm={onConfirm} title={title} description={description} confirmLabel={confirmLabel} loading={loading} />
   )
 }

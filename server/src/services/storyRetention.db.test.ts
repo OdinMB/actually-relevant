@@ -9,7 +9,10 @@ const mockNotify = vi.hoisted(() => vi.fn())
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 // storyWrites.ts (deleteStory) imports the OpenAI-backed modules; nothing here calls them
 vi.mock('./embedding.js', () => ({
-  generateEmbeddingForContent: vi.fn(), generateSearchEmbedding: vi.fn(), ensureEmbedding: vi.fn(), ensureEmbeddings: vi.fn(),
+  generateEmbeddingForContent: vi.fn(),
+  generateSearchEmbedding: vi.fn(),
+  ensureEmbedding: vi.fn(),
+  ensureEmbeddings: vi.fn(),
 }))
 
 const { runCleanupOldStories } = await import('../jobs/cleanupOldStories.js')
@@ -34,7 +37,9 @@ async function clusterOf(memberIds: string[], primaryId: string | null) {
 
 describeDb('story retention (PostgreSQL)', () => {
   useTestDatabase()
-  beforeEach(() => { mockNotify.mockReset().mockResolvedValue(undefined) })
+  beforeEach(() => {
+    mockNotify.mockReset().mockResolvedValue(undefined)
+  })
 
   it('deletes old stories of every deletable status and nothing else', async () => {
     const { feed } = await setup()

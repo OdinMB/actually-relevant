@@ -72,9 +72,7 @@ export function costOf(model: ModelId, usage: TokenUsage): number {
   return (uncached * p.input * p.cacheWrite + usage.cached * p.cached + usage.output * p.output) / 1_000_000
 }
 
-export type OutcomeInput =
-  | { parsed: unknown; content: string; finishReason: string | null }
-  | { error: unknown }
+export type OutcomeInput = { parsed: unknown; content: string; finishReason: string | null } | { error: unknown }
 
 export function classifyOutcome(input: OutcomeInput): CallOutcome {
   if ('error' in input) return 'error'
@@ -99,7 +97,9 @@ export function estimateCallUsd(call: PlannedCall): number {
 }
 
 export function cacheKey(a: Arm, schemaName: string, prompt: string): string {
-  return createHash('sha256').update(`${armKey(a)}\n${schemaName}\n${prompt}`).digest('hex')
+  return createHash('sha256')
+    .update(`${armKey(a)}\n${schemaName}\n${prompt}`)
+    .digest('hex')
 }
 
 /**
@@ -110,7 +110,10 @@ export function cacheKey(a: Arm, schemaName: string, prompt: string): string {
  * its phase-1 ledger entries stay reachable.
  */
 export function versionedSchemaName(name: string, schema: z.ZodType): string {
-  const fingerprint = createHash('sha256').update(JSON.stringify(toJsonSchema(schema))).digest('hex').slice(0, 8)
+  const fingerprint = createHash('sha256')
+    .update(JSON.stringify(toJsonSchema(schema)))
+    .digest('hex')
+    .slice(0, 8)
   return `${name}#${fingerprint}`
 }
 
@@ -189,7 +192,17 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
   async function invoke<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: string, key: string): Promise<CallRecord<T>> {
     const base = { key, arm: armKey(a), schema: schemaName, at: new Date().toISOString() }
     if (spent >= options.budgetUsd) {
-      return { ...base, outcome: 'skipped', parsed: null, content: '', finishReason: null, usage: ZERO_USAGE, costUsd: 0, latencyMs: 0, error: 'budget exhausted' }
+      return {
+        ...base,
+        outcome: 'skipped',
+        parsed: null,
+        content: '',
+        finishReason: null,
+        usage: ZERO_USAGE,
+        costUsd: 0,
+        latencyMs: 0,
+        error: 'budget exhausted',
+      }
     }
     const model = createChatModel({ name: a.model, reasoningEffort: a.effort })
     const structured = model.withStructuredOutput(schema, { includeRaw: true })
@@ -239,7 +252,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
     },
     spentUsd: () => spent,
     spentThisRunUsd: () => spentThisRun,
-    isCached: (call) => ledger.has(cacheKey(call.arm, call.schemaName, call.prompt)),
+    isCached: call => ledger.has(cacheKey(call.arm, call.schemaName, call.prompt)),
     liveCalls: () => live,
   }
 }

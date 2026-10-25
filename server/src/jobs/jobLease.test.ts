@@ -10,8 +10,7 @@ const mockWarn = vi.hoisted(() => vi.fn())
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../lib/logger.js', () => ({ createLogger: () => ({ info: vi.fn(), warn: mockWarn, error: vi.fn() }) }))
 
-const { claimJobRun, withJobLeaseHeartbeat, finishJobRun, jobsWithLiveLease, releaseHeldJobLeases, LEASE_HOLDER } =
-  await import('./jobLease.js')
+const { claimJobRun, withJobLeaseHeartbeat, finishJobRun, jobsWithLiveLease, releaseHeldJobLeases, LEASE_HOLDER } = await import('./jobLease.js')
 const { config } = await import('../config.js')
 
 /** The SQL text and the bound values of the n-th raw statement. */
@@ -68,7 +67,13 @@ describe('job lease', () => {
 
     it('renews the lease every leaseRenewMs while the work is pending, and stops after', async () => {
       let finish: () => void = () => {}
-      const run = withJobLeaseHeartbeat('assess_stories', () => new Promise<void>(resolve => { finish = resolve }))
+      const run = withJobLeaseHeartbeat(
+        'assess_stories',
+        () =>
+          new Promise<void>(resolve => {
+            finish = resolve
+          }),
+      )
 
       await vi.advanceTimersByTimeAsync(config.scheduler.leaseRenewMs * 3)
       expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(3)
@@ -85,7 +90,13 @@ describe('job lease', () => {
 
     it('renews at every renewal tick and never earlier, so a lease gets several renewals before it can expire', async () => {
       let finish: () => void = () => {}
-      const run = withJobLeaseHeartbeat('crawl_feeds', () => new Promise<void>(resolve => { finish = resolve }))
+      const run = withJobLeaseHeartbeat(
+        'crawl_feeds',
+        () =>
+          new Promise<void>(resolve => {
+            finish = resolve
+          }),
+      )
 
       await vi.advanceTimersByTimeAsync(config.scheduler.leaseRenewMs - 1)
       expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
@@ -94,7 +105,7 @@ describe('job lease', () => {
 
       // Within one lease period after the claim, every renewal tick has fired.
       await vi.advanceTimersByTimeAsync(config.scheduler.leaseSeconds * 1000 - config.scheduler.leaseRenewMs)
-      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(Math.floor(config.scheduler.leaseSeconds * 1000 / config.scheduler.leaseRenewMs))
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(Math.floor((config.scheduler.leaseSeconds * 1000) / config.scheduler.leaseRenewMs))
 
       finish()
       await run
@@ -103,7 +114,13 @@ describe('job lease', () => {
     it('warns once and stops renewing when the lease was lost, and the work still completes', async () => {
       mockPrisma.$executeRaw.mockResolvedValue(0)
       let finish: (value: string) => void = () => {}
-      const run = withJobLeaseHeartbeat('assess_stories', () => new Promise<string>(resolve => { finish = resolve }))
+      const run = withJobLeaseHeartbeat(
+        'assess_stories',
+        () =>
+          new Promise<string>(resolve => {
+            finish = resolve
+          }),
+      )
 
       await vi.advanceTimersByTimeAsync(config.scheduler.leaseRenewMs * 4)
       expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
@@ -117,7 +134,13 @@ describe('job lease', () => {
     it('a failed renewal write is logged and renewal goes on', async () => {
       mockPrisma.$executeRaw.mockRejectedValueOnce(new Error('db blip')).mockResolvedValue(1)
       let finish: () => void = () => {}
-      const run = withJobLeaseHeartbeat('assess_stories', () => new Promise<void>(resolve => { finish = resolve }))
+      const run = withJobLeaseHeartbeat(
+        'assess_stories',
+        () =>
+          new Promise<void>(resolve => {
+            finish = resolve
+          }),
+      )
 
       await vi.advanceTimersByTimeAsync(config.scheduler.leaseRenewMs * 2)
       expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(2)

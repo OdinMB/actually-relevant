@@ -19,11 +19,27 @@ const HOUR_MS = 60 * 60 * 1000
 export const MISSED_WEEK_TITLE = 'No podcast episode ready to publish this Saturday'
 
 const clockFormat = new Intl.DateTimeFormat('en-GB', {
-  timeZone: config.podcast.publishTimeZone, weekday: 'short', hour: '2-digit', minute: '2-digit',
+  timeZone: config.podcast.publishTimeZone,
+  weekday: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
 })
 
-type ReasonFields = 'stage' | 'mode' | 'status' | 'publishedAt' | 'unpublishedAt' | 'blockedAt' | 'blockedReason'
-  | 'dryRun' | 'lastError' | 'readyAt' | 'audioUrl' | 'audioBytes' | 'humanEdited' | 'kind'
+type ReasonFields =
+  | 'stage'
+  | 'mode'
+  | 'status'
+  | 'publishedAt'
+  | 'unpublishedAt'
+  | 'blockedAt'
+  | 'blockedReason'
+  | 'dryRun'
+  | 'lastError'
+  | 'readyAt'
+  | 'audioUrl'
+  | 'audioBytes'
+  | 'humanEdited'
+  | 'kind'
 
 /**
  * Why the week's weekly episode was not published automatically, or null when it is already listed.

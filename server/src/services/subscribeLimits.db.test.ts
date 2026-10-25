@@ -28,7 +28,9 @@ const { checkSendAllowance } = await import('./subscribeLimits.js')
 
 describeDb('checkSendAllowance (PostgreSQL)', () => {
   useTestDatabase()
-  beforeEach(() => { mockNotify.mockReset().mockResolvedValue(undefined) })
+  beforeEach(() => {
+    mockNotify.mockReset().mockResolvedValue(undefined)
+  })
 
   it('allows a first send', async () => {
     expect(await checkSendAllowance('a@example.com')).toBe('ok')

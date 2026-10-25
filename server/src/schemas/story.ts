@@ -1,20 +1,12 @@
 import { z } from 'zod'
 
-const storyStatusEnum = z.enum([
-  'fetched', 'pre_analyzed', 'analyzed', 'selected', 'published', 'rejected', 'trashed',
-])
+const storyStatusEnum = z.enum(['fetched', 'pre_analyzed', 'analyzed', 'selected', 'published', 'rejected', 'trashed'])
 
-const emotionTagEnum = z.enum([
-  'uplifting', 'frustrating', 'scary', 'calm',
-])
+const emotionTagEnum = z.enum(['uplifting', 'frustrating', 'scary', 'calm'])
 
-const storySortEnum = z.enum([
-  'rating_asc', 'rating_desc', 'date_asc', 'date_desc', 'title_asc', 'title_desc',
-])
+const storySortEnum = z.enum(['rating_asc', 'rating_desc', 'date_asc', 'date_desc', 'title_asc', 'title_desc'])
 
-const ratingFilterEnum = z.enum([
-  'gte4', 'gte5', 'gte6', 'gte7', 'lte3', 'lte4', 'lte5', 'lte6', 'lte7',
-])
+const ratingFilterEnum = z.enum(['gte4', 'gte5', 'gte6', 'gte7', 'lte3', 'lte4', 'lte5', 'lte6', 'lte7'])
 
 export const createStorySchema = z.object({
   sourceUrl: z.string().url('Must be a valid URL'),
@@ -31,7 +23,11 @@ export const updateStorySchema = z.object({
   sourceDatePublished: z.string().datetime().nullable().optional(),
   title: z.string().min(1).nullable().optional(),
   titleLabel: z.string().min(1).nullable().optional(),
-  slug: z.string().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase letters, numbers, and hyphens').optional(),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase letters, numbers, and hyphens')
+    .optional(),
   issueId: z.string().uuid().nullable().optional(),
   status: storyStatusEnum.optional(),
   relevancePre: z.number().int().min(0).max(10).nullable().optional(),
@@ -82,16 +78,17 @@ export const selectBodySchema = z.object({
 })
 
 export const batchStoriesQuerySchema = z.object({
-  ids: z.string().min(1, 'At least one ID is required')
-    .transform(str => str.split(',').map(s => s.trim()).filter(Boolean))
-    .refine(
-      arr => arr.length <= 100,
-      { message: 'Maximum 100 IDs allowed' },
+  ids: z
+    .string()
+    .min(1, 'At least one ID is required')
+    .transform(str =>
+      str
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean),
     )
-    .refine(
-      arr => arr.every(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)),
-      { message: 'All IDs must be valid UUIDs' },
-    ),
+    .refine(arr => arr.length <= 100, { message: 'Maximum 100 IDs allowed' })
+    .refine(arr => arr.every(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)), { message: 'All IDs must be valid UUIDs' }),
 })
 
 export const bulkStoryIdsSchema = z.object({
@@ -106,11 +103,10 @@ export const bulkSelectIdsSchema = z.object({
 // public API contract (documented in lib/openapi.ts and on /free-api), so never rename them.
 const ISO_DATE_TIME_MESSAGE = 'Must be an ISO 8601 date-time with a time zone, e.g. 2026-10-01T00:00:00Z'
 
-export const publishedSinceParam = z.string()
-  .datetime({ offset: true, message: ISO_DATE_TIME_MESSAGE })
-export const publishedBeforeParam = z.string()
-  .datetime({ offset: true, message: ISO_DATE_TIME_MESSAGE })
-export const minRelevanceParam = z.coerce.number({ invalid_type_error: 'Must be a whole number from 1 to 10' })
+export const publishedSinceParam = z.string().datetime({ offset: true, message: ISO_DATE_TIME_MESSAGE })
+export const publishedBeforeParam = z.string().datetime({ offset: true, message: ISO_DATE_TIME_MESSAGE })
+export const minRelevanceParam = z.coerce
+  .number({ invalid_type_error: 'Must be a whole number from 1 to 10' })
   .int('Must be a whole number from 1 to 10')
   .min(1, 'Must be a whole number from 1 to 10')
   .max(10, 'Must be a whole number from 1 to 10')
@@ -120,24 +116,25 @@ export const relatedStoriesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(10).optional(),
 })
 
-export const publicStoryQuerySchema = z.object({
-  issueSlug: z.string().optional(),
-  search: z.string().min(2).max(200).optional(),
-  emotionTags: z.string().optional(),
-  publishedSince: publishedSinceParam.optional(),
-  publishedBefore: publishedBeforeParam.optional(),
-  minRelevance: minRelevanceParam.optional(),
-  page: z.coerce.number().int().positive().optional().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).optional().default(25),
-})
-  .refine(
-    q => !q.publishedSince || !q.publishedBefore || Date.parse(q.publishedSince) < Date.parse(q.publishedBefore),
-    { message: 'publishedSince must be earlier than publishedBefore', path: ['publishedBefore'] },
-  )
-  .refine(
-    q => !q.search || (q.publishedSince === undefined && q.publishedBefore === undefined && q.minRelevance === undefined),
-    { message: 'publishedSince, publishedBefore and minRelevance cannot be combined with search', path: ['search'] },
-  )
+export const publicStoryQuerySchema = z
+  .object({
+    issueSlug: z.string().optional(),
+    search: z.string().min(2).max(200).optional(),
+    emotionTags: z.string().optional(),
+    publishedSince: publishedSinceParam.optional(),
+    publishedBefore: publishedBeforeParam.optional(),
+    minRelevance: minRelevanceParam.optional(),
+    page: z.coerce.number().int().positive().optional().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(25),
+  })
+  .refine(q => !q.publishedSince || !q.publishedBefore || Date.parse(q.publishedSince) < Date.parse(q.publishedBefore), {
+    message: 'publishedSince must be earlier than publishedBefore',
+    path: ['publishedBefore'],
+  })
+  .refine(q => !q.search || (q.publishedSince === undefined && q.publishedBefore === undefined && q.minRelevance === undefined), {
+    message: 'publishedSince, publishedBefore and minRelevance cannot be combined with search',
+    path: ['search'],
+  })
 
 /** Query of the public RSS feeds: only the relevance floor (a feed reader polls one fixed URL). */
 export const feedQuerySchema = z.object({

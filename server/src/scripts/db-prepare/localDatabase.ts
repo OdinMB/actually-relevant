@@ -4,10 +4,7 @@
  * cannot positively identify as local counts as remote.
  */
 
-export type DatabaseLocation =
-  | { kind: 'missing' }
-  | { kind: 'local'; host: string }
-  | { kind: 'remote'; host: string }
+export type DatabaseLocation = { kind: 'missing' } | { kind: 'local'; host: string } | { kind: 'remote'; host: string }
 
 // Exact hostnames only. host.docker.internal and *.localhost are deliberately
 // absent: the server runs on the host, not in a container, so neither is the

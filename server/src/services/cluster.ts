@@ -10,7 +10,10 @@ import * as lifecycle from './storyLifecycle.js'
 
 /** 409: some of the stories are already in a cluster; the body lists their ids. */
 export class StoriesAlreadyClusteredError extends ConflictError {
-  constructor(message: string, readonly storyIds: string[]) {
+  constructor(
+    message: string,
+    readonly storyIds: string[],
+  ) {
     super(message)
   }
 
@@ -58,7 +61,10 @@ export async function getClusterById(id: string) {
 
 function alreadyClustered(stories: { id: string; title: string | null }[]): StoriesAlreadyClusteredError {
   const titles = stories.map(s => s.title ?? s.id)
-  return new StoriesAlreadyClusteredError(`Stories already in a cluster: ${titles.join(', ')}`, stories.map(s => s.id))
+  return new StoriesAlreadyClusteredError(
+    `Stories already in a cluster: ${titles.join(', ')}`,
+    stories.map(s => s.id),
+  )
 }
 
 export async function createManualCluster(storyIds: string[], primaryStoryId: string) {
@@ -84,7 +90,7 @@ export async function createManualCluster(storyIds: string[], primaryStoryId: st
   const clustered = stories.filter(s => s.clusterId !== null)
   if (clustered.length > 0) throw alreadyClustered(clustered)
 
-  const clusterId = await lifecycle.withClusterLocks([], async (tx) => {
+  const clusterId = await lifecycle.withClusterLocks([], async tx => {
     const cluster = await tx.storyCluster.create({ data: {} })
     // Joins only stories still unclustered; a story another write clustered meanwhile rolls it all back
     const { count } = await tx.story.updateMany({
@@ -126,7 +132,7 @@ export async function searchStoriesForCluster(query: string, limit = 20) {
 }
 
 export async function setClusterPrimary(clusterId: string, storyId: string) {
-  await lifecycle.withClusterLocks([clusterId], async (tx) => {
+  await lifecycle.withClusterLocks([clusterId], async tx => {
     const story = await tx.story.findUnique({ where: { id: storyId }, select: { clusterId: true } })
     if (!story || story.clusterId !== clusterId) {
       throw new BadRequestError('Story is not a member of this cluster')

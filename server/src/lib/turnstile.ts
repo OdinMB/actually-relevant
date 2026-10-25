@@ -33,10 +33,7 @@ interface SiteverifyResponse {
  * with every attempt, so a retry after Cloudflare already saw the token gets the
  * first answer again instead of `timeout-or-duplicate`.
  */
-export async function verifyTurnstile(
-  token: string | undefined,
-  remoteIp: string | undefined,
-): Promise<TurnstileResult> {
+export async function verifyTurnstile(token: string | undefined, remoteIp: string | undefined): Promise<TurnstileResult> {
   const secret = config.subscribe.turnstileSecretKey
   if (!secret) return process.env.NODE_ENV === 'production' ? 'unavailable' : 'ok'
   if (!token) return 'failed'

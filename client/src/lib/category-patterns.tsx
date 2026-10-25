@@ -20,17 +20,10 @@ const base = 'absolute inset-0 w-full h-full pointer-events-none select-none'
 // ---------------------------------------------------------------------------
 
 export function HumanDevelopmentPattern({ className = '', opacity = 0.18 }: PatternProps) {
-
   return (
-    <svg
-      aria-hidden="true"
-      className={`${base} ${className}`}
-      viewBox="0 0 800 400"
-      preserveAspectRatio="xMidYMid slice"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden="true" className={`${base} ${className}`} viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
       <g fill="none" stroke="#fbbf24" strokeWidth="2.5" opacity={opacity}>
-        {[120, 200, 280, 360, 440, 520, 600].map((r) => (
+        {[120, 200, 280, 360, 440, 520, 600].map(r => (
           <circle key={r} cx="0" cy="400" r={r} />
         ))}
       </g>
@@ -48,18 +41,11 @@ export function HumanDevelopmentPattern({ className = '', opacity = 0.18 }: Patt
 // ---------------------------------------------------------------------------
 
 export function PlanetClimatePattern({ className = '', opacity = 0.18 }: PatternProps) {
-
   return (
-    <svg
-      aria-hidden="true"
-      className={`${base} ${className}`}
-      viewBox="0 0 800 400"
-      preserveAspectRatio="xMidYMid slice"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden="true" className={`${base} ${className}`} viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
       {/* Concentric rings — atmospheric layers around a planet core */}
       <g fill="none" stroke="#2dd4bf" strokeWidth="2.5" opacity={opacity}>
-        {[60, 100, 140, 180, 220, 260].map((r) => (
+        {[60, 100, 140, 180, 220, 260].map(r => (
           <circle key={r} cx="500" cy="300" r={r} />
         ))}
       </g>
@@ -78,15 +64,8 @@ export function PlanetClimatePattern({ className = '', opacity = 0.18 }: Pattern
 // ---------------------------------------------------------------------------
 
 export function ExistentialThreatsPattern({ className = '', opacity = 0.18 }: PatternProps) {
-
   return (
-    <svg
-      aria-hidden="true"
-      className={`${base} ${className}`}
-      viewBox="0 0 800 400"
-      preserveAspectRatio="xMidYMid slice"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden="true" className={`${base} ${className}`} viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
       <g fill="none" stroke="#f87171" strokeWidth="2" opacity={opacity}>
         <path d="M100,0 L250,180 L50,400" />
         <path d="M300,0 L400,200 L200,400" />
@@ -109,15 +88,8 @@ export function ExistentialThreatsPattern({ className = '', opacity = 0.18 }: Pa
 // ---------------------------------------------------------------------------
 
 export function ScienceTechnologyPattern({ className = '', opacity = 0.18 }: PatternProps) {
-
   return (
-    <svg
-      aria-hidden="true"
-      className={`${base} ${className}`}
-      viewBox="0 0 800 400"
-      preserveAspectRatio="xMidYMid slice"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden="true" className={`${base} ${className}`} viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
       {/* Incomplete circuit grid — broken line segments with squares at active intersections */}
       <g stroke="#818cf8" strokeWidth="1.5" fill="none" opacity={opacity}>
         {/* Horizontal segments (not full lines) */}

@@ -11,9 +11,7 @@ const issuesCache = new TTLCache<unknown>(ISSUES_TTL)
 
 router.get('/', async (_req, res) => {
   try {
-    const issues = await cached(issuesCache, 'public-issues', () =>
-      issueService.getPublicIssues()
-    )
+    const issues = await cached(issuesCache, 'public-issues', () => issueService.getPublicIssues())
     res.set('Cache-Control', 'public, max-age=300')
     res.json(issues)
   } catch (err) {

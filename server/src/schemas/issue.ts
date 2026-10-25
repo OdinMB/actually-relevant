@@ -7,7 +7,10 @@ const makeADifferenceItem = z.object({
 
 export const createIssueSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  slug: z.string().min(1, 'Slug is required').regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase with hyphens'),
+  slug: z
+    .string()
+    .min(1, 'Slug is required')
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase with hyphens'),
   description: z.string().optional().default(''),
   promptFactors: z.string().optional().default(''),
   promptAntifactors: z.string().optional().default(''),
@@ -22,7 +25,10 @@ export const createIssueSchema = z.object({
 
 export const updateIssueSchema = z.object({
   name: z.string().min(1).optional(),
-  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase with hyphens').optional(),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase with hyphens')
+    .optional(),
   description: z.string().optional(),
   promptFactors: z.string().optional(),
   promptAntifactors: z.string().optional(),

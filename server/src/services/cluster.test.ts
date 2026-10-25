@@ -39,7 +39,11 @@ const {
 /** A transaction client whose story reads answer from `story`. */
 function txWith(story: { findUnique?: unknown; updateMany?: unknown; findMany?: unknown } = {}) {
   return {
-    story: { findUnique: vi.fn().mockResolvedValue(story.findUnique ?? null), updateMany: vi.fn().mockResolvedValue(story.updateMany ?? { count: 0 }), findMany: vi.fn().mockResolvedValue(story.findMany ?? []) },
+    story: {
+      findUnique: vi.fn().mockResolvedValue(story.findUnique ?? null),
+      updateMany: vi.fn().mockResolvedValue(story.updateMany ?? { count: 0 }),
+      findMany: vi.fn().mockResolvedValue(story.findMany ?? []),
+    },
     storyCluster: { create: vi.fn().mockResolvedValue({ id: 'new-cluster' }) },
   }
 }
@@ -155,25 +159,17 @@ describe('dissolveCluster', () => {
 
 describe('createManualCluster', () => {
   it('throws if fewer than 2 stories', async () => {
-    await expect(createManualCluster(['s1'], 's1')).rejects.toThrow(
-      'At least 2 stories are required',
-    )
+    await expect(createManualCluster(['s1'], 's1')).rejects.toThrow('At least 2 stories are required')
   })
 
   it('throws if primaryStoryId not in storyIds', async () => {
-    await expect(createManualCluster(['s1', 's2'], 's3')).rejects.toThrow(
-      'Primary story must be one of the selected stories',
-    )
+    await expect(createManualCluster(['s1', 's2'], 's3')).rejects.toThrow('Primary story must be one of the selected stories')
   })
 
   it('throws if some stories not found', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 's1', clusterId: null, title: 'Story 1' },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 's1', clusterId: null, title: 'Story 1' }])
 
-    await expect(createManualCluster(['s1', 's2'], 's1')).rejects.toThrow(
-      'Stories not found: s2',
-    )
+    await expect(createManualCluster(['s1', 's2'], 's1')).rejects.toThrow('Stories not found: s2')
   })
 
   it('throws StoriesAlreadyClusteredError (409, with the story ids) if stories are in clusters', async () => {
@@ -227,9 +223,7 @@ describe('createManualCluster', () => {
 
 describe('searchStoriesForCluster', () => {
   it('searches stories by title excluding trashed', async () => {
-    const stories = [
-      { id: 's1', title: 'Climate Change', sourceTitle: 'Source', status: 'analyzed', relevance: 7, clusterId: null },
-    ]
+    const stories = [{ id: 's1', title: 'Climate Change', sourceTitle: 'Source', status: 'analyzed', relevance: 7, clusterId: null }]
     mockPrisma.story.findMany.mockResolvedValue(stories)
 
     const result = await searchStoriesForCluster('climate')
@@ -251,8 +245,6 @@ describe('searchStoriesForCluster', () => {
 
     await searchStoriesForCluster('test', 5)
 
-    expect(mockPrisma.story.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 5 }),
-    )
+    expect(mockPrisma.story.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 5 }))
   })
 })

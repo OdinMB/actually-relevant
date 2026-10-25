@@ -77,10 +77,7 @@ export function formatIssuesBlock(issues: IssueForPrompt[]): string {
  * (`config.preassess.batchSize`), so anything dropped here would silently
  * go unclassified.
  */
-export function formatArticlesBlock(
-  stories: StoryForPrompt[],
-  contentMaxLength: number = config.preassess.contentMaxLength,
-): string {
+export function formatArticlesBlock(stories: StoryForPrompt[], contentMaxLength: number = config.preassess.contentMaxLength): string {
   let block = '<ARTICLES>'
   for (const story of stories) {
     block += `\n\n-----\nArticle ID: ${story.id}`
