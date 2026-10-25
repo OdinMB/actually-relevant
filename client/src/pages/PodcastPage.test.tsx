@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import type { PublicPodcastResponse } from '@shared/types'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
+import { APPLE_PODCASTS_URL } from '../config'
 
 const mockApi = vi.hoisted(() => ({ podcast: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -70,9 +71,17 @@ async function expandStories() {
 describe('PodcastPage', () => {
   it('shows the AI subtitle before any episode', async () => {
     renderPage()
-    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle)
+    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle.lead, { exact: false })
     const episode = await screen.findByRole('heading', { name: /W42: Clean air/ })
     expect(subtitle.compareDocumentPosition(episode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('says "AI" in the subtitle once, through the inline badge', () => {
+    renderPage()
+    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle.lead, { exact: false })
+    const { lead, tail } = AI_DISCLOSURE_COPY.podcastSubtitle
+    expect(`${lead} ${tail}`).not.toMatch(/\bAI\b/)
+    expect(subtitle.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1)
   })
 
   it('does not repeat the per-episode AI line on the page', async () => {
@@ -122,6 +131,14 @@ describe('PodcastPage', () => {
     expect(audio?.getAttribute('src')).toBe(AUDIO_URL)
     expect(audio?.getAttribute('preload')).toBe('none')
     expect(screen.getByRole('link', { name: PODCAST_FEED_URL }).getAttribute('href')).toBe(PODCAST_FEED_URL)
+  })
+
+  it('links the Apple Podcasts listing with its badge before the feed address', () => {
+    renderPage()
+    const apple = screen.getByRole('link', { name: /Listen on Apple Podcasts/ })
+    expect(apple.getAttribute('href')).toBe(APPLE_PODCASTS_URL)
+    const feed = screen.getByRole('link', { name: PODCAST_FEED_URL })
+    expect(apple.compareDocumentPosition(feed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('links our analysis only for stories that have a page', async () => {

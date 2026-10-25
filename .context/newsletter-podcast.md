@@ -85,12 +85,25 @@ The `generate_newsletter` job (default: Saturday 4am, `0 4 * * 6`) chains the fu
 
 Handler: `server/src/jobs/generateNewsletter.ts`. Registered in `server/src/jobs/handlers.ts`.
 
+### Automated sending (`publish_newsletter` cron job)
+
+The `publish_newsletter` job (default: Saturday 4:30am, `30 4 * * 6`, 30 minutes after `generate_newsletter`; seeded **disabled** by migration `20261025120000_publish_newsletter_job`) sends the week's issue to everyone:
+
+1. Looks for this ISO week's automatic issue (`weekKey` from `getWeekKey()`, so hand-made newsletters are never sent) that is built (`html` non-empty), still `draft`, and has no live send. An issue an admin already sent live or published by hand is skipped, so a retry, a manual Run or a boot catch-up never sends a second email that week.
+2. None found: sends nothing and says why. This week's automatic issue already sent live or published records an `info` notice "Newsletter already sent" (key `newsletter-already-sent:<weekKey>`). An issue not built yet (generation still running at 04:30, or stuck), or no automatic issue at all, records a `newsletter` / `warning` notice "Newsletter not sent" (key `newsletter-not-sent:<weekKey>`) naming the reason.
+3. Found, but with no successful test send (no `isTest` send row; `sendTest` writes it only after Plunk accepted the send): sends nothing and records the same "Newsletter not sent" warning (same key), asking for the test first. Owner decision 2026-10-25: an issue goes to subscribers only after its `[TEST]` email went out.
+4. Calls `sendLive` (audience `ALL`), then sets `status: 'published'`, then records an `info` notice "Newsletter sent". A failed send fails the run (job-failure notice under Newsletter) and leaves the issue a draft. So every run leaves a notice, whatever the outcome (owner decision 2026-10-25).
+
+Enabling it is refused while `PLUNK_SECRET_KEY` is unset (the scheduler's enable checks). The 30-minute gap is a schedule, not a dependency: moving `generate_newsletter` on the Jobs page means moving this job too.
+
+Handler: `server/src/jobs/publishNewsletter.ts`.
+
 ### Sending (Plunk)
 
 Both sends need the stored `html` ("No HTML content — generate HTML first"). Each successful send creates a `NewsletterSend` row: `plunkCampaignId`, `isTest`, `status` (`sent | scheduled | sending`), a snapshot of `htmlContent`, `sentAt`, and `stats` (`{}` until first refreshed).
 
 - **Test** (`sendTest`): name and subject are `[TEST] <title>`. The audience is the Plunk segment `PLUNK_TEST_SEGMENT_ID` only. The row is `isTest: true`, `status: sent`, `sentAt: now`. Without a segment the send is refused (see the test-segment note above).
-- **Live** (`sendLive`, optional `scheduledFor`): name and subject are the title, and the audience is `ALL` subscribers. The row is `isTest: false`. Status is `scheduled` with `sentAt: null` when `scheduledFor` is given; otherwise status is `sending` with `sentAt: now`. A live send does **not** change the newsletter's `status`. Publishing is the separate `PUT /:id` step.
+- **Live** (`sendLive`, optional `scheduledFor`): name and subject are the title, and the audience is `ALL` subscribers. The row is `isTest: false`. Status is `scheduled` with `sentAt: null` when `scheduledFor` is given; otherwise status is `sending` with `sentAt: now`. A live send does **not** change the newsletter's `status`. Publishing is the separate `PUT /:id` step (the `publish_newsletter` job does both).
 - **Stats** (`refreshSendStats`): fetches Plunk campaign stats for the send's `plunkCampaignId` and stores them in `stats`. A send without a campaign ID gets 400.
 
 ### Web edition (public archive)
@@ -140,6 +153,7 @@ Both sends need the stored `html` ("No HTML content — generate HTML first"). E
 | `server/src/prompts/newsletter-intro.ts` | `buildNewsletterIntroPrompt` for editorial intro generation |
 | `server/src/prompts/newsletter-select.ts` | `buildNewsletterSelectPrompt` for story selection |
 | `server/src/jobs/generateNewsletter.ts` | Automated weekly newsletter generation cron job |
+| `server/src/jobs/publishNewsletter.ts` | Automated weekly send to all subscribers and publish |
 
 ## Modifying
 

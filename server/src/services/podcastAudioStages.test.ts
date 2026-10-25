@@ -179,7 +179,7 @@ describe('finishEpisode', () => {
     const [buffers, tags, opts] = mockAudio.assembleEpisodeMp3.mock.calls[0]
     expect(buffers).toHaveLength(CHUNKS.length)
     expect(tags).toMatchObject({ title: 'Week 41', artist: config.podcast.showTitle })
-    expect(tags.comment).toMatch(/^AI-generated/)
+    expect(tags.comment).toBe(PODCAST_EPISODE_COPY.weekly.aiLine)
     expect(opts).toEqual({ pauseMs: config.podcast.segmentPauseMs, loudnorm: true })
 
     const [[mp3Path, , mp3Type], [vttPath, vtt, vttType], [chaptersPath, , chaptersType]] = mockBunny.putObject.mock.calls

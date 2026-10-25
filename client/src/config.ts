@@ -11,3 +11,4 @@ export const BLUESKY_PROFILE_URL = 'https://bsky.app/profile/actuallyrelevant.bs
 export const MASTODON_PROFILE_URL = 'https://mastodon.social/@actuallyrelevant'
 export const GITHUB_REPO_URL = 'https://github.com/OdinMB/actually-relevant'
 export const GITHUB_LICENSE_URL = `${GITHUB_REPO_URL}/blob/main/LICENSE`
+export const APPLE_PODCASTS_URL = 'https://podcasts.apple.com/us/podcast/actually-relevant/id1751127139'

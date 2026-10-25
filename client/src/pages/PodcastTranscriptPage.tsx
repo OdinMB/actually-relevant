@@ -6,8 +6,8 @@ import { buildBreadcrumbSchema, buildPodcastEpisodeSchema } from '../lib/structu
 import { formatEpisodeDate, formatEpisodeDuration, podcastTranscriptPath } from '../lib/podcast'
 import StructuredData from '../components/StructuredData'
 import AiBadge from '../components/ai/AiBadge'
-import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import EpisodeStoryList, { PODCAST_LINK_CLASS } from '../components/podcast/EpisodeStoryList'
+import PodcastSubtitle from '../components/podcast/PodcastSubtitle'
 import { usePodcastEpisode } from '../hooks/usePodcastEpisodes'
 
 const BACK_LINK_CLASS = 'text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1'
@@ -102,10 +102,7 @@ export default function PodcastTranscriptPage() {
           <time dateTime={episode.publishedAt}>{formatEpisodeDate(episode.publishedAt)}</time>
           {duration && <> · {duration}</>}
         </p>
-        <p className="page-intro mt-4">
-          <AiBadge decorative className="mr-2 align-middle text-neutral-700" />
-          {AI_DISCLOSURE_COPY.podcastSubtitle}
-        </p>
+        <PodcastSubtitle className="page-intro mt-4" />
         <audio controls preload="none" src={episode.audioUrl} className="mt-6 w-full" aria-label={`Play episode: ${episode.title}`} />
 
         <section aria-labelledby="transcript-heading" className="mt-10" data-ai-generated="transcript">
