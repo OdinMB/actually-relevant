@@ -193,7 +193,7 @@ model Newsletter {
   weekKey   String?          @map("week_key")
   /// URL segment of the public web edition (/newsletter/<slug>); assigned on HTML build or first publish, never changed
   slug        String?        @unique
-  /// First time the issue was set to published (the public archive's date); kept when unpublished
+  /// The public archive's date: the first live send if the issue was emailed, else when it was first set to published; kept when unpublished
   publishedAt DateTime?      @map("published_at")
   sends     NewsletterSend[]
   createdAt DateTime         @default(now()) @map("created_at")

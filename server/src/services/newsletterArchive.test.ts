@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 
 const mockPrisma = vi.hoisted(() => ({
   newsletter: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+  newsletterSend: { findMany: vi.fn() },
 }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
@@ -12,6 +13,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockPrisma.newsletter.findFirst.mockResolvedValue(null)
   mockPrisma.newsletter.update.mockResolvedValue({})
+  mockPrisma.newsletterSend.findMany.mockResolvedValue([])
 })
 
 describe('newsletterSlugBase', () => {
@@ -49,6 +51,19 @@ describe('publicationFields', () => {
     const fields = await publicationFields('n1', 'published')
     expect(fields.publishedAt).toBeInstanceOf(Date)
     expect(mockPrisma.newsletter.update).toHaveBeenCalledWith({ where: { id: 'n1' }, data: { slug: 'week-42-2026' } })
+  })
+
+  it('dates an issue that was already emailed by its first live send', async () => {
+    mockPrisma.newsletter.findUnique.mockResolvedValue({ id: 'n1', title: 'Week 41, 2026', slug: 'week-41-2026', publishedAt: null })
+    mockPrisma.newsletterSend.findMany.mockResolvedValue([
+      { sentAt: new Date('2026-10-11T07:00:00Z'), createdAt: new Date('2026-10-11T07:00:00Z') },
+      { sentAt: null, createdAt: new Date('2026-10-10T18:00:00Z') }, // scheduled: no sentAt of its own
+    ])
+    expect(await publicationFields('n1', 'published')).toEqual({ publishedAt: new Date('2026-10-10T18:00:00Z') })
+    expect(mockPrisma.newsletterSend.findMany).toHaveBeenCalledWith({
+      where: { newsletterId: 'n1', isTest: false, status: { not: 'failed' } },
+      select: { sentAt: true, createdAt: true },
+    })
   })
 
   it('keeps the first publication date when an issue is published again', async () => {
