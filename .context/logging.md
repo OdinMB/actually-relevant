@@ -85,6 +85,16 @@ Two transports run in parallel via Pino's worker threads:
 | `debug` | Detailed diagnostic info (per-story results, batch details) |
 | `trace` | Extremely verbose (rarely used) |
 
+## Fatal errors
+
+An unhandled promise rejection or an uncaught exception still ends the process with exit code 1, so Render restarts the instance, as Node does on its own. What the handlers add (`server/src/lib/processErrors.ts`, installed by `server/src/index.ts` before the server listens) is the record:
+
+1. **A `fatal` log line** through pino (`module: "process"`, `kind: "unhandledRejection" | "uncaughtException"`, the error in `err` with its stack), written first, before anything that could hang.
+2. **An admin notice**, best effort: `jobs` / `critical`, title "Server process crashed", dedupe key `process-crash` (so repeated crashes are one row whose count rises). It names the kind and the error's type and code, never its message, since an arbitrary error's text can quote personal data. The database may be the cause, so the handler waits at most 3 seconds (`FATAL_NOTICE_WAIT_MS`) for it; the webhook forward (`WEBHOOK_URL`) runs inside that wait.
+3. **A flush** of the log transports (at most 1 second), then `process.exit(1)`.
+
+A second fatal error while the first is handled is logged and exits at once. An error thrown while the modules load, before the handlers are installed, still crashes with Node's raw stderr trace.
+
 ## Error Serialization
 
 A custom `serializeError` function in `logger.ts` strips bulky axios internals from all logged errors. Without this, logging an axios error via `{ err }` serializes the full HTTP response body (potentially megabytes of HTML), socket objects, TLS session cache, and circular config references, which can cause OOM during the crawl job.

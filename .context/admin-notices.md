@@ -18,6 +18,7 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 | `scheduler.ts` `runJob` failure (`jobFailureNotice`) | `generate_newsletter`, `publish_newsletter` → `newsletter`; `generate_podcast`, `publish_podcast` → `podcast`; else `jobs`; `warning` | `job-failure:<jobName>` | `/admin/newsletters`, `/admin/podcasts`, else `/admin/jobs` |
 | `scheduler.ts` boot retry: cannot start | `jobs` / `critical` | `job-failure:scheduler` | `/admin/jobs` |
 | `scheduler.ts`: started after that alert | `jobs` / `warning` ("scheduler started after N failed attempts: …") | `job-failure:scheduler` | `/admin/jobs` |
+| `lib/processErrors.ts` crash (unhandled rejection or uncaught exception; best effort, 3 s wait, then exit 1; `.context/logging.md`, "Fatal errors") | `jobs` / `critical` (kind and error type only, never the message) | `process-crash` | `/admin/jobs` |
 | `podcastWeekly.ts` episode ready | `podcast` / `info` | none | `/admin/podcasts/<id>` |
 | `publishPodcast.ts` episode published | `podcast` / `info` | none | episode |
 | `generatePodcast.ts` waiting for you | `podcast` / `info` | none (claimed once per episode) | episode |

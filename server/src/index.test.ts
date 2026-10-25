@@ -53,13 +53,22 @@ const mockReleaseHeldJobLeases = vi.hoisted(() => vi.fn().mockResolvedValue(0))
 vi.mock('./jobs/jobLease.js', () => ({ releaseHeldJobLeases: mockReleaseHeldJobLeases }))
 const mockCheckPodcastConfigAtBoot = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 vi.mock('./jobs/podcastBootCheck.js', () => ({ checkPodcastConfigAtBoot: mockCheckPodcastConfigAtBoot }))
+const mockInstallProcessErrorHandlers = vi.hoisted(() => vi.fn())
+vi.mock('./lib/processErrors.js', () => ({ installProcessErrorHandlers: mockInstallProcessErrorHandlers }))
 
 const { config } = await import('./config.js')
 
 // Import after mocks are set up
 const indexModule = await import('./index.js')
 
+// Before beforeEach clears the mocks: the handlers are installed once, at import
+const installedAtImport = mockInstallProcessErrorHandlers.mock.calls.length
+
 describe('server index', () => {
+  it('installs the process-level error handlers at startup', () => {
+    expect(installedAtImport).toBe(1)
+  })
+
   const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
 
   beforeEach(() => {

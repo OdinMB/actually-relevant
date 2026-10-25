@@ -7,7 +7,12 @@ import { cleanupExpiredTokens } from './services/auth.js'
 import { taskRegistry } from './lib/taskRegistry.js'
 import { releaseHeldLeases } from './services/podcastPipeline.js'
 import { checkPodcastConfigAtBoot } from './jobs/podcastBootCheck.js'
+import { installProcessErrorHandlers } from './lib/processErrors.js'
 import app from './app.js'
+
+// Before the server listens and the scheduler starts, so every later crash goes through pino
+// (.context/logging.md, "Fatal errors")
+installProcessErrorHandlers()
 
 const log = createLogger('server')
 const PORT = config.port
