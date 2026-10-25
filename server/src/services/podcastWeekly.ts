@@ -11,6 +11,7 @@ import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
+import { isUniqueViolation } from '../utils/errors.js'
 import {
   advanceEpisode,
   claimEpisode,
@@ -49,8 +50,6 @@ export function isoWeekKey(date: Date): string {
   const week = Math.ceil(((day.getTime() - yearStart) / DAY_MS + 1) / 7)
   return `${day.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
 }
-
-const isUniqueViolation = (err: unknown) => (err as { code?: unknown })?.code === 'P2002'
 
 /** The week's row, created on first use; the unique week key makes a concurrent create harmless. */
 export async function findOrCreateWeekEpisode(now: Date = new Date()): Promise<Podcast> {

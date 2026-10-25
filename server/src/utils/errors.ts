@@ -55,6 +55,11 @@ export class UnprocessableError extends ServiceError {
   }
 }
 
+/** True for Prisma's unique-constraint refusal (P2002), e.g. a row a concurrent writer inserted first. */
+export function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === 'P2002'
+}
+
 /** Produce a short, human-readable error summary without serializing bulky internals. */
 export function summarizeError(err: unknown): string {
   if (err instanceof Error && 'isAxiosError' in err) {

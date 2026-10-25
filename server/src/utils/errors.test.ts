@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { summarizeError } from './errors.js'
+import { isUniqueViolation, summarizeError } from './errors.js'
+
+describe('isUniqueViolation', () => {
+  it("is true only for Prisma's P2002", () => {
+    expect(isUniqueViolation(Object.assign(new Error('unique'), { code: 'P2002' }))).toBe(true)
+    expect(isUniqueViolation({ code: 'P2025' })).toBe(false)
+    expect(isUniqueViolation(new Error('boom'))).toBe(false)
+    expect(isUniqueViolation(null)).toBe(false)
+  })
+})
 
 describe('summarizeError', () => {
   it('returns HTTP status for axios errors with response', () => {

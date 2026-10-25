@@ -9,6 +9,7 @@ import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { paginate } from '../lib/paginate.js'
+import { isUniqueViolation } from '../utils/errors.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { AI_GENERATED_NEWSLETTER_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
 
@@ -41,7 +42,7 @@ export async function ensureNewsletterSlug(newsletter: { id: string; title: stri
       return candidate
     } catch (err) {
       // Taken between the check and the write: try the next one
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue
+      if (isUniqueViolation(err)) continue
       throw err
     }
   }

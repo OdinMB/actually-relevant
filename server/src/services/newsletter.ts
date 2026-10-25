@@ -10,6 +10,7 @@ import * as plunk from './plunk.js'
 import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
+import { escapeHtml } from '../lib/xml.js'
 import { ensureNewsletterSlug, newsletterIssueUrl, publicationFields } from './newsletterArchive.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
@@ -323,10 +324,6 @@ export async function generateCarouselForNewsletter(newsletterId: string): Promi
 }
 
 // --- HTML generation ---
-
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
 
 /**
  * Converts newsletter markdown content into an HTML email template.
