@@ -81,6 +81,7 @@ describe('jobFailureNotice', () => {
     expect(jobFailureNotice('generate_newsletter', 'x')).toMatchObject({ source: 'newsletter', link: '/admin/newsletters' })
     expect(jobFailureNotice('generate_podcast', 'x')).toMatchObject({ source: 'podcast', link: '/admin/podcasts' })
     expect(jobFailureNotice('publish_podcast', 'x')).toMatchObject({ source: 'podcast', link: '/admin/podcasts' })
+    expect(jobFailureNotice('publish_newsletter', 'x')).toMatchObject({ source: 'newsletter', link: '/admin/newsletters' })
   })
 
   it('files every other job under jobs, keyed by job name', () => {
