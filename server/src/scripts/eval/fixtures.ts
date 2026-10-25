@@ -661,7 +661,7 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
       issueName: topLevelIssue(s.issue ?? s.feed.issue).name,
       emotionTag: s.emotionTag as string | null,
     }))
-    // Mirrors newsletter.ts generateContent intro input (issue order, then title).
+    // Mirrors newsletter.ts buildContent intro input (issue order, then title).
     const selected = n.selectedStoryIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))
     const withIssue = selected.map(s => ({ s, issue: topLevelIssue(s.issue ?? s.feed.issue) }))
     withIssue.sort(
