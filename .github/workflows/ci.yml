@@ -1,16 +1,26 @@
-# Runs the check battery on every push and pull request: type-check, unit tests and the
-# production build for both packages (the client's with its prerender), the migration check,
-# and the server's PostgreSQL integration tests against a throwaway pgvector database
-# (ADR-0044). Production deploys wait for it: render.yaml sets `autoDeployTrigger:
-# checksPass` on both services, so Render deploys a commit on main only once every check on
-# it has passed, and skips a red one (ADR-0047, .context/deployment.md). Keep it running on
-# every push to main with no path filter: Render deploys nothing for a commit with no checks.
+# Runs the check battery on every pull request and every push to main (.context/ci.md):
+# type-check, unit tests and the production build for both packages (the client's with its
+# prerender), the migration check, and the server's PostgreSQL integration tests against a
+# throwaway pgvector database (ADR-0044). Production deploys wait for it: render.yaml sets
+# `autoDeployTrigger: checksPass` on both services, so Render deploys a commit on main only
+# once every check on it has passed, and skips a red one (ADR-0047, .context/deployment.md).
+# Keep it running on every push to main with no path filter: Render deploys nothing for a
+# commit with no checks. The job names `server` and `client` are the required checks of the
+# GitHub ruleset `no-nonsense-main`: rename one only together with the ruleset.
 # No secrets are needed or used.
 name: CI
 
 on:
+  # Pushes to other branches run only through their pull request, so a PR branch runs once
   push:
+    branches: [main]
   pull_request:
+
+# A newer push to a pull request cancels its older run; runs on main are never cancelled,
+# because Render deploys a main commit only once its checks have passed
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -18,6 +28,7 @@ permissions:
 jobs:
   server:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         # The major version production and the Docker dev database run
@@ -79,6 +90,7 @@ jobs:
 
   client:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -86,8 +98,15 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: client/package-lock.json
-      # Also downloads puppeteer's Chrome, which the prerender launches with --no-sandbox
-      # (vite.config.ts), so Ubuntu's user-namespace restriction does not stop it
+      # puppeteer's Chrome for the prerender; npm ci skips the download when it is already here
+      - name: Cache puppeteer's Chrome
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('client/package-lock.json') }}
+      # Also installs puppeteer's Chrome (from the cache when it hit), which the prerender
+      # launches with --no-sandbox (vite.config.ts), so Ubuntu's user-namespace restriction
+      # does not stop it
       - run: npm ci --prefix client
       - run: npm run typecheck --prefix client
       - run: npm run test --prefix client -- --run

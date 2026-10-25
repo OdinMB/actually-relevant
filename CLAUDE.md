@@ -70,6 +70,15 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Never pass `--no-engine` to `prisma generate`** -- breaks all direct PostgreSQL queries.
 - **`db:generate` requires the dev server to be stopped** -- `prisma generate` replaces a DLL that is locked while the server runs. Ask user to stop first.
 
+## CI and deploy gate
+
+- **CI must pass before Render deploys.** Both services use `autoDeployTrigger: checksPass`: a `main` commit deploys only once the `server` and `client` jobs of `.github/workflows/ci.yml` are green; a red `main` deploys nothing.
+- **Pushes to `main` need green checks or the admin bypass** of the GitHub ruleset `no-nonsense-main` (required checks `server` and `client`, Repository admin bypass). A bypassing push prints `remote: Bypassed rule violations for refs/heads/main`; for this rule that is expected, not a broken pull-request rule.
+- **Never rename a CI job** without changing the ruleset in the same step (the rule would wait for a check that never comes), and never path-filter or `[skip ci]` a push to `main`.
+- **Before pushing, run what CI runs:** `check:migrations`, both typechecks, `test`, `test:db`, both builds.
+- **A destructive migration statement** (DROP, TRUNCATE, ALTER … DROP) needs a `-- reviewed-destructive: <reason>` line, or `check:migrations` fails.
+- Details: `.context/ci.md` (checks, triggers, minutes) and `.context/deployment.md`, "CI gate".
+
 ## Key Conventions
 
 - **Prefer file tools over bash** -- Use Read, Write, Edit, Glob, Grep instead of cat, sed, grep, find.
@@ -149,6 +158,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `logging.md` | Pino config, error serialization, structured data, log levels |
 | `server-conventions.md` | Route errors (typed `ServiceError`s, `failsWith()`, the one global handler), test-only `_` exports |
 | `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands, the PostgreSQL integration tests (`*.db.test.ts`, `TEST_DATABASE_URL`, guard rules) and CI |
+| `ci.md` | The CI checks Render waits for and their local commands; triggers, cancelling, caches; measuring CI minutes and the levers if they ever matter |
 | `deployment.md` | Render services and the `render.yaml` blueprint (service settings change there, not in the dashboard); why builds install devDependencies and pin `tsc` (read before touching build scripts or `render.yaml`, or adding an env var: `server/src/blueprint.test.ts` fails until it is in the code, `env.example` and `render.yaml`) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |

@@ -60,7 +60,7 @@ ALTER TABLE "stories" DROP COLUMN "legacy_field";
 
 The marker covers the whole file. Before adding it, check the two-phase rule under "Production Migrations": the code that read the dropped object must already be deployed without it. A Prisma-generated `DROP CONSTRAINT`/`ADD CONSTRAINT` pair for a foreign-key change counts too: review it and mark it.
 
-"Added" means added (or renamed) since the merge base with `--base <ref>` (default `origin/main`), including uncommitted and untracked files. CI passes the pull request's target branch, on `main` the commit before the push, and `origin/main` on any other branch; it checks out full history for this. A base git cannot resolve (a force-pushed-away commit, a shallow clone) fails the check rather than passing it; rerun locally with an explicit `--base`. The matching is textual, per statement with comments stripped: a drop inside a `DO` block or an `EXECUTE` string is not caught, and a string literal that reads like a drop is (mark it).
+"Added" means added (or renamed) since the merge base with `--base <ref>` (default `origin/main`), including uncommitted and untracked files. CI passes the pull request's target branch, on `main` the commit before the push, and `origin/main` when the push names no previous commit; it checks out full history for this. A base git cannot resolve (a force-pushed-away commit, a shallow clone) fails the check rather than passing it; rerun locally with an explicit `--base`. The matching is textual, per statement with comments stripped: a drop inside a `DO` block or an `EXECUTE` string is not caught, and a string literal that reads like a drop is (mark it).
 
 ## Critical Rules
 
@@ -90,7 +90,7 @@ TEST_DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevan
 
 In a cloud dev container with a local PostgreSQL 16 and pgvector on `localhost:5432`, the same works with `psql -h localhost -U postgres -c "CREATE DATABASE actually_relevant_test"` and `TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/actually_relevant_test`. The migrations use nothing that differs between 16 and 17.
 
-**CI** (`.github/workflows/ci.yml`) runs on every push and pull request: a `pgvector/pgvector:pg17` service with the database `actually_relevant_test`, then the server's migration check, type-check, `test`, `test:db` and build, and the client's type-check, tests and build. It needs no secrets and leaves `DATABASE_URL` unset except for `db:generate`, which only wants a value. Render deploys a commit on `main` only once CI passes on it (`deployment.md`, "CI gate").
+**CI** (`.github/workflows/ci.yml`) runs on every pull request and every push to `main`: a `pgvector/pgvector:pg17` service with the database `actually_relevant_test`, then the server's migration check, type-check, `test`, `test:db` and build, and the client's type-check, tests and build. It needs no secrets and leaves `DATABASE_URL` unset except for `db:generate`, which only wants a value. Render deploys a commit on `main` only once CI passes on it (`deployment.md`, "CI gate").
 
 ## Production Migrations
 
