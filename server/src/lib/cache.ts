@@ -11,9 +11,10 @@ export interface TTLCacheOptions {
 }
 
 /**
- * The server's one in-memory cache: entries expire `ttlMs` after they are set (swept every 10
- * minutes and checked on read), optionally capped in size, and `cached()` coalesces concurrent
- * misses for a key into one load. Per process: a deploy starts it empty.
+ * The server's default in-memory cache: entries expire `ttlMs` after they are set (swept every 10
+ * minutes and checked on read), optionally capped in size (evicting the oldest set), and `cached()`
+ * coalesces concurrent misses for a key into one load. Per process: a deploy starts it empty.
+ * `BoundedCache` (boundedCache.ts) is the alternative when eviction must be least recently read.
  */
 export class TTLCache<T> {
   private store = new Map<string, CacheEntry<T>>()
