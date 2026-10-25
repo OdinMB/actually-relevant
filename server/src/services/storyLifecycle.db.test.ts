@@ -1,8 +1,7 @@
 /**
  * Story status moves and cluster edits against PostgreSQL. The OpenAI-backed modules are mocked; a
  * mocked call that changes a row mid-call (an editor trashing the story while the model runs) is
- * how the races are reproduced. Known defects are `it.fails`, each naming the step of
- * `.plans/2026-10-19_story-lifecycle-and-db-tests.md` that fixes it.
+ * how the races are reproduced.
  */
 import { it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 import type { BaseMessage } from '@langchain/core/messages'
