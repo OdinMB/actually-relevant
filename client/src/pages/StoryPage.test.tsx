@@ -1,8 +1,16 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import StoryPage from './StoryPage'
+import FeedbackProvider from '../components/FeedbackProvider'
+
+const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn() }))
+vi.mock('../lib/api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lib/api')>()),
+  publicApi: mockApi,
+}))
 
 /** AI-written story fields the page renders, with text that identifies each one. */
 const AI_TEXT = {
@@ -49,6 +57,43 @@ function renderStory(data: unknown) {
     </HelmetProvider>,
   )
 }
+
+describe('StoryPage "Report an error"', () => {
+  beforeEach(() => {
+    // jsdom has no <dialog> behavior: mirror it with the open attribute
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute('open', '')
+    }
+    HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+      this.removeAttribute('open')
+    }
+    mockApi.submitFeedback.mockReset().mockResolvedValue({ success: true })
+  })
+
+  it('opens the feedback dialog bound to the story and sends a correction with its id', async () => {
+    mockStory.current = story
+    render(
+      <HelmetProvider>
+        <MemoryRouter>
+          <FeedbackProvider>
+            <StoryPage />
+          </FeedbackProvider>
+        </MemoryRouter>
+      </HelmetProvider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Report an error' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Report an error' })
+    expect(within(dialog).getByText(`${AI_TEXT.titleLabel}: ${AI_TEXT.title}`)).toBeInTheDocument()
+    const message = within(dialog).getByRole('textbox', { name: 'What is wrong?' })
+    await waitFor(() => expect(message).toHaveFocus())
+    await userEvent.type(message, 'Wrong date')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Send report' }))
+
+    expect(mockApi.submitFeedback).toHaveBeenCalledWith({ category: 'correction', message: 'Wrong date', storyId: 'story-1' })
+  })
+})
 
 describe('StoryPage', () => {
   it('does not mark the original source headline when the story has no AI title', () => {

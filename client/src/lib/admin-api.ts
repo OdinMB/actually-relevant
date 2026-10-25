@@ -35,12 +35,16 @@ import { getAccessToken, setAccessToken, refreshSession, notifySessionExpired } 
 
 export interface FeedbackItem {
   id: string
-  category: 'general' | 'bug' | 'suggestion' | 'other'
+  /** `correction`: a "Report an error" from a story page */
+  category: 'general' | 'bug' | 'suggestion' | 'other' | 'correction'
   message: string
   email: string | null
   status: 'unread' | 'read' | 'archived'
   createdAt: string
   updatedAt: string
+  /** The story the report was sent from; null when none was given or the story was deleted */
+  storyId: string | null
+  story: { id: string; slug: string | null; title: string | null; sourceTitle: string; status: string } | null
 }
 
 export const ADMIN_NOTICE_SOURCES = ['jobs', 'newsletter', 'podcast', 'subscriptions', 'plunk'] as const

@@ -3,13 +3,14 @@ import { z } from 'zod'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import prisma from '../../lib/prisma.js'
+import { FEEDBACK_CATEGORIES } from '../../schemas/feedback.js'
 
 const router = Router()
 const feedbackNotFound = { notFound: 'Feedback not found' }
 
 const listQuerySchema = z.object({
   status: z.enum(['unread', 'read', 'archived']).optional(),
-  category: z.enum(['general', 'bug', 'suggestion', 'other']).optional(),
+  category: z.enum(FEEDBACK_CATEGORIES).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 })
@@ -22,6 +23,9 @@ const feedbackSelect = {
   status: true,
   createdAt: true,
   updatedAt: true,
+  // The story a "Report an error" came from; null once retention deleted it
+  storyId: true,
+  story: { select: { id: true, slug: true, title: true, sourceTitle: true, status: true } },
 } as const
 
 // List feedback with filters and pagination

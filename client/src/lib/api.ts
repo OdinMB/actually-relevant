@@ -121,7 +121,7 @@ export const publicApi = {
       body: JSON.stringify(data),
     }),
 
-  submitFeedback: (data: { category: string; message: string; email?: string; website?: string }) =>
+  submitFeedback: (data: { category: string; message: string; email?: string; website?: string; storyId?: string }) =>
     request<{ success: boolean }>('/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

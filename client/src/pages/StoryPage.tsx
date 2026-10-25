@@ -10,6 +10,7 @@ import { markAsRead } from '../lib/reading-history'
 import FeedFavicon from '../components/FeedFavicon'
 import BookmarkButton from '../components/BookmarkButton'
 import ShareButtons from '../components/ShareButtons'
+import { useFeedback } from '../components/FeedbackProvider'
 import RelatedStories from '../components/RelatedStories'
 import AlsoCoveredBy from '../components/AlsoCoveredBy'
 import AiLabel from '../components/ai/AiLabel'
@@ -75,6 +76,7 @@ function AnalysisSection({
 export default function StoryPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
+  const { openFeedback } = useFeedback()
   const { data: story, isLoading, error } = usePublicStory(slug || '')
 
   // Redirect to primary story's URL if this slug was a non-primary cluster member
@@ -274,6 +276,18 @@ export default function StoryPage() {
 
           {/* Caveats */}
           {story.antifactors && <AnalysisSection title="Caveats" text={story.antifactors} accentColor={shiftHex(colors.hex, -0.25)} aiField="antifactors" />}
+
+          {/* Report an error: the feedback dialog, bound to this story */}
+          <p className="text-sm text-neutral-600 mb-10">
+            Spotted a mistake?{' '}
+            <button
+              type="button"
+              onClick={() => openFeedback({ id: story.id, title: displayTitle })}
+              className="text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
+            >
+              Report an error
+            </button>
+          </p>
 
           {/* Related stories */}
           {story.slug && <RelatedStories slug={story.slug} />}

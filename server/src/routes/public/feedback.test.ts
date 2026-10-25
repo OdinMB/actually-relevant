@@ -11,6 +11,9 @@ const mockPrisma = vi.hoisted(() => ({
   feedback: {
     create: vi.fn(),
   },
+  story: {
+    findUnique: vi.fn(),
+  },
   $disconnect: vi.fn(),
 }))
 
@@ -148,6 +151,52 @@ describe('Public Feedback API', () => {
       expect(mockPrisma.feedback.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ email: null }),
       })
+    })
+
+    it('stores no story for feedback sent without one', async () => {
+      mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-5' })
+      await request(app).post('/api/feedback').send({ category: 'general', message: 'Test' })
+      expect(mockPrisma.story.findUnique).not.toHaveBeenCalled()
+      expect(mockPrisma.feedback.create.mock.calls[0][0].data.storyId).toBeNull()
+    })
+  })
+
+  describe('POST /api/feedback with a story ("Report an error")', () => {
+    it('stores a correction tied to the story it was sent from', async () => {
+      mockPrisma.story.findUnique.mockResolvedValue({ id: 'story-1' })
+      mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-6' })
+
+      const res = await request(app).post('/api/feedback').send({ category: 'correction', message: 'The date is wrong', storyId: 'story-1' })
+
+      expect(res.status).toBe(200)
+      expect(mockPrisma.story.findUnique).toHaveBeenCalledWith({ where: { id: 'story-1' }, select: { id: true } })
+      expect(mockPrisma.feedback.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ category: 'correction', message: 'The date is wrong', storyId: 'story-1' }),
+      })
+    })
+
+    it('refuses a story that does not exist, and stores nothing', async () => {
+      mockPrisma.story.findUnique.mockResolvedValue(null)
+
+      const res = await request(app).post('/api/feedback').send({ category: 'correction', message: 'Wrong', storyId: 'nope' })
+
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'That story does not exist.' })
+      expect(mockPrisma.feedback.create).not.toHaveBeenCalled()
+    })
+
+    it('accepts the correction category without a story too', async () => {
+      mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-7' })
+      const res = await request(app).post('/api/feedback').send({ category: 'correction', message: 'A typo on the about page' })
+      expect(res.status).toBe(200)
+    })
+
+    it('rejects an overlong story id', async () => {
+      const res = await request(app)
+        .post('/api/feedback')
+        .send({ category: 'correction', message: 'x', storyId: 'a'.repeat(101) })
+      expect(res.status).toBe(400)
+      expect(mockPrisma.story.findUnique).not.toHaveBeenCalled()
     })
   })
 })

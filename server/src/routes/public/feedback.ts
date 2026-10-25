@@ -7,6 +7,8 @@ import { validateBody } from '../../middleware/validate.js'
 import prisma from '../../lib/prisma.js'
 import { createLogger } from '../../lib/logger.js'
 import { hashFeedbackIp } from '../../lib/feedbackIpHash.js'
+import { BadRequestError } from '../../utils/errors.js'
+import { FEEDBACK_CATEGORIES } from '../../schemas/feedback.js'
 
 const router = Router()
 const log = createLogger('public:feedback')
@@ -20,7 +22,9 @@ const feedbackLimiter = rateLimit({
 })
 
 const feedbackSchema = z.object({
-  category: z.enum(['general', 'bug', 'suggestion', 'other']),
+  category: z.enum(FEEDBACK_CATEGORIES),
+  // The story a "Report an error" was sent from (.context/public-website.md, "Feedback"); must exist
+  storyId: z.string().min(1).max(100).optional(),
   message: z.string().min(1).max(config.feedback.messageMaxLength),
   email: z.string().email().max(255).optional().or(z.literal('')),
   website: z.string().optional(), // honeypot field
@@ -40,7 +44,12 @@ router.post('/', failsWith('Something went wrong. Please try again.'), feedbackL
     return
   }
 
-  const { category, message, email } = req.body
+  const { category, message, email, storyId } = req.body as z.infer<typeof feedbackSchema>
+
+  if (storyId) {
+    const story = await prisma.story.findUnique({ where: { id: storyId }, select: { id: true } })
+    if (!story) throw new BadRequestError('That story does not exist.')
+  }
 
   await prisma.feedback.create({
     data: {
@@ -48,10 +57,11 @@ router.post('/', failsWith('Something went wrong. Please try again.'), feedbackL
       message,
       email: email || null,
       ipHash,
+      storyId: storyId ?? null,
     },
   })
 
-  log.info({ category, hasEmail: !!email }, 'feedback submitted')
+  log.info({ category, hasEmail: !!email, hasStory: !!storyId }, 'feedback submitted')
   res.json({ success: true })
 })
 

@@ -103,6 +103,15 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 - `RatingDisplay` — Relevance rating with color coding
 - `Pagination` — Page navigation with ellipsis
 
+## Feedback
+
+Two ways in, one form (`FeedbackForm`), one endpoint (`POST /api/feedback`, `server/src/routes/public/feedback.ts`: honeypot, per-IP rate limit, the visitor IP stored only as an HMAC, ADR-0037):
+
+- **`/feedback`** (prerendered page): the general form, categories Feedback, Bug, Suggestion, Other.
+- **"Report an error" on every story page** (`StoryPage`, below the analysis: "Spotted a mistake? Report an error"): a button that opens `FeedbackModal` through `FeedbackProvider` (mounted once in `PublicLayout`; `useFeedback().openFeedback(story)`), bound to the story: heading "Report an error", the story's title as the page shows it, no category choice (always `correction`), a visible "What is wrong?" label, button "Send report". The native `<dialog>` moves focus to the message on open, closes on Escape or backdrop click, and returns focus to the button.
+
+The server takes an optional `storyId` and answers 400 "That story does not exist." for an unknown one; `correction` is also accepted without a story. `feedback.story_id` is a foreign key `ON DELETE SET NULL` (migration `20261025225344_feedback_story_correction`), so a report outlives a story that retention deletes, without its link. Admin view: `.context/admin-dashboard.md`. Feedback is kept indefinitely for now (retention is a BACKLOG item).
+
 ## Static Content
 
 Issue-specific evaluation criteria, sources, and "make a difference" links are in `client/src/data/issues-content.ts`. This data is static and doesn't come from the API. To update, edit the file directly.
