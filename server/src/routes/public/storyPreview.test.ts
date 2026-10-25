@@ -28,6 +28,7 @@ const viaPublicApi = express().use('/api', publicRouter)
 const SHELL = `<!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8" />
     <meta name="author" content="Actually Relevant" />
+    <meta name="fediverse:creator" content="@actuallyrelevant@mastodon.social" />
     <title>Actually Relevant - News That Matters to Humanity</title>
     <meta data-rh="true" name="description" content="Homepage description" />
     <meta data-rh="true" property="og:title" content="Homepage" />
@@ -121,6 +122,8 @@ describe('GET /api/story-page/:slug', () => {
     // Everything else in the shell is kept: the app's script, the author meta and the body
     expect(html).toContain('<script type="module" crossorigin src="/assets/index-abc123.js"></script>')
     expect(html).toContain('<meta name="author" content="Actually Relevant" />')
+    // The Mastodon byline is the shell's, so story pages keep it
+    expect(html).toContain('<meta name="fediverse:creator" content="@actuallyrelevant@mastodon.social" />')
     expect(html).toContain('<div id="root"><main>Homepage</main></div>')
   })
 

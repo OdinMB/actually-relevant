@@ -117,7 +117,8 @@ When adding a page, add its entry (`path`, `priority`, `changefreq`) to **`share
 `client/index.html` carries pre-JS fallbacks for description, `og:*`, `article:author` and `twitter:*`, each marked `data-rh="true"`. That marker makes react-helmet-async treat them as its own: on its first commit it removes them and writes the merged Helmet state. `DefaultSeo` (`client/src/lib/seo.tsx`), rendered once by the root route of `App.tsx`'s `appRoutes`, above every page, supplies the same defaults as Helmet tags; a page's own tag with the same `name`/`property` wins (innermost Helmet instance). Result: prerendered and client-navigated pages get exactly one of each — the page's own, or the default.
 
 - Adding a head tag to `index.html` that a page might also set: mark it `data-rh="true"` and add it to `DefaultSeo`, or prerendered pages get it twice. `client/src/lib/seo.test.tsx` loads the real `index.html` and fails on any duplicate.
-- Unmarked template tags (`charset`, `viewport`, `theme-color`, `author`) are never touched by Helmet; don't set those from pages.
+- Unmarked template tags (`charset`, `viewport`, `theme-color`, `author`, `fediverse:creator`) are never touched by Helmet; don't set those from pages. Story pages keep them too, because the backend removes only `data-rh` tags from the shell.
+- `fediverse:creator` (`@actuallyrelevant@mastodon.social`) makes Mastodon show an author byline linking the account under every preview card of a site link (`.context/mastodon.md`, "Author byline"). `seo.test.tsx` checks it matches `MASTODON_PROFILE_URL` in `client/src/config.ts`; change both together.
 - The `<title>` is not duplicated: Helmet updates the existing element.
 
 ## Story link previews

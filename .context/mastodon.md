@@ -32,6 +32,10 @@ Each Mastodon post consists of:
 
 Mastodon posts are limited to 500 characters (configurable via `MASTODON_CHAR_LIMIT`). The LLM text max chars are calculated dynamically as `charLimit - metaLine.length - sourceUrl.length - storyUrl.length - 3` (three newlines). If the LLM overshoots, the text is trimmed with an ellipsis. Unlike Bluesky, URLs are included in the post text (not as an external embed). The source URL appears first so Mastodon's auto-generated link preview card shows the original article's og:image, title, and description. Posts use `unlisted` visibility by default (configurable via `MASTODON_VISIBILITY`).
 
+## Author byline
+
+`client/index.html` carries `<meta name="fediverse:creator" content="@actuallyrelevant@mastodon.social" />`, unmarked so Helmet never touches it, and story pages keep it because the backend reuses the same shell (`.context/seo.md`). Mastodon then shows "More from Actually Relevant" with a link to the account under the preview card of any shared site link that has a large preview image. Mastodon ignores the tag unless the account lists `actuallyrelevant.news` under Profile settings > "Author attribution" (an owner step, done once). The handle has to match `MASTODON_PROFILE_URL` in `client/src/config.ts`; `client/src/lib/seo.test.tsx` checks it.
+
 ## Shared Social Media Logic
 
 To avoid duplicating story selection and post generation across channels, shared logic lives in `server/src/services/socialMedia.ts`:
