@@ -91,11 +91,12 @@ Channel-specific settings in `server/src/config.ts` under `config.bluesky`:
 | `appPassword` | `BLUESKY_APP_PASSWORD` | `''` | App-specific password |
 | `serviceUrl` | `BLUESKY_SERVICE_URL` | `https://bsky.social` | AT Protocol service URL |
 | `autoPost.enabled` | `BLUESKY_AUTO_POST_ENABLED` | `false` | Enable auto-post job |
-| `autoPost.lookbackHours` | `BLUESKY_LOOKBACK_HOURS` | `12` | Hours to look back for candidates |
 | `metrics.maxAgeDays` | `BLUESKY_METRICS_MAX_AGE_DAYS` | `30` | Only poll metrics for recent posts |
 | `postDelayMs` | `BLUESKY_POST_DELAY_MS` | `2000` | Delay between consecutive posts |
 | `postModelTier` | — | `medium` | LLM model tier for post text generation |
 | `pickModelTier` | — | `medium` | LLM model tier for story picking |
+
+The auto-post lookback window is shared with Mastodon: `config.socialAutoPost.lookbackHours` (`SOCIAL_LOOKBACK_HOURS`, falling back to `BLUESKY_LOOKBACK_HOURS`, default `25`; `.context/mastodon.md`).
 
 ## API Endpoints
 

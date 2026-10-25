@@ -519,7 +519,6 @@ export const config = {
     serviceUrl: process.env.BLUESKY_SERVICE_URL || 'https://bsky.social',
     autoPost: {
       enabled: process.env.BLUESKY_AUTO_POST_ENABLED === 'true',
-      lookbackHours: parseWholeNumber(process.env.BLUESKY_LOOKBACK_HOURS, 25, 'BLUESKY_LOOKBACK_HOURS'),
     },
     metrics: {
       maxAgeDays: parseWholeNumber(process.env.BLUESKY_METRICS_MAX_AGE_DAYS, 30, 'BLUESKY_METRICS_MAX_AGE_DAYS'),
