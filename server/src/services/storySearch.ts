@@ -15,6 +15,21 @@ const log = createLogger('story')
 const RRF_FETCH_LIMIT = 50
 const RRF_K = 60
 
+/**
+ * Reciprocal Rank Fusion: each id scores 1 / (k + rank) in every ranking it appears in (rank from
+ * 1), and the ids come back by summed score, highest first. Ties keep first-seen order: the earlier
+ * ranking, then the earlier position.
+ */
+export function fuseRankings(rankings: string[][], k: number = RRF_K): string[] {
+  const scores = new Map<string, number>()
+  for (const ids of rankings) {
+    ids.forEach((id, i) => {
+      scores.set(id, (scores.get(id) || 0) + 1 / (k + i + 1))
+    })
+  }
+  return [...scores.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id)
+}
+
 export async function hybridSearch(options: { query: string; issueSlug?: string; page: number; pageSize: number }) {
   const { query, issueSlug, page, pageSize } = options
 
@@ -56,17 +71,7 @@ export async function hybridSearch(options: { query: string; issueSlug?: string;
     })(),
   ])
 
-  // Compute RRF scores
-  const scores = new Map<string, number>()
-  semanticIds.forEach((id, i) => {
-    scores.set(id, (scores.get(id) || 0) + 1 / (RRF_K + i + 1))
-  })
-  textIds.forEach((id, i) => {
-    scores.set(id, (scores.get(id) || 0) + 1 / (RRF_K + i + 1))
-  })
-
-  // Sort by RRF score
-  const rankedIds = [...scores.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id)
+  const rankedIds = fuseRankings([semanticIds, textIds])
 
   const total = rankedIds.length
   const pageIds = rankedIds.slice((page - 1) * pageSize, page * pageSize)

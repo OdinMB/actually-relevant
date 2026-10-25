@@ -33,7 +33,7 @@ When `getPublishedStories` gets a `search` query (the `search` parameter of `GET
 - **Semantic leg:** embeds the query, then takes the top `RRF_FETCH_LIMIT` (50) by cosine distance (`embedding <=> query_vector`). If the embedding or the query fails, this leg returns nothing and search falls back to text-only.
 - **Text leg:** a case-insensitive `contains` match on `title` or `summary`, ordered by `datePublished` desc then `dateCrawled` desc, top 50.
 
-RRF score: `score(d) = Σ 1/(RRF_K + rank)` with `RRF_K = 60` and 1-based ranks. A story found by both legs scores higher, and one found by only one leg still gets a score. Results are sorted by score descending and paginated (`page`, `pageSize`, default 25). The positivity slider does not apply to search.
+RRF score: `score(d) = Σ 1/(RRF_K + rank)` with `RRF_K = 60` and 1-based ranks. A story found by both legs scores higher, and one found by only one leg still gets a score. Results are sorted by score descending (`fuseRankings()`, a pure function with its own unit tests; a tie keeps the semantic leg's order first) and paginated (`page`, `pageSize`, default 25). The positivity slider does not apply to search.
 
 ## Related Stories
 
