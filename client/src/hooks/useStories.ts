@@ -20,9 +20,8 @@ export function useStory(id: string) {
 export function useUpdateStory() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Story> }) =>
-      adminApi.stories.update(id, data),
-    onSuccess: (story) => {
+    mutationFn: ({ id, data }: { id: string; data: Partial<Story> }) => adminApi.stories.update(id, data),
+    onSuccess: story => {
       queryClient.setQueryData(['story', story.id], story)
       queryClient.invalidateQueries({ queryKey: ['stories'] })
     },
@@ -32,9 +31,8 @@ export function useUpdateStory() {
 export function useUpdateStoryStatus() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: StoryStatus }) =>
-      adminApi.stories.updateStatus(id, status),
-    onSuccess: (story) => {
+    mutationFn: ({ id, status }: { id: string; status: StoryStatus }) => adminApi.stories.updateStatus(id, status),
+    onSuccess: story => {
       queryClient.setQueryData(['story', story.id], story)
       queryClient.invalidateQueries({ queryKey: ['stories'] })
       queryClient.invalidateQueries({ queryKey: ['storyStats'] })
@@ -45,67 +43,8 @@ export function useUpdateStoryStatus() {
 export function useBulkUpdateStatus() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ ids, status }: { ids: string[]; status: StoryStatus }) =>
-      adminApi.stories.bulkStatus(ids, status),
+    mutationFn: ({ ids, status }: { ids: string[]; status: StoryStatus }) => adminApi.stories.bulkStatus(ids, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function usePreassessStories() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (storyIds?: string[]) => adminApi.stories.preassess(storyIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function useAssessStory() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => adminApi.stories.assess(id),
-    onSuccess: (story) => {
-      queryClient.setQueryData(['story', story.id], story)
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function useSelectStories() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (storyIds: string[]) => adminApi.stories.select(storyIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function usePublishStory() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => adminApi.stories.publish(id),
-    onSuccess: (story) => {
-      queryClient.setQueryData(['story', story.id], story)
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
-  })
-}
-
-export function useRejectStory() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => adminApi.stories.reject(id),
-    onSuccess: (story) => {
-      queryClient.setQueryData(['story', story.id], story)
       queryClient.invalidateQueries({ queryKey: ['stories'] })
       queryClient.invalidateQueries({ queryKey: ['storyStats'] })
     },
@@ -116,7 +55,7 @@ export function useDissolveCluster() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => adminApi.stories.dissolveCluster(id),
-    onSuccess: (story) => {
+    onSuccess: story => {
       queryClient.setQueryData(['story', story.id], story)
       queryClient.invalidateQueries({ queryKey: ['stories'] })
     },
@@ -137,8 +76,7 @@ export function useDeleteStory() {
 export function useCrawlUrl() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ url, feedId }: { url: string; feedId: string }) =>
-      adminApi.stories.crawlUrl(url, feedId),
+    mutationFn: ({ url, feedId }: { url: string; feedId: string }) => adminApi.stories.crawlUrl(url, feedId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stories'] })
       queryClient.invalidateQueries({ queryKey: ['storyStats'] })

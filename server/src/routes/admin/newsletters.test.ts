@@ -60,9 +60,7 @@ describe('Admin Newsletters API', () => {
       mockPrisma.newsletter.findMany.mockResolvedValue(newsletters)
       mockPrisma.newsletter.count.mockResolvedValue(2)
 
-      const res = await request(app)
-        .get('/api/admin/newsletters')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/newsletters').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.data).toHaveLength(2)
       expect(res.body.total).toBe(2)
@@ -72,9 +70,7 @@ describe('Admin Newsletters API', () => {
       mockPrisma.newsletter.findMany.mockResolvedValue([])
       mockPrisma.newsletter.count.mockResolvedValue(0)
 
-      const res = await request(app)
-        .get('/api/admin/newsletters?status=published')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/newsletters?status=published').set(authHeader())
       expect(res.status).toBe(200)
     })
   })
@@ -83,9 +79,7 @@ describe('Admin Newsletters API', () => {
     it('returns a single newsletter', async () => {
       mockPrisma.newsletter.findUnique.mockResolvedValue(sampleNewsletter())
 
-      const res = await request(app)
-        .get('/api/admin/newsletters/newsletter-1')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/newsletters/newsletter-1').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.title).toBe('Weekly Roundup #1')
     })
@@ -93,9 +87,7 @@ describe('Admin Newsletters API', () => {
     it('returns 404 for unknown newsletter', async () => {
       mockPrisma.newsletter.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .get('/api/admin/newsletters/unknown')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/newsletters/unknown').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -104,19 +96,13 @@ describe('Admin Newsletters API', () => {
     it('creates a new newsletter', async () => {
       mockPrisma.newsletter.create.mockResolvedValue(sampleNewsletter())
 
-      const res = await request(app)
-        .post('/api/admin/newsletters')
-        .set(authHeader())
-        .send({ title: 'Weekly Roundup #1' })
+      const res = await request(app).post('/api/admin/newsletters').set(authHeader()).send({ title: 'Weekly Roundup #1' })
       expect(res.status).toBe(201)
       expect(res.body.title).toBe('Weekly Roundup #1')
     })
 
     it('returns 400 for missing title', async () => {
-      const res = await request(app)
-        .post('/api/admin/newsletters')
-        .set(authHeader())
-        .send({})
+      const res = await request(app).post('/api/admin/newsletters').set(authHeader()).send({})
       expect(res.status).toBe(400)
     })
   })
@@ -126,10 +112,7 @@ describe('Admin Newsletters API', () => {
       const updated = sampleNewsletter({ title: 'Updated' })
       mockPrisma.newsletter.update.mockResolvedValue(updated)
 
-      const res = await request(app)
-        .put('/api/admin/newsletters/newsletter-1')
-        .set(authHeader())
-        .send({ title: 'Updated' })
+      const res = await request(app).put('/api/admin/newsletters/newsletter-1').set(authHeader()).send({ title: 'Updated' })
       expect(res.status).toBe(200)
       expect(res.body.title).toBe('Updated')
     })
@@ -137,10 +120,7 @@ describe('Admin Newsletters API', () => {
     it('returns 404 for unknown newsletter', async () => {
       mockPrisma.newsletter.update.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .put('/api/admin/newsletters/unknown')
-        .set(authHeader())
-        .send({ title: 'Test' })
+      const res = await request(app).put('/api/admin/newsletters/unknown').set(authHeader()).send({ title: 'Test' })
       expect(res.status).toBe(404)
     })
   })
@@ -149,18 +129,14 @@ describe('Admin Newsletters API', () => {
     it('deletes a newsletter', async () => {
       mockPrisma.newsletter.delete.mockResolvedValue(sampleNewsletter())
 
-      const res = await request(app)
-        .delete('/api/admin/newsletters/newsletter-1')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/newsletters/newsletter-1').set(authHeader())
       expect(res.status).toBe(204)
     })
 
     it('returns 404 for unknown newsletter', async () => {
       mockPrisma.newsletter.delete.mockRejectedValue({ code: 'P2025' })
 
-      const res = await request(app)
-        .delete('/api/admin/newsletters/unknown')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/newsletters/unknown').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -168,19 +144,12 @@ describe('Admin Newsletters API', () => {
   describe('POST /api/admin/newsletters/:id/assign', () => {
     it('assigns stories to newsletter', async () => {
       const newsletter = sampleNewsletter()
-      const stories = [
-        { id: 'story-1' },
-        { id: 'story-2' },
-      ]
+      const stories = [{ id: 'story-1' }, { id: 'story-2' }]
       mockPrisma.newsletter.findUnique.mockResolvedValue(newsletter)
       mockPrisma.story.findMany.mockResolvedValue(stories)
-      mockPrisma.newsletter.update.mockResolvedValue(
-        sampleNewsletter({ storyIds: ['story-1', 'story-2'] }),
-      )
+      mockPrisma.newsletter.update.mockResolvedValue(sampleNewsletter({ storyIds: ['story-1', 'story-2'] }))
 
-      const res = await request(app)
-        .post('/api/admin/newsletters/newsletter-1/assign')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/assign').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.storyIds).toEqual(['story-1', 'story-2'])
     })
@@ -188,9 +157,7 @@ describe('Admin Newsletters API', () => {
     it('returns 404 for unknown newsletter', async () => {
       mockPrisma.newsletter.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .post('/api/admin/newsletters/unknown/assign')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/newsletters/unknown/assign').set(authHeader())
       expect(res.status).toBe(404)
     })
   })
@@ -208,31 +175,23 @@ describe('Admin Newsletters API', () => {
       })
       mockPrisma.newsletter.findUnique.mockResolvedValue(newsletter)
       mockPrisma.story.findMany.mockResolvedValue([story])
-      mockPrisma.newsletter.update.mockResolvedValue(
-        sampleNewsletter({ content: 'Generated content' }),
-      )
+      mockPrisma.newsletter.update.mockResolvedValue(sampleNewsletter({ content: 'Generated content' }))
 
-      const res = await request(app)
-        .post('/api/admin/newsletters/newsletter-1/generate')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/generate').set(authHeader())
       expect(res.status).toBe(200)
     })
 
     it('returns 404 for unknown newsletter', async () => {
       mockPrisma.newsletter.findUnique.mockResolvedValue(null)
 
-      const res = await request(app)
-        .post('/api/admin/newsletters/unknown/generate')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/newsletters/unknown/generate').set(authHeader())
       expect(res.status).toBe(404)
     })
 
     it('returns 400 when no stories selected', async () => {
       mockPrisma.newsletter.findUnique.mockResolvedValue(sampleNewsletter({ selectedStoryIds: [] }))
 
-      const res = await request(app)
-        .post('/api/admin/newsletters/newsletter-1/generate')
-        .set(authHeader())
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/generate').set(authHeader())
       expect(res.status).toBe(400)
     })
   })
@@ -242,14 +201,69 @@ describe('Admin Newsletters API', () => {
       const original = config.plunk.testSegmentId
       config.plunk.testSegmentId = ''
       try {
-        const res = await request(app)
-          .post('/api/admin/newsletters/newsletter-1/send-test')
-          .set(authHeader())
+        const res = await request(app).post('/api/admin/newsletters/newsletter-1/send-test').set(authHeader())
         expect(res.status).toBe(409)
         expect(res.body.error).toEqual(expect.any(String))
       } finally {
         config.plunk.testSegmentId = original
       }
+    })
+  })
+
+  // Statuses and bodies the services' typed errors and the global handler give (unchanged from the
+  // per-route catch blocks they replaced)
+  describe('error answers', () => {
+    it('answers 404 with the service message for an unknown newsletter', async () => {
+      mockPrisma.newsletter.findUnique.mockResolvedValue(null)
+
+      for (const path of ['assign', 'select', 'generate', 'html']) {
+        const res = await request(app).post(`/api/admin/newsletters/unknown/${path}`).set(authHeader())
+        expect(res.status, path).toBe(404)
+        expect(res.body, path).toEqual({ error: 'Newsletter not found' })
+      }
+    })
+
+    it('answers 400 when the longlist is empty', async () => {
+      mockPrisma.newsletter.findUnique.mockResolvedValue(sampleNewsletter({ storyIds: [] }))
+
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/select').set(authHeader())
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'No stories in longlist' })
+    })
+
+    it('answers 400 when there is no content to convert to HTML', async () => {
+      mockPrisma.newsletter.findUnique.mockResolvedValue(sampleNewsletter({ content: null }))
+
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/html').set(authHeader())
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'No content to convert' })
+    })
+
+    it('answers 404 with the route text when Prisma finds no row to update', async () => {
+      mockPrisma.newsletter.update.mockRejectedValue(Object.assign(new Error('No record'), { code: 'P2025' }))
+
+      const res = await request(app).put('/api/admin/newsletters/unknown').set(authHeader()).send({ title: 'x' })
+      expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Newsletter not found' })
+    })
+
+    it('answers 500 with the route text on an unexpected failure', async () => {
+      mockPrisma.newsletter.findUnique.mockResolvedValue(sampleNewsletter())
+      mockPrisma.story.findMany.mockResolvedValue([])
+
+      // No recent stories is not a request error: it stays a 500, as before
+      const res = await request(app).post('/api/admin/newsletters/newsletter-1/assign').set(authHeader())
+      expect(res.status).toBe(500)
+      expect(res.body).toEqual({ error: 'Failed to assign stories' })
+    })
+
+    it('answers 500 with the list route text when the query fails', async () => {
+      mockPrisma.newsletter.findMany.mockRejectedValue(new Error('db down'))
+      mockPrisma.newsletter.count.mockRejectedValue(new Error('db down'))
+
+      const res = await request(app).get('/api/admin/newsletters').set(authHeader())
+      expect(res.status).toBe(500)
+      expect(res.body).toEqual({ error: 'Failed to fetch newsletters' })
     })
   })
 })

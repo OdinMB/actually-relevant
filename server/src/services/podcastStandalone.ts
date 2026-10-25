@@ -50,9 +50,7 @@ export async function createStandaloneEpisode(now: Date = new Date()): Promise<P
 export type StoryCandidatePage = PaginationResult<StoryCandidate> & { minStories: number; maxStories: number }
 
 /** One page of published stories matching the filters, most relevant first, then newest. */
-export async function searchStandaloneStories(
-  filters: StandaloneStoryFilters & { page?: number; pageSize?: number },
-): Promise<StoryCandidatePage> {
+export async function searchStandaloneStories(filters: StandaloneStoryFilters & { page?: number; pageSize?: number }): Promise<StoryCandidatePage> {
   const page = filters.page || 1
   const pageSize = filters.pageSize || 20
   const where = publishedStoryWhere(filters)
@@ -113,16 +111,20 @@ const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every
 export async function saveStandaloneStories(id: string, storyIds: string[], now: Date = new Date()): Promise<void> {
   const countErrors = storyCountErrors(storyIds)
   if (countErrors.length > 0) throw new PodcastEditRejectedError(countErrors)
-  await withEpisodeLease(id, async ({ episode, update }) => {
-    assertChoosable(episode)
-    const byId = new Map((await loadStoriesByIds(storyIds)).map(s => [s.id, s]))
-    const missing = storyIds.filter(storyId => !byId.has(storyId))
-    if (missing.length > 0) throw new PodcastEditRejectedError([`not published: ${missing.join(', ')}`])
-    const stories = { episodeStories: storyIds.map((storyId, i) => snapshotOf(byId.get(storyId)!, i + 1)), storyIds, storiesSelectedAt: now }
-    if (episode.stage === 'created') {
-      await update({ ...stories, stage: 'selected', mode: 'interactive' })
-      return
-    }
-    await update({ ...stories, humanEdited: episode.humanEdited || !sameOrder(storyIds, episode.storyIds) })
-  }, 'edited')
+  await withEpisodeLease(
+    id,
+    async ({ episode, update }) => {
+      assertChoosable(episode)
+      const byId = new Map((await loadStoriesByIds(storyIds)).map(s => [s.id, s]))
+      const missing = storyIds.filter(storyId => !byId.has(storyId))
+      if (missing.length > 0) throw new PodcastEditRejectedError([`not published: ${missing.join(', ')}`])
+      const stories = { episodeStories: storyIds.map((storyId, i) => snapshotOf(byId.get(storyId)!, i + 1)), storyIds, storiesSelectedAt: now }
+      if (episode.stage === 'created') {
+        await update({ ...stories, stage: 'selected', mode: 'interactive' })
+        return
+      }
+      await update({ ...stories, humanEdited: episode.humanEdited || !sameOrder(storyIds, episode.storyIds) })
+    },
+    'edited',
+  )
 }

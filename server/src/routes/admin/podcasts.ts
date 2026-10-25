@@ -4,45 +4,36 @@ import * as podcastService from '../../services/podcast.js'
 import { findOrCreateWeekEpisode, resumeEpisode, startAdminRun, type AdminRunRequest } from '../../services/podcastWeekly.js'
 import { getWeekSlot } from '../../services/podcastWeekSlot.js'
 import { rewindEpisode } from '../../services/podcastPipeline.js'
-import { getEpisodeStoryPool, replaceEpisodeStories, saveEpisodeScript, updateEpisodeMeta, PodcastEditRejectedError } from '../../services/podcastEditing.js'
-import { monthToDateChars, PodcastRefusedError } from '../../services/podcastGuards.js'
+import { getEpisodeStoryPool, replaceEpisodeStories, saveEpisodeScript, updateEpisodeMeta } from '../../services/podcastEditing.js'
+import { monthToDateChars } from '../../services/podcastGuards.js'
 import { publishEpisode, unpublishEpisode } from '../../services/podcastPublish.js'
 import { createStandaloneEpisode, saveStandaloneStories, searchStandaloneStories, suggestStandaloneStories } from '../../services/podcastStandalone.js'
 import { config } from '../../config.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import {
-  updatePodcastSchema, podcastQuerySchema, resumePodcastSchema, rewindPodcastSchema, podcastStoriesSchema, podcastScriptEditSchema,
-  podcastStoryFiltersSchema, podcastStorySearchQuerySchema,
+  updatePodcastSchema,
+  podcastQuerySchema,
+  resumePodcastSchema,
+  rewindPodcastSchema,
+  podcastStoriesSchema,
+  podcastScriptEditSchema,
+  podcastStoryFiltersSchema,
+  podcastStorySearchQuerySchema,
 } from '../../schemas/podcast.js'
 
+// Errors: the refusals every change shares are ServiceErrors the global handler in app.ts answers:
+// 409 PodcastRefusedError when the episode's state does not allow it, 422 PodcastEditRejectedError
+// when a person's content breaks a rule (with the errors and warnings), and a Prisma P2025 is
+// "Podcast not found"; anything else is a 500 with the route's failsWith() text.
 const router = Router()
 const log = createLogger('podcasts')
+const podcastNotFound = { notFound: 'Podcast not found' }
 
 /** Long-running podcast work continues after the 202; its outcome lands on the row and in the log. */
 function inBackground(work: Promise<unknown>, what: string, podcastId: string): void {
   work.catch(err => log.error({ err, podcastId }, `${what} failed`))
-}
-
-/**
- * The refusals every change shares: 409 when the episode's state does not allow it, 422 when a
- * person's content breaks a rule (with the errors and warnings), 404 when it is gone; else 500.
- */
-function sendFailure(res: Response, err: unknown, what: string): void {
-  if (err instanceof PodcastRefusedError) {
-    res.status(409).json({ error: err.message })
-    return
-  }
-  if (err instanceof PodcastEditRejectedError) {
-    res.status(422).json({ error: err.message, errors: err.errors, warnings: err.warnings })
-    return
-  }
-  if ((err as { code?: unknown })?.code === 'P2025') {
-    res.status(404).json({ error: 'Podcast not found' })
-    return
-  }
-  log.error({ err }, `failed to ${what}`)
-  res.status(500).json({ error: `Failed to ${what}` })
 }
 
 /** The episode as the admin sees it, or a 404 answered; null when answered. */
@@ -62,211 +53,147 @@ async function startInBackground(id: string, req: AdminRunRequest, res: Response
   inBackground(resumeEpisode(id), what, id)
 }
 
-router.get('/', validateQuery(podcastQuerySchema), async (req, res) => {
-  try {
-    const filters = req.parsedQuery || {}
-    const result = await podcastService.getPodcasts(filters)
-    res.json(result)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch podcasts')
-    res.status(500).json({ error: 'Failed to fetch podcasts' })
-  }
+router.get('/', failsWith('Failed to fetch podcasts'), validateQuery(podcastQuerySchema), async (req, res) => {
+  res.json(await podcastService.getPodcasts(req.parsedQuery || {}))
 })
 
 /** This ISO week's slot, read without creating a row (routed before /:id). */
-router.get('/weekly', async (_req, res) => {
-  try {
-    res.json(await getWeekSlot())
-  } catch (err) {
-    log.error({ err }, "failed to read this week's podcast slot")
-    res.status(500).json({ error: "Failed to read this week's podcast slot" })
-  }
+router.get('/weekly', failsWith("Failed to read this week's podcast slot"), async (_req, res) => {
+  res.json(await getWeekSlot())
 })
 
 /** Find or create this ISO week's episode; a person then starts it in a mode on its page. */
-router.post('/weekly', async (_req, res) => {
-  try {
-    const episode = await findOrCreateWeekEpisode()
-    res.json(await podcastService.getPodcastById(episode.id))
-  } catch (err) {
-    log.error({ err }, "failed to find or create this week's podcast")
-    res.status(500).json({ error: "Failed to open this week's episode" })
-  }
+router.post('/weekly', failsWith("Failed to open this week's episode"), async (_req, res) => {
+  const episode = await findOrCreateWeekEpisode()
+  res.json(await podcastService.getPodcastById(episode.id))
 })
 
 /** Create a standalone episode at `created`; a person then chooses its stories on its page. */
-router.post('/standalone', async (_req, res) => {
-  try {
-    const episode = await createStandaloneEpisode()
-    res.status(201).json(await podcastService.getPodcastById(episode.id))
-  } catch (err) {
-    log.error({ err }, 'failed to create a standalone podcast')
-    res.status(500).json({ error: 'Failed to create the episode' })
-  }
+router.post('/standalone', failsWith('Failed to create the episode'), async (_req, res) => {
+  const episode = await createStandaloneEpisode()
+  res.status(201).json(await podcastService.getPodcastById(episode.id))
 })
 
 /** Published stories of any date for a standalone episode's story finder, most relevant first. */
-router.get('/story-search', validateQuery(podcastStorySearchQuerySchema), async (req, res) => {
-  try {
-    res.json(await searchStandaloneStories(req.parsedQuery || {}))
-  } catch (err) {
-    log.error({ err }, 'failed to search stories for a podcast')
-    res.status(500).json({ error: 'Failed to search stories' })
-  }
+router.get('/story-search', failsWith('Failed to search stories'), validateQuery(podcastStorySearchQuerySchema), async (req, res) => {
+  res.json(await searchStandaloneStories(req.parsedQuery || {}))
 })
 
 /** Episodes a process is working on right now, with the step and the voicing progress (polled by the progress toast). */
-router.get('/active', async (_req, res) => {
-  try {
-    res.json(await podcastService.getActiveEpisodes())
-  } catch (err) {
-    log.error({ err }, 'failed to list running podcast episodes')
-    res.status(500).json({ error: 'Failed to list running episodes' })
-  }
+router.get('/active', failsWith('Failed to list running episodes'), async (_req, res) => {
+  res.json(await podcastService.getActiveEpisodes())
 })
 
 /** TTS characters reserved this UTC month against the monthly cap, and a typical and the largest episode. */
-router.get('/usage', async (_req, res) => {
-  try {
-    res.json({
-      monthToDateChars: await monthToDateChars(),
-      monthlyCap: config.podcast.monthlyTtsCharCap,
-      typicalEpisodeChars: config.podcast.spokenCharAim,
-      maxEpisodeChars: config.podcast.spokenCharBand[1],
-    })
-  } catch (err) {
-    log.error({ err }, 'failed to read podcast TTS usage')
-    res.status(500).json({ error: 'Failed to read podcast usage' })
-  }
+router.get('/usage', failsWith('Failed to read podcast usage'), async (_req, res) => {
+  res.json({
+    monthToDateChars: await monthToDateChars(),
+    monthlyCap: config.podcast.monthlyTtsCharCap,
+    typicalEpisodeChars: config.podcast.spokenCharAim,
+    maxEpisodeChars: config.podcast.spokenCharBand[1],
+  })
 })
 
-router.get('/:id', async (req, res) => {
-  try {
-    const podcast = await findOr404(req.params.id, res)
-    if (podcast) res.json(podcast)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch podcast')
-    res.status(500).json({ error: 'Failed to fetch podcast' })
-  }
+router.get('/:id', failsWith('Failed to fetch podcast'), async (req, res) => {
+  const podcast = await findOr404(req.params.id!, res)
+  if (podcast) res.json(podcast)
 })
 
 /** Start (with a mode), approve a review stop, switch to automated, or resume after a failure; runs in the background. */
-router.post('/:id/resume', expensiveOpLimiter, validateBody(resumePodcastSchema), async (req, res) => {
-  try {
-    if (!(await findOr404(req.params.id, res))) return
-    await startInBackground(req.params.id, { mode: req.body.mode }, res, 'podcast run')
-  } catch (err) {
-    sendFailure(res, err, 'start the podcast run')
-  }
-})
+router.post(
+  '/:id/resume',
+  failsWith('Failed to start the podcast run', podcastNotFound),
+  expensiveOpLimiter,
+  validateBody(resumePodcastSchema),
+  async (req, res) => {
+    if (!(await findOr404(req.params.id!, res))) return
+    await startInBackground(req.params.id!, { mode: req.body.mode }, res, 'podcast run')
+  },
+)
 
 /**
  * Go back to an earlier stage (Start over, Regenerate script, Change stories, Edit script after
  * voicing, Regenerate audio). With `advance` the episode continues from there in the background.
  */
-router.post('/:id/rewind', expensiveOpLimiter, validateBody(rewindPodcastSchema), async (req, res) => {
-  try {
+router.post(
+  '/:id/rewind',
+  failsWith('Failed to rewind the podcast', podcastNotFound),
+  expensiveOpLimiter,
+  validateBody(rewindPodcastSchema),
+  async (req, res) => {
     const { to, advance } = req.body as { to: 'created' | 'selected' | 'scripted'; advance: boolean }
-    if (!(await findOr404(req.params.id, res))) return
+    if (!(await findOr404(req.params.id!, res))) return
     if (advance) {
-      await startInBackground(req.params.id, { rewindTo: to }, res, 'podcast rewind')
+      await startInBackground(req.params.id!, { rewindTo: to }, res, 'podcast rewind')
       return
     }
-    await rewindEpisode(req.params.id, to, { dryRun: config.podcast.dryRun, mode: 'interactive' })
-    res.json(await podcastService.getPodcastById(req.params.id))
-  } catch (err) {
-    sendFailure(res, err, 'rewind the podcast')
-  }
-})
+    await rewindEpisode(req.params.id!, to, { dryRun: config.podcast.dryRun, mode: 'interactive' })
+    res.json(await podcastService.getPodcastById(req.params.id!))
+  },
+)
 
 /** The week's story pool for the picker, marking the episode's stories. */
-router.get('/:id/story-pool', async (req, res) => {
-  try {
-    const podcast = await findOr404(req.params.id, res)
-    if (podcast) res.json(await getEpisodeStoryPool(podcast))
-  } catch (err) {
-    sendFailure(res, err, 'load the story pool')
-  }
+router.get('/:id/story-pool', failsWith('Failed to load the story pool', podcastNotFound), async (req, res) => {
+  const podcast = await findOr404(req.params.id!, res)
+  if (podcast) res.json(await getEpisodeStoryPool(podcast))
 })
 
 /** The selection model's advice for a standalone episode's stories (writes nothing): 409 unless choosable, 422 when too few match. */
-router.post('/:id/suggest-stories', expensiveOpLimiter, validateBody(podcastStoryFiltersSchema), async (req, res) => {
-  try {
-    if (!(await findOr404(req.params.id, res))) return
-    res.json({ stories: await suggestStandaloneStories(req.params.id, req.body) })
-  } catch (err) {
-    sendFailure(res, err, 'suggest stories')
-  }
-})
+router.post(
+  '/:id/suggest-stories',
+  failsWith('Failed to suggest stories', podcastNotFound),
+  expensiveOpLimiter,
+  validateBody(podcastStoryFiltersSchema),
+  async (req, res) => {
+    if (!(await findOr404(req.params.id!, res))) return
+    res.json({ stories: await suggestStandaloneStories(req.params.id!, req.body) })
+  },
+)
 
 /** Save the episode's stories: from the week's pool for a weekly episode, from any published story for a standalone one. */
-router.put('/:id/stories', validateBody(podcastStoriesSchema), async (req, res) => {
-  try {
-    const podcast = await findOr404(req.params.id, res)
-    if (!podcast) return
-    const save = podcast.kind === 'standalone' ? saveStandaloneStories : replaceEpisodeStories
-    await save(req.params.id, req.body.storyIds)
-    res.json(await podcastService.getPodcastById(req.params.id))
-  } catch (err) {
-    sendFailure(res, err, 'save the stories')
-  }
+router.put('/:id/stories', failsWith('Failed to save the stories', podcastNotFound), validateBody(podcastStoriesSchema), async (req, res) => {
+  const podcast = await findOr404(req.params.id!, res)
+  if (!podcast) return
+  const save = podcast.kind === 'standalone' ? saveStandaloneStories : replaceEpisodeStories
+  await save(req.params.id!, req.body.storyIds)
+  res.json(await podcastService.getPodcastById(req.params.id!))
 })
 
 /** Save a person's script edit: 422 with errors (nothing saved), or the episode with the warnings. */
-router.put('/:id/script', validateBody(podcastScriptEditSchema), async (req, res) => {
-  try {
-    if (!(await findOr404(req.params.id, res))) return
-    const { warnings } = await saveEpisodeScript(req.params.id, req.body)
-    res.json({ podcast: await podcastService.getPodcastById(req.params.id), warnings })
-  } catch (err) {
-    sendFailure(res, err, 'save the script')
-  }
+router.put('/:id/script', failsWith('Failed to save the script', podcastNotFound), validateBody(podcastScriptEditSchema), async (req, res) => {
+  if (!(await findOr404(req.params.id!, res))) return
+  const { warnings } = await saveEpisodeScript(req.params.id!, req.body)
+  res.json({ podcast: await podcastService.getPodcastById(req.params.id!), warnings })
 })
 
 /** List a ready episode in the feed and on /podcast (409 unless ready, live and at rest). */
-router.post('/:id/publish', async (req, res) => {
-  try {
-    if (!(await findOr404(req.params.id, res))) return
-    await publishEpisode(req.params.id)
-    res.json(await podcastService.getPodcastById(req.params.id))
-  } catch (err) {
-    sendFailure(res, err, 'publish the podcast')
-  }
+router.post('/:id/publish', failsWith('Failed to publish the podcast', podcastNotFound), async (req, res) => {
+  if (!(await findOr404(req.params.id!, res))) return
+  await publishEpisode(req.params.id!)
+  res.json(await podcastService.getPodcastById(req.params.id!))
 })
 
 /** Take an episode out of the feed and off /podcast; always allowed, deletes nothing on the CDN. */
-router.post('/:id/unpublish', async (req, res) => {
-  try {
-    if (!(await unpublishEpisode(req.params.id))) {
-      res.status(404).json({ error: 'Podcast not found' })
-      return
-    }
-    res.json(await podcastService.getPodcastById(req.params.id))
-  } catch (err) {
-    sendFailure(res, err, 'unpublish the podcast')
+router.post('/:id/unpublish', failsWith('Failed to unpublish the podcast', podcastNotFound), async (req, res) => {
+  if (!(await unpublishEpisode(req.params.id!))) {
+    res.status(404).json({ error: 'Podcast not found' })
+    return
   }
+  res.json(await podcastService.getPodcastById(req.params.id!))
 })
 
-router.put('/:id', validateBody(updatePodcastSchema), async (req, res) => {
-  try {
-    if (!(await findOr404(req.params.id, res))) return
-    await updateEpisodeMeta(req.params.id, req.body)
-    res.json(await podcastService.getPodcastById(req.params.id))
-  } catch (err) {
-    sendFailure(res, err, 'update the podcast')
-  }
+router.put('/:id', failsWith('Failed to update the podcast', podcastNotFound), validateBody(updatePodcastSchema), async (req, res) => {
+  if (!(await findOr404(req.params.id!, res))) return
+  await updateEpisodeMeta(req.params.id!, req.body)
+  res.json(await podcastService.getPodcastById(req.params.id!))
 })
 
-router.delete('/:id', async (req, res) => {
-  try {
-    if (!(await podcastService.deletePodcast(req.params.id))) {
-      res.status(404).json({ error: 'Podcast not found' })
-      return
-    }
-    res.status(204).send()
-  } catch (err) {
-    sendFailure(res, err, 'delete the podcast')
+router.delete('/:id', failsWith('Failed to delete the podcast', podcastNotFound), async (req, res) => {
+  if (!(await podcastService.deletePodcast(req.params.id!))) {
+    res.status(404).json({ error: 'Podcast not found' })
+    return
   }
+  res.status(204).send()
 })
 
 export default router

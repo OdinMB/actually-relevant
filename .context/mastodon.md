@@ -175,11 +175,11 @@ Story picking reuses `pickBestStoryForSocial()` from the shared service, which u
 | `server/src/services/socialBotProfile.ts` | Bot bio and bot-flag updates for both accounts, applied only by `scripts/set-social-bot-profile.ts` (owner-run; see `.context/ai-transparency.md` §7) |
 | `server/src/schemas/mastodon.ts` | Zod schemas for LLM output and API validation |
 | `server/src/prompts/mastodon.ts` | LLM prompt builder for post text |
-| `server/src/routes/admin/mastodon.ts` | Admin API routes |
+| `server/src/routes/admin/mastodon.ts` | Admin API routes: the shared `socialChannelRouter` (`routes/admin/socialChannel.ts`) with Mastodon's service and schemas |
 | `server/src/jobs/socialAutoPost.ts` | Unified auto-post cron job handler |
 | `server/src/jobs/mastodonUpdateMetrics.ts` | Metrics polling cron job handler |
 | `server/src/config.ts` | Configuration (mastodon + socialAutoPost sections) |
 | `server/prisma/schema.prisma` | MastodonPost model |
-| `client/src/components/admin/MastodonDraftPanel.tsx` | Draft review side panel |
-| `client/src/pages/admin/MastodonPage.tsx` | Admin Mastodon overview page |
+| `client/src/components/admin/MastodonDraftPanel.tsx` | Draft review side panel: Mastodon's limit, character count and posting info on the shared `social/SocialDraftPanel.tsx` |
+| `client/src/pages/admin/MastodonPage.tsx` | Admin Mastodon overview page: Mastodon's API calls and item fields on the shared `components/admin/social/SocialChannelPage.tsx` (shared with Bluesky) |
 | `client/src/components/admin/BulkActionsBar.tsx` | Mastodon action buttons |

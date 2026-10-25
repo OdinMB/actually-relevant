@@ -37,6 +37,8 @@ export const routes: RouteConfig[] = [
   { path: '/free-api', priority: 0.7, changefreq: 'monthly' },
   { path: '/stewardship', priority: 0.6, changefreq: 'monthly' },
   { path: '/newsletter', priority: 0.7, changefreq: 'monthly' },
+  // Issue pages (/newsletter/:slug) are dynamic: server sitemap only, not prerendered
+  { path: '/newsletter/archive', priority: 0.6, changefreq: 'weekly' },
   { path: '/podcast', priority: 0.7, changefreq: 'weekly' },
   { path: '/feedback', priority: 0.5, changefreq: 'yearly' },
   { path: '/thank-you', priority: 0.3, changefreq: 'yearly' },
@@ -46,6 +48,6 @@ export const routes: RouteConfig[] = [
   // which fetches published story slugs from the API
 ]
 
-export const routePaths = routes.map((r) => r.path)
+export const routePaths = routes.map(r => r.path)
 
 export type Route = (typeof routePaths)[number]

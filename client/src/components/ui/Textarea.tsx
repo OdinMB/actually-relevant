@@ -6,10 +6,7 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: string
 }
 
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
-  { label, error, id, className = '', ...props },
-  ref,
-) {
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ label, error, id, className = '', ...props }, ref) {
   return (
     <div>
       {label && (
@@ -21,9 +18,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         ref={ref}
         id={id}
         className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm placeholder:text-neutral-400 focus:outline-none focus:ring-1 ${
-          error
-            ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-            : 'border-neutral-300 focus:border-brand-500 focus:ring-brand-500'
+          error ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-neutral-300 focus:border-brand-500 focus:ring-brand-500'
         } ${className}`}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={error && id ? `${id}-error` : undefined}

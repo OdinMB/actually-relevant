@@ -66,9 +66,14 @@ describe('crawlFeed', () => {
     expect(result.newStories).toBe(0)
     expect(result.skipped).toBe(0)
     expect(result.errors).toBe(0)
-    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
-      hadSuccess: true, newItemCount: 0, rssItemCount: 0,
-    }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith(
+      'feed-1',
+      expect.objectContaining({
+        hadSuccess: true,
+        newItemCount: 0,
+        rssItemCount: 0,
+      }),
+    )
   })
 
   it('records an RSS fetch or parse failure as a crawl error, not an empty feed', async () => {
@@ -82,12 +87,15 @@ describe('crawlFeed', () => {
     expect(result.errorMessage).toContain('RSS fetch failed')
     expect(result.errorMessage).toContain('ECONNREFUSED')
     expect(mockUpdateCrawlStatus).toHaveBeenCalledTimes(1)
-    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
-      hadSuccess: false,
-      fetchFailed: true,
-      rssItemCount: 0,
-      errorMessage: expect.stringContaining('ECONNREFUSED'),
-    }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith(
+      'feed-1',
+      expect.objectContaining({
+        hadSuccess: false,
+        fetchFailed: true,
+        rssItemCount: 0,
+        errorMessage: expect.stringContaining('ECONNREFUSED'),
+      }),
+    )
     expect(mockUpdateFeedCacheHeaders).not.toHaveBeenCalled()
     expect(mockExtractContent).not.toHaveBeenCalled()
   })
@@ -99,10 +107,13 @@ describe('crawlFeed', () => {
     const result = await crawlFeed('feed-1')
 
     expect(result.newStories).toBe(0)
-    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
-      hadSuccess: false,
-      crawlResult: '304 not modified',
-    }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith(
+      'feed-1',
+      expect.objectContaining({
+        hadSuccess: false,
+        crawlResult: '304 not modified',
+      }),
+    )
   })
 
   it('persists cache headers from RSS response', async () => {
@@ -132,10 +143,12 @@ describe('crawlFeed', () => {
 
   it('skips already-existing URLs', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/old', title: 'Old', datePublished: null, description: null },
-      { url: 'https://example.com/new', title: 'New', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(
+      rssResult([
+        { url: 'https://example.com/old', title: 'Old', datePublished: null, description: null },
+        { url: 'https://example.com/new', title: 'New', datePublished: null, description: null },
+      ]),
+    )
     mockGetExistingUrls.mockResolvedValue(new Set(['https://example.com/old']))
     mockExtractContent.mockResolvedValue({
       title: 'New Article',
@@ -154,9 +167,7 @@ describe('crawlFeed', () => {
 
   it('counts extraction failures as errors', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/fail', title: 'Fail', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(rssResult([{ url: 'https://example.com/fail', title: 'Fail', datePublished: null, description: null }]))
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue(null)
 
@@ -169,11 +180,13 @@ describe('crawlFeed', () => {
 
   it('builds error message when extraction failures occur', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
-      { url: 'https://example.com/b', title: 'B', datePublished: null, description: null },
-      { url: 'https://example.com/c', title: 'C', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(
+      rssResult([
+        { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
+        { url: 'https://example.com/b', title: 'B', datePublished: null, description: null },
+        { url: 'https://example.com/c', title: 'C', datePublished: null, description: null },
+      ]),
+    )
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent
       .mockResolvedValueOnce({ title: 'A', content: 'Content', datePublished: null, method: 'readability' })
@@ -185,43 +198,52 @@ describe('crawlFeed', () => {
 
     expect(result.errors).toBe(2)
     expect(result.errorMessage).toBe('2 of 3 articles failed extraction')
-    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
-      hadSuccess: true,
-      errorMessage: '2 of 3 articles failed extraction',
-      newItemCount: 3,
-      rssItemCount: 3,
-    }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith(
+      'feed-1',
+      expect.objectContaining({
+        hadSuccess: true,
+        errorMessage: '2 of 3 articles failed extraction',
+        newItemCount: 3,
+        rssItemCount: 3,
+      }),
+    )
   })
 
   it('clears error on successful crawl with no failures', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(rssResult([{ url: 'https://example.com/a', title: 'A', datePublished: null, description: null }]))
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue({
-      title: 'A', content: 'Content', datePublished: null, method: 'readability',
+      title: 'A',
+      content: 'Content',
+      datePublished: null,
+      method: 'readability',
     })
     mockCreateStory.mockResolvedValue({ id: 'story-1' })
 
     const result = await crawlFeed('feed-1')
 
     expect(result.errorMessage).toBeUndefined()
-    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
-      hadSuccess: true,
-      errorMessage: undefined,
-      newItemCount: 1,
-      rssItemCount: 1,
-      crawlResult: '1 new article',
-    }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith(
+      'feed-1',
+      expect.objectContaining({
+        hadSuccess: true,
+        errorMessage: undefined,
+        newItemCount: 1,
+        rssItemCount: 1,
+        crawlResult: '1 new article',
+      }),
+    )
   })
 
   it('reports total failure when all articles fail extraction', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
-      { url: 'https://example.com/b', title: 'B', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(
+      rssResult([
+        { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
+        { url: 'https://example.com/b', title: 'B', datePublished: null, description: null },
+      ]),
+    )
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue(null)
 
@@ -229,19 +251,20 @@ describe('crawlFeed', () => {
 
     expect(result.errors).toBe(2)
     expect(result.newStories).toBe(0)
-    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
-      hadSuccess: false,
-      errorMessage: '2 of 2 articles failed extraction',
-      newItemCount: 2,
-      rssItemCount: 2,
-    }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith(
+      'feed-1',
+      expect.objectContaining({
+        hadSuccess: false,
+        errorMessage: '2 of 2 articles failed extraction',
+        newItemCount: 2,
+        rssItemCount: 2,
+      }),
+    )
   })
 
   it('uses extracted title over RSS title', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/article', title: 'RSS Title', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(rssResult([{ url: 'https://example.com/article', title: 'RSS Title', datePublished: null, description: null }]))
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue({
       title: 'Better Title',
@@ -253,17 +276,17 @@ describe('crawlFeed', () => {
 
     await crawlFeed('feed-1')
 
-    expect(mockCreateStory).toHaveBeenCalledWith(
-      expect.objectContaining({ sourceTitle: 'Better Title' })
-    )
+    expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ sourceTitle: 'Better Title' }))
   })
 
   it('passes extraction method to createStory', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
-      { url: 'https://example.com/b', title: 'B', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(
+      rssResult([
+        { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
+        { url: 'https://example.com/b', title: 'B', datePublished: null, description: null },
+      ]),
+    )
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent
       .mockResolvedValueOnce({ title: 'A', content: 'Content', datePublished: null, method: 'selector' })
@@ -272,20 +295,18 @@ describe('crawlFeed', () => {
 
     await crawlFeed('feed-1')
 
-    expect(mockCreateStory).toHaveBeenCalledWith(
-      expect.objectContaining({ sourceUrl: 'https://example.com/a', crawlMethod: 'selector' })
-    )
-    expect(mockCreateStory).toHaveBeenCalledWith(
-      expect.objectContaining({ sourceUrl: 'https://example.com/b', crawlMethod: 'diffbot' })
-    )
+    expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: 'https://example.com/a', crawlMethod: 'selector' }))
+    expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: 'https://example.com/b', crawlMethod: 'diffbot' }))
   })
 
   it('does not claim success when all items are skipped (preserves previous error)', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/old1', title: 'Old 1', datePublished: null, description: null },
-      { url: 'https://example.com/old2', title: 'Old 2', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(
+      rssResult([
+        { url: 'https://example.com/old1', title: 'Old 1', datePublished: null, description: null },
+        { url: 'https://example.com/old2', title: 'Old 2', datePublished: null, description: null },
+      ]),
+    )
     mockGetExistingUrls.mockResolvedValue(new Set(['https://example.com/old1', 'https://example.com/old2']))
 
     const result = await crawlFeed('feed-1')
@@ -294,22 +315,26 @@ describe('crawlFeed', () => {
     expect(result.skipped).toBe(2)
     // hadSuccess should be false (0 new > 0 is false), so updateCrawlStatus
     // won't clear existing error fields
-    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
-      hadSuccess: false,
-      errorMessage: undefined,
-      newItemCount: 0,
-      rssItemCount: 2,
-    }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith(
+      'feed-1',
+      expect.objectContaining({
+        hadSuccess: false,
+        errorMessage: undefined,
+        newItemCount: 0,
+        rssItemCount: 2,
+      }),
+    )
   })
 
   it('clears error when crawl has genuine new successes', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/new1', title: 'New 1', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(rssResult([{ url: 'https://example.com/new1', title: 'New 1', datePublished: null, description: null }]))
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue({
-      title: 'New 1', content: 'Content', datePublished: null, method: 'readability',
+      title: 'New 1',
+      content: 'Content',
+      datePublished: null,
+      method: 'readability',
     })
     mockCreateStory.mockResolvedValue({ id: 'story-1' })
 
@@ -317,21 +342,29 @@ describe('crawlFeed', () => {
 
     expect(result.newStories).toBe(1)
     // hadSuccess is true, so updateCrawlStatus will clear error fields
-    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({
-      hadSuccess: true,
-      errorMessage: undefined,
-    }))
+    expect(mockUpdateCrawlStatus).toHaveBeenCalledWith(
+      'feed-1',
+      expect.objectContaining({
+        hadSuccess: true,
+        errorMessage: undefined,
+      }),
+    )
   })
 
   it('deduplicates items within the same RSS batch', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/article', title: 'First', datePublished: null, description: null },
-      { url: 'https://example.com/article', title: 'Duplicate', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(
+      rssResult([
+        { url: 'https://example.com/article', title: 'First', datePublished: null, description: null },
+        { url: 'https://example.com/article', title: 'Duplicate', datePublished: null, description: null },
+      ]),
+    )
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue({
-      title: 'Article', content: 'Content', datePublished: null, method: 'readability',
+      title: 'Article',
+      content: 'Content',
+      datePublished: null,
+      method: 'readability',
     })
     mockCreateStory.mockResolvedValue({ id: 'story-1' })
 
@@ -345,12 +378,13 @@ describe('crawlFeed', () => {
 
   it('handles P2002 unique constraint as skip instead of error', async () => {
     mockGetFeedById.mockResolvedValue(sampleFeed)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/race', title: 'Race', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(rssResult([{ url: 'https://example.com/race', title: 'Race', datePublished: null, description: null }]))
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue({
-      title: 'Race', content: 'Content', datePublished: null, method: 'readability',
+      title: 'Race',
+      content: 'Content',
+      datePublished: null,
+      method: 'readability',
     })
     const prismaError = new Error('Unique constraint failed') as any
     prismaError.code = 'P2002'
@@ -366,12 +400,13 @@ describe('crawlFeed', () => {
   it('passes htmlSelector to extractor', async () => {
     const feedWithSelector = { ...sampleFeed, htmlSelector: '.article-body' }
     mockGetFeedById.mockResolvedValue(feedWithSelector)
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(rssResult([{ url: 'https://example.com/a', title: 'A', datePublished: null, description: null }]))
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue({
-      title: 'A', content: 'Content', datePublished: null, method: 'selector',
+      title: 'A',
+      content: 'Content',
+      datePublished: null,
+      method: 'selector',
     })
     mockCreateStory.mockResolvedValue({ id: 'story-1' })
 
@@ -379,7 +414,7 @@ describe('crawlFeed', () => {
 
     expect(mockExtractContent).toHaveBeenCalledWith(
       'https://example.com/a',
-      expect.objectContaining({ htmlSelector: '.article-body', skipLocalExtraction: false })
+      expect.objectContaining({ htmlSelector: '.article-body', skipLocalExtraction: false }),
     )
   })
 
@@ -402,7 +437,10 @@ describe('crawlFeed', () => {
     mockGetExistingUrls.mockResolvedValue(new Set())
     // All return API method (diffbot) — each increments localFailCount
     mockExtractContent.mockResolvedValue({
-      title: 'T', content: 'Content', datePublished: null, method: 'diffbot',
+      title: 'T',
+      content: 'Content',
+      datePublished: null,
+      method: 'diffbot',
     })
     mockCreateStory.mockResolvedValue({ id: 'story-1' })
 
@@ -509,18 +547,19 @@ describe('crawlFeed', () => {
 
   it('passes the feed paywall setting to the extractor and the access tier to createStory', async () => {
     mockGetFeedById.mockResolvedValue({ ...sampleFeed, paywallDetection: false, paywallTitleMarker: '^\\(S\\+\\)' })
-    mockParseFeed.mockResolvedValue(rssResult([
-      { url: 'https://example.com/a', title: 'A', datePublished: null, description: null },
-    ]))
+    mockParseFeed.mockResolvedValue(rssResult([{ url: 'https://example.com/a', title: 'A', datePublished: null, description: null }]))
     mockGetExistingUrls.mockResolvedValue(new Set())
     mockExtractContent.mockResolvedValue({ title: 'A', content: 'C', datePublished: null, method: 'readability', accessTier: 'locked' })
     mockCreateStory.mockResolvedValue({ id: 'story-1', status: 'rejected' })
 
     await crawlFeed('feed-1')
 
-    expect(mockExtractContent).toHaveBeenCalledWith('https://example.com/a', expect.objectContaining({
-      paywall: { detection: false, titleMarker: '^\\(S\\+\\)' },
-    }))
+    expect(mockExtractContent).toHaveBeenCalledWith(
+      'https://example.com/a',
+      expect.objectContaining({
+        paywall: { detection: false, titleMarker: '^\\(S\\+\\)' },
+      }),
+    )
     expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ accessTier: 'locked' }))
   })
 
@@ -528,7 +567,10 @@ describe('crawlFeed', () => {
     const threshold = config.crawl.localFailThreshold
     mockGetFeedById.mockResolvedValue(sampleFeed)
     const items = Array.from({ length: threshold + 2 }, (_, i) => ({
-      url: `https://example.com/locked-${i}`, title: `Locked ${i}`, datePublished: null, description: null,
+      url: `https://example.com/locked-${i}`,
+      title: `Locked ${i}`,
+      datePublished: null,
+      description: null,
     }))
     mockParseFeed.mockResolvedValue(rssResult(items))
     mockGetExistingUrls.mockResolvedValue(new Set())
@@ -547,7 +589,10 @@ describe('crawlFeed', () => {
     const threshold = config.crawl.localFailThreshold
     mockGetFeedById.mockResolvedValue(sampleFeed)
     const items = Array.from({ length: threshold + 2 }, (_, i) => ({
-      url: `https://example.com/locked-api-${i}`, title: `Locked ${i}`, datePublished: null, description: null,
+      url: `https://example.com/locked-api-${i}`,
+      title: `Locked ${i}`,
+      datePublished: null,
+      description: null,
     }))
     mockParseFeed.mockResolvedValue(rssResult(items))
     mockGetExistingUrls.mockResolvedValue(new Set())
@@ -606,9 +651,7 @@ describe('crawlAllDueFeeds', () => {
   })
 
   it('handles individual feed crawl failures gracefully', async () => {
-    mockGetDueFeeds.mockResolvedValue([
-      { id: 'feed-bad', title: 'Bad Feed' },
-    ])
+    mockGetDueFeeds.mockResolvedValue([{ id: 'feed-bad', title: 'Bad Feed' }])
     mockGetFeedById.mockResolvedValue(null)
 
     const results = await crawlAllDueFeeds()
@@ -678,7 +721,7 @@ describe('crawlUrl', () => {
         sourceContent: 'Article content',
         feedId: 'feed-1',
         crawlMethod: 'readability',
-      })
+      }),
     )
   })
 
@@ -690,9 +733,12 @@ describe('crawlUrl', () => {
 
     await crawlUrl('https://example.com/article', 'feed-1')
 
-    expect(mockExtractContent).toHaveBeenCalledWith('https://example.com/article', expect.objectContaining({
-      paywall: { detection: true, titleMarker: 'Z\\+' },
-    }))
+    expect(mockExtractContent).toHaveBeenCalledWith(
+      'https://example.com/article',
+      expect.objectContaining({
+        paywall: { detection: true, titleMarker: 'Z\\+' },
+      }),
+    )
     expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ accessTier: 'locked', crawlMethod: 'teaser' }))
   })
 })

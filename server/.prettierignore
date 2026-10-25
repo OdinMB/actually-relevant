@@ -1,0 +1,9 @@
+dist/
+coverage/
+logs/
+node_modules/
+package-lock.json
+# Applied migrations must stay byte-for-byte as committed
+prisma/migrations/
+# Docs are prose, not code
+*.md

@@ -7,21 +7,12 @@ import AiBadge from './ai/AiBadge'
  * (announced as "AI-generated") and the AI-written topic label. The badge shows even when
  * a story has no label, because the headline and summary next to it are AI-written.
  */
-export default function StoryTitleLabel({
-  story,
-  className = '',
-}: {
-  story: Pick<PublicStory, 'titleLabel' | 'title' | 'sourceTitle'>
-  className?: string
-}) {
+export default function StoryTitleLabel({ story, className = '' }: { story: Pick<PublicStory, 'titleLabel' | 'title' | 'sourceTitle'>; className?: string }) {
   const label = getTitleLabel(story)
   return (
-    <span
-      className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-neutral-500 ${className}`.trim()}
-    >
+    <span className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-neutral-500 ${className}`.trim()}>
       {/* The space separates the badge's accessible name from the label; flex layout doesn't render it */}
-      <AiBadge />{' '}
-      {label && <span>{label}</span>}
+      <AiBadge /> {label && <span>{label}</span>}
     </span>
   )
 }

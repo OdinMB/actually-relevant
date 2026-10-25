@@ -14,12 +14,9 @@ const SELF_LABELS_TYPE = 'com.atproto.label.defs#selfLabels' as const
  * The Bluesky profile record with the bot bio and the "bot" self-label added. Every other field
  * and every existing self-label is kept; a labels object of another type is replaced.
  */
-export function withBotProfile(
-  existing: AppBskyActorProfile.Record | undefined,
-  bio: string,
-): Un$Typed<AppBskyActorProfile.Record> {
+export function withBotProfile(existing: AppBskyActorProfile.Record | undefined, bio: string): Un$Typed<AppBskyActorProfile.Record> {
   const current = existing?.labels && ComAtprotoLabelDefs.isSelfLabels(existing.labels) ? existing.labels.values : []
-  const values = current.some((label) => label.val === BOT_SELF_LABEL) ? current : [...current, { val: BOT_SELF_LABEL }]
+  const values = current.some(label => label.val === BOT_SELF_LABEL) ? current : [...current, { val: BOT_SELF_LABEL }]
   return { ...existing, description: bio, labels: { $type: SELF_LABELS_TYPE, values } }
 }
 

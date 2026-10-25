@@ -1,18 +1,11 @@
 import { Router } from 'express'
-import { createLogger } from '../../lib/logger.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import * as subscribersService from '../../services/subscribers.js'
 
 const router = Router()
-const log = createLogger('subscribers')
 
-router.get('/', async (_req, res) => {
-  try {
-    const data = await subscribersService.getSubscriberReconciliation()
-    res.json(data)
-  } catch (err) {
-    log.error({ err }, 'failed to load subscriber reconciliation')
-    res.status(500).json({ error: 'Failed to load subscribers' })
-  }
+router.get('/', failsWith('Failed to load subscribers'), async (_req, res) => {
+  res.json(await subscribersService.getSubscriberReconciliation())
 })
 
 export default router

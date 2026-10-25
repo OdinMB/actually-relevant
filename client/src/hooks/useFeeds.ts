@@ -31,8 +31,7 @@ export function useCreateFeed() {
 export function useUpdateFeed() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Feed> }) =>
-      adminApi.feeds.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<Feed> }) => adminApi.feeds.update(id, data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['feeds'] })
       queryClient.invalidateQueries({ queryKey: ['feed', variables.id] })
@@ -57,4 +56,3 @@ export function useFeedQuality() {
     staleTime: 5 * 60 * 1000,
   })
 }
-

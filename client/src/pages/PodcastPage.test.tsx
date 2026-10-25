@@ -26,22 +26,24 @@ const RESPONSE: PublicPodcastResponse = {
     artworkUrl: 'https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg',
     listenLinks: [{ name: 'Apple Podcasts', url: 'https://podcasts.apple.com/x' }],
   },
-  episodes: [{
-    id: 'podcast-1',
-    title: 'W42: Clean air',
-    aiLine: 'AI-generated: Everything in this episode was written and voiced by AI.',
-    summary: 'Two stories.',
-    publishedAt: '2026-10-12T07:30:00.000Z',
-    durationSec: 372,
-    audioUrl: AUDIO_URL,
-    audioBytes: 123,
-    transcriptUrl: null,
-    stories: [
-      { title: 'Air data ruling', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air' },
-      { title: 'Vaccine rollout', publisher: 'Phys.org', sourceUrl: 'https://news.example/2', slug: null },
-    ],
-    aiGenerated: { fields: ['title', 'summary', 'audioUrl', 'transcriptUrl'], digitalSourceType: 'x' },
-  }],
+  episodes: [
+    {
+      id: 'podcast-1',
+      title: 'W42: Clean air',
+      aiLine: 'AI-generated: Everything in this episode was written and voiced by AI.',
+      summary: 'Two stories.',
+      publishedAt: '2026-10-12T07:30:00.000Z',
+      durationSec: 372,
+      audioUrl: AUDIO_URL,
+      audioBytes: 123,
+      transcriptUrl: null,
+      stories: [
+        { title: 'Air data ruling', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air' },
+        { title: 'Vaccine rollout', publisher: 'Phys.org', sourceUrl: 'https://news.example/2', slug: null },
+      ],
+      aiGenerated: { fields: ['title', 'summary', 'audioUrl', 'transcriptUrl'], digitalSourceType: 'x' },
+    },
+  ],
 }
 
 function renderPage() {
@@ -87,7 +89,7 @@ describe('PodcastPage', () => {
   it('does not repeat the per-episode AI line on the page', async () => {
     renderPage()
     await screen.findByRole('heading', { name: /W42: Clean air/ })
-    expect(screen.queryByText(RESPONSE.episodes[0].aiLine)).toBeNull()
+    expect(screen.queryByText(RESPONSE.episodes[0]!.aiLine)).toBeNull()
   })
 
   it('collapses each episode story list until its toggle is pressed', async () => {

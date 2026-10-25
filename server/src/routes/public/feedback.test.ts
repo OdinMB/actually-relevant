@@ -22,7 +22,7 @@ vi.mock('../../services/crawler.js', () => ({
 }))
 
 // The real hash, behind a spy, so one test can make it report a missing secret.
-vi.mock('../../lib/feedbackIpHash.js', async (importOriginal) => {
+vi.mock('../../lib/feedbackIpHash.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../../lib/feedbackIpHash.js')>()
   return { hashFeedbackIp: vi.fn(actual.hashFeedbackIp) }
 })
@@ -52,9 +52,7 @@ describe('Public Feedback API', () => {
         status: 'unread',
       })
 
-      const res = await request(app)
-        .post('/api/feedback')
-        .send({ category: 'general', message: 'Great site!' })
+      const res = await request(app).post('/api/feedback').send({ category: 'general', message: 'Great site!' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -71,9 +69,7 @@ describe('Public Feedback API', () => {
     it('accepts feedback with email', async () => {
       mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-2' })
 
-      const res = await request(app)
-        .post('/api/feedback')
-        .send({ category: 'bug', message: 'Something broke', email: 'user@test.com' })
+      const res = await request(app).post('/api/feedback').send({ category: 'bug', message: 'Something broke', email: 'user@test.com' })
 
       expect(res.status).toBe(200)
       expect(mockPrisma.feedback.create).toHaveBeenCalledWith({
@@ -85,9 +81,7 @@ describe('Public Feedback API', () => {
     })
 
     it('silently rejects honeypot submissions', async () => {
-      const res = await request(app)
-        .post('/api/feedback')
-        .send({ category: 'general', message: 'Bot message', website: 'http://spam.com' })
+      const res = await request(app).post('/api/feedback').send({ category: 'general', message: 'Bot message', website: 'http://spam.com' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -96,33 +90,25 @@ describe('Public Feedback API', () => {
     })
 
     it('returns 400 for missing category', async () => {
-      const res = await request(app)
-        .post('/api/feedback')
-        .send({ message: 'No category' })
+      const res = await request(app).post('/api/feedback').send({ message: 'No category' })
 
       expect(res.status).toBe(400)
     })
 
     it('returns 400 for empty message', async () => {
-      const res = await request(app)
-        .post('/api/feedback')
-        .send({ category: 'general', message: '' })
+      const res = await request(app).post('/api/feedback').send({ category: 'general', message: '' })
 
       expect(res.status).toBe(400)
     })
 
     it('returns 400 for invalid category', async () => {
-      const res = await request(app)
-        .post('/api/feedback')
-        .send({ category: 'invalid', message: 'Test' })
+      const res = await request(app).post('/api/feedback').send({ category: 'invalid', message: 'Test' })
 
       expect(res.status).toBe(400)
     })
 
     it('returns 400 for invalid email format', async () => {
-      const res = await request(app)
-        .post('/api/feedback')
-        .send({ category: 'general', message: 'Test', email: 'not-an-email' })
+      const res = await request(app).post('/api/feedback').send({ category: 'general', message: 'Test', email: 'not-an-email' })
 
       expect(res.status).toBe(400)
     })
@@ -138,23 +124,16 @@ describe('Public Feedback API', () => {
     it('stores the HMAC of the visitor IP under the secret', async () => {
       mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-3' })
 
-      await request(app)
-        .post('/api/feedback')
-        .set('X-Forwarded-For', '198.51.100.4')
-        .send({ category: 'general', message: 'Test' })
+      await request(app).post('/api/feedback').set('X-Forwarded-For', '198.51.100.4').send({ category: 'general', message: 'Test' })
 
       const call = mockPrisma.feedback.create.mock.calls[0][0]
-      expect(call.data.ipHash).toBe(
-        createHmac('sha256', TEST_IP_HASH_SECRET).update('198.51.100.4').digest('hex'),
-      )
+      expect(call.data.ipHash).toBe(createHmac('sha256', TEST_IP_HASH_SECRET).update('198.51.100.4').digest('hex'))
     })
 
     it('refuses with 503 and stores nothing when the hash secret is missing', async () => {
       vi.mocked(hashFeedbackIp).mockReturnValueOnce(null)
 
-      const res = await request(app)
-        .post('/api/feedback')
-        .send({ category: 'general', message: 'Test' })
+      const res = await request(app).post('/api/feedback').send({ category: 'general', message: 'Test' })
 
       expect(res.status).toBe(503)
       expect(res.body.error).toEqual(expect.any(String))
@@ -164,9 +143,7 @@ describe('Public Feedback API', () => {
     it('treats empty email string as null', async () => {
       mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-4' })
 
-      await request(app)
-        .post('/api/feedback')
-        .send({ category: 'general', message: 'Test', email: '' })
+      await request(app).post('/api/feedback').send({ category: 'general', message: 'Test', email: '' })
 
       expect(mockPrisma.feedback.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ email: null }),

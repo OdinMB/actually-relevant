@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
-import { render, screen, within, act } from '@testing-library/react'
+import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
@@ -56,8 +56,7 @@ describe('PublicLayout', () => {
   })
 
   describe('Saved link', () => {
-    const savedLinks = () =>
-      within(screen.getByRole('banner')).queryAllByRole('link', { name: /^Saved/, hidden: true })
+    const savedLinks = () => within(screen.getByRole('banner')).queryAllByRole('link', { name: /^Saved/, hidden: true })
 
     beforeEach(() => {
       localStorage.clear()
@@ -92,7 +91,7 @@ describe('PublicLayout', () => {
         ...within(header).getAllByRole('link', { name: /^(Podcast|Saved)/, hidden: true }),
       ]
         .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
-        .map((el) => el.textContent?.replace(/\s*\(\d+\)$/, '').trim())
+        .map(el => el.textContent?.replace(/\s*\(\d+\)$/, '').trim())
       expect(order).toEqual(['Newsletter', 'Podcast', 'Saved', 'Newsletter', 'Podcast', 'Saved Stories'])
     })
   })
@@ -112,5 +111,33 @@ describe('PublicLayout', () => {
     renderLayout()
     const footer = screen.getByRole('contentinfo')
     expect(footer).toContainElement(screen.getByText(BRAND.claimSupport))
+  })
+
+  describe('Search panel', () => {
+    const openSearch = () => fireEvent.click(within(screen.getByRole('navigation', { name: 'Issue categories' })).getByRole('button', { name: 'Open search' }))
+    const searchBox = () => screen.queryByRole('textbox', { name: 'Search stories' })
+
+    it('clears the query on the first Escape and closes on the second', () => {
+      renderLayout()
+      openSearch()
+      fireEvent.change(searchBox()!, { target: { value: 'climate' } })
+
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(searchBox()).toHaveValue('')
+
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(searchBox()).toBeNull()
+    })
+
+    it('keeps an unsent query when closed with the toggle and reopened', () => {
+      renderLayout()
+      openSearch()
+      fireEvent.change(searchBox()!, { target: { value: 'water' } })
+      fireEvent.click(within(screen.getByRole('navigation', { name: 'Issue categories' })).getByRole('button', { name: 'Close search' }))
+      expect(searchBox()).toBeNull()
+
+      openSearch()
+      expect(searchBox()).toHaveValue('water')
+    })
   })
 })

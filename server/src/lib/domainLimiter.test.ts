@@ -110,7 +110,7 @@ describe('DomainLimiter', () => {
     await expect(
       limiter.run('https://example.com/a', async () => {
         throw new Error('test error')
-      })
+      }),
     ).rejects.toThrow('test error')
   })
 })

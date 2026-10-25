@@ -97,19 +97,33 @@ interface SetSpec {
 const SET_SPECS: Record<RatingSetSlug, SetSpec> = {
   'full-assessment': {
     title: 'Story assessments',
-    instructions: 'Each option is a full analysis of the article shown. Which analysis is more accurate, better supported by the article, and closer to the house format?',
+    instructions:
+      'Each option is a full analysis of the article shown. Which analysis is more accurate, better supported by the article, and closer to the house format?',
     // Prefer items where the two ratings differ; ≥1 Han-script and ≥3 non-English when available; then the 4-6 band.
-    pick: (drafts, cap) => pickWithQuotas(drafts, cap, [
-      { test: d => d.tags.han === true, min: 1 },
-      { test: d => d.tags.nonEnglish === true, min: 3 },
-    ], d => (d.tags.differ ? 2 : 0) + (d.tags.band46 ? 1 : 0)),
+    pick: (drafts, cap) =>
+      pickWithQuotas(
+        drafts,
+        cap,
+        [
+          { test: d => d.tags.han === true, min: 1 },
+          { test: d => d.tags.nonEnglish === true, min: 3 },
+        ],
+        d => (d.tags.differ ? 2 : 0) + (d.tags.band46 ? 1 : 0),
+      ),
   },
   'social-post': {
     title: 'Social post text',
     instructions: 'Each option is the text that would be posted above the story link. Which post would you rather publish unedited?',
     // Half Bluesky, half Mastodon; drafts where either option broke a hard rule first.
-    pick: (drafts, cap) => ['bluesky', 'mastodon'].flatMap(p =>
-      pickWithQuotas(drafts.filter(d => d.tags.platform === p), Math.floor(cap / 2), [], d => (d.tags.brokeRule ? 1 : 0))),
+    pick: (drafts, cap) =>
+      ['bluesky', 'mastodon'].flatMap(p =>
+        pickWithQuotas(
+          drafts.filter(d => d.tags.platform === p),
+          Math.floor(cap / 2),
+          [],
+          d => (d.tags.brokeRule ? 1 : 0),
+        ),
+      ),
   },
   'newsletter-intro': {
     title: 'Newsletter intros',
@@ -125,9 +139,10 @@ const SET_SPECS: Record<RatingSetSlug, SetSpec> = {
     title: 'Story selection',
     instructions: 'Each option is a set of stories picked from the candidates shown. Which set of picks is the better editorial choice for this group?',
     // Only groups where the two picks differ, most different first; fewer than the cap if fewer differ.
-    pick: (drafts, cap) => hashOrder(drafts.filter(d => Number(d.tags.jaccard) < 1))
-      .sort((a, b) => Number(a.tags.jaccard) - Number(b.tags.jaccard))
-      .slice(0, cap),
+    pick: (drafts, cap) =>
+      hashOrder(drafts.filter(d => Number(d.tags.jaccard) < 1))
+        .sort((a, b) => Number(a.tags.jaccard) - Number(b.tags.jaccard))
+        .slice(0, cap),
   },
 }
 
@@ -212,7 +227,7 @@ export function replaceRatingSet(
   replacement: { set: RatingSet; key: RatingKey },
 ): { file: RatingSetsFile; key: RatingKey } {
   const index = file.sets.findIndex(s => slugOfSetId(s.id) === slug)
-  const oldIds = new Set(index >= 0 ? file.sets[index].items.map(i => i.id) : [])
+  const oldIds = new Set(index >= 0 ? file.sets[index]!.items.map(i => i.id) : [])
   const sets = index >= 0 ? file.sets.map((s, i) => (i === index ? replacement.set : s)) : [...file.sets, replacement.set]
   const entries = Object.entries(key)
   const kept = entries.filter(([id]) => !oldIds.has(id))

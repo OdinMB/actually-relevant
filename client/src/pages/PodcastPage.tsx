@@ -33,13 +33,23 @@ function EpisodeList() {
       {data.show.listenLinks.length > 0 && (
         <ul aria-label="Listen in your podcast app" className="mb-8 flex flex-wrap gap-x-4 gap-y-2">
           {data.show.listenLinks.map(link => (
-            <li key={link.url}><a href={link.url} className={LINK_CLASS} rel="noopener noreferrer" target="_blank">{link.name}</a></li>
+            <li key={link.url}>
+              <a href={link.url} className={LINK_CLASS} rel="noopener noreferrer" target="_blank">
+                {link.name}
+              </a>
+            </li>
           ))}
         </ul>
       )}
-      {data.episodes.length === 0
-        ? <p className="text-neutral-600">The first episode is on its way.</p>
-        : <div className="space-y-8">{data.episodes.map(e => <PodcastEpisode key={e.id} episode={e} />)}</div>}
+      {data.episodes.length === 0 ? (
+        <p className="text-neutral-600">The first episode is on its way.</p>
+      ) : (
+        <div className="space-y-8">
+          {data.episodes.map(e => (
+            <PodcastEpisode key={e.id} episode={e} />
+          ))}
+        </div>
+      )}
     </>
   )
 }
@@ -70,7 +80,9 @@ export default function PodcastPage() {
         <PodcastSubtitle />
 
         <section aria-labelledby="podcast-subscribe-heading" className="mt-10 prose">
-          <h2 id="podcast-subscribe-heading" className="section-heading">Subscribe</h2>
+          <h2 id="podcast-subscribe-heading" className="section-heading">
+            Subscribe
+          </h2>
           <a
             href={APPLE_PODCASTS_URL}
             target="_blank"
@@ -88,12 +100,16 @@ export default function PodcastPage() {
           </a>
           <p>
             Or add the feed to any podcast app that accepts an RSS address:{' '}
-            <a href={PODCAST_FEED_URL} className={LINK_CLASS}>{PODCAST_FEED_URL}</a>
+            <a href={PODCAST_FEED_URL} className={LINK_CLASS}>
+              {PODCAST_FEED_URL}
+            </a>
           </p>
         </section>
 
         <section aria-labelledby="podcast-episodes-heading" className="mt-10">
-          <h2 id="podcast-episodes-heading" className="section-heading mb-6">Episodes</h2>
+          <h2 id="podcast-episodes-heading" className="section-heading mb-6">
+            Episodes
+          </h2>
           <EpisodeList />
         </section>
       </div>

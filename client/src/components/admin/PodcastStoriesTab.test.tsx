@@ -24,13 +24,21 @@ beforeEach(() => {
 
 describe('PodcastStoriesTab', () => {
   it('starts an interactive episode at once', async () => {
-    renderInAdmin(<PodcastStoriesTab podcast={makePodcast({ stage: 'created', mode: null, awaitingReview: false })} pendingEdits={false} onDirtyChange={noop} />)
+    renderInAdmin(
+      <PodcastStoriesTab podcast={makePodcast({ stage: 'created', mode: null, awaitingReview: false })} pendingEdits={false} onDirtyChange={noop} />,
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Interactive (review each step)' }))
     await waitFor(() => expect(mockApi.resume).toHaveBeenCalledWith('pod-1', 'interactive'))
   })
 
   it('asks for the typical cost before a fully automated start, and sends nothing on cancel', async () => {
-    renderInAdmin(<PodcastStoriesTab podcast={makePodcast({ stage: 'created', mode: null, awaitingReview: false, ttsCharsEstimate: null })} pendingEdits={false} onDirtyChange={noop} />)
+    renderInAdmin(
+      <PodcastStoriesTab
+        podcast={makePodcast({ stage: 'created', mode: null, awaitingReview: false, ttsCharsEstimate: null })}
+        pendingEdits={false}
+        onDirtyChange={noop}
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Fully automated' }))
     expect(await screen.findByText(/10,800 of 32,000/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -39,7 +47,7 @@ describe('PodcastStoriesTab', () => {
 
   it('approves the stories, unless the picker holds unsaved edits', async () => {
     const { unmount } = renderInAdmin(<PodcastStoriesTab podcast={makePodcast({ stage: 'selected' })} pendingEdits onDirtyChange={noop} />)
-    expect((await screen.findByRole('button', { name: 'Approve stories and write the script' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(((await screen.findByRole('button', { name: 'Approve stories and write the script' })) as HTMLButtonElement).disabled).toBe(true)
     unmount()
     renderInAdmin(<PodcastStoriesTab podcast={makePodcast({ stage: 'selected' })} pendingEdits={false} onDirtyChange={noop} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Approve stories and write the script' }))
@@ -63,7 +71,13 @@ describe('PodcastStoriesTab', () => {
 
   it('starts a standalone episode over without a run, so a person chooses the stories again', async () => {
     mockApi.rewind.mockResolvedValue(makeStandalonePodcast())
-    renderInAdmin(<PodcastStoriesTab podcast={makeStandalonePodcast({ stage: 'scripted', mode: 'interactive', awaitingReview: true })} pendingEdits={false} onDirtyChange={noop} />)
+    renderInAdmin(
+      <PodcastStoriesTab
+        podcast={makeStandalonePodcast({ stage: 'scripted', mode: 'interactive', awaitingReview: true })}
+        pendingEdits={false}
+        onDirtyChange={noop}
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Start over' }))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Start over' }))
     await waitFor(() => expect(mockApi.rewind).toHaveBeenCalledWith('pod-1', 'created', false))

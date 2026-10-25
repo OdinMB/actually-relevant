@@ -35,7 +35,18 @@ const { PodcastBlockedError, PodcastStoppedError, PodcastRefusedError } = await 
 const NOW = new Date('2026-10-10T06:00:00Z') // Saturday of 2026-W41
 
 function row(overrides: Record<string, unknown> = {}) {
-  return { id: 'pod-1', weekKey: '2026-W41', kind: 'weekly', stage: 'created', status: 'draft', mode: 'automated', dryRun: false, blockedAt: null, attempts: 0, ...overrides }
+  return {
+    id: 'pod-1',
+    weekKey: '2026-W41',
+    kind: 'weekly',
+    stage: 'created',
+    status: 'draft',
+    mode: 'automated',
+    dryRun: false,
+    blockedAt: null,
+    attempts: 0,
+    ...overrides,
+  }
 }
 
 describe('isoWeekKey', () => {
@@ -68,7 +79,7 @@ describe('weeklyCronAction', () => {
 describe('findOrCreateWeekEpisode', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('returns the week\'s existing row without creating one', async () => {
+  it("returns the week's existing row without creating one", async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row())
     expect(await findOrCreateWeekEpisode(NOW)).toEqual(row())
     expect(mockPrisma.podcast.create).not.toHaveBeenCalled()
@@ -78,7 +89,9 @@ describe('findOrCreateWeekEpisode', () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
     mockPrisma.podcast.create.mockResolvedValueOnce(row())
     await findOrCreateWeekEpisode(NOW)
-    expect(mockPrisma.podcast.create).toHaveBeenCalledWith({ data: expect.objectContaining({ weekKey: '2026-W41', dryRun: false, title: 'Actually Relevant, 2026-W41' }) })
+    expect(mockPrisma.podcast.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ weekKey: '2026-W41', dryRun: false, title: 'Actually Relevant, 2026-W41' }),
+    })
   })
 
   it('reads the row another process created first (unique week key)', async () => {
@@ -96,7 +109,7 @@ describe('runWeeklyEpisode', () => {
     mockPrisma.podcast.update.mockResolvedValue(row({ attempts: 1 }))
   })
 
-  it('advances the week\'s episode', async () => {
+  it("advances the week's episode", async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row())
     expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'done', podcastId: 'pod-1' })
     expect(mockPipeline.advanceEpisode).toHaveBeenCalledWith('pod-1', { trigger: 'cron', leaseHeld: false })
@@ -111,7 +124,11 @@ describe('runWeeklyEpisode', () => {
 
   it('on the cron trigger skips an interactive episode a person is reviewing', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ mode: 'interactive', stage: 'scripted' }))
-    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({ outcome: 'skipped', reason: expect.stringMatching(/interactive/), waitingForPerson: true })
+    expect(await runWeeklyEpisode({ trigger: 'cron', now: NOW })).toMatchObject({
+      outcome: 'skipped',
+      reason: expect.stringMatching(/interactive/),
+      waitingForPerson: true,
+    })
     expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
     expect(mockPrisma.podcast.update).not.toHaveBeenCalled()
   })
@@ -192,7 +209,9 @@ describe('runWeeklyEpisode', () => {
 
   it('blocks before any work when the configuration is incomplete', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row())
-    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => { throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY') })
+    mockGuards.assertPodcastRunnable.mockImplementationOnce(() => {
+      throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY')
+    })
     const result = await runWeeklyEpisode({ trigger: 'cron', now: NOW })
     expect(result).toMatchObject({ outcome: 'blocked', reason: expect.stringContaining('ELEVENLABS_API_KEY') })
     expect(mockGuards.assertPodcastRunnable).toHaveBeenCalledWith({ dryRun: false })
@@ -259,7 +278,10 @@ describe('startAdminRun', () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ mode: null, blockedAt: new Date(), attempts: 3 }))
     await startAdminRun('pod-1', { mode: 'interactive' })
     expect(mockPipeline.claimEpisode).toHaveBeenCalledWith('pod-1')
-    expect(mockPrisma.podcast.update).toHaveBeenCalledWith({ where: { id: 'pod-1' }, data: { mode: 'interactive', blockedAt: null, blockedReason: null, attempts: 0 } })
+    expect(mockPrisma.podcast.update).toHaveBeenCalledWith({
+      where: { id: 'pod-1' },
+      data: { mode: 'interactive', blockedAt: null, blockedReason: null, attempts: 0 },
+    })
     expect(mockPipeline.releaseEpisode).not.toHaveBeenCalled()
   })
 

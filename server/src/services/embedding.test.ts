@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('openai', () => {
   const mockCreate = vi.fn()
+  const constructorOptions: unknown[] = []
   return {
     default: class OpenAI {
       embeddings = { create: mockCreate }
+      constructor(options?: unknown) {
+        constructorOptions.push(options)
+      }
     },
     __mockCreate: mockCreate,
+    __constructorOptions: constructorOptions,
   }
 })
 
@@ -15,10 +20,6 @@ vi.mock('../lib/prisma.js', () => ({
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
   },
-}))
-
-vi.mock('../lib/retry.js', () => ({
-  withRetry: (fn: () => Promise<unknown>) => fn(),
 }))
 
 const mockLogger = vi.hoisted(() => ({
@@ -54,6 +55,20 @@ const {
 // Access the mock through the module
 const openaiModule = await import('openai')
 const mockCreate = (openaiModule as any).__mockCreate as ReturnType<typeof vi.fn>
+const openaiConstructorOptions = (openaiModule as any).__constructorOptions as unknown[]
+
+describe('OpenAI embeddings client retries', () => {
+  it("lets the SDK retry, with the chat models' 3 retries", () => {
+    expect(openaiConstructorOptions).toEqual([{ maxRetries: 3 }])
+  })
+
+  it('does not retry on top of the SDK: a failed request is made once', async () => {
+    vi.clearAllMocks()
+    mockCreate.mockRejectedValue(Object.assign(new Error('rate limited'), { status: 429 }))
+    await expect(generateEmbedding('text')).rejects.toThrow('rate limited')
+    expect(mockCreate).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('buildEmbeddingContent', () => {
   it('builds content with all fields present', () => {
@@ -66,9 +81,7 @@ describe('buildEmbeddingContent', () => {
     }
 
     const content = buildEmbeddingContent(story)
-    expect(content).toBe(
-      'Technology: AI Breakthrough\nResearchers achieve major milestone',
-    )
+    expect(content).toBe('Technology: AI Breakthrough\nResearchers achieve major milestone')
   })
 
   it('uses title alone when titleLabel is null', () => {
@@ -265,8 +278,12 @@ describe('ensureEmbedding', () => {
 
   it('generates and saves embedding when missing', async () => {
     mockFetchStoryForEmbedding.mockResolvedValue({
-      id: 'story-1', title: 'Test', titleLabel: null, summary: 'Summary',
-      embeddingContentHash: null, status: 'selected',
+      id: 'story-1',
+      title: 'Test',
+      titleLabel: null,
+      summary: 'Summary',
+      embeddingContentHash: null,
+      status: 'selected',
     })
     mockCreate.mockResolvedValue({
       data: [{ embedding: [0.1, 0.2], index: 0 }],
@@ -284,8 +301,12 @@ describe('ensureEmbedding', () => {
     const content = 'Test\nSummary'
     const hash = computeContentHash(content)
     mockFetchStoryForEmbedding.mockResolvedValue({
-      id: 'story-1', title: 'Test', titleLabel: null, summary: 'Summary',
-      embeddingContentHash: hash, status: 'analyzed',
+      id: 'story-1',
+      title: 'Test',
+      titleLabel: null,
+      summary: 'Summary',
+      embeddingContentHash: hash,
+      status: 'analyzed',
     })
 
     await ensureEmbedding('story-1')
@@ -305,8 +326,12 @@ describe('ensureEmbedding', () => {
 
   it('does nothing when content is empty', async () => {
     mockFetchStoryForEmbedding.mockResolvedValue({
-      id: 'story-1', title: null, titleLabel: null, summary: null,
-      embeddingContentHash: null, status: 'selected',
+      id: 'story-1',
+      title: null,
+      titleLabel: null,
+      summary: null,
+      embeddingContentHash: null,
+      status: 'selected',
     })
 
     await ensureEmbedding('story-1')
@@ -317,17 +342,18 @@ describe('ensureEmbedding', () => {
 
   it('logs warning and does not throw on OpenAI failure', async () => {
     mockFetchStoryForEmbedding.mockResolvedValue({
-      id: 'story-1', title: 'Test', titleLabel: null, summary: 'Summary',
-      embeddingContentHash: null, status: 'selected',
+      id: 'story-1',
+      title: 'Test',
+      titleLabel: null,
+      summary: 'Summary',
+      embeddingContentHash: null,
+      status: 'selected',
     })
     mockCreate.mockRejectedValue(new Error('OpenAI API error'))
 
     await ensureEmbedding('story-1')
 
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ storyId: 'story-1' }),
-      expect.stringContaining('failed to ensure embedding'),
-    )
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.objectContaining({ storyId: 'story-1' }), expect.stringContaining('failed to ensure embedding'))
     expect(mockSaveEmbedding).not.toHaveBeenCalled()
   })
 })
@@ -338,9 +364,7 @@ describe('ensureEmbeddings', () => {
   })
 
   it('generates and saves embeddings for stories missing them', async () => {
-    mockFetchStoriesForEmbedding.mockResolvedValue([
-      { id: 'story-1', title: 'Story 1', titleLabel: null, summary: 'Summary 1', embeddingContentHash: null },
-    ])
+    mockFetchStoriesForEmbedding.mockResolvedValue([{ id: 'story-1', title: 'Story 1', titleLabel: null, summary: 'Summary 1', embeddingContentHash: null }])
     mockCreate.mockResolvedValue({
       data: [{ embedding: [0.5], index: 0 }],
     })
@@ -361,23 +385,16 @@ describe('ensureEmbeddings', () => {
   })
 
   it('logs warning when some embeddings fail', async () => {
-    mockFetchStoriesForEmbedding.mockResolvedValue([
-      { id: 'story-1', title: 'S1', titleLabel: null, summary: 'Sum1', embeddingContentHash: null },
-    ])
+    mockFetchStoriesForEmbedding.mockResolvedValue([{ id: 'story-1', title: 'S1', titleLabel: null, summary: 'Sum1', embeddingContentHash: null }])
     mockCreate.mockRejectedValue(new Error('API error'))
 
     await ensureEmbeddings(['story-1'])
 
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ failedCount: 1 }),
-      expect.stringContaining('failed during ensure'),
-    )
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.objectContaining({ failedCount: 1 }), expect.stringContaining('failed during ensure'))
   })
 
   it('does not warn when all succeed', async () => {
-    mockFetchStoriesForEmbedding.mockResolvedValue([
-      { id: 'story-1', title: 'S1', titleLabel: null, summary: 'Sum1', embeddingContentHash: null },
-    ])
+    mockFetchStoriesForEmbedding.mockResolvedValue([{ id: 'story-1', title: 'S1', titleLabel: null, summary: 'Sum1', embeddingContentHash: null }])
     mockCreate.mockResolvedValue({
       data: [{ embedding: [0.1], index: 0 }],
     })

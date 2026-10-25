@@ -1,8 +1,11 @@
 import { access, writeFile, mkdir } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import type { Readable } from 'stream'
+import axios from 'axios'
 import * as cheerio from 'cheerio'
 import { createLogger } from '../lib/logger.js'
+import { isAllowedUrl, ssrfGuard } from '../utils/urlValidation.js'
 import * as feedService from './feed.js'
 
 const log = createLogger('favicon')
@@ -35,32 +38,60 @@ async function faviconExists(feedId: string): Promise<boolean> {
   }
 }
 
+/**
+ * GET through the SSRF guard (utils/urlValidation.ts: URL check, resolved addresses, every
+ * redirect), as a stream so the caller can stop reading at its size cap. Null unless a 2xx.
+ */
+async function guardedGet(url: string, accept?: string): Promise<{ contentType: string; body: Readable } | null> {
+  if (!isAllowedUrl(url)) {
+    log.warn({ url }, 'blocked disallowed favicon URL')
+    return null
+  }
+  const res = await axios.get<Readable>(url, {
+    responseType: 'stream',
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), // the whole exchange, body included
+    maxRedirects: 5,
+    headers: accept ? { Accept: accept } : undefined,
+    validateStatus: () => true,
+    ...ssrfGuard,
+  })
+  if (res.status < 200 || res.status >= 300) {
+    res.data.destroy()
+    return null
+  }
+  return { contentType: String(res.headers['content-type'] ?? ''), body: res.data }
+}
+
+/** Read a stream up to maxBytes; with `truncate`, keep the first maxBytes, else give up (null). */
+async function readCapped(body: Readable, maxBytes: number, truncate: boolean): Promise<Buffer | null> {
+  const chunks: Buffer[] = []
+  let totalBytes = 0
+  for await (const chunk of body) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    totalBytes += buf.byteLength
+    chunks.push(buf)
+    if (totalBytes > maxBytes) {
+      body.destroy()
+      if (!truncate) return null
+      break
+    }
+  }
+  return Buffer.concat(chunks)
+}
+
 async function fetchImage(url: string): Promise<Buffer | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
-    if (!res.ok) return null
-
-    const contentType = res.headers.get('content-type') || ''
-    if (!contentType.startsWith('image/')) return null
+    const res = await guardedGet(url)
+    if (!res) return null
+    if (!res.contentType.startsWith('image/')) {
+      res.body.destroy()
+      return null
+    }
 
     // Read body in chunks to avoid allocating huge buffers for unexpected responses
-    const reader = res.body?.getReader()
-    if (!reader) return null
-    const chunks: Uint8Array[] = []
-    let totalBytes = 0
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      totalBytes += value.byteLength
-      if (totalBytes > MAX_FAVICON_BYTES) {
-        await reader.cancel()
-        return null
-      }
-      chunks.push(value)
-    }
-    if (totalBytes === 0) return null
-
-    return Buffer.concat(chunks)
+    const buffer = await readCapped(res.body, MAX_FAVICON_BYTES, false)
+    if (!buffer || buffer.byteLength === 0) return null
+    return buffer
   } catch {
     return null
   }
@@ -78,28 +109,13 @@ async function tryGoogleApi(hostname: string): Promise<Buffer | null> {
 /** Parse HTML for <link rel="icon"> and download the best match. */
 async function tryHtmlParsing(origin: string): Promise<Buffer | null> {
   try {
-    const res = await fetch(origin, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: { 'Accept': 'text/html' },
-    })
-    if (!res.ok) return null
+    const res = await guardedGet(origin, 'text/html')
+    if (!res) return null
 
     // Read body in chunks to cap memory usage — we only need the <head> for favicon links
-    const reader = res.body?.getReader()
-    if (!reader) return null
-    const decoder = new TextDecoder()
-    let html = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      html += decoder.decode(value, { stream: true })
-      if (html.length > MAX_HTML_BYTES) {
-        await reader.cancel()
-        break
-      }
-    }
-    html += decoder.decode() // flush remaining bytes
-    const $ = cheerio.load(html)
+    const page = await readCapped(res.body, MAX_HTML_BYTES, true)
+    if (!page) return null
+    const $ = cheerio.load(page.toString('utf8'))
 
     // Collect all icon link tags, prefer larger sizes
     const iconLinks: { href: string; size: number }[] = []
@@ -108,7 +124,7 @@ async function tryHtmlParsing(origin: string): Promise<Buffer | null> {
       if (!href) return
       const sizes = $(el).attr('sizes') || ''
       const match = sizes.match(/(\d+)x\d+/)
-      const size = match ? parseInt(match[1]) : 0
+      const size = match ? parseInt(match[1]!) : 0
       iconLinks.push({ href, size })
     })
 
@@ -146,7 +162,7 @@ export async function fetchFavicon(feedId: string, feedUrl: string, homeUrl?: st
     throw new Error(`Invalid feed ID format: ${feedId}`)
   }
 
-  if (!force && await faviconExists(feedId)) {
+  if (!force && (await faviconExists(feedId))) {
     log.debug({ feedId }, 'favicon already exists, skipping')
     return { success: true, message: 'Already exists' }
   }
@@ -166,10 +182,7 @@ export async function fetchFavicon(feedId: string, feedUrl: string, homeUrl?: st
   let buffer: Buffer | null = null
   for (const domain of domains) {
     const origin = `${primaryUrl.protocol}//${domain}`
-    buffer =
-      await tryGoogleApi(domain) ??
-      await tryHtmlParsing(origin) ??
-      await tryDirectFavicon(origin)
+    buffer = (await tryGoogleApi(domain)) ?? (await tryHtmlParsing(origin)) ?? (await tryDirectFavicon(origin))
     if (buffer) break
   }
 
@@ -194,24 +207,25 @@ export async function fetchAllFavicons(): Promise<{ succeeded: number; failed: n
   for (let i = 0; i < feeds.length; i += CONCURRENCY) {
     const batch = feeds.slice(i, i + CONCURRENCY)
     const results = await Promise.allSettled(
-      batch.map(async (feed) => {
+      batch.map(async feed => {
         if (await faviconExists(feed.id)) return 'skipped' as const
         const result = await fetchFavicon(feed.id, feed.rssUrl, feed.url)
-        return result.success ? 'fetched' as const : 'not_found' as const
-      })
+        return result.success ? ('fetched' as const) : ('not_found' as const)
+      }),
     )
     for (const [idx, result] of results.entries()) {
+      const feed = batch[idx]!
       if (result.status === 'fulfilled') {
         if (result.value === 'skipped') skipped++
         else if (result.value === 'fetched') succeeded++
         else {
           failed++
-          errors.push(`${batch[idx].title}: not found`)
+          errors.push(`${feed.title}: not found`)
         }
       } else {
         failed++
-        errors.push(`${batch[idx].title}: ${result.reason?.message || 'Unknown error'}`)
-        log.warn({ feedId: batch[idx].id, err: result.reason }, 'failed to fetch favicon')
+        errors.push(`${feed.title}: ${result.reason?.message || 'Unknown error'}`)
+        log.warn({ feedId: feed.id, err: result.reason }, 'failed to fetch favicon')
       }
     }
   }

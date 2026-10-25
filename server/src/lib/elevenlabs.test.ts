@@ -22,17 +22,30 @@ const { config } = await import('../config.js')
 
 function audioResponse(headers: Record<string, string> = {}): AxiosResponse<ArrayBuffer> {
   const bytes = Buffer.from('ID3fake-mp3')
-  return { data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), status: 200, statusText: 'OK', headers, config: { headers: new AxiosHeaders() } }
+  return {
+    data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    status: 200,
+    statusText: 'OK',
+    headers,
+    config: { headers: new AxiosHeaders() },
+  }
 }
 
 function httpError(status: number, body: unknown): AxiosError {
   const data = Buffer.from(JSON.stringify(body))
   return new AxiosError(`Request failed with status code ${status}`, 'ERR_BAD_RESPONSE', undefined, undefined, {
-    data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() },
+    data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+    status,
+    statusText: '',
+    headers: {},
+    config: { headers: new AxiosHeaders() },
   })
 }
 
-const inputs = [{ text: 'Hello there.', voiceId: 'voice-a' }, { text: 'Hi.', voiceId: 'voice-b' }]
+const inputs = [
+  { text: 'Hello there.', voiceId: 'voice-a' },
+  { text: 'Hi.', voiceId: 'voice-b' },
+]
 
 describe('textToDialogue', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -47,7 +60,10 @@ describe('textToDialogue', () => {
       model_id: config.podcast.ttsModelId,
       seed: 98_765,
       language_code: 'en',
-      inputs: [{ text: 'Hello there.', voice_id: 'voice-a' }, { text: 'Hi.', voice_id: 'voice-b' }],
+      inputs: [
+        { text: 'Hello there.', voice_id: 'voice-a' },
+        { text: 'Hi.', voice_id: 'voice-b' },
+      ],
       future_text: 'Next up.',
     })
     expect(body).not.toHaveProperty('previous_text')

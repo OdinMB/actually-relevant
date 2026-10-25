@@ -26,10 +26,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof CreateClusterDi
   const defaultProps = {
     open: true,
     onClose: vi.fn(),
-    stories: [
-      makeStory({ id: 's1', title: 'Story One' }),
-      makeStory({ id: 's2', title: 'Story Two' }),
-    ],
+    stories: [makeStory({ id: 's1', title: 'Story One' }), makeStory({ id: 's2', title: 'Story Two' })],
     onSuccess: vi.fn(),
     ...props,
   }
@@ -57,10 +54,7 @@ describe('CreateClusterDialog', () => {
 
   it('shows conflict warning for already-clustered stories', () => {
     renderDialog({
-      stories: [
-        makeStory({ id: 's1', title: 'Story One' }),
-        makeStory({ id: 's2', title: 'Conflicting Story', clusterId: 'existing-cluster' }),
-      ],
+      stories: [makeStory({ id: 's1', title: 'Story One' }), makeStory({ id: 's2', title: 'Conflicting Story', clusterId: 'existing-cluster' })],
     })
     expect(screen.getByText('Some stories are already in a cluster:')).toBeInTheDocument()
     expect(screen.getByText(/Remove these stories/)).toBeInTheDocument()
@@ -70,10 +64,7 @@ describe('CreateClusterDialog', () => {
 
   it('disables Create button when stories have conflicts', () => {
     renderDialog({
-      stories: [
-        makeStory({ id: 's1', title: 'Story One' }),
-        makeStory({ id: 's2', title: 'Conflicting Story', clusterId: 'existing-cluster' }),
-      ],
+      stories: [makeStory({ id: 's1', title: 'Story One' }), makeStory({ id: 's2', title: 'Conflicting Story', clusterId: 'existing-cluster' })],
     })
     expect(screen.getByRole('button', { name: 'Create Cluster' })).toBeDisabled()
   })
@@ -91,7 +82,7 @@ describe('CreateClusterDialog', () => {
     // Find the "Make primary" button for the second story
     const makePrimaryButtons = screen.getAllByTitle('Make primary')
     expect(makePrimaryButtons).toHaveLength(1) // Only non-primary story has the button
-    await user.click(makePrimaryButtons[0])
+    await user.click(makePrimaryButtons[0]!)
 
     // Now the second story should be primary
     expect(screen.getByTitle('Primary story')).toBeInTheDocument()

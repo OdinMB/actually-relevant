@@ -5,6 +5,7 @@ import { publicApi } from '../lib/api'
 import { formatRelativeTime } from '../lib/constants'
 import AiLabel from '../components/ai/AiLabel'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
+import { SITE_URL } from '../config'
 
 export default function EmbedPage() {
   const [params] = useSearchParams()
@@ -26,10 +27,7 @@ export default function EmbedPage() {
   useEffect(() => {
     const observer = new ResizeObserver(() => {
       if (containerRef.current) {
-        window.parent.postMessage(
-          { type: 'ar-embed-resize', height: containerRef.current.scrollHeight },
-          '*',
-        )
+        window.parent.postMessage({ type: 'ar-embed-resize', height: containerRef.current.scrollHeight }, '*')
       }
     })
     if (containerRef.current) observer.observe(containerRef.current)
@@ -50,36 +48,23 @@ export default function EmbedPage() {
   }, [isDark])
 
   return (
-    <main
-      ref={containerRef}
-      className={`font-sans text-sm leading-relaxed ${isDark ? 'bg-neutral-900 text-neutral-200' : 'bg-white text-neutral-700'}`}
-    >
+    <main ref={containerRef} className={`font-sans text-sm leading-relaxed ${isDark ? 'bg-neutral-900 text-neutral-200' : 'bg-white text-neutral-700'}`}>
       <h1 className="sr-only">Actually Relevant Stories</h1>
       {/* AI label at the top of the embed, which shows AI headlines on other people's sites (AI Act Art. 50(4)) */}
       <p className={`px-4 py-2 border-b text-[12px] ${isDark ? 'border-neutral-700 text-neutral-300' : 'border-neutral-200 text-neutral-600'}`}>
         <AiLabel text={AI_DISCLOSURE_COPY.embedHeader} />
       </p>
-      {isLoading && (
-        <div className={`px-4 py-8 text-center text-[13px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-          Loading...
-        </div>
-      )}
+      {isLoading && <div className={`px-4 py-8 text-center text-[13px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Loading...</div>}
 
-      {isError && (
-        <div className="px-4 py-8 text-center text-[13px] text-red-500">
-          Could not load stories
-        </div>
-      )}
+      {isError && <div className="px-4 py-8 text-center text-[13px] text-red-500">Could not load stories</div>}
 
       {data && data.data.length === 0 && (
-        <div className={`px-4 py-8 text-center text-[13px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-          No stories available
-        </div>
+        <div className={`px-4 py-8 text-center text-[13px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>No stories available</div>
       )}
 
       {data && data.data.length > 0 && (
         <ul className={`divide-y ${isDark ? 'divide-neutral-700' : 'divide-neutral-200'}`}>
-          {data.data.map((story) => (
+          {data.data.map(story => (
             <li key={story.id}>
               <Link
                 to={`/stories/${story.slug || story.id}`}
@@ -87,12 +72,11 @@ export default function EmbedPage() {
                 className={`block px-4 py-2.5 transition-colors ${isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-50'}`}
               >
                 <p className="font-medium text-[14px] mb-0.5">
-                  {story.titleLabel ? `${story.titleLabel}: ` : ''}{story.title || story.sourceTitle}
+                  {story.titleLabel ? `${story.titleLabel}: ` : ''}
+                  {story.title || story.sourceTitle}
                 </p>
                 {showSummary && story.relevanceSummary && (
-                  <p className={`text-[12px] leading-relaxed mb-1 ${isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>
-                    {story.relevanceSummary}
-                  </p>
+                  <p className={`text-[12px] leading-relaxed mb-1 ${isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>{story.relevanceSummary}</p>
                 )}
                 <span className={`text-[12px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
                   {story.feed?.displayTitle || story.feed?.title}
@@ -106,17 +90,12 @@ export default function EmbedPage() {
 
       <div className={`px-4 py-2 border-t flex items-center justify-center ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}>
         <a
-          href="https://actuallyrelevant.news"
+          href={SITE_URL}
           target="_blank"
           rel="noopener noreferrer"
           className={`inline-flex items-center gap-1.5 text-[11px] ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-700'}`}
         >
-          <img
-            src="https://actuallyrelevant.news/images/logo-no-text-square.png"
-            alt=""
-            className="w-5 h-5 rounded-sm"
-            aria-hidden="true"
-          />
+          <img src={`${SITE_URL}/images/logo-no-text-square.png`} alt="" className="w-5 h-5 rounded-sm" aria-hidden="true" />
           Powered by Actually Relevant
         </a>
       </div>

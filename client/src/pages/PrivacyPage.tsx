@@ -1,6 +1,6 @@
-import { Helmet } from "react-helmet-async";
-import ObfuscatedEmail from "../components/ObfuscatedEmail";
-import { SEO, CommonOgTags } from "../lib/seo";
+import { Helmet } from 'react-helmet-async'
+import ObfuscatedEmail from '../components/ObfuscatedEmail'
+import { SEO, CommonOgTags } from '../lib/seo'
 
 export default function PrivacyPage() {
   return (
@@ -11,10 +11,7 @@ export default function PrivacyPage() {
           name="description"
           content="Actually Relevant respects your privacy. We set no cookies and use no tracking pixels or invasive analytics. Learn what minimal data we collect."
         />
-        <meta
-          property="og:title"
-          content={`Privacy Policy - ${SEO.siteName}`}
-        />
+        <meta property="og:title" content={`Privacy Policy - ${SEO.siteName}`} />
         <meta
           property="og:description"
           content="Actually Relevant respects your privacy. We set no cookies and use no tracking pixels or invasive analytics."
@@ -29,24 +26,16 @@ export default function PrivacyPage() {
 
         <div className="prose max-w-none">
           <p>
-            We do not set cookies, and we do not use tracking pixels, Google
-            Analytics, advertising scripts, or any other invasive data
-            collection. Your
-            browser keeps your dial position, saved stories, and reading history
-            on your device, and they never leave it.
+            We do not set cookies, and we do not use tracking pixels, Google Analytics, advertising scripts, or any other invasive data collection. Your browser
+            keeps your dial position, saved stories, and reading history on your device, and they never leave it.
           </p>
 
           <h2 className="section-heading mt-10">What We Collect</h2>
 
           <h3 className="text-lg font-normal mt-6 mb-2">Website Analytics</h3>
           <p>
-            We use{" "}
-            <a
-              href="https://www.simpleanalytics.com/"
-              className="text-brand-700 hover:text-brand-800"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            We use{' '}
+            <a href="https://www.simpleanalytics.com/" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
               Simple Analytics
             </a>
             , a privacy-focused analytics service that:
@@ -68,111 +57,66 @@ export default function PrivacyPage() {
             <li>Is fully GDPR, CCPA, and PECR compliant</li>
           </ul>
           <p className="mt-3">
-            Simple Analytics collects only aggregated, anonymous data such as
-            page views and referrer sources. No information is ever tied to you
-            as an individual. You can view their privacy policy at{" "}
-            <a
-              href="https://simpleanalytics.com/privacy"
-              className="text-brand-700 hover:text-brand-800"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            Simple Analytics collects only aggregated, anonymous data such as page views and referrer sources. No information is ever tied to you as an
+            individual. You can view their privacy policy at{' '}
+            <a href="https://simpleanalytics.com/privacy" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
               simpleanalytics.com/privacy
             </a>
             .
           </p>
 
-          <h3 className="text-lg font-normal mt-6 mb-2">
-            Newsletter (Optional)
-          </h3>
+          <h3 className="text-lg font-normal mt-6 mb-2">Newsletter (Optional)</h3>
           <p>
-            If you choose to subscribe to our newsletter, we collect your{" "}
-            <strong>email address</strong> (provided voluntarily by you).
+            If you choose to subscribe to our newsletter, we collect your <strong>email address</strong> (provided voluntarily by you).
           </p>
           <p className="mt-3">
-            It is used solely to send you updates about Actually Relevant and to
-            prevent abuse of the newsletter service. We never sell it or share it
-            for anyone else's purposes. Our newsletter provider,{" "}
-            <a
-              href="https://www.useplunk.com/"
-              className="text-brand-700 hover:text-brand-800"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            It is used solely to send you updates about Actually Relevant and to prevent abuse of the newsletter service. We never sell it or share it for
+            anyone else's purposes. Our newsletter provider,{' '}
+            <a href="https://www.useplunk.com/" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
               Plunk
             </a>
-            , and its delivery provider, Amazon SES (Amazon Web Services),
-            process it on our behalf to send our emails.
+            , and its delivery provider, Amazon SES (Amazon Web Services), process it on our behalf to send our emails.
           </p>
           <p className="mt-3">
-            To keep bots from signing up other people&apos;s addresses, the
-            signup form uses Cloudflare Turnstile, which checks that a person is
-            filling it in. Turnstile loads from Cloudflare only when you submit
-            the form, so Cloudflare receives your IP address and information
-            about your browser only if you submit the form. Cloudflare uses this data
-            only for bot protection: to check this signup on our behalf, and,
-            under its own responsibility, to improve its bot detection.
-            Cloudflare is a US company and may process this data in the USA.
-            It states that it is certified under the EU-U.S. Data Privacy
-            Framework, and its data processing agreement applies the EU
-            standard contractual clauses if that certification lapses.
+            To keep bots from signing up other people&apos;s addresses, the signup form uses Cloudflare Turnstile, which checks that a person is filling it in.
+            Turnstile loads from Cloudflare only when you submit the form, so Cloudflare receives your IP address and information about your browser only if you
+            submit the form. Cloudflare uses this data only for bot protection: to check this signup on our behalf, and, under its own responsibility, to
+            improve its bot detection. Cloudflare is a US company and may process this data in the USA. It states that it is certified under the EU-U.S. Data
+            Privacy Framework, and its data processing agreement applies the EU standard contractual clauses if that certification lapses.
           </p>
           <p className="mt-3">
-            Plunk states that it stores your email address in the EU (on
-            Hetzner servers in Germany). Sending each email through Amazon SES
-            involves a temporary transfer to the USA, which Plunk covers with
-            the EU standard contractual clauses.
+            Plunk states that it stores your email address in the EU (on Hetzner servers in Germany). Sending each email through Amazon SES involves a temporary
+            transfer to the USA, which Plunk covers with the EU standard contractual clauses.
           </p>
           <p className="mt-3">
-            Our newsletter provider, Plunk, automatically tracks email
-            opens and link clicks as part of their delivery infrastructure. We
-            cannot disable this functionality. We do not use this data for
-            profiling, advertising, or any purpose beyond basic delivery
-            monitoring.
+            Our newsletter provider, Plunk, automatically tracks email opens and link clicks as part of their delivery infrastructure. We cannot disable this
+            functionality. We do not use this data for profiling, advertising, or any purpose beyond basic delivery monitoring.
           </p>
-          <p>
-            You can unsubscribe at any time using the unsubscribe link included
-            in every email.
-          </p>
+          <p>You can unsubscribe at any time using the unsubscribe link included in every email.</p>
 
           <h3 className="text-lg font-normal mt-6 mb-2">Feedback Form</h3>
           <p>
-            If you send us feedback, we store your message, the category you
-            chose, and your email address if you give one, so we can read and
-            reply. We also store a hashed form of your IP address to spot
-            repeated abusive submissions. We don't use it for anything else.
+            If you send us feedback, we store your message, the category you chose, and your email address if you give one, so we can read and reply. We also
+            store a hashed form of your IP address to spot repeated abusive submissions. We don't use it for anything else.
           </p>
 
           <h3 className="text-lg font-normal mt-6 mb-2">Server Logs</h3>
           <p>
-            Our server records basic request metadata (URL path, HTTP status,
-            response time) for operational monitoring. These logs are retained
-            for 14 days and then automatically deleted. Sensitive information
-            such as authentication headers and cookies is redacted from all
-            logs.
+            Our server records basic request metadata (URL path, HTTP status, response time) for operational monitoring. These logs are retained for 14 days and
+            then automatically deleted. Sensitive information such as authentication headers and cookies is redacted from all logs.
           </p>
 
-          <h2 className="section-heading mt-10">
-            What We Store on Your Device
-          </h2>
+          <h2 className="section-heading mt-10">What We Store on Your Device</h2>
           <p>
-            We do not set cookies, and we do not use sessionStorage, IndexedDB,
-            or any other browser storage mechanism for public visitors.
-            If you submit the newsletter signup form, Cloudflare may set a
-            technically necessary cookie during the human check, which it uses
-            only to detect problems with the check itself.
+            We do not set cookies, and we do not use sessionStorage, IndexedDB, or any other browser storage mechanism for public visitors. If you submit the
+            newsletter signup form, Cloudflare may set a technically necessary cookie during the human check, which it uses only to detect problems with the
+            check itself.
           </p>
           <p>
-            Your <strong>dial position</strong> (a single number between 0 and
-            100), your <strong>saved stories</strong>, and your{" "}
-            <strong>reading history</strong> are saved in localStorage, so they
-            stay where you left them between visits. They never leave your
-            browser.
+            Your <strong>dial position</strong> (a single number between 0 and 100), your <strong>saved stories</strong>, and your{' '}
+            <strong>reading history</strong> are saved in localStorage, so they stay where you left them between visits. They never leave your browser.
           </p>
-          <p>
-            Our administrative interface, which is not accessible to the public,
-            uses secure, httpOnly authentication cookies.
-          </p>
+          <p>Our administrative interface, which is not accessible to the public, uses secure, httpOnly authentication cookies.</p>
 
           <h2 className="section-heading mt-10">Third-Party Services</h2>
           <div className="overflow-x-auto mt-4">
@@ -193,41 +137,23 @@ export default function PrivacyPage() {
               <tbody className="text-neutral-600">
                 <tr className="border-b border-neutral-100">
                   <td className="align-top py-2 pr-4">
-                    <a
-                      href="https://www.simpleanalytics.com/"
-                      className="text-brand-700 hover:text-brand-800"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href="https://www.simpleanalytics.com/" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
                       Simple Analytics
                     </a>
                   </td>
                   <td className="align-top py-2 pr-4">Privacy-first analytics</td>
-                  <td className="align-top py-2">
-                    Anonymous page views only. No cookies, no personal data.
-                  </td>
+                  <td className="align-top py-2">Anonymous page views only. No cookies, no personal data.</td>
                 </tr>
                 <tr className="border-b border-neutral-100">
                   <td className="align-top py-2 pr-4">
-                    <a
-                      href="https://www.useplunk.com/"
-                      className="text-brand-700 hover:text-brand-800"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href="https://www.useplunk.com/" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
                       Plunk
                     </a>
                   </td>
                   <td className="align-top py-2 pr-4">Newsletter delivery</td>
                   <td className="align-top py-2">
-                    Email address (if you subscribe), delivered through
-                    Amazon SES. See their{" "}
-                    <a
-                      href="https://www.useplunk.com/privacy"
-                      className="text-brand-700 hover:text-brand-800"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    Email address (if you subscribe), delivered through Amazon SES. See their{' '}
+                    <a href="https://www.useplunk.com/privacy" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
                       privacy policy
                     </a>
                     .
@@ -244,13 +170,10 @@ export default function PrivacyPage() {
                       Cloudflare Turnstile
                     </a>
                   </td>
-                  <td className="align-top py-2 pr-4">
-                    Bot protection on the newsletter form
-                  </td>
+                  <td className="align-top py-2 pr-4">Bot protection on the newsletter form</td>
                   <td className="align-top py-2">
-                    IP address and browser information, only when you submit
-                    the signup form, used only for bot protection. This may
-                    involve a transfer to the USA. See their{" "}
+                    IP address and browser information, only when you submit the signup form, used only for bot protection. This may involve a transfer to the
+                    USA. See their{' '}
                     <a
                       href="https://www.cloudflare.com/turnstile-privacy-policy/"
                       className="text-brand-700 hover:text-brand-800"
@@ -264,76 +187,48 @@ export default function PrivacyPage() {
                 </tr>
                 <tr className="border-b border-neutral-100">
                   <td className="align-top py-2 pr-4">
-                    <a
-                      href="https://render.com/"
-                      className="text-brand-700 hover:text-brand-800"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href="https://render.com/" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
                       Render
                     </a>
                   </td>
                   <td className="align-top py-2 pr-4">Website hosting</td>
                   <td className="align-top py-2">
-                    Standard HTTP data (IP address, user agent) as part of
-                    hosting infrastructure. We have no access to Render's
-                    infrastructure logs.
+                    Standard HTTP data (IP address, user agent) as part of hosting infrastructure. We have no access to Render's infrastructure logs.
                   </td>
                 </tr>
                 <tr className="border-b border-neutral-100">
                   <td className="align-top py-2 pr-4">
-                    <a
-                      href="https://bunny.net/"
-                      className="text-brand-700 hover:text-brand-800"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href="https://bunny.net/" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
                       Bunny.net
                     </a>
                   </td>
                   <td className="align-top py-2 pr-4">Podcast audio delivery</td>
                   <td className="align-top py-2">
-                    IP address and user agent when you play or download a
-                    podcast episode, its transcript, or the show artwork,
-                    including through a podcast app. BunnyWay d.o.o. (Slovenia,
-                    EU) stores the files in Germany, delivers them from the
-                    server nearest to you, and processes this data on our
+                    IP address and user agent when you play or download a podcast episode, its transcript, or the show artwork, including through a podcast app.
+                    BunnyWay d.o.o. (Slovenia, EU) stores the files in Germany, delivers them from the server nearest to you, and processes this data on our
                     behalf. IP addresses are anonymized in its logs.
                   </td>
                 </tr>
                 <tr>
                   <td className="align-top py-2 pr-4">
-                    <a
-                      href="https://elevenlabs.io/"
-                      className="text-brand-700 hover:text-brand-800"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href="https://elevenlabs.io/" className="text-brand-700 hover:text-brand-800" target="_blank" rel="noopener noreferrer">
                       ElevenLabs
                     </a>
                   </td>
                   <td className="align-top py-2 pr-4">AI voices for the podcast</td>
-                  <td className="align-top py-2">
-                    No visitor data. We send only the episode script, which is
-                    written from published news.
-                  </td>
+                  <td className="align-top py-2">No visitor data. We send only the episode script, which is written from published news.</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className="mt-4">
-            When you search, we send your query to OpenAI to match it with
-            stories. OpenAI processes it on our behalf, which may involve a
-            transfer to the USA. We also use OpenAI models to analyze news
-            articles, which involves no visitor data.
+            When you search, we send your query to OpenAI to match it with stories. OpenAI processes it on our behalf, which may involve a transfer to the USA.
+            We also use OpenAI models to analyze news articles, which involves no visitor data.
           </p>
           <p className="mt-4">
-            All fonts used on this site are self-hosted. We do not load fonts,
-            scripts, or other resources from external CDNs like Google, meaning
-            your IP address is not shared with third parties when you visit.
-            There are two exceptions. On the podcast page, an episode loads from
-            Bunny.net only when you press play. On the newsletter signup form,
-            Cloudflare Turnstile loads only when you submit the form.
+            All fonts used on this site are self-hosted. We do not load fonts, scripts, or other resources from external CDNs like Google, meaning your IP
+            address is not shared with third parties when you visit. There are two exceptions. On the podcast page, an episode loads from Bunny.net only when
+            you press play. On the newsletter signup form, Cloudflare Turnstile loads only when you submit the form.
           </p>
 
           <h2 className="section-heading mt-10">Your Rights</h2>
@@ -345,16 +240,14 @@ export default function PrivacyPage() {
             <li>Lodge a complaint with a supervisory authority</li>
           </ul>
           <p className="mt-3">
-            Since we collect almost no personal data, there is typically very
-            little (if anything) for us to provide. If you have subscribed to
-            our newsletter, we can delete your email address upon request.
+            Since we collect almost no personal data, there is typically very little (if anything) for us to provide. If you have subscribed to our newsletter,
+            we can delete your email address upon request.
           </p>
           <p>
-            For any privacy-related questions, contact us at{" "}
-            <ObfuscatedEmail className="text-brand-700 hover:text-brand-800" />.
+            For any privacy-related questions, contact us at <ObfuscatedEmail className="text-brand-700 hover:text-brand-800" />.
           </p>
         </div>
       </div>
     </>
-  );
+  )
 }

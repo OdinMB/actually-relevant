@@ -16,14 +16,10 @@ const INTRO_STYLES = [
 ]
 
 export function pickIntroStyle(): string {
-  return INTRO_STYLES[Math.floor(Math.random() * INTRO_STYLES.length)]
+  return INTRO_STYLES[Math.floor(Math.random() * INTRO_STYLES.length)]!
 }
 
-export function buildNewsletterIntroPrompt(
-  stories: StoryForNewsletterIntro[],
-  issueNames: string[],
-  style?: string,
-): string {
+export function buildNewsletterIntroPrompt(stories: StoryForNewsletterIntro[], issueNames: string[], style?: string): string {
   const chosenStyle = style ?? pickIntroStyle()
 
   let query = `<ROLE>
@@ -58,12 +54,13 @@ ${issueNames.map(n => `- ${n}`).join('\n')}
 `
 
   for (const story of stories) {
-    query += `<STORY>\n`
-      + `<ISSUE>${escapeXml(story.issueName)}</ISSUE>\n`
-      + `<EMOTION>${escapeXml(story.emotionTag)}</EMOTION>\n`
-      + `<TITLE>${escapeXml(story.title)}</TITLE>\n`
-      + `<BLURB>${escapeXml(story.blurb)}</BLURB>\n`
-      + `</STORY>\n`
+    query +=
+      `<STORY>\n` +
+      `<ISSUE>${escapeXml(story.issueName)}</ISSUE>\n` +
+      `<EMOTION>${escapeXml(story.emotionTag)}</EMOTION>\n` +
+      `<TITLE>${escapeXml(story.title)}</TITLE>\n` +
+      `<BLURB>${escapeXml(story.blurb)}</BLURB>\n` +
+      `</STORY>\n`
   }
 
   query += `</STORIES>`

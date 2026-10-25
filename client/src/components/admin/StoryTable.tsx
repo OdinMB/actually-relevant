@@ -76,20 +76,13 @@ function getJobActions(story: Story) {
   return actions
 }
 
-function MenuItemWithIcon({ icon: Icon, label, onClick, danger }: {
-  icon: typeof SparklesIcon
-  label: string
-  onClick: () => void
-  danger?: boolean
-}) {
+function MenuItemWithIcon({ icon: Icon, label, onClick, danger }: { icon: typeof SparklesIcon; label: string; onClick: () => void; danger?: boolean }) {
   return (
     <MenuItem>
       <button
         onClick={onClick}
         className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm ${
-          danger
-            ? 'text-red-600 data-[focus]:bg-red-50'
-            : 'text-neutral-700 data-[focus]:bg-neutral-100'
+          danger ? 'text-red-600 data-[focus]:bg-red-50' : 'text-neutral-700 data-[focus]:bg-neutral-100'
         }`}
       >
         <Icon className="h-4 w-4 shrink-0" />
@@ -133,12 +126,24 @@ export function StoryTable({
                 aria-label="Select all stories"
               />
             </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Title</th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">Status</th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">Rating</th>
-            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">Emotion</th>
-            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">Crawled</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">Actions</th>
+            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+              Title
+            </th>
+            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Status
+            </th>
+            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Rating
+            </th>
+            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Emotion
+            </th>
+            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Crawled
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -148,10 +153,7 @@ export function StoryTable({
             const hasJobActions = jobActions.some(a => jobHandlers[a.handler])
 
             return (
-              <tr
-                key={story.id}
-                className={`border-b border-neutral-100 last:border-0 ${isProcessing ? 'bg-brand-50/50' : 'hover:bg-neutral-50'}`}
-              >
+              <tr key={story.id} className={`border-b border-neutral-100 last:border-0 ${isProcessing ? 'bg-brand-50/50' : 'hover:bg-neutral-50'}`}>
                 <td className="px-3 py-2">
                   <input
                     type="checkbox"
@@ -163,9 +165,7 @@ export function StoryTable({
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-1.5">
-                    {isProcessing && (
-                      <ArrowPathIcon className="h-4 w-4 shrink-0 animate-spin text-brand-600" aria-label="Processing" />
-                    )}
+                    {isProcessing && <ArrowPathIcon className="h-4 w-4 shrink-0 animate-spin text-brand-600" aria-label="Processing" />}
                     <button
                       onClick={() => onView(story.id)}
                       className="text-left font-medium text-neutral-900 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
@@ -185,17 +185,9 @@ export function StoryTable({
                   <div className="flex flex-wrap items-center gap-1.5 mt-1 md:hidden">
                     <Badge variant={STATUS_VARIANTS[story.status]}>{formatStatus(story.status)}</Badge>
                     <span className="text-neutral-500 text-xs">
-                      {story.relevance != null
-                        ? String(story.relevance)
-                        : story.relevancePre != null
-                          ? `(${story.relevancePre})`
-                          : '—'}
+                      {story.relevance != null ? String(story.relevance) : story.relevancePre != null ? `(${story.relevancePre})` : '—'}
                     </span>
-                    {story.emotionTag && (
-                      <Badge variant={EMOTION_VARIANTS[story.emotionTag]}>
-                        {story.emotionTag}
-                      </Badge>
-                    )}
+                    {story.emotionTag && <Badge variant={EMOTION_VARIANTS[story.emotionTag]}>{story.emotionTag}</Badge>}
                     <span className="text-neutral-400 text-xs">{formatShortDate(story.dateCrawled)}</span>
                   </div>
                 </td>
@@ -203,22 +195,12 @@ export function StoryTable({
                   <Badge variant={STATUS_VARIANTS[story.status]}>{formatStatus(story.status)}</Badge>
                 </td>
                 <td className="hidden md:table-cell px-3 py-2 text-neutral-600">
-                  {story.relevance != null
-                    ? String(story.relevance)
-                    : story.relevancePre != null
-                      ? `(${story.relevancePre})`
-                      : '—'}
+                  {story.relevance != null ? String(story.relevance) : story.relevancePre != null ? `(${story.relevancePre})` : '—'}
                 </td>
                 <td className="hidden lg:table-cell px-3 py-2">
-                  {story.emotionTag ? (
-                    <Badge variant={EMOTION_VARIANTS[story.emotionTag]}>
-                      {story.emotionTag}
-                    </Badge>
-                  ) : '—'}
+                  {story.emotionTag ? <Badge variant={EMOTION_VARIANTS[story.emotionTag]}>{story.emotionTag}</Badge> : '—'}
                 </td>
-                <td className="hidden lg:table-cell px-3 py-2 text-neutral-500 whitespace-nowrap">
-                  {formatShortDate(story.dateCrawled)}
-                </td>
+                <td className="hidden lg:table-cell px-3 py-2 text-neutral-500 whitespace-nowrap">{formatShortDate(story.dateCrawled)}</td>
                 <td className="px-3 py-2">
                   {isProcessing ? (
                     <div className="flex items-center justify-end">
@@ -231,28 +213,12 @@ export function StoryTable({
                         {jobActions.map(action => {
                           const handler = jobHandlers[action.handler]
                           return handler ? (
-                            <ActionIconButton
-                              key={action.handler}
-                              icon={action.icon}
-                              label={action.label}
-                              onClick={() => handler(story.id)}
-                            />
+                            <ActionIconButton key={action.handler} icon={action.icon} label={action.label} onClick={() => handler(story.id)} />
                           ) : null
                         })}
-                        {hasJobActions && (
-                          <span className="mx-0.5 h-4 w-px bg-neutral-200" aria-hidden="true" />
-                        )}
-                        <ActionIconButton
-                          icon={PencilSquareIcon}
-                          label="Edit"
-                          onClick={() => onView(story.id)}
-                        />
-                        <ActionIconButton
-                          icon={TrashIcon}
-                          label="Delete"
-                          variant="danger"
-                          onClick={() => onDelete(story.id)}
-                        />
+                        {hasJobActions && <span className="mx-0.5 h-4 w-px bg-neutral-200" aria-hidden="true" />}
+                        <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => onView(story.id)} />
+                        <ActionIconButton icon={TrashIcon} label="Delete" variant="danger" onClick={() => onDelete(story.id)} />
                       </div>
 
                       {/* Mobile overflow menu */}
@@ -265,46 +231,20 @@ export function StoryTable({
                             {jobActions.map(action => {
                               const handler = jobHandlers[action.handler]
                               return handler ? (
-                                <MenuItemWithIcon
-                                  key={action.handler}
-                                  icon={action.icon}
-                                  label={action.label}
-                                  onClick={() => handler(story.id)}
-                                />
+                                <MenuItemWithIcon key={action.handler} icon={action.icon} label={action.label} onClick={() => handler(story.id)} />
                               ) : null
                             })}
-                            <MenuItemWithIcon
-                              icon={PencilSquareIcon}
-                              label="Edit"
-                              onClick={() => onView(story.id)}
-                            />
+                            <MenuItemWithIcon icon={PencilSquareIcon} label="Edit" onClick={() => onView(story.id)} />
                             {story.status !== 'published' && (
-                              <MenuItemWithIcon
-                                icon={GlobeAltIcon}
-                                label="Publish"
-                                onClick={() => onStatusChange(story.id, 'published')}
-                              />
+                              <MenuItemWithIcon icon={GlobeAltIcon} label="Publish" onClick={() => onStatusChange(story.id, 'published')} />
                             )}
                             {story.status !== 'rejected' && (
-                              <MenuItemWithIcon
-                                icon={XCircleIcon}
-                                label="Reject"
-                                onClick={() => onStatusChange(story.id, 'rejected')}
-                              />
+                              <MenuItemWithIcon icon={XCircleIcon} label="Reject" onClick={() => onStatusChange(story.id, 'rejected')} />
                             )}
                             {story.status !== 'trashed' && (
-                              <MenuItemWithIcon
-                                icon={ArchiveBoxXMarkIcon}
-                                label="Trash"
-                                onClick={() => onStatusChange(story.id, 'trashed')}
-                              />
+                              <MenuItemWithIcon icon={ArchiveBoxXMarkIcon} label="Trash" onClick={() => onStatusChange(story.id, 'trashed')} />
                             )}
-                            <MenuItemWithIcon
-                              icon={TrashIcon}
-                              label="Delete"
-                              onClick={() => onDelete(story.id)}
-                              danger
-                            />
+                            <MenuItemWithIcon icon={TrashIcon} label="Delete" onClick={() => onDelete(story.id)} danger />
                           </MenuItems>
                         </Menu>
                       </div>

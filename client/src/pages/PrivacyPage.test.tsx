@@ -32,9 +32,7 @@ describe('PrivacyPage', () => {
 
   it('says what the browser keeps on the device, instead of claiming nothing is stored', () => {
     const { container } = renderPrivacy()
-    expect(pageText(container)).toContain(
-      'Your browser keeps your dial position, saved stories, and reading history on your device, and they never leave it.',
-    )
+    expect(pageText(container)).toContain('Your browser keeps your dial position, saved stories, and reading history on your device, and they never leave it.')
     expect(pageText(container)).not.toContain('nothing is stored on your device')
     expect(pageText(container)).not.toContain('The only data stored on your device')
   })

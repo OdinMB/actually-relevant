@@ -54,7 +54,10 @@ function EditPage() {
 
 function renderPage() {
   return renderAdminRoutes(
-    [{ path: '/admin/stories/:id', element: <EditPage /> }, { path: '*', element: <Where /> }],
+    [
+      { path: '/admin/stories/:id', element: <EditPage /> },
+      { path: '*', element: <Where /> },
+    ],
     { history: ['/admin/stories', '/admin/stories/story-1'] },
   )
 }

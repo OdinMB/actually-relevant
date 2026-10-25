@@ -30,6 +30,8 @@ const NewsFatiguePage = lazy(() => import('./pages/NewsFatiguePage'))
 const FreeApiPage = lazy(() => import('./pages/FreeApiPage'))
 const StewardshipPage = lazy(() => import('./pages/StewardshipPage'))
 const NewsletterPage = lazy(() => import('./pages/NewsletterPage'))
+const NewsletterArchivePage = lazy(() => import('./pages/NewsletterArchivePage'))
+const NewsletterIssuePage = lazy(() => import('./pages/NewsletterIssuePage'))
 const PodcastPage = lazy(() => import('./pages/PodcastPage'))
 const PodcastTranscriptPage = lazy(() => import('./pages/PodcastTranscriptPage'))
 const FeedbackPagePublic = lazy(() => import('./pages/FeedbackPage'))
@@ -106,89 +108,271 @@ function RootLayout() {
  * ready synchronously and the first render (and prerendering) happens as soon as it mounts.
  */
 export const appRoutes: RouteObject[] = createRoutesFromElements(
-    <Route element={<RootLayout />}>
-      {/* Public routes — homepage static, others lazy-loaded */}
-      <Route element={<PublicLayout />}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/stories/:slug" element={<LazyPage><StoryPage /></LazyPage>} />
-        <Route path="/issues" element={<LazyPage><IssuesIndexPage /></LazyPage>} />
-        <Route path="/issues/:slug" element={<LazyPage><IssuePage /></LazyPage>} />
-        <Route path="/methodology" element={<LazyPage><MethodologyPage /></LazyPage>} />
-        <Route path="/about" element={<LazyPage><AboutPage /></LazyPage>} />
-        <Route path="/imprint" element={<LazyPage><ImprintPage /></LazyPage>} />
-        <Route path="/privacy" element={<LazyPage><PrivacyPage /></LazyPage>} />
-        <Route path="/search" element={<LazyPage><SearchPage /></LazyPage>} />
-        <Route path="/subscribed" element={<LazyPage><SubscribedPage /></LazyPage>} />
-        {/* DevelopersPage moved outside PublicLayout — Scalar styles clash with site theme */}
-        <Route path="/widgets" element={<LazyPage><WidgetGeneratorPage /></LazyPage>} />
-        <Route path="/embed-widget" element={<LazyPage><WidgetGeneratorPage /></LazyPage>} />
-        <Route path="/saved" element={<LazyPage><SavedPage /></LazyPage>} />
-        <Route path="/compare" element={<LazyPage><ComparePage /></LazyPage>} />
-        <Route path="/no-ads-no-tracking" element={<LazyPage><NoAdsNoTrackingPage /></LazyPage>} />
-        <Route path="/news-fatigue" element={<LazyPage><NewsFatiguePage /></LazyPage>} />
-        <Route path="/free-api" element={<LazyPage><FreeApiPage /></LazyPage>} />
-        <Route path="/stewardship" element={<LazyPage><StewardshipPage /></LazyPage>} />
-        <Route path="/newsletter" element={<LazyPage><NewsletterPage /></LazyPage>} />
-        <Route path="/podcast" element={<LazyPage><PodcastPage /></LazyPage>} />
-        <Route path="/podcast/:id/transcript" element={<LazyPage><PodcastTranscriptPage /></LazyPage>} />
-        <Route path="/feedback" element={<LazyPage><FeedbackPagePublic /></LazyPage>} />
-        <Route path="/thank-you" element={<LazyPage><ThankYouPage /></LazyPage>} />
-      </Route>
-
-      {/* Embed page — no layout wrapper */}
+  <Route element={<RootLayout />}>
+    {/* Public routes — homepage static, others lazy-loaded */}
+    <Route element={<PublicLayout />}>
+      <Route path="/" element={<HomePage />} />
       <Route
-        path="/embed"
-        element={<LazyPage><EmbedPage /></LazyPage>}
-      />
-
-      {/* Developers page — standalone to avoid site theme clashing with Scalar styles */}
-      <Route
-        path="/developers"
-        element={<LazyPage><DevelopersPage /></LazyPage>}
-      />
-
-      {/* Admin routes — lazy-loaded with error boundary for chunk failures */}
-      <Route
-        path="/admin/login"
+        path="/stories/:slug"
         element={
-          <ChunkErrorBoundary>
-            <Suspense fallback={<StandalonePageFallback />}><LoginPage /></Suspense>
-          </ChunkErrorBoundary>
+          <LazyPage>
+            <StoryPage />
+          </LazyPage>
         }
       />
       <Route
-        path="/admin"
+        path="/issues"
         element={
-          <ChunkErrorBoundary>
-            <Suspense fallback={<StandalonePageFallback />}><AdminLayout /></Suspense>
-          </ChunkErrorBoundary>
+          <LazyPage>
+            <IssuesIndexPage />
+          </LazyPage>
         }
-      >
-        <Route index element={<DashboardPage />} />
-        <Route path="stories" element={<StoriesPage />} />
-        <Route path="stories/:id" element={<StoryDetailPage />} />
-        <Route path="feeds" element={<FeedsPage />} />
-        <Route path="issues" element={<IssuesPage />} />
-        <Route path="issues/new" element={<IssueEditPage />} />
-        <Route path="issues/:id/edit" element={<IssueEditPage />} />
-        <Route path="newsletters" element={<NewslettersPage />} />
-        <Route path="newsletters/:id" element={<NewsletterDetailPage />} />
-        <Route path="subscribers" element={<SubscribersPage />} />
-        <Route path="podcasts" element={<PodcastsPage />} />
-        <Route path="podcasts/:id" element={<PodcastDetailPage />} />
-        <Route path="jobs" element={<JobsPage />} />
-        <Route path="clusters" element={<ClustersPage />} />
-        <Route path="bluesky" element={<BlueskyPage />} />
-        <Route path="mastodon" element={<MastodonPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="feedback" element={<FeedbackPage />} />
-        <Route path="notices" element={<NoticesPage />} />
-        <Route path="stats" element={<StatsPage />} />
-      </Route>
+      />
+      <Route
+        path="/issues/:slug"
+        element={
+          <LazyPage>
+            <IssuePage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/methodology"
+        element={
+          <LazyPage>
+            <MethodologyPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/about"
+        element={
+          <LazyPage>
+            <AboutPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/imprint"
+        element={
+          <LazyPage>
+            <ImprintPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/privacy"
+        element={
+          <LazyPage>
+            <PrivacyPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/search"
+        element={
+          <LazyPage>
+            <SearchPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/subscribed"
+        element={
+          <LazyPage>
+            <SubscribedPage />
+          </LazyPage>
+        }
+      />
+      {/* DevelopersPage moved outside PublicLayout — Scalar styles clash with site theme */}
+      <Route
+        path="/widgets"
+        element={
+          <LazyPage>
+            <WidgetGeneratorPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/embed-widget"
+        element={
+          <LazyPage>
+            <WidgetGeneratorPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/saved"
+        element={
+          <LazyPage>
+            <SavedPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/compare"
+        element={
+          <LazyPage>
+            <ComparePage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/no-ads-no-tracking"
+        element={
+          <LazyPage>
+            <NoAdsNoTrackingPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/news-fatigue"
+        element={
+          <LazyPage>
+            <NewsFatiguePage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/free-api"
+        element={
+          <LazyPage>
+            <FreeApiPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/stewardship"
+        element={
+          <LazyPage>
+            <StewardshipPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/newsletter"
+        element={
+          <LazyPage>
+            <NewsletterPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/newsletter/archive"
+        element={
+          <LazyPage>
+            <NewsletterArchivePage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/newsletter/:slug"
+        element={
+          <LazyPage>
+            <NewsletterIssuePage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/podcast"
+        element={
+          <LazyPage>
+            <PodcastPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/podcast/:id/transcript"
+        element={
+          <LazyPage>
+            <PodcastTranscriptPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/feedback"
+        element={
+          <LazyPage>
+            <FeedbackPagePublic />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/thank-you"
+        element={
+          <LazyPage>
+            <ThankYouPage />
+          </LazyPage>
+        }
+      />
+    </Route>
 
-      {/* Catch-all */}
-      <Route element={<PublicLayout />}>
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Route>,
+    {/* Embed page — no layout wrapper */}
+    <Route
+      path="/embed"
+      element={
+        <LazyPage>
+          <EmbedPage />
+        </LazyPage>
+      }
+    />
+
+    {/* Developers page — standalone to avoid site theme clashing with Scalar styles */}
+    <Route
+      path="/developers"
+      element={
+        <LazyPage>
+          <DevelopersPage />
+        </LazyPage>
+      }
+    />
+
+    {/* Admin routes — lazy-loaded with error boundary for chunk failures */}
+    <Route
+      path="/admin/login"
+      element={
+        <ChunkErrorBoundary>
+          <Suspense fallback={<StandalonePageFallback />}>
+            <LoginPage />
+          </Suspense>
+        </ChunkErrorBoundary>
+      }
+    />
+    <Route
+      path="/admin"
+      element={
+        <ChunkErrorBoundary>
+          <Suspense fallback={<StandalonePageFallback />}>
+            <AdminLayout />
+          </Suspense>
+        </ChunkErrorBoundary>
+      }
+    >
+      <Route index element={<DashboardPage />} />
+      <Route path="stories" element={<StoriesPage />} />
+      <Route path="stories/:id" element={<StoryDetailPage />} />
+      <Route path="feeds" element={<FeedsPage />} />
+      <Route path="issues" element={<IssuesPage />} />
+      <Route path="issues/new" element={<IssueEditPage />} />
+      <Route path="issues/:id/edit" element={<IssueEditPage />} />
+      <Route path="newsletters" element={<NewslettersPage />} />
+      <Route path="newsletters/:id" element={<NewsletterDetailPage />} />
+      <Route path="subscribers" element={<SubscribersPage />} />
+      <Route path="podcasts" element={<PodcastsPage />} />
+      <Route path="podcasts/:id" element={<PodcastDetailPage />} />
+      <Route path="jobs" element={<JobsPage />} />
+      <Route path="clusters" element={<ClustersPage />} />
+      <Route path="bluesky" element={<BlueskyPage />} />
+      <Route path="mastodon" element={<MastodonPage />} />
+      <Route path="users" element={<UsersPage />} />
+      <Route path="feedback" element={<FeedbackPage />} />
+      <Route path="notices" element={<NoticesPage />} />
+      <Route path="stats" element={<StatsPage />} />
+    </Route>
+
+    {/* Catch-all */}
+    <Route element={<PublicLayout />}>
+      <Route path="*" element={<NotFoundPage />} />
+    </Route>
+  </Route>,
 )

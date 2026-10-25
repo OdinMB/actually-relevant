@@ -52,12 +52,7 @@ export default function FeedbackModal({ open, onClose }: FeedbackModalProps) {
       aria-labelledby="feedback-modal-title"
     >
       <div className="p-6 sm:p-8">
-        <FeedbackForm
-          key={open ? 'open' : 'closed'}
-          autoFocus={open}
-          onSuccess={onClose}
-          idPrefix="feedback-modal"
-        />
+        <FeedbackForm key={open ? 'open' : 'closed'} autoFocus={open} onSuccess={onClose} idPrefix="feedback-modal" />
         <button
           type="button"
           onClick={onClose}

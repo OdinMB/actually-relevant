@@ -34,7 +34,7 @@ const rawClient = axios.create({
 rawClient.interceptors.request.use(authorize)
 
 // Plunk "next" API wraps responses in { success, data }; unwrap automatically
-client.interceptors.response.use((res) => {
+client.interceptors.response.use(res => {
   if (res.data && typeof res.data === 'object' && 'success' in res.data && 'data' in res.data) {
     res.data = res.data.data
   }
@@ -105,16 +105,6 @@ export async function createCampaign(opts: CreateCampaignOpts): Promise<Campaign
   )
 }
 
-export async function updateCampaign(id: string, opts: Partial<CreateCampaignOpts>): Promise<Campaign> {
-  return withRetry(
-    async () => {
-      const { data } = await client.patch(`/campaigns/${id}`, opts)
-      return data
-    },
-    { retries: 3, retryOn: isRetryableError },
-  )
-}
-
 export async function sendCampaign(id: string, scheduledFor?: string): Promise<void> {
   return withRetry(
     async () => {
@@ -127,21 +117,10 @@ export async function sendCampaign(id: string, scheduledFor?: string): Promise<v
   )
 }
 
-
 export async function getCampaignStats(id: string): Promise<CampaignStats> {
   return withRetry(
     async () => {
       const { data } = await client.get(`/campaigns/${id}/stats`)
-      return data
-    },
-    { retries: 3, retryOn: isRetryableError },
-  )
-}
-
-export async function listCampaigns(): Promise<Campaign[]> {
-  return withRetry(
-    async () => {
-      const { data } = await client.get('/campaigns')
       return data
     },
     { retries: 3, retryOn: isRetryableError },
@@ -153,7 +132,7 @@ export async function listCampaigns(): Promise<Campaign[]> {
 export async function createContact(opts: CreateContactOpts): Promise<Contact> {
   return withRetry(
     async () => {
-      log.info({ email: opts.email, subscribed: opts.subscribed }, 'creating contact')
+      log.info({ subscribed: opts.subscribed }, 'creating contact')
       const { data } = await client.post('/contacts', opts)
       log.info({ contactId: data.id }, 'contact created')
       return data
@@ -166,16 +145,6 @@ export async function updateContact(id: string, updates: Partial<CreateContactOp
   return withRetry(
     async () => {
       const { data } = await client.patch(`/contacts/${id}`, updates)
-      return data
-    },
-    { retries: 3, retryOn: isRetryableError },
-  )
-}
-
-export async function getContact(id: string): Promise<Contact> {
-  return withRetry(
-    async () => {
-      const { data } = await client.get(`/contacts/${id}`)
       return data
     },
     { retries: 3, retryOn: isRetryableError },
@@ -215,9 +184,7 @@ export function hasContactsArray(body: unknown): boolean {
  * from the same level, so an envelope `{ success, data: [...], cursor, hasMore }`
  * keeps its cursor.
  */
-export function parseContactsResponse(
-  rawBody: unknown,
-): { items: Contact[]; nextCursor: string | null; hasMore: boolean; total: number } {
+export function parseContactsResponse(rawBody: unknown): { items: Contact[]; nextCursor: string | null; hasMore: boolean; total: number } {
   const body = unwrapContactsEnvelope(rawBody)
   if (Array.isArray(body)) {
     return { items: body as Contact[], nextCursor: null, hasMore: false, total: body.length }
@@ -233,8 +200,7 @@ export function parseContactsResponse(
   }
   const array = [b.data, b.items, b.contacts].find(Array.isArray)
   const items = (array ?? []) as Contact[]
-  const nextCursor =
-    typeof b.cursor === 'string' ? b.cursor : typeof b.nextCursor === 'string' ? b.nextCursor : null
+  const nextCursor = typeof b.cursor === 'string' ? b.cursor : typeof b.nextCursor === 'string' ? b.nextCursor : null
   const hasMore = typeof b.hasMore === 'boolean' ? b.hasMore : Boolean(nextCursor)
   const total = typeof b.total === 'number' ? b.total : items.length
   return { items, nextCursor, hasMore, total }
@@ -309,8 +275,7 @@ export function parseActivityResponse(body: unknown): ActivityPage | null {
     // An envelope around the page itself
     return b.data && typeof b.data === 'object' ? parseActivityResponse(b.data) : null
   }
-  const nextCursor =
-    typeof b.cursor === 'string' && b.cursor ? b.cursor : typeof b.nextCursor === 'string' && b.nextCursor ? b.nextCursor : null
+  const nextCursor = typeof b.cursor === 'string' && b.cursor ? b.cursor : typeof b.nextCursor === 'string' && b.nextCursor ? b.nextCursor : null
   const hasMore = typeof b.hasMore === 'boolean' ? b.hasMore : nextCursor !== null
   return { items: array as PlunkActivity[], nextCursor, hasMore }
 }
@@ -346,15 +311,22 @@ export async function listActivity(opts: ListActivityOpts): Promise<ActivityPage
         throw new Error(`unrecognized Plunk activity response shape (keys: ${JSON.stringify(keysOf(body))})`)
       }
       // Shape check for the first live runs (ADR-0029): key names and counts only, never values.
-      log.info({
-        responseKeys: keysOf(body),
-        itemKeys: page.items[0] ? keysOf(page.items[0]) : null,
-        metadataKeys: page.items[0] ? keysOf(page.items[0].metadata) : null,
-        count: page.items.length,
-        hasMore: page.hasMore,
-        startDate: params.startDate,
-        oldestTimestamp: page.items.map(i => i.timestamp).filter((t): t is string => typeof t === 'string').sort()[0] ?? null,
-      }, 'listActivity: page shape')
+      log.info(
+        {
+          responseKeys: keysOf(body),
+          itemKeys: page.items[0] ? keysOf(page.items[0]) : null,
+          metadataKeys: page.items[0] ? keysOf(page.items[0].metadata) : null,
+          count: page.items.length,
+          hasMore: page.hasMore,
+          startDate: params.startDate,
+          oldestTimestamp:
+            page.items
+              .map(i => i.timestamp)
+              .filter((t): t is string => typeof t === 'string')
+              .sort()[0] ?? null,
+        },
+        'listActivity: page shape',
+      )
       return page
     },
     { retries: 3, retryOn: isRetryableError },
@@ -378,7 +350,7 @@ export interface SendTransactionalOpts {
 export async function sendTransactional(opts: SendTransactionalOpts): Promise<void> {
   return withRetry(
     async () => {
-      log.info({ to: opts.to, subject: opts.subject }, 'sending transactional email')
+      log.info({ subject: opts.subject }, 'sending transactional email')
       await client.post('/v1/send', {
         to: opts.to,
         subject: opts.subject,
@@ -386,7 +358,7 @@ export async function sendTransactional(opts: SendTransactionalOpts): Promise<vo
         from: opts.from || config.plunk.fromEmail,
         name: opts.name || config.plunk.fromName,
       })
-      log.info({ to: opts.to }, 'transactional email sent')
+      log.info({ subject: opts.subject }, 'transactional email sent')
     },
     { retries: 2, retryOn: isConnectionNotEstablished },
   )
@@ -403,22 +375,10 @@ export interface EmailVerifyResult {
 export async function verifyEmail(email: string): Promise<EmailVerifyResult> {
   return withRetry(
     async () => {
-      log.info({ email }, 'verifying email')
+      log.info('verifying email')
       const { data } = await client.post('/v1/verify', { email })
-      log.info({ email, result: data }, 'email verification result')
+      log.info({ valid: data?.valid, domainExists: data?.domainExists, isDisposable: data?.isDisposable }, 'email verification result')
       return data
-    },
-    { retries: 3, retryOn: isRetryableError },
-  )
-}
-
-// --- Event tracking ---
-
-export async function trackEvent(email: string, event: string, data?: Record<string, unknown>): Promise<void> {
-  return withRetry(
-    async () => {
-      log.debug({ email, event }, 'tracking event')
-      await client.post('/v1/track', { email, event, data })
     },
     { retries: 3, retryOn: isRetryableError },
   )

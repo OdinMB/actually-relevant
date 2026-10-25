@@ -7,7 +7,7 @@ import { createLogger } from '../lib/logger.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { config } from '../config.js'
 import { normalizeUrl } from '../utils/urlNormalization.js'
-import { summarizeError } from '../utils/errors.js'
+import { ConflictError, NotFoundError, summarizeError } from '../utils/errors.js'
 
 const log = createLogger('crawler')
 
@@ -28,7 +28,7 @@ export interface CrawlResult {
 
 export async function crawlFeed(feedId: string): Promise<CrawlResult> {
   const feed = await getFeedById(feedId)
-  if (!feed) throw new Error('Feed not found')
+  if (!feed) throw new NotFoundError('Feed not found')
 
   const result: CrawlResult = {
     feedId,
@@ -93,7 +93,7 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
   const rssUrls = uniqueItems.map(item => item.url)
   const existingUrls = await getExistingUrls(rssUrls)
   const newItems = uniqueItems.filter(item => !existingUrls.has(item.url))
-  result.skipped = rssItems.length - newItems.length  // includes RSS duplicates + DB matches
+  result.skipped = rssItems.length - newItems.length // includes RSS duplicates + DB matches
 
   // Extract content and create stories (parallel with concurrency limit).
   // The fail counters below are shared across concurrent tasks. This is safe because
@@ -107,83 +107,80 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
   let totalFailCount = 0
   let skipLocal = false
   let skipAll = false
-  let skippedDueToFailures = 0
   await Promise.allSettled(
-    newItems.map(item => articleSemaphore.run(async () => {
-      if (skipAll) {
-        skippedDueToFailures++
-        result.errors++
-        return
-      }
-      try {
-        const extracted = await extractContent(item.url, {
-          htmlSelector: feed.htmlSelector,
-          skipLocalExtraction: skipLocal,
-          shouldAbort: () => skipAll,
-          paywall: paywallPolicy(feed),
-        })
-
-        if (!extracted) {
-          totalFailCount++
-          // Local extraction was attempted and failed — count toward skip-local threshold
-          if (!skipLocal) localFailCount++
-          if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
-          if (totalFailCount >= config.crawl.totalFailThreshold) {
-            skipAll = true
-            log.warn({ feed: feed.title, totalFailCount, totalArticles }, 'all extraction methods failing, skipping remaining articles')
-          }
-          log.warn({ url: item.url }, 'no content extracted')
+    newItems.map(item =>
+      articleSemaphore.run(async () => {
+        if (skipAll) {
           result.errors++
           return
         }
+        try {
+          const extracted = await extractContent(item.url, {
+            htmlSelector: feed.htmlSelector,
+            skipLocalExtraction: skipLocal,
+            shouldAbort: () => skipAll,
+            paywall: paywallPolicy(feed),
+          })
 
-        totalFailCount = 0
-        // A teaser, or any result the HTML classified as locked, counts as local: the page was
-        // fetched and parsed, it is only locked. Counting it as a local failure would set skip-local
-        // and switch off paywall detection for the rest of the crawl.
-        if (LOCAL_METHODS.has(extracted.method) || extracted.accessTier === 'locked') {
-          localFailCount = 0
-        } else {
-          localFailCount++
-        }
-        if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
+          if (!extracted) {
+            totalFailCount++
+            // Local extraction was attempted and failed — count toward skip-local threshold
+            if (!skipLocal) localFailCount++
+            if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
+            if (totalFailCount >= config.crawl.totalFailThreshold) {
+              skipAll = true
+              log.warn({ feed: feed.title, totalFailCount, totalArticles }, 'all extraction methods failing, skipping remaining articles')
+            }
+            log.warn({ url: item.url }, 'no content extracted')
+            result.errors++
+            return
+          }
 
-        await createStory({
-          sourceUrl: item.url,
-          sourceTitle: extracted.title || item.title,
-          sourceContent: extracted.content,
-          feedId,
-          sourceDatePublished: extracted.datePublished || item.datePublished || undefined,
-          crawlMethod: extracted.method,
-          accessTier: extracted.accessTier,
-        })
-        if (extracted.accessTier === 'locked') {
-          log.info({ feed: feed.title, url: item.url, method: extracted.method }, 'paywall-locked story stored as rejected')
-        }
+          totalFailCount = 0
+          // A teaser, or any result the HTML classified as locked, counts as local: the page was
+          // fetched and parsed, it is only locked. Counting it as a local failure would set skip-local
+          // and switch off paywall detection for the rest of the crawl.
+          if (LOCAL_METHODS.has(extracted.method) || extracted.accessTier === 'locked') {
+            localFailCount = 0
+          } else {
+            localFailCount++
+          }
+          if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
 
-        result.newStories++
-      } catch (err: any) {
-        // Unique constraint violation = URL was inserted by a concurrent crawl; treat as skip
-        if (err?.code === 'P2002') {
-          log.info({ url: item.url }, 'story already exists (concurrent insert), skipping')
-          result.skipped++
-          return
+          await createStory({
+            sourceUrl: item.url,
+            sourceTitle: extracted.title || item.title,
+            sourceContent: extracted.content,
+            feedId,
+            sourceDatePublished: extracted.datePublished || item.datePublished || undefined,
+            crawlMethod: extracted.method,
+            accessTier: extracted.accessTier,
+          })
+          if (extracted.accessTier === 'locked') {
+            log.info({ feed: feed.title, url: item.url, method: extracted.method }, 'paywall-locked story stored as rejected')
+          }
+
+          result.newStories++
+        } catch (err) {
+          // Unique constraint violation = URL was inserted by a concurrent crawl; treat as skip
+          if ((err as { code?: unknown } | null)?.code === 'P2002') {
+            log.info({ url: item.url }, 'story already exists (concurrent insert), skipping')
+            result.skipped++
+            return
+          }
+          log.error({ url: item.url, err }, 'failed to process item')
+          result.errors++
         }
-        log.error({ url: item.url, err }, 'failed to process item')
-        result.errors++
-      }
-    }))
+      }),
+    ),
   )
 
   if (result.errors > 0) {
     result.errorMessage = `${result.errors} of ${totalArticles} articles failed extraction`
   }
 
-  const crawlResult = result.newStories > 0
-    ? `${result.newStories} new article${result.newStories > 1 ? 's' : ''}`
-    : result.errors > 0
-      ? result.errorMessage!
-      : 'No new articles'
+  const crawlResult =
+    result.newStories > 0 ? `${result.newStories} new article${result.newStories > 1 ? 's' : ''}` : result.errors > 0 ? result.errorMessage! : 'No new articles'
 
   await updateCrawlStatus(feedId, {
     hadSuccess: result.newStories > 0,
@@ -204,51 +201,60 @@ export async function crawlAllDueFeeds(): Promise<CrawlResult[]> {
   let completed = 0
 
   const settled = await Promise.allSettled(
-    dueFeeds.map(feed => feedSemaphore.run(async () => {
-      try {
-        const result = await crawlFeed(feed.id)
-        completed++
-        log.info({ progress: `${completed}/${total}`, feed: result.feedTitle, new: result.newStories, skipped: result.skipped, errors: result.errors }, 'feed crawl complete')
-        return result
-      } catch (err) {
-        completed++
-        // Not necessarily the RSS fetch (crawlFeed records that itself): any other throw, such as a
-        // missing feed or a database error, is a failed crawl and retried like one.
-        const errorMessage = `Crawl failed: ${err instanceof Error ? err.message : String(err)}`
-        log.error({ feed: feed.title, err }, 'failed to crawl feed')
-        await updateCrawlStatus(feed.id, { hadSuccess: false, errorMessage, newItemCount: 0, rssItemCount: 0, fetchFailed: true }).catch(() => {})
-        return {
-          feedId: feed.id,
-          feedTitle: feed.title,
+    dueFeeds.map(feed =>
+      feedSemaphore.run(async () => {
+        try {
+          const result = await crawlFeed(feed.id)
+          completed++
+          log.info(
+            { progress: `${completed}/${total}`, feed: result.feedTitle, new: result.newStories, skipped: result.skipped, errors: result.errors },
+            'feed crawl complete',
+          )
+          return result
+        } catch (err) {
+          completed++
+          // Not necessarily the RSS fetch (crawlFeed records that itself): any other throw, such as a
+          // missing feed or a database error, is a failed crawl and retried like one.
+          const errorMessage = `Crawl failed: ${err instanceof Error ? err.message : String(err)}`
+          log.error({ feed: feed.title, err }, 'failed to crawl feed')
+          await updateCrawlStatus(feed.id, { hadSuccess: false, errorMessage, newItemCount: 0, rssItemCount: 0, fetchFailed: true }).catch(() => {})
+          return {
+            feedId: feed.id,
+            feedTitle: feed.title,
+            newStories: 0,
+            skipped: 0,
+            errors: 1,
+            errorMessage,
+          }
+        }
+      }),
+    ),
+  )
+
+  return settled.map(s =>
+    s.status === 'fulfilled'
+      ? s.value
+      : {
+          feedId: '',
+          feedTitle: 'unknown',
           newStories: 0,
           skipped: 0,
           errors: 1,
-          errorMessage,
-        }
-      }
-    }))
+          errorMessage: 'Feed crawl failed unexpectedly',
+        },
   )
-
-  return settled.map(s => s.status === 'fulfilled' ? s.value : {
-    feedId: '',
-    feedTitle: 'unknown',
-    newStories: 0,
-    skipped: 0,
-    errors: 1,
-    errorMessage: 'Feed crawl failed unexpectedly',
-  })
 }
 
 export async function crawlUrl(url: string, feedId: string): Promise<{ storyId: string } | null> {
   const feed = await getFeedById(feedId)
-  if (!feed) throw new Error('Feed not found')
+  if (!feed) throw new NotFoundError('Feed not found')
 
   url = normalizeUrl(url)
 
   // Check not already crawled
   const existing = await getExistingUrls([url])
   if (existing.has(url)) {
-    throw new Error('URL already crawled')
+    throw new ConflictError('URL already crawled')
   }
 
   const extracted = await extractContent(url, {

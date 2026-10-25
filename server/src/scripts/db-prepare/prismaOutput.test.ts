@@ -5,7 +5,7 @@ describe('classifyGenerateFailure', () => {
   it.each([
     "EPERM: operation not permitted, rename 'C:\\x\\query_engine-windows.dll.node.tmp123' -> 'C:\\x\\query_engine-windows.dll.node'",
     'Error: EBUSY: resource busy or locked, unlink query_engine-windows.dll.node',
-  ])('recognizes a locked client file: %s', (output) => {
+  ])('recognizes a locked client file: %s', output => {
     expect(classifyGenerateFailure(output)).toBe('locked')
   })
 

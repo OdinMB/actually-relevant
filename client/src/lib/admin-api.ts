@@ -132,14 +132,15 @@ function getAuthHeaders(): HeadersInit {
  * person to login, keeping their URL); an unreachable server does not.
  */
 async function fetchWithSession(url: string, options: RequestInit): Promise<Response> {
-  const send = () => fetch(url, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      ...getAuthHeaders(),
-      ...(options.headers || {}),
-    },
-  })
+  const send = () =>
+    fetch(url, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        ...getAuthHeaders(),
+        ...(options.headers || {}),
+      },
+    })
 
   const res = await send()
   if (res.status !== 401) return res
@@ -227,51 +228,37 @@ export const adminApi = {
   stories: {
     stats: () => request<Record<string, number>>('/stories/stats'),
     lifetimeStats: () => request<LifetimeStoryStats>('/stories/lifetime-stats'),
-    list: (filters: StoryFilters = {}) =>
-      request<PaginatedResponse<Story>>(`/stories${toQueryString(filters as Record<string, unknown>)}`),
+    list: (filters: StoryFilters = {}) => request<PaginatedResponse<Story>>(`/stories${toQueryString(filters as Record<string, unknown>)}`),
     get: (id: string) => request<Story>(`/stories/${id}`),
     create: (data: Partial<Story>) => request<Story>('/stories', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Story>) =>
-      request<Story>(`/stories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    updateStatus: (id: string, status: StoryStatus) =>
-      request<Story>(`/stories/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+    update: (id: string, data: Partial<Story>) => request<Story>(`/stories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    updateStatus: (id: string, status: StoryStatus) => request<Story>(`/stories/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
     bulkStatus: (ids: string[], status: StoryStatus) =>
-      request<{ updated: number }>('/stories/bulk-status', { method: 'POST', body: JSON.stringify({ ids, status }) }),
-    preassess: (storyIds?: string[]) =>
-      request<{ processed: number }>('/stories/preassess', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+      // skipped: ids already at that status, or no longer existing
+      request<{ updated: number; skipped: string[] }>('/stories/bulk-status', { method: 'POST', body: JSON.stringify({ ids, status }) }),
+    preassess: (storyIds?: string[]) => request<{ processed: number }>('/stories/preassess', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     assess: (id: string) => request<Story>(`/stories/${id}/assess`, { method: 'POST' }),
-    select: (storyIds: string[]) =>
-      request<{ selected: number }>('/stories/select', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+    select: (storyIds: string[]) => request<{ selected: number }>('/stories/select', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     publish: (id: string) => request<Story>(`/stories/${id}/publish`, { method: 'POST' }),
     reject: (id: string) => request<Story>(`/stories/${id}/reject`, { method: 'POST' }),
     dissolveCluster: (id: string) => request<Story>(`/stories/${id}/dissolve-cluster`, { method: 'POST' }),
     delete: (id: string) => request<void>(`/stories/${id}`, { method: 'DELETE' }),
-    crawlUrl: (url: string, feedId: string) =>
-      request<Story>('/stories/crawl-url', { method: 'POST', body: JSON.stringify({ url, feedId }) }),
-    batch: (ids: string[]) =>
-      request<Story[]>(`/stories/batch?ids=${ids.join(',')}`),
-    bulkPreassess: (storyIds: string[]) =>
-      request<{ taskId: string }>('/stories/bulk-preassess', { method: 'POST', body: JSON.stringify({ storyIds }) }),
-    bulkReclassify: (storyIds: string[]) =>
-      request<{ taskId: string }>('/stories/bulk-reclassify', { method: 'POST', body: JSON.stringify({ storyIds }) }),
-    bulkAssess: (storyIds: string[]) =>
-      request<{ taskId: string }>('/stories/bulk-assess', { method: 'POST', body: JSON.stringify({ storyIds }) }),
-    bulkSelect: (storyIds: string[]) =>
-      request<{ taskId: string }>('/stories/bulk-select', { method: 'POST', body: JSON.stringify({ storyIds }) }),
-    taskStatus: (taskId: string) =>
-      request<TaskState>(`/stories/tasks/${taskId}`),
-    processing: () =>
-      request<{ storyIds: string[] }>('/stories/processing'),
+    crawlUrl: (url: string, feedId: string) => request<Story>('/stories/crawl-url', { method: 'POST', body: JSON.stringify({ url, feedId }) }),
+    batch: (ids: string[]) => request<Story[]>(`/stories/batch?ids=${ids.join(',')}`),
+    bulkPreassess: (storyIds: string[]) => request<{ taskId: string }>('/stories/bulk-preassess', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+    bulkReclassify: (storyIds: string[]) => request<{ taskId: string }>('/stories/bulk-reclassify', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+    bulkAssess: (storyIds: string[]) => request<{ taskId: string }>('/stories/bulk-assess', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+    bulkSelect: (storyIds: string[]) => request<{ taskId: string }>('/stories/bulk-select', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+    taskStatus: (taskId: string) => request<TaskState>(`/stories/tasks/${taskId}`),
+    processing: () => request<{ storyIds: string[] }>('/stories/processing'),
   },
 
   // Feeds
   feeds: {
-    list: (params?: { issueId?: string; active?: boolean }) =>
-      request<Feed[]>(`/feeds${toQueryString((params || {}) as Record<string, unknown>)}`),
+    list: (params?: { issueId?: string; active?: boolean }) => request<Feed[]>(`/feeds${toQueryString((params || {}) as Record<string, unknown>)}`),
     get: (id: string) => request<Feed>(`/feeds/${id}`),
     create: (data: Partial<Feed>) => request<Feed>('/feeds', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Feed>) =>
-      request<Feed>(`/feeds/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Feed>) => request<Feed>(`/feeds/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<{ action: string; message: string }>(`/feeds/${id}`, { method: 'DELETE' }),
     crawl: (id: string) => request<CrawlResult>(`/feeds/${id}/crawl`, { method: 'POST' }),
     crawlAll: () => request<CrawlResult[]>('/feeds/crawl-all', { method: 'POST' }),
@@ -285,20 +272,16 @@ export const adminApi = {
     list: () => request<Issue[]>('/issues'),
     get: (id: string) => request<Issue>(`/issues/${id}`),
     create: (data: Partial<Issue>) => request<Issue>('/issues', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Issue>) =>
-      request<Issue>(`/issues/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Issue>) => request<Issue>(`/issues/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/issues/${id}`, { method: 'DELETE' }),
   },
 
   // Newsletters
   newsletters: {
-    list: (params?: { status?: string }) =>
-      request<PaginatedResponse<Newsletter>>(`/newsletters${toQueryString((params || {}) as Record<string, unknown>)}`),
+    list: (params?: { status?: string }) => request<PaginatedResponse<Newsletter>>(`/newsletters${toQueryString((params || {}) as Record<string, unknown>)}`),
     get: (id: string) => request<Newsletter>(`/newsletters/${id}`),
-    create: (data: { title: string }) =>
-      request<Newsletter>('/newsletters', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Newsletter>) =>
-      request<Newsletter>(`/newsletters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    create: (data: { title: string }) => request<Newsletter>('/newsletters', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Newsletter>) => request<Newsletter>(`/newsletters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/newsletters/${id}`, { method: 'DELETE' }),
     assign: (id: string) => request<Newsletter>(`/newsletters/${id}/assign`, { method: 'POST' }),
     select: (id: string) => request<Newsletter>(`/newsletters/${id}/select`, { method: 'POST' }),
@@ -309,8 +292,7 @@ export const adminApi = {
     sendLive: (id: string, scheduledFor?: string) =>
       request<NewsletterSend>(`/newsletters/${id}/send-live`, { method: 'POST', body: JSON.stringify({ scheduledFor }) }),
     listSends: (id: string) => request<NewsletterSend[]>(`/newsletters/${id}/sends`),
-    refreshStats: (id: string, sendId: string) =>
-      request<NewsletterSend>(`/newsletters/${id}/sends/${sendId}/refresh-stats`, { method: 'POST' }),
+    refreshStats: (id: string, sendId: string) => request<NewsletterSend>(`/newsletters/${id}/sends/${sendId}/refresh-stats`, { method: 'POST' }),
   },
 
   // Podcasts
@@ -319,8 +301,7 @@ export const adminApi = {
       request<PaginatedResponse<PodcastListItem>>(`/podcasts${toQueryString((params || {}) as Record<string, unknown>)}`),
     get: (id: string) => request<Podcast>(`/podcasts/${id}`),
     /** The title and the "edited by a person" flag. */
-    update: (id: string, data: { title?: string; humanEdited?: boolean }) =>
-      request<Podcast>(`/podcasts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    update: (id: string, data: { title?: string; humanEdited?: boolean }) => request<Podcast>(`/podcasts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/podcasts/${id}`, { method: 'DELETE' }),
     /** This week's slot (its episode or none, what Friday's automatic run will do); creates nothing. */
     weekSlot: () => request<PodcastWeekSlot>('/podcasts/weekly'),
@@ -337,14 +318,12 @@ export const adminApi = {
     /** Episodes a process is working on right now. */
     active: () => request<ActivePodcastRun[]>('/podcasts/active'),
     /** Start (with a mode), approve, finish automatically or resume; the work continues in the background (202). */
-    resume: (id: string, mode?: PodcastMode) =>
-      request<Podcast>(`/podcasts/${id}/resume`, { method: 'POST', body: JSON.stringify(mode ? { mode } : {}) }),
+    resume: (id: string, mode?: PodcastMode) => request<Podcast>(`/podcasts/${id}/resume`, { method: 'POST', body: JSON.stringify(mode ? { mode } : {}) }),
     /** Back to an earlier stage; with `advance` the episode continues in the background (202). 409 once published. */
     rewind: (id: string, to: 'created' | 'selected' | 'scripted', advance: boolean) =>
       request<Podcast>(`/podcasts/${id}/rewind`, { method: 'POST', body: JSON.stringify({ to, advance }) }),
     storyPool: (id: string) => request<PodcastStoryPool>(`/podcasts/${id}/story-pool`),
-    saveStories: (id: string, storyIds: string[]) =>
-      request<Podcast>(`/podcasts/${id}/stories`, { method: 'PUT', body: JSON.stringify({ storyIds }) }),
+    saveStories: (id: string, storyIds: string[]) => request<Podcast>(`/podcasts/${id}/stories`, { method: 'PUT', body: JSON.stringify({ storyIds }) }),
     /** 422 (`ApiError.body`: `{ errors, warnings }`) when the edit breaks a rule; nothing is saved then. */
     saveScript: (id: string, edit: PodcastScriptEdit) =>
       request<PodcastScriptSaveResult>(`/podcasts/${id}/script`, { method: 'PUT', body: JSON.stringify(edit) }),
@@ -358,10 +337,8 @@ export const adminApi = {
   // Jobs
   jobs: {
     list: () => request<JobRun[]>('/jobs'),
-    update: (jobName: string, data: Partial<JobRun>) =>
-      request<JobRun>(`/jobs/${jobName}`, { method: 'PUT', body: JSON.stringify(data) }),
-    run: (jobName: string) =>
-      request<{ message: string }>(`/jobs/${jobName}/run`, { method: 'POST' }),
+    update: (jobName: string, data: Partial<JobRun>) => request<JobRun>(`/jobs/${jobName}`, { method: 'PUT', body: JSON.stringify(data) }),
+    run: (jobName: string) => request<{ message: string }>(`/jobs/${jobName}/run`, { method: 'POST' }),
     serverTime: () => request<{ time: string; timezone: string }>('/jobs/server-time'),
   },
 
@@ -373,32 +350,26 @@ export const adminApi = {
       request<StoryCluster>('/clusters', { method: 'POST', body: JSON.stringify({ storyIds, primaryStoryId }) }),
     searchStories: (q: string, limit?: number) =>
       request<ClusterStorySearchResult[]>(`/clusters/search-stories?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`),
-    setPrimary: (id: string, storyId: string) =>
-      request<StoryCluster>(`/clusters/${id}/primary`, { method: 'PUT', body: JSON.stringify({ storyId }) }),
+    setPrimary: (id: string, storyId: string) => request<StoryCluster>(`/clusters/${id}/primary`, { method: 'PUT', body: JSON.stringify({ storyId }) }),
     removeMember: (id: string, storyId: string) =>
       request<StoryCluster | { dissolved: true }>(`/clusters/${id}/remove-member`, { method: 'POST', body: JSON.stringify({ storyId }) }),
-    merge: (targetId: string, sourceId: string) =>
-      request<StoryCluster>(`/clusters/${targetId}/merge`, { method: 'POST', body: JSON.stringify({ sourceId }) }),
+    merge: (targetId: string, sourceId: string) => request<StoryCluster>(`/clusters/${targetId}/merge`, { method: 'POST', body: JSON.stringify({ sourceId }) }),
     dissolve: (id: string) => request<void>(`/clusters/${id}`, { method: 'DELETE' }),
   },
 
   // Bluesky
   bluesky: {
     listPosts: (params?: { status?: string; page?: number; limit?: number }) =>
-      request<{ posts: BlueskyPost[]; total: number; page: number; limit: number }>(`/bluesky/posts${toQueryString((params || {}) as Record<string, unknown>)}`),
+      request<{ posts: BlueskyPost[]; total: number; page: number; limit: number }>(
+        `/bluesky/posts${toQueryString((params || {}) as Record<string, unknown>)}`,
+      ),
     getPost: (id: string) => request<BlueskyPost>(`/bluesky/posts/${id}`),
-    generateDraft: (storyId: string) =>
-      request<BlueskyPost>('/bluesky/posts/generate', { method: 'POST', body: JSON.stringify({ storyId }) }),
-    pickAndDraft: (storyIds: string[]) =>
-      request<BlueskyPost>('/bluesky/posts/pick-and-draft', { method: 'POST', body: JSON.stringify({ storyIds }) }),
-    updateDraft: (id: string, postText: string) =>
-      request<BlueskyPost>(`/bluesky/posts/${id}`, { method: 'PUT', body: JSON.stringify({ postText }) }),
-    publishPost: (id: string) =>
-      request<BlueskyPost>(`/bluesky/posts/${id}/publish`, { method: 'POST' }),
-    deletePost: (id: string) =>
-      request<void>(`/bluesky/posts/${id}`, { method: 'DELETE' }),
-    refreshMetrics: () =>
-      request<{ success: boolean }>('/bluesky/metrics/refresh', { method: 'POST' }),
+    generateDraft: (storyId: string) => request<BlueskyPost>('/bluesky/posts/generate', { method: 'POST', body: JSON.stringify({ storyId }) }),
+    pickAndDraft: (storyIds: string[]) => request<BlueskyPost>('/bluesky/posts/pick-and-draft', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+    updateDraft: (id: string, postText: string) => request<BlueskyPost>(`/bluesky/posts/${id}`, { method: 'PUT', body: JSON.stringify({ postText }) }),
+    publishPost: (id: string) => request<BlueskyPost>(`/bluesky/posts/${id}/publish`, { method: 'POST' }),
+    deletePost: (id: string) => request<void>(`/bluesky/posts/${id}`, { method: 'DELETE' }),
+    refreshMetrics: () => request<{ success: boolean }>('/bluesky/metrics/refresh', { method: 'POST' }),
     getFeed: (params?: { cursor?: string; limit?: number }) =>
       request<BlueskyFeedResponse>(`/bluesky/feed${toQueryString((params || {}) as Record<string, unknown>)}`),
   },
@@ -406,20 +377,16 @@ export const adminApi = {
   // Mastodon
   mastodon: {
     listPosts: (params?: { status?: string; page?: number; limit?: number }) =>
-      request<{ posts: MastodonPost[]; total: number; page: number; limit: number }>(`/mastodon/posts${toQueryString((params || {}) as Record<string, unknown>)}`),
+      request<{ posts: MastodonPost[]; total: number; page: number; limit: number }>(
+        `/mastodon/posts${toQueryString((params || {}) as Record<string, unknown>)}`,
+      ),
     getPost: (id: string) => request<MastodonPost>(`/mastodon/posts/${id}`),
-    generateDraft: (storyId: string) =>
-      request<MastodonPost>('/mastodon/posts/generate', { method: 'POST', body: JSON.stringify({ storyId }) }),
-    pickAndDraft: (storyIds: string[]) =>
-      request<MastodonPost>('/mastodon/posts/pick-and-draft', { method: 'POST', body: JSON.stringify({ storyIds }) }),
-    updateDraft: (id: string, postText: string) =>
-      request<MastodonPost>(`/mastodon/posts/${id}`, { method: 'PUT', body: JSON.stringify({ postText }) }),
-    publishPost: (id: string) =>
-      request<MastodonPost>(`/mastodon/posts/${id}/publish`, { method: 'POST' }),
-    deletePost: (id: string) =>
-      request<void>(`/mastodon/posts/${id}`, { method: 'DELETE' }),
-    refreshMetrics: () =>
-      request<{ success: boolean }>('/mastodon/metrics/refresh', { method: 'POST' }),
+    generateDraft: (storyId: string) => request<MastodonPost>('/mastodon/posts/generate', { method: 'POST', body: JSON.stringify({ storyId }) }),
+    pickAndDraft: (storyIds: string[]) => request<MastodonPost>('/mastodon/posts/pick-and-draft', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+    updateDraft: (id: string, postText: string) => request<MastodonPost>(`/mastodon/posts/${id}`, { method: 'PUT', body: JSON.stringify({ postText }) }),
+    publishPost: (id: string) => request<MastodonPost>(`/mastodon/posts/${id}/publish`, { method: 'POST' }),
+    deletePost: (id: string) => request<void>(`/mastodon/posts/${id}`, { method: 'DELETE' }),
+    refreshMetrics: () => request<{ success: boolean }>('/mastodon/metrics/refresh', { method: 'POST' }),
     getFeed: (params?: { maxId?: string; limit?: number }) =>
       request<MastodonFeedResponse>(`/mastodon/feed${toQueryString((params || {}) as Record<string, unknown>)}`),
   },
@@ -428,21 +395,19 @@ export const adminApi = {
   feedback: {
     list: (params?: { status?: string; category?: string; page?: number; limit?: number }) =>
       request<{ items: FeedbackItem[]; total: number; page: number; limit: number; unreadCount: number }>(
-        `/feedback${toQueryString((params || {}) as Record<string, unknown>)}`
+        `/feedback${toQueryString((params || {}) as Record<string, unknown>)}`,
       ),
     count: () => request<{ unreadCount: number }>('/feedback/count'),
-    updateStatus: (id: string, status: string) =>
-      request<FeedbackItem>(`/feedback/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    updateStatus: (id: string, status: string) => request<FeedbackItem>(`/feedback/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     delete: (id: string) => request<void>(`/feedback/${id}`, { method: 'DELETE' }),
-    bulk: (ids: string[], action: string) =>
-      request<{ affected: number }>('/feedback/bulk', { method: 'POST', body: JSON.stringify({ ids, action }) }),
+    bulk: (ids: string[], action: string) => request<{ affected: number }>('/feedback/bulk', { method: 'POST', body: JSON.stringify({ ids, action }) }),
   },
 
   // Notices (owner alerts; .context/admin-notices.md)
   notices: {
     list: (params?: { source?: AdminNoticeSource; show?: 'unseen' | 'all'; page?: number; limit?: number }) =>
       request<{ items: AdminNotice[]; total: number; page: number; limit: number; unseenCount: number }>(
-        `/notices${toQueryString((params || {}) as Record<string, unknown>)}`
+        `/notices${toQueryString((params || {}) as Record<string, unknown>)}`,
       ),
     count: () => request<{ unseen: number; unseenCritical: number }>('/notices/count'),
     markSeen: (id: string) => request<AdminNotice>(`/notices/${id}/seen`, { method: 'POST' }),
@@ -454,8 +419,7 @@ export const adminApi = {
   users: {
     list: () => request<User[]>('/users'),
     get: (id: string) => request<User>(`/users/${id}`),
-    create: (data: { email: string; name: string; password: string; role?: string }) =>
-      request<User>('/users', { method: 'POST', body: JSON.stringify(data) }),
+    create: (data: { email: string; name: string; password: string; role?: string }) => request<User>('/users', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: { email?: string; name?: string; role?: string }) =>
       request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/users/${id}`, { method: 'DELETE' }),

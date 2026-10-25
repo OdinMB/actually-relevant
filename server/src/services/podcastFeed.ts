@@ -9,9 +9,7 @@ import { config } from '../config.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { prepareRepresentation, type Representation } from '../lib/httpRepresentation.js'
 import { escapeXml } from '../lib/xml.js'
-import {
-  episodeDescriptionHtml, episodeDescriptionText, podcastShowInfo, type PodcastCategory, type PublishedEpisode,
-} from './podcastShow.js'
+import { episodeDescriptionHtml, episodeDescriptionText, podcastShowInfo, type PodcastCategory, type PublishedEpisode } from './podcastShow.js'
 
 const NAMESPACES = [
   'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"',
@@ -53,6 +51,8 @@ function itemXml(episode: PublishedEpisode, artworkUrl: string): string {
     el('itunes:explicit', 'false'),
     `<itunes:image href="${escapeXml(artworkUrl)}"/>`,
     ...(episode.transcriptUrl ? [`<podcast:transcript url="${escapeXml(episode.transcriptUrl)}" type="text/vtt" language="en"/>`] : []),
+    // Episodes made before chapters existed have none; apps then fall back to their own.
+    ...(episode.chaptersUrl ? [`<podcast:chapters url="${escapeXml(episode.chaptersUrl)}" type="application/json+chapters"/>`] : []),
     AI_CONTENT_TXT,
   ]
   return `<item>${parts.join('')}</item>`

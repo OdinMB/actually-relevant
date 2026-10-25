@@ -20,8 +20,7 @@ const techArticleSchema = {
   '@context': 'https://schema.org',
   '@type': 'TechArticle',
   headline: 'Our Methodology \u2014 How AI Curates the News',
-  description:
-    "Detailed explanation of Actually Relevant's multi-stage AI news curation pipeline, covering 82+ sources across 5 languages.",
+  description: "Detailed explanation of Actually Relevant's multi-stage AI news curation pipeline, covering 82+ sources across 5 languages.",
   url: META.url,
   author: {
     '@type': 'Organization',
@@ -60,10 +59,9 @@ export default function MethodologyPage() {
         <div className="prose max-w-none">
           <h2 className="section-heading mt-8">What Does "Relevant" Mean?</h2>
           <p>
-            We only feature stories that are important for humanity and its long-term future. Most
-            daily news focuses on events that are dramatic, local, or short-lived. We filter for
-            stories that affect large numbers of people, shift long-term trends, or represent genuine
-            progress in our understanding of the world.
+            We only feature stories that are important for humanity and its long-term future. Most daily news focuses on events that are dramatic, local, or
+            short-lived. We filter for stories that affect large numbers of people, shift long-term trends, or represent genuine progress in our understanding
+            of the world.
           </p>
 
           <h2 className="section-heading mt-8">Our Process</h2>
@@ -73,10 +71,7 @@ export default function MethodologyPage() {
           <div className="my-6">
             {/* Legend */}
             <div className="flex items-center gap-1.5 justify-end mb-4 text-xs text-neutral-400">
-              <span
-                className="w-2.5 h-2.5 rounded-full bg-brand-500 shrink-0"
-                aria-hidden="true"
-              />
+              <span className="w-2.5 h-2.5 rounded-full bg-brand-500 shrink-0" aria-hidden="true" />
               <span>= story</span>
             </div>
 
@@ -109,18 +104,14 @@ export default function MethodologyPage() {
                   desc: 'We identify the 8 most relevant stories of the week, 2 from each Issue.',
                   dots: 1,
                 },
-              ].map((step) => (
+              ].map(step => (
                 <div key={step.label} className="flex gap-4 md:gap-6 items-center py-3">
                   <div className="flex-1">
                     <strong className="text-neutral-800">{step.label}</strong>
                     <p className="text-sm text-neutral-500 mt-1 leading-relaxed">{step.desc}</p>
                   </div>
                   {/* Dot cluster — fewer stories = stronger color */}
-                  <div
-                    className="w-16 md:w-20 shrink-0 flex flex-wrap justify-end gap-[5px]"
-                    role="img"
-                    aria-label={`~${step.dots} stories remaining`}
-                  >
+                  <div className="w-16 md:w-20 shrink-0 flex flex-wrap justify-end gap-[5px]" role="img" aria-label={`~${step.dots} stories remaining`}>
                     {Array.from({ length: step.dots }).map((_, j) => (
                       <span
                         key={j}
@@ -136,10 +127,7 @@ export default function MethodologyPage() {
           </div>
 
           <h2 className="section-heading mt-8">Issue Areas</h2>
-          <p>
-            We cover four main issue areas, each with adapted evaluation criteria. Some areas have
-            subcategories with further adjusted criteria.
-          </p>
+          <p>We cover four main issue areas, each with adapted evaluation criteria. Some areas have subcategories with further adjusted criteria.</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
           {[
@@ -147,7 +135,7 @@ export default function MethodologyPage() {
             { slug: 'planet-climate', title: 'Planet & Climate', description: 'Climate change, biodiversity, ecosystems, energy' },
             { slug: 'existential-threats', title: 'Existential Threats', description: 'Nuclear weapons, pandemics, AI risks, conflict' },
             { slug: 'science-technology', title: 'Science & Technology', description: 'Research breakthroughs, innovation, AI policy' },
-          ].map((card) => {
+          ].map(card => {
             const colors = getCategoryColor(card.slug)
             return (
               <Link
@@ -163,13 +151,11 @@ export default function MethodologyPage() {
           })}
         </div>
         <div className="prose max-w-none">
-
           {/* Our Sources */}
           <h2 className="section-heading mt-10">Our Sources</h2>
           <p>
-            We monitor{sources ? ` ${sources.totalCount}` : ''} curated publications. Every source
-            is chosen for editorial quality, regional coverage, or subject-matter expertise — not
-            for traffic volume.
+            We monitor{sources ? ` ${sources.totalCount}` : ''} curated publications. Every source is chosen for editorial quality, regional coverage, or
+            subject-matter expertise — not for traffic volume.
           </p>
 
           {sourcesLoading ? (
@@ -214,47 +200,34 @@ export default function MethodologyPage() {
           <h2 className="section-heading mt-10">What We Don't Do</h2>
           <ul className="list-disc pl-6 space-y-2 mt-3">
             <li>
-              <strong>We don't personalize.</strong> Everyone sees the same stories. There's no
-              filter bubble.
+              <strong>We don't personalize.</strong> Everyone sees the same stories. There's no filter bubble.
             </li>
             <li>
-              <strong>We don't optimize for clicks.</strong> No engagement metrics influence
-              selection.
+              <strong>We don't optimize for clicks.</strong> No engagement metrics influence selection.
             </li>
             <li>
-              <strong>We don't do original reporting.</strong> Every story links to the original
-              source article. Headlines, summaries, blurbs, relevance analyses, social posts, and the
-              newsletter intro are generated by AI. AI also rates each story, selects the stories we
-              publish, and sets the emotion tag behind the dial. Quotes are selected by AI and
-              translated into English where needed. No editor reviews anything before it's
-              published. Spotted AI content without a label, or a label that's wrong? Tell us on
-              the{' '}
-              <Link
-                to="/feedback"
-                className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-              >
+              <strong>We don't do original reporting.</strong> Every story links to the original source article. Headlines, summaries, blurbs, relevance
+              analyses, social posts, and the newsletter intro are generated by AI. AI also rates each story, selects the stories we publish, and sets the
+              emotion tag behind the dial. Quotes are selected by AI and translated into English where needed. No editor reviews anything before it's published.
+              Spotted AI content without a label, or a label that's wrong? Tell us on the{' '}
+              <Link to="/feedback" className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
                 feedback page
               </Link>
               .
             </li>
             <li>
-              <strong>We don't sell data.</strong> No tracking, no analytics profiles, no ad
-              targeting.
+              <strong>We don't sell data.</strong> No tracking, no analytics profiles, no ad targeting.
             </li>
           </ul>
 
           {/* The Positivity Slider */}
           <h2 className="section-heading mt-10">The Positivity Dial</h2>
           <p>
-            Readers can adjust a 5-position positivity dial that filters stories by emotional tone.
-            This doesn't change what we select — it lets you control how much difficult news you see
-            in a given session. It's a tool for managing news fatigue, not an editorial filter.
+            Readers can adjust a 5-position positivity dial that filters stories by emotional tone. This doesn't change what we select — it lets you control how
+            much difficult news you see in a given session. It's a tool for managing news fatigue, not an editorial filter.
           </p>
           <p className="mt-2">
-            <Link
-              to="/news-fatigue"
-              className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-            >
+            <Link to="/news-fatigue" className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
               Learn more about our approach to news fatigue{' '}
             </Link>
           </p>
@@ -262,35 +235,25 @@ export default function MethodologyPage() {
           {/* Transparency */}
           <h2 className="section-heading mt-10">Transparency</h2>
           <p>
-            For every published story, we show the AI-generated analysis: why the story matters, what
-            factors contributed to its rating, and potential caveats. We believe readers deserve to
-            understand not just <em>what</em> is relevant, but <em>why</em>.
+            For every published story, we show the AI-generated analysis: why the story matters, what factors contributed to its rating, and potential caveats.
+            We believe readers deserve to understand not just <em>what</em> is relevant, but <em>why</em>.
           </p>
           <p className="mt-4">
-            AI curation is only trustworthy if you can verify it. We name our sources, explain our
-            pipeline, and publish an open API so anyone can inspect what we produce.
+            AI curation is only trustworthy if you can verify it. We name our sources, explain our pipeline, and publish an open API so anyone can inspect what
+            we produce.
           </p>
           <p className="mt-2">
-            <Link
-              to="/compare"
-              className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-            >
+            <Link to="/compare" className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
               See how we compare to other aggregators{' '}
             </Link>
             {' | '}
-            <Link
-              to="/free-api"
-              className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-            >
+            <Link to="/free-api" className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
               Explore the free API
             </Link>
           </p>
         </div>
 
-        <LandingCta
-          heading="See it in action."
-          description="Visit actuallyrelevant.news to read today's curated stories — or subscribe to the newsletter."
-        />
+        <LandingCta heading="See it in action." description="Visit actuallyrelevant.news to read today's curated stories — or subscribe to the newsletter." />
       </div>
     </>
   )

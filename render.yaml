@@ -51,7 +51,9 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     branch: main
-    autoDeployTrigger: commit
+    # Deploy a commit on main only once its GitHub checks (.github/workflows/ci.yml) pass;
+    # a red or check-less commit is not deployed (ADR-0047, .context/deployment.md).
+    autoDeployTrigger: checksPass
     # Custom domains as in the dashboard (ADR-0038). The static site's rewrites target it.
     domains:
       - api.actuallyrelevant.news
@@ -136,16 +138,17 @@ services:
     # Relative to rootDir (client/dist), as Render's export of the live service shows.
     staticPublishPath: dist
     branch: main
-    autoDeployTrigger: commit
+    # As the backend: only once the commit's checks pass (ADR-0047)
+    autoDeployTrigger: checksPass
     # Custom domains as in the dashboard (ADR-0038); the onrender.com subdomain is off.
     domains:
       - actuallyrelevant.news
       - www.actuallyrelevant.news
     renderSubdomainPolicy: disabled
-    # Order matters: Render applies the first matching rule, so /sitemap.xml and
-    # /podcast.xml must stay above the SPA catch-all. No static sitemap.xml or
-    # podcast.xml may exist in client/public/. Both rewrites target the API's custom
-    # domain, not the onrender.com host (ADR-0019, .context/seo.md).
+    # Order matters: Render applies the first matching rule, so /sitemap.xml,
+    # /podcast.xml and /stories/* must stay above the SPA catch-all. No static sitemap.xml or
+    # podcast.xml may exist in client/public/, and nothing may be built under dist/stories/.
+    # The rewrites target the API's custom domain, not the onrender.com host (ADR-0019, .context/seo.md).
     routes:
       - type: rewrite
         source: /sitemap.xml
@@ -153,6 +156,12 @@ services:
       - type: rewrite
         source: /podcast.xml
         destination: https://api.actuallyrelevant.news/api/podcast/feed.xml
+      # Story pages: the backend returns this build's index.html with the story's title,
+      # description and og:/twitter: tags injected, so shared links preview as the story.
+      # On any failure it returns the shell unchanged (.context/seo.md, "Story link previews").
+      - type: rewrite
+        source: /stories/*
+        destination: https://api.actuallyrelevant.news/api/story-page/*
       - type: rewrite
         source: /*
         destination: /index.html

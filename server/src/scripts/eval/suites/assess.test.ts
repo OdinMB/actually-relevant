@@ -23,14 +23,40 @@ const base: AssessArmMetrics = {
 
 describe('scoreAssess calibration', () => {
   const story = (id: string, rating: number): AssessItem => ({
-    id, title: id, content: '', publisher: 'P', url: 'u', guidelines: { factors: '', antifactors: '', ratings: '' }, language: 'en', han: false, stored: { rating },
+    id,
+    title: id,
+    content: '',
+    publisher: 'P',
+    url: 'u',
+    guidelines: { factors: '', antifactors: '', ratings: '' },
+    language: 'en',
+    han: false,
+    stored: { rating },
   })
   const rec = (rating: number, limitingFactors: string[] = []): CallRecord<AssessResult> => ({
-    key: 'k', arm: 'm@medium', schema: 'assess', outcome: 'ok', content: '{}', finishReason: 'stop',
-    usage: { input: 0, cached: 0, output: 0, reasoning: 0 }, costUsd: 0, latencyMs: 0, at: '',
+    key: 'k',
+    arm: 'm@medium',
+    schema: 'assess',
+    outcome: 'ok',
+    content: '{}',
+    finishReason: 'stop',
+    usage: { input: 0, cached: 0, output: 0, reasoning: 0 },
+    costUsd: 0,
+    latencyMs: 0,
+    at: '',
     parsed: {
-      titleLabel: 'Label', relevanceTitle: 'Title', summary: 's', quote: 'q', quoteAttribution: 'a', factors: [], limitingFactors,
-      relevanceCalculation: [], conservativeRating: rating, relevanceSummary: 'r', marketingBlurb: 'b', publicationDate: '2026-01-01 00:00:00',
+      titleLabel: 'Label',
+      relevanceTitle: 'Title',
+      summary: 's',
+      quote: 'q',
+      quoteAttribution: 'a',
+      factors: [],
+      limitingFactors,
+      relevanceCalculation: [],
+      conservativeRating: rating,
+      relevanceSummary: 'r',
+      marketingBlurb: 'b',
+      publicationDate: '2026-01-01 00:00:00',
     } as unknown as AssessResult,
   })
 

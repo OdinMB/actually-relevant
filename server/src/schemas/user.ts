@@ -7,10 +7,12 @@ export const createUserSchema = z.object({
   role: z.enum(['admin', 'editor', 'viewer']).optional(),
 })
 
-export const updateUserSchema = z.object({
-  email: z.string().email().optional(),
-  name: z.string().min(1).optional(),
-  role: z.enum(['admin', 'editor', 'viewer']).optional(),
-}).refine(data => Object.keys(data).length > 0, {
-  message: 'At least one field must be provided',
-})
+export const updateUserSchema = z
+  .object({
+    email: z.string().email().optional(),
+    name: z.string().min(1).optional(),
+    role: z.enum(['admin', 'editor', 'viewer']).optional(),
+  })
+  .refine(data => Object.keys(data).length > 0, {
+    message: 'At least one field must be provided',
+  })

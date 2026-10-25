@@ -20,11 +20,11 @@ describe('decidePreparation', () => {
     expect(decidePreparation({})).toEqual({ action: 'skip-missing' })
   })
 
-  it.each(['1', 'true', 'TRUE', 'yes'])('honors SKIP_DB_PREPARE=%s', (value) => {
+  it.each(['1', 'true', 'TRUE', 'yes'])('honors SKIP_DB_PREPARE=%s', value => {
     expect(decidePreparation({ DATABASE_URL: LOCAL, SKIP_DB_PREPARE: value })).toEqual({ action: 'skip-requested' })
   })
 
-  it.each(['', '0', 'false', 'no'])('does not skip for SKIP_DB_PREPARE=%j', (value) => {
+  it.each(['', '0', 'false', 'no'])('does not skip for SKIP_DB_PREPARE=%j', value => {
     expect(decidePreparation({ DATABASE_URL: LOCAL, SKIP_DB_PREPARE: value })).toEqual({ action: 'run' })
   })
 })

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { config } from '../../config.js'
 import { validateBody } from '../../middleware/validate.js'
 import * as subscribeService from '../../services/subscribe.js'
-import { EmailValidationError, ConfirmationEmailError, SignupUnavailableError } from '../../services/subscribe.js'
+import { EmailValidationError, ConfirmationEmailError, SignupUnavailableError, ConfirmationLinkError } from '../../services/subscribe.js'
 import { issueFormToken, verifyFormToken } from '../../lib/formToken.js'
 import { verifyTurnstile, type TurnstileResult } from '../../lib/turnstile.js'
 import { createLogger } from '../../lib/logger.js'
@@ -111,11 +111,7 @@ router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, va
     // Surface real failures to the visitor rather than falsely claiming the email
     // was sent. (An already-confirmed or throttled address returns success earlier,
     // so this path can't leak subscription status — these are genuine errors.)
-    if (
-      err instanceof EmailValidationError ||
-      err instanceof ConfirmationEmailError ||
-      err instanceof SignupUnavailableError
-    ) {
+    if (err instanceof EmailValidationError || err instanceof ConfirmationEmailError || err instanceof SignupUnavailableError) {
       res.json({ success: false, message: err.message })
       return
     }
@@ -144,9 +140,10 @@ router.post('/confirm', lightLimiter, validateBody(confirmSchema), async (req, r
   try {
     await subscribeService.confirmSubscription(token, email)
     res.json({ success: true })
-  } catch (err: any) {
-    log.warn({ err, email }, 'confirmation failed')
-    const reason = err?.message === 'Confirmation link has expired' ? 'expired' : 'invalid'
+  } catch (err) {
+    // No address or token in the log (`.context/logging.md`, "Personal data")
+    log.warn({ err }, 'confirmation failed')
+    const reason = err instanceof ConfirmationLinkError ? err.reason : 'invalid'
     res.json({ success: false, reason })
   }
 })

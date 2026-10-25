@@ -37,9 +37,7 @@ function wrapWithProviders(ui: React.ReactElement, initialEntry = '/') {
   return render(
     <HelmetProvider>
       <MemoryRouter initialEntries={[initialEntry]}>
-        <QueryClientProvider client={queryClient}>
-          {ui}
-        </QueryClientProvider>
+        <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
       </MemoryRouter>
     </HelmetProvider>,
   )

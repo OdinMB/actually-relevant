@@ -35,15 +35,9 @@ async function processSingle(story: {
   id: string
   relevanceSummary: string
 }> {
-  const summaryLine = story.summary
-    ? `\nSummary: "${story.summary}"\n`
-    : ''
-  const antifactorsLine = story.antifactors
-    ? `\nLimiting factors:\n${story.antifactors}\n`
-    : ''
-  const ratingLine = story.relevance != null
-    ? `\nConservative rating: ${story.relevance}/10\n`
-    : ''
+  const summaryLine = story.summary ? `\nSummary: "${story.summary}"\n` : ''
+  const antifactorsLine = story.antifactors ? `\nLimiting factors:\n${story.antifactors}\n` : ''
+  const ratingLine = story.relevance != null ? `\nConservative rating: ${story.relevance}/10\n` : ''
 
   const result = await structuredLlm.invoke([
     new HumanMessage(
@@ -100,7 +94,7 @@ async function main() {
     if (stories.length === 0) break
 
     const results = await Promise.allSettled(
-      stories.map((story) =>
+      stories.map(story =>
         semaphore.run(async () => {
           const result = await processSingle({
             id: story.id,
@@ -135,7 +129,7 @@ async function main() {
       }
     }
 
-    cursor = stories[stories.length - 1].id
+    cursor = stories[stories.length - 1]!.id
 
     if (TEST_MODE) break
   }
@@ -144,7 +138,7 @@ async function main() {
   await prisma.$disconnect()
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Fatal error:', err)
   process.exit(1)
 })

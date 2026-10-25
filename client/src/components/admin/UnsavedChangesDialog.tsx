@@ -7,10 +7,7 @@ interface UnsavedChangesDialogProps {
 }
 
 /** The one confirm dialog of a page's `useUnsavedChangesGuard`. */
-export function UnsavedChangesDialog({
-  leave,
-  description = 'Your changes have not been saved. Leaving discards them.',
-}: UnsavedChangesDialogProps) {
+export function UnsavedChangesDialog({ leave, description = 'Your changes have not been saved. Leaving discards them.' }: UnsavedChangesDialogProps) {
   return (
     <ConfirmDialog
       open={leave.asking}

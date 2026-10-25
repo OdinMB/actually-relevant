@@ -5,8 +5,23 @@ import type { RatingItemDraft, RatingSetSlug } from './types.js'
 const BASE = 'gpt-5-mini@medium'
 const CAND = 'gpt-6-luna@medium'
 
-function draft(set: RatingSetSlug, key: string, tags: RatingItemDraft['tags'] = {}, content = ['Option one text', 'Option two text'], context = 'Context'): RatingItemDraft {
-  return { set, key, context_md: context, options: [{ arm: BASE, content_md: content[0] }, { arm: CAND, content_md: content[1] }], tags }
+function draft(
+  set: RatingSetSlug,
+  key: string,
+  tags: RatingItemDraft['tags'] = {},
+  content = ['Option one text', 'Option two text'],
+  context = 'Context',
+): RatingItemDraft {
+  return {
+    set,
+    key,
+    context_md: context,
+    options: [
+      { arm: BASE, content_md: content[0] },
+      { arm: CAND, content_md: content[1] },
+    ],
+    tags,
+  }
 }
 
 const many = (set: RatingSetSlug, n: number, tags: (i: number) => RatingItemDraft['tags'] = () => ({})) =>
@@ -24,7 +39,9 @@ describe('buildRatingDeliverable', () => {
   it('numbers items as <set id>-NN', () => {
     const { sets } = buildRatingDeliverable(many('newsletter-intro', 3))
     expect(sets.sets[0].items.map(i => i.id)).toEqual([
-      'actually-relevant-newsletter-intro-01', 'actually-relevant-newsletter-intro-02', 'actually-relevant-newsletter-intro-03',
+      'actually-relevant-newsletter-intro-01',
+      'actually-relevant-newsletter-intro-02',
+      'actually-relevant-newsletter-intro-03',
     ])
   })
 
@@ -86,7 +103,8 @@ describe('buildRatingDeliverable', () => {
 
   it('honours the assessment strata (Han, non-English, differing ratings)', () => {
     const drafts = Array.from({ length: 40 }, (_, i) =>
-      draft('full-assessment', `s${i}`, { han: i === 39, nonEnglish: i >= 36, differ: i % 5 === 0, band46: true }, undefined, `ctx-${i}`))
+      draft('full-assessment', `s${i}`, { han: i === 39, nonEnglish: i >= 36, differ: i % 5 === 0, band46: true }, undefined, `ctx-${i}`),
+    )
     const byContext = new Map(drafts.map(d => [d.context_md, d]))
     const picked = buildRatingDeliverable(drafts).sets.sets[0].items.map(item => byContext.get(item.context_md)!)
     expect(picked).toHaveLength(12)
@@ -116,13 +134,19 @@ describe('replaceRatingSet', () => {
     const built = buildRatingDeliverable([...many('full-assessment', 3), ...many('newsletter-intro', 2), ...many('podcast-script', 1)])
     return JSON.parse(JSON.stringify(built)) as typeof built
   }
-  const v2 = buildRatingSet(many('full-assessment', 4).map(d => ({ ...d, key: `new-${d.key}` })), 'full-assessment', 2)
+  const v2 = buildRatingSet(
+    many('full-assessment', 4).map(d => ({ ...d, key: `new-${d.key}` })),
+    'full-assessment',
+    2,
+  )
 
   it('swaps the set in place and leaves every other set untouched', () => {
     const { sets, key } = original()
     const replaced = replaceRatingSet(sets, key, 'full-assessment', { set: v2.set!, key: v2.key })
     expect(replaced.file.sets.map(s => s.id)).toEqual([
-      'actually-relevant-full-assessment-v2', 'actually-relevant-newsletter-intro', 'actually-relevant-podcast-script',
+      'actually-relevant-full-assessment-v2',
+      'actually-relevant-newsletter-intro',
+      'actually-relevant-podcast-script',
     ])
     expect(replaced.file.sets[1]).toBe(sets.sets[1])
     expect(replaced.file.sets[2]).toBe(sets.sets[2])
@@ -151,7 +175,10 @@ describe('replaceRatingSet', () => {
 describe('validateRatingDeliverable', () => {
   const valid = () => {
     const built = buildRatingDeliverable([...many('newsletter-intro', 2), ...many('podcast-script', 1)])
-    return { sets: JSON.parse(JSON.stringify(built.sets)) as RatingSetsFile, key: JSON.parse(JSON.stringify(built.key)) as Record<string, Record<string, string>> }
+    return {
+      sets: JSON.parse(JSON.stringify(built.sets)) as RatingSetsFile,
+      key: JSON.parse(JSON.stringify(built.key)) as Record<string, Record<string, string>>,
+    }
   }
 
   it('accepts a built deliverable', () => {

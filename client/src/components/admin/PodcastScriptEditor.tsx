@@ -68,23 +68,29 @@ export function PodcastScriptEditor({ podcast, onDirtyChange }: PodcastScriptEdi
 
   const handleSave = () => {
     setFeedback({ errors: [], warnings: [] })
-    save.mutate({ id: podcast.id, edit: buildScriptEdit(dialogue, texts, summary) }, {
-      onSuccess: ({ warnings }) => {
-        setFeedback({ errors: [], warnings })
-        toast('success', warnings.length > 0 ? 'Script saved, with warnings' : 'Script saved')
+    save.mutate(
+      { id: podcast.id, edit: buildScriptEdit(dialogue, texts, summary) },
+      {
+        onSuccess: ({ warnings }) => {
+          setFeedback({ errors: [], warnings })
+          toast('success', warnings.length > 0 ? 'Script saved, with warnings' : 'Script saved')
+        },
+        onError: err => {
+          const body = err instanceof ApiError ? (err.body as Partial<Feedback> | undefined) : undefined
+          setFeedback({ errors: body?.errors ?? [err instanceof Error ? err.message : 'Failed to save the script'], warnings: body?.warnings ?? [] })
+        },
       },
-      onError: err => {
-        const body = err instanceof ApiError ? (err.body as Partial<Feedback> | undefined) : undefined
-        setFeedback({ errors: body?.errors ?? [err instanceof Error ? err.message : 'Failed to save the script'], warnings: body?.warnings ?? [] })
-      },
-    })
+    )
   }
 
   const handleRegenerate = () => {
-    rewind.mutate({ id: podcast.id, to: 'selected', advance: true }, {
-      onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
-      onSettled: () => setConfirming(false),
-    })
+    rewind.mutate(
+      { id: podcast.id, to: 'selected', advance: true },
+      {
+        onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
+        onSettled: () => setConfirming(false),
+      },
+    )
   }
 
   const setTurn = (i: number, j: number, value: string) => setTexts(prev => prev.map((seg, a) => (a === i ? seg.map((t, b) => (b === j ? value : t)) : seg)))
@@ -92,7 +98,9 @@ export function PodcastScriptEditor({ podcast, onDirtyChange }: PodcastScriptEdi
   return (
     <section aria-labelledby="podcast-script-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-4">
       <div>
-        <h2 id="podcast-script-heading" className="text-sm font-semibold text-neutral-900">Script</h2>
+        <h2 id="podcast-script-heading" className="text-sm font-semibold text-neutral-900">
+          Script
+        </h2>
         <p className="text-xs text-neutral-600 mt-1">
           Edit what each host says; who speaks stays as written. The spoken AI disclosure at the start and the sign-off are added automatically.
         </p>
@@ -121,32 +129,53 @@ export function PodcastScriptEditor({ podcast, onDirtyChange }: PodcastScriptEdi
       {feedback.errors.length > 0 && (
         <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           <p className="font-semibold">Not saved. Fix these first:</p>
-          <ul className="list-disc pl-5 mt-1">{feedback.errors.map(e => <li key={e}>{e}</li>)}</ul>
+          <ul className="list-disc pl-5 mt-1">
+            {feedback.errors.map(e => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
         </div>
       )}
       {feedback.warnings.length > 0 && (
         <div role="status" className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
           <p className="font-semibold">Worth a look (does not block):</p>
-          <ul className="list-disc pl-5 mt-1">{feedback.warnings.map(w => <li key={w}>{w}</li>)}</ul>
+          <ul className="list-disc pl-5 mt-1">
+            {feedback.warnings.map(w => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
         </div>
       )}
 
       {/* Always shown (disabled while nothing changed), so the form does not shift when an edit starts */}
       <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-3">
-        <Button size="sm" variant="secondary" onClick={handleSave} loading={save.isPending} disabled={!dirty}>Save script</Button>
-        <Button size="sm" variant="ghost" onClick={() => { setTexts(textsOf(dialogue)); setSummary(dialogue.episodeSummary); setFeedback({ errors: [], warnings: [] }) }} disabled={!dirty || save.isPending}>
+        <Button size="sm" variant="secondary" onClick={handleSave} loading={save.isPending} disabled={!dirty}>
+          Save script
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setTexts(textsOf(dialogue))
+            setSummary(dialogue.episodeSummary)
+            setFeedback({ errors: [], warnings: [] })
+          }}
+          disabled={!dirty || save.isPending}
+        >
           Discard changes
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setConfirming(true)} disabled={save.isPending || rewind.isPending}>Regenerate script</Button>
+        <Button size="sm" variant="ghost" onClick={() => setConfirming(true)} disabled={save.isPending || rewind.isPending}>
+          Regenerate script
+        </Button>
         {podcast.awaitingReview && (
           <span className="sm:ml-auto">
-            <PodcastRunButton podcast={podcast} size="sm" confirmTitle="Approve the script and voice it?" disabled={dirty}>Approve and voice</PodcastRunButton>
+            <PodcastRunButton podcast={podcast} size="sm" confirmTitle="Approve the script and voice it?" disabled={dirty}>
+              Approve and voice
+            </PodcastRunButton>
           </span>
         )}
       </div>
-      {podcast.awaitingReview && (
-        <p className="min-h-[1rem] text-xs text-neutral-600">{dirty ? 'Save or discard your changes before approving.' : ''}</p>
-      )}
+      {podcast.awaitingReview && <p className="min-h-[1rem] text-xs text-neutral-600">{dirty ? 'Save or discard your changes before approving.' : ''}</p>}
 
       <ConfirmDialog
         open={confirming}

@@ -78,8 +78,7 @@ export interface MissingContact {
   droppedDataKeys: string[]
 }
 
-const normalize = (email: unknown): string | null =>
-  typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null
+const normalize = (email: unknown): string | null => (typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null)
 
 /**
  * Contacts in the backup whose lowercased email is not among the current ones.
@@ -108,7 +107,12 @@ export function findMissingContacts(backup: RawContact[], current: RawContact[])
         else droppedDataKeys.push(k)
       }
     }
-    missing.push({ email: (c.email as string).trim(), subscribed: c.subscribed === true || c.subscribed === 'true' || c.subscribed === 1, data, droppedDataKeys })
+    missing.push({
+      email: (c.email as string).trim(),
+      subscribed: c.subscribed === true || c.subscribed === 'true' || c.subscribed === 1,
+      data,
+      droppedDataKeys,
+    })
   }
   return missing
 }
@@ -149,7 +153,7 @@ export async function restoreContacts(
       failed++
       log(`  failed to recreate ${m.email}: ${err instanceof Error ? err.message : String(err)}`)
     }
-    if (opts.delayMs) await new Promise((resolve) => setTimeout(resolve, opts.delayMs))
+    if (opts.delayMs) await new Promise(resolve => setTimeout(resolve, opts.delayMs))
   }
   return { created, failed }
 }
@@ -166,9 +170,7 @@ async function main() {
   console.log(`Plunk contact restore — mode: ${args.apply ? 'APPLY (will recreate)' : 'PREVIEW (no changes)'}`)
   console.log(`Backup: ${filePath} (${backup.length} contacts)`)
 
-  const fetched = await fetchAllContacts(
-    (cursor, limit) => plunk.listContacts(cursor, limit) as unknown as Promise<ContactsPage>,
-  )
+  const fetched = await fetchAllContacts((cursor, limit) => plunk.listContacts(cursor, limit) as unknown as Promise<ContactsPage>)
   const current = fetched.contacts
   console.log(`Current Plunk contacts: ${current.length}`)
   // A contact the listing missed would be "recreated" through POST /contacts, which may
@@ -180,12 +182,12 @@ async function main() {
   }
 
   const missing = findMissingContacts(backup, current)
-  const subscribed = missing.filter((m) => m.subscribed).length
+  const subscribed = missing.filter(m => m.subscribed).length
   console.log(`\nIn the backup but missing now: ${missing.length} (${subscribed} were subscribed, ${missing.length - subscribed} unsubscribed)`)
   for (const m of missing) {
     console.log(`  ${args.apply ? 'RECREATE' : 'would recreate'}: ${m.email} (${m.subscribed ? 'subscribed' : 'unsubscribed'})`)
   }
-  const dropped = missing.filter((m) => m.droppedDataKeys.length > 0).length
+  const dropped = missing.filter(m => m.droppedDataKeys.length > 0).length
   if (dropped > 0) console.log(`\n${dropped} of them carry custom data that is not a string, number or boolean; those keys are left out.`)
 
   if (!args.apply) {
@@ -200,7 +202,7 @@ async function main() {
 
 // Only run when executed directly (so importing the file for tests has no side effects).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
+  main().catch(err => {
     console.error('Fatal error:', err instanceof Error ? err.message : err)
     process.exit(1)
   })

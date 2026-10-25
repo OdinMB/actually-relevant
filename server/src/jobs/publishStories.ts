@@ -1,4 +1,5 @@
-import { getStoryIdsByStatus, bulkUpdateStatus } from '../services/story.js'
+import { getStoryIdsByStatus } from '../services/story.js'
+import { transition } from '../services/storyLifecycle.js'
 import { createLogger } from '../lib/logger.js'
 
 const log = createLogger('publish_stories')
@@ -14,9 +15,10 @@ export async function runPublishStories(): Promise<void> {
 
   log.info({ storyCount: ids.length }, 'publishing stories')
 
-  // bulkUpdateStatus publishes in bounded chunks (config.publish.chunkSize), so even a
-  // large `selected` backlog is processed within Render's memory limit and the tx timeout.
-  const result = await bulkUpdateStatus(ids, 'published')
+  // Publishes in bounded chunks (config.publish.chunkSize), so even a large `selected` backlog is
+  // processed within Render's memory limit and the tx timeout. Only unclustered stories and
+  // cluster primaries publish; a story trashed or rejected meanwhile is skipped.
+  const { moved, skipped } = await transition(ids, { to: 'published' }, 'pipeline')
 
-  log.info({ published: result.count }, 'publish job finished')
+  log.info({ published: moved.length, skipped: skipped.length }, 'publish job finished')
 }

@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js'
 import { hashPassword, verifyPassword, revokeAllUserTokens } from './auth.js'
 import type { UserRole } from '@prisma/client'
+import { UnauthorizedError } from '../utils/errors.js'
 
 const userSelect = {
   id: true,
@@ -11,12 +12,7 @@ const userSelect = {
   updatedAt: true,
 }
 
-export async function createUser(data: {
-  email: string
-  name: string
-  password: string
-  role?: UserRole
-}) {
+export async function createUser(data: { email: string; name: string; password: string; role?: UserRole }) {
   const passwordHash = await hashPassword(data.password)
   return prisma.user.create({
     data: {
@@ -61,16 +57,12 @@ export async function deleteUser(id: string) {
   return prisma.user.delete({ where: { id } })
 }
 
-export async function changePassword(
-  userId: string,
-  currentPassword: string,
-  newPassword: string,
-): Promise<void> {
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) throw new Error('User not found')
 
   const valid = await verifyPassword(currentPassword, user.passwordHash)
-  if (!valid) throw new Error('Current password is incorrect')
+  if (!valid) throw new UnauthorizedError('Current password is incorrect')
 
   const passwordHash = await hashPassword(newPassword)
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } })

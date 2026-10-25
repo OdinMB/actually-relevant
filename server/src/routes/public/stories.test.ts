@@ -133,6 +133,65 @@ describe('Public Stories API', () => {
       expect(res.body.data[0].aiGenerated).toEqual(expectedMarker(publicStory))
     })
 
+    describe('incremental sync filters', () => {
+      /** The where clause the listing query ran with. */
+      function lastWhere() {
+        return mockPrisma.story.findMany.mock.calls.at(-1)![0].where
+      }
+
+      it('filters on datePublished and relevance', async () => {
+        mockPrisma.story.findMany.mockResolvedValue([publicStory])
+        mockPrisma.story.count.mockResolvedValue(1)
+
+        const res = await request(app).get('/api/stories?publishedSince=2026-10-01T00:00:00Z&publishedBefore=2026-10-08T12:00:00%2B02:00&minRelevance=7')
+        expect(res.status).toBe(200)
+        expect(lastWhere()).toEqual({
+          status: 'published',
+          AND: [{ datePublished: { gte: new Date('2026-10-01T00:00:00Z'), lt: new Date('2026-10-08T10:00:00Z') } }, { relevance: { gte: 7 } }],
+        })
+        // count runs on the same filter, so total and pages describe the filtered set
+        expect(mockPrisma.story.count.mock.calls.at(-1)![0].where).toEqual(lastWhere())
+      })
+
+      it('accepts publishedSince on its own', async () => {
+        mockPrisma.story.findMany.mockResolvedValue([])
+        mockPrisma.story.count.mockResolvedValue(0)
+
+        const res = await request(app).get('/api/stories?publishedSince=2026-10-01T00:00:00.000Z')
+        expect(res.status).toBe(200)
+        expect(lastWhere().AND).toEqual([{ datePublished: { gte: new Date('2026-10-01T00:00:00Z') } }])
+      })
+
+      it.each([
+        ['publishedSince=yesterday', 'publishedSince'],
+        ['publishedSince=2026-10-01', 'publishedSince'],
+        ['publishedBefore=2026-13-01T00:00:00Z', 'publishedBefore'],
+        ['minRelevance=0', 'minRelevance'],
+        ['minRelevance=11', 'minRelevance'],
+        ['minRelevance=7.5', 'minRelevance'],
+        ['minRelevance=high', 'minRelevance'],
+      ])('rejects %s with a 400 naming the parameter', async (qs, field) => {
+        const res = await request(app).get(`/api/stories?${qs}`)
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Invalid query parameters')
+        expect(res.body.details.fieldErrors[field]).toBeDefined()
+        expect(mockPrisma.story.findMany).not.toHaveBeenCalled()
+      })
+
+      it('rejects a publishedSince that is not earlier than publishedBefore', async () => {
+        const res = await request(app).get('/api/stories?publishedSince=2026-10-08T00:00:00Z&publishedBefore=2026-10-08T00:00:00Z')
+        expect(res.status).toBe(400)
+        expect(res.body.details.fieldErrors.publishedBefore).toEqual(['publishedSince must be earlier than publishedBefore'])
+      })
+
+      it('rejects the filters combined with search, which does not apply them', async () => {
+        const res = await request(app).get('/api/stories?search=climate&minRelevance=7')
+        expect(res.status).toBe(400)
+        expect(res.body.details.fieldErrors.search[0]).toContain('cannot be combined with search')
+        expect(mockPrisma.$queryRaw).not.toHaveBeenCalled()
+      })
+    })
+
     it('marks the AI-generated fields of search results', async () => {
       mockPrisma.story.findMany.mockResolvedValue([publicStory])
 
@@ -148,12 +207,18 @@ describe('Public Stories API', () => {
       mockPrisma.$queryRaw
         .mockResolvedValueOnce([{ id: 'source', title: 'Source', title_label: null }])
         .mockResolvedValueOnce([{ id: 'story-1', title: 'Published Article', title_label: null }])
-      mockPrisma.story.findMany.mockResolvedValue([publicStory])
+      // The final fetch also returns the source, proving it is still published
+      mockPrisma.story.findMany.mockResolvedValue([{ id: 'source' }, publicStory])
 
       const res = await request(app).get('/api/stories/source-slug/related')
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(1)
       expect(res.body[0].aiGenerated).toEqual(expectedMarker(publicStory))
+    })
+
+    it.each(['0', '-3', '11', '2.5', 'abc'])('refuses limit=%s', async limit => {
+      const res = await request(app).get(`/api/stories/source-slug/related?limit=${limit}`)
+      expect(res.status).toBe(400)
     })
   })
 

@@ -25,11 +25,21 @@ export function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
       <table className="min-w-full divide-y divide-neutral-200">
         <thead className="bg-neutral-50">
           <tr>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Email</th>
-            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">In our DB</th>
-            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">In Plunk</th>
-            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Confirmed</th>
-            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Created</th>
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Email
+            </th>
+            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              In our DB
+            </th>
+            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              In Plunk
+            </th>
+            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Confirmed
+            </th>
+            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Created
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-200">
@@ -58,12 +68,8 @@ export function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
               <td className="hidden sm:table-cell whitespace-nowrap px-4 py-3 text-sm">
                 <StatusBadge status={row.plunkStatus} variantMap={PLUNK_BADGE} />
               </td>
-              <td className="hidden lg:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">
-                {formatShortDate(row.dbConfirmedAt)}
-              </td>
-              <td className="hidden lg:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">
-                {formatShortDate(row.dbCreatedAt)}
-              </td>
+              <td className="hidden lg:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">{formatShortDate(row.dbConfirmedAt)}</td>
+              <td className="hidden lg:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">{formatShortDate(row.dbCreatedAt)}</td>
             </tr>
           ))}
         </tbody>

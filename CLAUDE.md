@@ -32,7 +32,7 @@ actually-relevant/
 
 **Backend:** Express + TypeScript, PostgreSQL + pgvector (Prisma ORM), LangChain + OpenAI (structured output with Zod), node-cron, Zod
 
-**Deployment:** Render.com (static site + web service + PostgreSQL). **Every push to `main` deploys both services to production**, including pending migrations (`.context/deployment.md`).
+**Deployment:** Render.com (static site + web service + PostgreSQL). **Every push to `main` deploys both services to production once CI passes on it**, including pending migrations (`.context/deployment.md`, "CI gate").
 
 ## Commands
 
@@ -49,6 +49,12 @@ npm run dev --prefix server           # Start server with hot reload
 npm run build --prefix server         # Build server (installs devDeps first)
 npm run typecheck --prefix server     # Type-check server (tsc --noEmit)
 npm run test --prefix server          # Run server tests
+npm run test:db --prefix server       # PostgreSQL integration tests (needs TEST_DATABASE_URL, a local *_test database; fails without it)
+npm run check:migrations --prefix server # Embedding-index drop anywhere, unmarked DROP/TRUNCATE in new migrations (CI)
+npm run lint --prefix <client|server>          # ESLint, warnings fail (CI)
+npm run format --prefix <client|server>        # Prettier write; CI runs format:check
+npm run test:coverage --prefix <client|server> # Unit tests + coverage floor; raise thresholds, never lower (CI)
+npm run audit:prod --prefix <client|server>    # npm audit --omit=dev at high, minus audit-allowlist.json (CI)
 ```
 
 **Type-checking:** use `npm run typecheck --prefix <client|server>`. It's the canonical TS check and runs without a permission prompt. Do **not** invoke `tsc` via `node .../node_modules/typescript/bin/tsc` or bare `tsc` -- those are not allowlisted and force a confirmation.
@@ -68,13 +74,23 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Never pass `--no-engine` to `prisma generate`** -- breaks all direct PostgreSQL queries.
 - **`db:generate` requires the dev server to be stopped** -- `prisma generate` replaces a DLL that is locked while the server runs. Ask user to stop first.
 
+## CI and deploy gate
+
+- **CI must pass before Render deploys.** Both services use `autoDeployTrigger: checksPass`: a `main` commit deploys only once the `server` and `client` jobs of `.github/workflows/ci.yml` are green; a red `main` deploys nothing.
+- **Pushes to `main` need green checks or the admin bypass** of the GitHub ruleset `no-nonsense-main` (required checks `server` and `client`, Repository admin bypass). A bypassing push prints `remote: Bypassed rule violations for refs/heads/main`; for this rule that is expected, not a broken pull-request rule.
+- **Never rename a CI job** without changing the ruleset in the same step (the rule would wait for a check that never comes), and never path-filter or `[skip ci]` a push to `main`.
+- **Before pushing, run what CI runs:** `npm run lint`, `npm run format` (CI runs `format:check`), `npm run test:coverage` (a floor; raise it, never lower it) in both packages, plus `check:migrations`, both typechecks, `test:db` and both builds.
+- **`audit:prod` can turn `main` red with no code change.** Update the dependency, or add a reviewed entry to `server/audit-allowlist.json` / `client/audit-allowlist.json` (`.context/ci.md`, "Dependency audit").
+- **A destructive migration statement** (DROP, TRUNCATE, ALTER … DROP) needs a `-- reviewed-destructive: <reason>` line, or `check:migrations` fails.
+- Details: `.context/ci.md` (checks, triggers, minutes) and `.context/deployment.md`, "CI gate".
+
 ## Key Conventions
 
 - **Prefer file tools over bash** -- Use Read, Write, Edit, Glob, Grep instead of cat, sed, grep, find.
-- **Server config** -- All tunable constants centralized in `server/src/config.ts` with env var overrides.
+- **Server config** -- All tunable constants centralized in `server/src/config.ts` with env var overrides. Each override goes through a parser that throws at startup on a bad value (`parseWholeNumber`, `parseOneOf`, …), never a bare `parseInt` (`.context/deployment.md`).
 - **Logging** -- Use `createLogger('module')` from `server/src/lib/logger.ts`. Never `console.log` in application code (scripts exempt). See `.context/logging.md`.
 - **Prompts** -- Read `.context/prompting.md` before modifying any prompt in `server/src/prompts/`. Reasoning-model conventions (declarative constraints, XML scaffolding); prompts are tuned for the GPT-6 defaults, so check a rating, dedup, social-post or selection prompt change with `eval:recalibrate` (`.context/model-eval.md`).
-- **Retry logic** -- External HTTP and LLM calls must use `withRetry()` from `server/src/lib/retry.ts`.
+- **Retry logic** -- External HTTP calls use `withRetry()` from `server/src/lib/retry.ts`. LLM calls do not: the OpenAI SDK retries them (`maxRetries` in `createChatModel()`), and wrapping them too stacks retries (`.context/llm-analysis.md`, "Retries").
 - **AI transparency (EU AI Act)** -- Changing an AI feature, model, AI label, model-written story field or export pipeline? Update `.context/ai-transparency.md` in the same change. It is the compliance record: feature inventory with model ids, labels and machine-readable markers, and the owner decisions still open. Visible AI label wording is owner-approved and lives only in `client/src/components/ai/aiDisclosureCopy.ts` and `server/src/lib/aiLabelCopy.ts`; don't change it without the owner, and render new story listings through `StoryCard`/`StoryTitleLabel` so they carry the "AI" badge.
 - **American English** -- All UI text uses American English spelling ("analyzed" not "analysed").
 - **Em dashes** -- One per paragraph max in user-facing copy.
@@ -82,9 +98,9 @@ npm run db:studio --prefix server     # Open Prisma Studio
 
 ## Resilience
 
-- **Retry logic**: `withRetry()` (3 attempts, exponential backoff) for HTTP and LLM calls.
+- **Retry logic**: `withRetry()` (3 retries, exponential backoff) for external HTTP calls; the OpenAI SDK's `maxRetries: 3` for LLM calls.
 - **Graceful shutdown**: `server/src/index.ts` handles `SIGTERM`/`SIGINT`.
-- **Global error handler**: `server/src/app.ts` catches Prisma `P2025`/`P2002` and known service errors.
+- **Route errors**: services throw `ServiceError` subclasses (`NotFoundError`, `BadRequestError`, `ConflictError`, … in `server/src/utils/errors.ts`), never errors a route matches by message; routes don't catch, they name their 500/404/409 texts with `failsWith()`, and the global handler answers (`.context/server-conventions.md`).
 - **Request correlation**: Every request gets `X-Request-Id` header.
 - **Health check**: `GET /health` verifies DB connectivity.
 
@@ -107,7 +123,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 - **Toast provider**: Components using `useToast()` need `<ToastProvider>` in tests.
 - **Headless UI dialogs**: Use `getByRole('heading', { name: ... })` to disambiguate from buttons.
 - **URL-persisted state**: Admin pages use `useSearchParams()` for state (e.g., `?open=id`).
-- **Server tests**: `vi.hoisted()` for mocks, `supertest` + `authHeader()` for route tests.
+- **Server tests**: `vi.hoisted()` for mocks, `supertest` + `authHeader()` for route tests. `_`-prefixed exports (`_resetShutdownState`, `_resetApiState`) exist for tests only; app code never calls them.
 
 ## Project Management (`pm/`)
 
@@ -121,7 +137,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 
 | File | Topic |
 |------|-------|
-| `story-pipeline.md` | Status transitions, jobs, admin endpoints, slugs, field reference |
+| `story-pipeline.md` | Status transitions (`storyLifecycle.ts` is the only status writer; a test fences it), rejection reasons, jobs, admin endpoints, slugs, field reference |
 | `content-extraction.md` | 3-tier extraction chain, crawl flow, conditional RSS, resource limits, adding feeds |
 | `story-retention.md` | Monthly cleanup: which old stories are deleted or kept, the `story_archive_counts` roll-up, lifetime totals, cleared embeddings and how publishing restores them |
 | `feed-management.md` | Feed CRUD and soft delete, crawl due rule, crawl-health counters, quality metrics, favicons |
@@ -142,10 +158,12 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `embeddings.md` | Trigger points, hybrid RRF search, related stories and cache, backfill script |
 | `ui-conventions.md` | SEO checklist, CSS classes, bundle splitting, accessibility, spelling |
 | `accessibility.md` | Full WCAG 2.2 AA patterns, ARIA, forms, testing checklist |
-| `seo.md` | Sitemap, Render rewrites, robots.txt, route registration, head-tag defaults (`DefaultSeo` + `data-rh` fallbacks in `index.html`) |
+| `seo.md` | Sitemap, Render rewrites, robots.txt, route registration, head-tag defaults (`DefaultSeo` + `data-rh` fallbacks in `index.html`), story link previews (story pages proxied through the backend, per-story `og.png`) |
 | `images.md` | WebP optimization, size presets, CLI commands |
 | `logging.md` | Pino config, error serialization, structured data, log levels |
-| `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands |
+| `server-conventions.md` | Route errors (typed `ServiceError`s, `failsWith()`, the one global handler), test-only `_` exports |
+| `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands, the PostgreSQL integration tests (`*.db.test.ts`, `TEST_DATABASE_URL`, guard rules) and CI |
+| `ci.md` | The CI checks Render waits for (lint, format, types with `noUncheckedIndexedAccess`, coverage ratchet, audit allowlist, builds): commands, rules turned off and why, what to do when `main` is red; triggers, cancelling, caches; measuring CI minutes and the levers if they ever matter |
 | `deployment.md` | Render services and the `render.yaml` blueprint (service settings change there, not in the dashboard); why builds install devDependencies and pin `tsc` (read before touching build scripts or `render.yaml`, or adding an env var: `server/src/blueprint.test.ts` fails until it is in the code, `env.example` and `render.yaml`) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |

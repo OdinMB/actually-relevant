@@ -16,7 +16,8 @@ import AiLabel from '../components/ai/AiLabel'
 import { AI_DISCLOSURE_COPY, quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { StoryPageSkeleton } from '../components/skeletons'
 import { SEO, CommonOgTags } from '../lib/seo'
-import { buildArticleSchema, buildBreadcrumbSchema } from '../lib/structured-data'
+import { storyOgImageUrl } from '../lib/api'
+import { buildArticleSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
 
 // ---------------------------------------------------------------------------
 // Analysis section with ruled heading + numbered points
@@ -41,11 +42,7 @@ function AnalysisSection({
       {/* Ruled heading with colored dot — larger text */}
       <div className="ruled-heading mb-6 !text-sm !tracking-wider">
         <span className="flex items-center gap-2">
-          <span
-            className="w-2.5 h-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: accentColor }}
-            aria-hidden="true"
-          />
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: accentColor }} aria-hidden="true" />
           {title}
         </span>
       </div>
@@ -100,13 +97,8 @@ export default function StoryPage() {
     return (
       <div className="page-section text-center">
         <h1 className="page-title">Story Not Found</h1>
-        <p className="text-neutral-500 mb-6">
-          This story may have been removed or is not yet published.
-        </p>
-        <Link
-          to="/"
-          className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
-        >
+        <p className="text-neutral-500 mb-6">This story may have been removed or is not yet published.</p>
+        <Link to="/" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
           &larr; Back to home
         </Link>
       </div>
@@ -139,7 +131,9 @@ export default function StoryPage() {
   return (
     <>
       <Helmet>
-        <title>{displayTitle} - {SEO.siteName}</title>
+        <title>
+          {displayTitle} - {SEO.siteName}
+        </title>
         <meta name="description" content={description.slice(0, 160)} />
         <meta name="author" content="RelevanceAI by Actually Relevant" />
         <meta property="og:title" content={displayTitle} />
@@ -147,19 +141,14 @@ export default function StoryPage() {
         <meta property="og:type" content="article" />
         <meta property="og:url" content={`${SEO.siteUrl}/stories/${story.slug}`} />
         <meta property="article:author" content="RelevanceAI by Actually Relevant" />
-        {story.datePublished && (
-          <meta property="article:published_time" content={story.datePublished} />
-        )}
-        {CommonOgTags({})}
+        {story.datePublished && <meta property="article:published_time" content={story.datePublished} />}
+        {/* The story's own preview image; the server injects the same tags for crawlers (.context/seo.md) */}
+        {CommonOgTags({ image: storyOgImageUrl(story.slug) })}
+        <script type="application/ld+json">{toJsonLd(buildArticleSchema(story))}</script>
         <script type="application/ld+json">
-          {JSON.stringify(buildArticleSchema(story))}
-        </script>
-        <script type="application/ld+json">
-          {JSON.stringify(buildBreadcrumbSchema([
-            { name: 'Home', url: SEO.siteUrl },
-            { name: issueName, url: `${SEO.siteUrl}/issues/${issueSlug}` },
-            { name: displayTitle },
-          ]))}
+          {toJsonLd(
+            buildBreadcrumbSchema([{ name: 'Home', url: SEO.siteUrl }, { name: issueName, url: `${SEO.siteUrl}/issues/${issueSlug}` }, { name: displayTitle }]),
+          )}
         </script>
       </Helmet>
 
@@ -180,7 +169,9 @@ export default function StoryPage() {
 
             {/* Title. data-ai-generated marks AI-written text by API field name (.context/ai-transparency.md). */}
             {titleLabel && (
-              <span className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3" data-ai-generated="titleLabel">{titleLabel}</span>
+              <span className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3" data-ai-generated="titleLabel">
+                {titleLabel}
+              </span>
             )}
             {/* Without an AI title the headline falls back to the source's own, which is not AI text */}
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-5 leading-tight" data-ai-generated={story.title ? 'title' : undefined}>
@@ -250,10 +241,7 @@ export default function StoryPage() {
           {/* Summary */}
           {story.summary && (
             <section className="mb-10" data-ai-generated="summary">
-              <div
-                className="prose drop-cap"
-                style={{ '--drop-cap-color': colors.hex } as React.CSSProperties}
-              >
+              <div className="prose drop-cap" style={{ '--drop-cap-color': colors.hex } as React.CSSProperties}>
                 <Markdown>{story.summary}</Markdown>
               </div>
             </section>
@@ -272,9 +260,7 @@ export default function StoryPage() {
                 </span>
                 <blockquote className="-mt-8">
                   {/* No italic — avoids loading Roboto-Italic; decorative quotes provide visual distinction */}
-                  <p className="text-xl md:text-2xl text-neutral-700 leading-relaxed px-4">
-                    {story.quote}
-                  </p>
+                  <p className="text-xl md:text-2xl text-neutral-700 leading-relaxed px-4">{story.quote}</p>
                 </blockquote>
                 <p className="text-sm text-neutral-500 mt-3">{quoteAttributionLine(story.quoteAttribution)}</p>
               </div>
@@ -283,23 +269,11 @@ export default function StoryPage() {
 
           {/* Why This Matters */}
           {story.relevanceReasons && (
-            <AnalysisSection
-              title="Why This Matters"
-              text={story.relevanceReasons}
-              accentColor={colors.hex}
-              aiField="relevanceReasons"
-            />
+            <AnalysisSection title="Why This Matters" text={story.relevanceReasons} accentColor={colors.hex} aiField="relevanceReasons" />
           )}
 
           {/* Caveats */}
-          {story.antifactors && (
-            <AnalysisSection
-              title="Caveats"
-              text={story.antifactors}
-              accentColor={shiftHex(colors.hex, -0.25)}
-              aiField="antifactors"
-            />
-          )}
+          {story.antifactors && <AnalysisSection title="Caveats" text={story.antifactors} accentColor={shiftHex(colors.hex, -0.25)} aiField="antifactors" />}
 
           {/* Related stories */}
           {story.slug && <RelatedStories slug={story.slug} />}
@@ -316,10 +290,7 @@ export default function StoryPage() {
 
           {/* Navigation */}
           <div className="border-t border-neutral-200 pt-6 mt-10 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-            <Link
-              to="/"
-              className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
-            >
+            <Link to="/" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
               &larr; Back to all stories
             </Link>
             <Link
@@ -329,7 +300,6 @@ export default function StoryPage() {
               More in {issueName} &rarr;
             </Link>
           </div>
-
         </div>
       </article>
     </>

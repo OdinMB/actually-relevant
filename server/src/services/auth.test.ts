@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import bcrypt from 'bcryptjs'
 
 const mockPrisma = vi.hoisted(() => ({
   refreshToken: {
@@ -32,6 +33,7 @@ afterEach(() => {
 const {
   hashPassword,
   verifyPassword,
+  verifyLoginPassword,
   generateAccessToken,
   verifyAccessToken,
   generateRefreshToken,
@@ -54,6 +56,32 @@ describe('hashPassword / verifyPassword', () => {
     const hash = await hashPassword('correct-password')
     expect(await verifyPassword('wrong-password', hash)).toBe(false)
   })
+
+  it('hashes at the configured cost', async () => {
+    const hash = await hashPassword('pw')
+    expect(hash.split('$')[2]).toBe(String(config.auth.bcryptRounds))
+  })
+})
+
+describe('verifyLoginPassword', () => {
+  it("checks the account's hash", async () => {
+    const hash = await hashPassword('right')
+    expect(await verifyLoginPassword('right', hash)).toBe(true)
+    expect(await verifyLoginPassword('wrong', hash)).toBe(false)
+  })
+
+  it('still runs a bcrypt comparison when there is no account, and refuses', async () => {
+    const compare = vi.spyOn(bcrypt, 'compare')
+    try {
+      expect(await verifyLoginPassword('anything', null)).toBe(false)
+      expect(await verifyLoginPassword('anything', undefined)).toBe(false)
+      expect(compare).toHaveBeenCalledTimes(2)
+      // Against a real hash at the same cost as stored passwords, so it takes as long
+      expect(String(compare.mock.calls[0][1]).split('$')[2]).toBe(String(config.auth.bcryptRounds))
+    } finally {
+      compare.mockRestore()
+    }
+  })
 })
 
 describe('generateAccessToken / verifyAccessToken', () => {
@@ -73,9 +101,7 @@ describe('generateAccessToken / verifyAccessToken', () => {
 
   it('throws when JWT_SECRET is missing', () => {
     delete process.env.JWT_SECRET
-    expect(() =>
-      generateAccessToken({ id: 'user-1', email: 'a@b.com', role: 'admin' })
-    ).toThrow('JWT_SECRET')
+    expect(() => generateAccessToken({ id: 'user-1', email: 'a@b.com', role: 'admin' })).toThrow('JWT_SECRET')
   })
 })
 
@@ -193,9 +219,7 @@ describe('rotateRefreshToken', () => {
     })
     mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 })
 
-    await expect(rotateRefreshToken('reused-token')).rejects.toThrow(
-      'Refresh token reuse detected'
-    )
+    await expect(rotateRefreshToken('reused-token')).rejects.toThrow('Refresh token reuse detected')
   })
 
   it('reuse detection revokes all tokens in the family via deleteMany', async () => {
@@ -258,9 +282,7 @@ describe('rotateRefreshToken', () => {
       user,
       expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     }
-    mockPrisma.refreshToken.findUnique
-      .mockResolvedValueOnce(row)
-      .mockResolvedValueOnce({ ...row, rotatedAt: new Date() })
+    mockPrisma.refreshToken.findUnique.mockResolvedValueOnce(row).mockResolvedValueOnce({ ...row, rotatedAt: new Date() })
     mockPrisma.refreshToken.updateMany.mockResolvedValue({ count: 0 })
     mockPrisma.refreshToken.create.mockResolvedValue({ id: 'rt-3', token: 'newer' })
 
@@ -293,7 +315,7 @@ describe('rotateRefreshToken', () => {
 })
 
 describe('revokeRefreshToken', () => {
-  it('ends the whole login session: deletes every token of the presented token\'s family', async () => {
+  it("ends the whole login session: deletes every token of the presented token's family", async () => {
     mockPrisma.refreshToken.findUnique.mockResolvedValue({ id: 'rt-2', familyId: 'family-abc' })
     mockPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 })
     await revokeRefreshToken('some-token')

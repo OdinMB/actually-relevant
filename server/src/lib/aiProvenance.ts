@@ -7,8 +7,7 @@ import { config } from '../config.js'
  */
 
 /** IPTC Digital Source Type term for content created by a trained model (cv.iptc.org/newscodes/digitalsourcetype). */
-export const IPTC_TRAINED_ALGORITHMIC_MEDIA =
-  'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
+export const IPTC_TRAINED_ALGORITHMIC_MEDIA = 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
 
 /**
  * Story fields whose text the assessment model writes (analysis.ts assessStory).
@@ -41,7 +40,7 @@ export interface AiGeneratedMarker {
 
 export function aiGeneratedMarker(story: AiStoryText): AiGeneratedMarker {
   return {
-    fields: AI_GENERATED_STORY_FIELDS.filter((field) => Boolean(story[field])),
+    fields: AI_GENERATED_STORY_FIELDS.filter(field => Boolean(story[field])),
     model: config.llm.models[config.assess.modelTier].name,
     digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA,
   }
@@ -60,3 +59,10 @@ export const AI_GENERATED_PODCAST_FIELDS = ['title', 'summary', 'audioUrl', 'tra
 
 /** The same for one episode with its readable transcript (`GET /api/podcast/episodes/:id`). */
 export const AI_GENERATED_PODCAST_DETAIL_FIELDS = [...AI_GENERATED_PODCAST_FIELDS, 'transcript'] as const
+
+/**
+ * Fields of a public newsletter issue (`GET /api/newsletters/:slug`) with AI-generated content: the
+ * issue text (AI-selected stories, AI intro, headlines and summaries) and its stories' AI headlines
+ * and labels. openapi.test.ts checks each is described as AI-generated.
+ */
+export const AI_GENERATED_NEWSLETTER_FIELDS = ['content', 'stories'] as const

@@ -29,6 +29,28 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleString()
 }
 
+/** Says what Publish does beyond the admin: it puts the issue on the public website. */
+export function PublishHint({ newsletter }: { newsletter: Pick<Newsletter, 'status' | 'slug'> }) {
+  if (newsletter.status === 'published' && newsletter.slug) {
+    const path = `/newsletter/${newsletter.slug}`
+    return (
+      <p className="text-xs text-neutral-500">
+        This issue is public on the website at{' '}
+        <a href={path} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:text-brand-800 underline">
+          {path}
+        </a>
+        . Unpublish to take it down.
+      </p>
+    )
+  }
+  return (
+    <p className="text-xs text-neutral-500">
+      Publishing makes this issue public on the website, in the newsletter archive. The email&apos;s &quot;View in browser&quot; link works once the issue is
+      published.
+    </p>
+  )
+}
+
 function SendStatusBadge({ status }: { status: string }) {
   const variants: Record<string, 'green' | 'yellow' | 'red' | 'gray' | 'blue'> = {
     sent: 'green',
@@ -81,13 +103,15 @@ function SendHistory({ newsletterId }: { newsletterId: string }) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => refreshStats.mutate(
-              { newsletterId, sendId: send.id },
-              {
-                onSuccess: () => toast('success', 'Stats refreshed'),
-                onError: () => toast('error', 'Failed to refresh stats'),
-              },
-            )}
+            onClick={() =>
+              refreshStats.mutate(
+                { newsletterId, sendId: send.id },
+                {
+                  onSuccess: () => toast('success', 'Stats refreshed'),
+                  onError: () => toast('error', 'Failed to refresh stats'),
+                },
+              )
+            }
             loading={refreshStats.isPending}
           >
             Refresh Stats
@@ -126,7 +150,9 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       await update.mutateAsync({ id: newsletter.id, data: { title } })
       toast('success', 'Title updated')
       setEditingTitle(false)
-    } catch { toast('error', 'Failed to update title') }
+    } catch {
+      toast('error', 'Failed to update title')
+    }
   }
 
   const handleSave = async () => {
@@ -138,7 +164,9 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       toast('success', 'Changes saved')
       setEditingContent(false)
       setEditingHtml(false)
-    } catch { toast('error', 'Failed to save changes') }
+    } catch {
+      toast('error', 'Failed to save changes')
+    }
   }
 
   const handleCancel = () => {
@@ -153,12 +181,14 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
     try {
       await update.mutateAsync({ id: newsletter.id, data: { status: newStatus } })
       toast('success', newStatus === 'published' ? 'Newsletter published' : 'Newsletter unpublished')
-    } catch { toast('error', 'Failed to update status') }
+    } catch {
+      toast('error', 'Failed to update status')
+    }
   }
 
   const handleGenerateContent = () => {
     generate.mutate(newsletter.id, {
-      onSuccess: (result) => {
+      onSuccess: result => {
         setContent(result.content)
         toast('success', 'Content generated')
       },
@@ -171,14 +201,18 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       const result = await generateHtml.mutateAsync(newsletter.id)
       setHtml(result.html)
       toast('success', 'HTML generated')
-    } catch { toast('error', 'Failed to generate HTML') }
+    } catch {
+      toast('error', 'Failed to generate HTML')
+    }
   }
 
   const handleSendTest = async () => {
     try {
       await sendTest.mutateAsync(newsletter.id)
       toast('success', 'Test email sent')
-    } catch { toast('error', 'Failed to send test email') }
+    } catch {
+      toast('error', 'Failed to send test email')
+    }
   }
 
   const handleSendLive = async () => {
@@ -186,7 +220,9 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
     try {
       await sendLive.mutateAsync({ id: newsletter.id })
       toast('success', 'Newsletter sent to subscribers')
-    } catch { toast('error', 'Failed to send newsletter') }
+    } catch {
+      toast('error', 'Failed to send newsletter')
+    }
   }
 
   const handleSelectStory = (storyId: string) => {
@@ -228,26 +264,33 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
     { icon: 'discard' as const, title: 'Discard from longlist', onClick: handleDiscardStory },
   ]
 
-  const selectedActions: StoryListAction[] = [
-    { icon: 'discard' as const, title: 'Remove from selection', onClick: handleRemoveSelected },
-  ]
+  const selectedActions: StoryListAction[] = [{ icon: 'discard' as const, title: 'Remove from selection', onClick: handleRemoveSelected }]
 
   return (
     <>
-    <div className="max-w-3xl space-y-6">
+      <div className="max-w-3xl space-y-6">
         {/* Title + Status */}
         <div>
           {editingTitle ? (
             <div className="flex gap-2">
               <Input id="nl-title" value={title} onChange={e => setTitle(e.target.value)} className="flex-1" />
-              <Button size="sm" onClick={handleSaveTitle} loading={update.isPending}>Save</Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEditingTitle(false); setTitle(newsletter.title) }}>Cancel</Button>
+              <Button size="sm" onClick={handleSaveTitle} loading={update.isPending}>
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setEditingTitle(false)
+                  setTitle(newsletter.title)
+                }}
+              >
+                Cancel
+              </Button>
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <Badge variant={newsletter.status === 'published' ? 'green' : 'gray'}>
-                {newsletter.status === 'published' ? 'Published' : 'Draft'}
-              </Badge>
+              <Badge variant={newsletter.status === 'published' ? 'green' : 'gray'}>{newsletter.status === 'published' ? 'Published' : 'Draft'}</Badge>
               <h1 className="text-xl font-bold text-neutral-900">{newsletter.title}</h1>
               <button
                 type="button"
@@ -256,7 +299,11 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
                 title="Rename"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
+                  />
                 </svg>
               </button>
             </div>
@@ -265,28 +312,50 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" onClick={() => assign.mutate(newsletter.id, {
-            onSuccess: () => toast('success', 'Longlist generated'),
-            onError: () => toast('error', 'Failed to generate longlist'),
-          })} loading={assign.isPending}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              assign.mutate(newsletter.id, {
+                onSuccess: () => toast('success', 'Longlist generated'),
+                onError: () => toast('error', 'Failed to generate longlist'),
+              })
+            }
+            loading={assign.isPending}
+          >
             Generate Longlist
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => selectStories.mutate(newsletter.id, {
-            onSuccess: () => toast('success', 'Stories selected'),
-            onError: () => toast('error', 'Selection failed'),
-          })} loading={selectStories.isPending}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              selectStories.mutate(newsletter.id, {
+                onSuccess: () => toast('success', 'Stories selected'),
+                onError: () => toast('error', 'Selection failed'),
+              })
+            }
+            loading={selectStories.isPending}
+          >
             {selectStories.isPending ? 'Selecting... (this may take a minute)' : 'Select Stories'}
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => carousel.mutate(newsletter.id, {
-            onSuccess: () => toast('success', 'Carousel downloaded'),
-            onError: () => toast('error', 'Carousel generation failed'),
-          })} loading={carousel.isPending}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              carousel.mutate(newsletter.id, {
+                onSuccess: () => toast('success', 'Carousel downloaded'),
+                onError: () => toast('error', 'Carousel generation failed'),
+              })
+            }
+            loading={carousel.isPending}
+          >
             {carousel.isPending ? 'Generating... (this may take a minute)' : 'Download Carousel ZIP'}
           </Button>
           <Button variant={newsletter.status === 'published' ? 'ghost' : 'primary'} size="sm" onClick={handlePublishToggle} loading={update.isPending}>
             {newsletter.status === 'published' ? 'Unpublish' : 'Publish'}
           </Button>
         </div>
+        <PublishHint newsletter={newsletter} />
 
         {/* Selected stories */}
         <AssignedStoriesList
@@ -317,7 +386,16 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
                 {generate.isPending ? 'Generating...' : 'Generate Content'}
               </Button>
               {!editingContent && (
-                <Button variant="ghost" size="sm" onClick={() => { setContent(newsletter.content); setEditingContent(true) }}>Edit</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setContent(newsletter.content)
+                    setEditingContent(true)
+                  }}
+                >
+                  Edit
+                </Button>
               )}
             </div>
           </div>
@@ -339,19 +417,16 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
                 {generateHtml.isPending ? 'Generating...' : 'Generate HTML'}
               </Button>
               {!editingHtml && html && (
-                <Button variant="ghost" size="sm" onClick={() => setEditingHtml(true)}>Edit</Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditingHtml(true)}>
+                  Edit
+                </Button>
               )}
             </div>
           </div>
           {editingHtml ? (
             <Textarea id="nl-html" rows={20} value={html} onChange={e => setHtml(e.target.value)} className="font-mono text-xs" />
           ) : html ? (
-            <iframe
-              srcDoc={html}
-              title="Email preview"
-              className="w-full h-[500px] border border-neutral-200 rounded bg-white"
-              sandbox=""
-            />
+            <iframe srcDoc={html} title="Email preview" className="w-full h-[500px] border border-neutral-200 rounded bg-white" sandbox="" />
           ) : (
             <p className="text-neutral-400 italic text-sm">Click "Generate HTML" to create the email template from the content above.</p>
           )}
@@ -371,12 +446,16 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Send History</h4>
           <SendHistory newsletterId={newsletter.id} />
         </div>
-    </div>
+      </div>
 
       {/* Fixed bottom save bar */}
       <div className="fixed bottom-0 left-0 lg:left-60 right-0 z-10 bg-white border-t border-neutral-200 shadow-lg px-4 py-3 flex items-center gap-3">
-        <Button size="sm" variant="ghost" onClick={handleCancel} disabled={!hasUnsavedChanges || update.isPending}>Cancel</Button>
-        <Button size="sm" onClick={handleSave} loading={update.isPending} disabled={!hasUnsavedChanges}>Save</Button>
+        <Button size="sm" variant="ghost" onClick={handleCancel} disabled={!hasUnsavedChanges || update.isPending}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={handleSave} loading={update.isPending} disabled={!hasUnsavedChanges}>
+          Save
+        </Button>
       </div>
       {/* Spacer for fixed bar */}
       <div className="h-14" />

@@ -40,7 +40,7 @@ function stubTurnstile() {
 const scriptTags = () => document.head.querySelectorAll('script[src*="challenges.cloudflare.com/turnstile"]')
 function finishScriptLoad(api: ReturnType<typeof stubTurnstile>['api']) {
   window.turnstile = api
-  scriptTags()[0].dispatchEvent(new Event('load'))
+  scriptTags()[0]!.dispatchEvent(new Event('load'))
 }
 
 const pausedError = () => new ApiError(503, 'Newsletter signups are paused.', 'SIGNUPS_PAUSED')
@@ -58,7 +58,7 @@ describe('SubscribeForm', () => {
     mockGetToken.mockResolvedValue({ token: 'test-token' })
     vi.stubEnv('VITE_TURNSTILE_SITE_KEY', '')
     delete window.turnstile
-    scriptTags().forEach((s) => s.remove())
+    scriptTags().forEach(s => s.remove())
   })
 
   afterEach(() => {
@@ -83,9 +83,7 @@ describe('SubscribeForm', () => {
 
   it('retries the token fetch once and submits the retried token', async () => {
     mockGetToken.mockReset()
-    mockGetToken
-      .mockRejectedValueOnce(new Error('network blip'))
-      .mockResolvedValueOnce({ token: 'retry-token' })
+    mockGetToken.mockRejectedValueOnce(new Error('network blip')).mockResolvedValueOnce({ token: 'retry-token' })
     mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
     const user = userEvent.setup()
 
@@ -171,7 +169,7 @@ describe('SubscribeForm', () => {
 
       finishScriptLoad(api)
       await waitFor(() => expect(api.execute).toHaveBeenCalled())
-      rendered[0].callback('ts-token')
+      rendered[0]!.callback('ts-token')
 
       await waitFor(() => {
         expect(mockSubscribe).toHaveBeenCalledWith({
@@ -201,7 +199,7 @@ describe('SubscribeForm', () => {
 
       await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
       await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
-      scriptTags()[0].dispatchEvent(new Event('error'))
+      scriptTags()[0]!.dispatchEvent(new Event('error'))
 
       await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/human check/i))
       expect(mockSubscribe).not.toHaveBeenCalled()
@@ -211,7 +209,7 @@ describe('SubscribeForm', () => {
       await user.click(button)
       expect(scriptTags()).toHaveLength(1)
       // Settle the second load so it does not leak into the next test.
-      scriptTags()[0].dispatchEvent(new Event('error'))
+      scriptTags()[0]!.dispatchEvent(new Event('error'))
       await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/human check/i))
     })
 
@@ -224,7 +222,7 @@ describe('SubscribeForm', () => {
       await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
       await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
       await waitFor(() => expect(rendered).toHaveLength(1))
-      rendered[0]['error-callback']()
+      rendered[0]!['error-callback']()
 
       await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/human check/i))
       expect(mockSubscribe).not.toHaveBeenCalled()

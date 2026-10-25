@@ -46,8 +46,18 @@ vi.mock('./socialMedia.js', () => ({
   pickBestStoryForSocial: vi.fn().mockResolvedValue({ storyId: 'story-1', reasoning: 'Good story' }),
 }))
 
-const { assemblePostText, calcMaxBlurbChars, generateDraft, updateDraft, deletePostRecord, publishPost, updateMetrics, listPosts, getFeed, invalidateFeedCache } =
-  await import('./mastodon.js')
+const {
+  assemblePostText,
+  calcMaxBlurbChars,
+  generateDraft,
+  updateDraft,
+  deletePostRecord,
+  publishPost,
+  updateMetrics,
+  listPosts,
+  getFeed,
+  invalidateFeedCache,
+} = await import('./mastodon.js')
 const { config } = await import('../config.js')
 
 describe('assemblePostText', () => {
@@ -195,9 +205,7 @@ describe('generateDraft', () => {
     mockPrisma.mastodonPost.findFirst.mockResolvedValue(null)
     // Return a blurb that's intentionally oversized — the service should trim it
     mockLlm.invoke.mockResolvedValue({ postText: 'A'.repeat(400) })
-    mockPrisma.mastodonPost.create.mockImplementation(({ data }: any) =>
-      Promise.resolve({ id: 'post-1', ...data, story: longUrlStory }),
-    )
+    mockPrisma.mastodonPost.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'post-1', ...data, story: longUrlStory }))
 
     await generateDraft('story-1')
 
@@ -409,16 +417,32 @@ describe('getFeed', () => {
     mockMastodonClient.isMastodonConfigured.mockReturnValue(true)
     mockMastodonClient.getAccountStatuses.mockResolvedValue({
       items: [
-        { id: '111', url: 'https://mas.to/@bot/111', text: 'Tracked post', createdAt: '2025-01-01T00:00:00Z', favouriteCount: 5, boostCount: 1, replyCount: 0, isReblog: false },
-        { id: '222', url: 'https://mas.to/@bot/222', text: 'Untracked post', createdAt: '2025-01-02T00:00:00Z', favouriteCount: 3, boostCount: 0, replyCount: 1, isReblog: false },
+        {
+          id: '111',
+          url: 'https://mas.to/@bot/111',
+          text: 'Tracked post',
+          createdAt: '2025-01-01T00:00:00Z',
+          favouriteCount: 5,
+          boostCount: 1,
+          replyCount: 0,
+          isReblog: false,
+        },
+        {
+          id: '222',
+          url: 'https://mas.to/@bot/222',
+          text: 'Untracked post',
+          createdAt: '2025-01-02T00:00:00Z',
+          favouriteCount: 3,
+          boostCount: 0,
+          replyCount: 1,
+          isReblog: false,
+        },
       ],
       nextMaxId: 'next-id',
     })
 
     mockPrisma.mastodonPost.findMany
-      .mockResolvedValueOnce([
-        { id: 'db-1', statusId: '111', status: 'published', story: { title: 'My Story', slug: 'my-story', issue: { name: 'Climate' } } },
-      ])
+      .mockResolvedValueOnce([{ id: 'db-1', statusId: '111', status: 'published', story: { title: 'My Story', slug: 'my-story', issue: { name: 'Climate' } } }])
       .mockResolvedValueOnce([])
 
     const result = await getFeed({})
@@ -434,10 +458,16 @@ describe('getFeed', () => {
     mockMastodonClient.isMastodonConfigured.mockReturnValue(true)
     mockMastodonClient.getAccountStatuses.mockResolvedValue({ items: [], nextMaxId: undefined })
 
-    mockPrisma.mastodonPost.findMany
-      .mockResolvedValueOnce([
-        { id: 'draft-1', postText: 'Draft post', status: 'draft', error: null, createdAt: new Date(), story: { title: 'Draft Story', slug: 'draft-story', issue: { name: 'Tech' } } },
-      ])
+    mockPrisma.mastodonPost.findMany.mockResolvedValueOnce([
+      {
+        id: 'draft-1',
+        postText: 'Draft post',
+        status: 'draft',
+        error: null,
+        createdAt: new Date(),
+        story: { title: 'Draft Story', slug: 'draft-story', issue: { name: 'Tech' } },
+      },
+    ])
 
     const result = await getFeed({})
 

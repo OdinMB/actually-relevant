@@ -3,8 +3,9 @@ import { assertReadOnly, classifyDb, readOnlyUrl } from './readOnlyDb.js'
 
 describe('read-only session guard', () => {
   it('adds one connection and the URL-encoded read-only option', () => {
-    expect(readOnlyUrl('postgresql://u:p@localhost:5432/db', true))
-      .toBe('postgresql://u:p@localhost:5432/db?connection_limit=1&options=-c%20default_transaction_read_only%3Don')
+    expect(readOnlyUrl('postgresql://u:p@localhost:5432/db', true)).toBe(
+      'postgresql://u:p@localhost:5432/db?connection_limit=1&options=-c%20default_transaction_read_only%3Don',
+    )
   })
 
   it('appends with & when the URL already has parameters, replacing existing ones', () => {

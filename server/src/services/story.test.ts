@@ -27,12 +27,18 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
   },
   $disconnect: vi.fn(),
-  $transaction: vi.fn((args: any) => Array.isArray(args) ? Promise.all(args) : args()),
+  $transaction: vi.fn((args: any) => (Array.isArray(args) ? Promise.all(args) : args())),
 }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
-const { getStoryIdsByStatus, generateUniqueSlugs, getStories, deleteStory, dissolveCluster, getClusterRedirectSlug, createStory } = await import('./story.js')
+const mockLifecycleDissolve = vi.hoisted(() => vi.fn())
+vi.mock('./storyLifecycle.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('./storyLifecycle.js')>()),
+  dissolveCluster: mockLifecycleDissolve,
+}))
+
+const { getStoryIdsByStatus, getStories, deleteStory, dissolveCluster, getClusterRedirectSlug, createStory } = await import('./story.js')
 
 describe('getStories', () => {
   beforeEach(() => {
@@ -79,10 +85,7 @@ describe('getStories', () => {
     // Both should be combined via AND
     expect(call.where.AND).toHaveLength(2)
     // Rating condition
-    expect(call.where.AND[0].OR).toEqual([
-      { relevance: { gte: 5 } },
-      { relevance: null, relevancePre: { gte: 5 } },
-    ])
+    expect(call.where.AND[0].OR).toEqual([{ relevance: { gte: 5 } }, { relevance: null, relevancePre: { gte: 5 } }])
     // Search condition
     expect(call.where.AND[1].OR).toEqual([
       { title: { contains: 'AI', mode: 'insensitive' } },
@@ -130,7 +133,7 @@ describe('createStory', () => {
     expect(mockPrisma.story.create.mock.calls[0][0].data).toMatchObject({ status: 'rejected', accessTier: 'locked' })
   })
 
-  it.each([['metered'], ['unknown'], ['free'], [undefined]] as const)('stores a %s story as fetched', async (accessTier) => {
+  it.each([['metered'], ['unknown'], ['free'], [undefined]] as const)('stores a %s story as fetched', async accessTier => {
     await createStory({ ...base, accessTier })
 
     expect(mockPrisma.story.create.mock.calls[0][0].data).toMatchObject({ status: 'fetched', accessTier: accessTier ?? null })
@@ -143,10 +146,7 @@ describe('getStoryIdsByStatus', () => {
   })
 
   it('returns story IDs filtered by status', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'id-1' },
-      { id: 'id-2' },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 'id-1' }, { id: 'id-2' }])
 
     const result = await getStoryIdsByStatus('analyzed')
 
@@ -265,143 +265,6 @@ describe('getStoryIdsByStatus', () => {
   })
 })
 
-describe('generateUniqueSlugs', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('returns empty map for empty input', async () => {
-    const result = await generateUniqueSlugs([])
-
-    expect(result).toEqual(new Map())
-    expect(mockPrisma.story.findMany).not.toHaveBeenCalled()
-  })
-
-  it('generates slugs from titles', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([])
-
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'Hello World', sourceTitle: 'Source Title' },
-    ])
-
-    expect(result.get('s1')).toBe('hello-world')
-  })
-
-  it('falls back to sourceTitle when title is null', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([])
-
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: null, sourceTitle: 'My Source Article' },
-    ])
-
-    expect(result.get('s1')).toBe('my-source-article')
-  })
-
-  it('resolves conflicts with existing slugs in database', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { slug: 'hello-world' },
-    ])
-
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'Hello World', sourceTitle: 'Source' },
-    ])
-
-    expect(result.get('s1')).toBe('hello-world-2')
-  })
-
-  it('resolves conflicts within the same batch', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([])
-
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'Same Title', sourceTitle: 'Source 1' },
-      { id: 's2', title: 'Same Title', sourceTitle: 'Source 2' },
-      { id: 's3', title: 'Same Title', sourceTitle: 'Source 3' },
-    ])
-
-    expect(result.get('s1')).toBe('same-title')
-    expect(result.get('s2')).toBe('same-title-2')
-    expect(result.get('s3')).toBe('same-title-3')
-  })
-
-  it('resolves conflicts with both existing and batch slugs', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { slug: 'hello-world' },
-      { slug: 'hello-world-2' },
-    ])
-
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'Hello World', sourceTitle: 'Source' },
-      { id: 's2', title: 'Hello World', sourceTitle: 'Source' },
-    ])
-
-    expect(result.get('s1')).toBe('hello-world-3')
-    expect(result.get('s2')).toBe('hello-world-4')
-  })
-
-  it('excludes the stories being processed from the conflict check', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([])
-
-    await generateUniqueSlugs([
-      { id: 's1', title: 'Test Article', sourceTitle: 'Source' },
-    ])
-
-    expect(mockPrisma.story.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          id: { notIn: ['s1'] },
-          slug: { not: null },
-        }),
-      }),
-    )
-  })
-
-  it('queries DB with unique base slugs for conflict detection', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([])
-
-    await generateUniqueSlugs([
-      { id: 's1', title: 'Alpha', sourceTitle: 'S1' },
-      { id: 's2', title: 'Beta', sourceTitle: 'S2' },
-      { id: 's3', title: 'Alpha', sourceTitle: 'S3' },
-    ])
-
-    const call = mockPrisma.story.findMany.mock.calls[0][0]
-    // Should have OR conditions for unique bases only (alpha and beta)
-    expect(call.where.OR).toHaveLength(2)
-    expect(call.where.OR).toEqual(
-      expect.arrayContaining([
-        { slug: { startsWith: 'alpha' } },
-        { slug: { startsWith: 'beta' } },
-      ]),
-    )
-  })
-
-  it('handles special characters in titles', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([])
-
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'AI & Machine Learning: 2024 Update!', sourceTitle: 'Source' },
-    ])
-
-    // slugify converts special chars to hyphens
-    expect(result.get('s1')).toBe('ai-machine-learning-2024-update')
-  })
-
-  it('returns correct map size for multiple stories', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([])
-
-    const result = await generateUniqueSlugs([
-      { id: 's1', title: 'Article One', sourceTitle: 'Source 1' },
-      { id: 's2', title: 'Article Two', sourceTitle: 'Source 2' },
-      { id: 's3', title: 'Article Three', sourceTitle: 'Source 3' },
-    ])
-
-    expect(result.size).toBe(3)
-    expect(result.get('s1')).toBe('article-one')
-    expect(result.get('s2')).toBe('article-two')
-    expect(result.get('s3')).toBe('article-three')
-  })
-})
-
 describe('deleteStory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -409,12 +272,8 @@ describe('deleteStory', () => {
 
   it('deletes story and removes its ID from newsletters and podcasts', async () => {
     mockPrisma.story.delete.mockResolvedValue({})
-    mockPrisma.newsletter.findMany.mockResolvedValue([
-      { id: 'nl-1', storyIds: ['s1', 's2', 's3'] },
-    ])
-    mockPrisma.podcast.findMany.mockResolvedValue([
-      { id: 'p-1', storyIds: ['s1', 's3'] },
-    ])
+    mockPrisma.newsletter.findMany.mockResolvedValue([{ id: 'nl-1', storyIds: ['s1', 's2', 's3'] }])
+    mockPrisma.podcast.findMany.mockResolvedValue([{ id: 'p-1', storyIds: ['s1', 's3'] }])
     mockPrisma.newsletter.update.mockResolvedValue({})
     mockPrisma.podcast.update.mockResolvedValue({})
 
@@ -460,40 +319,13 @@ describe('dissolveCluster', () => {
     await expect(dissolveCluster('s-missing')).rejects.toThrow('Story is not in a cluster')
   })
 
-  it('restores rejected members to analyzed, removes all from cluster, deletes cluster record', async () => {
+  it("dissolves the story's cluster through the lifecycle module", async () => {
     mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'cluster-1' })
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 2 })
-    mockPrisma.storyCluster.delete.mockResolvedValue({})
+    mockLifecycleDissolve.mockResolvedValue({ restored: [] })
 
     await dissolveCluster('s1')
 
-    // First updateMany: restore rejected members to analyzed
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { clusterId: 'cluster-1', status: 'rejected' },
-      data: { status: 'analyzed' },
-    })
-
-    // Second updateMany: remove all members from cluster
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { clusterId: 'cluster-1' },
-      data: { clusterId: null },
-    })
-
-    // Delete the cluster record
-    expect(mockPrisma.storyCluster.delete).toHaveBeenCalledWith({
-      where: { id: 'cluster-1' },
-    })
-  })
-
-  it('calls updateMany twice and storyCluster.delete once', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'cluster-2' })
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 1 })
-    mockPrisma.storyCluster.delete.mockResolvedValue({})
-
-    await dissolveCluster('s2')
-
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledTimes(2)
-    expect(mockPrisma.storyCluster.delete).toHaveBeenCalledTimes(1)
+    expect(mockLifecycleDissolve).toHaveBeenCalledWith('cluster-1')
   })
 })
 

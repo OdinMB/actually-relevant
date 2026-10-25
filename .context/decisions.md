@@ -40,4 +40,12 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0036 · Fix same-on-every-host settings and the Node version as values in render.yaml, held to the code by a test](decisions/0036-fixed-values-and-blueprint-test.md)
 - [ADR-0037 · Hash feedback IP addresses with HMAC-SHA256 under a dedicated secret, and refuse feedback without it](decisions/0037-feedback-ip-hmac.md)
 - [ADR-0038 · Declare custom domains, plan and subdomain policy in render.yaml exactly as Render exports them](decisions/0038-mirror-render-service-settings.md)
-- [ADR-0039 · Delete unkept stories after a year, counting them into an append-only summary table in the same statement](decisions/0039-monthly-story-retention.md)
+- [ADR-0039 · Delete unkept stories after a year, counting them into an append-only summary table in the same statement](decisions/0039-monthly-story-retention.md) — superseded by ADR-0042
+- [ADR-0040 · Serve story pages through the backend, which injects each story's preview tags into the client's own index.html](decisions/0040-story-pages-through-backend.md)
+- [ADR-0041 · Make a newsletter issue public on the website exactly while its admin status is published](decisions/0041-newsletter-published-means-public.md)
+- [ADR-0042 · Delete unkept stories after 6 months, and repair the clusters the deletion touches](decisions/0042-six-month-story-retention.md)
+- [ADR-0043 · Re-rank related stories with a small model on the public request path, cached 72 hours in memory and over HTTP, one call per slug at a time](decisions/0043-related-stories-rerank-on-request-path.md)
+- [ADR-0044 · Let tests migrate only a guarded local database named *_test, with migrate deploy once per run and TRUNCATE between tests](decisions/0044-guarded-test-database.md)
+- [ADR-0045 · Make one module, storyLifecycle.ts, the only writer of story status, with conditional moves, a transition table and transactional cluster edits](decisions/0045-story-lifecycle-owner.md)
+- [ADR-0046 · Record why a story is rejected in a nullable rejection_reason column, backfilled by a guess, and restore only duplicate rejections](decisions/0046-story-rejection-reason.md)
+- [ADR-0047 · Deploy both Render services only after the commit's GitHub checks pass, with both builds and a migration check in CI](decisions/0047-deploy-after-ci-checks-pass.md)

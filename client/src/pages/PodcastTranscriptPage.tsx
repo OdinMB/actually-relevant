@@ -13,7 +13,11 @@ import { usePodcastEpisode } from '../hooks/usePodcastEpisodes'
 const BACK_LINK_CLASS = 'text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1'
 
 function BackToPodcast() {
-  return <Link to="/podcast" className={BACK_LINK_CLASS}>&larr; All episodes</Link>
+  return (
+    <Link to="/podcast" className={BACK_LINK_CLASS}>
+      &larr; All episodes
+    </Link>
+  )
 }
 
 function EpisodeHead({ episode }: { episode: PublicPodcastEpisodeDetail }) {
@@ -34,11 +38,7 @@ function EpisodeHead({ episode }: { episode: PublicPodcastEpisodeDetail }) {
       </Helmet>
       <StructuredData data={buildPodcastEpisodeSchema(episode)} />
       <StructuredData
-        data={buildBreadcrumbSchema([
-          { name: 'Home', url: SEO.siteUrl },
-          { name: 'Podcast', url: `${SEO.siteUrl}/podcast` },
-          { name: episode.title },
-        ])}
+        data={buildBreadcrumbSchema([{ name: 'Home', url: SEO.siteUrl }, { name: 'Podcast', url: `${SEO.siteUrl}/podcast` }, { name: episode.title }])}
       />
     </>
   )
@@ -51,7 +51,13 @@ function TranscriptSegment({ segment }: { segment: PublicPodcastTranscriptSegmen
     <div className="space-y-3">
       {story && (
         <h3 className="pt-4 text-lg font-semibold text-neutral-900">
-          {story.slug ? <Link to={`/stories/${story.slug}`} className={PODCAST_LINK_CLASS}>{story.title}</Link> : story.title}
+          {story.slug ? (
+            <Link to={`/stories/${story.slug}`} className={PODCAST_LINK_CLASS}>
+              {story.title}
+            </Link>
+          ) : (
+            story.title
+          )}
         </h3>
       )}
       {segment.turns.map((turn, i) => (
@@ -86,7 +92,12 @@ export default function PodcastTranscriptPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { data: episode, isLoading, isError } = usePodcastEpisode(id)
 
-  if (isLoading) return <div className="page-section py-16 min-h-[60vh]" aria-busy="true"><p className="text-neutral-500">Loading transcript…</p></div>
+  if (isLoading)
+    return (
+      <div className="page-section py-16 min-h-[60vh]" aria-busy="true">
+        <p className="text-neutral-500">Loading transcript…</p>
+      </div>
+    )
   if (isError || !episode) return <NotFound />
 
   const duration = formatEpisodeDuration(episode.durationSec)
@@ -95,8 +106,7 @@ export default function PodcastTranscriptPage() {
       <EpisodeHead episode={episode} />
       <article className="page-section py-16">
         <h1 className="page-title" data-ai-generated="title">
-          <AiBadge className="mr-2 align-middle" />{' '}
-          {episode.title}
+          <AiBadge className="mr-2 align-middle" /> {episode.title}
         </h1>
         <p className="text-sm text-neutral-600 text-center">
           <time dateTime={episode.publishedAt}>{formatEpisodeDate(episode.publishedAt)}</time>
@@ -106,15 +116,21 @@ export default function PodcastTranscriptPage() {
         <audio controls preload="none" src={episode.audioUrl} className="mt-6 w-full" aria-label={`Play episode: ${episode.title}`} />
 
         <section aria-labelledby="transcript-heading" className="mt-10" data-ai-generated="transcript">
-          <h2 id="transcript-heading" className="section-heading mb-4">Transcript</h2>
+          <h2 id="transcript-heading" className="section-heading mb-4">
+            Transcript
+          </h2>
           <div className="space-y-3">
-            {episode.transcript.map((segment, i) => <TranscriptSegment key={i} segment={segment} />)}
+            {episode.transcript.map((segment, i) => (
+              <TranscriptSegment key={i} segment={segment} />
+            ))}
           </div>
         </section>
 
         {episode.stories.length > 0 && (
           <section aria-labelledby="transcript-stories-heading" className="mt-10">
-            <h2 id="transcript-stories-heading" className="section-heading mb-2">Stories in this episode</h2>
+            <h2 id="transcript-stories-heading" className="section-heading mb-2">
+              Stories in this episode
+            </h2>
             <EpisodeStoryList stories={episode.stories} />
           </section>
         )}

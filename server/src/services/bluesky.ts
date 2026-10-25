@@ -11,6 +11,8 @@ import { blueskyPostTextSchema, blueskyPickBestSchema } from '../schemas/bluesky
 import type { AuthorFeedResult } from '../lib/bluesky.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { buildMetaLine } from './socialPostFormat.js'
+import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
+import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('bluesky-service')
 
@@ -36,12 +38,7 @@ function buildTitleLine(titleLabel: string, title: string): string {
  * Assemble the structured post text from parts.
  * Format: editorial text\nmetadata
  */
-export function assemblePostText(parts: {
-  blurb: string
-  issueName: string | null
-  emotionTag: string | null
-  publisherName: string
-}): string {
+export function assemblePostText(parts: { blurb: string; issueName: string | null; emotionTag: string | null; publisherName: string }): string {
   const metaLine = buildMetaLine(parts)
   return `${parts.blurb}\n${metaLine}`
 }
@@ -50,11 +47,7 @@ export function assemblePostText(parts: {
  * Calculate max chars for the LLM editorial text given the metadata line.
  * Exported for the model-eval harness, which must compute the same limit.
  */
-export function calcMaxBlurbChars(parts: {
-  issueName: string | null
-  emotionTag: string | null
-  publisherName: string
-}): number {
+export function calcMaxBlurbChars(parts: { issueName: string | null; emotionTag: string | null; publisherName: string }): number {
   const metaLine = buildMetaLine(parts)
   // 300 grapheme limit minus metadata line and newline
   return Math.max(50, 300 - metaLine.length - 1)
@@ -85,14 +78,14 @@ export async function generateDraft(storyId: string) {
     },
   })
 
-  if (!story) throw new Error('Story not found')
-  if (!story.title || !story.summary) throw new Error('Story must be fully analyzed (title and summary required)')
+  if (!story) throw new NotFoundError('Story not found')
+  if (!story.title || !story.summary) throw new BadRequestError('Story must be fully analyzed (title and summary required)')
 
   // Prevent duplicate posts
   const existingPost = await prisma.blueskyPost.findFirst({
     where: { storyId },
   })
-  if (existingPost) throw new Error('Story already has a Bluesky post')
+  if (existingPost) throw new BadRequestError('Story already has a Bluesky post')
 
   const publisherName = story.feed.displayTitle || story.feed.title
   const issueName = story.issue?.name ?? null
@@ -168,7 +161,7 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
     include: { issue: true },
   })
 
-  if (stories.length === 0) throw new Error('No stories found')
+  if (stories.length === 0) throw new BadRequestError('No stories found')
 
   // Filter out stories that already have any Bluesky post (draft, published, or failed)
   const alreadyHavePost = await prisma.blueskyPost.findMany({
@@ -178,16 +171,16 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
     select: { storyId: true },
   })
   const postedSet = new Set(alreadyHavePost.map((p: { storyId: string }) => p.storyId))
-  const candidates = stories.filter((s) => !postedSet.has(s.id))
+  const candidates = stories.filter(s => !postedSet.has(s.id))
 
-  if (candidates.length === 0) throw new Error('All selected stories already have a Bluesky post')
+  if (candidates.length === 0) throw new BadRequestError('All selected stories already have a Bluesky post')
 
   // If only one candidate, just return it
   if (candidates.length === 1) {
-    return { storyId: candidates[0].id, reasoning: 'Only one unposted story in the selection.' }
+    return { storyId: candidates[0]!.id, reasoning: 'Only one unposted story in the selection.' }
   }
 
-  const storiesForPrompt: StoryForBlueskyPick[] = candidates.map((s) => ({
+  const storiesForPrompt: StoryForBlueskyPick[] = candidates.map(s => ({
     id: s.id,
     title: s.title || s.sourceTitle,
     titleLabel: s.titleLabel || '',
@@ -208,10 +201,10 @@ export async function pickBestStory(storyIds: string[]): Promise<{ storyId: stri
   const result = await structuredLlm.invoke([new HumanMessage(prompt)])
 
   // Validate the returned storyId exists in candidates
-  const valid = candidates.find((s) => s.id === result.storyId)
+  const valid = candidates.find(s => s.id === result.storyId)
   if (!valid) {
     log.warn({ returnedId: result.storyId }, 'LLM returned invalid storyId, falling back to first candidate')
-    return { storyId: candidates[0].id, reasoning: 'LLM returned invalid ID; selected first candidate.' }
+    return { storyId: candidates[0]!.id, reasoning: 'LLM returned invalid ID; selected first candidate.' }
   }
 
   log.info({ storyId: result.storyId, reasoning: result.reasoning }, 'best story picked')
@@ -233,8 +226,8 @@ export async function pickAndDraft(storyIds: string[]) {
 
 export async function updateDraft(postId: string, postText: string) {
   const post = await prisma.blueskyPost.findUnique({ where: { id: postId } })
-  if (!post) throw new Error('Post not found')
-  if (post.status !== 'draft') throw new Error('Can only edit draft posts')
+  if (!post) throw new NotFoundError('Post not found')
+  if (post.status !== 'draft') throw new BadRequestError('Can only edit draft posts')
 
   return prisma.blueskyPost.update({
     where: { id: postId },
@@ -248,7 +241,7 @@ export async function updateDraft(postId: string, postText: string) {
  */
 export async function deletePostRecord(postId: string) {
   const post = await prisma.blueskyPost.findUnique({ where: { id: postId } })
-  if (!post) throw new Error('Post not found')
+  if (!post) throw new NotFoundError('Post not found')
 
   // If published with a URI, delete from Bluesky first
   if (post.status === 'published' && post.postUri) {
@@ -274,7 +267,7 @@ export async function deletePostRecord(postId: string) {
  */
 export async function publishPost(postId: string) {
   if (!isBlueskyConfigured()) {
-    throw new Error('Bluesky credentials not configured')
+    throw new BadRequestError('Bluesky credentials not configured')
   }
 
   const post = await prisma.blueskyPost.findUnique({
@@ -282,8 +275,8 @@ export async function publishPost(postId: string) {
     include: { story: { include: { feed: true } } },
   })
 
-  if (!post) throw new Error('Post not found')
-  if (post.status !== 'draft') throw new Error('Can only publish draft posts')
+  if (!post) throw new NotFoundError('Post not found')
+  if (post.status !== 'draft') throw new BadRequestError('Can only publish draft posts')
 
   const story = post.story
   const storyUrl = `${config.siteUrl}/stories/${story.slug}`
@@ -298,8 +291,8 @@ export async function publishPost(postId: string) {
     description: story.marketingBlurb || story.summary || '',
   }
 
-  // Global og:image, served from client/public/images (the same file as the site's og:image meta)
-  linkCard.thumbUrl = `${config.siteUrl}/images/og-image.png`
+  // The story's own preview image (the same URL as its page's og:image); the global one without a slug
+  linkCard.thumbUrl = story.slug ? storyOgImageUrl(story.slug) : `${config.siteUrl}/images/og-image.png`
 
   try {
     const result = await createPost(post.postText, linkCard, publisherName, publisherUrl)
@@ -438,7 +431,7 @@ export async function getFeed(options: { cursor?: string; limit?: number }) {
   const apiResult = await cached(feedCache, cacheKey, () => getAuthorFeed(cursor, limit))
 
   // Cross-reference API post URIs with DB + fetch draft/failed in parallel
-  const apiUris = apiResult.items.map((item) => item.uri)
+  const apiUris = apiResult.items.map(item => item.uri)
 
   const [trackedPosts, pendingPosts] = await Promise.all([
     apiUris.length > 0
@@ -456,10 +449,10 @@ export async function getFeed(options: { cursor?: string; limit?: number }) {
       : Promise.resolve([]),
   ])
 
-  const trackedByUri = new Map(trackedPosts.map((p) => [p.postUri, p]))
+  const trackedByUri = new Map(trackedPosts.map(p => [p.postUri, p]))
 
   // Enrich API items with DB data
-  const feed = apiResult.items.map((item) => {
+  const feed = apiResult.items.map(item => {
     const tracked = trackedByUri.get(item.uri)
     return {
       ...item,
@@ -471,7 +464,7 @@ export async function getFeed(options: { cursor?: string; limit?: number }) {
     }
   })
 
-  const dbOnlyPosts = pendingPosts.map((p) => ({
+  const dbOnlyPosts = pendingPosts.map(p => ({
     id: p.id,
     postText: p.postText,
     status: p.status,

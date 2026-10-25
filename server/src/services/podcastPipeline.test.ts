@@ -27,9 +27,8 @@ vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastScript.js', () => mockScript)
 vi.mock('./podcastAudioStages.js', () => mockAudio)
 
-const {
-  advanceEpisode, rewindEpisode, withEpisodeLease, releaseHeldLeases, pausesForReview, defaultEpisodeTitle, LeaseLostError,
-} = await import('./podcastPipeline.js')
+const { advanceEpisode, rewindEpisode, withEpisodeLease, releaseHeldLeases, pausesForReview, defaultEpisodeTitle, LeaseLostError } =
+  await import('./podcastPipeline.js')
 const { PodcastStoppedError, PodcastRefusedError } = await import('./podcastGuards.js')
 const { PODCAST_OPENER, PODCAST_EPISODE_COPY } = await import('../lib/aiLabelCopy.js')
 
@@ -43,8 +42,21 @@ const CREATED_AT = new Date('2026-10-10T06:00:00Z')
 
 function episode(stage: string, overrides: Record<string, unknown> = {}) {
   return {
-    id: 'pod-1', stage, status: 'draft', title: 'Week', mode: null, weekKey: null, kind: 'weekly', humanEdited: false, createdAt: CREATED_AT,
-    episodeStories: [1, 2, 3, 4].map(snapshot), leaseOwner: null, leaseUntil: null, audioPath: null, transcriptPath: null, ...overrides,
+    id: 'pod-1',
+    stage,
+    status: 'draft',
+    title: 'Week',
+    mode: null,
+    weekKey: null,
+    kind: 'weekly',
+    humanEdited: false,
+    createdAt: CREATED_AT,
+    episodeStories: [1, 2, 3, 4].map(snapshot),
+    leaseOwner: null,
+    leaseUntil: null,
+    audioPath: null,
+    transcriptPath: null,
+    ...overrides,
   }
 }
 
@@ -96,7 +108,13 @@ describe('advanceEpisode', () => {
     const [anchor] = mockScript.selectEpisodeStories.mock.calls[0]
     expect(anchor).not.toEqual(CREATED_AT)
     expect(selectWrite.data.storiesSelectedAt).toBe(anchor)
-    expect(scriptWrite.data).toMatchObject({ stage: 'scripted', title: 'Episode title', episodeSummary: 'Summary.', showNotes: 'notes', scriptModelId: 'gpt-6-sol' })
+    expect(scriptWrite.data).toMatchObject({
+      stage: 'scripted',
+      title: 'Episode title',
+      episodeSummary: 'Summary.',
+      showNotes: 'notes',
+      scriptModelId: 'gpt-6-sol',
+    })
     expect(scriptWrite.data.script.startsWith(`HOST A: ${PODCAST_OPENER}`)).toBe(true)
     const [release] = writesWith('leaseOwner')
     expect(release).toEqual({ where: { id: 'pod-1', leaseOwner: selectWrite.where.leaseOwner }, data: { leaseOwner: null, leaseUntil: null } })
@@ -238,7 +256,7 @@ describe('advanceEpisode', () => {
     expect(writesWith('stage')).toHaveLength(0)
   })
 
-  it('writes a standalone episode\'s script with its kind: the model title unprefixed and the standalone opener', async () => {
+  it("writes a standalone episode's script with its kind: the model title unprefixed and the standalone opener", async () => {
     stagesRead(['selected', 'scripted'], { kind: 'standalone', mode: 'interactive' })
     await advanceEpisode('pod-1', { trigger: 'admin' })
     expect(mockScript.writeEpisodeScript.mock.calls[0][1]).toBe('standalone')
@@ -268,8 +286,20 @@ describe('pausesForReview', () => {
 describe('rewindEpisode', () => {
   beforeEach(setUp)
 
-  const ready = () => episode('ready', { weekKey: '2026-W41', audioPath: 'episodes/2026-W41-aaaa.mp3', transcriptPath: 'episodes/2026-W41-aaaa.vtt', humanEdited: true })
-  const audioCleared = { audioUrl: null, audioPath: null, transcriptUrl: null, transcriptPath: null, audioBytes: null, durationSec: null, readyAt: null, ttsModelId: null }
+  const ready = () =>
+    episode('ready', { weekKey: '2026-W41', audioPath: 'episodes/2026-W41-aaaa.mp3', transcriptPath: 'episodes/2026-W41-aaaa.vtt', humanEdited: true })
+  const audioCleared = {
+    audioUrl: null,
+    audioPath: null,
+    transcriptUrl: null,
+    transcriptPath: null,
+    chaptersUrl: null,
+    chaptersPath: null,
+    audioBytes: null,
+    durationSec: null,
+    readyAt: null,
+    ttsModelId: null,
+  }
 
   it('to scripted clears only the audio, draws a fresh seed, deletes the chunks and the old objects', async () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready())
@@ -292,13 +322,19 @@ describe('rewindEpisode', () => {
     await rewindEpisode('pod-1', 'selected', { dryRun: false })
     const [write] = writesWith('stage')
     expect(write.data).toMatchObject({
-      stage: 'selected', ...audioCleared, script: '', showNotes: '', episodeSummary: '', scriptModelId: null, ttsSeed: null,
+      stage: 'selected',
+      ...audioCleared,
+      script: '',
+      showNotes: '',
+      episodeSummary: '',
+      scriptModelId: null,
+      ttsSeed: null,
       title: 'Actually Relevant, 2026-W41',
     })
     for (const kept of ['episodeStories', 'storyIds', 'storiesSelectedAt', 'humanEdited']) expect(write.data).not.toHaveProperty(kept)
   })
 
-  it('restores a standalone episode\'s dated default title', async () => {
+  it("restores a standalone episode's dated default title", async () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('scripted', { kind: 'standalone', title: 'A model title' }))
     await rewindEpisode('pod-1', 'selected', { dryRun: false })
     expect(writesWith('stage')[0].data.title).toBe('Actually Relevant, 2026-10-10')
@@ -308,7 +344,15 @@ describe('rewindEpisode', () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready())
     await rewindEpisode('pod-1', 'created', { dryRun: true, mode: 'interactive' })
     const [write] = writesWith('stage')
-    expect(write.data).toMatchObject({ stage: 'created', dryRun: true, storyIds: [], storiesSelectedAt: null, humanEdited: false, script: '', mode: 'interactive' })
+    expect(write.data).toMatchObject({
+      stage: 'created',
+      dryRun: true,
+      storyIds: [],
+      storiesSelectedAt: null,
+      humanEdited: false,
+      script: '',
+      mode: 'interactive',
+    })
   })
 
   it('refuses a target at or after the current stage', async () => {
@@ -373,13 +417,17 @@ describe('withEpisodeLease', () => {
     await expect(withEpisodeLease('pod-1', async () => 'x')).rejects.toBeInstanceOf(PodcastRefusedError)
 
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('selected'))
-    await expect(withEpisodeLease('pod-1', async () => { throw new Error('bad') })).rejects.toThrow('bad')
+    await expect(
+      withEpisodeLease('pod-1', async () => {
+        throw new Error('bad')
+      }),
+    ).rejects.toThrow('bad')
     expect(writesWith('leaseOwner')).toHaveLength(1)
   })
 })
 
 describe('releaseHeldLeases', () => {
-  it('clears only this process\'s leases', async () => {
+  it("clears only this process's leases", async () => {
     vi.clearAllMocks()
     mockPrisma.podcast.updateMany.mockResolvedValue({ count: 2 })
     await releaseHeldLeases()

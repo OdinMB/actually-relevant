@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { stratifiedPick, buildSelectionGroups, splitHalves } from './sampling.js'
 
-interface Item { id: string; lang: string; han: boolean }
+interface Item {
+  id: string
+  lang: string
+  han: boolean
+}
 
 const pool: Item[] = [
   ...Array.from({ length: 10 }, (_, i) => ({ id: `en${i}`, lang: 'en', han: false })),
@@ -53,7 +57,7 @@ describe('splitHalves', () => {
   })
 
   it('halves each stratum, so the halves differ in size by at most one overall', () => {
-    const { calibration, holdout } = splitHalves(pool, byId, t => t.lang)
+    const { calibration } = splitHalves(pool, byId, t => t.lang)
     for (const lang of ['en', 'zh', 'de']) {
       expect(calibration.filter(t => t.lang === lang)).toHaveLength(pool.filter(t => t.lang === lang).length / 2)
     }
@@ -69,12 +73,14 @@ describe('splitHalves', () => {
 })
 
 describe('buildSelectionGroups', () => {
-  const day = (d: string, n: number) =>
-    Array.from({ length: n }, (_, i) => ({ id: `${d}-${i}`, dateCrawled: new Date(`${d}T0${i % 10}:00:00Z`) }))
+  const day = (d: string, n: number) => Array.from({ length: n }, (_, i) => ({ id: `${d}-${i}`, dateCrawled: new Date(`${d}T0${i % 10}:00:00Z`) }))
 
   it('keeps only days with enough stories and splits them like production', () => {
     const groups = buildSelectionGroups([...day('2026-09-01', 25), ...day('2026-09-02', 5)], {
-      minPerDay: 8, maxGroupSize: 20, ratio: 0.5, count: 20,
+      minPerDay: 8,
+      maxGroupSize: 20,
+      ratio: 0.5,
+      count: 20,
     })
     expect(groups.map(g => g.storyIds.length).sort()).toEqual([12, 13])
     expect(groups.every(g => g.day === '2026-09-01')).toBe(true)

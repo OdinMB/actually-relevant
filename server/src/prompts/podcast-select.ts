@@ -20,7 +20,8 @@ const KIND_WORDING: Record<PodcastSelectKind, { role: string; goal: string; issu
   weekly: {
     role: 'a weekly five-minute spoken news briefing',
     goal: "this week's episode",
-    issueRule: (min, max) => `- Normally at most one story per issue. A second story from the same issue is allowed only when that issue has two clearly outstanding stories, or when another issue has no suitable article. Select ${max} stories only in the first case; otherwise select ${min}.`,
+    issueRule: (min, max) =>
+      `- Normally at most one story per issue. A second story from the same issue is allowed only when that issue has two clearly outstanding stories, or when another issue has no suitable article. Select ${max} stories only in the first case; otherwise select ${min}.`,
   },
   standalone: {
     role: 'a five-minute spoken news briefing',
@@ -32,14 +33,18 @@ const KIND_WORDING: Record<PodcastSelectKind, { role: string; goal: string; issu
 /** Picks an episode's stories for the spoken episode (a different criterion from the newsletter's). */
 export function buildPodcastSelectPrompt(stories: StoryForPodcastSelect[], minStories: number, maxStories: number, kind: PodcastSelectKind): string {
   const wording = KIND_WORDING[kind]
-  const articles = stories.map(s => `<ARTICLE>
+  const articles = stories
+    .map(
+      s => `<ARTICLE>
 <ID>${s.id}</ID>
 <ISSUE>${escapeXml(s.issue)}</ISSUE>
 <RELEVANCE>${s.relevance ?? 'unrated'}</RELEVANCE>
 <EMOTION>${escapeXml(s.emotionTag || 'none')}</EMOTION>
 <TITLE>${escapeXml(s.title)}</TITLE>
 <SUMMARY>${escapeXml(s.summary)}</SUMMARY>
-</ARTICLE>`).join('\n')
+</ARTICLE>`,
+    )
+    .join('\n')
 
   return `<ROLE>
 You are the editor of "Actually Relevant", ${wording.role} about the developments most relevant for humanity.

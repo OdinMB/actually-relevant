@@ -66,9 +66,7 @@ export interface CreatedWindow {
 }
 
 /** The previous provider's import into Plunk: 15 Feb 2026, 01:36 Berlin. Covers that day in Berlin and in UTC. */
-export const DEFAULT_PROTECTED_WINDOWS: CreatedWindow[] = [
-  { start: new Date('2026-02-14T23:00:00.000Z'), end: new Date('2026-02-16T00:00:00.000Z') },
-]
+export const DEFAULT_PROTECTED_WINDOWS: CreatedWindow[] = [{ start: new Date('2026-02-14T23:00:00.000Z'), end: new Date('2026-02-16T00:00:00.000Z') }]
 
 export interface Args {
   apply: boolean
@@ -86,8 +84,8 @@ function parseWindow(raw: string): CreatedWindow {
       throw new Error(`--protect-created needs a date (YYYY-MM-DD) or a date-time with Z or an offset, got "${p}" in "${raw}"`)
     }
   }
-  const [start, end] = parts.map((p) => new Date(p.trim()))
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+  const [start, end] = parts.map(p => new Date(p.trim()))
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     throw new Error(`--protect-created has an unparseable date: "${raw}"`)
   }
   if (start >= end) throw new Error(`--protect-created start must be before end: "${raw}"`)
@@ -129,24 +127,18 @@ export type ContactVerdict = 'purge' | 'subscribed' | 'confirmed' | 'no-date' | 
  * check comes last, so 'import-window' counts exactly the contacts the import
  * guard saved from deletion.
  */
-export function classifyContact(
-  contact: { email: string; subscribed: boolean; createdAt?: string },
-  rules: PurgeRules,
-): ContactVerdict {
+export function classifyContact(contact: { email: string; subscribed: boolean; createdAt?: string }, rules: PurgeRules): ContactVerdict {
   if (contact.subscribed !== false) return 'subscribed'
   if (rules.confirmedEmails.has(contact.email.toLowerCase())) return 'confirmed'
   if (!contact.createdAt) return 'no-date'
   const created = new Date(contact.createdAt)
   if (Number.isNaN(created.getTime())) return 'no-date'
   if (!(created < rules.olderThan)) return 'too-new'
-  if (rules.protectedWindows.some((w) => created >= w.start && created < w.end)) return 'import-window'
+  if (rules.protectedWindows.some(w => created >= w.start && created < w.end)) return 'import-window'
   return 'purge'
 }
 
-export function shouldPurgeContact(
-  contact: { email: string; subscribed: boolean; createdAt?: string },
-  rules: PurgeRules,
-): boolean {
+export function shouldPurgeContact(contact: { email: string; subscribed: boolean; createdAt?: string }, rules: PurgeRules): boolean {
   return classifyContact(contact, rules) === 'purge'
 }
 
@@ -176,7 +168,7 @@ async function main() {
     where: { confirmedAt: { not: null } },
     select: { email: true },
   })
-  const confirmedEmails = new Set(confirmed.map((c) => c.email.toLowerCase()))
+  const confirmedEmails = new Set(confirmed.map(c => c.email.toLowerCase()))
   console.log(`Locally-confirmed emails (protected): ${confirmedEmails.size}`)
 
   // Only purge contacts created before this cutoff, so a brand-new signup that
@@ -207,10 +199,12 @@ async function main() {
     cursor = page.nextCursor
   }
 
-  console.log(`Scanned ${scanned} contacts; ${purgeable.length} purgeable (unsubscribed + never confirmed locally + older than ${PURGE_MIN_AGE_DAYS} days + outside the import guard).`)
+  console.log(
+    `Scanned ${scanned} contacts; ${purgeable.length} purgeable (unsubscribed + never confirmed locally + older than ${PURGE_MIN_AGE_DAYS} days + outside the import guard).`,
+  )
   console.log(`Kept by the import guard (would otherwise be purgeable): ${importProtected}`)
 
-  const byDay = countByCreatedDay(purgeable.map((c) => c.createdAt))
+  const byDay = countByCreatedDay(purgeable.map(c => c.createdAt))
   if (byDay.length > 0) {
     console.log(`\nPurgeable contacts by creation day (UTC), top ${DAY_BREAKDOWN_LIMIT}:`)
     for (const { day, count } of byDay) console.log(`  ${day}  ${count}`)
@@ -239,7 +233,7 @@ async function main() {
       failed++
       console.error(`  failed to delete ${c.email} (${c.id}):`, err instanceof Error ? err.message : err)
     }
-    await new Promise((resolve) => setTimeout(resolve, DELETE_DELAY_MS))
+    await new Promise(resolve => setTimeout(resolve, DELETE_DELAY_MS))
   }
 
   console.log(`\nDone. Deleted: ${deleted}, Failed: ${failed}`)
@@ -248,7 +242,7 @@ async function main() {
 
 // Only run when executed directly (so importing the file for tests has no side effects).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
+  main().catch(err => {
     console.error('Fatal error:', err)
     process.exit(1)
   })

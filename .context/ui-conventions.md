@@ -10,6 +10,7 @@ Each page should:
 - [ ] Have unique, descriptive title
 - [ ] Have unique meta description (150-160 chars)
 - [ ] Be listed in `client/src/routes.ts` for prerendering
+- [ ] Render JSON-LD through `<StructuredData>` or, inside Helmet, `toJsonLd()` (`client/src/lib/structured-data.ts`), never plain `JSON.stringify`: story and episode text comes from crawled pages, and an unescaped `</script>` would break out of the element in prerendered HTML
 - [ ] No hardcoded counts (source count, story count, language count) -- use `useSources()` hook or omit. These values change as feeds are added/removed.
 
 ## CSS Utility Classes
@@ -28,6 +29,10 @@ Defined in `client/src/index.css`:
 - `.prose` -- Body text container (text-neutral-600, relaxed leading, auto-styled links)
 - `.section-heading` -- Section headings (text-2xl)
 - `.section-heading-lg` -- Larger section headings (text-3xl)
+
+## Public URLs
+
+The site URL and the Ko-fi, Bluesky, Mastodon and GitHub addresses are constants in `client/src/config.ts` (`SITE_URL`, `KOFI_URL`, `BLUESKY_PROFILE_URL`, `MASTODON_PROFILE_URL`, `GITHUB_REPO_URL`); `SEO.siteUrl` is `SITE_URL`. Import them rather than writing an address inline. `index.html` and the build scripts in `client/scripts/` cannot import them and keep their own copies.
 
 ## Bundle Splitting
 

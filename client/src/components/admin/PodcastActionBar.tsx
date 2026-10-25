@@ -39,15 +39,16 @@ export function PodcastActionBar({ podcast, pendingEdits }: PodcastActionBarProp
   const legacy = podcast.stage === 'legacy'
   const writesFirst = podcast.stage !== 'scripted'
 
-  const handleDelete = () => del.mutate(podcast.id, {
-    onSuccess: () => {
-      toast('success', 'Podcast deleted')
-      // The episode is gone, and its unsaved edits with it: leave without the page's guard asking.
-      navigate('/admin/podcasts', { state: LEAVE_UNSAVED })
-    },
-    onError: err => toast('error', err instanceof Error ? err.message : 'Failed to delete'),
-    onSettled: () => setConfirmDelete(false),
-  })
+  const handleDelete = () =>
+    del.mutate(podcast.id, {
+      onSuccess: () => {
+        toast('success', 'Podcast deleted')
+        // The episode is gone, and its unsaved edits with it: leave without the page's guard asking.
+        navigate('/admin/podcasts', { state: LEAVE_UNSAVED })
+      },
+      onError: err => toast('error', err instanceof Error ? err.message : 'Failed to delete'),
+      onSettled: () => setConfirmDelete(false),
+    })
 
   return (
     <div
@@ -59,30 +60,43 @@ export function PodcastActionBar({ podcast, pendingEdits }: PodcastActionBarProp
     >
       <div className="flex min-h-[2.5rem] flex-wrap items-center gap-x-3 gap-y-2">
         {action === 'resume' && (
-          <PodcastRunButton podcast={podcast} confirmTitle={writesFirst ? 'Resume, then write and voice the episode?' : 'Resume and voice the episode?'} disabled={pendingEdits} aria-describedby={pendingEdits ? hintId : undefined}>
+          <PodcastRunButton
+            podcast={podcast}
+            confirmTitle={writesFirst ? 'Resume, then write and voice the episode?' : 'Resume and voice the episode?'}
+            disabled={pendingEdits}
+            aria-describedby={pendingEdits ? hintId : undefined}
+          >
             Resume
           </PodcastRunButton>
         )}
         {action === 'approve-stories' && (
-          <PodcastRunButton podcast={podcast} mode="automated" variant="secondary" confirmTitle="Write the script and voice it without review?" disabled={pendingEdits} aria-describedby={pendingEdits ? hintId : undefined}>
+          <PodcastRunButton
+            podcast={podcast}
+            mode="automated"
+            variant="secondary"
+            confirmTitle="Write the script and voice it without review?"
+            disabled={pendingEdits}
+            aria-describedby={pendingEdits ? hintId : undefined}
+          >
             Finish automatically
           </PodcastRunButton>
         )}
         {pendingEdits && (action === 'resume' || action === 'approve-stories') && (
-          <span id={hintId} className="text-sm text-neutral-600">Save or discard your changes first.</span>
+          <span id={hintId} className="text-sm text-neutral-600">
+            Save or discard your changes first.
+          </span>
         )}
         {!legacy && <PodcastPublishControls podcast={podcast} />}
-        <ReasonButton variant="ghost" reason={deleteBlockedReason(podcast)} onClick={() => setConfirmDelete(true)} className="text-red-700 hover:bg-red-50 hover:text-red-800">
+        <ReasonButton
+          variant="ghost"
+          reason={deleteBlockedReason(podcast)}
+          onClick={() => setConfirmDelete(true)}
+          className="text-red-700 hover:bg-red-50 hover:text-red-800"
+        >
           Delete
         </ReasonButton>
         {podcast.audioUrl && (
-          <audio
-            controls
-            preload="none"
-            src={podcast.audioUrl}
-            aria-label={`Episode audio: ${podcast.title}`}
-            className="h-9 w-full sm:ml-auto sm:w-80"
-          />
+          <audio controls preload="none" src={podcast.audioUrl} aria-label={`Episode audio: ${podcast.title}`} className="h-9 w-full sm:ml-auto sm:w-80" />
         )}
       </div>
 

@@ -2,7 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { fetchDeployedBuildId, isOutdated } from './buildVersion'
 
 function respond(body: string, ok = true) {
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: ok ? 200 : 404 })))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(body, { status: ok ? 200 : 404 })),
+  )
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -24,7 +27,12 @@ describe('fetchDeployedBuildId', () => {
   })
 
   it('is null when the request fails', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline') }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('offline')
+      }),
+    )
     expect(await fetchDeployedBuildId()).toBeNull()
   })
 })

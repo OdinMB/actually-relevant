@@ -3,7 +3,10 @@ import { Button } from '../ui/Button'
 
 interface BulkActionsBarProps {
   count: number
-  onAction: (action: 'preassess' | 'reclassify' | 'assess' | 'select' | 'create-cluster' | 'bluesky-post' | 'bluesky-pick' | 'mastodon-post' | 'mastodon-pick' | StoryStatus) => void
+  onAction: (
+    action:
+      'preassess' | 'reclassify' | 'assess' | 'select' | 'create-cluster' | 'bluesky-post' | 'bluesky-pick' | 'mastodon-post' | 'mastodon-pick' | StoryStatus,
+  ) => void
   loading?: boolean
   allHaveRelevance?: boolean
   allPublished?: boolean
@@ -26,9 +29,7 @@ export function BulkActionsBar({ count, onAction, loading, allHaveRelevance, all
 
   return (
     <div className="sticky bottom-0 z-10 bg-white border-t border-neutral-200 shadow-lg px-4 py-3 flex items-center gap-3 flex-wrap">
-      <span className="text-sm font-medium text-neutral-700">
-        {count} selected
-      </span>
+      <span className="text-sm font-medium text-neutral-700">{count} selected</span>
       <div className="flex gap-2 flex-wrap">
         <Button variant="secondary" size="sm" onClick={() => onAction('preassess')} disabled={loading}>
           Pre-assess
@@ -65,7 +66,7 @@ export function BulkActionsBar({ count, onAction, loading, allHaveRelevance, all
           Create Cluster
         </Button>
         <div className="w-px h-6 bg-neutral-300 mx-1" />
-        <span title={!allPublished ? 'All stories must be published' : (count === 1 && singleHasBlueskyPost) ? 'Story already has a Bluesky post' : undefined}>
+        <span title={!allPublished ? 'All stories must be published' : count === 1 && singleHasBlueskyPost ? 'Story already has a Bluesky post' : undefined}>
           <Button
             variant="secondary"
             size="sm"
@@ -75,7 +76,7 @@ export function BulkActionsBar({ count, onAction, loading, allHaveRelevance, all
             {count === 1 ? 'Post to Bluesky' : 'Pick Best for Bluesky'}
           </Button>
         </span>
-        <span title={!allPublished ? 'All stories must be published' : (count === 1 && singleHasMastodonPost) ? 'Story already has a Mastodon post' : undefined}>
+        <span title={!allPublished ? 'All stories must be published' : count === 1 && singleHasMastodonPost ? 'Story already has a Mastodon post' : undefined}>
           <Button
             variant="secondary"
             size="sm"

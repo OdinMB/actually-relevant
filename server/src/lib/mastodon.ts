@@ -49,10 +49,7 @@ export interface CreateStatusResult {
  * @param text - Full post text (including URLs — Mastodon auto-generates link previews)
  * @param options - Visibility, language, idempotency key
  */
-export async function createStatus(
-  text: string,
-  options: CreateStatusOptions = {},
-): Promise<CreateStatusResult> {
+export async function createStatus(text: string, options: CreateStatusOptions = {}): Promise<CreateStatusResult> {
   const { visibility = config.mastodon.visibility, language = 'en' } = options
 
   return withRetry(
@@ -147,9 +144,7 @@ export interface AccountStatusesResult {
 /**
  * Fetch the bot account's statuses from Mastodon.
  */
-export async function getAccountStatuses(
-  options: { maxId?: string; limit?: number } = {},
-): Promise<AccountStatusesResult> {
+export async function getAccountStatuses(options: { maxId?: string; limit?: number } = {}): Promise<AccountStatusesResult> {
   const { maxId, limit = 25 } = options
 
   return withRetry(
@@ -161,15 +156,13 @@ export async function getAccountStatuses(
 
       log.info({ limit, maxId: maxId ?? null }, 'fetching Mastodon account statuses')
 
-      const params: Record<string, unknown> = {
+      const statuses = await c.v1.accounts.$select(account.id).statuses.list({
         limit,
         excludeReplies: true,
-      }
-      if (maxId) params.maxId = maxId
+        ...(maxId ? { maxId } : {}),
+      })
 
-      const statuses = await c.v1.accounts.$select(account.id).statuses.list(params as any)
-
-      const items: AccountStatusItem[] = statuses.map((s) => ({
+      const items: AccountStatusItem[] = statuses.map(s => ({
         id: s.id,
         url: s.url ?? '',
         text: s.content.replace(/<[^>]*>/g, ''), // Strip HTML tags for plain text
@@ -180,7 +173,7 @@ export async function getAccountStatuses(
         isReblog: s.reblog !== null,
       }))
 
-      const nextMaxId = items.length > 0 ? items[items.length - 1].id : undefined
+      const nextMaxId = items.at(-1)?.id
 
       log.info({ itemCount: items.length, nextMaxId: nextMaxId ?? null }, 'fetched Mastodon account statuses')
       return { items, nextMaxId }

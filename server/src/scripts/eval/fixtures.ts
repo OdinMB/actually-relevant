@@ -213,15 +213,17 @@ async function loadPreassess(db: Db, floor: Date, shortfalls: string[]): Promise
   return picked.flatMap(p => {
     const r = byId.get(p.id)
     if (!r?.issue || r.relevancePre == null || !r.emotionTag) return []
-    return [{
-      id: r.id,
-      title: r.sourceTitle,
-      content: r.sourceContent.substring(0, config.preassess.contentMaxLength),
-      language: meta.get(r.id)?.language ?? 'unknown',
-      han: p.han,
-      status: p.status,
-      stored: { issueSlug: r.issue.slug, rating: r.relevancePre, emotion: r.emotionTag },
-    }]
+    return [
+      {
+        id: r.id,
+        title: r.sourceTitle,
+        content: r.sourceContent.substring(0, config.preassess.contentMaxLength),
+        language: meta.get(r.id)?.language ?? 'unknown',
+        han: p.han,
+        status: p.status,
+        stored: { issueSlug: r.issue.slug, rating: r.relevancePre, emotion: r.emotionTag },
+      },
+    ]
   })
 }
 
@@ -249,7 +251,11 @@ async function loadAssess(db: Db, floor: Date, shortfalls: string[]): Promise<As
   const rows = await db.story.findMany({
     where: { id: { in: picked.map(p => p.id) } },
     select: {
-      id: true, sourceTitle: true, sourceContent: true, sourceUrl: true, relevance: true,
+      id: true,
+      sourceTitle: true,
+      sourceContent: true,
+      sourceUrl: true,
+      relevance: true,
       issue: { select: guidelineSelect },
       feed: { select: { title: true, language: true, issue: { select: guidelineSelect } } },
     },
@@ -260,17 +266,19 @@ async function loadAssess(db: Db, floor: Date, shortfalls: string[]): Promise<As
     const r = byId.get(p.id)
     if (!r || r.relevance == null) return []
     const issue = r.issue ?? r.feed.issue
-    return [{
-      id: r.id,
-      title: r.sourceTitle,
-      content: r.sourceContent.substring(0, config.assess.contentMaxLength),
-      publisher: r.feed.title,
-      url: r.sourceUrl,
-      guidelines: { factors: issue.promptFactors, antifactors: issue.promptAntifactors, ratings: issue.promptRatings },
-      language: r.feed.language,
-      han: p.han,
-      stored: { rating: r.relevance },
-    }]
+    return [
+      {
+        id: r.id,
+        title: r.sourceTitle,
+        content: r.sourceContent.substring(0, config.assess.contentMaxLength),
+        publisher: r.feed.title,
+        url: r.sourceUrl,
+        guidelines: { factors: issue.promptFactors, antifactors: issue.promptAntifactors, ratings: issue.promptRatings },
+        language: r.feed.language,
+        han: p.han,
+        stored: { rating: r.relevance },
+      },
+    ]
   })
 }
 
@@ -307,7 +315,9 @@ async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations:
   // neighbours are the next-best source of them, so they fill the missing slots.
   const extraNearest = Math.max(0, t.clusterMembers - clustered.length)
   if (extraNearest > 0) {
-    adaptations.push(`dedup: only ${clustered.length} of ${t.clusterMembers} cluster-member sources exist, so up to ${extraNearest} more closest-neighbour (unclustered) sources fill their slots`)
+    adaptations.push(
+      `dedup: only ${clustered.length} of ${t.clusterMembers} cluster-member sources exist, so up to ${extraNearest} more closest-neighbour (unclustered) sources fill their slots`,
+    )
   }
   const hardNegatives = [...nearest].sort((a, b) => a.distance - b.distance).slice(0, t.hardNegatives + extraNearest)
   const hardIds = new Set(hardNegatives.map(h => h.id))
@@ -345,12 +355,14 @@ async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations:
     const source = sourceById.get(id)
     const candidates = rows.filter(r => r.source_id === id)
     if (!source?.title || !source.summary || candidates.length === 0) return []
-    return [{
-      sourceId: id,
-      kind: kinds.get(id) ?? 'random',
-      source: { title: source.title, summary: source.summary },
-      candidates: candidates.map(c => ({ id: c.id, title: c.title, summary: c.summary, distance: Number(c.distance), sameCluster: c.same_cluster })),
-    }]
+    return [
+      {
+        sourceId: id,
+        kind: kinds.get(id) ?? 'random',
+        source: { title: source.title, summary: source.summary },
+        candidates: candidates.map(c => ({ id: c.id, title: c.title, summary: c.summary, distance: Number(c.distance), sameCluster: c.same_cluster })),
+      },
+    ]
   })
   const want = t.clusterMembers + t.hardNegatives + t.random
   if (sets.length < want) shortfalls.push(`dedup: ${sets.length} of ${want} source sets`)
@@ -365,8 +377,11 @@ async function loadRelated(db: Db, shortfalls: string[]): Promise<RelatedItem[]>
     ORDER BY md5(s.id || 'gpt6-eval')
     LIMIT ${TARGETS.related.total}`
   const ids = sources.map(s => s.id)
-  // Mirrors story.ts getRelatedStories: the 12 cosine-nearest published stories.
-  const rows = ids.length === 0 ? [] : await db.$queryRaw<{ source_id: string; id: string; title: string | null; title_label: string | null }[]>`
+  // Mirrors relatedStories.ts getRelatedStories: the 12 cosine-nearest published stories.
+  const rows =
+    ids.length === 0
+      ? []
+      : await db.$queryRaw<{ source_id: string; id: string; title: string | null; title_label: string | null }[]>`
     SELECT src.id AS source_id, c.id, c.title, c.title_label
     FROM stories src
     CROSS JOIN LATERAL (
@@ -388,8 +403,16 @@ async function loadRelated(db: Db, shortfalls: string[]): Promise<RelatedItem[]>
 }
 
 const pickSelect = {
-  id: true, title: true, sourceTitle: true, titleLabel: true, summary: true, relevanceSummary: true,
-  relevance: true, emotionTag: true, datePublished: true, issue: { select: { name: true } },
+  id: true,
+  title: true,
+  sourceTitle: true,
+  titleLabel: true,
+  summary: true,
+  relevanceSummary: true,
+  relevance: true,
+  emotionTag: true,
+  datePublished: true,
+  issue: { select: { name: true } },
 } as const
 
 async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[], adaptations: string[]): Promise<{ days: SocialPickDay[]; synthetic: boolean }> {
@@ -413,11 +436,11 @@ async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[], adapta
         at.setUTCHours(11, 30, 0, 0) // the social_auto_post cron default
         return { day: at.toISOString().slice(0, 10), storyId: null as string | null, at }
       })
-    : [...firstPostPerDay.entries()]
-        .sort(([a], [b]) => (a < b ? 1 : -1))
-        .map(([day, p]) => ({ day, storyId: p.storyId as string | null, at: p.at }))
+    : [...firstPostPerDay.entries()].sort(([a], [b]) => (a < b ? 1 : -1)).map(([day, p]) => ({ day, storyId: p.storyId as string | null, at: p.at }))
   if (synthetic) {
-    adaptations.push(`social pick: no stored posts, so synthetic 11:30 UTC windows were scanned up to ${TARGETS.socialPickScanDays} days back from the anchor for days with at least 2 candidates`)
+    adaptations.push(
+      `social pick: no stored posts, so synthetic 11:30 UTC windows were scanned up to ${TARGETS.socialPickScanDays} days back from the anchor for days with at least 2 candidates`,
+    )
   }
 
   const days: SocialPickDay[] = []
@@ -433,8 +456,7 @@ async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[], adapta
       select: pickSelect,
       orderBy: { datePublished: 'desc' },
     })
-    const postedBefore = (platform: string) =>
-      new Set(posts.filter(p => p.platform === platform && p.published_at < w.at).map(p => p.story_id))
+    const postedBefore = (platform: string) => new Set(posts.filter(p => p.platform === platform && p.published_at < w.at).map(p => p.story_id))
     const bs = postedBefore('bluesky')
     const md = postedBefore('mastodon')
     const candidates = stories.filter(s => s.id === w.storyId || !bs.has(s.id) || !md.has(s.id))
@@ -471,8 +493,16 @@ async function loadSocialPost(db: Db, floor: Date, shortfalls: string[]): Promis
   const rows = await db.story.findMany({
     where: { id: { in: ids.map(i => i.id) } },
     select: {
-      id: true, title: true, titleLabel: true, summary: true, relevanceSummary: true, emotionTag: true,
-      sourceUrl: true, slug: true, issue: { select: { name: true } }, feed: { select: { title: true, displayTitle: true } },
+      id: true,
+      title: true,
+      titleLabel: true,
+      summary: true,
+      relevanceSummary: true,
+      emotionTag: true,
+      sourceUrl: true,
+      slug: true,
+      issue: { select: { name: true } },
+      feed: { select: { title: true, displayTitle: true } },
     },
   })
   const byId = new Map(rows.map(r => [r.id, r]))
@@ -482,14 +512,15 @@ async function loadSocialPost(db: Db, floor: Date, shortfalls: string[]): Promis
     const platform: SocialPostItem['platform'] = i < n ? 'bluesky' : 'mastodon'
     // Mirrors bluesky.ts / mastodon.ts generateDraft.
     const meta = { issueName: s.issue?.name ?? null, emotionTag: s.emotionTag, publisherName: s.feed.displayTitle || s.feed.title }
-    const maxChars = platform === 'bluesky'
-      ? blueskyMaxChars(meta)
-      : mastodonMaxChars({ ...meta, sourceUrl: s.sourceUrl, storyUrl: `${config.siteUrl}/stories/${s.slug}` })
-    return [{
-      id: s.id,
-      platform,
-      story: { id: s.id, title: s.title, titleLabel: s.titleLabel || '', summary: s.summary, relevanceSummary: s.relevanceSummary, maxChars },
-    }]
+    const maxChars =
+      platform === 'bluesky' ? blueskyMaxChars(meta) : mastodonMaxChars({ ...meta, sourceUrl: s.sourceUrl, storyUrl: `${config.siteUrl}/stories/${s.slug}` })
+    return [
+      {
+        id: s.id,
+        platform,
+        story: { id: s.id, title: s.title, titleLabel: s.titleLabel || '', summary: s.summary, relevanceSummary: s.relevanceSummary, maxChars },
+      },
+    ]
   })
   if (items.length < 2 * n) shortfalls.push(`social post: ${items.length} of ${2 * n} stories`)
   return items
@@ -509,51 +540,68 @@ async function loadSelection(db: Db, anchor: Date, shortfalls: string[], adaptat
       AND s.title IS NOT NULL
       AND s.date_crawled > ${since} AND s.date_crawled <= ${anchor}`
   // Every group in hash order; the target count is taken after blinding below.
-  const drafts = buildSelectionGroups(pool.map(p => ({ id: p.id, dateCrawled: p.date_crawled })), {
-    minPerDay: t.minPerDay,
-    maxGroupSize: config.selection.maxGroupSize,
-    ratio: config.selection.ratio,
-    count: Number.MAX_SAFE_INTEGER,
-  })
+  const drafts = buildSelectionGroups(
+    pool.map(p => ({ id: p.id, dateCrawled: p.date_crawled })),
+    {
+      minPerDay: t.minPerDay,
+      maxGroupSize: config.selection.maxGroupSize,
+      ratio: config.selection.ratio,
+      count: Number.MAX_SAFE_INTEGER,
+    },
+  )
   const statusById = new Map(pool.map(p => [p.id, p.status]))
   const rows = await db.story.findMany({
     where: { id: { in: drafts.flatMap(d => d.storyIds) } },
     select: {
-      id: true, title: true, summary: true, relevanceReasons: true, antifactors: true, relevanceCalculation: true, emotionTag: true, relevance: true,
+      id: true,
+      title: true,
+      summary: true,
+      relevanceReasons: true,
+      antifactors: true,
+      relevanceCalculation: true,
+      emotionTag: true,
+      relevance: true,
       sourceDatePublished: true,
     },
   })
   const byId = new Map(rows.map(r => [r.id, r]))
   const removedFromUsed: unknown[] = []
   let groupsDropped = 0
-  const groups = drafts.flatMap(d => {
-    // Mirrors analysis.ts selectStories.
-    const all = d.storyIds.flatMap(id => {
-      const r = byId.get(id)
-      return r ? [{ ...r, emotionTag: r.emotionTag as string | null, sourceDatePublished: r.sourceDatePublished?.toISOString() ?? null }] : []
+  const groups = drafts
+    .flatMap(d => {
+      // Mirrors analysis.ts selectStories.
+      const all = d.storyIds.flatMap(id => {
+        const r = byId.get(id)
+        return r ? [{ ...r, emotionTag: r.emotionTag as string | null, sourceDatePublished: r.sourceDatePublished?.toISOString() ?? null }] : []
+      })
+      // Owner's blinding rule: a story that mentions a model name is removed before any
+      // prompt is built, so no arm sees it and no rating item shows it.
+      const blinded = withoutModelNames(all)
+      if (blinded.kept.length < t.minAfterBlinding) {
+        groupsDropped++
+        return []
+      }
+      const keptIds = blinded.kept.map(s => s.id)
+      return [
+        {
+          id: d.id,
+          day: d.day,
+          toSelect: Math.ceil(blinded.kept.length * config.selection.ratio),
+          stories: blinded.kept,
+          storedPicked: keptIds.filter(id => ['selected', 'published'].includes(statusById.get(id) ?? '')),
+          removed: blinded.removed,
+        },
+      ]
     })
-    // Owner's blinding rule: a story that mentions a model name is removed before any
-    // prompt is built, so no arm sees it and no rating item shows it.
-    const blinded = withoutModelNames(all)
-    if (blinded.kept.length < t.minAfterBlinding) {
-      groupsDropped++
-      return []
-    }
-    const keptIds = blinded.kept.map(s => s.id)
-    return [{
-      id: d.id,
-      day: d.day,
-      toSelect: Math.ceil(blinded.kept.length * config.selection.ratio),
-      stories: blinded.kept,
-      storedPicked: keptIds.filter(id => ['selected', 'published'].includes(statusById.get(id) ?? '')),
-      removed: blinded.removed,
-    }]
-  }).slice(0, t.groups).map(({ removed: r, ...g }) => {
-    removedFromUsed.push(...r)
-    return g
-  })
+    .slice(0, t.groups)
+    .map(({ removed: r, ...g }) => {
+      removedFromUsed.push(...r)
+      return g
+    })
   if (removedFromUsed.length > 0 || groupsDropped > 0) {
-    adaptations.push(`selection: ${removedFromUsed.length} stories that mention a model name (${tallyTerms(removedFromUsed)}) were removed from the ${groups.length} groups used, so no arm saw them (owner's blinding rule; pick count recomputed as ceil(n × ${config.selection.ratio})); ${groupsDropped} groups fell below ${t.minAfterBlinding} stories and were dropped`)
+    adaptations.push(
+      `selection: ${removedFromUsed.length} stories that mention a model name (${tallyTerms(removedFromUsed)}) were removed from the ${groups.length} groups used, so no arm saw them (owner's blinding rule; pick count recomputed as ceil(n × ${config.selection.ratio})); ${groupsDropped} groups fell below ${t.minAfterBlinding} stories and were dropped`,
+    )
   }
   if (groups.length < t.groups) shortfalls.push(`selection: ${groups.length} of ${t.groups} groups`)
   return groups
@@ -563,7 +611,12 @@ async function loadSelection(db: Db, anchor: Date, shortfalls: string[], adaptat
 const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
 const issueSortIndex = (slug: string) => (ISSUE_ORDER.indexOf(slug) >= 0 ? ISSUE_ORDER.indexOf(slug) : ISSUE_ORDER.length)
 
-interface IssueRef { name: string; slug: string; parentId: string | null; parent: { name: string; slug: string } | null }
+interface IssueRef {
+  name: string
+  slug: string
+  parentId: string | null
+  parent: { name: string; slug: string } | null
+}
 const issueRefSelect = { name: true, slug: true, parentId: true, parent: { select: { name: true, slug: true } } } as const
 
 function topLevelIssue(issue: IssueRef | null | undefined): { name: string; slug: string } {
@@ -584,8 +637,14 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
     const rows = await db.story.findMany({
       where: { id: { in: n.storyIds } },
       select: {
-        id: true, title: true, sourceTitle: true, summary: true, marketingBlurb: true, emotionTag: true,
-        issue: { select: issueRefSelect }, feed: { select: { issue: { select: issueRefSelect } } },
+        id: true,
+        title: true,
+        sourceTitle: true,
+        summary: true,
+        marketingBlurb: true,
+        emotionTag: true,
+        issue: { select: issueRefSelect },
+        feed: { select: { issue: { select: issueRefSelect } } },
       },
     })
     // Owner's blinding rule: stories that mention a model name leave the longlist and the intro input.
@@ -605,9 +664,9 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
     // Mirrors newsletter.ts generateContent intro input (issue order, then title).
     const selected = n.selectedStoryIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))
     const withIssue = selected.map(s => ({ s, issue: topLevelIssue(s.issue ?? s.feed.issue) }))
-    withIssue.sort((a, b) =>
-      issueSortIndex(a.issue.slug) - issueSortIndex(b.issue.slug) ||
-      (a.s.title || a.s.sourceTitle).localeCompare(b.s.title || b.s.sourceTitle))
+    withIssue.sort(
+      (a, b) => issueSortIndex(a.issue.slug) - issueSortIndex(b.issue.slug) || (a.s.title || a.s.sourceTitle).localeCompare(b.s.title || b.s.sourceTitle),
+    )
     const introIssues = [...new Map(withIssue.map(w => [w.issue.name, w.issue.slug])).entries()]
       .sort(([, a], [, b]) => issueSortIndex(a) - issueSortIndex(b))
       .map(([name]) => name)
@@ -630,7 +689,10 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
       },
     })
   }
-  if (removed.length > 0) adaptations.push(`newsletters: ${removed.length} longlist stories that mention a model name (${tallyTerms(removed)}) were removed before prompting (owner's blinding rule)`)
+  if (removed.length > 0)
+    adaptations.push(
+      `newsletters: ${removed.length} longlist stories that mention a model name (${tallyTerms(removed)}) were removed before prompting (owner's blinding rule)`,
+    )
   if (items.length < TARGETS.newsletters.count) shortfalls.push(`newsletters: ${items.length} of ${TARGETS.newsletters.count}`)
   return items
 }
@@ -640,8 +702,15 @@ async function loadPodcast(db: Db, anchor: Date, shortfalls: string[], adaptatio
   const stories = await db.story.findMany({
     where: { status: 'published', dateCrawled: { gte: new Date(anchor.getTime() - TARGETS.podcastFallbackDays * DAY_MS), lte: anchor } },
     select: {
-      id: true, title: true, sourceTitle: true, summary: true, relevanceSummary: true, relevanceReasons: true, antifactors: true,
-      relevance: true, emotionTag: true,
+      id: true,
+      title: true,
+      sourceTitle: true,
+      summary: true,
+      relevanceSummary: true,
+      relevanceReasons: true,
+      antifactors: true,
+      relevance: true,
+      emotionTag: true,
       issue: { select: { name: true, parent: { select: { name: true } } } },
       feed: { select: { title: true, displayTitle: true, issue: { select: { name: true, parent: { select: { name: true } } } } } },
     },
@@ -664,7 +733,10 @@ async function loadPodcast(db: Db, anchor: Date, shortfalls: string[], adaptatio
   })
   // Owner's blinding rule: stories that mention a model name are left out of the script input.
   const { kept, removed } = withoutModelNames(shaped)
-  if (removed.length > 0) adaptations.push(`podcast: ${removed.length} of ${shaped.length} stories that mention a model name (${tallyTerms(removed)}) were removed before prompting (owner's blinding rule)`)
+  if (removed.length > 0)
+    adaptations.push(
+      `podcast: ${removed.length} of ${shaped.length} stories that mention a model name (${tallyTerms(removed)}) were removed before prompting (owner's blinding rule)`,
+    )
   if (kept.length === 0) {
     shortfalls.push('podcast: no stories')
     return null
@@ -683,7 +755,9 @@ export async function loadFixtures(db: ReadOnlyDb, floorDay: string): Promise<Fi
     const adaptations: string[] = []
     const anchor = await loadAnchor(q)
     if (floorDay !== DEFAULT_FLOOR) {
-      adaptations.push(`crawl floor moved from ${DEFAULT_FLOOR} to ${floorDay} for pre-assess, assess, dedup and social-post samples (newest assessed crawl in this database: ${anchor.toISOString().slice(0, 10)})`)
+      adaptations.push(
+        `crawl floor moved from ${DEFAULT_FLOOR} to ${floorDay} for pre-assess, assess, dedup and social-post samples (newest assessed crawl in this database: ${anchor.toISOString().slice(0, 10)})`,
+      )
     }
     const issues = await loadIssues(q)
     const preassess = await loadPreassess(q, floor, shortfalls)

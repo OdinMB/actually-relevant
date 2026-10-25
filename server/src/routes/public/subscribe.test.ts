@@ -20,6 +20,11 @@ const mockVerifyTurnstile = vi.hoisted(() => vi.fn())
 class EmailValidationError extends Error {}
 class ConfirmationEmailError extends Error {}
 class SignupUnavailableError extends Error {}
+class ConfirmationLinkError extends Error {
+  constructor(readonly reason: 'invalid' | 'expired') {
+    super(reason)
+  }
+}
 
 vi.mock('../../services/subscribe.js', () => ({
   subscribe: (...args: any[]) => mockSubscribe(...args),
@@ -27,6 +32,7 @@ vi.mock('../../services/subscribe.js', () => ({
   EmailValidationError,
   ConfirmationEmailError,
   SignupUnavailableError,
+  ConfirmationLinkError,
 }))
 
 vi.mock('../../lib/turnstile.js', () => ({
@@ -73,9 +79,7 @@ describe('Public Subscribe API', () => {
     })
 
     it('refuses a signup with 503 SIGNUPS_PAUSED and sends nothing', async () => {
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 't' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 't' })
 
       expect(res.status).toBe(503)
       expect(res.body.code).toBe('SIGNUPS_PAUSED')
@@ -84,9 +88,7 @@ describe('Public Subscribe API', () => {
     })
 
     it('still confirms an already-sent link', async () => {
-      const res = await request(app)
-        .post('/api/subscribe/confirm')
-        .send({ token: 'abc', email: 'u@example.com' })
+      const res = await request(app).post('/api/subscribe/confirm').send({ token: 'abc', email: 'u@example.com' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -98,9 +100,7 @@ describe('Public Subscribe API', () => {
     it('tells the visitor when the human check fails, and subscribes nothing', async () => {
       mockVerifyTurnstile.mockResolvedValue('failed')
 
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 'bad' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 'bad' })
 
       expect(res.body.success).toBe(false)
       expect(res.body.message).toMatch(/human/i)
@@ -110,9 +110,7 @@ describe('Public Subscribe API', () => {
     it('refuses with "try again later" when the check cannot run', async () => {
       mockVerifyTurnstile.mockResolvedValue('unavailable')
 
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 't' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 't' })
 
       expect(res.body.success).toBe(false)
       expect(res.body.message).toMatch(/try again later/i)
@@ -120,20 +118,14 @@ describe('Public Subscribe API', () => {
     })
 
     it('passes the token and the visitor IP to the check', async () => {
-      await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 'tok' })
+      await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token', turnstileToken: 'tok' })
 
       expect(mockVerifyTurnstile).toHaveBeenCalledWith('tok', expect.any(String))
     })
 
     it('runs only after the honeypot and the form token pass', async () => {
-      await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'bot@example.com', website: 'x', formToken: 'valid-token', turnstileToken: 't' })
-      await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'bot@example.com', formToken: 'wrong', turnstileToken: 't' })
+      await request(app).post('/api/subscribe').send({ email: 'bot@example.com', website: 'x', formToken: 'valid-token', turnstileToken: 't' })
+      await request(app).post('/api/subscribe').send({ email: 'bot@example.com', formToken: 'wrong', turnstileToken: 't' })
 
       expect(mockVerifyTurnstile).not.toHaveBeenCalled()
     })
@@ -149,9 +141,7 @@ describe('Public Subscribe API', () => {
     })
 
     it('is reachable cross-origin (open CORS so the public form can fetch it anywhere)', async () => {
-      const res = await request(app)
-        .get('/api/subscribe/token')
-        .set('Origin', 'https://not-an-allowlisted-origin.example')
+      const res = await request(app).get('/api/subscribe/token').set('Origin', 'https://not-an-allowlisted-origin.example')
 
       expect(res.status).toBe(200)
       expect(res.headers['access-control-allow-origin']).toBe('*')
@@ -160,9 +150,7 @@ describe('Public Subscribe API', () => {
 
   describe('POST /api/subscribe', () => {
     it('subscribes with a valid form token', async () => {
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -170,9 +158,7 @@ describe('Public Subscribe API', () => {
     })
 
     it('silently rejects honeypot-filled submissions', async () => {
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'bot@example.com', website: 'http://spam.com', formToken: 'valid-token' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'bot@example.com', website: 'http://spam.com', formToken: 'valid-token' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -188,9 +174,7 @@ describe('Public Subscribe API', () => {
     })
 
     it('silently rejects when the form token is invalid', async () => {
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'bot@example.com', formToken: 'wrong' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'bot@example.com', formToken: 'wrong' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -200,9 +184,7 @@ describe('Public Subscribe API', () => {
     it('returns success:false with the message on EmailValidationError', async () => {
       mockSubscribe.mockRejectedValue(new EmailValidationError('Please enter a valid email address.'))
 
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(false)
@@ -210,13 +192,9 @@ describe('Public Subscribe API', () => {
     })
 
     it('reports a send failure honestly instead of a false "check your email"', async () => {
-      mockSubscribe.mockRejectedValue(
-        new ConfirmationEmailError("We couldn't send the confirmation email right now. Please try again in a few minutes."),
-      )
+      mockSubscribe.mockRejectedValue(new ConfirmationEmailError("We couldn't send the confirmation email right now. Please try again in a few minutes."))
 
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(false)
@@ -226,18 +204,14 @@ describe('Public Subscribe API', () => {
     it('returns success:false with the message at the global cap', async () => {
       mockSubscribe.mockRejectedValue(new SignupUnavailableError('Signups are unavailable right now. Please try again later.'))
 
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token' })
 
       expect(res.body.success).toBe(false)
       expect(res.body.message).toMatch(/try again later/i)
     })
 
     it('passes only the trimmed email to the service, never a first name', async () => {
-      await request(app)
-        .post('/api/subscribe')
-        .send({ email: ' user@example.com ', firstName: 'Buy pills', formToken: 'valid-token' })
+      await request(app).post('/api/subscribe').send({ email: ' user@example.com ', firstName: 'Buy pills', formToken: 'valid-token' })
 
       expect(mockSubscribe).toHaveBeenCalledWith({ email: 'user@example.com' })
     })
@@ -245,18 +219,14 @@ describe('Public Subscribe API', () => {
     it('returns success:false on an unexpected error', async () => {
       mockSubscribe.mockRejectedValue(new Error('db down'))
 
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'user@example.com', formToken: 'valid-token' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(false)
     })
 
     it('returns 400 for an invalid email format', async () => {
-      const res = await request(app)
-        .post('/api/subscribe')
-        .send({ email: 'not-an-email', formToken: 'valid-token' })
+      const res = await request(app).post('/api/subscribe').send({ email: 'not-an-email', formToken: 'valid-token' })
 
       expect(res.status).toBe(400)
     })
@@ -284,9 +254,7 @@ describe('Public Subscribe API', () => {
 
   describe('POST /api/subscribe/confirm', () => {
     it('confirms the subscription', async () => {
-      const res = await request(app)
-        .post('/api/subscribe/confirm')
-        .send({ token: 'abc', email: 'u@example.com' })
+      const res = await request(app).post('/api/subscribe/confirm').send({ token: 'abc', email: 'u@example.com' })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -294,21 +262,25 @@ describe('Public Subscribe API', () => {
     })
 
     it('reports expired links', async () => {
-      mockConfirm.mockRejectedValue(new Error('Confirmation link has expired'))
+      mockConfirm.mockRejectedValue(new ConfirmationLinkError('expired'))
 
-      const res = await request(app)
-        .post('/api/subscribe/confirm')
-        .send({ token: 'abc', email: 'u@example.com' })
+      const res = await request(app).post('/api/subscribe/confirm').send({ token: 'abc', email: 'u@example.com' })
 
       expect(res.body).toEqual({ success: false, reason: 'expired' })
     })
 
     it('reports invalid links', async () => {
-      mockConfirm.mockRejectedValue(new Error('Invalid confirmation link'))
+      mockConfirm.mockRejectedValue(new ConfirmationLinkError('invalid'))
 
-      const res = await request(app)
-        .post('/api/subscribe/confirm')
-        .send({ token: 'abc', email: 'u@example.com' })
+      const res = await request(app).post('/api/subscribe/confirm').send({ token: 'abc', email: 'u@example.com' })
+
+      expect(res.body).toEqual({ success: false, reason: 'invalid' })
+    })
+
+    it('reports any other failure as an invalid link', async () => {
+      mockConfirm.mockRejectedValue(new Error('database down'))
+
+      const res = await request(app).post('/api/subscribe/confirm').send({ token: 'abc', email: 'u@example.com' })
 
       expect(res.body).toEqual({ success: false, reason: 'invalid' })
     })

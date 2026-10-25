@@ -14,7 +14,9 @@ describe('jobEnableRefusal', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('refuses either podcast job while the podcast configuration is incomplete, naming what is missing', () => {
-    mockGuards.assertPodcastRunnable.mockImplementation(() => { throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY, BUNNY_STORAGE_ZONE') })
+    mockGuards.assertPodcastRunnable.mockImplementation(() => {
+      throw new PodcastBlockedError('podcast configuration missing: ELEVENLABS_API_KEY, BUNNY_STORAGE_ZONE')
+    })
     for (const job of [GENERATE_PODCAST_JOB, PUBLISH_PODCAST_JOB]) {
       expect(jobEnableRefusal(job)).toContain('ELEVENLABS_API_KEY, BUNNY_STORAGE_ZONE')
     }
@@ -26,13 +28,17 @@ describe('jobEnableRefusal', () => {
   })
 
   it('never checks the podcast configuration for another job', () => {
-    mockGuards.assertPodcastRunnable.mockImplementation(() => { throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE') })
+    mockGuards.assertPodcastRunnable.mockImplementation(() => {
+      throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE')
+    })
     expect(jobEnableRefusal('crawl_feeds')).toBeNull()
     expect(mockGuards.assertPodcastRunnable).not.toHaveBeenCalled()
   })
 
   it('lets an unexpected error through rather than reading it as a missing setting', () => {
-    mockGuards.assertPodcastRunnable.mockImplementation(() => { throw new Error('boom') })
+    mockGuards.assertPodcastRunnable.mockImplementation(() => {
+      throw new Error('boom')
+    })
     expect(() => jobEnableRefusal(PUBLISH_PODCAST_JOB)).toThrow('boom')
   })
 })

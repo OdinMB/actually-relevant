@@ -22,7 +22,23 @@ interface FeedEditPanelProps {
   onClose: () => void
 }
 
-function buildFormState(feed: Pick<Feed, 'title' | 'rssUrl' | 'url' | 'displayTitle' | 'issueId' | 'language' | 'region' | 'crawlIntervalHours' | 'htmlSelector' | 'paywallDetection' | 'paywallTitleMarker' | 'active'>) {
+function buildFormState(
+  feed: Pick<
+    Feed,
+    | 'title'
+    | 'rssUrl'
+    | 'url'
+    | 'displayTitle'
+    | 'issueId'
+    | 'language'
+    | 'region'
+    | 'crawlIntervalHours'
+    | 'htmlSelector'
+    | 'paywallDetection'
+    | 'paywallTitleMarker'
+    | 'active'
+  >,
+) {
   return {
     title: feed.title,
     rssUrl: feed.rssUrl,
@@ -84,10 +100,7 @@ function ExtractionMethodBreakdown({ methods }: { methods: Record<string, number
   return (
     <div className="flex flex-wrap gap-1">
       {entries.map(([method, count]) => (
-        <span
-          key={method}
-          className="inline-flex items-center rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-medium text-neutral-700"
-        >
+        <span key={method} className="inline-flex items-center rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-medium text-neutral-700">
           {method} {Math.round((count / total) * 100)}%
         </span>
       ))}
@@ -110,7 +123,9 @@ function QualityCard({ feedId }: { feedId: string }) {
           {m.archivedCount > 0 && ` (${m.archivedCount.toLocaleString('en-US')} deleted by cleanup)`}
         </span>
         <span>Publish Rate:</span>
-        <span className="font-medium">{Math.round(m.publishRate * 100)}% ({m.publishedCount} of {m.totalCrawled})</span>
+        <span className="font-medium">
+          {Math.round(m.publishRate * 100)}% ({m.publishedCount} of {m.totalCrawled})
+        </span>
         <span>Avg Screening:</span>
         <span className="font-medium">{m.avgRelevancePre?.toFixed(1) ?? '--'}</span>
         <span>Avg Relevance:</span>
@@ -132,7 +147,7 @@ function FeedEditForm({ feedId, issues, onClose }: { feedId: string; issues: Iss
     entityId: feedId,
     initialState,
     mutation: updateFeed,
-    toPayload: (f) => ({
+    toPayload: f => ({
       title: f.title,
       rssUrl: f.rssUrl,
       url: f.url || null,
@@ -160,16 +175,27 @@ function FeedEditForm({ feedId, issues, onClose }: { feedId: string; issues: Iss
             <div>
               <p className="font-medium">Last crawl error</p>
               <p>{feed!.lastCrawlError}</p>
-              {feed!.lastCrawlErrorAt && (
-                <p className="text-xs text-amber-600 mt-1">{formatDateWithTime(feed!.lastCrawlErrorAt)}</p>
-              )}
+              {feed!.lastCrawlErrorAt && <p className="text-xs text-amber-600 mt-1">{formatDateWithTime(feed!.lastCrawlErrorAt)}</p>}
             </div>
           </div>
         )}
         <Input id="feed-title" label="Title" value={form.title} onChange={e => set('title', e.target.value)} required />
-        <Input id="feed-display-title" label="Display Title (optional)" value={form.displayTitle} onChange={e => set('displayTitle', e.target.value)} placeholder="Public-facing name" />
+        <Input
+          id="feed-display-title"
+          label="Display Title (optional)"
+          value={form.displayTitle}
+          onChange={e => set('displayTitle', e.target.value)}
+          placeholder="Public-facing name"
+        />
         <Input id="feed-rss-url" label="RSS URL" type="url" value={form.rssUrl} onChange={e => set('rssUrl', e.target.value)} required />
-        <Input id="feed-url" label="Homepage URL (optional)" type="url" value={form.url} onChange={e => set('url', e.target.value)} placeholder="e.g. https://reuters.com" />
+        <Input
+          id="feed-url"
+          label="Homepage URL (optional)"
+          type="url"
+          value={form.url}
+          onChange={e => set('url', e.target.value)}
+          placeholder="e.g. https://reuters.com"
+        />
         <Select
           id="feed-issue"
           label="Issue"
@@ -188,9 +214,22 @@ function FeedEditForm({ feedId, issues, onClose }: { feedId: string; issues: Iss
         />
         <div className="grid grid-cols-2 gap-3">
           <Input id="feed-lang" label="Language" value={form.language} onChange={e => set('language', e.target.value)} />
-          <Input id="feed-interval" label="Interval (hours)" type="number" min="1" value={form.crawlIntervalHours} onChange={e => set('crawlIntervalHours', e.target.value)} />
+          <Input
+            id="feed-interval"
+            label="Interval (hours)"
+            type="number"
+            min="1"
+            value={form.crawlIntervalHours}
+            onChange={e => set('crawlIntervalHours', e.target.value)}
+          />
         </div>
-        <Input id="feed-selector" label="HTML Selector (optional)" value={form.htmlSelector} onChange={e => set('htmlSelector', e.target.value)} placeholder="e.g. article .content" />
+        <Input
+          id="feed-selector"
+          label="HTML Selector (optional)"
+          value={form.htmlSelector}
+          onChange={e => set('htmlSelector', e.target.value)}
+          placeholder="e.g. article .content"
+        />
         <FeedPaywallFields
           detection={form.paywallDetection}
           titleMarker={form.paywallTitleMarker}
@@ -218,13 +257,7 @@ export function FeedEditPanel({ feedId, issues, onClose }: FeedEditPanelProps) {
   const { data: feed, isLoading, error } = useFeed(feedId || '')
 
   return (
-    <EditPanel
-      open={!!feedId}
-      onClose={onClose}
-      title={feed?.title || 'Feed'}
-      loading={isLoading}
-      error={!!error}
-    >
+    <EditPanel open={!!feedId} onClose={onClose} title={feed?.title || 'Feed'} loading={isLoading} error={!!error}>
       {feed && <FeedEditForm feedId={feedId!} issues={issues} onClose={onClose} />}
     </EditPanel>
   )

@@ -112,7 +112,7 @@ export function runTurnstileChallenge(container: HTMLElement, siteKey: string): 
   const timer = setTimeout(() => fail('Turnstile challenge timed out'), TURNSTILE_TIMEOUT_MS)
 
   loadTurnstile().then(
-    (loaded) => {
+    loaded => {
       if (settled) return
       api = loaded
       try {
@@ -123,12 +123,13 @@ export function runTurnstileChallenge(container: HTMLElement, siteKey: string): 
           retry: 'never',
           size: 'flexible',
           theme: 'light',
-          callback: (value) => finish({ token: value }),
+          callback: value => finish({ token: value }),
           'error-callback': () => fail('Turnstile challenge failed'),
           'timeout-callback': () => fail('Turnstile challenge timed out'),
           'unsupported-callback': () => fail('Turnstile is not supported in this browser'),
         })
-        if (settled) loaded.remove(widgetId) // a callback fired during render
+        if (settled)
+          loaded.remove(widgetId) // a callback fired during render
         else loaded.execute(container)
       } catch (err) {
         fail(err instanceof Error ? err.message : 'Turnstile could not render')

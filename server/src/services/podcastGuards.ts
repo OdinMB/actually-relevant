@@ -9,6 +9,7 @@ import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { ElevenLabsQuotaError, getRemainingCharacters, isElevenLabsConfigured } from '../lib/elevenlabs.js'
 import { PODCAST_EPISODE_AI_LINE_EDITED_CONFIRMED, PODCAST_STANDALONE_COPY_CONFIRMED } from '../lib/aiLabelCopy.js'
+import { ConflictError } from '../utils/errors.js'
 
 /** A failure that retrying will not fix: the episode is blocked until an admin Resume. */
 export class PodcastBlockedError extends Error {
@@ -26,8 +27,8 @@ export class PodcastStoppedError extends Error {
   }
 }
 
-/** An admin change the episode's state does not allow (in progress, or published). Maps to 409. */
-export class PodcastRefusedError extends Error {
+/** An admin change the episode's state does not allow (in progress, or published). Answered 409 by the global error handler. */
+export class PodcastRefusedError extends ConflictError {
   constructor(message: string) {
     super(message)
     this.name = 'PodcastRefusedError'
@@ -92,7 +93,9 @@ export async function reserveTtsChars(podcastId: string, chars: number, now: Dat
     const { _sum } = await tx.podcastTtsUsage.aggregate({ _sum: { chars: true }, where: { createdAt: { gte: utcMonthStart(now) } } })
     const used = _sum.chars ?? 0
     if (used + chars > config.podcast.monthlyTtsCharCap) {
-      throw new PodcastBlockedError(`monthly TTS cap reached: ${used} of ${config.podcast.monthlyTtsCharCap} characters used this month, this call needs ${chars}`)
+      throw new PodcastBlockedError(
+        `monthly TTS cap reached: ${used} of ${config.podcast.monthlyTtsCharCap} characters used this month, this call needs ${chars}`,
+      )
     }
     await tx.podcastTtsUsage.create({ data: { podcastId, chars } })
   })

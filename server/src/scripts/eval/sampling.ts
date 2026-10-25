@@ -8,7 +8,9 @@ export const EVAL_SALT = 'gpt6-eval'
 
 /** Same value as Postgres `md5(id || 'gpt6-eval')`, so JS and SQL orderings agree. */
 export function evalHash(id: string): string {
-  return createHash('md5').update(id + EVAL_SALT).digest('hex')
+  return createHash('md5')
+    .update(id + EVAL_SALT)
+    .digest('hex')
 }
 
 export function byEvalHash<T>(items: T[], key: (t: T) => string): T[] {
@@ -77,7 +79,10 @@ export function stratifiedPick<T>(
 export type Half = 'calibration' | 'holdout'
 
 const SPLIT_SALT = 'recalibration-split'
-const splitHash = (key: string) => createHash('md5').update(key + SPLIT_SALT).digest('hex')
+const splitHash = (key: string) =>
+  createHash('md5')
+    .update(key + SPLIT_SALT)
+    .digest('hex')
 
 /**
  * Deterministic calibration/holdout split, so prompt tuning never sees the

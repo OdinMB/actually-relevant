@@ -25,10 +25,7 @@ const { default: app } = await import('../app.js')
 
 describe('GET /health/client-ip', () => {
   it('resolves the visitor address with the configured hop count and matches Cloudflare', async () => {
-    const res = await request(app)
-      .get('/health/client-ip')
-      .set('X-Forwarded-For', '198.51.100.4, 104.16.0.1')
-      .set('CF-Connecting-IP', '198.51.100.4')
+    const res = await request(app).get('/health/client-ip').set('X-Forwarded-For', '198.51.100.4, 104.16.0.1').set('CF-Connecting-IP', '198.51.100.4')
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({
@@ -51,10 +48,7 @@ describe('GET /health/client-ip', () => {
   })
 
   it('reports a mismatch when the resolved address is not the Cloudflare one', async () => {
-    const res = await request(app)
-      .get('/health/client-ip')
-      .set('X-Forwarded-For', '198.51.100.4, 104.16.0.1')
-      .set('CF-Connecting-IP', '192.0.2.9')
+    const res = await request(app).get('/health/client-ip').set('X-Forwarded-For', '198.51.100.4, 104.16.0.1').set('CF-Connecting-IP', '192.0.2.9')
 
     expect(res.body.matchesCloudflare).toBe(false)
   })

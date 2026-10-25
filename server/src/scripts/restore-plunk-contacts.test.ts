@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import {
-  parseRestoreArgs,
-  contactsFromBackup,
-  findMissingContacts,
-  restoreContacts,
-} from './restore-plunk-contacts.js'
+import { parseRestoreArgs, contactsFromBackup, findMissingContacts, restoreContacts } from './restore-plunk-contacts.js'
 
 describe('parseRestoreArgs', () => {
   it('defaults to preview and requires --file', () => {
@@ -52,7 +47,7 @@ describe('findMissingContacts', () => {
 
   it('lists each email once and skips entries without an email', () => {
     const backup = [{ email: 'a@x.org', subscribed: true }, { email: 'A@x.org', subscribed: false }, { email: '' }, { id: 'z' }]
-    expect(findMissingContacts(backup, []).map((m) => m.email)).toEqual(['a@x.org'])
+    expect(findMissingContacts(backup, []).map(m => m.email)).toEqual(['a@x.org'])
   })
 
   it('never restores an unsubscribed contact as subscribed, whatever the flag spelling', () => {
@@ -63,7 +58,7 @@ describe('findMissingContacts', () => {
       { email: 'd@x.org', subscribed: null },
       { email: 'e@x.org', subscribed: 'true' },
     ]
-    expect(findMissingContacts(backup, []).map((m) => m.subscribed)).toEqual([false, false, false, false, true])
+    expect(findMissingContacts(backup, []).map(m => m.subscribed)).toEqual([false, false, false, false, true])
   })
 
   it('restores a missing subscribed flag as unsubscribed and leaves out non-primitive data', () => {

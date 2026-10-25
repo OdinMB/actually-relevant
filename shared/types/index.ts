@@ -8,6 +8,15 @@ export type StoryStatus =
   | 'rejected'
   | 'trashed'
 
+// Why a story is rejected; null on every other status
+export type RejectionReason =
+  | 'paywall'
+  | 'assess_threshold'
+  | 'select_threshold'
+  | 'selection'
+  | 'duplicate'
+  | 'editor'
+
 export type EmotionTag =
   | 'uplifting'
   | 'frustrating'
@@ -65,6 +74,7 @@ export interface Story {
   feedId: string
   issueId: string | null
   status: StoryStatus
+  rejectionReason: RejectionReason | null
   dateCrawled: string
   datePublished: string | null
   relevancePre: number | null
@@ -192,8 +202,43 @@ export interface Newsletter {
   storyIds: string[]
   selectedStoryIds: string[]
   status: 'draft' | 'published'
+  /** URL segment of the public web edition (/newsletter/<slug>), assigned on HTML build or first publish */
+  slug: string | null
+  /** First publication; the issue is public on the web while `status` is published */
+  publishedAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+/** One issue in the public newsletter archive (`GET /api/newsletters`). */
+export interface PublicNewsletterIssueSummary {
+  slug: string
+  title: string
+  publishedAt: string
+  storyCount: number
+}
+
+/** One published issue's web edition (`GET /api/newsletters/:slug`). */
+export interface PublicNewsletterIssue {
+  slug: string
+  title: string
+  publishedAt: string
+  /** The issue's AI label, the same wording as at the top of the email */
+  aiLabel: { lead: string; text: string }
+  /** The issue's Markdown, without the email template's machine markers */
+  content: string
+  stories: {
+    /** The `## ` heading this story has in `content` */
+    headline: string
+    title: string | null
+    titleLabel: string | null
+    sourceTitle: string
+    sourceUrl: string
+    publisher: string
+    /** Null when the story is no longer published */
+    slug: string | null
+  }[]
+  aiGenerated: { fields: string[]; digitalSourceType: string }
 }
 
 export type NewsletterSendStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed'

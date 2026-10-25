@@ -134,12 +134,7 @@ function titleMarkerMatches(marker: string | null, title: string | null): boolea
  * @param extractedText the text the winning extraction tier produced ('' when every tier failed)
  * @param title the winning tier's title, tested by the title marker when the page has no og:title
  */
-export function classifyAccess(input: {
-  html: string | null
-  extractedText: string
-  title: string | null
-  policy: PaywallPolicy
-}): AccessClassification {
+export function classifyAccess(input: { html: string | null; extractedText: string; title: string | null; policy: PaywallPolicy }): AccessClassification {
   const { html, extractedText, title, policy } = input
   const markup = html ? readMarkup(html) : null
 

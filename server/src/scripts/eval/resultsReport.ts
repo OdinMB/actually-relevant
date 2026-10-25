@@ -50,7 +50,13 @@ function lunaTier(tier: 'small' | 'medium', ids: CallSiteId[], byId: Map<CallSit
   const sites = ids.map(id => byId.get(id)!)
   const failing = sites.filter(s => s.decision.verdict.kind !== 'winner')
   if (failing.length > 0) {
-    return { tier, model: null, effort: null, summary: `no automated recommendation: ${failing.map(s => s.id).join(', ')} have no passing gpt-6-luna arm`, notes: [] }
+    return {
+      tier,
+      model: null,
+      effort: null,
+      summary: `no automated recommendation: ${failing.map(s => s.id).join(', ')} have no passing gpt-6-luna arm`,
+      notes: [],
+    }
   }
   // Lowest effort every call site passes at, assuming a site that passes at a
   // lower effort also passes at a higher one (flagged where not tested).
@@ -58,7 +64,10 @@ function lunaTier(tier: 'small' | 'medium', ids: CallSiteId[], byId: Map<CallSit
   const effort = winners.map(effortOf).reduce((a, b) => (REASONING_EFFORTS.indexOf(b) > REASONING_EFFORTS.indexOf(a) ? b : a))
   const notes = sites
     .filter(s => !s.decision.passing.includes(`gpt-6-luna@${effort}`))
-    .map(s => `${s.id} passed at ${s.decision.verdict.kind === 'winner' ? s.decision.verdict.arm : '?'} and was not tested at ${effort}; this assumes more effort does not hurt it`)
+    .map(
+      s =>
+        `${s.id} passed at ${s.decision.verdict.kind === 'winner' ? s.decision.verdict.arm : '?'} and was not tested at ${effort}; this assumes more effort does not hurt it`,
+    )
   return { tier, model: 'gpt-6-luna', effort, summary: `gpt-6-luna at ${effort} (passes ${ids.join(', ')})`, notes }
 }
 
@@ -67,9 +76,17 @@ export function recommendTierSettings(sites: CallSiteResult[]): TierRecommendati
   const recs = LUNA_TIERS.map(t => lunaTier(t.tier, t.sites, byId))
   const large = LARGE_SITES.map(id => byId.get(id))
   const failing = LARGE_SITES.filter((_, i) => !large[i]?.decision.passing.includes(SOL))
-  recs.push(failing.length === 0
-    ? { tier: 'large', model: 'gpt-6-sol', effort: 'medium', summary: 'gpt-6-sol at medium: automated gate passed; switch only after the owner rates the large-tier sets', notes: [] }
-    : { tier: 'large', model: 'gpt-5.2', effort: 'medium', summary: `stay on gpt-5.2: Sol did not pass (or did not run) ${failing.join(', ')}`, notes: [] })
+  recs.push(
+    failing.length === 0
+      ? {
+          tier: 'large',
+          model: 'gpt-6-sol',
+          effort: 'medium',
+          summary: 'gpt-6-sol at medium: automated gate passed; switch only after the owner rates the large-tier sets',
+          notes: [],
+        }
+      : { tier: 'large', model: 'gpt-5.2', effort: 'medium', summary: `stay on gpt-5.2: Sol did not pass (or did not run) ${failing.join(', ')}`, notes: [] },
+  )
   return recs
 }
 
@@ -112,11 +129,14 @@ function armWins(site: CallSiteResult, a: string, b: string): string[] {
   const sa = site.stats.find(s => s.arm === a && s.calls > 0)
   const sb = site.stats.find(s => s.arm === b && s.calls > 0)
   const ms = (v: number) => `${v} ms`
-  const fromStats = !sa || !sb ? [] : [
-    { label: 'median latency', x: sa.latencyP50, y: sb.latencyP50, fmt: ms },
-    { label: '95th-percentile latency', x: sa.latencyP95, y: sb.latencyP95, fmt: ms },
-    { label: 'cost per call', x: sa.meanCostUsd, y: sb.meanCostUsd, fmt: (v: number) => `$${v.toFixed(4)}` },
-  ].flatMap(c => (c.x != null && c.y != null && c.x < c.y ? [`${site.id}: ${c.label} (${model(a)} ${c.fmt(c.x)} vs ${model(b)} ${c.fmt(c.y)})`] : []))
+  const fromStats =
+    !sa || !sb
+      ? []
+      : [
+          { label: 'median latency', x: sa.latencyP50, y: sb.latencyP50, fmt: ms },
+          { label: '95th-percentile latency', x: sa.latencyP95, y: sb.latencyP95, fmt: ms },
+          { label: 'cost per call', x: sa.meanCostUsd, y: sb.meanCostUsd, fmt: (v: number) => `$${v.toFixed(4)}` },
+        ].flatMap(c => (c.x != null && c.y != null && c.x < c.y ? [`${site.id}: ${c.label} (${model(a)} ${c.fmt(c.x)} vs ${model(b)} ${c.fmt(c.y)})`] : []))
   return [...fromMetrics, ...fromStats]
 }
 
@@ -148,20 +168,24 @@ export interface ReportInput {
 }
 
 function exclusionLines(excluded: ExcludedDraft[]): string[] {
-  const list = (where: ExcludedDraft['where']) => excluded
-    .filter(e => e.where === where)
-    .map(e => `${e.set}/${e.key} (${e.terms.join(', ')})`)
-    .join('; ')
+  const list = (where: ExcludedDraft['where']) =>
+    excluded
+      .filter(e => e.where === where)
+      .map(e => `${e.set}/${e.key} (${e.terms.join(', ')})`)
+      .join('; ')
   const story = excluded.filter(e => e.where === 'context').length
   const option = excluded.filter(e => e.where === 'option').length
   return [
-    ...(story > 0 ? ['', `${story} drafted items were left out because the story itself mentions a model name (owner's blinding rule): ${list('context')}.`] : []),
+    ...(story > 0
+      ? ['', `${story} drafted items were left out because the story itself mentions a model name (owner's blinding rule): ${list('context')}.`]
+      : []),
     ...(option > 0 ? ['', `${option} drafted items were left out because a model output named a model: ${list('option')}.`] : []),
   ]
 }
 
 function statsTable(stats: ArmStats[], site: CallSiteResult): string[] {
-  const head = '| Arm | Calls | ok | parse fail | empty/declined | truncated | error | skipped | p50 ms | p95 ms | in tok | cached | out tok | reasoning | $/call | $/month |'
+  const head =
+    '| Arm | Calls | ok | parse fail | empty/declined | truncated | error | skipped | p50 ms | p95 ms | in tok | cached | out tok | reasoning | $/call | $/month |'
   const rows = stats.map(s => {
     const o = s.outcomes
     const u = s.meanUsage
@@ -176,11 +200,12 @@ function statsTable(stats: ArmStats[], site: CallSiteResult): string[] {
 function siteSection(site: CallSiteResult): string[] {
   const arms = [site.baseline, ...site.candidates]
   const verdict = site.decision.verdict
-  const verdictLines = verdict.kind === 'winner'
-    ? [`**Automated verdict:** ${verdict.arm} passes.`, ...verdict.evidence.map(e => `- ${e}`)]
-    : verdict.kind === 'none'
-      ? ['**Automated verdict:** no automated winner.', ...verdict.reasons.map(r => `- ${r}`)]
-      : [`**Automated verdict:** ${verdict.text}`]
+  const verdictLines =
+    verdict.kind === 'winner'
+      ? [`**Automated verdict:** ${verdict.arm} passes.`, ...verdict.evidence.map(e => `- ${e}`)]
+      : verdict.kind === 'none'
+        ? ['**Automated verdict:** no automated winner.', ...verdict.reasons.map(r => `- ${r}`)]
+        : [`**Automated verdict:** ${verdict.text}`]
   return [
     `### ${site.title}`,
     '',
@@ -226,10 +251,14 @@ function largeTierSection(sites: CallSiteResult[]): string[] {
   if (large.length === 0) return ['The large-tier suite did not run.']
   const wins = large.flatMap(baselineWins)
   const solWins = large.flatMap(candidateWins)
-  const cost = (arm: string) => large.reduce((acc, s) => {
-    const m = monthlyCost(s, arm)
-    return m ? { low: acc.low + m.low, high: acc.high + m.high } : acc
-  }, { low: 0, high: 0 })
+  const cost = (arm: string) =>
+    large.reduce(
+      (acc, s) => {
+        const m = monthlyCost(s, arm)
+        return m ? { low: acc.low + m.low, high: acc.high + m.high } : acc
+      },
+      { low: 0, high: 0 },
+    )
   return [
     wins.length === 0
       ? '**Not on any automated measure.** On every compliance, failure, rule-violation, latency and cost measure, gpt-6-sol is equal to or better than the gpt-5.2 rerun.'
@@ -250,15 +279,19 @@ export function renderResults(input: ReportInput): string {
   const sites = input.suites.flatMap(s => s.result?.callSites ?? [])
   const recs = recommendTierSettings(sites)
   const awaiting = sites.filter(s => s.ratingSet)
-  const prices = Object.entries(MODELS).map(([id, p]) =>
-    `| ${id} | ${p.input} | ${p.cached} | ${p.output} | ${p.cacheWrite > 1 ? `${p.cacheWrite}× input` : '–'} | ${p.source}${p.verified ? '' : ' (**unverified**)'} |`)
+  const prices = Object.entries(MODELS).map(
+    ([id, p]) =>
+      `| ${id} | ${p.input} | ${p.cached} | ${p.output} | ${p.cacheWrite > 1 ? `${p.cacheWrite}× input` : '–'} | ${p.source}${p.verified ? '' : ' (**unverified**)'} |`,
+  )
   return [
     '# GPT-6 model eval: actually-relevant',
     '',
     `Generated ${input.generatedAt}. Database: ${input.fixtures.dbClass}, read-only (${input.fixtures.readOnlyMode} mode). ` +
       `Fixtures sampled ${input.fixtures.createdAt}, anchored on the newest assessed crawl date ${input.fixtures.anchor.slice(0, 10)}, ` +
       `with stored-data samples crawled on or after ${input.fixtures.floor}.`,
-    ...(input.limit != null ? ['', `**Partial run:** at most ${input.limit} fixture items per suite (\`--limit\`). Verdicts from a partial run are not evidence.`] : []),
+    ...(input.limit != null
+      ? ['', `**Partial run:** at most ${input.limit} fixture items per suite (\`--limit\`). Verdicts from a partial run are not evidence.`]
+      : []),
     '',
     '## Recommendation for Phase 2',
     '',
@@ -276,11 +309,16 @@ export function renderResults(input: ReportInput): string {
     '',
     ...costSection(sites),
     '',
-    '## Awaiting the owner\'s rating',
+    "## Awaiting the owner's rating",
     '',
     ...(awaiting.length > 0 ? awaiting.map(s => `- ${s.title}: set \`actually-relevant-${s.ratingSet}\``) : ['- none (the taste suites did not run)']),
     ...input.rating.sets.map(s => `  - \`${s.id}\`: ${s.items} items`),
-    ...(input.rating.written ? [] : ['', '`rating-sets.json` already existed in this folder, so this run left it and `rating-key.json` as they were; the sets listed are what it would have written.']),
+    ...(input.rating.written
+      ? []
+      : [
+          '',
+          '`rating-sets.json` already existed in this folder, so this run left it and `rating-key.json` as they were; the sets listed are what it would have written.',
+        ]),
     ...exclusionLines(input.rating.excluded),
     ...(input.rating.validationErrors.length > 0 ? ['', '**Deliverable validation failed:**', ...input.rating.validationErrors.map(e => `- ${e}`)] : []),
     '',
@@ -297,7 +335,9 @@ export function renderResults(input: ReportInput): string {
     '',
     '## Fixtures',
     '',
-    ...(input.fixtures.shortfalls.length > 0 ? ['Shortfalls against the targets (reported, not padded):', ...input.fixtures.shortfalls.map(s => `- ${s}`)] : ['All fixture targets met.']),
+    ...(input.fixtures.shortfalls.length > 0
+      ? ['Shortfalls against the targets (reported, not padded):', ...input.fixtures.shortfalls.map(s => `- ${s}`)]
+      : ['All fixture targets met.']),
     '',
     ...(input.fixtures.adaptations.length > 0
       ? ['Sample adaptations for this database and for blinding:', ...input.fixtures.adaptations.map(s => `- ${s}`), '']

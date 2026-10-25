@@ -12,6 +12,8 @@ const log = createLogger('scheduler')
 const tasksByName = new Map<string, cron.ScheduledTask>()
 /** Fast path of the overlap guard within this process; the job lease (jobLease.ts) covers other processes. */
 const runningJobs = new Set<string>()
+/** The promise of each run under way in this process, which graceful shutdown awaits (waitForRunningJobs). */
+const runningJobRuns = new Map<string, Promise<void>>()
 /** Bumped by stopScheduler, so a boot catch-up chain started before it ends at its next step. */
 let catchUpGeneration = 0
 
@@ -107,18 +109,21 @@ function estimateCronIntervalMs(cronExpr: string): number | null {
   const parts = cronExpr.split(' ')
   if (parts.length < 5) return null
 
-  const [, hourPart, domPart, , dowPart] = parts
+  const [, hourPart = '', domPart = '', , dowPart = ''] = parts
 
   // Base interval from hour field
   let baseHours: number | null = null
 
   // "*/N" pattern → every N hours
   const everyMatch = hourPart.match(/^\*\/(\d+)$/)
-  if (everyMatch) baseHours = parseInt(everyMatch[1])
+  if (everyMatch) baseHours = parseInt(everyMatch[1]!)
 
   // "H1,H2,H3" pattern → interval between entries
   if (baseHours === null) {
-    const hours = hourPart.split(',').map(Number).filter(n => !isNaN(n))
+    const hours = hourPart
+      .split(',')
+      .map(Number)
+      .filter(n => !isNaN(n))
     if (hours.length >= 2) {
       baseHours = 24 / hours.length
     }
@@ -172,8 +177,8 @@ function countDaysInDowExpr(expr: string): number | null {
     // Range: "1-5"
     const rangeMatch = part.match(/^(\d+)-(\d+)$/)
     if (rangeMatch) {
-      const start = parseInt(rangeMatch[1])
-      const end = parseInt(rangeMatch[2])
+      const start = parseInt(rangeMatch[1]!)
+      const end = parseInt(rangeMatch[2]!)
       if (start <= end) {
         for (let d = start; d <= end; d++) days.add(d % 7)
       } else {
@@ -208,7 +213,16 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
   }
 
   runningJobs.add(jobName)
+  const run = executeJob(jobName, handler).finally(() => {
+    runningJobs.delete(jobName)
+    runningJobRuns.delete(jobName)
+  })
+  runningJobRuns.set(jobName, run)
+  return run
+}
 
+/** The body of runJob: claim, run under the heartbeat, record. Never rejects. */
+async function executeJob(jobName: string, handler: () => Promise<void>): Promise<void> {
   try {
     if ((await claimJobRun(jobName)) === 'held') {
       log.info({ jobName }, 'held by another process, skipping')
@@ -228,9 +242,24 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
     log.error({ jobName, err }, 'job failed')
     await recordFailure(jobName, errorMsg)
     notify(jobFailureNotice(jobName, errorMsg)).catch(() => {})
-  } finally {
-    runningJobs.delete(jobName)
   }
+}
+
+/**
+ * Graceful shutdown: wait up to `timeoutMs` for the runs in progress in this process (cron ticks,
+ * catch-up, manual runs) to finish, bookkeeping included. Returns the jobs still running at the
+ * deadline (empty when all finished).
+ */
+export async function waitForRunningJobs(timeoutMs: number): Promise<string[]> {
+  if (runningJobRuns.size === 0) return []
+  let timer: NodeJS.Timeout | undefined
+  const deadline = new Promise<void>(resolve => {
+    timer = setTimeout(resolve, Math.max(0, timeoutMs))
+    timer.unref()
+  })
+  await Promise.race([Promise.allSettled([...runningJobRuns.values()]), deadline])
+  clearTimeout(timer)
+  return [...runningJobRuns.keys()]
 }
 
 /** Write the failure to the job row and release the lease; a failed write is logged, never thrown. */

@@ -15,12 +15,13 @@ export default function JobsPage() {
         <title>Jobs — Admin — Actually Relevant</title>
       </Helmet>
 
-      <PageHeader
-        title="Jobs"
-        description="Scheduled background jobs. Auto-refreshes every 10 seconds."
-      />
+      <PageHeader title="Jobs" description="Scheduled background jobs. Auto-refreshes every 10 seconds." />
 
-      {jobsQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {jobsQuery.isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {jobsQuery.error && <ErrorState message="Failed to load jobs" onRetry={() => jobsQuery.refetch()} />}
       {jobsQuery.data && jobsQuery.data.length === 0 && <EmptyState title="No jobs configured" />}
       {jobsQuery.data && jobsQuery.data.length > 0 && <JobsTable jobs={jobsQuery.data} />}

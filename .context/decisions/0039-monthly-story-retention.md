@@ -1,7 +1,8 @@
 ---
 id: ADR-0039
 title: Delete unkept stories after a year, counting them into an append-only summary table in the same statement
-status: accepted
+status: superseded
+superseded-by: ADR-0042
 date: 2026-10-18
 deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant

@@ -5,7 +5,9 @@ const options = { initialDelayMs: 100, pollMs: 50, maxWaitMs: 1000 }
 
 describe('signalRenderComplete', () => {
   let fired: number
-  const onComplete = () => { fired += 1 }
+  const onComplete = () => {
+    fired += 1
+  }
 
   beforeEach(() => {
     vi.useFakeTimers()

@@ -36,7 +36,7 @@ describe('parallelMap', () => {
 
     await parallelMap(
       items,
-      async (s) => s.toUpperCase(),
+      async s => s.toUpperCase(),
       1,
       (completed, total) => progressCalls.push([completed, total]),
     )
@@ -59,16 +59,12 @@ describe('parallelMap', () => {
 
     expect(results).toEqual([10, 30])
     expect(errors).toHaveLength(2)
-    expect(errors[0].item).toBe(2)
-    expect(errors[1].item).toBe(4)
+    expect(errors[0]!.item).toBe(2)
+    expect(errors[1]!.item).toBe(4)
   })
 
   it('returns empty results for empty input', async () => {
-    const { results, errors } = await parallelMap(
-      [],
-      async (n: number) => n,
-      5,
-    )
+    const { results, errors } = await parallelMap([], async (n: number) => n, 5)
 
     expect(results).toEqual([])
     expect(errors).toEqual([])
@@ -90,7 +86,7 @@ describe('parallelMap', () => {
 
     await parallelMap(
       items,
-      async (n) => {
+      async n => {
         if (n === 2) throw new Error('fail')
         return n
       },

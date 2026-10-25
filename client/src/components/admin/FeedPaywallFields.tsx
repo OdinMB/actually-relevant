@@ -30,7 +30,8 @@ export function FeedPaywallFields({ detection, titleMarker, onDetectionChange, o
         aria-describedby="feed-paywall-hint"
       />
       <p id="feed-paywall-hint" className="text-xs text-neutral-500">
-        Locked articles are rejected at crawl and never analyzed. Turn detection off for a feed that serves full text although its pages are marked paid; a title matching the marker is always treated as locked. Changes apply to future crawls only.
+        Locked articles are rejected at crawl and never analyzed. Turn detection off for a feed that serves full text although its pages are marked paid; a
+        title matching the marker is always treated as locked. Changes apply to future crawls only.
       </p>
     </fieldset>
   )

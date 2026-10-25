@@ -3,10 +3,13 @@ import jwt from 'jsonwebtoken'
 import { randomBytes, randomUUID } from 'crypto'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
+import { UnauthorizedError } from '../utils/errors.js'
 
-const BCRYPT_ROUNDS = 12
-const ACCESS_TOKEN_EXPIRY = '15m'
-const REFRESH_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
+/**
+ * The refresh token itself was rejected (unknown, expired, or reused after the grace window):
+ * 401, and the route clears the cookie. Any other failure keeps the cookie so the client can retry.
+ */
+export class RefreshTokenRejectedError extends UnauthorizedError {}
 
 export interface AccessTokenPayload {
   userId: string
@@ -21,11 +24,26 @@ function getJwtSecret(): string {
 }
 
 export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, BCRYPT_ROUNDS)
+  return bcrypt.hash(plain, config.auth.bcryptRounds)
 }
 
 export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
   return bcrypt.compare(plain, hash)
+}
+
+// A hash of a random password at the same cost, computed once, so a login for an unknown email
+// spends the same bcrypt time as one for a known email and cannot reveal which emails have accounts.
+let dummyHash: Promise<string> | null = null
+
+/**
+ * Check a login password against the account's hash, or against a dummy hash when there is no
+ * account (always false then), so both cases take the same time.
+ */
+export async function verifyLoginPassword(plain: string, hash: string | null | undefined): Promise<boolean> {
+  if (hash) return bcrypt.compare(plain, hash)
+  dummyHash ??= bcrypt.hash(randomBytes(16).toString('hex'), config.auth.bcryptRounds)
+  await bcrypt.compare(plain, await dummyHash)
+  return false
 }
 
 export function generateAccessToken(user: { id: string; email: string; role: string }): string {
@@ -34,7 +52,7 @@ export function generateAccessToken(user: { id: string; email: string; role: str
     email: user.email,
     role: user.role,
   }
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: ACCESS_TOKEN_EXPIRY })
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: config.auth.accessTokenExpiry })
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
@@ -43,7 +61,7 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
 
 export async function generateRefreshToken(userId: string, familyId?: string): Promise<string> {
   const token = randomBytes(40).toString('hex')
-  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS)
+  const expiresAt = new Date(Date.now() + config.auth.refreshTokenLifetimeMs)
   const family = familyId ?? randomUUID()
 
   await prisma.refreshToken.create({
@@ -53,18 +71,16 @@ export async function generateRefreshToken(userId: string, familyId?: string): P
   return token
 }
 
-export async function rotateRefreshToken(
-  oldToken: string
-): Promise<{ accessToken: string; refreshToken: string }> {
+export async function rotateRefreshToken(oldToken: string): Promise<{ accessToken: string; refreshToken: string }> {
   const record = await prisma.refreshToken.findUnique({
     where: { token: oldToken },
     include: { user: true },
   })
 
-  if (!record) throw new Error('Invalid refresh token')
+  if (!record) throw new RefreshTokenRejectedError('Invalid refresh token')
   if (record.expiresAt < new Date()) {
     await prisma.refreshToken.delete({ where: { id: record.id } })
-    throw new Error('Refresh token expired')
+    throw new RefreshTokenRejectedError('Refresh token expired')
   }
 
   if (record.rotatedAt) {
@@ -73,7 +89,7 @@ export async function rotateRefreshToken(
     // is a lost response or a second tab, and gets a fresh token in the family.
     if (!isWithinReuseGrace(record.rotatedAt)) {
       await prisma.refreshToken.deleteMany({ where: { familyId: record.familyId } })
-      throw new Error('Refresh token reuse detected')
+      throw new RefreshTokenRejectedError('Refresh token reuse detected')
     }
     return issueTokenPair(record.user, record.familyId)
   }
@@ -87,7 +103,7 @@ export async function rotateRefreshToken(
     // A concurrent request rotated or revoked it between our read and write
     const current = await prisma.refreshToken.findUnique({ where: { id: record.id } })
     if (!current?.rotatedAt || !isWithinReuseGrace(current.rotatedAt)) {
-      throw new Error('Invalid refresh token')
+      throw new RefreshTokenRejectedError('Invalid refresh token')
     }
   }
 
@@ -98,10 +114,7 @@ function isWithinReuseGrace(rotatedAt: Date): boolean {
   return Date.now() - rotatedAt.getTime() <= config.auth.refreshReuseGraceMs
 }
 
-async function issueTokenPair(
-  user: { id: string; email: string; role: string },
-  familyId: string,
-): Promise<{ accessToken: string; refreshToken: string }> {
+async function issueTokenPair(user: { id: string; email: string; role: string }, familyId: string): Promise<{ accessToken: string; refreshToken: string }> {
   const accessToken = generateAccessToken(user)
   const refreshToken = await generateRefreshToken(user.id, familyId)
   return { accessToken, refreshToken }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import StoryPage from './StoryPage'
@@ -77,9 +77,7 @@ describe('StoryPage', () => {
 
   it('follows the quote attribution with the AI selection note', () => {
     renderStory(story)
-    expect(
-      screen.getByText(`— ${AI_TEXT.quoteAttribution} · selected and potentially translated by AI`),
-    ).toBeInTheDocument()
+    expect(screen.getByText(`— ${AI_TEXT.quoteAttribution} · selected and potentially translated by AI`)).toBeInTheDocument()
   })
 
   it('shows the AI selection note under a quote that has no attribution', () => {
@@ -96,5 +94,13 @@ describe('StoryPage', () => {
       expect(marked, `${field} is not inside a data-ai-generated element`).not.toBeNull()
       expect(marked!.getAttribute('data-ai-generated')!.split(' ')).toContain(field)
     }
+  })
+
+  it("points og:image and twitter:image at the story's own preview image", async () => {
+    renderStory(story)
+    await waitFor(() => {
+      expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe('/api/stories/ai-story/og.png')
+    })
+    expect(document.head.querySelector('meta[name="twitter:image"]')?.getAttribute('content')).toBe('/api/stories/ai-story/og.png')
   })
 })

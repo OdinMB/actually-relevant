@@ -5,6 +5,21 @@ import { SEO } from './seo'
 
 const LOGO_URL = `${SEO.siteUrl}/images/logo.png`
 
+// `<`, `>`, `&` and the two JS line terminators U+2028 / U+2029 (built from
+// char codes so the source file stays plain ASCII).
+const JSON_LD_UNSAFE = new RegExp(`[<>&${String.fromCharCode(0x2028, 0x2029)}]`, 'g')
+
+/**
+ * Serializes a schema for a `<script type="application/ld+json">` element.
+ * Titles and summaries come from crawled text, so plain `JSON.stringify` could
+ * carry a `</script>` that closes the element early in prerendered HTML. Each
+ * unsafe character becomes a JSON `\uXXXX` escape, so the parsed value is unchanged.
+ * Every JSON-LD script goes through this, whether via `StructuredData` or Helmet.
+ */
+export function toJsonLd(data: unknown): string {
+  return JSON.stringify(data).replace(JSON_LD_UNSAFE, ch => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`)
+}
+
 const publisher = {
   '@type': 'Organization',
   name: SEO.siteName,
@@ -16,10 +31,7 @@ const publisher = {
 }
 
 export function buildArticleSchema(story: PublicStory) {
-  const displayTitle =
-    story.titleLabel && story.title
-      ? `${story.titleLabel}: ${story.title}`
-      : story.title || ''
+  const displayTitle = story.titleLabel && story.title ? `${story.titleLabel}: ${story.title}` : story.title || ''
   const issueName = story.issue?.name ?? story.feed?.issue?.name ?? 'News'
 
   return {
@@ -83,9 +95,7 @@ export function buildCollectionPageSchema(issue: PublicIssue) {
 }
 
 /** A published podcast episode, described on its transcript page. */
-export function buildPodcastEpisodeSchema(
-  episode: Pick<PublicPodcastEpisode, 'id' | 'title' | 'summary' | 'publishedAt' | 'durationSec' | 'audioUrl'>,
-) {
+export function buildPodcastEpisodeSchema(episode: Pick<PublicPodcastEpisode, 'id' | 'title' | 'summary' | 'publishedAt' | 'durationSec' | 'audioUrl'>) {
   const sec = episode.durationSec
   return {
     '@context': 'https://schema.org',

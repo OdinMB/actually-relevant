@@ -111,16 +111,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      isAuthenticated: !!user,
-      isLoading: status === 'unchecked' || status === 'checking',
-      isServerUnavailable: status === 'unavailable',
-      login,
-      logout,
-      tryRestoreSession,
-      retryRestoreSession: restore,
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading: status === 'unchecked' || status === 'checking',
+        isServerUnavailable: status === 'unavailable',
+        login,
+        logout,
+        tryRestoreSession,
+        retryRestoreSession: restore,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

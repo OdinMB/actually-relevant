@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// Publishing itself (chunks, slugs, clusters, races) is tested on PostgreSQL: storyLifecycle.db.test.ts
 const mockGetStoryIdsByStatus = vi.hoisted(() => vi.fn())
-const mockBulkUpdateStatus = vi.hoisted(() => vi.fn())
+const mockTransition = vi.hoisted(() => vi.fn())
 
 vi.mock('../services/story.js', () => ({
   getStoryIdsByStatus: mockGetStoryIdsByStatus,
-  bulkUpdateStatus: mockBulkUpdateStatus,
 }))
+vi.mock('../services/storyLifecycle.js', () => ({ transition: mockTransition }))
 
 const { runPublishStories } = await import('./publishStories.js')
 
@@ -21,15 +22,6 @@ describe('runPublishStories', () => {
     await runPublishStories()
 
     expect(mockGetStoryIdsByStatus).toHaveBeenCalledWith('selected')
-    expect(mockBulkUpdateStatus).not.toHaveBeenCalled()
-  })
-
-  it('publishes the selected stories', async () => {
-    mockGetStoryIdsByStatus.mockResolvedValue(['a', 'b', 'c'])
-    mockBulkUpdateStatus.mockResolvedValue({ count: 3 })
-
-    await runPublishStories()
-
-    expect(mockBulkUpdateStatus).toHaveBeenCalledWith(['a', 'b', 'c'], 'published')
+    expect(mockTransition).not.toHaveBeenCalled()
   })
 })

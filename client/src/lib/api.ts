@@ -1,6 +1,21 @@
-import type { PublicStory, PaginatedResponse, PublicPodcastResponse, PublicPodcastEpisodeDetail } from '@shared/types'
+import type {
+  PublicStory,
+  PaginatedResponse,
+  PublicPodcastResponse,
+  PublicPodcastEpisodeDetail,
+  PublicNewsletterIssue,
+  PublicNewsletterIssueSummary,
+} from '@shared/types'
 
 export const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api'
+
+/**
+ * A story's link-preview image (1200x630, served by the API); the site-wide image without a slug.
+ * The server's story-page route injects the same URL for crawlers (server/src/lib/storyPreviewUrls.ts).
+ */
+export function storyOgImageUrl(slug: string | null | undefined): string {
+  return slug ? `${API_BASE}/stories/${encodeURIComponent(slug)}/og.png` : 'https://actuallyrelevant.news/images/og-image.png'
+}
 
 export class ApiError extends Error {
   constructor(
@@ -64,10 +79,8 @@ export const publicApi = {
     list: (params?: { page?: number; pageSize?: number; issueSlug?: string; search?: string; emotionTags?: string }) =>
       request<PaginatedResponse<PublicStory>>(`/stories${toQueryString((params || {}) as Record<string, unknown>)}`),
     get: (slug: string) => request<PublicStory>(`/stories/${slug}`),
-    related: (slug: string, limit = 4) =>
-      request<PublicStory[]>(`/stories/${slug}/related?limit=${limit}`),
-    cluster: (slug: string) =>
-      request<{ sources: { feedTitle: string; sourceUrl: string }[] }>(`/stories/${slug}/cluster`),
+    related: (slug: string, limit = 4) => request<PublicStory[]>(`/stories/${slug}/related?limit=${limit}`),
+    cluster: (slug: string) => request<{ sources: { feedTitle: string; sourceUrl: string }[] }>(`/stories/${slug}/cluster`),
   },
 
   issues: {
@@ -81,8 +94,13 @@ export const publicApi = {
   /** One published episode with its readable transcript (404 unless published). */
   podcastEpisode: (id: string) => request<PublicPodcastEpisodeDetail>(`/podcast/episodes/${encodeURIComponent(id)}`),
 
-  sources: () =>
-    request<{ byRegion: Record<string, string[]>; byIssue: Record<string, string[]>; totalCount: number }>('/sources'),
+  /** Published newsletter issues, newest first (the web archive). */
+  newsletterArchive: (page = 1) => request<PaginatedResponse<PublicNewsletterIssueSummary>>(`/newsletters${toQueryString({ page })}`),
+
+  /** One published newsletter issue's web edition; 404 unless published. */
+  newsletterIssue: (slug: string) => request<PublicNewsletterIssue>(`/newsletters/${encodeURIComponent(slug)}`),
+
+  sources: () => request<{ byRegion: Record<string, string[]>; byIssue: Record<string, string[]>; totalCount: number }>('/sources'),
 
   subscribe: (data: { email: string; website?: string; formToken?: string; turnstileToken?: string }) =>
     request<{ success: boolean; message: string }>('/subscribe', {

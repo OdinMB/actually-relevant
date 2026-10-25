@@ -46,7 +46,12 @@ describe('parseRecalibrationOptions', () => {
 
   it('defaults to the three checks on the whole sample, medium for ratings and low for dedup', () => {
     expect(parseRecalibrationOptions(['--out', 'x'])).toMatchObject({
-      half: 'all', steps: ['preassess', 'assess', 'dedup'], effort: 'medium', dedupEffort: 'low', dryRun: false, budget: DEFAULT_BUDGET_USD,
+      half: 'all',
+      steps: ['preassess', 'assess', 'dedup'],
+      effort: 'medium',
+      dedupEffort: 'low',
+      dryRun: false,
+      budget: DEFAULT_BUDGET_USD,
     })
   })
 
@@ -60,7 +65,7 @@ describe('parseRecalibrationOptions', () => {
     expect(parseRecalibrationOptions(['--out', 'x', '--steps', 'selection,assess,social-post']).steps).toEqual(['assess', 'social-post', 'selection'])
   })
 
-  it('refuses a partial (--limit) rating set, which would replace the owner\'s set with a stub', () => {
+  it("refuses a partial (--limit) rating set, which would replace the owner's set with a stub", () => {
     expect(() => parseRecalibrationOptions(['--out', 'x', '--steps', 'assess,rating-set', '--limit', '1'])).toThrow(/rating-set/)
     expect(parseRecalibrationOptions(['--out', 'x', '--steps', 'assess', '--limit', '1']).limit).toBe(1)
   })

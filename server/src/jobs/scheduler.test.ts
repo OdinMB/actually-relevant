@@ -36,15 +36,14 @@ vi.mock('../lib/notify.js', async importOriginal => ({
 }))
 
 /** The notice the scheduler sends for a failed run of `jobName` whose message matches `message`. */
-const failureOf = (jobName: string, message: unknown) =>
-  expect.objectContaining({ dedupeKey: `job-failure:${jobName}`, message })
+const failureOf = (jobName: string, message: unknown) => expect.objectContaining({ dedupeKey: `job-failure:${jobName}`, message })
 vi.mock('./jobLease.js', () => mockLease)
 vi.mock('./crawlFeeds.js', () => ({ runCrawlFeeds: mockRunCrawlFeeds }))
 vi.mock('./preassessStories.js', () => ({ runPreassessStories: vi.fn() }))
 vi.mock('./assessStories.js', () => ({ runAssessStories: mockRunAssessStories }))
 vi.mock('./selectStories.js', () => ({ runSelectStories: vi.fn() }))
 
-const { initScheduler, startScheduler, stopScheduler, reloadJob, runJob, runningJobs, isJobRunning, estimateCronIntervalMs } =
+const { initScheduler, startScheduler, stopScheduler, reloadJob, runJob, runningJobs, isJobRunning, estimateCronIntervalMs, waitForRunningJobs } =
   await import('./scheduler.js')
 const { config } = await import('../config.js')
 
@@ -138,6 +137,48 @@ describe('scheduler', () => {
     })
   })
 
+  describe('waitForRunningJobs (graceful shutdown)', () => {
+    it('resolves at once with nothing running', async () => {
+      expect(await waitForRunningJobs(1000)).toEqual([])
+    })
+
+    it('waits for a run in progress, its bookkeeping included', async () => {
+      let finish!: () => void
+      const handler = vi.fn(
+        () =>
+          new Promise<void>(r => {
+            finish = r
+          }),
+      )
+      void runJob('crawl_feeds', handler)
+      await flush()
+
+      const waiting = waitForRunningJobs(5000)
+      finish()
+
+      expect(await waiting).toEqual([])
+      expect(mockLease.finishJobRun).toHaveBeenCalledWith('crawl_feeds', null)
+    })
+
+    it('gives up at the deadline and names the jobs still running', async () => {
+      let finish!: () => void
+      void runJob(
+        'crawl_feeds',
+        () =>
+          new Promise<void>(r => {
+            finish = r
+          }),
+      )
+      await flush()
+
+      expect(await waitForRunningJobs(20)).toEqual(['crawl_feeds'])
+
+      finish()
+      await flush()
+      expect(await waitForRunningJobs(20)).toEqual([])
+    })
+  })
+
   describe('runJob never rejects', () => {
     it('does not run the handler when the claim fails, and clears and alerts', async () => {
       mockLease.claimJobRun.mockRejectedValue(new Error('db down'))
@@ -226,10 +267,7 @@ describe('scheduler', () => {
     })
 
     it('retries with doubling delays until initScheduler succeeds, registering once', async () => {
-      mockPrisma.jobRun.findMany
-        .mockRejectedValueOnce(new Error('db down'))
-        .mockRejectedValueOnce(new Error('db down'))
-        .mockResolvedValue([enabledCrawlJob])
+      mockPrisma.jobRun.findMany.mockRejectedValueOnce(new Error('db down')).mockRejectedValueOnce(new Error('db down')).mockResolvedValue([enabledCrawlJob])
 
       startScheduler()
       await vi.advanceTimersByTimeAsync(0)
@@ -267,11 +305,13 @@ describe('scheduler', () => {
       }
       expect(mockPrisma.jobRun.findMany).toHaveBeenCalledTimes(initAlertAfterAttempts)
       expect(mockNotify).toHaveBeenCalledTimes(1)
-      expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
-        dedupeKey: 'job-failure:scheduler',
-        severity: 'critical',
-        message: expect.stringContaining('db down'),
-      }))
+      expect(mockNotify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dedupeKey: 'job-failure:scheduler',
+          severity: 'critical',
+          message: expect.stringContaining('db down'),
+        }),
+      )
 
       // Many more failed attempts: no further alerts
       await vi.advanceTimersByTimeAsync(config.scheduler.initRetryMaxMs * 5)
@@ -286,11 +326,13 @@ describe('scheduler', () => {
       startScheduler()
       await vi.advanceTimersByTimeAsync(config.scheduler.initRetryMaxMs * 5)
       expect(mockNotify).toHaveBeenCalledTimes(2)
-      expect(mockNotify).toHaveBeenLastCalledWith(expect.objectContaining({
-        dedupeKey: 'job-failure:scheduler',
-        severity: 'warning',
-        message: expect.stringMatching(new RegExp(`started after ${initAlertAfterAttempts} failed attempts: db down`)),
-      }))
+      expect(mockNotify).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          dedupeKey: 'job-failure:scheduler',
+          severity: 'warning',
+          message: expect.stringMatching(new RegExp(`started after ${initAlertAfterAttempts} failed attempts: db down`)),
+        }),
+      )
     })
 
     it('records nothing on a start with no earlier alert', async () => {
@@ -347,11 +389,8 @@ describe('scheduler', () => {
       expect(mockSchedule).toHaveBeenCalledWith('0 */6 * * *', expect.any(Function))
     })
 
-    it('schedules a job with a fixed time zone in that zone, and every other job in the server\'s own', async () => {
-      mockPrisma.jobRun.findMany.mockResolvedValue([
-        enabledCrawlJob,
-        { ...enabledCrawlJob, jobName: 'publish_podcast', cronExpression: '0 7 * * 6' },
-      ])
+    it("schedules a job with a fixed time zone in that zone, and every other job in the server's own", async () => {
+      mockPrisma.jobRun.findMany.mockResolvedValue([enabledCrawlJob, { ...enabledCrawlJob, jobName: 'publish_podcast', cronExpression: '0 7 * * 6' }])
 
       await initScheduler()
 
@@ -406,15 +445,22 @@ describe('scheduler', () => {
   })
 
   describe('boot catch-up', () => {
-    const rowsByName = (rows: ReturnType<typeof overdueRow>[]) =>
-      ({ where }: { where: { jobName: string } }) => Promise.resolve(rows.find(row => row.jobName === where.jobName) ?? null)
+    const rowsByName =
+      (rows: ReturnType<typeof overdueRow>[]) =>
+      ({ where }: { where: { jobName: string } }) =>
+        Promise.resolve(rows.find(row => row.jobName === where.jobName) ?? null)
 
     it('runs overdue jobs one after another in pipeline order', async () => {
       const rows = [overdueRow('assess_stories'), overdueRow('crawl_feeds')]
       mockPrisma.jobRun.findMany.mockResolvedValue(rows)
       mockPrisma.jobRun.findUnique.mockImplementation(rowsByName(rows))
       let finishCrawl: () => void = () => {}
-      mockRunCrawlFeeds.mockImplementation(() => new Promise<void>(resolve => { finishCrawl = resolve }))
+      mockRunCrawlFeeds.mockImplementation(
+        () =>
+          new Promise<void>(resolve => {
+            finishCrawl = resolve
+          }),
+      )
 
       await initScheduler()
       await vi.waitFor(() => expect(mockRunCrawlFeeds).toHaveBeenCalledTimes(1))
@@ -428,9 +474,7 @@ describe('scheduler', () => {
     it('skips a job whose re-read row is no longer overdue (its cron tick ran it meanwhile)', async () => {
       const rows = [overdueRow('crawl_feeds'), overdueRow('assess_stories')]
       mockPrisma.jobRun.findMany.mockResolvedValue(rows)
-      mockPrisma.jobRun.findUnique.mockImplementation(
-        rowsByName([overdueRow('crawl_feeds'), { ...overdueRow('assess_stories'), lastCompletedAt: new Date() }]),
-      )
+      mockPrisma.jobRun.findUnique.mockImplementation(rowsByName([overdueRow('crawl_feeds'), { ...overdueRow('assess_stories'), lastCompletedAt: new Date() }]))
 
       await initScheduler()
       await vi.waitFor(() => expect(mockRunCrawlFeeds).toHaveBeenCalledTimes(1))
@@ -442,9 +486,7 @@ describe('scheduler', () => {
     it('skips a job disabled since boot', async () => {
       const rows = [overdueRow('crawl_feeds'), overdueRow('assess_stories')]
       mockPrisma.jobRun.findMany.mockResolvedValue(rows)
-      mockPrisma.jobRun.findUnique.mockImplementation(
-        rowsByName([overdueRow('crawl_feeds'), { ...overdueRow('assess_stories'), enabled: false }]),
-      )
+      mockPrisma.jobRun.findUnique.mockImplementation(rowsByName([overdueRow('crawl_feeds'), { ...overdueRow('assess_stories'), enabled: false }]))
 
       await initScheduler()
       await vi.waitFor(() => expect(mockRunCrawlFeeds).toHaveBeenCalledTimes(1))
@@ -458,7 +500,12 @@ describe('scheduler', () => {
       mockPrisma.jobRun.findMany.mockResolvedValue(rows)
       mockPrisma.jobRun.findUnique.mockImplementation(rowsByName(rows))
       let finishCrawl: () => void = () => {}
-      mockRunCrawlFeeds.mockImplementation(() => new Promise<void>(resolve => { finishCrawl = resolve }))
+      mockRunCrawlFeeds.mockImplementation(
+        () =>
+          new Promise<void>(resolve => {
+            finishCrawl = resolve
+          }),
+      )
 
       await initScheduler()
       await vi.waitFor(() => expect(mockRunCrawlFeeds).toHaveBeenCalledTimes(1))

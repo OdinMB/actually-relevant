@@ -2,22 +2,45 @@ import { describe, it, expect } from 'vitest'
 import { ASSESS_FORMAT_CHECKS, type AssessFormatCheck } from './checks.js'
 import type { AssessItem, DedupSet, PreassessItem } from './fixtures.js'
 import {
-  accepted, assessCriteria, dedupCounts, dedupCriteria, dedupMistakes, preassessCriteria, sampleFor, TOLERANCE, type Criterion,
+  accepted,
+  assessCriteria,
+  dedupCounts,
+  dedupCriteria,
+  dedupMistakes,
+  preassessCriteria,
+  sampleFor,
+  TOLERANCE,
+  type Criterion,
 } from './recalibration.js'
 import type { AssessArmMetrics } from './suites/assess.js'
 import type { PairLabel } from './suites/dedup.js'
 import type { PreassessArmMetrics } from './suites/preassess.js'
 
 const preassessItem = (i: number): PreassessItem => ({
-  id: `p${i}`, title: '', content: '', language: 'en', han: false, status: i % 3 === 0 ? 'published' : 'rejected',
+  id: `p${i}`,
+  title: '',
+  content: '',
+  language: 'en',
+  han: false,
+  status: i % 3 === 0 ? 'published' : 'rejected',
   stored: { issueSlug: 'x', rating: i % 10, emotion: 'calm' },
 })
 const assessItem = (i: number): AssessItem => ({
-  id: `a${i}`, title: '', content: '', publisher: '', url: '', guidelines: { factors: '', antifactors: '', ratings: '' },
-  language: i % 4 === 0 ? 'de' : 'en', han: false, stored: { rating: i % 8 },
+  id: `a${i}`,
+  title: '',
+  content: '',
+  publisher: '',
+  url: '',
+  guidelines: { factors: '', antifactors: '', ratings: '' },
+  language: i % 4 === 0 ? 'de' : 'en',
+  han: false,
+  stored: { rating: i % 8 },
 })
 const dedupSet = (i: number): DedupSet => ({
-  sourceId: `s${i}`, kind: i % 2 ? 'hard-negative' : 'random', source: { title: '', summary: '' }, candidates: [],
+  sourceId: `s${i}`,
+  kind: i % 2 ? 'hard-negative' : 'random',
+  source: { title: '', summary: '' },
+  candidates: [],
 })
 const fx = {
   preassess: Array.from({ length: 30 }, (_, i) => preassessItem(i)),
@@ -49,9 +72,22 @@ describe('sampleFor', () => {
 })
 
 const preassess = (over: Partial<PreassessArmMetrics> = {}): PreassessArmMetrics => ({
-  returned: 150, issueAgreement: 0.75, emotionAgreement: 0.72, gateAgreement: 0.86, publishedRecall: 0.8, passRate: 0.31,
-  storedPassRate: 0.33, omitted: 0, unknownIds: 0, invalidSlugs: 0, failures: 0, junk: [], meanShift: -0.1,
-  passRateOneLower: 0.5, publishedRecallOneLower: 0.95, ...over,
+  returned: 150,
+  issueAgreement: 0.75,
+  emotionAgreement: 0.72,
+  gateAgreement: 0.86,
+  publishedRecall: 0.8,
+  passRate: 0.31,
+  storedPassRate: 0.33,
+  omitted: 0,
+  unknownIds: 0,
+  invalidSlugs: 0,
+  failures: 0,
+  junk: [],
+  meanShift: -0.1,
+  passRateOneLower: 0.5,
+  publishedRecallOneLower: 0.95,
+  ...over,
 })
 const failing = (criteria: Criterion[]) => criteria.filter(c => c.required && !c.pass).map(c => c.name)
 
@@ -70,7 +106,7 @@ describe('preassessCriteria', () => {
   it('fails a gate share more than 5 points from stored, a thin published pass, or worse agreement than phase 1', () => {
     expect(failing(preassessCriteria(preassess({ passRate: 0.27 })))).toHaveLength(1)
     expect(failing(preassessCriteria(preassess({ publishedRecall: 0.74 })))).toHaveLength(1)
-    expect(failing(preassessCriteria(preassess({ issueAgreement: 0.73, emotionAgreement: 0.70 })))).toHaveLength(2)
+    expect(failing(preassessCriteria(preassess({ issueAgreement: 0.73, emotionAgreement: 0.7 })))).toHaveLength(2)
   })
 
   it('reports the emotion aim without requiring it', () => {
@@ -87,9 +123,18 @@ describe('preassessCriteria', () => {
 const format = (over: Partial<Record<AssessFormatCheck, number>> = {}) =>
   ({ ...Object.fromEntries(ASSESS_FORMAT_CHECKS.map(k => [k, 1])), ...over }) as Record<AssessFormatCheck, number | null>
 const assess = (over: Partial<AssessArmMetrics> = {}): AssessArmMetrics => ({
-  ok: 25, format: format(), vsBaseline: { mad: null, shift: null, splitAgreement: null, n: 0 },
-  vsStored: { mad: 0.7, shift: 0.1, splitAgreement: 0.8, n: 25 }, unsupportedPerOutput: 0.1, unsupported: [], junk: [], failures: 0,
-  atLeastSplit: 0.44, storedAtLeastSplit: 0.46, metaCommentary: [], ...over,
+  ok: 25,
+  format: format(),
+  vsBaseline: { mad: null, shift: null, splitAgreement: null, n: 0 },
+  vsStored: { mad: 0.7, shift: 0.1, splitAgreement: 0.8, n: 25 },
+  unsupportedPerOutput: 0.1,
+  unsupported: [],
+  junk: [],
+  failures: 0,
+  atLeastSplit: 0.44,
+  storedAtLeastSplit: 0.46,
+  metaCommentary: [],
+  ...over,
 })
 
 describe('assessCriteria', () => {
@@ -113,20 +158,38 @@ describe('assessCriteria', () => {
 
 describe('dedup acceptance', () => {
   // Two sets: 3 labelled duplicates, 4 labelled distinct, 1 contested pair.
-  const labels: PairLabel[][] = [['dup', 'dup', 'not', 'not'], ['dup', 'not', 'not', 'contested']]
+  const labels: PairLabel[][] = [
+    ['dup', 'dup', 'not', 'not'],
+    ['dup', 'not', 'not', 'contested'],
+  ]
 
   it('counts wrong merges over distinct pairs and catches over duplicates, ignoring contested pairs', () => {
-    const counts = dedupCounts([[true, false, true, false], [true, false, false, true]], labels)
+    const counts = dedupCounts(
+      [
+        [true, false, true, false],
+        [true, false, false, true],
+      ],
+      labels,
+    )
     expect(counts).toEqual({ wrongMerges: 1, distinct: 4, caught: 2, duplicates: 3 })
   })
 
   it('names the pairs behind each wrong merge and each missed duplicate', () => {
     const set = (id: string, titles: string[]): DedupSet => ({
-      ...dedupSet(0), sourceId: id, source: { title: `source ${id}`, summary: '' },
+      ...dedupSet(0),
+      sourceId: id,
+      source: { title: `source ${id}`, summary: '' },
       candidates: titles.map((t, i) => ({ id: `${id}-${i}`, title: t, summary: '', distance: 0, sameCluster: false })),
     })
     const sets = [set('a', ['a0', 'a1', 'a2', 'a3']), set('b', ['b0', 'b1', 'b2', 'b3'])]
-    const mistakes = dedupMistakes(sets, [[true, false, true, false], [true, false, false, true]], labels)
+    const mistakes = dedupMistakes(
+      sets,
+      [
+        [true, false, true, false],
+        [true, false, false, true],
+      ],
+      labels,
+    )
     expect(mistakes.wrongMerges).toEqual([{ source: 'source a', candidate: 'a2' }])
     expect(mistakes.missed).toEqual([{ source: 'source a', candidate: 'a1' }])
   })

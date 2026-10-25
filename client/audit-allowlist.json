@@ -1,0 +1,12 @@
+{
+  "$comment": "Reviewed exceptions for npm run audit:prod (scripts/audit-check.mjs, .context/ci.md). Each entry excuses one advisory in one package while every production path to it runs through `via`. postcss-selector-parser (GHSA-rj75-hqrm-r3gf, moderate, tailwindcss 3 path) is below the high bar, so it needs no entry.",
+  "advisories": [
+    {
+      "advisory": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "via": "@scalar/api-reference-react",
+      "reason": "Memory exhaustion from collecting one issue per failing element of a large array; fixed only in zod 4.6.6. The client has no zod of its own: the API docs page bundles @scalar/api-reference-react, whose agent-chat pulls in `ai` with zod 3.25 (its other zod copies are 4.6.7). It runs in the visitor's own browser on the OpenAPI spec our server serves, so the worst case is that visitor's tab. Goes when @scalar's `ai` dependency moves to a fixed zod.",
+      "reviewed": "2026-10-25"
+    }
+  ]
+}

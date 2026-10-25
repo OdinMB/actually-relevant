@@ -4,15 +4,22 @@ import type { ArmStats, CallSiteId, CallSiteResult, Decision, MetricRow } from '
 
 function stats(arm: string, meanCostUsd: number): ArmStats {
   return {
-    arm, calls: 1, outcomes: { ok: 1, parse_failure: 0, empty: 0, truncated: 0, error: 0, skipped: 0 },
-    latencyP50: 1, latencyP95: 1, meanUsage: { input: 0, cached: 0, output: 0, reasoning: 0 }, meanCostUsd, totalCostUsd: meanCostUsd,
+    arm,
+    calls: 1,
+    outcomes: { ok: 1, parse_failure: 0, empty: 0, truncated: 0, error: 0, skipped: 0 },
+    latencyP50: 1,
+    latencyP95: 1,
+    meanUsage: { input: 0, cached: 0, output: 0, reasoning: 0 },
+    meanCostUsd,
+    totalCostUsd: meanCostUsd,
   }
 }
 
 function site(id: CallSiteId, passing: string[], extra: Partial<CallSiteResult> = {}): CallSiteResult {
-  const decision: Decision = passing.length > 0
-    ? { verdict: { kind: 'winner', arm: passing[0], evidence: [] }, passing }
-    : { verdict: { kind: 'none', reasons: ['failed'] }, passing: [] }
+  const decision: Decision =
+    passing.length > 0
+      ? { verdict: { kind: 'winner', arm: passing[0], evidence: [] }, passing }
+      : { verdict: { kind: 'none', reasons: ['failed'] }, passing: [] }
   return { id, title: id, baseline: 'b', candidates: [], stats: [], metrics: [], decision, notes: [], ...extra }
 }
 
@@ -79,10 +86,7 @@ describe('baselineWins', () => {
     const fast = { ...stats('b', 0.01), latencyP50: 900, latencyP95: 2000 }
     const slow = { ...stats('c', 0.02), latencyP50: 1500, latencyP95: 1800 }
     const s = site('podcast', [], { baseline: 'b', candidates: ['c'], stats: [fast, slow] })
-    expect(baselineWins(s)).toEqual([
-      'podcast: median latency (b 900 ms vs c 1500 ms)',
-      'podcast: cost per call (b $0.0100 vs c $0.0200)',
-    ])
+    expect(baselineWins(s)).toEqual(['podcast: median latency (b 900 ms vs c 1500 ms)', 'podcast: cost per call (b $0.0100 vs c $0.0200)'])
     expect(candidateWins(s)).toEqual(['podcast: 95th-percentile latency (c 1800 ms vs b 2000 ms)'])
   })
 })

@@ -24,15 +24,28 @@ interface PodcastRunButtonProps {
  * Starts, approves, finishes automatically or resumes a run (`POST /:id/resume`). A run that will
  * voice the episode asks first, with its cost (owner, 2026-10-06); any other starts at once.
  */
-export function PodcastRunButton({ podcast, mode, confirmTitle = 'Write and voice the episode?', variant = 'primary', size = 'md', disabled, children, ...rest }: PodcastRunButtonProps) {
+export function PodcastRunButton({
+  podcast,
+  mode,
+  confirmTitle = 'Write and voice the episode?',
+  variant = 'primary',
+  size = 'md',
+  disabled,
+  children,
+  ...rest
+}: PodcastRunButtonProps) {
   const resume = useResumePodcast()
   const { toast } = useToast()
   const [asking, setAsking] = useState(false)
 
-  const run = () => resume.mutate({ id: podcast.id, mode }, {
-    onError: err => toast('error', err instanceof Error ? err.message : 'Failed to start'),
-    onSettled: () => setAsking(false),
-  })
+  const run = () =>
+    resume.mutate(
+      { id: podcast.id, mode },
+      {
+        onError: err => toast('error', err instanceof Error ? err.message : 'Failed to start'),
+        onSettled: () => setAsking(false),
+      },
+    )
 
   return (
     <>

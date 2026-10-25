@@ -1,6 +1,6 @@
 # Public Website
 
-The public site uses `PublicLayout` with hardcoded navigation in `PublicLayout.tsx`: the issue bar (`ISSUE_LINKS`), the header's Newsletter, Podcast and Saved links, in that order (desktop right of the logo, and the same three in the mobile menu dialog), and the footer's Navigate (`FOOTER_NAV`), Connect (channels: Newsletter, Podcast, RSS and the rest, written out inline) and Issues columns. A new channel goes in both the header (desktop and mobile) and Connect; each link appears once in the footer.
+The public site uses `PublicLayout` with hardcoded navigation in `client/src/layouts/public/` (link lists in `navLinks.ts`): the issue bar (`ISSUE_LINKS`), the header's Newsletter, Podcast and Saved links, in that order (desktop right of the logo, and the same three in the mobile menu dialog), and the footer's Navigate (`FOOTER_NAV`), Connect (channels: Newsletter, Podcast, RSS and the rest, written out inline) and Issues columns. A new channel goes in both the header (desktop and mobile) and Connect; each link appears once in the footer.
 
 Saved appears only once the visitor has saved a story, and goes when the last is removed, at once and without a reload: `useSavedCount` (`client/src/hooks/`) subscribes to the saved-stories store in `lib/preferences.ts`, whose `toggleSaved` announces every change itself (other tabs through the `storage` event), so a new place that saves or removes a story needs no event of its own. Prerendered pages carry no Saved link, since the prerender's browser has nothing saved; the client adds it on its first render. Because the desktop group is anchored right, Newsletter and Podcast then sit one link further left for a visitor with saved stories. The Layout Instability API records no shift for it (0 on a prerendered page with three saved stories and the JS delayed 1.5 s, 2026-10-07), because the client replaces the prerendered nodes rather than moving them. This document covers routes, components, data flow, and static content structure.
 
@@ -14,21 +14,34 @@ Saved appears only once the visitor has saved a story, and goes when the last is
 | `/methodology` | `MethodologyPage` | Three-criteria framework explanation |
 | `/about` | `AboutPage` | Mission and approach |
 | `/contact` | `ContactPage` | Email + bilingual imprint (EN/DE) |
-| `/newsletter` | `NewsletterPage` | Inline subscribe form (reuses `SubscribeForm`) |
+| `/newsletter` | `NewsletterPage` | Inline subscribe form (reuses `SubscribeForm`), and a link to the archive |
+| `/newsletter/archive` | `NewsletterArchivePage` | Published newsletter issues, newest first, paginated (skeleton while loading) |
+| `/newsletter/:slug` | `NewsletterIssuePage` | One published issue's web edition: title and date, the issue's AI label, then its stored markdown with each story heading through `StoryTitleLabel` and linked to the story page; not-found state is `noindex` (`.context/newsletter-podcast.md`, "Web edition") |
 | `/podcast` | `PodcastPage` | Weekly AI podcast: AI subtitle, Apple Podcasts badge and feed link, listen links and episodes with `<audio preload="none">` on the CDN (`.context/podcast.md`) |
 | `/podcast/:id/transcript` | `PodcastTranscriptPage` | One published episode's readable transcript: "AI" badge and title, the `/podcast` AI subtitle, player, the conversation by "Host A"/"Host B" with a heading per story, the story list. `:id` is the episode's row id (the feed GUID), which never changes once published (`.context/podcast.md`) |
 
-Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `routes.ts`, and prerendered at build time. Dynamic routes (`/stories/:slug`, `/podcast/:id/transcript`) are only in `App.tsx`: they load client-side, are not prerendered, and the server sitemap lists them (`.context/seo.md`).
+Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `routes.ts`, and prerendered at build time. Dynamic routes (`/stories/:slug`, `/podcast/:id/transcript`, `/newsletter/:slug`) are only in `App.tsx`: they load client-side, are not prerendered, and the server sitemap lists them (`.context/seo.md`). Story pages reach the browser through the backend, which puts the story's preview tags into the shell (`.context/seo.md`, "Story link previews").
 
 ## Public API
 
-- `GET /api/stories` — Paginated published stories, filterable by `issueSlug` and `positivity` (0-100)
+- `GET /api/stories` — Paginated published stories, newest first, filterable by `issueSlug`, `emotionTags` and the incremental-sync filters below, or searched with `search` (hybrid search). Cached 60 seconds (`Cache-Control: public, max-age=60`, no server-side cache)
 - `GET /api/stories/:id` — Single published story
+
+**Incremental sync** (`publicStoryQuerySchema` in `server/src/schemas/story.ts`, applied in `getPublishedStories()`). These names are part of the public API contract: never rename them.
+
+- `publishedSince` — ISO 8601 date-time with a zone (`Z` or an offset; a bare date is a 400), inclusive lower bound on `datePublished`
+- `publishedBefore` — same format, exclusive upper bound; must be later than `publishedSince` (else 400)
+- `minRelevance` — whole number 1-10, `relevance >= minRelevance`
+- All three are rejected with a 400 when combined with `search`: hybrid search does not apply them, and a silent no-op would mislead a poller. `total`/`totalPages` describe the filtered set.
+- Documented in the OpenAPI spec from the same Zod schemas (`requestParams.query` in `server/src/lib/openapi.ts`), with examples on `/free-api` and `/developers`.
 - `GET /api/issues` — All issues (id, name, slug, description only)
 - `GET /api/issues/:slug` — Single issue by slug
 
 - `GET /api/podcast` — The podcast show and its published episodes (each with its AI line and an `aiGenerated` marker)
 - `GET /api/podcast/episodes/:id` — One published episode with its readable `transcript` (404 unless published; its `aiGenerated` marker names `transcript` too)
+- `GET /api/newsletters` — Published newsletter issues, newest first (paginated)
+- `GET /api/newsletters/:slug` — One published issue's web edition, with its `aiLabel` and an `aiGenerated` marker (404 unless published)
+- `GET /api/stories/:slug/og.png` — A published story's 1200x630 link-preview image (`.context/seo.md`)
 
 Every story object the public JSON routes return (`/api/stories`, `/api/stories/:slug`, `/api/stories/:slug/related`, `/api/homepage`) carries a machine-readable `aiGenerated` marker, added in the route with `withAiGeneratedMarker()` (`server/src/lib/aiProvenance.ts`). A new public route that returns stories must add it too; the compliance record (`.context/ai-transparency.md`) relies on it.
 
@@ -40,7 +53,10 @@ Hooks: `usePublicStories.ts`, `usePublicIssues.ts`
 Public RSS 2.0 feeds are available without authentication:
 
 - `GET /api/feed` — Global feed of the 50 most recent published stories
-- `GET /api/feed/:issueSlug` — Per-issue feed (e.g., `/api/feed/human-development`)
+- `GET /api/feed/:issueSlug` — Per-issue feed (e.g., `/api/feed/human-development`; the issue is a path segment, an `?issueSlug=` query on `/api/feed` is ignored)
+- Both take `?minRelevance=1..10` (`feedQuerySchema`; anything else is a JSON 400). A filtered feed's channel title ends in "(relevance N+)" and its self link carries the query. The feeds take no date filter: a reader polls one fixed URL and dedupes by item GUID, so a fixed `publishedSince` would only freeze the feed.
+
+**Caching.** Feeds are cached in memory (`feedCache`, TTL `config.feed.cacheMaxAge`) under a key that includes the variant (`feed:global`, `feed:global:minRelevance=7`, `feed:issue:<slug>:minRelevance=7`), so filtered and unfiltered feeds never share an entry; `minRelevance` has ten values, which keeps the key space bounded. A new feed parameter must join the key, and must stay bounded (an unbounded value such as a timestamp would let any caller grow the cache). Browser and Cloudflare caches key on the full URL, query string included, so the `Cache-Control` header is safe for every variant.
 
 Feed items include: title, link to story page, AI-generated summary prefixed "[AI-generated] ", publish date, and issue category. The channel description is fixed copy that says AI writes and curates the feed (`rssChannelDescription()` in `server/src/lib/aiLabelCopy.ts`; per-issue feeds no longer use the issue's own description). RSS readers never see the site's labels, so keep the item prefix when changing the feed. Responses use `Content-Type: application/rss+xml` with a 15-minute cache (`Cache-Control: public, max-age=900`).
 
@@ -74,7 +90,7 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 - `client/src/components/PositivitySlider.tsx` — Slider UI with emoji labels and info tooltip
 - `client/src/contexts/PositivityContext.tsx` — React Context + localStorage persistence
 - `client/src/lib/mix-stories.ts` — `mixHomepageStories()` and `filterStoriesByPositivity()` helpers
-- `server/src/services/story.ts` — `getHomepageData()` returns `{ positive, negative }` per issue
+- `server/src/services/publicStories.ts` — `getHomepageData()` returns `{ positive, negative }` per issue
 
 ## Shared Components
 
@@ -114,7 +130,11 @@ Preload hints: `client/index.html`
 
 ## Key Files
 
-- `client/src/layouts/PublicLayout.tsx` — Header, footer, navigation, positivity slider placement
+- `client/src/layouts/PublicLayout.tsx` — Providers, skip link, RSS autodiscovery, scroll reset; composes the parts in `client/src/layouts/public/`:
+  - `SiteHeader.tsx` — logo bar and its actions, positivity slider placement; owns menu and search state
+  - `IssueNav.tsx` (desktop issue bar), `MobileMenu.tsx` (menu dialog), `SearchPanel.tsx` (search bar)
+  - `SiteFooter.tsx` — sign-off, brand, Navigate, Connect and Issues columns
+  - `navLinks.ts` (`ISSUE_LINKS`, `FOOTER_NAV`, `FOOTER_LEGAL`), `icons.tsx`
 - `client/src/pages/HomePage.tsx` — Homepage with issue sections
 - `client/src/pages/StoryPage.tsx` — Story detail
 - `client/src/pages/IssuePage.tsx` — Issue page with stories + static content

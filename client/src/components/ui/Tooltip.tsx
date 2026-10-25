@@ -24,7 +24,9 @@ export function Tooltip({ content, children, placement = 'bottom', align = 'star
 
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [open])
@@ -39,7 +41,11 @@ export function Tooltip({ content, children, placement = 'bottom', align = 'star
     >
       {children({ 'aria-describedby': id })}
       <span className={`absolute z-30 ${PLACEMENT[placement]} ${ALIGN[align]} ${open ? '' : 'hidden'}`}>
-        <span role="tooltip" id={id} className="block w-max max-w-xs rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs font-normal leading-snug text-white shadow-lg">
+        <span
+          role="tooltip"
+          id={id}
+          className="block w-max max-w-xs rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs font-normal leading-snug text-white shadow-lg"
+        >
           {content}
         </span>
       </span>

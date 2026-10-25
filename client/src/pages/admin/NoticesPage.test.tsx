@@ -20,9 +20,18 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
 
 function notice(overrides: Partial<AdminNotice> = {}): AdminNotice {
   return {
-    id: 'n-1', source: 'plunk', severity: 'critical', title: 'Spam complaint in Plunk', message: 'A recipient marked an email as spam.',
-    link: '/admin/subscribers', dedupeKey: 'plunk:e1_complaint', count: 1,
-    firstOccurredAt: '2026-10-08T10:00:00.000Z', lastOccurredAt: '2026-10-08T10:00:00.000Z', seenAt: null, ...overrides,
+    id: 'n-1',
+    source: 'plunk',
+    severity: 'critical',
+    title: 'Spam complaint in Plunk',
+    message: 'A recipient marked an email as spam.',
+    link: '/admin/subscribers',
+    dedupeKey: 'plunk:e1_complaint',
+    count: 1,
+    firstOccurredAt: '2026-10-08T10:00:00.000Z',
+    lastOccurredAt: '2026-10-08T10:00:00.000Z',
+    seenAt: null,
+    ...overrides,
   }
 }
 

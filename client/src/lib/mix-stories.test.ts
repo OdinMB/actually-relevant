@@ -71,7 +71,7 @@ describe('mixHomepageStories', () => {
     const buckets = makeBuckets(7, 5, 7)
     const result = mixHomepageStories(buckets, 7, 100)
     expect(result).toHaveLength(7)
-    expect(result.every((s) => s.emotionTag === 'uplifting')).toBe(true)
+    expect(result.every(s => s.emotionTag === 'uplifting')).toBe(true)
   })
 
   it('at 100% returns fewer than slots if not enough uplifting', () => {
@@ -79,14 +79,14 @@ describe('mixHomepageStories', () => {
     const result = mixHomepageStories(buckets, 7, 100)
     // Only 3 uplifting available — no backfill
     expect(result).toHaveLength(3)
-    expect(result.every((s) => s.emotionTag === 'uplifting')).toBe(true)
+    expect(result.every(s => s.emotionTag === 'uplifting')).toBe(true)
   })
 
   it('returns all negative at 0%', () => {
     const buckets = makeBuckets(7, 5, 7)
     const result = mixHomepageStories(buckets, 7, 0)
     expect(result).toHaveLength(7)
-    expect(result.every((s) => ['frustrating', 'scary'].includes(s.emotionTag!))).toBe(true)
+    expect(result.every(s => ['frustrating', 'scary'].includes(s.emotionTag!))).toBe(true)
   })
 
   it('returns a balanced mix at 50%', () => {
@@ -94,8 +94,8 @@ describe('mixHomepageStories', () => {
     const result = mixHomepageStories(buckets, 7, 50)
     expect(result).toHaveLength(7)
 
-    const posCount = result.filter((s) => ['uplifting', 'calm'].includes(s.emotionTag!)).length
-    const negCount = result.filter((s) => ['frustrating', 'scary'].includes(s.emotionTag!)).length
+    const posCount = result.filter(s => ['uplifting', 'calm'].includes(s.emotionTag!)).length
+    const negCount = result.filter(s => ['frustrating', 'scary'].includes(s.emotionTag!)).length
     // round(7 * 0.5) = 4 positive, 3 negative
     expect(posCount).toBe(4)
     expect(negCount).toBe(3)
@@ -106,7 +106,7 @@ describe('mixHomepageStories', () => {
     const result = mixHomepageStories(buckets, 7, 75)
     expect(result).toHaveLength(7)
 
-    const posCount = result.filter((s) => ['uplifting', 'calm'].includes(s.emotionTag!)).length
+    const posCount = result.filter(s => ['uplifting', 'calm'].includes(s.emotionTag!)).length
     // round(7 * 0.75) = 5 positive (uplifting+calm), 2 negative
     expect(posCount).toBe(5)
   })
@@ -116,7 +116,7 @@ describe('mixHomepageStories', () => {
     const result = mixHomepageStories(buckets, 7, 25)
     expect(result).toHaveLength(7)
 
-    const posCount = result.filter((s) => ['uplifting', 'calm'].includes(s.emotionTag!)).length
+    const posCount = result.filter(s => ['uplifting', 'calm'].includes(s.emotionTag!)).length
     // round(7 * 0.25) = 2 positive, 5 negative
     expect(posCount).toBe(2)
   })
@@ -132,14 +132,14 @@ describe('mixHomepageStories', () => {
     const buckets = makeBuckets(0, 0, 7)
     const result = mixHomepageStories(buckets, 7, 50)
     expect(result).toHaveLength(7)
-    expect(result.every((s) => ['frustrating', 'scary'].includes(s.emotionTag!))).toBe(true)
+    expect(result.every(s => ['frustrating', 'scary'].includes(s.emotionTag!))).toBe(true)
   })
 
   it('handles empty negative bucket', () => {
     const buckets = makeBuckets(4, 3, 0)
     const result = mixHomepageStories(buckets, 7, 50)
     expect(result).toHaveLength(7)
-    expect(result.every((s) => ['uplifting', 'calm'].includes(s.emotionTag!))).toBe(true)
+    expect(result.every(s => ['uplifting', 'calm'].includes(s.emotionTag!))).toBe(true)
   })
 
   it('handles all buckets empty', () => {
@@ -152,8 +152,8 @@ describe('mixHomepageStories', () => {
     const buckets = makeBuckets(3, 2, 3)
     const result = mixHomepageStories(buckets, 6, 50)
     for (let i = 1; i < result.length; i++) {
-      const prev = new Date(result[i - 1].datePublished!).getTime()
-      const curr = new Date(result[i].datePublished!).getTime()
+      const prev = new Date(result[i - 1]!.datePublished!).getTime()
+      const curr = new Date(result[i]!.datePublished!).getTime()
       expect(prev).toBeGreaterThanOrEqual(curr)
     }
   })
@@ -161,7 +161,7 @@ describe('mixHomepageStories', () => {
   it('does not include duplicate stories', () => {
     const buckets = makeBuckets(3, 2, 3)
     const result = mixHomepageStories(buckets, 6, 50)
-    const ids = result.map((s) => s.id)
+    const ids = result.map(s => s.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
 })
@@ -227,12 +227,7 @@ describe('pickHero', () => {
 
 describe('filterStoriesByPositivity', () => {
   function mixedStories(): PublicStory[] {
-    return [
-      ...storiesOfType('uplifting', 5),
-      ...storiesOfType('calm', 5),
-      ...storiesOfType('frustrating', 5),
-      ...storiesOfType('scary', 5),
-    ]
+    return [...storiesOfType('uplifting', 5), ...storiesOfType('calm', 5), ...storiesOfType('frustrating', 5), ...storiesOfType('scary', 5)]
   }
 
   it('returns all stories at 50%', () => {
@@ -245,20 +240,20 @@ describe('filterStoriesByPositivity', () => {
     const stories = mixedStories()
     const result = filterStoriesByPositivity(stories, 100)
     expect(result).toHaveLength(5)
-    expect(result.every((s) => s.emotionTag === 'uplifting')).toBe(true)
+    expect(result.every(s => s.emotionTag === 'uplifting')).toBe(true)
   })
 
   it('returns only negative stories at 0%', () => {
     const stories = mixedStories()
     const result = filterStoriesByPositivity(stories, 0)
     expect(result).toHaveLength(10)
-    expect(result.every((s) => ['frustrating', 'scary'].includes(s.emotionTag!))).toBe(true)
+    expect(result.every(s => ['frustrating', 'scary'].includes(s.emotionTag!))).toBe(true)
   })
 
   it('returns ~75% positive at 75% (includes calm)', () => {
     const stories = mixedStories()
     const result = filterStoriesByPositivity(stories, 75)
-    const posCount = result.filter((s) => ['uplifting', 'calm'].includes(s.emotionTag!)).length
+    const posCount = result.filter(s => ['uplifting', 'calm'].includes(s.emotionTag!)).length
     const ratio = posCount / result.length
     expect(ratio).toBeGreaterThanOrEqual(0.7)
     expect(ratio).toBeLessThanOrEqual(0.85)
@@ -267,7 +262,7 @@ describe('filterStoriesByPositivity', () => {
   it('returns ~25% positive at 25%', () => {
     const stories = mixedStories()
     const result = filterStoriesByPositivity(stories, 25)
-    const posCount = result.filter((s) => ['uplifting', 'calm'].includes(s.emotionTag!)).length
+    const posCount = result.filter(s => ['uplifting', 'calm'].includes(s.emotionTag!)).length
     const ratio = posCount / result.length
     expect(ratio).toBeGreaterThanOrEqual(0.2)
     expect(ratio).toBeLessThanOrEqual(0.35)
@@ -275,19 +270,19 @@ describe('filterStoriesByPositivity', () => {
 
   it('at 75% includes all positive stories (uplifting+calm)', () => {
     const stories = mixedStories()
-    const allPositive = stories.filter((s) => ['uplifting', 'calm'].includes(s.emotionTag!))
+    const allPositive = stories.filter(s => ['uplifting', 'calm'].includes(s.emotionTag!))
     const result = filterStoriesByPositivity(stories, 75)
     for (const pos of allPositive) {
-      expect(result.find((s) => s.id === pos.id)).toBeDefined()
+      expect(result.find(s => s.id === pos.id)).toBeDefined()
     }
   })
 
   it('at 25% includes all negative stories', () => {
     const stories = mixedStories()
-    const allNegative = stories.filter((s) => ['frustrating', 'scary'].includes(s.emotionTag!))
+    const allNegative = stories.filter(s => ['frustrating', 'scary'].includes(s.emotionTag!))
     const result = filterStoriesByPositivity(stories, 25)
     for (const neg of allNegative) {
-      expect(result.find((s) => s.id === neg.id)).toBeDefined()
+      expect(result.find(s => s.id === neg.id)).toBeDefined()
     }
   })
 
@@ -295,8 +290,8 @@ describe('filterStoriesByPositivity', () => {
     const stories = mixedStories()
     const result = filterStoriesByPositivity(stories, 75)
     for (let i = 1; i < result.length; i++) {
-      const prev = new Date(result[i - 1].datePublished!).getTime()
-      const curr = new Date(result[i].datePublished!).getTime()
+      const prev = new Date(result[i - 1]!.datePublished!).getTime()
+      const curr = new Date(result[i]!.datePublished!).getTime()
       expect(prev).toBeGreaterThanOrEqual(curr)
     }
   })
@@ -337,6 +332,6 @@ describe('filterStoriesByPositivity', () => {
     ]
     const result = filterStoriesByPositivity(stories, 100)
     expect(result).toHaveLength(1)
-    expect(result[0].emotionTag).toBe('uplifting')
+    expect(result[0]!.emotionTag).toBe('uplifting')
   })
 })

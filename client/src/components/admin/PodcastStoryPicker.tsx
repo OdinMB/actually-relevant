@@ -16,7 +16,9 @@ function StoryLine({ story }: { story: PodcastPoolStory | undefined }) {
   return (
     <span>
       <span className="text-neutral-900">{story.title}</span>{' '}
-      <span className="text-neutral-500">({story.publisher}, {story.issue})</span>
+      <span className="text-neutral-500">
+        ({story.publisher}, {story.issue})
+      </span>
     </span>
   )
 }
@@ -38,23 +40,41 @@ export function PodcastStoryPicker({ podcast, onDirtyChange }: PodcastStoryPicke
   const byId = useMemo(() => new Map((pool.data?.stories ?? []).map(s => [s.id, s])), [pool.data])
   const others = (pool.data?.stories ?? []).filter(s => !chosen.includes(s.id))
 
-  if (pool.isLoading) return <div className="flex justify-center py-6"><LoadingSpinner /></div>
-  if (pool.error || !pool.data) return <p role="alert" className="text-sm text-red-700">Failed to load this week&apos;s stories.</p>
+  if (pool.isLoading)
+    return (
+      <div className="flex justify-center py-6">
+        <LoadingSpinner />
+      </div>
+    )
+  if (pool.error || !pool.data)
+    return (
+      <p role="alert" className="text-sm text-red-700">
+        Failed to load this week&apos;s stories.
+      </p>
+    )
   const { minStories, maxStories } = pool.data
 
   return (
     <section aria-labelledby="podcast-stories-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-4">
       <div>
-        <h2 id="podcast-stories-heading" className="text-sm font-semibold text-neutral-900">Stories in this episode</h2>
-        <p className="text-xs text-neutral-600 mt-1">{minStories} to {maxStories} stories, in the order they are discussed. A swapped-in story takes the place of the one it replaces.</p>
+        <h2 id="podcast-stories-heading" className="text-sm font-semibold text-neutral-900">
+          Stories in this episode
+        </h2>
+        <p className="text-xs text-neutral-600 mt-1">
+          {minStories} to {maxStories} stories, in the order they are discussed. A swapped-in story takes the place of the one it replaces.
+        </p>
       </div>
 
       <ol className="space-y-3">
         {chosen.map((id, i) => (
           <li key={`${i}-${id}`} className="flex flex-wrap items-center gap-2 text-sm">
             <span className="w-5 text-neutral-500">{i + 1}.</span>
-            <span className="flex-1 min-w-[12rem]"><StoryLine story={byId.get(id)} /></span>
-            <label htmlFor={`swap-${i}`} className="sr-only">Swap story {i + 1} for another story</label>
+            <span className="flex-1 min-w-[12rem]">
+              <StoryLine story={byId.get(id)} />
+            </span>
+            <label htmlFor={`swap-${i}`} className="sr-only">
+              Swap story {i + 1} for another story
+            </label>
             <select
               id={`swap-${i}`}
               value=""
@@ -63,7 +83,11 @@ export function PodcastStoryPicker({ podcast, onDirtyChange }: PodcastStoryPicke
               className="rounded-md border border-neutral-300 px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 max-w-[14rem]"
             >
               <option value="">Swap for…</option>
-              {others.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+              {others.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
             </select>
             <Button
               variant="ghost"
@@ -86,8 +110,16 @@ export function PodcastStoryPicker({ podcast, onDirtyChange }: PodcastStoryPicke
           <ul className="mt-2 space-y-2">
             {others.map(s => (
               <li key={s.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="flex-1 min-w-[12rem]"><StoryLine story={s} /></span>
-                <Button variant="secondary" size="sm" onClick={() => setChosen([...chosen, s.id])} disabled={chosen.length >= maxStories} aria-label={`Add ${s.title}`}>
+                <span className="flex-1 min-w-[12rem]">
+                  <StoryLine story={s} />
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setChosen([...chosen, s.id])}
+                  disabled={chosen.length >= maxStories}
+                  aria-label={`Add ${s.title}`}
+                >
                   Add
                 </Button>
               </li>

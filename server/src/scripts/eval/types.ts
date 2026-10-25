@@ -95,10 +95,7 @@ export interface MetricRow {
   better?: 'higher' | 'lower'
 }
 
-export type Verdict =
-  | { kind: 'winner'; arm: string; evidence: string[] }
-  | { kind: 'none'; reasons: string[] }
-  | { kind: 'info'; text: string }
+export type Verdict = { kind: 'winner'; arm: string; evidence: string[] } | { kind: 'none'; reasons: string[] } | { kind: 'info'; text: string }
 
 export interface Decision {
   verdict: Verdict
@@ -107,23 +104,9 @@ export interface Decision {
 }
 
 export type CallSiteId =
-  | 'preassess'
-  | 'assess'
-  | 'dedup'
-  | 'related'
-  | 'social-pick'
-  | 'social-post'
-  | 'selection'
-  | 'newsletter-select'
-  | 'newsletter-intro'
-  | 'podcast'
+  'preassess' | 'assess' | 'dedup' | 'related' | 'social-pick' | 'social-post' | 'selection' | 'newsletter-select' | 'newsletter-intro' | 'podcast'
 
-export type RatingSetSlug =
-  | 'full-assessment'
-  | 'social-post'
-  | 'newsletter-intro'
-  | 'podcast-script'
-  | 'story-selection'
+export type RatingSetSlug = 'full-assessment' | 'social-post' | 'newsletter-intro' | 'podcast-script' | 'story-selection'
 
 export interface CallSiteResult {
   id: CallSiteId

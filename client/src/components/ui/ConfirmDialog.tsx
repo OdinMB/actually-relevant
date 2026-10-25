@@ -35,25 +35,15 @@ export function ConfirmDialog({
               </div>
             )}
             <div>
-              <DialogTitle className="text-base font-semibold text-neutral-900">
-                {title}
-              </DialogTitle>
-              {description && (
-                <Description className="mt-2 text-sm text-neutral-500">
-                  {description}
-                </Description>
-              )}
+              <DialogTitle className="text-base font-semibold text-neutral-900">{title}</DialogTitle>
+              {description && <Description className="mt-2 text-sm text-neutral-500">{description}</Description>}
             </div>
           </div>
           <div className="mt-6 flex justify-end gap-3">
             <Button variant="secondary" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button
-              variant={variant === 'danger' ? 'danger' : 'primary'}
-              onClick={onConfirm}
-              loading={loading}
-            >
+            <Button variant={variant === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
               {confirmLabel}
             </Button>
           </div>

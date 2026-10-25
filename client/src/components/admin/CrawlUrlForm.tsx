@@ -37,9 +37,7 @@ export function CrawlUrlForm({ open, onClose }: CrawlUrlFormProps) {
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="mx-auto max-w-md w-full rounded-lg bg-white p-6 shadow-xl">
-          <DialogTitle className="text-base font-semibold text-neutral-900 mb-4">
-            Crawl URL
-          </DialogTitle>
+          <DialogTitle className="text-base font-semibold text-neutral-900 mb-4">Crawl URL</DialogTitle>
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               id="crawl-url"
@@ -59,7 +57,9 @@ export function CrawlUrlForm({ open, onClose }: CrawlUrlFormProps) {
               options={(feeds.data || []).map(f => ({ value: f.id, label: f.title }))}
             />
             <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
               <Button type="submit" loading={crawlUrl.isPending} disabled={!url || !feedId}>
                 Crawl
               </Button>

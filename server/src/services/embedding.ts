@@ -1,18 +1,16 @@
 import crypto from 'node:crypto'
 import OpenAI from 'openai'
-import { withRetry } from '../lib/retry.js'
+import { TTLCache, cached } from '../lib/cache.js'
 import { createLogger } from '../lib/logger.js'
 import { config } from '../config.js'
-import {
-  fetchStoryForEmbedding,
-  fetchStoriesForEmbedding,
-  saveEmbedding,
-  type StoryEmbeddingRow,
-} from '../lib/vectors.js'
+import { fetchStoryForEmbedding, fetchStoriesForEmbedding, saveEmbedding, type StoryEmbeddingRow } from '../lib/vectors.js'
 
 const log = createLogger('embedding')
 
-const openai = new OpenAI()
+// The SDK retries 408/409/429/5xx and connection errors with backoff, honoring Retry-After; the
+// same 3 retries as the chat models (createChatModel). Never wrap these calls in withRetry() as
+// well: the layers multiply (`.context/llm-analysis.md`, "Retries").
+const openai = new OpenAI({ maxRetries: 3 })
 
 export type StoryForEmbedding = StoryEmbeddingRow
 
@@ -36,86 +34,54 @@ export function computeContentHash(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex')
 }
 
-export function needsEmbeddingUpdate(
-  story: Pick<StoryForEmbedding, 'embeddingContentHash'>,
-  currentHash: string,
-): boolean {
+export function needsEmbeddingUpdate(story: Pick<StoryForEmbedding, 'embeddingContentHash'>, currentHash: string): boolean {
   return story.embeddingContentHash !== currentHash
 }
 
 // ~8k token limit for text-embedding-3-small; truncate at char level with safety margin
 const MAX_EMBEDDING_CHARS = 30_000
 
-// Small LRU cache for search query embeddings to avoid redundant OpenAI calls.
+// Small cache for search query embeddings to avoid redundant OpenAI calls.
 // 50 entries * ~6KB each = ~300KB max memory.
 const SEARCH_CACHE_MAX = 50
 const SEARCH_CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
-const searchEmbeddingCache = new Map<string, { embedding: number[]; expiry: number }>()
-
-function evictExpiredSearchCache() {
-  const now = Date.now()
-  for (const [key, entry] of searchEmbeddingCache) {
-    if (entry.expiry <= now) searchEmbeddingCache.delete(key)
-  }
-}
+const searchEmbeddingCache = new TTLCache<number[]>(SEARCH_CACHE_TTL_MS, { maxEntries: SEARCH_CACHE_MAX })
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   const input = text.length > MAX_EMBEDDING_CHARS ? text.slice(0, MAX_EMBEDDING_CHARS) : text
-  const response = await withRetry(
-    () =>
-      openai.embeddings.create({
-        model: config.embedding.model,
-        input,
-        dimensions: config.embedding.dimensions,
-      }),
-    { retries: 3, baseDelayMs: 1000 },
-  )
-  return response.data[0].embedding
+  const response = await openai.embeddings.create({
+    model: config.embedding.model,
+    input,
+    dimensions: config.embedding.dimensions,
+  })
+  const [first] = response.data
+  if (!first) throw new Error('OpenAI returned no embedding')
+  return first.embedding
 }
 
 /**
  * Generate embedding for a search query with caching.
- * Identical queries within the TTL reuse the cached embedding.
+ * Identical queries (trimmed, case-insensitive) within the TTL reuse the cached embedding, and
+ * concurrent identical queries share one call.
  */
 export async function generateSearchEmbedding(query: string): Promise<number[]> {
-  const key = query.trim().toLowerCase()
-
-  const cached = searchEmbeddingCache.get(key)
-  if (cached && cached.expiry > Date.now()) return cached.embedding
-
-  const embedding = await generateEmbedding(query)
-
-  // Evict expired entries and enforce max size
-  evictExpiredSearchCache()
-  if (searchEmbeddingCache.size >= SEARCH_CACHE_MAX) {
-    const oldest = searchEmbeddingCache.keys().next().value!
-    searchEmbeddingCache.delete(oldest)
-  }
-
-  searchEmbeddingCache.set(key, { embedding, expiry: Date.now() + SEARCH_CACHE_TTL_MS })
-  return embedding
+  return cached(searchEmbeddingCache, query.trim().toLowerCase(), () => generateEmbedding(query))
 }
 
-export async function generateEmbeddingsBatch(
-  texts: string[],
-): Promise<number[][]> {
-  const response = await withRetry(
-    () =>
-      openai.embeddings.create({
-        model: config.embedding.model,
-        input: texts,
-        dimensions: config.embedding.dimensions,
-      }),
-    { retries: 3, baseDelayMs: 1000 },
-  )
+export async function generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
+  const response = await openai.embeddings.create({
+    model: config.embedding.model,
+    input: texts,
+    dimensions: config.embedding.dimensions,
+  })
   // OpenAI returns embeddings in order of input, but sort by index to be safe
-  return response.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
+  return response.data.sort((a, b) => a.index - b.index).map(d => d.embedding)
 }
 
 /**
  * Generate an embedding vector for story content without touching the DB.
  * Returns the vector + hash, or null if no update is needed.
- * Throws on OpenAI failure (after 3 retries via withRetry).
+ * Throws on OpenAI failure (after the SDK's retries).
  */
 export async function generateEmbeddingForContent(
   story: Pick<StoryForEmbedding, 'title' | 'titleLabel' | 'summary' | 'embeddingContentHash'>,
@@ -143,10 +109,7 @@ export interface EmbeddingResult {
  * Returns per-story results (success/failure) so callers can decide
  * which stories to proceed with.
  */
-export async function batchGenerateEmbeddings(
-  storyIds: string[],
-  statusFilter?: 'published' | 'selected' | 'analyzed',
-): Promise<EmbeddingResult[]> {
+export async function batchGenerateEmbeddings(storyIds: string[], statusFilter?: 'published' | 'selected' | 'analyzed'): Promise<EmbeddingResult[]> {
   if (storyIds.length === 0) return []
 
   const stories = await fetchStoriesForEmbedding(storyIds, statusFilter)
@@ -184,11 +147,12 @@ export async function batchGenerateEmbeddings(
     try {
       const embeddings = await generateEmbeddingsBatch(batch.map(b => b.content))
       for (let j = 0; j < batch.length; j++) {
+        const item = batch[j]!
         results.push({
-          id: batch[j].story.id,
+          id: item.story.id,
           success: true,
           embedding: embeddings[j],
-          hash: batch[j].hash,
+          hash: item.hash,
         })
       }
     } catch (err) {

@@ -53,14 +53,20 @@ function RatingTable({ title, counts }: { title: string; counts: Record<string, 
       <table className="w-full text-sm">
         <caption className="sr-only">{title}: stories per rating</caption>
         <thead className="sr-only">
-          <tr><th scope="col">Rating</th><th scope="col">Stories</th><th scope="col">Share</th></tr>
+          <tr>
+            <th scope="col">Rating</th>
+            <th scope="col">Stories</th>
+            <th scope="col">Share</th>
+          </tr>
         </thead>
         <tbody>
           {RATINGS.map(r => {
             const n = counts[r] ?? 0
             return (
               <tr key={r}>
-                <th scope="row" className="py-0.5 pr-3 w-8 text-right font-normal text-neutral-600 tabular-nums">{r}</th>
+                <th scope="row" className="py-0.5 pr-3 w-8 text-right font-normal text-neutral-600 tabular-nums">
+                  {r}
+                </th>
                 <td className="py-0.5 pr-3">
                   <div className="h-3 rounded-sm bg-brand-500" style={{ width: `${(n / max) * 100}%`, minWidth: n > 0 ? 2 : 0 }} aria-hidden="true" />
                 </td>
@@ -71,7 +77,9 @@ function RatingTable({ title, counts }: { title: string; counts: Record<string, 
           })}
         </tbody>
       </table>
-      <p className="text-xs text-neutral-500 mt-2">{fmt(rated)} rated, {fmt(counts.none ?? 0)} not rated</p>
+      <p className="text-xs text-neutral-500 mt-2">
+        {fmt(rated)} rated, {fmt(counts.none ?? 0)} not rated
+      </p>
     </Card>
   )
 }
@@ -105,19 +113,35 @@ function MonthTable({ stats }: { stats: LifetimeStoryStats }) {
           <caption className="sr-only">Lifetime story counts by month crawled</caption>
           <thead className="sticky top-0 bg-white">
             <tr className="border-b border-neutral-200">
-              <th scope="col" className={`${TH} text-left`}>Month</th>
-              <th scope="col" className={`${TH} text-right`}>Crawled</th>
-              <th scope="col" className={`${TH} text-right`}>Screened</th>
-              <th scope="col" className={`${TH} text-right`}>Assessed</th>
-              <th scope="col" className={`${TH} text-right`}>Published</th>
-              <th scope="col" className={`${TH} text-right`}>Pub %</th>
-              <th scope="col" className={`${TH} text-right`}>Deleted</th>
+              <th scope="col" className={`${TH} text-left`}>
+                Month
+              </th>
+              <th scope="col" className={`${TH} text-right`}>
+                Crawled
+              </th>
+              <th scope="col" className={`${TH} text-right`}>
+                Screened
+              </th>
+              <th scope="col" className={`${TH} text-right`}>
+                Assessed
+              </th>
+              <th scope="col" className={`${TH} text-right`}>
+                Published
+              </th>
+              <th scope="col" className={`${TH} text-right`}>
+                Pub %
+              </th>
+              <th scope="col" className={`${TH} text-right`}>
+                Deleted
+              </th>
             </tr>
           </thead>
           <tbody>
             {stats.byMonth.map(m => (
               <tr key={m.month} className="border-b border-neutral-100 last:border-0">
-                <th scope="row" className="py-2 px-3 text-left font-medium text-neutral-900 whitespace-nowrap">{m.month}</th>
+                <th scope="row" className="py-2 px-3 text-left font-medium text-neutral-900 whitespace-nowrap">
+                  {m.month}
+                </th>
                 <td className={TD}>{fmt(m.crawled)}</td>
                 <td className={TD}>{fmt(m.screened)}</td>
                 <td className={TD}>{fmt(m.assessed)}</td>
@@ -143,12 +167,7 @@ const sortValue = (row: LifetimeGroupRow, key: SortKey): number | string => {
 }
 
 /** Feeds or issues, sortable by any column (largest first, name A to Z). */
-function GroupTable({ title, label, rows, linkTo }: {
-  title: string
-  label: string
-  rows: LifetimeGroupRow[]
-  linkTo?: (row: LifetimeGroupRow) => string
-}) {
+function GroupTable({ title, label, rows, linkTo }: { title: string; label: string; rows: LifetimeGroupRow[]; linkTo?: (row: LifetimeGroupRow) => string }) {
   const [sort, setSort] = useState<SortKey>('crawled')
   const sorted = [...rows].sort((a, b) => {
     const va = sortValue(a, sort)
@@ -191,8 +210,12 @@ function GroupTable({ title, label, rows, linkTo }: {
               <tr key={row.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
                 <th scope="row" className="py-2 px-3 text-left font-medium text-neutral-900">
                   {linkTo ? (
-                    <Link to={linkTo(row)} className="hover:text-brand-700 hover:underline">{row.name}</Link>
-                  ) : row.name}
+                    <Link to={linkTo(row)} className="hover:text-brand-700 hover:underline">
+                      {row.name}
+                    </Link>
+                  ) : (
+                    row.name
+                  )}
                 </th>
                 <td className={TD}>{fmt(row.crawled)}</td>
                 <td className={TD}>{fmt(row.published)}</td>
@@ -218,12 +241,13 @@ export default function StatsPage() {
         <title>Stats — Admin — Actually Relevant</title>
       </Helmet>
 
-      <PageHeader
-        title="Stats"
-        description="Lifetime totals of every story ever crawled, including the ones the monthly cleanup deleted"
-      />
+      <PageHeader title="Stats" description="Lifetime totals of every story ever crawled, including the ones the monthly cleanup deleted" />
 
-      {query.isLoading && <div className="flex justify-center py-8"><LoadingSpinner /></div>}
+      {query.isLoading && (
+        <div className="flex justify-center py-8">
+          <LoadingSpinner />
+        </div>
+      )}
       {query.error && <ErrorState message="Failed to load stats" onRetry={() => query.refetch()} />}
       {query.data && (
         <>
@@ -234,12 +258,7 @@ export default function StatsPage() {
             <StatusTable stats={query.data} />
           </div>
           <div className="space-y-8">
-            <GroupTable
-              title="By source"
-              label="Feed"
-              rows={query.data.byFeed}
-              linkTo={row => `/admin/feeds?open=${encodeURIComponent(row.id)}`}
-            />
+            <GroupTable title="By source" label="Feed" rows={query.data.byFeed} linkTo={row => `/admin/feeds?open=${encodeURIComponent(row.id)}`} />
             <GroupTable title="By issue" label="Issue" rows={query.data.byIssue} />
             <MonthTable stats={query.data} />
           </div>

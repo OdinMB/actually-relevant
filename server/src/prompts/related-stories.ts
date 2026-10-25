@@ -6,11 +6,7 @@ export interface CandidateStory {
   title: string | null
 }
 
-export function buildRelatedStoriesPrompt(
-  source: { titleLabel: string | null; title: string | null },
-  candidates: CandidateStory[],
-  toSelect: number,
-): string {
+export function buildRelatedStoriesPrompt(source: { titleLabel: string | null; title: string | null }, candidates: CandidateStory[], toSelect: number): string {
   let prompt = `<ROLE>
 You are a news editor identifying stories that are genuinely related to a source story — covering the same event, topic, policy area, or ongoing development.
 </ROLE>
@@ -30,9 +26,7 @@ From the ${candidates.length} candidate stories below, select exactly ${toSelect
 `
 
   for (const c of candidates) {
-    prompt += `<STORY id="${escapeXml(c.id)}">`
-      + `${escapeXml(c.titleLabel || '')} — ${escapeXml(c.title || '')}`
-      + `</STORY>\n`
+    prompt += `<STORY id="${escapeXml(c.id)}">` + `${escapeXml(c.titleLabel || '')} — ${escapeXml(c.title || '')}` + `</STORY>\n`
   }
 
   prompt += '</CANDIDATES>\n'

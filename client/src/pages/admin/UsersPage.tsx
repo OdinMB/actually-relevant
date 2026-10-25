@@ -22,13 +22,7 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
 ]
 
-function CreateUserDialog({
-  open,
-  onClose,
-}: {
-  open: boolean
-  onClose: () => void
-}) {
+function CreateUserDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast()
   const createUser = useCreateUser()
   const [name, setName] = useState('')
@@ -67,18 +61,33 @@ function CreateUserDialog({
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="mx-auto w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-          <DialogTitle className="text-lg font-semibold text-neutral-900 mb-4">
-            Create User
-          </DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-neutral-900 mb-4">Create User</DialogTitle>
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input id="create-name" label="Name" value={name} onChange={e => setName(e.target.value)} required autoFocus />
             <Input id="create-email" label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-            <Input id="create-password" label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+            <Input
+              id="create-password"
+              label="Password"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
             <Select id="create-role" label="Role" options={ROLE_OPTIONS} value={role} onChange={e => setRole(e.target.value)} />
-            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+            {error && (
+              <p className="text-sm text-red-600" role="alert">
+                {error}
+              </p>
+            )}
             <div className="flex justify-end gap-3 pt-2">
-              <Button variant="secondary" type="button" onClick={handleClose}>Cancel</Button>
-              <Button type="submit" loading={createUser.isPending}>Create</Button>
+              <Button variant="secondary" type="button" onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={createUser.isPending}>
+                Create
+              </Button>
             </div>
           </form>
         </DialogPanel>
@@ -115,30 +124,17 @@ export default function UsersPage() {
         <title>Users — Admin — Actually Relevant</title>
       </Helmet>
 
-      <PageHeader
-        title="Users"
-        description="Manage admin users and their roles."
-        actions={
-          <Button onClick={() => setShowCreate(true)}>Create User</Button>
-        }
-      />
+      <PageHeader title="Users" description="Manage admin users and their roles." actions={<Button onClick={() => setShowCreate(true)}>Create User</Button>} />
 
       {usersQuery.isLoading && (
-        <div className="flex justify-center py-12"><LoadingSpinner /></div>
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
       )}
-      {usersQuery.error && (
-        <ErrorState message="Failed to load users" onRetry={() => usersQuery.refetch()} />
-      )}
-      {usersQuery.data && usersQuery.data.length === 0 && (
-        <EmptyState title="No users yet" />
-      )}
+      {usersQuery.error && <ErrorState message="Failed to load users" onRetry={() => usersQuery.refetch()} />}
+      {usersQuery.data && usersQuery.data.length === 0 && <EmptyState title="No users yet" />}
       {usersQuery.data && usersQuery.data.length > 0 && (
-        <UserTable
-          users={usersQuery.data}
-          currentUserId={currentUser?.id}
-          onEdit={setEditingUserId}
-          onDelete={setDeletingUser}
-        />
+        <UserTable users={usersQuery.data} currentUserId={currentUser?.id} onEdit={setEditingUserId} onDelete={setDeletingUser} />
       )}
 
       <CreateUserDialog open={showCreate} onClose={() => setShowCreate(false)} />

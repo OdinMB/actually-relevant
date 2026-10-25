@@ -61,7 +61,9 @@ describe('requireAuth (JWT only)', () => {
 
   it('rejects API key — admin routes are JWT only', () => {
     process.env.PUBLIC_API_KEY = 'test-api-key-123'
-    mockVerifyAccessToken.mockImplementation(() => { throw new Error('invalid') })
+    mockVerifyAccessToken.mockImplementation(() => {
+      throw new Error('invalid')
+    })
     req.headers = { authorization: 'Bearer test-api-key-123' }
 
     requireAuth(req as Request, res as Response, next)
@@ -71,7 +73,9 @@ describe('requireAuth (JWT only)', () => {
   })
 
   it('returns 401 for invalid JWT', () => {
-    mockVerifyAccessToken.mockImplementation(() => { throw new Error('invalid') })
+    mockVerifyAccessToken.mockImplementation(() => {
+      throw new Error('invalid')
+    })
     req.headers = { authorization: 'Bearer bad-token' }
 
     requireAuth(req as Request, res as Response, next)

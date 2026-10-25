@@ -44,14 +44,18 @@ export function podcastEpisodeStories(p: PodcastItem): StoryForPodcast[] {
 export const podcastPrompt = (p: PodcastItem) => buildPodcastPrompt(podcastEpisodeStories(p), dialogueCharBudget('weekly'), 'weekly')
 
 const selectStory = (s: PodcastFixtureStory & { id: string }): StoryForPodcastSelect => ({
-  id: s.id, issue: s.category, title: s.title, summary: s.summary, relevance: s.relevance ?? null, emotionTag: s.emotionTag ?? null,
+  id: s.id,
+  issue: s.category,
+  title: s.title,
+  summary: s.summary,
+  relevance: s.relevance ?? null,
+  emotionTag: s.emotionTag ?? null,
 })
 
 export const podcastSelectPrompt = (p: PodcastItem) =>
   buildPodcastSelectPrompt(podcastPool(p).map(selectStory), config.podcast.minStories, config.podcast.maxStories, 'weekly')
 
-export const scoreDialogue = (p: PodcastItem, dialogue: PodcastDialogue): DialogueCheck =>
-  checkDialogue(dialogue, podcastEpisodeStories(p))
+export const scoreDialogue = (p: PodcastItem, dialogue: PodcastDialogue): DialogueCheck => checkDialogue(dialogue, podcastEpisodeStories(p))
 
 export interface PodcastArmMetrics {
   /** Dialogues production would reject (and regenerate once). */

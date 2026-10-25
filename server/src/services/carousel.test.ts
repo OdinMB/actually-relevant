@@ -7,7 +7,7 @@ import { tmpdir } from 'os'
 /** Every text the slide renderer draws, recorded by a pass-through wrapper around the real canvas. */
 const drawnText = vi.hoisted(() => [] as { text: string; x: number; align: string; width: number }[])
 
-vi.mock('@napi-rs/canvas', async (importOriginal) => {
+vi.mock('@napi-rs/canvas', async importOriginal => {
   const actual = await importOriginal<typeof import('@napi-rs/canvas')>()
   return {
     ...actual,
@@ -25,14 +25,8 @@ vi.mock('@napi-rs/canvas', async (importOriginal) => {
   }
 })
 
-const {
-  createStoryImage,
-  generateCarouselPdf,
-  generateCarouselZip,
-  buildCarouselPostText,
-  slideAltText,
-  CAROUSEL_POST_TEXT_FILE,
-} = await import('./carousel.js')
+const { createStoryImage, generateCarouselPdf, generateCarouselZip, buildCarouselPostText, slideAltText, CAROUSEL_POST_TEXT_FILE } =
+  await import('./carousel.js')
 type CarouselStory = import('./carousel.js').CarouselStory
 const { IPTC_TRAINED_ALGORITHMIC_MEDIA } = await import('../lib/aiProvenance.js')
 
@@ -81,11 +75,28 @@ describe('createStoryImage', () => {
   it('draws the AI label into the slide footer, fully inside the slide', () => {
     drawnText.length = 0
     createStoryImage(sampleStory)
-    const footer = drawnText.find((d) => d.text === 'actuallyrelevant.news · AI-generated')
+    const footer = drawnText.find(d => d.text === 'actuallyrelevant.news · AI-generated')
     expect(footer).toBeDefined()
     expect(footer!.align).toBe('right')
     expect(footer!.x).toBeLessThanOrEqual(1200)
     expect(footer!.x - footer!.width).toBeGreaterThanOrEqual(0)
+  })
+
+  it('renders at the size it is given, with the AI marks, for the og:image', async () => {
+    const { OG_IMAGE_SIZE } = await import('./carousel.js')
+    drawnText.length = 0
+    const buffer = createStoryImage({ ...sampleStory, summary: 'Long summary sentence. '.repeat(80) }, OG_IMAGE_SIZE)
+    // IHDR width and height
+    expect(buffer.readUInt32BE(16)).toBe(1200)
+    expect(buffer.readUInt32BE(20)).toBe(630)
+    expect(buffer.includes(`DigitalSourceType="${IPTC_TRAINED_ALGORITHMIC_MEDIA}"`)).toBe(true)
+    expect(drawnText.some(d => d.text === 'actuallyrelevant.news · AI-generated')).toBe(true)
+  })
+
+  it('keeps the carousel slide size by default', () => {
+    const buffer = createStoryImage(sampleStory)
+    expect(buffer.readUInt32BE(16)).toBe(1200)
+    expect(buffer.readUInt32BE(20)).toBe(675)
   })
 })
 
@@ -151,10 +162,7 @@ describe('generateCarouselZip', () => {
   })
 
   it('generates a ZIP file', async () => {
-    const stories: CarouselStory[] = [
-      sampleStory,
-      { ...sampleStory, title: 'Climate report shows progress', category: 'Planet & Climate' },
-    ]
+    const stories: CarouselStory[] = [sampleStory, { ...sampleStory, title: 'Climate report shows progress', category: 'Planet & Climate' }]
 
     const zipPath = await generateCarouselZip(stories, outputDir)
     expect(existsSync(zipPath)).toBe(true)

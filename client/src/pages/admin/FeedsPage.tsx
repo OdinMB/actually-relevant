@@ -109,7 +109,7 @@ export default function FeedsPage() {
     launchTask({
       id: `crawl-all-${Date.now()}`,
       label,
-      executor: async (reportProgress) => {
+      executor: async reportProgress => {
         let succeeded = 0
         let failed = 0
         for (const feed of activeFeeds) {
@@ -150,10 +150,7 @@ export default function FeedsPage() {
         description={feedsQuery.data ? `${feedsQuery.data.length} feeds` : undefined}
         actions={
           <>
-            <Button
-              variant={showInactive ? 'secondary' : 'ghost'}
-              onClick={() => setShowInactive(!showInactive)}
-            >
+            <Button variant={showInactive ? 'secondary' : 'ghost'} onClick={() => setShowInactive(!showInactive)}>
               {showInactive ? 'Hide inactive' : 'Show inactive'}
             </Button>
             {import.meta.env.DEV && (
@@ -182,7 +179,11 @@ export default function FeedsPage() {
         </div>
       )}
 
-      {feedsQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {feedsQuery.isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {feedsQuery.error && <ErrorState message="Failed to load feeds" onRetry={() => feedsQuery.refetch()} />}
       {feedsQuery.data && feedsQuery.data.length === 0 && <EmptyState title="No feeds yet" description="Add your first RSS feed." />}
       {feedsQuery.data && feedsQuery.data.length > 0 && (
@@ -196,17 +197,9 @@ export default function FeedsPage() {
         />
       )}
 
-      <FeedCreateForm
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        issues={issuesQuery.data || []}
-      />
+      <FeedCreateForm open={createOpen} onClose={() => setCreateOpen(false)} issues={issuesQuery.data || []} />
 
-      <FeedEditPanel
-        feedId={editingFeedId}
-        issues={issuesQuery.data || []}
-        onClose={() => setEditingFeedId(null)}
-      />
+      <FeedEditPanel feedId={editingFeedId} issues={issuesQuery.data || []} onClose={() => setEditingFeedId(null)} />
 
       <ConfirmDialog
         open={!!deleteId}

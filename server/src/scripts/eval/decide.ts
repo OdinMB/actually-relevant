@@ -40,7 +40,7 @@ export function pickLowestPassing(candidates: CandidateCheck[]): Decision {
     }
   }
   return {
-    verdict: { kind: 'winner', arm: passing[0].arm, evidence: passing[0].evidence ?? [] },
+    verdict: { kind: 'winner', arm: passing[0]!.arm, evidence: passing[0]!.evidence ?? [] },
     passing: passing.map(c => c.arm),
   }
 }

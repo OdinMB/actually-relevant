@@ -33,16 +33,19 @@ export function findModelNames(text: string): string[] {
 }
 
 export function mentionsModelName(value: unknown): boolean {
-  return findModelNames(typeof value === 'string' ? value : JSON.stringify(value) ?? '').length > 0
+  return findModelNames(typeof value === 'string' ? value : (JSON.stringify(value) ?? '')).length > 0
 }
 
 /** How often each term matched across `values`, e.g. "OpenAI ×2, gpt ×1" (for the report). */
 export function tallyTerms(values: unknown[]): string {
   const counts = new Map<string, number>()
   for (const v of values) {
-    for (const t of findModelNames(typeof v === 'string' ? v : JSON.stringify(v) ?? '')) counts.set(t, (counts.get(t) ?? 0) + 1)
+    for (const t of findModelNames(typeof v === 'string' ? v : (JSON.stringify(v) ?? ''))) counts.set(t, (counts.get(t) ?? 0) + 1)
   }
-  return [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([t, n]) => `${t} ×${n}`).join(', ')
+  return [...counts]
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .map(([t, n]) => `${t} ×${n}`)
+    .join(', ')
 }
 
 /**

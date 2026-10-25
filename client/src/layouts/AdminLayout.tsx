@@ -68,10 +68,7 @@ export function NavItems({ onClick, badgeCounts }: { onClick?: () => void; badge
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500
-              ${isActive
-                ? 'bg-brand-50 text-brand-700'
-                : 'text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900'
-              }`
+              ${isActive ? 'bg-brand-50 text-brand-700' : 'text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900'}`
             }
           >
             <item.icon className="h-5 w-5 shrink-0" />
@@ -171,61 +168,63 @@ function AdminShell() {
 
   return (
     <ToastProvider>
-    <PodcastProgressProvider>
-    <BackgroundTaskProvider>
-      <div className="flex h-screen bg-neutral-50">
-        {/* Desktop sidebar */}
-        <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-neutral-200 lg:bg-white">
-          <Sidebar />
-        </aside>
+      <PodcastProgressProvider>
+        <BackgroundTaskProvider>
+          <div className="flex h-screen bg-neutral-50">
+            {/* Desktop sidebar */}
+            <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-neutral-200 lg:bg-white">
+              <Sidebar />
+            </aside>
 
-        {/* Mobile sidebar */}
-        <Dialog open={mobileOpen} onClose={setMobileOpen} className="relative z-40 lg:hidden">
-          <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-          <DialogPanel className="fixed inset-y-0 left-0 z-50 w-60 bg-white shadow-xl">
-            <div className="absolute right-2 top-2">
-              <button
-                onClick={() => setMobileOpen(false)}
-                className="rounded-md p-2 text-neutral-500 hover:text-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                aria-label="Close menu"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
+            {/* Mobile sidebar */}
+            <Dialog open={mobileOpen} onClose={setMobileOpen} className="relative z-40 lg:hidden">
+              <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+              <DialogPanel className="fixed inset-y-0 left-0 z-50 w-60 bg-white shadow-xl">
+                <div className="absolute right-2 top-2">
+                  <button
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-md p-2 text-neutral-500 hover:text-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    aria-label="Close menu"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+                <Sidebar onNavigate={() => setMobileOpen(false)} />
+              </DialogPanel>
+            </Dialog>
+
+            {/* Main content */}
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {/* Mobile top bar: a banner landmark, so its "Admin" label sits inside one (axe "region") */}
+              <header className="flex items-center border-b border-neutral-200 bg-white px-4 py-3 lg:hidden">
+                <button
+                  onClick={() => setMobileOpen(true)}
+                  className="rounded-md p-2 text-neutral-500 hover:text-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  aria-label="Open menu"
+                >
+                  <Bars3Icon className="h-5 w-5" />
+                </button>
+                <span className="ml-3 text-lg font-bold text-neutral-900">Admin</span>
+              </header>
+
+              <NewVersionBanner />
+
+              <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+                <Suspense
+                  fallback={
+                    <div className="flex justify-center py-12">
+                      <h1 className="sr-only">Loading</h1>
+                      <LoadingSpinner />
+                    </div>
+                  }
+                >
+                  <Outlet />
+                </Suspense>
+              </main>
             </div>
-            <Sidebar onNavigate={() => setMobileOpen(false)} />
-          </DialogPanel>
-        </Dialog>
-
-        {/* Main content */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Mobile top bar: a banner landmark, so its "Admin" label sits inside one (axe "region") */}
-          <header className="flex items-center border-b border-neutral-200 bg-white px-4 py-3 lg:hidden">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="rounded-md p-2 text-neutral-500 hover:text-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-              aria-label="Open menu"
-            >
-              <Bars3Icon className="h-5 w-5" />
-            </button>
-            <span className="ml-3 text-lg font-bold text-neutral-900">Admin</span>
-          </header>
-
-          <NewVersionBanner />
-
-          <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-            <Suspense fallback={
-              <div className="flex justify-center py-12">
-                <h1 className="sr-only">Loading</h1>
-                <LoadingSpinner />
-              </div>
-            }>
-              <Outlet />
-            </Suspense>
-          </main>
-        </div>
-      </div>
-    </BackgroundTaskProvider>
-    </PodcastProgressProvider>
+          </div>
+        </BackgroundTaskProvider>
+      </PodcastProgressProvider>
     </ToastProvider>
   )
 }

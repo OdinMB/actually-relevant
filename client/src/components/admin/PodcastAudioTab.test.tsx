@@ -46,7 +46,9 @@ describe('PodcastAudioTab', () => {
   })
 
   it('offers no changes on an episode that was ever published', () => {
-    renderInAdmin(<PodcastAudioTab podcast={{ ...ready, status: 'published', publishedAt: '2026-10-12T07:00:00.000Z' }} pendingEdits={false} onBackToScript={() => {}} />)
+    renderInAdmin(
+      <PodcastAudioTab podcast={{ ...ready, status: 'published', publishedAt: '2026-10-12T07:00:00.000Z' }} pendingEdits={false} onBackToScript={() => {}} />,
+    )
     expect(screen.queryByRole('button', { name: /Regenerate audio|Back to script/ })).toBeNull()
   })
 

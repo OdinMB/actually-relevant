@@ -82,23 +82,18 @@ export default function ClustersPage() {
         }
       />
 
-      {clustersQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {clustersQuery.isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {clustersQuery.error && <ErrorState message="Failed to load clusters" onRetry={() => clustersQuery.refetch()} />}
       {clustersQuery.data && clustersQuery.data.length === 0 && (
         <EmptyState title="No clusters" description="Story clusters are created automatically during deduplication." />
       )}
-      {clustersQuery.data && clustersQuery.data.length > 0 && (
-        <ClusterTable
-          clusters={clustersQuery.data}
-          onEdit={setEditingId}
-          onDissolve={setDissolveId}
-        />
-      )}
+      {clustersQuery.data && clustersQuery.data.length > 0 && <ClusterTable clusters={clustersQuery.data} onEdit={setEditingId} onDissolve={setDissolveId} />}
 
-      <ClusterDetailPanel
-        clusterId={openId}
-        onClose={() => setEditingId(null)}
-      />
+      <ClusterDetailPanel clusterId={openId} onClose={() => setEditingId(null)} />
 
       <CreateClusterPanel
         open={isCreateOpen}

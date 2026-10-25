@@ -6,6 +6,7 @@ const mockPrisma = vi.hoisted(() => ({
   newsletter: {
     findUnique: vi.fn(),
     findUniqueOrThrow: vi.fn(),
+    findFirst: vi.fn(),
     update: vi.fn(),
   },
   newsletterSend: {
@@ -38,6 +39,7 @@ vi.mock('../lib/retry.js', () => ({
 
 const { generateHtmlContent, sendTest, TestSegmentNotConfiguredError } = await import('./newsletter.js')
 const { config } = await import('../config.js')
+const NEWSLETTER_TOP_LABEL_TEXT = (await import('../lib/aiLabelCopy.js')).NEWSLETTER_TOP_LABEL.text
 
 describe('sendTest', () => {
   const originalSegment = config.plunk.testSegmentId
@@ -68,9 +70,7 @@ describe('sendTest', () => {
 
     await sendTest('nl-1')
 
-    expect(mockPlunk.createCampaign).toHaveBeenCalledWith(
-      expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-test' }),
-    )
+    expect(mockPlunk.createCampaign).toHaveBeenCalledWith(expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-test' }))
   })
 })
 
@@ -92,15 +92,7 @@ describe('generateHtmlContent', () => {
   }
 
   /** Helper to build markdown content for a single story */
-  function storyBlock(opts: {
-    issue?: string
-    issueSlug?: string
-    title: string
-    publisher: string
-    url: string
-    body: string
-    relevanceUrl?: string
-  }) {
+  function storyBlock(opts: { issue?: string; issueSlug?: string; title: string; publisher: string; url: string; body: string; relevanceUrl?: string }) {
     const lines: string[] = []
     if (opts.issue) {
       const slug = opts.issueSlug || 'general-news'
@@ -109,12 +101,7 @@ describe('generateHtmlContent', () => {
     const linkParts = [opts.publisher, `[original article](${opts.url})`]
     if (opts.relevanceUrl) linkParts.push(`[relevance analysis](${opts.relevanceUrl})`)
     const links = linkParts.join(' · ')
-    lines.push(
-      `## ${opts.title}`,
-      links,
-      '',
-      opts.body,
-    )
+    lines.push(`## ${opts.title}`, links, '', opts.body)
     return lines.join('\n')
   }
 
@@ -144,6 +131,25 @@ describe('generateHtmlContent', () => {
     expect(introIndex).toBeLessThan(storyIndex)
   })
 
+  it('builds every site link and image from config.siteUrl', async () => {
+    const original = config.siteUrl
+    config.siteUrl = 'https://staging.example'
+    try {
+      mockPrisma.newsletter.findUnique.mockResolvedValue({
+        ...baseNewsletter,
+        content: storyBlock({ issue: 'Technology', title: 'T', publisher: 'Nature', url: 'https://example.com/t', body: 'B.' }),
+      })
+      const html = await generateHtmlContent('nl-1')
+
+      expect(html).toContain('href="https://staging.example"')
+      expect(html).toContain('src="https://staging.example/images/logo-text-horizontal.png"')
+      expect(html).toContain('src="https://staging.example/images/social/bluesky.png"')
+      expect(html).not.toMatch(/(href|src)="https:\/\/actuallyrelevant\.news/)
+    } finally {
+      config.siteUrl = original
+    }
+  })
+
   it('labels the issue as AI-generated directly under the week title, and keeps the bottom line', async () => {
     const content = [
       'An intro written by AI.',
@@ -157,11 +163,9 @@ describe('generateHtmlContent', () => {
     const html = await generateHtmlContent('nl-1')
     const doc = new JSDOM(html).window.document
 
-    const title = [...doc.querySelectorAll('p')].find((p) => p.textContent === baseNewsletter.title)
+    const title = [...doc.querySelectorAll('p')].find(p => p.textContent === baseNewsletter.title)
     const label = title?.nextElementSibling
-    expect(label?.textContent).toBe(
-      'AI-generated: AI selected the stories in this issue and wrote the intro, headlines, and summaries.',
-    )
+    expect(label?.textContent).toBe('AI-generated: AI selected the stories in this issue and wrote the intro, headlines, and summaries.')
     expect(label?.querySelector('strong')?.textContent).toBe('AI-generated:')
     // Seen before any AI text: the intro and the stories come after it
     expect(html.indexOf('AI-generated:')).toBeLessThan(html.indexOf('An intro written by AI.'))
@@ -186,19 +190,17 @@ describe('generateHtmlContent', () => {
   })
 
   it('does not render border-bottom dividers between stories', async () => {
-    const content = storyBlock({
-      issue: 'Science',
-      issueSlug: 'science-technology',
-      title: 'Story one',
-      publisher: 'BBC',
-      url: 'https://example.com/one',
-      body: 'First summary.',
-    }) + '\n\n' + [
-      '## Story two',
-      'Wired · [original article](https://example.com/two)',
-      '',
-      'Second summary.',
-    ].join('\n')
+    const content =
+      storyBlock({
+        issue: 'Science',
+        issueSlug: 'science-technology',
+        title: 'Story one',
+        publisher: 'BBC',
+        url: 'https://example.com/one',
+        body: 'First summary.',
+      }) +
+      '\n\n' +
+      ['## Story two', 'Wired · [original article](https://example.com/two)', '', 'Second summary.'].join('\n')
 
     mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
     const html = await generateHtmlContent('nl-1')
@@ -228,12 +230,9 @@ describe('generateHtmlContent', () => {
   })
 
   it('escapes HTML entities in content', async () => {
-    const content = [
-      '## Story with <tags> & "quotes"',
-      'Publisher & Co · [original article](https://example.com)',
-      '',
-      'Content with <html> & entities.',
-    ].join('\n')
+    const content = ['## Story with <tags> & "quotes"', 'Publisher & Co · [original article](https://example.com)', '', 'Content with <html> & entities.'].join(
+      '\n',
+    )
 
     mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
     const html = await generateHtmlContent('nl-1')
@@ -241,6 +240,20 @@ describe('generateHtmlContent', () => {
     expect(html).toContain('&lt;tags&gt;')
     expect(html).toContain('&amp;')
     expect(html).toContain('&quot;quotes&quot;')
+  })
+
+  it('links "View in browser" to the issue\'s web edition, assigning its slug once', async () => {
+    mockPrisma.newsletter.findFirst.mockResolvedValue(null)
+    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, title: 'Week 42, 2026', slug: null, content: 'Intro only.' })
+    const html = await generateHtmlContent('nl-1')
+    expect(html).toContain('<a href="https://actuallyrelevant.news/newsletter/week-42-2026"')
+    expect(html.indexOf('View in browser')).toBeLessThan(html.indexOf(NEWSLETTER_TOP_LABEL_TEXT))
+    expect(mockPrisma.newsletter.update).toHaveBeenCalledWith({ where: { id: 'nl-1' }, data: { slug: 'week-42-2026' } })
+
+    vi.clearAllMocks()
+    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, slug: 'kept-slug', content: 'Intro only.' })
+    expect(await generateHtmlContent('nl-1')).toContain('https://actuallyrelevant.news/newsletter/kept-slug')
+    expect(mockPrisma.newsletter.findFirst).not.toHaveBeenCalled()
   })
 
   it('throws if newsletter not found', async () => {

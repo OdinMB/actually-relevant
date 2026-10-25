@@ -3,7 +3,7 @@ import { findStoryAnchors, findUnstatedNames } from './storyAnchors.js'
 
 const story = [
   'India pledges to buy $500 billion of US goods',
-  'The deal, announced by India\'s prime minister Narendra Modi on Monday, ends purchases of Russian oil. Tariffs fall to 18%.',
+  "The deal, announced by India's prime minister Narendra Modi on Monday, ends purchases of Russian oil. Tariffs fall to 18%.",
 ].join('\n')
 
 describe('findStoryAnchors', () => {

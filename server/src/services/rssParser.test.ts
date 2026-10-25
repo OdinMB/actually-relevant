@@ -31,6 +31,24 @@ describe('parseFeed', () => {
     vi.clearAllMocks()
   })
 
+  it('refuses a private or internal feed URL without fetching it', async () => {
+    for (const url of ['http://169.254.169.254/latest/meta-data', 'http://localhost:3001/api', 'http://actually-relevant-db/']) {
+      await expect(parseFeed(url)).rejects.toThrow('Blocked feed URL')
+    }
+    expect(mockAxiosGet).not.toHaveBeenCalled()
+  })
+
+  it('fetches through the SSRF guard (resolved addresses and redirects checked)', async () => {
+    mockAxiosGet.mockResolvedValue(axiosResponse('<rss></rss>'))
+    mockParseString.mockResolvedValue({ items: [] })
+
+    await parseFeed('https://example.com/rss')
+
+    const options = mockAxiosGet.mock.calls[0][1]
+    expect(options.lookup).toEqual(expect.any(Function))
+    expect(() => options.beforeRedirect({ href: 'http://10.0.0.1/' })).toThrow()
+  })
+
   it('parses RSS items from feed', async () => {
     mockAxiosGet.mockResolvedValue(axiosResponse('<rss></rss>'))
     mockParseString.mockResolvedValue({
@@ -71,10 +89,7 @@ describe('parseFeed', () => {
   it('skips items without links', async () => {
     mockAxiosGet.mockResolvedValue(axiosResponse('<rss></rss>'))
     mockParseString.mockResolvedValue({
-      items: [
-        { title: 'No link' },
-        { link: 'https://example.com/valid', title: 'Valid' },
-      ],
+      items: [{ title: 'No link' }, { link: 'https://example.com/valid', title: 'Valid' }],
     })
 
     const result = await parseFeed('https://example.com/rss')
@@ -148,15 +163,17 @@ describe('parseFeed', () => {
           'If-None-Match': '"etag-value"',
           'If-Modified-Since': 'Fri, 01 Dec 2023 00:00:00 GMT',
         }),
-      })
+      }),
     )
   })
 
   it('extracts cache headers from response', async () => {
-    mockAxiosGet.mockResolvedValue(axiosResponse('<rss></rss>', 200, {
-      'etag': '"new-etag"',
-      'last-modified': 'Sun, 15 Jan 2024 00:00:00 GMT',
-    }))
+    mockAxiosGet.mockResolvedValue(
+      axiosResponse('<rss></rss>', 200, {
+        etag: '"new-etag"',
+        'last-modified': 'Sun, 15 Jan 2024 00:00:00 GMT',
+      }),
+    )
     mockParseString.mockResolvedValue({ items: [] })
 
     const result = await parseFeed('https://example.com/rss')
@@ -187,7 +204,7 @@ describe('parseFeed', () => {
       expect.objectContaining({
         maxContentLength: 5 * 1024 * 1024,
         responseType: 'text',
-      })
+      }),
     )
   })
 })

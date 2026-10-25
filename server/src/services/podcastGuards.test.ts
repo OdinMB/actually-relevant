@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-interface UsageRow { podcastId: string | null; chars: number; createdAt: Date }
+interface UsageRow {
+  podcastId: string | null
+  chars: number
+  createdAt: Date
+}
 
 /**
  * An in-memory ledger behind a fake `$transaction`. The fake advisory lock is a mutex taken by the
@@ -25,13 +29,17 @@ const db = vi.hoisted(() => {
       const tx = {
         $executeRaw: vi.fn(async () => {
           const previous = state.lock
-          state.lock = new Promise<void>(r => { release = r })
+          state.lock = new Promise<void>(r => {
+            release = r
+          })
           await previous
           return 1
         }),
         podcastTtsUsage: {
           aggregate: vi.fn(aggregate),
-          create: vi.fn(async ({ data }: { data: { podcastId: string; chars: number } }) => { state.rows.push({ ...data, createdAt: new Date() }) }),
+          create: vi.fn(async ({ data }: { data: { podcastId: string; chars: number } }) => {
+            state.rows.push({ ...data, createdAt: new Date() })
+          }),
         },
       }
       try {
@@ -96,7 +104,7 @@ describe('the UTC month', () => {
     expect(guards.utcMonthStart(new Date('2026-11-01T00:00:00Z'))).toEqual(new Date('2026-11-01T00:00:00Z'))
   })
 
-  it('counts only this month\'s usage', async () => {
+  it("counts only this month's usage", async () => {
     db.state.rows = [
       { podcastId: 'a', chars: 900, createdAt: new Date('2026-09-30T23:59:59Z') },
       { podcastId: 'b', chars: 400, createdAt: new Date('2026-10-01T00:00:00Z') },
@@ -189,7 +197,9 @@ describe('assertChangeable', () => {
 
   it('refuses a published episode and one in progress', () => {
     expect(() => guards.assertChangeable({ stage: 'ready', status: 'published', leaseUntil: null }, 'deleted', now)).toThrow(PodcastRefusedError)
-    expect(() => guards.assertChangeable({ stage: 'voiced', status: 'draft', leaseUntil: new Date('2026-10-10T08:10:00Z') }, 'deleted', now)).toThrow(/in progress/)
+    expect(() => guards.assertChangeable({ stage: 'voiced', status: 'draft', leaseUntil: new Date('2026-10-10T08:10:00Z') }, 'deleted', now)).toThrow(
+      /in progress/,
+    )
   })
 
   it('allows a draft with an expired lease, and a published legacy row', () => {
@@ -199,7 +209,7 @@ describe('assertChangeable', () => {
 })
 
 describe('editedAiLineRefusal', () => {
-  it('refuses an edited episode while the edited AI line awaits the owner\'s confirmation', () => {
+  it("refuses an edited episode while the edited AI line awaits the owner's confirmation", () => {
     expect(guards.editedAiLineRefusal(true, false)).toMatch(/Edited by a person/)
   })
 

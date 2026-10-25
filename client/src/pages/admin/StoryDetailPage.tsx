@@ -27,7 +27,11 @@ export default function StoryDetailPage() {
         </Button>
       </div>
 
-      {isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {error && <ErrorState message="Failed to load story" onRetry={refetch} />}
 
       {story && (

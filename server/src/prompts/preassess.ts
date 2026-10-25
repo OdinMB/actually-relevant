@@ -5,10 +5,7 @@ import type { StoryForPrompt, IssueForPrompt } from './shared.js'
 export type StoryForPreassess = StoryForPrompt
 export type IssueForPreassess = IssueForPrompt
 
-export function buildPreassessPrompt(
-  stories: StoryForPreassess[],
-  issues: IssueForPreassess[],
-): string {
+export function buildPreassessPrompt(stories: StoryForPreassess[], issues: IssueForPreassess[]): string {
   return `<ROLE>
 You are a relevance screener evaluating news articles for their importance to humanity.
 </ROLE>

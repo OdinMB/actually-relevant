@@ -17,6 +17,6 @@ export function classifyMigrateFailure(output: string): MigrateFailure {
 }
 
 export function summarizeMigrateSuccess(output: string): { applied: string[] } {
-  const applied = [...output.matchAll(/Applying migration `([^`]+)`/g)].map((match) => match[1])
+  const applied = [...output.matchAll(/Applying migration `([^`]+)`/g)].map(match => match[1]!)
   return { applied }
 }

@@ -15,13 +15,16 @@ export function isRetryableError(err: unknown): boolean {
       return true
     }
   }
-  // Axios-style errors with response status
-  const status = (err as any)?.response?.status
+  // HTTP status: axios puts it on err.response.status, the OpenAI SDK (and LangChain's
+  // wrappers around it) on err.status
+  const e = err as { response?: { status?: unknown }; status?: unknown } | null
+  const status = e?.response?.status ?? e?.status
   if (typeof status === 'number') {
     return status === 429 || (status >= 500 && status < 600)
   }
   // Network errors (no response)
-  if ((err as any)?.code === 'ECONNABORTED' || (err as any)?.code === 'ETIMEDOUT') {
+  const code = (err as { code?: unknown } | null)?.code
+  if (code === 'ECONNABORTED' || code === 'ETIMEDOUT') {
     return true
   }
   return false
@@ -42,10 +45,7 @@ export function isConnectionNotEstablished(err: unknown): boolean {
   return typeof code === 'string' && NOT_CONNECTED_CODES.has(code)
 }
 
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {},
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const { retries = 3, baseDelayMs = 1000, retryOn = isRetryableError } = options
 
   let lastError: unknown

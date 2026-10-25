@@ -1,5 +1,6 @@
 import { getStoryIdsByStatus } from '../services/story.js'
 import { assessStories } from '../services/analysis.js'
+import { transition } from '../services/storyLifecycle.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import prisma from '../lib/prisma.js'
@@ -44,11 +45,8 @@ export async function runAssessStories(): Promise<void> {
   const belowThreshold = allPreAnalyzed.filter(id => !qualifiedSet.has(id))
 
   if (belowThreshold.length > 0) {
-    await prisma.story.updateMany({
-      where: { id: { in: belowThreshold }, status: 'pre_analyzed' },
-      data: { status: 'rejected' },
-    })
-    log.info({ count: belowThreshold.length }, 'rejected pre_analyzed stories below assessment threshold')
+    const { moved } = await transition(belowThreshold, { to: 'rejected', reason: 'assess_threshold' }, 'pipeline')
+    log.info({ count: moved.length }, 'rejected pre_analyzed stories below assessment threshold')
   }
 
   if (allIds.length === 0) {

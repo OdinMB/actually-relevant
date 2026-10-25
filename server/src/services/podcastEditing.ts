@@ -16,12 +16,20 @@ import { buildShowNotes, episodeSnapshots, loadEpisodePool, type EpisodeStory, t
 import { withEpisodeLease } from './podcastPipeline.js'
 import { PodcastRefusedError, editedAiLineRefusal, wasPublished } from './podcastGuards.js'
 import { invalidateFeedCache } from './podcastFeed.js'
+import { UnprocessableError } from '../utils/errors.js'
 
-/** A person's change whose content breaks a rule (422): nothing was saved. */
-export class PodcastEditRejectedError extends Error {
-  constructor(readonly errors: string[], readonly warnings: string[] = []) {
+/** A person's change whose content breaks a rule (422, with the errors and warnings): nothing was saved. */
+export class PodcastEditRejectedError extends UnprocessableError {
+  constructor(
+    readonly errors: string[],
+    readonly warnings: string[] = [],
+  ) {
     super(errors.join('; '))
     this.name = 'PodcastEditRejectedError'
+  }
+
+  override toBody() {
+    return { error: this.message, errors: this.errors, warnings: this.warnings }
   }
 }
 
@@ -73,7 +81,7 @@ export function storyCountErrors(storyIds: string[]): string[] {
  */
 const FAILURE_CLEARED = { lastError: null, failedAt: null } as const
 
-const sameOrder =(a: string[], b: string[]) => a.length === b.length && a.every((id, i) => id === b[i])
+const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every((id, i) => id === b[i])
 
 /**
  * Replace the episode's stories (at `selected`) with pool stories, in the given order, refs 1..n.
@@ -82,18 +90,22 @@ const sameOrder =(a: string[], b: string[]) => a.length === b.length && a.every(
 export async function replaceEpisodeStories(id: string, storyIds: string[]): Promise<void> {
   const countErrors = storyCountErrors(storyIds)
   if (countErrors.length > 0) throw new PodcastEditRejectedError(countErrors)
-  await withEpisodeLease(id, async ({ episode, update }) => {
-    assertEditable(episode, 'selected')
-    const pool = new Map((await loadEpisodePool(poolAnchor(episode))).map(s => [s.id, s]))
-    const outside = storyIds.filter(storyId => !pool.has(storyId))
-    if (outside.length > 0) throw new PodcastEditRejectedError([`not in this week's pool: ${outside.join(', ')}`])
-    const snapshots: EpisodeStory[] = storyIds.map((storyId, i) => {
-      const s = pool.get(storyId)!
-      return { ref: i + 1, id: s.id, title: s.title, publisher: s.publisher, sourceUrl: s.sourceUrl, slug: s.slug, issue: s.issue }
-    })
-    const changed = !sameOrder(storyIds, episode.storyIds)
-    await update({ episodeStories: snapshots, storyIds, humanEdited: episode.humanEdited || changed, ...FAILURE_CLEARED })
-  }, 'edited')
+  await withEpisodeLease(
+    id,
+    async ({ episode, update }) => {
+      assertEditable(episode, 'selected')
+      const pool = new Map((await loadEpisodePool(poolAnchor(episode))).map(s => [s.id, s]))
+      const outside = storyIds.filter(storyId => !pool.has(storyId))
+      if (outside.length > 0) throw new PodcastEditRejectedError([`not in this week's pool: ${outside.join(', ')}`])
+      const snapshots: EpisodeStory[] = storyIds.map((storyId, i) => {
+        const s = pool.get(storyId)!
+        return { ref: i + 1, id: s.id, title: s.title, publisher: s.publisher, sourceUrl: s.sourceUrl, slug: s.slug, issue: s.issue }
+      })
+      const changed = !sameOrder(storyIds, episode.storyIds)
+      await update({ episodeStories: snapshots, storyIds, humanEdited: episode.humanEdited || changed, ...FAILURE_CLEARED })
+    },
+    'edited',
+  )
 }
 
 export interface ScriptSaveResult {
@@ -108,35 +120,39 @@ export interface ScriptSaveResult {
  * "edited by a person" when any text changed; rewrites the rendered script and the show notes.
  */
 export async function saveEpisodeScript(id: string, edit: DialogueTextEdit): Promise<ScriptSaveResult> {
-  return withEpisodeLease(id, async ({ episode, update }) => {
-    assertEditable(episode, 'scripted')
-    const stored = episode.dialogue as unknown as PodcastDialogue | null
-    if (!stored) throw new PodcastRefusedError('the episode has no script to edit')
-    const applied = applyTurnEdits(stored, edit)
-    if (!applied.dialogue) throw new PodcastEditRejectedError(['the script changed since it was opened; reload it', ...applied.mismatches])
+  return withEpisodeLease(
+    id,
+    async ({ episode, update }) => {
+      assertEditable(episode, 'scripted')
+      const stored = episode.dialogue as unknown as PodcastDialogue | null
+      if (!stored) throw new PodcastRefusedError('the episode has no script to edit')
+      const applied = applyTurnEdits(stored, edit)
+      if (!applied.dialogue) throw new PodcastEditRejectedError(['the script changed since it was opened; reload it', ...applied.mismatches])
 
-    const snapshots = episodeSnapshots(episode)
-    const refs = snapshots.map(s => ({ ref: s.ref, title: s.title, publisher: s.publisher }))
-    const validation = validateDialogue(applied.dialogue, refs, { kind: episode.kind, authoredBy: 'person' })
-    if (!validation.valid) throw new PodcastEditRejectedError(validation.errors, validation.warnings)
+      const snapshots = episodeSnapshots(episode)
+      const refs = snapshots.map(s => ({ ref: s.ref, title: s.title, publisher: s.publisher }))
+      const validation = validateDialogue(applied.dialogue, refs, { kind: episode.kind, authoredBy: 'person' })
+      if (!validation.valid) throw new PodcastEditRejectedError(validation.errors, validation.warnings)
 
-    const humanEdited = episode.humanEdited || textChanged(stored, applied.dialogue)
-    const script = renderScript(assembleSpokenSegments(applied.dialogue, episode.kind))
-    await update({
-      dialogue: applied.dialogue,
-      episodeSummary: applied.dialogue.episodeSummary,
-      script,
-      showNotes: buildShowNotes(applied.dialogue.episodeSummary, snapshots, humanEdited, episode.kind),
-      humanEdited,
-      ...FAILURE_CLEARED,
-    })
-    // A failed voicing leaves its chunks stored, and a resume skips every stored index: once the
-    // spoken words change, those chunks voice the old text, so they go.
-    if (script !== renderScript(assembleSpokenSegments(stored, episode.kind))) {
-      await prisma.podcastAudioChunk.deleteMany({ where: { podcastId: id } })
-    }
-    return { warnings: validation.warnings }
-  }, 'edited')
+      const humanEdited = episode.humanEdited || textChanged(stored, applied.dialogue)
+      const script = renderScript(assembleSpokenSegments(applied.dialogue, episode.kind))
+      await update({
+        dialogue: applied.dialogue,
+        episodeSummary: applied.dialogue.episodeSummary,
+        script,
+        showNotes: buildShowNotes(applied.dialogue.episodeSummary, snapshots, humanEdited, episode.kind),
+        humanEdited,
+        ...FAILURE_CLEARED,
+      })
+      // A failed voicing leaves its chunks stored, and a resume skips every stored index: once the
+      // spoken words change, those chunks voice the old text, so they go.
+      if (script !== renderScript(assembleSpokenSegments(stored, episode.kind))) {
+        await prisma.podcastAudioChunk.deleteMany({ where: { podcastId: id } })
+      }
+      return { warnings: validation.warnings }
+    },
+    'edited',
+  )
 }
 
 export interface EpisodeMetaEdit {
@@ -153,24 +169,33 @@ export interface EpisodeMetaEdit {
  */
 export async function updateEpisodeMeta(id: string, edit: EpisodeMetaEdit): Promise<void> {
   let published = false
-  await withEpisodeLease(id, async ({ episode, update }) => {
-    if (episode.stage === 'legacy') throw new PodcastRefusedError('a legacy episode cannot be edited')
-    published = wasPublished(episode)
-    if (edit.title !== undefined) {
-      if (published) throw new PodcastRefusedError('a published episode cannot have its title changed')
-      if (episode.stage === 'created' || episode.stage === 'selected') {
-        throw new PodcastRefusedError('the title can be changed once the script is written')
+  await withEpisodeLease(
+    id,
+    async ({ episode, update }) => {
+      if (episode.stage === 'legacy') throw new PodcastRefusedError('a legacy episode cannot be edited')
+      published = wasPublished(episode)
+      if (edit.title !== undefined) {
+        if (published) throw new PodcastRefusedError('a published episode cannot have its title changed')
+        if (episode.stage === 'created' || episode.stage === 'selected') {
+          throw new PodcastRefusedError('the title can be changed once the script is written')
+        }
       }
-    }
-    const flagChanged = edit.humanEdited !== undefined && edit.humanEdited !== episode.humanEdited
-    if (flagChanged && episode.status === 'published') {
-      const refusal = editedAiLineRefusal(edit.humanEdited!)
-      if (refusal) throw new PodcastRefusedError(refusal)
-    }
-    const notes = flagChanged && episode.showNotes !== ''
-      ? { showNotes: buildShowNotes(episode.episodeSummary, episodeSnapshots(episode), edit.humanEdited!, episode.kind) }
-      : {}
-    await update({ ...(edit.title !== undefined ? { title: edit.title } : {}), ...(edit.humanEdited !== undefined ? { humanEdited: edit.humanEdited } : {}), ...notes })
-  }, 'edited')
+      const flagChanged = edit.humanEdited !== undefined && edit.humanEdited !== episode.humanEdited
+      if (flagChanged && episode.status === 'published') {
+        const refusal = editedAiLineRefusal(edit.humanEdited!)
+        if (refusal) throw new PodcastRefusedError(refusal)
+      }
+      const notes =
+        flagChanged && episode.showNotes !== ''
+          ? { showNotes: buildShowNotes(episode.episodeSummary, episodeSnapshots(episode), edit.humanEdited!, episode.kind) }
+          : {}
+      await update({
+        ...(edit.title !== undefined ? { title: edit.title } : {}),
+        ...(edit.humanEdited !== undefined ? { humanEdited: edit.humanEdited } : {}),
+        ...notes,
+      })
+    },
+    'edited',
+  )
   if (published) invalidateFeedCache()
 }
