@@ -5,6 +5,12 @@ import path from 'path'
 
 const mockSpawn = vi.hoisted(() => vi.fn())
 vi.mock('child_process', () => ({ spawn: mockSpawn }))
+// spawn is mocked, so the ffmpeg-static binary need not be on disk (an offline or --ignore-scripts
+// install has none); the real binary is exercised in podcastAudio.integration.test.ts.
+vi.mock('fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('fs')>()
+  return { ...actual, existsSync: (p: string) => p.includes('ffmpeg-static') || actual.existsSync(p) }
+})
 
 const { assembleEpisodeMp3, buildAssembleArgs, cbrDurationMs, AI_PROVENANCE_FRAMES } = await import('./podcastAudio.js')
 
