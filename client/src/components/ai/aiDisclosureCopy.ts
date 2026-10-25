@@ -41,7 +41,7 @@ export const AI_DISCLOSURE_COPY = {
   /**
    * Subtitle under the /newsletter heading, modeled on podcastSubtitle: the "AI" badge stands
    * inline between lead and tail and is the subtitle's only "AI".
-   * PENDING OWNER APPROVAL (added 2026-10-25 when the archive moved onto /newsletter).
+   * Owner-approved 2026-10-25 (added when the archive moved onto /newsletter).
    */
   newsletterSubtitle: {
     lead: 'A weekly email with the news that matters most to humanity, selected and written by',
