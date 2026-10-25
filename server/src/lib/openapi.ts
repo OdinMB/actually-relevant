@@ -376,6 +376,9 @@ export function getOpenAPIDocument(): ReturnType<typeof createDocument> {
       description:
         'Public API for Actually Relevant — an AI-curated news platform that evaluates article relevance to humanity. ' +
         'Access published stories, issues, homepage data, and RSS feeds. No authentication required.\n\n' +
+        `Rate limit: ${config.rateLimit.publicMax} requests per ${config.rateLimit.publicWindowMs / 60_000} minutes per client IP ` +
+        '(`RateLimit-*` response headers; 429 when exceeded). Partners given an API key send it as ' +
+        '`Authorization: Bearer <key>` and get a larger limit; the key is optional and grants no other access.\n\n' +
         OPENAPI_REPUBLISHER_NOTE,
       contact: {
         name: 'Actually Relevant',
@@ -709,7 +712,19 @@ export function getOpenAPIDocument(): ReturnType<typeof createDocument> {
     },
     components: {
       schemas: {},
+      securitySchemes: {
+        publicApiKey: {
+          type: 'http',
+          scheme: 'bearer',
+          description:
+            `Optional. A partner API key raises the rate limit from ${config.rateLimit.publicMax} requests per client IP ` +
+            `to ${config.rateLimit.publicApiKeyMax} requests for the key, per ${config.rateLimit.publicWindowMs / 60_000} minutes. ` +
+            'A missing or wrong key is not an error: the request gets the ordinary limit.',
+        },
+      },
     },
+    // Optional: the empty requirement allows every request without a key
+    security: [{}, { publicApiKey: [] }],
     tags: [
       { name: 'Homepage', description: 'Homepage data with emotion-bucketed stories' },
       { name: 'Stories', description: 'Published story listing and detail' },

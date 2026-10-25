@@ -7,6 +7,12 @@ describe('getOpenAPIDocument', () => {
   const doc: any = getOpenAPIDocument()
   const schemas = doc.components.schemas
 
+  it('documents the partner API key as an optional bearer scheme', () => {
+    expect(doc.components.securitySchemes.publicApiKey).toMatchObject({ type: 'http', scheme: 'bearer' })
+    expect(doc.security).toEqual([{}, { publicApiKey: [] }])
+    expect(doc.info.description).toContain('Authorization: Bearer')
+  })
+
   it('documents the aiGenerated marker on every public story', () => {
     expect(schemas.PublicStory.required).toContain('aiGenerated')
     expect(schemas.PublicStory.properties.aiGenerated.$ref).toBe('#/components/schemas/AiGenerated')

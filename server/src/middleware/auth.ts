@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { timingSafeEqual } from 'crypto'
+import { createHash, timingSafeEqual } from 'crypto'
 import { config } from '../config.js'
 import { verifyAccessToken, type AccessTokenPayload } from '../services/auth.js'
 
@@ -33,17 +33,19 @@ function tryJwtAuth(token: string): AccessTokenPayload | null {
 }
 
 /**
- * Try to authenticate via static API key.
- * Returns true if the token matches the PUBLIC_API_KEY env var.
+ * Whether the request carries the static PUBLIC_API_KEY as `Authorization: Bearer <key>`. A valid
+ * key only raises the public API's rate limit (middleware/rateLimit.ts); it never authenticates
+ * anyone. Unset or empty: no key is valid. Both sides are hashed to the same length first, so the
+ * constant-time comparison does not reveal the key's length either.
  */
-function tryApiKeyAuth(token: string): boolean {
+export function hasValidPublicApiKey(req: Request): boolean {
   const apiKey = config.auth.publicApiKey
   if (!apiKey) return false
+  const token = extractBearerToken(req)
+  if (token === null) return false
 
-  const tokenBuf = Buffer.from(token)
-  const keyBuf = Buffer.from(apiKey)
-  if (tokenBuf.length !== keyBuf.length) return false
-  return timingSafeEqual(tokenBuf, keyBuf)
+  const digest = (value: string) => createHash('sha256').update(value).digest()
+  return timingSafeEqual(digest(token), digest(apiKey))
 }
 
 function extractBearerToken(req: Request): string | null {
@@ -76,32 +78,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   res.status(401).json({ error: 'Invalid credentials' })
-}
-
-/**
- * API key authentication middleware.
- * Used for public API routes that need authenticated access (mobile apps, etc.).
- * Accepts the static PUBLIC_API_KEY as a Bearer token.
- */
-export function requireApiKey(req: Request, res: Response, next: NextFunction): void {
-  const token = extractBearerToken(req)
-
-  if (!token) {
-    res.status(401).json({ error: 'Missing authorization header' })
-    return
-  }
-
-  if (tryApiKeyAuth(token)) {
-    req.user = {
-      userId: 'api-key',
-      email: 'api-key@system',
-      role: 'api-client',
-    }
-    next()
-    return
-  }
-
-  res.status(403).json({ error: 'Invalid API key' })
 }
 
 /**

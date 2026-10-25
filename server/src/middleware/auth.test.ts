@@ -7,7 +7,7 @@ vi.mock('../services/auth.js', () => ({
   verifyAccessToken: mockVerifyAccessToken,
 }))
 
-const { requireAuth, requireApiKey, requireRole } = await import('./auth.js')
+const { requireAuth, hasValidPublicApiKey, requireRole } = await import('./auth.js')
 
 describe('requireAuth (JWT only)', () => {
   let req: Partial<Request>
@@ -85,22 +85,9 @@ describe('requireAuth (JWT only)', () => {
   })
 })
 
-describe('requireApiKey', () => {
-  let req: Partial<Request>
-  let res: Partial<Response>
-  let next: NextFunction
-  let jsonFn: ReturnType<typeof vi.fn>
-  let statusFn: ReturnType<typeof vi.fn>
+describe('hasValidPublicApiKey', () => {
   const originalKey = process.env.PUBLIC_API_KEY
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    jsonFn = vi.fn()
-    statusFn = vi.fn().mockReturnValue({ json: jsonFn })
-    req = { headers: {} }
-    res = { status: statusFn, json: jsonFn } as any
-    next = vi.fn()
-  })
+  const withAuth = (authorization?: string) => ({ headers: authorization === undefined ? {} : { authorization } }) as Request
 
   afterEach(() => {
     if (originalKey !== undefined) {
@@ -110,45 +97,30 @@ describe('requireApiKey', () => {
     }
   })
 
-  it('returns 401 for missing authorization header', () => {
-    req.headers = {}
-    requireApiKey(req as Request, res as Response, next)
-    expect(statusFn).toHaveBeenCalledWith(401)
-    expect(next).not.toHaveBeenCalled()
-  })
-
-  it('authenticates with valid API key', () => {
+  it('accepts the PUBLIC_API_KEY sent as a Bearer token', () => {
     process.env.PUBLIC_API_KEY = 'test-api-key-123'
-    req.headers = { authorization: 'Bearer test-api-key-123' }
-
-    requireApiKey(req as Request, res as Response, next)
-
-    expect(next).toHaveBeenCalled()
-    expect((req as any).user).toEqual({
-      userId: 'api-key',
-      email: 'api-key@system',
-      role: 'api-client',
-    })
+    expect(hasValidPublicApiKey(withAuth('Bearer test-api-key-123'))).toBe(true)
   })
 
-  it('returns 403 for wrong API key', () => {
+  it('refuses a wrong key, including one of a different length or a prefix of the real one', () => {
     process.env.PUBLIC_API_KEY = 'test-api-key-123'
-    req.headers = { authorization: 'Bearer wrong-key' }
-
-    requireApiKey(req as Request, res as Response, next)
-
-    expect(statusFn).toHaveBeenCalledWith(403)
-    expect(next).not.toHaveBeenCalled()
+    expect(hasValidPublicApiKey(withAuth('Bearer wrong-key-000000'))).toBe(false)
+    expect(hasValidPublicApiKey(withAuth('Bearer x'))).toBe(false)
+    expect(hasValidPublicApiKey(withAuth('Bearer test-api-key-12'))).toBe(false)
+    expect(hasValidPublicApiKey(withAuth('Bearer '))).toBe(false)
   })
 
-  it('returns 403 when PUBLIC_API_KEY is not set', () => {
+  it('refuses a request without a Bearer header', () => {
+    process.env.PUBLIC_API_KEY = 'test-api-key-123'
+    expect(hasValidPublicApiKey(withAuth())).toBe(false)
+    expect(hasValidPublicApiKey(withAuth('test-api-key-123'))).toBe(false)
+  })
+
+  it('accepts nothing while PUBLIC_API_KEY is unset or empty', () => {
     delete process.env.PUBLIC_API_KEY
-    req.headers = { authorization: 'Bearer some-key' }
-
-    requireApiKey(req as Request, res as Response, next)
-
-    expect(statusFn).toHaveBeenCalledWith(403)
-    expect(next).not.toHaveBeenCalled()
+    expect(hasValidPublicApiKey(withAuth('Bearer '))).toBe(false)
+    process.env.PUBLIC_API_KEY = ''
+    expect(hasValidPublicApiKey(withAuth('Bearer '))).toBe(false)
   })
 })
 

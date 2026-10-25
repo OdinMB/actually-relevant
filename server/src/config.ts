@@ -111,6 +111,9 @@ const siteUrl = process.env.SITE_URL || 'https://actuallyrelevant.news'
 
 const configDir = dirname(fileURLToPath(import.meta.url))
 
+/** Public API requests per window and client IP; the keyed limit defaults to ten times it. */
+const publicRateLimitMax = parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_MAX, 100, 'RATE_LIMIT_PUBLIC_MAX')
+
 // The `get` settings below read the environment when used, not when config.ts loads, as their
 // callers did before they moved here: tests set these variables after import.
 export const config = {
@@ -154,7 +157,10 @@ export const config = {
     get jwtSecret(): string {
       return process.env.JWT_SECRET || ''
     },
-    /** Static API key accepted by requireApiKey ('' = no key accepted). */
+    /**
+     * Static key for public API consumers ('' = no key accepted). Sent as `Authorization: Bearer
+     * <key>`, it raises the public API's rate limit (`rateLimit.publicApiKeyMax`); it grants no access.
+     */
     get publicApiKey(): string {
       return process.env.PUBLIC_API_KEY || ''
     },
@@ -416,7 +422,10 @@ export const config = {
   },
   rateLimit: {
     publicWindowMs: parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_WINDOW_MS, 15 * 60 * 1000, 'RATE_LIMIT_PUBLIC_WINDOW_MS'),
-    publicMax: parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_MAX, 100, 'RATE_LIMIT_PUBLIC_MAX'),
+    publicMax: publicRateLimitMax,
+    // Requests carrying the valid PUBLIC_API_KEY: one shared budget for the key, whatever the IP
+    // (middleware/rateLimit.ts, .context/authentication.md)
+    publicApiKeyMax: parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_API_KEY_MAX, publicRateLimitMax * 10, 'RATE_LIMIT_PUBLIC_API_KEY_MAX'),
     expensiveWindowMs: parseWholeNumber(process.env.RATE_LIMIT_EXPENSIVE_WINDOW_MS, 60 * 60 * 1000, 'RATE_LIMIT_EXPENSIVE_WINDOW_MS'),
     expensiveMax: parseWholeNumber(process.env.RATE_LIMIT_EXPENSIVE_MAX, 1000, 'RATE_LIMIT_EXPENSIVE_MAX'),
     searchWindowMs: parseWholeNumber(process.env.RATE_LIMIT_SEARCH_WINDOW_MS, 15 * 60 * 1000, 'RATE_LIMIT_SEARCH_WINDOW_MS'),
