@@ -32,7 +32,7 @@ Defined in `client/src/index.css`:
 
 ## Public URLs
 
-The site URL and the Ko-fi, Bluesky, Mastodon and GitHub addresses are constants in `client/src/config.ts` (`SITE_URL`, `KOFI_URL`, `BLUESKY_PROFILE_URL`, `MASTODON_PROFILE_URL`, `GITHUB_REPO_URL`); `SEO.siteUrl` is `SITE_URL`. Import them rather than writing an address inline. `index.html` and the build scripts in `client/scripts/` cannot import them and keep their own copies.
+The site URL and the Ko-fi, Bluesky, Mastodon and GitHub addresses are constants in `client/src/config.ts` (`SITE_URL`, `KOFI_URL`, `BLUESKY_PROFILE_URL`, `MASTODON_PROFILE_URL`, `GITHUB_REPO_URL`); `SEO.siteUrl` is `SITE_URL`. Import them rather than writing an address inline. `index.html` and the build scripts in `client/scripts/` cannot import them and keep their own copies, as does the server's newsletter email template (`config.links` in `server/src/config.ts`).
 
 ## Bundle Splitting
 

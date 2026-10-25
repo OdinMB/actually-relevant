@@ -171,6 +171,12 @@ export const config = {
   siteUrl,
   /** Public API origin: the OpenAPI spec's server and absolute og:image URLs (crawlers need them absolute). */
   apiUrl: process.env.API_URL || 'https://api.actuallyrelevant.news',
+  /** The project's donation page and social profiles, linked from the newsletter email. The client keeps its own copies (client/src/config.ts). */
+  links: {
+    kofi: 'https://ko-fi.com/odinmb',
+    blueskyProfile: 'https://bsky.app/profile/actuallyrelevant.bsky.social',
+    mastodonProfile: 'https://mastodon.social/@actuallyrelevant',
+  },
   /** Public client (frontend) URL — used to build links the visitor clicks, e.g. the subscription confirmation page. */
   clientUrl: process.env.CLIENT_URL || 'https://actuallyrelevant.news',
   database: {

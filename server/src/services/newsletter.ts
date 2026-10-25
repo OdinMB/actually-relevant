@@ -568,7 +568,7 @@ ${introSection}
           <tr>
             <td style="padding: 28px 32px; text-align: center; border-top: 1px solid #e5e5e5;">
               <p style="margin: 0 0 14px; font-size: 14px; color: #525252;">Free. Independent. Without ads. Help us keep it that way.</p>
-              <a href="https://ko-fi.com/odinmb" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 10px 24px; font-size: 14px; font-weight: 600; color: #ffffff; background-color: #171717; border-radius: 8px; text-decoration: none;">&#10084; Support Us</a>
+              <a href="${config.links.kofi}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 10px 24px; font-size: 14px; font-weight: 600; color: #ffffff; background-color: #171717; border-radius: 8px; text-decoration: none;">&#10084; Support Us</a>
             </td>
           </tr>
 
@@ -587,9 +587,9 @@ ${introSection}
                 <a href="${config.siteUrl}" style="color: #2563eb; text-decoration: none;">actuallyrelevant.news</a>
               </p>
               <p style="margin: 0 0 10px; font-size: 12px; color: #a3a3a3;">
-                <a href="https://bsky.app/profile/actuallyrelevant.bsky.social" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/bluesky.png" alt="Bluesky" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Bluesky</a>
+                <a href="${config.links.blueskyProfile}" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/bluesky.png" alt="Bluesky" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Bluesky</a>
                 <span style="color: #d4d4d4; margin: 0 6px;">&middot;</span>
-                <a href="https://mastodon.social/@actuallyrelevant" rel="me" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/mastodon.png" alt="Mastodon" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Mastodon</a>
+                <a href="${config.links.mastodonProfile}" rel="me" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/mastodon.png" alt="Mastodon" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Mastodon</a>
               </p>
             </td>
           </tr>
