@@ -3,8 +3,7 @@ import { SEO, CommonOgTags } from '../lib/seo'
 import { APPLE_PODCASTS_URL } from '../config'
 import { buildBreadcrumbSchema } from '../lib/structured-data'
 import StructuredData from '../components/StructuredData'
-import AiBadge from '../components/ai/AiBadge'
-import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
+import PodcastSubtitle from '../components/podcast/PodcastSubtitle'
 import PodcastEpisode from '../components/podcast/PodcastEpisode'
 import { usePodcastEpisodes } from '../hooks/usePodcastEpisodes'
 
@@ -68,10 +67,7 @@ export default function PodcastPage() {
 
       <div className="page-section py-16">
         <h1 className="page-title">Podcast</h1>
-        <p className="page-intro">
-          <AiBadge decorative className="mr-2 align-middle text-neutral-700" />
-          {AI_DISCLOSURE_COPY.podcastSubtitle}
-        </p>
+        <PodcastSubtitle />
 
         <section aria-labelledby="podcast-subscribe-heading" className="mt-10 prose">
           <h2 id="podcast-subscribe-heading" className="section-heading">Subscribe</h2>

@@ -71,9 +71,17 @@ async function expandStories() {
 describe('PodcastPage', () => {
   it('shows the AI subtitle before any episode', async () => {
     renderPage()
-    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle)
+    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle.lead, { exact: false })
     const episode = await screen.findByRole('heading', { name: /W42: Clean air/ })
     expect(subtitle.compareDocumentPosition(episode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('says "AI" in the subtitle once, through the inline badge', () => {
+    renderPage()
+    const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle.lead, { exact: false })
+    const { lead, tail } = AI_DISCLOSURE_COPY.podcastSubtitle
+    expect(`${lead} ${tail}`).not.toMatch(/\bAI\b/)
+    expect(subtitle.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1)
   })
 
   it('does not repeat the per-episode AI line on the page', async () => {
