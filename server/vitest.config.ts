@@ -29,6 +29,9 @@ export default defineConfig({
           name: 'unit',
           include: ['src/**/*.test.ts'],
           exclude: [...configDefaults.exclude, 'src/**/*.db.test.ts'],
+          // Nothing calls OpenAI in unit tests, but the openai SDK's constructor throws without a key
+          // (services/embedding.ts builds one at import), so test files load without a `.env`.
+          env: { OPENAI_API_KEY: 'sk-test-dummy' },
         },
       },
       {
