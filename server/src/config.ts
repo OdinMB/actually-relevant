@@ -358,6 +358,10 @@ export const config = {
     // "actuallyrelevant.news/podcast.xml". Never change it, even if the feed moves.
     feedGuid: '097a5224-a76e-5f98-98e0-151f653772ae',
     showAuthor: 'Actually Relevant',
+    // podcast:funding text beside config.links.kofi (Pocket Casts shows it as a Funding button).
+    fundingLabel: 'Support the show',
+    // podcast:updateFrequency: an RFC 5545 rule for the weekly Saturday episode, and its display text.
+    updateFrequency: { rrule: 'FREQ=WEEKLY', label: 'Weekly' },
     // Apple Podcasts categories (owner decision, 2026-10-07): Apple's exact names, a subcategory
     // nested in its parent; the feed escapes them. "Government" replaced "Society & Culture" and
     // "Technology" replaced "Science" (owner, 2026-10-07): Apple wants a subcategory for both, none

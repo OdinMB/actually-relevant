@@ -52,6 +52,15 @@ describe('buildPodcastFeedXml', () => {
     for (const ns of ['xmlns:itunes=', 'xmlns:podcast=', 'xmlns:atom=', 'xmlns:content=']) expect(xml).toContain(ns)
   })
 
+  it('links the Ko-fi page as podcast:funding and declares the weekly schedule as podcast:updateFrequency, on the channel only', () => {
+    const xml = buildPodcastFeedXml([episode()], NOW)
+    const channel = channelOnly(xml)
+    expect(config.links.kofi).toBe('https://ko-fi.com/odinmb')
+    expect(channel).toContain('<podcast:funding url="https://ko-fi.com/odinmb">Support the show</podcast:funding>')
+    expect(channel).toContain('<podcast:updateFrequency rrule="FREQ=WEEKLY">Weekly</podcast:updateFrequency>')
+    for (const item of items(xml)) expect(item).not.toMatch(/podcast:(funding|updateFrequency)/)
+  })
+
   it('marks the channel and every item as AI content and describes the show with the standing AI statement', () => {
     const xml = buildPodcastFeedXml([episode(), episode({ id: 'e2' })], NOW)
     const txt = '<podcast:txt purpose="ai-content">true</podcast:txt>'
