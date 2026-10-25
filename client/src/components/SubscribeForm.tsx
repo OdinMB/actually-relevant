@@ -27,12 +27,7 @@ function isPlausibleEmail(address: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)
 }
 
-export default function SubscribeForm({
-  onSuccess,
-  autoFocus = false,
-  idPrefix = 'subscribe',
-  hideHeading = false,
-}: SubscribeFormProps) {
+export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix = 'subscribe', hideHeading = false }: SubscribeFormProps) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'verifying' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
@@ -140,7 +135,9 @@ export default function SubscribeForm({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h2 id={`${idPrefix}-title`} className="text-xl font-bold text-neutral-900 mb-2">Signups are paused</h2>
+        <h2 id={`${idPrefix}-title`} className="text-xl font-bold text-neutral-900 mb-2">
+          Signups are paused
+        </h2>
         <p className="text-neutral-600 text-sm mb-6">
           New newsletter registrations are temporarily disabled. We expect to have them back up again soon — thanks for your patience.
         </p>
@@ -195,13 +192,15 @@ export default function SubscribeForm({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor={`${idPrefix}-email`} className="sr-only">Email address</label>
+          <label htmlFor={`${idPrefix}-email`} className="sr-only">
+            Email address
+          </label>
           <input
             ref={emailInputRef}
             id={`${idPrefix}-email`}
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value.trim())}
+            onChange={e => setEmail(e.target.value.trim())}
             placeholder="you@example.com"
             required
             autoComplete="email"
@@ -213,14 +212,7 @@ export default function SubscribeForm({
         {/* Honeypot — hidden from humans */}
         <div aria-hidden="true" className="absolute -left-[9999px] -top-[9999px]">
           <label htmlFor={`${idPrefix}-website`}>Website</label>
-          <input
-            id={`${idPrefix}-website`}
-            type="text"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-            tabIndex={-1}
-            autoComplete="off"
-          />
+          <input id={`${idPrefix}-website`} type="text" value={website} onChange={e => setWebsite(e.target.value)} tabIndex={-1} autoComplete="off" />
         </div>
 
         {/* Stays empty unless Cloudflare needs the visitor to interact during a submit. */}

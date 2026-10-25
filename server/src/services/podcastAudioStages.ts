@@ -15,9 +15,7 @@ import { assembleEpisodeMp3, cbrDurationMs, silentMp3 } from '../lib/podcastAudi
 import { deleteObject, isBunnyConfigured, publicUrl, putObject } from '../lib/bunnyStorage.js'
 import type { PodcastDialogue } from '../schemas/llm.js'
 import { assembleSpokenSegments, type SpokenSegment } from './podcastDialogue.js'
-import {
-  buildChapters, buildTranscriptVtt, chunkChars, chunkContinuity, chunkTurns, type ChapterStory, type Chunk,
-} from './podcastChunks.js'
+import { buildChapters, buildTranscriptVtt, chunkChars, chunkContinuity, chunkTurns, type ChapterStory, type Chunk } from './podcastChunks.js'
 import type { EpisodeStory } from './podcastScript.js'
 import { assertBalanceCovers, assertJobEnabled, PodcastBlockedError, reserveTtsChars, standaloneCopyRefusal } from './podcastGuards.js'
 
@@ -88,11 +86,12 @@ export const renderSeed = (episode: Pick<Podcast, 'ttsSeed'>): number => episode
 /** Voice one chunk with ElevenLabs, after reserving its characters against the monthly cap. */
 async function voiceLive(episode: Podcast, chunks: Chunk[], index: number): Promise<Omit<VoicedChunk, 'index'>> {
   const podcastId = episode.id
-  const chars = chunkChars(chunks[index])
+  const chunk = chunks[index]!
+  const chars = chunkChars(chunk)
   await reserveTtsChars(podcastId, chars)
   try {
     const result = await textToDialogue({
-      inputs: chunks[index].map(t => ({ text: t.text, voiceId: voiceFor(t.speaker) })),
+      inputs: chunk.map(t => ({ text: t.text, voiceId: voiceFor(t.speaker) })),
       seed: renderSeed(episode),
       ...chunkContinuity(chunks, index, config.podcast.continuityChars),
     })
@@ -106,7 +105,7 @@ async function voiceLive(episode: Podcast, chunks: Chunk[], index: number): Prom
 
 /** The dry-run stub: silence as long as the chunk would take to speak. No credits, no reservation. */
 async function voiceStub(chunks: Chunk[], index: number): Promise<Omit<VoicedChunk, 'index'>> {
-  const chars = chunkChars(chunks[index])
+  const chars = chunkChars(chunks[index]!)
   const bytes = await silentMp3(chars / config.podcast.stubCharsPerSecond)
   return { bytes, requestId: null, chars, durationMs: cbrDurationMs(bytes.length) }
 }
@@ -124,7 +123,7 @@ export async function voiceEpisode(episode: Podcast, ctx: AudioStageContext): Pr
   const done = new Set(stored.map(c => c.index))
   const pending = chunks.map((_, i) => i).filter(i => !done.has(i))
 
-  if (!episode.dryRun && pending.length > 0) await assertBalanceCovers(pending.reduce((n, i) => n + chunkChars(chunks[i]), 0))
+  if (!episode.dryRun && pending.length > 0) await assertBalanceCovers(pending.reduce((n, i) => n + chunkChars(chunks[i]!), 0))
   for (const index of pending) {
     await ctx.renewLease()
     if (ctx.trigger === 'cron') await assertJobEnabled(GENERATE_PODCAST_JOB)
@@ -168,8 +167,17 @@ export async function finishEpisode(episode: Podcast, ctx: AudioStageContext): P
   }
 
   const pauseMs = config.podcast.segmentPauseMs
-  const tags = { title: episode.title, artist: config.podcast.showTitle, album: config.podcast.showTitle, comment: podcastEpisodeAiLine(episode.humanEdited, episode.kind) }
-  const { buffer, durationSec } = await assembleEpisodeMp3(rows.map(r => Buffer.from(r.bytes)), tags, { pauseMs, loudnorm: !episode.dryRun })
+  const tags = {
+    title: episode.title,
+    artist: config.podcast.showTitle,
+    album: config.podcast.showTitle,
+    comment: podcastEpisodeAiLine(episode.humanEdited, episode.kind),
+  }
+  const { buffer, durationSec } = await assembleEpisodeMp3(
+    rows.map(r => Buffer.from(r.bytes)),
+    tags,
+    { pauseMs, loudnorm: !episode.dryRun },
+  )
   const durationsMs = rows.map(r => r.durationMs)
   const vtt = buildTranscriptVtt(chunks, durationsMs, pauseMs)
   const chapters = buildChapters(segments, chunks, durationsMs, pauseMs, chapterStories(episode))

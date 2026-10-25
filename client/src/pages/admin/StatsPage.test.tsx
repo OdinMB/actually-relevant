@@ -22,9 +22,7 @@ vi.mock('../../lib/admin-api', () => ({
           { id: 'feed-a', name: 'Alpha News', crawled: 1000, published: 20, archived: 900, avgRelevancePre: 3.1, highPre: 30 },
           { id: 'feed-b', name: 'Beta Times', crawled: 500, published: 80, archived: 300, avgRelevancePre: 6.4, highPre: 120 },
         ],
-        byIssue: [
-          { id: 'issue-1', name: 'Climate', crawled: 1500, published: 100, archived: 1200, avgRelevancePre: 4.2, highPre: 150 },
-        ],
+        byIssue: [{ id: 'issue-1', name: 'Climate', crawled: 1500, published: 100, archived: 1200, avgRelevancePre: 4.2, highPre: 150 }],
       }),
     },
   },
@@ -45,7 +43,10 @@ function renderPage() {
 
 const sourceRows = () => {
   const table = screen.getByRole('table', { name: /By source/ })
-  return within(table).getAllByRole('row').slice(1).map(row => within(row).getByRole('rowheader').textContent)
+  return within(table)
+    .getAllByRole('row')
+    .slice(1)
+    .map(row => within(row).getByRole('rowheader').textContent)
 }
 
 describe('StatsPage', () => {
@@ -71,7 +72,7 @@ describe('StatsPage', () => {
     renderPage()
     const table = await screen.findByRole('table', { name: /by month crawled/ })
     const rows = within(table).getAllByRole('row').slice(1)
-    expect(within(rows[0]).getByRole('rowheader')).toHaveTextContent('2026-09')
+    expect(within(rows[0]!).getByRole('rowheader')).toHaveTextContent('2026-09')
     expect(rows[1]).toHaveTextContent('1,200')
   })
 })

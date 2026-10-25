@@ -9,7 +9,9 @@ export function TextBlock({ title, text, empty }: { title: string; text: string;
   const headingId = useId()
   return (
     <section className="bg-white rounded-lg border border-neutral-200 p-4">
-      <h2 id={headingId} className="text-sm font-semibold text-neutral-900 mb-3">{title}</h2>
+      <h2 id={headingId} className="text-sm font-semibold text-neutral-900 mb-3">
+        {title}
+      </h2>
       <div
         role="region"
         aria-labelledby={headingId}
@@ -38,10 +40,14 @@ export function PodcastScriptTab({ podcast, pendingEdits, onDirtyChange }: Podca
   const writing = podcast.inProgress && podcast.stage === 'selected'
   return (
     <div className="space-y-4">
-      <PodcastStepRunButton podcast={podcast} step="write-script" pendingEdits={pendingEdits}>Write script</PodcastStepRunButton>
-      {editable
-        ? <PodcastScriptEditor podcast={podcast} onDirtyChange={onDirtyChange} />
-        : <TextBlock title="Script" text={podcast.script} empty={writing ? 'The script is being written.' : 'No script yet.'} />}
+      <PodcastStepRunButton podcast={podcast} step="write-script" pendingEdits={pendingEdits}>
+        Write script
+      </PodcastStepRunButton>
+      {editable ? (
+        <PodcastScriptEditor podcast={podcast} onDirtyChange={onDirtyChange} />
+      ) : (
+        <TextBlock title="Script" text={podcast.script} empty={writing ? 'The script is being written.' : 'No script yet.'} />
+      )}
       <TextBlock title="Show notes" text={podcast.showNotes} empty="No show notes yet." />
     </div>
   )

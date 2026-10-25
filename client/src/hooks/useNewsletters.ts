@@ -30,9 +30,8 @@ export function useCreateNewsletter() {
 export function useUpdateNewsletter() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Newsletter> }) =>
-      adminApi.newsletters.update(id, data),
-    onSuccess: (newsletter) => {
+    mutationFn: ({ id, data }: { id: string; data: Partial<Newsletter> }) => adminApi.newsletters.update(id, data),
+    onSuccess: newsletter => {
       queryClient.setQueryData(['newsletter', newsletter.id], newsletter)
       queryClient.invalidateQueries({ queryKey: ['newsletters'] })
     },
@@ -53,7 +52,7 @@ export function useAssignNewsletterStories() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => adminApi.newsletters.assign(id),
-    onSuccess: (newsletter) => {
+    onSuccess: newsletter => {
       queryClient.setQueryData(['newsletter', newsletter.id], newsletter)
       queryClient.invalidateQueries({ queryKey: ['newsletters'] })
     },
@@ -64,7 +63,7 @@ export function useSelectNewsletterStories() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => adminApi.newsletters.select(id),
-    onSuccess: (newsletter) => {
+    onSuccess: newsletter => {
       queryClient.setQueryData(['newsletter', newsletter.id], newsletter)
       queryClient.invalidateQueries({ queryKey: ['newsletters'] })
     },
@@ -75,7 +74,7 @@ export function useGenerateNewsletter() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => adminApi.newsletters.generate(id),
-    onSuccess: (newsletter) => {
+    onSuccess: newsletter => {
       queryClient.setQueryData(['newsletter', newsletter.id], newsletter)
       queryClient.invalidateQueries({ queryKey: ['newsletters'] })
     },
@@ -119,8 +118,7 @@ export function useSendTestNewsletter() {
 export function useSendLiveNewsletter() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, scheduledFor }: { id: string; scheduledFor?: string }) =>
-      adminApi.newsletters.sendLive(id, scheduledFor),
+    mutationFn: ({ id, scheduledFor }: { id: string; scheduledFor?: string }) => adminApi.newsletters.sendLive(id, scheduledFor),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['newsletter-sends', id] })
     },
@@ -138,8 +136,7 @@ export function useNewsletterSends(id: string) {
 export function useRefreshSendStats() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ newsletterId, sendId }: { newsletterId: string; sendId: string }) =>
-      adminApi.newsletters.refreshStats(newsletterId, sendId),
+    mutationFn: ({ newsletterId, sendId }: { newsletterId: string; sendId: string }) => adminApi.newsletters.refreshStats(newsletterId, sendId),
     onSuccess: (_, { newsletterId }) => {
       queryClient.invalidateQueries({ queryKey: ['newsletter-sends', newsletterId] })
     },

@@ -28,17 +28,13 @@ export default function BookmarkButton({ slug, size = 'sm', hoverReveal = false,
   const padding = size === 'md' ? 'pt-0.5 pb-2.5 px-1.5' : 'pt-0 pb-2 px-1'
 
   // When hoverReveal: desktop-only hover reveal unless bookmarked (saved items always visible)
-  const visibilityClass = hoverReveal && !saved
-    ? 'lg:opacity-0 lg:group-hover:opacity-100 transition-opacity'
-    : 'transition-opacity'
+  const visibilityClass = hoverReveal && !saved ? 'lg:opacity-0 lg:group-hover:opacity-100 transition-opacity' : 'transition-opacity'
 
   return (
     <button
       onClick={handleToggle}
       className={`${padding} rounded transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 ${
-        saved
-          ? 'text-brand-600 hover:text-brand-700'
-          : 'text-neutral-300 hover:text-neutral-500'
+        saved ? 'text-brand-600 hover:text-brand-700' : 'text-neutral-300 hover:text-neutral-500'
       } ${visibilityClass} ${className}`}
       aria-label={saved ? 'Remove bookmark' : 'Bookmark story'}
       title={saved ? 'Remove bookmark' : 'Bookmark'}

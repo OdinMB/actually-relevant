@@ -1,12 +1,5 @@
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
-import {
-  EllipsisVerticalIcon,
-  PencilSquareIcon,
-  TrashIcon,
-  ArrowPathIcon,
-  ArrowTopRightOnSquareIcon,
-  ClockIcon,
-} from '@heroicons/react/24/outline'
+import { EllipsisVerticalIcon, PencilSquareIcon, TrashIcon, ArrowPathIcon, ArrowTopRightOnSquareIcon, ClockIcon } from '@heroicons/react/24/outline'
 import type { Feed, Issue } from '@shared/types'
 import type { FeedQualityMetrics } from '../../lib/admin-api'
 import { FeedFaviconPreview } from '../FeedFavicon'
@@ -25,7 +18,7 @@ interface FeedTableProps {
 
 function getDominantMethod(methods?: Record<string, number>): string {
   if (!methods || Object.keys(methods).length === 0) return '--'
-  return Object.entries(methods).sort((a, b) => b[1] - a[1])[0][0]
+  return Object.entries(methods).sort((a, b) => b[1] - a[1])[0]![0]
 }
 
 export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDelete }: FeedTableProps) {
@@ -36,16 +29,40 @@ export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDe
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">Title</th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">Issue</th>
-            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">Lang</th>
-            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">Interval</th>
-            <th scope="col" className="hidden xl:table-cell text-right px-3 py-2 font-medium text-neutral-500" title="Every story ever crawled, including those the monthly cleanup deleted">Crawled</th>
-            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">Pub %</th>
-            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">Avg Rel.</th>
-            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">Method</th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">Last Crawled</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">Actions</th>
+            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+              Title
+            </th>
+            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Issue
+            </th>
+            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Lang
+            </th>
+            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Interval
+            </th>
+            <th
+              scope="col"
+              className="hidden xl:table-cell text-right px-3 py-2 font-medium text-neutral-500"
+              title="Every story ever crawled, including those the monthly cleanup deleted"
+            >
+              Crawled
+            </th>
+            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">
+              Pub %
+            </th>
+            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">
+              Avg Rel.
+            </th>
+            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">
+              Method
+            </th>
+            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+              Last Crawled
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -75,9 +92,7 @@ export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDe
                       aria-label={`Crawl error: ${feed.lastCrawlError}`}
                       className="shrink-0 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700"
                     >
-                      {feed.lastCrawlError.length > 30
-                        ? feed.lastCrawlError.slice(0, 30) + '\u2026'
-                        : feed.lastCrawlError}
+                      {feed.lastCrawlError.length > 30 ? feed.lastCrawlError.slice(0, 30) + '\u2026' : feed.lastCrawlError}
                     </span>
                   )}
                   {feed.isStale && (
@@ -94,7 +109,9 @@ export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDe
                 {/* Mobile metadata */}
                 <div className="flex flex-wrap items-center gap-1.5 mt-1 md:hidden">
                   <span className="text-neutral-500 text-xs">{issueMap.get(feed.issueId) || '—'}</span>
-                  <span className="text-neutral-500 text-xs"><TimeWithRelative dateStr={feed.lastCrawledAt} /></span>
+                  <span className="text-neutral-500 text-xs">
+                    <TimeWithRelative dateStr={feed.lastCrawledAt} />
+                  </span>
                 </div>
               </td>
               <td className="hidden md:table-cell px-3 py-2 text-neutral-600">{issueMap.get(feed.issueId) || '—'}</td>
@@ -107,38 +124,21 @@ export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDe
                     <td className="hidden xl:table-cell px-3 py-2 text-right text-neutral-600 text-xs tabular-nums">
                       {m ? m.totalCrawled.toLocaleString('en-US') : '--'}
                     </td>
-                    <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">
-                      {m ? `${Math.round(m.publishRate * 100)}%` : '--'}
-                    </td>
-                    <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">
-                      {m?.avgRelevance?.toFixed(1) ?? '--'}
-                    </td>
-                    <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">
-                      {getDominantMethod(m?.extractionMethods)}
-                    </td>
+                    <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">{m ? `${Math.round(m.publishRate * 100)}%` : '--'}</td>
+                    <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">{m?.avgRelevance?.toFixed(1) ?? '--'}</td>
+                    <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">{getDominantMethod(m?.extractionMethods)}</td>
                   </>
                 )
               })()}
-              <td className="hidden md:table-cell px-3 py-2 text-neutral-500 whitespace-nowrap"><TimeWithRelative dateStr={feed.lastCrawledAt} /></td>
+              <td className="hidden md:table-cell px-3 py-2 text-neutral-500 whitespace-nowrap">
+                <TimeWithRelative dateStr={feed.lastCrawledAt} />
+              </td>
               <td className="px-3 py-2">
                 {/* Desktop actions */}
                 <div className="hidden md:flex items-center justify-end gap-0.5">
-                  <ActionIconButton
-                    icon={ArrowPathIcon}
-                    label="Crawl"
-                    onClick={() => onCrawl(feed.id)}
-                  />
-                  <ActionIconButton
-                    icon={PencilSquareIcon}
-                    label="Edit"
-                    onClick={() => onEdit(feed.id)}
-                  />
-                  <ActionIconButton
-                    icon={TrashIcon}
-                    label="Delete"
-                    variant="danger"
-                    onClick={() => onDelete(feed.id)}
-                  />
+                  <ActionIconButton icon={ArrowPathIcon} label="Crawl" onClick={() => onCrawl(feed.id)} />
+                  <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => onEdit(feed.id)} />
+                  <ActionIconButton icon={TrashIcon} label="Delete" variant="danger" onClick={() => onDelete(feed.id)} />
                 </div>
 
                 {/* Mobile overflow menu */}

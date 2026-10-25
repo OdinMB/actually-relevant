@@ -47,15 +47,17 @@ export async function parseFeed(feedUrl: string, cacheHeaders?: FeedCacheHeaders
     }
 
     const response = await crawlLimiter.run(feedUrl, () =>
-      withRetry(() => axios.get(feedUrl, {
-        timeout: config.crawl.httpTimeoutMs,
-        maxRedirects: 3,
-        headers,
-        responseType: 'text',
-        maxContentLength: 5 * 1024 * 1024, // 5 MB cap to prevent OOM on huge responses
-        validateStatus: (status) => status === 200 || status === 304,
-        ...ssrfGuard, // resolved addresses and every redirect checked (utils/urlValidation.ts)
-      }))
+      withRetry(() =>
+        axios.get(feedUrl, {
+          timeout: config.crawl.httpTimeoutMs,
+          maxRedirects: 3,
+          headers,
+          responseType: 'text',
+          maxContentLength: 5 * 1024 * 1024, // 5 MB cap to prevent OOM on huge responses
+          validateStatus: status => status === 200 || status === 304,
+          ...ssrfGuard, // resolved addresses and every redirect checked (utils/urlValidation.ts)
+        }),
+      ),
     )
 
     if (response.status === 304) {

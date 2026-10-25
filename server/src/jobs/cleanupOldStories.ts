@@ -38,12 +38,18 @@ function describe(result: CleanupResult): string {
       ? `Picked a new primary for ${result.primariesReElected} cluster${result.primariesReElected === 1 ? '' : 's'} whose primary was deleted.`
       : null,
     'The deleted stories stay counted in the lifetime totals.',
-  ].filter(Boolean).join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 export async function runCleanupOldStories(): Promise<CleanupResult> {
   const result: CleanupResult = {
-    deletedByStatus: {}, deleted: 0, clustersDeleted: 0, primariesReElected: 0, embeddingsCleared: 0,
+    deletedByStatus: {},
+    deleted: 0,
+    clustersDeleted: 0,
+    primariesReElected: 0,
+    embeddingsCleared: 0,
   }
   const { batchSize } = config.storyRetention
   const touchedClusters = new Set<string>()
@@ -72,7 +78,9 @@ export async function runCleanupOldStories(): Promise<CleanupResult> {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     // Rethrown for the scheduler, whose job-failure notice carries this message.
-    throw new Error(`Story cleanup failed after deleting ${result.deleted} stories and clearing ${result.embeddingsCleared} embeddings: ${reason}`)
+    throw new Error(`Story cleanup failed after deleting ${result.deleted} stories and clearing ${result.embeddingsCleared} embeddings: ${reason}`, {
+      cause: err,
+    })
   }
 
   log.info(result, 'old stories cleaned up')

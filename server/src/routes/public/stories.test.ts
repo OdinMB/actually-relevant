@@ -143,16 +143,11 @@ describe('Public Stories API', () => {
         mockPrisma.story.findMany.mockResolvedValue([publicStory])
         mockPrisma.story.count.mockResolvedValue(1)
 
-        const res = await request(app).get(
-          '/api/stories?publishedSince=2026-10-01T00:00:00Z&publishedBefore=2026-10-08T12:00:00%2B02:00&minRelevance=7',
-        )
+        const res = await request(app).get('/api/stories?publishedSince=2026-10-01T00:00:00Z&publishedBefore=2026-10-08T12:00:00%2B02:00&minRelevance=7')
         expect(res.status).toBe(200)
         expect(lastWhere()).toEqual({
           status: 'published',
-          AND: [
-            { datePublished: { gte: new Date('2026-10-01T00:00:00Z'), lt: new Date('2026-10-08T10:00:00Z') } },
-            { relevance: { gte: 7 } },
-          ],
+          AND: [{ datePublished: { gte: new Date('2026-10-01T00:00:00Z'), lt: new Date('2026-10-08T10:00:00Z') } }, { relevance: { gte: 7 } }],
         })
         // count runs on the same filter, so total and pages describe the filtered set
         expect(mockPrisma.story.count.mock.calls.at(-1)![0].where).toEqual(lastWhere())
@@ -184,9 +179,7 @@ describe('Public Stories API', () => {
       })
 
       it('rejects a publishedSince that is not earlier than publishedBefore', async () => {
-        const res = await request(app).get(
-          '/api/stories?publishedSince=2026-10-08T00:00:00Z&publishedBefore=2026-10-08T00:00:00Z',
-        )
+        const res = await request(app).get('/api/stories?publishedSince=2026-10-08T00:00:00Z&publishedBefore=2026-10-08T00:00:00Z')
         expect(res.status).toBe(400)
         expect(res.body.details.fieldErrors.publishedBefore).toEqual(['publishedSince must be earlier than publishedBefore'])
       })
@@ -223,7 +216,7 @@ describe('Public Stories API', () => {
       expect(res.body[0].aiGenerated).toEqual(expectedMarker(publicStory))
     })
 
-    it.each(['0', '-3', '11', '2.5', 'abc'])('refuses limit=%s', async (limit) => {
+    it.each(['0', '-3', '11', '2.5', 'abc'])('refuses limit=%s', async limit => {
       const res = await request(app).get(`/api/stories/source-slug/related?limit=${limit}`)
       expect(res.status).toBe(400)
     })

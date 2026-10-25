@@ -97,7 +97,7 @@ describe('GET /api/stories/:slug/og.png', () => {
 })
 
 describe('GET /api/story-page/:slug', () => {
-  it('injects the story\'s escaped title, description, canonical, og and twitter tags into the shell', async () => {
+  it("injects the story's escaped title, description, canonical, og and twitter tags into the shell", async () => {
     const res = await request(app).get('/api/story-page/clean-air')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/^text\/html/)
@@ -124,7 +124,7 @@ describe('GET /api/story-page/:slug', () => {
     expect(html).toContain('<div id="root"><main>Homepage</main></div>')
   })
 
-  it('drops the API\'s security policy, which would block the site\'s own scripts', async () => {
+  it("drops the API's security policy, which would block the site's own scripts", async () => {
     const res = await request(app).get('/api/story-page/clean-air')
     expect(res.headers['content-security-policy']).toBeUndefined()
     expect(res.headers['cache-control']).toBe(`public, max-age=${config.storyPreview.pageCacheSeconds}`)
@@ -144,7 +144,7 @@ describe('GET /api/story-page/:slug', () => {
     expect(res.text).toBe(SHELL)
   })
 
-  it('returns the shell for any deeper path, never the API\'s JSON 404', async () => {
+  it("returns the shell for any deeper path, never the API's JSON 404", async () => {
     const res = await request(app).get('/api/story-page/')
     expect(res.status).toBe(200)
     expect(res.text).toBe(SHELL)
@@ -172,7 +172,7 @@ describe('GET /api/story-page/:slug', () => {
     }
   })
 
-  it('revalidates with the shell\'s ETag and keeps it on 304', async () => {
+  it("revalidates with the shell's ETag and keeps it on 304", async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       await request(app).get('/api/story-page/missing')

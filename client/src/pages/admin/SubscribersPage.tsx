@@ -65,12 +65,13 @@ export default function SubscribersPage() {
         <title>Subscribers — Admin — Actually Relevant</title>
       </Helmet>
 
-      <PageHeader
-        title="Subscribers"
-        actions={data && data.rows.length > 0 ? <Button onClick={handleExport}>Export CSV</Button> : undefined}
-      />
+      <PageHeader title="Subscribers" actions={data && data.rows.length > 0 ? <Button onClick={handleExport}>Export CSV</Button> : undefined} />
 
-      {isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {error && <ErrorState message="Failed to load subscribers" onRetry={() => refetch()} />}
       {data && (
         <>
@@ -79,35 +80,20 @@ export default function SubscribersPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 mb-6">
             <StatCard
               label="In Plunk"
-              value={data.plunk.available ? data.plunk.total ?? 0 : '—'}
-              hint={
-                data.plunk.available
-                  ? `${data.plunk.subscribed} subscribed · ${data.plunk.unsubscribed} unsubscribed`
-                  : 'unavailable'
-              }
+              value={data.plunk.available ? (data.plunk.total ?? 0) : '—'}
+              hint={data.plunk.available ? `${data.plunk.subscribed} subscribed · ${data.plunk.unsubscribed} unsubscribed` : 'unavailable'}
             />
-            <StatCard
-              label="In our DB"
-              value={data.db.total}
-              hint={`${data.db.confirmed} confirmed · ${data.db.pending} pending`}
-            />
-            <StatCard
-              label="Mismatches"
-              value={data.plunk.available ? data.mismatches : '—'}
-              hint="DB and Plunk disagree"
-            />
+            <StatCard label="In our DB" value={data.db.total} hint={`${data.db.confirmed} confirmed · ${data.db.pending} pending`} />
+            <StatCard label="Mismatches" value={data.plunk.available ? data.mismatches : '—'} hint="DB and Plunk disagree" />
             <StatCard
               label="Never-confirmed in Plunk"
-              value={data.plunk.available ? data.plunk.unsubscribedNotInDb ?? 0 : '—'}
+              value={data.plunk.available ? (data.plunk.unsubscribedNotInDb ?? 0) : '—'}
               hint="unsubscribed, no local row"
             />
           </div>
 
           {data.rows.length === 0 ? (
-            <EmptyState
-              title="No subscribers yet"
-              description="Confirmed subscribers and subscribed Plunk contacts will appear here."
-            />
+            <EmptyState title="No subscribers yet" description="Confirmed subscribers and subscribed Plunk contacts will appear here." />
           ) : (
             <SubscribersTable rows={data.rows} />
           )}

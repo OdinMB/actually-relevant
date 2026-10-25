@@ -62,7 +62,7 @@ const ACTIVITY: Partial<Record<PodcastStage, string>> = {
 
 /** The step running on an episode in progress, named after the stage it is leaving; null at rest. */
 export function episodeActivity(row: { stage: PodcastStage; inProgress: boolean }): string | null {
-  return row.inProgress ? ACTIVITY[row.stage] ?? null : null
+  return row.inProgress ? (ACTIVITY[row.stage] ?? null) : null
 }
 
 /** Spoken characters a full voicing of the stored dialogue sends to TTS; null before there is a script. */
@@ -138,18 +138,20 @@ export async function getActiveEpisodes(now: Date = new Date()): Promise<ActiveE
     select: { id: true, title: true, stage: true, mode: true, kind: true, dialogue: true },
     orderBy: { createdAt: 'desc' },
   })
-  return Promise.all(rows.map(async row => {
-    const voicing = row.stage === PodcastStage.scripted && row.dialogue != null
-    return {
-      id: row.id,
-      title: row.title,
-      stage: row.stage,
-      mode: row.mode,
-      activity: episodeActivity({ stage: row.stage, inProgress: true }),
-      chunksDone: voicing ? await prisma.podcastAudioChunk.count({ where: { podcastId: row.id } }) : null,
-      chunksTotal: voicing ? episodeChunks(row).length : null,
-    }
-  }))
+  return Promise.all(
+    rows.map(async row => {
+      const voicing = row.stage === PodcastStage.scripted && row.dialogue != null
+      return {
+        id: row.id,
+        title: row.title,
+        stage: row.stage,
+        mode: row.mode,
+        activity: episodeActivity({ stage: row.stage, inProgress: true }),
+        chunksDone: voicing ? await prisma.podcastAudioChunk.count({ where: { podcastId: row.id } }) : null,
+        chunksTotal: voicing ? episodeChunks(row).length : null,
+      }
+    }),
+  )
 }
 
 /**
@@ -163,11 +165,15 @@ export async function getActiveEpisodes(now: Date = new Date()): Promise<ActiveE
  */
 export async function deletePodcast(id: string): Promise<boolean> {
   if (!(await prisma.podcast.findUnique({ where: { id }, select: { id: true } }))) return false
-  const deleted = await withEpisodeLease(id, async ({ episode }) => {
-    if (wasPublished(episode)) throw new PodcastRefusedError('a published episode cannot be deleted')
-    await prisma.podcast.delete({ where: { id } })
-    return episode
-  }, 'deleted')
+  const deleted = await withEpisodeLease(
+    id,
+    async ({ episode }) => {
+      if (wasPublished(episode)) throw new PodcastRefusedError('a published episode cannot be deleted')
+      await prisma.podcast.delete({ where: { id } })
+      return episode
+    },
+    'deleted',
+  )
   await deleteEpisodeObjects(deleted)
   return true
 }

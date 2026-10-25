@@ -6,8 +6,9 @@ import type { AxeMatchers } from 'vitest-axe'
 expect.extend(matchers)
 
 declare module 'vitest' {
-  // eslint-disable-next-line @typescript-eslint/no-empty-interface
+  // Declaration merging adds the axe matchers; the interfaces must keep vitest's names and parameter
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type, @typescript-eslint/no-unused-vars
   interface Assertion<T> extends AxeMatchers {}
-  // eslint-disable-next-line @typescript-eslint/no-empty-interface
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   interface AsymmetricMatchersContaining extends AxeMatchers {}
 }

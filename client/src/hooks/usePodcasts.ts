@@ -64,8 +64,7 @@ function useStoreStartedEpisode() {
 export function useUpdatePodcast() {
   const store = useStoreEpisode()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { title?: string; humanEdited?: boolean } }) =>
-      adminApi.podcasts.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: { title?: string; humanEdited?: boolean } }) => adminApi.podcasts.update(id, data),
     onSuccess: store,
   })
 }
@@ -173,8 +172,7 @@ export function useSavePodcastScript() {
 export function usePublishPodcast() {
   const store = useStoreEpisode()
   return useMutation({
-    mutationFn: ({ id, publish }: { id: string; publish: boolean }) =>
-      publish ? adminApi.podcasts.publish(id) : adminApi.podcasts.unpublish(id),
+    mutationFn: ({ id, publish }: { id: string; publish: boolean }) => (publish ? adminApi.podcasts.publish(id) : adminApi.podcasts.unpublish(id)),
     onSuccess: store,
   })
 }

@@ -30,7 +30,13 @@ const issue = {
 } as unknown as Issue
 
 function renderEditor(path: string) {
-  const page = <><Link to="/admin/feeds">Feeds</Link><IssueEditPage /><Where /></>
+  const page = (
+    <>
+      <Link to="/admin/feeds">Feeds</Link>
+      <IssueEditPage />
+      <Where />
+    </>
+  )
   return renderAdminRoutes(
     [
       { path: '/admin/issues/new', element: page },

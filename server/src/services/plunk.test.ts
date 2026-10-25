@@ -14,11 +14,13 @@ vi.mock('axios', () => ({
   default: {
     create: () => {
       const responseInterceptors: Interceptor[] = []
-      const through = (method: keyof typeof mockAxiosInstance) => async (...args: unknown[]) => {
-        let res: unknown = await (mockAxiosInstance[method] as (...a: unknown[]) => Promise<unknown>)(...args)
-        if (res) for (const interceptor of responseInterceptors) res = interceptor(res)
-        return res
-      }
+      const through =
+        (method: keyof typeof mockAxiosInstance) =>
+        async (...args: unknown[]) => {
+          let res: unknown = await (mockAxiosInstance[method] as (...a: unknown[]) => Promise<unknown>)(...args)
+          if (res) for (const interceptor of responseInterceptors) res = interceptor(res)
+          return res
+        }
       return {
         post: through('post'),
         get: through('get'),
@@ -26,7 +28,11 @@ vi.mock('axios', () => ({
         delete: through('delete'),
         interceptors: {
           request: { use: vi.fn() },
-          response: { use: (fn: Interceptor) => { responseInterceptors.push(fn) } },
+          response: {
+            use: (fn: Interceptor) => {
+              responseInterceptors.push(fn)
+            },
+          },
         },
       }
     },
@@ -68,10 +74,7 @@ describe('Plunk API client', () => {
       })
 
       expect(result).toEqual({ id: 'campaign-1', name: 'Test', status: 'DRAFT' })
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/campaigns',
-        expect.objectContaining({ name: 'Test', subject: 'Subject', audienceType: 'ALL' }),
-      )
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/campaigns', expect.objectContaining({ name: 'Test', subject: 'Subject', audienceType: 'ALL' }))
     })
   })
 
@@ -88,7 +91,6 @@ describe('Plunk API client', () => {
       expect(mockAxiosInstance.post).toHaveBeenCalledWith('/campaigns/campaign-1/send', { scheduledFor: '2025-01-15T10:00:00Z' })
     })
   })
-
 
   describe('getCampaignStats', () => {
     it('returns campaign stats', async () => {
@@ -146,10 +148,13 @@ describe('Plunk API client', () => {
     it('sends a transactional email', async () => {
       mockAxiosInstance.post.mockResolvedValue({ data: {} })
       await sendTransactional({ to: 'test@example.com', subject: 'Confirm', body: '<p>Confirm</p>' })
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/v1/send', expect.objectContaining({
-        to: 'test@example.com',
-        subject: 'Confirm',
-      }))
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+        '/v1/send',
+        expect.objectContaining({
+          to: 'test@example.com',
+          subject: 'Confirm',
+        }),
+      )
     })
 
     // A timeout or 5xx may come after Plunk accepted the email; retrying would send it twice.
@@ -310,8 +315,11 @@ describe('Plunk API client', () => {
     })
 
     it('reads a page wrapped in a { success, data } envelope', () => {
-      expect(parseActivityResponse({ success: true, data: { data: [item], cursor: 'c3', hasMore: true } }))
-        .toEqual({ items: [item], nextCursor: 'c3', hasMore: true })
+      expect(parseActivityResponse({ success: true, data: { data: [item], cursor: 'c3', hasMore: true } })).toEqual({
+        items: [item],
+        nextCursor: 'c3',
+        hasMore: true,
+      })
     })
 
     it('reports an unrecognized shape as null rather than as an empty page', () => {

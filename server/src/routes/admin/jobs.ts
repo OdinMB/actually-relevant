@@ -29,36 +29,36 @@ router.put('/:jobName', failsWith('Failed to update job', { notFound: 'Job not f
     return
   }
   if (req.body.enabled === true) {
-    const refusal = jobEnableRefusal(req.params.jobName)
+    const refusal = jobEnableRefusal(req.params.jobName!)
     if (refusal) {
-      res.status(422).json({ error: `Cannot enable ${req.params.jobName}: ${refusal}` })
+      res.status(422).json({ error: `Cannot enable ${req.params.jobName!}: ${refusal}` })
       return
     }
   }
 
-  const job = await updateJob(req.params.jobName, req.body)
-  await reloadJob(req.params.jobName)
+  const job = await updateJob(req.params.jobName!, req.body)
+  await reloadJob(req.params.jobName!)
   res.json(job)
 })
 
 router.post('/:jobName/run', failsWith('Failed to trigger job'), async (req, res) => {
-  const handler = JOB_HANDLERS[req.params.jobName]
+  const handler = JOB_HANDLERS[req.params.jobName!]
   if (!handler) {
     res.status(404).json({ error: 'Job not found' })
     return
   }
   // In this process, or in another by a live job lease
-  if (await isJobRunning(req.params.jobName)) {
-    res.status(409).json({ error: `Job ${req.params.jobName} is already running` })
+  if (await isJobRunning(req.params.jobName!)) {
+    res.status(409).json({ error: `Job ${req.params.jobName!} is already running` })
     return
   }
 
   // Run in background — don't block the response
-  runJob(req.params.jobName, handler).catch(err => {
-    log.error({ err, jobName: req.params.jobName }, 'manual job run failed')
+  runJob(req.params.jobName!, handler).catch(err => {
+    log.error({ err, jobName: req.params.jobName! }, 'manual job run failed')
   })
 
-  res.json({ message: `Job ${req.params.jobName} triggered` })
+  res.json({ message: `Job ${req.params.jobName!} triggered` })
 })
 
 export default router

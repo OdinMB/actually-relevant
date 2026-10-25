@@ -23,10 +23,7 @@ export const POST_TOKENS = 1500
 const days = (fx: Fixtures, limit?: number) => limited(fx.socialPick, limit)
 const posts = (fx: Fixtures, limit?: number) => {
   const per = limit ?? TARGETS.socialPost.perPlatform
-  return [
-    ...fx.socialPost.filter(p => p.platform === 'bluesky').slice(0, per),
-    ...fx.socialPost.filter(p => p.platform === 'mastodon').slice(0, per),
-  ]
+  return [...fx.socialPost.filter(p => p.platform === 'bluesky').slice(0, per), ...fx.socialPost.filter(p => p.platform === 'mastodon').slice(0, per)]
 }
 const pickPrompt = (d: SocialPickDay) => buildBlueskyPickBestPrompt(d.candidates)
 export const postPrompt = (p: SocialPostItem) => (p.platform === 'bluesky' ? buildBlueskyPostPrompt(p.story) : buildMastodonPostPrompt(p.story))
@@ -56,11 +53,13 @@ function scorePick(ds: SocialPickDay[], recs: CallRecord<BlueskyPickBest>[], oth
 
 export function decideSocialPick(metrics: Record<string, PickArmMetrics>, candidates: string[]): Decision {
   return pickLowestPassing(
-    candidates.filter(c => metrics[c]).map(c => ({
-      arm: c,
-      failures: (metrics[c].validRate ?? 0) < 1 ? [`valid story ID rate ${pct(metrics[c].validRate)} < 100%`] : [],
-      evidence: [`valid IDs ${pct(metrics[c].validRate)}; agreement with the posted story ${pct(metrics[c].storedAgreement)} (information only)`],
-    })),
+    candidates
+      .filter(c => metrics[c])
+      .map(c => ({
+        arm: c,
+        failures: (metrics[c]!.validRate ?? 0) < 1 ? [`valid story ID rate ${pct(metrics[c]!.validRate)} < 100%`] : [],
+        evidence: [`valid IDs ${pct(metrics[c]!.validRate)}; agreement with the posted story ${pct(metrics[c]!.storedAgreement)} (information only)`],
+      })),
   )
 }
 
@@ -95,18 +94,20 @@ function scorePost(items: SocialPostItem[], recs: CallRecord<{ postText: string 
 }
 
 export function decideSocialPost(metrics: Record<string, PostArmMetrics>, baseline: string, candidates: string[]): Decision {
-  const b = metrics[baseline]
+  const b = metrics[baseline]!
   return pickLowestPassing(
-    candidates.filter(c => metrics[c]).map(c => ({
-      arm: c,
-      failures: [
-        ...(metrics[c].drafts === 0 ? ['no drafts returned'] : []),
-        ...(metrics[c].overLimit > b.overLimit ? [`${metrics[c].overLimit} raw drafts over the limit (mini ${b.overLimit})`] : []),
-        ...(metrics[c].forbidden > 0 ? [`${metrics[c].forbidden} drafts with URLs, mentions, disallowed hashtags, the title or junk`] : []),
-        ...(metrics[c].failures > b.failures ? [`${metrics[c].failures} failed calls (mini ${b.failures})`] : []),
-      ],
-      evidence: [`${metrics[c].overLimit} over-limit drafts (mini ${b.overLimit}); no forbidden content`],
-    })),
+    candidates
+      .filter(c => metrics[c])
+      .map(c => ({
+        arm: c,
+        failures: [
+          ...(metrics[c]!.drafts === 0 ? ['no drafts returned'] : []),
+          ...(metrics[c]!.overLimit > b.overLimit ? [`${metrics[c]!.overLimit} raw drafts over the limit (mini ${b.overLimit})`] : []),
+          ...(metrics[c]!.forbidden > 0 ? [`${metrics[c]!.forbidden} drafts with URLs, mentions, disallowed hashtags, the title or junk`] : []),
+          ...(metrics[c]!.failures > b.failures ? [`${metrics[c]!.failures} failed calls (mini ${b.failures})`] : []),
+        ],
+        evidence: [`${metrics[c]!.overLimit} over-limit drafts (mini ${b.overLimit}); no forbidden content`],
+      })),
   )
 }
 
@@ -126,23 +127,25 @@ function postRatingDrafts(items: SocialPostItem[], records: Map<string, CallReco
     const b = parsedOf(cand[i])?.postText
     if (a == null || b == null) return []
     const broke = [baseChecks[i], candChecks[i]].some(c => c != null && (c.overLimit || forbiddenContent(c) || c.extraEmDash))
-    return [{
-      set: 'social-post' as const,
-      key: `${p.platform}:${p.id}`,
-      context_md: [
-        `Platform: ${p.platform === 'bluesky' ? 'Bluesky' : 'Mastodon'} (text limit ${p.story.maxChars} characters; longer drafts are cut with an ellipsis)`,
-        '',
-        `**${p.story.title}**`,
-        '',
-        `Summary: ${p.story.summary}`,
-        ...(p.story.relevanceSummary ? ['', `Why it matters: ${p.story.relevanceSummary}`] : []),
-      ].join('\n'),
-      options: [
-        { arm: armKey(BASELINE), content_md: asPublished(a, p.story.maxChars) },
-        { arm: armKey(CANDIDATE), content_md: asPublished(b, p.story.maxChars) },
-      ],
-      tags: { platform: p.platform, brokeRule: broke },
-    }]
+    return [
+      {
+        set: 'social-post' as const,
+        key: `${p.platform}:${p.id}`,
+        context_md: [
+          `Platform: ${p.platform === 'bluesky' ? 'Bluesky' : 'Mastodon'} (text limit ${p.story.maxChars} characters; longer drafts are cut with an ellipsis)`,
+          '',
+          `**${p.story.title}**`,
+          '',
+          `Summary: ${p.story.summary}`,
+          ...(p.story.relevanceSummary ? ['', `Why it matters: ${p.story.relevanceSummary}`] : []),
+        ].join('\n'),
+        options: [
+          { arm: armKey(BASELINE), content_md: asPublished(a, p.story.maxChars) },
+          { arm: armKey(CANDIDATE), content_md: asPublished(b, p.story.maxChars) },
+        ],
+        tags: { platform: p.platform, brokeRule: broke },
+      },
+    ]
   })
 }
 
@@ -200,9 +203,11 @@ export const socialSuite: Suite = {
         metricRow('Agrees with the other arm', pickMetrics, m => m.armAgreement, pct),
       ],
       decision: decideSocialPick(pickMetrics, [candKey]),
-      notes: [fx.socialPickSynthetic
-        ? 'No published social posts were found, so the replay used synthetic daily windows with no stored pick.'
-        : 'The stored pick is the first story posted that day; admin picks and manual posts blur it, so agreement is information only.'],
+      notes: [
+        fx.socialPickSynthetic
+          ? 'No published social posts were found, so the replay used synthetic daily windows with no stored pick.'
+          : 'The stored pick is the first story posted that day; admin picks and manual posts blur it, so agreement is information only.',
+      ],
     }
     const postSite: CallSiteResult = {
       id: 'social-post',

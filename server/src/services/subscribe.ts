@@ -96,9 +96,7 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
     // axios message alone only says "status code 403"). Plunk's docs list only
     // 400/401 for verify, so a 403 likely means plan/quota gating or an edge
     // block — either way, verification is best-effort and we proceed.
-    const detail = axios.isAxiosError(err)
-      ? { status: err.response?.status, plunkResponse: err.response?.data }
-      : {}
+    const detail = axios.isAxiosError(err) ? { status: err.response?.status, plunkResponse: err.response?.data } : {}
     log.warn({ err, ...detail }, 'email verification failed, skipping check')
   }
 
@@ -146,9 +144,7 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
     await prisma.pendingSubscription.delete({ where: { id: pending.id } }).catch((deleteErr: unknown) => {
       log.error({ err: deleteErr, subscriptionId: pending.id }, 'failed to remove the pending row after a failed send')
     })
-    throw new ConfirmationEmailError(
-      "We couldn't send the confirmation email right now. Please try again in a few minutes.",
-    )
+    throw new ConfirmationEmailError("We couldn't send the confirmation email right now. Please try again in a few minutes.")
   }
 }
 

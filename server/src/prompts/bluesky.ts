@@ -53,7 +53,7 @@ export interface StoryForBlueskyPick {
 export function buildBlueskyPickBestPrompt(stories: StoryForBlueskyPick[]): string {
   const storiesBlock = stories
     .map(
-      (s) =>
+      s =>
         `<STORY id="${escapeXml(s.id)}">
 Topic: ${escapeXml(s.titleLabel)}
 Title: ${escapeXml(s.title)}
@@ -62,7 +62,7 @@ Relevance: ${s.relevance ?? 'N/A'}/10
 Emotion: ${s.emotionTag || 'calm'}
 Issue: ${s.issueName || 'General'}
 Published: ${s.datePublished || 'Unknown'}
-</STORY>`
+</STORY>`,
     )
     .join('\n\n')
 

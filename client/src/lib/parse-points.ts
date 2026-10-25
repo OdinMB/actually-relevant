@@ -31,7 +31,7 @@ export function parsePoints(text: string): string[] {
   const lines = text.split('\n')
 
   // Check if the text uses markdown list syntax
-  const hasDashes = lines.some((l) => /^\s*[-*]\s+/.test(l))
+  const hasDashes = lines.some(l => /^\s*[-*]\s+/.test(l))
 
   if (hasDashes) {
     // Merge continuation lines (lines that don't start with a dash) into the preceding item
@@ -43,15 +43,15 @@ export function parsePoints(text: string): string[] {
         points[points.length - 1] += ' ' + line.trim()
       }
     }
-    return points.filter((p) => p.length > 0)
+    return points.filter(p => p.length > 0)
   }
 
   // No dashes — split on blank lines first, then on single newlines
   const paragraphs = text.split(/\n\s*\n/)
   if (paragraphs.length > 1) {
-    return paragraphs.map((p) => p.trim()).filter((p) => p.length > 0)
+    return paragraphs.map(p => p.trim()).filter(p => p.length > 0)
   }
 
   // Single block — split on newlines
-  return lines.map((l) => l.trim()).filter((l) => l.length > 0)
+  return lines.map(l => l.trim()).filter(l => l.length > 0)
 }

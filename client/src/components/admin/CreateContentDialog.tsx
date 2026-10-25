@@ -30,9 +30,7 @@ export function CreateContentDialog({ open, onClose, onSubmit, type, loading }: 
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="mx-auto max-w-sm w-full rounded-lg bg-white p-6 shadow-xl">
-          <DialogTitle className="text-base font-semibold text-neutral-900 mb-4">
-            New {LABELS[type]}
-          </DialogTitle>
+          <DialogTitle className="text-base font-semibold text-neutral-900 mb-4">New {LABELS[type]}</DialogTitle>
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               id="content-title"
@@ -44,8 +42,12 @@ export function CreateContentDialog({ open, onClose, onSubmit, type, loading }: 
               autoFocus
             />
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-              <Button type="submit" loading={loading} disabled={!title.trim()}>Create</Button>
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={loading} disabled={!title.trim()}>
+                Create
+              </Button>
             </div>
           </form>
         </DialogPanel>

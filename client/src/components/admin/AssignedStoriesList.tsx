@@ -89,14 +89,19 @@ export function AssignedStoriesList({
   const isOpen = !collapsible || expanded
   const idsKey = useMemo(() => [...storyIds].sort().join(','), [storyIds])
 
-  const { data: stories, isLoading, isError, refetch } = useQuery({
+  const {
+    data: stories,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['stories', 'batch', idsKey],
     queryFn: () => adminApi.stories.batch(storyIds),
     enabled: isOpen && storyIds.length > 0,
     staleTime: 5 * 60 * 1000,
   })
 
-  const grouped = useMemo(() => stories ? groupByIssue(stories) : [], [stories])
+  const grouped = useMemo(() => (stories ? groupByIssue(stories) : []), [stories])
 
   const header = (
     <div className="flex items-center justify-between p-4">
@@ -134,12 +139,8 @@ export function AssignedStoriesList({
 
       {isOpen && (
         <div className="px-4 pb-4">
-          {storyIds.length === 0 && (
-            <p className="text-sm text-neutral-400 italic">{emptyText}</p>
-          )}
-          {isLoading && (
-            <p className="text-sm text-neutral-500">Loading stories...</p>
-          )}
+          {storyIds.length === 0 && <p className="text-sm text-neutral-400 italic">{emptyText}</p>}
+          {isLoading && <p className="text-sm text-neutral-500">Loading stories...</p>}
           {isError && (
             <div className="text-sm text-red-600">
               <p>
@@ -166,13 +167,19 @@ export function AssignedStoriesList({
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="border-b border-neutral-200 bg-neutral-50">
-                          <th scope="col" className="text-left px-3 py-1.5 font-medium text-neutral-500">Title</th>
-                          <th scope="col" className="hidden md:table-cell text-left px-3 py-1.5 font-medium text-neutral-500">Rating</th>
-                          <th scope="col" className="hidden lg:table-cell text-left px-3 py-1.5 font-medium text-neutral-500">Emotion</th>
-                          <th scope="col" className="hidden lg:table-cell text-left px-3 py-1.5 font-medium text-neutral-500">Crawled</th>
-                          {actions && actions.length > 0 && (
-                            <th scope="col" className="px-1 py-1.5" style={{ width: `${actions.length * 28 + 4}px` }} />
-                          )}
+                          <th scope="col" className="text-left px-3 py-1.5 font-medium text-neutral-500">
+                            Title
+                          </th>
+                          <th scope="col" className="hidden md:table-cell text-left px-3 py-1.5 font-medium text-neutral-500">
+                            Rating
+                          </th>
+                          <th scope="col" className="hidden lg:table-cell text-left px-3 py-1.5 font-medium text-neutral-500">
+                            Emotion
+                          </th>
+                          <th scope="col" className="hidden lg:table-cell text-left px-3 py-1.5 font-medium text-neutral-500">
+                            Crawled
+                          </th>
+                          {actions && actions.length > 0 && <th scope="col" className="px-1 py-1.5" style={{ width: `${actions.length * 28 + 4}px` }} />}
                         </tr>
                       </thead>
                       <tbody>
@@ -188,23 +195,15 @@ export function AssignedStoriesList({
                               {/* Mobile metadata */}
                               <div className="flex flex-wrap items-center gap-1.5 mt-1 md:hidden">
                                 <span className="text-neutral-500 text-xs">{ratingDisplay(story)}</span>
-                                {story.emotionTag && (
-                                  <Badge variant={EMOTION_VARIANTS[story.emotionTag]}>{story.emotionTag}</Badge>
-                                )}
+                                {story.emotionTag && <Badge variant={EMOTION_VARIANTS[story.emotionTag]}>{story.emotionTag}</Badge>}
                                 <span className="text-neutral-400 text-xs">{formatShortDate(story.dateCrawled)}</span>
                               </div>
                             </td>
-                            <td className="hidden md:table-cell px-3 py-2 text-neutral-600">
-                              {ratingDisplay(story)}
-                            </td>
+                            <td className="hidden md:table-cell px-3 py-2 text-neutral-600">{ratingDisplay(story)}</td>
                             <td className="hidden lg:table-cell px-3 py-2">
-                              {story.emotionTag ? (
-                                <Badge variant={EMOTION_VARIANTS[story.emotionTag]}>{story.emotionTag}</Badge>
-                              ) : '—'}
+                              {story.emotionTag ? <Badge variant={EMOTION_VARIANTS[story.emotionTag]}>{story.emotionTag}</Badge> : '—'}
                             </td>
-                            <td className="hidden lg:table-cell px-3 py-2 text-neutral-500 whitespace-nowrap">
-                              {formatShortDate(story.dateCrawled)}
-                            </td>
+                            <td className="hidden lg:table-cell px-3 py-2 text-neutral-500 whitespace-nowrap">{formatShortDate(story.dateCrawled)}</td>
                             {actions && actions.length > 0 && (
                               <td className="px-1 py-2">
                                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">

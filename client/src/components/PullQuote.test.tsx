@@ -17,16 +17,12 @@ describe('PullQuote AI disclosure', () => {
     const { container } = renderQuote()
     const footer = container.querySelector('footer')!
     expect(footer.querySelector('[aria-hidden="true"]')?.textContent).toBe('AI')
-    expect(announcedText(footer)).toBe(
-      'Selected by AI — Dr. Jane Doe, WHO, via AI headline · selected and potentially translated by AI',
-    )
+    expect(announcedText(footer)).toBe('Selected by AI — Dr. Jane Doe, WHO, via AI headline · selected and potentially translated by AI')
   })
 
   it('adds the note after the "from" attribution too', () => {
     const { container } = renderQuote(makeStory({ quoteAttribution: 'Original article' }))
-    expect(announcedText(container.querySelector('footer')!)).toBe(
-      'Selected by AI — from AI headline · selected and potentially translated by AI',
-    )
+    expect(announcedText(container.querySelector('footer')!)).toBe('Selected by AI — from AI headline · selected and potentially translated by AI')
   })
 
   it('shows the disclosure right under the quote, in the same block', () => {

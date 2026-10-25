@@ -10,10 +10,7 @@ import { Prisma } from '@prisma/client'
 export function storyInIssueWhere(issueSlug: string): Prisma.StoryWhereInput {
   const matches: Prisma.IssueWhereInput = { OR: [{ slug: issueSlug }, { parent: { slug: issueSlug } }] }
   return {
-    OR: [
-      { issue: matches },
-      { issue: null, feed: { issue: matches } },
-    ],
+    OR: [{ issue: matches }, { issue: null, feed: { issue: matches } }],
   }
 }
 

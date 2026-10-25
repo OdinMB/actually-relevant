@@ -1,20 +1,17 @@
-import { escapeXml } from "./shared.js";
+import { escapeXml } from './shared.js'
 
 export interface StoryForDedup {
-  title: string;
-  summary: string;
+  title: string
+  summary: string
 }
 
 export interface CandidateForDedup {
-  id: string;
-  title: string;
-  summary: string;
+  id: string
+  title: string
+  summary: string
 }
 
-export function buildDedupPrompt(
-  source: StoryForDedup,
-  candidates: CandidateForDedup[],
-): string {
+export function buildDedupPrompt(source: StoryForDedup, candidates: CandidateForDedup[]): string {
   let prompt = `<ROLE>
 You are a strict news editor determining whether articles report on the exact same specific event.
 </ROLE>
@@ -44,17 +41,17 @@ NOT A DUPLICATE — mark isDuplicate: false when:
 </SOURCE>
 
 <CANDIDATES>
-`;
+`
 
   candidates.forEach((c, i) => {
     prompt += `<CANDIDATE number="${i + 1}">
 <Title>${escapeXml(c.title)}</Title>
 <Summary>${escapeXml(c.summary)}</Summary>
 </CANDIDATE>
-`;
-  });
+`
+  })
 
-  prompt += `</CANDIDATES>`;
+  prompt += `</CANDIDATES>`
 
-  return prompt;
+  return prompt
 }

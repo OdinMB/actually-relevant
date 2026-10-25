@@ -19,7 +19,9 @@ class WithDetails extends UnprocessableError {
 /** One route that throws `err`, with or without failsWith texts, behind the global handler. */
 function appThrowing(err: unknown, texts?: Parameters<typeof failsWith>) {
   const app = express()
-  const handler = async () => { throw err }
+  const handler = async () => {
+    throw err
+  }
   if (texts) app.get('/x', failsWith(...texts), handler)
   else app.get('/x', handler)
   app.use(errorHandler)
@@ -91,7 +93,10 @@ describe('errorHandler', () => {
       throw new ServiceError('late', 400)
     })
     app.use(errorHandler)
-    app.use((_err: unknown, _req: unknown, _res: unknown, next: (e?: unknown) => void) => { reached(); next(_err) })
+    app.use((_err: unknown, _req: unknown, _res: unknown, next: (e?: unknown) => void) => {
+      reached()
+      next(_err)
+    })
     await expect(request(app).get('/x')).rejects.toThrow()
     expect(reached).toHaveBeenCalled()
   })

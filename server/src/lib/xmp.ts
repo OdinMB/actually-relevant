@@ -39,7 +39,7 @@ const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
 /** CRC-32 as PNG chunks use it (ISO 3309 / ITU-T V.42). */
 export function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff
-  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8)
+  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8)
   return (crc ^ 0xffffffff) >>> 0
 }
 
@@ -62,10 +62,6 @@ export function embedXmpInPng(png: Buffer, xmp: string): Buffer {
   }
   const ihdrEnd = 8 + 12 + png.readUInt32BE(8)
   // keyword, null separator, compression flag, compression method, empty language tag + null, empty translated keyword + null
-  const itxtData = Buffer.concat([
-    Buffer.from(XMP_ITXT_KEYWORD, 'latin1'),
-    Buffer.from([0, 0, 0, 0, 0]),
-    Buffer.from(xmp, 'utf8'),
-  ])
+  const itxtData = Buffer.concat([Buffer.from(XMP_ITXT_KEYWORD, 'latin1'), Buffer.from([0, 0, 0, 0, 0]), Buffer.from(xmp, 'utf8')])
   return Buffer.concat([png.subarray(0, ihdrEnd), pngChunk('iTXt', itxtData), png.subarray(ihdrEnd)])
 }

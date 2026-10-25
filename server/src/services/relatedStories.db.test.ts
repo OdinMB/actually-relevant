@@ -9,7 +9,10 @@ vi.mock('./llm.js', () => ({
   rateLimitDelay: () => Promise.resolve(),
 }))
 vi.mock('./embedding.js', () => ({
-  generateEmbeddingForContent: vi.fn(), generateSearchEmbedding: vi.fn(), ensureEmbedding: vi.fn(), ensureEmbeddings: vi.fn(),
+  generateEmbeddingForContent: vi.fn(),
+  generateSearchEmbedding: vi.fn(),
+  ensureEmbedding: vi.fn(),
+  ensureEmbeddings: vi.fn(),
 }))
 
 const { getRelatedStories, updateStoryStatus } = await import('./story.js')
@@ -38,7 +41,9 @@ async function seed(count: number) {
 
 describeDb('related stories (PostgreSQL)', () => {
   useTestDatabase()
-  beforeEach(() => { mockInvoke.mockReset() })
+  beforeEach(() => {
+    mockInvoke.mockReset()
+  })
 
   it('returns the nearest published stories without a model call when there are few', async () => {
     const { slug, neighbours } = await seed(displayCount)
@@ -73,7 +78,12 @@ describeDb('related stories (PostgreSQL)', () => {
     const { slug, neighbours } = await seed(displayCount + 2)
     const ranked = [neighbours[5], neighbours[0], neighbours[3], neighbours[1]].map(s => s.id)
     let release!: () => void
-    mockInvoke.mockImplementation(() => new Promise(r => { release = () => r({ selectedIds: ranked }) }))
+    mockInvoke.mockImplementation(
+      () =>
+        new Promise(r => {
+          release = () => r({ selectedIds: ranked })
+        }),
+    )
 
     const pending = [getRelatedStories(slug), getRelatedStories(slug), getRelatedStories(slug, 2)]
     await vi.waitFor(() => expect(mockInvoke).toHaveBeenCalled())

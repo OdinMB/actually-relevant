@@ -17,12 +17,7 @@ function CellContent({ cell }: { cell: CellValue }) {
   return (
     <>
       {check && (
-        <svg
-          className="inline-block w-4 h-4 text-green-600 mr-1 -mt-0.5 shrink-0"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          aria-hidden="true"
-        >
+        <svg className="inline-block w-4 h-4 text-green-600 mr-1 -mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
           <path
             fillRule="evenodd"
             d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -86,23 +81,17 @@ export default function ComparisonTable({ headers, rows, highlightColumn, compet
             return (
               <div
                 key={competitor}
-                className={`rounded-xl border p-4 ${
-                  isHighlighted
-                    ? 'border-brand-300 bg-brand-50/50 ring-1 ring-brand-200'
-                    : 'border-neutral-200'
-                }`}
+                className={`rounded-xl border p-4 ${isHighlighted ? 'border-brand-300 bg-brand-50/50 ring-1 ring-brand-200' : 'border-neutral-200'}`}
               >
                 <h3 className={`font-bold text-lg mb-3 ${isHighlighted ? 'text-brand-800' : ''}`}>
                   {colIdx === competitorHeaders.length - 1 && competitorSelect ? competitorSelect : competitor}
                 </h3>
                 <dl className="space-y-2">
-                  {rows.map((row) => (
+                  {rows.map(row => (
                     <div key={row.feature} className="flex flex-col">
-                      <dt className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                        {row.feature}
-                      </dt>
+                      <dt className="text-xs font-medium text-neutral-500 uppercase tracking-wide">{row.feature}</dt>
                       <dd className="text-sm text-neutral-700 mt-0.5">
-                        <CellContent cell={row.cells[colIdx]} />
+                        <CellContent cell={row.cells[colIdx]!} />
                       </dd>
                     </div>
                   ))}
@@ -125,10 +114,7 @@ export default function ComparisonTable({ headers, rows, highlightColumn, compet
             </colgroup>
             <thead>
               <tr>
-                <th
-                  scope="col"
-                  className="sticky left-0 z-10 bg-neutral-100 text-left py-3 px-3 font-bold text-neutral-700 border-b border-neutral-300"
-                >
+                <th scope="col" className="sticky left-0 z-10 bg-neutral-100 text-left py-3 px-3 font-bold text-neutral-700 border-b border-neutral-300">
                   {headers[0]}
                 </th>
                 {competitorHeaders.map((header, i) => {
@@ -139,9 +125,7 @@ export default function ComparisonTable({ headers, rows, highlightColumn, compet
                       key={header}
                       scope="col"
                       className={`text-left py-3 px-3 font-bold border-b border-neutral-300 ${
-                        isHighlighted
-                          ? 'bg-brand-50 text-brand-800 border-b-brand-300'
-                          : 'bg-neutral-50 text-neutral-700'
+                        isHighlighted ? 'bg-brand-50 text-brand-800 border-b-brand-300' : 'bg-neutral-50 text-neutral-700'
                       }`}
                     >
                       {isLast && competitorSelect ? competitorSelect : header}
@@ -153,15 +137,11 @@ export default function ComparisonTable({ headers, rows, highlightColumn, compet
             <tbody>
               {rows.map((row, rowIdx) => (
                 <tr key={row.feature} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}>
-                  <td className="sticky left-0 z-10 bg-inherit py-2.5 px-3 font-medium text-neutral-800 border-b border-neutral-200">
-                    {row.feature}
-                  </td>
+                  <td className="sticky left-0 z-10 bg-inherit py-2.5 px-3 font-medium text-neutral-800 border-b border-neutral-200">{row.feature}</td>
                   {row.cells.map((cell, i) => (
                     <td
                       key={i}
-                      className={`py-2.5 px-3 border-b border-neutral-200 ${
-                        i === highlightColumn ? 'bg-brand-50/60 text-neutral-800' : 'text-neutral-600'
-                      }`}
+                      className={`py-2.5 px-3 border-b border-neutral-200 ${i === highlightColumn ? 'bg-brand-50/60 text-neutral-800' : 'text-neutral-600'}`}
                     >
                       <CellContent cell={cell} />
                     </td>

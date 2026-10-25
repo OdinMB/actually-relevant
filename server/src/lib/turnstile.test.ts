@@ -81,7 +81,7 @@ describe('verifyTurnstile', () => {
     await vi.runAllTimersAsync()
 
     expect(await result).toBe('ok')
-    const keys = mockPost.mock.calls.map((call) => (call[1] as { idempotency_key: string }).idempotency_key)
+    const keys = mockPost.mock.calls.map(call => (call[1] as { idempotency_key: string }).idempotency_key)
     expect(keys).toHaveLength(2)
     expect(keys[0]).toBeTruthy()
     expect(keys[1]).toBe(keys[0])

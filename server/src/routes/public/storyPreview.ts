@@ -49,7 +49,7 @@ function slugOf(req: Request): string | null {
 }
 
 async function sendStoryPage(req: Request, res: Response) {
-  const html = await renderStoryPage(slugOf(req)).catch((err) => {
+  const html = await renderStoryPage(slugOf(req)).catch(err => {
     log.error({ err, path: req.path }, 'failed to render story page')
     return null
   })

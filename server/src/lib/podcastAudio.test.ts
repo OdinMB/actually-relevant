@@ -24,7 +24,7 @@ function fakeFfmpeg(code: number, outputBytes = 0) {
 }
 
 const live = { pauseMs: 700, loudnorm: true }
-const filterOf =(args: string[]) => args[args.indexOf('-filter_complex') + 1]
+const filterOf = (args: string[]) => args[args.indexOf('-filter_complex') + 1]
 
 describe('buildAssembleArgs', () => {
   it('pads every chunk but the last with the pause, then joins and loudnorms', () => {
@@ -47,13 +47,18 @@ describe('buildAssembleArgs', () => {
     expect(filterOf(buildAssembleArgs(['a.mp3', 'b.mp3'], tags, { ...live, loudnorm: false }, 'o.mp3'))).not.toContain('loudnorm')
   })
 
-  it('writes the episode tags and the AI-provenance frames, dropping the chunks\' own metadata', () => {
+  it("writes the episode tags and the AI-provenance frames, dropping the chunks' own metadata", () => {
     const args = buildAssembleArgs(['a.mp3'], tags, live, 'o.mp3')
     const metadata = args.flatMap((a, i) => (a === '-metadata' ? [args[i + 1]] : []))
-    expect(metadata).toEqual(expect.arrayContaining([
-      'title=Week 41', 'artist=Actually Relevant', 'album=Actually Relevant', 'comment=AI-generated.',
-      ...Object.entries(AI_PROVENANCE_FRAMES).map(([k, v]) => `${k}=${v}`),
-    ]))
+    expect(metadata).toEqual(
+      expect.arrayContaining([
+        'title=Week 41',
+        'artist=Actually Relevant',
+        'album=Actually Relevant',
+        'comment=AI-generated.',
+        ...Object.entries(AI_PROVENANCE_FRAMES).map(([k, v]) => `${k}=${v}`),
+      ]),
+    )
     expect(args.join(' ')).toContain('-map_metadata -1')
     expect(args.join(' ')).toContain('-c:a libmp3lame -b:a 128k')
   })

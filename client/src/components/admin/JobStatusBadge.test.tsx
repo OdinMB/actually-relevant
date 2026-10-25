@@ -23,44 +23,64 @@ function makeJob(overrides: Partial<JobRun> = {}): JobRun {
 
 describe('JobStatusBadge', () => {
   it('shows OK when the last run completed after it started', () => {
-    render(<JobStatusBadge job={makeJob({
-      lastStartedAt: '2026-06-19T01:00:00.000Z',
-      lastCompletedAt: '2026-06-19T01:05:00.000Z',
-    })} />)
+    render(
+      <JobStatusBadge
+        job={makeJob({
+          lastStartedAt: '2026-06-19T01:00:00.000Z',
+          lastCompletedAt: '2026-06-19T01:05:00.000Z',
+        })}
+      />,
+    )
     expect(screen.getByText('OK')).toBeTruthy()
   })
 
   it('shows Incomplete when a run started but completion is older (hard kill / OOM)', () => {
-    render(<JobStatusBadge job={makeJob({
-      lastStartedAt: '2026-06-19T01:00:00.000Z',
-      lastCompletedAt: '2026-06-17T01:09:00.000Z',
-    })} />)
+    render(
+      <JobStatusBadge
+        job={makeJob({
+          lastStartedAt: '2026-06-19T01:00:00.000Z',
+          lastCompletedAt: '2026-06-17T01:09:00.000Z',
+        })}
+      />,
+    )
     expect(screen.getByText('Incomplete')).toBeTruthy()
   })
 
   it('shows Incomplete when a run started but never completed', () => {
-    render(<JobStatusBadge job={makeJob({
-      lastStartedAt: '2026-06-19T01:00:00.000Z',
-      lastCompletedAt: null,
-    })} />)
+    render(
+      <JobStatusBadge
+        job={makeJob({
+          lastStartedAt: '2026-06-19T01:00:00.000Z',
+          lastCompletedAt: null,
+        })}
+      />,
+    )
     expect(screen.getByText('Incomplete')).toBeTruthy()
   })
 
   it('prefers Error over Incomplete when lastError is set', () => {
-    render(<JobStatusBadge job={makeJob({
-      lastStartedAt: '2026-06-19T01:00:00.000Z',
-      lastCompletedAt: '2026-06-17T01:09:00.000Z',
-      lastError: 'boom',
-    })} />)
+    render(
+      <JobStatusBadge
+        job={makeJob({
+          lastStartedAt: '2026-06-19T01:00:00.000Z',
+          lastCompletedAt: '2026-06-17T01:09:00.000Z',
+          lastError: 'boom',
+        })}
+      />,
+    )
     expect(screen.getByText('Error')).toBeTruthy()
   })
 
   it('shows Running while in progress regardless of timestamps', () => {
-    render(<JobStatusBadge job={makeJob({
-      running: true,
-      lastStartedAt: '2026-06-19T01:00:00.000Z',
-      lastCompletedAt: '2026-06-17T01:09:00.000Z',
-    })} />)
+    render(
+      <JobStatusBadge
+        job={makeJob({
+          running: true,
+          lastStartedAt: '2026-06-19T01:00:00.000Z',
+          lastCompletedAt: '2026-06-17T01:09:00.000Z',
+        })}
+      />,
+    )
     expect(screen.getByText('Running')).toBeTruthy()
   })
 

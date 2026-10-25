@@ -11,8 +11,8 @@ export const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    error: 'Too many requests. Please try again later.'
-  }
+    error: 'Too many requests. Please try again later.',
+  },
 })
 
 /**
@@ -26,10 +26,10 @@ export const expensiveOpLimiter = rateLimit({
   max: config.rateLimit.expensiveMax,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => `${req.ip}-${req.baseUrl}${req.path}`,
+  keyGenerator: req => `${req.ip}-${req.baseUrl}${req.path}`,
   message: {
-    error: 'Operational limit reached for this endpoint. Please try again later.'
-  }
+    error: 'Operational limit reached for this endpoint. Please try again later.',
+  },
 })
 
 /**
@@ -42,8 +42,8 @@ export const searchLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    error: 'Too many search requests. Please try again later.'
-  }
+    error: 'Too many search requests. Please try again later.',
+  },
 })
 
 /**
@@ -56,8 +56,8 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    error: 'Too many login attempts. Please try again later.'
-  }
+    error: 'Too many login attempts. Please try again later.',
+  },
 })
 
 /**
@@ -70,6 +70,6 @@ export const refreshLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    error: 'Too many refresh attempts. Please try again later.'
-  }
+    error: 'Too many refresh attempts. Please try again later.',
+  },
 })

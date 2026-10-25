@@ -150,7 +150,7 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
   const steps = listOf('--steps', values.steps, RECALIBRATION_STEPS, RECALIBRATION_DEFAULT_STEPS)
   const limit = positiveInt('--limit', values.limit)
   if (limit !== undefined && steps.includes('rating-set')) {
-    throw new Error('--limit cannot be combined with the rating-set step: a partial set would replace the full one in the owner\'s file')
+    throw new Error("--limit cannot be combined with the rating-set step: a partial set would replace the full one in the owner's file")
   }
   return {
     out: values.out,

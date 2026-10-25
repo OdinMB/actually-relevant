@@ -126,11 +126,7 @@ function whereClause({ source, unseenOnly }: NoticeFilter): Prisma.Sql {
 }
 
 /** One page of notices, newest occurrence first, with the total and the unseen count under the source filter. */
-export async function listNotices(
-  filter: NoticeFilter,
-  page: number,
-  limit: number,
-): Promise<{ items: AdminNotice[]; total: number; unseenCount: number }> {
+export async function listNotices(filter: NoticeFilter, page: number, limit: number): Promise<{ items: AdminNotice[]; total: number; unseenCount: number }> {
   const offset = (page - 1) * limit
   const [items, totals] = await Promise.all([
     prisma.$queryRaw<AdminNotice[]>`

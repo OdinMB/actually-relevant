@@ -39,30 +39,52 @@ export function PodcastTitle({ podcast }: { podcast: Podcast }) {
     pencil.current?.focus()
   }, [editing])
 
-  const stopEditing = () => { returnFocus.current = true; setEditing(false) }
+  const stopEditing = () => {
+    returnFocus.current = true
+    setEditing(false)
+  }
 
   const save = async () => {
     try {
       await update.mutateAsync({ id: podcast.id, data: { title } })
       toast('success', 'Title updated')
       stopEditing()
-    } catch (err) { toast('error', err instanceof Error ? err.message : 'Failed to update title') }
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : 'Failed to update title')
+    }
   }
 
   if (editing) {
     return (
-      <form className="flex flex-wrap items-center gap-2" onSubmit={e => { e.preventDefault(); void save() }}>
-        <label htmlFor="podcast-title" className="sr-only">Title</label>
+      <form
+        className="flex flex-wrap items-center gap-2"
+        onSubmit={e => {
+          e.preventDefault()
+          void save()
+        }}
+      >
+        <label htmlFor="podcast-title" className="sr-only">
+          Title
+        </label>
         <input
           id="podcast-title"
           autoFocus
           value={title}
           onChange={e => setTitle(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); stopEditing() } }}
+          onKeyDown={e => {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              stopEditing()
+            }
+          }}
           className="min-w-0 flex-1 rounded-md border border-neutral-300 px-3 py-1 text-2xl font-bold text-neutral-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         />
-        <Button type="submit" size="sm" loading={update.isPending} disabled={!title.trim()}>Save</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={stopEditing}>Cancel</Button>
+        <Button type="submit" size="sm" loading={update.isPending} disabled={!title.trim()}>
+          Save
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={stopEditing}>
+          Cancel
+        </Button>
       </form>
     )
   }
@@ -78,7 +100,12 @@ export function PodcastTitle({ podcast }: { podcast: Podcast }) {
               type="button"
               aria-label="Edit title"
               aria-disabled={blocked ? true : undefined}
-              onClick={() => { if (!blocked) { setTitle(podcast.title); setEditing(true) } }}
+              onClick={() => {
+                if (!blocked) {
+                  setTitle(podcast.title)
+                  setEditing(true)
+                }
+              }}
               className={`mt-1 rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${blocked ? 'cursor-not-allowed text-neutral-300' : 'text-neutral-500 hover:text-neutral-800'}`}
               {...trigger}
             >

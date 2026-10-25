@@ -14,31 +14,37 @@ Two-stage detection triggered after story assessment:
 Stories are grouped into clusters via `story_clusters` table:
 
 - Each cluster has a designated **primary story** (the one shown to users)
-- Non-primary members are auto-rejected
-- Automatic primary election (`updatePrimary()` in `dedup.ts`) orders members as follows:
-  1. Published stories win, because readers have already seen them.
-  2. Among published stories, the earliest `datePublished` wins.
-  3. Among unpublished stories, the highest `relevance` wins.
-  4. The tie-breaker is the earliest `dateCrawled`.
+- Non-primary members are auto-rejected with reason `duplicate`
+- Election and auto-rejection live in the lifecycle module (`reelectPrimary()` in `server/src/services/storyLifecycle.ts`, ADR-0045), the only code that writes story status. A member is **electable** unless it is `trashed` or rejected for a reason other than `duplicate`. Electable members are ordered as follows:
+  1. `duplicate` rejections come last.
+  2. Published stories win, because readers have already seen them.
+  3. Among published stories, the earliest `datePublished` wins.
+  4. Among unpublished stories, the highest `relevance` wins.
+  5. The tie-breaker is the earliest `dateCrawled`.
 
-  An admin can set the primary explicitly, either when creating a cluster or with set-primary. Any later re-election runs this ordering again and can override the admin's choice: after a new duplicate joins, after a member is removed, or after a merge.
+  If no member is electable, the primary pointer is left as it is (cleared only when it names a story no longer in the cluster). An admin can set the primary explicitly, either when creating a cluster or with set-primary. Any later re-election runs this ordering again and can override the admin's choice: after a new duplicate joins, after a member is removed, after a merge, after a publish, or after an editor rejects, trashes or re-queues a primary or published member.
+
+  The election runs in one of three modes:
+  - `pipeline` (dedup formation, publishing, repair after deletion): auto-rejects `fetched`, `pre_analyzed`, `analyzed` and `selected` non-primaries; published members are kept; nothing is moved out of `rejected`, so an elected duplicate stays rejected.
+  - `editor-story` (an editor's status move of a primary or published member): as pipeline, but an elected `duplicate` is restored.
+  - `editor-cluster` (create, set primary, remove member, merge): published non-primaries are rejected too, and the chosen or elected primary is restored if it was a `duplicate`.
+
+  **Restoring** a `duplicate` rejection moves it to `published` if it has a `datePublished` (slug and date unchanged; its embedding is ensured after the commit), else to `analyzed`. An editor rejecting a `duplicate` turns its reason into `editor`, so no later dissolve restores it. Other rejection reasons, and rejections from before the reason existed (null), are never restored.
 - A story can belong to at most one cluster
 
 ### Auto-Rejection and Admin Operations
 
-**Auto-rejection** (`autoRejectNonPrimary()`) sets every member except the primary to `rejected`. Members already `rejected` or `trashed` are left alone. Published non-primaries are rejected only when `includePublished: true`. The automatic pipeline preserves them, and every admin cluster operation passes `true`.
+**Auto-rejection** sets the non-primary members in the mode's from-list to `rejected`/`duplicate` (above). Members already `rejected` or `trashed` are left alone.
 
-Admin operations (`server/src/services/cluster.ts`):
+Admin operations (`server/src/services/cluster.ts` checks the arguments and reads; the writes are the module's). Each runs in **one transaction holding the cluster's row lock** (`withClusterLocks`), so a concurrent dedup, publish or second edit waits rather than interleaving:
 
-- **Create** (`createManualCluster`): needs at least 2 stories, the designated primary must be one of them, and none may already be in a cluster (otherwise `ALREADY_CLUSTERED`, which becomes a 409). The admin's primary is used as given.
-- **Set primary** (`setClusterPrimary`): the story must already be a member of the cluster.
-- **Remove member** (`removeFromCluster`): the story must be a member. It leaves the cluster and, if `rejected`, goes back to `analyzed`. If one member or none remains, the cluster is dissolved. Otherwise the primary is re-elected.
-- **Merge** (`mergeClusters`): a cluster cannot be merged with itself. All source members move to the target, the source cluster is deleted, and the target's primary is re-elected.
-- **Dissolve** (`dissolveCluster`): every `rejected` member goes back to `analyzed`, all members are unlinked, and the cluster record is deleted.
+- **Create** (`createManualCluster`): needs at least 2 stories, the designated primary must be one of them, and none may already be in a cluster (otherwise `StoriesAlreadyClusteredError`, a 409 listing the ids). Only stories still unclustered join; if any was clustered meanwhile, the whole creation rolls back with the same 409. The admin's primary is used as given (editor-cluster mode).
+- **Set primary** (`setClusterPrimary`): the story must already be a member of the cluster; it is elected in editor-cluster mode.
+- **Remove member** (`removeFromCluster`): the story must be a member. It leaves the cluster and is restored if it was a `duplicate`. If one member or none remains, the cluster is dissolved by the dissolve rule (the route answers `{ dissolved: true }`). Otherwise the primary is re-elected (editor-cluster mode).
+- **Merge** (`mergeClusters`): a cluster cannot be merged with itself. All source members move to the target, the source cluster is deleted, and the target's primary is re-elected (editor-cluster mode).
+- **Dissolve** (`dissolveCluster`, both `DELETE /clusters/:id` and the per-story `POST /stories/:id/dissolve-cluster`, one implementation): every `duplicate` member is restored, all members are unlinked, and the cluster record is deleted.
 
-Every admin operation finishes by auto-rejecting with published stories included.
-
-**Deleting members** (`repairClusters()` in `server/src/services/clusterRepair.ts`): deleting a story (`deleteStory()`) and the monthly retention cleanup (`story-retention.md`) repair each cluster they took members from in the same way. A cluster left with one member or none is dissolved (the member is unlinked, the cluster row deleted; its status is left as it is). A cluster that keeps two or more members but lost its primary (`primary_story_id` is `ON DELETE SET NULL`) gets one by `updatePrimary()`. Neither path auto-rejects afterwards: the remaining members were already non-primaries, and the new primary keeps its status.
+**Deleting members** (`repairClusters()` in `server/src/services/clusterRepair.ts`): deleting a story (`deleteStory()`) and the monthly retention cleanup (`story-retention.md`) repair each cluster they took members from in the same way, one transaction per cluster under its lock. A cluster left with one member or none is dissolved (the member is unlinked, the cluster row deleted; its status is left as it is). A cluster that keeps two or more members but lost its primary (`primary_story_id` is `ON DELETE SET NULL`) gets one by the election in pipeline mode, which never restores: an elected `duplicate` stays rejected.
 
 ## Pipeline Position
 
@@ -54,13 +60,13 @@ Dedup runs fire-and-forget after the assessment transaction commits (`assessStor
 
 ## Cluster Formation
 
-If no confirmed duplicate is in a cluster yet, a new cluster is created with the source story and every confirmed duplicate as members. If any is clustered, the source joins the existing cluster as described below. In both cases the primary is then re-elected (`updatePrimary()`), and non-primary members are auto-rejected with published stories preserved (`autoRejectNonPrimary()` without `includePublished`).
+If no confirmed duplicate is in a cluster yet, a new cluster is created with the source story and every confirmed duplicate as members. If any is clustered, the source joins the existing cluster as described below. Membership, election and auto-rejection run in one transaction after the LLM confirmation, holding the existing cluster's row lock (`formCluster()` in `dedup.ts`, calling `reelectPrimary(..., 'pipeline', tx)`): only stories still unclustered join, and if the existing cluster was dissolved meanwhile a new one is created. A formation that would leave fewer than two members (the stories joined other clusters during the model call) rolls back and forms nothing. Published members are preserved.
 
 **Multi-cluster collisions:** when confirmed duplicates belong to different existing clusters, the source story joins the cluster of the **newest duplicate** (by `dateCrawled`). Other clusters are not auto-merged — merging requires explicit admin action via the clusters page. A warning is logged when this occurs. Duplicates already in a different cluster stay where they are; only unclustered duplicates are added to the target cluster.
 
 ## Selection Safety Net
 
-In `selectStories()` (`server/src/services/analysis.ts`), before passing candidates to the LLM, non-primary cluster members are removed from the pool and set back to `rejected`. A story is eligible for selection only if it is unclustered or is its cluster's primary. This catches edge cases where dedup hasn't run or a story was manually un-rejected.
+In `selectStories()` (`server/src/services/analysis.ts`), before passing candidates to the LLM, non-primary cluster members are removed from the pool and set back to `rejected`/`duplicate` (only from `analyzed`). Publishing likewise re-elects the cluster of every story it publishes, and the publish job publishes only unclustered stories and cluster primaries, so one cluster never goes live twice. A story is eligible for selection only if it is unclustered or is its cluster's primary. This catches edge cases where dedup hasn't run or a story was manually un-rejected.
 
 ## Admin UI
 
@@ -105,7 +111,8 @@ In `server/src/config.ts` under `dedup`:
 
 | File | Purpose |
 |------|---------|
-| `server/src/services/dedup.ts` | Core service: candidate finding, LLM confirmation, clustering, primary selection, auto-reject |
+| `server/src/services/dedup.ts` | Core service: candidate finding, LLM confirmation, cluster formation |
+| `server/src/services/storyLifecycle.ts` | Primary election, auto-reject, restore, and the dissolve, remove and merge writes (the only status writer) |
 | `server/src/prompts/dedup.ts` | LLM prompt for duplicate confirmation |
 | `server/src/schemas/llm.ts` | `dedupConfirmationSchema` Zod schema |
 | `server/src/services/embedding.ts` | `generateStoryEmbedding()` for pre-selection embedding |
@@ -116,8 +123,8 @@ In `server/src/config.ts` under `dedup`:
 | `server/src/routes/admin/clusters.ts` | Admin cluster API endpoints (includes search-stories and create) |
 | `server/src/schemas/cluster.ts` | Zod schemas for cluster creation and story search |
 | `server/src/services/publicStories.ts` | `getClusterMembers()`, `getClusterRedirectSlug()` |
-| `server/src/services/storyWrites.ts` | `dissolveCluster()` (per-story) |
-| `server/src/services/clusterRepair.ts` | `repairClusters()`: dissolve or re-elect after member deletion (`deleteStory()`, retention) |
+| `server/src/services/storyWrites.ts` | `dissolveCluster()` (per-story: looks up the cluster, calls the module) |
+| `server/src/services/clusterRepair.ts` | `repairClusters()`: dissolve or re-elect (pipeline mode) after member deletion (`deleteStory()`, retention) |
 | `server/src/routes/admin/stories.ts` | `POST /:id/dissolve-cluster` endpoint |
 | `client/src/pages/admin/ClustersPage.tsx` | Admin clusters list page |
 | `client/src/components/admin/ClusterTable.tsx` | Clusters list table |
@@ -135,9 +142,9 @@ In `server/src/config.ts` under `dedup`:
 
 - **Change candidate selection:** Edit `findNearestCandidates()` in `dedup.ts` -- adjust the SQL query, time window, or add distance thresholds
 - **Change LLM confirmation:** Edit prompt in `prompts/dedup.ts` and schema in `schemas/llm.ts`
-- **Change primary selection:** Edit `updatePrimary()` in `dedup.ts` -- modify the sort comparator
-- **Change auto-reject behavior:** Edit `autoRejectNonPrimary()` in `dedup.ts`. Accepts `{ includePublished?: boolean }` option -- automatic pipeline preserves published stories, but admin-initiated actions (manual cluster creation, set primary, remove member, merge) pass `includePublished: true` to reject published non-primary members.
-- **Dissolve a cluster:** `dissolveCluster()` in `storyWrites.ts` -- restores rejected members to `analyzed`, removes all `clusterId` references, deletes the cluster record
+- **Change primary selection:** Edit `electable` and `byElectionRank` in `storyLifecycle.ts`
+- **Change auto-reject or restore behavior:** Edit `reelectPrimary()` and its modes in `storyLifecycle.ts` (`DUPLICATE_FROM`, `restoreDuplicates`). Keep the lock order (clusters by id, then stories) and run the change against PostgreSQL: `storyLifecycle.db.test.ts` (`npm run test:db`) covers the modes, dissolve, remove, merge and the races.
+- **Dissolve a cluster:** `dissolveCluster()` in `storyLifecycle.ts` -- restores `duplicate` members, removes all `clusterId` references, deletes the cluster record
 
 ## Public URL Redirect
 

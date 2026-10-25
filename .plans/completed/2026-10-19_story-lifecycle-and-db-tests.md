@@ -1,5 +1,5 @@
 ---
-status: draft
+status: implemented
 type: refactor
 complexity: complex
 ---
@@ -35,7 +35,7 @@ Owner-approved (2026-10-19):
 Defaults taken, owner can overrule (the approaches doc's suggested answers):
 3. **Dissolve and remove-member restore only `duplicate` rejections**: to `published` if `datePublished` is set, else `analyzed`. Editor, threshold, selection, paywall and null reasons stay rejected.
 4. **Publish re-elects the cluster primary and auto-rejects the previous one**, with published members kept (pipeline mode). This stops a cluster publishing twice.
-5. **Add the nullable `rejection_reason` column** (enum `paywall`, `assess_threshold`, `select_threshold`, `selection`, `duplicate`, `editor`), backfilled in the same migration: `access_tier = 'locked'` rejected rows to `paywall`, rejected non-primary cluster members to `duplicate`, the rest null. Null means "never auto-restored", stricter than today.
+5. **Add the nullable `rejection_reason` column** (enum `paywall`, `assess_threshold`, `select_threshold`, `selection`, `duplicate`, `editor`), backfilled in the same migration: `access_tier = 'locked'` rejected rows to `paywall`, rejected non-primary cluster members to `duplicate`, the rest null. (Changed after review, 2026-10-19: only members with `date_published IS NULL` become `duplicate`; once-published ones stay null and are never auto-restored.) Null means "never auto-restored", stricter than today.
 6. **Add a GitHub Actions workflow** with a pgvector service running unit and DB tests. Do not change `autoDeployTrigger`; whether Render waits for checks is a separate owner decision.
 
 Defaults taken by this plan where the docs left a detail open, owner can overrule:

@@ -47,7 +47,8 @@ describe('extractContent', () => {
     process.env.DIFFBOT_TOKEN = 'test-token'
     mockAxiosGet
       .mockRejectedValueOnce(new Error('Network error')) // page fetch fails
-      .mockResolvedValueOnce({                           // Diffbot API
+      .mockResolvedValueOnce({
+        // Diffbot API
         data: { objects: [{ title: 'Diffbot Title', text: LONG_TEXT, date: '2024-01-15' }] },
       })
 
@@ -109,7 +110,8 @@ describe('extractContent', () => {
     const html = `<html><body><p>Short</p></body></html>`
     mockAxiosGet
       .mockResolvedValueOnce({ data: html }) // page fetch
-      .mockResolvedValueOnce({               // Diffbot API
+      .mockResolvedValueOnce({
+        // Diffbot API
         data: { objects: [{ title: 'Diffbot Title', text: LONG_TEXT, date: '2024-01-15' }] },
       })
     mockReadabilityParse.mockReturnValue(null)
@@ -213,17 +215,17 @@ describe('Diffbot extraction', () => {
     process.env.DIFFBOT_TOKEN = 'test-token'
     const html = `<html><body><p>Short</p></body></html>`
     // First GET: page fetch; Second GET: Diffbot API
-    mockAxiosGet
-      .mockResolvedValueOnce({ data: html })
-      .mockResolvedValueOnce({
-        data: {
-          objects: [{
+    mockAxiosGet.mockResolvedValueOnce({ data: html }).mockResolvedValueOnce({
+      data: {
+        objects: [
+          {
             title: 'Diffbot Title',
             text: LONG_TEXT,
             date: '2024-06-15',
-          }],
-        },
-      })
+          },
+        ],
+      },
+    })
     mockReadabilityParse.mockReturnValue(null)
 
     const result = await extractContent('https://example.com/article')
@@ -247,11 +249,9 @@ describe('Diffbot extraction', () => {
   it('returns null when Diffbot returns insufficient content', async () => {
     process.env.DIFFBOT_TOKEN = 'test-token'
     const html = `<html><body><p>Short</p></body></html>`
-    mockAxiosGet
-      .mockResolvedValueOnce({ data: html })
-      .mockResolvedValueOnce({
-        data: { objects: [{ title: 'Title', text: 'Too short' }] },
-      })
+    mockAxiosGet.mockResolvedValueOnce({ data: html }).mockResolvedValueOnce({
+      data: { objects: [{ title: 'Title', text: 'Too short' }] },
+    })
     mockReadabilityParse.mockReturnValue(null)
 
     const result = await extractContent('https://example.com/article')
@@ -261,17 +261,17 @@ describe('Diffbot extraction', () => {
   it('uses estimatedDate when date is absent', async () => {
     process.env.DIFFBOT_TOKEN = 'test-token'
     const html = `<html><body><p>Short</p></body></html>`
-    mockAxiosGet
-      .mockResolvedValueOnce({ data: html })
-      .mockResolvedValueOnce({
-        data: {
-          objects: [{
+    mockAxiosGet.mockResolvedValueOnce({ data: html }).mockResolvedValueOnce({
+      data: {
+        objects: [
+          {
             title: 'Title',
             text: LONG_TEXT,
             estimatedDate: '2024-05-01',
-          }],
-        },
-      })
+          },
+        ],
+      },
+    })
     mockReadabilityParse.mockReturnValue(null)
 
     const result = await extractContent('https://example.com/article')
@@ -338,7 +338,9 @@ describe('JSDOM cleanup', () => {
   it('calls window.close() when readability throws', async () => {
     const html = `<html><body><p>Content</p></body></html>`
     mockAxiosGet.mockResolvedValue({ data: html })
-    mockReadabilityParse.mockImplementation(() => { throw new Error('parse error') })
+    mockReadabilityParse.mockImplementation(() => {
+      throw new Error('parse error')
+    })
 
     await extractContent('https://example.com/article')
     expect(mockWindowClose).toHaveBeenCalled()
@@ -363,7 +365,7 @@ describe('fetchPage limits', () => {
       'https://example.com/article',
       expect.objectContaining({
         maxContentLength: 5 * 1024 * 1024,
-      })
+      }),
     )
   })
 })
@@ -379,22 +381,21 @@ describe('API extraction limits', () => {
   it('passes maxContentLength to Diffbot API call', async () => {
     process.env.DIFFBOT_TOKEN = 'test-token'
     const html = `<html><body><p>Short</p></body></html>`
-    mockAxiosGet
-      .mockResolvedValueOnce({ data: html })
-      .mockResolvedValueOnce({
-        data: { objects: [{ title: 'Title', text: LONG_TEXT }] },
-      })
+    mockAxiosGet.mockResolvedValueOnce({ data: html }).mockResolvedValueOnce({
+      data: { objects: [{ title: 'Title', text: LONG_TEXT }] },
+    })
     mockReadabilityParse.mockReturnValue(null)
 
     await extractContent('https://example.com/article')
 
     // Second GET call is the Diffbot API call
     const diffbotCall = mockAxiosGet.mock.calls[1]
-    expect(diffbotCall[1]).toEqual(expect.objectContaining({
-      maxContentLength: 5 * 1024 * 1024,
-    }))
+    expect(diffbotCall[1]).toEqual(
+      expect.objectContaining({
+        maxContentLength: 5 * 1024 * 1024,
+      }),
+    )
   })
-
 })
 
 describe('maxParseBytes guard', () => {
@@ -409,8 +410,9 @@ describe('maxParseBytes guard', () => {
     process.env.DIFFBOT_TOKEN = 'test-token'
     const hugeHtml = '<html><body>' + 'x'.repeat(2 * 1024 * 1024 + 1) + '</body></html>'
     mockAxiosGet
-      .mockResolvedValueOnce({ data: hugeHtml })            // page fetch (oversized)
-      .mockResolvedValueOnce({                              // Diffbot API
+      .mockResolvedValueOnce({ data: hugeHtml }) // page fetch (oversized)
+      .mockResolvedValueOnce({
+        // Diffbot API
         data: { objects: [{ title: 'API Title', text: LONG_TEXT, date: '2024-01-01' }] },
       })
     // Even though readability would succeed, it must never be invoked for oversized pages.
@@ -475,9 +477,7 @@ describe('access classification', () => {
 
   it('classifies an API tier result from the fetched HTML', async () => {
     process.env.DIFFBOT_TOKEN = 'test-token'
-    mockAxiosGet
-      .mockResolvedValueOnce({ data: lockedHtml() })
-      .mockResolvedValueOnce({ data: { objects: [{ title: 'API', text: LONG_TEXT }] } })
+    mockAxiosGet.mockResolvedValueOnce({ data: lockedHtml() }).mockResolvedValueOnce({ data: { objects: [{ title: 'API', text: LONG_TEXT }] } })
     mockReadabilityParse.mockReturnValue(null)
 
     const result = await extractContent('https://example.com/article')
@@ -584,7 +584,9 @@ describe('ApiThrottle', () => {
 
     // Verify by running calls and measuring timing — delay should be ~500ms (capped)
     const start = Date.now()
-    await throttle.run(async () => { delays.push(Date.now() - start) })
+    await throttle.run(async () => {
+      delays.push(Date.now() - start)
+    })
     // With 0ms backoff, the only wait is the inter-call delay (capped at 500ms)
     expect(delays[0]).toBeGreaterThanOrEqual(450)
     expect(delays[0]).toBeLessThan(1000)
@@ -594,9 +596,15 @@ describe('ApiThrottle', () => {
     const throttle = new ApiThrottle(0, 0, 1000)
     const order: number[] = []
 
-    const p1 = throttle.run(async () => { order.push(1) })
-    const p2 = throttle.run(async () => { order.push(2) })
-    const p3 = throttle.run(async () => { order.push(3) })
+    const p1 = throttle.run(async () => {
+      order.push(1)
+    })
+    const p2 = throttle.run(async () => {
+      order.push(2)
+    })
+    const p3 = throttle.run(async () => {
+      order.push(3)
+    })
 
     await Promise.all([p1, p2, p3])
     expect(order).toEqual([1, 2, 3])

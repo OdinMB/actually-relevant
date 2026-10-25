@@ -38,7 +38,7 @@ beforeEach(() => {
 })
 
 describe('GET /api/podcast/feed.xml', () => {
-  it('serves RSS with the story feed\'s caching headers', async () => {
+  it("serves RSS with the story feed's caching headers", async () => {
     const res = await request(podcastOnly).get('/api/podcast/feed.xml')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toBe('application/rss+xml; charset=utf-8')
@@ -51,8 +51,7 @@ describe('GET /api/podcast/feed.xml', () => {
     expect(res.headers['content-encoding']).toBe('gzip')
     expect(res.headers['content-length']).toBeDefined()
     expect(res.headers['last-modified']).toBeDefined()
-    const again = await request(podcastOnly).get('/api/podcast/feed.xml')
-      .set('Accept-Encoding', 'gzip').set('If-None-Match', res.headers['etag'])
+    const again = await request(podcastOnly).get('/api/podcast/feed.xml').set('Accept-Encoding', 'gzip').set('If-None-Match', res.headers['etag'])
     expect(again.status).toBe(304)
   })
 
@@ -131,7 +130,18 @@ describe('GET /api/podcast/episodes/:id', () => {
     const res = await request(await routerWithoutLimiter()).get('/api/podcast/episodes/podcast-1')
     expect(res.status).toBe(200)
     expect(Object.keys(res.body).sort()).toEqual([
-      'aiGenerated', 'aiLine', 'audioBytes', 'audioUrl', 'durationSec', 'id', 'publishedAt', 'stories', 'summary', 'title', 'transcript', 'transcriptUrl',
+      'aiGenerated',
+      'aiLine',
+      'audioBytes',
+      'audioUrl',
+      'durationSec',
+      'id',
+      'publishedAt',
+      'stories',
+      'summary',
+      'title',
+      'transcript',
+      'transcriptUrl',
     ])
     expect(res.body.aiGenerated.fields).toContain('transcript')
     expect(res.body.transcript[2]).toEqual({

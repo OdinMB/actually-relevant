@@ -112,12 +112,13 @@ describe('isAllowedUrl', () => {
 
 describe('isPrivateAddress', () => {
   it.each(['10.1.2.3', '127.0.0.1', '169.254.169.254', '192.168.1.1', '172.20.0.1', '0.0.0.0', '::1', '::ffff:10.0.0.1', 'fe80::1%eth0', 'garbage'])(
-    'is true for %s', (address) => {
+    'is true for %s',
+    address => {
       expect(isPrivateAddress(address)).toBe(true)
     },
   )
 
-  it.each(['93.184.216.34', '1.1.1.1', '2606:4700:4700::1111', '::ffff:93.184.216.34'])('is false for %s', (address) => {
+  it.each(['93.184.216.34', '1.1.1.1', '2606:4700:4700::1111', '::ffff:93.184.216.34'])('is false for %s', address => {
     expect(isPrivateAddress(address)).toBe(false)
   })
 })
@@ -126,12 +127,16 @@ describe('safeLookup', () => {
   const lookupResult = (addresses: { address: string; family: number }[]) =>
     mockDnsLookup.mockImplementation((_host: string, _opts: unknown, cb: (err: Error | null, a: unknown) => void) => cb(null, addresses))
 
-  const run = () => new Promise<{ err: Error | null; addresses: unknown }>((resolve) => {
-    safeLookup('feeds.example.com', {}, (err, addresses) => resolve({ err, addresses }))
-  })
+  const run = () =>
+    new Promise<{ err: Error | null; addresses: unknown }>(resolve => {
+      safeLookup('feeds.example.com', {}, (err, addresses) => resolve({ err, addresses }))
+    })
 
   it('passes every address through when all are public', async () => {
-    lookupResult([{ address: '93.184.216.34', family: 4 }, { address: '2606:2800:220:1::1', family: 6 }])
+    lookupResult([
+      { address: '93.184.216.34', family: 4 },
+      { address: '2606:2800:220:1::1', family: 6 },
+    ])
     const { err, addresses } = await run()
     expect(err).toBeNull()
     expect(addresses).toHaveLength(2)
@@ -146,13 +151,18 @@ describe('safeLookup', () => {
   })
 
   it('refuses when any one of several records is private', async () => {
-    lookupResult([{ address: '93.184.216.34', family: 4 }, { address: '127.0.0.1', family: 4 }])
+    lookupResult([
+      { address: '93.184.216.34', family: 4 },
+      { address: '127.0.0.1', family: 4 },
+    ])
     const { err } = await run()
     expect(err).toBeInstanceOf(BlockedUrlError)
   })
 
   it('passes DNS errors on', async () => {
-    mockDnsLookup.mockImplementation((_h: string, _o: unknown, cb: (err: Error | null, a: unknown) => void) => cb(Object.assign(new Error('nope'), { code: 'ENOTFOUND' }), []))
+    mockDnsLookup.mockImplementation((_h: string, _o: unknown, cb: (err: Error | null, a: unknown) => void) =>
+      cb(Object.assign(new Error('nope'), { code: 'ENOTFOUND' }), []),
+    )
     const { err } = await run()
     expect((err as NodeJS.ErrnoException).code).toBe('ENOTFOUND')
   })

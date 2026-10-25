@@ -5,9 +5,7 @@ import { BulkActionsBar } from './BulkActionsBar'
 
 describe('BulkActionsBar', () => {
   it('renders nothing when count is 0', () => {
-    const { container } = render(
-      <BulkActionsBar count={0} onAction={vi.fn()} />,
-    )
+    const { container } = render(<BulkActionsBar count={0} onAction={vi.fn()} />)
     expect(container.firstChild).toBeNull()
   })
 

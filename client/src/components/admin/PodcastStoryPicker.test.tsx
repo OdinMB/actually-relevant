@@ -12,7 +12,14 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
 import { PodcastStoryPicker, swapStory } from './PodcastStoryPicker'
 
 const story = (n: number, selected: boolean): PodcastPoolStory => ({
-  id: `s${n}`, title: `Story ${n}`, publisher: `Pub ${n}`, sourceUrl: `https://x.example/${n}`, slug: null, issue: `Issue ${n}`, relevance: 8, selected,
+  id: `s${n}`,
+  title: `Story ${n}`,
+  publisher: `Pub ${n}`,
+  sourceUrl: `https://x.example/${n}`,
+  slug: null,
+  issue: `Issue ${n}`,
+  relevance: 8,
+  selected,
 })
 
 function setPool(chosen: number) {

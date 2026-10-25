@@ -24,8 +24,18 @@ export const PHASE1_PREASSESS = { issueAgreement: 0.74, emotionAgreement: 0.703,
 
 /** Phase-1 gpt-5-mini@medium full-assessment format pass rates (50 stories). */
 export const PHASE1_MINI_FORMAT: Record<AssessFormatCheck, number> = {
-  factorCount: 1, limitingCount: 1, calculationCount: 1, summaryWords: 1, relevanceSummaryWords: 0.78, titleWords: 1,
-  titleNoColon: 0.98, labelWords: 1, labelTitleDistinct: 1, blurbLength: 1, factorFormat: 1, dateFormat: 1,
+  factorCount: 1,
+  limitingCount: 1,
+  calculationCount: 1,
+  summaryWords: 1,
+  relevanceSummaryWords: 0.78,
+  titleWords: 1,
+  titleNoColon: 0.98,
+  labelWords: 1,
+  labelTitleDistinct: 1,
+  blurbLength: 1,
+  factorFormat: 1,
+  dateFormat: 1,
 }
 
 export const TOLERANCE = {
@@ -57,9 +67,21 @@ export interface RecalibrationSample {
 export function sampleFor(fx: RecalibrationSample, half: Half | 'all'): RecalibrationSample {
   if (half === 'all') return { preassess: fx.preassess, assess: fx.assess, dedup: fx.dedup }
   return {
-    preassess: splitHalves(fx.preassess, s => s.id, s => `${s.status === 'published'}|${s.stored.rating >= GATE}`)[half],
-    assess: splitHalves(fx.assess, s => s.id, s => `${s.stored.rating >= SPLIT}|${s.language !== 'en'}`)[half],
-    dedup: splitHalves(fx.dedup, s => s.sourceId, s => s.kind)[half],
+    preassess: splitHalves(
+      fx.preassess,
+      s => s.id,
+      s => `${s.status === 'published'}|${s.stored.rating >= GATE}`,
+    )[half],
+    assess: splitHalves(
+      fx.assess,
+      s => s.id,
+      s => `${s.stored.rating >= SPLIT}|${s.language !== 'en'}`,
+    )[half],
+    dedup: splitHalves(
+      fx.dedup,
+      s => s.sourceId,
+      s => s.kind,
+    )[half],
   }
 }
 
@@ -79,12 +101,25 @@ export interface Criterion {
 /** Rounding slack, so a rate equal to its bar is not failed by float error. */
 const EPS = 1e-9
 
-function criterion(name: string, value: number | null, bar: string, ok: (v: number) => boolean, format: (v: number | null) => string, required = true): Criterion {
+function criterion(
+  name: string,
+  value: number | null,
+  bar: string,
+  ok: (v: number) => boolean,
+  format: (v: number | null) => string,
+  required = true,
+): Criterion {
   return { name, value: format(value), bar, pass: value != null && ok(value), required }
 }
 
 const offset = (name: string, shift: number | null) =>
-  criterion(name, shift, `within ±${TOLERANCE.meanShift}`, v => Math.abs(v) <= TOLERANCE.meanShift + EPS, v => num(v))
+  criterion(
+    name,
+    shift,
+    `within ±${TOLERANCE.meanShift}`,
+    v => Math.abs(v) <= TOLERANCE.meanShift + EPS,
+    v => num(v),
+  )
 
 function shareNearStored(name: string, share: number | null, stored: number | null): Criterion {
   const bar = `within ${TOLERANCE.passShare * 100} points of stored ${pct(stored)}`
@@ -101,7 +136,7 @@ export function preassessCriteria(m: PreassessArmMetrics): Criterion[] {
     atLeast('Published stories passing the gate', m.publishedRecall, TOLERANCE.publishedPass, 'owner'),
     atLeast('Issue agreement with stored', m.issueAgreement, PHASE1_PREASSESS.issueAgreement, 'phase 1'),
     atLeast('Emotion agreement with stored', m.emotionAgreement, PHASE1_PREASSESS.emotionAgreement, 'phase 1'),
-    atLeast('Emotion agreement, owner\'s aim', m.emotionAgreement, PHASE1_PREASSESS.emotionAim, 'aim, not required', false),
+    atLeast("Emotion agreement, owner's aim", m.emotionAgreement, PHASE1_PREASSESS.emotionAim, 'aim, not required', false),
   ]
 }
 
@@ -151,12 +186,14 @@ export interface DedupPair {
 export function dedupMistakes(sets: DedupSet[], votes: Vote[][], labels: PairLabel[][]): { wrongMerges: DedupPair[]; missed: DedupPair[] } {
   const wrongMerges: DedupPair[] = []
   const missed: DedupPair[] = []
-  sets.forEach((set, s) => set.candidates.forEach((c, i) => {
-    const pair = { source: set.source.title, candidate: c.title }
-    const said = votes[s]?.[i] === true
-    if (said && labels[s]?.[i] === 'not') wrongMerges.push(pair)
-    if (!said && labels[s]?.[i] === 'dup') missed.push(pair)
-  }))
+  sets.forEach((set, s) =>
+    set.candidates.forEach((c, i) => {
+      const pair = { source: set.source.title, candidate: c.title }
+      const said = votes[s]?.[i] === true
+      if (said && labels[s]?.[i] === 'not') wrongMerges.push(pair)
+      if (!said && labels[s]?.[i] === 'dup') missed.push(pair)
+    }),
+  )
   return { wrongMerges, missed }
 }
 

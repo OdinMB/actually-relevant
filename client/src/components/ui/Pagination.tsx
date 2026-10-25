@@ -19,7 +19,9 @@ export function Pagination({ page, totalPages, onPageChange, pageSize, onPageSiz
     <nav className="flex items-center justify-center gap-2 mt-4" aria-label="Pagination">
       {onPageSizeChange && (
         <div className="flex items-center gap-1.5 mr-4">
-          <label htmlFor="page-size" className="text-sm text-neutral-500">Show</label>
+          <label htmlFor="page-size" className="text-sm text-neutral-500">
+            Show
+          </label>
           <select
             id="page-size"
             value={pageSize}
@@ -27,7 +29,9 @@ export function Pagination({ page, totalPages, onPageChange, pageSize, onPageSiz
             className="rounded border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
           >
             {PAGE_SIZE_OPTIONS.map(size => (
-              <option key={size} value={size}>{size}</option>
+              <option key={size} value={size}>
+                {size}
+              </option>
             ))}
           </select>
         </div>
@@ -35,12 +39,7 @@ export function Pagination({ page, totalPages, onPageChange, pageSize, onPageSiz
 
       {totalPages > 1 && (
         <>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onPageChange(page - 1)}
-            disabled={page <= 1}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
             Previous
           </Button>
 
@@ -62,12 +61,7 @@ export function Pagination({ page, totalPages, onPageChange, pageSize, onPageSiz
             ),
           )}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onPageChange(page + 1)}
-            disabled={page >= totalPages}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
             Next
           </Button>
         </>

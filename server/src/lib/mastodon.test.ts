@@ -78,8 +78,15 @@ describe('getStatusMetrics', () => {
 
 describe('getAccountStatuses', () => {
   const raw = (id: string, extra: object = {}) => ({
-    id, url: `https://mastodon.example/@bot/${id}`, content: '<p>Story <a href="x">link</a></p>', createdAt: '2026-10-01T00:00:00Z',
-    favouritesCount: 1, reblogsCount: 0, repliesCount: 0, reblog: null, ...extra,
+    id,
+    url: `https://mastodon.example/@bot/${id}`,
+    content: '<p>Story <a href="x">link</a></p>',
+    createdAt: '2026-10-01T00:00:00Z',
+    favouritesCount: 1,
+    reblogsCount: 0,
+    repliesCount: 0,
+    reblog: null,
+    ...extra,
   })
 
   it("lists the bot account's statuses as plain text, with the last id as the next page's maxId", async () => {
@@ -93,8 +100,14 @@ describe('getAccountStatuses', () => {
     expect(accountStatuses.list).toHaveBeenCalledWith({ limit: 2, excludeReplies: true })
     expect(result.nextMaxId).toBe('2')
     expect(result.items[0]).toEqual({
-      id: '3', url: 'https://mastodon.example/@bot/3', text: 'Story link', createdAt: '2026-10-01T00:00:00Z',
-      favouriteCount: 1, boostCount: 0, replyCount: 0, isReblog: false,
+      id: '3',
+      url: 'https://mastodon.example/@bot/3',
+      text: 'Story link',
+      createdAt: '2026-10-01T00:00:00Z',
+      favouriteCount: 1,
+      boostCount: 0,
+      replyCount: 0,
+      isReblog: false,
     })
     expect(result.items[1]).toMatchObject({ url: '', isReblog: true })
   })

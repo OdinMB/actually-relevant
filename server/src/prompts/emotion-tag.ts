@@ -8,10 +8,7 @@ import type { StoryForPreassess, IssueForPreassess } from './preassess.js'
  * The issueSlug field is still required in the response schema, so we include
  * a minimal issue reference to satisfy it.
  */
-export function buildEmotionTagPrompt(
-  stories: StoryForPreassess[],
-  issues: IssueForPreassess[],
-): string {
+export function buildEmotionTagPrompt(stories: StoryForPreassess[], issues: IssueForPreassess[]): string {
   // We include a single dummy issue so the LLM can satisfy the required issueSlug field.
   // The actual issue assignment is ignored in the buildUpdate.
   const fallbackSlug = issues[0]?.slug ?? 'unknown'

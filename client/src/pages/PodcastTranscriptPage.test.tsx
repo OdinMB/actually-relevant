@@ -38,7 +38,10 @@ const EPISODE: PublicPodcastEpisodeDetail = {
     { story: null, turns: [{ speaker: 'Host A', text: 'Welcome to the week.' }] },
     {
       story: { title: 'Air data ruling', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air' },
-      turns: [{ speaker: 'Host B', text: 'A court ruled on air data.' }, { speaker: 'Host A', text: 'It matters for millions.' }],
+      turns: [
+        { speaker: 'Host B', text: 'A court ruled on air data.' },
+        { speaker: 'Host A', text: 'It matters for millions.' },
+      ],
     },
     {
       story: { title: 'Vaccine rollout', publisher: 'Phys.org', sourceUrl: 'https://news.example/2', slug: null },
@@ -87,7 +90,7 @@ describe('PodcastTranscriptPage', () => {
     await screen.findByText('Welcome to the week.')
     const turns = container.querySelectorAll('[data-transcript-turn]')
     expect(turns).toHaveLength(6)
-    expect(turns[2].textContent).toBe('Host B: A court ruled on air data.')
+    expect(turns[2]!.textContent).toBe('Host B: A court ruled on air data.')
   })
 
   it('heads each story segment with the story, linked to our story page when it has one', async () => {

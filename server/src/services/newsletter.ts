@@ -128,9 +128,7 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
   // Resolve top-level issue name for each story
   const storiesForPrompt = stories.map(s => {
     const issue = s.issue ?? s.feed?.issue
-    const issueName = issue?.parentId && issue.parent
-      ? issue.parent.name
-      : issue?.name ?? 'General'
+    const issueName = issue?.parentId && issue.parent ? issue.parent.name : (issue?.name ?? 'General')
     return {
       id: s.id,
       title: s.title || s.sourceTitle,
@@ -143,16 +141,9 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
   // Get distinct top-level issue names
   const issueNames = [...new Set(storiesForPrompt.map(s => s.issueName))].sort()
 
-  log.info(
-    { newsletterId, storyCount: stories.length, issueCount: issueNames.length },
-    'selecting stories for newsletter',
-  )
+  log.info({ newsletterId, storyCount: stories.length, issueCount: issueNames.length }, 'selecting stories for newsletter')
 
-  const prompt = buildNewsletterSelectPrompt(
-    storiesForPrompt,
-    config.newsletter.storiesPerIssue,
-    issueNames,
-  )
+  const prompt = buildNewsletterSelectPrompt(storiesForPrompt, config.newsletter.storiesPerIssue, issueNames)
 
   await rateLimitDelay()
   const llm = getLLMByTier(config.newsletter.selectModelTier)
@@ -196,14 +187,21 @@ export async function generateContent(newsletterId: string) {
       emotionTag: true,
       sourceDatePublished: true,
       dateCrawled: true,
-      feed: { select: { id: true, title: true, displayTitle: true, issue: { select: { name: true, slug: true, parentId: true, parent: { select: { name: true, slug: true } } } } } },
+      feed: {
+        select: {
+          id: true,
+          title: true,
+          displayTitle: true,
+          issue: { select: { name: true, slug: true, parentId: true, parent: { select: { name: true, slug: true } } } },
+        },
+      },
       issue: { select: { name: true, slug: true, parentId: true, parent: { select: { name: true, slug: true } } } },
     },
     orderBy: { dateCrawled: 'desc' },
   })
 
   // Resolve each story's top-level (parent) issue
-  function resolveIssue(story: typeof stories[number]) {
+  function resolveIssue(story: (typeof stories)[number]) {
     const issue = story.issue ?? story.feed?.issue
     if (!issue) return { name: 'General', slug: 'general-news' }
     if (issue.parentId && issue.parent) {
@@ -224,12 +222,11 @@ export async function generateContent(newsletterId: string) {
   })
 
   // Generate editorial intro via LLM
-  const issueNames = [...new Set(stories.map(s => resolveIssue(s).name))]
-    .sort((a, b) => {
-      const slugA = stories.find(s => resolveIssue(s).name === a)!
-      const slugB = stories.find(s => resolveIssue(s).name === b)!
-      return getIssueSortIndex(resolveIssue(slugA).slug) - getIssueSortIndex(resolveIssue(slugB).slug)
-    })
+  const issueNames = [...new Set(stories.map(s => resolveIssue(s).name))].sort((a, b) => {
+    const slugA = stories.find(s => resolveIssue(s).name === a)!
+    const slugB = stories.find(s => resolveIssue(s).name === b)!
+    return getIssueSortIndex(resolveIssue(slugA).slug) - getIssueSortIndex(resolveIssue(slugB).slug)
+  })
   const storiesForIntro = stories.map(s => ({
     title: s.title || s.sourceTitle,
     issueName: resolveIssue(s).name,
@@ -257,8 +254,7 @@ export async function generateContent(newsletterId: string) {
   }
 
   let currentIssue = ''
-  for (let i = 0; i < stories.length; i++) {
-    const story = stories[i]
+  for (const [i, story] of stories.entries()) {
     const resolved = resolveIssue(story)
     const issueName = resolved.name
     const issueSlug = resolved.slug
@@ -329,11 +325,7 @@ export async function generateCarouselForNewsletter(newsletterId: string): Promi
 // --- HTML generation ---
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 /**
@@ -391,8 +383,8 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
         // Parse "# Issue Name {slug}"
         const headerMatch = trimmed.slice(2).match(/^(.+?)\s*\{([^}]+)\}\s*$/)
         if (headerMatch) {
-          issueHeader = headerMatch[1]
-          issueSlug = headerMatch[2]
+          issueHeader = headerMatch[1]!
+          issueSlug = headerMatch[2]!
         } else {
           issueHeader = trimmed.slice(2)
         }
@@ -435,9 +427,14 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
           continue
         } else if (!metaLine && trimmed.match(/\[.*\]\(https?:\/\//)) {
           metaLine = trimmed
-        } else if (trimmed.startsWith('> "') || trimmed.startsWith("> \u201C")) {
-          const quoteText = trimmed.slice(2).replace(/^[""\u201C]|[""\u201D]$/g, '').trim()
-          bodyParts.push(`<p style="margin: 0 0 4px; font-size: 15px; font-style: italic; color: #525252; line-height: 1.6;">\u201C${escapeHtml(quoteText)}\u201D</p>`)
+        } else if (trimmed.startsWith('> "') || trimmed.startsWith('> \u201C')) {
+          const quoteText = trimmed
+            .slice(2)
+            .replace(/^[""\u201C]|[""\u201D]$/g, '')
+            .trim()
+          bodyParts.push(
+            `<p style="margin: 0 0 4px; font-size: 15px; font-style: italic; color: #525252; line-height: 1.6;">\u201C${escapeHtml(quoteText)}\u201D</p>`,
+          )
         } else if (trimmed.startsWith('> \u2014') || trimmed.startsWith('> —')) {
           const attribution = trimmed.replace(/^> [—\u2014]\s*/, '').trim()
           bodyParts.push(`<p style="margin: 0 0 10px; font-size: 13px; color: #737373;">\u2014 ${escapeHtml(attribution)}</p>`)
@@ -455,16 +452,20 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
         if (metaLine) {
           const links = [...metaLine.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)]
           for (const link of links) {
-            if (link[1] === 'original article') originalUrl = link[2]
-            else if (link[1] === 'relevance analysis') relevanceUrl = link[2]
+            if (link[1] === 'original article') originalUrl = link[2]!
+            else if (link[1] === 'relevance analysis') relevanceUrl = link[2]!
           }
           // Extract feed ID if present: {feed:uuid}
           const feedMatch = metaLine.match(/\{feed:([^}]+)\}/)
-          if (feedMatch) feedId = feedMatch[1]
+          if (feedMatch) feedId = feedMatch[1]!
           // Publisher is plain text before the first link (after optional {feed:...} tag)
           const firstBracket = metaLine.indexOf('[')
           if (firstBracket > 0) {
-            publisherName = metaLine.slice(0, firstBracket).replace(/\{feed:[^}]+\}\s*/, '').replace(/·\s*$/, '').trim()
+            publisherName = metaLine
+              .slice(0, firstBracket)
+              .replace(/\{feed:[^}]+\}\s*/, '')
+              .replace(/·\s*$/, '')
+              .trim()
           }
         }
 
@@ -479,8 +480,10 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
             ? `<img src="${config.siteUrl}/images/feeds/${feedId}.png" alt="" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; border-radius: 2px; margin-right: 4px;">`
             : ''
           if (publisherName) parts.push(`${faviconHtml}<span style="vertical-align: middle;">${escapeHtml(publisherName)}</span>`)
-          if (originalUrl) parts.push(`<a href="${escapeHtml(originalUrl)}" style="color: #2563eb; text-decoration: none; vertical-align: middle;">original article</a>`)
-          if (relevanceUrl) parts.push(`<a href="${escapeHtml(relevanceUrl)}" style="color: #2563eb; text-decoration: none; vertical-align: middle;">relevance analysis</a>`)
+          if (originalUrl)
+            parts.push(`<a href="${escapeHtml(originalUrl)}" style="color: #2563eb; text-decoration: none; vertical-align: middle;">original article</a>`)
+          if (relevanceUrl)
+            parts.push(`<a href="${escapeHtml(relevanceUrl)}" style="color: #2563eb; text-decoration: none; vertical-align: middle;">relevance analysis</a>`)
           metaHtml = `<p style="margin: 0 0 12px; font-size: 13px; color: #737373; line-height: 20px;">${parts.join(' <span style="vertical-align: middle;">&middot;</span> ')}</p>`
         }
 

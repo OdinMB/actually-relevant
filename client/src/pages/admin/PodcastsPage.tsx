@@ -83,14 +83,16 @@ export default function PodcastsPage() {
 
       <PageHeader
         title="Podcasts"
-        actions={(
+        actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={handleCreateStandalone} loading={createStandalone.isPending}>New podcast</Button>
+            <Button variant="secondary" onClick={handleCreateStandalone} loading={createStandalone.isPending}>
+              New podcast
+            </Button>
             <Button onClick={handleWeeklyClick} loading={startWeekly.isPending || weekSlot.isPending}>
               {claimedEpisode ? "Open this week's episode" : "Start this week's episode"}
             </Button>
           </div>
-        )}
+        }
       />
 
       <PodcastWeekSlotNotice slot={weekSlot.data} failed={weekSlot.isError} />
@@ -101,9 +103,7 @@ export default function PodcastsPage() {
             key={tab.value}
             onClick={() => setStatusFilter(tab.value)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              statusFilter === tab.value
-                ? 'bg-brand-50 text-brand-700'
-                : 'text-neutral-600 hover:bg-neutral-100'
+              statusFilter === tab.value ? 'bg-brand-50 text-brand-700' : 'text-neutral-600 hover:bg-neutral-100'
             }`}
           >
             {tab.label}
@@ -111,15 +111,20 @@ export default function PodcastsPage() {
         ))}
       </div>
 
-      {podcastsQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {podcastsQuery.isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {podcastsQuery.error && <ErrorState message="Failed to load podcasts" onRetry={() => podcastsQuery.refetch()} />}
-      {podcastsQuery.data && podcastsQuery.data.data.length === 0 && <EmptyState title="No podcasts yet" description="Start this week's episode and choose whether to review each step or let it run, or make a new podcast from stories you pick." />}
-      {podcastsQuery.data && podcastsQuery.data.data.length > 0 && (
-        <PodcastTable
-          podcasts={podcastsQuery.data.data}
-          onView={id => navigate(`/admin/podcasts/${id}`)}
-          onDelete={setDeleteId}
+      {podcastsQuery.data && podcastsQuery.data.data.length === 0 && (
+        <EmptyState
+          title="No podcasts yet"
+          description="Start this week's episode and choose whether to review each step or let it run, or make a new podcast from stories you pick."
         />
+      )}
+      {podcastsQuery.data && podcastsQuery.data.data.length > 0 && (
+        <PodcastTable podcasts={podcastsQuery.data.data} onView={id => navigate(`/admin/podcasts/${id}`)} onDelete={setDeleteId} />
       )}
 
       <ConfirmDialog

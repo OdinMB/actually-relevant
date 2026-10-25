@@ -19,17 +19,23 @@ const STATE_TEXT: Record<TabState, string> = {
 function StateIcon({ state }: { state: TabState }) {
   const cls = 'h-4 w-4 shrink-0'
   switch (state) {
-    case 'done': return <CheckCircleIcon className={`${cls} text-brand-700`} aria-hidden="true" />
-    case 'running': return (
-      <svg className={`${cls} animate-spin text-brand-600`} viewBox="0 0 24 24" fill="none" aria-hidden="true" data-state="running">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-      </svg>
-    )
-    case 'review': return <EyeIcon className={`${cls} text-orange-600`} aria-hidden="true" />
-    case 'error': return <ExclamationTriangleIcon className={`${cls} text-red-600`} aria-hidden="true" />
-    case 'locked': return <LockClosedIcon className={`${cls} text-neutral-400`} aria-hidden="true" />
-    case 'next': return <span className={`${cls} rounded-full border-2 border-neutral-400`} aria-hidden="true" />
+    case 'done':
+      return <CheckCircleIcon className={`${cls} text-brand-700`} aria-hidden="true" />
+    case 'running':
+      return (
+        <svg className={`${cls} animate-spin text-brand-600`} viewBox="0 0 24 24" fill="none" aria-hidden="true" data-state="running">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+      )
+    case 'review':
+      return <EyeIcon className={`${cls} text-orange-600`} aria-hidden="true" />
+    case 'error':
+      return <ExclamationTriangleIcon className={`${cls} text-red-600`} aria-hidden="true" />
+    case 'locked':
+      return <LockClosedIcon className={`${cls} text-neutral-400`} aria-hidden="true" />
+    case 'next':
+      return <span className={`${cls} rounded-full border-2 border-neutral-400`} aria-hidden="true" />
   }
 }
 
@@ -51,7 +57,7 @@ export function PodcastStageTabs({ podcast, selected, onSelect, panels }: Podcas
   const index = PODCAST_TABS.findIndex(def => def.tab === selected)
 
   return (
-    <TabGroup selectedIndex={index} onChange={i => onSelect(PODCAST_TABS[i].tab)}>
+    <TabGroup selectedIndex={index} onChange={i => onSelect(PODCAST_TABS[i]!.tab)}>
       <TabList aria-label="Production stages" className="flex gap-1 border-b border-neutral-200">
         {PODCAST_TABS.map((def, i) => (
           <Tab
@@ -63,10 +69,11 @@ export function PodcastStageTabs({ podcast, selected, onSelect, panels }: Podcas
               data-[selected]:border-brand-700 data-[selected]:text-brand-800
               data-[disabled]:cursor-not-allowed data-[disabled]:text-neutral-400 data-[disabled]:hover:text-neutral-400"
           >
-            <StateIcon state={states[i]} />
+            <StateIcon state={states[i]!} />
             {LABEL[def.tab]}
             <span className="sr-only">
-              {`, ${STATE_TEXT[states[i]]}`}{states[i] === 'locked' ? `: ${def.lockedReason}` : ''}
+              {`, ${STATE_TEXT[states[i]!]}`}
+              {states[i] === 'locked' ? `: ${def.lockedReason}` : ''}
             </span>
           </Tab>
         ))}

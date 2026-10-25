@@ -1,0 +1,12 @@
+{
+  "$comment": "Reviewed exceptions for npm run audit:prod (scripts/audit-check.mjs, .context/ci.md). Each entry excuses one advisory in one package while every production path to it runs through `via`.",
+  "advisories": [
+    {
+      "advisory": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "via": "zod",
+      "reason": "Memory exhaustion from collecting one issue per failing element of a large array with no length cap; fixed only in zod 4.6.6, no 3.x patch. zod 3.25 is a direct dependency here (and of @atproto/api, langchain and openai), so `via` cannot narrow it. The arrays it validates come from request bodies, which express.json caps at 100kb (app.ts), most of them on admin routes behind auth, and from the model's structured output; neither can carry an array large enough to exhaust memory. Goes with the move to zod 4 (owner decision: it touches every schema, zod-openapi and the LangChain structured output).",
+      "reviewed": "2026-10-25"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ Each run, in this order (`jobs/cleanupOldStories.ts`, SQL in `services/storyRete
 
    `published`, `analyzed` and `selected` stories are never deleted.
 2. **Counts each deleted story in the same statement** (one data-modifying CTE: select with `FOR UPDATE SKIP LOCKED`, delete, insert the grouped counts into `story_archive_counts`). A story can never be deleted without being counted or counted twice.
-3. **Repairs the clusters it took members from**, as `deleteStory()` does (`repairClusters()`, `dedup.md`): the delete statement also returns the deleted stories' cluster ids, and after the last batch a cluster left with one member or none is dissolved, and one that keeps two or more members but lost its primary (`primary_story_id` is `ON DELETE SET NULL`) gets a new primary by `updatePrimary()`. Without this a lost primary would leave every member a non-primary (selection and auto-reject skip such a cluster).
+3. **Repairs the clusters it took members from**, as `deleteStory()` does (`repairClusters()`, `dedup.md`): the delete statement also returns the deleted stories' cluster ids, and after the last batch a cluster left with one member or none is dissolved, and one that keeps two or more members but lost its primary (`primary_story_id` is `ON DELETE SET NULL`) gets a new primary by the lifecycle module's election in pipeline mode (`reelectPrimary()`, one transaction per cluster under its lock), which never restores a rejected story: an elected `duplicate` stays rejected, and a trashed or otherwise rejected member is never elected. Without this a lost primary would leave every member a non-primary (selection and auto-reject skip such a cluster).
 4. **Clears the embeddings** (`embedding`, `embedding_content_hash`, `embedding_generated_at`) of every unpublished story crawled before the same cutoff, in batches. Clearing the hash is what makes `ensureEmbedding()` generate a new one.
 5. **Records a notice** (source `jobs`, severity `info`, no dedupe key, so one row per run) with the deleted count per status, the cleared embeddings, the dissolved clusters and the re-elected primaries, including on a run where nothing was due.
 
@@ -25,7 +25,7 @@ A failure stops the run and throws "Story cleanup failed after deleting N storie
 ## Getting an embedding back
 
 An old unpublished story without an embedding gets one again when it is:
-- **published**, by any path (`publishStory`, `updateStoryStatus`, bulk publish's `publishChunk`, an admin edit setting `status: 'published'` through `updateStory`): each generates a missing embedding first, whatever else the edit carries. As everywhere, a failed generation is logged and the publish goes ahead without one.
+- **published**, by any path (the publish job, `publishStory`, `updateStoryStatus`, bulk status, an admin edit setting `status: 'published'` through `updateStory`, all through `storyLifecycle.ts`), or **put back on the site** as a restored duplicate by a cluster edit or an editor's election: each ensures a missing embedding, before the flip for a publish and right after the commit for a restore. As everywhere, a failed generation is logged and the story goes live without one.
 - **re-assessed**: the assessment writes a fresh embedding with the analysis.
 
 Until then it is invisible to the semantic half of admin search, related stories and dedup candidates (dedup only looks 14 days back anyway).

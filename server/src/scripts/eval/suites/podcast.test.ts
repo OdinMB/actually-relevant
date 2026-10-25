@@ -5,7 +5,12 @@ import { checkPodcastSelection, podcastEpisodeStories, podcastPool } from './pod
 
 function story(n: number, category: string, relevance?: number, withId = true): PodcastFixtureStory {
   return {
-    category, title: `Title ${n}`, summary: 's', publisher: `Pub ${n}`, relevanceReasons: `Reasons ${n}`, antifactors: 'a',
+    category,
+    title: `Title ${n}`,
+    summary: 's',
+    publisher: `Pub ${n}`,
+    relevanceReasons: `Reasons ${n}`,
+    antifactors: 'a',
     ...(withId ? { id: `id-${n}` } : {}),
     ...(relevance !== undefined ? { relevance } : {}),
   }
@@ -16,8 +21,13 @@ const item = (stories: PodcastFixtureStory[]): PodcastItem => ({ id: 'recent-sto
 describe('podcastEpisodeStories', () => {
   it('takes the most relevant story per issue first, then fills by relevance up to five', () => {
     const p = item([
-      story(1, 'Planet', 6), story(2, 'Planet', 9), story(3, 'Health', 7),
-      story(4, 'Science', 5), story(5, 'Threats', 4), story(6, 'Planet', 8), story(7, 'Health', 3),
+      story(1, 'Planet', 6),
+      story(2, 'Planet', 9),
+      story(3, 'Health', 7),
+      story(4, 'Science', 5),
+      story(5, 'Threats', 4),
+      story(6, 'Planet', 8),
+      story(7, 'Health', 3),
     ])
     expect(podcastEpisodeStories(p).map(s => s.title)).toEqual(['Title 2', 'Title 3', 'Title 4', 'Title 5', 'Title 6'])
     expect(podcastEpisodeStories(p).map(s => s.ref)).toEqual([1, 2, 3, 4, 5])

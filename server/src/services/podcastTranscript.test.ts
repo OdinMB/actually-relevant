@@ -13,7 +13,14 @@ const DIALOGUE = {
   episodeSummary: 'Two stories.',
   segments: [
     { kind: 'intro', storyRef: null, turns: [{ speaker: 'HOST_A', text: 'Welcome to the week.' }] },
-    { kind: 'story', storyRef: 1, turns: [{ speaker: 'HOST_B', text: '[thoughtful] A court   ruled on air data.' }, { speaker: 'HOST_A', text: '[laughs]' }] },
+    {
+      kind: 'story',
+      storyRef: 1,
+      turns: [
+        { speaker: 'HOST_B', text: '[thoughtful] A court   ruled on air data.' },
+        { speaker: 'HOST_A', text: '[laughs]' },
+      ],
+    },
     { kind: 'story', storyRef: 2, turns: [{ speaker: 'HOST_A', text: 'From air to health. [excited] Vaccines!' }] },
     { kind: 'outro', storyRef: null, turns: [{ speaker: 'HOST_B', text: 'That was the week.' }] },
   ],

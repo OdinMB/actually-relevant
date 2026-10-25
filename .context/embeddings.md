@@ -51,7 +51,7 @@ The result is always computed and cached for `displayCount` IDs, then sliced to 
 
 A `TTLCache` (`server/src/lib/cache.ts`) in `relatedStories.ts`, per process and lost on restart. The key is the source story's slug and the value is the source's id with the ordered list of related story IDs. Each entry expires after `relatedStories.cacheHours` (72h). At `MAX_RELATED_CACHE_SIZE` (500) entries, setting a new slug drops the expired entries, then the oldest. Concurrent misses for one slug share one computation, so a burst of first visitors costs one LLM call. A source with no candidates is not cached.
 
-When a story leaves `published` or is deleted through the story service (`updateStory`, `updateStoryStatus`, `bulkUpdateStatus`, `rejectStory`, `deleteStory`), its own entry is dropped (`forgetRelatedStories`); other paths are covered by the published check on every hit. Other stories' lists that name it simply leave it out until they expire.
+When a story leaves `published` (any editor status move, or a duplicate auto-rejection, in `storyLifecycle.ts`) or is deleted (`deleteStory`), its own entry is dropped (`forgetRelatedStories`); other paths are covered by the published check on every hit. Other stories' lists that name it simply leave it out until they expire.
 
 **HTTP cache:** the route still sends `Cache-Control: public, max-age=259200` (`httpCacheSeconds`, 72 h), so a browser or CDN that cached a response can show a now-unpublished story's link for up to that long (it leads to a 404). Kept on purpose: the long lifetime is what spares the LLM re-rank on repeat visits; shorten `httpCacheSeconds` if unpublished stories must vanish from every client sooner. Why the re-rank runs on the public request path at all, and when to revisit that: ADR-0043.
 
@@ -97,7 +97,8 @@ Uses raw SQL for fetching (bypasses Prisma type limitations), processes in batch
 | `server/src/services/embedding.ts` | Core embedding service (generate, hash, batch) |
 | `server/src/services/embedding.test.ts` | Unit tests |
 | `server/src/lib/vectors.ts` | Raw SQL embedding persistence (`saveEmbedding`, `saveEmbeddingTx`) |
-| `server/src/services/storyWrites.ts` | Lifecycle hooks: embeddings on publish and on edits of published stories |
+| `server/src/services/storyLifecycle.ts` | Embeddings ensured on publish (outside the transaction), re-embedding of refreshed published stories |
+| `server/src/services/storyWrites.ts` | Embeddings on edits of published stories |
 | `server/src/services/storySearch.ts` | Hybrid (RRF) search |
 | `server/src/services/relatedStories.ts` | Related stories, their re-rank and cache |
 | `server/src/prompts/related-stories.ts` | Related-stories re-rank prompt |

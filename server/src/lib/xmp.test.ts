@@ -52,14 +52,14 @@ describe('embedXmpInPng', () => {
 
     expect(chunks[0].type).toBe('IHDR')
     expect(chunks[1].type).toBe('iTXt')
-    expect(chunks.filter((c) => c.type === 'iTXt')).toHaveLength(1)
-    expect(chunks.every((c) => c.crcValid)).toBe(true)
+    expect(chunks.filter(c => c.type === 'iTXt')).toHaveLength(1)
+    expect(chunks.every(c => c.crcValid)).toBe(true)
     expect(chunks[chunks.length - 1].type).toBe('IEND')
   })
 
   it('writes the packet under the XMP keyword, uncompressed', () => {
     const xmp = aiGeneratedXmpPacket()
-    const itxt = readChunks(embedXmpInPng(smallPng(), xmp)).find((c) => c.type === 'iTXt')!
+    const itxt = readChunks(embedXmpInPng(smallPng(), xmp)).find(c => c.type === 'iTXt')!
     const keyword = 'XML:com.adobe.xmp'
 
     expect(itxt.data.subarray(0, keyword.length).toString('latin1')).toBe(keyword)
@@ -71,10 +71,8 @@ describe('embedXmpInPng', () => {
   it('keeps every original chunk byte for byte', () => {
     const original = smallPng()
     const originalChunks = readChunks(original)
-    const embeddedChunks = readChunks(embedXmpInPng(original, aiGeneratedXmpPacket())).filter((c) => c.type !== 'iTXt')
-    expect(embeddedChunks.map((c) => [c.type, c.data.toString('hex')])).toEqual(
-      originalChunks.map((c) => [c.type, c.data.toString('hex')]),
-    )
+    const embeddedChunks = readChunks(embedXmpInPng(original, aiGeneratedXmpPacket())).filter(c => c.type !== 'iTXt')
+    expect(embeddedChunks.map(c => [c.type, c.data.toString('hex')])).toEqual(originalChunks.map(c => [c.type, c.data.toString('hex')]))
   })
 
   it('still decodes as an image', async () => {

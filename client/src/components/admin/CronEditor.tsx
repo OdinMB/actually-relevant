@@ -14,12 +14,8 @@ interface CronEditorProps {
 
 export function CronEditor({ job, initialEditing = false, onSave, onCancel }: CronEditorProps) {
   const [editing, setEditing] = useState(initialEditing)
-  const [mode, setMode] = useState<'preset' | 'custom'>(() =>
-    findPreset(job.cronExpression) ? 'preset' : 'custom',
-  )
-  const [selectedPreset, setSelectedPreset] = useState(
-    () => findPreset(job.cronExpression)?.value ?? '',
-  )
+  const [mode, setMode] = useState<'preset' | 'custom'>(() => (findPreset(job.cronExpression) ? 'preset' : 'custom'))
+  const [selectedPreset, setSelectedPreset] = useState(() => findPreset(job.cronExpression)?.value ?? '')
   const [customValue, setCustomValue] = useState(job.cronExpression)
   const updateJob = useUpdateJob()
   const { toast } = useToast()
@@ -56,7 +52,10 @@ export function CronEditor({ job, initialEditing = false, onSave, onCancel }: Cr
         className="text-left text-xs text-neutral-600 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
         title="Click to edit schedule"
       >
-        <span className="block">{cronToHuman(job.cronExpression)}{job.timeZone && ` (${job.timeZone})`}</span>
+        <span className="block">
+          {cronToHuman(job.cronExpression)}
+          {job.timeZone && ` (${job.timeZone})`}
+        </span>
         <span className="block font-mono text-neutral-400 text-[10px]">{job.cronExpression}</span>
       </button>
     )
@@ -66,13 +65,7 @@ export function CronEditor({ job, initialEditing = false, onSave, onCancel }: Cr
     <div className="flex flex-col gap-2 min-w-[240px]">
       <div className="flex items-center gap-2">
         <label className="flex items-center gap-1 text-xs text-neutral-600 cursor-pointer">
-          <input
-            type="radio"
-            name={`cron-mode-${job.jobName}`}
-            checked={mode === 'preset'}
-            onChange={() => setMode('preset')}
-            className="accent-brand-600"
-          />
+          <input type="radio" name={`cron-mode-${job.jobName}`} checked={mode === 'preset'} onChange={() => setMode('preset')} className="accent-brand-600" />
           Preset
         </label>
         <label className="flex items-center gap-1 text-xs text-neutral-600 cursor-pointer">
@@ -80,7 +73,10 @@ export function CronEditor({ job, initialEditing = false, onSave, onCancel }: Cr
             type="radio"
             name={`cron-mode-${job.jobName}`}
             checked={mode === 'custom'}
-            onChange={() => { setMode('custom'); if (selectedPreset) setCustomValue(selectedPreset) }}
+            onChange={() => {
+              setMode('custom')
+              if (selectedPreset) setCustomValue(selectedPreset)
+            }}
             className="accent-brand-600"
           />
           Custom
@@ -96,7 +92,9 @@ export function CronEditor({ job, initialEditing = false, onSave, onCancel }: Cr
         >
           <option value="">Select a schedule...</option>
           {CRON_PRESETS.map(p => (
-            <option key={p.value} value={p.value}>{p.label}</option>
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
           ))}
         </select>
       ) : (

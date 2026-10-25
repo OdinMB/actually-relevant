@@ -42,6 +42,7 @@ const transports = pino.transport({
  * Custom error serializer that strips bulky axios internals (request, response,
  * config) to prevent OOM from serializing full HTML responses and socket objects.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- pino's serializer contract: anything thrown, axios fields read loosely
 export function serializeError(err: any) {
   const serialized = pino.stdSerializers.err(err)
   if (serialized && err?.isAxiosError) {

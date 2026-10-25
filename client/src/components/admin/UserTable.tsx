@@ -1,9 +1,5 @@
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
-import {
-  EllipsisVerticalIcon,
-  PencilSquareIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline'
+import { EllipsisVerticalIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type { User, UserRole } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { ActionIconButton } from '../ui/ActionIconButton'
@@ -29,11 +25,21 @@ export function UserTable({ users, currentUserId, onEdit, onDelete }: UserTableP
       <table className="min-w-full divide-y divide-neutral-200">
         <thead className="bg-neutral-50">
           <tr>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Name</th>
-            <th scope="col" className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Email</th>
-            <th scope="col" className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Role</th>
-            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Created</th>
-            <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-neutral-500">Actions</th>
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Name
+            </th>
+            <th scope="col" className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Email
+            </th>
+            <th scope="col" className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Role
+            </th>
+            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Created
+            </th>
+            <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-200">
@@ -48,43 +54,23 @@ export function UserTable({ users, currentUserId, onEdit, onDelete }: UserTableP
                   >
                     {user.name}
                   </button>
-                  {isSelf && (
-                    <span className="ml-2 text-xs text-neutral-400">(you)</span>
-                  )}
+                  {isSelf && <span className="ml-2 text-xs text-neutral-400">(you)</span>}
                   {/* Mobile metadata */}
                   <div className="flex flex-wrap items-center gap-1.5 mt-1 md:hidden">
                     <span className="text-neutral-500 text-xs">{user.email}</span>
-                    <Badge variant={ROLE_BADGE[user.role as UserRole]}>
-                      {user.role}
-                    </Badge>
+                    <Badge variant={ROLE_BADGE[user.role as UserRole]}>{user.role}</Badge>
                   </div>
                 </td>
-                <td className="hidden md:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">
-                  {user.email}
-                </td>
+                <td className="hidden md:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">{user.email}</td>
                 <td className="hidden md:table-cell whitespace-nowrap px-4 py-3 text-sm">
-                  <Badge variant={ROLE_BADGE[user.role as UserRole]}>
-                    {user.role}
-                  </Badge>
+                  <Badge variant={ROLE_BADGE[user.role as UserRole]}>{user.role}</Badge>
                 </td>
-                <td className="hidden lg:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">
-                  {formatShortDate(user.createdAt)}
-                </td>
+                <td className="hidden lg:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">{formatShortDate(user.createdAt)}</td>
                 <td className="whitespace-nowrap px-4 py-3">
                   {/* Desktop actions */}
                   <div className="hidden md:flex items-center justify-end gap-0.5">
-                    <ActionIconButton
-                      icon={PencilSquareIcon}
-                      label="Edit"
-                      onClick={() => onEdit(user.id)}
-                    />
-                    <ActionIconButton
-                      icon={TrashIcon}
-                      label={`Delete ${user.name}`}
-                      variant="danger"
-                      disabled={isSelf}
-                      onClick={() => onDelete(user)}
-                    />
+                    <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => onEdit(user.id)} />
+                    <ActionIconButton icon={TrashIcon} label={`Delete ${user.name}`} variant="danger" disabled={isSelf} onClick={() => onDelete(user)} />
                   </div>
 
                   {/* Mobile overflow menu */}

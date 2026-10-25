@@ -12,7 +12,14 @@ vi.mock('../lib/admin-api', async importOriginal => ({
 import { usePodcastProgress, progressText, runOutcome } from './usePodcastProgress'
 
 const run = (overrides: Partial<ActivePodcastRun> = {}): ActivePodcastRun => ({
-  id: 'pod-1', title: 'W41: Clean air', stage: 'scripted', mode: 'interactive', activity: 'Voicing', chunksDone: 2, chunksTotal: 5, ...overrides,
+  id: 'pod-1',
+  title: 'W41: Clean air',
+  stage: 'scripted',
+  mode: 'interactive',
+  activity: 'Voicing',
+  chunksDone: 2,
+  chunksTotal: 5,
+  ...overrides,
 })
 
 function Tracker() {
@@ -21,7 +28,10 @@ function Tracker() {
 }
 
 /** The provider re-reads the running episodes on window focus (and on its timer). */
-const refocus = () => act(() => { window.dispatchEvent(new Event('focus')) })
+const refocus = () =>
+  act(() => {
+    window.dispatchEvent(new Event('focus'))
+  })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -32,14 +42,20 @@ describe('progressText and runOutcome', () => {
   it('name the step as the message and, while voicing, the chunks as the unannounced detail', () => {
     expect(progressText(run())).toEqual({ message: 'W41: Clean air: Voicing', detail: ' 2/5' })
     expect(progressText(run({ chunksDone: 4 })).message).toBe(progressText(run()).message)
-    expect(progressText(run({ stage: 'created', activity: 'Selecting stories', chunksDone: null, chunksTotal: null }))).toEqual({ message: 'W41: Clean air: Selecting stories' })
+    expect(progressText(run({ stage: 'created', activity: 'Selecting stories', chunksDone: null, chunksTotal: null }))).toEqual({
+      message: 'W41: Clean air: Selecting stories',
+    })
   })
 
   it('turn a review stop or ready into a success, and a failure or block into a sticky error', () => {
     expect(runOutcome(makePodcast({ stage: 'selected' }))).toMatchObject({ type: 'success', sticky: false, message: expect.stringMatching(/review them/) })
     expect(runOutcome(makePodcast({ stage: 'ready' }))).toMatchObject({ type: 'success', message: expect.stringMatching(/ready to listen/) })
     expect(runOutcome(makePodcast({ lastError: 'model down' }))).toMatchObject({ type: 'error', sticky: true, message: expect.stringMatching(/model down/) })
-    expect(runOutcome(makePodcast({ blockedAt: '2026-10-10T07:00:00Z', blockedReason: 'cap reached' }))).toMatchObject({ type: 'error', sticky: true, message: expect.stringMatching(/cap reached/) })
+    expect(runOutcome(makePodcast({ blockedAt: '2026-10-10T07:00:00Z', blockedReason: 'cap reached' }))).toMatchObject({
+      type: 'error',
+      sticky: true,
+      message: expect.stringMatching(/cap reached/),
+    })
   })
 })
 

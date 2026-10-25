@@ -48,12 +48,7 @@ export function JobStatusBadge({ job, variant = 'badge' }: JobStatusBadgeProps) 
     if (job.running) {
       return <Spinner />
     }
-    return (
-      <span
-        className={`inline-block h-2.5 w-2.5 rounded-full ${dotColors[status.color]}`}
-        title={status.label}
-      />
-    )
+    return <span className={`inline-block h-2.5 w-2.5 rounded-full ${dotColors[status.color]}`} title={status.label} />
   }
 
   if (job.running) {

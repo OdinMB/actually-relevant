@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import { validateBody } from '../middleware/validate.js'
 import { requireAuth } from '../middleware/auth.js'
 import { authLimiter, refreshLimiter } from '../middleware/rateLimit.js'
@@ -33,7 +33,7 @@ function cookieSameSite(): CookieSameSite {
   return config.auth.cookieSameSite ?? (isSecureEnv() ? 'none' : 'strict')
 }
 
-function setRefreshCookie(res: any, token: string) {
+function setRefreshCookie(res: Response, token: string) {
   res.cookie(REFRESH_COOKIE, token, {
     httpOnly: true,
     secure: isSecureEnv(),
@@ -43,7 +43,7 @@ function setRefreshCookie(res: any, token: string) {
   })
 }
 
-function clearRefreshCookie(res: any) {
+function clearRefreshCookie(res: Response) {
   res.clearCookie(REFRESH_COOKIE, {
     httpOnly: true,
     secure: isSecureEnv(),

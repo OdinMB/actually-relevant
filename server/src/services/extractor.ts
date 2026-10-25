@@ -22,7 +22,9 @@ function isQuotaError(err: unknown): boolean {
 }
 
 class ThrottleAbortError extends Error {
-  constructor() { super('Throttle aborted') }
+  constructor() {
+    super('Throttle aborted')
+  }
 }
 
 export type ExtractionMethod = 'selector' | 'readability' | 'diffbot' | 'pipfeed' | 'teaser'
@@ -118,21 +120,23 @@ export class ApiThrottle {
 
 const apiThrottle = new ApiThrottle(
   config.crawl.minDelayPerDomainMs, // base delay same as crawl limiter
-  30_000,  // 30s backoff after 429
-  30_000,  // max 30s between calls
+  30_000, // 30s backoff after 429
+  30_000, // max 30s between calls
 )
 
 async function fetchPage(url: string): Promise<string | null> {
   try {
     const response = await crawlLimiter.run(url, () =>
-      withRetry(() => axios.get(url, {
-        timeout: config.crawl.httpTimeoutMs,
-        headers: { 'User-Agent': USER_AGENT },
-        maxRedirects: 5,
-        responseType: 'text',
-        maxContentLength: 5 * 1024 * 1024, // 5 MB cap to prevent OOM on huge pages
-        ...ssrfGuard, // resolved addresses and every redirect checked (utils/urlValidation.ts)
-      }))
+      withRetry(() =>
+        axios.get(url, {
+          timeout: config.crawl.httpTimeoutMs,
+          headers: { 'User-Agent': USER_AGENT },
+          maxRedirects: 5,
+          responseType: 'text',
+          maxContentLength: 5 * 1024 * 1024, // 5 MB cap to prevent OOM on huge pages
+          ...ssrfGuard, // resolved addresses and every redirect checked (utils/urlValidation.ts)
+        }),
+      ),
     )
     return response.data
   } catch (err) {
@@ -190,24 +194,25 @@ async function extractByDiffbot(url: string): Promise<TierResult | null> {
   log.info({ url }, 'attempting Diffbot extraction')
 
   const response = await crawlLimiter.run('https://api.diffbot.com/v3/article', () =>
-    withRetry(() => axios.get(
-      'https://api.diffbot.com/v3/article',
+    withRetry(
+      () =>
+        axios.get('https://api.diffbot.com/v3/article', {
+          timeout: config.crawl.diffbotTimeoutMs,
+          maxContentLength: 5 * 1024 * 1024,
+          params: {
+            token,
+            url,
+            discussion: false,
+            paging: false,
+          },
+        }),
       {
-        timeout: config.crawl.diffbotTimeoutMs,
-        maxContentLength: 5 * 1024 * 1024,
-        params: {
-          token,
-          url,
-          discussion: false,
-          paging: false,
+        retryOn: err => {
+          if (isQuotaError(err)) return false
+          return isRetryableError(err)
         },
-      }
-    ), {
-      retryOn: (err) => {
-        if (isQuotaError(err)) return false
-        return isRetryableError(err)
       },
-    })
+    ),
   )
 
   const article = response.data?.objects?.[0]
@@ -231,24 +236,28 @@ async function extractByPipfeed(url: string): Promise<TierResult | null> {
 
   log.info({ url }, 'attempting PipFeed extraction')
 
-  const response = await withRetry(() => axios.post(
-    'https://news-article-data-extract-and-summarization1.p.rapidapi.com/extract/',
-    { url },
+  const response = await withRetry(
+    () =>
+      axios.post(
+        'https://news-article-data-extract-and-summarization1.p.rapidapi.com/extract/',
+        { url },
+        {
+          timeout: config.crawl.pipfeedTimeoutMs,
+          maxContentLength: 5 * 1024 * 1024,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-RapidAPI-Key': apiKey,
+            'X-RapidAPI-Host': 'news-article-data-extract-and-summarization1.p.rapidapi.com',
+          },
+        },
+      ),
     {
-      timeout: config.crawl.pipfeedTimeoutMs,
-      maxContentLength: 5 * 1024 * 1024,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-RapidAPI-Key': apiKey,
-        'X-RapidAPI-Host': 'news-article-data-extract-and-summarization1.p.rapidapi.com',
+      retryOn: err => {
+        if (isQuotaError(err)) return false
+        return isRetryableError(err)
       },
-    }
-  ), {
-    retryOn: (err) => {
-      if (isQuotaError(err)) return false
-      return isRetryableError(err)
     },
-  })
+  )
 
   const data = response.data
   if (!data?.text || data.text.length < config.crawl.minContentLength) {
@@ -318,7 +327,7 @@ export async function extractContent(
     shouldAbort?: () => boolean
     /** The feed's paywall setting (ADR-0032); defaults to detection on, no title marker. */
     paywall?: PaywallPolicy
-  }
+  },
 ): Promise<ExtractionResult | null> {
   if (!isAllowedUrl(url)) {
     log.warn({ url }, 'blocked disallowed URL')

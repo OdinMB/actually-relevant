@@ -30,7 +30,8 @@ function compilesAsRegex(pattern: string): boolean {
 const NESTED_REPETITION = /\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)\s*[+*{]/
 
 /** A regex tested on an article's title; a match marks the article paywall-locked (ADR-0032). */
-const paywallTitleMarkerSchema = z.string()
+const paywallTitleMarkerSchema = z
+  .string()
   .min(1)
   .max(200, 'Title marker must be at most 200 characters')
   .refine(compilesAsRegex, 'Title marker must be a valid regular expression')

@@ -9,9 +9,7 @@ import { config } from '../config.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { prepareRepresentation, type Representation } from '../lib/httpRepresentation.js'
 import { escapeXml } from '../lib/xml.js'
-import {
-  episodeDescriptionHtml, episodeDescriptionText, podcastShowInfo, type PodcastCategory, type PublishedEpisode,
-} from './podcastShow.js'
+import { episodeDescriptionHtml, episodeDescriptionText, podcastShowInfo, type PodcastCategory, type PublishedEpisode } from './podcastShow.js'
 
 const NAMESPACES = [
   'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"',

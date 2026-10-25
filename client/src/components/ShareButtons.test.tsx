@@ -24,7 +24,7 @@ describe('ShareButtons prefill', () => {
   it('says it in the email body too', () => {
     renderButtons()
     const href = screen.getByRole('link', { name: 'Share via email' }).getAttribute('href')!
-    expect(decodeURIComponent(href.split('body=')[1])).toBe(`${PREFILL}\n\n${STORY_URL}`)
+    expect(decodeURIComponent(href.split('body=')[1]!)).toBe(`${PREFILL}\n\n${STORY_URL}`)
   })
 
   it('says it in the native share text', () => {

@@ -34,7 +34,10 @@ beforeEach(() => {
       { slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: '2026-10-18T09:00:00.000Z', storyCount: 8 },
       { slug: 'week-41-2026', title: 'Week 41, 2026', publishedAt: '2026-10-11T09:00:00.000Z', storyCount: 1 },
     ],
-    total: 2, page: 1, pageSize: 20, totalPages: 1,
+    total: 2,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1,
   })
 })
 
@@ -74,7 +77,7 @@ describe('PublishHint (admin)', () => {
     expect(screen.getByText(/Publishing makes this issue public on the website/)).toBeInTheDocument()
   })
 
-  it('links a published issue\'s public page', () => {
+  it("links a published issue's public page", () => {
     render(<PublishHint newsletter={{ status: 'published', slug: 'week-42-2026' }} />)
     expect(screen.getByRole('link', { name: '/newsletter/week-42-2026' }).getAttribute('href')).toBe('/newsletter/week-42-2026')
   })

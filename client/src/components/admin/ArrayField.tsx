@@ -10,30 +10,19 @@ interface ArrayFieldProps<T> {
   renderItem: (item: T, index: number, onItemChange: (value: T) => void) => ReactNode
 }
 
-export function ArrayField<T>({
-  label,
-  items,
-  onChange,
-  createEmpty,
-  addLabel,
-  renderItem,
-}: ArrayFieldProps<T>) {
+export function ArrayField<T>({ label, items, onChange, createEmpty, addLabel, renderItem }: ArrayFieldProps<T>) {
   return (
     <div>
       <label className="block text-sm font-medium text-neutral-700 mb-1">{label}</label>
       <div className="space-y-2">
         {items.map((item, i) => (
           <div key={i} className="flex gap-2">
-            {renderItem(item, i, (value) => {
+            {renderItem(item, i, value => {
               const updated = [...items]
               updated[i] = value
               onChange(updated)
             })}
-            <button
-              type="button"
-              onClick={() => onChange(items.filter((_, j) => j !== i))}
-              className="p-1.5 text-neutral-400 hover:text-red-500"
-            >
+            <button type="button" onClick={() => onChange(items.filter((_, j) => j !== i))} className="p-1.5 text-neutral-400 hover:text-red-500">
               <TrashIcon className="h-4 w-4" />
             </button>
           </div>

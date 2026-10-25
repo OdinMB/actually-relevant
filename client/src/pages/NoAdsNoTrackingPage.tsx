@@ -66,17 +66,14 @@ export default function NoAdsNoTrackingPage() {
         <h1 className="page-title">News Without Ads, Tracking, or Clickbait</h1>
         <div className="prose max-w-none">
           <p className="text-lg text-neutral-600 leading-relaxed">
-            Most free news services make money from your data. Here's how Actually Relevant is
-            different.
+            Most free news services make money from your data. Here's how Actually Relevant is different.
           </p>
 
           {/* Two-column comparison */}
           <table className="w-full text-sm border-collapse mt-6 mb-2">
             <thead>
               <tr>
-                <th className="text-left py-3 px-4 font-bold bg-brand-50 text-brand-800 border-b border-brand-200 rounded-tl-lg">
-                  Actually Relevant
-                </th>
+                <th className="text-left py-3 px-4 font-bold bg-brand-50 text-brand-800 border-b border-brand-200 rounded-tl-lg">Actually Relevant</th>
                 <th className="text-left py-3 px-4 font-bold bg-neutral-50 text-neutral-700 border-b border-neutral-300 rounded-tr-lg">
                   Typical news aggregator
                 </th>
@@ -85,19 +82,14 @@ export default function NoAdsNoTrackingPage() {
             <tbody>
               {COMPARISON.map((row, i) => (
                 <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}>
-                  <td className="py-2.5 px-4 border-b border-neutral-200 text-neutral-800 font-medium">
-                    {row.us}
-                  </td>
-                  <td className="py-2.5 px-4 border-b border-neutral-200 text-neutral-500">
-                    {row.them}
-                  </td>
+                  <td className="py-2.5 px-4 border-b border-neutral-200 text-neutral-800 font-medium">{row.us}</td>
+                  <td className="py-2.5 px-4 border-b border-neutral-200 text-neutral-500">{row.them}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="text-xs text-neutral-400 mt-1">
-            * Our newsletter provider tracks email opens and link clicks. We cannot disable this.
-            We do not use this data for profiling or advertising. See our{' '}
+            * Our newsletter provider tracks email opens and link clicks. We cannot disable this. We do not use this data for profiling or advertising. See our{' '}
             <Link to="/privacy" className="underline hover:text-neutral-300">
               privacy policy
             </Link>{' '}
@@ -109,7 +101,6 @@ export default function NoAdsNoTrackingPage() {
               See all aggregators side by side
             </Link>
           </p>
-
         </div>
 
         {/* What We Don't Show — 2x2 cards */}
@@ -119,7 +110,11 @@ export default function NoAdsNoTrackingPage() {
             {
               icon: (
                 <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                  />
                 </svg>
               ),
               title: 'No Ads',
@@ -139,7 +134,11 @@ export default function NoAdsNoTrackingPage() {
             {
               icon: (
                 <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
                 </svg>
               ),
               title: 'No Paywalls',
@@ -149,18 +148,19 @@ export default function NoAdsNoTrackingPage() {
             {
               icon: (
                 <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
                 </svg>
               ),
               title: 'No Filter Bubble',
               description: 'Everyone sees the same curated stories. No personalization, no algorithmic profiling.',
               border: 'border-l-indigo-400',
             },
-          ].map((card) => (
-            <div
-              key={card.title}
-              className={`bg-white border border-neutral-200 ${card.border} border-l-4 rounded-lg p-5`}
-            >
+          ].map(card => (
+            <div key={card.title} className={`bg-white border border-neutral-200 ${card.border} border-l-4 rounded-lg p-5`}>
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-neutral-500">{card.icon}</span>
                 <p className="font-bold text-neutral-800">{card.title}</p>

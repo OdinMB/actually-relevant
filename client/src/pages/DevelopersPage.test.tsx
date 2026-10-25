@@ -9,7 +9,7 @@ import DevelopersPage from './DevelopersPage'
 // That is what lets the prerenderer capture the page before Scalar has loaded.
 const reference = vi.hoisted(() => {
   let release: () => void = () => {}
-  const loaded = new Promise<void>((resolve) => {
+  const loaded = new Promise<void>(resolve => {
     release = resolve
   })
   return { loaded, release: () => release() }

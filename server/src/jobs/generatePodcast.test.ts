@@ -42,7 +42,7 @@ describe('runGeneratePodcast', () => {
     expect(mockWeekly.runWeeklyEpisode).not.toHaveBeenCalled()
   })
 
-  it('runs the week\'s episode on the cron trigger inside the window', async () => {
+  it("runs the week's episode on the cron trigger inside the window", async () => {
     await runGeneratePodcast(FRIDAY_0600)
     expect(mockWeekly.runWeeklyEpisode).toHaveBeenCalledWith({ trigger: 'cron', now: FRIDAY_0600 })
   })
@@ -93,7 +93,7 @@ describe('runGeneratePodcast', () => {
     expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
-  it('does not remind while a person\'s run is in progress', async () => {
+  it("does not remind while a person's run is in progress", async () => {
     mockWeekly.runWeeklyEpisode.mockResolvedValueOnce(waiting())
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(episode({ leaseUntil: new Date(FRIDAY_1800.getTime() + 60_000) }))
     await runGeneratePodcast(FRIDAY_1800)

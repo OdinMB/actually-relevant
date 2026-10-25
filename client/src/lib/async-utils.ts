@@ -16,7 +16,7 @@ export async function parallelMap<T, R>(
   async function runNext(): Promise<void> {
     while (nextIndex < items.length) {
       const index = nextIndex++
-      const item = items[index]
+      const item = items[index]!
       try {
         const result = await fn(item)
         results.push(result)
@@ -28,10 +28,7 @@ export async function parallelMap<T, R>(
     }
   }
 
-  const workers = Array.from(
-    { length: Math.min(concurrency, items.length) },
-    () => runNext(),
-  )
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => runNext())
   await Promise.all(workers)
 
   return { results, errors }

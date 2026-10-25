@@ -8,7 +8,11 @@ function renderBanner(deployedBuildId: string) {
   const fetchMock = vi.fn(async () => new Response(JSON.stringify({ buildId: deployedBuildId })))
   vi.stubGlobal('fetch', fetchMock)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><NewVersionBanner /></QueryClientProvider>)
+  render(
+    <QueryClientProvider client={client}>
+      <NewVersionBanner />
+    </QueryClientProvider>,
+  )
   return client
 }
 

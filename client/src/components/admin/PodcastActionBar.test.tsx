@@ -55,7 +55,13 @@ describe('PodcastActionBar', () => {
   })
 
   it('deletes only after the confirmation, then returns to the list', async () => {
-    renderInAdmin(<><PodcastActionBar podcast={ready} pendingEdits={false} /><Where /></>, { route: '/admin/podcasts/pod-1' })
+    renderInAdmin(
+      <>
+        <PodcastActionBar podcast={ready} pendingEdits={false} />
+        <Where />
+      </>,
+      { route: '/admin/podcasts/pod-1' },
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(mockApi.delete).not.toHaveBeenCalled()
     const dialog = await screen.findByRole('dialog')

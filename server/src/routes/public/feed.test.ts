@@ -61,10 +61,7 @@ describe('RSS feeds', () => {
 
     expect(res.status).toBe(200)
     expect(channelDescription(res.text)).toBe('News that matters to humanity. Written and curated by AI.')
-    expect(itemDescriptions(res.text)).toEqual([
-      '[AI-generated] First summary.',
-      '[AI-generated] Second summary.',
-    ])
+    expect(itemDescriptions(res.text)).toEqual(['[AI-generated] First summary.', '[AI-generated] Second summary.'])
   })
 
   it('labels the per-issue channel with the issue name and prefixes every item', async () => {
@@ -76,9 +73,7 @@ describe('RSS feeds', () => {
     const res = await request(app).get('/api/feed/planet-climate')
 
     expect(res.status).toBe(200)
-    expect(channelDescription(res.text)).toBe(
-      'Planet & Climate: news that matters to humanity. Written and curated by AI.',
-    )
+    expect(channelDescription(res.text)).toBe('Planet & Climate: news that matters to humanity. Written and curated by AI.')
     // A story without a summary has no description to label
     expect(itemDescriptions(res.text)).toEqual(['[AI-generated] Issue summary.', null])
   })
@@ -106,10 +101,7 @@ describe('RSS feeds', () => {
       expect(filteredAgain.text).toBe(filtered.text)
       // The unfiltered feed was cached by the first test; a filtered one never replaces it
       const unfiltered = await request(app).get('/api/feed')
-      expect(itemDescriptions(unfiltered.text)).toEqual([
-        '[AI-generated] First summary.',
-        '[AI-generated] Second summary.',
-      ])
+      expect(itemDescriptions(unfiltered.text)).toEqual(['[AI-generated] First summary.', '[AI-generated] Second summary.'])
     })
 
     it('filters a per-issue feed', async () => {
@@ -120,13 +112,11 @@ describe('RSS feeds', () => {
       const res = await request(app).get('/api/feed/planet-climate?minRelevance=7')
 
       expect(res.status).toBe(200)
-      expect(mockStoryService.getPublishedStories).toHaveBeenCalledWith(
-        expect.objectContaining({ issueSlug: 'planet-climate', minRelevance: 7 }),
-      )
+      expect(mockStoryService.getPublishedStories).toHaveBeenCalledWith(expect.objectContaining({ issueSlug: 'planet-climate', minRelevance: 7 }))
       expect(itemDescriptions(res.text)).toEqual(['[AI-generated] Issue high signal.'])
     })
 
-    it.each(['0', '11', 'abc'])('rejects minRelevance=%s with a 400', async (value) => {
+    it.each(['0', '11', 'abc'])('rejects minRelevance=%s with a 400', async value => {
       mockStoryService.getPublishedStories.mockReset()
       const res = await request(app).get(`/api/feed?minRelevance=${value}`)
       expect(res.status).toBe(400)

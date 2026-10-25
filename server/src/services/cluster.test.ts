@@ -1,30 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// The edits' writes (membership, election, auto-reject, restore) are covered against PostgreSQL in
+// storyLifecycle.db.test.ts; these tests cover reads, argument checks and the delegation.
 const mockPrisma = vi.hoisted(() => ({
   story: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
-    update: vi.fn(),
-    updateMany: vi.fn(),
-    count: vi.fn(),
   },
   storyCluster: {
-    create: vi.fn(),
     findMany: vi.fn(),
     findUnique: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
   },
 }))
 
-const mockUpdatePrimary = vi.hoisted(() => vi.fn())
-const mockAutoRejectNonPrimary = vi.hoisted(() => vi.fn())
+const mockLifecycle = vi.hoisted(() => ({
+  withClusterLocks: vi.fn(),
+  reelectPrimary: vi.fn(),
+  removeFromCluster: vi.fn(),
+  mergeClusters: vi.fn(),
+  dissolveCluster: vi.fn(),
+}))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
-vi.mock('./dedup.js', () => ({
-  updatePrimary: mockUpdatePrimary,
-  autoRejectNonPrimary: mockAutoRejectNonPrimary,
-}))
+vi.mock('./storyLifecycle.js', () => mockLifecycle)
 
 const {
   getAllClusters,
@@ -38,9 +36,23 @@ const {
   StoriesAlreadyClusteredError,
 } = await import('./cluster.js')
 
-describe('getAllClusters', () => {
-  beforeEach(() => vi.clearAllMocks())
+/** A transaction client whose story reads answer from `story`. */
+function txWith(story: { findUnique?: unknown; updateMany?: unknown; findMany?: unknown } = {}) {
+  return {
+    story: {
+      findUnique: vi.fn().mockResolvedValue(story.findUnique ?? null),
+      updateMany: vi.fn().mockResolvedValue(story.updateMany ?? { count: 0 }),
+      findMany: vi.fn().mockResolvedValue(story.findMany ?? []),
+    },
+    storyCluster: { create: vi.fn().mockResolvedValue({ id: 'new-cluster' }) },
+  }
+}
 
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('getAllClusters', () => {
   it('returns clusters ordered by createdAt desc', async () => {
     const clusters = [{ id: 'c1' }, { id: 'c2' }]
     mockPrisma.storyCluster.findMany.mockResolvedValue(clusters)
@@ -61,8 +73,6 @@ describe('getAllClusters', () => {
 })
 
 describe('getClusterById', () => {
-  beforeEach(() => vi.clearAllMocks())
-
   it('returns cluster with stories ordered by dateCrawled', async () => {
     const cluster = { id: 'c1', stories: [] }
     mockPrisma.storyCluster.findUnique.mockResolvedValue(cluster)
@@ -84,199 +94,82 @@ describe('getClusterById', () => {
 })
 
 describe('setClusterPrimary', () => {
-  beforeEach(() => vi.clearAllMocks())
-
   it('throws if story is not in the cluster', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'other-cluster' })
+    const tx = txWith({ findUnique: { clusterId: 'other-cluster' } })
+    mockLifecycle.withClusterLocks.mockImplementation((_ids, fn) => fn(tx, new Set(['c1'])))
 
-    await expect(setClusterPrimary('c1', 's1')).rejects.toThrow(
-      'Story is not a member of this cluster',
-    )
+    await expect(setClusterPrimary('c1', 's1')).rejects.toThrow('Story is not a member of this cluster')
+    expect(mockLifecycle.reelectPrimary).not.toHaveBeenCalled()
   })
 
   it('throws if story is not found', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue(null)
+    const tx = txWith()
+    mockLifecycle.withClusterLocks.mockImplementation((_ids, fn) => fn(tx, new Set(['c1'])))
 
-    await expect(setClusterPrimary('c1', 's1')).rejects.toThrow(
-      'Story is not a member of this cluster',
-    )
+    await expect(setClusterPrimary('c1', 's1')).rejects.toThrow('Story is not a member of this cluster')
   })
 
-  it('updates primary and auto-rejects non-primary members', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'c1' })
-    mockPrisma.storyCluster.update.mockResolvedValue({})
-    mockAutoRejectNonPrimary.mockResolvedValue([])
+  it('elects the chosen story under the cluster lock, in editor-cluster mode', async () => {
+    const tx = txWith({ findUnique: { clusterId: 'c1' } })
+    mockLifecycle.withClusterLocks.mockImplementation((_ids, fn) => fn(tx, new Set(['c1'])))
     mockPrisma.storyCluster.findUnique.mockResolvedValue({ id: 'c1', stories: [] })
 
     await setClusterPrimary('c1', 's1')
 
-    expect(mockPrisma.storyCluster.update).toHaveBeenCalledWith({
-      where: { id: 'c1' },
-      data: { primaryStoryId: 's1' },
-    })
-    expect(mockAutoRejectNonPrimary).toHaveBeenCalledWith('c1', { includePublished: true })
+    expect(mockLifecycle.withClusterLocks).toHaveBeenCalledWith(['c1'], expect.any(Function))
+    expect(mockLifecycle.reelectPrimary).toHaveBeenCalledWith('c1', 'editor-cluster', tx, 's1')
   })
 })
 
 describe('removeFromCluster', () => {
-  beforeEach(() => vi.clearAllMocks())
+  it('returns null when the module dissolved the cluster', async () => {
+    mockLifecycle.removeFromCluster.mockResolvedValue({ dissolved: true })
 
-  it('throws if story is not in the cluster', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'other', status: 'analyzed' })
-
-    await expect(removeFromCluster('c1', 's1')).rejects.toThrow(
-      'Story is not a member of this cluster',
-    )
+    expect(await removeFromCluster('c1', 's1')).toBeNull()
+    expect(mockLifecycle.removeFromCluster).toHaveBeenCalledWith('c1', 's1')
   })
 
-  it('removes story and dissolves cluster if <=1 remaining', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'c1', status: 'analyzed' })
-    mockPrisma.story.update.mockResolvedValue({})
-    mockPrisma.story.count.mockResolvedValue(1)
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 1 })
-    mockPrisma.storyCluster.delete.mockResolvedValue({})
-
-    const result = await removeFromCluster('c1', 's1')
-
-    expect(result).toBeNull()
-    expect(mockPrisma.storyCluster.delete).toHaveBeenCalledWith({ where: { id: 'c1' } })
-  })
-
-  it('restores rejected story to analyzed when removed', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'c1', status: 'rejected' })
-    mockPrisma.story.update.mockResolvedValue({})
-    mockPrisma.story.count.mockResolvedValue(3)
-    mockUpdatePrimary.mockResolvedValue(undefined)
-    mockAutoRejectNonPrimary.mockResolvedValue([])
+  it('returns the cluster when it still has members', async () => {
+    mockLifecycle.removeFromCluster.mockResolvedValue({ dissolved: false })
     mockPrisma.storyCluster.findUnique.mockResolvedValue({ id: 'c1', stories: [] })
 
-    await removeFromCluster('c1', 's1')
-
-    // Single update: remove from cluster and restore to analyzed
-    expect(mockPrisma.story.update).toHaveBeenCalledWith({
-      where: { id: 's1' },
-      data: { clusterId: null, status: 'analyzed' },
-    })
-  })
-
-  it('re-elects primary when >1 remaining', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'c1', status: 'analyzed' })
-    mockPrisma.story.update.mockResolvedValue({})
-    mockPrisma.story.count.mockResolvedValue(2)
-    mockUpdatePrimary.mockResolvedValue(undefined)
-    mockAutoRejectNonPrimary.mockResolvedValue([])
-    mockPrisma.storyCluster.findUnique.mockResolvedValue({ id: 'c1', stories: [] })
-
-    await removeFromCluster('c1', 's1')
-
-    expect(mockUpdatePrimary).toHaveBeenCalledWith('c1')
-    expect(mockAutoRejectNonPrimary).toHaveBeenCalledWith('c1', { includePublished: true })
+    expect(await removeFromCluster('c1', 's1')).toEqual({ id: 'c1', stories: [] })
   })
 })
 
 describe('mergeClusters', () => {
-  beforeEach(() => vi.clearAllMocks())
+  it('delegates to the module and returns the target', async () => {
+    mockLifecycle.mergeClusters.mockResolvedValue(undefined)
+    mockPrisma.storyCluster.findUnique.mockResolvedValue({ id: 'c1', stories: [] })
 
-  it('throws when merging a cluster with itself', async () => {
-    await expect(mergeClusters('c1', 'c1')).rejects.toThrow(
-      'Cannot merge a cluster with itself',
-    )
-  })
-
-  it('throws when target cluster not found', async () => {
-    mockPrisma.storyCluster.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'c2' })
-
-    await expect(mergeClusters('c1', 'c2')).rejects.toThrow('Target cluster not found')
-  })
-
-  it('throws when source cluster not found', async () => {
-    mockPrisma.storyCluster.findUnique
-      .mockResolvedValueOnce({ id: 'c1' })
-      .mockResolvedValueOnce(null)
-
-    await expect(mergeClusters('c1', 'c2')).rejects.toThrow('Source cluster not found')
-  })
-
-  it('moves source members to target and deletes source', async () => {
-    mockPrisma.storyCluster.findUnique
-      .mockResolvedValueOnce({ id: 'c1' })
-      .mockResolvedValueOnce({ id: 'c2' })
-      .mockResolvedValueOnce({ id: 'c1', stories: [] }) // getClusterById re-fetch
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 2 })
-    mockPrisma.storyCluster.update.mockResolvedValue({})
-    mockPrisma.storyCluster.delete.mockResolvedValue({})
-    mockUpdatePrimary.mockResolvedValue(undefined)
-    mockAutoRejectNonPrimary.mockResolvedValue([])
-
-    await mergeClusters('c1', 'c2')
-
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { clusterId: 'c2' },
-      data: { clusterId: 'c1' },
-    })
-    expect(mockPrisma.storyCluster.update).toHaveBeenCalledWith({
-      where: { id: 'c2' },
-      data: { primaryStoryId: null },
-    })
-    expect(mockPrisma.storyCluster.delete).toHaveBeenCalledWith({ where: { id: 'c2' } })
-    expect(mockUpdatePrimary).toHaveBeenCalledWith('c1')
-    expect(mockAutoRejectNonPrimary).toHaveBeenCalledWith('c1', { includePublished: true })
+    expect(await mergeClusters('c1', 'c2')).toEqual({ id: 'c1', stories: [] })
+    expect(mockLifecycle.mergeClusters).toHaveBeenCalledWith('c1', 'c2')
   })
 })
 
 describe('dissolveCluster', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('throws when cluster not found', async () => {
-    mockPrisma.storyCluster.findUnique.mockResolvedValue(null)
-
-    await expect(dissolveCluster('c-missing')).rejects.toThrow('Cluster not found')
-  })
-
-  it('restores rejected members, removes all, and deletes cluster', async () => {
-    mockPrisma.storyCluster.findUnique.mockResolvedValue({ id: 'c1' })
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 2 })
-    mockPrisma.storyCluster.delete.mockResolvedValue({})
+  it('delegates to the module', async () => {
+    mockLifecycle.dissolveCluster.mockResolvedValue({ restored: [] })
 
     await dissolveCluster('c1')
 
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { clusterId: 'c1', status: 'rejected' },
-      data: { status: 'analyzed' },
-    })
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { clusterId: 'c1' },
-      data: { clusterId: null },
-    })
-    expect(mockPrisma.storyCluster.delete).toHaveBeenCalledWith({ where: { id: 'c1' } })
+    expect(mockLifecycle.dissolveCluster).toHaveBeenCalledWith('c1')
   })
 })
 
 describe('createManualCluster', () => {
-  beforeEach(() => vi.clearAllMocks())
-
   it('throws if fewer than 2 stories', async () => {
-    await expect(createManualCluster(['s1'], 's1')).rejects.toThrow(
-      'At least 2 stories are required',
-    )
+    await expect(createManualCluster(['s1'], 's1')).rejects.toThrow('At least 2 stories are required')
   })
 
   it('throws if primaryStoryId not in storyIds', async () => {
-    await expect(createManualCluster(['s1', 's2'], 's3')).rejects.toThrow(
-      'Primary story must be one of the selected stories',
-    )
+    await expect(createManualCluster(['s1', 's2'], 's3')).rejects.toThrow('Primary story must be one of the selected stories')
   })
 
   it('throws if some stories not found', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 's1', clusterId: null, title: 'Story 1' },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 's1', clusterId: null, title: 'Story 1' }])
 
-    await expect(createManualCluster(['s1', 's2'], 's1')).rejects.toThrow(
-      'Stories not found: s2',
-    )
+    await expect(createManualCluster(['s1', 's2'], 's1')).rejects.toThrow('Stories not found: s2')
   })
 
   it('throws StoriesAlreadyClusteredError (409, with the story ids) if stories are in clusters', async () => {
@@ -291,45 +184,46 @@ describe('createManualCluster', () => {
     expect(err.storyIds).toEqual(['s2'])
     expect(err.message).toContain('Story 2')
     expect(err.toBody()).toEqual({ error: err.message, storyIds: ['s2'] })
+    expect(mockLifecycle.withClusterLocks).not.toHaveBeenCalled()
   })
 
-  it('creates cluster with specified primary and auto-rejects', async () => {
+  it('throws StoriesAlreadyClusteredError when a story was clustered between the check and the write', async () => {
     mockPrisma.story.findMany.mockResolvedValue([
       { id: 's1', clusterId: null, title: 'Story 1' },
       { id: 's2', clusterId: null, title: 'Story 2' },
     ])
-    mockPrisma.storyCluster.create.mockResolvedValue({ id: 'new-cluster' })
-    mockAutoRejectNonPrimary.mockResolvedValue(['s2'])
-    // getClusterById re-fetch
-    mockPrisma.storyCluster.findUnique.mockResolvedValue({
-      id: 'new-cluster',
-      primaryStoryId: 's1',
-      stories: [
-        { id: 's1', title: 'Story 1', status: 'analyzed' },
-        { id: 's2', title: 'Story 2', status: 'rejected' },
-      ],
-    })
+    const tx = txWith({ updateMany: { count: 1 }, findMany: [{ id: 's2', title: 'Story 2' }] })
+    mockLifecycle.withClusterLocks.mockImplementation((_ids, fn) => fn(tx, new Set()))
+
+    const err = await createManualCluster(['s1', 's2'], 's1').catch(e => e)
+    expect(err).toBeInstanceOf(StoriesAlreadyClusteredError)
+    expect(err.storyIds).toEqual(['s2'])
+    expect(mockLifecycle.reelectPrimary).not.toHaveBeenCalled()
+  })
+
+  it('creates the cluster and elects the chosen primary in editor-cluster mode', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([
+      { id: 's1', clusterId: null, title: 'Story 1' },
+      { id: 's2', clusterId: null, title: 'Story 2' },
+    ])
+    const tx = txWith({ updateMany: { count: 2 } })
+    mockLifecycle.withClusterLocks.mockImplementation((_ids, fn) => fn(tx, new Set()))
+    mockPrisma.storyCluster.findUnique.mockResolvedValue({ id: 'new-cluster', stories: [] })
 
     const result = await createManualCluster(['s1', 's2'], 's1')
 
-    expect(mockPrisma.storyCluster.create).toHaveBeenCalledWith({
-      data: {
-        primaryStoryId: 's1',
-        stories: { connect: [{ id: 's1' }, { id: 's2' }] },
-      },
+    expect(tx.story.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['s1', 's2'] }, clusterId: null },
+      data: { clusterId: 'new-cluster' },
     })
-    expect(mockAutoRejectNonPrimary).toHaveBeenCalledWith('new-cluster', { includePublished: true })
+    expect(mockLifecycle.reelectPrimary).toHaveBeenCalledWith('new-cluster', 'editor-cluster', tx, 's1')
     expect(result).toEqual(expect.objectContaining({ id: 'new-cluster' }))
   })
 })
 
 describe('searchStoriesForCluster', () => {
-  beforeEach(() => vi.clearAllMocks())
-
   it('searches stories by title excluding trashed', async () => {
-    const stories = [
-      { id: 's1', title: 'Climate Change', sourceTitle: 'Source', status: 'analyzed', relevance: 7, clusterId: null },
-    ]
+    const stories = [{ id: 's1', title: 'Climate Change', sourceTitle: 'Source', status: 'analyzed', relevance: 7, clusterId: null }]
     mockPrisma.story.findMany.mockResolvedValue(stories)
 
     const result = await searchStoriesForCluster('climate')
@@ -351,8 +245,6 @@ describe('searchStoriesForCluster', () => {
 
     await searchStoriesForCluster('test', 5)
 
-    expect(mockPrisma.story.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 5 }),
-    )
+    expect(mockPrisma.story.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 5 }))
   })
 })

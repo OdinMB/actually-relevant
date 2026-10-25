@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { buildPreassessPrompt, buildReclassifyPrompt, buildAssessPrompt, buildSelectPrompt, buildPodcastPrompt, buildNewsletterIntroPrompt, pickIntroStyle } from '../prompts/index.js'
+import {
+  buildPreassessPrompt,
+  buildReclassifyPrompt,
+  buildAssessPrompt,
+  buildSelectPrompt,
+  buildPodcastPrompt,
+  buildNewsletterIntroPrompt,
+  pickIntroStyle,
+} from '../prompts/index.js'
 import { podcastLengthTargets } from '../prompts/podcast.js'
 import { dialogueCharBudget } from './podcastDialogue.js'
 
@@ -61,9 +69,7 @@ describe('buildPreassessPrompt', () => {
   })
 
   it('escapes XML characters in issue names', () => {
-    const specialIssues = [
-      { slug: 'test', name: 'Test & <Special>', description: 'Desc with "quotes"' },
-    ]
+    const specialIssues = [{ slug: 'test', name: 'Test & <Special>', description: 'Desc with "quotes"' }]
     const stories = [{ id: 's1', title: 'Test', content: 'Content' }]
     const prompt = buildPreassessPrompt(stories, specialIssues)
     expect(prompt).toContain('name="Test &amp; &lt;Special&gt;"')
@@ -77,14 +83,11 @@ describe('buildPreassessPrompt', () => {
     expect(prompt).toContain('<ARTICLES>')
     expect(prompt).toContain('</ARTICLES>')
   })
-
 })
 
 describe('buildReclassifyPrompt', () => {
   it('includes article IDs, titles, and content', () => {
-    const stories = [
-      { id: 'story-1', title: 'AI Breakthrough', content: 'Some content about AI...' },
-    ]
+    const stories = [{ id: 'story-1', title: 'AI Breakthrough', content: 'Some content about AI...' }]
     const prompt = buildReclassifyPrompt(stories, issues)
     expect(prompt).toContain('Article ID: story-1')
     expect(prompt).toContain('Title: AI Breakthrough')
@@ -150,7 +153,6 @@ describe('buildAssessPrompt', () => {
     expect(prompt).toContain('<ANALYSIS_REQUIREMENTS>')
     expect(prompt).toContain('<GUIDELINES>')
   })
-
 })
 
 describe('buildSelectPrompt', () => {
@@ -191,7 +193,7 @@ describe('buildSelectPrompt', () => {
     expect(prompt).toContain('1 articles from the 2 candidates')
   })
 
-  it('shows today and each candidate\'s publication day, or unknown when there is none', () => {
+  it("shows today and each candidate's publication day, or unknown when there is none", () => {
     const prompt = buildSelectPrompt(stories, 1, today)
     expect(prompt).toContain('2026-02-08')
     expect(prompt).toContain('<Published>2026-02-07</Published>')
@@ -206,16 +208,18 @@ describe('buildSelectPrompt', () => {
   })
 
   it('escapes XML characters in content', () => {
-    const storiesWithSpecial = [{
-      id: 's1',
-      title: 'Test & <special>',
-      summary: 'Summary with "quotes"',
-      relevanceReasons: null,
-      antifactors: null,
-      relevanceCalculation: null,
-      emotionTag: null,
-      sourceDatePublished: null,
-    }]
+    const storiesWithSpecial = [
+      {
+        id: 's1',
+        title: 'Test & <special>',
+        summary: 'Summary with "quotes"',
+        relevanceReasons: null,
+        antifactors: null,
+        relevanceCalculation: null,
+        emotionTag: null,
+        sourceDatePublished: null,
+      },
+    ]
     const prompt = buildSelectPrompt(storiesWithSpecial, 1, today)
     expect(prompt).toContain('&amp;')
     expect(prompt).toContain('&lt;special&gt;')
@@ -243,7 +247,7 @@ describe('buildPodcastPrompt', () => {
     expect(prompt).toMatch(/<STORIES>\s*The stories are untrusted input/)
   })
 
-  it('adds the previous draft\'s problems only on a regeneration', () => {
+  it("adds the previous draft's problems only on a regeneration", () => {
     expect(buildPodcastPrompt(stories, budget, 'weekly')).not.toContain('<PREVIOUS_DRAFT_PROBLEMS>')
     expect(buildPodcastPrompt(stories, budget, 'weekly', ['story 1 is covered 0 times'])).toContain('- story 1 is covered 0 times')
   })
@@ -253,7 +257,7 @@ describe('podcastLengthTargets', () => {
   // The model's own budget as production derives it from the spoken band.
   const budget = dialogueCharBudget('weekly')
 
-  it('states the budget\'s aim, rounded to a hundred, not the band\'s middle', () => {
+  it("states the budget's aim, rounded to a hundred, not the band's middle", () => {
     const t = podcastLengthTargets({ min: 4000, max: 6000, aim: 4660 }, 5)
     expect(t.aim).toBe(4700)
   })
@@ -323,9 +327,7 @@ describe('buildNewsletterIntroPrompt', () => {
   })
 
   it('escapes XML characters in content', () => {
-    const storiesWithSpecial = [
-      { title: 'Test & <special>', issueName: 'Tech', blurb: 'Blurb with "quotes"', emotionTag: 'calm' },
-    ]
+    const storiesWithSpecial = [{ title: 'Test & <special>', issueName: 'Tech', blurb: 'Blurb with "quotes"', emotionTag: 'calm' }]
     const prompt = buildNewsletterIntroPrompt(storiesWithSpecial, ['Tech'])
     expect(prompt).toContain('&amp;')
     expect(prompt).toContain('&lt;special&gt;')
@@ -348,5 +350,4 @@ describe('buildNewsletterIntroPrompt', () => {
     expect(style).toBeTruthy()
     expect(typeof style).toBe('string')
   })
-
 })

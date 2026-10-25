@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// The below-threshold rejection is a status move: storyLifecycle.db.test.ts covers it on PostgreSQL
 const mockGetStoryIdsByStatus = vi.hoisted(() => vi.fn())
 const mockAssessStories = vi.hoisted(() => vi.fn())
+const mockTransition = vi.hoisted(() => vi.fn())
 const mockPrisma = vi.hoisted(() => ({
   issue: { findMany: vi.fn() },
-  story: { updateMany: vi.fn() },
 }))
 
 vi.mock('../services/story.js', () => ({
@@ -13,6 +14,7 @@ vi.mock('../services/story.js', () => ({
 vi.mock('../services/analysis.js', () => ({
   assessStories: mockAssessStories,
 }))
+vi.mock('../services/storyLifecycle.js', () => ({ transition: mockTransition }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
 const { runAssessStories } = await import('./assessStories.js')
@@ -21,13 +23,11 @@ describe('runAssessStories', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockPrisma.issue.findMany.mockResolvedValue([])
-    mockPrisma.story.updateMany.mockResolvedValue({ count: 0 })
+    mockTransition.mockResolvedValue({ moved: [], skipped: [] })
   })
 
   it('assesses pre-analyzed stories above threshold', async () => {
-    mockPrisma.issue.findMany.mockResolvedValue([
-      { id: 'issue-1', name: 'Test Issue', minPreRating: null },
-    ])
+    mockPrisma.issue.findMany.mockResolvedValue([{ id: 'issue-1', name: 'Test Issue', minPreRating: null }])
     mockGetStoryIdsByStatus
       .mockResolvedValueOnce([]) // snapshot: all pre_analyzed (for rejection)
       .mockResolvedValueOnce(['story-1', 'story-2']) // issue-1 stories
@@ -68,62 +68,10 @@ describe('runAssessStories', () => {
     await runAssessStories()
 
     expect(mockAssessStories).not.toHaveBeenCalled()
-    expect(mockPrisma.story.updateMany).not.toHaveBeenCalled()
-  })
-
-  it('rejects pre_analyzed stories below threshold', async () => {
-    mockPrisma.issue.findMany.mockResolvedValue([
-      { id: 'issue-1', name: 'Test', minPreRating: null },
-    ])
-    mockGetStoryIdsByStatus
-      .mockResolvedValueOnce(['story-1', 'story-2', 'story-3']) // snapshot: all pre_analyzed
-      .mockResolvedValueOnce(['story-1']) // issue-1: qualifies
-      .mockResolvedValueOnce([]) // unassigned
-    mockAssessStories.mockResolvedValue({ completed: 1, errors: 0 })
-
-    await runAssessStories()
-
-    // story-2 and story-3 are below threshold (not in qualified set)
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['story-2', 'story-3'] }, status: 'pre_analyzed' },
-      data: { status: 'rejected' },
-    })
-  })
-
-  it('does not reject when all pre_analyzed stories qualify', async () => {
-    mockPrisma.issue.findMany.mockResolvedValue([
-      { id: 'issue-1', name: 'Test', minPreRating: null },
-    ])
-    mockGetStoryIdsByStatus
-      .mockResolvedValueOnce(['story-1', 'story-2']) // snapshot: all pre_analyzed
-      .mockResolvedValueOnce(['story-1', 'story-2']) // issue-1: both qualify
-      .mockResolvedValueOnce([]) // unassigned
-    mockAssessStories.mockResolvedValue({ completed: 2, errors: 0 })
-
-    await runAssessStories()
-
-    expect(mockPrisma.story.updateMany).not.toHaveBeenCalled()
-  })
-
-  it('rejects below-threshold stories even when no stories qualify', async () => {
-    // All pre_analyzed stories are below threshold
-    mockGetStoryIdsByStatus
-      .mockResolvedValueOnce(['story-low-1', 'story-low-2']) // snapshot: all pre_analyzed
-      .mockResolvedValueOnce([]) // no unassigned qualify
-
-    await runAssessStories()
-
-    expect(mockAssessStories).not.toHaveBeenCalled()
-    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['story-low-1', 'story-low-2'] }, status: 'pre_analyzed' },
-      data: { status: 'rejected' },
-    })
   })
 
   it('handles errors in assessment result', async () => {
-    mockPrisma.issue.findMany.mockResolvedValue([
-      { id: 'issue-1', name: 'Test', minPreRating: null },
-    ])
+    mockPrisma.issue.findMany.mockResolvedValue([{ id: 'issue-1', name: 'Test', minPreRating: null }])
     mockGetStoryIdsByStatus
       .mockResolvedValueOnce(['story-1', 'story-2']) // snapshot: all pre_analyzed
       .mockResolvedValueOnce(['story-1', 'story-2']) // issue-1: both qualify

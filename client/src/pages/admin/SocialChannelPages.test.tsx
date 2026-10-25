@@ -19,19 +19,42 @@ vi.mock('../../lib/admin-api', () => ({
 
 const common = { storyTitle: 'A story', storySlug: null, issueName: 'Planet', dbStatus: null }
 const bskyItem = (n: number, tracked: boolean) => ({
-  ...common, uri: `at://did:plc:x/app.bsky.feed.post/r${n}`, cid: 'c', text: `bsky ${n}`,
-  createdAt: '2020-01-01T00:00:00Z', indexedAt: '2020-01-02T00:00:00Z',
-  likeCount: 4, repostCount: 1, replyCount: 2, quoteCount: 3, isRepost: false, trackedPostId: tracked ? `bp${n}` : null,
+  ...common,
+  uri: `at://did:plc:x/app.bsky.feed.post/r${n}`,
+  cid: 'c',
+  text: `bsky ${n}`,
+  createdAt: '2020-01-01T00:00:00Z',
+  indexedAt: '2020-01-02T00:00:00Z',
+  likeCount: 4,
+  repostCount: 1,
+  replyCount: 2,
+  quoteCount: 3,
+  isRepost: false,
+  trackedPostId: tracked ? `bp${n}` : null,
 })
 const mastoItem = (n: number, tracked: boolean) => ({
-  ...common, id: `m${n}`, url: `https://mastodon.social/@x/${n}`, text: `masto ${n}`, createdAt: '2020-01-02T00:00:00Z',
-  favouriteCount: 6, boostCount: 1, replyCount: 2, isReblog: true, trackedPostId: tracked ? `mp${n}` : null,
+  ...common,
+  id: `m${n}`,
+  url: `https://mastodon.social/@x/${n}`,
+  text: `masto ${n}`,
+  createdAt: '2020-01-02T00:00:00Z',
+  favouriteCount: 6,
+  boostCount: 1,
+  replyCount: 2,
+  isReblog: true,
+  trackedPostId: tracked ? `mp${n}` : null,
 })
 
 function wrap(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <HelmetProvider><QueryClientProvider client={client}><MemoryRouter><ToastProvider>{ui}</ToastProvider></MemoryRouter></QueryClientProvider></HelmetProvider>,
+    <HelmetProvider>
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ToastProvider>{ui}</ToastProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </HelmetProvider>,
   )
 }
 
@@ -53,11 +76,15 @@ describe('social channel pages', () => {
     expect(screen.getByText('4L 1R 2C 3Q')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View on Bluesky' })).toHaveAttribute('href', 'https://bsky.app/profile/did:plc:x/post/r1')
 
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Load More' })) })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load More' }))
+    })
     await screen.findByText('bsky 2')
     expect(adminApi.bluesky.getFeed).toHaveBeenLastCalledWith({ cursor: 'cur-1', limit: 25 })
 
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Delete' })) })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    })
     expect(window.confirm).toHaveBeenCalledWith('Delete this post? Published posts will also be removed from Bluesky.')
     expect(adminApi.bluesky.deletePost).toHaveBeenCalledWith('bp1')
     expect(adminApi.mastodon.getFeed).not.toHaveBeenCalled()
@@ -76,11 +103,15 @@ describe('social channel pages', () => {
     expect(screen.getByText('6F 1B 2R')).toBeInTheDocument()
     expect(screen.getByText('Reblog')).toBeInTheDocument()
 
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Load More' })) })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load More' }))
+    })
     await screen.findByText('masto 2')
     expect(adminApi.mastodon.getFeed).toHaveBeenLastCalledWith({ maxId: 'm1', limit: 25 })
 
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Refresh Metrics' })) })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh Metrics' }))
+    })
     await waitFor(() => expect(adminApi.mastodon.refreshMetrics).toHaveBeenCalledTimes(1))
     expect(adminApi.bluesky.refreshMetrics).not.toHaveBeenCalled()
   })
@@ -88,12 +119,15 @@ describe('social channel pages', () => {
 
 describe('social draft panels', () => {
   const draft = {
-    id: 'p9', postText: 'Hi',
+    id: 'p9',
+    postText: 'Hi',
     story: { title: 'T', titleLabel: null, sourceUrl: 'https://src.example/a', slug: 'a', feed: { title: 'F', displayTitle: null } },
   }
   const handlers = () => ({
-    onClose: vi.fn(), onPublish: vi.fn().mockResolvedValue(undefined),
-    onUpdate: vi.fn().mockResolvedValue(undefined), onDelete: vi.fn().mockResolvedValue(undefined),
+    onClose: vi.fn(),
+    onPublish: vi.fn().mockResolvedValue(undefined),
+    onUpdate: vi.fn().mockResolvedValue(undefined),
+    onDelete: vi.fn().mockResolvedValue(undefined),
   })
 
   it('Bluesky counts graphemes against 300, saves an edit and then publishes', async () => {
@@ -104,7 +138,9 @@ describe('social draft panels', () => {
     expect(screen.getByText('2/300')).toBeInTheDocument()
     expect(screen.getByText('actuallyrelevant.news/stories/a')).toBeInTheDocument()
 
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Post to Bluesky' })) })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Post to Bluesky' }))
+    })
     expect(h.onUpdate).toHaveBeenCalledWith('p9', '👍🏽👍🏽')
     expect(h.onPublish).toHaveBeenCalledWith('p9')
   })

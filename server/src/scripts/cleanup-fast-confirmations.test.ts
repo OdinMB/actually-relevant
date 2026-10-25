@@ -1,13 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  parseArgs,
-  applyGuardError,
-  gapSeconds,
-  bucketGaps,
-  selectFastConfirmations,
-  planUnsubscribes,
-  DEFAULT_CUTOFF,
-} from './cleanup-fast-confirmations.js'
+import { parseArgs, applyGuardError, gapSeconds, bucketGaps, selectFastConfirmations, planUnsubscribes, DEFAULT_CUTOFF } from './cleanup-fast-confirmations.js'
 
 const cutoff = new Date('2026-06-03T00:00:00.000Z')
 
@@ -89,7 +81,7 @@ describe('bucketGaps', () => {
       row('unconf@x.com', '2026-05-01T00:00:00Z', null), // never confirmed: excluded
     ]
     const buckets = bucketGaps(rows, cutoff)
-    expect(buckets.map((b) => [b.label, b.count])).toEqual([
+    expect(buckets.map(b => [b.label, b.count])).toEqual([
       ['<5s', 2],
       ['5-10s', 1],
       ['10-30s', 1],
@@ -109,24 +101,18 @@ describe('selectFastConfirmations', () => {
       row('edge@x.com', '2026-05-01T00:00:00Z', 10), // not below 10
     ]
     const { candidates, reconfirmed } = selectFastConfirmations(rows, cutoff, 10)
-    expect(candidates.map((c) => c.email)).toEqual(['fast@x.com'])
+    expect(candidates.map(c => c.email)).toEqual(['fast@x.com'])
     expect(candidates[0].gapSeconds).toBe(3)
     expect(reconfirmed).toEqual([])
   })
 
   it('ignores signups created on or after the cutoff and unconfirmed rows', () => {
-    const rows = [
-      row('new@x.com', '2026-06-03T00:00:00Z', 1),
-      row('unconf@x.com', '2026-05-01T00:00:00Z', null),
-    ]
+    const rows = [row('new@x.com', '2026-06-03T00:00:00Z', 1), row('unconf@x.com', '2026-05-01T00:00:00Z', null)]
     expect(selectFastConfirmations(rows, cutoff, 10).candidates).toEqual([])
   })
 
   it('dedupes by lowercased email', () => {
-    const rows = [
-      row('Fast@X.com', '2026-05-01T00:00:00Z', 4),
-      row('fast@x.com', '2026-05-02T00:00:00Z', 2),
-    ]
+    const rows = [row('Fast@X.com', '2026-05-01T00:00:00Z', 4), row('fast@x.com', '2026-05-02T00:00:00Z', 2)]
     const { candidates } = selectFastConfirmations(rows, cutoff, 10)
     expect(candidates).toHaveLength(1)
     expect(candidates[0].email).toBe('fast@x.com')
@@ -134,30 +120,21 @@ describe('selectFastConfirmations', () => {
   })
 
   it('protects an address that confirmed again after the cutoff', () => {
-    const rows = [
-      row('back@x.com', '2026-05-01T00:00:00Z', 2),
-      row('BACK@x.com', '2026-07-01T00:00:00Z', 90),
-    ]
+    const rows = [row('back@x.com', '2026-05-01T00:00:00Z', 2), row('BACK@x.com', '2026-07-01T00:00:00Z', 90)]
     const { candidates, reconfirmed } = selectFastConfirmations(rows, cutoff, 10)
     expect(candidates).toEqual([])
     expect(reconfirmed).toEqual(['back@x.com'])
   })
 
   it('protects an address that also has a slow (human-paced) pre-cutoff confirmation', () => {
-    const rows = [
-      row('mixed@x.com', '2026-05-01T00:00:00Z', 2),
-      row('mixed@x.com', '2026-05-10T00:00:00Z', 120),
-    ]
+    const rows = [row('mixed@x.com', '2026-05-01T00:00:00Z', 2), row('mixed@x.com', '2026-05-10T00:00:00Z', 120)]
     expect(selectFastConfirmations(rows, cutoff, 10).candidates).toEqual([])
   })
 
   it('does not treat a later unconfirmed signup as a re-confirmation', () => {
-    const rows = [
-      row('bot@x.com', '2026-05-01T00:00:00Z', 2),
-      row('bot@x.com', '2026-07-01T00:00:00Z', null),
-    ]
+    const rows = [row('bot@x.com', '2026-05-01T00:00:00Z', 2), row('bot@x.com', '2026-07-01T00:00:00Z', null)]
     const { candidates, reconfirmed } = selectFastConfirmations(rows, cutoff, 10)
-    expect(candidates.map((c) => c.email)).toEqual(['bot@x.com'])
+    expect(candidates.map(c => c.email)).toEqual(['bot@x.com'])
     expect(reconfirmed).toEqual([])
   })
 })

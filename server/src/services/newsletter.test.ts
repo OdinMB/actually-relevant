@@ -70,9 +70,7 @@ describe('sendTest', () => {
 
     await sendTest('nl-1')
 
-    expect(mockPlunk.createCampaign).toHaveBeenCalledWith(
-      expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-test' }),
-    )
+    expect(mockPlunk.createCampaign).toHaveBeenCalledWith(expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-test' }))
   })
 })
 
@@ -94,15 +92,7 @@ describe('generateHtmlContent', () => {
   }
 
   /** Helper to build markdown content for a single story */
-  function storyBlock(opts: {
-    issue?: string
-    issueSlug?: string
-    title: string
-    publisher: string
-    url: string
-    body: string
-    relevanceUrl?: string
-  }) {
+  function storyBlock(opts: { issue?: string; issueSlug?: string; title: string; publisher: string; url: string; body: string; relevanceUrl?: string }) {
     const lines: string[] = []
     if (opts.issue) {
       const slug = opts.issueSlug || 'general-news'
@@ -111,12 +101,7 @@ describe('generateHtmlContent', () => {
     const linkParts = [opts.publisher, `[original article](${opts.url})`]
     if (opts.relevanceUrl) linkParts.push(`[relevance analysis](${opts.relevanceUrl})`)
     const links = linkParts.join(' · ')
-    lines.push(
-      `## ${opts.title}`,
-      links,
-      '',
-      opts.body,
-    )
+    lines.push(`## ${opts.title}`, links, '', opts.body)
     return lines.join('\n')
   }
 
@@ -178,11 +163,9 @@ describe('generateHtmlContent', () => {
     const html = await generateHtmlContent('nl-1')
     const doc = new JSDOM(html).window.document
 
-    const title = [...doc.querySelectorAll('p')].find((p) => p.textContent === baseNewsletter.title)
+    const title = [...doc.querySelectorAll('p')].find(p => p.textContent === baseNewsletter.title)
     const label = title?.nextElementSibling
-    expect(label?.textContent).toBe(
-      'AI-generated: AI selected the stories in this issue and wrote the intro, headlines, and summaries.',
-    )
+    expect(label?.textContent).toBe('AI-generated: AI selected the stories in this issue and wrote the intro, headlines, and summaries.')
     expect(label?.querySelector('strong')?.textContent).toBe('AI-generated:')
     // Seen before any AI text: the intro and the stories come after it
     expect(html.indexOf('AI-generated:')).toBeLessThan(html.indexOf('An intro written by AI.'))
@@ -207,19 +190,17 @@ describe('generateHtmlContent', () => {
   })
 
   it('does not render border-bottom dividers between stories', async () => {
-    const content = storyBlock({
-      issue: 'Science',
-      issueSlug: 'science-technology',
-      title: 'Story one',
-      publisher: 'BBC',
-      url: 'https://example.com/one',
-      body: 'First summary.',
-    }) + '\n\n' + [
-      '## Story two',
-      'Wired · [original article](https://example.com/two)',
-      '',
-      'Second summary.',
-    ].join('\n')
+    const content =
+      storyBlock({
+        issue: 'Science',
+        issueSlug: 'science-technology',
+        title: 'Story one',
+        publisher: 'BBC',
+        url: 'https://example.com/one',
+        body: 'First summary.',
+      }) +
+      '\n\n' +
+      ['## Story two', 'Wired · [original article](https://example.com/two)', '', 'Second summary.'].join('\n')
 
     mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
     const html = await generateHtmlContent('nl-1')
@@ -249,12 +230,9 @@ describe('generateHtmlContent', () => {
   })
 
   it('escapes HTML entities in content', async () => {
-    const content = [
-      '## Story with <tags> & "quotes"',
-      'Publisher & Co · [original article](https://example.com)',
-      '',
-      'Content with <html> & entities.',
-    ].join('\n')
+    const content = ['## Story with <tags> & "quotes"', 'Publisher & Co · [original article](https://example.com)', '', 'Content with <html> & entities.'].join(
+      '\n',
+    )
 
     mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
     const html = await generateHtmlContent('nl-1')

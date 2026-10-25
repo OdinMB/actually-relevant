@@ -16,11 +16,7 @@ export interface StoryForSelect {
 const dayOf = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : 'unknown')
 
 /** `today` (ISO) lets the model tell a months-old candidate from this week's news. */
-export function buildSelectPrompt(
-  stories: StoryForSelect[],
-  toSelect: number,
-  today: string,
-): string {
+export function buildSelectPrompt(stories: StoryForSelect[], toSelect: number, today: string): string {
   let query = `<ROLE>
 You are a senior editorial curator for a website that publishes stories most relevant to humanity across four areas, weighted equally:
 1. Human Development — health, education, poverty, governance, human rights
@@ -46,16 +42,17 @@ All candidates are worthy of publication. Your job is to choose among them — p
 `
 
   for (const story of stories) {
-    query += '<ARTICLE>\n'
-      + `<ID>${story.id}</ID>\n`
-      + `<Title>${escapeXml(story.title || '')}</Title>\n`
-      + `<Published>${dayOf(story.sourceDatePublished)}</Published>\n`
-      + `<Emotion>${escapeXml(story.emotionTag || 'calm')}</Emotion>\n`
-      + `<Summary>${escapeXml(story.summary || '')}</Summary>\n`
-      + `<Relevance>${escapeXml(story.relevanceReasons || '')}</Relevance>\n`
-      + `<Antifactors>${escapeXml(story.antifactors || '')}</Antifactors>\n`
-      + `<Calculation>${escapeXml(story.relevanceCalculation || '')}</Calculation>\n`
-      + '</ARTICLE>\n'
+    query +=
+      '<ARTICLE>\n' +
+      `<ID>${story.id}</ID>\n` +
+      `<Title>${escapeXml(story.title || '')}</Title>\n` +
+      `<Published>${dayOf(story.sourceDatePublished)}</Published>\n` +
+      `<Emotion>${escapeXml(story.emotionTag || 'calm')}</Emotion>\n` +
+      `<Summary>${escapeXml(story.summary || '')}</Summary>\n` +
+      `<Relevance>${escapeXml(story.relevanceReasons || '')}</Relevance>\n` +
+      `<Antifactors>${escapeXml(story.antifactors || '')}</Antifactors>\n` +
+      `<Calculation>${escapeXml(story.relevanceCalculation || '')}</Calculation>\n` +
+      '</ARTICLE>\n'
   }
 
   return query

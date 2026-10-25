@@ -2,13 +2,7 @@ import { useState } from 'react'
 import { StarIcon, XMarkIcon as XCircleIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid'
 import type { StoryStatus } from '@shared/types'
-import {
-  useCluster,
-  useSetClusterPrimary,
-  useRemoveClusterMember,
-  useMergeClusters,
-  useDissolveClusterById,
-} from '../../hooks/useClusters'
+import { useCluster, useSetClusterPrimary, useRemoveClusterMember, useMergeClusters, useDissolveClusterById } from '../../hooks/useClusters'
 import { useClusters } from '../../hooks/useClusters'
 import { EditPanel, PANEL_BODY } from './EditPanel'
 import { Button } from '../ui/Button'
@@ -38,39 +32,48 @@ function ClusterDetailContent({ clusterId, onClose }: { clusterId: string; onClo
   const otherClusters = allClusters?.filter(c => c.id !== clusterId) || []
 
   const handleSetPrimary = (storyId: string) => {
-    setPrimary.mutate({ id: clusterId, storyId }, {
-      onSuccess: () => toast('success', 'Primary story updated'),
-      onError: (err) => toast('error', err instanceof Error ? err.message : 'Failed to update primary'),
-    })
+    setPrimary.mutate(
+      { id: clusterId, storyId },
+      {
+        onSuccess: () => toast('success', 'Primary story updated'),
+        onError: err => toast('error', err instanceof Error ? err.message : 'Failed to update primary'),
+      },
+    )
   }
 
   const handleRemoveMember = (storyId: string) => {
-    removeMember.mutate({ id: clusterId, storyId }, {
-      onSuccess: (result) => {
-        if ('dissolved' in result) {
-          toast('success', 'Story removed; cluster dissolved (too few members)')
-          onClose()
-        } else {
-          toast('success', 'Story removed from cluster')
-        }
-        setConfirmRemoveId(null)
+    removeMember.mutate(
+      { id: clusterId, storyId },
+      {
+        onSuccess: result => {
+          if ('dissolved' in result) {
+            toast('success', 'Story removed; cluster dissolved (too few members)')
+            onClose()
+          } else {
+            toast('success', 'Story removed from cluster')
+          }
+          setConfirmRemoveId(null)
+        },
+        onError: err => {
+          toast('error', err instanceof Error ? err.message : 'Failed to remove member')
+          setConfirmRemoveId(null)
+        },
       },
-      onError: (err) => {
-        toast('error', err instanceof Error ? err.message : 'Failed to remove member')
-        setConfirmRemoveId(null)
-      },
-    })
+    )
   }
 
   const handleMerge = () => {
     if (!mergeTargetId) return
-    mergeClusters.mutate({ targetId: clusterId, sourceId: mergeTargetId }, {
-      onSuccess: () => {
-        toast('success', 'Clusters merged')
-        setMergeTargetId('')
+    mergeClusters.mutate(
+      { targetId: clusterId, sourceId: mergeTargetId },
+      {
+        onSuccess: () => {
+          toast('success', 'Clusters merged')
+          setMergeTargetId('')
+        },
+        onError: err => toast('error', err instanceof Error ? err.message : 'Failed to merge clusters'),
       },
-      onError: (err) => toast('error', err instanceof Error ? err.message : 'Failed to merge clusters'),
-    })
+    )
   }
 
   const handleDissolve = () => {
@@ -79,7 +82,7 @@ function ClusterDetailContent({ clusterId, onClose }: { clusterId: string; onClo
         toast('success', 'Cluster dissolved')
         onClose()
       },
-      onError: (err) => toast('error', err instanceof Error ? err.message : 'Failed to dissolve cluster'),
+      onError: err => toast('error', err instanceof Error ? err.message : 'Failed to dissolve cluster'),
     })
   }
 
@@ -88,16 +91,12 @@ function ClusterDetailContent({ clusterId, onClose }: { clusterId: string; onClo
       {/* Primary story */}
       <div>
         <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Primary Story</h3>
-        <p className="text-sm text-neutral-900 font-medium">
-          {cluster.primaryStory?.title || cluster.primaryStory?.sourceTitle || 'None set'}
-        </p>
+        <p className="text-sm text-neutral-900 font-medium">{cluster.primaryStory?.title || cluster.primaryStory?.sourceTitle || 'None set'}</p>
       </div>
 
       {/* Members list */}
       <div>
-        <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">
-          Members ({cluster.stories.length})
-        </h3>
+        <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Members ({cluster.stories.length})</h3>
         <ul className="space-y-2">
           {cluster.stories.map(story => {
             const isPrimary = story.id === cluster.primaryStoryId
@@ -105,14 +104,10 @@ function ClusterDetailContent({ clusterId, onClose }: { clusterId: string; onClo
               <li key={story.id} className="rounded-md border border-neutral-200 p-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-neutral-900 truncate">
-                      {story.title || story.sourceTitle}
-                    </p>
+                    <p className="text-sm font-medium text-neutral-900 truncate">{story.title || story.sourceTitle}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs text-neutral-500">{formatStatus(story.status as StoryStatus)}</span>
-                      {story.relevance != null && (
-                        <span className="text-xs text-neutral-500">Rating: {story.relevance}</span>
-                      )}
+                      {story.relevance != null && <span className="text-xs text-neutral-500">Rating: {story.relevance}</span>}
                       {isPrimary && (
                         <span className="inline-flex items-center gap-0.5 text-xs font-medium text-green-700">
                           <StarSolidIcon className="h-3 w-3" />
@@ -141,10 +136,7 @@ function ClusterDetailContent({ clusterId, onClose }: { clusterId: string; onClo
                         >
                           {removeMember.isPending ? 'Removing...' : 'Confirm'}
                         </button>
-                        <button
-                          onClick={() => setConfirmRemoveId(null)}
-                          className="text-xs text-neutral-500 hover:text-neutral-700"
-                        >
+                        <button onClick={() => setConfirmRemoveId(null)} className="text-xs text-neutral-500 hover:text-neutral-700">
                           Cancel
                         </button>
                       </div>
@@ -169,9 +161,7 @@ function ClusterDetailContent({ clusterId, onClose }: { clusterId: string; onClo
       {otherClusters.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Merge</h3>
-          <p className="text-xs text-neutral-500 mb-2">
-            Merge another cluster into this one. The source cluster will be deleted.
-          </p>
+          <p className="text-xs text-neutral-500 mb-2">Merge another cluster into this one. The source cluster will be deleted.</p>
           <div className="flex items-center gap-2">
             <select
               value={mergeTargetId}
@@ -185,12 +175,7 @@ function ClusterDetailContent({ clusterId, onClose }: { clusterId: string; onClo
                 </option>
               ))}
             </select>
-            <Button
-              size="sm"
-              onClick={handleMerge}
-              disabled={!mergeTargetId || mergeClusters.isPending}
-              loading={mergeClusters.isPending}
-            >
+            <Button size="sm" onClick={handleMerge} disabled={!mergeTargetId || mergeClusters.isPending} loading={mergeClusters.isPending}>
               Merge
             </Button>
           </div>
@@ -219,18 +204,12 @@ function ClusterDetailContent({ clusterId, onClose }: { clusterId: string; onClo
             >
               {dissolveCluster.isPending ? 'Dissolving...' : 'Confirm'}
             </button>
-            <button
-              onClick={() => setConfirmDissolve(false)}
-              className="text-sm text-neutral-500 hover:text-neutral-700"
-            >
+            <button onClick={() => setConfirmDissolve(false)} className="text-sm text-neutral-500 hover:text-neutral-700">
               Cancel
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => setConfirmDissolve(true)}
-            className="text-sm text-red-600 hover:text-red-700 font-medium"
-          >
+          <button onClick={() => setConfirmDissolve(true)} className="text-sm text-red-600 hover:text-red-700 font-medium">
             Dissolve cluster
           </button>
         )}

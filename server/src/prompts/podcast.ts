@@ -73,7 +73,8 @@ const KIND_WORDING: Record<PodcastPromptKind, { role: string; goal: string; intr
     role: 'a five-minute news briefing',
     goal: 'this episode',
     introCovers: 'says the episode covers a selection of stories rated relevant for humanity',
-    extraConstraints: "\n- The stories may come from different weeks or months. Never date a story relative to now ('this week', 'last month', 'yesterday'); when the material uses such words, paraphrase them or give the date only if the material states it.",
+    extraConstraints:
+      "\n- The stories may come from different weeks or months. Never date a story relative to now ('this week', 'last month', 'yesterday'); when the material uses such words, paraphrase them or give the date only if the material states it.",
   },
 }
 
@@ -86,14 +87,18 @@ export function buildPodcastPrompt(stories: StoryForPodcast[], budget: PodcastCh
   const wording = KIND_WORDING[kind]
   const { aim, perStory, words, turnsPerStory } = podcastLengthTargets(budget, stories.length)
   const n = (x: number) => x.toLocaleString('en-US')
-  const storiesXml = stories.map(s => `<STORY ref="${s.ref}">
+  const storiesXml = stories
+    .map(
+      s => `<STORY ref="${s.ref}">
 <TOPIC>${escapeXml(s.issue)}</TOPIC>
 <PUBLISHER>${escapeXml(s.publisher)}</PUBLISHER>
 <TITLE>${escapeXml(s.title)}</TITLE>
 <SUMMARY>${escapeXml(s.summary)}</SUMMARY>
 <WHY_IT_MATTERS>${escapeXml(s.whyItMatters)}</WHY_IT_MATTERS>
 <LIMITING_FACTORS>${escapeXml(s.limitingFactors)}</LIMITING_FACTORS>
-</STORY>`).join('\n')
+</STORY>`,
+    )
+    .join('\n')
 
   let prompt = `<ROLE>
 You are the writer of "Actually Relevant", ${wording.role} spoken by two AI hosts.

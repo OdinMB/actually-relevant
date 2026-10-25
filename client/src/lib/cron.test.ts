@@ -82,7 +82,7 @@ describe('cronToHuman', () => {
 
   it('returns raw expression for unrecognized patterns', () => {
     expect(cronToHuman('0 9 15 * *')).toBe('0 9 15 * *') // specific day of month
-    expect(cronToHuman('0 9 * 3 *')).toBe('0 9 * 3 *')   // specific month
+    expect(cronToHuman('0 9 * 3 *')).toBe('0 9 * 3 *') // specific month
     expect(cronToHuman('invalid')).toBe('invalid')
   })
 })

@@ -18,7 +18,7 @@ const mockListen = vi.hoisted(() =>
   vi.fn((_port: unknown, cb: () => void) => {
     cb()
     return { close: mockServerClose }
-  })
+  }),
 )
 
 const mockApp = vi.hoisted(() => ({
@@ -91,16 +91,31 @@ describe('server index', () => {
 
     it('calls shutdown steps in correct order: scheduler, server, drain, prisma', async () => {
       const callOrder: string[] = []
-      mockStopScheduler.mockImplementation(() => { callOrder.push('stopScheduler') })
+      mockStopScheduler.mockImplementation(() => {
+        callOrder.push('stopScheduler')
+      })
       mockServerClose.mockImplementation((cb: () => void) => {
         callOrder.push('serverClose')
         cb()
       })
-      mockWaitForRunningJobs.mockImplementation(async () => { callOrder.push('waitForJobs'); return [] })
-      mockTaskRegistryDestroy.mockImplementation(() => { callOrder.push('taskRegistryDestroy') })
-      mockReleaseHeldLeases.mockImplementation(async () => { callOrder.push('releasePodcastLeases'); return 0 })
-      mockReleaseHeldJobLeases.mockImplementation(async () => { callOrder.push('releaseJobLeases'); return 0 })
-      mockPrisma.$disconnect.mockImplementation(async () => { callOrder.push('prismaDisconnect') })
+      mockWaitForRunningJobs.mockImplementation(async () => {
+        callOrder.push('waitForJobs')
+        return []
+      })
+      mockTaskRegistryDestroy.mockImplementation(() => {
+        callOrder.push('taskRegistryDestroy')
+      })
+      mockReleaseHeldLeases.mockImplementation(async () => {
+        callOrder.push('releasePodcastLeases')
+        return 0
+      })
+      mockReleaseHeldJobLeases.mockImplementation(async () => {
+        callOrder.push('releaseJobLeases')
+        return 0
+      })
+      mockPrisma.$disconnect.mockImplementation(async () => {
+        callOrder.push('prismaDisconnect')
+      })
 
       const shutdownPromise = indexModule.shutdown()
       await vi.advanceTimersByTimeAsync(1000)
@@ -165,9 +180,7 @@ describe('server index', () => {
       await shutdownPromise
 
       // Find the call that sets the 10-second force-exit timeout
-      const forceExitCall = setTimeoutSpy.mock.calls.find(
-        ([, ms]) => ms === 10_000
-      )
+      const forceExitCall = setTimeoutSpy.mock.calls.find(([, ms]) => ms === 10_000)
       expect(forceExitCall).toBeDefined()
       expect(mockUnref).toHaveBeenCalled()
 
@@ -176,14 +189,15 @@ describe('server index', () => {
 
     it('waits for running tasks to drain before disconnecting prisma', async () => {
       // First call returns running tasks, second call returns empty
-      mockGetProcessingStoryIds
-        .mockReturnValueOnce(['story-1', 'story-2'])
-        .mockReturnValueOnce(['story-1'])
-        .mockReturnValueOnce([])
+      mockGetProcessingStoryIds.mockReturnValueOnce(['story-1', 'story-2']).mockReturnValueOnce(['story-1']).mockReturnValueOnce([])
 
       const callOrder: string[] = []
-      mockPrisma.$disconnect.mockImplementation(async () => { callOrder.push('prismaDisconnect') })
-      mockTaskRegistryDestroy.mockImplementation(() => { callOrder.push('taskRegistryDestroy') })
+      mockPrisma.$disconnect.mockImplementation(async () => {
+        callOrder.push('prismaDisconnect')
+      })
+      mockTaskRegistryDestroy.mockImplementation(() => {
+        callOrder.push('taskRegistryDestroy')
+      })
 
       const shutdownPromise = indexModule.shutdown()
 
@@ -217,7 +231,12 @@ describe('server index', () => {
 
     it('waits for running jobs within the drain deadline before releasing job leases', async () => {
       let finishJob!: () => void
-      mockWaitForRunningJobs.mockImplementation(() => new Promise<string[]>(r => { finishJob = () => r([]) }))
+      mockWaitForRunningJobs.mockImplementation(
+        () =>
+          new Promise<string[]>(r => {
+            finishJob = () => r([])
+          }),
+      )
 
       const shutdownPromise = indexModule.shutdown()
       await vi.advanceTimersByTimeAsync(2000)

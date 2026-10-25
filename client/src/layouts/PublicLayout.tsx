@@ -1,13 +1,13 @@
-import { useLayoutEffect } from "react";
-import { Outlet, useLocation } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
-import { API_BASE } from "../lib/api";
-import SubscribeProvider from "../components/SubscribeProvider";
-import FeedbackProvider from "../components/FeedbackProvider";
-import { PositivityProvider } from "../contexts/PositivityContext";
-import SiteHeader from "./public/SiteHeader";
-import SiteFooter from "./public/SiteFooter";
-import { CategoryColorStrip } from "./public/icons";
+import { useLayoutEffect } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
+import { API_BASE } from '../lib/api'
+import SubscribeProvider from '../components/SubscribeProvider'
+import FeedbackProvider from '../components/FeedbackProvider'
+import { PositivityProvider } from '../contexts/PositivityContext'
+import SiteHeader from './public/SiteHeader'
+import SiteFooter from './public/SiteFooter'
+import { CategoryColorStrip } from './public/icons'
 
 export default function PublicLayout() {
   return (
@@ -18,26 +18,21 @@ export default function PublicLayout() {
         </FeedbackProvider>
       </SubscribeProvider>
     </PositivityProvider>
-  );
+  )
 }
 
 function PublicLayoutInner() {
-  const { pathname } = useLocation();
+  const { pathname } = useLocation()
 
   // Scroll to top on route change
   useLayoutEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    window.scrollTo(0, 0)
+  }, [pathname])
 
   return (
     <div className="min-h-screen flex flex-col">
       <Helmet>
-        <link
-          rel="alternate"
-          type="application/rss+xml"
-          title="Actually Relevant RSS Feed"
-          href={`${API_BASE}/feed`}
-        />
+        <link rel="alternate" type="application/rss+xml" title="Actually Relevant RSS Feed" href={`${API_BASE}/feed`} />
       </Helmet>
 
       {/* Skip to content */}
@@ -59,5 +54,5 @@ function PublicLayoutInner() {
 
       <SiteFooter />
     </div>
-  );
+  )
 }

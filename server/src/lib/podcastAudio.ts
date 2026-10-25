@@ -53,9 +53,14 @@ function runFfmpeg(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(ffmpegBinary(), ['-hide_banner', '-loglevel', 'error', '-y', ...args], { stdio: ['ignore', 'ignore', 'pipe'] })
     let stderr = ''
-    child.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-2000) })
+    child.stderr?.on('data', (d: Buffer) => {
+      stderr = (stderr + d.toString()).slice(-2000)
+    })
     const timer = setTimeout(() => child.kill('SIGKILL'), FFMPEG_TIMEOUT_MS)
-    child.on('error', err => { clearTimeout(timer); reject(err) })
+    child.on('error', err => {
+      clearTimeout(timer)
+      reject(err)
+    })
     child.on('close', code => {
       clearTimeout(timer)
       if (code === 0) resolve()
@@ -102,13 +107,17 @@ export interface AssembleOptions {
  */
 export function buildAssembleArgs(inputs: string[], tags: EpisodeTags, opts: AssembleOptions, output: string): string[] {
   const pad = `apad=pad_dur=${opts.pauseMs}ms`
-  const prepared = inputs.map((_, i) => `[${i}:a]aformat=sample_rates=44100:channel_layouts=mono${i < inputs.length - 1 && opts.pauseMs > 0 ? `,${pad}` : ''}[a${i}]`)
+  const prepared = inputs.map(
+    (_, i) => `[${i}:a]aformat=sample_rates=44100:channel_layouts=mono${i < inputs.length - 1 && opts.pauseMs > 0 ? `,${pad}` : ''}[a${i}]`,
+  )
   const normalise = opts.loudnorm ? `,loudnorm=I=${config.podcast.loudnessLufs}:TP=-1.5:LRA=11` : ''
   const joined = `${inputs.map((_, i) => `[a${i}]`).join('')}concat=n=${inputs.length}:v=0:a=1${normalise}[out]`
   return [
     ...inputs.flatMap(f => ['-i', f]),
-    '-filter_complex', [...prepared, joined].join(';'),
-    '-map', '[out]',
+    '-filter_complex',
+    [...prepared, joined].join(';'),
+    '-map',
+    '[out]',
     ...encodeArgs(),
     ...metadataArgs(tags),
     output,
@@ -119,11 +128,13 @@ export function buildAssembleArgs(inputs: string[], tags: EpisodeTags, opts: Ass
 export async function assembleEpisodeMp3(chunks: Buffer[], tags: EpisodeTags, opts: AssembleOptions): Promise<{ buffer: Buffer; durationSec: number }> {
   if (chunks.length === 0) throw new Error('no audio chunks to assemble')
   return withTempDir(async dir => {
-    const inputs = await Promise.all(chunks.map(async (bytes, i) => {
-      const file = path.join(dir, `chunk-${String(i).padStart(3, '0')}.mp3`)
-      await fs.writeFile(file, bytes)
-      return file
-    }))
+    const inputs = await Promise.all(
+      chunks.map(async (bytes, i) => {
+        const file = path.join(dir, `chunk-${String(i).padStart(3, '0')}.mp3`)
+        await fs.writeFile(file, bytes)
+        return file
+      }),
+    )
     const output = path.join(dir, 'episode.mp3')
     await runFfmpeg(buildAssembleArgs(inputs, tags, opts, output))
     const buffer = await fs.readFile(output)

@@ -72,9 +72,7 @@ describe('Admin Clusters API', () => {
     it('returns list of clusters', async () => {
       mockGetAllClusters.mockResolvedValue([sampleCluster])
 
-      const res = await request(app)
-        .get('/api/admin/clusters')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/clusters').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(1)
       expect(res.body[0].id).toBe(CLUSTER_ID)
@@ -85,18 +83,14 @@ describe('Admin Clusters API', () => {
     it('returns 404 when cluster not found', async () => {
       mockGetClusterById.mockResolvedValue(null)
 
-      const res = await request(app)
-        .get('/api/admin/clusters/nonexistent')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/clusters/nonexistent').set(authHeader())
       expect(res.status).toBe(404)
     })
 
     it('returns cluster detail', async () => {
       mockGetClusterById.mockResolvedValue(sampleCluster)
 
-      const res = await request(app)
-        .get(`/api/admin/clusters/${CLUSTER_ID}`)
-        .set(authHeader())
+      const res = await request(app).get(`/api/admin/clusters/${CLUSTER_ID}`).set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.stories).toHaveLength(2)
     })
@@ -104,20 +98,14 @@ describe('Admin Clusters API', () => {
 
   describe('PUT /api/admin/clusters/:id/primary', () => {
     it('returns 400 for invalid body', async () => {
-      const res = await request(app)
-        .put(`/api/admin/clusters/${CLUSTER_ID}/primary`)
-        .set(authHeader())
-        .send({})
+      const res = await request(app).put(`/api/admin/clusters/${CLUSTER_ID}/primary`).set(authHeader()).send({})
       expect(res.status).toBe(400)
     })
 
     it('sets primary story', async () => {
       mockSetClusterPrimary.mockResolvedValue(sampleCluster)
 
-      const res = await request(app)
-        .put(`/api/admin/clusters/${CLUSTER_ID}/primary`)
-        .set(authHeader())
-        .send({ storyId: STORY_ID_2 })
+      const res = await request(app).put(`/api/admin/clusters/${CLUSTER_ID}/primary`).set(authHeader()).send({ storyId: STORY_ID_2 })
       expect(res.status).toBe(200)
       expect(mockSetClusterPrimary).toHaveBeenCalledWith(CLUSTER_ID, STORY_ID_2)
     })
@@ -136,10 +124,7 @@ describe('Admin Clusters API', () => {
     it('returns 404 when the cluster does not exist (Prisma P2025)', async () => {
       mockSetClusterPrimary.mockRejectedValue(Object.assign(new Error('No record'), { code: 'P2025' }))
 
-      const res = await request(app)
-        .put(`/api/admin/clusters/${CLUSTER_ID}/primary`)
-        .set(authHeader())
-        .send({ storyId: STORY_ID_2 })
+      const res = await request(app).put(`/api/admin/clusters/${CLUSTER_ID}/primary`).set(authHeader()).send({ storyId: STORY_ID_2 })
       expect(res.status).toBe(404)
       expect(res.body).toEqual({ error: 'Cluster not found' })
     })
@@ -147,10 +132,7 @@ describe('Admin Clusters API', () => {
     it('returns 500 with the route text on an unexpected failure', async () => {
       mockSetClusterPrimary.mockRejectedValue(new Error('db down'))
 
-      const res = await request(app)
-        .put(`/api/admin/clusters/${CLUSTER_ID}/primary`)
-        .set(authHeader())
-        .send({ storyId: STORY_ID_2 })
+      const res = await request(app).put(`/api/admin/clusters/${CLUSTER_ID}/primary`).set(authHeader()).send({ storyId: STORY_ID_2 })
       expect(res.status).toBe(500)
       expect(res.body).toEqual({ error: 'Failed to set cluster primary' })
     })
@@ -160,10 +142,7 @@ describe('Admin Clusters API', () => {
     it('removes member from cluster', async () => {
       mockRemoveFromCluster.mockResolvedValue(sampleCluster)
 
-      const res = await request(app)
-        .post(`/api/admin/clusters/${CLUSTER_ID}/remove-member`)
-        .set(authHeader())
-        .send({ storyId: STORY_ID_2 })
+      const res = await request(app).post(`/api/admin/clusters/${CLUSTER_ID}/remove-member`).set(authHeader()).send({ storyId: STORY_ID_2 })
       expect(res.status).toBe(200)
       expect(mockRemoveFromCluster).toHaveBeenCalledWith(CLUSTER_ID, STORY_ID_2)
     })
@@ -171,20 +150,14 @@ describe('Admin Clusters API', () => {
 
   describe('POST /api/admin/clusters/:id/merge', () => {
     it('returns 400 for invalid body', async () => {
-      const res = await request(app)
-        .post(`/api/admin/clusters/${CLUSTER_ID}/merge`)
-        .set(authHeader())
-        .send({})
+      const res = await request(app).post(`/api/admin/clusters/${CLUSTER_ID}/merge`).set(authHeader()).send({})
       expect(res.status).toBe(400)
     })
 
     it('merges clusters', async () => {
       mockMergeClusters.mockResolvedValue(sampleCluster)
 
-      const res = await request(app)
-        .post(`/api/admin/clusters/${CLUSTER_ID}/merge`)
-        .set(authHeader())
-        .send({ sourceId: CLUSTER_ID_2 })
+      const res = await request(app).post(`/api/admin/clusters/${CLUSTER_ID}/merge`).set(authHeader()).send({ sourceId: CLUSTER_ID_2 })
       expect(res.status).toBe(200)
       expect(mockMergeClusters).toHaveBeenCalledWith(CLUSTER_ID, CLUSTER_ID_2)
     })
@@ -192,10 +165,7 @@ describe('Admin Clusters API', () => {
     it('returns 400 for self-merge', async () => {
       mockMergeClusters.mockRejectedValue(new BadRequestError('Cannot merge a cluster with itself'))
 
-      const res = await request(app)
-        .post(`/api/admin/clusters/${CLUSTER_ID}/merge`)
-        .set(authHeader())
-        .send({ sourceId: CLUSTER_ID })
+      const res = await request(app).post(`/api/admin/clusters/${CLUSTER_ID}/merge`).set(authHeader()).send({ sourceId: CLUSTER_ID })
       expect(res.status).toBe(400)
       expect(res.body).toEqual({ error: 'Cannot merge a cluster with itself' })
     })
@@ -205,9 +175,7 @@ describe('Admin Clusters API', () => {
     it('dissolves cluster', async () => {
       mockDissolveCluster.mockResolvedValue(undefined)
 
-      const res = await request(app)
-        .delete(`/api/admin/clusters/${CLUSTER_ID}`)
-        .set(authHeader())
+      const res = await request(app).delete(`/api/admin/clusters/${CLUSTER_ID}`).set(authHeader())
       expect(res.status).toBe(204)
       expect(mockDissolveCluster).toHaveBeenCalledWith(CLUSTER_ID)
     })
@@ -215,9 +183,7 @@ describe('Admin Clusters API', () => {
     it('returns 404 when cluster not found', async () => {
       mockDissolveCluster.mockRejectedValue(new NotFoundError('Cluster not found'))
 
-      const res = await request(app)
-        .delete('/api/admin/clusters/nonexistent')
-        .set(authHeader())
+      const res = await request(app).delete('/api/admin/clusters/nonexistent').set(authHeader())
       expect(res.status).toBe(404)
       expect(res.body).toEqual({ error: 'Cluster not found' })
     })
@@ -248,10 +214,7 @@ describe('Admin Clusters API', () => {
         .set(authHeader())
         .send({ storyIds: [STORY_ID_1, STORY_ID_2], primaryStoryId: STORY_ID_1 })
       expect(res.status).toBe(201)
-      expect(mockCreateManualCluster).toHaveBeenCalledWith(
-        [STORY_ID_1, STORY_ID_2],
-        STORY_ID_1,
-      )
+      expect(mockCreateManualCluster).toHaveBeenCalledWith([STORY_ID_1, STORY_ID_2], STORY_ID_1)
     })
 
     it('returns 409 when stories already clustered', async () => {
@@ -283,21 +246,15 @@ describe('Admin Clusters API', () => {
     })
 
     it('returns 400 without query parameter', async () => {
-      const res = await request(app)
-        .get('/api/admin/clusters/search-stories')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/clusters/search-stories').set(authHeader())
       expect(res.status).toBe(400)
     })
 
     it('searches stories', async () => {
-      const stories = [
-        { id: STORY_ID_1, title: 'Test Article', sourceTitle: 'Source', status: 'analyzed', relevance: 7, clusterId: null },
-      ]
+      const stories = [{ id: STORY_ID_1, title: 'Test Article', sourceTitle: 'Source', status: 'analyzed', relevance: 7, clusterId: null }]
       mockSearchStoriesForCluster.mockResolvedValue(stories)
 
-      const res = await request(app)
-        .get('/api/admin/clusters/search-stories?q=test')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/clusters/search-stories?q=test').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body).toHaveLength(1)
       expect(mockSearchStoriesForCluster).toHaveBeenCalledWith('test', 20)
@@ -306,9 +263,7 @@ describe('Admin Clusters API', () => {
     it('passes custom limit', async () => {
       mockSearchStoriesForCluster.mockResolvedValue([])
 
-      const res = await request(app)
-        .get('/api/admin/clusters/search-stories?q=test&limit=5')
-        .set(authHeader())
+      const res = await request(app).get('/api/admin/clusters/search-stories?q=test&limit=5').set(authHeader())
       expect(res.status).toBe(200)
       expect(mockSearchStoriesForCluster).toHaveBeenCalledWith('test', 5)
     })

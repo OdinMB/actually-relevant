@@ -55,7 +55,11 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
   {
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
       </svg>
     ),
     title: 'Complete Platform',
@@ -65,7 +69,11 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
   {
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+        />
       </svg>
     ),
     title: 'Full Documentation',
@@ -75,7 +83,11 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
   {
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"
+        />
       </svg>
     ),
     title: 'Low Cost',
@@ -85,11 +97,21 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
 ]
 
 const STEWARD_QUALITIES = [
-  <>Works in <strong>journalism, civic tech, effective altruism, or international development</strong></>,
-  <>Has (or can hire) technical capacity for a <strong>TypeScript + PostgreSQL + OpenAI</strong> stack</>,
-  <>Values <strong>editorial transparency</strong> and open methodology</>,
-  <>Shares the <strong>non-commercial, public-good orientation</strong></>,
-  <>Has existing <strong>audience or distribution channels</strong> that would amplify the service's reach</>,
+  <>
+    Works in <strong>journalism, civic tech, effective altruism, or international development</strong>
+  </>,
+  <>
+    Has (or can hire) technical capacity for a <strong>TypeScript + PostgreSQL + OpenAI</strong> stack
+  </>,
+  <>
+    Values <strong>editorial transparency</strong> and open methodology
+  </>,
+  <>
+    Shares the <strong>non-commercial, public-good orientation</strong>
+  </>,
+  <>
+    Has existing <strong>audience or distribution channels</strong> that would amplify the service's reach
+  </>,
 ]
 
 const TECH_STACK = [
@@ -128,17 +150,15 @@ export default function StewardshipPage() {
       <div className="page-section">
         <h1 className="page-title">Looking for a Long-Term Home</h1>
         <p className="page-intro text-left max-w-none mx-0 mt-2 mb-6">
-          Actually Relevant works. It curates global news daily, runs on a clean codebase, and costs
-          less than $85 a month to operate. But it's a side project run by one person, and it
-          deserves more than that.
+          Actually Relevant works. It curates global news daily, runs on a clean codebase, and costs less than $85 a month to operate. But it's a side project
+          run by one person, and it deserves more than that.
         </p>
 
         <div className="prose max-w-none">
           <h2 className="section-heading mt-8">What This Is</h2>
           <p>
-            This isn't a shutdown notice or an acqui-hire. It's an invitation to discuss
-            stewardship: transferring ownership of a working product to an organization better
-            positioned to grow it. Like the{' '}
+            This isn't a shutdown notice or an acqui-hire. It's an invitation to discuss stewardship: transferring ownership of a working product to an
+            organization better positioned to grow it. Like the{' '}
             <a
               href="https://coralproject.net/about-2/"
               target="_blank"
@@ -148,24 +168,19 @@ export default function StewardshipPage() {
               Coral Project
               <span className="sr-only"> (opens in new tab)</span>
             </a>
-            : an open-source journalism tool incubated at Mozilla, then graduated to Vox Media when
-            it was ready for a bigger stage.
+            : an open-source journalism tool incubated at Mozilla, then graduated to Vox Media when it was ready for a bigger stage.
           </p>
         </div>
 
         {/* What You'd Receive — 2x2 colored cards, outside .prose */}
         <h2 className="section-heading mt-8">What You'd Receive</h2>
         <p className="text-neutral-600 mt-2 mb-6">
-          A fully automated news curation platform
-          with{' '}{sources ? `${sources.totalCount}+` : '80+'} sources across multiple languages
-          and everything needed to run it.
+          A fully automated news curation platform with {sources ? `${sources.totalCount}+` : '80+'} sources across multiple languages and everything needed to
+          run it.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {RECEIVE_CARDS.map((card) => (
-            <div
-              key={card.title}
-              className={`bg-white border border-neutral-200 ${card.border} border-l-4 rounded-lg p-5`}
-            >
+          {RECEIVE_CARDS.map(card => (
+            <div key={card.title} className={`bg-white border border-neutral-200 ${card.border} border-l-4 rounded-lg p-5`}>
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-neutral-500">{card.icon}</span>
                 <p className="font-bold text-neutral-800">{card.title}</p>
@@ -225,12 +240,8 @@ export default function StewardshipPage() {
                 <tbody>
                   {COSTS.map((row, i) => (
                     <tr key={row.item} className={i % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}>
-                      <td className="py-2 px-3 border-b border-neutral-100 text-neutral-600 align-top">
-                        {row.item}
-                      </td>
-                      <td className="py-2 px-3 border-b border-neutral-100 text-neutral-600 align-top">
-                        {row.monthly}
-                      </td>
+                      <td className="py-2 px-3 border-b border-neutral-100 text-neutral-600 align-top">{row.item}</td>
+                      <td className="py-2 px-3 border-b border-neutral-100 text-neutral-600 align-top">{row.monthly}</td>
                     </tr>
                   ))}
                   <tr className="font-bold">
@@ -269,19 +280,15 @@ export default function StewardshipPage() {
                 <tbody>
                   {TECH_STACK.map((row, i) => (
                     <tr key={row.layer} className={i % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}>
-                      <td className="py-2 px-3 border-b border-neutral-100 text-neutral-800 font-medium align-top">
-                        {row.layer}
-                      </td>
-                      <td className="py-2 px-3 border-b border-neutral-100 text-neutral-600 align-top">
-                        {row.tech}
-                      </td>
+                      <td className="py-2 px-3 border-b border-neutral-100 text-neutral-800 font-medium align-top">{row.layer}</td>
+                      <td className="py-2 px-3 border-b border-neutral-100 text-neutral-600 align-top">{row.tech}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p className="text-sm text-neutral-600 mt-3">
-                Strict TypeScript, comprehensive error handling, structured logging, WCAG 2.2 AA
-                accessibility, and prerendered HTML for SEO. Production software, not a prototype.
+                Strict TypeScript, comprehensive error handling, structured logging, WCAG 2.2 AA accessibility, and prerendered HTML for SEO. Production
+                software, not a prototype.
               </p>
             </div>
           )}
@@ -289,17 +296,15 @@ export default function StewardshipPage() {
 
         <div className="prose max-w-none mt-8">
           <h2 className="section-heading">Who We're Looking For</h2>
-          <p>
-            The ideal steward is an organization that:
-          </p>
+          <p>The ideal steward is an organization that:</p>
           <ul className="list-disc pl-6 space-y-1.5">
             {STEWARD_QUALITIES.map((quality, i) => (
               <li key={i}>{quality}</li>
             ))}
           </ul>
           <p className="mt-4">
-            Journalism schools, digital media nonprofits, public interest technology labs, and
-            organizations in the Effective Altruism community are all good fits.
+            Journalism schools, digital media nonprofits, public interest technology labs, and organizations in the Effective Altruism community are all good
+            fits.
           </p>
         </div>
 
@@ -329,18 +334,17 @@ export default function StewardshipPage() {
             </a>
             <div className="text-left">
               <p className="text-lg text-neutral-600 leading-relaxed">
-                If this sounds like a fit for your organization, I'd love to hear from you. No
-                formal proposals needed, just reach out and let's have a conversation.
+                If this sounds like a fit for your organization, I'd love to hear from you. No formal proposals needed, just reach out and let's have a
+                conversation.
               </p>
               <p className="font-bold text-neutral-800 mt-4">Odin M&uuml;hlenbein</p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm mt-1">
-                <Link
-                  to="/imprint"
-                  className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-                >
+                <Link to="/imprint" className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
                   Email via Impressum
                 </Link>
-                <span className="text-neutral-300" aria-hidden="true">&middot;</span>
+                <span className="text-neutral-300" aria-hidden="true">
+                  &middot;
+                </span>
                 <a
                   href="https://www.linkedin.com/in/odinmuehlenbein/"
                   target="_blank"
@@ -350,7 +354,9 @@ export default function StewardshipPage() {
                   LinkedIn
                   <span className="sr-only"> (opens in new tab)</span>
                 </a>
-                <span className="text-neutral-300" aria-hidden="true">&middot;</span>
+                <span className="text-neutral-300" aria-hidden="true">
+                  &middot;
+                </span>
                 <a
                   href="https://odins.website"
                   target="_blank"

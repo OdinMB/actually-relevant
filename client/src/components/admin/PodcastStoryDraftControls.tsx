@@ -7,7 +7,11 @@ export function StoryDraftErrors({ errors }: { errors: string[] }) {
   if (errors.length === 0) return null
   return (
     <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-      <ul className="list-disc pl-5">{errors.map(e => <li key={e}>{e}</li>)}</ul>
+      <ul className="list-disc pl-5">
+        {errors.map(e => (
+          <li key={e}>{e}</li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -22,9 +26,24 @@ export function StoryDraftFooter({ draft, canSave = true, blockedHint }: { draft
   const hint = canSave ? undefined : blockedHint
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" variant="secondary" onClick={draft.save} loading={draft.saving} disabled={!draft.dirty || !canSave} aria-describedby={hint ? hintId : undefined}>Save selection</Button>
-      <Button size="sm" variant="ghost" onClick={draft.discard} disabled={!draft.dirty || draft.saving}>Discard changes</Button>
-      {hint && <span id={hintId} className="text-sm text-neutral-600">{hint}</span>}
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={draft.save}
+        loading={draft.saving}
+        disabled={!draft.dirty || !canSave}
+        aria-describedby={hint ? hintId : undefined}
+      >
+        Save selection
+      </Button>
+      <Button size="sm" variant="ghost" onClick={draft.discard} disabled={!draft.dirty || draft.saving}>
+        Discard changes
+      </Button>
+      {hint && (
+        <span id={hintId} className="text-sm text-neutral-600">
+          {hint}
+        </span>
+      )}
     </div>
   )
 }

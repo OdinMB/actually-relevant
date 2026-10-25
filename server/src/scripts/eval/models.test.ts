@@ -76,8 +76,17 @@ describe('createEvalContext', () => {
   it('serves a cached call from the ledger without calling the API', async () => {
     const file = tempLedger()
     const cached: CallRecord = {
-      key: cacheKey(luna, 's', 'prompt'), arm: 'gpt-6-luna@low', schema: 's', outcome: 'ok', parsed: { ok: true }, content: '{"ok":true}',
-      finishReason: 'stop', usage: { input: 10, cached: 0, output: 5, reasoning: 0 }, costUsd: 0.5, latencyMs: 42, at: '',
+      key: cacheKey(luna, 's', 'prompt'),
+      arm: 'gpt-6-luna@low',
+      schema: 's',
+      outcome: 'ok',
+      parsed: { ok: true },
+      content: '{"ok":true}',
+      finishReason: 'stop',
+      usage: { input: 10, cached: 0, output: 5, reasoning: 0 },
+      costUsd: 0.5,
+      latencyMs: 42,
+      at: '',
     }
     writeFileSync(file, JSON.stringify(cached) + '\n')
     const ctx = createEvalContext({ cacheFile: file, budgetUsd: 0, concurrency: 1, offline: true })

@@ -1,13 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import path from 'path'
-import {
-  chooseBackupFileName,
-  completenessProblems,
-  fetchAllContacts,
-  summarizeContacts,
-  DOCS_DIR,
-  type ContactsPage,
-} from './backup-plunk-contacts.js'
+import { chooseBackupFileName, completenessProblems, fetchAllContacts, summarizeContacts, DOCS_DIR, type ContactsPage } from './backup-plunk-contacts.js'
 
 describe('chooseBackupFileName', () => {
   const now = new Date('2026-10-08T23:45:07.000Z')
@@ -18,7 +11,7 @@ describe('chooseBackupFileName', () => {
 
   it('adds -HHMM rather than overwrite', () => {
     const taken = new Set(['2026-10-08_plunk-contacts-backup.json'])
-    expect(chooseBackupFileName(now, (n) => taken.has(n))).toBe('2026-10-08_plunk-contacts-backup-2345.json')
+    expect(chooseBackupFileName(now, n => taken.has(n))).toBe('2026-10-08_plunk-contacts-backup-2345.json')
   })
 
   it('falls back to seconds and then a counter, never an existing name', () => {
@@ -28,13 +21,11 @@ describe('chooseBackupFileName', () => {
       '2026-10-08_plunk-contacts-backup-234507.json',
       '2026-10-08_plunk-contacts-backup-234507-2.json',
     ])
-    expect(chooseBackupFileName(now, (n) => taken.has(n))).toBe('2026-10-08_plunk-contacts-backup-234507-3.json')
+    expect(chooseBackupFileName(now, n => taken.has(n))).toBe('2026-10-08_plunk-contacts-backup-234507-3.json')
   })
 
   it('uses UTC, not the local date', () => {
-    expect(chooseBackupFileName(new Date('2026-01-01T00:30:00+02:00'), () => false)).toBe(
-      '2025-12-31_plunk-contacts-backup.json',
-    )
+    expect(chooseBackupFileName(new Date('2026-01-01T00:30:00+02:00'), () => false)).toBe('2025-12-31_plunk-contacts-backup.json')
   })
 })
 

@@ -21,10 +21,10 @@ describe('buildScriptEdit', () => {
   it('keeps the structure and speakers and takes the edited text', () => {
     const dialogue = makeDialogue()
     const texts = dialogue.segments.map(s => s.turns.map(t => t.text))
-    texts[1][0] = 'Rewritten.'
+    texts[1]![0] = 'Rewritten.'
     const edit = buildScriptEdit(dialogue, texts, 'New summary.')
     expect(edit.episodeSummary).toBe('New summary.')
-    expect(edit.segments[1]).toEqual({ kind: 'story', storyRef: 1, turns: [{ speaker: 'HOST_B', text: 'Rewritten.' }, dialogue.segments[1].turns[1]] })
+    expect(edit.segments[1]).toEqual({ kind: 'story', storyRef: 1, turns: [{ speaker: 'HOST_B', text: 'Rewritten.' }, dialogue.segments[1]!.turns[1]] })
     expect(edit).not.toHaveProperty('episodeTitle')
   })
 })
@@ -40,10 +40,10 @@ describe('PodcastScriptEditor', () => {
   it('saves the edit and shows the warnings it came back with', async () => {
     mockApi.saveScript.mockResolvedValue({ podcast: makePodcast(), warnings: ['segment 3 (story 2): short bridge'] })
     renderInAdmin(<PodcastScriptEditor podcast={makePodcast()} />)
-    fireEvent.change(screen.getAllByLabelText('Host A')[2], { target: { value: 'And now, vaccines.' } })
+    fireEvent.change(screen.getAllByLabelText('Host A')[2]!, { target: { value: 'And now, vaccines.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
     await waitFor(() => expect(mockApi.saveScript).toHaveBeenCalled())
-    expect(mockApi.saveScript.mock.calls[0][1].segments[2].turns[0]).toEqual({ speaker: 'HOST_A', text: 'And now, vaccines.' })
+    expect(mockApi.saveScript.mock.calls[0]![1].segments[2].turns[0]).toEqual({ speaker: 'HOST_A', text: 'And now, vaccines.' })
     expect(await screen.findByText('segment 3 (story 2): short bridge')).toBeTruthy()
   })
 

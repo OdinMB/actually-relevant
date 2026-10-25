@@ -22,16 +22,9 @@ import type { PublicStory } from '@shared/types'
 type LayoutVariant = 'A' | 'B' | 'C'
 const LAYOUTS: LayoutVariant[] = ['A', 'B', 'C']
 
-function StoryGroup({
-  stories,
-  layout,
-}: {
-  stories: PublicStory[]
-  layout: LayoutVariant
-}) {
-  if (stories.length === 0) return null
-
+function StoryGroup({ stories, layout }: { stories: PublicStory[]; layout: LayoutVariant }) {
   const [first, ...rest] = stories
+  if (!first) return null
 
   // Layout A: featured (2-col) + compact sidebar
   if (layout === 'A') {
@@ -42,7 +35,7 @@ function StoryGroup({
         </div>
         {rest.length > 0 && (
           <div className="space-y-3">
-            {rest.map((story) => (
+            {rest.map(story => (
               <StoryCard key={story.id} story={story} variant="compact" />
             ))}
           </div>
@@ -58,7 +51,7 @@ function StoryGroup({
         <StoryCard story={first} variant="horizontal" />
         {rest.length > 0 && (
           <div className="grid gap-5 md:grid-cols-3">
-            {rest.map((story) => (
+            {rest.map(story => (
               <StoryCard key={story.id} story={story} variant="compact" />
             ))}
           </div>
@@ -71,13 +64,13 @@ function StoryGroup({
   return (
     <div className="space-y-5">
       <div className="grid gap-5 md:grid-cols-3">
-        {stories.slice(0, 3).map((story) => (
+        {stories.slice(0, 3).map(story => (
           <StoryCard key={story.id} story={story} variant="equal" />
         ))}
       </div>
       {stories.length > 3 && (
         <div className="grid gap-5 md:grid-cols-3">
-          {stories.slice(3).map((story) => (
+          {stories.slice(3).map(story => (
             <StoryCard key={story.id} story={story} variant="compact" />
           ))}
         </div>
@@ -91,7 +84,7 @@ function StoryGroup({
 // ---------------------------------------------------------------------------
 
 function QuoteDivider({ stories, variantIndex }: { stories: PublicStory[]; variantIndex: number }) {
-  const storyWithQuote = stories.find((s) => s.quote)
+  const storyWithQuote = stories.find(s => s.quote)
   if (!storyWithQuote) return null
 
   return <PullQuote story={storyWithQuote} variant={getQuoteVariant(variantIndex)} />
@@ -132,9 +125,12 @@ export default function IssuePage() {
   // Reset to page 1 when positivity changes
   useEffect(() => {
     if (page !== 1) {
-      setSearchParams((prev) => { prev.delete('page'); return prev })
+      setSearchParams(prev => {
+        prev.delete('page')
+        return prev
+      })
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positivity])
 
   if (isLoading) {
@@ -146,10 +142,7 @@ export default function IssuePage() {
       <div className="page-section text-center">
         <h1 className="page-title">Issue Not Found</h1>
         <p className="text-neutral-500 mb-6">This issue category does not exist.</p>
-        <Link
-          to="/issues"
-          className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
-        >
+        <Link to="/issues" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
           &larr; View all issues
         </Link>
       </div>
@@ -161,14 +154,9 @@ export default function IssuePage() {
   const colors = getCategoryColor(slug ?? 'general-news')
 
   // Only show children with published stories
-  const activeChildren = (issue.children ?? []).filter(
-    (child) => (child.publishedStoryCount ?? 0) > 0,
-  )
+  const activeChildren = (issue.children ?? []).filter(child => (child.publishedStoryCount ?? 0) > 0)
 
-  const hasAboutContent =
-    (issue.evaluationCriteria?.length ?? 0) > 0 ||
-    (issue.sourceNames?.length ?? 0) > 0 ||
-    (issue.makeADifference?.length ?? 0) > 0
+  const hasAboutContent = (issue.evaluationCriteria?.length ?? 0) > 0 || (issue.sourceNames?.length ?? 0) > 0 || (issue.makeADifference?.length ?? 0) > 0
 
   // Break stories into groups of 4 for layout rotation
   const storyGroups = chunk(stories, 4)
@@ -176,7 +164,9 @@ export default function IssuePage() {
   return (
     <>
       <Helmet>
-        <title>{issue.name} - {SEO.siteName}</title>
+        <title>
+          {issue.name} - {SEO.siteName}
+        </title>
         <meta name="description" content={(issue.intro || issue.description).slice(0, 160)} />
         <meta property="og:title" content={`${issue.name} - ${SEO.siteName}`} />
         <meta property="og:description" content={(issue.intro || issue.description).slice(0, 200)} />
@@ -184,15 +174,15 @@ export default function IssuePage() {
         <meta property="og:url" content={`${SEO.siteUrl}/issues/${slug}`} />
         {CommonOgTags({})}
         <link rel="alternate" type="application/rss+xml" title={`${issue.name} RSS Feed`} href={`${API_BASE}/feed/${slug}`} />
+        <script type="application/ld+json">{toJsonLd(buildCollectionPageSchema(issue))}</script>
         <script type="application/ld+json">
-          {toJsonLd(buildCollectionPageSchema(issue))}
-        </script>
-        <script type="application/ld+json">
-          {toJsonLd(buildBreadcrumbSchema([
-            { name: 'Home', url: SEO.siteUrl },
-            ...(issue.parent ? [{ name: issue.parent.name, url: `${SEO.siteUrl}/issues/${issue.parent.slug}` }] : []),
-            { name: issue.name },
-          ]))}
+          {toJsonLd(
+            buildBreadcrumbSchema([
+              { name: 'Home', url: SEO.siteUrl },
+              ...(issue.parent ? [{ name: issue.parent.name, url: `${SEO.siteUrl}/issues/${issue.parent.slug}` }] : []),
+              { name: issue.name },
+            ]),
+          )}
         </script>
       </Helmet>
 
@@ -228,7 +218,7 @@ export default function IssuePage() {
         {/* Sub-topics — only those with stories */}
         {activeChildren.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-5">
-            {activeChildren.map((child) => {
+            {activeChildren.map(child => {
               const childColors = getCategoryColor(child.slug)
               return (
                 <Link
@@ -248,7 +238,7 @@ export default function IssuePage() {
         {stories.length > 0 ? (
           <>
             {storyGroups.map((group, idx) => {
-              const layout = LAYOUTS[idx % LAYOUTS.length]
+              const layout = LAYOUTS[idx % LAYOUTS.length]!
               const isLast = idx === storyGroups.length - 1
               const useQuote = idx % 2 === 0
 
@@ -257,11 +247,7 @@ export default function IssuePage() {
                   <StoryGroup stories={group} layout={layout} />
 
                   {/* Divider between groups */}
-                  {!isLast && (
-                    useQuote
-                      ? <QuoteDivider stories={group} variantIndex={idx} />
-                      : <hr className="section-divider" />
-                  )}
+                  {!isLast && (useQuote ? <QuoteDivider stories={group} variantIndex={idx} /> : <hr className="section-divider" />)}
                 </div>
               )
             })}
@@ -269,8 +255,8 @@ export default function IssuePage() {
             <Pagination
               page={storiesData?.page ?? 1}
               totalPages={totalPages}
-              onPageChange={(newPage) => {
-                setSearchParams((prev) => {
+              onPageChange={newPage => {
+                setSearchParams(prev => {
                   if (newPage === 1) prev.delete('page')
                   else prev.set('page', String(newPage))
                   return prev
@@ -280,9 +266,7 @@ export default function IssuePage() {
             />
           </>
         ) : (
-          <p className="text-neutral-500 py-8 text-center">
-            No stories published yet in this category.
-          </p>
+          <p className="text-neutral-500 py-8 text-center">No stories published yet in this category.</p>
         )}
 
         {/* About this issue — collapsible on mobile, always visible on md+ */}
@@ -293,13 +277,7 @@ export default function IssuePage() {
             {/* Mobile: collapsible */}
             <details className="group mb-8 md:hidden">
               <summary className="cursor-pointer select-none text-sm font-semibold text-neutral-500 uppercase tracking-wide py-3 list-none flex items-center gap-2 hover:text-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
-                <svg
-                  className="w-4 h-4 transition-transform group-open:rotate-90"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
+                <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
                 About {issue.name}
@@ -310,9 +288,7 @@ export default function IssuePage() {
                 {issue.evaluationCriteria?.length > 0 && (
                   <div>
                     <h3 className="text-sm font-bold text-neutral-700 mb-2">How We Evaluate</h3>
-                    {issue.evaluationIntro && (
-                      <p className="text-sm text-neutral-500 mb-2">{issue.evaluationIntro}</p>
-                    )}
+                    {issue.evaluationIntro && <p className="text-sm text-neutral-500 mb-2">{issue.evaluationIntro}</p>}
                     <ol className="list-decimal list-inside space-y-1 text-sm text-neutral-600">
                       {issue.evaluationCriteria.map((criterion, i) => (
                         <li key={i}>{criterion}</li>
@@ -326,11 +302,8 @@ export default function IssuePage() {
                   <div>
                     <h3 className="text-sm font-bold text-neutral-700 mb-2">Our Sources</h3>
                     <div className="flex flex-wrap gap-1.5">
-                      {issue.sourceNames.map((source) => (
-                        <span
-                          key={source}
-                          className="bg-neutral-100 text-neutral-600 text-xs px-2 py-0.5 rounded-full"
-                        >
+                      {issue.sourceNames.map(source => (
+                        <span key={source} className="bg-neutral-100 text-neutral-600 text-xs px-2 py-0.5 rounded-full">
                           {source}
                         </span>
                       ))}
@@ -343,7 +316,7 @@ export default function IssuePage() {
                   <div>
                     <h3 className="text-sm font-bold text-neutral-700 mb-2">Make a Difference</h3>
                     <ul className="space-y-1">
-                      {issue.makeADifference.map((link) => (
+                      {issue.makeADifference.map(link => (
                         <li key={link.url}>
                           <a
                             href={link.url}
@@ -352,10 +325,14 @@ export default function IssuePage() {
                             className="text-sm text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                           >
                             {link.label}
-                            <span className="sr-only"> (opens in new tab)</span>
-                            {' '}
+                            <span className="sr-only"> (opens in new tab)</span>{' '}
                             <svg className="inline w-3.5 h-3.5 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                              />
                             </svg>
                           </a>
                         </li>
@@ -368,18 +345,14 @@ export default function IssuePage() {
 
             {/* Desktop: always visible, no collapse */}
             <div className="hidden md:block mb-8">
-              <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide py-3">
-                About {issue.name}
-              </h2>
+              <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide py-3">About {issue.name}</h2>
 
               <div className="pt-4 pb-2 grid gap-8" style={{ gridTemplateColumns: '3fr 2fr' }}>
                 {/* Evaluation criteria — left column (~60%) */}
                 {issue.evaluationCriteria?.length > 0 && (
                   <div>
                     <h3 className="text-sm font-bold text-neutral-700 mb-2">How We Evaluate</h3>
-                    {issue.evaluationIntro && (
-                      <p className="text-sm text-neutral-500 mb-2">{issue.evaluationIntro}</p>
-                    )}
+                    {issue.evaluationIntro && <p className="text-sm text-neutral-500 mb-2">{issue.evaluationIntro}</p>}
                     <ol className="list-decimal list-inside space-y-1 text-sm text-neutral-600">
                       {issue.evaluationCriteria.map((criterion, i) => (
                         <li key={i}>{criterion}</li>
@@ -395,11 +368,8 @@ export default function IssuePage() {
                     <div>
                       <h3 className="text-sm font-bold text-neutral-700 mb-2">Our Sources</h3>
                       <div className="flex flex-wrap gap-1.5">
-                        {issue.sourceNames.map((source) => (
-                          <span
-                            key={source}
-                            className="bg-neutral-100 text-neutral-600 text-xs px-2 py-0.5 rounded-full"
-                          >
+                        {issue.sourceNames.map(source => (
+                          <span key={source} className="bg-neutral-100 text-neutral-600 text-xs px-2 py-0.5 rounded-full">
                             {source}
                           </span>
                         ))}
@@ -412,7 +382,7 @@ export default function IssuePage() {
                     <div>
                       <h3 className="text-sm font-bold text-neutral-700 mb-2">Make a Difference</h3>
                       <ul className="space-y-1">
-                        {issue.makeADifference.map((link) => (
+                        {issue.makeADifference.map(link => (
                           <li key={link.url}>
                             <a
                               href={link.url}
@@ -421,10 +391,14 @@ export default function IssuePage() {
                               className="text-sm text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                             >
                               {link.label}
-                              <span className="sr-only"> (opens in new tab)</span>
-                              {' '}
+                              <span className="sr-only"> (opens in new tab)</span>{' '}
                               <svg className="inline w-3.5 h-3.5 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                />
                               </svg>
                             </a>
                           </li>

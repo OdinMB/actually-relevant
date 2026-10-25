@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
@@ -36,7 +36,7 @@ function useFiltersFromParams(): StoryFilters {
     status: (searchParams.get('status') as StoryStatus) || undefined,
     issueId: searchParams.get('issueId') || undefined,
     feedId: searchParams.get('feedId') || undefined,
-    emotionTag: searchParams.get('emotionTag') as StoryFilters['emotionTag'] || undefined,
+    emotionTag: (searchParams.get('emotionTag') as StoryFilters['emotionTag']) || undefined,
     rating: searchParams.get('rating') || undefined,
     accessTier: ACCESS_TIER_FILTERS.find(t => t === searchParams.get('accessTier')),
     sort: (searchParams.get('sort') as StorySort) || 'date_desc',
@@ -88,7 +88,7 @@ export default function StoriesPage() {
     queryClient.invalidateQueries({ queryKey: ['storyStats'] })
   }, [queryClient])
 
-  const stories = storiesQuery.data?.data || []
+  const stories = useMemo(() => storiesQuery.data?.data || [], [storiesQuery.data])
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -189,11 +189,12 @@ export default function StoriesPage() {
       // Single story: generate draft and open panel
       setBlueskyPanelOpen(true)
       setBlueskyDraft(null)
-      adminApi.bluesky.generateDraft(ids[0])
-        .then((draft) => {
+      adminApi.bluesky
+        .generateDraft(ids[0]!)
+        .then(draft => {
           setBlueskyDraft(draft as BlueskyDraft)
         })
-        .catch((err) => {
+        .catch(err => {
           toast('error', err instanceof Error ? err.message : 'Failed to generate draft')
           setBlueskyPanelOpen(false)
         })
@@ -202,11 +203,12 @@ export default function StoriesPage() {
       // Multiple stories: pick best and generate draft
       setBlueskyPanelOpen(true)
       setBlueskyDraft(null)
-      adminApi.bluesky.pickAndDraft(ids)
-        .then((result) => {
+      adminApi.bluesky
+        .pickAndDraft(ids)
+        .then(result => {
           setBlueskyDraft(result as BlueskyDraft)
         })
-        .catch((err) => {
+        .catch(err => {
           toast('error', err instanceof Error ? err.message : 'Failed to pick and draft')
           setBlueskyPanelOpen(false)
         })
@@ -215,11 +217,12 @@ export default function StoriesPage() {
       // Single story: generate draft and open panel
       setMastodonPanelOpen(true)
       setMastodonDraft(null)
-      adminApi.mastodon.generateDraft(ids[0])
-        .then((draft) => {
+      adminApi.mastodon
+        .generateDraft(ids[0]!)
+        .then(draft => {
           setMastodonDraft(draft as MastodonDraft)
         })
-        .catch((err) => {
+        .catch(err => {
           toast('error', err instanceof Error ? err.message : 'Failed to generate draft')
           setMastodonPanelOpen(false)
         })
@@ -228,11 +231,12 @@ export default function StoriesPage() {
       // Multiple stories: pick best and generate draft
       setMastodonPanelOpen(true)
       setMastodonDraft(null)
-      adminApi.mastodon.pickAndDraft(ids)
-        .then((result) => {
+      adminApi.mastodon
+        .pickAndDraft(ids)
+        .then(result => {
           setMastodonDraft(result as MastodonDraft)
         })
-        .catch((err) => {
+        .catch(err => {
           toast('error', err instanceof Error ? err.message : 'Failed to pick and draft')
           setMastodonPanelOpen(false)
         })
@@ -256,10 +260,13 @@ export default function StoriesPage() {
   }
 
   const handleSingleStatusChange = (id: string, status: StoryStatus) => {
-    updateStatus.mutate({ id, status }, {
-      onSuccess: () => toast('success', 'Status updated'),
-      onError: () => toast('error', 'Failed to update status'),
-    })
+    updateStatus.mutate(
+      { id, status },
+      {
+        onSuccess: () => toast('success', 'Status updated'),
+        onError: () => toast('error', 'Failed to update status'),
+      },
+    )
   }
 
   const handlePreassess = (id: string) => {
@@ -401,22 +408,17 @@ export default function StoriesPage() {
         }
       />
 
-      <StoryFiltersBar
-        issues={issuesQuery.data || []}
-        feeds={feedsQuery.data || []}
-      />
+      <StoryFiltersBar issues={issuesQuery.data || []} feeds={feedsQuery.data || []} />
 
       {storiesQuery.isLoading && (
-        <div className="flex justify-center py-12"><LoadingSpinner /></div>
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
       )}
 
-      {storiesQuery.error && (
-        <ErrorState message="Failed to load stories" onRetry={() => storiesQuery.refetch()} />
-      )}
+      {storiesQuery.error && <ErrorState message="Failed to load stories" onRetry={() => storiesQuery.refetch()} />}
 
-      {storiesQuery.data && stories.length === 0 && (
-        <EmptyState title="No stories found" description="Try adjusting your filters." />
-      )}
+      {storiesQuery.data && stories.length === 0 && <EmptyState title="No stories found" description="Try adjusting your filters." />}
 
       {storiesQuery.data && stories.length > 0 && (
         <>
@@ -459,22 +461,24 @@ export default function StoriesPage() {
         storyId={detailId}
         issues={issuesQuery.data || []}
         onClose={() => setDetailId(null)}
-        onBlueskyGenerate={(storyId) => {
+        onBlueskyGenerate={storyId => {
           setBlueskyPanelOpen(true)
           setBlueskyDraft(null)
-          adminApi.bluesky.generateDraft(storyId)
-            .then((draft) => setBlueskyDraft(draft as BlueskyDraft))
-            .catch((err) => {
+          adminApi.bluesky
+            .generateDraft(storyId)
+            .then(draft => setBlueskyDraft(draft as BlueskyDraft))
+            .catch(err => {
               toast('error', err instanceof Error ? err.message : 'Failed to generate draft')
               setBlueskyPanelOpen(false)
             })
         }}
-        onMastodonGenerate={(storyId) => {
+        onMastodonGenerate={storyId => {
           setMastodonPanelOpen(true)
           setMastodonDraft(null)
-          adminApi.mastodon.generateDraft(storyId)
-            .then((draft) => setMastodonDraft(draft as MastodonDraft))
-            .catch((err) => {
+          adminApi.mastodon
+            .generateDraft(storyId)
+            .then(draft => setMastodonDraft(draft as MastodonDraft))
+            .catch(err => {
               toast('error', err instanceof Error ? err.message : 'Failed to generate draft')
               setMastodonPanelOpen(false)
             })

@@ -16,8 +16,7 @@ const log = createLogger('poll_plunk_activity')
 const TYPES: PlunkActivityType[] = ['email.complaint', 'email.bounced']
 const DAY_MS = 24 * 60 * 60 * 1000
 
-const COMPLAINT_STAKES =
-  'One more complaint before about 5,800 total sends disables the Plunk project; see DOCS/2026-10-08_plunk-suspension-review.md.'
+const COMPLAINT_STAKES = 'One more complaint before about 5,800 total sends disables the Plunk project; see DOCS/2026-10-08_plunk-suspension-review.md.'
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null)
 
@@ -44,7 +43,12 @@ export function activityNotice(activity: PlunkActivity): NoticeInput | null {
   const shared = { source: 'plunk' as const, link: '/admin/subscribers', dedupeKey: `plunk:${id}` }
 
   if (activity.type === 'email.complaint') {
-    return { ...shared, severity: 'critical', title: 'Spam complaint in Plunk', message: `A recipient marked an email (${what}) as spam at ${when}. ${COMPLAINT_STAKES}` }
+    return {
+      ...shared,
+      severity: 'critical',
+      title: 'Spam complaint in Plunk',
+      message: `A recipient marked an email (${what}) as spam at ${when}. ${COMPLAINT_STAKES}`,
+    }
   }
   if (activity.type === 'email.bounced') {
     return { ...shared, severity: 'warning', title: 'Email bounced (permanent)', message: `An email (${what}) bounced permanently at ${when}.` }

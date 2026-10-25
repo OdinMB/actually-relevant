@@ -31,12 +31,8 @@ export class ChunkErrorBoundary extends Component<Props, State> {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="max-w-sm text-center">
-          <h1 className="text-xl font-bold text-neutral-900 mb-2">
-            Failed to load page
-          </h1>
-          <p className="text-sm text-neutral-600 mb-6">
-            A newer version may have been deployed. Reload to get the latest.
-          </p>
+          <h1 className="text-xl font-bold text-neutral-900 mb-2">Failed to load page</h1>
+          <p className="text-sm text-neutral-600 mb-6">A newer version may have been deployed. Reload to get the latest.</p>
           <button
             onClick={() => window.location.reload()}
             className="inline-flex items-center justify-center rounded-md bg-brand-700 px-4 py-2 text-sm font-normal text-white hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"

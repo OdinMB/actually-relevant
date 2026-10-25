@@ -22,15 +22,14 @@ export function PodcastStepRunButton({ podcast, step, pendingEdits, confirmTitle
   if (!state) return null
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <PodcastRunButton
-        podcast={podcast}
-        confirmTitle={confirmTitle}
-        disabled={state.reason !== null}
-        aria-describedby={state.reason ? reasonId : undefined}
-      >
+      <PodcastRunButton podcast={podcast} confirmTitle={confirmTitle} disabled={state.reason !== null} aria-describedby={state.reason ? reasonId : undefined}>
         {children}
       </PodcastRunButton>
-      {state.reason && <span id={reasonId} className="text-sm text-neutral-600">{state.reason}</span>}
+      {state.reason && (
+        <span id={reasonId} className="text-sm text-neutral-600">
+          {state.reason}
+        </span>
+      )}
     </div>
   )
 }

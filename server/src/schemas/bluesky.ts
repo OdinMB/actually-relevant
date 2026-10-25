@@ -3,24 +3,27 @@ import { z } from 'zod'
 // --- LLM output schemas ---
 
 export const blueskyPostTextSchema = z.object({
-  postText: z.string().describe(
-    'Short, informal editorial hook for Bluesky. Give readers a reason to care — ' +
-    'why this matters, what it means, or a conversational intro that hooks attention. ' +
-    'Name the story\'s main actor or one key number, using only names, numbers and claims from the story. ' +
-    'Do NOT summarize the story or repeat the title. ' +
-    'Do NOT include any URLs, links, or hashtags. ' +
-    'Write in a warm, conversational voice like a knowledgeable friend. Avoid clickbait.'
-  ),
+  postText: z
+    .string()
+    .describe(
+      'Short, informal editorial hook for Bluesky. Give readers a reason to care — ' +
+        'why this matters, what it means, or a conversational intro that hooks attention. ' +
+        "Name the story's main actor or one key number, using only names, numbers and claims from the story. " +
+        'Do NOT summarize the story or repeat the title. ' +
+        'Do NOT include any URLs, links, or hashtags. ' +
+        'Write in a warm, conversational voice like a knowledgeable friend. Avoid clickbait.',
+    ),
 })
 
 export type BlueskyPostText = z.infer<typeof blueskyPostTextSchema>
 
 export const blueskyPickBestSchema = z.object({
   storyId: z.string().describe('The ID of the story best suited for a Bluesky post'),
-  reasoning: z.string().describe(
-    'Brief explanation of why this story was chosen (1-2 sentences). ' +
-    'Consider timeliness, emotional appeal, broad relevance, and engagement potential.'
-  ),
+  reasoning: z
+    .string()
+    .describe(
+      'Brief explanation of why this story was chosen (1-2 sentences). ' + 'Consider timeliness, emotional appeal, broad relevance, and engagement potential.',
+    ),
 })
 
 export type BlueskyPickBest = z.infer<typeof blueskyPickBestSchema>

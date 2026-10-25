@@ -50,7 +50,8 @@ export default function NoticesPage() {
   const pageEmptied = Boolean(noticesQuery.data) && items.length === 0 && total > 0 && page > 1
   useEffect(() => {
     if (pageEmptied) setParam('page', totalPages > 1 ? String(totalPages) : '')
-  }, [pageEmptied, totalPages]) // setParam is recreated each render; these two decide the effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setParam is recreated each render; these two decide the effect
+  }, [pageEmptied, totalPages])
 
   const toggle = (notice: AdminNotice) => {
     setExpandedId(expandedId === notice.id ? null : notice.id)
@@ -86,7 +87,9 @@ export default function NoticesPage() {
         <select value={source ?? ''} onChange={e => setParam('source', e.target.value)} className={SELECT_CLASS} aria-label="Filter by source">
           <option value="">All sources</option>
           {ADMIN_NOTICE_SOURCES.map(s => (
-            <option key={s} value={s}>{NOTICE_SOURCE_LABELS[s]}</option>
+            <option key={s} value={s}>
+              {NOTICE_SOURCE_LABELS[s]}
+            </option>
           ))}
         </select>
         <select value={show} onChange={e => setParam('show', e.target.value === 'unseen' ? 'unseen' : '')} className={SELECT_CLASS} aria-label="Show">
@@ -95,7 +98,11 @@ export default function NoticesPage() {
         </select>
       </div>
 
-      {noticesQuery.isLoading && <div className="flex justify-center py-12"><LoadingSpinner /></div>}
+      {noticesQuery.isLoading && (
+        <div className="flex justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
       {noticesQuery.error && <ErrorState message="Failed to load notices" onRetry={() => noticesQuery.refetch()} />}
       {noticesQuery.data && items.length === 0 && <EmptyState title="No notices" />}
       {noticesQuery.data && items.length > 0 && (
@@ -114,12 +121,14 @@ export default function NoticesPage() {
                       <NoticeSeverityBadge severity={notice.severity} />
                       <span className="text-xs text-neutral-500">{NOTICE_SOURCE_LABELS[notice.source]}</span>
                       <span className="text-sm font-medium text-neutral-900">{notice.title}</span>
-                      {notice.count > 1 && <span className="text-xs text-neutral-500" aria-label={`${notice.count} times`}>×{notice.count}</span>}
+                      {notice.count > 1 && (
+                        <span className="text-xs text-neutral-500" aria-label={`${notice.count} times`}>
+                          ×{notice.count}
+                        </span>
+                      )}
                       {!notice.seenAt && <Badge variant="blue">Unseen</Badge>}
                     </div>
-                    <p className={`mt-1 text-sm text-neutral-700 ${expandedId === notice.id ? 'whitespace-pre-wrap' : 'truncate'}`}>
-                      {notice.message}
-                    </p>
+                    <p className={`mt-1 text-sm text-neutral-700 ${expandedId === notice.id ? 'whitespace-pre-wrap' : 'truncate'}`}>{notice.message}</p>
                   </button>
                   <div className="flex items-center gap-3 text-sm text-neutral-500">
                     <NoticeTime dateStr={notice.lastOccurredAt} />
@@ -146,7 +155,9 @@ export default function NoticesPage() {
                 <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setParam('page', String(page - 1))}>
                   Previous
                 </Button>
-                <span className="flex items-center text-sm text-neutral-600 px-2">Page {page} of {totalPages}</span>
+                <span className="flex items-center text-sm text-neutral-600 px-2">
+                  Page {page} of {totalPages}
+                </span>
                 <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setParam('page', String(page + 1))}>
                   Next
                 </Button>

@@ -32,14 +32,10 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 const APPLY = process.argv.includes('--apply')
 
 function labelList(labels: { val: string }[] | undefined): string {
-  return labels?.length ? labels.map((label) => label.val).join(', ') : '(none)'
+  return labels?.length ? labels.map(label => label.val).join(', ') : '(none)'
 }
 
-async function setBlueskyProfile(
-  cfg: { handle: string; appPassword: string; serviceUrl: string },
-  bio: string,
-  retry: typeof WithRetry,
-) {
+async function setBlueskyProfile(cfg: { handle: string; appPassword: string; serviceUrl: string }, bio: string, retry: typeof WithRetry) {
   if (!cfg.handle || !cfg.appPassword) {
     console.log('\nBluesky: BLUESKY_HANDLE or BLUESKY_APP_PASSWORD not set, skipped.')
     return
@@ -56,17 +52,13 @@ async function setBlueskyProfile(
     return
   }
 
-  await retry(() => agent.upsertProfile((existing) => withBotProfile(existing, bio)))
+  await retry(() => agent.upsertProfile(existing => withBotProfile(existing, bio)))
   const after = await retry(() => agent.getProfile({ actor: cfg.handle }))
   console.log(`  new bio:        ${after.data.description ?? '(none)'}`)
   console.log(`  new labels:     ${labelList(after.data.labels)}`)
 }
 
-async function setMastodonProfile(
-  cfg: { instanceUrl: string; accessToken: string },
-  bio: string,
-  retry: typeof WithRetry,
-) {
+async function setMastodonProfile(cfg: { instanceUrl: string; accessToken: string }, bio: string, retry: typeof WithRetry) {
   if (!cfg.instanceUrl || !cfg.accessToken) {
     console.log('\nMastodon: MASTODON_URL or MASTODON_TOKEN not set, skipped.')
     return
@@ -111,7 +103,7 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
+  main().catch(err => {
     console.error('Fatal error:', err)
     process.exit(1)
   })

@@ -12,7 +12,7 @@ describe('parseWholeNumber', () => {
     expect(parseWholeNumber('60000', 1, 'X')).toBe(60_000)
   })
 
-  it.each(['60s', 'NaN', '1.5', '-3', ' 5', '1e3', 'abc'])('refuses %j at startup, naming the variable', (value) => {
+  it.each(['60s', 'NaN', '1.5', '-3', ' 5', '1e3', 'abc'])('refuses %j at startup, naming the variable', value => {
     expect(() => parseWholeNumber(value, 1, 'AUTH_REFRESH_REUSE_GRACE_MS')).toThrow(/AUTH_REFRESH_REUSE_GRACE_MS/)
   })
 
@@ -30,7 +30,7 @@ describe('parseFraction', () => {
     expect(parseFraction('0', 0.5, 'X')).toBe(0)
   })
 
-  it.each(['1.5', '-0.1', 'half', '0.5x'])('refuses %j', (value) => {
+  it.each(['1.5', '-0.1', 'half', '0.5x'])('refuses %j', value => {
     expect(() => parseFraction(value, 0.5, 'SELECT_RATIO')).toThrow(/SELECT_RATIO/)
   })
 })
@@ -65,7 +65,7 @@ describe('config numeric overrides', () => {
     expect(wholeNumberVars.length).toBeGreaterThan(45)
   })
 
-  it.each([...wholeNumberVars, ...fractionVars])('refuses to load with a typo in %s', async (name) => {
+  it.each([...wholeNumberVars, ...fractionVars])('refuses to load with a typo in %s', async name => {
     vi.stubEnv(name, '12x')
     vi.resetModules()
     await expect(import('./config.js')).rejects.toThrow(name)
@@ -119,7 +119,7 @@ describe('parseSameSite', () => {
 })
 
 describe('parseTrustProxyHops', () => {
-  it.each([undefined, ''])('defaults to 1 for %j', (value) => {
+  it.each([undefined, ''])('defaults to 1 for %j', value => {
     expect(parseTrustProxyHops(value)).toBe(1)
   })
 
@@ -131,7 +131,7 @@ describe('parseTrustProxyHops', () => {
     expect(parseTrustProxyHops(value)).toBe(expected)
   })
 
-  it.each(['-1', '1.5', '2abc', 'true', 'loopback', ' 2'])('throws for %j, naming TRUST_PROXY', (value) => {
+  it.each(['-1', '1.5', '2abc', 'true', 'loopback', ' 2'])('throws for %j, naming TRUST_PROXY', value => {
     expect(() => parseTrustProxyHops(value)).toThrow(/TRUST_PROXY/)
   })
 })

@@ -13,6 +13,7 @@ declare global {
     interface Request {
       id?: string
       user?: AuthUser
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each route's own Zod schema shapes it; routes read it untyped
       parsedQuery?: Record<string, any>
     }
   }

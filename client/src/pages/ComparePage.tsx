@@ -31,12 +31,7 @@ function CellContent({ cell }: { cell: CellValue }) {
   return (
     <>
       {check && (
-        <svg
-          className="inline-block w-4 h-4 text-green-600 mr-1 -mt-0.5 shrink-0"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          aria-hidden="true"
-        >
+        <svg className="inline-block w-4 h-4 text-green-600 mr-1 -mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
           <path
             fillRule="evenodd"
             d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -131,14 +126,7 @@ const ROWS: { us: CellValue; them: CellValue[] }[] = [
   },
   {
     us: { text: 'Free API, no key required', check: true },
-    them: [
-      'Shut down in 2011',
-      'No',
-      'No',
-      'No',
-      'Limited dev API (250 requests)',
-      'Advertiser API only',
-    ],
+    them: ['Shut down in 2011', 'No', 'No', 'No', 'Limited dev API (250 requests)', 'Advertiser API only'],
   },
   {
     us: { text: 'RSS feeds', check: true },
@@ -168,45 +156,57 @@ const DIFFERENTIATORS: { icon: ReactNode; title: string; description: string; bo
   {
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+        />
       </svg>
     ),
     title: 'Significance Over Engagement',
-    description:
-      'AI selects 10\u201320 stories daily by real-world importance, not click potential.',
+    description: 'AI selects 10\u201320 stories daily by real-world importance, not click potential.',
     border: 'border-l-brand-400',
   },
   {
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
       </svg>
     ),
     title: 'Global Coverage',
-    description:
-      '82+ sources across five languages, including regions most aggregators ignore.',
+    description: '82+ sources across five languages, including regions most aggregators ignore.',
     border: 'border-l-teal-400',
   },
   {
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3.98 8.223A10.477 10.477 0 001.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"
+        />
       </svg>
     ),
     title: 'No Ads, No Tracking',
-    description:
-      'No ads, no cookies, no third-party trackers. Privacy-first analytics only.',
+    description: 'No ads, no cookies, no third-party trackers. Privacy-first analytics only.',
     border: 'border-l-amber-400',
   },
   {
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+        />
       </svg>
     ),
     title: 'Non-Commercial',
-    description:
-      'Donation-supported, no investors, no engagement metrics. Built to inform, not monetize.',
+    description: 'Donation-supported, no investors, no engagement metrics. Built to inform, not monetize.',
     border: 'border-l-indigo-400',
   },
 ]
@@ -279,17 +279,13 @@ export default function ComparePage() {
       <div className="page-section">
         <h1 className="page-title">How Does Actually Relevant Compare?</h1>
         <p className="text-lg text-neutral-600 leading-relaxed">
-          Most news aggregators optimize for engagement. More clicks, more time on site, more ad
-          impressions. Actually Relevant does something different: it uses AI to find the stories
-          that matter most to humanity, with no ads, no tracking, and full source transparency.
+          Most news aggregators optimize for engagement. More clicks, more time on site, more ad impressions. Actually Relevant does something different: it
+          uses AI to find the stories that matter most to humanity, with no ads, no tracking, and full source transparency.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
-          {DIFFERENTIATORS.map((card) => (
-            <div
-              key={card.title}
-              className={`bg-white border border-neutral-200 ${card.border} border-l-4 rounded-lg p-5`}
-            >
+          {DIFFERENTIATORS.map(card => (
+            <div key={card.title} className={`bg-white border border-neutral-200 ${card.border} border-l-4 rounded-lg p-5`}>
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-neutral-500">{card.icon}</span>
                 <p className="font-bold text-neutral-800">{card.title}</p>
@@ -304,18 +300,18 @@ export default function ComparePage() {
         <table className="w-full text-sm border-collapse mt-6 table-fixed">
           <thead>
             <tr>
-              <th className="w-1/2 text-left py-3 px-4 font-bold bg-brand-50 text-brand-800 border-b border-brand-200 rounded-tl-lg">
-                Actually Relevant
-              </th>
+              <th className="w-1/2 text-left py-3 px-4 font-bold bg-brand-50 text-brand-800 border-b border-brand-200 rounded-tl-lg">Actually Relevant</th>
               <th className="w-1/2 text-left py-3 px-4 font-bold bg-neutral-50 text-neutral-700 border-b border-neutral-300 rounded-tr-lg">
                 <select
                   value={competitor}
-                  onChange={(e) => setCompetitor(e.target.value)}
+                  onChange={e => setCompetitor(e.target.value)}
                   className="font-bold text-sm bg-transparent text-neutral-700 border-none outline-none cursor-pointer underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-500 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                   aria-label="Select competitor to compare"
                 >
-                  {COMPETITORS.map((name) => (
-                    <option key={name} value={name}>{name}</option>
+                  {COMPETITORS.map(name => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
                   ))}
                 </select>
               </th>
@@ -328,7 +324,7 @@ export default function ComparePage() {
                   <CellContent cell={row.us} />
                 </td>
                 <td className="py-2.5 px-4 border-b border-neutral-200 text-neutral-600">
-                  <CellContent cell={row.them[idx]} />
+                  <CellContent cell={row.them[idx]!} />
                 </td>
               </tr>
             ))}
@@ -339,11 +335,8 @@ export default function ComparePage() {
         {/* Who We're Best For — colored cards */}
         <h2 className="section-heading mt-12">Who We're Best For</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-          {PERSONAS.map((card) => (
-            <div
-              key={card.title}
-              className={`bg-white border border-neutral-200 ${card.border} border-l-4 rounded-lg p-5`}
-            >
+          {PERSONAS.map(card => (
+            <div key={card.title} className={`bg-white border border-neutral-200 ${card.border} border-l-4 rounded-lg p-5`}>
               <h3 className="font-bold text-neutral-800 mb-1">{card.title}</h3>
               <p className="text-sm text-neutral-600 leading-relaxed">
                 {card.description}{' '}

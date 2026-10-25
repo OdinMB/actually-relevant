@@ -141,7 +141,7 @@ describe('Homepage API', () => {
       const res = await request(app).get('/api/homepage')
       const expected = JSON.parse(JSON.stringify(aiGeneratedMarker(mockStory)))
       const buckets = Object.values(res.body.storiesByIssue) as Record<string, { aiGenerated?: unknown }[]>[]
-      const stories = buckets.flatMap((b) => [...b.uplifting, ...b.calm, ...b.negative])
+      const stories = buckets.flatMap(b => [...b.uplifting, ...b.calm, ...b.negative])
 
       expect(stories.length).toBeGreaterThan(0)
       for (const story of stories) {

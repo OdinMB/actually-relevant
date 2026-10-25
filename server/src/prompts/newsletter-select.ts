@@ -8,11 +8,7 @@ export interface StoryForNewsletterSelect {
   emotionTag: string | null
 }
 
-export function buildNewsletterSelectPrompt(
-  stories: StoryForNewsletterSelect[],
-  storiesPerIssue: number,
-  issueNames: string[],
-): string {
+export function buildNewsletterSelectPrompt(stories: StoryForNewsletterSelect[], storiesPerIssue: number, issueNames: string[]): string {
   let query = `<ROLE>
 You are a senior editorial curator selecting stories for a weekly newsletter about the most relevant developments for humanity.
 </ROLE>
@@ -39,13 +35,14 @@ If a category has fewer than ${storiesPerIssue} stories available, select all of
 `
 
   for (const story of stories) {
-    query += `<ARTICLE>\n`
-      + `<ID>${story.id}</ID>\n`
-      + `<ISSUE>${escapeXml(story.issueName)}</ISSUE>\n`
-      + `<EMOTION>${escapeXml(story.emotionTag || 'calm')}</EMOTION>\n`
-      + `<TITLE>${escapeXml(story.title || '')}</TITLE>\n`
-      + `<SUMMARY>${escapeXml(story.summary || '')}</SUMMARY>\n`
-      + `</ARTICLE>\n`
+    query +=
+      `<ARTICLE>\n` +
+      `<ID>${story.id}</ID>\n` +
+      `<ISSUE>${escapeXml(story.issueName)}</ISSUE>\n` +
+      `<EMOTION>${escapeXml(story.emotionTag || 'calm')}</EMOTION>\n` +
+      `<TITLE>${escapeXml(story.title || '')}</TITLE>\n` +
+      `<SUMMARY>${escapeXml(story.summary || '')}</SUMMARY>\n` +
+      `</ARTICLE>\n`
   }
 
   query += `</ARTICLES>`

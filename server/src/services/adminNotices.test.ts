@@ -7,8 +7,7 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
-const { recordNotice, listNotices, markNoticesSeen, markNoticeSeen, countUnseenNotices, MAX_NOTICE_MESSAGE_LENGTH } =
-  await import('./adminNotices.js')
+const { recordNotice, listNotices, markNoticesSeen, markNoticeSeen, countUnseenNotices, MAX_NOTICE_MESSAGE_LENGTH } = await import('./adminNotices.js')
 const { config } = await import('../config.js')
 
 type RawCall = [TemplateStringsArray, ...unknown[]]

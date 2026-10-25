@@ -69,17 +69,9 @@ describe('findAutoPostCandidates', () => {
   })
 
   it('returns stories not posted to any channel', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'story-1' },
-      { id: 'story-2' },
-      { id: 'story-3' },
-    ])
-    mockPrisma.blueskyPost.findMany.mockResolvedValue([
-      { storyId: 'story-1' },
-    ])
-    mockPrisma.mastodonPost.findMany.mockResolvedValue([
-      { storyId: 'story-2' },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 'story-1' }, { id: 'story-2' }, { id: 'story-3' }])
+    mockPrisma.blueskyPost.findMany.mockResolvedValue([{ storyId: 'story-1' }])
+    mockPrisma.mastodonPost.findMany.mockResolvedValue([{ storyId: 'story-2' }])
 
     const result = await findAutoPostCandidates(25, ['bluesky', 'mastodon'])
 
@@ -90,17 +82,9 @@ describe('findAutoPostCandidates', () => {
   })
 
   it('excludes stories posted to both channels', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'story-1' },
-      { id: 'story-2' },
-    ])
-    mockPrisma.blueskyPost.findMany.mockResolvedValue([
-      { storyId: 'story-1' },
-      { storyId: 'story-2' },
-    ])
-    mockPrisma.mastodonPost.findMany.mockResolvedValue([
-      { storyId: 'story-1' },
-    ])
+    mockPrisma.story.findMany.mockResolvedValue([{ id: 'story-1' }, { id: 'story-2' }])
+    mockPrisma.blueskyPost.findMany.mockResolvedValue([{ storyId: 'story-1' }, { storyId: 'story-2' }])
+    mockPrisma.mastodonPost.findMany.mockResolvedValue([{ storyId: 'story-1' }])
 
     const result = await findAutoPostCandidates(25, ['bluesky', 'mastodon'])
 
@@ -125,8 +109,30 @@ describe('pickBestStoryForSocial', () => {
 
   it('calls LLM to pick from multiple candidates', async () => {
     mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'story-1', title: 'One', titleLabel: 'A', summary: 'S1', relevance: 8, emotionTag: 'calm', issue: null, datePublished: null, sourceTitle: 'Source1', relevanceSummary: null },
-      { id: 'story-2', title: 'Two', titleLabel: 'B', summary: 'S2', relevance: 7, emotionTag: 'uplifting', issue: null, datePublished: null, sourceTitle: 'Source2', relevanceSummary: null },
+      {
+        id: 'story-1',
+        title: 'One',
+        titleLabel: 'A',
+        summary: 'S1',
+        relevance: 8,
+        emotionTag: 'calm',
+        issue: null,
+        datePublished: null,
+        sourceTitle: 'Source1',
+        relevanceSummary: null,
+      },
+      {
+        id: 'story-2',
+        title: 'Two',
+        titleLabel: 'B',
+        summary: 'S2',
+        relevance: 7,
+        emotionTag: 'uplifting',
+        issue: null,
+        datePublished: null,
+        sourceTitle: 'Source2',
+        relevanceSummary: null,
+      },
     ])
     mockLlm.invoke.mockResolvedValue({ storyId: 'story-2', reasoning: 'More engaging' })
 
@@ -137,8 +143,30 @@ describe('pickBestStoryForSocial', () => {
 
   it('falls back to first candidate if LLM returns invalid ID', async () => {
     mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'story-1', title: 'One', titleLabel: 'A', summary: 'S1', relevance: 8, emotionTag: 'calm', issue: null, datePublished: null, sourceTitle: 'Source1', relevanceSummary: null },
-      { id: 'story-2', title: 'Two', titleLabel: 'B', summary: 'S2', relevance: 7, emotionTag: 'calm', issue: null, datePublished: null, sourceTitle: 'Source2', relevanceSummary: null },
+      {
+        id: 'story-1',
+        title: 'One',
+        titleLabel: 'A',
+        summary: 'S1',
+        relevance: 8,
+        emotionTag: 'calm',
+        issue: null,
+        datePublished: null,
+        sourceTitle: 'Source1',
+        relevanceSummary: null,
+      },
+      {
+        id: 'story-2',
+        title: 'Two',
+        titleLabel: 'B',
+        summary: 'S2',
+        relevance: 7,
+        emotionTag: 'calm',
+        issue: null,
+        datePublished: null,
+        sourceTitle: 'Source2',
+        relevanceSummary: null,
+      },
     ])
     mockLlm.invoke.mockResolvedValue({ storyId: 'nonexistent', reasoning: 'N/A' })
 

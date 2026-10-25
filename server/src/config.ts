@@ -106,9 +106,7 @@ export function parseJobLeaseTiming(leaseValue: string | undefined, renewValue: 
   const leaseSeconds = parsePositiveSeconds(leaseValue, 120, 'JOB_LEASE_SECONDS')
   const renewSeconds = parsePositiveSeconds(renewValue, 30, 'JOB_LEASE_RENEW_SECONDS')
   if (renewSeconds * 2 > leaseSeconds) {
-    throw new Error(
-      `JOB_LEASE_RENEW_SECONDS=${renewSeconds} must be at most half of JOB_LEASE_SECONDS=${leaseSeconds}`
-    )
+    throw new Error(`JOB_LEASE_RENEW_SECONDS=${renewSeconds} must be at most half of JOB_LEASE_SECONDS=${leaseSeconds}`)
   }
   return { leaseSeconds, leaseRenewMs: renewSeconds * 1000 }
 }
@@ -161,16 +159,16 @@ export const config = {
     // shifts ratings and dedup (.context/llm-analysis.md).
     models: {
       small: {
-        name: process.env.OPENAI_MODEL_SMALL || "gpt-6-luna",
-        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_SMALL, "low", "OPENAI_EFFORT_SMALL"),
+        name: process.env.OPENAI_MODEL_SMALL || 'gpt-6-luna',
+        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_SMALL, 'low', 'OPENAI_EFFORT_SMALL'),
       },
       medium: {
-        name: process.env.OPENAI_MODEL_MEDIUM || "gpt-6-luna",
-        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_MEDIUM, "medium", "OPENAI_EFFORT_MEDIUM"),
+        name: process.env.OPENAI_MODEL_MEDIUM || 'gpt-6-luna',
+        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_MEDIUM, 'medium', 'OPENAI_EFFORT_MEDIUM'),
       },
       large: {
-        name: process.env.OPENAI_MODEL_LARGE || "gpt-6-sol",
-        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_LARGE, "medium", "OPENAI_EFFORT_LARGE"),
+        name: process.env.OPENAI_MODEL_LARGE || 'gpt-6-sol',
+        reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_LARGE, 'medium', 'OPENAI_EFFORT_LARGE'),
       },
     },
     delayMs: parseWholeNumber(process.env.LLM_DELAY_MS, 500, 'LLM_DELAY_MS', 0),
@@ -178,18 +176,18 @@ export const config = {
   preassess: {
     batchSize: 10,
     contentMaxLength: 1200,
-    modelTier: "medium" as const,
+    modelTier: 'medium' as const,
   },
   assess: {
     contentMaxLength: 4000,
     fullAssessmentThreshold: 5,
-    modelTier: "medium" as const,
+    modelTier: 'medium' as const,
   },
   selection: {
     maxGroupSize: parseWholeNumber(process.env.SELECT_MAX_GROUP_SIZE, 20, 'SELECT_MAX_GROUP_SIZE'),
     ratio: parseFraction(process.env.SELECT_RATIO, 0.5, 'SELECT_RATIO'),
     relevanceMin: parseWholeNumber(process.env.SELECT_RELEVANCE_MIN, 5, 'SELECT_RELEVANCE_MIN', 0),
-    modelTier: "large" as const,
+    modelTier: 'large' as const,
   },
   publish: {
     // Bulk publish processes the `selected` backlog in chunks of this size so the
@@ -238,8 +236,8 @@ export const config = {
   },
   newsletter: {
     storiesPerIssue: parseWholeNumber(process.env.NEWSLETTER_STORIES_PER_ISSUE, 2, 'NEWSLETTER_STORIES_PER_ISSUE'),
-    selectModelTier: "large" as const,
-    contentModelTier: "large" as const,
+    selectModelTier: 'large' as const,
+    contentModelTier: 'large' as const,
     // Weekly job guard: a built automatic issue newer than this blocks the next run.
     // 156 h (6.5 days) covers a Sunday catch-up as early as 00:00 (148 h before the
     // next Saturday 04:00 cron) yet lets a Saturday run started up to 16:00 (>= 156 h
@@ -253,14 +251,14 @@ export const config = {
   // overrides; on/off is the generate_podcast / publish_podcast job rows in the admin Jobs page.
   podcast: {
     // Derived, never set: dev always runs a dry run, production never does.
-    dryRun: process.env.NODE_ENV !== "production",
+    dryRun: process.env.NODE_ENV !== 'production',
     maxStories: 5,
     minStories: 4,
     // "Suggest stories" for a standalone episode: the most relevant published stories matching the
     // finder's filters, at most this many, go to the selection call (the weekly pool is the 7-day window).
     suggestPoolMax: 60,
-    selectModelTier: "large" as const,
-    scriptModelTier: "large" as const,
+    selectModelTier: 'large' as const,
+    scriptModelTier: 'large' as const,
     // Spoken characters of the whole episode, code-added opener and sign-off and audio tags included.
     // Also the per-episode TTS ceiling. Top raised to 6200 (about 6.5 minutes; owner, 2026-10-06)
     // to fit how long gpt-6-sol writes. Validation only; the prompt states spokenCharAim.
@@ -279,18 +277,18 @@ export const config = {
     // Lease on the stage machine, renewed at every stage (database clock).
     leaseMinutes: 30,
     // Phase 0 outcomes (2026-10-06), used from the audio phase on.
-    voiceIdA: "gOupLcAkjEnguROwi4oS", // Darian – Warm Grounded Storyteller (HOST_A)
-    voiceIdB: "OZ0L6eISlOejga3XjDFt", // Talia – Warm Soft Guide (HOST_B)
-    ttsModelId: "eleven_v4",
-    continuityMode: "text" as const,
+    voiceIdA: 'gOupLcAkjEnguROwi4oS', // Darian – Warm Grounded Storyteller (HOST_A)
+    voiceIdB: 'OZ0L6eISlOejga3XjDFt', // Talia – Warm Soft Guide (HOST_B)
+    ttsModelId: 'eleven_v4',
+    continuityMode: 'text' as const,
     segmentPauseMs: 700,
     chunkMaxChars: 1800,
     // About 4.3 episodes at ~5,500 plus one full re-voice (owner, 2026-10-06). Provisional:
     // S2 measured a promotional rate; re-measure one call after 2026-10-12.
     monthlyTtsCharCap: 32000,
-    ownerEmail: "contact@actuallyrelevant.news",
+    ownerEmail: 'contact@actuallyrelevant.news',
     // Audio (phase 2). ElevenLabs returns CBR MP3 at this format; the episode is re-encoded at the bitrate.
-    ttsOutputFormat: "mp3_44100_128",
+    ttsOutputFormat: 'mp3_44100_128',
     ttsSeed: 412026,
     // previous_text / future_text context per side between chunks (ElevenLabs' limit).
     continuityChars: 100,
@@ -300,40 +298,36 @@ export const config = {
     stubCharsPerSecond: 16,
     // Public base URL of the Bunny pull zone (custom hostname, S4). Uploads use a fresh file name per
     // render: the CDN caches a deleted file for up to 30 days, so a path is never reused.
-    audioBaseUrl: "https://audio.actuallyrelevant.news",
-    showTitle: "Actually Relevant",
+    audioBaseUrl: 'https://audio.actuallyrelevant.news',
+    showTitle: 'Actually Relevant',
     // Publishing (phase 3). The feed's public URL is the Render rewrite of /podcast.xml to
     // /api/podcast/feed.xml (.context/seo.md); the API host is not used for it.
-    feedPath: "/podcast.xml",
+    feedPath: '/podcast.xml',
     // podcast:guid, fixed for good: UUIDv5 (Podcasting 2.0 namespace ead4c236-…) of
     // "actuallyrelevant.news/podcast.xml". Never change it, even if the feed moves.
-    feedGuid: "097a5224-a76e-5f98-98e0-151f653772ae",
-    showAuthor: "Actually Relevant",
+    feedGuid: '097a5224-a76e-5f98-98e0-151f653772ae',
+    showAuthor: 'Actually Relevant',
     // Apple Podcasts categories (owner decision, 2026-10-07): Apple's exact names, a subcategory
     // nested in its parent; the feed escapes them. "Government" replaced "Society & Culture" and
     // "Technology" replaced "Science" (owner, 2026-10-07): Apple wants a subcategory for both, none
     // of which fits the show; Government and Technology have none.
-    categories: [
-      { name: "News", subcategory: "Daily News" },
-      { name: "Technology" },
-      { name: "Government" },
-    ] as { name: string; subcategory?: string }[],
+    categories: [{ name: 'News', subcategory: 'Daily News' }, { name: 'Technology' }, { name: 'Government' }] as { name: string; subcategory?: string }[],
     // Show artwork (itunes:image, required by Apple): 3000x3000 JPEG on Bunny under show/, built
     // deterministically from the brand logo (not AI-generated). A new image gets a new file name,
     // because the CDN caches the old one for up to 30 days.
-    artworkUrl: "https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg",
+    artworkUrl: 'https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg',
     // Directory listings, in the owner's priority order: Apple, Spotify, YouTube Music, Amazon Music,
     // Pocket Casts, then the rest. Add each as it is listed. Spotify is being verified (2026-10-22).
     listenLinks: [
-      { name: "Apple Podcasts", url: "https://podcasts.apple.com/us/podcast/actually-relevant/id1751127139" },
-      { name: "Pocket Casts", url: "https://pca.st/mni05hsb" },
+      { name: 'Apple Podcasts', url: 'https://podcasts.apple.com/us/podcast/actually-relevant/id1751127139' },
+      { name: 'Pocket Casts', url: 'https://pca.st/mni05hsb' },
     ] as { name: string; url: string }[],
     // The automatic publish job only takes an episode that has been ready this long: one finished by
     // Friday evening still goes out on Saturday morning, and the owner has the evening to listen.
     autoPublishMinAgeHours: 8,
     // publish_podcast runs on this zone's clock (cron 07:00 Saturday, and its Saturday-only guard),
     // so it follows summer and winter time. Every other job runs on the server's clock (ADR-0013).
-    publishTimeZone: "Europe/Berlin",
+    publishTimeZone: 'Europe/Berlin',
     // generate_podcast's window (UTC): Friday from 00:00 until this hour. Outside it the job does
     // nothing, so a boot catch-up on another day never starts an episode (ADR-0013).
     generateWindowEndHourUtc: 20,
@@ -342,15 +336,15 @@ export const config = {
     reminderFromHourUtc: 18,
   },
   elevenlabs: {
-    apiKey: process.env.ELEVENLABS_API_KEY || "",
-    baseUrl: "https://api.elevenlabs.io",
+    apiKey: process.env.ELEVENLABS_API_KEY || '',
+    baseUrl: 'https://api.elevenlabs.io',
     timeoutMs: 120_000,
     maxResponseBytes: 20 * 1024 * 1024,
   },
   bunny: {
-    storageZone: process.env.BUNNY_STORAGE_ZONE || "",
-    storagePassword: process.env.BUNNY_STORAGE_PASSWORD || "",
-    storageHost: "storage.bunnycdn.com",
+    storageZone: process.env.BUNNY_STORAGE_ZONE || '',
+    storagePassword: process.env.BUNNY_STORAGE_PASSWORD || '',
+    storageHost: 'storage.bunnycdn.com',
     timeoutMs: 60_000,
   },
   scheduler: {
@@ -404,13 +398,13 @@ export const config = {
     crawlArticles: parseWholeNumber(process.env.CONCURRENCY_CRAWL_ARTICLES, 1, 'CONCURRENCY_CRAWL_ARTICLES'),
   },
   plunk: {
-    secretKey: process.env.PLUNK_SECRET_KEY || "",
-    publicKey: process.env.PLUNK_PUBLIC_KEY || "",
-    fromEmail: process.env.PLUNK_FROM_EMAIL || "",
-    fromName: process.env.PLUNK_FROM_NAME || "Actually Relevant",
-    testSegmentId: process.env.PLUNK_TEST_SEGMENT_ID || "",
+    secretKey: process.env.PLUNK_SECRET_KEY || '',
+    publicKey: process.env.PLUNK_PUBLIC_KEY || '',
+    fromEmail: process.env.PLUNK_FROM_EMAIL || '',
+    fromName: process.env.PLUNK_FROM_NAME || 'Actually Relevant',
+    testSegmentId: process.env.PLUNK_TEST_SEGMENT_ID || '',
 
-    baseUrl: "https://next-api.useplunk.com",
+    baseUrl: 'https://next-api.useplunk.com',
     // The poll_plunk_activity job (ADR-0029): every run reads this trailing window of complaints
     // and bounces, whatever earlier runs saw; each event is recorded once by its activity id.
     activityLookbackDays: 30,
@@ -438,19 +432,17 @@ export const config = {
     rateLimitWindowMs: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_WINDOW_MS, 60 * 1000, 'SUBSCRIBE_RATE_LIMIT_WINDOW_MS'),
     rateLimitMax: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_MAX, 3, 'SUBSCRIBE_RATE_LIMIT_MAX'),
     // Sustained limiter: caps signups per IP over a long window (blunts rotating-burst bots).
-    rateLimitDailyWindowMs: parseWholeNumber(
-      process.env.SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS, 24 * 60 * 60 * 1000, 'SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS'
-    ),
+    rateLimitDailyWindowMs: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS, 24 * 60 * 60 * 1000, 'SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS'),
     rateLimitDailyMax: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_MAX, 20, 'SUBSCRIBE_RATE_LIMIT_DAILY_MAX'),
     // Form-token anti-bot gate. Min fill time trips instant submitters; max age bounds replay.
     minFormFillMs: parseWholeNumber(process.env.SUBSCRIBE_MIN_FORM_FILL_MS, 1500, 'SUBSCRIBE_MIN_FORM_FILL_MS', 0),
     formTokenMaxAgeMs: parseWholeNumber(process.env.SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS, 30 * 60 * 1000, 'SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS'),
     // HMAC key for form tokens. Dedicated secret, falling back to JWT_SECRET so it works out of the box.
-    formTokenSecret: process.env.FORM_TOKEN_SECRET || process.env.JWT_SECRET || "",
+    formTokenSecret: process.env.FORM_TOKEN_SECRET || process.env.JWT_SECRET || '',
     // The one signup switch. Closed unless explicitly 'true': a missing value means paused.
     enabled: process.env.SUBSCRIPTIONS_ENABLED === 'true',
     // Cloudflare Turnstile secret. Missing in production refuses every signup (fail closed).
-    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || "",
+    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
     // At most one confirmation email per normalized address within this window.
     perAddressWindowHours: parseWholeNumber(process.env.SUBSCRIBE_PER_ADDRESS_WINDOW_HOURS, 24, 'SUBSCRIBE_PER_ADDRESS_WINDOW_HOURS'),
     // At most this many confirmation emails per rolling hour across all addresses.
@@ -513,8 +505,9 @@ export const config = {
   },
   socialAutoPost: {
     lookbackHours: parseWholeNumber(
-      process.env.SOCIAL_LOOKBACK_HOURS || process.env.BLUESKY_LOOKBACK_HOURS, 25,
-      process.env.SOCIAL_LOOKBACK_HOURS ? 'SOCIAL_LOOKBACK_HOURS' : 'BLUESKY_LOOKBACK_HOURS'
+      process.env.SOCIAL_LOOKBACK_HOURS || process.env.BLUESKY_LOOKBACK_HOURS,
+      25,
+      process.env.SOCIAL_LOOKBACK_HOURS ? 'SOCIAL_LOOKBACK_HOURS' : 'BLUESKY_LOOKBACK_HOURS',
     ),
     pickModelTier: 'medium' as const,
   },
@@ -541,4 +534,4 @@ export const config = {
   newsletterArchive: {
     cacheMaxAge: 300,
   },
-} as const;
+} as const

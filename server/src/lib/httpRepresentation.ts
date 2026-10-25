@@ -49,20 +49,25 @@ export function negotiateEncoding(acceptEncoding: string | undefined): ContentCo
   let bestQ = 0
   for (const coding of CODINGS) {
     const value = q.get(coding) ?? q.get('*') ?? 0
-    if (value > bestQ) { best = coding; bestQ = value }
+    if (value > bestQ) {
+      best = coding
+      bestQ = value
+    }
   }
   return best
 }
 
-const taggedFor = (etag: string, coding: ContentCoding) =>
-  coding === 'identity' ? etag : `${etag.slice(0, -1)}-${coding}"`
+const taggedFor = (etag: string, coding: ContentCoding) => (coding === 'identity' ? etag : `${etag.slice(0, -1)}-${coding}"`)
 
 /** Conditional GET: If-None-Match (weak comparison, any of our encodings' tags) wins over If-Modified-Since. */
 function isNotModified(req: Request, rep: Representation): boolean {
   const ifNoneMatch = req.headers['if-none-match']
   if (ifNoneMatch) {
     const ours = new Set<string>(['identity', ...CODINGS].map(c => taggedFor(rep.etag, c as ContentCoding)))
-    return ifNoneMatch.split(',').map(t => t.trim().replace(/^W\//, '')).some(t => t === '*' || ours.has(t))
+    return ifNoneMatch
+      .split(',')
+      .map(t => t.trim().replace(/^W\//, ''))
+      .some(t => t === '*' || ours.has(t))
   }
   const since = Date.parse(req.headers['if-modified-since'] ?? '')
   return Number.isFinite(since) && rep.lastModified.getTime() <= since

@@ -59,20 +59,23 @@ export async function createFeed(data: {
   return withStaleFlag(await prisma.feed.create({ data }))
 }
 
-export async function updateFeed(id: string, data: Partial<{
-  title: string
-  rssUrl: string
-  url: string | null
-  displayTitle: string | null
-  language: string
-  region: FeedRegion | null
-  issueId: string
-  crawlIntervalHours: number
-  htmlSelector: string | null
-  paywallDetection: boolean
-  paywallTitleMarker: string | null
-  active: boolean
-}>): Promise<Feed & { isStale: boolean }> {
+export async function updateFeed(
+  id: string,
+  data: Partial<{
+    title: string
+    rssUrl: string
+    url: string | null
+    displayTitle: string | null
+    language: string
+    region: FeedRegion | null
+    issueId: string
+    crawlIntervalHours: number
+    htmlSelector: string | null
+    paywallDetection: boolean
+    paywallTitleMarker: string | null
+    active: boolean
+  }>,
+): Promise<Feed & { isStale: boolean }> {
   if (data.issueId) {
     const issue = await prisma.issue.findUnique({ where: { id: data.issueId } })
     if (!issue) {
@@ -281,7 +284,12 @@ export async function getAllFeedQualityMetrics(): Promise<Map<string, FeedQualit
     const avgRelevancePre = preCount > 0 ? Math.round((Number(row.pre_sum) / preCount) * 10) / 10 : null
 
     result.set(row.feed_id, {
-      totalCrawled, archivedCount: Number(row.archived_count), avgRelevancePre, publishedCount, publishRate, avgRelevance,
+      totalCrawled,
+      archivedCount: Number(row.archived_count),
+      avgRelevancePre,
+      publishedCount,
+      publishRate,
+      avgRelevance,
       extractionMethods: methodsByFeed.get(row.feed_id) || {},
     })
   }

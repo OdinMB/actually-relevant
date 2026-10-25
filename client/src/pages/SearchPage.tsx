@@ -28,7 +28,9 @@ export default function SearchPage() {
   return (
     <>
       <Helmet>
-        <title>{q ? `Search: ${q}` : 'Search'} - {SEO.siteName}</title>
+        <title>
+          {q ? `Search: ${q}` : 'Search'} - {SEO.siteName}
+        </title>
         <meta name="description" content={q ? `Search results for "${q}" on Actually Relevant` : 'Search stories on Actually Relevant'} />
         <meta property="og:title" content={q ? `Search: ${q} - ${SEO.siteName}` : `Search - ${SEO.siteName}`} />
         <meta property="og:type" content="website" />
@@ -37,18 +39,8 @@ export default function SearchPage() {
 
       <div className="page-section-wide">
         <header className="mb-6">
-          <h1 className="text-xl md:text-2xl font-bold">
-            {q ? (
-              <>Search results for &ldquo;{q}&rdquo;</>
-            ) : (
-              'Search'
-            )}
-          </h1>
-          {q && !isLoading && !isError && (
-            <p className="text-sm text-neutral-500 mt-1">
-              {data?.total === 1 ? '1 result' : `${data?.total ?? 0} results`}
-            </p>
-          )}
+          <h1 className="text-xl md:text-2xl font-bold">{q ? <>Search results for &ldquo;{q}&rdquo;</> : 'Search'}</h1>
+          {q && !isLoading && !isError && <p className="text-sm text-neutral-500 mt-1">{data?.total === 1 ? '1 result' : `${data?.total ?? 0} results`}</p>}
         </header>
 
         {!q ? (
@@ -62,17 +54,14 @@ export default function SearchPage() {
         ) : stories.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-neutral-500 mb-4">No results found for &ldquo;{q}&rdquo;.</p>
-            <Link
-              to="/"
-              className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
-            >
+            <Link to="/" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
               &larr; Back to home
             </Link>
           </div>
         ) : (
           <>
             <div className="grid gap-5 md:grid-cols-3">
-              {stories.map((story) => (
+              {stories.map(story => (
                 <StoryCard key={story.id} story={story} variant="equal" />
               ))}
             </div>

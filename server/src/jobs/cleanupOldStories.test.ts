@@ -69,9 +69,7 @@ describe('runCleanupOldStories', () => {
   it('fails with what it did before the error, and leaves the alert to the scheduler', async () => {
     mockDeleteBatch.mockResolvedValueOnce(batchOf({ rejected: batchSize })).mockRejectedValueOnce(new Error('connection lost'))
 
-    await expect(runCleanupOldStories()).rejects.toThrow(
-      `Story cleanup failed after deleting ${batchSize} stories and clearing 0 embeddings: connection lost`,
-    )
+    await expect(runCleanupOldStories()).rejects.toThrow(`Story cleanup failed after deleting ${batchSize} stories and clearing 0 embeddings: connection lost`)
     expect(mockNotify).not.toHaveBeenCalled()
   })
 })

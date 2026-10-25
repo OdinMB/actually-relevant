@@ -15,14 +15,17 @@ export function StoryDetail({ storyId, issues, onClose, onBlueskyGenerate, onMas
   const { data: story, isLoading, error } = useStory(storyId || '')
 
   return (
-    <EditPanel
-      open={!!storyId}
-      onClose={onClose}
-      title={story?.title || story?.sourceTitle || 'Story'}
-      loading={isLoading}
-      error={!!error}
-    >
-      {story && <StoryEditForm story={story} issues={issues} onDone={onClose} onBlueskyGenerate={onBlueskyGenerate} onMastodonGenerate={onMastodonGenerate} variant="panel" />}
+    <EditPanel open={!!storyId} onClose={onClose} title={story?.title || story?.sourceTitle || 'Story'} loading={isLoading} error={!!error}>
+      {story && (
+        <StoryEditForm
+          story={story}
+          issues={issues}
+          onDone={onClose}
+          onBlueskyGenerate={onBlueskyGenerate}
+          onMastodonGenerate={onMastodonGenerate}
+          variant="panel"
+        />
+      )}
     </EditPanel>
   )
 }

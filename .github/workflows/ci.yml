@@ -1,0 +1,125 @@
+# Runs the check battery on every pull request and every push to main (.context/ci.md): for
+# both packages type-check, lint, format check, unit tests with a coverage floor, the
+# production build (the client's with its prerender) and a production-dependency audit; for
+# the server also the migration check and the PostgreSQL integration tests against a
+# throwaway pgvector database (ADR-0044). Production deploys wait for it: render.yaml sets
+# `autoDeployTrigger: checksPass` on both services, so Render deploys a commit on main only
+# once every check on it has passed, and skips a red one (ADR-0047, .context/deployment.md).
+# Keep it running on every push to main with no path filter: Render deploys nothing for a
+# commit with no checks. The job names `server` and `client` are the required checks of the
+# GitHub ruleset `no-nonsense-main`: rename one only together with the ruleset.
+# No secrets are needed or used.
+name: CI
+
+on:
+  # Pushes to other branches run only through their pull request, so a PR branch runs once
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to a pull request cancels its older run; runs on main are never cancelled,
+# because Render deploys a main commit only once its checks have passed
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        # The major version production and the Docker dev database run
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: actually_relevant_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Nothing calls OpenAI in tests; the client libraries only want a key to exist
+      OPENAI_API_KEY: sk-test-dummy
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The migration check diffs against the base branch, so it needs the history
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --prefix server
+      - name: Migration check
+        # Base: the pull request's target; on main, the commit before the push; elsewhere main
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            base="origin/$BASE_REF"
+          elif [ "$REF" = refs/heads/main ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            base="$BEFORE"
+          else
+            base=origin/main
+          fi
+          npm run check:migrations --prefix server -- --base "$base"
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
+      - name: Generate the Prisma client
+        run: npm run db:generate --prefix server
+        env:
+          # prisma.config.ts requires a value; generate never connects to it
+          DATABASE_URL: postgresql://unused:unused@localhost:5432/unused
+      - run: npm run typecheck --prefix server
+      - run: npm run lint --prefix server
+      - run: npm run format:check --prefix server
+      - name: Unit tests with the coverage floor
+        run: npm run test:coverage --prefix server
+      - name: PostgreSQL integration tests
+        run: npm run test:db --prefix server
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/actually_relevant_test
+      - name: Build (as Render does, minus the migrate step)
+        run: npm run build --prefix server
+      - name: Production dependency audit (high and above, minus audit-allowlist.json)
+        run: npm run audit:prod --prefix server
+
+  client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      # puppeteer's Chrome for the prerender; npm ci skips the download when it is already here
+      - name: Cache puppeteer's Chrome
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('client/package-lock.json') }}
+      # Also installs puppeteer's Chrome (from the cache when it hit), which the prerender
+      # launches with --no-sandbox (vite.config.ts), so Ubuntu's user-namespace restriction
+      # does not stop it
+      - run: npm ci --prefix client
+      - run: npm run typecheck --prefix client
+      - run: npm run lint --prefix client
+      - run: npm run format:check --prefix client
+      - name: Unit tests with the coverage floor
+        run: npm run test:coverage --prefix client
+      - name: Build with prerender
+        run: npm run build --prefix client
+      - name: Production dependency audit (high and above, minus audit-allowlist.json)
+        run: npm run audit:prod --prefix client

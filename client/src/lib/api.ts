@@ -79,10 +79,8 @@ export const publicApi = {
     list: (params?: { page?: number; pageSize?: number; issueSlug?: string; search?: string; emotionTags?: string }) =>
       request<PaginatedResponse<PublicStory>>(`/stories${toQueryString((params || {}) as Record<string, unknown>)}`),
     get: (slug: string) => request<PublicStory>(`/stories/${slug}`),
-    related: (slug: string, limit = 4) =>
-      request<PublicStory[]>(`/stories/${slug}/related?limit=${limit}`),
-    cluster: (slug: string) =>
-      request<{ sources: { feedTitle: string; sourceUrl: string }[] }>(`/stories/${slug}/cluster`),
+    related: (slug: string, limit = 4) => request<PublicStory[]>(`/stories/${slug}/related?limit=${limit}`),
+    cluster: (slug: string) => request<{ sources: { feedTitle: string; sourceUrl: string }[] }>(`/stories/${slug}/cluster`),
   },
 
   issues: {
@@ -97,14 +95,12 @@ export const publicApi = {
   podcastEpisode: (id: string) => request<PublicPodcastEpisodeDetail>(`/podcast/episodes/${encodeURIComponent(id)}`),
 
   /** Published newsletter issues, newest first (the web archive). */
-  newsletterArchive: (page = 1) =>
-    request<PaginatedResponse<PublicNewsletterIssueSummary>>(`/newsletters${toQueryString({ page })}`),
+  newsletterArchive: (page = 1) => request<PaginatedResponse<PublicNewsletterIssueSummary>>(`/newsletters${toQueryString({ page })}`),
 
   /** One published newsletter issue's web edition; 404 unless published. */
   newsletterIssue: (slug: string) => request<PublicNewsletterIssue>(`/newsletters/${encodeURIComponent(slug)}`),
 
-  sources: () =>
-    request<{ byRegion: Record<string, string[]>; byIssue: Record<string, string[]>; totalCount: number }>('/sources'),
+  sources: () => request<{ byRegion: Record<string, string[]>; byIssue: Record<string, string[]>; totalCount: number }>('/sources'),
 
   subscribe: (data: { email: string; website?: string; formToken?: string; turnstileToken?: string }) =>
     request<{ success: boolean; message: string }>('/subscribe', {

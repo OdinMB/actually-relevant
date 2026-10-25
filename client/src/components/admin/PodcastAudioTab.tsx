@@ -39,11 +39,7 @@ function AudioStatus({ podcast }: { podcast: Podcast }) {
       </p>
     )
   }
-  return (
-    <p className="text-sm italic text-neutral-500">
-      {podcast.stage === 'voiced' ? 'Voiced; the MP3 is not uploaded yet.' : 'No audio yet.'}
-    </p>
-  )
+  return <p className="text-sm italic text-neutral-500">{podcast.stage === 'voiced' ? 'Voiced; the MP3 is not uploaded yet.' : 'No audio yet.'}</p>
 }
 
 interface PodcastAudioTabProps {
@@ -69,16 +65,23 @@ export function PodcastAudioTab({ podcast, pendingEdits, onBackToScript }: Podca
   const handleConfirm = () => {
     if (!confirm) return
     const back = confirm === 'back'
-    rewind.mutate({ id: podcast.id, to: 'scripted', advance: !back }, {
-      onSuccess: () => { if (back) onBackToScript() },
-      onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
-      onSettled: () => setConfirm(null),
-    })
+    rewind.mutate(
+      { id: podcast.id, to: 'scripted', advance: !back },
+      {
+        onSuccess: () => {
+          if (back) onBackToScript()
+        },
+        onError: err => toast('error', err instanceof Error ? err.message : 'Failed'),
+        onSettled: () => setConfirm(null),
+      },
+    )
   }
 
   return (
     <section aria-labelledby="podcast-audio-heading" className="bg-white rounded-lg border border-neutral-200 p-4 space-y-3">
-      <h2 id="podcast-audio-heading" className="text-sm font-semibold text-neutral-900">Audio</h2>
+      <h2 id="podcast-audio-heading" className="text-sm font-semibold text-neutral-900">
+        Audio
+      </h2>
       <AudioStatus podcast={podcast} />
       <PodcastStepRunButton podcast={podcast} step="voice-script" pendingEdits={pendingEdits} confirmTitle="Approve the script and voice it?">
         Voice script
@@ -87,11 +90,7 @@ export function PodcastAudioTab({ podcast, pendingEdits, onBackToScript }: Podca
         <dt className="text-neutral-500">TTS characters, this episode</dt>
         <dd>{podcast.ttsChars.toLocaleString('en-US')}</dd>
         <dt className="text-neutral-500">TTS characters, this month</dt>
-        <dd>
-          {usage.data
-            ? `${usage.data.monthToDateChars.toLocaleString('en-US')} of ${usage.data.monthlyCap.toLocaleString('en-US')}`
-            : '…'}
-        </dd>
+        <dd>{usage.data ? `${usage.data.monthToDateChars.toLocaleString('en-US')} of ${usage.data.monthlyCap.toLocaleString('en-US')}` : '…'}</dd>
       </dl>
 
       {canChange && (
@@ -102,8 +101,12 @@ export function PodcastAudioTab({ podcast, pendingEdits, onBackToScript }: Podca
             <li>When it sounds right, publish it from the bar below. It then appears in the podcast feed and on the podcast page.</li>
           </ol>
           <div className="flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
-            <Button size="sm" variant="secondary" onClick={() => setConfirm('regenerate')} disabled={rewind.isPending}>Regenerate audio</Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirm('back')} disabled={rewind.isPending}>Back to script</Button>
+            <Button size="sm" variant="secondary" onClick={() => setConfirm('regenerate')} disabled={rewind.isPending}>
+              Regenerate audio
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm('back')} disabled={rewind.isPending}>
+              Back to script
+            </Button>
           </div>
         </>
       )}

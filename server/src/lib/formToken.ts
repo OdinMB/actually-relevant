@@ -32,9 +32,7 @@ function sign(payload: string): string {
 
 /** Issue a fresh signed form token stamped with the current time. */
 export function issueFormToken(): string {
-  const payload = Buffer.from(
-    JSON.stringify({ ts: Date.now(), nonce: randomBytes(8).toString('hex') }),
-  ).toString('base64url')
+  const payload = Buffer.from(JSON.stringify({ ts: Date.now(), nonce: randomBytes(8).toString('hex') })).toString('base64url')
   return `${payload}.${sign(payload)}`
 }
 
@@ -45,9 +43,8 @@ export function issueFormToken(): string {
 export function verifyFormToken(token: string | undefined | null): { ok: boolean } {
   if (!token || typeof token !== 'string') return { ok: false }
 
-  const parts = token.split('.')
-  if (parts.length !== 2) return { ok: false }
-  const [payload, sig] = parts
+  const [payload, sig, ...rest] = token.split('.')
+  if (payload === undefined || sig === undefined || rest.length > 0) return { ok: false }
 
   // Compare the decoded HMAC bytes in constant time.
   const expected = sign(payload)

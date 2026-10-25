@@ -48,27 +48,21 @@ export function toVectorLiteral(embedding: number[]): string {
 // ──── Queries ──────────────────────────────────────────────────────────────
 
 /** Fetch a single story's embedding-relevant fields (any status). */
-export async function fetchStoryForEmbedding(
-  storyId: string,
-): Promise<(StoryEmbeddingRow & { status: string }) | null> {
+export async function fetchStoryForEmbedding(storyId: string): Promise<(StoryEmbeddingRow & { status: string }) | null> {
   const rows = await prisma.$queryRaw<(RawStoryRow & { status: string })[]>`
     SELECT id, status, title, title_label, summary, embedding_content_hash
     FROM stories
     WHERE id = ${storyId}
   `
-  if (rows.length === 0) return null
-  return { ...mapRow(rows[0]), status: rows[0].status }
+  const [row] = rows
+  if (!row) return null
+  return { ...mapRow(row), status: row.status }
 }
 
 /** Fetch multiple stories' embedding-relevant fields. Optionally filter by status. */
-export async function fetchStoriesForEmbedding(
-  storyIds: string[],
-  statusFilter?: 'published' | 'selected' | 'analyzed',
-): Promise<StoryEmbeddingRow[]> {
+export async function fetchStoriesForEmbedding(storyIds: string[], statusFilter?: 'published' | 'selected' | 'analyzed'): Promise<StoryEmbeddingRow[]> {
   if (storyIds.length === 0) return []
-  const statusClause = statusFilter
-    ? Prisma.sql`AND status = ${statusFilter}::"StoryStatus"`
-    : Prisma.empty
+  const statusClause = statusFilter ? Prisma.sql`AND status = ${statusFilter}::"StoryStatus"` : Prisma.empty
   const rows = await prisma.$queryRaw<RawStoryRow[]>`
     SELECT id, title, title_label, summary, embedding_content_hash
     FROM stories
@@ -78,11 +72,7 @@ export async function fetchStoriesForEmbedding(
 }
 
 /** Save an embedding vector + content hash to a story row. */
-export async function saveEmbedding(
-  storyId: string,
-  embedding: number[],
-  contentHash: string,
-): Promise<void> {
+export async function saveEmbedding(storyId: string, embedding: number[], contentHash: string): Promise<void> {
   await prisma.$executeRaw`
     UPDATE stories
     SET embedding = ${JSON.stringify(embedding)}::vector,
@@ -138,12 +128,8 @@ export async function fetchEmbeddingBackfillBatch(
   overrideMode: boolean,
   client: { $queryRaw: typeof prisma.$queryRaw } = prisma,
 ): Promise<StoryEmbeddingRow[]> {
-  const hashFilter = overrideMode
-    ? Prisma.empty
-    : Prisma.sql`AND embedding_content_hash IS NULL`
-  const cursorFilter = cursor
-    ? Prisma.sql`AND id > ${cursor}`
-    : Prisma.empty
+  const hashFilter = overrideMode ? Prisma.empty : Prisma.sql`AND embedding_content_hash IS NULL`
+  const cursorFilter = cursor ? Prisma.sql`AND id > ${cursor}` : Prisma.empty
 
   const rows = await client.$queryRaw<RawStoryRow[]>`
     SELECT id, title, title_label, summary, embedding_content_hash

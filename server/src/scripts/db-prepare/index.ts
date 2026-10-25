@@ -81,9 +81,7 @@ function generateIfSchemaChanged(): void {
   const { ok, output } = runPrisma(['generate'])
   if (!ok) {
     if (classifyGenerateFailure(output) === 'locked') {
-      fail(
-        'Cannot replace the Prisma client: another process holds its files, usually a server that is still running. Stop it and retry.',
-      )
+      fail('Cannot replace the Prisma client: another process holds its files, usually a server that is still running. Stop it and retry.')
     }
     fail('`prisma generate` failed. Prisma said:', output)
   }
@@ -104,9 +102,7 @@ function main(): void {
       warn('DATABASE_URL is not set; skipped migrations and client generation.')
       return
     case 'skip-remote':
-      warn(
-        `database host "${preparation.host}" is not local; skipped automatic migrations and client generation.`,
-      )
+      warn(`database host "${preparation.host}" is not local; skipped automatic migrations and client generation.`)
       return
     case 'run':
       migrate()

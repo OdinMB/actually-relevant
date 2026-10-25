@@ -34,7 +34,7 @@ const rawClient = axios.create({
 rawClient.interceptors.request.use(authorize)
 
 // Plunk "next" API wraps responses in { success, data }; unwrap automatically
-client.interceptors.response.use((res) => {
+client.interceptors.response.use(res => {
   if (res.data && typeof res.data === 'object' && 'success' in res.data && 'data' in res.data) {
     res.data = res.data.data
   }
@@ -117,7 +117,6 @@ export async function sendCampaign(id: string, scheduledFor?: string): Promise<v
   )
 }
 
-
 export async function getCampaignStats(id: string): Promise<CampaignStats> {
   return withRetry(
     async () => {
@@ -185,9 +184,7 @@ export function hasContactsArray(body: unknown): boolean {
  * from the same level, so an envelope `{ success, data: [...], cursor, hasMore }`
  * keeps its cursor.
  */
-export function parseContactsResponse(
-  rawBody: unknown,
-): { items: Contact[]; nextCursor: string | null; hasMore: boolean; total: number } {
+export function parseContactsResponse(rawBody: unknown): { items: Contact[]; nextCursor: string | null; hasMore: boolean; total: number } {
   const body = unwrapContactsEnvelope(rawBody)
   if (Array.isArray(body)) {
     return { items: body as Contact[], nextCursor: null, hasMore: false, total: body.length }
@@ -203,8 +200,7 @@ export function parseContactsResponse(
   }
   const array = [b.data, b.items, b.contacts].find(Array.isArray)
   const items = (array ?? []) as Contact[]
-  const nextCursor =
-    typeof b.cursor === 'string' ? b.cursor : typeof b.nextCursor === 'string' ? b.nextCursor : null
+  const nextCursor = typeof b.cursor === 'string' ? b.cursor : typeof b.nextCursor === 'string' ? b.nextCursor : null
   const hasMore = typeof b.hasMore === 'boolean' ? b.hasMore : Boolean(nextCursor)
   const total = typeof b.total === 'number' ? b.total : items.length
   return { items, nextCursor, hasMore, total }
@@ -279,8 +275,7 @@ export function parseActivityResponse(body: unknown): ActivityPage | null {
     // An envelope around the page itself
     return b.data && typeof b.data === 'object' ? parseActivityResponse(b.data) : null
   }
-  const nextCursor =
-    typeof b.cursor === 'string' && b.cursor ? b.cursor : typeof b.nextCursor === 'string' && b.nextCursor ? b.nextCursor : null
+  const nextCursor = typeof b.cursor === 'string' && b.cursor ? b.cursor : typeof b.nextCursor === 'string' && b.nextCursor ? b.nextCursor : null
   const hasMore = typeof b.hasMore === 'boolean' ? b.hasMore : nextCursor !== null
   return { items: array as PlunkActivity[], nextCursor, hasMore }
 }
@@ -316,15 +311,22 @@ export async function listActivity(opts: ListActivityOpts): Promise<ActivityPage
         throw new Error(`unrecognized Plunk activity response shape (keys: ${JSON.stringify(keysOf(body))})`)
       }
       // Shape check for the first live runs (ADR-0029): key names and counts only, never values.
-      log.info({
-        responseKeys: keysOf(body),
-        itemKeys: page.items[0] ? keysOf(page.items[0]) : null,
-        metadataKeys: page.items[0] ? keysOf(page.items[0].metadata) : null,
-        count: page.items.length,
-        hasMore: page.hasMore,
-        startDate: params.startDate,
-        oldestTimestamp: page.items.map(i => i.timestamp).filter((t): t is string => typeof t === 'string').sort()[0] ?? null,
-      }, 'listActivity: page shape')
+      log.info(
+        {
+          responseKeys: keysOf(body),
+          itemKeys: page.items[0] ? keysOf(page.items[0]) : null,
+          metadataKeys: page.items[0] ? keysOf(page.items[0].metadata) : null,
+          count: page.items.length,
+          hasMore: page.hasMore,
+          startDate: params.startDate,
+          oldestTimestamp:
+            page.items
+              .map(i => i.timestamp)
+              .filter((t): t is string => typeof t === 'string')
+              .sort()[0] ?? null,
+        },
+        'listActivity: page shape',
+      )
       return page
     },
     { retries: 3, retryOn: isRetryableError },
