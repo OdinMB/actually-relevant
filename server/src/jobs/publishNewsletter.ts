@@ -1,7 +1,7 @@
 /**
  * The publish_newsletter cron entry: sends this week's automatic issue (the one generate_newsletter
- * built, keyed by `weekKey`) to all subscribers and marks it published. Seeded disabled, 30 minutes
- * after generate_newsletter. An issue already sent live or published by hand is left alone, so a
+ * built, keyed by `weekKey`) to all subscribers and marks it published, only once its test email
+ * went out. Seeded disabled, 30 minutes after generate_newsletter. An issue already sent live or published by hand is left alone, so a
  * retry, a manual Run or a boot catch-up never sends a second email for the week.
  */
 import prisma from '../lib/prisma.js'
@@ -29,8 +29,21 @@ export async function runPublishNewsletter(now: Date = new Date()): Promise<void
       status: 'draft',
       sends: { none: { isTest: false } },
     },
-    select: { id: true, title: true },
+    select: { id: true, title: true, sends: { where: { isTest: true }, select: { id: true }, take: 1 } },
   })
+  // sendTest records its row only after Plunk accepted the send, so a row means the test went out.
+  if (issue && issue.sends.length === 0) {
+    log.warn({ weekKey, newsletterId: issue.id }, 'no successful test send for this week\'s issue, not sending')
+    await notify({
+      source: 'newsletter',
+      severity: 'warning',
+      title: 'Newsletter not sent',
+      message: `${issue.title} (${weekKey}) has no successful test email, so it was not sent to subscribers. Send the test, then send it live from the newsletter page.`,
+      link: '/admin/newsletters',
+      dedupeKey: `newsletter-not-sent:${weekKey}`,
+    })
+    return
+  }
   if (!issue) {
     // No issue at all was already alerted by generate_newsletter (no stories, or its failure);
     // one still being built would otherwise be missed without a word.
