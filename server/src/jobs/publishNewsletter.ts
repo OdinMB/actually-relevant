@@ -31,36 +31,44 @@ export async function runPublishNewsletter(now: Date = new Date()): Promise<void
     },
     select: { id: true, title: true, sends: { where: { isTest: true }, select: { id: true }, take: 1 } },
   })
-  // sendTest records its row only after Plunk accepted the send, so a row means the test went out.
-  if (issue && issue.sends.length === 0) {
-    log.warn({ weekKey, newsletterId: issue.id }, 'no successful test send for this week\'s issue, not sending')
+  // Every run that sends nothing records why; a failed send fails the run, which the scheduler alerts.
+  const notSent = async (reason: string) => {
+    log.warn({ weekKey, reason }, 'not sending this week\'s newsletter')
     await notify({
       source: 'newsletter',
       severity: 'warning',
       title: 'Newsletter not sent',
-      message: `${issue.title} (${weekKey}) has no successful test email, so it was not sent to subscribers. Send the test, then send it live from the newsletter page.`,
+      message: reason,
       link: '/admin/newsletters',
       dedupeKey: `newsletter-not-sent:${weekKey}`,
     })
+  }
+
+  // sendTest records its row only after Plunk accepted the send, so a row means the test went out.
+  if (issue && issue.sends.length === 0) {
+    await notSent(`${issue.title} (${weekKey}) has no successful test email, so it was not sent to subscribers. Send the test, then send it live from the newsletter page.`)
     return
   }
   if (!issue) {
-    // No issue at all was already alerted by generate_newsletter (no stories, or its failure);
-    // one still being built would otherwise be missed without a word.
-    const unbuilt = await prisma.newsletter.findFirst({ where: { weekKey, html: '' }, select: { id: true } })
-    if (unbuilt) {
-      log.warn({ weekKey, newsletterId: unbuilt.id }, 'this week\'s issue is not built yet, not sending')
+    const existing = await prisma.newsletter.findFirst({
+      where: { weekKey },
+      select: { id: true, title: true, status: true, sends: { where: { isTest: false }, select: { id: true }, take: 1 } },
+    })
+    if (existing && (existing.status === 'published' || existing.sends.length > 0)) {
+      log.info({ weekKey, newsletterId: existing.id }, 'this week\'s issue was already sent or published')
       await notify({
         source: 'newsletter',
-        severity: 'warning',
-        title: 'Newsletter not sent',
-        message: `This week's issue (${weekKey}) was still being built when publish_newsletter ran. Send it from the newsletter page once it is ready.`,
+        severity: 'info',
+        title: 'Newsletter already sent',
+        message: `${existing.title} (${weekKey}) was already sent or published before publish_newsletter ran, so it sent nothing.`,
         link: '/admin/newsletters',
-        dedupeKey: `newsletter-not-sent:${weekKey}`,
+        dedupeKey: `newsletter-already-sent:${weekKey}`,
       })
-      return
+    } else if (existing) {
+      await notSent(`This week's issue (${weekKey}) was still being built when publish_newsletter ran. Send it from the newsletter page once it is ready.`)
+    } else {
+      await notSent(`There is no automatic issue for ${weekKey}, so nothing was sent. Check the Generate Newsletter job.`)
     }
-    log.info({ weekKey }, 'no built, unsent issue this week, nothing to publish')
     return
   }
 

@@ -26,7 +26,8 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 | `subscribeLimits.ts` signup cap | `subscriptions` / `warning` | `signup-cap` | `/admin/subscribers` |
 | `generateNewsletter.ts` no stories this week | `newsletter` / `warning` | `newsletter-no-stories:<weekKey>` | `/admin/jobs` |
 | `publishNewsletter.ts` issue sent | `newsletter` / `info` | none | `/admin/newsletters` |
-| `publishNewsletter.ts` issue not built, or its test email never went out, when the job ran | `newsletter` / `warning` | `newsletter-not-sent:<weekKey>` | `/admin/newsletters` |
+| `publishNewsletter.ts` already sent or published | `newsletter` / `info` | `newsletter-already-sent:<weekKey>` | `/admin/newsletters` |
+| `publishNewsletter.ts` no issue, issue not built, or its test email never went out, when the job ran | `newsletter` / `warning` | `newsletter-not-sent:<weekKey>` | `/admin/newsletters` |
 | `cleanupOldStories.ts` monthly result (`.context/story-retention.md`) | `jobs` / `info` | none (one per run) | `/admin/jobs` |
 | `pollPlunkActivity.ts` spam complaint | `plunk` / `critical` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |
 | `pollPlunkActivity.ts` permanent bounce | `plunk` / `warning` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |
