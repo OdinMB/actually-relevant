@@ -53,7 +53,7 @@ npm run test:db --prefix server       # PostgreSQL integration tests (needs TEST
 npm run check:migrations --prefix server # Embedding-index drop anywhere, unmarked DROP/TRUNCATE in new migrations (CI)
 npm run lint --prefix <client|server>          # ESLint, warnings fail (CI)
 npm run format --prefix <client|server>        # Prettier write; CI runs format:check
-npm run test:coverage --prefix <client|server> # Unit tests + coverage floor; raise thresholds, never lower (CI)
+npm run test:coverage --prefix <client|server> # Tests + coverage floor (server: unit + DB tests, needs TEST_DATABASE_URL); raise thresholds, never lower (CI)
 npm run audit:prod --prefix <client|server>    # npm audit --omit=dev at high, minus audit-allowlist.json (CI)
 ```
 
