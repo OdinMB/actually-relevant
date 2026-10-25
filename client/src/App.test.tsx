@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
@@ -33,5 +33,11 @@ describe('appRoutes', () => {
     expect(screen.getByRole('banner')).toBeTruthy()
     const matches = router.state.matches
     expect(matches[matches.length - 1]!.route.path).toBe('*')
+  })
+
+  it('redirects the old newsletter archive URL to /newsletter, not to an issue page', async () => {
+    const router = renderAt('/newsletter/archive')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/newsletter'))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Newsletter' })).toBeTruthy()
   })
 })

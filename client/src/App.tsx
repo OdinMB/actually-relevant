@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { createRoutesFromElements, Outlet, Route } from 'react-router-dom'
+import { createRoutesFromElements, Navigate, Outlet, Route } from 'react-router-dom'
 import type { RouteObject } from 'react-router-dom'
 import PublicLayout from './layouts/PublicLayout'
 import HomePage from './pages/HomePage'
@@ -30,7 +30,6 @@ const NewsFatiguePage = lazy(() => import('./pages/NewsFatiguePage'))
 const FreeApiPage = lazy(() => import('./pages/FreeApiPage'))
 const StewardshipPage = lazy(() => import('./pages/StewardshipPage'))
 const NewsletterPage = lazy(() => import('./pages/NewsletterPage'))
-const NewsletterArchivePage = lazy(() => import('./pages/NewsletterArchivePage'))
 const NewsletterIssuePage = lazy(() => import('./pages/NewsletterIssuePage'))
 const PodcastPage = lazy(() => import('./pages/PodcastPage'))
 const PodcastTranscriptPage = lazy(() => import('./pages/PodcastTranscriptPage'))
@@ -257,14 +256,8 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
           </LazyPage>
         }
       />
-      <Route
-        path="/newsletter/archive"
-        element={
-          <LazyPage>
-            <NewsletterArchivePage />
-          </LazyPage>
-        }
-      />
+      {/* The archive moved onto /newsletter; the old URL (emails, bookmarks) keeps working. Must stay above /newsletter/:slug. */}
+      <Route path="/newsletter/archive" element={<Navigate to="/newsletter" replace />} />
       <Route
         path="/newsletter/:slug"
         element={

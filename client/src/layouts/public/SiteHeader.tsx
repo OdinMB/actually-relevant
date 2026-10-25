@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSavedCount } from "../../hooks/useSavedCount";
-import { useSubscribe } from "../../components/SubscribeProvider";
 import { MoodDialPanel } from "../../components/PositivitySlider";
 import BrandLogo from "../../components/BrandLogo";
 import IssueNav from "./IssueNav";
@@ -22,7 +21,6 @@ export default function SiteHeader() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const savedCount = useSavedCount();
-  const { openSubscribe } = useSubscribe();
   const { pathname } = useLocation();
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
@@ -49,13 +47,13 @@ export default function SiteHeader() {
 
           {/* Desktop: newsletter, podcast, saved — vertically centered on logo */}
           <div className="hidden lg:flex items-center gap-1 absolute right-12 top-4 h-16">
-            <button
-              onClick={() => openSubscribe()}
+            <Link
+              to="/newsletter"
               className={HEADER_ACTION_LINK}
             >
               <NewsletterIcon className="w-4 h-4 shrink-0" />
               Newsletter
-            </button>
+            </Link>
             <Link
               to="/podcast"
               className={HEADER_ACTION_LINK}
@@ -141,7 +139,6 @@ export default function SiteHeader() {
         open={menuOpen}
         onClose={closeMenu}
         savedCount={savedCount}
-        onSubscribe={openSubscribe}
       />
 
       {/* Search bar */}

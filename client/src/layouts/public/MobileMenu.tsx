@@ -21,11 +21,10 @@ interface MobileMenuProps {
   open: boolean;
   onClose: () => void;
   savedCount: number;
-  onSubscribe: () => void;
 }
 
 /** Full-screen mobile navigation in a native <dialog>, for its built-in focus trap. */
-export default function MobileMenu({ open, onClose, savedCount, onSubscribe }: MobileMenuProps) {
+export default function MobileMenu({ open, onClose, savedCount }: MobileMenuProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const { pathname } = useLocation();
 
@@ -112,16 +111,14 @@ export default function MobileMenu({ open, onClose, savedCount, onSubscribe }: M
 
           {/* Newsletter, Podcast, Saved & Support — each on its own line */}
           <div className="border-t border-neutral-100 pt-3 px-2 flex flex-col">
-            <button
-              onClick={() => {
-                onClose();
-                onSubscribe();
-              }}
+            <Link
+              to="/newsletter"
+              onClick={onClose}
               className={MENU_ACTION_LINK}
             >
               <NewsletterIcon className="w-3.5 h-3.5 shrink-0" />
               Newsletter
-            </button>
+            </Link>
             <Link
               to="/podcast"
               onClick={onClose}

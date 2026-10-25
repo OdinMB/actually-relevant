@@ -38,6 +38,15 @@ export const AI_DISCLOSURE_COPY = {
     lead: 'A weekly five-minute briefing on the news that matters most to humanity, written and voiced by',
     tail: ". Two hosts talk through a handful of the week's stories.",
   },
+  /**
+   * Subtitle under the /newsletter heading, modeled on podcastSubtitle: the "AI" badge stands
+   * inline between lead and tail and is the subtitle's only "AI".
+   * Owner-approved 2026-10-25 (added when the archive moved onto /newsletter).
+   */
+  newsletterSubtitle: {
+    lead: 'A weekly email with the news that matters most to humanity, selected and written by',
+    tail: ". Each issue sums up the week's most relevant stories.",
+  },
 } as const
 
 /** The attribution line under an AI-selected quote: "— {attribution} · {note}", or the note alone. */

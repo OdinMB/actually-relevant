@@ -63,7 +63,7 @@ The podcast's RSS feed is served the same way, at the canonical `https://actuall
 
 Same rules as the sitemap: above the SPA catch-all, and no static `podcast.xml` in `client/public/`. The `/podcast` page is an ordinary prerendered route (in both route lists below). Each episode's transcript page, `/podcast/<id>/transcript`, is dynamic like a story page: not prerendered and not in either static list, but in the server sitemap; its Helmet sets title, description, canonical and `og:*`, and it carries `PodcastEpisode` and breadcrumb JSON-LD (`buildPodcastEpisodeSchema` in `client/src/lib/structured-data.ts`); its not-found state is `noindex`. Details: `.context/podcast.md`, "Publishing, feed and page".
 
-The newsletter's web edition follows the same split: `/newsletter/archive` is an ordinary prerendered route (in both route lists), and each issue page, `/newsletter/<slug>`, is dynamic (only in `App.tsx` and the server sitemap), with title, description, canonical, `og:*`, breadcrumb JSON-LD and a `noindex` not-found state (`.context/newsletter-podcast.md`, "Web edition").
+The newsletter's web edition follows the same split: `/newsletter`, which lists the published issues, is an ordinary prerendered route (in both route lists; `/newsletter/archive` only redirects there client-side and is in neither), and each issue page, `/newsletter/<slug>`, is dynamic (only in `App.tsx` and the server sitemap), with title, description, canonical, `og:*`, breadcrumb JSON-LD and a `noindex` not-found state (`.context/newsletter-podcast.md`, "Web edition").
 
 ### Configuration
 
