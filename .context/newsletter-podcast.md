@@ -104,6 +104,7 @@ Both sends need the stored `html` ("No HTML content — generate HTML first"). E
 
 - **Test** (`sendTest`): name and subject are `[TEST] <title>`. The audience is the Plunk segment `PLUNK_TEST_SEGMENT_ID` only. The row is `isTest: true`, `status: sent`, `sentAt: now`. Without a segment the send is refused (see the test-segment note above).
 - **Live** (`sendLive`, optional `scheduledFor`): name and subject are the title, and the audience is `ALL` subscribers. The row is `isTest: false`. Status is `scheduled` with `sentAt: null` when `scheduledFor` is given; otherwise status is `sending` with `sentAt: now`. A live send does **not** change the newsletter's `status`. Publishing is the separate `PUT /:id` step (the `publish_newsletter` job does both).
+- **Retries.** Creating the campaign is retried on any transient error (a lost response leaves at most an orphan draft campaign in Plunk). Sending it (`sendCampaign()` in `services/plunk.ts`) is retried only when no connection was made: after a timeout, a reset or a 5xx Plunk may already have accepted the send, and a retry would email the whole audience twice. Such a failure fails the send (no `NewsletterSend` row), and an editor checks Plunk before resending by hand.
 - **Stats** (`refreshSendStats`): fetches Plunk campaign stats for the send's `plunkCampaignId` and stores them in `stats`. A send without a campaign ID gets 400.
 
 ### Web edition (public archive)
