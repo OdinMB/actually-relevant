@@ -56,23 +56,39 @@ export async function findAutoPostCandidates(lookbackHours: number, channels: So
   return storyIds.filter(id => postedSets.some(posted => !posted.has(id)))
 }
 
+const CHANNEL_LABELS: Record<SocialChannelName, string> = { bluesky: 'Bluesky', mastodon: 'Mastodon' }
+
 /**
- * Use LLM to pick the best story from a set for social media posting.
- * This is platform-agnostic — it picks based on content quality and engagement potential.
+ * The one social story picker (both channels' pick-and-draft and the auto-post job): an LLM picks
+ * the best story from a set, on content quality and engagement potential, with the pick-best
+ * prompt (the criteria are universal across platforms).
  *
- * Uses the same pick-best prompt as Bluesky (the criteria are universal).
+ * With `channel` (a manual pick-and-draft), stories that already have a post on that channel, in
+ * any status, are skipped first, since generateDraft refuses them; when none is left it throws a
+ * BadRequestError. Without it (the auto-post job), the candidates are taken as given:
+ * findAutoPostCandidates has filtered them across the enabled channels already.
  */
-export async function pickBestStoryForSocial(storyIds: string[]): Promise<{ storyId: string; reasoning: string }> {
-  const stories = await prisma.story.findMany({
+export async function pickBestStoryForSocial(storyIds: string[], channel?: SocialChannelName): Promise<{ storyId: string; reasoning: string }> {
+  const found = await prisma.story.findMany({
     where: { id: { in: storyIds } },
     include: { issue: true },
   })
 
-  if (stories.length === 0) throw new BadRequestError('No stories found')
+  if (found.length === 0) throw new BadRequestError('No stories found')
+
+  let stories = found
+  if (channel) {
+    const posted = await storiesWithPost(
+      channel,
+      found.map(s => s.id),
+    )
+    stories = found.filter(s => !posted.has(s.id))
+    if (stories.length === 0) throw new BadRequestError(`All selected stories already have a ${CHANNEL_LABELS[channel]} post`)
+  }
 
   // If only one candidate, just return it
   if (stories.length === 1) {
-    return { storyId: stories[0]!.id, reasoning: 'Only one candidate story.' }
+    return { storyId: stories[0]!.id, reasoning: channel ? 'Only one unposted story in the selection.' : 'Only one candidate story.' }
   }
 
   const storiesForPrompt: StoryForBlueskyPick[] = stories.map(s => ({

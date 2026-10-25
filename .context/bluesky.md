@@ -44,7 +44,7 @@ Bluesky does **not** auto-fetch og: metadata from URLs. The link card (title, de
 
 1. Admin selects multiple published stories
 2. Clicks "Pick Best for Bluesky"
-3. `POST /api/admin/bluesky/posts/pick-and-draft` uses LLM to pick the best story, then generates draft text
+3. `POST /api/admin/bluesky/posts/pick-and-draft` uses the shared picker, `pickBestStoryForSocial(storyIds, 'bluesky')` (`services/socialMedia.ts`, the one Mastodon and the auto-post job use): it skips stories that already have a Bluesky post in any status (a Mastodon post does not count), refuses with 400 "All selected stories already have a Bluesky post" when none is left, takes a lone remaining story without an LLM call, and otherwise lets the LLM pick; then it generates draft text
 4. Same review panel flow as single story, with additional "Selected from X stories" reasoning display
 
 ### Automated: Cron Job
@@ -94,9 +94,8 @@ Channel-specific settings in `server/src/config.ts` under `config.bluesky`:
 | `metrics.maxAgeDays` | `BLUESKY_METRICS_MAX_AGE_DAYS` | `30` | Only poll metrics for recent posts |
 | `postDelayMs` | `BLUESKY_POST_DELAY_MS` | `2000` | Delay between consecutive posts |
 | `postModelTier` | — | `medium` | LLM model tier for post text generation |
-| `pickModelTier` | — | `medium` | LLM model tier for story picking |
 
-The auto-post lookback window is shared with Mastodon: `config.socialAutoPost.lookbackHours` (`SOCIAL_LOOKBACK_HOURS`, falling back to `BLUESKY_LOOKBACK_HOURS`, default `25`; `.context/mastodon.md`).
+Story picking has one tier for both channels, `config.socialAutoPost.pickModelTier` (`medium`). The auto-post lookback window is shared with Mastodon too: `config.socialAutoPost.lookbackHours` (`SOCIAL_LOOKBACK_HOURS`, falling back to `BLUESKY_LOOKBACK_HOURS`, default `25`; `.context/mastodon.md`).
 
 ## API Endpoints
 
@@ -137,7 +136,7 @@ Two prompts in `server/src/prompts/bluesky.ts`:
 
 2. **`buildBlueskyPickBestPrompt`** — Picks the most engagement-worthy story from a set. Receives each candidate's summary and relevanceSummary (as "Why it matters") alongside metadata. Considers timeliness, emotional appeal, broad relevance, shareability, and uniqueness. Output: `blueskyPickBestSchema` (storyId + reasoning).
 
-Both use the `medium` model tier (configured separately as `postModelTier` and `pickModelTier`).
+Both use the `medium` model tier (`config.bluesky.postModelTier` for the text; the shared picker's `config.socialAutoPost.pickModelTier` for the pick). The pick prompt serves both channels (`.context/mastodon.md`).
 
 ## File Locations
 

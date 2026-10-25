@@ -178,4 +178,59 @@ describe('pickBestStoryForSocial', () => {
     mockPrisma.story.findMany.mockResolvedValue([])
     await expect(pickBestStoryForSocial(['story-1'])).rejects.toThrow('No stories found')
   })
+
+  describe('for one channel (manual pick and draft)', () => {
+    const twoStories = [
+      { id: 'story-1', title: 'One', titleLabel: 'A', summary: 'S1', relevance: 8, emotionTag: 'calm', issue: null, datePublished: null },
+      { id: 'story-2', title: 'Two', titleLabel: 'B', summary: 'S2', relevance: 7, emotionTag: 'calm', issue: null, datePublished: null },
+    ]
+
+    it('skips a story that already has a Mastodon post, so the draft step cannot fail on it', async () => {
+      mockPrisma.story.findMany.mockResolvedValue(twoStories)
+      mockPrisma.mastodonPost.findMany.mockResolvedValue([{ storyId: 'story-1' }])
+
+      const result = await pickBestStoryForSocial(['story-1', 'story-2'], 'mastodon')
+
+      expect(result.storyId).toBe('story-2')
+      expect(mockLlm.invoke).not.toHaveBeenCalled()
+      expect(mockPrisma.blueskyPost.findMany).not.toHaveBeenCalled()
+    })
+
+    it('skips a story that already has a Bluesky post', async () => {
+      mockPrisma.story.findMany.mockResolvedValue(twoStories)
+      mockPrisma.blueskyPost.findMany.mockResolvedValue([{ storyId: 'story-2' }])
+
+      const result = await pickBestStoryForSocial(['story-1', 'story-2'], 'bluesky')
+
+      expect(result.storyId).toBe('story-1')
+      expect(mockPrisma.mastodonPost.findMany).not.toHaveBeenCalled()
+    })
+
+    it('asks the model only about the unposted stories', async () => {
+      mockPrisma.story.findMany.mockResolvedValue([...twoStories, { ...twoStories[0]!, id: 'story-3' }])
+      mockPrisma.mastodonPost.findMany.mockResolvedValue([{ storyId: 'story-1' }])
+      // The model names a story that is already posted: fall back to the first unposted one
+      mockLlm.invoke.mockResolvedValue({ storyId: 'story-1', reasoning: 'N/A' })
+
+      const result = await pickBestStoryForSocial(['story-1', 'story-2', 'story-3'], 'mastodon')
+
+      expect(result.storyId).toBe('story-2')
+    })
+
+    it('refuses when every selected story already has a post on the channel', async () => {
+      mockPrisma.story.findMany.mockResolvedValue(twoStories)
+      mockPrisma.mastodonPost.findMany.mockResolvedValue([{ storyId: 'story-1' }, { storyId: 'story-2' }])
+
+      await expect(pickBestStoryForSocial(['story-1', 'story-2'], 'mastodon')).rejects.toThrow('All selected stories already have a Mastodon post')
+    })
+
+    it('without a channel, does not look at existing posts (auto-post candidates are filtered already)', async () => {
+      mockPrisma.story.findMany.mockResolvedValue([twoStories[0]])
+
+      await pickBestStoryForSocial(['story-1'])
+
+      expect(mockPrisma.blueskyPost.findMany).not.toHaveBeenCalled()
+      expect(mockPrisma.mastodonPost.findMany).not.toHaveBeenCalled()
+    })
+  })
 })

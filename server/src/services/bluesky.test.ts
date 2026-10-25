@@ -46,14 +46,16 @@ vi.mock('./llm.js', () => ({
 }))
 vi.mock('../prompts/index.js', () => ({
   buildBlueskyPostPrompt: vi.fn(() => 'post prompt'),
-  buildBlueskyPickBestPrompt: vi.fn(() => 'pick prompt'),
 }))
+const mockPickBestStoryForSocial = vi.hoisted(() => vi.fn())
+vi.mock('./socialMedia.js', () => ({ pickBestStoryForSocial: mockPickBestStoryForSocial }))
 
+const { BadRequestError } = await import('../utils/errors.js')
 const {
   assemblePostText,
   calcMaxBlurbChars,
   generateDraft,
-  pickBestStory,
+  pickAndDraft,
   updateDraft,
   deletePostRecord,
   publishPost,
@@ -199,51 +201,16 @@ describe('generateDraft', () => {
   })
 })
 
-describe('pickBestStory', () => {
+describe('pickAndDraft', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('returns the only candidate without LLM call', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'story-1', title: 'One', titleLabel: 'A', summary: 'S', relevance: 8, emotionTag: 'calm', issue: null, datePublished: null },
-    ])
-    mockPrisma.blueskyPost.findMany.mockResolvedValue([])
+  it('picks with the shared picker for Bluesky, which skips stories already posted there', async () => {
+    mockPickBestStoryForSocial.mockRejectedValueOnce(new BadRequestError('All selected stories already have a Bluesky post'))
 
-    const result = await pickBestStory(['story-1'])
-    expect(result.storyId).toBe('story-1')
-    expect(mockLlm.invoke).not.toHaveBeenCalled()
-  })
+    await expect(pickAndDraft(['story-1', 'story-2'])).rejects.toThrow('already have a Bluesky post')
 
-  it('calls LLM to pick from multiple candidates', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'story-1', title: 'One', titleLabel: 'A', summary: 'S1', relevance: 8, emotionTag: 'calm', issue: null, datePublished: null },
-      { id: 'story-2', title: 'Two', titleLabel: 'B', summary: 'S2', relevance: 7, emotionTag: 'uplifting', issue: null, datePublished: null },
-    ])
-    mockPrisma.blueskyPost.findMany.mockResolvedValue([])
-    mockLlm.invoke.mockResolvedValue({ storyId: 'story-2', reasoning: 'More engaging' })
-
-    const result = await pickBestStory(['story-1', 'story-2'])
-    expect(result.storyId).toBe('story-2')
-    expect(result.reasoning).toBe('More engaging')
-  })
-
-  it('excludes already-posted stories', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'story-1', title: 'One', titleLabel: 'A', summary: 'S', relevance: 8, emotionTag: 'calm', issue: null, datePublished: null },
-      { id: 'story-2', title: 'Two', titleLabel: 'B', summary: 'S', relevance: 7, emotionTag: 'calm', issue: null, datePublished: null },
-    ])
-    mockPrisma.blueskyPost.findMany.mockResolvedValue([{ storyId: 'story-1' }])
-
-    const result = await pickBestStory(['story-1', 'story-2'])
-    expect(result.storyId).toBe('story-2')
-  })
-
-  it('throws when all stories already posted', async () => {
-    mockPrisma.story.findMany.mockResolvedValue([
-      { id: 'story-1', title: 'One', titleLabel: 'A', summary: 'S', relevance: 8, emotionTag: 'calm', issue: null, datePublished: null },
-    ])
-    mockPrisma.blueskyPost.findMany.mockResolvedValue([{ storyId: 'story-1' }])
-
-    await expect(pickBestStory(['story-1'])).rejects.toThrow('already have a Bluesky post')
+    expect(mockPickBestStoryForSocial).toHaveBeenCalledWith(['story-1', 'story-2'], 'bluesky')
+    expect(mockPrisma.blueskyPost.create).not.toHaveBeenCalled()
   })
 })
 

@@ -10,6 +10,7 @@ import { mastodonPostTextSchema } from '../schemas/mastodon.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import type { AccountStatusesResult } from '../lib/mastodon.js'
 import { buildMetaLine } from './socialPostFormat.js'
+import { pickBestStoryForSocial } from './socialMedia.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('mastodon-service')
@@ -157,13 +158,11 @@ export async function generateDraft(storyId: string) {
 // ---------------------------------------------------------------------------
 
 /**
- * Pick the best story from a set and generate a Mastodon draft for it.
- * Uses the platform-agnostic picker from socialMedia.ts (does NOT filter by
- * Bluesky posts — only considers story quality).
+ * Pick the best story from a set and generate a Mastodon draft for it. The shared picker
+ * (socialMedia.ts) skips stories that already have a Mastodon post; Bluesky posts do not count.
  */
 export async function pickAndDraft(storyIds: string[]) {
-  const { pickBestStoryForSocial } = await import('./socialMedia.js')
-  const { storyId, reasoning } = await pickBestStoryForSocial(storyIds)
+  const { storyId, reasoning } = await pickBestStoryForSocial(storyIds, 'mastodon')
   const post = await generateDraft(storyId)
   return { ...post, pickReasoning: reasoning }
 }

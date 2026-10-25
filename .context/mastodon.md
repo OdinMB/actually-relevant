@@ -37,7 +37,7 @@ Mastodon posts are limited to 500 characters (configurable via `MASTODON_CHAR_LI
 To avoid duplicating story selection and post generation across channels, shared logic lives in `server/src/services/socialMedia.ts`:
 
 - **`findAutoPostCandidates(lookbackHours, channels)`** — Finds published stories with no post, in any status, on at least one **enabled** channel (only the enabled channels' tables are queried). With both enabled, a story posted to Bluesky but not Mastodon is still a candidate; with only Bluesky enabled, it is not. Draft and failed posts count as posted because `generateDraft` refuses any story that already has a post on the channel. A candidate is a story with `status = published`, published within the lookback window, and non-null `title`, `summary` and `slug`.
-- **`pickBestStoryForSocial(storyIds)`** — Platform-agnostic LLM picker, reuses the Bluesky pick-best prompt (criteria are universal: timeliness, emotional appeal, shareability).
+- **`pickBestStoryForSocial(storyIds, channel?)`** — The one story picker, for both channels' pick-and-draft and the auto-post job; an LLM picker with the Bluesky pick-best prompt (criteria are universal: timeliness, emotional appeal, shareability). With `channel` (pick-and-draft), it first skips stories that already have a post on that channel in any status, since `generateDraft` would refuse them, and throws a 400 "All selected stories already have a <Channel> post" when none is left. Without it (the auto-post job) the candidates are used as given: `findAutoPostCandidates` filtered them across the enabled channels. A lone remaining story is returned without an LLM call; an id the model invents falls back to the first remaining story.
 
 The unified `social_auto_post` job (`server/src/jobs/socialAutoPost.ts`) uses a channel adapter pattern: it finds candidates once, picks a best story once, then iterates over enabled channels to generate and publish posts. Each channel has its own text generation (different constraints) and publishing logic.
 
@@ -66,7 +66,7 @@ Each post table (`bluesky_posts`, `mastodon_posts`) holds at most one post per s
 
 1. Admin selects multiple published stories
 2. Clicks "Pick Best for Mastodon"
-3. `POST /api/admin/mastodon/posts/pick-and-draft` uses LLM to pick the best story, then generates draft text
+3. `POST /api/admin/mastodon/posts/pick-and-draft` picks with `pickBestStoryForSocial(storyIds, 'mastodon')`, which skips stories that already have a Mastodon post (Bluesky posts do not count), then generates draft text. Before 2026-10-25 it did not skip them, so it could pick an already-posted story and fail in `generateDraft`
 4. Same review panel flow as single story, with additional pick reasoning display
 
 ### Automated: Unified Social Auto-Post
@@ -123,7 +123,7 @@ All settings in `server/src/config.ts`:
 | Setting | Env Var | Default | Description |
 |---------|---------|---------|-------------|
 | `lookbackHours` | `SOCIAL_LOOKBACK_HOURS` | `25` | Hours to look back for auto-post candidates |
-| `pickModelTier` | — | `medium` | LLM model tier for story picking |
+| `pickModelTier` | — | `medium` | LLM model tier for story picking, on both channels (manual and auto-post) |
 
 ## API Endpoints
 
@@ -162,7 +162,7 @@ One prompt in `server/src/prompts/mastodon.ts`:
 
 **`buildMastodonPostPrompt`** — Generates a short editorial post for Mastodon. Unlike Bluesky's hook, it must stand on its own, because Mastodon's preview card shows the source article's og: data rather than our summary: it says what happened and who it is about, names the main actor or one key number, and uses only names, numbers and claims from the story (owner's decision, 2026-09-24). It allows hashtags and targets Mastodon's higher character limit. The LLM receives the story title, summary, and relevanceSummary. Max chars are dynamically calculated based on remaining space. Output: `mastodonPostTextSchema` (editorial text).
 
-Story picking reuses `pickBestStoryForSocial()` from the shared service, which uses the Bluesky pick-best prompt (criteria are universal).
+Story picking uses `pickBestStoryForSocial()` from the shared service, as Bluesky does, which uses the Bluesky pick-best prompt (criteria are universal).
 
 ## File Locations
 

@@ -525,7 +525,6 @@ export const config = {
     },
     postDelayMs: parseWholeNumber(process.env.BLUESKY_POST_DELAY_MS, 2000, 'BLUESKY_POST_DELAY_MS', 0),
     postModelTier: 'medium' as const,
-    pickModelTier: 'medium' as const,
   },
   mastodon: {
     instanceUrl: process.env.MASTODON_URL || '',
