@@ -55,26 +55,45 @@ describe('runPublishNewsletter', () => {
     }))
   })
 
-  it('does nothing quietly when no issue exists this week (generate_newsletter already alerted)', async () => {
+  it('warns when no automatic issue exists this week', async () => {
     mockFindFirst.mockResolvedValue(null)
 
     await runPublishNewsletter(SATURDAY)
 
+    expect(mockFindFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: { weekKey: '2026-W08' } }))
     expect(mockSendLive).not.toHaveBeenCalled()
     expect(mockUpdateNewsletter).not.toHaveBeenCalled()
-    expect(mockNotify).not.toHaveBeenCalled()
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'newsletter', severity: 'warning', dedupeKey: 'newsletter-not-sent:2026-W08', message: expect.stringContaining('no automatic issue'),
+    }))
   })
 
-  it('warns once per week when this week\'s issue is still being built', async () => {
-    mockFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'nl-draft' })
+  it('warns when this week\'s issue is still being built', async () => {
+    mockFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'nl-draft', title: 'Week 8, 2026', status: 'draft', sends: [] })
 
     await runPublishNewsletter(SATURDAY)
 
-    expect(mockFindFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: { weekKey: '2026-W08', html: '' } }))
     expect(mockSendLive).not.toHaveBeenCalled()
     expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
-      source: 'newsletter', severity: 'warning', dedupeKey: 'newsletter-not-sent:2026-W08',
+      source: 'newsletter', severity: 'warning', dedupeKey: 'newsletter-not-sent:2026-W08', message: expect.stringContaining('still being built'),
     }))
+  })
+
+  it('records an info notice, and sends nothing, when the issue was already sent or published', async () => {
+    for (const existing of [
+      { id: 'nl-1', title: 'Week 8, 2026', status: 'published', sends: [] },
+      { id: 'nl-1', title: 'Week 8, 2026', status: 'draft', sends: [{ id: 'send-live' }] },
+    ]) {
+      vi.resetAllMocks()
+      mockFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(existing)
+
+      await runPublishNewsletter(SATURDAY)
+
+      expect(mockSendLive).not.toHaveBeenCalled()
+      expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+        source: 'newsletter', severity: 'info', title: 'Newsletter already sent', dedupeKey: 'newsletter-already-sent:2026-W08',
+      }))
+    }
   })
 
   it('fails the run without marking the issue published when the send fails', async () => {
