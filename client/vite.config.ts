@@ -110,8 +110,8 @@ export default defineConfig({
       reporter: ['text-summary', 'html'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/**/*.d.ts'],
-      // Measured 2026-10-19: statements 53.34, branches 53.45, functions 43.86, lines 53.43
-      thresholds: { statements: 53, branches: 53, functions: 43, lines: 53 },
+      // Measured 2026-10-25: statements 53.42, branches 53.68, functions 44.12, lines 53.53
+      thresholds: { statements: 53, branches: 53, functions: 44, lines: 53 },
     },
   },
 })
