@@ -46,6 +46,7 @@ async function postWebhook(input: NoticeInput): Promise<void> {
 /** Jobs whose failures are filed under their product rather than under Jobs, with that product's admin page. */
 const JOB_FAILURE_HOMES: Record<string, { source: NoticeSource; link: string }> = {
   generate_newsletter: { source: 'newsletter', link: '/admin/newsletters' },
+  publish_newsletter: { source: 'newsletter', link: '/admin/newsletters' },
   generate_podcast: { source: 'podcast', link: '/admin/podcasts' },
   publish_podcast: { source: 'podcast', link: '/admin/podcasts' },
 }
