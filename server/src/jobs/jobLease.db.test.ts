@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import prisma from '../lib/prisma.js'
+import { config } from '../config.js'
 import { describeDb, useTestDatabase } from '../test/db/harness.js'
 import { claimJobRun, finishJobRun, jobsWithLiveLease, LEASE_HOLDER, releaseHeldJobLeases } from './jobLease.js'
 
@@ -29,7 +30,11 @@ describeDb('job lease (PostgreSQL)', () => {
 
       const job = await row()
       expect(job.lockedBy).toBe(LEASE_HOLDER)
-      expect(job.lockedUntil!.getTime()).toBeGreaterThan(Date.now())
+      // leaseSeconds from now on the database clock (UTC, timestamp without time zone)
+      const [lease] = await prisma.$queryRaw<{ seconds: number }[]>`
+        SELECT EXTRACT(EPOCH FROM locked_until - (now() AT TIME ZONE 'UTC'))::float AS seconds FROM job_runs WHERE job_name = ${JOB}`
+      expect(lease!.seconds).toBeGreaterThan(config.scheduler.leaseSeconds - 30)
+      expect(lease!.seconds).toBeLessThanOrEqual(config.scheduler.leaseSeconds)
       expect(job.lastStartedAt).not.toBeNull()
       expect(job.lastError).toBeNull()
     })

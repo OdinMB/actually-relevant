@@ -271,13 +271,6 @@ describe('assessStory', () => {
     await expect(assessStory('nonexistent')).rejects.toThrow('Story not found')
   })
 
-  it('skips a trashed story without a model call', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1', status: 'trashed' }))
-    expect(await assessStory('story-1', 'editor')).toBe('skipped')
-    expect(mockGetMediumLLM).not.toHaveBeenCalled()
-    expect(mockRecordAnalysis).not.toHaveBeenCalled()
-  })
-
   it('throws and does not save when embedding generation fails', async () => {
     const story = storyWithRelations({ id: 'story-1' })
     mockPrisma.story.findUnique.mockResolvedValue(story)

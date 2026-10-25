@@ -42,7 +42,7 @@ const { runSelectStories } = await import('../jobs/selectStories.js')
 const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
 const { transition } = await import('./storyLifecycle.js')
 const { detectAndCluster } = await import('./dedup.js')
-const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary, createManualCluster } = await import('./cluster.js')
+const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary, createManualCluster, StoriesAlreadyClusteredError } = await import('./cluster.js')
 
 let feedId = ''
 let issueSlug = ''
@@ -439,6 +439,17 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await row(primary.id)).status).toBe('analyzed')
   })
 
+  it('removing from a larger cluster keeps it and returns it without the story', async () => {
+    const [a, b, c] = await Promise.all([story({ status: 'analyzed' }), story({ status: 'analyzed' }), story({ status: 'analyzed' })])
+    const clusterId = await createCluster([a.id, b.id, c.id], a.id)
+
+    const left = await removeFromCluster(clusterId, c.id)
+
+    expect(left?.id).toBe(clusterId)
+    expect(left?.stories.map(s => s.id).sort()).toEqual([a.id, b.id].sort())
+    expect((await row(c.id)).clusterId).toBeNull()
+  })
+
   // ──── Election ──────────────────────────────────────────────────────────
 
   it('re-election never picks a trashed member', async () => {
@@ -537,6 +548,9 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const results = await Promise.allSettled([createManualCluster([a.id, b.id], a.id), createManualCluster([b.id, c.id], c.id)])
 
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
+    const [lost] = results.filter(r => r.status === 'rejected')
+    expect(lost?.reason).toBeInstanceOf(StoriesAlreadyClusteredError)
+    expect(lost?.reason.storyIds).toEqual([b.id])
     expect(await prisma.storyCluster.count()).toBe(1)
     const rows = await prisma.story.findMany({ where: { id: { in: [a.id, b.id, c.id] } }, select: { clusterId: true } })
     expect(rows.filter(r => r.clusterId !== null)).toHaveLength(2)
@@ -550,8 +564,10 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const target = await createCluster([a.id, b.id], a.id)
     const source = await createCluster([c.id, d.id], c.id)
 
-    await mergeClusters(target, source)
+    const merged = await mergeClusters(target, source)
 
+    expect(merged?.id).toBe(target)
+    expect(merged?.stories).toHaveLength(4)
     expect(await primaryOf(target)).toBe(a.id)
     expect((await row(c.id)).status).toBe('rejected')
     expect(await prisma.storyCluster.count()).toBe(1)
