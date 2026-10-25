@@ -38,7 +38,7 @@ These changes are tuned for Luna and would shift gpt-5-mini and gpt-5-nano: on t
 
 ### GPT-6 and LangChain
 
-`@langchain/openai` forwards its `reasoning: { effort }` option only for model IDs it recognises as reasoning models (`o*`, `gpt-5*`), and silently drops it for `gpt-6-*`. `createChatModel` therefore sends effort as `modelKwargs: { reasoning_effort }`, which reaches every Chat Completions request. Never set `temperature`, `topP` or `maxTokens` on these clients: GPT-6 rejects sampling parameters above effort `none`, and LangChain would send `max_tokens` for `gpt-6-*`. Never use `method: 'functionCalling'` or bound tools either: GPT-6 Chat Completions function calling works only at effort `none`. The default `withStructuredOutput` method (`response_format` json_schema) is fine.
+`@langchain/openai` forwards its `reasoning: { effort }` option only for model IDs on its own list of reasoning models (`o*`, `gpt-5*`, and `gpt-6*` since 1.5.14), and silently drops it for any other ID. `createChatModel` therefore sends effort as `modelKwargs: { reasoning_effort }`, which reaches every Chat Completions request whatever the model ID (`llm.test.ts` pins it), so an `OPENAI_MODEL_*` override to a model LangChain does not list yet keeps its effort. `gpt-6-*` stays on Chat Completions (LangChain routes only some gpt-5.x and codex IDs to the Responses API). Never set `temperature`, `topP` or `maxTokens` on these clients: GPT-6 rejects sampling parameters above effort `none`. Never use `method: 'functionCalling'` or bound tools either: GPT-6 Chat Completions function calling works only at effort `none`. The default `withStructuredOutput` method (`response_format` json_schema) is fine.
 
 ### Retries
 
