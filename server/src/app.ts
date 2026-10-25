@@ -84,6 +84,8 @@ export function requestIdFrom(header: string | string[] | undefined): string {
 app.use((req, res, next) => {
   req.id = requestIdFrom(req.headers['x-request-id'])
   res.set('X-Request-Id', req.id)
+  // AI usage preference on every response, story pages served from here included (.context/seo.md)
+  res.set('Content-Usage', config.contentUsage)
   next()
 })
 

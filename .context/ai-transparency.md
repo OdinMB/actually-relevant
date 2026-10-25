@@ -138,6 +138,7 @@ A solo operator (the project owner) runs every AI feature. Model behavior, limit
 | Vendor terms (OpenAI Sharing & Publication Policy) | Social posts now carry "AI-generated" in every metadata line (pending deploy); bios follow when the owner runs the script (§7) | assessment F-4 |
 | § 18(3) MStV social bots | Not researched in the brief; have it checked | assessment 5.4 |
 | Consumer law (B2C only) | N/A: no B2C contract | — |
+| AI usage preference for our content (IETF AIPREF) | Implemented pending deploy (owner, 2026-10-25: allow AI search, no AI model training): `Content-Usage: train-ai=n, search=y` in `robots.txt` (catch-all group), as an HTTP header on every API response (story pages, feeds and the sitemap included) and on every static-site response (`render.yaml` `headers`). Not an Art. 50 duty and not a licence: crawlers comply voluntarily, the vocabulary is still an Internet-Draft (attach-05, vocab-07, August 2026), and it says nothing about the publishers' quotes we carry, which are not ours to license. `ai-use` (inference such as RAG) is left unstated on purpose | `config.contentUsage` in `server/src/config.ts`; `server/src/app.ts`; `client/public/robots.txt`; `render.yaml`; test `app.test.ts`; `.context/seo.md` |
 
 ## 11. Open items
 

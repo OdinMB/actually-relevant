@@ -183,6 +183,12 @@ export const config = {
     blueskyProfile: 'https://bsky.app/profile/actuallyrelevant.bsky.social',
     mastodonProfile: 'https://mastodon.social/@actuallyrelevant',
   },
+  /**
+   * AI usage preference (IETF AIPREF draft vocabulary): AI search may use the content, AI model
+   * training may not (owner, 2026-10-25). Sent as the Content-Usage header on every API response;
+   * client/public/robots.txt and the static site's headers in render.yaml state the same (app.test.ts).
+   */
+  contentUsage: 'train-ai=n, search=y',
   /** Public client (frontend) URL — used to build links the visitor clicks, e.g. the subscription confirmation page. */
   clientUrl: process.env.CLIENT_URL || 'https://actuallyrelevant.news',
   database: {

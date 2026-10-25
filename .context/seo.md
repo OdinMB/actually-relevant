@@ -9,14 +9,26 @@
 
 ## robots.txt
 
-Static file that rarely changes. Points crawlers to the sitemap.
+Static file that rarely changes. Points crawlers to the sitemap and states the AI usage preference.
 
 ```txt
 User-agent: *
 Allow: /
+# AI usage preference (IETF AIPREF draft): AI search yes, AI model training no
+Content-Usage: train-ai=n, search=y
 
 Sitemap: https://actuallyrelevant.news/sitemap.xml
 ```
+
+### AI usage preference (`Content-Usage`)
+
+Owner decision 2026-10-25: AI search may use the site's content, AI model training may not. Stated with the IETF AIPREF drafts (draft-ietf-aipref-attach-05 for the `robots.txt` rule and the HTTP header, draft-ietf-aipref-vocab-07 for the `train-ai` and `search` categories, both August 2026), in three places that must agree:
+
+- `robots.txt`: `Content-Usage: train-ai=n, search=y` in the catch-all group (no path prefix, so it covers the whole site).
+- The API: every response carries `Content-Usage: train-ai=n, search=y` (`server/src/app.ts`, value `config.contentUsage`), which covers what the static site's rewrites proxy to it (story pages, `/sitemap.xml`, `/podcast.xml`), the RSS feeds and the JSON API.
+- The static site: a `headers` rule on `/*` in `render.yaml` sends the same header with every static file and prerendered page.
+
+`server/src/app.test.ts` holds all three to `config.contentUsage`; change the value there and in the two files together. The drafts are not RFCs yet and compliance is voluntary; if a later draft renames a category, update all three. `ai-use` (AI inference, e.g. retrieval) is left unstated on purpose. Google's robots.txt parser ignores the unknown rule, so crawling is unaffected. Record: `.context/ai-transparency.md` §10.
 
 ## sitemap.xml
 
