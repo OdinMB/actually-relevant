@@ -120,7 +120,7 @@ const RUNS_ON_ITS_CODE_DEFAULT: Record<string, string> = {
     'MASTODON_CHAR_LIMIT',
     'SOCIAL_LOOKBACK_HOURS',
   ]),
-  ...tunables('local file paths and log rotation (config.log, config.crawl.faviconDir)',['LOG_DIR', 'LOG_RETENTION_DAYS', 'FAVICON_DIR']),
+  ...tunables('local file paths and log rotation (config.log, config.crawl.faviconDir)', ['LOG_DIR', 'LOG_RETENTION_DAYS', 'FAVICON_DIR']),
 }
 
 /**
