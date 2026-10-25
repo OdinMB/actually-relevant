@@ -89,6 +89,10 @@ export interface Contact {
 
 // --- Campaign methods ---
 
+/**
+ * Retried on any transient error: a retry after a lost response leaves at most an orphan draft
+ * campaign in Plunk, and only the campaign whose id is returned is ever sent.
+ */
 export async function createCampaign(opts: CreateCampaignOpts): Promise<Campaign> {
   return withRetry(
     async () => {
@@ -105,6 +109,11 @@ export async function createCampaign(opts: CreateCampaignOpts): Promise<Campaign
   )
 }
 
+/**
+ * Retried only when the connection was never made: a timeout, a reset or a 5xx may come after
+ * Plunk accepted the send, and a retry would then email the whole audience twice. A transient
+ * failure fails the send instead, and an editor resends by hand.
+ */
 export async function sendCampaign(id: string, scheduledFor?: string): Promise<void> {
   return withRetry(
     async () => {
@@ -113,7 +122,7 @@ export async function sendCampaign(id: string, scheduledFor?: string): Promise<v
       await client.post(`/campaigns/${id}/send`, body)
       log.info({ campaignId: id }, 'campaign send triggered')
     },
-    { retries: 3, retryOn: isRetryableError },
+    { retries: 3, retryOn: isConnectionNotEstablished },
   )
 }
 
