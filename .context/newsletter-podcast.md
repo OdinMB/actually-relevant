@@ -4,7 +4,7 @@ The weekly two-speaker podcast has its own file: `.context/podcast.md`.
 
 ## Overview
 
-Newsletters are generated from published stories through a create-assign-generate workflow via admin API endpoints, with template-based formatting.
+Newsletters are generated from published stories through a create-assign-select-generate workflow via admin API endpoints, with template-based formatting. The `generate_newsletter` job builds the weekly issue and the `publish_newsletter` job sends it to every subscriber and publishes it (seeded disabled). A published issue is public on the website, in the archive at `/newsletter` and at `/newsletter/:slug` (see Web edition).
 
 ## Workflow
 

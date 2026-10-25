@@ -127,6 +127,10 @@ Selection: candidates go through LLM selection (~`config.selection.ratio`, defau
 | `server/src/services/storyQueries.ts` | Admin list and filters, by-id reads, status counts, `getStoryIdsByStatus` |
 | `server/src/services/storyWrites.ts` | Create, admin edit, editor status actions (through the module), delete, per-story cluster dissolve |
 | `server/src/services/publicStories.ts` | Public listing, story by slug, cluster redirect and sources, homepage buckets |
+| `server/src/services/storySearch.ts` | Public hybrid (semantic + text) search, `hybridSearch()` (`.context/embeddings.md`) |
+| `server/src/services/relatedStories.ts` | Related stories, their LLM re-rank and cache (`forgetRelatedStories()` clears entries) |
+| `server/src/services/storySelect.ts` | `PUBLIC_STORY_SELECT`, the field selection every public story read uses |
+| `server/src/services/clusterRepair.ts` | `repairClusters()`: dissolves or re-elects clusters after member deletes, shared by `deleteStory()` and the retention cleanup |
 | `server/src/services/analysis.ts` | LLM orchestration (preassess, assess, select); results written through the module |
 | `server/src/jobs/preassessStories.ts` | Scheduled pre-assessment |
 | `server/src/jobs/assessStories.ts` | Scheduled full assessment |
