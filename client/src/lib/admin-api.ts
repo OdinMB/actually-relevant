@@ -293,6 +293,8 @@ export const adminApi = {
       request<NewsletterSend>(`/newsletters/${id}/send-live`, { method: 'POST', body: JSON.stringify({ scheduledFor }) }),
     listSends: (id: string) => request<NewsletterSend[]>(`/newsletters/${id}/sends`),
     refreshStats: (id: string, sendId: string) => request<NewsletterSend>(`/newsletters/${id}/sends/${sendId}/refresh-stats`, { method: 'POST' }),
+    /** An unconfirmed live send did not go out (checked in Plunk): marks it failed, so the issue can be sent. 409 for any other send. */
+    markSendFailed: (id: string, sendId: string) => request<NewsletterSend>(`/newsletters/${id}/sends/${sendId}/mark-failed`, { method: 'POST' }),
   },
 
   // Podcasts

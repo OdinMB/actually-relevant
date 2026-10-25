@@ -15,7 +15,10 @@ import {
   useSendLiveNewsletter,
   useNewsletterSends,
   useRefreshSendStats,
+  useMarkSendFailed,
 } from '../../hooks/useNewsletters'
+import { ApiError } from '../../lib/admin-api'
+import { newsletterSendState } from '../../lib/newsletter-state'
 import { useToast } from '../ui/Toast'
 import { AssignedStoriesList } from './AssignedStoriesList'
 import type { StoryListAction } from './AssignedStoriesList'
@@ -51,7 +54,14 @@ export function PublishHint({ newsletter }: { newsletter: Pick<Newsletter, 'stat
   )
 }
 
-function SendStatusBadge({ status }: { status: string }) {
+/** The server's refusal reason (a 409 says why) or, for anything else, the fallback. */
+function errorText(err: unknown, fallback: string): string {
+  return err instanceof ApiError && err.message ? err.message : fallback
+}
+
+function SendStatusBadge({ send }: { send: NewsletterSend }) {
+  // A live send in `draft` was claimed but never confirmed: Plunk may or may not have sent it
+  if (!send.isTest && send.status === 'draft') return <Badge variant="yellow">Unconfirmed</Badge>
   const variants: Record<string, 'green' | 'yellow' | 'red' | 'gray' | 'blue'> = {
     sent: 'green',
     sending: 'blue',
@@ -59,7 +69,7 @@ function SendStatusBadge({ status }: { status: string }) {
     failed: 'red',
     draft: 'gray',
   }
-  return <Badge variant={variants[status] || 'gray'}>{status}</Badge>
+  return <Badge variant={variants[send.status] || 'gray'}>{send.status}</Badge>
 }
 
 function StatsDisplay({ stats }: { stats: Record<string, unknown> }) {
@@ -82,42 +92,66 @@ function StatsDisplay({ stats }: { stats: Record<string, unknown> }) {
   )
 }
 
-function SendHistory({ newsletterId }: { newsletterId: string }) {
-  const { data: sends, isLoading } = useNewsletterSends(newsletterId)
+function SendHistory({ newsletterId, sends, isLoading }: { newsletterId: string; sends: NewsletterSend[] | undefined; isLoading: boolean }) {
   const refreshStats = useRefreshSendStats()
+  const markSendFailed = useMarkSendFailed()
   const { toast } = useToast()
 
   if (isLoading) return <p className="text-neutral-400 text-sm">Loading send history...</p>
   if (!sends || sends.length === 0) return <p className="text-neutral-400 text-sm italic">No sends yet.</p>
 
+  const handleMarkNotSent = (sendId: string) => {
+    if (!confirm('Only if Plunk shows this campaign was not sent. Marking it as not sent lets the issue be sent to subscribers again. Continue?')) return
+    markSendFailed.mutate(
+      { newsletterId, sendId },
+      {
+        onSuccess: () => toast('success', 'Send marked as not sent'),
+        onError: err => toast('error', errorText(err, 'Failed to mark the send as not sent')),
+      },
+    )
+  }
+
   return (
     <div className="space-y-2">
-      {sends.map((send: NewsletterSend) => (
-        <div key={send.id} className="flex items-center justify-between gap-3 p-3 bg-neutral-50 rounded-lg text-sm">
-          <div className="flex items-center gap-3 min-w-0">
-            <SendStatusBadge status={send.status} />
-            {send.isTest && <Badge variant="gray">Test</Badge>}
-            <span className="text-neutral-500 text-xs whitespace-nowrap">{formatDate(send.createdAt)}</span>
-            <StatsDisplay stats={send.stats as Record<string, unknown>} />
+      {sends.map((send: NewsletterSend) => {
+        const unconfirmed = !send.isTest && send.status === 'draft'
+        return (
+          <div key={send.id} className="p-3 bg-neutral-50 rounded-lg text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <SendStatusBadge send={send} />
+                {send.isTest && <Badge variant="gray">Test</Badge>}
+                <span className="text-neutral-500 text-xs whitespace-nowrap">{formatDate(send.createdAt)}</span>
+                <StatsDisplay stats={send.stats as Record<string, unknown>} />
+              </div>
+              <div className="flex gap-2 shrink-0">
+                {unconfirmed && (
+                  <Button variant="secondary" size="sm" onClick={() => handleMarkNotSent(send.id)} loading={markSendFailed.isPending}>
+                    Mark as not sent
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    refreshStats.mutate(
+                      { newsletterId, sendId: send.id },
+                      {
+                        onSuccess: () => toast('success', 'Stats refreshed'),
+                        onError: err => toast('error', errorText(err, 'Failed to refresh stats')),
+                      },
+                    )
+                  }
+                  loading={refreshStats.isPending}
+                >
+                  Refresh Stats
+                </Button>
+              </div>
+            </div>
+            {send.errorMessage && (send.status === 'failed' || unconfirmed) && <p className="mt-2 text-xs text-neutral-600">{send.errorMessage}</p>}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              refreshStats.mutate(
-                { newsletterId, sendId: send.id },
-                {
-                  onSuccess: () => toast('success', 'Stats refreshed'),
-                  onError: () => toast('error', 'Failed to refresh stats'),
-                },
-              )
-            }
-            loading={refreshStats.isPending}
-          >
-            Refresh Stats
-          </Button>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -139,6 +173,10 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
   const generateHtml = useGenerateHtml()
   const sendTest = useSendTestNewsletter()
   const sendLive = useSendLiveNewsletter()
+  const { data: sends, isLoading: sendsLoading } = useNewsletterSends(newsletter.id)
+  // Mirrors the server's rule for button states; its 409 is the authority
+  const { liveSent, unconfirmed, frozen, testCurrent } = newsletterSendState(newsletter, sends)
+  const sendLiveBlock = unconfirmed ? 'A send is unconfirmed' : liveSent ? 'Already sent' : !testCurrent ? 'Send a test of the current HTML first' : null
 
   // Track whether local edits differ from server state
   const hasContentChanges = content !== newsletter.content
@@ -150,8 +188,8 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       await update.mutateAsync({ id: newsletter.id, data: { title } })
       toast('success', 'Title updated')
       setEditingTitle(false)
-    } catch {
-      toast('error', 'Failed to update title')
+    } catch (err) {
+      toast('error', errorText(err, 'Failed to update title'))
     }
   }
 
@@ -164,8 +202,8 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       toast('success', 'Changes saved')
       setEditingContent(false)
       setEditingHtml(false)
-    } catch {
-      toast('error', 'Failed to save changes')
+    } catch (err) {
+      toast('error', errorText(err, 'Failed to save changes'))
     }
   }
 
@@ -181,8 +219,8 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
     try {
       await update.mutateAsync({ id: newsletter.id, data: { status: newStatus } })
       toast('success', newStatus === 'published' ? 'Newsletter published' : 'Newsletter unpublished')
-    } catch {
-      toast('error', 'Failed to update status')
+    } catch (err) {
+      toast('error', errorText(err, 'Failed to update status'))
     }
   }
 
@@ -192,7 +230,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
         setContent(result.content)
         toast('success', 'Content generated')
       },
-      onError: () => toast('error', 'Generation failed'),
+      onError: err => toast('error', errorText(err, 'Generation failed')),
     })
   }
 
@@ -201,8 +239,8 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       const result = await generateHtml.mutateAsync(newsletter.id)
       setHtml(result.html)
       toast('success', 'HTML generated')
-    } catch {
-      toast('error', 'Failed to generate HTML')
+    } catch (err) {
+      toast('error', errorText(err, 'Failed to generate HTML'))
     }
   }
 
@@ -210,18 +248,18 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
     try {
       await sendTest.mutateAsync(newsletter.id)
       toast('success', 'Test email sent')
-    } catch {
-      toast('error', 'Failed to send test email')
+    } catch (err) {
+      toast('error', errorText(err, 'Failed to send test email'))
     }
   }
 
   const handleSendLive = async () => {
-    if (!confirm('This will send the newsletter to all subscribers. This cannot be undone. Continue?')) return
+    if (!confirm('This will send the newsletter to all subscribers and publish it on the website. It cannot be sent again. Continue?')) return
     try {
       await sendLive.mutateAsync({ id: newsletter.id })
-      toast('success', 'Newsletter sent to subscribers')
-    } catch {
-      toast('error', 'Failed to send newsletter')
+      toast('success', 'Newsletter sent to subscribers and published')
+    } catch (err) {
+      toast('error', errorText(err, 'Failed to send newsletter'))
     }
   }
 
@@ -232,7 +270,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       { id: newsletter.id, data: { storyIds: newLonglist, selectedStoryIds: newSelected } },
       {
         onSuccess: () => toast('success', 'Story selected'),
-        onError: () => toast('error', 'Failed to select story'),
+        onError: err => toast('error', errorText(err, 'Failed to select story')),
       },
     )
   }
@@ -243,7 +281,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       { id: newsletter.id, data: { storyIds: newLonglist } },
       {
         onSuccess: () => toast('success', 'Story discarded'),
-        onError: () => toast('error', 'Failed to discard story'),
+        onError: err => toast('error', errorText(err, 'Failed to discard story')),
       },
     )
   }
@@ -254,7 +292,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
       { id: newsletter.id, data: { selectedStoryIds: newSelected } },
       {
         onSuccess: () => toast('success', 'Story removed from selection'),
-        onError: () => toast('error', 'Failed to remove story'),
+        onError: err => toast('error', errorText(err, 'Failed to remove story')),
       },
     )
   }
@@ -295,7 +333,8 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
               <button
                 type="button"
                 onClick={() => setEditingTitle(true)}
-                className="shrink-0 p-1 rounded text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-brand-500"
+                disabled={frozen}
+                className="shrink-0 p-1 rounded text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 title="Rename"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -318,10 +357,11 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
             onClick={() =>
               assign.mutate(newsletter.id, {
                 onSuccess: () => toast('success', 'Longlist generated'),
-                onError: () => toast('error', 'Failed to generate longlist'),
+                onError: err => toast('error', errorText(err, 'Failed to generate longlist')),
               })
             }
             loading={assign.isPending}
+            disabled={frozen}
           >
             Generate Longlist
           </Button>
@@ -331,10 +371,11 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
             onClick={() =>
               selectStories.mutate(newsletter.id, {
                 onSuccess: () => toast('success', 'Stories selected'),
-                onError: () => toast('error', 'Selection failed'),
+                onError: err => toast('error', errorText(err, 'Selection failed')),
               })
             }
             loading={selectStories.isPending}
+            disabled={frozen}
           >
             {selectStories.isPending ? 'Selecting... (this may take a minute)' : 'Select Stories'}
           </Button>
@@ -344,7 +385,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
             onClick={() =>
               carousel.mutate(newsletter.id, {
                 onSuccess: () => toast('success', 'Carousel downloaded'),
-                onError: () => toast('error', 'Carousel generation failed'),
+                onError: err => toast('error', errorText(err, 'Carousel generation failed')),
               })
             }
             loading={carousel.isPending}
@@ -356,6 +397,13 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           </Button>
         </div>
         <PublishHint newsletter={newsletter} />
+        {frozen && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            {unconfirmed
+              ? 'A send to subscribers is unconfirmed. Check the campaign in Plunk, then mark the send as not sent below if it did not go out.'
+              : 'Sent to subscribers. Unpublish to edit; it cannot be sent again.'}
+          </p>
+        )}
 
         {/* Selected stories */}
         <AssignedStoriesList
@@ -363,7 +411,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           storyIds={newsletter.selectedStoryIds}
           emptyText="No stories selected yet. Use 'Select Stories' or manually select from the longlist."
           actions={selectedActions}
-          isActioning={update.isPending}
+          isActioning={update.isPending || frozen}
           collapsible={false}
         />
 
@@ -373,7 +421,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           storyIds={newsletter.storyIds}
           emptyText="No stories in longlist. Click 'Generate Longlist' to fetch recent published stories."
           actions={longlistActions}
-          isActioning={update.isPending}
+          isActioning={update.isPending || frozen}
           defaultExpanded={newsletter.selectedStoryIds.length === 0}
         />
 
@@ -382,13 +430,14 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-neutral-900">Content</h3>
             <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={handleGenerateContent} loading={generate.isPending}>
+              <Button variant="secondary" size="sm" onClick={handleGenerateContent} loading={generate.isPending} disabled={frozen}>
                 {generate.isPending ? 'Generating...' : 'Generate Content'}
               </Button>
               {!editingContent && (
                 <Button
                   variant="ghost"
                   size="sm"
+                  disabled={frozen}
                   onClick={() => {
                     setContent(newsletter.content)
                     setEditingContent(true)
@@ -413,11 +462,11 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-neutral-900">Email HTML</h3>
             <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={handleGenerateHtml} loading={generateHtml.isPending}>
+              <Button variant="secondary" size="sm" onClick={handleGenerateHtml} loading={generateHtml.isPending} disabled={frozen}>
                 {generateHtml.isPending ? 'Generating...' : 'Generate HTML'}
               </Button>
               {!editingHtml && html && (
-                <Button variant="ghost" size="sm" onClick={() => setEditingHtml(true)}>
+                <Button variant="ghost" size="sm" onClick={() => setEditingHtml(true)} disabled={frozen}>
                   Edit
                 </Button>
               )}
@@ -439,12 +488,20 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
             <Button variant="secondary" size="sm" onClick={handleSendTest} loading={sendTest.isPending}>
               {sendTest.isPending ? 'Sending...' : 'Send Test'}
             </Button>
-            <Button variant="primary" size="sm" onClick={handleSendLive} loading={sendLive.isPending}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSendLive}
+              loading={sendLive.isPending}
+              disabled={sendsLoading || !!sendLiveBlock}
+              title={sendLiveBlock ?? undefined}
+            >
               {sendLive.isPending ? 'Sending...' : 'Send to Subscribers'}
             </Button>
           </div>
+          {!sendsLoading && sendLiveBlock && <p className="text-xs text-neutral-500 -mt-2 mb-4">{sendLiveBlock}.</p>}
           <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Send History</h4>
-          <SendHistory newsletterId={newsletter.id} />
+          <SendHistory newsletterId={newsletter.id} sends={sends} isLoading={sendsLoading} />
         </div>
       </div>
 
@@ -453,7 +510,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
         <Button size="sm" variant="ghost" onClick={handleCancel} disabled={!hasUnsavedChanges || update.isPending}>
           Cancel
         </Button>
-        <Button size="sm" onClick={handleSave} loading={update.isPending} disabled={!hasUnsavedChanges}>
+        <Button size="sm" onClick={handleSave} loading={update.isPending} disabled={!hasUnsavedChanges || frozen}>
           Save
         </Button>
       </div>
