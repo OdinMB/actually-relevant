@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -63,6 +63,17 @@ describe('NewsletterPage', () => {
     expect(screen.getByText(/8 stories/)).toBeInTheDocument()
     expect(screen.getByText(/1 story$/)).toBeInTheDocument()
     expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1)
+  })
+
+  it('links the newsletter RSS feed, visibly and for feed autodiscovery', async () => {
+    renderPage()
+    const link = screen.getByRole('link', { name: 'Follow new issues by RSS' })
+    expect(link.getAttribute('href')).toBe('/api/newsletters/feed.xml')
+    await waitFor(() => {
+      const alternate = document.head.querySelector('link[rel="alternate"][type="application/rss+xml"]')
+      expect(alternate?.getAttribute('href')).toBe('/api/newsletters/feed.xml')
+      expect(alternate?.getAttribute('title')).toBe('Actually Relevant newsletter')
+    })
   })
 
   it('says so when no issue is published yet', async () => {

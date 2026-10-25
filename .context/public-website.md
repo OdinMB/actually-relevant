@@ -60,6 +60,8 @@ Public RSS 2.0 feeds are available without authentication:
 
 Feed items include: title, link to story page, AI-generated summary prefixed "[AI-generated] ", publish date, and issue category. The channel description is fixed copy that says AI writes and curates the feed (`rssChannelDescription()` in `server/src/lib/aiLabelCopy.ts`; per-issue feeds no longer use the issue's own description). RSS readers never see the site's labels, so keep the item prefix when changing the feed. Responses use `Content-Type: application/rss+xml` with a 15-minute cache (`Cache-Control: public, max-age=900`).
 
+The newsletter has a feed of its published issues, `GET /api/newsletters/feed.xml`, each item linking the issue's web edition with the issue's AI label as description; it shares `buildFeed`/`setRssHeaders` (`server/src/lib/rssFeed.ts`) with the story feeds and is described in `.context/newsletter-podcast.md`, "Web edition". Its autodiscovery link is on `/newsletter` and every issue page, with a visible link under the signup form on `/newsletter`.
+
 The podcast has its own hand-built feed (`GET /api/podcast/feed.xml`, public at `/podcast.xml` through a Render rewrite, mounted before the shared rate limiter); it is described in `.context/podcast.md`, "Publishing, feed and page".
 
 **Discoverability:**
@@ -69,7 +71,7 @@ The podcast has its own hand-built feed (`GET /api/podcast/feed.xml`, public at 
 - All RSS hrefs use `API_BASE` (from `client/src/lib/api.ts`) so they resolve correctly in both dev (Vite proxy) and production (separate static site + API service on Render)
 
 **Key files:**
-- `server/src/routes/public/feed.ts` — RSS feed route handler (uses `feed` npm package)
+- `server/src/routes/public/feed.ts` — RSS feed route handler (uses `feed` npm package; channel setup and headers in `server/src/lib/rssFeed.ts`, shared with the newsletter feed)
 - `server/src/routes/public/index.ts` — Registers feed router at `/feed`
 - `client/vite.config.ts` — Dev proxy for `/api` to `localhost:3001`
 

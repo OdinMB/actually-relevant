@@ -686,6 +686,25 @@ export function getOpenAPIDocument(): ReturnType<typeof createDocument> {
           },
         },
       },
+      '/api/newsletters/feed.xml': {
+        get: {
+          operationId: 'getNewsletterRssFeed',
+          summary: 'Newsletter RSS feed',
+          description:
+            'Returns an RSS 2.0 feed of the published newsletter issues, newest first, each linking its web edition. Every item description is the issue’s AI label. Cached for 15 minutes.',
+          tags: ['Newsletter'],
+          responses: {
+            '200': {
+              description: 'RSS 2.0 XML feed',
+              content: {
+                'application/rss+xml': {
+                  schema: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
       '/api/newsletters/{slug}': {
         get: {
           operationId: 'getNewsletterIssue',

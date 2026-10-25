@@ -2,7 +2,8 @@ import { Router } from 'express'
 import { config } from '../../config.js'
 import { TTLCache, cached } from '../../lib/cache.js'
 import { RSS_ITEM_PREFIX, rssChannelDescription } from '../../lib/aiLabelCopy.js'
-import { Feed } from 'feed'
+import type { Feed } from 'feed'
+import { buildFeed, setRssHeaders } from '../../lib/rssFeed.js'
 import * as storyService from '../../services/story.js'
 import * as issueService from '../../services/issue.js'
 import { failsWith } from '../../middleware/routeErrors.js'
@@ -15,31 +16,12 @@ const feedCache = new TTLCache<string>(config.feed.cacheMaxAge * 1000)
 
 type FeedStory = Awaited<ReturnType<typeof storyService.getPublishedStories>>['data'][number]
 
-function getSiteUrl(): string {
-  return config.siteUrl
-}
-
-function buildFeed(options: { title: string; description: string; feedPath: string }) {
-  const siteUrl = getSiteUrl()
-  return new Feed({
-    title: options.title,
-    description: options.description,
-    id: siteUrl,
-    link: siteUrl,
-    language: 'en',
-    copyright: `© ${new Date().getFullYear()} Actually Relevant`,
-    feedLinks: {
-      rss: `${siteUrl}${options.feedPath}`,
-    },
-  })
-}
-
 /**
  * Add one item per story. RSS readers never show the website's labels, so every item
  * description carries its own AI label (AI Act Art. 50(4)).
  */
 function addStoryItems(feed: Feed, stories: FeedStory[]) {
-  const siteUrl = getSiteUrl()
+  const siteUrl = config.siteUrl
   for (const story of stories) {
     feed.addItem({
       title: story.title || story.sourceTitle,
@@ -50,11 +32,6 @@ function addStoryItems(feed: Feed, stories: FeedStory[]) {
       category: [{ name: (story.issue ?? story.feed?.issue)?.name || 'General' }],
     })
   }
-}
-
-function setRssHeaders(res: import('express').Response) {
-  res.set('Content-Type', 'application/rss+xml; charset=utf-8')
-  res.set('Cache-Control', `public, max-age=${config.feed.cacheMaxAge}`)
 }
 
 /**

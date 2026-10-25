@@ -76,6 +76,55 @@ describe('GET /api/newsletters', () => {
   })
 })
 
+describe('GET /api/newsletters/feed.xml', () => {
+  it('is an RSS feed of the published issues, each linking its web edition and carrying the AI label', async () => {
+    mockPrisma.newsletter.findMany.mockResolvedValue([
+      { slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: new Date('2026-10-18T09:00:00Z'), createdAt: new Date(), selectedStoryIds: ['s1'] },
+      { slug: 'week-41-2026', title: 'Week 41 & more', publishedAt: null, createdAt: new Date('2026-10-11T09:00:00Z'), selectedStoryIds: [] },
+    ])
+    mockPrisma.newsletter.count.mockResolvedValue(2)
+
+    const res = await request(app).get('/api/newsletters/feed.xml')
+
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/rss+xml; charset=utf-8')
+    expect(res.headers['cache-control']).toMatch(/^public, max-age=\d+$/)
+    const args = mockPrisma.newsletter.findMany.mock.calls[0][0]
+    expect(args.where).toEqual({ status: 'published', slug: { not: null } })
+    expect(args.select.content).toBeUndefined()
+
+    const xml: string = res.text
+    expect(xml).toContain('<rss version="2.0"')
+    const channel = xml.replace(/<item>[\s\S]*?<\/item>/g, '')
+    expect(channel).toContain('Weekly newsletter: news that matters to humanity. Written and curated by AI.')
+    expect(channel).toContain('https://actuallyrelevant.news/newsletter')
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => m[1]!)
+    expect(items).toHaveLength(2)
+    expect(items[0]).toContain('<link>https://actuallyrelevant.news/newsletter/week-42-2026</link>')
+    expect(items[0]).toContain('Sun, 18 Oct 2026 09:00:00 GMT')
+    expect(items[0]).toContain(`${NEWSLETTER_TOP_LABEL.lead} ${NEWSLETTER_TOP_LABEL.text}`)
+    expect(items[1]).toContain('<title><![CDATA[Week 41 & more]]></title>')
+    expect(items[1]).toContain('Sun, 11 Oct 2026 09:00:00 GMT')
+    for (const item of items) expect(item).toContain(NEWSLETTER_TOP_LABEL.text)
+  })
+
+  it('is a valid empty feed before the first issue is published', async () => {
+    mockPrisma.newsletter.findMany.mockResolvedValue([])
+    mockPrisma.newsletter.count.mockResolvedValue(0)
+    const res = await request(app).get('/api/newsletters/feed.xml')
+    expect(res.status).toBe(200)
+    expect(res.text).toContain('<channel>')
+    expect(res.text).not.toContain('<item>')
+  })
+
+  it('answers 500 with its own text when the archive cannot be read', async () => {
+    mockPrisma.newsletter.findMany.mockRejectedValue(new Error('db down'))
+    const res = await request(app).get('/api/newsletters/feed.xml')
+    expect(res.status).toBe(500)
+    expect(res.body).toEqual({ error: 'Failed to generate the newsletter feed' })
+  })
+})
+
 describe('GET /api/newsletters/:slug', () => {
   it('returns a published issue with its AI label, web markdown, stories and AI marker', async () => {
     mockPrisma.newsletter.findFirst.mockResolvedValue({

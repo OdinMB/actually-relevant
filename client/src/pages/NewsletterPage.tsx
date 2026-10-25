@@ -11,6 +11,7 @@ import AiSubtitle from '../components/ai/AiSubtitle'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { NewsletterArchiveSkeleton } from '../components/skeletons'
 import { useNewsletterArchive } from '../hooks/useNewsletterArchive'
+import { NEWSLETTER_FEED_URL } from '../lib/api'
 
 const META = {
   title: 'Newsletter - Actually Relevant',
@@ -80,6 +81,7 @@ export default function NewsletterPage() {
         <title>{META.title}</title>
         <meta name="description" content={META.description} />
         <link rel="canonical" href={META.url} />
+        <link rel="alternate" type="application/rss+xml" title="Actually Relevant newsletter" href={NEWSLETTER_FEED_URL} />
         <meta property="og:title" content={META.title} />
         <meta property="og:description" content={META.description} />
         <meta property="og:type" content="website" />
@@ -98,6 +100,13 @@ export default function NewsletterPage() {
           </h2>
           <div className="max-w-md">
             <SubscribeForm hideHeading idPrefix="newsletter-page" />
+            <p className="mt-3 text-sm text-neutral-600">
+              Prefer a feed reader?{' '}
+              <a href={NEWSLETTER_FEED_URL} className={LINK_CLASS}>
+                Follow new issues by RSS
+              </a>
+              .
+            </p>
           </div>
         </section>
 
