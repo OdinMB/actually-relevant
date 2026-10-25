@@ -134,6 +134,45 @@ describe('GET /api/newsletters/:slug', () => {
     expect(res.body.aiGenerated).toEqual({ fields: ['content', 'stories'], digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA })
   })
 
+  it('matches a marked heading to its story by id, after the story was renamed or the heading edited', async () => {
+    const content = [
+      '## Smog falls in 40 cities {story:s1}',
+      '{feed:feed-1} Nation · [original article](https://news.example/1)',
+      '',
+      '## Old unmarked heading',
+      'Other · [original article](https://news.example/2)',
+    ].join('\n')
+    mockPrisma.newsletter.findFirst.mockResolvedValue({
+      slug: 'week-42-2026',
+      title: 'Week 42, 2026',
+      content,
+      publishedAt: new Date('2026-10-18T09:00:00Z'),
+      createdAt: new Date(),
+      // s1 was dropped from the shortlist after generation; s2 is unmarked
+      selectedStoryIds: ['s2'],
+    })
+    const storyRow = (id: string, title: string) => ({
+      id,
+      slug: id,
+      status: 'published',
+      title,
+      titleLabel: null,
+      sourceTitle: `Source ${id}`,
+      sourceUrl: `https://news.example/${id}`,
+      feed: { title: 'Feed', displayTitle: null },
+    })
+    mockPrisma.story.findMany.mockResolvedValue([storyRow('s1', 'A title renamed later'), storyRow('s2', 'Old unmarked heading')])
+
+    const res = await request(app).get('/api/newsletters/week-42-2026')
+
+    expect(mockPrisma.story.findMany.mock.calls[0][0].where).toEqual({ id: { in: ['s1', 's2'] } })
+    expect(res.body.content).toContain('## Smog falls in 40 cities\n')
+    expect(res.body.stories.map((s: { slug: string; headline: string }) => [s.slug, s.headline])).toEqual([
+      ['s1', 'Smog falls in 40 cities'],
+      ['s2', 'Old unmarked heading'],
+    ])
+  })
+
   it('404s for an issue that is not published', async () => {
     mockPrisma.newsletter.findFirst.mockResolvedValue(null)
     const res = await request(app).get('/api/newsletters/week-43-2026')

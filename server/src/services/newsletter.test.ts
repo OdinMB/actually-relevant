@@ -229,6 +229,21 @@ describe('generateHtmlContent', () => {
     expect(html).toContain('<a href="https://example.com/linked" style="color: #171717; text-decoration: none;">Linked story title</a>')
   })
 
+  it('shows a marked story heading without its story marker', async () => {
+    const content = [
+      '## Marked headline {story:3f2b8c1e-0000-4000-8000-000000000001}',
+      'Publisher · [original article](https://example.com/m)',
+      '',
+      'Body.',
+    ].join('\n')
+
+    mockPrisma.newsletter.findUnique.mockResolvedValue({ ...baseNewsletter, content })
+    const html = await generateHtmlContent('nl-1')
+
+    expect(html).toContain('>Marked headline</a>')
+    expect(html).not.toContain('{story:')
+  })
+
   it('escapes HTML entities in content', async () => {
     const content = ['## Story with <tags> & "quotes"', 'Publisher & Co · [original article](https://example.com)', '', 'Content with <html> & entities.'].join(
       '\n',

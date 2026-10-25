@@ -12,6 +12,7 @@ import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { escapeHtml } from '../lib/xml.js'
 import { ensureNewsletterSlug, newsletterIssueUrl, publicationFields } from './newsletterArchive.js'
+import { parseStoryHeading, storyHeading } from './newsletterContent.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
 import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors.js'
@@ -269,7 +270,7 @@ export async function generateContent(newsletterId: string) {
       content += `# ${issueName} {${issueSlug}}\n\n`
     }
 
-    content += `## ${story.title || story.sourceTitle}\n`
+    content += `${storyHeading(story.title || story.sourceTitle, story.id)}\n`
     const feedId = story.feed?.id || ''
     const linkParts = [feedId ? `{feed:${feedId}} ${publisher}` : publisher]
     linkParts.push(`[original article](${story.sourceUrl})`)
@@ -419,7 +420,7 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
 
       for (const trimmed of storyLines) {
         if (trimmed.startsWith('## ')) {
-          title = trimmed.slice(3)
+          title = parseStoryHeading(trimmed).headline
         } else if (!title) {
           continue
         } else if (!metaLine && trimmed.match(/\[.*\]\(https?:\/\//)) {

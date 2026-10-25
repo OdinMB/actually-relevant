@@ -7,7 +7,7 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
-const { newsletterSlugBase, ensureNewsletterSlug, publicationFields, toWebMarkdown } = await import('./newsletterArchive.js')
+const { newsletterSlugBase, ensureNewsletterSlug, publicationFields } = await import('./newsletterArchive.js')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -75,12 +75,5 @@ describe('publicationFields', () => {
     expect(await publicationFields('n1', 'draft')).toEqual({})
     expect(await publicationFields('n1', undefined)).toEqual({})
     expect(mockPrisma.newsletter.findUnique).not.toHaveBeenCalled()
-  })
-})
-
-describe('toWebMarkdown', () => {
-  it("drops the email template's favicon and section-color markers", () => {
-    const md = '# Human Development {human-development}\n\n## Title\n{feed:abc-123} Publisher · [original article](https://x)\n'
-    expect(toWebMarkdown(md)).toBe('# Human Development\n\n## Title\nPublisher · [original article](https://x)\n')
   })
 })

@@ -12,6 +12,7 @@ import { paginate } from '../lib/paginate.js'
 import { isUniqueViolation } from '../utils/errors.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { AI_GENERATED_NEWSLETTER_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
+import { storyHeadlines, toWebMarkdown } from './newsletterContent.js'
 
 const log = createLogger('newsletter-archive')
 
@@ -121,15 +122,11 @@ export async function listPublishedIssueDates(): Promise<{ slug: string; publish
 }
 
 /**
- * The stored markdown as the web edition shows it: without the template's machine tags, the
- * `{feed:<id>}` favicon marker in each metadata line and the ` {issue-slug}` after each section
- * heading, which the email template turns into a favicon and a colored dot.
+ * One public issue with its stories, or null unless it is published. The stories are those its
+ * content's story headings name (`newsletterContent.ts`) plus its shortlist; a marked story's
+ * `headline` is its heading as it stands in the content, an unmarked one's (an issue generated
+ * before the marker) its title, which is what that heading was generated from.
  */
-export function toWebMarkdown(content: string): string {
-  return content.replace(/\{feed:[^}\s]*\}[ \t]*/g, '').replace(/^(#[ \t].*?)[ \t]*\{[a-z0-9-]+\}[ \t]*$/gm, '$1')
-}
-
-/** One public issue with its stories, or null unless it is published. */
 export async function getPublishedIssue(slug: string) {
   const issue = await prisma.newsletter.findFirst({
     where: { ...PUBLIC_WHERE, slug },
@@ -137,9 +134,11 @@ export async function getPublishedIssue(slug: string) {
   })
   if (!issue) return null
 
-  const stories = issue.selectedStoryIds.length
+  const markedHeadlines = new Map(storyHeadlines(issue.content).map(h => [h.storyId, h.headline]))
+  const storyIds = [...new Set([...markedHeadlines.keys(), ...issue.selectedStoryIds])]
+  const stories = storyIds.length
     ? await prisma.story.findMany({
-        where: { id: { in: issue.selectedStoryIds } },
+        where: { id: { in: storyIds } },
         select: {
           id: true,
           slug: true,
@@ -160,8 +159,8 @@ export async function getPublishedIssue(slug: string) {
     aiLabel: NEWSLETTER_TOP_LABEL,
     content: toWebMarkdown(issue.content),
     stories: stories.map(story => ({
-      // The `## ` heading generateContent wrote for this story, to match it in the content
-      headline: story.title || story.sourceTitle,
+      // The `## ` heading this story has in the content, to match it there
+      headline: markedHeadlines.get(story.id) ?? (story.title || story.sourceTitle),
       title: story.title,
       titleLabel: story.titleLabel,
       sourceTitle: story.sourceTitle,
