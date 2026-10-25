@@ -569,7 +569,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
   it('the migration backfill marks only never-published rejected non-primaries as duplicates', async () => {
     const migration = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'prisma', 'migrations',
-      '20261019120000_story_rejection_reason', 'migration.sql'), 'utf8')
+      '20261025130000_story_rejection_reason', 'migration.sql'), 'utf8')
     const backfills = migration.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(s => /^UPDATE\b/i.test(s))
     expect(backfills).toHaveLength(2)
 
