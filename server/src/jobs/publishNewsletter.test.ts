@@ -16,7 +16,7 @@ const { runPublishNewsletter, newsletterSendProblem } = await import('./publishN
 
 // Saturday 2026-02-21 04:30 UTC, ISO week 8
 const SATURDAY = new Date('2026-02-21T04:30:00Z')
-const ISSUE = { id: 'nl-1', title: 'Week 8, 2026' }
+const ISSUE = { id: 'nl-1', title: 'Week 8, 2026', sends: [{ id: 'send-test' }] }
 
 describe('runPublishNewsletter', () => {
   beforeEach(() => {
@@ -37,6 +37,21 @@ describe('runPublishNewsletter', () => {
     expect(mockSendLive.mock.invocationCallOrder[0]).toBeLessThan(mockUpdateNewsletter.mock.invocationCallOrder[0])
     expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
       source: 'newsletter', severity: 'info', message: expect.stringContaining('Week 8, 2026'),
+    }))
+  })
+
+  it('does not send an issue without a successful test send, and warns once per week', async () => {
+    mockFindFirst.mockResolvedValueOnce({ ...ISSUE, sends: [] })
+
+    await runPublishNewsletter(SATURDAY)
+
+    expect(mockFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ sends: expect.objectContaining({ where: { isTest: true } }) }),
+    }))
+    expect(mockSendLive).not.toHaveBeenCalled()
+    expect(mockUpdateNewsletter).not.toHaveBeenCalled()
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'newsletter', severity: 'warning', dedupeKey: 'newsletter-not-sent:2026-W08', message: expect.stringContaining('no successful test email'),
     }))
   })
 

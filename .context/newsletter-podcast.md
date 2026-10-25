@@ -90,9 +90,10 @@ The `publish_newsletter` job (default: Saturday 4:30am, `30 4 * * 6`, 30 minutes
 
 1. Looks for this ISO week's automatic issue (`weekKey` from `getWeekKey()`, so hand-made newsletters are never sent) that is built (`html` non-empty), still `draft`, and has no live send. An issue an admin already sent live or published by hand is skipped, so a retry, a manual Run or a boot catch-up never sends a second email that week.
 2. None found: if this week's automatic row exists but is not built yet (generation still running at 04:30, or stuck), records a `newsletter` / `warning` notice "Newsletter not sent" (key `newsletter-not-sent:<weekKey>`) and sends nothing; send it from the admin once ready. With no row at all it logs and returns quietly, since `generate_newsletter` has already alerted (no stories, or its own failure).
-3. Calls `sendLive` (audience `ALL`), then sets `status: 'published'`, then records an `info` notice "Newsletter sent". A failed send fails the run (job-failure notice under Newsletter) and leaves the issue a draft.
+3. Found, but with no successful test send (no `isTest` send row; `sendTest` writes it only after Plunk accepted the send): sends nothing and records the same "Newsletter not sent" warning (same key), asking for the test first. Owner decision 2026-10-25: an issue goes to subscribers only after its `[TEST]` email went out.
+4. Calls `sendLive` (audience `ALL`), then sets `status: 'published'`, then records an `info` notice "Newsletter sent". A failed send fails the run (job-failure notice under Newsletter) and leaves the issue a draft.
 
-It does not wait for the `[TEST]` send: an issue whose test send failed is still sent. Enabling it is refused while `PLUNK_SECRET_KEY` is unset (the scheduler's enable checks). The 30-minute gap is a schedule, not a dependency: moving `generate_newsletter` on the Jobs page means moving this job too.
+Enabling it is refused while `PLUNK_SECRET_KEY` is unset (the scheduler's enable checks). The 30-minute gap is a schedule, not a dependency: moving `generate_newsletter` on the Jobs page means moving this job too.
 
 Handler: `server/src/jobs/publishNewsletter.ts`.
 
