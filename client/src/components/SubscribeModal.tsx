@@ -52,7 +52,9 @@ export default function SubscribeModal({ open, onClose }: SubscribeModalProps) {
       aria-labelledby="subscribe-modal-title"
     >
       <div className="p-6 sm:p-8">
-        <SubscribeForm key={open ? 'open' : 'closed'} autoFocus={open} onSuccess={onClose} onPastIssuesClick={onClose} idPrefix="subscribe-modal" />
+        {/* Mounted only while open: every page holds this dialog, and the form fetches a form token
+            when it mounts, so each open starts a fresh form and a closed dialog requests nothing. */}
+        {open && <SubscribeForm autoFocus onSuccess={onClose} onPastIssuesClick={onClose} idPrefix="subscribe-modal" />}
         <button
           type="button"
           onClick={onClose}
