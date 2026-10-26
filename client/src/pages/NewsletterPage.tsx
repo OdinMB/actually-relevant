@@ -28,6 +28,9 @@ const breadcrumb = buildBreadcrumbSchema([
 
 const LINK_CLASS = 'text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5'
 
+/** A link inside a sentence is underlined: its color alone barely stands out from the text around it. */
+const INLINE_LINK_CLASS = `${LINK_CLASS} underline`
+
 /** Every published issue, newest first, paginated. Loads client-side (the prerenderer does not wait for data). */
 function IssueList({ onPageChange }: { onPageChange: () => void }) {
   const [page, setPage] = useState(1)
@@ -103,7 +106,7 @@ export default function NewsletterPage() {
             <SubscribeForm hideHeading idPrefix="newsletter-page" />
             <p className="mt-3 text-sm text-neutral-600">
               Prefer a feed reader?{' '}
-              <a href={NEWSLETTER_FEED_URL} className={LINK_CLASS}>
+              <a href={NEWSLETTER_FEED_URL} className={INLINE_LINK_CLASS}>
                 Follow new issues by RSS
               </a>
               .

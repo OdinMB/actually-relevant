@@ -16,6 +16,9 @@ const BUTTON_CLASS =
 
 const COPIED_VISIBLE_MS = 4000
 
+/** How long the status stays empty before a result shows: long enough for screen readers to register the change. */
+const REANNOUNCE_DELAY_MS = 100
+
 const COPY_STATUS_TEXT = {
   idle: '',
   copied: 'Copied',
@@ -61,23 +64,32 @@ function ListenLinkItem({ link }: { link: ListenLink }) {
 
 /**
  * Copies the feed address. The status region is always in the page, so screen readers announce
- * "Copied" (or the fallback) when its text changes.
+ * "Copied" (or the fallback) when its text changes. Each press empties it first and shows the
+ * result a moment later, so a second "Copied" in a row is a change and is announced too.
  */
 function CopyFeedButton({ feedUrl }: { feedUrl: string }) {
   const [status, setStatus] = useState<keyof typeof COPY_STATUS_TEXT>('idle')
-  const resetTimer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout>>()
 
-  useEffect(() => () => clearTimeout(resetTimer.current), [])
+  useEffect(() => () => clearTimeout(timer.current), [])
+
+  function show(result: 'copied' | 'failed') {
+    clearTimeout(timer.current)
+    setStatus('idle')
+    timer.current = setTimeout(() => {
+      setStatus(result)
+      if (result === 'copied') timer.current = setTimeout(() => setStatus('idle'), COPIED_VISIBLE_MS)
+    }, REANNOUNCE_DELAY_MS)
+  }
 
   async function copy() {
-    clearTimeout(resetTimer.current)
+    clearTimeout(timer.current)
     try {
       // Throws where the browser has no Clipboard API (an insecure context, an old browser)
       await navigator.clipboard.writeText(feedUrl)
-      setStatus('copied')
-      resetTimer.current = setTimeout(() => setStatus('idle'), COPIED_VISIBLE_MS)
+      show('copied')
     } catch {
-      setStatus('failed')
+      show('failed')
     }
   }
 

@@ -203,6 +203,32 @@ describe('PodcastPage', () => {
     await waitFor(() => expect(status.textContent).toBe('Copied'))
   })
 
+  // A screen reader announces the status only when its text changes, so a repeat must change it too
+  it('announces "Copied" again when the feed is copied a second time while it still shows', async () => {
+    stubClipboard(vi.fn().mockResolvedValue(undefined))
+    renderPage()
+    const status = within(subscribeSection()).getByRole('status')
+    const copy = within(subscribeSection()).getByRole('button', { name: 'Copy RSS feed' })
+    fireEvent.click(copy)
+    await waitFor(() => expect(status.textContent).toBe('Copied'))
+
+    fireEvent.click(copy)
+    await waitFor(() => expect(status.textContent).toBe(''))
+    await waitFor(() => expect(status.textContent).toBe('Copied'))
+  })
+
+  it('announces the pointer to the address again when a second copy fails too', async () => {
+    renderPage()
+    const status = within(subscribeSection()).getByRole('status')
+    const copy = within(subscribeSection()).getByRole('button', { name: 'Copy RSS feed' })
+    fireEvent.click(copy)
+    await waitFor(() => expect(status.textContent).toMatch(/select the address/i))
+
+    fireEvent.click(copy)
+    await waitFor(() => expect(status.textContent).toBe(''))
+    await waitFor(() => expect(status.textContent).toMatch(/select the address/i))
+  })
+
   it('points to the address when the browser does not allow the copy', async () => {
     stubClipboard(vi.fn().mockRejectedValue(new Error('denied')))
     renderPage()
