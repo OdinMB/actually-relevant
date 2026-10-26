@@ -111,6 +111,20 @@ describeDb('story retention (PostgreSQL)', () => {
     expect(stats).toMatchObject({ total: 3, archived: 3, byStatus: { rejected: 2, fetched: 1 } })
   })
 
+  it('keeps a "Report an error" sent from a deleted story, without its story', async () => {
+    const { feed } = await setup()
+    const story = await createStory({ feedId: feed.id, status: 'trashed', dateCrawled: OLD() })
+    const report = await prisma.feedback.create({ data: { category: 'correction', message: 'Wrong date', ipHash: 'h', storyId: story.id } })
+
+    await deleteOldStoriesBatch(6, 100)
+
+    expect(await exists(story.id)).toBe(false)
+    expect(await prisma.feedback.findUnique({ where: { id: report.id }, select: { storyId: true, message: true } })).toEqual({
+      storyId: null,
+      message: 'Wrong date',
+    })
+  })
+
   it('deletes in batches of the limit, oldest first, and a second run finds nothing', async () => {
     const { feed } = await setup()
     const ids = []

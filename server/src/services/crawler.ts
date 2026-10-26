@@ -7,7 +7,7 @@ import { createLogger } from '../lib/logger.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { config } from '../config.js'
 import { normalizeUrl } from '../utils/urlNormalization.js'
-import { ConflictError, NotFoundError, summarizeError } from '../utils/errors.js'
+import { ConflictError, NotFoundError, isUniqueViolation, summarizeError } from '../utils/errors.js'
 
 const log = createLogger('crawler')
 
@@ -163,7 +163,7 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
           result.newStories++
         } catch (err) {
           // Unique constraint violation = URL was inserted by a concurrent crawl; treat as skip
-          if ((err as { code?: unknown } | null)?.code === 'P2002') {
+          if (isUniqueViolation(err)) {
             log.info({ url: item.url }, 'story already exists (concurrent insert), skipping')
             result.skipped++
             return

@@ -20,7 +20,7 @@ Saved appears only once the visitor has saved a story, and goes when the last is
 | `/podcast` | `PodcastPage` | Weekly AI podcast: AI subtitle, Apple Podcasts badge and feed link, listen links and episodes with `<audio preload="none">` on the CDN (`.context/podcast.md`) |
 | `/podcast/:id/transcript` | `PodcastTranscriptPage` | One published episode's readable transcript: "AI" badge and title, the `/podcast` AI subtitle, player, the conversation by "Host A"/"Host B" with a heading per story, the story list. `:id` is the episode's row id (the feed GUID), which never changes once published (`.context/podcast.md`) |
 
-Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `routes.ts`, and prerendered at build time. Dynamic routes (`/stories/:slug`, `/podcast/:id/transcript`, `/newsletter/:slug`) are only in `App.tsx`: they load client-side, are not prerendered, and the server sitemap lists them (`.context/seo.md`). Story pages reach the browser through the backend, which puts the story's preview tags into the shell (`.context/seo.md`, "Story link previews").
+Static routes are registered in both `App.tsx` (`appRoutes`, the route tree `main.tsx` hands to react-router's data router, `createBrowserRouter`) and `shared/routes.json` (read by `client/src/routes.ts`; the server sitemap reads the same file, `.context/seo.md`), and prerendered at build time. Dynamic routes (`/stories/:slug`, `/podcast/:id/transcript`, `/newsletter/:slug`) are only in `App.tsx`: they load client-side, are not prerendered, and the server sitemap lists them (`.context/seo.md`). Story pages reach the browser through the backend, which puts the story's preview tags into the shell (`.context/seo.md`, "Story link previews").
 
 ## Public API
 
@@ -60,6 +60,8 @@ Public RSS 2.0 feeds are available without authentication:
 
 Feed items include: title, link to story page, AI-generated summary prefixed "[AI-generated] ", publish date, and issue category. The channel description is fixed copy that says AI writes and curates the feed (`rssChannelDescription()` in `server/src/lib/aiLabelCopy.ts`; per-issue feeds no longer use the issue's own description). RSS readers never see the site's labels, so keep the item prefix when changing the feed. Responses use `Content-Type: application/rss+xml` with a 15-minute cache (`Cache-Control: public, max-age=900`).
 
+The newsletter has a feed of its published issues, `GET /api/newsletters/feed.xml`, each item linking the issue's web edition with the issue's AI label as description; it shares `buildFeed`/`setRssHeaders` (`server/src/lib/rssFeed.ts`) with the story feeds and is described in `.context/newsletter-podcast.md`, "Web edition". Its autodiscovery link is on `/newsletter` and every issue page, with a visible link under the signup form on `/newsletter`.
+
 The podcast has its own hand-built feed (`GET /api/podcast/feed.xml`, public at `/podcast.xml` through a Render rewrite, mounted before the shared rate limiter); it is described in `.context/podcast.md`, "Publishing, feed and page".
 
 **Discoverability:**
@@ -69,7 +71,7 @@ The podcast has its own hand-built feed (`GET /api/podcast/feed.xml`, public at 
 - All RSS hrefs use `API_BASE` (from `client/src/lib/api.ts`) so they resolve correctly in both dev (Vite proxy) and production (separate static site + API service on Render)
 
 **Key files:**
-- `server/src/routes/public/feed.ts` — RSS feed route handler (uses `feed` npm package)
+- `server/src/routes/public/feed.ts` — RSS feed route handler (uses `feed` npm package; channel setup and headers in `server/src/lib/rssFeed.ts`, shared with the newsletter feed)
 - `server/src/routes/public/index.ts` — Registers feed router at `/feed`
 - `client/vite.config.ts` — Dev proxy for `/api` to `localhost:3001`
 
@@ -100,6 +102,15 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 - `StoryCard` — Story card with title, rating, summary (used on homepage + issue pages)
 - `RatingDisplay` — Relevance rating with color coding
 - `Pagination` — Page navigation with ellipsis
+
+## Feedback
+
+Two ways in, one form (`FeedbackForm`), one endpoint (`POST /api/feedback`, `server/src/routes/public/feedback.ts`: honeypot, per-IP rate limit, the visitor IP stored only as an HMAC, ADR-0037):
+
+- **`/feedback`** (prerendered page): the general form, categories Feedback, Bug, Suggestion, Other.
+- **"Report an error" on every story page** (`StoryPage`, below the analysis: "Spotted a mistake? Report an error"): a button that opens `FeedbackModal` through `FeedbackProvider` (mounted once in `PublicLayout`; `useFeedback().openFeedback(story)`), bound to the story: heading "Report an error", the story's title as the page shows it, no category choice (always `correction`), a visible "What is wrong?" label, button "Send report". The native `<dialog>` moves focus to the message on open, closes on Escape or backdrop click, and returns focus to the button.
+
+The server takes an optional `storyId` and answers 400 "That story does not exist." for an unknown one; `correction` is also accepted without a story. `feedback.story_id` is a foreign key `ON DELETE SET NULL` (migration `20261025225344_feedback_story_correction`), so a report outlives a story that retention deletes, without its link. Admin view: `.context/admin-dashboard.md`. Feedback is kept indefinitely for now (retention is a BACKLOG item).
 
 ## Static Content
 

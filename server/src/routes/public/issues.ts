@@ -1,38 +1,27 @@
 import { Router } from 'express'
 import * as issueService from '../../services/issue.js'
 import { TTLCache, cached } from '../../lib/cache.js'
-import { createLogger } from '../../lib/logger.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 
 const router = Router()
-const log = createLogger('public:issues')
 
 const ISSUES_TTL = 5 * 60 * 1000 // 5 minutes
 const issuesCache = new TTLCache<unknown>(ISSUES_TTL)
 
-router.get('/', async (_req, res) => {
-  try {
-    const issues = await cached(issuesCache, 'public-issues', () => issueService.getPublicIssues())
-    res.set('Cache-Control', 'public, max-age=300')
-    res.json(issues)
-  } catch (err) {
-    log.error({ err }, 'failed to fetch issues')
-    res.status(500).json({ error: 'Failed to fetch issues' })
-  }
+router.get('/', failsWith('Failed to fetch issues'), async (_req, res) => {
+  const issues = await cached(issuesCache, 'public-issues', () => issueService.getPublicIssues())
+  res.set('Cache-Control', 'public, max-age=300')
+  res.json(issues)
 })
 
-router.get('/:slug', async (req, res) => {
-  try {
-    const issue = await issueService.getPublicIssueBySlug(req.params.slug)
-    if (!issue) {
-      res.status(404).json({ error: 'Issue not found' })
-      return
-    }
-    res.set('Cache-Control', 'public, max-age=300')
-    res.json(issue)
-  } catch (err) {
-    log.error({ err, slug: req.params.slug }, 'failed to fetch issue')
-    res.status(500).json({ error: 'Failed to fetch issue' })
+router.get('/:slug', failsWith('Failed to fetch issue'), async (req, res) => {
+  const issue = await issueService.getPublicIssueBySlug(req.params.slug!)
+  if (!issue) {
+    res.status(404).json({ error: 'Issue not found' })
+    return
   }
+  res.set('Cache-Control', 'public, max-age=300')
+  res.json(issue)
 })
 
 export default router

@@ -32,12 +32,7 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
-const mockLifecycleDissolve = vi.hoisted(() => vi.fn())
-vi.mock('./storyLifecycle.js', async importOriginal => ({
-  ...(await importOriginal<typeof import('./storyLifecycle.js')>()),
-  dissolveCluster: mockLifecycleDissolve,
-}))
-
+// The dissolve itself runs on PostgreSQL in storyLifecycle.db.test.ts ("the per-story dissolve")
 const { getStoryIdsByStatus, getStories, deleteStory, dissolveCluster, getClusterRedirectSlug, createStory } = await import('./story.js')
 
 describe('getStories', () => {
@@ -317,15 +312,6 @@ describe('dissolveCluster', () => {
     mockPrisma.story.findUnique.mockResolvedValue(null)
 
     await expect(dissolveCluster('s-missing')).rejects.toThrow('Story is not in a cluster')
-  })
-
-  it("dissolves the story's cluster through the lifecycle module", async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ clusterId: 'cluster-1' })
-    mockLifecycleDissolve.mockResolvedValue({ restored: [] })
-
-    await dissolveCluster('s1')
-
-    expect(mockLifecycleDissolve).toHaveBeenCalledWith('cluster-1')
   })
 })
 

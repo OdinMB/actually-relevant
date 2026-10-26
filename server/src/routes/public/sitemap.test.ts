@@ -57,6 +57,16 @@ describe('GET /api/sitemap.xml', () => {
     expect(mockPrisma.newsletter.findMany.mock.calls[0][0].where).toMatchObject({ status: 'published', slug: { not: null } })
   })
 
+  it('lists the static pages from shared/routes.json: /feedback in, /saved out, /widgets at 0.4', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/sitemap.xml')
+
+    expect(res.text).toContain('<loc>https://actuallyrelevant.news/feedback</loc>')
+    expect(res.text).not.toContain('/saved')
+    expect(res.text).toMatch(/<loc>https:\/\/actuallyrelevant\.news\/widgets<\/loc>\s*<changefreq>monthly<\/changefreq>\s*<priority>0\.4<\/priority>/)
+  })
+
   it('lists the transcript page of each published podcast episode', async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
     mockPrisma.podcast.findMany.mockResolvedValue([{ id: 'ep-1', publishedAt: new Date('2026-10-12T07:30:00Z') }])

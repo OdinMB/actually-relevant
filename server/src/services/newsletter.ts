@@ -1,19 +1,27 @@
+/**
+ * What a newsletter issue says: the reads, creating an issue, and the builders the lifecycle's
+ * moves write from (longlist, model-picked shortlist, markdown, the HTML email), plus the
+ * carousel, the send list and send stats. Nothing here writes an issue's lifecycle fields or its
+ * sends; that is `newsletterLifecycle.ts`.
+ */
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { HumanMessage } from '@langchain/core/messages'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { type Prisma, ContentStatus, StoryStatus, NewsletterSendStatus } from '@prisma/client'
+import { type Prisma, ContentStatus, StoryStatus } from '@prisma/client'
 import { paginate } from '../lib/paginate.js'
 import { generateCarouselZip, type CarouselStory } from './carousel.js'
 import * as plunk from './plunk.js'
 import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
-import { ensureNewsletterSlug, newsletterIssueUrl, publicationFields } from './newsletterArchive.js'
+import { escapeHtml } from '../lib/xml.js'
+import { parseStoryHeading, storyHeading } from './newsletterContent.js'
+import { newsletterIntroInput, newsletterIssue, newsletterOrder, newsletterSelectInput } from './promptInputs.js'
 import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
-import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors.js'
+import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('newsletter')
 
@@ -26,16 +34,8 @@ const ISSUE_DOT_COLORS: Record<string, string> = {
 }
 const DEFAULT_DOT_COLOR = '#f472b6'
 
-/** Fixed display order for top-level issues in the newsletter */
-const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
-
 function getIssueDotColor(slug: string): string {
   return ISSUE_DOT_COLORS[slug] ?? DEFAULT_DOT_COLOR
-}
-
-function getIssueSortIndex(slug: string): number {
-  const idx = ISSUE_ORDER.indexOf(slug)
-  return idx >= 0 ? idx : ISSUE_ORDER.length
 }
 
 interface NewsletterFilters {
@@ -73,21 +73,10 @@ export async function createNewsletter(data: { title: string; weekKey?: string }
   return prisma.newsletter.create({ data: { title: data.title, weekKey: data.weekKey } })
 }
 
-/** Setting `status: 'published'` also makes the issue public on the web (newsletterArchive.ts). */
-export async function updateNewsletter(id: string, data: Prisma.NewsletterUpdateInput) {
-  const publication = await publicationFields(id, data.status)
-  return prisma.newsletter.update({ where: { id }, data: { ...data, ...publication } })
-}
+// --- Content builders: they compute, and newsletterLifecycle.ts writes what they return ---
 
-export async function deleteNewsletter(id: string) {
-  await prisma.newsletter.delete({ where: { id } })
-}
-
-export async function assignStories(newsletterId: string) {
-  const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new NotFoundError('Newsletter not found')
-
-  // Find recently published stories from the last N days
+/** The longlist: ids of the stories published in the last `storyAssignmentDays` days, newest first. */
+export async function recentStoryIds(): Promise<string[]> {
   const stories = await prisma.story.findMany({
     where: {
       status: StoryStatus.published,
@@ -99,17 +88,12 @@ export async function assignStories(newsletterId: string) {
 
   const storyIds = stories.map(s => s.id)
   if (storyIds.length === 0) throw new Error('No recent stories to assign')
-
-  return prisma.newsletter.update({
-    where: { id: newsletterId },
-    data: { storyIds },
-  })
+  return storyIds
 }
 
-export async function selectStoriesForNewsletter(newsletterId: string) {
-  const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new NotFoundError('Newsletter not found')
-  if (newsletter.storyIds.length === 0) throw new BadRequestError('No stories in longlist')
+/** The shortlist the model picks from the issue's (non-empty) longlist; only longlist ids are kept. */
+export async function pickShortlist(newsletter: { id: string; storyIds: string[] }): Promise<string[]> {
+  const newsletterId = newsletter.id
 
   // Fetch stories with title, summary, and issue info
   const stories = await prisma.story.findMany({
@@ -125,21 +109,8 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
     },
   })
 
-  // Resolve top-level issue name for each story
-  const storiesForPrompt = stories.map(s => {
-    const issue = s.issue ?? s.feed?.issue
-    const issueName = issue?.parentId && issue.parent ? issue.parent.name : (issue?.name ?? 'General')
-    return {
-      id: s.id,
-      title: s.title || s.sourceTitle,
-      summary: s.summary,
-      issueName,
-      emotionTag: s.emotionTag,
-    }
-  })
-
-  // Get distinct top-level issue names
-  const issueNames = [...new Set(storiesForPrompt.map(s => s.issueName))].sort()
+  // Each story under its top-level issue name, and the distinct names
+  const { stories: storiesForPrompt, issueNames } = newsletterSelectInput(stories)
 
   log.info({ newsletterId, storyCount: stories.length, issueCount: issueNames.length }, 'selecting stories for newsletter')
 
@@ -160,18 +131,14 @@ export async function selectStoriesForNewsletter(newsletterId: string) {
     'newsletter story selection complete',
   )
 
-  return prisma.newsletter.update({
-    where: { id: newsletterId },
-    data: { selectedStoryIds: selectedIds },
-  })
+  return selectedIds
 }
 
-export async function generateContent(newsletterId: string) {
-  const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new NotFoundError('Newsletter not found')
-  if (newsletter.selectedStoryIds.length === 0) throw new BadRequestError('No stories selected')
+/** The issue's markdown, built from its (non-empty) shortlist with a model-written intro. */
+export async function buildContent(newsletter: { id: string; selectedStoryIds: string[] }): Promise<string> {
+  const newsletterId = newsletter.id
 
-  const stories = await prisma.story.findMany({
+  const loaded = await prisma.story.findMany({
     where: { id: { in: newsletter.selectedStoryIds } },
     select: {
       id: true,
@@ -200,39 +167,11 @@ export async function generateContent(newsletterId: string) {
     orderBy: { dateCrawled: 'desc' },
   })
 
-  // Resolve each story's top-level (parent) issue
-  function resolveIssue(story: (typeof stories)[number]) {
-    const issue = story.issue ?? story.feed?.issue
-    if (!issue) return { name: 'General', slug: 'general-news' }
-    if (issue.parentId && issue.parent) {
-      return { name: issue.parent.name, slug: issue.parent.slug }
-    }
-    return { name: issue.name, slug: issue.slug }
-  }
-
   // Sort by fixed issue order, then by title within each group
-  stories.sort((a, b) => {
-    const slugA = resolveIssue(a).slug
-    const slugB = resolveIssue(b).slug
-    const orderDiff = getIssueSortIndex(slugA) - getIssueSortIndex(slugB)
-    if (orderDiff !== 0) return orderDiff
-    const titleA = a.title || a.sourceTitle || ''
-    const titleB = b.title || b.sourceTitle || ''
-    return titleA.localeCompare(titleB)
-  })
+  const stories = newsletterOrder(loaded)
 
   // Generate editorial intro via LLM
-  const issueNames = [...new Set(stories.map(s => resolveIssue(s).name))].sort((a, b) => {
-    const slugA = stories.find(s => resolveIssue(s).name === a)!
-    const slugB = stories.find(s => resolveIssue(s).name === b)!
-    return getIssueSortIndex(resolveIssue(slugA).slug) - getIssueSortIndex(resolveIssue(slugB).slug)
-  })
-  const storiesForIntro = stories.map(s => ({
-    title: s.title || s.sourceTitle,
-    issueName: resolveIssue(s).name,
-    blurb: s.marketingBlurb || s.summary || '',
-    emotionTag: s.emotionTag || 'calm',
-  }))
+  const { stories: storiesForIntro, issueNames } = newsletterIntroInput(stories)
 
   let intro = ''
   try {
@@ -255,7 +194,7 @@ export async function generateContent(newsletterId: string) {
 
   let currentIssue = ''
   for (const [i, story] of stories.entries()) {
-    const resolved = resolveIssue(story)
+    const resolved = newsletterIssue(story)
     const issueName = resolved.name
     const issueSlug = resolved.slug
     const publisher = story.feed?.displayTitle || story.feed?.title || 'Unknown'
@@ -268,7 +207,7 @@ export async function generateContent(newsletterId: string) {
       content += `# ${issueName} {${issueSlug}}\n\n`
     }
 
-    content += `## ${story.title || story.sourceTitle}\n`
+    content += `${storyHeading(story.title || story.sourceTitle, story.id)}\n`
     const feedId = story.feed?.id || ''
     const linkParts = [feedId ? `{feed:${feedId}} ${publisher}` : publisher]
     linkParts.push(`[original article](${story.sourceUrl})`)
@@ -286,10 +225,7 @@ export async function generateContent(newsletterId: string) {
     }
   }
 
-  return prisma.newsletter.update({
-    where: { id: newsletterId },
-    data: { content: content.trim() },
-  })
+  return content.trim()
 }
 
 export async function generateCarouselForNewsletter(newsletterId: string): Promise<string> {
@@ -324,26 +260,17 @@ export async function generateCarouselForNewsletter(newsletterId: string): Promi
 
 // --- HTML generation ---
 
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
 /**
  * Converts newsletter markdown content into an HTML email template.
- * Parses the markdown structure produced by generateContent():
+ * Parses the markdown structure produced by buildContent():
  * - Optional intro paragraph(s) at the top (before first # heading)
  * - Issue section headers (# IssueName)
  * - Story blocks: h2 heading, publisher + "Read original article" link row,
  *   body text (relevanceSummary or blockquote with quote + attribution)
+ *
+ * `webUrl` is the web edition's address, for "View in browser"; it opens once the issue is published.
  */
-export async function generateHtmlContent(newsletterId: string): Promise<string> {
-  const newsletter = await prisma.newsletter.findUnique({ where: { id: newsletterId } })
-  if (!newsletter) throw new NotFoundError('Newsletter not found')
-  if (!newsletter.content) throw new BadRequestError('No content to convert')
-
-  // The web edition's address, for "View in browser"; it opens once the issue is published
-  const webUrl = newsletterIssueUrl(await ensureNewsletterSlug(newsletter))
-
+export function renderHtml(newsletter: { title: string; content: string }, webUrl: string): string {
   // Split on --- separators to get individual blocks
   const sections = newsletter.content.split(/\n---\n/).filter(s => s.trim())
 
@@ -422,7 +349,7 @@ export async function generateHtmlContent(newsletterId: string): Promise<string>
 
       for (const trimmed of storyLines) {
         if (trimmed.startsWith('## ')) {
-          title = trimmed.slice(3)
+          title = parseStoryHeading(trimmed).headline
         } else if (!title) {
           continue
         } else if (!metaLine && trimmed.match(/\[.*\]\(https?:\/\//)) {
@@ -568,7 +495,7 @@ ${introSection}
           <tr>
             <td style="padding: 28px 32px; text-align: center; border-top: 1px solid #e5e5e5;">
               <p style="margin: 0 0 14px; font-size: 14px; color: #525252;">Free. Independent. Without ads. Help us keep it that way.</p>
-              <a href="https://ko-fi.com/odinmb" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 10px 24px; font-size: 14px; font-weight: 600; color: #ffffff; background-color: #171717; border-radius: 8px; text-decoration: none;">&#10084; Support Us</a>
+              <a href="${config.links.kofi}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 10px 24px; font-size: 14px; font-weight: 600; color: #ffffff; background-color: #171717; border-radius: 8px; text-decoration: none;">&#10084; Support Us</a>
             </td>
           </tr>
 
@@ -587,9 +514,9 @@ ${introSection}
                 <a href="${config.siteUrl}" style="color: #2563eb; text-decoration: none;">actuallyrelevant.news</a>
               </p>
               <p style="margin: 0 0 10px; font-size: 12px; color: #a3a3a3;">
-                <a href="https://bsky.app/profile/actuallyrelevant.bsky.social" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/bluesky.png" alt="Bluesky" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Bluesky</a>
+                <a href="${config.links.blueskyProfile}" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/bluesky.png" alt="Bluesky" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Bluesky</a>
                 <span style="color: #d4d4d4; margin: 0 6px;">&middot;</span>
-                <a href="https://mastodon.social/@actuallyrelevant" rel="me" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/mastodon.png" alt="Mastodon" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Mastodon</a>
+                <a href="${config.links.mastodonProfile}" rel="me" style="color: #737373; text-decoration: none; vertical-align: middle;"><img src="${config.siteUrl}/images/social/mastodon.png" alt="Mastodon" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 3px;">Mastodon</a>
               </p>
             </td>
           </tr>
@@ -599,11 +526,6 @@ ${introSection}
   </table>
 </body>
 </html>`
-
-  await prisma.newsletter.update({
-    where: { id: newsletterId },
-    data: { html },
-  })
 
   return html
 }
@@ -617,78 +539,7 @@ export async function getNewsletterSends(newsletterId: string) {
   })
 }
 
-/** A test send was refused because no test segment is configured (never falls back to all subscribers). */
-export class TestSegmentNotConfiguredError extends ConflictError {
-  constructor() {
-    super('Test send refused: PLUNK_TEST_SEGMENT_ID is not set, and a test email is never sent to all subscribers')
-    this.name = 'TestSegmentNotConfiguredError'
-  }
-}
-
-export async function sendTest(newsletterId: string) {
-  const segmentId = config.plunk.testSegmentId
-  if (!segmentId) {
-    const err = new TestSegmentNotConfiguredError()
-    log.error({ newsletterId }, err.message)
-    throw err
-  }
-
-  const newsletter = await prisma.newsletter.findUniqueOrThrow({ where: { id: newsletterId } })
-  if (!newsletter.html) throw new Error('No HTML content — generate HTML first')
-  const html = newsletter.html
-
-  log.info({ newsletterId }, 'creating test campaign in Plunk')
-  const campaign = await plunk.createCampaign({
-    name: `[TEST] ${newsletter.title}`,
-    subject: `[TEST] ${newsletter.title}`,
-    body: html,
-    audienceType: 'SEGMENT',
-    segmentId,
-  })
-
-  await plunk.sendCampaign(campaign.id)
-
-  return prisma.newsletterSend.create({
-    data: {
-      newsletterId,
-      plunkCampaignId: campaign.id,
-      isTest: true,
-      status: 'sent' as NewsletterSendStatus,
-      htmlContent: html,
-      sentAt: new Date(),
-    },
-  })
-}
-
-export async function sendLive(newsletterId: string, scheduledFor?: string) {
-  const newsletter = await prisma.newsletter.findUniqueOrThrow({ where: { id: newsletterId } })
-  if (!newsletter.html) throw new Error('No HTML content — generate HTML first')
-  const html = newsletter.html
-
-  log.info({ newsletterId, scheduledFor }, 'creating live campaign in Plunk')
-  const campaign = await plunk.createCampaign({
-    name: newsletter.title,
-    subject: newsletter.title,
-    body: html,
-    audienceType: 'ALL',
-  })
-
-  await plunk.sendCampaign(campaign.id, scheduledFor)
-
-  const status: NewsletterSendStatus = scheduledFor ? 'scheduled' : 'sending'
-
-  return prisma.newsletterSend.create({
-    data: {
-      newsletterId,
-      plunkCampaignId: campaign.id,
-      isTest: false,
-      status,
-      htmlContent: html,
-      sentAt: scheduledFor ? null : new Date(),
-    },
-  })
-}
-
+/** Fetch a send's Plunk campaign stats and store them (`stats` only: not a lifecycle field). */
 export async function refreshSendStats(sendId: string) {
   const send = await prisma.newsletterSend.findUniqueOrThrow({ where: { id: sendId } })
   if (!send.plunkCampaignId) throw new BadRequestError('No Plunk campaign ID')

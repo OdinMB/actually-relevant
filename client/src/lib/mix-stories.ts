@@ -1,8 +1,5 @@
 import type { PublicStory } from '@shared/types'
 
-const POSITIVE_TAGS = new Set(['uplifting', 'calm'])
-const NEGATIVE_TAGS = new Set(['frustrating', 'scary'])
-
 export interface StoryBuckets {
   uplifting: PublicStory[]
   calm: PublicStory[]
@@ -88,40 +85,6 @@ export function pickHero(storiesByIssue: Record<string, StoryBuckets>, positivit
 
   all.sort(byDateDesc)
   return all[0] ?? null
-}
-
-/**
- * Filter a flat list of stories based on positivity slider value.
- * Used for issue pages where all stories are fetched and filtered client-side.
- *
- * At 50%: show all stories (no filter).
- * At 100%: show only uplifting stories (not calm).
- * At 0%: show only negative stories.
- * At 75%: show all positive (uplifting+calm) + enough negative to achieve ~75% positive ratio.
- * At 25%: show all negative + enough positive to achieve ~25% positive ratio.
- */
-export function filterStoriesByPositivity(stories: PublicStory[], positivity: number): PublicStory[] {
-  if (positivity === 50) return stories
-
-  // At 100%, strict uplifting only
-  if (positivity === 100) {
-    return stories.filter(s => s.emotionTag === 'uplifting')
-  }
-
-  const positive = stories.filter(s => POSITIVE_TAGS.has(s.emotionTag ?? ''))
-  const negative = stories.filter(s => NEGATIVE_TAGS.has(s.emotionTag ?? ''))
-
-  if (positivity === 0) return negative
-
-  const ratio = positivity / 100
-
-  if (ratio > 0.5) {
-    const negativeToShow = Math.round((positive.length * (1 - ratio)) / ratio)
-    return [...positive, ...negative.slice(0, negativeToShow)].sort(byDateDesc)
-  } else {
-    const positiveToShow = Math.round((negative.length * ratio) / (1 - ratio))
-    return [...positive.slice(0, positiveToShow), ...negative].sort(byDateDesc)
-  }
 }
 
 /**

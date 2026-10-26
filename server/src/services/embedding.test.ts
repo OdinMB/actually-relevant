@@ -372,16 +372,8 @@ describe('ensureEmbeddings', () => {
 
     await ensureEmbeddings(['story-1'])
 
-    expect(mockFetchStoriesForEmbedding).toHaveBeenCalledWith(['story-1'], undefined)
+    expect(mockFetchStoriesForEmbedding).toHaveBeenCalledWith(['story-1'])
     expect(mockSaveEmbedding).toHaveBeenCalledWith('story-1', [0.5], expect.any(String))
-  })
-
-  it('passes no status filter to fetch all stories regardless of status', async () => {
-    mockFetchStoriesForEmbedding.mockResolvedValue([])
-
-    await ensureEmbeddings(['story-1'])
-
-    expect(mockFetchStoriesForEmbedding).toHaveBeenCalledWith(['story-1'], undefined)
   })
 
   it('logs warning when some embeddings fail', async () => {

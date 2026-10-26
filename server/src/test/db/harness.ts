@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeEach, describe } from 'vitest'
-import type { RejectionReason, StoryStatus } from '@prisma/client'
+import type { ContentStatus, NewsletterSendStatus, RejectionReason, StoryStatus } from '@prisma/client'
 import prisma from '../../lib/prisma.js'
 import { testDatabaseRefusal } from './guard.js'
 
@@ -104,6 +104,49 @@ export async function statusesOf(ids: string[]) {
     select: { id: true, status: true, rejectionReason: true, slug: true, datePublished: true, clusterId: true },
   })
   return new Map(rows.map(r => [r.id, r]))
+}
+
+export async function createNewsletter(
+  data: {
+    title?: string
+    status?: ContentStatus
+    html?: string
+    content?: string
+    storyIds?: string[]
+    selectedStoryIds?: string[]
+    weekKey?: string | null
+    slug?: string | null
+    publishedAt?: Date | null
+  } = {},
+) {
+  return prisma.newsletter.create({
+    data: {
+      title: data.title ?? `Issue ${randomUUID().slice(0, 8)}`,
+      status: data.status ?? 'draft',
+      html: data.html ?? '',
+      content: data.content ?? '',
+      storyIds: data.storyIds ?? [],
+      selectedStoryIds: data.selectedStoryIds ?? [],
+      weekKey: data.weekKey ?? null,
+      slug: data.slug ?? null,
+      publishedAt: data.publishedAt ?? null,
+    },
+  })
+}
+
+/** A send row of an issue; `htmlContent` defaults to the issue's HTML at the time of the call. */
+export async function createSend(data: {
+  newsletterId: string
+  isTest: boolean
+  status: NewsletterSendStatus
+  htmlContent?: string
+  sentAt?: Date | null
+  createdAt?: Date
+}) {
+  const htmlContent = data.htmlContent ?? (await prisma.newsletter.findUniqueOrThrow({ where: { id: data.newsletterId }, select: { html: true } })).html
+  return prisma.newsletterSend.create({
+    data: { newsletterId: data.newsletterId, isTest: data.isTest, status: data.status, htmlContent, sentAt: data.sentAt ?? null, createdAt: data.createdAt },
+  })
 }
 
 /** Store an embedding: a 1536-dimension unit vector along `axis` (cosine distance 0 to itself, 1 to any other axis). */

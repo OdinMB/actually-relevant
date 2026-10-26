@@ -13,7 +13,7 @@ vi.mock('../../middleware/rateLimit.js', () => ({
 
 const { storyImageRouter, storyPageRouter } = await import('./storyPreview.js')
 const { default: publicRouter } = await import('./index.js')
-const { resetStoryPreviewCaches } = await import('../../services/storyPreview.js')
+const { _resetStoryPreviewCaches } = await import('../../services/storyPreview.js')
 const { config } = await import('../../config.js')
 const { IPTC_TRAINED_ALGORITHMIC_MEDIA } = await import('../../lib/aiProvenance.js')
 
@@ -28,6 +28,7 @@ const viaPublicApi = express().use('/api', publicRouter)
 const SHELL = `<!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8" />
     <meta name="author" content="Actually Relevant" />
+    <meta name="fediverse:creator" content="@actuallyrelevant@mastodon.social" />
     <title>Actually Relevant - News That Matters to Humanity</title>
     <meta data-rh="true" name="description" content="Homepage description" />
     <meta data-rh="true" property="og:title" content="Homepage" />
@@ -58,7 +59,7 @@ function shellResponse(html = SHELL, status = 200, headers: Record<string, strin
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resetStoryPreviewCaches()
+  _resetStoryPreviewCaches()
   vi.stubGlobal('fetch', fetchMock)
   fetchMock.mockResolvedValue(shellResponse())
   mockPrisma.story.findFirst.mockResolvedValue(STORY)
@@ -108,8 +109,8 @@ describe('GET /api/story-page/:slug', () => {
     expect(html).toContain('<meta data-rh="true" name="description" content="A summary that is AI-written." />')
     expect(html).toContain('<link data-rh="true" rel="canonical" href="https://actuallyrelevant.news/stories/clean-air" />')
     expect(html).toContain('<meta data-rh="true" property="og:url" content="https://actuallyrelevant.news/stories/clean-air" />')
-    expect(html).toContain(`<meta data-rh="true" property="og:image" content="${config.storyPreview.apiUrl}/api/stories/clean-air/og.png" />`)
-    expect(html).toContain(`<meta data-rh="true" name="twitter:image" content="${config.storyPreview.apiUrl}/api/stories/clean-air/og.png" />`)
+    expect(html).toContain(`<meta data-rh="true" property="og:image" content="${config.apiUrl}/api/stories/clean-air/og.png" />`)
+    expect(html).toContain(`<meta data-rh="true" name="twitter:image" content="${config.apiUrl}/api/stories/clean-air/og.png" />`)
     expect(html).toContain('<meta data-rh="true" property="og:type" content="article" />')
     expect(html).toContain('<meta data-rh="true" name="twitter:card" content="summary_large_image" />')
     // The homepage's own tags are gone, so each tag appears once
@@ -121,6 +122,8 @@ describe('GET /api/story-page/:slug', () => {
     // Everything else in the shell is kept: the app's script, the author meta and the body
     expect(html).toContain('<script type="module" crossorigin src="/assets/index-abc123.js"></script>')
     expect(html).toContain('<meta name="author" content="Actually Relevant" />')
+    // The Mastodon byline is the shell's, so story pages keep it
+    expect(html).toContain('<meta name="fediverse:creator" content="@actuallyrelevant@mastodon.social" />')
     expect(html).toContain('<div id="root"><main>Homepage</main></div>')
   })
 

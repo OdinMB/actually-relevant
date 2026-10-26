@@ -99,7 +99,7 @@ describe('social channel pages', () => {
 
     await screen.findByText('masto 1')
     expect(adminApi.mastodon.getFeed).toHaveBeenLastCalledWith({ limit: 25 })
-    expect(screen.getByText('Avg Favourites').previousSibling).toHaveTextContent('6')
+    expect(screen.getByText('Avg Favorites').previousSibling).toHaveTextContent('6')
     expect(screen.getByText('6F 1B 2R')).toBeInTheDocument()
     expect(screen.getByText('Reblog')).toBeInTheDocument()
 

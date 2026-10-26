@@ -14,6 +14,7 @@ import { podcastDialogueSchemaFor, podcastSelectResultSchema, type PodcastDialog
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { dialogueCharBudget, validateDialogue } from './podcastDialogue.js'
 import { PodcastBlockedError } from './podcastGuards.js'
+import { podcastHeading, podcastScriptStory, podcastSelectStory } from './promptInputs.js'
 
 const log = createLogger('podcast-script')
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -97,40 +98,18 @@ function loadPool(anchor: Date) {
   })
 }
 
-function topIssueName(s: PoolStory): string {
-  const issue = s.issue ?? s.feed?.issue
-  return issue?.parent?.name ?? issue?.name ?? 'General'
-}
-
 /** A story's facts as the episode shows them: title, publisher, links and top-level issue. */
-export const storyFacts = (s: PoolStory): Omit<EpisodeStory, 'ref'> => ({
-  id: s.id,
-  title: s.title || s.sourceTitle,
-  publisher: s.feed?.displayTitle || s.feed?.title || 'Unknown',
-  sourceUrl: s.sourceUrl,
-  slug: s.slug,
-  issue: topIssueName(s),
-})
+export const storyFacts = (s: PoolStory): Omit<EpisodeStory, 'ref'> => {
+  const heading = podcastHeading(s)
+  return { id: s.id, title: heading.title, publisher: heading.publisher, sourceUrl: s.sourceUrl, slug: s.slug, issue: heading.issue }
+}
 
 /** The frozen snapshot of a story at position `ref` in the episode. */
 export const snapshotOf = (s: PoolStory, ref: number): EpisodeStory => ({ ref, ...storyFacts(s) })
 
-/** The prompt material for a story, under the episode's frozen snapshot (its ref, title and publisher). */
-function promptFor(s: PoolStory, snapshot: EpisodeStory): StoryForPodcast {
-  return {
-    ref: snapshot.ref,
-    issue: snapshot.issue,
-    title: snapshot.title,
-    publisher: snapshot.publisher,
-    summary: s.summary || '',
-    whyItMatters: s.relevanceSummary || s.relevanceReasons || '',
-    limitingFactors: s.antifactors || '',
-  }
-}
-
 function toSelected(s: PoolStory, ref: number): SelectedStory {
   const snapshot = snapshotOf(s, ref)
-  return { snapshot, prompt: promptFor(s, snapshot) }
+  return { snapshot, prompt: podcastScriptStory(s, snapshot) }
 }
 
 /** A story of the week's pool as the story picker lists it, ready to become a snapshot. */
@@ -151,7 +130,7 @@ export async function loadEpisodeStories(snapshots: EpisodeStory[]): Promise<Sel
   return snapshots.map(snapshot => {
     const story = byId.get(snapshot.id)
     if (!story) throw new Error(`story "${snapshot.title}" is no longer published; change the selection`)
-    return { snapshot, prompt: promptFor(story, snapshot) }
+    return { snapshot, prompt: podcastScriptStory(story, snapshot) }
   })
 }
 
@@ -180,14 +159,7 @@ export async function chooseStories<S extends PoolStory>(pool: S[], kind: Podcas
   const { minStories, maxStories, selectModelTier } = config.podcast
   if (pool.length < minStories) throw new TooFewStoriesError(pool.length, minStories)
   const prompt = buildPodcastSelectPrompt(
-    pool.map(s => ({
-      id: s.id,
-      issue: topIssueName(s),
-      title: s.title || s.sourceTitle,
-      summary: s.summary || '',
-      relevance: s.relevance,
-      emotionTag: s.emotionTag,
-    })),
+    pool.map(s => podcastSelectStory(s, podcastHeading(s))),
     minStories,
     maxStories,
     kind,

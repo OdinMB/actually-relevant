@@ -9,7 +9,7 @@ const log = createLogger('turnstile')
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 
 if (!config.subscribe.turnstileSecretKey) {
-  if (process.env.NODE_ENV === 'production') {
+  if (config.isProduction) {
     log.error('TURNSTILE_SECRET_KEY is not set: newsletter signups will be refused')
   } else {
     log.warn('TURNSTILE_SECRET_KEY is not set: the Turnstile check is skipped outside production')
@@ -35,7 +35,7 @@ interface SiteverifyResponse {
  */
 export async function verifyTurnstile(token: string | undefined, remoteIp: string | undefined): Promise<TurnstileResult> {
   const secret = config.subscribe.turnstileSecretKey
-  if (!secret) return process.env.NODE_ENV === 'production' ? 'unavailable' : 'ok'
+  if (!secret) return config.isProduction ? 'unavailable' : 'ok'
   if (!token) return 'failed'
 
   const idempotencyKey = randomUUID()

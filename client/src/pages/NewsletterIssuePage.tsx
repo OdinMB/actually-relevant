@@ -11,6 +11,7 @@ import StoryTitleLabel from '../components/StoryTitleLabel'
 import AiBadge from '../components/ai/AiBadge'
 import { NewsletterIssueSkeleton } from '../components/skeletons'
 import { useNewsletterIssue } from '../hooks/useNewsletterArchive'
+import { NEWSLETTER_FEED_URL } from '../lib/api'
 
 const LINK_CLASS = 'text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5'
 
@@ -83,6 +84,7 @@ function IssueHead({ issue }: { issue: PublicNewsletterIssue }) {
         <title>{title}</title>
         <meta name="description" content={description.slice(0, 160)} />
         <link rel="canonical" href={url} />
+        <link rel="alternate" type="application/rss+xml" title="Actually Relevant newsletter" href={NEWSLETTER_FEED_URL} />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description.slice(0, 200)} />
         <meta property="og:type" content="article" />

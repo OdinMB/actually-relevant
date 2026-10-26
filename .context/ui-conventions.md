@@ -9,7 +9,7 @@ Each page should:
 - [ ] Use Helmet with title, description
 - [ ] Have unique, descriptive title
 - [ ] Have unique meta description (150-160 chars)
-- [ ] Be listed in `client/src/routes.ts` for prerendering
+- [ ] Be listed in `shared/routes.json` for prerendering and the sitemap (`.context/seo.md`)
 - [ ] Render JSON-LD through `<StructuredData>` or, inside Helmet, `toJsonLd()` (`client/src/lib/structured-data.ts`), never plain `JSON.stringify`: story and episode text comes from crawled pages, and an unescaped `</script>` would break out of the element in prerendered HTML
 - [ ] No hardcoded counts (source count, story count, language count) -- use `useSources()` hook or omit. These values change as feeds are added/removed.
 
@@ -32,7 +32,7 @@ Defined in `client/src/index.css`:
 
 ## Public URLs
 
-The site URL and the Ko-fi, Bluesky, Mastodon and GitHub addresses are constants in `client/src/config.ts` (`SITE_URL`, `KOFI_URL`, `BLUESKY_PROFILE_URL`, `MASTODON_PROFILE_URL`, `GITHUB_REPO_URL`); `SEO.siteUrl` is `SITE_URL`. Import them rather than writing an address inline. `index.html` and the build scripts in `client/scripts/` cannot import them and keep their own copies.
+The site URL and the Ko-fi, Bluesky, Mastodon and GitHub addresses are constants in `client/src/config.ts` (`SITE_URL`, `KOFI_URL`, `BLUESKY_PROFILE_URL`, `MASTODON_PROFILE_URL`, `GITHUB_REPO_URL`); `SEO.siteUrl` is `SITE_URL`. Import them rather than writing an address inline. `index.html` and the build scripts in `client/scripts/` cannot import them and keep their own copies, as does the server's newsletter email template (`config.links` in `server/src/config.ts`).
 
 ## Bundle Splitting
 

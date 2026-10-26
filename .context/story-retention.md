@@ -12,7 +12,7 @@ Each run, in this order (`jobs/cleanupOldStories.ts`, SQL in `services/storyRete
    - a podcast that lists it in `story_ids`,
    - a published story in its cluster (the published page's "Also covered by" sources).
 
-   `published`, `analyzed` and `selected` stories are never deleted.
+   `published`, `analyzed` and `selected` stories are never deleted. A "Report an error" sent from a deleted story stays, its `feedback.story_id` set to NULL by the foreign key.
 2. **Counts each deleted story in the same statement** (one data-modifying CTE: select with `FOR UPDATE SKIP LOCKED`, delete, insert the grouped counts into `story_archive_counts`). A story can never be deleted without being counted or counted twice.
 3. **Repairs the clusters it took members from**, as `deleteStory()` does (`repairClusters()`, `dedup.md`): the delete statement also returns the deleted stories' cluster ids, and after the last batch a cluster left with one member or none is dissolved, and one that keeps two or more members but lost its primary (`primary_story_id` is `ON DELETE SET NULL`) gets a new primary by the lifecycle module's election in pipeline mode (`reelectPrimary()`, one transaction per cluster under its lock), which never restores a rejected story: an elected `duplicate` stays rejected, and a trashed or otherwise rejected member is never elected. Without this a lost primary would leave every member a non-primary (selection and auto-reject skip such a cluster).
 4. **Clears the embeddings** (`embedding`, `embedding_content_hash`, `embedding_generated_at`) of every unpublished story crawled before the same cutoff, in batches. Clearing the hash is what makes `ensureEmbedding()` generate a new one.

@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+# AI usage preference (IETF AIPREF draft): AI search yes, AI model training no
+Content-Usage: train-ai=n, search=y
 
 Sitemap: https://actuallyrelevant.news/sitemap.xml

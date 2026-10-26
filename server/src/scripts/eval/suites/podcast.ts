@@ -8,6 +8,7 @@ import { buildPodcastPrompt, type StoryForPodcast } from '../../../prompts/podca
 import { buildPodcastSelectPrompt, type StoryForPodcastSelect } from '../../../prompts/podcast-select.js'
 import type { PodcastDialogue, PodcastSelectResult } from '../../../schemas/llm.js'
 import { assembleSpokenSegments, dialogueCharBudget, renderScript } from '../../../services/podcastDialogue.js'
+import { podcastScriptStory, podcastSelectStory } from '../../../services/promptInputs.js'
 import { checkDialogue, mean, type DialogueCheck } from '../checks.js'
 import type { PodcastFixtureStory, PodcastItem } from '../fixtures.js'
 import type { CallRecord } from '../types.js'
@@ -30,27 +31,15 @@ export function podcastEpisodeStories(p: PodcastItem): StoryForPodcast[] {
   const picked: typeof pool = []
   for (const s of byRelevance) if (!picked.some(x => x.category === s.category)) picked.push(s)
   for (const s of byRelevance) if (!picked.includes(s)) picked.push(s)
-  return picked.slice(0, config.podcast.maxStories).map((s, i) => ({
-    ref: i + 1,
-    issue: s.category,
-    title: s.title,
-    publisher: s.publisher,
-    summary: s.summary,
-    whyItMatters: s.relevanceSummary || s.relevanceReasons,
-    limitingFactors: s.antifactors,
-  }))
+  return picked
+    .slice(0, config.podcast.maxStories)
+    .map((s, i) => podcastScriptStory(s, { ref: i + 1, issue: s.category, title: s.title, publisher: s.publisher }))
 }
 
 export const podcastPrompt = (p: PodcastItem) => buildPodcastPrompt(podcastEpisodeStories(p), dialogueCharBudget('weekly'), 'weekly')
 
-const selectStory = (s: PodcastFixtureStory & { id: string }): StoryForPodcastSelect => ({
-  id: s.id,
-  issue: s.category,
-  title: s.title,
-  summary: s.summary,
-  relevance: s.relevance ?? null,
-  emotionTag: s.emotionTag ?? null,
-})
+const selectStory = (s: PodcastFixtureStory & { id: string }): StoryForPodcastSelect =>
+  podcastSelectStory({ id: s.id, summary: s.summary, relevance: s.relevance ?? null, emotionTag: s.emotionTag ?? null }, { issue: s.category, title: s.title })
 
 export const podcastSelectPrompt = (p: PodcastItem) =>
   buildPodcastSelectPrompt(podcastPool(p).map(selectStory), config.podcast.minStories, config.podcast.maxStories, 'weekly')

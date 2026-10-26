@@ -9,6 +9,9 @@ import type {
 
 export const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api'
 
+/** RSS feed of the published newsletter issues (server/src/routes/public/newsletters.ts). */
+export const NEWSLETTER_FEED_URL = `${API_BASE}/newsletters/feed.xml`
+
 /**
  * A story's link-preview image (1200x630, served by the API); the site-wide image without a slug.
  * The server's story-page route injects the same URL for crawlers (server/src/lib/storyPreviewUrls.ts).
@@ -118,7 +121,7 @@ export const publicApi = {
       body: JSON.stringify(data),
     }),
 
-  submitFeedback: (data: { category: string; message: string; email?: string; website?: string }) =>
+  submitFeedback: (data: { category: string; message: string; email?: string; website?: string; storyId?: string }) =>
     request<{ success: boolean }>('/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -10,6 +10,7 @@ import { useUpdateStory, useDissolveCluster } from '../../hooks/useStories'
 import { useEditForm } from '../../hooks/useEditForm'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { formatStatus, formatDate } from '../../lib/constants'
+import { blueskyPostUrl } from '../../lib/bluesky'
 import { PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
 import { buildIssueOptions } from './StoryFiltersBar'
@@ -278,9 +279,8 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
               This story has been posted to Bluesky.
               {story.blueskyPosts?.[0]?.postUri &&
                 (() => {
-                  const match = story.blueskyPosts![0].postUri!.match(/^at:\/\/(did:[^/]+)\/app\.bsky\.feed\.post\/(.+)$/)
-                  if (!match) return null
-                  const url = `https://bsky.app/profile/${match[1]}/post/${match[2]}`
+                  const url = blueskyPostUrl(story.blueskyPosts![0].postUri!)
+                  if (!url) return null
                   return (
                     <>
                       {' '}

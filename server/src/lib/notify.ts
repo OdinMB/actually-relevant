@@ -23,7 +23,7 @@ export async function notify(input: NoticeInput, options: RecordOptions = {}): P
 
 /** Post to WEBHOOK_URL; silent without it, and a failed post is logged, never thrown. */
 async function postWebhook(input: NoticeInput): Promise<void> {
-  const url = process.env.WEBHOOK_URL
+  const url = config.notices.webhookUrl
   if (!url) return
 
   const open = input.link ? `\nOpen: ${config.clientUrl}${input.link}` : ''

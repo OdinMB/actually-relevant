@@ -119,8 +119,21 @@ export function useSendLiveNewsletter() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, scheduledFor }: { id: string; scheduledFor?: string }) => adminApi.newsletters.sendLive(id, scheduledFor),
-    onSuccess: (_, { id }) => {
+    // Settled, not only on success: a failed send leaves a failed or unconfirmed row; a sent one publishes the issue
+    onSettled: (_, __, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['newsletter-sends', id] })
+      queryClient.invalidateQueries({ queryKey: ['newsletter', id] })
+      queryClient.invalidateQueries({ queryKey: ['newsletters'] })
+    },
+  })
+}
+
+export function useMarkSendFailed() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ newsletterId, sendId }: { newsletterId: string; sendId: string }) => adminApi.newsletters.markSendFailed(newsletterId, sendId),
+    onSuccess: (_, { newsletterId }) => {
+      queryClient.invalidateQueries({ queryKey: ['newsletter-sends', newsletterId] })
     },
   })
 }

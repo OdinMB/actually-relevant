@@ -58,13 +58,19 @@ function importsOf(text: string): ImportStatement[] {
   return out
 }
 
-const ALLOWED_SERVICE_IMPORTS: Record<string, string[]> = {
+/** `'*'`: any named import, for a module held to having no I/O below. */
+const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/llm.js': ['createChatModel'],
-  'services/bluesky.js': ['calcMaxBlurbChars'],
-  'services/mastodon.js': ['calcMaxBlurbChars'],
+  // Production's prompt-input builders, so the eval sends the prompts production sends.
+  'services/promptInputs.js': '*',
+  'services/bluesky.js': ['blueskyDraftInput'],
+  'services/mastodon.js': ['mastodonDraftInput'],
   // Pure dialogue rules (no I/O): the eval scores and renders with production's own validation.
   'services/podcastDialogue.js': ['validateDialogue', 'DialogueStoryRef', 'assembleSpokenSegments', 'renderScript', 'dialogueCharBudget'],
 }
+
+/** The pure modules the eval may import whole: config and prompt types only. */
+const PURE_SERVICE_MODULES = ['promptInputs.ts']
 
 describe('eval harness has no write path', () => {
   it('finds the eval source files', () => {
@@ -81,15 +87,25 @@ describe('eval harness has no write path', () => {
     expect(offenders).toEqual([])
   })
 
-  it('imports only createChatModel, calcMaxBlurbChars and the pure dialogue rules from services', () => {
+  it('imports only createChatModel, the prompt-input builders and the pure dialogue rules from services', () => {
     const offenders = files.flatMap(f =>
       importsOf(f.text)
         .filter(i => i.specifier.includes('/services/'))
         .flatMap(i => {
           const allowed = Object.entries(ALLOWED_SERVICE_IMPORTS).find(([suffix]) => i.specifier.endsWith(suffix))?.[1]
           if (!allowed || i.names === null) return [`${f.name}: ${i.specifier}`]
+          if (allowed === '*') return []
           return i.names.filter(n => !allowed.includes(n)).map(n => `${f.name}: ${n} from ${i.specifier}`)
         }),
+    )
+    expect(offenders).toEqual([])
+  })
+
+  it('imports whole only service modules that import nothing but config and prompt types', () => {
+    const offenders = PURE_SERVICE_MODULES.flatMap(name =>
+      importsOf(stripComments(readFileSync(join(ROOT, '../../services', name), 'utf8')))
+        .filter(i => !(i.specifier === '../config.js' || (i.typeOnly && i.specifier.startsWith('../prompts/'))))
+        .map(i => `${name}: ${i.specifier}`),
     )
     expect(offenders).toEqual([])
   })

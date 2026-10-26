@@ -2,8 +2,10 @@
  * Every suite's inputs, sampled deterministically from stored data through the
  * read-only session in readOnlyDb.ts. SELECT only.
  *
- * Prompt-input shaping below mirrors the production services (named per
- * block) without calling them, because those functions persist results.
+ * Prompt inputs are built from the rows with production's own input builders
+ * (`services/promptInputs.ts`, and the draft inputs in `services/bluesky.ts`
+ * and `services/mastodon.ts`), the ones the services call before their model
+ * call; the services themselves are not called, because they persist results.
  */
 import { Prisma } from '@prisma/client'
 import { config } from '../../config.js'
@@ -14,8 +16,21 @@ import type { CandidateStory } from '../../prompts/related-stories.js'
 import type { StoryForSelect } from '../../prompts/select.js'
 import type { StoryForNewsletterSelect } from '../../prompts/newsletter-select.js'
 import type { StoryForNewsletterIntro } from '../../prompts/newsletter-intro.js'
-import { calcMaxBlurbChars as blueskyMaxChars } from '../../services/bluesky.js'
-import { calcMaxBlurbChars as mastodonMaxChars } from '../../services/mastodon.js'
+import { blueskyDraftInput } from '../../services/bluesky.js'
+import { mastodonDraftInput } from '../../services/mastodon.js'
+import {
+  assessPromptInput,
+  newsletterIntroInput,
+  newsletterOrder,
+  newsletterSelectInput,
+  podcastHeading,
+  relatedCandidate,
+  relatedNeedsRanking,
+  relatedSource,
+  selectCount,
+  selectPromptStory,
+  socialPickStory,
+} from '../../services/promptInputs.js'
 import { mentionsModelName, tallyTerms, withoutModelNames } from './blinding.js'
 import { DEFAULT_FLOOR } from './options.js'
 import type { Db, ReadOnlyDb } from './readOnlyDb.js'
@@ -261,19 +276,16 @@ async function loadAssess(db: Db, floor: Date, shortfalls: string[]): Promise<As
     },
   })
   const byId = new Map(rows.map(r => [r.id, r]))
-  // Mirrors analysis.ts assessStory: guidelines from story.issue ?? feed.issue, publisher = feed.title.
   return picked.flatMap(p => {
     const r = byId.get(p.id)
     if (!r || r.relevance == null) return []
-    const issue = r.issue ?? r.feed.issue
+    const input = assessPromptInput(r)
     return [
       {
         id: r.id,
-        title: r.sourceTitle,
-        content: r.sourceContent.substring(0, config.assess.contentMaxLength),
-        publisher: r.feed.title,
-        url: r.sourceUrl,
-        guidelines: { factors: issue.promptFactors, antifactors: issue.promptAntifactors, ratings: issue.promptRatings },
+        ...input,
+        // buildAssessPrompt cuts the content to the same length; cut here, the fixture holds only what is sent.
+        content: input.content.substring(0, config.assess.contentMaxLength),
         language: r.feed.language,
         han: p.han,
         stored: { rating: r.relevance },
@@ -377,7 +389,7 @@ async function loadRelated(db: Db, shortfalls: string[]): Promise<RelatedItem[]>
     ORDER BY md5(s.id || 'gpt6-eval')
     LIMIT ${TARGETS.related.total}`
   const ids = sources.map(s => s.id)
-  // Mirrors relatedStories.ts getRelatedStories: the 12 cosine-nearest published stories.
+  // The candidate query of relatedStories.ts rankRelatedStories, for every source at once: the 12 cosine-nearest published stories.
   const rows =
     ids.length === 0
       ? []
@@ -393,10 +405,10 @@ async function loadRelated(db: Db, shortfalls: string[]): Promise<RelatedItem[]>
     WHERE src.id = ANY(${ids})
     ORDER BY src.id, c.distance`
   const items = sources.flatMap(s => {
-    const candidates = rows.filter(r => r.source_id === s.id).map(r => ({ id: r.id, titleLabel: r.title_label, title: r.title }))
+    const candidates = rows.filter(r => r.source_id === s.id).map(relatedCandidate)
     // Production skips the LLM when there are no more candidates than display slots.
-    if (candidates.length <= config.relatedStories.displayCount) return []
-    return [{ id: s.id, source: { titleLabel: s.title_label, title: s.title }, candidates }]
+    if (!relatedNeedsRanking(candidates.length)) return []
+    return [{ id: s.id, source: relatedSource(s), candidates }]
   })
   if (items.length < TARGETS.related.total) shortfalls.push(`related: ${items.length} of ${TARGETS.related.total} stories`)
   return items
@@ -464,18 +476,7 @@ async function loadSocialPick(db: Db, anchor: Date, shortfalls: string[], adapta
     days.push({
       day: w.day,
       storedPickId: w.storyId && candidates.some(c => c.id === w.storyId) ? w.storyId : null,
-      // Mirrors socialMedia.ts pickBestStoryForSocial prompt input.
-      candidates: candidates.map(s => ({
-        id: s.id,
-        title: s.title || s.sourceTitle,
-        titleLabel: s.titleLabel || '',
-        summary: s.summary || '',
-        relevanceSummary: s.relevanceSummary,
-        relevance: s.relevance,
-        emotionTag: s.emotionTag,
-        issueName: s.issue?.name ?? null,
-        datePublished: s.datePublished?.toISOString() ?? null,
-      })),
+      candidates: candidates.map(socialPickStory),
     })
   }
   if (days.length < TARGETS.socialPick.days) shortfalls.push(`social pick: ${days.length} of ${TARGETS.socialPick.days} days`)
@@ -510,17 +511,9 @@ async function loadSocialPost(db: Db, floor: Date, shortfalls: string[]): Promis
     const s = byId.get(id)
     if (!s?.title || !s.summary || !s.slug) return []
     const platform: SocialPostItem['platform'] = i < n ? 'bluesky' : 'mastodon'
-    // Mirrors bluesky.ts / mastodon.ts generateDraft.
-    const meta = { issueName: s.issue?.name ?? null, emotionTag: s.emotionTag, publisherName: s.feed.displayTitle || s.feed.title }
-    const maxChars =
-      platform === 'bluesky' ? blueskyMaxChars(meta) : mastodonMaxChars({ ...meta, sourceUrl: s.sourceUrl, storyUrl: `${config.siteUrl}/stories/${s.slug}` })
-    return [
-      {
-        id: s.id,
-        platform,
-        story: { id: s.id, title: s.title, titleLabel: s.titleLabel || '', summary: s.summary, relevanceSummary: s.relevanceSummary, maxChars },
-      },
-    ]
+    const story = { ...s, title: s.title, summary: s.summary }
+    const input = platform === 'bluesky' ? blueskyDraftInput(story) : mastodonDraftInput(story)
+    return [{ id: s.id, platform, story: input.prompt }]
   })
   if (items.length < 2 * n) shortfalls.push(`social post: ${items.length} of ${2 * n} stories`)
   return items
@@ -569,10 +562,9 @@ async function loadSelection(db: Db, anchor: Date, shortfalls: string[], adaptat
   let groupsDropped = 0
   const groups = drafts
     .flatMap(d => {
-      // Mirrors analysis.ts selectStories.
       const all = d.storyIds.flatMap(id => {
         const r = byId.get(id)
-        return r ? [{ ...r, emotionTag: r.emotionTag as string | null, sourceDatePublished: r.sourceDatePublished?.toISOString() ?? null }] : []
+        return r ? [{ ...selectPromptStory(r), relevance: r.relevance }] : []
       })
       // Owner's blinding rule: a story that mentions a model name is removed before any
       // prompt is built, so no arm sees it and no rating item shows it.
@@ -586,7 +578,7 @@ async function loadSelection(db: Db, anchor: Date, shortfalls: string[], adaptat
         {
           id: d.id,
           day: d.day,
-          toSelect: Math.ceil(blinded.kept.length * config.selection.ratio),
+          toSelect: selectCount(blinded.kept.length),
           stories: blinded.kept,
           storedPicked: keptIds.filter(id => ['selected', 'published'].includes(statusById.get(id) ?? '')),
           removed: blinded.removed,
@@ -607,22 +599,7 @@ async function loadSelection(db: Db, anchor: Date, shortfalls: string[], adaptat
   return groups
 }
 
-/** Copy of the private ISSUE_ORDER in services/newsletter.ts (intro ordering). */
-const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
-const issueSortIndex = (slug: string) => (ISSUE_ORDER.indexOf(slug) >= 0 ? ISSUE_ORDER.indexOf(slug) : ISSUE_ORDER.length)
-
-interface IssueRef {
-  name: string
-  slug: string
-  parentId: string | null
-  parent: { name: string; slug: string } | null
-}
 const issueRefSelect = { name: true, slug: true, parentId: true, parent: { select: { name: true, slug: true } } } as const
-
-function topLevelIssue(issue: IssueRef | null | undefined): { name: string; slug: string } {
-  if (!issue) return { name: 'General', slug: 'general-news' }
-  return issue.parentId && issue.parent ? issue.parent : { name: issue.name, slug: issue.slug }
-}
 
 async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string[]): Promise<NewsletterItem[]> {
   const newsletters = await db.newsletter.findMany({
@@ -653,40 +630,17 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
     removed.push(...rows.filter(s => mentionsModelName(shown(s))).map(shown))
     const byId = new Map(stories.map(s => [s.id, s]))
     const ordered = n.storyIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))
-    // Mirrors newsletter.ts selectStoriesForNewsletter.
-    const longlist = ordered.map(s => ({
-      id: s.id,
-      title: s.title || s.sourceTitle,
-      summary: s.summary,
-      issueName: topLevelIssue(s.issue ?? s.feed.issue).name,
-      emotionTag: s.emotionTag as string | null,
-    }))
-    // Mirrors newsletter.ts generateContent intro input (issue order, then title).
-    const selected = n.selectedStoryIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))
-    const withIssue = selected.map(s => ({ s, issue: topLevelIssue(s.issue ?? s.feed.issue) }))
-    withIssue.sort(
-      (a, b) => issueSortIndex(a.issue.slug) - issueSortIndex(b.issue.slug) || (a.s.title || a.s.sourceTitle).localeCompare(b.s.title || b.s.sourceTitle),
-    )
-    const introIssues = [...new Map(withIssue.map(w => [w.issue.name, w.issue.slug])).entries()]
-      .sort(([, a], [, b]) => issueSortIndex(a) - issueSortIndex(b))
-      .map(([name]) => name)
+    // Production's inputs (newsletter.ts pickShortlist, buildContent), from the stored longlist and shortlist in stored order.
+    const longlist = newsletterSelectInput(ordered)
+    const intro = newsletterIntroInput(newsletterOrder(n.selectedStoryIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))))
     items.push({
       id: n.id,
       title: n.title,
-      longlist,
-      issueNames: [...new Set(longlist.map(s => s.issueName))].sort(),
+      longlist: longlist.stories,
+      issueNames: longlist.issueNames,
       storiesPerIssue: config.newsletter.storiesPerIssue,
       storedSelected: n.selectedStoryIds.filter(id => byId.has(id)),
-      intro: {
-        stories: withIssue.map(({ s, issue }) => ({
-          title: s.title || s.sourceTitle,
-          issueName: issue.name,
-          blurb: s.marketingBlurb || s.summary || '',
-          emotionTag: s.emotionTag || 'calm',
-        })),
-        issueNames: introIssues,
-        style: pickIntroStyle(),
-      },
+      intro: { stories: intro.stories, issueNames: intro.issueNames, style: pickIntroStyle() },
     })
   }
   if (removed.length > 0)
@@ -698,7 +652,8 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
 }
 
 async function loadPodcast(db: Db, anchor: Date, shortfalls: string[], adaptations: string[]): Promise<PodcastItem | null> {
-  // Mirrors podcastScript.ts loadPool and toSelected: the week's published stories, most relevant first.
+  // Like podcastScript.ts loadPool: the week's published stories, most relevant first. suites/podcast.ts
+  // turns these into prompt input with production's builders.
   const stories = await db.story.findMany({
     where: { status: 'published', dateCrawled: { gte: new Date(anchor.getTime() - TARGETS.podcastFallbackDays * DAY_MS), lte: anchor } },
     select: {
@@ -717,13 +672,13 @@ async function loadPodcast(db: Db, anchor: Date, shortfalls: string[], adaptatio
     orderBy: [{ relevance: 'desc' }, { dateCrawled: 'desc' }],
   })
   const shaped: PodcastFixtureStory[] = stories.map(s => {
-    const issue = s.issue ?? s.feed?.issue
+    const heading = podcastHeading(s)
     return {
       id: s.id,
-      category: issue?.parent?.name ?? issue?.name ?? 'General',
-      title: s.title || s.sourceTitle,
+      category: heading.issue,
+      title: heading.title,
       summary: s.summary || '',
-      publisher: s.feed?.displayTitle || s.feed?.title || 'Unknown',
+      publisher: heading.publisher,
       relevanceReasons: s.relevanceReasons || '',
       antifactors: s.antifactors || '',
       relevanceSummary: s.relevanceSummary || '',

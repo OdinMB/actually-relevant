@@ -100,7 +100,7 @@ The build generates the Prisma client, applies any pending database migrations, 
 | `NODE_ENV` | Fixed in `render.yaml` | `production` (enables secure cross-origin cookies) |
 | `NODE_VERSION` | Fixed in `render.yaml` | Exact Node version, equal to `.node-version` (`22.23.4`); set on both services |
 | `PORT` | No | Render sets this automatically (defaults to 10000) |
-| `PUBLIC_API_KEY` | No | Static API key for public consumers (mobile apps, etc.) |
+| `PUBLIC_API_KEY` | No | Static key for partners of the public API: sent as `Authorization: Bearer <key>`, it raises the rate limit from 100 requests per 15 minutes per IP to 1,000 per 15 minutes for the key (`RATE_LIMIT_PUBLIC_API_KEY_MAX`). It grants no other access; unset, no key is accepted (`.context/authentication.md`) |
 | `LOG_LEVEL` | No | Logging verbosity (default: `info`) |
 | `SUBSCRIPTIONS_ENABLED` | No | `true` opens newsletter signups; unset or anything else keeps them paused (`.context/subscription.md`) |
 | `TURNSTILE_SECRET_KEY` | For signups | Cloudflare Turnstile secret; without it, production refuses every signup |

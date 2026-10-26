@@ -43,9 +43,7 @@ app.use(
 // Dev ports 5173-5180 (Vite increments when a port is taken) and preview ports
 // 4173-4174, on both localhost and 127.0.0.1.
 const devPorts = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 4173, 4174]
-const allowedOrigins = [...devPorts.flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]), process.env.FRONTEND_URL].filter(
-  Boolean,
-) as string[]
+const allowedOrigins = [...devPorts.flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]), config.frontendUrl].filter(Boolean) as string[]
 
 // Open CORS for public read-only endpoints (widget/embed API calls from any origin).
 // /api/subscribe/token is included: it's an anonymous, side-effect-free GET the
@@ -86,6 +84,8 @@ export function requestIdFrom(header: string | string[] | undefined): string {
 app.use((req, res, next) => {
   req.id = requestIdFrom(req.headers['x-request-id'])
   res.set('X-Request-Id', req.id)
+  // AI usage preference on every response, story pages served from here included (.context/seo.md)
+  res.set('Content-Usage', config.contentUsage)
   next()
 })
 

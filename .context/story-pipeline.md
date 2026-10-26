@@ -69,7 +69,7 @@ An editor move to the status the story already has is a no-op that answers 200 w
 
 **Analysis results are written against the status read before the model call** (`recordAnalysis(stage, actor, rows, expected)`): a story an editor moved during the call (trashed, rejected) is skipped, so the editor's move stands.
 
-**Lock order** in every transaction that writes status (moves, analysis results, publishing, cluster edits): the slug advisory lock (publish only), then the affected `story_clusters` rows `FOR UPDATE` ordered by id, then the story rows ordered by id; an election then locks its cluster's member rows in id order before writing. Publish locks the clusters of its chunk before the flip, so a concurrent cluster edit cannot deadlock against it.
+**Lock order** in every transaction that writes status (moves, analysis results, publishing, cluster edits): the slug advisory lock (publish only), then the affected `story_clusters` rows `FOR UPDATE` ordered by id, then the story rows ordered by id; an election then locks its cluster's member rows in id order before writing. Publish locks the clusters of its chunk before the flip, so a concurrent cluster edit cannot deadlock against it. A move reads its stories' cluster ids before it can lock them, so a story can join a cluster (a manual cluster, a dedup formation, a merge) in between: after locking the story rows, the move compares their cluster ids with the clusters it locked, and when a new one appeared it rolls back and runs the whole transaction again, which then locks that cluster first. At most three attempts, then the move fails with "gave up moving stories after 3 attempts: their clusters kept changing" (`lockForMove`, `retryOnClusterChange`; `storyLifecycle.db.test.ts` reproduces the race).
 
 **Restored stories get their embedding back.** A cluster edit or editor election that restores a published `duplicate` puts it back on the site; its embedding is ensured after the commit, outside the transaction (the retention job may have cleared it), and a failure is logged and leaves it published without one, as for every publish path.
 
@@ -127,6 +127,10 @@ Selection: candidates go through LLM selection (~`config.selection.ratio`, defau
 | `server/src/services/storyQueries.ts` | Admin list and filters, by-id reads, status counts, `getStoryIdsByStatus` |
 | `server/src/services/storyWrites.ts` | Create, admin edit, editor status actions (through the module), delete, per-story cluster dissolve |
 | `server/src/services/publicStories.ts` | Public listing, story by slug, cluster redirect and sources, homepage buckets |
+| `server/src/services/storySearch.ts` | Public hybrid (semantic + text) search, `hybridSearch()` (`.context/embeddings.md`) |
+| `server/src/services/relatedStories.ts` | Related stories, their LLM re-rank and cache (`forgetRelatedStories()` clears entries) |
+| `server/src/services/storySelect.ts` | `PUBLIC_STORY_SELECT`, the field selection every public story read uses |
+| `server/src/services/clusterRepair.ts` | `repairClusters()`: dissolves or re-elects clusters after member deletes, shared by `deleteStory()` and the retention cleanup |
 | `server/src/services/analysis.ts` | LLM orchestration (preassess, assess, select); results written through the module |
 | `server/src/jobs/preassessStories.ts` | Scheduled pre-assessment |
 | `server/src/jobs/assessStories.ts` | Scheduled full assessment |

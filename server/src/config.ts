@@ -1,3 +1,6 @@
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
+
 /** Every `reasoning_effort` value an OpenAI model accepts; each model accepts a subset (see createChatModel). */
 export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
@@ -73,14 +76,6 @@ export interface JobLeaseTiming {
   leaseRenewMs: number
 }
 
-function parsePositiveSeconds(value: string | undefined, fallback: number, varName: string): number {
-  if (value === undefined || value === '') return fallback
-  if (!/^\d+$/.test(value) || Number(value) <= 0) {
-    throw new Error(`${varName}="${value}" is not a positive whole number of seconds`)
-  }
-  return Number(value)
-}
-
 /**
  * Parse TRUST_PROXY, the number of proxy hops Express trusts when deriving
  * req.ip from X-Forwarded-For. Unset or empty → 1; anything but a plain
@@ -103,15 +98,41 @@ export function parseTrustProxyHops(value: string | undefined): number {
  * chances before its lease runs out and let another process start the same job mid-run.
  */
 export function parseJobLeaseTiming(leaseValue: string | undefined, renewValue: string | undefined): JobLeaseTiming {
-  const leaseSeconds = parsePositiveSeconds(leaseValue, 120, 'JOB_LEASE_SECONDS')
-  const renewSeconds = parsePositiveSeconds(renewValue, 30, 'JOB_LEASE_RENEW_SECONDS')
+  const leaseSeconds = parseWholeNumber(leaseValue, 120, 'JOB_LEASE_SECONDS')
+  const renewSeconds = parseWholeNumber(renewValue, 30, 'JOB_LEASE_RENEW_SECONDS')
   if (renewSeconds * 2 > leaseSeconds) {
     throw new Error(`JOB_LEASE_RENEW_SECONDS=${renewSeconds} must be at most half of JOB_LEASE_SECONDS=${leaseSeconds}`)
   }
   return { leaseSeconds, leaseRenewMs: renewSeconds * 1000 }
 }
 
+/** Canonical public URL for the site; one default for every setting built on it. */
+const siteUrl = process.env.SITE_URL || 'https://actuallyrelevant.news'
+
+const configDir = dirname(fileURLToPath(import.meta.url))
+
+/** Public API requests per window and client IP; the keyed limit defaults to ten times it. */
+const publicRateLimitMax = parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_MAX, 100, 'RATE_LIMIT_PUBLIC_MAX')
+
+// The `get` settings below read the environment when used, not when config.ts loads, as their
+// callers did before they moved here: tests set these variables after import.
 export const config = {
+  /** NODE_ENV is `production` (Render). */
+  get isProduction(): boolean {
+    return process.env.NODE_ENV === 'production'
+  },
+  /** Port the server listens on; Render sets PORT. */
+  port: parseWholeNumber(process.env.PORT, 3001, 'PORT'),
+  /** The admin and public site's origin, allowed by CORS beside the local dev origins ('' = none). */
+  get frontendUrl(): string {
+    return process.env.FRONTEND_URL || ''
+  },
+  log: {
+    dir: process.env.LOG_DIR || 'logs',
+    retentionDays: parseWholeNumber(process.env.LOG_RETENTION_DAYS, 14, 'LOG_RETENTION_DAYS'),
+    /** Unset: `info` in production, `debug` elsewhere. */
+    level: process.env.LOG_LEVEL || '',
+  },
   /**
    * Proxy hops between the visitor and the server (Cloudflare, then Render's proxies).
    * Too low: req.ip is a proxy address and visitors share every rate-limit bucket.
@@ -132,6 +153,17 @@ export const config = {
      * the API is served from the same site as the admin (see .context/authentication.md).
      */
     cookieSameSite: parseSameSite(process.env.AUTH_COOKIE_SAMESITE, 'AUTH_COOKIE_SAMESITE'),
+    /** Signs access tokens; signing and verifying throw while it is unset. */
+    get jwtSecret(): string {
+      return process.env.JWT_SECRET || ''
+    },
+    /**
+     * Static key for public API consumers ('' = no key accepted). Sent as `Authorization: Bearer
+     * <key>`, it raises the public API's rate limit (`rateLimit.publicApiKeyMax`); it grants no access.
+     */
+    get publicApiKey(): string {
+      return process.env.PUBLIC_API_KEY || ''
+    },
     // The settings below are security choices with no env override on purpose: changing one is a
     // reviewed code change (.context/authentication.md), not a dashboard edit.
     /** Lifetime of an access token (jsonwebtoken `expiresIn`). */
@@ -142,7 +174,21 @@ export const config = {
     bcryptRounds: 12,
   },
   /** Canonical public URL for the site — used in social media posts, RSS feeds, sitemaps, etc. */
-  siteUrl: process.env.SITE_URL || 'https://actuallyrelevant.news',
+  siteUrl,
+  /** Public API origin: the OpenAPI spec's server and absolute og:image URLs (crawlers need them absolute). */
+  apiUrl: process.env.API_URL || 'https://api.actuallyrelevant.news',
+  /** The project's donation page and social profiles, linked from the newsletter email. The client keeps its own copies (client/src/config.ts). */
+  links: {
+    kofi: 'https://ko-fi.com/odinmb',
+    blueskyProfile: 'https://bsky.app/profile/actuallyrelevant.bsky.social',
+    mastodonProfile: 'https://mastodon.social/@actuallyrelevant',
+  },
+  /**
+   * AI usage preference (IETF AIPREF draft vocabulary): AI search may use the content, AI model
+   * training may not (owner, 2026-10-25). Sent as the Content-Usage header on every API response;
+   * client/public/robots.txt and the static site's headers in render.yaml state the same (app.test.ts).
+   */
+  contentUsage: 'train-ai=n, search=y',
   /** Public client (frontend) URL — used to build links the visitor clicks, e.g. the subscription confirmation page. */
   clientUrl: process.env.CLIENT_URL || 'https://actuallyrelevant.news',
   database: {
@@ -222,6 +268,17 @@ export const config = {
     minDelayPerDomainMs: parseWholeNumber(process.env.MIN_DELAY_PER_DOMAIN_MS, 200, 'MIN_DELAY_PER_DOMAIN_MS', 0),
     localFailThreshold: parseWholeNumber(process.env.LOCAL_FAIL_THRESHOLD, 3, 'LOCAL_FAIL_THRESHOLD'),
     totalFailThreshold: parseWholeNumber(process.env.TOTAL_FAIL_THRESHOLD, 3, 'TOTAL_FAIL_THRESHOLD'),
+    /** Extraction API credentials ('' = that tier is skipped). */
+    get diffbotToken(): string {
+      return process.env.DIFFBOT_TOKEN || ''
+    },
+    get pipfeedApiKey(): string {
+      return process.env.PIPFEED_API_KEY || ''
+    },
+    /** Where feed favicons are written; the client serves them from public/images/feeds. */
+    get faviconDir(): string {
+      return process.env.FAVICON_DIR || join(configDir, '..', '..', 'client', 'public', 'images', 'feeds')
+    },
   },
   // Access classification at extraction (.context/content-extraction.md, "Access classification").
   // A page the publisher marks as not free is `locked` only with evidence of truncation: the
@@ -307,6 +364,10 @@ export const config = {
     // "actuallyrelevant.news/podcast.xml". Never change it, even if the feed moves.
     feedGuid: '097a5224-a76e-5f98-98e0-151f653772ae',
     showAuthor: 'Actually Relevant',
+    // podcast:funding text beside config.links.kofi (Pocket Casts shows it as a Funding button).
+    fundingLabel: 'Support the show',
+    // podcast:updateFrequency: an RFC 5545 rule for the weekly Saturday episode, and its display text.
+    updateFrequency: { rrule: 'FREQ=WEEKLY', label: 'Weekly' },
     // Apple Podcasts categories (owner decision, 2026-10-07): Apple's exact names, a subcategory
     // nested in its parent; the feed escapes them. "Government" replaced "Society & Culture" and
     // "Technology" replaced "Science" (owner, 2026-10-07): Apple wants a subcategory for both, none
@@ -371,7 +432,10 @@ export const config = {
   },
   rateLimit: {
     publicWindowMs: parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_WINDOW_MS, 15 * 60 * 1000, 'RATE_LIMIT_PUBLIC_WINDOW_MS'),
-    publicMax: parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_MAX, 100, 'RATE_LIMIT_PUBLIC_MAX'),
+    publicMax: publicRateLimitMax,
+    // Requests carrying the valid PUBLIC_API_KEY: one shared budget for the key, whatever the IP
+    // (middleware/rateLimit.ts, .context/authentication.md)
+    publicApiKeyMax: parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_API_KEY_MAX, publicRateLimitMax * 10, 'RATE_LIMIT_PUBLIC_API_KEY_MAX'),
     expensiveWindowMs: parseWholeNumber(process.env.RATE_LIMIT_EXPENSIVE_WINDOW_MS, 60 * 60 * 1000, 'RATE_LIMIT_EXPENSIVE_WINDOW_MS'),
     expensiveMax: parseWholeNumber(process.env.RATE_LIMIT_EXPENSIVE_MAX, 1000, 'RATE_LIMIT_EXPENSIVE_MAX'),
     searchWindowMs: parseWholeNumber(process.env.RATE_LIMIT_SEARCH_WINDOW_MS, 15 * 60 * 1000, 'RATE_LIMIT_SEARCH_WINDOW_MS'),
@@ -425,6 +489,10 @@ export const config = {
   notices: {
     // Seen admin notices older than this (by last occurrence) are deleted; unseen ones are kept.
     retentionDays: 90,
+    /** Optional forward of every notice to a chat webhook ('' = none). */
+    get webhookUrl(): string {
+      return process.env.WEBHOOK_URL || ''
+    },
   },
   subscribe: {
     confirmTokenExpiryHours: parseWholeNumber(process.env.SUBSCRIBE_TOKEN_EXPIRY_HOURS, 24, 'SUBSCRIBE_TOKEN_EXPIRY_HOURS'),
@@ -470,14 +538,12 @@ export const config = {
     serviceUrl: process.env.BLUESKY_SERVICE_URL || 'https://bsky.social',
     autoPost: {
       enabled: process.env.BLUESKY_AUTO_POST_ENABLED === 'true',
-      lookbackHours: parseWholeNumber(process.env.BLUESKY_LOOKBACK_HOURS, 25, 'BLUESKY_LOOKBACK_HOURS'),
     },
     metrics: {
       maxAgeDays: parseWholeNumber(process.env.BLUESKY_METRICS_MAX_AGE_DAYS, 30, 'BLUESKY_METRICS_MAX_AGE_DAYS'),
     },
     postDelayMs: parseWholeNumber(process.env.BLUESKY_POST_DELAY_MS, 2000, 'BLUESKY_POST_DELAY_MS', 0),
     postModelTier: 'medium' as const,
-    pickModelTier: 'medium' as const,
   },
   mastodon: {
     instanceUrl: process.env.MASTODON_URL || '',
@@ -513,10 +579,8 @@ export const config = {
   },
   /** Story link previews: the og:image endpoint and the story-page shell route (.context/seo.md). */
   storyPreview: {
-    /** Public API origin that serves `/api/stories/:slug/og.png`; absolute because crawlers need it. */
-    apiUrl: process.env.API_URL || 'https://api.actuallyrelevant.news',
     /** The built client's index.html on the static site; the story-page route injects meta tags into it. */
-    shellUrl: `${process.env.SITE_URL || 'https://actuallyrelevant.news'}/index.html`,
+    shellUrl: `${siteUrl}/index.html`,
     /** How long the fetched shell is reused before it is revalidated (short: it names the build's hashed assets). */
     shellCacheSeconds: parseWholeNumber(process.env.STORY_PAGE_SHELL_CACHE_SECONDS, 60, 'STORY_PAGE_SHELL_CACHE_SECONDS', 0),
     shellFetchTimeoutMs: 5000,

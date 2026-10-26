@@ -16,17 +16,18 @@ vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 vi.mock('../lib/prisma.js', () => ({
   default: {
     story: { count: mockCount },
-    newsletter: { findFirst: mockFindFirst, delete: mockDelete },
+    newsletter: { findFirst: mockFindFirst },
   },
 }))
 
-vi.mock('../services/newsletter.js', () => ({
-  createNewsletter: mockCreateNewsletter,
+vi.mock('../services/newsletter.js', () => ({ createNewsletter: mockCreateNewsletter }))
+vi.mock('../services/newsletterLifecycle.js', () => ({
   assignStories: mockAssignStories,
-  selectStoriesForNewsletter: mockSelectStoriesForNewsletter,
+  selectStories: mockSelectStoriesForNewsletter,
   generateContent: mockGenerateContent,
-  generateHtmlContent: mockGenerateHtmlContent,
+  generateHtml: mockGenerateHtmlContent,
   sendTest: mockSendTest,
+  deleteNewsletter: mockDelete,
 }))
 
 const { runGenerateNewsletter, getWeekTitle, getWeekKey } = await import('./generateNewsletter.js')
@@ -81,8 +82,8 @@ describe('runGenerateNewsletter', () => {
     vi.setSystemTime(SATURDAY)
     rows = []
     mockFindFirst.mockImplementation(async ({ where }: { where: Where }) => rows.find(r => matches(r, where)) ?? null)
-    mockDelete.mockImplementation(async ({ where }: { where: { id: string } }) => {
-      rows = rows.filter(r => r.id !== where.id)
+    mockDelete.mockImplementation(async (id: string) => {
+      rows = rows.filter(r => r.id !== id)
     })
     mockCount.mockResolvedValue(5)
     mockCreateNewsletter.mockResolvedValue({ id: 'nl-new' })
@@ -225,7 +226,7 @@ describe('runGenerateNewsletter', () => {
 
     await runGenerateNewsletter()
 
-    expect(mockDelete).toHaveBeenCalledWith({ where: { id: 'nl-draft' } })
+    expect(mockDelete).toHaveBeenCalledWith('nl-draft')
     expect(mockCreateNewsletter).toHaveBeenCalledTimes(1)
     expect(mockSendTest).toHaveBeenCalledTimes(1)
   })
@@ -236,7 +237,7 @@ describe('runGenerateNewsletter', () => {
 
     await expect(runGenerateNewsletter()).rejects.toThrow('LLM timeout')
 
-    expect(mockDelete).toHaveBeenCalledWith({ where: { id: 'nl-1' } })
+    expect(mockDelete).toHaveBeenCalledWith('nl-1')
     expect(mockGenerateHtmlContent).not.toHaveBeenCalled()
     expect(mockSendTest).not.toHaveBeenCalled()
   })

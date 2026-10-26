@@ -11,28 +11,24 @@
 import { Router, type Request, type Response } from 'express'
 import { config } from '../../config.js'
 import { createLogger } from '../../lib/logger.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import { getStoryOgImage, renderStoryPage } from '../../services/storyPreview.js'
 
 const log = createLogger('story-preview')
 
 export const storyImageRouter = Router()
 
-storyImageRouter.get('/:slug/og.png', async (req, res) => {
-  try {
-    const png = await getStoryOgImage(req.params.slug)
-    if (!png) {
-      res.status(404).json({ error: 'Story not found' })
-      return
-    }
-    res.set('Content-Type', 'image/png')
-    res.set('Cache-Control', `public, max-age=${config.storyPreview.imageCacheSeconds}`)
-    // Helmet's default (same-origin) would stop browsers showing the image on other sites
-    res.set('Cross-Origin-Resource-Policy', 'cross-origin')
-    res.send(png)
-  } catch (err) {
-    log.error({ err, slug: req.params.slug }, 'failed to render story og image')
-    res.status(500).json({ error: 'Failed to render image' })
+storyImageRouter.get('/:slug/og.png', failsWith('Failed to render image'), async (req, res) => {
+  const png = await getStoryOgImage(req.params.slug!)
+  if (!png) {
+    res.status(404).json({ error: 'Story not found' })
+    return
   }
+  res.set('Content-Type', 'image/png')
+  res.set('Cache-Control', `public, max-age=${config.storyPreview.imageCacheSeconds}`)
+  // Helmet's default (same-origin) would stop browsers showing the image on other sites
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin')
+  res.send(png)
 })
 
 export const storyPageRouter = Router()

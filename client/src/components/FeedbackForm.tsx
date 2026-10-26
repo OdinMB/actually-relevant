@@ -10,6 +10,15 @@ interface FeedbackFormProps {
   idPrefix?: string
   /** Hide the heading and tagline (when the parent provides its own) */
   hideHeading?: boolean
+  /** A story's "Report an error": names the story and sends a correction tied to it */
+  story?: FeedbackStory
+}
+
+/** The story a "Report an error" is about. */
+export interface FeedbackStory {
+  id: string
+  /** As the story page shows it (title label and headline) */
+  title: string
 }
 
 const CATEGORIES = [
@@ -22,8 +31,9 @@ const CATEGORIES = [
 // Must match config.feedback.messageMaxLength on the server
 const MAX_MESSAGE_LENGTH = 2000
 
-export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 'feedback', hideHeading = false }: FeedbackFormProps) {
-  const [category, setCategory] = useState<string>('general')
+export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 'feedback', hideHeading = false, story }: FeedbackFormProps) {
+  const [chosenCategory, setCategory] = useState<string>('general')
+  const category = story ? 'correction' : chosenCategory
   const [message, setMessage] = useState('')
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('') // honeypot
@@ -49,6 +59,7 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
         message: message.trim(),
         ...(email.trim() ? { email: email.trim() } : {}),
         ...(website ? { website } : {}),
+        ...(story ? { storyId: story.id } : {}),
       })
       setStatus('success')
     } catch {
@@ -65,7 +76,7 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-xl font-bold text-neutral-900 mb-2">Thanks for your feedback!</h2>
+        <h2 className="text-xl font-bold text-neutral-900 mb-2">{story ? 'Thanks for your report!' : 'Thanks for your feedback!'}</h2>
         <p className="text-neutral-600 text-sm mb-6">We appreciate you taking the time to share your thoughts.</p>
         {onSuccess && (
           <button
@@ -84,50 +95,57 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
       {!hideHeading && (
         <div className="text-center mb-6">
           <h2 id={`${idPrefix}-title`} className="text-xl font-bold text-neutral-900">
-            Send feedback
+            {story ? 'Report an error' : 'Send feedback'}
           </h2>
+          {story && (
+            <p className="mt-2 text-sm text-neutral-600">
+              In: <span className="font-medium text-neutral-800">{story.title}</span>
+            </p>
+          )}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Category */}
-        <fieldset>
-          <legend className="sr-only">Category</legend>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map(cat => (
-              <label
-                key={cat.value}
-                className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors border ${
-                  category === cat.value
-                    ? 'bg-brand-50 border-brand-300 text-brand-700 font-medium'
-                    : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name={`${idPrefix}-category`}
-                  value={cat.value}
-                  checked={category === cat.value}
-                  onChange={() => setCategory(cat.value)}
-                  className="sr-only"
-                />
-                {cat.label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        {/* Category (a story's report is always a correction) */}
+        {!story && (
+          <fieldset>
+            <legend className="sr-only">Category</legend>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map(cat => (
+                <label
+                  key={cat.value}
+                  className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors border ${
+                    category === cat.value
+                      ? 'bg-brand-50 border-brand-300 text-brand-700 font-medium'
+                      : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={`${idPrefix}-category`}
+                    value={cat.value}
+                    checked={category === cat.value}
+                    onChange={() => setCategory(cat.value)}
+                    className="sr-only"
+                  />
+                  {cat.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         {/* Message */}
         <div>
-          <label htmlFor={`${idPrefix}-message`} className="sr-only">
-            Message
+          <label htmlFor={`${idPrefix}-message`} className={story ? 'block text-sm font-medium text-neutral-700 mb-1' : 'sr-only'}>
+            {story ? 'What is wrong?' : 'Message'}
           </label>
           <textarea
             ref={messageRef}
             id={`${idPrefix}-message`}
             value={message}
             onChange={e => setMessage(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
-            placeholder="What's on your mind?"
+            placeholder={story ? 'A wrong fact, date, name or label' : "What's on your mind?"}
             required
             rows={4}
             className="w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-200 outline-none transition-colors resize-y"
@@ -172,7 +190,7 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
           aria-describedby={status === 'error' ? `${idPrefix}-error` : undefined}
           className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {status === 'loading' ? 'Sending...' : 'Send feedback'}
+          {status === 'loading' ? 'Sending...' : story ? 'Send report' : 'Send feedback'}
         </button>
       </form>
     </>

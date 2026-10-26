@@ -1,8 +1,8 @@
 /**
  * A small in-memory cache with a time-to-live and a maximum number of entries. When full,
- * the least recently used entry goes. For per-key caches that a crawler could otherwise
- * grow without bound (one entry per story), on a memory-capped instance; TTLCache in
- * cache.ts has no size limit.
+ * the least recently used entry goes, where TTLCache (cache.ts) with `maxEntries` drops the
+ * oldest set. Used by the story previews (one entry per story, which a crawler walking the
+ * site would otherwise cycle through); it has no in-flight dedupe, which TTLCache's `cached()` has.
  */
 export class BoundedCache<T> {
   private store = new Map<string, { value: T; expiresAt: number }>()

@@ -5,12 +5,13 @@ import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { createPost, getPostMetrics, deletePost as deleteBlueskyPost, isBlueskyConfigured, getAuthorFeed } from '../lib/bluesky.js'
 import type { LinkCardMeta } from '../lib/bluesky.js'
-import { buildBlueskyPostPrompt, buildBlueskyPickBestPrompt } from '../prompts/index.js'
-import type { StoryForBlueskyPost, StoryForBlueskyPick } from '../prompts/index.js'
-import { blueskyPostTextSchema, blueskyPickBestSchema } from '../schemas/bluesky.js'
+import { buildBlueskyPostPrompt } from '../prompts/index.js'
+import type { StoryForBlueskyPost } from '../prompts/index.js'
+import { blueskyPostTextSchema } from '../schemas/bluesky.js'
+import { pickBestStoryForSocial } from './socialMedia.js'
 import type { AuthorFeedResult } from '../lib/bluesky.js'
 import { TTLCache, cached } from '../lib/cache.js'
-import { buildMetaLine } from './socialPostFormat.js'
+import { buildMetaLine, draftMetaParts, type MetaLineParts, type SocialDraftStory } from './socialPostFormat.js'
 import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
@@ -43,14 +44,30 @@ export function assemblePostText(parts: { blurb: string; issueName: string | nul
   return `${parts.blurb}\n${metaLine}`
 }
 
-/**
- * Calculate max chars for the LLM editorial text given the metadata line.
- * Exported for the model-eval harness, which must compute the same limit.
- */
-export function calcMaxBlurbChars(parts: { issueName: string | null; emotionTag: string | null; publisherName: string }): number {
+/** Calculate max chars for the LLM editorial text given the metadata line. */
+export function calcMaxBlurbChars(parts: MetaLineParts): number {
   const metaLine = buildMetaLine(parts)
   // 300 grapheme limit minus metadata line and newline
   return Math.max(50, 300 - metaLine.length - 1)
+}
+
+/**
+ * The draft prompt's input and the metadata line's parts for a story; the blurb budget is what
+ * the metadata line leaves. The model-eval harness builds its post inputs with this too.
+ */
+export function blueskyDraftInput(story: SocialDraftStory): { parts: MetaLineParts; prompt: StoryForBlueskyPost } {
+  const parts = draftMetaParts(story)
+  return {
+    parts,
+    prompt: {
+      id: story.id,
+      title: story.title,
+      titleLabel: story.titleLabel || '',
+      summary: story.summary,
+      relevanceSummary: story.relevanceSummary,
+      maxChars: calcMaxBlurbChars(parts),
+    },
+  }
 }
 
 /**
@@ -87,25 +104,8 @@ export async function generateDraft(storyId: string) {
   })
   if (existingPost) throw new BadRequestError('Story already has a Bluesky post')
 
-  const publisherName = story.feed.displayTitle || story.feed.title
-  const issueName = story.issue?.name ?? null
-  const emotionTag = story.emotionTag
-  const titleLabel = story.titleLabel || ''
-
-  const maxChars = calcMaxBlurbChars({
-    issueName,
-    emotionTag,
-    publisherName,
-  })
-
-  const storyForPrompt: StoryForBlueskyPost = {
-    id: story.id,
-    title: story.title,
-    titleLabel,
-    summary: story.summary,
-    relevanceSummary: story.relevanceSummary,
-    maxChars,
-  }
+  const { parts, prompt: storyForPrompt } = blueskyDraftInput({ ...story, title: story.title, summary: story.summary })
+  const { maxChars } = storyForPrompt
 
   const prompt = buildBlueskyPostPrompt(storyForPrompt)
   const llm = getLLMByTier(config.bluesky.postModelTier)
@@ -122,12 +122,7 @@ export async function generateDraft(storyId: string) {
     blurb = blurb.slice(0, maxChars - 1) + '\u2026'
   }
 
-  const fullText = assemblePostText({
-    blurb,
-    issueName,
-    emotionTag,
-    publisherName,
-  })
+  const fullText = assemblePostText({ blurb, ...parts })
 
   // Final grapheme count safety check
   const graphemeCount = countGraphemes(fullText)
@@ -153,69 +148,11 @@ export async function generateDraft(storyId: string) {
 // ---------------------------------------------------------------------------
 
 /**
- * Use LLM to pick the best story from a set for Bluesky posting.
- */
-export async function pickBestStory(storyIds: string[]): Promise<{ storyId: string; reasoning: string }> {
-  const stories = await prisma.story.findMany({
-    where: { id: { in: storyIds } },
-    include: { issue: true },
-  })
-
-  if (stories.length === 0) throw new BadRequestError('No stories found')
-
-  // Filter out stories that already have any Bluesky post (draft, published, or failed)
-  const alreadyHavePost = await prisma.blueskyPost.findMany({
-    where: {
-      storyId: { in: storyIds },
-    },
-    select: { storyId: true },
-  })
-  const postedSet = new Set(alreadyHavePost.map((p: { storyId: string }) => p.storyId))
-  const candidates = stories.filter(s => !postedSet.has(s.id))
-
-  if (candidates.length === 0) throw new BadRequestError('All selected stories already have a Bluesky post')
-
-  // If only one candidate, just return it
-  if (candidates.length === 1) {
-    return { storyId: candidates[0]!.id, reasoning: 'Only one unposted story in the selection.' }
-  }
-
-  const storiesForPrompt: StoryForBlueskyPick[] = candidates.map(s => ({
-    id: s.id,
-    title: s.title || s.sourceTitle,
-    titleLabel: s.titleLabel || '',
-    summary: s.summary || '',
-    relevanceSummary: s.relevanceSummary,
-    relevance: s.relevance,
-    emotionTag: s.emotionTag,
-    issueName: s.issue?.name ?? null,
-    datePublished: s.datePublished?.toISOString() ?? null,
-  }))
-
-  const prompt = buildBlueskyPickBestPrompt(storiesForPrompt)
-  const llm = getLLMByTier(config.bluesky.pickModelTier)
-  const structuredLlm = llm.withStructuredOutput(blueskyPickBestSchema)
-
-  await rateLimitDelay()
-  log.info({ candidateCount: candidates.length }, 'picking best story for Bluesky')
-  const result = await structuredLlm.invoke([new HumanMessage(prompt)])
-
-  // Validate the returned storyId exists in candidates
-  const valid = candidates.find(s => s.id === result.storyId)
-  if (!valid) {
-    log.warn({ returnedId: result.storyId }, 'LLM returned invalid storyId, falling back to first candidate')
-    return { storyId: candidates[0]!.id, reasoning: 'LLM returned invalid ID; selected first candidate.' }
-  }
-
-  log.info({ storyId: result.storyId, reasoning: result.reasoning }, 'best story picked')
-  return result
-}
-
-/**
- * Pick the best story from a set and generate a draft for it.
+ * Pick the best story from a set and generate a draft for it. The shared picker skips stories
+ * that already have a Bluesky post (socialMedia.ts).
  */
 export async function pickAndDraft(storyIds: string[]) {
-  const { storyId, reasoning } = await pickBestStory(storyIds)
+  const { storyId, reasoning } = await pickBestStoryForSocial(storyIds, 'bluesky')
   const post = await generateDraft(storyId)
   return { ...post, pickReasoning: reasoning }
 }

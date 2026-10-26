@@ -90,6 +90,7 @@ const RUNS_ON_ITS_CODE_DEFAULT: Record<string, string> = {
   ...tunables('rate limits', [
     'RATE_LIMIT_PUBLIC_WINDOW_MS',
     'RATE_LIMIT_PUBLIC_MAX',
+    'RATE_LIMIT_PUBLIC_API_KEY_MAX',
     'RATE_LIMIT_EXPENSIVE_WINDOW_MS',
     'RATE_LIMIT_EXPENSIVE_MAX',
     'RATE_LIMIT_SEARCH_WINDOW_MS',
@@ -120,7 +121,7 @@ const RUNS_ON_ITS_CODE_DEFAULT: Record<string, string> = {
     'MASTODON_CHAR_LIMIT',
     'SOCIAL_LOOKBACK_HOURS',
   ]),
-  ...tunables('local file paths and log rotation (lib/logger.ts, services/favicon.ts)', ['LOG_DIR', 'LOG_RETENTION_DAYS', 'FAVICON_DIR']),
+  ...tunables('local file paths and log rotation (config.log, config.crawl.faviconDir)', ['LOG_DIR', 'LOG_RETENTION_DAYS', 'FAVICON_DIR']),
 }
 
 /**
@@ -154,8 +155,8 @@ function filesUnder(dir: string, keep: (relPath: string) => boolean): string[] {
 
 /**
  * Adaptation: the skill records what a `loadConfig(env)` reads through a Proxy, but here
- * eleven modules besides config.ts read process.env, several at call time, so the source
- * is scanned instead. Tests, src/test/ and src/scripts/ are left out: scripts/db-prepare
+ * config.ts reads several variables at call time (its `get` settings), which a Proxy over
+ * one load would miss, so the source is scanned instead. Tests, src/test/ and src/scripts/ are left out: scripts/db-prepare
  * passes process.env whole and runs only locally.
  */
 const serverSourceFiles = filesUnder(SERVER_SRC, p => p.endsWith('.ts') && !p.endsWith('.test.ts') && !p.startsWith('test/') && !p.startsWith('scripts/'))

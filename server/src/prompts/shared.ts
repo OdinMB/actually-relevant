@@ -13,10 +13,6 @@ export function buildGuidelinesXml(g: Guidelines): string {
   return `<FACTORS>\n${g.factors}\n</FACTORS>\n\n<TOPIC-SPECIFIC LIMITING FACTORS>\n${g.antifactors}\n</TOPIC-SPECIFIC LIMITING FACTORS>\n\n<CRITERIA>\n${g.ratings}\n</CRITERIA>`
 }
 
-export function containsChineseCharacters(str: string): boolean {
-  return /\p{Script=Han}/u.test(str)
-}
-
 // ---------------------------------------------------------------------------
 // Emotion tag definitions (single source of truth)
 // ---------------------------------------------------------------------------

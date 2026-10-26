@@ -102,6 +102,7 @@ model Story {
   primaryOfCluster       StoryCluster? @relation("ClusterPrimary")
   blueskyPosts           BlueskyPost[]
   mastodonPosts          MastodonPost[]
+  feedback               Feedback[]
   createdAt              DateTime     @default(now()) @map("created_at")
   updatedAt              DateTime     @updatedAt @map("updated_at")
 
@@ -466,6 +467,7 @@ enum FeedbackCategory {
   bug
   suggestion
   other
+  correction
 }
 
 enum FeedbackStatus {
@@ -481,9 +483,13 @@ model Feedback {
   email     String?
   status    FeedbackStatus   @default(unread)
   ipHash    String           @map("ip_hash")
+  // The story a "Report an error" was sent from; cleared when the story is deleted (retention).
+  storyId   String?          @map("story_id")
+  story     Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")
 
+  @@index([storyId])
   @@index([status])
   @@index([createdAt])
   @@map("feedback")

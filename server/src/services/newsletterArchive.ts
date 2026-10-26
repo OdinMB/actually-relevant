@@ -2,17 +2,17 @@
  * The newsletter's public web edition (.context/newsletter-podcast.md, "Web edition"): an issue
  * is public once its admin status is `published`, at `/newsletter/<slug>`, listed on
  * `/newsletter` (whose old `/newsletter/archive` URL redirects there) and in the sitemap. Unpublishing takes it off the web again; its slug
- * and first publication date stay, so republishing restores the same URL.
+ * and first publication date stay, so republishing restores the same URL. Publishing and
+ * unpublishing are moves of `newsletterLifecycle.ts`; this module holds slugs and the public reads.
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { createLogger } from '../lib/logger.js'
 import { paginate } from '../lib/paginate.js'
+import { isUniqueViolation } from '../utils/errors.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { AI_GENERATED_NEWSLETTER_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
-
-const log = createLogger('newsletter-archive')
+import { storyHeadlines, toWebMarkdown } from './newsletterContent.js'
 
 /** Path segments under /newsletter/ that belong to pages or redirects, never to an issue. */
 const RESERVED_SLUGS = new Set(['archive'])
@@ -41,40 +41,11 @@ export async function ensureNewsletterSlug(newsletter: { id: string; title: stri
       return candidate
     } catch (err) {
       // Taken between the check and the write: try the next one
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue
+      if (isUniqueViolation(err)) continue
       throw err
     }
   }
   throw new Error('Could not find a free newsletter slug')
-}
-
-/**
- * When an issue first went out: its earliest live (non-test, not failed) send, by `sentAt`, or
- * `createdAt` for a scheduled send, which records no time of its own. Null if it was never sent.
- */
-async function firstLiveSendDate(newsletterId: string): Promise<Date | null> {
-  const sends = await prisma.newsletterSend.findMany({
-    where: { newsletterId, isTest: false, status: { not: 'failed' } },
-    select: { sentAt: true, createdAt: true },
-  })
-  const dates = sends.map(send => (send.sentAt ?? send.createdAt).getTime())
-  return dates.length > 0 ? new Date(Math.min(...dates)) : null
-}
-
-/**
- * Extra fields for an admin update that publishes an issue: its slug (if it has none yet) and
- * `publishedAt` the first time, which is the date the issue was first emailed if it was, so an
- * older issue published on the web later keeps its own week. Called by updateNewsletter before
- * it writes.
- */
-export async function publicationFields(id: string, status: unknown): Promise<Prisma.NewsletterUpdateInput> {
-  if (status !== 'published') return {}
-  const current = await prisma.newsletter.findUnique({ where: { id }, select: { id: true, title: true, slug: true, publishedAt: true } })
-  if (!current) return {} // the update itself answers 404
-  const slug = await ensureNewsletterSlug(current)
-  log.info({ newsletterId: id, slug }, 'newsletter published on the web')
-  if (current.publishedAt) return {}
-  return { publishedAt: (await firstLiveSendDate(id)) ?? new Date() }
 }
 
 /** Public web address of an issue. */
@@ -120,15 +91,11 @@ export async function listPublishedIssueDates(): Promise<{ slug: string; publish
 }
 
 /**
- * The stored markdown as the web edition shows it: without the template's machine tags, the
- * `{feed:<id>}` favicon marker in each metadata line and the ` {issue-slug}` after each section
- * heading, which the email template turns into a favicon and a colored dot.
+ * One public issue with its stories, or null unless it is published. The stories are those its
+ * content's story headings name (`newsletterContent.ts`) plus its shortlist; a marked story's
+ * `headline` is its heading as it stands in the content, an unmarked one's (an issue generated
+ * before the marker) its title, which is what that heading was generated from.
  */
-export function toWebMarkdown(content: string): string {
-  return content.replace(/\{feed:[^}\s]*\}[ \t]*/g, '').replace(/^(#[ \t].*?)[ \t]*\{[a-z0-9-]+\}[ \t]*$/gm, '$1')
-}
-
-/** One public issue with its stories, or null unless it is published. */
 export async function getPublishedIssue(slug: string) {
   const issue = await prisma.newsletter.findFirst({
     where: { ...PUBLIC_WHERE, slug },
@@ -136,9 +103,11 @@ export async function getPublishedIssue(slug: string) {
   })
   if (!issue) return null
 
-  const stories = issue.selectedStoryIds.length
+  const markedHeadlines = new Map(storyHeadlines(issue.content).map(h => [h.storyId, h.headline]))
+  const storyIds = [...new Set([...markedHeadlines.keys(), ...issue.selectedStoryIds])]
+  const stories = storyIds.length
     ? await prisma.story.findMany({
-        where: { id: { in: issue.selectedStoryIds } },
+        where: { id: { in: storyIds } },
         select: {
           id: true,
           slug: true,
@@ -159,8 +128,8 @@ export async function getPublishedIssue(slug: string) {
     aiLabel: NEWSLETTER_TOP_LABEL,
     content: toWebMarkdown(issue.content),
     stories: stories.map(story => ({
-      // The `## ` heading generateContent wrote for this story, to match it in the content
-      headline: story.title || story.sourceTitle,
+      // The `## ` heading this story has in the content, to match it there
+      headline: markedHeadlines.get(story.id) ?? (story.title || story.sourceTitle),
       title: story.title,
       titleLabel: story.titleLabel,
       sourceTitle: story.sourceTitle,

@@ -103,6 +103,11 @@ const ENDPOINTS = [
     path: '/api/feed?minRelevance=7',
     description: 'RSS feed of only the stories rated 7 or higher (works on per-issue feeds too)',
   },
+  {
+    method: 'GET',
+    path: '/api/newsletters/feed.xml',
+    description: 'RSS feed of the weekly newsletter issues',
+  },
 ]
 
 const USE_CASES = [

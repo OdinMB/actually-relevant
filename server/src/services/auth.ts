@@ -18,7 +18,7 @@ export interface AccessTokenPayload {
 }
 
 function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET
+  const secret = config.auth.jwtSecret
   if (!secret) throw new Error('JWT_SECRET environment variable is not set')
   return secret
 }

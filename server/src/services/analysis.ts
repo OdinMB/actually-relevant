@@ -12,23 +12,15 @@ import { getSmallLLM, getMediumLLM, getLLMByTier, rateLimitDelay } from './llm.j
 import { buildPreassessPrompt, buildReclassifyPrompt, buildEmotionTagPrompt, buildAssessPrompt, buildSelectPrompt } from '../prompts/index.js'
 import type { StoryForPreassess, IssueForPreassess } from '../prompts/index.js'
 import { preAssessResultSchema, reclassifyResultSchema, assessResultSchema, selectResultSchema } from '../schemas/llm.js'
-import type { Guidelines } from '../prompts/shared.js'
 import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
+import { assessPromptInput, selectCount, selectPromptStory } from './promptInputs.js'
 import { NotFoundError } from '../utils/errors.js'
 import { analysisFrom, partition, recordAnalysis, transition, type Actor, type AnalysisOutcome, type AnalysisRow, type MoveResult } from './storyLifecycle.js'
 
 const log = createLogger('analysis')
 
 export type ProgressCallback = (event: { type: 'completed'; count: number } | { type: 'failed'; count: number; error: string }) => void
-
-function getGuidelines(issue: { promptFactors: string; promptAntifactors: string; promptRatings: string }): Guidelines {
-  return {
-    factors: issue.promptFactors,
-    antifactors: issue.promptAntifactors,
-    ratings: issue.promptRatings,
-  }
-}
 
 // --- Shared batch classification helper ---
 
@@ -294,9 +286,8 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
 
   log.info({ storyId, title: story.sourceTitle?.slice(0, 80) }, 'assessing story')
 
-  const guidelines = getGuidelines(story.issue ?? story.feed.issue)
-  const publisher = story.feed.title
-  const prompt = buildAssessPrompt(story.sourceTitle, story.sourceContent, publisher, story.sourceUrl, guidelines)
+  const input = assessPromptInput(story)
+  const prompt = buildAssessPrompt(input.title, input.content, input.publisher, input.url, input.guidelines)
 
   await rateLimitDelay()
   const llm = getLLMByTier(config.assess.modelTier)
@@ -425,21 +416,7 @@ export async function selectStories(storyIds: string[]): Promise<SelectionResult
 
   log.info({ storyCount: dedupFiltered.length }, 'selecting from stories')
 
-  const toSelect = Math.ceil(dedupFiltered.length * config.selection.ratio)
-  const prompt = buildSelectPrompt(
-    dedupFiltered.map(s => ({
-      id: s.id,
-      title: s.title,
-      summary: s.summary,
-      relevanceReasons: s.relevanceReasons,
-      antifactors: s.antifactors,
-      relevanceCalculation: s.relevanceCalculation,
-      emotionTag: s.emotionTag,
-      sourceDatePublished: s.sourceDatePublished?.toISOString() ?? null,
-    })),
-    toSelect,
-    new Date().toISOString(),
-  )
+  const prompt = buildSelectPrompt(dedupFiltered.map(selectPromptStory), selectCount(dedupFiltered.length), new Date().toISOString())
 
   await rateLimitDelay()
   const llm = getLLMByTier(config.selection.modelTier)

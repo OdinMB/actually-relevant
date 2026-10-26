@@ -145,6 +145,13 @@ services:
       - actuallyrelevant.news
       - www.actuallyrelevant.news
     renderSubdomainPolicy: disabled
+    # AI usage preference (IETF AIPREF draft) on every static response, the same value as
+    # robots.txt and the API's Content-Usage header (config.contentUsage; server/src/app.test.ts).
+    # The API sets the same header itself on what the rewrites proxy (sitemap, podcast feed, story pages).
+    headers:
+      - path: /*
+        name: Content-Usage
+        value: "train-ai=n, search=y"
     # Order matters: Render applies the first matching rule, so /sitemap.xml,
     # /podcast.xml and /stories/* must stay above the SPA catch-all. No static sitemap.xml or
     # podcast.xml may exist in client/public/, and nothing may be built under dist/stories/.

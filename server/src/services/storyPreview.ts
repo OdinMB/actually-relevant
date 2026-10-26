@@ -12,6 +12,7 @@ import { createLogger } from '../lib/logger.js'
 import { withRetry } from '../lib/retry.js'
 import { BoundedCache } from '../lib/boundedCache.js'
 import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
+import { escapeHtml } from '../lib/xml.js'
 import { createStoryImage, OG_IMAGE_SIZE } from './carousel.js'
 
 const log = createLogger('story-preview')
@@ -155,8 +156,8 @@ export async function getShell(): Promise<string | null> {
   return inflight
 }
 
-/** Test hook: forget the cached shell and pages. */
-export function resetStoryPreviewCaches(): void {
+/** Tests only: forget the cached shell and pages. */
+export function _resetStoryPreviewCaches(): void {
   shell = null
   inflight = null
   pageCache.clear()
@@ -164,10 +165,6 @@ export function resetStoryPreviewCaches(): void {
 }
 
 // --- Meta tags ---
-
-export function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-}
 
 /** The head tags the story page's Helmet sets, as HTML. Marked data-rh so Helmet takes them over. */
 export function buildStoryHeadTags(story: PreviewStory): string {

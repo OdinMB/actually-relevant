@@ -3,8 +3,15 @@ import { getOpenAPIDocument } from './openapi.js'
 import { AI_GENERATED_NEWSLETTER_FIELDS, AI_GENERATED_PODCAST_DETAIL_FIELDS, AI_GENERATED_PODCAST_FIELDS, AI_GENERATED_STORY_FIELDS } from './aiProvenance.js'
 
 describe('getOpenAPIDocument', () => {
-  const doc = getOpenAPIDocument()
+  // Read loosely: the assertions walk nested schemas by name, which the OpenAPI types keep optional
+  const doc: any = getOpenAPIDocument()
   const schemas = doc.components.schemas
+
+  it('documents the partner API key as an optional bearer scheme', () => {
+    expect(doc.components.securitySchemes.publicApiKey).toMatchObject({ type: 'http', scheme: 'bearer' })
+    expect(doc.security).toEqual([{}, { publicApiKey: [] }])
+    expect(doc.info.description).toContain('Authorization: Bearer')
+  })
 
   it('documents the aiGenerated marker on every public story', () => {
     expect(schemas.PublicStory.required).toContain('aiGenerated')

@@ -13,7 +13,10 @@
  *
  * Lock order in every transaction that touches status and clusters: the slug advisory lock
  * (publish only), then the affected `story_clusters` rows ordered by id, then the story rows
- * ordered by id.
+ * ordered by id. A move reads its stories' cluster ids before it can lock them; when a story
+ * joined another cluster in between, the move re-checks after its row locks and runs the whole
+ * transaction again (at most three attempts) rather than lock that cluster out of order
+ * (`lockForMove`).
  */
 import { Prisma, RejectionReason, StoryStatus } from '@prisma/client'
 import prisma from '../lib/prisma.js'
@@ -139,29 +142,32 @@ export async function recordAnalysis(
   if (rows.length === 0) return outcomes
   const { to, advance, refresh } = ANALYSIS[stage]
 
-  await prisma.$transaction(
-    async tx => {
-      await lockForMove(
-        tx,
-        rows.map(r => r.id),
-      )
-      for (const row of rows) {
-        const status = expected.get(row.id)
-        const outcome: AnalysisOutcome = status && advance[actor].includes(status) ? 'advanced' : status && refresh.includes(status) ? 'refreshed' : 'skipped'
-        outcomes.set(row.id, outcome)
-        if (outcome === 'skipped') continue
-        const { count } = await tx.story.updateMany({
-          where: { id: row.id, status },
-          data: outcome === 'advanced' ? { ...row.data, status: to, rejectionReason: null } : row.data,
-        })
-        if (count === 0) {
-          outcomes.set(row.id, 'skipped')
-          continue
+  // lockForMove throws before any outcome is set, so a retried attempt starts clean
+  await retryOnClusterChange(() =>
+    prisma.$transaction(
+      async tx => {
+        await lockForMove(
+          tx,
+          rows.map(r => r.id),
+        )
+        for (const row of rows) {
+          const status = expected.get(row.id)
+          const outcome: AnalysisOutcome = status && advance[actor].includes(status) ? 'advanced' : status && refresh.includes(status) ? 'refreshed' : 'skipped'
+          outcomes.set(row.id, outcome)
+          if (outcome === 'skipped') continue
+          const { count } = await tx.story.updateMany({
+            where: { id: row.id, status },
+            data: outcome === 'advanced' ? { ...row.data, status: to, rejectionReason: null } : row.data,
+          })
+          if (count === 0) {
+            outcomes.set(row.id, 'skipped')
+            continue
+          }
+          if (row.embedding) await saveEmbeddingTx(tx, row.id, row.embedding.embedding, row.embedding.hash)
         }
-        if (row.embedding) await saveEmbeddingTx(tx, row.id, row.embedding.embedding, row.embedding.hash)
-      }
-    },
-    { timeout: config.database.transactionTimeoutMs },
+      },
+      { timeout: config.database.transactionTimeoutMs },
+    ),
   )
 
   // A refreshed published story has new content: its cached related list is stale
@@ -213,7 +219,7 @@ export async function transition(ids: string[], move: Move, actor: Actor): Promi
   const result =
     move.to === published
       ? await publishIds(unique, from, actor)
-      : await inTransaction(tx => (actor === 'editor' ? editorMove(tx, unique, move, from) : pipelineMove(tx, unique, move, from)))
+      : await retryOnClusterChange(() => inTransaction(tx => (actor === 'editor' ? editorMove(tx, unique, move, from) : pipelineMove(tx, unique, move, from))))
 
   if (actor === 'editor' && move.to !== published) forgetRelatedStories(result.moved)
   log.info(
@@ -274,7 +280,7 @@ async function publishIds(ids: string[], from: StoryStatus[], actor: Actor): Pro
   for (let i = 0; i < ids.length; i += config.publish.chunkSize) {
     const chunk = ids.slice(i, i + config.publish.chunkSize)
     await ensureEmbeddingsBeforePublish(chunk, from)
-    const part = await withSlugLock(tx => publishChunk(tx, chunk, from, actor))
+    const part = await retryOnClusterChange(() => withSlugLock(tx => publishChunk(tx, chunk, from, actor)))
     result.moved.push(...part.moved)
     result.skipped.push(...part.skipped)
   }
@@ -526,19 +532,62 @@ async function lockClusters(tx: Tx, clusterIds: string[]): Promise<Set<string>> 
   return new Set(rows.map(r => r.id))
 }
 
-async function lockClustersOf(tx: Tx, storyIds: string[]): Promise<void> {
+async function lockClustersOf(tx: Tx, storyIds: string[]): Promise<Set<string>> {
   const rows = await tx.story.findMany({ where: { id: { in: storyIds }, clusterId: { not: null } }, select: { clusterId: true } })
-  await lockClusters(
+  return lockClusters(
     tx,
     rows.map(r => r.clusterId!),
   )
 }
 
-/** The lock order for moving stories: their clusters' rows by id, then the story rows by id. */
-async function lockForMove(tx: Tx, ids: string[]): Promise<Map<string, LockedStory>> {
-  await lockClustersOf(tx, ids)
-  return lockStories(tx, ids)
+/** How often a transaction is tried when its stories keep joining clusters it has not locked. */
+const CLUSTER_CHANGE_ATTEMPTS = 3
+
+/** A story joined a cluster between the unlocked read of its cluster id and its row lock. */
+export class ClusterChangedError extends Error {
+  constructor(readonly clusterIds: string[]) {
+    super(`stories joined clusters while being locked: ${clusterIds.join(', ')}`)
+    this.name = 'ClusterChangedError'
+  }
 }
+
+/**
+ * The lock order for moving stories: their clusters' rows by id, then the story rows by id. The
+ * cluster ids are read without a lock, so a story can join a cluster (a manual cluster, a dedup
+ * formation, a merge) before its row is locked; locking that cluster now would invert the order
+ * (a deadlock risk), so the transaction is abandoned with `ClusterChangedError` and run again by
+ * `retryOnClusterChange`, which then locks the new cluster first.
+ */
+async function lockForMove(tx: Tx, ids: string[]): Promise<Map<string, LockedStory>> {
+  const lockedClusters = await lockClustersOf(tx, ids)
+  const stories = await lockStories(tx, ids)
+  const appeared = new Set<string>()
+  for (const { clusterId } of stories.values()) if (clusterId && !lockedClusters.has(clusterId)) appeared.add(clusterId)
+  if (appeared.size > 0) throw new ClusterChangedError([...appeared].sort())
+  return stories
+}
+
+/**
+ * Run a transaction that calls `lockForMove`, again when a story joined an unlocked cluster
+ * meanwhile, up to `CLUSTER_CHANGE_ATTEMPTS` times; then fail with a clear error. `run` must start
+ * the whole transaction, so each attempt rolls back and takes its locks afresh.
+ */
+async function retryOnClusterChange<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run()
+    } catch (err) {
+      if (!(err instanceof ClusterChangedError)) throw err
+      if (attempt >= CLUSTER_CHANGE_ATTEMPTS) {
+        throw new Error(`gave up moving stories after ${attempt} attempts: their clusters kept changing (${err.clusterIds.join(', ')})`, { cause: err })
+      }
+      log.info({ attempt, clusterIds: err.clusterIds }, 'stories joined a cluster while being locked; retrying the transaction')
+    }
+  }
+}
+
+/** Test-only: `retryOnClusterChange`, to exercise its bound without a race. */
+export const _retryOnClusterChange = retryOnClusterChange
 
 interface LockedStory {
   status: StoryStatus

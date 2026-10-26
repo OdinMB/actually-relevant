@@ -1,13 +1,21 @@
 import rateLimit from 'express-rate-limit'
 import { config } from '../config.js'
+import { hasValidPublicApiKey } from './auth.js'
+
+/** The bucket every request carrying the valid PUBLIC_API_KEY shares, whatever its IP. */
+export const PUBLIC_API_KEY_BUCKET = 'public-api-key'
 
 /**
- * General API rate limiter.
- * Applied to public endpoints to prevent abuse.
+ * General API rate limiter, applied to the public endpoints to prevent abuse:
+ * `config.rateLimit.publicMax` requests per window and client IP. A request carrying the valid
+ * PUBLIC_API_KEY (`Authorization: Bearer <key>`) counts against the key's own, larger budget
+ * instead (`publicApiKeyMax`, one bucket for the key, so a leaked key is still capped). A wrong or
+ * missing key is an ordinary request, never an error.
  */
 export const apiLimiter = rateLimit({
   windowMs: config.rateLimit.publicWindowMs,
-  max: config.rateLimit.publicMax,
+  max: req => (hasValidPublicApiKey(req) ? config.rateLimit.publicApiKeyMax : config.rateLimit.publicMax),
+  keyGenerator: req => (hasValidPublicApiKey(req) ? PUBLIC_API_KEY_BUCKET : (req.ip ?? '')),
   standardHeaders: true,
   legacyHeaders: false,
   message: {

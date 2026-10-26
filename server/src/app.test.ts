@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { TEST_API_KEY } from './test/helpers.js'
 
 vi.mock('express-rate-limit', () => ({
@@ -48,6 +51,7 @@ vi.mock('./services/analysis.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('./app.js')
+const { config } = await import('./config.js')
 
 describe('App error handling', () => {
   beforeEach(() => {
@@ -106,6 +110,24 @@ describe('X-Request-Id', () => {
   it('generates one when none is sent', async () => {
     const res = await request(app).get('/api/nonexistent-route')
     expect(res.headers['x-request-id']).toMatch(UUID)
+  })
+})
+
+describe('Content-Usage (AI usage preference)', () => {
+  it('states "allow search, no training" on every API response', async () => {
+    expect(config.contentUsage).toBe('train-ai=n, search=y')
+    for (const path of ['/api/nonexistent-route', '/health/nope', '/api/feed/x?minRelevance=99']) {
+      const res = await request(app).get(path)
+      expect(res.headers['content-usage']).toBe(config.contentUsage)
+    }
+  })
+
+  it('states the same preference in robots.txt and on the static site (render.yaml)', () => {
+    const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+    const robots = readFileSync(resolve(repo, 'client/public/robots.txt'), 'utf8')
+    expect(robots).toMatch(new RegExp(`^User-agent: \\*\\n(?:.*\\n)*?Content-Usage: ${config.contentUsage}$`, 'm'))
+    const blueprint = readFileSync(resolve(repo, 'render.yaml'), 'utf8')
+    expect(blueprint).toMatch(/- path: \/\*\n\s+name: Content-Usage\n\s+value: "train-ai=n, search=y"/)
   })
 })
 

@@ -228,7 +228,11 @@ export interface PublicNewsletterIssue {
   /** The issue's Markdown, without the email template's machine markers */
   content: string
   stories: {
-    /** The `## ` heading this story has in `content` */
+    /**
+     * The `## ` heading this story has in `content`: taken from the content's story marker, so a
+     * heading edited by hand or a story renamed later stays matched; for an issue generated before
+     * the marker existed, the story's title
+     */
     headline: string
     title: string | null
     titleLabel: string | null

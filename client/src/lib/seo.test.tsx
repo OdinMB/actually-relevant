@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { render, waitFor, cleanup } from '@testing-library/react'
 import { Helmet, HelmetProvider } from 'react-helmet-async'
 import { DefaultSeo, SEO } from './seo'
+import { MASTODON_PROFILE_URL } from '../config'
 
 const PAGE_DESCRIPTION = 'A page-specific description.'
 
@@ -73,6 +74,22 @@ describe('DefaultSeo with the index.html fallback tags', () => {
       expect(contents('meta[name="description"]')).toEqual([SEO.defaultDescription])
     })
     expect(contents('meta[property="og:description"]')).toEqual([SEO.defaultDescription])
+  })
+
+  it('keeps one fediverse:creator tag naming the Mastodon account in MASTODON_PROFILE_URL', async () => {
+    render(
+      <HelmetProvider>
+        <DefaultSeo />
+        <PageWithOwnTags />
+      </HelmetProvider>,
+    )
+    await waitFor(() => {
+      expect(contents('meta[name="description"]')).toEqual([PAGE_DESCRIPTION])
+    })
+    const profile = new URL(MASTODON_PROFILE_URL)
+    const handle = `${profile.pathname.slice(1)}@${profile.host}`
+    expect(handle).toBe('@actuallyrelevant@mastodon.social')
+    expect(contents('meta[name="fediverse:creator"]')).toEqual([handle])
   })
 
   it('restores the generic description when navigating away from a page that set its own', async () => {

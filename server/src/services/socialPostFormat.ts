@@ -6,6 +6,27 @@ export interface MetaLineParts {
   publisherName: string
 }
 
+/** A story a channel can draft a post for: generateDraft refuses one without a title or summary. */
+export interface SocialDraftStory {
+  id: string
+  title: string
+  titleLabel: string | null
+  summary: string
+  relevanceSummary: string | null
+  emotionTag: string | null
+  issue: { name: string } | null
+  feed: { title: string; displayTitle: string | null }
+}
+
+/** The metadata line's parts for a story: its issue, emotion and publisher (display title first). */
+export function draftMetaParts(story: SocialDraftStory): MetaLineParts {
+  return {
+    issueName: story.issue?.name ?? null,
+    emotionTag: story.emotionTag,
+    publisherName: story.feed.displayTitle || story.feed.title,
+  }
+}
+
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }

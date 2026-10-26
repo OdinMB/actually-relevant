@@ -11,15 +11,15 @@ export interface ChatModelSpec {
  * backfill scripts, eval harness) goes through here.
  *
  * Effort travels as `modelKwargs: { reasoning_effort }`, not the `reasoning`
- * option: @langchain/openai forwards `reasoning` only for IDs it recognises as
- * reasoning models (`o*`, `gpt-5*`) and silently drops it for gpt-6-*.
- * modelKwargs is spread into every Chat Completions request, so gpt-5 models
- * get the same parameters as before.
+ * option: @langchain/openai forwards `reasoning` only for IDs on its own list
+ * of reasoning models (`o*`, `gpt-5*`, and `gpt-6*` since 1.5.14) and silently
+ * drops it for any other ID. modelKwargs is spread into every Chat Completions
+ * request whatever the model ID, so an override to a model LangChain does not
+ * know yet still gets its effort.
  *
  * GPT-6 rules for anyone extending this:
  * - Never add `temperature`, `topP` or `maxTokens`. GPT-6 rejects sampling
- *   params above effort `none`, and LangChain would send `max_tokens`
- *   (not `max_completion_tokens`) for gpt-6-* IDs.
+ *   params above effort `none`.
  * - Never use `withStructuredOutput(..., { method: 'functionCalling' })` or
  *   bind tools: GPT-6 Chat Completions function calling only works at effort
  *   `none`. The default structured-output method (response_format json_schema)

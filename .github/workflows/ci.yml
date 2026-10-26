@@ -1,8 +1,8 @@
 # Runs the check battery on every pull request and every push to main (.context/ci.md): for
-# both packages type-check, lint, format check, unit tests with a coverage floor, the
+# both packages type-check, lint, format check, tests with a coverage floor, the
 # production build (the client's with its prerender) and a production-dependency audit; for
-# the server also the migration check and the PostgreSQL integration tests against a
-# throwaway pgvector database (ADR-0044). Production deploys wait for it: render.yaml sets
+# the server also the migration check, and its coverage run includes the PostgreSQL
+# integration tests against a throwaway pgvector database (ADR-0044). Production deploys wait for it: render.yaml sets
 # `autoDeployTrigger: checksPass` on both services, so Render deploys a commit on main only
 # once every check on it has passed, and skips a red one (ADR-0047, .context/deployment.md).
 # Keep it running on every push to main with no path filter: Render deploys nothing for a
@@ -83,10 +83,9 @@ jobs:
       - run: npm run typecheck --prefix server
       - run: npm run lint --prefix server
       - run: npm run format:check --prefix server
-      - name: Unit tests with the coverage floor
+      # One run of both vitest projects (unit and db), so the floor counts the db tests too
+      - name: Unit and PostgreSQL tests with the coverage floor
         run: npm run test:coverage --prefix server
-      - name: PostgreSQL integration tests
-        run: npm run test:db --prefix server
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/actually_relevant_test
       - name: Build (as Render does, minus the migrate step)

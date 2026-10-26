@@ -1,12 +1,12 @@
 # Authentication
 
-The admin panel uses JWT-only authentication: access tokens (15 min) with httpOnly refresh token cookies (24 hours) for browser sessions. A separate `requireApiKey` middleware exists for public API consumers (mobile apps, etc.) that need authenticated read access — the static API key cannot access admin endpoints.
+The admin panel uses JWT-only authentication: access tokens (15 min) with httpOnly refresh token cookies (24 hours) for browser sessions. The public API needs no authentication; the optional static `PUBLIC_API_KEY` only raises its rate limit for partners (see "Public API key") and cannot access admin endpoints.
 
 ## Architecture
 
 ### Server
 
-- **Auth middleware** (`server/src/middleware/auth.ts`): `requireAuth` accepts JWT only (used on admin routes). `requireApiKey` accepts the static `PUBLIC_API_KEY` (used on public API routes that need authenticated access). `requireRole(...roles)` checks user role after auth. `requireApiKey` compares the presented key to `PUBLIC_API_KEY` in constant time (`crypto.timingSafeEqual`) to prevent timing attacks. `requireAuth` has no API-key fallback.
+- **Auth middleware** (`server/src/middleware/auth.ts`): `requireAuth` accepts JWT only (used on admin routes) and has no API-key fallback. `requireRole(...roles)` checks user role after auth. `hasValidPublicApiKey(req)` tells the public rate limiter whether a request carries the partner key (below); it authenticates nobody.
 - **Auth service** (`server/src/services/auth.ts`): Password hashing (bcryptjs, 12 rounds), JWT generation/verification (`JWT_SECRET` env var, 15 min expiry), refresh token creation/rotation/revocation (stored in `refresh_tokens` DB table, 24h expiry). The cost, both lifetimes and the login/refresh rate limits live in `config.auth` and `config.rateLimit` (`server/src/config.ts`) with no env override on purpose: changing one is a reviewed code change. Includes token reuse detection via family tracking, with a short grace window (see Session and Token Rules).
 - **User service** (`server/src/services/user.ts`): CRUD operations for user management. Returns sanitized objects (no `passwordHash`).
 - **Auth routes** (`server/src/routes/auth.ts`): Public routes at `/api/auth` — login, refresh, logout, me. Login and refresh endpoints are rate-limited (`authLimiter`: 5 req/15 min, `refreshLimiter`: 30 req/15 min) via `server/src/middleware/rateLimit.ts`. Both limits are counted per client IP and are checked before any auth logic runs.
@@ -65,10 +65,23 @@ In development the Vite proxy makes the API same-origin. In production (2026-10-
 
 A static-site rewrite of `/api/*` to the API would also work, but every request would reach the API from the proxy's address, which breaks the per-IP rate limits.
 
+## Public API key
+
+The public API is open without a key (`/developers`, `/free-api`). `PUBLIC_API_KEY` is one static key the owner can hand to a partner who needs more than the anonymous rate limit.
+
+- **Sent as** `Authorization: Bearer <key>` on any request behind the shared `apiLimiter` (`server/src/middleware/rateLimit.ts`; mounted in `routes/public/index.ts`, and on the podcast JSON routes).
+- **Effect:** the request counts against the key's own budget, `config.rateLimit.publicApiKeyMax` (`RATE_LIMIT_PUBLIC_API_KEY_MAX`, default ten times `publicMax`: 1,000 against 100 per 15-minute window), in one bucket for the key whatever the caller's IP, so a leaked key is still capped. Requests without the key are counted per client IP with `publicMax`, exactly as before the key existed.
+- **A missing or wrong key is not an error**: the request is an ordinary anonymous one (same IP bucket, no 401 or 403).
+- **It grants nothing else**: not the admin routes (`requireAuth` is JWT only), and not the other limiters (`searchLimiter`'s embedding-cost cap, the feedback and subscribe limits stay per IP).
+- **Comparison:** `hasValidPublicApiKey` hashes the presented token and the key with SHA-256 and compares the digests with `crypto.timingSafeEqual`, so neither the key's content nor its length leaks through timing. Unset or empty `PUBLIC_API_KEY`: no key is valid.
+- Documented for consumers in the OpenAPI spec (`server/src/lib/openapi.ts`: the optional `publicApiKey` bearer scheme and the info description), which `/developers` renders.
+- Production does not set `PUBLIC_API_KEY` as of 2026-10-13 (`server/src/blueprint.test.ts`, `NOT_SET_IN_PRODUCTION`); setting it means adding it to `render.yaml` as `sync: false` (`.context/deployment.md`).
+
 ## Environment Variables
 
 - `JWT_SECRET` — Required. Random string (32+ chars) for signing JWTs. Verification is restricted to HS256 algorithm only.
-- `PUBLIC_API_KEY` — Optional. Static key for public API consumers (mobile apps, external services). Does **not** grant admin access.
+- `PUBLIC_API_KEY` — Optional. Static partner key that raises the public API's rate limit (above). Does **not** grant admin access.
+- `RATE_LIMIT_PUBLIC_API_KEY_MAX` — Optional. Requests per window for the key; default ten times `RATE_LIMIT_PUBLIC_MAX`.
 
 ## Database Models
 

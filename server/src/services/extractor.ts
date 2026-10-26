@@ -188,7 +188,7 @@ function extractByReadability(html: string, url: string): TierResult | null {
 }
 
 async function extractByDiffbot(url: string): Promise<TierResult | null> {
-  const token = process.env.DIFFBOT_TOKEN
+  const token = config.crawl.diffbotToken
   if (!token) return null
 
   log.info({ url }, 'attempting Diffbot extraction')
@@ -231,7 +231,7 @@ async function extractByDiffbot(url: string): Promise<TierResult | null> {
 }
 
 async function extractByPipfeed(url: string): Promise<TierResult | null> {
-  const apiKey = process.env.PIPFEED_API_KEY
+  const apiKey = config.crawl.pipfeedApiKey
   if (!apiKey) return null
 
   log.info({ url }, 'attempting PipFeed extraction')

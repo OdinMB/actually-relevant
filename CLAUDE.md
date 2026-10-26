@@ -53,7 +53,7 @@ npm run test:db --prefix server       # PostgreSQL integration tests (needs TEST
 npm run check:migrations --prefix server # Embedding-index drop anywhere, unmarked DROP/TRUNCATE in new migrations (CI)
 npm run lint --prefix <client|server>          # ESLint, warnings fail (CI)
 npm run format --prefix <client|server>        # Prettier write; CI runs format:check
-npm run test:coverage --prefix <client|server> # Unit tests + coverage floor; raise thresholds, never lower (CI)
+npm run test:coverage --prefix <client|server> # Tests + coverage floor (server: unit + DB tests, needs TEST_DATABASE_URL); raise thresholds, never lower (CI)
 npm run audit:prod --prefix <client|server>    # npm audit --omit=dev at high, minus audit-allowlist.json (CI)
 ```
 
@@ -112,8 +112,6 @@ npm run db:studio --prefix server     # Open Prisma Studio
 
 ## Known Issues
 
-- **Prisma client out of sync**: TS errors for `clusterId`, `storyCluster`, etc. are pre-existing. Fix: `npm run db:generate --prefix server`.
-- **clusters.test.ts**: Pre-existing failure (`html-encoding-sniffer` ESM compat). Not code-related.
 - **Windows vitest teardown**: `kill EPERM` errors are normal on Windows.
 
 ## UI & Testing Patterns
@@ -146,7 +144,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `prompting.md` | Prompt conventions for the GPT-5/GPT-6 reasoning models and calibration lessons (read before modifying prompts) |
 | `scheduler.md` | Job registry, overlap prevention (job lease), catch-up, `SCHEDULER_ENABLED`, concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
-| `newsletter-podcast.md` | Newsletter: create-assign-select-generate workflow, issue ordering, templates, Plunk sending, carousel |
+| `newsletter-podcast.md` | Newsletter: create-assign-select-generate workflow, issue lifecycle (`newsletterLifecycle.ts` is the only writer of issue state and sends, a fence test holds it; live sends claimed before Plunk, once, after a test of the current HTML; a sent issue frozen until unpublished), issue ordering, templates, Plunk sending, `publish_newsletter` auto-send, web edition (public archive at `/newsletter`, slugs, `publishedAt`), carousel |
 | `decisions.md` | Architectural decision log: the index, with one file per decision in `.context/decisions/`; append-only history |
 | `podcast.md` | Two-speaker podcast, weekly and standalone episodes (kind, person-chosen stories, copy gate): stages, lease, weekly run and blocks, interactive/automated modes, a person's edits and rewinds, progress toast, selection and dialogue rules (segues), ElevenLabs voicing, ffmpeg assembly, Bunny storage (never reuse a file name), spend cap, dry run, publish/unpublish rules, the RSS feed and `/podcast` page, admin endpoints, the Friday generate and Saturday (Berlin) auto-publish jobs |
 | `authentication.md` | JWT flow, cookie config, token rotation and reuse rules, roles |

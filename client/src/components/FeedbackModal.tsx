@@ -1,12 +1,18 @@
 import { useRef, useEffect } from 'react'
-import FeedbackForm from './FeedbackForm'
+import FeedbackForm, { type FeedbackStory } from './FeedbackForm'
 
 interface FeedbackModalProps {
   open: boolean
   onClose: () => void
+  /** The story a "Report an error" is about; general feedback without one */
+  story?: FeedbackStory
 }
 
-export default function FeedbackModal({ open, onClose }: FeedbackModalProps) {
+/**
+ * The feedback dialog (native <dialog>, so focus moves in on open, Escape closes, and focus goes
+ * back to the button that opened it on close).
+ */
+export default function FeedbackModal({ open, onClose, story }: FeedbackModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -52,7 +58,7 @@ export default function FeedbackModal({ open, onClose }: FeedbackModalProps) {
       aria-labelledby="feedback-modal-title"
     >
       <div className="p-6 sm:p-8">
-        <FeedbackForm key={open ? 'open' : 'closed'} autoFocus={open} onSuccess={onClose} idPrefix="feedback-modal" />
+        <FeedbackForm key={open ? `open:${story?.id ?? ''}` : 'closed'} autoFocus={open} onSuccess={onClose} idPrefix="feedback-modal" story={story} />
         <button
           type="button"
           onClick={onClose}

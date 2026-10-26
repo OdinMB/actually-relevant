@@ -91,6 +91,20 @@ describe('Admin Feedback API', () => {
         }),
       )
     })
+
+    it('filters by the correction category and returns the linked story', async () => {
+      const story = { id: 'story-1', slug: 'clean-air', title: 'Cities cut smog', sourceTitle: 'Smog falls', status: 'published' }
+      mockPrisma.feedback.findMany.mockResolvedValue([{ ...sampleFeedback, category: 'correction', storyId: 'story-1', story }])
+      mockPrisma.feedback.count.mockResolvedValue(1)
+
+      const res = await request(app).get('/api/admin/feedback?category=correction').set(authHeader())
+
+      expect(res.status).toBe(200)
+      const args = mockPrisma.feedback.findMany.mock.calls[0][0]
+      expect(args.where).toEqual({ category: 'correction' })
+      expect(args.select.story).toEqual({ select: { id: true, slug: true, title: true, sourceTitle: true, status: true } })
+      expect(res.body.items[0].story).toEqual(story)
+    })
   })
 
   describe('GET /api/admin/feedback/count', () => {

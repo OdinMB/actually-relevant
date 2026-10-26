@@ -41,15 +41,16 @@ vi.mock('../prompts/index.js', () => ({
   buildMastodonPostPrompt: vi.fn(() => 'post prompt'),
   buildBlueskyPickBestPrompt: vi.fn(() => 'pick prompt'),
 }))
-// Mock socialMedia.js for pickBestStoryForSocial (used by pickAndDraft)
-vi.mock('./socialMedia.js', () => ({
-  pickBestStoryForSocial: vi.fn().mockResolvedValue({ storyId: 'story-1', reasoning: 'Good story' }),
-}))
+// The shared picker (used by pickAndDraft)
+const mockPickBestStoryForSocial = vi.hoisted(() => vi.fn())
+vi.mock('./socialMedia.js', () => ({ pickBestStoryForSocial: mockPickBestStoryForSocial }))
 
+const { BadRequestError } = await import('../utils/errors.js')
 const {
   assemblePostText,
   calcMaxBlurbChars,
   generateDraft,
+  pickAndDraft,
   updateDraft,
   deletePostRecord,
   publishPost,
@@ -142,6 +143,19 @@ describe('assemblePostText', () => {
     expect(lines[1]).toContain('found on Reuters')
     expect(lines[2]).toBe('https://reuters.com/article/test')
     expect(lines[3]).toBe('https://actuallyrelevant.com/stories/test')
+  })
+})
+
+describe('pickAndDraft', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('picks only among stories without a Mastodon post, so it never drafts an already-posted story', async () => {
+    mockPickBestStoryForSocial.mockRejectedValueOnce(new BadRequestError('All selected stories already have a Mastodon post'))
+
+    await expect(pickAndDraft(['story-1', 'story-2'])).rejects.toThrow('already have a Mastodon post')
+
+    expect(mockPickBestStoryForSocial).toHaveBeenCalledWith(['story-1', 'story-2'], 'mastodon')
+    expect(mockPrisma.mastodonPost.create).not.toHaveBeenCalled()
   })
 })
 

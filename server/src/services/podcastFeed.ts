@@ -81,6 +81,8 @@ export function buildPodcastFeedXml(episodes: PublishedEpisode[], now: Date = ne
     el('itunes:type', 'episodic'),
     `<podcast:locked owner="${escapeXml(show.ownerEmail)}">no</podcast:locked>`,
     el('podcast:guid', config.podcast.feedGuid),
+    `<podcast:funding url="${escapeXml(config.links.kofi)}">${escapeXml(config.podcast.fundingLabel)}</podcast:funding>`,
+    `<podcast:updateFrequency rrule="${escapeXml(config.podcast.updateFrequency.rrule)}">${escapeXml(config.podcast.updateFrequency.label)}</podcast:updateFrequency>`,
     AI_CONTENT_TXT,
     ...episodes.map(episode => itemXml(episode, show.artworkUrl)),
   ]

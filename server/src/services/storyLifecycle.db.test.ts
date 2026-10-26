@@ -1,8 +1,7 @@
 /**
  * Story status moves and cluster edits against PostgreSQL. The OpenAI-backed modules are mocked; a
  * mocked call that changes a row mid-call (an editor trashing the story while the model runs) is
- * how the races are reproduced. Known defects are `it.fails`, each naming the step of
- * `.plans/2026-10-19_story-lifecycle-and-db-tests.md` that fixes it.
+ * how the races are reproduced.
  */
 import { it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 import type { BaseMessage } from '@langchain/core/messages'
@@ -20,6 +19,27 @@ vi.mock('./llm.js', () => ({
   getSmallLLM: () => ({ withStructuredOutput: () => ({ invoke: mockInvoke }) }),
   rateLimitDelay: () => Promise.resolve(),
 }))
+// The lifecycle module's logger, spied (and still logging) to see its lock-order retries
+const lifecycleLogInfo = vi.hoisted(() => vi.fn())
+vi.mock('../lib/logger.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/logger.js')>()
+  return {
+    ...actual,
+    createLogger: (name: string) => {
+      const logger = actual.createLogger(name)
+      if (name !== 'story-lifecycle') return logger
+      return new Proxy(logger, {
+        get: (target, prop, receiver) =>
+          prop === 'info'
+            ? (...args: Parameters<typeof logger.info>) => {
+                lifecycleLogInfo(...args)
+                return target.info(...args)
+              }
+            : Reflect.get(target, prop, receiver),
+      })
+    },
+  }
+})
 const mockEnsureEmbeddings = vi.hoisted(() => vi.fn())
 const mockGenerate = vi.hoisted(() => vi.fn())
 vi.mock('./embedding.js', () => ({
@@ -41,9 +61,9 @@ const { runPublishStories } = await import('../jobs/publishStories.js')
 const { runAssessStories } = await import('../jobs/assessStories.js')
 const { runSelectStories } = await import('../jobs/selectStories.js')
 const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
-const { transition } = await import('./storyLifecycle.js')
+const { transition, ClusterChangedError, _retryOnClusterChange } = await import('./storyLifecycle.js')
 const { detectAndCluster } = await import('./dedup.js')
-const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary, createManualCluster } = await import('./cluster.js')
+const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary, createManualCluster, StoriesAlreadyClusteredError } = await import('./cluster.js')
 
 let feedId = ''
 let issueSlug = ''
@@ -440,6 +460,17 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await row(primary.id)).status).toBe('analyzed')
   })
 
+  it('removing from a larger cluster keeps it and returns it without the story', async () => {
+    const [a, b, c] = await Promise.all([story({ status: 'analyzed' }), story({ status: 'analyzed' }), story({ status: 'analyzed' })])
+    const clusterId = await createCluster([a.id, b.id, c.id], a.id)
+
+    const left = await removeFromCluster(clusterId, c.id)
+
+    expect(left?.id).toBe(clusterId)
+    expect(left?.stories.map(s => s.id).sort()).toEqual([a.id, b.id].sort())
+    expect((await row(c.id)).clusterId).toBeNull()
+  })
+
   // ──── Election ──────────────────────────────────────────────────────────
 
   it('re-election never picks a trashed member', async () => {
@@ -538,6 +569,9 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const results = await Promise.allSettled([createManualCluster([a.id, b.id], a.id), createManualCluster([b.id, c.id], c.id)])
 
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
+    const [lost] = results.filter(r => r.status === 'rejected')
+    expect(lost?.reason).toBeInstanceOf(StoriesAlreadyClusteredError)
+    expect(lost?.reason.storyIds).toEqual([b.id])
     expect(await prisma.storyCluster.count()).toBe(1)
     const rows = await prisma.story.findMany({ where: { id: { in: [a.id, b.id, c.id] } }, select: { clusterId: true } })
     expect(rows.filter(r => r.clusterId !== null)).toHaveLength(2)
@@ -551,8 +585,10 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const target = await createCluster([a.id, b.id], a.id)
     const source = await createCluster([c.id, d.id], c.id)
 
-    await mergeClusters(target, source)
+    const merged = await mergeClusters(target, source)
 
+    expect(merged?.id).toBe(target)
+    expect(merged?.stories).toHaveLength(4)
     expect(await primaryOf(target)).toBe(a.id)
     expect((await row(c.id)).status).toBe('rejected')
     expect(await prisma.storyCluster.count()).toBe(1)
@@ -665,6 +701,61 @@ describeDb('story lifecycle (PostgreSQL)', () => {
           .filter(e => /deadlock/i.test(e)),
       ).toEqual([])
     }
+  })
+
+  it('a story clustered between the cluster read and its row lock: the move retries and locks the new cluster first', async () => {
+    const s = await story({ status: 'analyzed', relevance: 9 })
+    const t = await story({ status: 'analyzed', relevance: 1 })
+    lifecycleLogInfo.mockClear()
+
+    // Another writer holds s's row, then clusters s and t (s primary) once the move waits on it
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => (release = resolve))
+    let markHeld: () => void = () => {}
+    const held = new Promise<void>(resolve => (markHeld = resolve))
+    const writer = prisma.$transaction(
+      async tx => {
+        await tx.$queryRaw`SELECT id FROM stories WHERE id = ${s.id} FOR UPDATE`
+        markHeld()
+        await gate
+        const cluster = await tx.storyCluster.create({ data: { primaryStoryId: s.id } })
+        await tx.story.updateMany({ where: { id: { in: [s.id, t.id] } }, data: { clusterId: cluster.id } })
+      },
+      { timeout: 20_000 },
+    )
+    await held
+
+    // The move reads "no cluster", locks none and waits for s's row
+    const move = transition([s.id], { to: 'rejected', reason: 'editor' }, 'editor')
+    await expect.poll(async () => (await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_locks WHERE NOT granted`)[0]!.n).toBeGreaterThan(0)
+    release()
+    await writer
+
+    expect(await move).toEqual({ moved: [s.id], skipped: [] })
+    const clusterId = (await row(t.id)).clusterId!
+    expect(lifecycleLogInfo).toHaveBeenCalledWith({ attempt: 1, clusterIds: [clusterId] }, expect.stringContaining('retrying'))
+    // The retry saw the cluster: rejecting its primary elected the other member
+    expect(await primaryOf(clusterId)).toBe(t.id)
+    expect(await row(s.id)).toMatchObject({ status: 'rejected', rejectionReason: 'editor' })
+  })
+
+  it('a move whose clusters keep changing gives up after three attempts with a clear error', async () => {
+    let attempts = 0
+    const run = _retryOnClusterChange(async () => {
+      attempts++
+      throw new ClusterChangedError(['c1'])
+    })
+    await expect(run).rejects.toThrow(/gave up moving stories after 3 attempts.*c1/)
+    expect(attempts).toBe(3)
+    // Any other error is not retried
+    let others = 0
+    await expect(
+      _retryOnClusterChange(async () => {
+        others++
+        throw new Error('boom')
+      }),
+    ).rejects.toThrow('boom')
+    expect(others).toBe(1)
   })
 
   it('an editor reject during an editor re-assessment stands', async () => {

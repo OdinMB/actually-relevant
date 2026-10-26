@@ -25,6 +25,7 @@ const CATEGORY_OPTIONS = [
   { value: 'bug', label: 'Bug' },
   { value: 'suggestion', label: 'Suggestion' },
   { value: 'other', label: 'Other' },
+  { value: 'correction', label: 'Correction (story error)' },
 ]
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -32,6 +33,35 @@ const CATEGORY_COLORS: Record<string, string> = {
   bug: 'bg-red-100 text-red-700',
   suggestion: 'bg-amber-100 text-amber-700',
   other: 'bg-neutral-100 text-neutral-600',
+  correction: 'bg-purple-100 text-purple-700',
+}
+
+/** The story a correction was reported from: its public page while published, else its title and status. */
+function LinkedStory({ item }: { item: FeedbackItem }) {
+  if (!item.story) {
+    return item.category === 'correction' ? <span className="text-xs text-neutral-400">Story deleted or not given</span> : null
+  }
+  const title = item.story.title || item.story.sourceTitle
+  return (
+    <span className="text-xs text-neutral-500">
+      Story:{' '}
+      {item.story.status === 'published' && item.story.slug ? (
+        <a
+          href={`/stories/${item.story.slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="text-brand-600 hover:text-brand-700 hover:underline"
+        >
+          {title}
+        </a>
+      ) : (
+        <>
+          {title} <span className="text-neutral-400">({item.story.status})</span>
+        </>
+      )}
+    </span>
+  )
 }
 
 function formatDate(dateStr: string): string {
@@ -257,6 +287,7 @@ export default function FeedbackPage() {
                   </td>
                   <td className="px-3 py-3 text-sm text-neutral-900 max-w-md">
                     {expandedId === item.id ? <div className="whitespace-pre-wrap">{item.message}</div> : <div className="truncate">{item.message}</div>}
+                    <LinkedStory item={item} />
                   </td>
                   <td className="px-3 py-3 text-sm text-neutral-500">
                     {item.email ? (

@@ -38,7 +38,7 @@ These changes are tuned for Luna and would shift gpt-5-mini and gpt-5-nano: on t
 
 ### GPT-6 and LangChain
 
-`@langchain/openai` forwards its `reasoning: { effort }` option only for model IDs it recognises as reasoning models (`o*`, `gpt-5*`), and silently drops it for `gpt-6-*`. `createChatModel` therefore sends effort as `modelKwargs: { reasoning_effort }`, which reaches every Chat Completions request. Never set `temperature`, `topP` or `maxTokens` on these clients: GPT-6 rejects sampling parameters above effort `none`, and LangChain would send `max_tokens` for `gpt-6-*`. Never use `method: 'functionCalling'` or bound tools either: GPT-6 Chat Completions function calling works only at effort `none`. The default `withStructuredOutput` method (`response_format` json_schema) is fine.
+`@langchain/openai` forwards its `reasoning: { effort }` option only for model IDs on its own list of reasoning models (`o*`, `gpt-5*`, and `gpt-6*` since 1.5.14), and silently drops it for any other ID. `createChatModel` therefore sends effort as `modelKwargs: { reasoning_effort }`, which reaches every Chat Completions request whatever the model ID (`llm.test.ts` pins it), so an `OPENAI_MODEL_*` override to a model LangChain does not list yet keeps its effort. `gpt-6-*` stays on Chat Completions (LangChain routes only some gpt-5.x and codex IDs to the Responses API). Never set `temperature`, `topP` or `maxTokens` on these clients: GPT-6 rejects sampling parameters above effort `none`. Never use `method: 'functionCalling'` or bound tools either: GPT-6 Chat Completions function calling works only at effort `none`. The default `withStructuredOutput` method (`response_format` json_schema) is fine.
 
 ### Retries
 
@@ -50,7 +50,7 @@ Prompt templates live in `server/src/prompts/`:
 
 | File | Contents |
 |------|----------|
-| `shared.ts` | `Guidelines` interface, `buildGuidelinesXml()`, `escapeXml()` (re-exported from `lib/xml.ts`), `containsChineseCharacters()` |
+| `shared.ts` | `Guidelines` interface, `buildGuidelinesXml()`, `escapeXml()` (re-exported from `lib/xml.ts`) |
 | `preassess.ts` | `buildPreassessPrompt()` — batch screening + issue classification |
 | `reclassify.ts` | `buildReclassifyPrompt()` — issue + emotion reclassification (no rating) |
 | `assess.ts` | `buildAssessPrompt()` — full analysis |
@@ -58,6 +58,8 @@ Prompt templates live in `server/src/prompts/`:
 | `podcast.ts` | `buildPodcastPrompt()` — the weekly two-speaker dialogue (segue rule, untrusted `<STORIES>`) |
 | `podcast-select.ts` | `buildPodcastSelectPrompt()` — the week's 4-5 stories for audio |
 | `index.ts` | Barrel re-exports all builders and types |
+
+A service turns its loaded rows into a builder's input with an exported pure function in `server/src/services/promptInputs.ts` (the Bluesky and Mastodon draft inputs live in those services), and the model-eval harness calls the same functions (`.context/model-eval.md`). Change a call site's input there, never inline in the service; `promptInputs.test.ts` pins the prompts each one sends, so update its snapshot only for an intended change.
 
 ## Schema-Driven Format Guidance
 
