@@ -49,7 +49,7 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
       </svg>
     ),
     title: 'Automated Pipeline',
-    description: 'Daily crawl, AI analysis, selection, and publication with no manual intervention.',
+    description: 'A crawl every six hours, AI analysis, selection, and publication with no manual intervention.',
     border: 'border-l-brand-400',
   },
   {
@@ -63,7 +63,7 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
       </svg>
     ),
     title: 'Complete Platform',
-    description: 'Public website, free API, RSS feeds, newsletter, podcast scripts, and admin dashboard.',
+    description: 'Public website, free API, RSS feeds, newsletter, weekly podcast, and admin dashboard.',
     border: 'border-l-teal-400',
   },
   {
@@ -77,7 +77,7 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
       </svg>
     ),
     title: 'Full Documentation',
-    description: '17 architecture docs, 90+ implementation plans, deployment guide, and PM repo.',
+    description: '30+ subsystem docs, 40+ decision records, 140+ plans, deployment guide, and PM repo.',
     border: 'border-l-amber-400',
   },
   {
