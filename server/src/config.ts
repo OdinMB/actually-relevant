@@ -294,7 +294,6 @@ export const config = {
   newsletter: {
     storiesPerIssue: parseWholeNumber(process.env.NEWSLETTER_STORIES_PER_ISSUE, 2, 'NEWSLETTER_STORIES_PER_ISSUE'),
     selectModelTier: 'large' as const,
-    contentModelTier: 'large' as const,
     // Weekly job guard: a built automatic issue newer than this blocks the next run.
     // 156 h (6.5 days) covers a Sunday catch-up as early as 00:00 (148 h before the
     // next Saturday 04:00 cron) yet lets a Saturday run started up to 16:00 (>= 156 h

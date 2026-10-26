@@ -9,19 +9,15 @@
  */
 import { Prisma } from '@prisma/client'
 import { config } from '../../config.js'
-import { pickIntroStyle } from '../../prompts/newsletter-intro.js'
 import type { Guidelines, IssueForPrompt } from '../../prompts/shared.js'
 import type { StoryForBlueskyPick, StoryForBlueskyPost } from '../../prompts/bluesky.js'
 import type { CandidateStory } from '../../prompts/related-stories.js'
 import type { StoryForSelect } from '../../prompts/select.js'
 import type { StoryForNewsletterSelect } from '../../prompts/newsletter-select.js'
-import type { StoryForNewsletterIntro } from '../../prompts/newsletter-intro.js'
 import { blueskyDraftInput } from '../../services/bluesky.js'
 import { mastodonDraftInput } from '../../services/mastodon.js'
 import {
   assessPromptInput,
-  newsletterIntroInput,
-  newsletterOrder,
   newsletterSelectInput,
   podcastHeading,
   relatedCandidate,
@@ -114,7 +110,6 @@ export interface NewsletterItem {
   issueNames: string[]
   storiesPerIssue: number
   storedSelected: string[]
-  intro: { stories: StoryForNewsletterIntro[]; issueNames: string[]; style: string }
 }
 
 /**
@@ -624,15 +619,14 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
         feed: { select: { issue: { select: issueRefSelect } } },
       },
     })
-    // Owner's blinding rule: stories that mention a model name leave the longlist and the intro input.
+    // Owner's blinding rule: stories that mention a model name leave the longlist.
     const shown = (s: (typeof rows)[number]) => [s.title, s.sourceTitle, s.summary, s.marketingBlurb]
     const stories = rows.filter(s => !mentionsModelName(shown(s)))
     removed.push(...rows.filter(s => mentionsModelName(shown(s))).map(shown))
     const byId = new Map(stories.map(s => [s.id, s]))
     const ordered = n.storyIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))
-    // Production's inputs (newsletter.ts pickShortlist, buildContent), from the stored longlist and shortlist in stored order.
+    // Production's input (newsletter.ts pickShortlist), from the stored longlist in stored order.
     const longlist = newsletterSelectInput(ordered)
-    const intro = newsletterIntroInput(newsletterOrder(n.selectedStoryIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))))
     items.push({
       id: n.id,
       title: n.title,
@@ -640,7 +634,6 @@ async function loadNewsletters(db: Db, shortfalls: string[], adaptations: string
       issueNames: longlist.issueNames,
       storiesPerIssue: config.newsletter.storiesPerIssue,
       storedSelected: n.selectedStoryIds.filter(id => byId.has(id)),
-      intro: { stories: intro.stories, issueNames: intro.issueNames, style: pickIntroStyle() },
     })
   }
   if (removed.length > 0)

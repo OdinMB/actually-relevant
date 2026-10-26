@@ -103,9 +103,12 @@ export interface Decision {
   passing: string[]
 }
 
-export type CallSiteId =
-  'preassess' | 'assess' | 'dedup' | 'related' | 'social-pick' | 'social-post' | 'selection' | 'newsletter-select' | 'newsletter-intro' | 'podcast'
+export type CallSiteId = 'preassess' | 'assess' | 'dedup' | 'related' | 'social-pick' | 'social-post' | 'selection' | 'newsletter-select' | 'podcast'
 
+/**
+ * `newsletter-intro` has no call site any more (the intro was dropped on 2026-10-26); the set stays
+ * so the phase-1 deliverable that holds it still validates.
+ */
 export type RatingSetSlug = 'full-assessment' | 'social-post' | 'newsletter-intro' | 'podcast-script' | 'story-selection'
 
 export interface CallSiteResult {

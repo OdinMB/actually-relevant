@@ -1,25 +1,18 @@
 /**
- * Large-tier suite: editorial selection, newsletter selection, newsletter
- * intro and podcast script. They share OPENAI_MODEL_LARGE, so they are
- * evaluated (and later switched) together: gpt-5.2 rerun vs gpt-6-sol.
- * Sol's known risk is declining more often on "pick exactly N" prompts, so
- * exact-count compliance is the gate.
+ * Large-tier suite: editorial selection, newsletter selection and podcast
+ * script. They share OPENAI_MODEL_LARGE, so they are evaluated (and later
+ * switched) together: gpt-5.2 rerun vs gpt-6-sol. Sol's known risk is
+ * declining more often on "pick exactly N" prompts, so exact-count compliance
+ * is the gate. (The newsletter intro was a fourth call site until it was
+ * dropped on 2026-10-26.)
  */
 import { buildSelectPrompt } from '../../../prompts/select.js'
 import { buildNewsletterSelectPrompt } from '../../../prompts/newsletter-select.js'
-import { buildNewsletterIntroPrompt } from '../../../prompts/newsletter-intro.js'
-import {
-  newsletterIntroSchema,
-  newsletterSelectResultSchema,
-  podcastDialogueSchema,
-  selectResultSchema,
-  type NewsletterIntro,
-  type SelectResult,
-} from '../../../schemas/llm.js'
+import { newsletterSelectResultSchema, podcastDialogueSchema, selectResultSchema, type SelectResult } from '../../../schemas/llm.js'
 import type { Fixtures, NewsletterItem, PodcastItem, SelectionGroup } from '../fixtures.js'
 import { TARGETS } from '../fixtures.js'
 import { arm, armKey } from '../models.js'
-import { checkIntro, introViolations, jaccard, mean, num, pct, rate, type IntroCheck } from '../checks.js'
+import { jaccard, mean, num, pct, rate } from '../checks.js'
 import { pickLowestPassing } from '../decide.js'
 import type { CallRecord, CallSiteResult, Decision, RatingItemDraft, Suite } from '../types.js'
 import { podcastEpisodeStories, podcastPrompt, renderDialogue, scorePodcast } from './podcast.js'
@@ -30,7 +23,7 @@ const CANDIDATE = arm('gpt-6-sol', 'medium')
 const ARMS = [BASELINE, CANDIDATE]
 const BASE_KEY = armKey(BASELINE)
 const CAND_KEY = armKey(CANDIDATE)
-const TOKENS = { selection: 4500, newsletterSelect: 4000, intro: 1500, podcast: 6000 }
+const TOKENS = { selection: 4500, newsletterSelect: 4000, podcast: 6000 }
 
 const groups = (fx: Fixtures, limit?: number) => limited(fx.selection, limit)
 const newsletters = (fx: Fixtures, limit?: number) => limited(fx.newsletters, limit)
@@ -39,7 +32,6 @@ const podcasts = (fx: Fixtures, limit?: number): PodcastItem[] => (fx.podcast &&
 /** Today is the group's crawl day, when production would have run the selection. */
 const selectPrompt = (g: SelectionGroup) => buildSelectPrompt(g.stories, g.toSelect, g.day)
 const newsletterPrompt = (n: NewsletterItem) => buildNewsletterSelectPrompt(n.longlist, n.storiesPerIssue, n.issueNames)
-const introPrompt = (n: NewsletterItem) => buildNewsletterIntroPrompt(n.intro.stories, n.intro.issueNames, n.intro.style)
 
 const failuresOf = (recs: CallRecord[]) => recs.filter(r => r.outcome !== 'ok' && r.outcome !== 'skipped').length
 const count = (v: number | null) => String(v ?? 0)
@@ -184,27 +176,8 @@ function scoreNewsletterSelect(ns: NewsletterItem[], recs: CallRecord<SelectResu
 }
 
 // ---------------------------------------------------------------------------
-// Intro and podcast
+// Shared gate
 // ---------------------------------------------------------------------------
-
-export interface IntroArmMetrics {
-  violations: number
-  byRule: Record<keyof IntroCheck, number>
-  failures: number
-}
-
-function scoreIntro(recs: CallRecord<NewsletterIntro>[]): IntroArmMetrics {
-  const checks = recs.flatMap(r => {
-    const intro = parsedOf(r)?.intro
-    return intro == null ? [] : [checkIntro(intro)]
-  })
-  const rules: (keyof IntroCheck)[] = ['over60Words', 'sentenceCount', 'bannedPhrase', 'emDash', 'markdown']
-  return {
-    violations: checks.reduce((n, c) => n + introViolations(c), 0),
-    byRule: Object.fromEntries(rules.map(k => [k, checks.filter(c => c[k]).length])) as Record<keyof IntroCheck, number>,
-    failures: failuresOf(recs),
-  }
-}
 
 /** Candidate must be no worse than the gpt-5.2 rerun on each listed "lower is better" count. */
 function noWorseThanBaseline(label: string, items: number, checks: { name: string; cand: number | null; base: number | null }[]): Decision {
@@ -223,7 +196,7 @@ function noWorseThanBaseline(label: string, items: number, checks: { name: strin
 // ---------------------------------------------------------------------------
 
 function textDrafts<T>(
-  set: 'newsletter-intro' | 'podcast-script',
+  set: 'podcast-script',
   items: { key: string; context_md: string }[],
   records: Map<string, CallRecord<T>[]>,
   text: (t: T) => string,
@@ -255,7 +228,7 @@ export const largeTierSuite: Suite = {
   describe(fx, limit) {
     return [
       `selection: ${groups(fx, limit).length} historical groups (target ${TARGETS.selection.groups})`,
-      `newsletter selection and intro: ${newsletters(fx, limit).length} newsletters (target ${TARGETS.newsletters.count})`,
+      `newsletter selection: ${newsletters(fx, limit).length} newsletters (target ${TARGETS.newsletters.count})`,
       `podcast: ${fx.podcast ? `${podcastEpisodeStories(fx.podcast).length} of ${fx.podcast.stories.length} pool stories (${fx.podcast.source})` : 'none'}`,
     ]
   },
@@ -265,7 +238,6 @@ export const largeTierSuite: Suite = {
     return [
       ...planFor(groups(fx, limit), 'select', selectPrompt, TOKENS.selection),
       ...planFor(newsletters(fx, limit), 'newsletter-select', newsletterPrompt, TOKENS.newsletterSelect),
-      ...planFor(newsletters(fx, limit), 'newsletter-intro', introPrompt, TOKENS.intro),
       ...planFor(podcasts(fx, limit), 'podcast', podcastPrompt, TOKENS.podcast),
     ]
   },
@@ -273,10 +245,9 @@ export const largeTierSuite: Suite = {
     const gs = groups(fx, ctx.limit)
     const ns = newsletters(fx, ctx.limit)
     const ps = podcasts(fx, ctx.limit)
-    const [sel, nsel, intro, pod] = await Promise.all([
+    const [sel, nsel, pod] = await Promise.all([
       runArms(ctx, ARMS, gs, 'select', selectResultSchema, selectPrompt),
       runArms(ctx, ARMS, ns, 'newsletter-select', newsletterSelectResultSchema, newsletterPrompt),
-      runArms(ctx, ARMS, ns, 'newsletter-intro', newsletterIntroSchema, introPrompt),
       runArms(ctx, ARMS, ps, 'podcast', podcastDialogueSchema, podcastPrompt),
     ])
     const selM = {
@@ -284,7 +255,6 @@ export const largeTierSuite: Suite = {
       [CAND_KEY]: scoreSelection(gs, sel.get(CAND_KEY) ?? [], sel.get(BASE_KEY) ?? []),
     }
     const nselM = Object.fromEntries([...nsel].map(([k, r]) => [k, scoreNewsletterSelect(ns, r)]))
-    const introM = Object.fromEntries([...intro].map(([k, r]) => [k, scoreIntro(r)]))
     const podM = Object.fromEntries([...pod].map(([k, r]) => [k, scorePodcast(ps, r)]))
     const storedUplifting = rate(gs.flatMap(g => g.stories.filter(s => g.storedPicked.includes(s.id)).map(s => s.emotionTag === 'uplifting')))
 
@@ -332,26 +302,6 @@ export const largeTierSuite: Suite = {
         notes: [],
       },
       {
-        id: 'newsletter-intro',
-        title: 'Newsletter intro',
-        baseline: BASE_KEY,
-        candidates: [CAND_KEY],
-        stats: statsFor(intro),
-        metrics: [
-          metricRow('Hard-rule violations (total)', introM, m => m.violations, count, 'lower'),
-          ...(['over60Words', 'sentenceCount', 'bannedPhrase', 'emDash', 'markdown'] as const).map(rule =>
-            metricRow(`Violations: ${rule}`, introM, m => m.byRule[rule], count, 'lower'),
-          ),
-          metricRow('Failed calls', introM, m => m.failures, count, 'lower'),
-        ],
-        decision: noWorseThanBaseline('intro', ns.length, [
-          { name: 'hard-rule violations', cand: introM[CAND_KEY]?.violations ?? null, base: introM[BASE_KEY]?.violations ?? null },
-          { name: 'failed calls', cand: introM[CAND_KEY]?.failures ?? null, base: introM[BASE_KEY]?.failures ?? null },
-        ]),
-        ratingSet: 'newsletter-intro',
-        notes: ['Each newsletter uses one intro style, drawn once with pickIntroStyle() and stored in the fixture, so both arms get the same prompt.'],
-      },
-      {
         id: 'podcast',
         title: 'Podcast script',
         baseline: BASE_KEY,
@@ -378,20 +328,6 @@ export const largeTierSuite: Suite = {
 
     const ratingItems = [
       ...selectionDrafts(gs, sel),
-      ...textDrafts(
-        'newsletter-intro',
-        ns.map(n => ({
-          key: n.id,
-          context_md: [
-            `Style instruction: ${n.intro.style}`,
-            '',
-            'Stories in this edition:',
-            ...n.intro.stories.map(s => `- **${s.title}** (${s.issueName}, ${s.emotionTag}): ${s.blurb}`),
-          ].join('\n'),
-        })),
-        intro,
-        (t: NewsletterIntro) => t.intro,
-      ),
       ...textDrafts(
         'podcast-script',
         ps.map(p => ({

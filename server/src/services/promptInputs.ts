@@ -13,7 +13,6 @@ import type { StoryForSelect } from '../prompts/select.js'
 import type { CandidateStory } from '../prompts/related-stories.js'
 import type { StoryForBlueskyPick } from '../prompts/bluesky.js'
 import type { StoryForNewsletterSelect } from '../prompts/newsletter-select.js'
-import type { StoryForNewsletterIntro } from '../prompts/newsletter-intro.js'
 import type { StoryForPodcast } from '../prompts/podcast.js'
 import type { StoryForPodcastSelect } from '../prompts/podcast-select.js'
 
@@ -125,7 +124,7 @@ export function socialPickStory(s: {
   }
 }
 
-// --- Newsletter selection and intro (newsletter.ts pickShortlist, buildContent) ---
+// --- Newsletter selection and story order (newsletter.ts pickShortlist, buildContent) ---
 
 /** Fixed display order for top-level issues in the newsletter. */
 const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
@@ -182,25 +181,6 @@ export function newsletterOrder<S extends NewsletterStory>(stories: S[]): S[] {
     const titleB = b.title || b.sourceTitle || ''
     return titleA.localeCompare(titleB)
   })
-}
-
-/** The intro prompt's stories and issue names, from stories already in `newsletterOrder`. */
-export function newsletterIntroInput(ordered: (NewsletterStory & { summary: string | null; marketingBlurb: string | null; emotionTag: string | null })[]): {
-  stories: StoryForNewsletterIntro[]
-  issueNames: string[]
-} {
-  const issueNames = [...new Set(ordered.map(s => newsletterIssue(s).name))].sort((a, b) => {
-    const storyA = ordered.find(s => newsletterIssue(s).name === a)!
-    const storyB = ordered.find(s => newsletterIssue(s).name === b)!
-    return newsletterIssueSortIndex(newsletterIssue(storyA).slug) - newsletterIssueSortIndex(newsletterIssue(storyB).slug)
-  })
-  const stories = ordered.map(s => ({
-    title: s.title || s.sourceTitle,
-    issueName: newsletterIssue(s).name,
-    blurb: s.marketingBlurb || s.summary || '',
-    emotionTag: s.emotionTag || 'calm',
-  }))
-  return { stories, issueNames }
 }
 
 // --- Podcast story selection and dialogue (podcastScript.ts) ---

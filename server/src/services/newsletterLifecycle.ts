@@ -7,8 +7,9 @@
  *
  * - Every write move runs in a transaction that first locks the issue's row
  *   (`SELECT ... FOR UPDATE`), re-checks its rule, then writes, so moves on one issue serialize.
- *   The model-backed moves (select, generate) check before the model call too, so a refused issue
- *   spends nothing, and again at the write, so an issue sent meanwhile is not overwritten.
+ *   The moves that build outside the lock (select with its model call, generate) check before
+ *   building too, so a refused issue spends nothing, and again at the write, so an issue sent
+ *   meanwhile is not overwritten.
  * - **Frozen**: an unconfirmed live send exists, or a live non-failed send exists and the issue is
  *   published. A frozen issue refuses every build move and edit; unpublishing a sent issue opens it
  *   again, and it can never be emailed again.
@@ -133,11 +134,12 @@ export async function selectStories(id: string): Promise<Newsletter> {
   })
 }
 
-/** generate: the issue's markdown from its shortlist. */
+/** generate: the issue's markdown from its shortlist (the template alone, no model call). */
 export async function generateContent(id: string): Promise<Newsletter> {
   const newsletter = await readIssue(id)
   await assertNotFrozen(prisma, newsletter)
   if (newsletter.selectedStoryIds.length === 0) throw new BadRequestError('No stories selected')
+  // Built before the lock: buildContent reads the stories through its own connection
   const content = await buildContent(newsletter)
   return underLock(id, async (tx, current) => {
     await assertNotFrozen(tx, current)

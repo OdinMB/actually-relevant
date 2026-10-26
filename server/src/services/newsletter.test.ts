@@ -24,7 +24,7 @@ describe('renderHtml', () => {
     return lines.join('\n')
   }
 
-  it('renders the intro section before stories', async () => {
+  it('still renders the intro of an issue generated before intros were dropped, before its stories', async () => {
     const content = [
       'Something hopeful happened in climate science.',
       '',
@@ -66,13 +66,7 @@ describe('renderHtml', () => {
   })
 
   it('labels the issue as AI-generated directly under the week title, and keeps the bottom line', async () => {
-    const content = [
-      'An intro written by AI.',
-      '',
-      '---',
-      '',
-      storyBlock({ title: 'First story', publisher: 'Nature', url: 'https://example.com/first', body: 'Summary.' }),
-    ].join('\n')
+    const content = storyBlock({ title: 'First story', publisher: 'Nature', url: 'https://example.com/first', body: 'Summary.' })
 
     const html = render(content)
     const doc = new JSDOM(html).window.document
@@ -81,8 +75,9 @@ describe('renderHtml', () => {
     const label = title?.nextElementSibling
     expect(label?.textContent).toBe('AI-generated: AI selected the stories in this issue and wrote the intro, headlines, and summaries.')
     expect(label?.querySelector('strong')?.textContent).toBe('AI-generated:')
-    // Seen before any AI text: the intro and the stories come after it
-    expect(html.indexOf('AI-generated:')).toBeLessThan(html.indexOf('An intro written by AI.'))
+    // Seen before any AI text: the stories come after it
+    expect(html.indexOf('AI-generated:')).toBeLessThan(html.indexOf('First story'))
+    expect(html).not.toContain('<!-- Intro -->')
     expect(html).toContain('Curated and written with care by AI')
   })
 
@@ -167,7 +162,7 @@ describe('renderHtml', () => {
   })
 
   it('links "View in browser", above the AI label, to the web edition it is given', () => {
-    const html = renderHtml({ title: 'Week 42, 2026', content: 'Intro only.' }, 'https://actuallyrelevant.news/newsletter/week-42-2026')
+    const html = renderHtml({ title: 'Week 42, 2026', content: 'Text only.' }, 'https://actuallyrelevant.news/newsletter/week-42-2026')
     expect(html).toContain('<a href="https://actuallyrelevant.news/newsletter/week-42-2026"')
     expect(html.indexOf('View in browser')).toBeLessThan(html.indexOf(NEWSLETTER_TOP_LABEL_TEXT))
   })
