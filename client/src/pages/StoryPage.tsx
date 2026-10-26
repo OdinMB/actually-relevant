@@ -11,6 +11,7 @@ import FeedFavicon from '../components/FeedFavicon'
 import BookmarkButton from '../components/BookmarkButton'
 import ShareButtons from '../components/ShareButtons'
 import { useFeedback } from '../components/FeedbackProvider'
+import { StoryNewsletterLine } from '../components/CrossLinks'
 import RelatedStories from '../components/RelatedStories'
 import AlsoCoveredBy from '../components/AlsoCoveredBy'
 import AiLabel from '../components/ai/AiLabel'
@@ -278,7 +279,7 @@ export default function StoryPage() {
           {story.antifactors && <AnalysisSection title="Caveats" text={story.antifactors} accentColor={shiftHex(colors.hex, -0.25)} aiField="antifactors" />}
 
           {/* Report an error: the feedback dialog, bound to this story */}
-          <p className="text-sm text-neutral-600 mb-10">
+          <p className="text-sm text-neutral-600 mb-3">
             Spotted a mistake?{' '}
             <button
               type="button"
@@ -288,6 +289,9 @@ export default function StoryPage() {
               Report an error
             </button>
           </p>
+
+          {/* Where the reader finishes: the newsletter, in the site's subscribe dialog */}
+          <StoryNewsletterLine className="mb-10" />
 
           {/* Related stories */}
           {story.slug && <RelatedStories slug={story.slug} />}
