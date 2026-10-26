@@ -103,7 +103,7 @@ The build generates the Prisma client, applies any pending database migrations, 
 | `PUBLIC_API_KEY` | No | Static key for partners of the public API: sent as `Authorization: Bearer <key>`, it raises the rate limit from 100 requests per 15 minutes per IP to 1,000 per 15 minutes for the key (`RATE_LIMIT_PUBLIC_API_KEY_MAX`). It grants no other access; unset, no key is accepted (`.context/authentication.md`) |
 | `LOG_LEVEL` | No | Logging verbosity (default: `info`) |
 | `SUBSCRIPTIONS_ENABLED` | No | `true` opens newsletter signups; unset or anything else keeps them paused (`.context/subscription.md`) |
-| `TURNSTILE_SECRET_KEY` | For signups | Cloudflare Turnstile secret; without it, production refuses every signup |
+| `TURNSTILE_SECRET_KEY` | For signups | Cloudflare Turnstile secret for the signup and feedback forms; without it, production refuses every signup, and feedback skips the check |
 | `TRUST_PROXY` | Fixed in `render.yaml` | Proxy hops to trust for client IPs: `2`, measured on 2026-10-12 with the `/health/client-ip` check (code default `1`; see `.context/deployment.md`) |
 | `FEEDBACK_IP_HASH_SECRET` | For feedback | Key for the hashed IP stored with feedback (64 hex characters: `openssl rand -hex 32`, or in Windows PowerShell `$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b \| ForEach-Object { $_.ToString('x2') })`). Without it, feedback is refused |
 
@@ -128,7 +128,7 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `VITE_API_URL` | Yes | Backend URL (e.g. `https://api.actuallyrelevant.news`) |
-| `VITE_TURNSTILE_SITE_KEY` | For signups | Cloudflare Turnstile site key for the newsletter form |
+| `VITE_TURNSTILE_SITE_KEY` | For signups | Cloudflare Turnstile site key for the newsletter and feedback forms |
 | `NODE_VERSION` | Fixed in `render.yaml` | Same exact Node version as the backend, equal to `.node-version` |
 
 ### Post-deploy Steps

@@ -1,7 +1,7 @@
 /**
  * Cloudflare Turnstile, fetched and run only on demand. Nothing reaches Cloudflare until
- * `runTurnstileChallenge` is called, which the signup form does only on submit, so
- * visitors who never sign up never contact Cloudflare. No npm dependency.
+ * `runTurnstileChallenge` is called, which the signup and feedback forms do only on submit,
+ * so visitors who never submit either never contact Cloudflare. No npm dependency.
  */
 
 /**

@@ -18,9 +18,9 @@ import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { escapeHtml } from '../lib/xml.js'
 import { parseStoryHeading, storyHeading } from './newsletterContent.js'
-import { newsletterIntroInput, newsletterIssue, newsletterOrder, newsletterSelectInput } from './promptInputs.js'
-import { buildNewsletterSelectPrompt, buildNewsletterIntroPrompt } from '../prompts/index.js'
-import { newsletterSelectResultSchema, newsletterIntroSchema } from '../schemas/llm.js'
+import { newsletterIssue, newsletterOrder, newsletterSelectInput } from './promptInputs.js'
+import { buildNewsletterSelectPrompt } from '../prompts/index.js'
+import { newsletterSelectResultSchema } from '../schemas/llm.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('newsletter')
@@ -134,10 +134,8 @@ export async function pickShortlist(newsletter: { id: string; storyIds: string[]
   return selectedIds
 }
 
-/** The issue's markdown, built from its (non-empty) shortlist with a model-written intro. */
-export async function buildContent(newsletter: { id: string; selectedStoryIds: string[] }): Promise<string> {
-  const newsletterId = newsletter.id
-
+/** The issue's markdown, built from its (non-empty) shortlist by the template alone (no model call). */
+export async function buildContent(newsletter: { selectedStoryIds: string[] }): Promise<string> {
   const loaded = await prisma.story.findMany({
     where: { id: { in: newsletter.selectedStoryIds } },
     select: {
@@ -170,28 +168,9 @@ export async function buildContent(newsletter: { id: string; selectedStoryIds: s
   // Sort by fixed issue order, then by title within each group
   const stories = newsletterOrder(loaded)
 
-  // Generate editorial intro via LLM
-  const { stories: storiesForIntro, issueNames } = newsletterIntroInput(stories)
-
-  let intro = ''
-  try {
-    const introPrompt = buildNewsletterIntroPrompt(storiesForIntro, issueNames)
-    await rateLimitDelay()
-    const llm = getLLMByTier(config.newsletter.contentModelTier)
-    const structuredLlm = llm.withStructuredOutput(newsletterIntroSchema)
-    const introResult = await structuredLlm.invoke([new HumanMessage(introPrompt)])
-    intro = introResult.intro
-    log.info({ newsletterId, introLength: intro.length }, 'generated newsletter intro')
-  } catch (err) {
-    log.warn({ newsletterId, err }, 'failed to generate newsletter intro, continuing without it')
-  }
-
-  // Build markdown content with issue section headers
+  // Build markdown content with issue section headers. No intro: the owner dropped the
+  // model-written intro on 2026-10-26, so the content opens with the first section.
   let content = ''
-  if (intro) {
-    content += `${intro}\n\n---\n\n`
-  }
-
   let currentIssue = ''
   for (const [i, story] of stories.entries()) {
     const resolved = newsletterIssue(story)
@@ -263,7 +242,9 @@ export async function generateCarouselForNewsletter(newsletterId: string): Promi
 /**
  * Converts newsletter markdown content into an HTML email template.
  * Parses the markdown structure produced by buildContent():
- * - Optional intro paragraph(s) at the top (before first # heading)
+ * - Optional text before the first heading: generated issues no longer have it, but issues
+ *   generated before 2026-10-26 open with a model-written intro, which still renders here
+ *   (as does an opening a person writes by hand)
  * - Issue section headers (# IssueName)
  * - Story blocks: h2 heading, publisher + "Read original article" link row,
  *   body text (relevanceSummary or blockquote with quote + attribution)

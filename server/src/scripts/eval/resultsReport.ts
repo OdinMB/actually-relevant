@@ -20,7 +20,6 @@ export const VOLUMES: Record<CallSiteId, { low: number; high: number }> = {
   'social-post': { low: 30, high: 60 },
   selection: { low: 30, high: 90 },
   'newsletter-select': { low: 4, high: 5 },
-  'newsletter-intro': { low: 4, high: 5 },
   podcast: { low: 0, high: 4 },
 }
 const EMBEDDINGS_MONTHLY = { low: 0.01, high: 0.02 }
@@ -41,7 +40,7 @@ const LUNA_TIERS: { tier: 'small' | 'medium'; sites: CallSiteId[] }[] = [
   { tier: 'small', sites: ['dedup', 'related', 'preassess'] },
   { tier: 'medium', sites: ['preassess', 'assess', 'social-pick'] },
 ]
-const LARGE_SITES: CallSiteId[] = ['selection', 'newsletter-select', 'newsletter-intro', 'podcast']
+const LARGE_SITES: CallSiteId[] = ['selection', 'newsletter-select', 'podcast']
 const SOL = 'gpt-6-sol@medium'
 
 function lunaTier(tier: 'small' | 'medium', ids: CallSiteId[], byId: Map<CallSiteId, CallSiteResult>): TierRecommendation {
@@ -270,8 +269,8 @@ function largeTierSection(sites: CallSiteResult[]): string[] {
     '',
     'Measures not listed are ties. Cost per call uses the unverified gpt-5.2 price.',
     '',
-    `Monthly cost of the four large-tier call sites: gpt-5.2 ${range(cost('gpt-5.2@medium'))} vs gpt-6-sol ${range(cost(SOL))} (gpt-5.2 price unverified).`,
-    'Taste is not measured here: the owner rates the selection groups where the two disagree most, the intros and the podcast script.',
+    `Monthly cost of the three large-tier call sites: gpt-5.2 ${range(cost('gpt-5.2@medium'))} vs gpt-6-sol ${range(cost(SOL))} (gpt-5.2 price unverified).`,
+    'Taste is not measured here: the owner rates the selection groups where the two disagree most and the podcast script.',
   ]
 }
 

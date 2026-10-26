@@ -8,7 +8,6 @@ import {
   splitSentences,
   summarizeCalls,
   checkSocialPost,
-  checkIntro,
   checkDialogue,
 } from './checks.js'
 import type { AssessResult } from '../../schemas/llm.js'
@@ -207,20 +206,6 @@ describe('checkSocialPost', () => {
     const m = { ...rules, platform: 'mastodon' as const, maxChars: 500 }
     expect(checkSocialPost('Good news #coral #ocean', m).hashtag).toBe(false)
     expect(checkSocialPost('Good news #coral #ocean #fiji', m).hashtag).toBe(true)
-  })
-})
-
-describe('checkIntro', () => {
-  it('passes a compliant intro', () => {
-    const c = checkIntro('Coral is returning to Fiji. Quiet rules can outlast loud promises.')
-    expect(Object.values(c).some(Boolean)).toBe(false)
-  })
-
-  it('flags banned phrases, em dashes, markdown and sentence count', () => {
-    expect(checkIntro('This week, good news. More good news.').bannedPhrase).toBe(true)
-    expect(checkIntro('One thing — another. Two.').emDash).toBe(true)
-    expect(checkIntro('**Bold** start. Second.').markdown).toBe(true)
-    expect(checkIntro('Just one sentence.').sentenceCount).toBe(true)
   })
 })
 

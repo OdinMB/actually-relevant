@@ -19,7 +19,7 @@ const ISSUE: PublicNewsletterIssue = {
   slug: 'week-42-2026',
   title: 'Week 42, 2026',
   publishedAt: '2026-10-18T09:00:00.000Z',
-  aiLabel: { lead: 'AI-generated:', text: 'AI selected the stories in this issue and wrote the intro, headlines, and summaries.' },
+  aiLabel: { lead: 'AI-generated:', text: 'AI selected the stories in this issue and wrote the headlines and summaries.' },
   content: [
     'A hopeful week for clean air.',
     '',

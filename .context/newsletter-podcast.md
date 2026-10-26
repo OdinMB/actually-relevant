@@ -37,7 +37,7 @@ Newsletters are generated from published stories through a create-assign-select-
 | unpublish | any; no-op when draft | `status = 'draft'`; slug, `publishedAt` and sends kept |
 | delete | no live non-failed send (409 `sent_issue`) | the row, cascading test and failed sends |
 
-- **Serialized per issue.** Every write move runs in a transaction that first takes `SELECT id FROM newsletters WHERE id = $1 FOR UPDATE`, re-checks its rule, then writes. The model moves (select, generate) check before the model call too, so a frozen issue spends nothing, and again at the write, so an issue sent while the model ran keeps its content. `ensureNewsletterSlug` runs before the lock, never inside it: it writes the row through its own connection and would wait on the lock.
+- **Serialized per issue.** Every write move runs in a transaction that first takes `SELECT id FROM newsletters WHERE id = $1 FOR UPDATE`, re-checks its rule, then writes. The moves that build outside the lock (select with its model call, generate with its story reads) check before building too, so a frozen issue spends nothing, and again at the write, so an issue sent meanwhile keeps its content. `ensureNewsletterSlug` runs before the lock, never inside it: it writes the row through its own connection and would wait on the lock.
 - **Refusals** are `NewsletterRefusedError` (a `ConflictError`, 409 `{ error }`) with a `code` (`frozen`, `already_sent`, `no_current_test`, `sent_issue`, `not_unconfirmed`) the job maps to notices.
 - **Changing a sent issue** means unpublishing it (owner decision Q1): that takes the web edition down and opens editing again; republishing shows the edited version under the same URL and date. A sent issue can never be emailed again (no override), and cannot be deleted.
 - **The admin mirrors the rule** for button states only (`client/src/lib/newsletter-state.ts`, from the send list it loads; the server's 409 is the authority). A frozen issue disables the build, edit, rename, story-list and Save controls with one hint line; Send to Subscribers is disabled once sent, while a send is unconfirmed, or without a test of the current HTML. Every error toast shows the server's reason. Named debt: the rule exists twice; a server-computed lifecycle object in the responses would end that (rejected for now, plan decision 12).
@@ -50,18 +50,18 @@ The longlist is every story with status `published` whose `dateCrawled` falls wi
 
 ### Content generation (`POST /api/admin/newsletters/:id/generate`)
 
-Generates markdown content in two phases:
+Generates markdown content from a template alone, with no model call (`buildContent()`). For each selected story, grouped by issue with section headers:
 
-1. **LLM editorial intro** — Calls the `contentModelTier` LLM with `buildNewsletterIntroPrompt()` to generate a 2-3 sentence warm, conversational opening that weaves together the edition's key themes. Falls back gracefully to no intro on failure.
-2. **Template-based story blocks** — For each selected story, grouped by issue with section headers:
-   - `# IssueName` section header (when the issue group changes)
-   - Title as `##` heading, with the story's id as a marker: `## <headline> {story:<id>}` (`storyHeading()` in `services/newsletterContent.ts`, which owns the content's three markers for every reader). The email shows the heading without it; the web edition matches the heading to its story by it
-   - Metadata line with `{feed:id}` tag, publisher name, and links (feed ID is used for favicon in HTML)
-   - Body text: alternates between `relevanceSummary` (2/3 of stories) and `quote` + `quoteAttribution` blockquote (1/3)
+- `# IssueName` section header (when the issue group changes)
+- Title as `##` heading, with the story's id as a marker: `## <headline> {story:<id>}` (`storyHeading()` in `services/newsletterContent.ts`, which owns the content's three markers for every reader). The email shows the heading without it; the web edition matches the heading to its story by it
+- Metadata line with `{feed:id}` tag, publisher name, and links (feed ID is used for favicon in HTML)
+- Body text: alternates between `relevanceSummary` (2/3 of stories) and `quote` + `quoteAttribution` blockquote (1/3)
+
+**No intro** (owner decision, 2026-10-26: the model-written intro added no value). The content opens with the first `#` section. Issues generated before then start with a 2-3 sentence intro paragraph and a `---`; that stored text is left as it is and still renders, in the email (`renderHtml()` shows any text before the first heading as an opening paragraph, which also covers an opening a person types in) and on the web edition (which renders the stored markdown). The prompt, its schema, its prompt-input builder, the `contentModelTier` setting and the eval's intro call site were removed with it.
 
 #### Issue ordering
 
-Selected stories are sorted by a fixed issue order, then alphabetically by title (`title`, falling back to `sourceTitle`) within each issue (`ISSUE_ORDER` in `services/newsletter.ts`). The order is Human Development, Planet & Climate, Existential Threats, Science & Technology. Issues not on the list sort last. This order decides where the `# Issue` section headers go, and the intro receives the issue names in the same order. Body text alternates by position: every third story (`i % 3 === 2`) uses its pull-quote when `quote` and `quoteAttribution` are both present. The others use `relevanceSummary`.
+Selected stories are sorted by a fixed issue order, then alphabetically by title (`title`, falling back to `sourceTitle`) within each issue (`ISSUE_ORDER` in `services/newsletter.ts`). The order is Human Development, Planet & Climate, Existential Threats, Science & Technology. Issues not on the list sort last. This order decides where the `# Issue` section headers go. Body text alternates by position: every third story (`i % 3 === 2`) uses its pull-quote when `quote` and `quoteAttribution` are both present. The others use `relevanceSummary`.
 
 ### HTML email template (`POST /api/admin/newsletters/:id/html`)
 
@@ -70,8 +70,8 @@ Converts the markdown content into a responsive HTML email (`renderHtml()` in `n
 Template structure:
 - **View in browser** — a small link above the logo to the issue's web edition, `https://actuallyrelevant.news/newsletter/<slug>`. Building the HTML assigns the slug if the issue has none (`ensureNewsletterSlug()`), so the link exists before the issue is published; it opens only once the issue is published (until then the page is "Issue Not Found"). A live send publishes the issue, so the link works from the moment the email goes out
 - **Header** — Logo, tagline, four-color category strip (amber/teal/red/indigo), newsletter title (uppercase, bold)
-- **AI label** — directly under the week title, before any AI text: "**AI-generated:** AI selected the stories in this issue and wrote the intro, headlines, and summaries." (`NEWSLETTER_TOP_LABEL` in `server/src/lib/aiLabelCopy.ts`)
-- **Intro** — Editorial intro paragraph(s) if present
+- **AI label** — directly under the week title, before any AI text: "**AI-generated:** AI selected the stories in this issue and wrote the headlines and summaries." (`NEWSLETTER_TOP_LABEL` in `server/src/lib/aiLabelCopy.ts`; owner reworded it 2026-10-26 when the intro was removed, and issues generated before then keep their intro under the same label)
+- **Opening text** — any text before the first heading, as paragraphs: the intro of an issue generated before 2026-10-26, or an opening a person wrote. New issues have none
 - **Issue sections** — Centered category headers with colored dot and decorative lines
 - **Story blocks** — Title (linked), publisher favicon + name + "original article" / "relevance analysis" links, body text or blockquote
 - **Support Us** — Ko-fi link with "Free. Independent. Without ads." tagline
@@ -187,8 +187,7 @@ Both sends need the stored `html` (400 "No HTML content — generate HTML first"
 | `server/src/services/plunk.ts` | Plunk campaigns, sends and stats |
 | `server/src/routes/admin/newsletters.ts` | Newsletter admin API endpoints |
 | `server/src/schemas/newsletter.ts` | Newsletter request validation schemas |
-| `server/src/schemas/llm.ts` | `newsletterSelectResultSchema`, `newsletterIntroSchema` for LLM structured output |
-| `server/src/prompts/newsletter-intro.ts` | `buildNewsletterIntroPrompt` for editorial intro generation |
+| `server/src/schemas/llm.ts` | `newsletterSelectResultSchema` for LLM structured output |
 | `server/src/prompts/newsletter-select.ts` | `buildNewsletterSelectPrompt` for story selection |
 | `server/src/jobs/generateNewsletter.ts` | Automated weekly newsletter generation cron job |
 | `server/src/jobs/publishNewsletter.ts` | Automated weekly send to all subscribers and publish |
@@ -197,7 +196,5 @@ Both sends need the stored `html` (400 "No HTML content — generate HTML first"
 
 - **To change newsletter format:** Edit the template loop in `newsletter.ts:buildContent()` and the HTML parser in `renderHtml()`; a new marker goes in `newsletterContent.ts`
 - **To change what an issue may do in a state:** the move's rule in `newsletterLifecycle.ts`, and its mirror in `client/src/lib/newsletter-state.ts`
-- **To change newsletter intro prompt:** Edit `buildNewsletterIntroPrompt()` in `prompts/newsletter-intro.ts`
-- **To change newsletter intro output structure:** Update `newsletterIntroSchema` in `schemas/llm.ts` AND the prompt
 - **To add new carousel image layouts:** Edit `createStoryImage()` in `carousel.ts`
 - **To use real branded assets:** Replace placeholder files in `server/assets/images/` and `server/assets/fonts/`

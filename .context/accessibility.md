@@ -118,6 +118,7 @@ Before deploying new pages/components:
 | Admin frame | `AdminLayout.tsx` | All text inside a landmark (axe "region"): desktop sidebar in `<aside>` with a labelled `<nav>`, mobile top bar a `<header>`, content in `<main>` |
 | Story list | `StoryList.tsx` | To be implemented — use semantic table or list |
 | Focus styles | All interactive elements | `focus-visible:ring-2` |
+| Human check (Turnstile) | `SubscribeForm.tsx`, `FeedbackForm.tsx` | Widget is invisible unless Cloudflare needs the visitor to interact, so it adds no tab stop; the submit button's text says "Verifying..." while it runs; a failure is text with `role="alert"` (in `FeedbackForm` also linked to the button by `aria-describedby`) and the form stays usable. Covered by axe in `FeedbackForm.test.tsx` |
 | Footer tap targets | `SiteFooter.tsx` | List links at least 32px tall on phones, 28px from `md` up (`LINK_TARGET`), in rows without gap that grow when a label wraps; legal links 32px / 24px; icon links 32x32px. Test: `SiteFooter.test.tsx` |
 
 ## Resources

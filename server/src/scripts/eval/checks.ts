@@ -95,7 +95,7 @@ export function checkAssessFormat(a: AssessResult): Record<AssessFormatCheck, bo
 }
 
 // ---------------------------------------------------------------------------
-// Social post, newsletter intro and podcast rules (from their prompts)
+// Social post and podcast rules (from their prompts)
 // ---------------------------------------------------------------------------
 
 export interface SocialPostCheck {
@@ -127,27 +127,6 @@ export function checkSocialPost(text: string, rules: { platform: 'bluesky' | 'ma
 
 /** Violations of content the prompt forbids outright (length and em dashes are counted separately). */
 export const forbiddenContent = (c: SocialPostCheck) => c.url || c.mention || c.hashtag || c.titleRepeated || c.junk
-
-export interface IntroCheck {
-  over60Words: boolean
-  sentenceCount: boolean
-  bannedPhrase: boolean
-  emDash: boolean
-  markdown: boolean
-}
-
-export function checkIntro(text: string): IntroCheck {
-  const sentences = splitSentences(text).length
-  return {
-    over60Words: countWords(text) >= 60,
-    sentenceCount: sentences < 2 || sentences > 3,
-    bannedPhrase: /\bthis week\b|\bin this edition\b|\byou\b|\byour\b|\bdear reader\b/i.test(text),
-    emDash: text.includes('—'),
-    markdown: /[*_#`]|^\s*[-•]\s/m.test(text),
-  }
-}
-
-export const introViolations = (c: IntroCheck) => Object.values(c).filter(Boolean).length
 
 export interface DialogueCheck {
   /** Production validation verdicts (validateDialogue): coverage, band, bridges, tags, markup. */

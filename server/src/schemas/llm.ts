@@ -114,12 +114,6 @@ export const newsletterSelectResultSchema = z.object({
   selectedIds: z.array(z.string()).describe('IDs of the selected articles. Must contain exactly the number of articles requested.'),
 })
 
-export const newsletterIntroSchema = z.object({
-  intro: z
-    .string()
-    .describe('A 2-3 sentence editorial introduction for the newsletter edition. ' + 'Warm and conversational tone. Plain text only, under 60 words.'),
-})
-
 /** Audio tags the dialogue may use (ElevenLabs eleven_v4; billed as characters, Phase 0 S3). */
 export const PODCAST_AUDIO_TAGS = ['[calm]', '[thoughtful]', '[serious]', '[warmly]', '[curious]', '[short pause]'] as const
 
@@ -286,6 +280,5 @@ export type AssessResult = z.infer<typeof assessResultSchema>
 export type SelectResult = z.infer<typeof selectResultSchema>
 export type ReclassifyResult = z.infer<typeof reclassifyResultSchema>
 export type NewsletterSelectResult = z.infer<typeof newsletterSelectResultSchema>
-export type NewsletterIntro = z.infer<typeof newsletterIntroSchema>
 export type PodcastDialogue = z.infer<typeof podcastDialogueSchema>
 export type PodcastSelectResult = z.infer<typeof podcastSelectResultSchema>

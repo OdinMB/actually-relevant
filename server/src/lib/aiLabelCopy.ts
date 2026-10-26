@@ -26,7 +26,7 @@ export const OPENAPI_AI_FIELD_PREFIX = 'AI-generated. '
 /** Newsletter label directly under the week title; the lead-in is set in bold. */
 export const NEWSLETTER_TOP_LABEL = {
   lead: 'AI-generated:',
-  text: 'AI selected the stories in this issue and wrote the intro, headlines, and summaries.',
+  text: 'AI selected the stories in this issue and wrote the headlines and summaries.',
 } as const
 
 /** Last segment of the metadata line in every Bluesky and Mastodon post. */

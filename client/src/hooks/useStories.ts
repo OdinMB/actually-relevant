@@ -1,6 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { adminApi } from '../lib/admin-api'
 import type { Story, StoryFilters, StoryStatus } from '@shared/types'
+
+/**
+ * After anything that changes stories on the server (a task, a job, a bulk action):
+ * the lists, the counts and every story's detail query (`['story', id]`, the edit
+ * panel and page), so an open or reopened story shows the new data.
+ */
+export function invalidateStoryQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['stories'] })
+  queryClient.invalidateQueries({ queryKey: ['story'] })
+  queryClient.invalidateQueries({ queryKey: ['storyStats'] })
+}
 
 export function useStories(filters: StoryFilters) {
   return useQuery({
@@ -44,10 +55,7 @@ export function useBulkUpdateStatus() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ ids, status }: { ids: string[]; status: StoryStatus }) => adminApi.stories.bulkStatus(ids, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
+    onSuccess: () => invalidateStoryQueries(queryClient),
   })
 }
 

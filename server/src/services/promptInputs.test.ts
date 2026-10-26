@@ -219,9 +219,16 @@ describe('newsletter prompts', () => {
     expect(await promptsOf(() => pickShortlist({ id: 'nl-1', storyIds: rows.map(r => r.id) }))).toMatchSnapshot()
   })
 
-  it('buildContent sends the intro stories in issue order', async () => {
+  it('buildContent sends no prompt: the content is the template alone, with no intro', async () => {
     mockPrisma.story.findMany.mockResolvedValue(rows)
-    expect(await promptsOf(() => buildContent({ id: 'nl-1', selectedStoryIds: rows.map(r => r.id) }))).toMatchSnapshot()
+    let content = ''
+    expect(
+      await promptsOf(async () => {
+        content = await buildContent({ id: 'nl-1', selectedStoryIds: rows.map(r => r.id) })
+      }),
+    ).toEqual([])
+    // The first line is the first issue's section header
+    expect(content.startsWith('# ')).toBe(true)
   })
 })
 

@@ -105,10 +105,18 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 
 ## Feedback
 
-Two ways in, one form (`FeedbackForm`), one endpoint (`POST /api/feedback`, `server/src/routes/public/feedback.ts`: honeypot, per-IP rate limit, the visitor IP stored only as an HMAC, ADR-0037):
+Two ways in, one form (`FeedbackForm`), one endpoint (`POST /api/feedback`, `server/src/routes/public/feedback.ts`: honeypot, per-IP rate limit, the signup's bot gate, the visitor IP stored only as an HMAC, ADR-0037):
 
 - **`/feedback`** (prerendered page): the general form, categories Feedback, Bug, Suggestion, Other.
 - **"Report an error" on every story page** (`StoryPage`, below the analysis: "Spotted a mistake? Report an error"): a button that opens `FeedbackModal` through `FeedbackProvider` (mounted once in `PublicLayout`; `useFeedback().openFeedback(story)`), bound to the story: heading "Report an error", the story's title as the page shows it, no category choice (always `correction`), a visible "What is wrong?" label, button "Send report". The native `<dialog>` moves focus to the message on open, closes on Escape or backdrop click, and returns focus to the button.
+
+**Bot gate**, the newsletter signup's (`.context/subscription.md`, steps 2 to 4, and "Client Behavior"), in this order before anything is stored:
+
+1. **Honeypot** filled → `{ success: true }`, nothing stored.
+2. **Form token** from `GET /api/feedback/token` (`issueFormToken('feedback')`, `Cache-Control: no-store`, behind the shared public limiter only). Missing, forged, younger than 1.5 s, older than 30 min, or a signup token → `{ success: true }`, nothing stored (silent, as for the signup). The form fetches it on mount (one retry; submit stays disabled until it has one) and a fresh one every 20 minutes (`FORM_TOKEN_REFRESH_MS`), so a long message is not silently dropped. The closed modal's form fetches one too, as the closed signup modal does.
+3. **Turnstile** (`verifyTurnstile(..., { skipWithoutSecret: true })`): rejected or missing token → `{ success: false, message: "We couldn't verify that you're human. Please try again." }`; siteverify unreachable → `{ success: false, message: "Feedback is unavailable right now. Please try again later." }`. The form shows the message inline with `role="alert"` and keeps what the visitor wrote. **Unlike the signup, feedback skips the check while `TURNSTILE_SECRET_KEY` is empty, in production too**, so the forms keep working until the owner creates the widget; once the secret is set it fails closed like the signup. Set the secret and `VITE_TURNSTILE_SITE_KEY` together: a secret without a site key refuses every submission as failed.
+
+On the client, as on the signup: with a site key set, Cloudflare's script loads only on submit (never on render or typing), the invisible widget runs, the button reads "Verifying..." then "Sending...", and a failed challenge shows "The human check couldn't load. Please press Send feedback (or Send report) to try again." with `role="alert"`, linked to the button by `aria-describedby`, the form still usable.
 
 The server takes an optional `storyId` and answers 400 "That story does not exist." for an unknown one; `correction` is also accepted without a story. `feedback.story_id` is a foreign key `ON DELETE SET NULL` (migration `20261025225344_feedback_story_correction`), so a report outlives a story that retention deletes, without its link. Admin view: `.context/admin-dashboard.md`. Feedback is kept indefinitely for now (retention is a BACKLOG item).
 

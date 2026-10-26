@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { publicApi } from '../lib/api'
+import { turnstileSiteKey } from '../lib/turnstile'
+import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
 
 interface FeedbackFormProps {
   /** Called after successful submission (e.g. to close a modal) */
@@ -31,14 +33,25 @@ const CATEGORIES = [
 // Must match config.feedback.messageMaxLength on the server
 const MAX_MESSAGE_LENGTH = 2000
 
+/**
+ * How often an open form fetches a fresh form token. The server drops a token older than
+ * 30 minutes without a word (config.subscribe.formTokenMaxAgeMs), so a visitor who takes
+ * long over a message must still hold a younger one.
+ */
+export const FORM_TOKEN_REFRESH_MS = 20 * 60 * 1000
+
 export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 'feedback', hideHeading = false, story }: FeedbackFormProps) {
   const [chosenCategory, setCategory] = useState<string>('general')
   const category = story ? 'correction' : chosenCategory
   const [message, setMessage] = useState('')
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('') // honeypot
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'verifying' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [formToken, setFormToken] = useState<string | null>(null)
+  // Turnstile loads only on submit, so visitors who never send feedback never contact Cloudflare.
+  const [turnstileFailed, setTurnstileFailed] = useState(false)
+  const { containerRef: turnstileContainerRef, getToken: getTurnstileToken } = useTurnstileChallenge()
   const messageRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -47,20 +60,72 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
     }
   }, [autoFocus])
 
+  // Fetch the anti-bot form token on mount, and a fresh one while the form stays open.
+  useEffect(() => {
+    let cancelled = false
+    async function loadToken() {
+      // Try up to twice; if both fail, the last token stays (or none, and submit stays
+      // disabled: the API is unreachable anyway).
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const { token } = await publicApi.getFeedbackToken()
+          if (!cancelled) setFormToken(token)
+          return
+        } catch {
+          // retry once
+        }
+      }
+    }
+    loadToken()
+    const refresh = setInterval(loadToken, FORM_TOKEN_REFRESH_MS)
+    return () => {
+      cancelled = true
+      clearInterval(refresh)
+    }
+  }, [])
+
+  const siteKey = turnstileSiteKey()
+  const busy = status === 'verifying' || status === 'loading'
+  const submitLabel = story ? 'Send report' : 'Send feedback'
+  const errorId = `${idPrefix}-error`
+  const humanCheckErrorId = `${idPrefix}-human-check-error`
+  const describedBy = [status === 'error' && errorId, turnstileFailed && humanCheckErrorId].filter(Boolean).join(' ') || undefined
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!message.trim()) return
+    if (!message.trim() || busy || !formToken) return
+
+    setErrorMessage('')
+    setTurnstileFailed(false)
+    // A token is single-use, so every submit runs a fresh challenge.
+    let turnstileToken: string | undefined
+    if (siteKey) {
+      setStatus('verifying')
+      try {
+        turnstileToken = await getTurnstileToken(siteKey)
+      } catch {
+        setStatus('idle')
+        setTurnstileFailed(true)
+        return
+      }
+    }
 
     setStatus('loading')
-    setErrorMessage('')
     try {
-      await publicApi.submitFeedback({
+      const result = await publicApi.submitFeedback({
         category,
         message: message.trim(),
         ...(email.trim() ? { email: email.trim() } : {}),
         ...(website ? { website } : {}),
         ...(story ? { storyId: story.id } : {}),
+        formToken,
+        ...(turnstileToken ? { turnstileToken } : {}),
       })
+      if (!result.success) {
+        setStatus('error')
+        setErrorMessage(result.message || 'Something went wrong. Please try again.')
+        return
+      }
       setStatus('success')
     } catch {
       setStatus('error')
@@ -178,19 +243,28 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
           <input id={`${idPrefix}-website`} type="text" value={website} onChange={e => setWebsite(e.target.value)} tabIndex={-1} autoComplete="off" />
         </div>
 
+        {/* Stays empty unless Cloudflare needs the visitor to interact during a submit. */}
+        {siteKey && <div ref={turnstileContainerRef} className="empty:hidden" />}
+
+        {turnstileFailed && (
+          <p id={humanCheckErrorId} className="text-sm text-red-600" role="alert">
+            The human check couldn&apos;t load. Please press {submitLabel} to try again.
+          </p>
+        )}
+
         {status === 'error' && (
-          <p id={`${idPrefix}-error`} className="text-sm text-red-600" role="alert">
+          <p id={errorId} className="text-sm text-red-600" role="alert">
             {errorMessage}
           </p>
         )}
 
         <button
           type="submit"
-          disabled={status === 'loading' || !message.trim()}
-          aria-describedby={status === 'error' ? `${idPrefix}-error` : undefined}
+          disabled={busy || !formToken || !message.trim()}
+          aria-describedby={describedBy}
           className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {status === 'loading' ? 'Sending...' : story ? 'Send report' : 'Send feedback'}
+          {status === 'verifying' ? 'Verifying...' : status === 'loading' ? 'Sending...' : submitLabel}
         </button>
       </form>
     </>

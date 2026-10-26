@@ -124,8 +124,19 @@ export const publicApi = {
       body: JSON.stringify(data),
     }),
 
-  submitFeedback: (data: { category: string; message: string; email?: string; website?: string; storyId?: string }) =>
-    request<{ success: boolean }>('/feedback', {
+  getFeedbackToken: () => request<{ token: string }>('/feedback/token'),
+
+  /** `success: false` with a message when the human check refuses (`.context/public-website.md`, "Feedback"). */
+  submitFeedback: (data: {
+    category: string
+    message: string
+    email?: string
+    website?: string
+    storyId?: string
+    formToken?: string
+    turnstileToken?: string
+  }) =>
+    request<{ success: boolean; message?: string }>('/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),

@@ -52,11 +52,11 @@ describe('recommendTierSettings', () => {
     expect(recs.find(r => r.tier === 'small')).toMatchObject({ model: null, effort: null })
   })
 
-  it('recommends Sol for the large tier only when all four call sites pass', () => {
-    const large = ['selection', 'newsletter-select', 'newsletter-intro', 'podcast'] as const
+  it('recommends Sol for the large tier only when all three call sites pass', () => {
+    const large = ['selection', 'newsletter-select', 'podcast'] as const
     const pass = recommendTierSettings(large.map(id => site(id, ['gpt-6-sol@medium'])))
     expect(pass.find(r => r.tier === 'large')).toMatchObject({ model: 'gpt-6-sol', effort: 'medium' })
-    const fail = recommendTierSettings([...large.slice(0, 3).map(id => site(id, ['gpt-6-sol@medium'])), site('podcast', [])])
+    const fail = recommendTierSettings([...large.slice(0, 2).map(id => site(id, ['gpt-6-sol@medium'])), site('podcast', [])])
     expect(fail.find(r => r.tier === 'large')).toMatchObject({ model: 'gpt-5.2' })
   })
 })

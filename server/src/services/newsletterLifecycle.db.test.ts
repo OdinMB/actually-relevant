@@ -227,22 +227,6 @@ describeDb('newsletter lifecycle', () => {
     expect(fakePlunk.liveSends()).toHaveLength(1)
   })
 
-  it("keeps the content of an issue sent while generate's model call ran", async () => {
-    const topic = await createIssue()
-    const feed = await createFeed(topic.id)
-    const story = await createStory({ feedId: feed.id, status: 'published', title: 'A story' })
-    const issue = await testedIssue({ selectedStoryIds: [story.id] })
-    mockInvoke.mockImplementation(async () => {
-      await sendLive(issue.id)
-      return { intro: 'A fresh intro.' }
-    })
-
-    await expect(lifecycle.generateContent(issue.id)).rejects.toMatchObject({ code: 'frozen' })
-
-    expect((await issueOf(issue.id)).content).toBe(CONTENT)
-    expect(fakePlunk.liveSends()).toHaveLength(1)
-  })
-
   it('leaves a sent issue that is not published open for editing', async () => {
     const issue = await builtIssue()
     await createSend({ newsletterId: issue.id, isTest: false, status: 'sending', sentAt: new Date() })
@@ -261,9 +245,12 @@ describeDb('newsletter lifecycle', () => {
     expect((await lifecycle.assignStories(issue.id)).storyIds).toEqual([story.id])
     mockInvoke.mockResolvedValueOnce({ selectedIds: [story.id, 'not-on-the-longlist'] })
     expect((await lifecycle.selectStories(issue.id)).selectedStoryIds).toEqual([story.id])
-    mockInvoke.mockResolvedValueOnce({ intro: 'A hopeful week.' })
+    mockInvoke.mockClear()
     const { content } = await lifecycle.generateContent(issue.id)
     expect(content).toContain(`## Cities cut smog {story:${story.id}}`)
+    // No intro: generating makes no model call and the content opens with the first section
+    expect(mockInvoke).not.toHaveBeenCalled()
+    expect(content!.startsWith(`# ${topic.name}`)).toBe(true)
 
     const html = await lifecycle.generateHtml(issue.id)
     expect(html).toContain('/newsletter/week-9-2026')

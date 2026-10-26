@@ -331,8 +331,9 @@ const newsletterIssueSchema = z
     }),
     content: z.string().openapi({
       description: aiField(
-        'The issue as Markdown: an intro written by an AI model, then one section per issue area with the AI-selected stories, ' +
-          'each with its AI headline, publisher, links and an AI summary or a quote selected by AI.',
+        'The issue as Markdown: one section per issue area with the AI-selected stories, ' +
+          'each with its AI headline, publisher, links and an AI summary or a quote selected by AI. ' +
+          'Issues generated before 2026-10-26 open with an intro written by an AI model.',
       ),
     }),
     stories: z

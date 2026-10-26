@@ -7,10 +7,10 @@ vi.mock('express-rate-limit', () => ({
   default: () => (_req: any, _res: any, next: any) => next(),
 }))
 
-// Deterministic form-token behavior: only 'valid-token' verifies.
+// Deterministic form-token behavior: only 'valid-token' verifies, and only for the signup form.
 vi.mock('../../lib/formToken.js', () => ({
-  issueFormToken: () => 'issued-token',
-  verifyFormToken: (t: string | undefined | null) => ({ ok: t === 'valid-token' }),
+  issueFormToken: (form: string) => (form === 'subscribe' ? 'issued-token' : `wrong-form-${form}`),
+  verifyFormToken: (t: string | undefined | null, form: string) => ({ ok: t === 'valid-token' && form === 'subscribe' }),
 }))
 
 const mockSubscribe = vi.hoisted(() => vi.fn())
