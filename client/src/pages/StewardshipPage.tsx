@@ -63,7 +63,7 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
       </svg>
     ),
     title: 'Complete Platform',
-    description: 'Public website, free API, RSS feeds, newsletter, podcast scripts, and admin dashboard.',
+    description: 'Public website, free API, RSS feeds, newsletter, weekly podcast, and admin dashboard.',
     border: 'border-l-teal-400',
   },
   {
@@ -77,7 +77,7 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
       </svg>
     ),
     title: 'Full Documentation',
-    description: '17 architecture docs, 90+ implementation plans, deployment guide, and PM repo.',
+    description: '30+ subsystem docs, 40+ decision records, 140+ plans, deployment guide, and PM repo.',
     border: 'border-l-amber-400',
   },
   {
