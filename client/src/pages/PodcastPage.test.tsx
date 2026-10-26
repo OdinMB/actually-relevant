@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -17,6 +17,7 @@ vi.mock('../lib/api', async importOriginal => ({
 import PodcastPage, { PODCAST_FEED_URL } from './PodcastPage'
 
 const AUDIO_URL = 'https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.mp3'
+const POCKET_CASTS_URL = 'https://pca.st/example'
 
 const RESPONSE: PublicPodcastResponse = {
   show: {
@@ -24,7 +25,10 @@ const RESPONSE: PublicPodcastResponse = {
     description: 'A weekly briefing. Written and voiced by AI.',
     feedUrl: 'https://actuallyrelevant.news/podcast.xml',
     artworkUrl: 'https://audio.actuallyrelevant.news/show/artwork-2026-10.jpg',
-    listenLinks: [{ name: 'Apple Podcasts', url: 'https://podcasts.apple.com/x' }],
+    listenLinks: [
+      { name: 'Apple Podcasts', url: APPLE_PODCASTS_URL },
+      { name: 'Pocket Casts', url: POCKET_CASTS_URL },
+    ],
   },
   episodes: [
     {
@@ -64,10 +68,23 @@ beforeEach(() => {
   mockApi.podcast.mockResolvedValue(RESPONSE)
 })
 
+afterEach(() => {
+  Reflect.deleteProperty(navigator, 'clipboard')
+})
+
 async function expandStories() {
   const toggle = await screen.findByRole('button', { name: /Stories \(2\)/ })
   fireEvent.click(toggle)
   return toggle
+}
+
+/** jsdom has no Clipboard API; the copy button only needs `writeText`. */
+function stubClipboard(writeText: (text: string) => Promise<void>) {
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+}
+
+function subscribeSection() {
+  return screen.getByRole('region', { name: 'Subscribe' })
 }
 
 describe('PodcastPage', () => {
@@ -126,21 +143,73 @@ describe('PodcastPage', () => {
     expect(screen.getByRole('link', { name: /Transcript/ }).getAttribute('href')).toBe('/podcast/podcast-1/transcript')
   })
 
-  it('streams each episode from the CDN without preloading, and links the feed', async () => {
+  it('streams each episode from the CDN without preloading', async () => {
     const { container } = renderPage()
     await screen.findByRole('heading', { name: /W42: Clean air/ })
     const audio = container.querySelector('audio')
     expect(audio?.getAttribute('src')).toBe(AUDIO_URL)
     expect(audio?.getAttribute('preload')).toBe('none')
-    expect(screen.getByRole('link', { name: PODCAST_FEED_URL }).getAttribute('href')).toBe(PODCAST_FEED_URL)
   })
 
-  it('links the Apple Podcasts listing with its badge before the feed address', () => {
+  it('shows each configured app once, in its order, in the Subscribe row and not under Episodes', async () => {
     renderPage()
-    const apple = screen.getByRole('link', { name: /Listen on Apple Podcasts/ })
+    await screen.findByRole('heading', { name: /W42: Clean air/ })
+    const apple = screen.getAllByRole('link', { name: /Apple Podcasts/ })
+    const pocketCasts = screen.getAllByRole('link', { name: /Pocket Casts/ })
+    expect(apple).toHaveLength(1)
+    expect(pocketCasts).toHaveLength(1)
+    expect(apple[0]).toHaveAccessibleName('Listen on Apple Podcasts (opens in new tab)')
+    expect(apple[0]?.getAttribute('href')).toBe(APPLE_PODCASTS_URL)
+    expect(pocketCasts[0]).toHaveAccessibleName('Listen on Pocket Casts (opens in new tab)')
+    expect(pocketCasts[0]?.getAttribute('href')).toBe(POCKET_CASTS_URL)
+    expect(pocketCasts[0]?.getAttribute('target')).toBe('_blank')
+    expect(subscribeSection()).toContainElement(apple[0] ?? null)
+    expect(subscribeSection()).toContainElement(pocketCasts[0] ?? null)
+    expect(apple[0]!.compareDocumentPosition(pocketCasts[0]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const copy = within(subscribeSection()).getByRole('button', { name: 'Copy RSS feed' })
+    expect(pocketCasts[0]!.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('links Apple Podcasts with its badge before the show data loads, and keeps it if loading fails', async () => {
+    mockApi.podcast.mockRejectedValue(new Error('down'))
+    renderPage()
+    const apple = within(subscribeSection()).getByRole('link', { name: 'Listen on Apple Podcasts (opens in new tab)' })
     expect(apple.getAttribute('href')).toBe(APPLE_PODCASTS_URL)
-    const feed = screen.getByRole('link', { name: PODCAST_FEED_URL })
-    expect(apple.compareDocumentPosition(feed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await screen.findByText('The episodes could not be loaded. Please try again later.')
+    expect(within(subscribeSection()).getByRole('link', { name: /Listen on Apple Podcasts/ })).toBeInTheDocument()
+  })
+
+  it('shows the feed address as text to select, not as a link to the XML', () => {
+    renderPage()
+    expect(within(subscribeSection()).getByText(PODCAST_FEED_URL)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: PODCAST_FEED_URL })).toBeNull()
+  })
+
+  it('copies the feed address and announces "Copied"', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    stubClipboard(writeText)
+    renderPage()
+    // The live region is in the page before the copy, so its change is announced
+    const status = within(subscribeSection()).getByRole('status')
+    expect(status.textContent).toBe('')
+    fireEvent.click(within(subscribeSection()).getByRole('button', { name: 'Copy RSS feed' }))
+    expect(writeText).toHaveBeenCalledWith(PODCAST_FEED_URL)
+    await waitFor(() => expect(status.textContent).toBe('Copied'))
+  })
+
+  it('points to the address when the browser does not allow the copy', async () => {
+    stubClipboard(vi.fn().mockRejectedValue(new Error('denied')))
+    renderPage()
+    const status = within(subscribeSection()).getByRole('status')
+    fireEvent.click(within(subscribeSection()).getByRole('button', { name: 'Copy RSS feed' }))
+    await waitFor(() => expect(status.textContent).toMatch(/select the address/i))
+  })
+
+  it('points to the address when the browser has no clipboard access', async () => {
+    renderPage()
+    const status = within(subscribeSection()).getByRole('status')
+    fireEvent.click(within(subscribeSection()).getByRole('button', { name: 'Copy RSS feed' }))
+    await waitFor(() => expect(status.textContent).toMatch(/select the address/i))
   })
 
   it('links our analysis only for stories that have a page', async () => {
