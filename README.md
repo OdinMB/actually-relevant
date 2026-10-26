@@ -80,6 +80,7 @@ The database is created by hand. The backend and the static site are declared in
    ```sql
    CREATE EXTENSION IF NOT EXISTS vector;
    ```
+4. Moving the running site's data over? Restore it into this database now, before step 2 (see "Taking Over This Deployment" below).
 
 ### 2. Backend and Static Site
 
@@ -144,6 +145,33 @@ The sitemap rewrite proxies requests to the backend, which generates the sitemap
 4. Verify the health endpoint: `curl https://<backend-url>/health`
 5. Verify the sitemap: `curl https://<frontend-url>/sitemap.xml`
 
+The migrations give a new database its schema but none of the content the pipeline runs on. Either move the existing site's data into it ("Taking Over This Deployment") or start empty ("Fresh Install").
+
+### Taking Over This Deployment
+
+This moves everything the site's database holds into yours: stories, issues, feeds, newsletter issues, podcast episodes, job settings and admin accounts. Do it after step 1 and **before the backend's first deploy**: that deploy migrates whatever `DATABASE_URL` names, and a dump restored over the tables the migrations created collides with them.
+
+1. Suspend the old backend in the Render dashboard, so nothing is written after the dump and the old and new deployments never both run the jobs (crawls, social posts, newsletter sends).
+2. Dump the old database and restore it into the new, empty one, with pgvector enabled as in step 1. The old database's External Database URL is on its page in the Render dashboard; if the connection is refused, check that page's access settings. Use PostgreSQL client tools at least as new as the old server, since `pg_dump` refuses to dump a server newer than itself: production runs PostgreSQL 17 ([`.context/database-migrations.md`](.context/database-migrations.md)), and the database's page in the Render dashboard shows its version. Restore into the same version or newer:
+   ```bash
+   pg_dump --format=custom --no-owner --no-acl --file=actually-relevant.dump "<old database's external URL>"
+   pg_restore --no-owner --no-acl --dbname="<new database's external URL>" actually-relevant.dump
+   ```
+3. Give the backend the new database as `DATABASE_URL` and deploy (step 2). The dump carries the migration history, so the build applies only the migrations newer than the dump. Jobs keep their on/off switches, and the scheduler starts the enabled ones (an overdue one right at boot), so fill in the variables those jobs need when Render prompts for them. Skip post-deploy step 3: the admin accounts came along.
+4. Delete the dump once the site runs on the new database. It holds personal data: admin email addresses and password hashes, newsletter signup addresses, and feedback with optional email addresses.
+
+The database does not hold the newsletter's subscriber list (Plunk contacts, [`.context/subscription.md`](.context/subscription.md)), the podcast's audio files (Bunny storage, [`.context/podcast.md`](.context/podcast.md)) or any secret (dashboard variables); those move with their accounts. Backups: the database, its plan and its backups are managed in the Render dashboard only ([ADR-0035](.context/decisions/0035-database-outside-blueprint.md)). Which backups exist and how far back they reach is not recorded in this repository, so check in the Render dashboard.
+
+### Fresh Install
+
+After the first deploy an empty database has no issues, no feeds and only some job rows. The migrations create `cleanup_old_stories` and `poll_plunk_activity` switched on, and `social_auto_post`, `bluesky_update_metrics`, `mastodon_update_metrics`, `publish_newsletter`, `generate_podcast` and `publish_podcast` switched off. `crawl_feeds`, the four story jobs (`preassess_stories`, `assess_stories`, `select_stories`, `publish_stories`) and `generate_newsletter` have no row, and the scheduler runs only jobs that have one, so nothing is ever crawled. Run the two seeds from the Render shell, in `server/` as for `admin:create` (locally, from the repository root with `--prefix server`, after `npm run dev` has applied the migrations). Both write to whatever `DATABASE_URL` names; neither has a local-only guard.
+
+1. `npm run db:seed` writes the issue taxonomy: the issues the homepage and issue pages are built around, whose guidelines the model rates every story against. Every feed belongs to one issue. Run it before you edit any issue: a second run writes the seed's names, descriptions, guidelines and page texts over the seeded issues again. It also creates five of the missing job rows, switched off.
+2. `npm run db:seed:jobs` creates every job row that does not exist yet, switched off. It is safe to rerun: it only creates missing rows, and never changes an existing job's schedule, on/off switch or run history.
+3. Add sources on the admin's **Feeds** page. Each feed needs an RSS URL and an issue. Crawl one and read its extracted stories before adding many ([`.context/content-extraction.md`](.context/content-extraction.md), "Adding a New Feed"; [`.context/feed-management.md`](.context/feed-management.md)).
+4. On the admin's **Jobs** page, switch the jobs on in pipeline order: Crawl Feeds, Pre-assess Stories, Assess Stories, Select Stories, Publish Stories. Each stage works on the stories the one before it produced, so check a stage's output before turning on the next: every stage after the crawl calls OpenAI. A job that has never run waits for its first scheduled time, and its **Run** button starts it now. Schedules can be changed on the same page.
+5. Optionally, once the service each one needs is configured: Social Auto-Post (it posts only to the channels whose `BLUESKY_AUTO_POST_ENABLED` or `MASTODON_AUTO_POST_ENABLED` is `true`) and the two metrics jobs; Generate Newsletter, then Publish Newsletter, which sends each week's automatic issue to every subscriber and cannot be switched on without `PLUNK_SECRET_KEY`; Generate Podcast, then Publish Podcast, neither of which can be switched on while a podcast setting is missing ([`.context/podcast.md`](.context/podcast.md)). Plunk Complaints and Clean Up Old Stories are on already.
+
 ## Project Structure
 
 ```
@@ -200,7 +228,7 @@ Check the build logs. Common issues:
 ### Database Connection Fails
 1. Verify `DATABASE_URL` is correct
 2. Ensure pgvector extension is installed: `CREATE EXTENSION IF NOT EXISTS vector;`
-3. Run migrations: `npx prisma migrate deploy`
+3. Run migrations: `npm run db:migrate:deploy` in `server/` (never `npx prisma`, which can fetch a different Prisma version)
 
 ### Health Check
 ```bash
