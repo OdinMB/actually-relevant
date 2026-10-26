@@ -4,6 +4,7 @@ import type { RouteObject } from 'react-router-dom'
 import PublicLayout from './layouts/PublicLayout'
 import HomePage from './pages/HomePage'
 import NotFoundPage from './pages/NotFoundPage'
+import RouteErrorPage from './pages/RouteErrorPage'
 import { LoadingSpinner } from './components/ui/LoadingSpinner'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary'
 import { DefaultSeo } from './lib/seo'
@@ -105,9 +106,10 @@ function RootLayout() {
  * Every route of the app, for react-router's data router: `main.tsx` builds the browser router
  * from it, tests a memory router. No route loaders and no route-level `lazy`, so the router is
  * ready synchronously and the first render (and prerendering) happens as soon as it mounts.
+ * Whatever a route throws that no ChunkErrorBoundary catches lands on the root's `RouteErrorPage`.
  */
 export const appRoutes: RouteObject[] = createRoutesFromElements(
-  <Route element={<RootLayout />}>
+  <Route element={<RootLayout />} errorElement={<RouteErrorPage />}>
     {/* Public routes — homepage static, others lazy-loaded */}
     <Route element={<PublicLayout />}>
       <Route path="/" element={<HomePage />} />

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { publicApi, ApiError } from '../lib/api'
 import { BRAND } from '../config'
 import { turnstileSiteKey } from '../lib/turnstile'
+import { isPrerendering } from '../lib/renderComplete'
 import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
 
 interface SubscribeFormProps {
@@ -15,8 +16,11 @@ interface SubscribeFormProps {
   hideHeading?: boolean
 }
 
-/** Whether the API takes signups: it answers the token request with SIGNUPS_PAUSED when not. */
-type Availability = 'checking' | 'open' | 'paused'
+/**
+ * Whether the API takes signups: it answers the token request with SIGNUPS_PAUSED when not.
+ * `unavailable`: both token attempts failed, so the form cannot be sent.
+ */
+type Availability = 'checking' | 'open' | 'paused' | 'unavailable'
 
 function isSignupsPaused(err: unknown): boolean {
   return err instanceof ApiError && err.code === 'SIGNUPS_PAUSED'
@@ -49,8 +53,8 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
   useEffect(() => {
     let cancelled = false
     async function loadToken() {
-      // Try up to twice; if both fail, the token stays null and submit stays
-      // disabled (the API is unreachable anyway). A paused answer is final.
+      // Try up to twice; if both fail, the token stays null, submit stays disabled
+      // (the API is unreachable anyway) and the reader is told. A paused answer is final.
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const { token } = await publicApi.getSubscribeToken()
@@ -66,6 +70,9 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
           }
         }
       }
+      // Not while prerendering: the build's API may be unreachable, and the message would be
+      // baked into every page's static HTML.
+      if (!cancelled && !isPrerendering()) setAvailability('unavailable')
     }
     loadToken()
     return () => {
@@ -76,6 +83,8 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
   const siteKey = turnstileSiteKey()
   const busy = status === 'verifying' || status === 'loading'
   const canSubmit = !busy && formToken !== null
+  // Notes under the form: centered under its own heading (the modal), left-aligned in a parent's column (/newsletter).
+  const noteAlign = hideHeading ? 'text-left' : 'text-center'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -205,7 +214,9 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
             required
             autoComplete="email"
             className="w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-200 outline-none transition-colors"
-            aria-describedby={errorMessage ? `${idPrefix}-error` : undefined}
+            aria-describedby={
+              [availability === 'unavailable' && `${idPrefix}-unavailable`, errorMessage && `${idPrefix}-error`].filter(Boolean).join(' ') || undefined
+            }
           />
         </div>
 
@@ -238,6 +249,15 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
           {status === 'verifying' ? 'Verifying...' : status === 'loading' ? 'Subscribing...' : 'Subscribe'}
         </button>
       </form>
+
+      {/* Always mounted, so screen readers announce the message when it appears. */}
+      <div role="status">
+        {availability === 'unavailable' && (
+          <p id={`${idPrefix}-unavailable`} className={`mt-4 ${noteAlign} text-sm text-neutral-700`}>
+            The signup form can't load right now. Please reload the page or try again later.
+          </p>
+        )}
+      </div>
     </>
   )
 }

@@ -3,8 +3,15 @@ import { Helmet } from 'react-helmet-async'
 import { useQuery } from '@tanstack/react-query'
 import { publicApi } from '../lib/api'
 import { getSavedSlugs, subscribeSaved } from '../lib/preferences'
+import { SEO, CommonOgTags } from '../lib/seo'
 import StoryCard from '../components/StoryCard'
 import type { PublicStory } from '@shared/types'
+
+const META = {
+  title: 'Saved Stories - Actually Relevant',
+  description: 'Your saved stories on Actually Relevant.',
+  url: `${SEO.siteUrl}/saved`,
+}
 
 export default function SavedPage() {
   const [savedSlugs, setSavedSlugs] = useState<string[]>([])
@@ -38,8 +45,13 @@ export default function SavedPage() {
   return (
     <>
       <Helmet>
-        <title>Saved Stories - Actually Relevant</title>
-        <meta name="description" content="Your saved stories on Actually Relevant." />
+        <title>{META.title}</title>
+        <meta name="description" content={META.description} />
+        <meta property="og:title" content={META.title} />
+        <meta property="og:description" content={META.description} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={META.url} />
+        {CommonOgTags({})}
       </Helmet>
 
       <div className="page-section py-12">

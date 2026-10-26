@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import type { NonIndexRouteObject } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { appRoutes } from './App'
+// A route behind React.lazy imports its page on first render, and vitest transforms that module on its first
+// import, which under CPU load takes longer than findBy's 1s default. Importing here the lazy pages these tests
+// reach does that work before any test starts, outside every timeout: the route's lazy import then resolves
+// from the module cache, inside the act() that renders it.
+import './pages/NewsletterPage'
 
 function renderAt(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -35,8 +41,31 @@ describe('appRoutes', () => {
     expect(matches[matches.length - 1]!.route.path).toBe('*')
   })
 
+  it('shows the branded error page, not the router default, when a route throws', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    function Boom(): never {
+      throw new Error('render failed')
+    }
+    const root = appRoutes[0] as NonIndexRouteObject
+    const router = createMemoryRouter([{ ...root, children: [...root.children!, { id: 'boom', path: '/boom', element: <Boom /> }] }], {
+      initialEntries: ['/boom'],
+    })
+    render(
+      <HelmetProvider>
+        <RouterProvider router={router} />
+      </HelmetProvider>,
+    )
+    expect(await screen.findByRole('heading', { level: 1, name: 'Something went wrong' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Go to the homepage' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reload page' })).toBeTruthy()
+    expect(screen.queryByText('render failed')).toBeNull()
+    consoleError.mockRestore()
+  })
+
   it('redirects the old newsletter archive URL to /newsletter, not to an issue page', async () => {
-    const router = renderAt('/newsletter/archive')
+    // React finishes the redirect and the preloaded lazy page inside this act, so the checks below pass on their
+    // first try rather than racing findBy's 1s against render time under load
+    const router = await act(async () => renderAt('/newsletter/archive'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/newsletter'))
     expect(await screen.findByRole('heading', { level: 1, name: 'Newsletter' })).toBeTruthy()
   })

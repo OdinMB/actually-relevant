@@ -125,7 +125,7 @@ npm run db:studio --prefix server     # Open Prisma Studio
 
 ## Project Management (`pm/`)
 
-Separate git repo for marketing, research, strategy. **Never write, edit, or create files in `pm/`**. Read only.
+Separate git repo for marketing, research, strategy. **Never write, edit, or create files in `pm/`**. Read only. One exception: the autopilot skill keeps its product memory in `pm/autopilot/` and commits it to the pm repo.
 
 Key dirs: `pm/state/` (business context), `pm/backlog/` (priorities), `pm/plans/` (active/completed plans), `pm/references/` (research).
 
