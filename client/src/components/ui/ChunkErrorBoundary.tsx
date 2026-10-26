@@ -3,6 +3,12 @@ import type { ReactNode, ErrorInfo } from 'react'
 
 interface Props {
   children: ReactNode
+  /**
+   * Shown in place of the children when they fail to load or render. Without it the boundary
+   * takes over the screen with a full-page "Failed to load page" and its own h1, which suits a
+   * whole route; a widget inside a page passes an inline fallback so the rest of the page stays.
+   */
+  fallback?: ReactNode
 }
 
 interface State {
@@ -26,6 +32,10 @@ export class ChunkErrorBoundary extends Component<Props, State> {
   render() {
     if (!this.state.hasError) {
       return this.props.children
+    }
+
+    if (this.props.fallback !== undefined) {
+      return this.props.fallback
     }
 
     return (

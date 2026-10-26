@@ -3,12 +3,38 @@ import { Helmet } from 'react-helmet-async'
 import { Link } from 'react-router-dom'
 import { ChunkErrorBoundary } from '../components/ui/ChunkErrorBoundary'
 import { ApiReferenceSkeleton } from '../components/skeletons'
-import { API_BASE } from '../lib/api'
+import { API_BASE, OPENAPI_SPEC_URL } from '../lib/api'
 
 // The Scalar reference is several MB. Loading it as its own chunk keeps this
 // page small, so its title, description and intro are in the DOM before the
 // prerenderer's render-complete snapshot; the reference fills in afterwards.
 const ApiReference = lazy(() => import('../components/developers/ApiReference'))
+
+/** Takes the reference's place if its chunk fails to load or Scalar throws, leaving the rest of the page as it is. */
+function ApiReferenceUnavailable() {
+  return (
+    <div role="alert" className="px-4 py-6">
+      <h2 className="text-base font-semibold text-neutral-800">The API reference couldn't load</h2>
+      <p className="mt-1 max-w-3xl text-sm text-neutral-600">
+        The site may have been updated since you opened this page, or the connection dropped. Reload to try again, or read the{' '}
+        <a
+          href={OPENAPI_SPEC_URL}
+          className="rounded text-brand-700 underline hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        >
+          OpenAPI spec as raw JSON
+        </a>
+        .
+      </p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="mt-3 inline-flex items-center justify-center rounded-md bg-brand-700 px-4 py-2 text-sm font-normal text-white hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+      >
+        Reload page
+      </button>
+    </div>
+  )
+}
 
 export default function DevelopersPage() {
   // Mount the lazy reference only after the page itself has committed. If it
@@ -54,7 +80,7 @@ curl "${API_BASE}/feed?minRelevance=7"`}</code>
       </section>
       <div className="min-h-[calc(100vh-3rem)]">
         {pageMounted ? (
-          <ChunkErrorBoundary>
+          <ChunkErrorBoundary fallback={<ApiReferenceUnavailable />}>
             <Suspense fallback={<ApiReferenceSkeleton />}>
               <ApiReference />
             </Suspense>

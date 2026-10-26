@@ -49,4 +49,27 @@ describe('ChunkErrorBoundary', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Reload page' }))
     expect(reloadMock).toHaveBeenCalled()
   })
+
+  describe('with a fallback', () => {
+    it('renders children when no error', () => {
+      render(
+        <ChunkErrorBoundary fallback={<p>Widget unavailable</p>}>
+          <p>Content</p>
+        </ChunkErrorBoundary>,
+      )
+      expect(screen.getByText('Content')).toBeInTheDocument()
+      expect(screen.queryByText('Widget unavailable')).not.toBeInTheDocument()
+    })
+
+    it('shows the fallback instead of the full-page error when a child throws', () => {
+      render(
+        <ChunkErrorBoundary fallback={<p>Widget unavailable</p>}>
+          <ThrowingComponent error={new Error('chunk failed')} />
+        </ChunkErrorBoundary>,
+      )
+      expect(screen.getByText('Widget unavailable')).toBeInTheDocument()
+      expect(screen.queryByText('Failed to load page')).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
+    })
+  })
 })
