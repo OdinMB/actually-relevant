@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { adminApi } from '../lib/admin-api'
+import { invalidateStoryQueries } from './useStories'
 import type { JobRun } from '@shared/types'
 
 export function useJobs(options?: { refetchInterval?: number }) {
@@ -94,8 +95,7 @@ function pollJobCompletion(queryClient: QueryClient, jobName: string) {
       if (!job) return
 
       if (!job.running) {
-        queryClient.invalidateQueries({ queryKey: ['stories'] })
-        queryClient.invalidateQueries({ queryKey: ['storyStats'] })
+        invalidateStoryQueries(queryClient)
         queryClient.invalidateQueries({ queryKey: ['feeds'] })
         return
       }

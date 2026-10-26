@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../lib/admin-api'
+import { invalidateStoryQueries } from './useStories'
 
 export function useClusters() {
   return useQuery({
@@ -23,7 +24,7 @@ export function useSetClusterPrimary() {
     onSuccess: cluster => {
       queryClient.setQueryData(['cluster', cluster.id], cluster)
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
+      invalidateStoryQueries(queryClient)
     },
   })
 }
@@ -35,7 +36,7 @@ export function useRemoveClusterMember() {
     onSuccess: (_result, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['cluster', id] })
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
+      invalidateStoryQueries(queryClient)
     },
   })
 }
@@ -47,7 +48,7 @@ export function useMergeClusters() {
     onSuccess: cluster => {
       queryClient.setQueryData(['cluster', cluster.id], cluster)
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
+      invalidateStoryQueries(queryClient)
     },
   })
 }
@@ -58,7 +59,7 @@ export function useDissolveClusterById() {
     mutationFn: (id: string) => adminApi.clusters.dissolve(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
+      invalidateStoryQueries(queryClient)
     },
   })
 }
@@ -69,7 +70,7 @@ export function useCreateCluster() {
     mutationFn: ({ storyIds, primaryStoryId }: { storyIds: string[]; primaryStoryId: string }) => adminApi.clusters.create(storyIds, primaryStoryId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
+      invalidateStoryQueries(queryClient)
     },
   })
 }

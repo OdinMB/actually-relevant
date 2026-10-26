@@ -23,9 +23,19 @@ export function useEditForm<TForm extends Record<string, unknown>, TPayload>({
   onFieldChange,
 }: UseEditFormOptions<TForm, TPayload>) {
   const [form, setForm] = useState<TForm>(initialState)
+  // The loaded data the form last took over. When the entity's query refetches
+  // (e.g. after an assessment finished in the background), a form nobody has
+  // edited shows the new data; a form with edits keeps them.
+  // Compared as JSON, so a caller that rebuilds an equal initialState is no change.
+  const initialJson = JSON.stringify(initialState)
+  const [baselineJson, setBaselineJson] = useState(initialJson)
+  if (baselineJson !== initialJson) {
+    if (JSON.stringify(form) === baselineJson) setForm(initialState)
+    setBaselineJson(initialJson)
+  }
   const { toast } = useToast()
 
-  const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initialState), [form, initialState])
+  const isDirty = useMemo(() => JSON.stringify(form) !== initialJson, [form, initialJson])
 
   const set = useCallback(
     <K extends keyof TForm>(key: K, value: TForm[K]) => {

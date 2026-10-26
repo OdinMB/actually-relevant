@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import type { StoryStatus, StoryFilters, StorySort } from '@shared/types'
-import { useStories, useBulkUpdateStatus, useDeleteStory, useUpdateStoryStatus } from '../../hooks/useStories'
+import { useStories, useBulkUpdateStatus, useDeleteStory, useUpdateStoryStatus, invalidateStoryQueries } from '../../hooks/useStories'
 import { useFeeds } from '../../hooks/useFeeds'
 import { useIssues } from '../../hooks/useIssues'
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
@@ -83,10 +83,7 @@ export default function StoriesPage() {
   const deleteStory = useDeleteStory()
   const updateStatus = useUpdateStoryStatus()
 
-  const invalidateStories = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['stories'] })
-    queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-  }, [queryClient])
+  const invalidateStories = useCallback(() => invalidateStoryQueries(queryClient), [queryClient])
 
   const stories = useMemo(() => storiesQuery.data?.data || [], [storiesQuery.data])
 
