@@ -37,6 +37,21 @@ describe('verifyTurnstile', () => {
     expect(mockPost).not.toHaveBeenCalled()
   })
 
+  it('skips the check in production too when the caller allows it and no secret is set (feedback)', async () => {
+    config.subscribe.turnstileSecretKey = ''
+    process.env.NODE_ENV = 'production'
+
+    expect(await verifyTurnstile(undefined, '1.2.3.4', { skipWithoutSecret: true })).toBe('ok')
+    expect(mockPost).not.toHaveBeenCalled()
+  })
+
+  it('still checks the token when the caller allows skipping but a secret is set', async () => {
+    expect(await verifyTurnstile(undefined, '1.2.3.4', { skipWithoutSecret: true })).toBe('failed')
+    mockPost.mockResolvedValue({ data: { success: true } })
+    expect(await verifyTurnstile('tok', '1.2.3.4', { skipWithoutSecret: true })).toBe('ok')
+    expect(mockPost).toHaveBeenCalledTimes(1)
+  })
+
   it('fails without calling Cloudflare when the token is missing or empty', async () => {
     expect(await verifyTurnstile(undefined, '1.2.3.4')).toBe('failed')
     expect(await verifyTurnstile('', '1.2.3.4')).toBe('failed')

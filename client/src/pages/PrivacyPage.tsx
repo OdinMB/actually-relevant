@@ -100,6 +100,10 @@ export default function PrivacyPage() {
             report an error from a story page, we also store which story it was about. We also store a hashed form of your IP address to spot repeated abusive
             submissions. We don't use it for anything else.
           </p>
+          <p className="mt-3">
+            To keep bots from flooding it, the feedback form uses the same Cloudflare Turnstile check as the newsletter signup, described above. It loads from
+            Cloudflare only when you send the form, and Cloudflare uses the data only to check this submission on our behalf and to improve its bot detection.
+          </p>
 
           <h3 className="text-lg font-normal mt-6 mb-2">Server Logs</h3>
           <p>
@@ -110,8 +114,8 @@ export default function PrivacyPage() {
           <h2 className="section-heading mt-10">What We Store on Your Device</h2>
           <p>
             We do not set cookies, and we do not use sessionStorage, IndexedDB, or any other browser storage mechanism for public visitors. If you submit the
-            newsletter signup form, Cloudflare may set a technically necessary cookie during the human check, which it uses only to detect problems with the
-            check itself.
+            newsletter signup or feedback form, Cloudflare may set a technically necessary cookie during the human check, which it uses only to detect problems
+            with the check itself.
           </p>
           <p>
             Your <strong>dial position</strong> (a single number between 0 and 100), your <strong>saved stories</strong>, and your{' '}
@@ -171,10 +175,10 @@ export default function PrivacyPage() {
                       Cloudflare Turnstile
                     </a>
                   </td>
-                  <td className="align-top py-2 pr-4">Bot protection on the newsletter form</td>
+                  <td className="align-top py-2 pr-4">Bot protection on the newsletter and feedback forms</td>
                   <td className="align-top py-2">
-                    IP address and browser information, only when you submit the signup form, used only for bot protection. This may involve a transfer to the
-                    USA. See their{' '}
+                    IP address and browser information, only when you submit the signup or feedback form, used only for bot protection. This may involve a
+                    transfer to the USA. See their{' '}
                     <a
                       href="https://www.cloudflare.com/turnstile-privacy-policy/"
                       className="text-brand-700 hover:text-brand-800"
@@ -229,7 +233,7 @@ export default function PrivacyPage() {
           <p className="mt-4">
             All fonts used on this site are self-hosted. We do not load fonts, scripts, or other resources from external CDNs like Google, meaning your IP
             address is not shared with third parties when you visit. There are two exceptions. On the podcast page, an episode loads from Bunny.net only when
-            you press play. On the newsletter signup form, Cloudflare Turnstile loads only when you submit the form.
+            you press play. On the newsletter signup and feedback forms, Cloudflare Turnstile loads only when you submit the form.
           </p>
 
           <h2 className="section-heading mt-10">Your Rights</h2>

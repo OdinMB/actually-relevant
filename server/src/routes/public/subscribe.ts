@@ -77,7 +77,7 @@ const requireSignupsOpen: RequestHandler = (_req, res, next) => {
 // Issue a short-lived anti-bot form token when the form is rendered.
 router.get('/token', requireSignupsOpen, lightLimiter, (_req, res) => {
   res.set('Cache-Control', 'no-store')
-  res.json({ token: issueFormToken() })
+  res.json({ token: issueFormToken('subscribe') })
 })
 
 router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, validateBody(subscribeSchema), async (req, res) => {
@@ -90,7 +90,7 @@ router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, va
   // Require a valid, appropriately-aged form token. Missing/invalid → silent accept,
   // no Plunk call. This trips naive bots; a script can still fetch a token, which
   // is why Turnstile follows.
-  if (!verifyFormToken(req.body.formToken).ok) {
+  if (!verifyFormToken(req.body.formToken, 'subscribe').ok) {
     log.info('rejected subscribe: missing or invalid form token')
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
     return

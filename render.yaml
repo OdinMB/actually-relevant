@@ -87,7 +87,7 @@ services:
         sync: false
       - key: PLUNK_TEST_SEGMENT_ID
         sync: false
-      # Newsletter signup (switch and Turnstile bot check)
+      # Newsletter signup (switch) and the Turnstile bot check on the signup and feedback forms
       - key: SUBSCRIPTIONS_ENABLED
         sync: false
       - key: TURNSTILE_SECRET_KEY

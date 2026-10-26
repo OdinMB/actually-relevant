@@ -6,15 +6,19 @@ const log = createLogger('formToken')
 
 if (!config.subscribe.formTokenSecret) {
   // Fail loud at startup: an empty key makes every form token forgeable, so the
-  // bot gate would fail open. Set FORM_TOKEN_SECRET (or JWT_SECRET).
-  log.warn('form token secret is empty — the subscribe bot gate is insecure')
+  // bot gates would fail open. Set FORM_TOKEN_SECRET (or JWT_SECRET).
+  log.warn('form token secret is empty — the signup and feedback bot gates are insecure')
 }
 
+/** The public forms that carry a form token. A token verifies only on the form it was issued for. */
+export type FormTokenForm = 'subscribe' | 'feedback'
+
 /**
- * Anti-bot form token for the public subscribe form.
+ * Anti-bot form token for the public signup and feedback forms.
  *
- * The token is a stateless, HMAC-signed `{ ts, nonce }` payload issued when the
- * form is rendered (GET /api/subscribe/token) and validated on submit. It trips
+ * The token is a stateless, HMAC-signed `{ ts, nonce, form }` payload issued when the
+ * form is rendered (GET /api/subscribe/token, GET /api/feedback/token) and validated on
+ * submit against the same form, so a signup token cannot be spent on feedback. It trips
  * scripts that POST without fetching a token and enforces a minimum fill time
  * (tripping instant bots). A script that fetches a token first passes it;
  * Turnstile (lib/turnstile.ts) is the gate that stops those.
@@ -30,17 +34,17 @@ function sign(payload: string): string {
   return createHmac('sha256', config.subscribe.formTokenSecret).update(payload).digest('base64url')
 }
 
-/** Issue a fresh signed form token stamped with the current time. */
-export function issueFormToken(): string {
-  const payload = Buffer.from(JSON.stringify({ ts: Date.now(), nonce: randomBytes(8).toString('hex') })).toString('base64url')
+/** Issue a fresh signed form token for `form`, stamped with the current time. */
+export function issueFormToken(form: FormTokenForm): string {
+  const payload = Buffer.from(JSON.stringify({ ts: Date.now(), nonce: randomBytes(8).toString('hex'), form })).toString('base64url')
   return `${payload}.${sign(payload)}`
 }
 
 /**
- * Verify a form token. Returns `{ ok: true }` only when the signature is valid
- * and the token's age is within `[minFormFillMs, formTokenMaxAgeMs]`.
+ * Verify a form token. Returns `{ ok: true }` only when the signature is valid, the
+ * token was issued for `form`, and its age is within `[minFormFillMs, formTokenMaxAgeMs]`.
  */
-export function verifyFormToken(token: string | undefined | null): { ok: boolean } {
+export function verifyFormToken(token: string | undefined | null, form: FormTokenForm): { ok: boolean } {
   if (!token || typeof token !== 'string') return { ok: false }
 
   const [payload, sig, ...rest] = token.split('.')
@@ -54,13 +58,14 @@ export function verifyFormToken(token: string | undefined | null): { ok: boolean
     return { ok: false }
   }
 
-  let parsed: { ts?: unknown; nonce?: unknown }
+  let parsed: { ts?: unknown; nonce?: unknown; form?: unknown }
   try {
     parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
   } catch {
     return { ok: false }
   }
 
+  if (parsed.form !== form) return { ok: false }
   if (typeof parsed.ts !== 'number') return { ok: false }
   const age = Date.now() - parsed.ts
   if (age < config.subscribe.minFormFillMs) return { ok: false }

@@ -20,42 +20,56 @@ describe('formToken', () => {
   })
 
   it('accepts a token presented after the minimum fill time and within max age', () => {
-    const token = issueFormToken()
+    const token = issueFormToken('subscribe')
     vi.advanceTimersByTime(MIN + 1000)
-    expect(verifyFormToken(token)).toEqual({ ok: true })
+    expect(verifyFormToken(token, 'subscribe')).toEqual({ ok: true })
+  })
+
+  it('accepts a feedback token on the feedback form', () => {
+    const token = issueFormToken('feedback')
+    vi.advanceTimersByTime(MIN + 1000)
+    expect(verifyFormToken(token, 'feedback')).toEqual({ ok: true })
+  })
+
+  it('rejects a token issued for another form', () => {
+    const signup = issueFormToken('subscribe')
+    const feedback = issueFormToken('feedback')
+    vi.advanceTimersByTime(MIN + 1000)
+    expect(verifyFormToken(signup, 'feedback').ok).toBe(false)
+    expect(verifyFormToken(feedback, 'subscribe').ok).toBe(false)
   })
 
   it('rejects a token submitted faster than the minimum fill time', () => {
-    const token = issueFormToken()
+    const token = issueFormToken('subscribe')
     vi.advanceTimersByTime(Math.max(0, MIN - 200))
-    expect(verifyFormToken(token).ok).toBe(false)
+    expect(verifyFormToken(token, 'subscribe').ok).toBe(false)
   })
 
   it('rejects a token older than the max age', () => {
-    const token = issueFormToken()
+    const token = issueFormToken('subscribe')
     vi.advanceTimersByTime(MAX + 1000)
-    expect(verifyFormToken(token).ok).toBe(false)
+    expect(verifyFormToken(token, 'subscribe').ok).toBe(false)
   })
 
   it('rejects a token with a tampered signature', () => {
-    const token = issueFormToken()
+    const token = issueFormToken('subscribe')
     vi.advanceTimersByTime(MIN + 1000)
     const [payload] = token.split('.')
-    expect(verifyFormToken(`${payload}.deadbeef`).ok).toBe(false)
+    expect(verifyFormToken(`${payload}.deadbeef`, 'subscribe').ok).toBe(false)
   })
 
   it('rejects a tampered payload (signature no longer matches)', () => {
-    const token = issueFormToken()
+    const token = issueFormToken('subscribe')
     vi.advanceTimersByTime(MIN + 1000)
     const [, sig] = token.split('.')
-    const forged = Buffer.from(JSON.stringify({ ts: Date.now(), nonce: 'x' })).toString('base64url')
-    expect(verifyFormToken(`${forged}.${sig}`).ok).toBe(false)
+    const forged = Buffer.from(JSON.stringify({ ts: Date.now(), nonce: 'x', form: 'feedback' })).toString('base64url')
+    expect(verifyFormToken(`${forged}.${sig}`, 'feedback').ok).toBe(false)
   })
 
   it('rejects malformed and empty tokens', () => {
-    expect(verifyFormToken(undefined).ok).toBe(false)
-    expect(verifyFormToken('').ok).toBe(false)
-    expect(verifyFormToken('no-dot').ok).toBe(false)
-    expect(verifyFormToken('a.b.c').ok).toBe(false)
+    expect(verifyFormToken(undefined, 'subscribe').ok).toBe(false)
+    expect(verifyFormToken('', 'subscribe').ok).toBe(false)
+    expect(verifyFormToken('no-dot', 'subscribe').ok).toBe(false)
+    expect(verifyFormToken('a.b.c', 'subscribe').ok).toBe(false)
   })
 })

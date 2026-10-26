@@ -10,18 +10,27 @@ const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverif
 
 if (!config.subscribe.turnstileSecretKey) {
   if (config.isProduction) {
-    log.error('TURNSTILE_SECRET_KEY is not set: newsletter signups will be refused')
+    log.error('TURNSTILE_SECRET_KEY is not set: newsletter signups will be refused; feedback skips the check')
   } else {
     log.warn('TURNSTILE_SECRET_KEY is not set: the Turnstile check is skipped outside production')
   }
 }
 
 /**
- * `ok`: a person passed the check (or the check is skipped outside production).
+ * `ok`: a person passed the check (or the check is skipped: outside production, or for a
+ * caller that allows skipping, while no secret is set).
  * `failed`: Cloudflare rejected the token, or there was none.
- * `unavailable`: the check could not run; the signup must be refused (fail closed).
+ * `unavailable`: the check could not run; the submission must be refused (fail closed).
  */
 export type TurnstileResult = 'ok' | 'failed' | 'unavailable'
+
+export interface VerifyTurnstileOptions {
+  /**
+   * With no secret set, skip the check in production too instead of refusing. The feedback
+   * form passes it so it keeps working until the widget exists; the signup never does.
+   */
+  skipWithoutSecret?: boolean
+}
 
 interface SiteverifyResponse {
   success: boolean
@@ -33,9 +42,13 @@ interface SiteverifyResponse {
  * with every attempt, so a retry after Cloudflare already saw the token gets the
  * first answer again instead of `timeout-or-duplicate`.
  */
-export async function verifyTurnstile(token: string | undefined, remoteIp: string | undefined): Promise<TurnstileResult> {
+export async function verifyTurnstile(
+  token: string | undefined,
+  remoteIp: string | undefined,
+  { skipWithoutSecret = false }: VerifyTurnstileOptions = {},
+): Promise<TurnstileResult> {
   const secret = config.subscribe.turnstileSecretKey
-  if (!secret) return config.isProduction ? 'unavailable' : 'ok'
+  if (!secret) return config.isProduction && !skipWithoutSecret ? 'unavailable' : 'ok'
   if (!token) return 'failed'
 
   const idempotencyKey = randomUUID()

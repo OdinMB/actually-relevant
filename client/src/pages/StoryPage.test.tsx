@@ -6,7 +6,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import StoryPage from './StoryPage'
 import FeedbackProvider from '../components/FeedbackProvider'
 
-const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn() }))
+const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
@@ -68,6 +68,7 @@ describe('StoryPage "Report an error"', () => {
       this.removeAttribute('open')
     }
     mockApi.submitFeedback.mockReset().mockResolvedValue({ success: true })
+    mockApi.getFeedbackToken.mockReset().mockResolvedValue({ token: 'form-token' })
   })
 
   it('opens the feedback dialog bound to the story and sends a correction with its id', async () => {
@@ -91,7 +92,7 @@ describe('StoryPage "Report an error"', () => {
     await userEvent.type(message, 'Wrong date')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send report' }))
 
-    expect(mockApi.submitFeedback).toHaveBeenCalledWith({ category: 'correction', message: 'Wrong date', storyId: 'story-1' })
+    expect(mockApi.submitFeedback).toHaveBeenCalledWith({ category: 'correction', message: 'Wrong date', storyId: 'story-1', formToken: 'form-token' })
   })
 })
 
