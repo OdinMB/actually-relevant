@@ -73,7 +73,7 @@ describe('renderHtml', () => {
 
     const title = [...doc.querySelectorAll('p')].find(p => p.textContent === baseNewsletter.title)
     const label = title?.nextElementSibling
-    expect(label?.textContent).toBe('AI-generated: AI selected the stories in this issue and wrote the intro, headlines, and summaries.')
+    expect(label?.textContent).toBe('AI-generated: AI selected the stories in this issue and wrote the headlines and summaries.')
     expect(label?.querySelector('strong')?.textContent).toBe('AI-generated:')
     // Seen before any AI text: the stories come after it
     expect(html.indexOf('AI-generated:')).toBeLessThan(html.indexOf('First story'))
