@@ -4,6 +4,14 @@ import { Link } from 'react-router-dom'
 import { ChunkErrorBoundary } from '../components/ui/ChunkErrorBoundary'
 import { ApiReferenceSkeleton } from '../components/skeletons'
 import { API_BASE, OPENAPI_SPEC_URL } from '../lib/api'
+import { SEO, CommonOgTags } from '../lib/seo'
+
+const META = {
+  title: 'API Documentation - Actually Relevant',
+  description:
+    'Public API documentation for Actually Relevant. Access published stories, issues, and RSS feeds programmatically, with endpoints and example requests.',
+  url: `${SEO.siteUrl}/developers`,
+}
 
 // The Scalar reference is several MB. Loading it as its own chunk keeps this
 // page small, so its title, description and intro are in the DOM before the
@@ -47,11 +55,13 @@ export default function DevelopersPage() {
   return (
     <>
       <Helmet>
-        <title>API Documentation - Actually Relevant</title>
-        <meta
-          name="description"
-          content="Public API documentation for Actually Relevant. Access published stories, issues, and RSS feeds programmatically, with endpoints and example requests."
-        />
+        <title>{META.title}</title>
+        <meta name="description" content={META.description} />
+        <meta property="og:title" content={META.title} />
+        <meta property="og:description" content={META.description} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={META.url} />
+        {CommonOgTags({})}
       </Helmet>
       <div className="border-b border-neutral-200 bg-white px-4 py-3 flex items-center gap-3">
         <Link to="/" className="text-sm text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
