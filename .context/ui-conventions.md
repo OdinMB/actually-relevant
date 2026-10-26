@@ -48,6 +48,15 @@ The client uses `React.lazy()` to split code and reduce initial bundle size. Hom
 - **Preloading:** `LoginPage` calls `preloadAdminChunks()` on mount.
 - **Heavy widgets inside a public page** get their own `React.lazy()` chunk inside the page, with a skeleton fallback. The prerenderer snapshots once no route fallback is showing (checked from 100ms after start, at most 5s; `signalRenderComplete` in `lib/renderComplete.ts`). It does not wait for the page's own data or nested Suspense, and a page chunk that bundles a multi-MB library delays every snapshot or, past 5s, is captured as a spinner. Mount the lazy widget only after the page's first commit (a `useEffect`-set flag, plain skeleton until then): if it suspends in the page's first render, React throttles revealing the nested fallback and the snapshot still shows the route spinner. Example: `DevelopersPage` lazy-loads `components/developers/ApiReference.tsx` (Scalar).
 
+## Route Error Page
+
+Whatever a route throws, during render or loading, that no `ChunkErrorBoundary` catches first (those wrap every lazy page and the admin, so this means the homepage, the public layout's header and footer, and the not-found page) lands on the root route's `errorElement`, `RouteErrorPage` (`client/src/pages/RouteErrorPage.tsx`), instead of React Router's default "Unexpected Application Error" screen. Its rules:
+
+- **Standalone**: logo, one h1 "Something went wrong", one sentence, a "Reload page" button and a "Go to the homepage" link. No site header or footer, since the layout may be what failed. The link is a plain `<a href="/">`, a full page load that also drops whatever in-memory state failed.
+- **No error text** is ever shown to readers; the title is "Something Went Wrong" and the page is `noindex`.
+- **Focus** moves to the h1 (`tabIndex={-1}`) when it appears, so a screen reader announces it.
+- **Logging**: `main.tsx` passes `logRouteError` to `RouterProvider` as `onError`, which logs each route error once with `console.error` and its route pattern (`Route error on /stories/:slug:`), replacing React Router's own console line. No error leaves the browser.
+
 ## Accessibility (WCAG 2.2 AA)
 
 See `.context/accessibility.md` for full WCAG patterns, ARIA, and testing checklist.
