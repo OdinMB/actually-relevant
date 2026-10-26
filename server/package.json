@@ -8,7 +8,7 @@
     "predev": "tsx src/scripts/db-prepare/index.ts",
     "dev": "tsx watch src/index.ts",
     "build": "node ../scripts/install-dev-deps.mjs && node node_modules/typescript/bin/tsc --version && node node_modules/typescript/bin/tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p prisma",
     "lint": "eslint . --max-warnings 0",
     "audit:prod": "node ../scripts/audit-check.mjs --audit-level high",
     "format": "prettier --write .",

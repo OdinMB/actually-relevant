@@ -4,6 +4,8 @@
 
 Local development runs PostgreSQL + pgvector in Docker (`docker-compose.yml` at the repo root): image `pgvector/pgvector:pg17`, `localhost:5433`, database `actually_relevant_dev`, credentials in the compose file. Start it with `docker compose up -d`. The container's user is a superuser, so Prisma can create its temporary shadow database for `migrate dev --create-only`. It is a disposable dev database, but never reset it without the user's go-ahead: it holds their local test data.
 
+**Seed.** `npm run db:seed --prefix server` (also Prisma's `migrations.seed` in `prisma.config.ts`) upserts the issue taxonomy and five disabled job runs into whatever `DATABASE_URL` points at; it has no local-only guard, so run it only against the local database. A second run overwrites the seeded issues' fields and leaves existing job runs alone. The writes live in `prisma/seedDatabase.ts` (`prisma/seed.ts` is the entry), and two checks keep it in step with the schema: `npm run typecheck` checks `prisma/` against the generated client, and `src/test/db/seed.db.test.ts` runs the seed against the test database. A migration that drops or renames a column the seed writes fails both until the seed follows.
+
 ## How Migrations Reach the Local Database
 
 **Automatically, on server dev start.** `npm run dev --prefix server` first runs `db:prepare` (wired as `predev`), which:
@@ -72,7 +74,7 @@ The marker covers the whole file. Before adding it, check the two-phase rule und
 
 ## Integration Tests (PostgreSQL)
 
-Most server tests mock Prisma. Logic whose guarantee lives in SQL (story status moves and cluster edits, retention keep rules and cluster repair, the job lease, pgvector queries (`lib/vectors.ts`), the issue filter, the signup send limits, slug assignment, the admin-notice dedupe and reopen, the podcast TTS spend cap) has `*.db.test.ts` files that run against a real database. They are the `db` project in `server/vitest.config.ts`; every other test is the `unit` project.
+Most server tests mock Prisma. Logic whose guarantee lives in SQL (story status moves and cluster edits, retention keep rules and cluster repair, the job lease, pgvector queries (`lib/vectors.ts`), the issue filter, the signup send limits, slug assignment, the admin-notice dedupe and reopen, the podcast TTS spend cap, the development seed) has `*.db.test.ts` files that run against a real database. They are the `db` project in `server/vitest.config.ts`; every other test is the `unit` project.
 
 - **Three commands.** `npm run test --prefix server` runs the `unit` project only and needs no database. `npm run test:db --prefix server` runs the `db` project and **fails** when `TEST_DATABASE_URL` is unset (it used to skip). `npm run test:coverage --prefix server` runs both projects in one run with the coverage floor, which counts the db tests (`ci.md`, "Coverage floor"), and fails the same way without the variable; it is what CI runs. Run it, or `test` and `test:db`, before committing a change to anything a db test covers.
 - **Replace, don't layer.** A module whose guarantee lives in SQL (raw queries, `ON CONFLICT`, advisory locks, row locks) is tested in a `*.db.test.ts`, and a mock test that only replays its SQL against a fake is deleted, not kept beside it. Keep a unit test for logic that does not need the database (input shaping, error mapping, decisions made in TypeScript).
@@ -127,6 +129,7 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 | `npm run db:migrate:resolve --prefix server -- --rolled-back <name>` | Mark a failed migration as rolled back |
 | `npm run db:migrate:deploy --prefix server` | Apply pending migrations to whatever `DATABASE_URL` points at (no local guard) |
 | `npm run db:generate --prefix server` | Regenerate the Prisma client (**dev server stopped**) |
+| `npm run db:seed --prefix server` | Upsert the issue taxonomy and five disabled job runs (local DB only by convention; no guard) |
 
 **Never use:**
 

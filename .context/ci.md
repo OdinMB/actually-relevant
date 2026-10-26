@@ -5,7 +5,7 @@
 | Check | Server | Client | Fails when |
 |---|---|---|---|
 | Migration check | `npm run check:migrations --prefix server` | | a migration drops `stories_embedding_idx`, or a new one holds an unmarked destructive statement (`database-migrations.md`, "Migration check") |
-| Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error; both tsconfigs set `strict` and `noUncheckedIndexedAccess` |
+| Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error; both tsconfigs set `strict` and `noUncheckedIndexedAccess`. The server's also checks the development seed in `prisma/` against the generated client (`prisma/tsconfig.json`, no emit), so a schema change the seed no longer matches fails here |
 | Lint | `npm run lint --prefix server` | `… client` | any ESLint error or warning (`--max-warnings 0`) |
 | Format | `npm run format:check --prefix server` | `… client` | a file Prettier would change; fix with `npm run format --prefix <pkg>` |
 | Tests and coverage | `npm run test:coverage --prefix server` (unit and db projects, needs `TEST_DATABASE_URL`) | `… client` | a failing unit or db test (`database-migrations.md`, "Integration Tests"), or coverage below a threshold |

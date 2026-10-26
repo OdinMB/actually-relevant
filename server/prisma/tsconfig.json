@@ -1,0 +1,11 @@
+{
+  // Type-checks the seed against the generated Prisma client (`npm run typecheck` runs it after the
+  // main project). The build's tsconfig compiles src/ only, so files here never reach dist/.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["*.ts"],
+  "exclude": []
+}
