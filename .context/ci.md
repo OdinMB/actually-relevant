@@ -30,7 +30,7 @@ Turning one of these back on is a follow-up, not a CI change: fix the findings i
 
 ## Format
 
-Prettier 3, one config at the repository root (`.prettierrc.json`): no semicolons, single quotes, width 160, `arrowParens: avoid`, trailing commas. These match the code as it was written, chosen by measuring the reformat diff. Each package's `.prettierignore` leaves out build output, lockfiles, Markdown, `server/prisma/migrations/` (applied migrations stay byte-for-byte) and `client/index.html` (build-time placeholders). Files outside the two packages (root `scripts/`, the workflow) are not checked.
+Prettier 3, one config at the repository root (`.prettierrc.json`): no semicolons, single quotes, width 160, `arrowParens: avoid`, trailing commas. These match the code as it was written, chosen by measuring the reformat diff. Each package's `.prettierignore` leaves out build output, server logs, lockfiles, Markdown, `server/prisma/migrations/` (applied migrations stay byte-for-byte), `client/index.html` (build-time placeholders) and the static assets in `client/public/`. A line meant for one folder at the package root starts with `/`: without it the line matches every file or folder of that name, as `public/` once matched `client/src/layouts/public/` and left it unchecked. Files outside the two packages (root `scripts/`, the workflow) are not checked.
 
 ## Coverage floor
 

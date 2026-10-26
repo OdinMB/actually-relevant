@@ -1,6 +1,8 @@
-dist/
-coverage/
-logs/
+# A leading / anchors a line to this folder; without it the line matches any
+# file or folder of that name
+/dist/
+/coverage/
+/logs/
 node_modules/
 package-lock.json
 # Applied migrations must stay byte-for-byte as committed
