@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { publicApi, ApiError } from '../lib/api'
-import { BRAND } from '../config'
+import { BRAND, NEWSLETTER_PROMISE } from '../config'
 import { turnstileSiteKey } from '../lib/turnstile'
 import { isPrerendering } from '../lib/renderComplete'
 import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
@@ -14,6 +15,11 @@ interface SubscribeFormProps {
   idPrefix?: string
   /** Hide the heading and tagline (when the parent provides its own) */
   hideHeading?: boolean
+  /**
+   * Shows a "Read past issues" link to /newsletter under the form, and is called when it is
+   * followed (e.g. to close a modal). Leave it out on /newsletter, which lists the issues itself.
+   */
+  onPastIssuesClick?: () => void
 }
 
 /**
@@ -31,7 +37,7 @@ function isPlausibleEmail(address: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)
 }
 
-export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix = 'subscribe', hideHeading = false }: SubscribeFormProps) {
+export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix = 'subscribe', hideHeading = false, onPastIssuesClick }: SubscribeFormProps) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'verifying' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
@@ -214,9 +220,9 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
             required
             autoComplete="email"
             className="w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-200 outline-none transition-colors"
-            aria-describedby={
-              [availability === 'unavailable' && `${idPrefix}-unavailable`, errorMessage && `${idPrefix}-error`].filter(Boolean).join(' ') || undefined
-            }
+            aria-describedby={[availability === 'unavailable' && `${idPrefix}-unavailable`, errorMessage && `${idPrefix}-error`, `${idPrefix}-promise`]
+              .filter(Boolean)
+              .join(' ')}
           />
         </div>
 
@@ -258,6 +264,20 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
           </p>
         )}
       </div>
+      <p id={`${idPrefix}-promise`} className={`mt-3 ${noteAlign} text-sm text-neutral-600`}>
+        {NEWSLETTER_PROMISE}
+      </p>
+      {onPastIssuesClick && (
+        <p className={`${noteAlign} text-sm`}>
+          <Link
+            to="/newsletter"
+            onClick={onPastIssuesClick}
+            className="inline-block py-1 text-brand-700 underline underline-offset-2 hover:text-brand-800 rounded px-0.5 focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            Read past issues
+          </Link>
+        </p>
+      )}
     </>
   )
 }

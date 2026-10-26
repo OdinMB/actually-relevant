@@ -4,6 +4,11 @@ export const BRAND = {
   claimSupport: 'Curated with care by AI.',
 } as const
 
+// What a subscriber gets, shown at every newsletter signup. Keep it true: one issue a week (the
+// generate_newsletter and publish_newsletter jobs, .context/newsletter-podcast.md), and Plunk puts an
+// unsubscribe link in every email. No weekday: Saturday 04:30 UTC is still Friday in the Americas.
+export const NEWSLETTER_PROMISE = 'Free, no ads, once a week. Unsubscribe anytime.'
+
 // Canonical public URLs. Use these instead of writing the addresses inline.
 export const SITE_URL = 'https://actuallyrelevant.news'
 export const KOFI_URL = 'https://ko-fi.com/odinmb'

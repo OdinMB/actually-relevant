@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
+import { NEWSLETTER_PROMISE } from '../config'
 
 const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -63,6 +64,14 @@ describe('NewsletterPage', () => {
     expect(screen.getByText(/8 stories/)).toBeInTheDocument()
     expect(screen.getByText(/1 story$/)).toBeInTheDocument()
     expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1)
+  })
+
+  it('says what a subscriber gets in the left-aligned column, without a link back to this page', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
+
+    expect(screen.getByText(NEWSLETTER_PROMISE)).toHaveClass('text-left')
+    expect(screen.queryByRole('link', { name: /past issues/i })).not.toBeInTheDocument()
   })
 
   it('links the newsletter RSS feed, visibly and for feed autodiscovery', async () => {
