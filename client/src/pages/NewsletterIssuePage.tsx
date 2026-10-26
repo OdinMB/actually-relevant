@@ -9,6 +9,7 @@ import { formatEpisodeDate } from '../lib/podcast'
 import StructuredData from '../components/StructuredData'
 import StoryTitleLabel from '../components/StoryTitleLabel'
 import AiBadge from '../components/ai/AiBadge'
+import { PodcastCrossLink } from '../components/CrossLinks'
 import { NewsletterIssueSkeleton } from '../components/skeletons'
 import { useNewsletterIssue } from '../hooks/useNewsletterArchive'
 import { NEWSLETTER_FEED_URL } from '../lib/api'
@@ -155,6 +156,7 @@ export default function NewsletterIssuePage() {
             Get the newsletter by email
           </Link>
         </div>
+        <PodcastCrossLink className="mt-6" />
       </article>
     </>
   )

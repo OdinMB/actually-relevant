@@ -5,6 +5,9 @@ export function podcastTranscriptPath(id: string): string {
   return `/podcast/${encodeURIComponent(id)}/transcript`
 }
 
+/** /podcast's Subscribe section, by its heading's id; the page scrolls to it on arrival. */
+export const PODCAST_SUBSCRIBE_PATH = '/podcast#podcast-subscribe-heading'
+
 /** "6:12"; null when the duration is not known. */
 export function formatEpisodeDuration(sec: number | null): string | null {
   if (sec == null) return null

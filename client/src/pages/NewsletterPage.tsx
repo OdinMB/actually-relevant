@@ -7,6 +7,7 @@ import { formatEpisodeDate } from '../lib/podcast'
 import StructuredData from '../components/StructuredData'
 import SubscribeForm from '../components/SubscribeForm'
 import Pagination from '../components/Pagination'
+import { PodcastCrossLink } from '../components/CrossLinks'
 import AiSubtitle from '../components/ai/AiSubtitle'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { NewsletterArchiveSkeleton } from '../components/skeletons'
@@ -116,6 +117,8 @@ export default function NewsletterPage() {
           </h2>
           <IssueList onPageChange={() => issuesRef.current?.scrollIntoView?.({ block: 'start' })} />
         </section>
+
+        <PodcastCrossLink className="mt-10 border-t border-neutral-200 pt-6" />
       </div>
     </>
   )

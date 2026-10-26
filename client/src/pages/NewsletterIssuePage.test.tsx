@@ -112,6 +112,15 @@ describe('NewsletterIssuePage', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Planet & Climate' })).toBeInTheDocument()
   })
 
+  it('offers the podcast after the issue text', async () => {
+    renderPage()
+    const lastText = await screen.findByText('A quote.', { exact: false })
+    const podcast = screen.getByRole('link', { name: 'Try the weekly podcast' })
+    expect(podcast.getAttribute('href')).toBe('/podcast')
+    expect(lastText.compareDocumentPosition(podcast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(podcast.closest('[data-ai-generated]')).toBeNull()
+  })
+
   it('shows the not-found state for an unpublished issue', async () => {
     mockApi.newsletterIssue.mockRejectedValue(new ApiError(404, 'Issue not found'))
     renderPage('draft-issue')

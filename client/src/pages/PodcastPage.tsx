@@ -5,7 +5,9 @@ import StructuredData from '../components/StructuredData'
 import PodcastSubtitle from '../components/podcast/PodcastSubtitle'
 import PodcastEpisode from '../components/podcast/PodcastEpisode'
 import PodcastListenOptions from '../components/podcast/PodcastListenOptions'
+import { NewsletterCrossLink } from '../components/CrossLinks'
 import { usePodcastEpisodes } from '../hooks/usePodcastEpisodes'
+import { useScrollToHash } from '../hooks/useScrollToHash'
 
 /** The public feed URL: a Render rewrite to the API's feed route (.context/seo.md). Static, so it prerenders. */
 export const PODCAST_FEED_URL = `${SEO.siteUrl}/podcast.xml`
@@ -45,9 +47,10 @@ function EpisodeList() {
  * The public podcast page. The heading, AI subtitle, Apple badge, copy button and feed address
  * are static, so they prerender; the other listen links and the episodes load client-side (the
  * prerenderer does not wait for data). Audio streams from the CDN (`preload="none"`), never
- * through our servers.
+ * through our servers. A link to `PODCAST_SUBSCRIBE_PATH` lands on the Subscribe section.
  */
 export default function PodcastPage() {
+  useScrollToHash()
   return (
     <>
       <Helmet>
@@ -80,6 +83,8 @@ export default function PodcastPage() {
           </h2>
           <EpisodeList />
         </section>
+
+        <NewsletterCrossLink className="mt-10 border-t border-neutral-200 pt-6" />
       </div>
     </>
   )

@@ -7,11 +7,17 @@ import { HelmetProvider } from 'react-helmet-async'
 import type { PublicPodcastResponse } from '@shared/types'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { APPLE_PODCASTS_URL } from '../config'
+import { PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
 
 const mockApi = vi.hoisted(() => ({ podcast: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
+}))
+
+const openSubscribe = vi.hoisted(() => vi.fn())
+vi.mock('../components/SubscribeProvider', () => ({
+  useSubscribe: () => ({ openSubscribe }),
 }))
 
 import PodcastPage, { PODCAST_FEED_URL } from './PodcastPage'
@@ -50,11 +56,11 @@ const RESPONSE: PublicPodcastResponse = {
   ],
 }
 
-function renderPage() {
+function renderPage(path = '/podcast') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <HelmetProvider>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <QueryClientProvider client={client}>
           <PodcastPage />
         </QueryClientProvider>
@@ -218,6 +224,42 @@ describe('PodcastPage', () => {
     expect(screen.getByRole('link', { name: 'Air data ruling' }).getAttribute('href')).toBe('/stories/air')
     expect(screen.queryByRole('link', { name: 'Vaccine rollout' })).toBeNull()
     expect(screen.getAllByRole('link', { name: 'source' })).toHaveLength(2)
+  })
+
+  it('offers the newsletter after the episodes', async () => {
+    renderPage()
+    const episode = await screen.findByRole('heading', { name: /W42: Clean air/ })
+    const subscribe = screen.getByRole('button', { name: 'Get the weekly newsletter' })
+    expect(episode.compareDocumentPosition(subscribe) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'read past issues' }).getAttribute('href')).toBe('/newsletter')
+
+    fireEvent.click(subscribe)
+    expect(openSubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  describe('arriving through a link to the Subscribe section', () => {
+    const original = Element.prototype.scrollIntoView
+    const scrolledTo: Element[] = []
+    beforeEach(() => {
+      scrolledTo.length = 0
+      // jsdom has no scrollIntoView
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolledTo.push(this)
+      }
+    })
+    afterEach(() => {
+      Element.prototype.scrollIntoView = original
+    })
+
+    it('scrolls to the Subscribe heading', () => {
+      renderPage(PODCAST_SUBSCRIBE_PATH)
+      expect(scrolledTo).toEqual([screen.getByRole('heading', { level: 2, name: 'Subscribe' })])
+    })
+
+    it('does not scroll without a hash', () => {
+      renderPage()
+      expect(scrolledTo).toEqual([])
+    })
   })
 
   it('has no a11y violations', async () => {
