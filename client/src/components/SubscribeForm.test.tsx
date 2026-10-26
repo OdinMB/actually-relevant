@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import SubscribeForm from './SubscribeForm'
 import { ApiError } from '../lib/api'
+import { NEWSLETTER_PROMISE } from '../config'
 import type { TurnstileRenderOptions } from '../lib/turnstile'
 
 const mockSubscribe = vi.fn()
@@ -19,7 +21,8 @@ vi.mock('../lib/api', async () => {
   }
 })
 
-vi.mock('../config', () => ({
+vi.mock('../config', async importOriginal => ({
+  ...(await importOriginal<typeof import('../config')>()),
   BRAND: { claim: 'News that matters to humanity.', claimSupport: 'Curated with care by AI.' },
 }))
 
@@ -314,6 +317,48 @@ describe('SubscribeForm', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /subscribing/i })).toBeDisabled()
+    })
+  })
+
+  describe('what a subscriber gets', () => {
+    it('is said under the form and describes the email field', async () => {
+      await renderReady()
+
+      expect(screen.getByText(NEWSLETTER_PROMISE)).toBeInTheDocument()
+      expect(screen.getByRole('textbox', { name: /email/i })).toHaveAccessibleDescription(NEWSLETTER_PROMISE)
+    })
+
+    it('is centered under the form’s own heading, and left-aligned in a parent’s column', async () => {
+      const { unmount } = render(<SubscribeForm idPrefix="test" />)
+      await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
+      expect(screen.getByText(NEWSLETTER_PROMISE)).toHaveClass('text-center')
+      unmount()
+
+      render(<SubscribeForm idPrefix="test" hideHeading />)
+      await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
+      expect(screen.getByText(NEWSLETTER_PROMISE)).toHaveClass('text-left')
+    })
+
+    it('links past issues only when asked to, and reports the click', async () => {
+      const onPastIssuesClick = vi.fn()
+      const user = userEvent.setup()
+      const { rerender } = render(
+        <MemoryRouter>
+          <SubscribeForm idPrefix="test" />
+        </MemoryRouter>,
+      )
+      await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
+      expect(screen.queryByRole('link', { name: /past issues/i })).not.toBeInTheDocument()
+
+      rerender(
+        <MemoryRouter>
+          <SubscribeForm idPrefix="test" onPastIssuesClick={onPastIssuesClick} />
+        </MemoryRouter>,
+      )
+      const link = screen.getByRole('link', { name: 'Read past issues' })
+      expect(link.getAttribute('href')).toBe('/newsletter')
+      await user.click(link)
+      expect(onPastIssuesClick).toHaveBeenCalledTimes(1)
     })
   })
 })

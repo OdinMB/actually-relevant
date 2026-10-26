@@ -1,4 +1,5 @@
 import { useSubscribe } from './SubscribeProvider'
+import { NEWSLETTER_PROMISE } from '../config'
 
 function MailIcon({ className }: { className?: string }) {
   return (
@@ -37,6 +38,7 @@ export default function NewsletterBanner() {
         <MailIcon className="w-4 h-4" />
         Get the Newsletter
       </button>
+      <p className="mt-3 text-sm text-neutral-600">{NEWSLETTER_PROMISE}</p>
     </div>
   )
 }
