@@ -50,7 +50,7 @@ export default function SearchPanel({ query, onQueryChange, onClose }: SearchPan
           }}
           className="relative"
         >
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400 pointer-events-none" />
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500 pointer-events-none" />
           <input
             ref={inputRef}
             type="text"
@@ -66,7 +66,7 @@ export default function SearchPanel({ query, onQueryChange, onClose }: SearchPan
               if (query) onQueryChange('')
               else onClose()
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-500 hover:text-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
             aria-label="Close search"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -74,7 +74,7 @@ export default function SearchPanel({ query, onQueryChange, onClose }: SearchPan
             </svg>
           </button>
         </form>
-        <p className="text-xs text-neutral-400 mt-2 text-center">Search by meaning, not just keywords.</p>
+        <p className="text-xs text-neutral-500 mt-2 text-center">Search by meaning, not just keywords.</p>
       </div>
     </div>
   )

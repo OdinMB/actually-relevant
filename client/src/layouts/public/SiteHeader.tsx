@@ -72,7 +72,7 @@ export default function SiteHeader() {
                 setMenuOpen(false)
               }}
               className={`p-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                searchOpen ? 'text-brand-700' : 'text-neutral-400 hover:text-neutral-600'
+                searchOpen ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
               }`}
               aria-label={searchOpen ? 'Close search' : 'Open search'}
               aria-expanded={searchOpen}

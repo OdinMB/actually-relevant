@@ -16,6 +16,9 @@ import { NEWSLETTER_FEED_URL } from '../lib/api'
 
 const LINK_CLASS = 'text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5'
 
+/** A link inside the issue's text is underlined: its color alone barely stands out from the text around it. */
+const INLINE_LINK_CLASS = `${LINK_CLASS} underline`
+
 type IssueStory = PublicNewsletterIssue['stories'][number]
 
 /** Plain text of a hast node (what a Markdown heading says). */
@@ -30,13 +33,13 @@ function textOf(node: unknown): string {
 function IssueLink({ href = '', children }: { href?: string; children?: ReactNode }) {
   if (href.startsWith(`${SEO.siteUrl}/`)) {
     return (
-      <Link to={href.slice(SEO.siteUrl.length)} className={LINK_CLASS}>
+      <Link to={href.slice(SEO.siteUrl.length)} className={INLINE_LINK_CLASS}>
         {children}
       </Link>
     )
   }
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
+    <a href={href} target="_blank" rel="noopener noreferrer" className={INLINE_LINK_CLASS}>
       {children}
     </a>
   )

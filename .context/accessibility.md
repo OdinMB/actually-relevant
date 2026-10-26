@@ -65,9 +65,10 @@ This site targets WCAG 2.2 Level AA compliance.
 - Normal text: 4.5:1 minimum (use `text-brand-700` for links, not brand-600)
 - Grey text on white: `text-neutral-500` (4.7:1) is the lightest that passes; `text-neutral-400` (2.5:1) fails at any size, so never use it for text
 - Large text (18pt+ or 14pt+ bold): 3:1 minimum
-- UI components: 3:1 minimum
+- UI components: 3:1 minimum, icons that are a control or name a field included (the search toggle, the search field's icon): `text-neutral-500` or darker, as for text
 
 **Don't Rely on Color Alone**
+- A link inside running text is underlined (`underline`, as in `CrossLinks.tsx` and `.prose a`): `text-brand-700` against the grey body text is under 3:1, so color alone does not mark it (1.4.1). A link that stands on its own line, such as a title in a list or a "back" link, needs no underline
 - Add text labels, icons, or patterns alongside color indicators
 - Example: Error states should have text, not just red color
 
