@@ -12,25 +12,38 @@ import {
 import { FOOTER_LEGAL, FOOTER_NAV, ISSUE_LINKS } from "./navLinks";
 import { CategoryColorStrip, PodcastIcon } from "./icons";
 
+/*
+ * Tap targets (WCAG 2.2 target size, 2.5.8): every footer link is at least 24px tall. The list
+ * links are 32px tall on phones and 28px from `md` up, with the text centered. The lists have no
+ * row gap and no fixed row height, so the space between two lines of text belongs to a link while
+ * the spacing looks as it did, and a label that wraps (narrow phones, the five columns at `md`)
+ * grows its row instead of overlapping the next link. `min-h-*` needs a box: hence `inline-flex`.
+ */
+const LINK_TARGET = "inline-flex items-center min-h-8 md:min-h-7 py-1";
+
 /** Social icon buttons (Bluesky, Mastodon, Apple Podcasts, GitHub) in the brand column. */
 const SOCIAL_LINK =
   "flex items-center justify-center w-8 h-8 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-brand-500";
 
+/** Links in the Navigate, Connect and Issues columns. */
+const LIST_LINK = `${LINK_TARGET} text-sm leading-5 text-neutral-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5`;
+
 /** Links in the Connect column; the image icons brighten with the text on hover (`group`). */
-const CONNECT_LINK =
-  "group inline-flex items-center gap-1.5 text-sm leading-5 text-neutral-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5";
+const CONNECT_LINK = `group gap-1.5 ${LIST_LINK}`;
 
 const CONNECT_ICON =
   "w-3.5 h-3.5 shrink-0 transition-[filter] group-hover:brightness-[10]";
 
-const INLINE_LINK =
-  "hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded";
+/** The links inside the "Free API (Intro, Docs)" line: inline boxes, so the line reads as before. */
+const INLINE_LINK = `${LINK_TARGET} hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded`;
 
+/** 32px tall on phones like the list links; 24px from `md` up, where they sit under the social icons. */
 const LEGAL_LINK =
-  "text-xs text-neutral-400 hover:text-neutral-200 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5";
+  "inline-flex items-center min-h-8 md:min-h-6 text-xs text-neutral-400 hover:text-neutral-200 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5";
 
+/** The bottom margin allows for the space `LINK_TARGET` adds above the first link's text. */
 const COLUMN_HEADING =
-  "text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3 leading-none";
+  "text-xs font-bold uppercase tracking-widest text-neutral-400 mb-1.5 md:mb-2 leading-none";
 
 function LegalLinks({ className }: { className: string }) {
   return (
@@ -85,7 +98,7 @@ export default function SiteFooter() {
           <div className="col-span-2">
             <Link
               to="/"
-              className="inline-block mb-3 font-nexa text-xl font-bold text-white hover:text-brand-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+              className="inline-block min-h-7 mb-3 font-nexa text-xl font-bold text-white hover:text-brand-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
             >
               Actually Relevant
             </Link>
@@ -144,12 +157,12 @@ export default function SiteFooter() {
             <p className={COLUMN_HEADING} role="presentation">
               Navigate
             </p>
-            <ul className="grid auto-rows-[1.25rem] gap-y-2">
+            <ul className="grid">
               {FOOTER_NAV.map((link) => (
                 <li key={link.label} className="flex items-center">
                   <Link
                     to={link.href}
-                    className="text-sm leading-5 text-neutral-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
+                    className={LIST_LINK}
                   >
                     {link.label}
                   </Link>
@@ -163,7 +176,7 @@ export default function SiteFooter() {
             <p className={COLUMN_HEADING} role="presentation">
               Connect
             </p>
-            <ul className="grid auto-rows-[1.25rem] gap-y-2">
+            <ul className="grid">
               <li className="flex items-center">
                 <Link
                   to="/newsletter"
@@ -176,7 +189,7 @@ export default function SiteFooter() {
               <li className="flex items-center">
                 <Link
                   to="/podcast"
-                  className="inline-flex items-center gap-1.5 text-sm leading-5 text-neutral-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
+                  className={CONNECT_LINK}
                 >
                   <PodcastIcon className="w-3.5 h-3.5 shrink-0" />
                   Podcast
@@ -244,14 +257,14 @@ export default function SiteFooter() {
             <p className={COLUMN_HEADING} role="presentation">
               Issues
             </p>
-            <ul className="grid grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-1 auto-rows-[1.25rem]">
+            <ul className="grid grid-cols-2 gap-x-6 md:grid-cols-1">
               {ISSUE_LINKS.map((link) => {
                 const colors = getCategoryColor(link.slug);
                 return (
                   <li key={link.href} className="flex items-center">
                     <Link
                       to={link.href}
-                      className="inline-flex items-center gap-2 text-sm leading-5 text-neutral-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
+                      className={`gap-2 ${LIST_LINK}`}
                     >
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${colors.dotBg} opacity-70 shrink-0`}
@@ -267,9 +280,9 @@ export default function SiteFooter() {
         </div>
 
         {/* Legal links + copyright — mobile only */}
-        <div className="mt-7 md:hidden text-center">
+        <div className="mt-5 md:hidden text-center">
           <LegalLinks className="flex justify-center gap-5" />
-          <Copyright className="text-xs text-neutral-400 mt-3" />
+          <Copyright className="text-xs text-neutral-400 mt-2" />
         </div>
       </div>
     </footer>
