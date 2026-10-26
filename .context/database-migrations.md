@@ -4,7 +4,9 @@
 
 Local development runs PostgreSQL + pgvector in Docker (`docker-compose.yml` at the repo root): image `pgvector/pgvector:pg17`, `localhost:5433`, database `actually_relevant_dev`, credentials in the compose file. Start it with `docker compose up -d`. The container's user is a superuser, so Prisma can create its temporary shadow database for `migrate dev --create-only`. It is a disposable dev database, but never reset it without the user's go-ahead: it holds their local test data.
 
-**Seed.** `npm run db:seed --prefix server` (also Prisma's `migrations.seed` in `prisma.config.ts`) upserts the issue taxonomy and five disabled job runs into whatever `DATABASE_URL` points at; it has no local-only guard, so run it only against the local database. A second run overwrites the seeded issues' fields and leaves existing job runs alone. The writes live in `prisma/seedDatabase.ts` (`prisma/seed.ts` is the entry), and two checks keep it in step with the schema: `npm run typecheck` checks `prisma/` against the generated client, and `src/test/db/seed.db.test.ts` runs the seed against the test database. A migration that drops or renames a column the seed writes fails both until the seed follows.
+**Seed.** `npm run db:seed --prefix server` (also Prisma's `migrations.seed` in `prisma.config.ts`) upserts the issue taxonomy and five disabled job runs into whatever `DATABASE_URL` points at; it has no local-only guard, so run it only against the local database, or once against a new, empty production database (README, "Fresh Install"). A second run overwrites the seeded issues' fields and leaves existing job runs alone. The writes live in `prisma/seedDatabase.ts` (`prisma/seed.ts` is the entry), and two checks keep it in step with the schema: `npm run typecheck` checks `prisma/` against the generated client, and `src/test/db/seed.db.test.ts` runs the seed against the test database. A migration that drops or renames a column the seed writes fails both until the seed follows.
+
+**Job rows.** The scheduler runs only jobs that have a `job_runs` row, and the migrations create rows only for `social_auto_post`, `bluesky_update_metrics`, `mastodon_update_metrics`, `publish_newsletter`, `generate_podcast`, `publish_podcast` (all disabled), `poll_plunk_activity` and `cleanup_old_stories` (both enabled); `crawl_feeds`, the four story jobs and `generate_newsletter` get theirs from a seed. `npm run db:seed:jobs --prefix server` (`src/scripts/seed-jobs.ts`) creates every job's row that does not exist yet, disabled, and never changes an existing one (`update: {}`), so it is safe to rerun on any database. Like `db:seed`, it writes to whatever `DATABASE_URL` points at, with no guard.
 
 ## How Migrations Reach the Local Database
 
@@ -170,7 +172,8 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 | `npm run db:migrate:resolve --prefix server -- --rolled-back <name>` | Mark a failed migration as rolled back |
 | `npm run db:migrate:deploy --prefix server` | Apply pending migrations to whatever `DATABASE_URL` points at (no local guard) |
 | `npm run db:generate --prefix server` | Regenerate the Prisma client (**dev server stopped**) |
-| `npm run db:seed --prefix server` | Upsert the issue taxonomy and five disabled job runs (local DB only by convention; no guard) |
+| `npm run db:seed --prefix server` | Upsert the issue taxonomy and five disabled job runs (local DB, or once on a new empty one; no guard) |
+| `npm run db:seed:jobs --prefix server` | Create every missing job run, disabled; never changes an existing one, safe to rerun (no guard) |
 
 **Never use:**
 
