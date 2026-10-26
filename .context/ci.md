@@ -5,7 +5,7 @@
 | Check | Server | Client | Fails when |
 |---|---|---|---|
 | Migration check | `npm run check:migrations --prefix server` | | a migration drops `stories_embedding_idx`, or a new one holds an unmarked destructive statement (`database-migrations.md`, "Migration check") |
-| Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error; both tsconfigs set `strict` and `noUncheckedIndexedAccess` |
+| Type-check | `npm run typecheck --prefix server` | `… client` | any `tsc` error; both tsconfigs set `strict` and `noUncheckedIndexedAccess`. The server's also checks the development seed in `prisma/` against the generated client (`prisma/tsconfig.json`, no emit), so a schema change the seed no longer matches fails here |
 | Lint | `npm run lint --prefix server` | `… client` | any ESLint error or warning (`--max-warnings 0`) |
 | Format | `npm run format:check --prefix server` | `… client` | a file Prettier would change; fix with `npm run format --prefix <pkg>` |
 | Tests and coverage | `npm run test:coverage --prefix server` (unit and db projects, needs `TEST_DATABASE_URL`) | `… client` | a failing unit or db test (`database-migrations.md`, "Integration Tests"), or coverage below a threshold |
@@ -30,7 +30,7 @@ Turning one of these back on is a follow-up, not a CI change: fix the findings i
 
 ## Format
 
-Prettier 3, one config at the repository root (`.prettierrc.json`): no semicolons, single quotes, width 160, `arrowParens: avoid`, trailing commas. These match the code as it was written, chosen by measuring the reformat diff. Each package's `.prettierignore` leaves out build output, lockfiles, Markdown, `server/prisma/migrations/` (applied migrations stay byte-for-byte) and `client/index.html` (build-time placeholders). Files outside the two packages (root `scripts/`, the workflow) are not checked.
+Prettier 3, one config at the repository root (`.prettierrc.json`): no semicolons, single quotes, width 160, `arrowParens: avoid`, trailing commas. These match the code as it was written, chosen by measuring the reformat diff. Each package's `.prettierignore` leaves out build output, server logs, lockfiles, Markdown, `server/prisma/migrations/` (applied migrations stay byte-for-byte), `client/index.html` (build-time placeholders) and the static assets in `client/public/`. A line meant for one folder at the package root starts with `/`: without it the line matches every file or folder of that name, as `public/` once matched `client/src/layouts/public/` and left it unchecked. Files outside the two packages (root `scripts/`, the workflow) are not checked.
 
 ## Coverage floor
 

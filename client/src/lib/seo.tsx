@@ -39,6 +39,9 @@ export function CommonOgTags({ image = SEO.ogImage }: { image?: string }): React
  * Helmet it owns them: on its first commit it removes them and writes this
  * merged set, so each page (prerendered or navigated client-side) ends up with
  * exactly one of each.
+ *
+ * No `article:author` default: only story pages carry it. StoryPage sets it
+ * (and the backend injects it for crawlers, .context/seo.md).
  */
 export function DefaultSeo(): ReactNode {
   return (
@@ -49,7 +52,6 @@ export function DefaultSeo(): ReactNode {
       <meta property="og:title" content={SEO.defaultTitle} />
       <meta property="og:description" content={SEO.defaultDescription} />
       <meta property="og:url" content={`${SEO.siteUrl}/`} />
-      <meta property="article:author" content={SEO.siteName} />
       {CommonOgTags({})}
     </Helmet>
   )

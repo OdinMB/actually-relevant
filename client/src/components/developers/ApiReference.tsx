@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { ApiReferenceReact } from '@scalar/api-reference-react'
 import type { AnyApiReferenceConfiguration } from '@scalar/api-reference-react'
 import scalarCss from '@scalar/api-reference-react/style.css?inline'
-import { API_BASE } from '../../lib/api'
+import { OPENAPI_SPEC_URL } from '../../lib/api'
 
 // The interactive Scalar reference. It bundles several MB, so DevelopersPage
 // loads it as its own lazy chunk and keeps the page's own content out of it,
@@ -13,7 +13,7 @@ import { API_BASE } from '../../lib/api'
 // to be visible here. To test locally: temporarily clear VITE_API_URL in client/.env
 // and restart the Vite dev server (the Vite proxy will forward /api to localhost:3001).
 const scalarConfig: AnyApiReferenceConfiguration = {
-  url: `${API_BASE}/docs/openapi.json`,
+  url: OPENAPI_SPEC_URL,
   theme: 'laserwave',
   layout: 'modern',
   defaultOpenAllTags: true,

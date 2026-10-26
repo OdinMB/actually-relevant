@@ -10,7 +10,14 @@ This site targets WCAG 2.2 Level AA compliance.
 - All buttons need descriptive text or `aria-label`
 - Links should describe their destination (avoid "click here")
 - Focus styles: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`
-- Touch targets: minimum 24x24px (use padding if visual element is smaller)
+- Touch targets: minimum 24x24px (use padding if visual element is smaller); see Target size below
+
+**Target size (2.5.8)**
+- Every link and button is at least 24x24px. Grow the hit area with padding or `min-h-*`/`min-w-*`, not bigger text.
+- `min-h-*` needs a box: give the link `inline-flex items-center` (or `block`/`flex`). An inline `<a>` ignores min-height, and vertical padding on it overlaps the lines around it instead of making room.
+- A list of links: drop the row gap and any fixed row height (`auto-rows-[…]`), and let each row take its link's height, so the space between two lines of text belongs to a link and the spacing looks unchanged. A fixed row lets a label that wraps overflow into the next link, and two hit areas then overlap. Phones get more where the layout allows (the footer: 32px below `md`, 28px from `md` up).
+- WCAG exempts a link inside running text, and an undersized target whose 24px circle (centered on it) meets no other target or circle. Don't build new UI on the spacing exception: it fails silently the next time a gap is tightened.
+- jsdom can't measure, so a test checks the classes instead: `SiteFooter.test.tsx` fails when a footer link is inline or under 24px at any breakpoint.
 
 **Forms**
 - Every input needs a `<label>` with `htmlFor` matching the input's `id`
@@ -112,6 +119,7 @@ Before deploying new pages/components:
 | Story list | `StoryList.tsx` | To be implemented — use semantic table or list |
 | Focus styles | All interactive elements | `focus-visible:ring-2` |
 | Human check (Turnstile) | `SubscribeForm.tsx`, `FeedbackForm.tsx` | Widget is invisible unless Cloudflare needs the visitor to interact, so it adds no tab stop; the submit button's text says "Verifying..." while it runs; a failure is text with `role="alert"` (in `FeedbackForm` also linked to the button by `aria-describedby`) and the form stays usable. Covered by axe in `FeedbackForm.test.tsx` |
+| Footer tap targets | `SiteFooter.tsx` | List links at least 32px tall on phones, 28px from `md` up (`LINK_TARGET`), in rows without gap that grow when a label wraps; legal links 32px / 24px; icon links 32x32px. Test: `SiteFooter.test.tsx` |
 
 ## Resources
 

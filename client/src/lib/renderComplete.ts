@@ -5,6 +5,16 @@
  * Data fetched by the page itself is not waited for (BACKLOG: prerender content check).
  */
 
+/**
+ * True in the prerenderer's browser, which Puppeteer drives, so `navigator.webdriver` is set
+ * (also in Playwright and other automated browsers). The build's API may be unreachable, so a
+ * state that only means "the API did not answer" must not render then, or it is baked into every
+ * page's static HTML.
+ */
+export function isPrerendering(nav: Pick<Navigator, 'webdriver'> = navigator): boolean {
+  return nav.webdriver === true
+}
+
 /** Marks a Suspense fallback shown while a page chunk loads. */
 export const ROUTE_FALLBACK_ATTR = 'data-route-fallback'
 

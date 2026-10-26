@@ -113,6 +113,9 @@ describe('GET /api/story-page/:slug', () => {
     expect(html).toContain(`<meta data-rh="true" name="twitter:image" content="${config.apiUrl}/api/stories/clean-air/og.png" />`)
     expect(html).toContain('<meta data-rh="true" property="og:type" content="article" />')
     expect(html).toContain('<meta data-rh="true" name="twitter:card" content="summary_large_image" />')
+    // Story pages are the only pages with an article author: the shell carries none, the route adds it
+    expect(html).toContain('<meta data-rh="true" property="article:author" content="RelevanceAI by Actually Relevant" />')
+    expect(html.match(/property="article:author"/g)).toHaveLength(1)
     // The homepage's own tags are gone, so each tag appears once
     expect(html).not.toContain('Homepage description')
     expect(html).not.toContain('og-image.png')

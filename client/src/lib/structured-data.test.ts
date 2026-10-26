@@ -33,12 +33,15 @@ describe('buildPodcastEpisodeSchema', () => {
   })
 })
 
-describe('app shell author metadata (story routes are not prerendered, so crawlers read these)', () => {
+describe('app shell author metadata', () => {
   const doc = new DOMParser().parseFromString(indexHtml, 'text/html')
 
   it('names the project, not a person, as the author', () => {
     expect(doc.querySelector('meta[name="author"]')?.getAttribute('content')).toBe('Actually Relevant')
-    expect(doc.querySelector('meta[property="article:author"]')?.getAttribute('content')).toBe('Actually Relevant')
+  })
+
+  it('carries no article:author, which only story pages set (their Helmet, and the backend for crawlers)', () => {
+    expect(doc.querySelector('meta[property="article:author"]')).toBeNull()
   })
 })
 

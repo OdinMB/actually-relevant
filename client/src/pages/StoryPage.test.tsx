@@ -149,4 +149,13 @@ describe('StoryPage', () => {
     })
     expect(document.head.querySelector('meta[name="twitter:image"]')?.getAttribute('content')).toBe('/api/stories/ai-story/og.png')
   })
+
+  it('names the article author, as the one page type that sets article:author', async () => {
+    renderStory(story)
+    await waitFor(() => {
+      expect(Array.from(document.head.querySelectorAll('meta[property="article:author"]')).map(el => el.getAttribute('content'))).toEqual([
+        'RelevanceAI by Actually Relevant',
+      ])
+    })
+  })
 })

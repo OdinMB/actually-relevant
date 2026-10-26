@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import SubscribeForm from './SubscribeForm'
 import { ApiError } from '../lib/api'
@@ -74,11 +74,12 @@ describe('SubscribeForm', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
   })
 
-  it('disables submit until the form token has loaded', async () => {
+  it('disables submit until the form token has loaded, without a message meanwhile', async () => {
     mockGetToken.mockReturnValue(new Promise(() => {})) // never resolves
     render(<SubscribeForm idPrefix="test" />)
 
     expect(screen.getByRole('button', { name: /subscribe/i })).toBeDisabled()
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
   it('retries the token fetch once and submits the retried token', async () => {
@@ -88,11 +89,47 @@ describe('SubscribeForm', () => {
     const user = userEvent.setup()
 
     await renderReady()
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
     await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com')
     await user.click(screen.getByRole('button', { name: /subscribe/i }))
 
     await waitFor(() => {
       expect(mockSubscribe).toHaveBeenCalledWith(expect.objectContaining({ formToken: 'retry-token' }))
+    })
+  })
+
+  describe('when both token attempts fail', () => {
+    /** Render with an unreachable API and wait until both attempts have settled. */
+    async function renderUnreachable() {
+      mockGetToken.mockReset()
+      mockGetToken.mockRejectedValue(new Error('API down'))
+      render(<SubscribeForm idPrefix="test" />)
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalledTimes(2))
+      await act(() => new Promise(resolve => setTimeout(resolve, 0)))
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, 'webdriver')
+    })
+
+    it('says calmly that the form cannot load, announced and describing the email field', async () => {
+      await renderUnreachable()
+
+      const status = screen.getByRole('status')
+      expect(status).toHaveTextContent("The signup form can't load right now. Please reload the page or try again later.")
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /subscribe/i })).toBeDisabled()
+      const email = screen.getByRole('textbox', { name: /email/i })
+      expect(email.getAttribute('aria-describedby')?.split(' ')[0]).toBe('test-unavailable')
+      expect(email).toHaveAccessibleDescription(/^The signup form can.t load right now/)
+    })
+
+    it('says nothing while prerendering, so the static HTML never carries the message', async () => {
+      Object.defineProperty(navigator, 'webdriver', { configurable: true, get: () => true })
+      await renderUnreachable()
+
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+      expect(screen.getByRole('textbox', { name: /email/i }).getAttribute('aria-describedby') ?? '').not.toContain('test-unavailable')
     })
   })
 

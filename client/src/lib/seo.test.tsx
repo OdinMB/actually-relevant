@@ -7,6 +7,7 @@ import { DefaultSeo, SEO } from './seo'
 import { MASTODON_PROFILE_URL } from '../config'
 
 const PAGE_DESCRIPTION = 'A page-specific description.'
+const STORY_AUTHOR = 'RelevanceAI by Actually Relevant'
 
 /** Load the real index.html <head>, so its fallback tags are what Helmet has to replace. */
 function seedTemplateHead() {
@@ -90,6 +91,45 @@ describe('DefaultSeo with the index.html fallback tags', () => {
     const handle = `${profile.pathname.slice(1)}@${profile.host}`
     expect(handle).toBe('@actuallyrelevant@mastodon.social')
     expect(contents('meta[name="fediverse:creator"]')).toEqual([handle])
+  })
+
+  it('has no article:author on a page that is not a story', async () => {
+    render(
+      <HelmetProvider>
+        <DefaultSeo />
+        <PageWithOwnTags />
+      </HelmetProvider>,
+    )
+    await waitFor(() => {
+      expect(contents('meta[name="description"]')).toEqual([PAGE_DESCRIPTION])
+    })
+    expect(contents('meta[property="article:author"]')).toEqual([])
+  })
+
+  it('keeps the article:author a story page sets, once, and drops it when navigating to another page', async () => {
+    const { rerender } = render(
+      <HelmetProvider>
+        <DefaultSeo />
+        <Helmet>
+          <meta property="article:author" content={STORY_AUTHOR} />
+        </Helmet>
+      </HelmetProvider>,
+    )
+    await waitFor(() => {
+      expect(contents('meta[property="article:author"]')).toEqual([STORY_AUTHOR])
+    })
+
+    rerender(
+      <HelmetProvider>
+        <DefaultSeo />
+        <PageWithOwnTags />
+      </HelmetProvider>,
+    )
+
+    await waitFor(() => {
+      expect(contents('meta[name="description"]')).toEqual([PAGE_DESCRIPTION])
+    })
+    expect(contents('meta[property="article:author"]')).toEqual([])
   })
 
   it('restores the generic description when navigating away from a page that set its own', async () => {
