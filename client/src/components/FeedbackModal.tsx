@@ -58,7 +58,9 @@ export default function FeedbackModal({ open, onClose, story }: FeedbackModalPro
       aria-labelledby="feedback-modal-title"
     >
       <div className="p-6 sm:p-8">
-        <FeedbackForm key={open ? `open:${story?.id ?? ''}` : 'closed'} autoFocus={open} onSuccess={onClose} idPrefix="feedback-modal" story={story} />
+        {/* Mounted only while open, as in SubscribeModal: the form fetches a form token on mount and
+            refreshes it while mounted, so a closed dialog requests nothing. */}
+        {open && <FeedbackForm key={story?.id ?? ''} autoFocus onSuccess={onClose} idPrefix="feedback-modal" story={story} />}
         <button
           type="button"
           onClick={onClose}

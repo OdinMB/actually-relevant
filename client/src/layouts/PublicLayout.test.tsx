@@ -7,6 +7,13 @@ import PublicLayout from './PublicLayout'
 import { BRAND } from '../config'
 import { toggleSaved } from '../lib/preferences'
 
+// The layout holds the signup and feedback dialogs, whose forms fetch a form token when they mount
+const mockTokens = vi.hoisted(() => ({ getSubscribeToken: vi.fn(), getFeedbackToken: vi.fn() }))
+vi.mock('../lib/api', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/api')>()
+  return { ...actual, publicApi: { ...actual.publicApi, ...mockTokens } }
+})
+
 function renderLayout() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -26,6 +33,19 @@ describe('PublicLayout', () => {
     HTMLDialogElement.prototype.showModal = vi.fn()
     HTMLDialogElement.prototype.close = vi.fn()
     window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
+  })
+
+  beforeEach(() => {
+    mockTokens.getSubscribeToken.mockReset().mockResolvedValue({ token: 'form-token' })
+    mockTokens.getFeedbackToken.mockReset().mockResolvedValue({ token: 'form-token' })
+  })
+
+  it('requests no form token on a page view while the signup and feedback dialogs stay closed', async () => {
+    renderLayout()
+    await act(async () => {})
+
+    expect(mockTokens.getSubscribeToken).not.toHaveBeenCalled()
+    expect(mockTokens.getFeedbackToken).not.toHaveBeenCalled()
   })
 
   it('exposes the site-wide AI statement to assistive technology', () => {

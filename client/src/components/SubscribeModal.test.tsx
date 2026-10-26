@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import SubscribeModal from './SubscribeModal'
@@ -36,6 +36,40 @@ function renderModal(onClose = vi.fn()) {
 }
 
 describe('SubscribeModal', () => {
+  it('requests no form token while closed, and a fresh one on each open, ready to send once it arrives', async () => {
+    const user = userEvent.setup()
+    mockApi.subscribe.mockResolvedValue({ success: true })
+    const onClose = vi.fn()
+    const modal = (open: boolean) => (
+      <MemoryRouter>
+        <SubscribeModal open={open} onClose={onClose} />
+      </MemoryRouter>
+    )
+    const { rerender } = render(modal(false))
+    await act(async () => {})
+    expect(mockApi.getSubscribeToken).not.toHaveBeenCalled()
+
+    rerender(modal(true))
+    const dialog = screen.getByRole('dialog', { name: 'Stay informed' })
+    const email = within(dialog).getByRole('textbox', { name: 'Email address' })
+    await waitFor(() => expect(email).toHaveFocus())
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
+    expect(mockApi.getSubscribeToken).toHaveBeenCalledTimes(1)
+
+    await user.type(email, 'reader@example.com')
+    await user.click(within(dialog).getByRole('button', { name: /^subscribe$/i }))
+    expect(mockApi.subscribe).toHaveBeenCalledWith({ email: 'reader@example.com', formToken: 'form-token' })
+    expect(await within(dialog).findByText('Check your email')).toBeInTheDocument()
+
+    rerender(modal(false))
+    await act(async () => {})
+    expect(mockApi.getSubscribeToken).toHaveBeenCalledTimes(1)
+
+    rerender(modal(true))
+    await waitFor(() => expect(mockApi.getSubscribeToken).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue('')
+  })
+
   it('says what a subscriber gets, centered under the form', async () => {
     renderModal()
     await waitFor(() => expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
