@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import FeedbackModal from './FeedbackModal'
-import { FORM_TOKEN_REFRESH_MS } from './FeedbackForm'
+import { FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
 
 const mockApi = vi.hoisted(() => ({ getFeedbackToken: vi.fn(), submitFeedback: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({

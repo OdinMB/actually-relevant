@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { publicApi, ApiError } from '../lib/api'
 import { BRAND, NEWSLETTER_PROMISE } from '../config'
+import { FORM_TOKEN_MIN_AGE_MS, FORM_TOKEN_POST_MAX_AGE_MS, FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
 import { turnstileSiteKey } from '../lib/turnstile'
 import { isPrerendering } from '../lib/renderComplete'
 import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
@@ -37,12 +38,45 @@ function isPlausibleEmail(address: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)
 }
 
+/** The anti-bot form token the form holds, with the times (`Date.now()`) that decide when it may be posted. */
+interface HeldToken {
+  value: string
+  receivedAt: number
+  /**
+   * From when the server takes it. The first token may be posted at once: its age is how long
+   * the form has been open, which is what the server's minimum fill time measures. A
+   * replacement's age says nothing about the reader, so it waits out that minimum.
+   */
+  postableFrom: number
+}
+
+/** Asks for a form token, trying twice. A paused answer is final; otherwise the last error is thrown. */
+async function fetchFormToken(): Promise<string> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { token } = await publicApi.getSubscribeToken()
+      return token
+    } catch (err) {
+      if (isSignupsPaused(err)) throw err
+      lastError = err
+    }
+  }
+  throw lastError
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix = 'subscribe', hideHeading = false, onPastIssuesClick }: SubscribeFormProps) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'verifying' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [website, setWebsite] = useState('') // honeypot — humans never fill this
-  const [formToken, setFormToken] = useState<string | null>(null)
+  // Never rendered, so a ref: `availability` turns 'open' when the first token arrives.
+  const tokenRef = useRef<HeldToken | null>(null)
+  const replacementRef = useRef<Promise<HeldToken> | null>(null)
   const [availability, setAvailability] = useState<Availability>('checking')
   // Turnstile loads only on submit, so visitors who never sign up never contact Cloudflare.
   const [turnstileFailed, setTurnstileFailed] = useState(false)
@@ -56,46 +90,84 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
   }, [autoFocus])
 
   // Fetch the anti-bot form token on mount; its answer also says whether signups are open.
+  // If both attempts fail, submit stays disabled (the API is unreachable anyway) and the
+  // reader is told.
   useEffect(() => {
     let cancelled = false
-    async function loadToken() {
-      // Try up to twice; if both fail, the token stays null, submit stays disabled
-      // (the API is unreachable anyway) and the reader is told. A paused answer is final.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const { token } = await publicApi.getSubscribeToken()
-          if (!cancelled) {
-            setFormToken(token)
-            setAvailability('open')
-          }
-          return
-        } catch (err) {
-          if (isSignupsPaused(err)) {
-            if (!cancelled) setAvailability('paused')
-            return
-          }
-        }
-      }
-      // Not while prerendering: the build's API may be unreachable, and the message would be
-      // baked into every page's static HTML.
-      if (!cancelled && !isPrerendering()) setAvailability('unavailable')
-    }
-    loadToken()
+    fetchFormToken().then(
+      value => {
+        if (cancelled) return
+        const now = Date.now()
+        tokenRef.current = { value, receivedAt: now, postableFrom: now }
+        setAvailability('open')
+      },
+      err => {
+        if (cancelled) return
+        if (isSignupsPaused(err)) setAvailability('paused')
+        // Not while prerendering: the build's API may be unreachable, and the message would be
+        // baked into every page's static HTML.
+        else if (!isPrerendering()) setAvailability('unavailable')
+      },
+    )
     return () => {
       cancelled = true
     }
   }, [])
 
+  /** Fetches a token to replace the one held, joining a fetch already under way. */
+  const replaceToken = useCallback((): Promise<HeldToken> => {
+    if (!replacementRef.current) {
+      replacementRef.current = fetchFormToken()
+        .then(value => {
+          const receivedAt = Date.now()
+          const token = { value, receivedAt, postableFrom: receivedAt + FORM_TOKEN_MIN_AGE_MS }
+          tokenRef.current = token
+          return token
+        })
+        .finally(() => {
+          replacementRef.current = null
+        })
+    }
+    return replacementRef.current
+  }, [])
+
+  // Timers stop in a background tab, so the moment a reader comes back to the page is when an
+  // ageing token is replaced: the new one is then old enough by the time they submit.
+  useEffect(() => {
+    function replaceIfAgeing() {
+      const token = tokenRef.current
+      if (document.visibilityState !== 'visible' || !token) return
+      if (Date.now() - token.receivedAt < FORM_TOKEN_REFRESH_MS) return
+      // On failure the held token stays, and the submit tries again.
+      replaceToken().catch(() => {})
+    }
+    document.addEventListener('visibilitychange', replaceIfAgeing)
+    window.addEventListener('focus', replaceIfAgeing)
+    return () => {
+      document.removeEventListener('visibilitychange', replaceIfAgeing)
+      window.removeEventListener('focus', replaceIfAgeing)
+    }
+  }, [replaceToken])
+
+  /** The token to post: replaced first when it is too old for the server, and given once it is old enough. */
+  async function postableToken(): Promise<string> {
+    let token = tokenRef.current
+    if (!token || Date.now() - token.receivedAt > FORM_TOKEN_POST_MAX_AGE_MS) token = await replaceToken()
+    const wait = token.postableFrom - Date.now()
+    if (wait > 0) await sleep(wait)
+    return token.value
+  }
+
   const siteKey = turnstileSiteKey()
   const busy = status === 'verifying' || status === 'loading'
-  const canSubmit = !busy && formToken !== null
+  const canSubmit = !busy && availability === 'open'
   // Notes under the form: centered under its own heading (the modal), left-aligned in a parent's column (/newsletter).
   const noteAlign = hideHeading ? 'text-left' : 'text-center'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const address = email.trim()
-    if (!canSubmit || !formToken) return
+    if (!canSubmit) return
     if (!isPlausibleEmail(address)) {
       setTurnstileFailed(false)
       setStatus('error')
@@ -120,6 +192,8 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
 
     setStatus('loading')
     try {
+      // A token the server would drop still gets a success reply, and no email would come.
+      const formToken = await postableToken()
       const result = await publicApi.subscribe({
         email: address,
         ...(website ? { website } : {}),

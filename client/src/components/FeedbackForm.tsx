@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { publicApi } from '../lib/api'
+import { FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
 import { turnstileSiteKey } from '../lib/turnstile'
 import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
 
@@ -33,13 +34,6 @@ const CATEGORIES = [
 // Must match config.feedback.messageMaxLength on the server
 const MAX_MESSAGE_LENGTH = 2000
 
-/**
- * How often an open form fetches a fresh form token. The server drops a token older than
- * 30 minutes without a word (config.subscribe.formTokenMaxAgeMs), so a visitor who takes
- * long over a message must still hold a younger one.
- */
-export const FORM_TOKEN_REFRESH_MS = 20 * 60 * 1000
-
 export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 'feedback', hideHeading = false, story }: FeedbackFormProps) {
   const [chosenCategory, setCategory] = useState<string>('general')
   const category = story ? 'correction' : chosenCategory
@@ -60,7 +54,8 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
     }
   }, [autoFocus])
 
-  // Fetch the anti-bot form token on mount, and a fresh one while the form stays open.
+  // Fetch the anti-bot form token on mount, and a fresh one while the form stays open, so a
+  // visitor who takes long over a message still holds one the server takes.
   useEffect(() => {
     let cancelled = false
     async function loadToken() {
