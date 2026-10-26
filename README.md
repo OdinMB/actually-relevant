@@ -64,6 +64,8 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
 
    Starting the backend first applies any pending migrations and regenerates the Prisma client if the schema changed (`npm run db:prepare`, also runnable on its own). It only does this when `DATABASE_URL` points at this machine (`localhost`, `127.0.0.1` or `::1`); for any other host it warns and skips. Set `SKIP_DB_PREPARE=1` to skip it. A failing migration stops the backend from starting. See [`.context/database-migrations.md`](.context/database-migrations.md).
 
+6. Optional: to run against made-up content instead (stories, newsletters, podcast episodes and an admin login, with no paid API calls), fill a separate local database with `npm run db:seed:synthetic --prefix server` and start the server against it with the run line in "Run Locally with Synthetic Data" ([`.context/database-migrations.md`](.context/database-migrations.md)), which replaces the email, social and other outbound credentials from `server/.env` with placeholders.
+
 ## Deploying to Render.com
 
 This project requires **three services** on Render: a managed PostgreSQL database, an Express backend (web service), and a React frontend (static site). The backend and frontend run on separate origins.

@@ -65,6 +65,7 @@ npm run audit:prod --prefix <client|server>    # npm audit --omit=dev at high, m
 npm run db:migrate:create --prefix server -- --name <name>  # Write migration SQL, don't apply
 npm run db:prepare --prefix server    # Apply migrations + regenerate client if schema changed (local DB only)
 npm run db:studio --prefix server     # Open Prisma Studio
+npm run db:seed:synthetic --prefix server  # Fill a local *_synthetic DB with made-up data (SYNTHETIC_DATABASE_URL; .context/database-migrations.md)
 ```
 
 **IMPORTANT database rules** (full workflow: `.context/database-migrations.md`):
