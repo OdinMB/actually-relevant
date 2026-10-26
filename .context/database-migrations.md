@@ -27,6 +27,46 @@ Run it on its own with `npm run db:prepare --prefix server`. Skip it entirely wi
 
 Code: `server/src/scripts/db-prepare/` (`index.ts` orchestrates; `gate.ts` and `localDatabase.ts` hold the local-only guard; `schemaStamp.ts` the regenerate check; `prismaOutput.ts` reads Prisma's output).
 
+## Run Locally with Synthetic Data
+
+A separate local database filled with made-up content, for development, demos or a new maintainer: the app runs against it without touching the development or production data, and without a paid API call. `npm run db:seed:synthetic --prefix server` (`server/src/scripts/synthetic-data/`: `dataset.ts` the data, `seed.ts` the writes, `guard.ts` the database rule, `index.ts` the command) writes:
+
+- the live site's issue taxonomy (its slugs and names, with made-up descriptions) and 15 feeds, three per top-level issue, one of them switched off and one failing;
+- 45 stories in every status the pipeline uses: 26 published (every homepage section has uplifting, calm and negative ones), the rest fetched, pre-analyzed, analyzed, selected, trashed, and rejected with each reason; one dedup cluster, a published primary with two `duplicate` reports from other feeds;
+- two published newsletter issues (`/newsletter/week-NN-YYYY`) and this week's draft; two published podcast episodes with transcripts, whose audio URL points nowhere (the player lists them but cannot play them), and this week's episode stopped after story selection, as a dry run (silent stub voice);
+- an admin login, `admin@example.org` with the password `synthetic-admin`: a throwaway that exists only in this local database.
+
+Every place, organization and event is invented, and the only email address is on `example.org`. Every URL is on `synthetic.example.org` except the newsletter issues' "relevance analysis" links, which the seed builds from `SITE_URL` in its shell as the real newsletter does: unset, they point at the live site, where these stories don't exist, so the seed line below points them at the local client. The ids and the stories' text are fixed. The dates count back from the day the seed runs, so the site looks current, and the newsletter titles and slugs and the podcast week keys follow them.
+
+**No embeddings.** The stories have none, and nothing calls OpenAI to make them. Related stories stay empty and search finds stories by text only (its semantic leg finds nothing). Publishing or re-assessing a story from the admin asks OpenAI for an embedding with whatever `OPENAI_API_KEY` the server has, which the run line below makes a placeholder that OpenAI refuses.
+
+**Guarded.** `SYNTHETIC_DATABASE_URL` comes from the shell, never from `server/.env`, and must name a local database (the `db:prepare` host rule) whose name ends in `_synthetic` (`guard.ts`); anything else is refused before a connection, so neither `actually_relevant_dev`, a `*_test` database nor production qualifies. The seed replaces everything in the database except the migration history and `job_runs`, in one transaction. It refuses, and changes nothing, when the database holds a feed or story whose URL is not on `synthetic.example.org` or a user whose email is not on `example.org`, unless given `--reset`; a rerun over an unchanged data set needs no flag and writes the same rows again. It switches off every job in `job_runs`, so a server started against the database schedules no crawl, model call or send.
+
+Against the Docker database: create the database once, apply the migrations (a shell value wins over `server/.env`), seed, then start the server against it:
+
+```bash
+docker exec actually-relevant-db psql -U ardev -d actually_relevant_dev -c "CREATE DATABASE actually_relevant_synthetic"
+DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevant_synthetic npm run db:prepare --prefix server
+SYNTHETIC_DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevant_synthetic SITE_URL=http://localhost:5173 npm run db:seed:synthetic --prefix server
+DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevant_synthetic NODE_ENV=development OPENAI_API_KEY=sk-none \
+  DIFFBOT_TOKEN=none PIPFEED_API_KEY=none \
+  PLUNK_SECRET_KEY=none PLUNK_PUBLIC_KEY=none PLUNK_FROM_EMAIL=none@example.org PLUNK_TEST_SEGMENT_ID=none SUBSCRIPTIONS_ENABLED=false \
+  BLUESKY_AUTO_POST_ENABLED=false BLUESKY_SERVICE_URL=http://localhost:9 BLUESKY_HANDLE=none.invalid BLUESKY_APP_PASSWORD=none \
+  MASTODON_AUTO_POST_ENABLED=false MASTODON_URL=http://localhost:9 MASTODON_TOKEN=none \
+  ELEVENLABS_API_KEY=none BUNNY_STORAGE_ZONE=none BUNNY_STORAGE_PASSWORD=none WEBHOOK_URL=http://localhost:9 \
+  npm run dev --prefix server
+```
+
+**Keep the placeholders on the server line.** The server also loads `server/.env`, so without them its Plunk, Bluesky, Mastodon, ElevenLabs, Bunny, extraction and webhook credentials would be live, and a send, post or publish clicked in the admin of this made-up database could email real subscribers or post to the real accounts. A value set in the shell wins over `server/.env`. The placeholders are non-empty on purpose: on Windows an empty variable can be dropped on its way to the server, and the real value from `server/.env` would then load. Each one disarms its service:
+
+- the switches read `false`, so auto-posting and signups are off;
+- the Bluesky, Mastodon and webhook URLs point at `localhost:9`, where nothing listens, so those calls fail on the machine;
+- Plunk, ElevenLabs, Bunny, Diffbot and PipFeed have fixed hosts in the code, and each rejects its placeholder key, so a newsletter send, a subscriber listing or an upload is refused there. Under `NODE_ENV=development` the podcast episodes the server makes or rewinds are dry runs, like the seeded draft, and their silent stub voice never calls ElevenLabs.
+
+A credential added to `env.example` later belongs on this line too.
+
+The server still sends its model calls to OpenAI, which refuses the placeholder key: what needs a model (assessing, search's semantic leg, newsletter and podcast generation, the embedding made on publish) fails or falls back instead. Without a migrated schema the seed stops with Prisma's missing-table error and the `db:prepare` line to run. `seed.db.test.ts` runs the seed against the test database (`npm run test:db`).
+
 ## Authoring a Migration
 
 1. Edit `server/prisma/schema.prisma`.
@@ -122,6 +162,7 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 |---|---|
 | `docker compose up -d` | Start the local database |
 | `npm run db:prepare --prefix server` | Apply pending migrations and regenerate the client if the schema changed (local DB only; runs automatically before `dev`) |
+| `SYNTHETIC_DATABASE_URL=… npm run db:seed:synthetic --prefix server [-- --reset]` | Fill a local `*_synthetic` database with the synthetic data set ("Run Locally with Synthetic Data") |
 | `npm run db:migrate:create --prefix server -- --name <name>` | Generate migration SQL without applying |
 | `npm run db:migrate:status --prefix server` | Check which migrations are pending/applied |
 | `npm run db:migrate:diff --prefix server` | Print the SQL from the database to the schema, read-only (expected: only the `stories_embedding_idx` drop) |
