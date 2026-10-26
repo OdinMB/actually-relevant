@@ -1,0 +1,10 @@
+{
+  "name": "actually-relevant-site-harness",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Development tooling, never deployed: a hermetic run of the public website with invented data, driven by headless Chrome. See README.md.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}
