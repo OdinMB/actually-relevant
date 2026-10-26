@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -7,11 +7,17 @@ import { HelmetProvider } from 'react-helmet-async'
 import type { PublicPodcastEpisodeDetail } from '@shared/types'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { ApiError } from '../lib/api'
+import { PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
 
 const mockApi = vi.hoisted(() => ({ podcastEpisode: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
+}))
+
+const openSubscribe = vi.hoisted(() => vi.fn())
+vi.mock('../components/SubscribeProvider', () => ({
+  useSubscribe: () => ({ openSubscribe }),
 }))
 
 import PodcastTranscriptPage from './PodcastTranscriptPage'
@@ -109,6 +115,25 @@ describe('PodcastTranscriptPage', () => {
     expect(audio?.getAttribute('src')).toBe(AUDIO_URL)
     expect(audio?.getAttribute('preload')).toBe('none')
     expect(container.querySelector('a[href="/podcast"]')).not.toBeNull()
+  })
+
+  it("links /podcast's Subscribe section beside the way back to all episodes", async () => {
+    renderPage()
+    await screen.findByText('Welcome to the week.')
+    expect(screen.getByRole('link', { name: /All episodes/ }).getAttribute('href')).toBe('/podcast')
+    expect(screen.getByRole('link', { name: 'Subscribe to the podcast' }).getAttribute('href')).toBe(PODCAST_SUBSCRIBE_PATH)
+  })
+
+  it('offers the newsletter after the transcript and the story list', async () => {
+    renderPage()
+    await screen.findByText('Welcome to the week.')
+    const storyList = screen.getByRole('heading', { level: 2, name: 'Stories in this episode' })
+    const subscribe = screen.getByRole('button', { name: 'Get the weekly newsletter' })
+    expect(storyList.compareDocumentPosition(subscribe) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'read past issues' }).getAttribute('href')).toBe('/newsletter')
+
+    fireEvent.click(subscribe)
+    expect(openSubscribe).toHaveBeenCalledTimes(1)
   })
 
   it('says the episode was not found when it is not published', async () => {

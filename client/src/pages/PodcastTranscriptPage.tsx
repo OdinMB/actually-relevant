@@ -3,9 +3,10 @@ import { Helmet } from 'react-helmet-async'
 import type { PublicPodcastEpisodeDetail, PublicPodcastTranscriptSegment } from '@shared/types'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildBreadcrumbSchema, buildPodcastEpisodeSchema } from '../lib/structured-data'
-import { formatEpisodeDate, formatEpisodeDuration, podcastTranscriptPath } from '../lib/podcast'
+import { formatEpisodeDate, formatEpisodeDuration, podcastTranscriptPath, PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
 import StructuredData from '../components/StructuredData'
 import AiBadge from '../components/ai/AiBadge'
+import { NewsletterCrossLink } from '../components/CrossLinks'
 import EpisodeStoryList, { PODCAST_LINK_CLASS } from '../components/podcast/EpisodeStoryList'
 import PodcastSubtitle from '../components/podcast/PodcastSubtitle'
 import { usePodcastEpisode } from '../hooks/usePodcastEpisodes'
@@ -85,8 +86,9 @@ function NotFound() {
 /**
  * A published episode's transcript page (`/podcast/:id/transcript`): the "AI" badge and title,
  * date and duration, the /podcast AI subtitle, the player, then the conversation as spoken (opener
- * and sign-off included) with a heading per story, then the story list. Loads client-side like a
- * story page; not prerendered, listed in the server sitemap.
+ * and sign-off included) with a heading per story, then the story list, links to all episodes and
+ * /podcast's Subscribe section, and the newsletter offer. Loads client-side like a story page; not
+ * prerendered, listed in the server sitemap.
  */
 export default function PodcastTranscriptPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -135,9 +137,13 @@ export default function PodcastTranscriptPage() {
           </section>
         )}
 
-        <div className="border-t border-neutral-200 pt-6 mt-10">
+        <div className="border-t border-neutral-200 pt-6 mt-10 flex flex-wrap justify-between gap-4">
           <BackToPodcast />
+          <Link to={PODCAST_SUBSCRIBE_PATH} className={BACK_LINK_CLASS}>
+            Subscribe to the podcast
+          </Link>
         </div>
+        <NewsletterCrossLink className="mt-6" />
       </article>
     </>
   )

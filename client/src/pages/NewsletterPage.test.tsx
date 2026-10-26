@@ -76,6 +76,14 @@ describe('NewsletterPage', () => {
     })
   })
 
+  it('offers the podcast after the past issues', async () => {
+    renderPage()
+    const lastIssue = await screen.findByRole('link', { name: 'Week 41, 2026' })
+    const podcast = screen.getByRole('link', { name: 'Try the weekly podcast' })
+    expect(podcast.getAttribute('href')).toBe('/podcast')
+    expect(lastIssue.compareDocumentPosition(podcast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('says so when no issue is published yet', async () => {
     mockApi.newsletterArchive.mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
     renderPage()
