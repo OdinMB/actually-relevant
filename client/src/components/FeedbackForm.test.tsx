@@ -10,7 +10,8 @@ vi.mock('../lib/api', async importOriginal => ({
   publicApi: mockApi,
 }))
 
-import FeedbackForm, { FORM_TOKEN_REFRESH_MS } from './FeedbackForm'
+import FeedbackForm from './FeedbackForm'
+import { FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
 
 const STORY = { id: 'story-1', title: 'Air & Health: Cities cut smog' }
 

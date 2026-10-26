@@ -357,6 +357,159 @@ describe('SubscribeForm', () => {
     })
   })
 
+  describe('when the form stays open a long time', () => {
+    // The server drops a token older than 30 minutes or younger than 1.5 s and still answers
+    // success, so no email would come (config.subscribe.formTokenMaxAgeMs, minFormFillMs).
+    const MINUTE = 60 * 1000
+    const SERVER_MIN_AGE_MS = 1500
+
+    let visibility: DocumentVisibilityState
+
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      visibility = 'visible'
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+      Reflect.deleteProperty(document, 'visibilityState')
+    })
+
+    /** Answers the token requests in turn, noting the (fake) time each token was issued. */
+    function issueTokens(...tokens: string[]) {
+      const issuedAt: Record<string, number> = {}
+      mockGetToken.mockReset()
+      for (const token of tokens) {
+        mockGetToken.mockImplementationOnce(async () => {
+          issuedAt[token] = Date.now()
+          return { token }
+        })
+      }
+      return issuedAt
+    }
+
+    /** Accepts every signup, noting the (fake) time each was posted. */
+    function recordPosts() {
+      const postedAt: number[] = []
+      mockSubscribe.mockImplementation(async () => {
+        postedAt.push(Date.now())
+        return { success: true, message: 'ok' }
+      })
+      return postedAt
+    }
+
+    async function wait(ms: number) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ms)
+      })
+    }
+
+    /** Hides the tab for `awayMs`, then shows it again. */
+    async function leaveAndReturn(awayMs: number) {
+      visibility = 'hidden'
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await wait(awayMs)
+      visibility = 'visible'
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+    }
+
+    async function submit(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      await user.click(screen.getByRole('button', { name: /subscribe/i }))
+    }
+
+    it('posts a fresh token, old enough for the server, when the one it holds is 31 minutes old', async () => {
+      const issuedAt = issueTokens('first-token', 'fresh-token')
+      const postedAt = recordPosts()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await renderReady()
+
+      await wait(31 * MINUTE)
+      await submit(user)
+
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalledTimes(2))
+      expect(screen.getByRole('button', { name: /subscribing/i })).toBeDisabled()
+      expect(mockSubscribe).not.toHaveBeenCalled()
+
+      await wait(SERVER_MIN_AGE_MS)
+      await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument())
+      expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'fresh-token' })
+      expect(postedAt[0]! - issuedAt['fresh-token']!).toBeGreaterThanOrEqual(SERVER_MIN_AGE_MS)
+    })
+
+    it('posts the token it holds, asking for none, while that token is 24 minutes old', async () => {
+      recordPosts()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await renderReady()
+
+      await wait(24 * MINUTE)
+      await submit(user)
+
+      await waitFor(() => expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'test-token' }))
+      expect(mockGetToken).toHaveBeenCalledTimes(1)
+    })
+
+    it('fetches a fresh token when the reader comes back to the tab after 30 minutes, and posts it once old enough', async () => {
+      const issuedAt = issueTokens('first-token', 'fresh-token')
+      const postedAt = recordPosts()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await renderReady()
+
+      await leaveAndReturn(31 * MINUTE)
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalledTimes(2))
+      // Submitting at once: the fresh token is still too young for the server.
+      await submit(user)
+      await wait(SERVER_MIN_AGE_MS)
+
+      await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument())
+      expect(mockGetToken).toHaveBeenCalledTimes(2)
+      expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'fresh-token' })
+      expect(postedAt[0]! - issuedAt['fresh-token']!).toBeGreaterThanOrEqual(SERVER_MIN_AGE_MS)
+    })
+
+    it('fetches a fresh token when the window gets focus back after 30 minutes', async () => {
+      issueTokens('first-token', 'fresh-token')
+      await renderReady()
+
+      await wait(31 * MINUTE)
+      act(() => {
+        window.dispatchEvent(new Event('focus'))
+      })
+
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalledTimes(2))
+    })
+
+    it('asks for no new token when the reader comes back within minutes', async () => {
+      await renderReady()
+
+      await leaveAndReturn(5 * MINUTE)
+      act(() => {
+        window.dispatchEvent(new Event('focus'))
+      })
+      await wait(0)
+
+      expect(mockGetToken).toHaveBeenCalledTimes(1)
+    })
+
+    it('says something went wrong, posting nothing, when no fresh token can be fetched', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await renderReady()
+      mockGetToken.mockRejectedValue(new Error('API down'))
+
+      await wait(31 * MINUTE)
+      await submit(user)
+
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong'))
+      expect(mockSubscribe).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled()
+    })
+  })
+
   describe('what a subscriber gets', () => {
     it('is said under the form and describes the email field', async () => {
       await renderReady()
