@@ -1,3 +1,9 @@
+/**
+ * `npm run db:seed:jobs --prefix server`: creates every job_runs row that does not exist yet, all
+ * disabled, so a new database has a row for each job in JOB_HANDLERS (README, "Fresh Install").
+ * An existing row is never changed (`update: {}`), so it is safe to rerun on any database. It has
+ * no local-only guard: it writes to whatever DATABASE_URL names.
+ */
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 

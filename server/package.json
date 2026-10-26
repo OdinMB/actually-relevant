@@ -29,6 +29,7 @@
     "db:prepare": "tsx src/scripts/db-prepare/index.ts",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:jobs": "tsx src/scripts/seed-jobs.ts",
     "db:seed:synthetic": "tsx src/scripts/synthetic-data/index.ts",
     "admin:create": "tsx src/scripts/create-admin.ts",
     "backup:plunk-contacts": "tsx src/scripts/backup-plunk-contacts.ts",
