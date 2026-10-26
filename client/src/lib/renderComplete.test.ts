@@ -1,7 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ROUTE_FALLBACK_ATTR, signalRenderComplete } from './renderComplete'
+import { ROUTE_FALLBACK_ATTR, isPrerendering, signalRenderComplete } from './renderComplete'
 
 const options = { initialDelayMs: 100, pollMs: 50, maxWaitMs: 1000 }
+
+describe('isPrerendering', () => {
+  it('is true only in an automated browser such as the prerenderer', () => {
+    expect(isPrerendering({ webdriver: true })).toBe(true)
+    expect(isPrerendering({ webdriver: false })).toBe(false)
+    expect(isPrerendering()).toBe(false) // jsdom is not automated
+  })
+})
 
 describe('signalRenderComplete', () => {
   let fired: number
