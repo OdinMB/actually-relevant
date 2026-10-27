@@ -1,28 +1,30 @@
 /**
  * Large-tier suite: editorial selection, newsletter selection and podcast
  * script. They share OPENAI_MODEL_LARGE, so they are evaluated (and later
- * switched) together: gpt-5.2 rerun vs gpt-6-sol. Sol's known risk is
- * declining more often on "pick exactly N" prompts, so exact-count compliance
- * is the gate. (The newsletter intro was a fourth call site until it was
- * dropped on 2026-10-26.)
+ * switched) together: today's gpt-6-sol, rerun, vs gpt-6.1-sol (since
+ * 2026-10-27; phase 1 compared gpt-5.2 with gpt-6-sol). Sol's known risk is
+ * declining more often on "pick exactly N" prompts, and 6.1 Sol is reported
+ * to refuse more, so exact-count compliance and declines are the gate. (The
+ * newsletter intro was a fourth call site until it was dropped on 2026-10-26.)
  */
 import { buildSelectPrompt } from '../../../prompts/select.js'
 import { buildNewsletterSelectPrompt } from '../../../prompts/newsletter-select.js'
 import { newsletterSelectResultSchema, podcastDialogueSchema, selectResultSchema, type SelectResult } from '../../../schemas/llm.js'
 import type { Fixtures, NewsletterItem, PodcastItem, SelectionGroup } from '../fixtures.js'
 import { TARGETS } from '../fixtures.js'
-import { arm, armKey } from '../models.js'
+import { arm, armKey, modelOf } from '../models.js'
 import { jaccard, mean, num, pct, rate } from '../checks.js'
 import { pickLowestPassing } from '../decide.js'
 import type { CallRecord, CallSiteResult, Decision, RatingItemDraft, Suite } from '../types.js'
 import { podcastEpisodeStories, podcastPrompt, renderDialogue, scorePodcast } from './podcast.js'
 import { limited, metricRow, parsedOf, runArms, statsFor } from './shared.js'
 
-const BASELINE = arm('gpt-5.2', 'medium')
-const CANDIDATE = arm('gpt-6-sol', 'medium')
-const ARMS = [BASELINE, CANDIDATE]
-const BASE_KEY = armKey(BASELINE)
-const CAND_KEY = armKey(CANDIDATE)
+/** Today's production model, rerun, and the model proposed to replace it; the report names both. */
+export const LARGE_BASELINE = arm('gpt-6-sol', 'medium')
+export const LARGE_CANDIDATE = arm('gpt-6.1-sol', 'medium')
+const ARMS = [LARGE_BASELINE, LARGE_CANDIDATE]
+const BASE_KEY = armKey(LARGE_BASELINE)
+const CAND_KEY = armKey(LARGE_CANDIDATE)
 const TOKENS = { selection: 4500, newsletterSelect: 4000, podcast: 6000 }
 
 const groups = (fx: Fixtures, limit?: number) => limited(fx.selection, limit)
@@ -87,17 +89,18 @@ export function decideSelection(metrics: Record<string, SelectionArmMetrics>, ba
   const b = metrics[baseline]
   const m = metrics[candidate]
   if (b?.exactCount == null || m?.exactCount == null) return { verdict: { kind: 'none', reasons: ['no selection groups were evaluated'] }, passing: [] }
-  // Absolute bar 100%, relaxed to gpt-5.2's own rate only if gpt-5.2 misses it too.
+  // Absolute bar 100%, relaxed to the baseline's own rate only if the baseline misses it too.
   const bar = (b.exactCount ?? 0) < 1 ? (b.exactCount ?? 0) : 1
+  const base = modelOf(baseline)
   return pickLowestPassing([
     {
       arm: candidate,
       failures: [
         ...((m.exactCount ?? 0) < bar ? [`exact-count compliance ${pct(m.exactCount)} < ${pct(bar)}`] : []),
-        ...(m.declined > b.declined ? [`${m.declined} declined/empty responses (gpt-5.2 ${b.declined})`] : []),
-        ...(m.failures > b.failures ? [`${m.failures} failed calls (gpt-5.2 ${b.failures})`] : []),
+        ...(m.declined > b.declined ? [`${m.declined} declined/empty responses (${base} ${b.declined})`] : []),
+        ...(m.failures > b.failures ? [`${m.failures} failed calls (${base} ${b.failures})`] : []),
       ],
-      evidence: [`exact count ${pct(m.exactCount)} (gpt-5.2 ${pct(b.exactCount)}), declines ${m.declined} (gpt-5.2 ${b.declined})`],
+      evidence: [`exact count ${pct(m.exactCount)} (${base} ${pct(b.exactCount)}), declines ${m.declined} (${base} ${b.declined})`],
     },
   ])
 }
@@ -179,14 +182,15 @@ function scoreNewsletterSelect(ns: NewsletterItem[], recs: CallRecord<SelectResu
 // Shared gate
 // ---------------------------------------------------------------------------
 
-/** Candidate must be no worse than the gpt-5.2 rerun on each listed "lower is better" count. */
+/** Candidate must be no worse than the baseline rerun on each listed "lower is better" count. */
 function noWorseThanBaseline(label: string, items: number, checks: { name: string; cand: number | null; base: number | null }[]): Decision {
   if (items === 0) return { verdict: { kind: 'none', reasons: [`${label}: no fixture items were evaluated`] }, passing: [] }
+  const base = LARGE_BASELINE.model
   return pickLowestPassing([
     {
       arm: CAND_KEY,
-      failures: checks.filter(c => (c.cand ?? Infinity) > (c.base ?? 0)).map(c => `${label} ${c.name}: ${num(c.cand)} > gpt-5.2 ${num(c.base)}`),
-      evidence: checks.map(c => `${c.name}: ${num(c.cand)} (gpt-5.2 ${num(c.base)})`),
+      failures: checks.filter(c => (c.cand ?? Infinity) > (c.base ?? 0)).map(c => `${label} ${c.name}: ${num(c.cand)} > ${base} ${num(c.base)}`),
+      evidence: checks.map(c => `${c.name}: ${num(c.cand)} (${base} ${num(c.base)})`),
     },
   ])
 }

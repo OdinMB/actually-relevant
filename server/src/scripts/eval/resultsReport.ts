@@ -1,13 +1,14 @@
 /**
  * Renders the plain-language `results.md`: per-call-site evidence, the
- * monthly cost projection, and the per-tier settings recommended for Phase 2.
+ * monthly cost projection, and the per-tier settings it recommends.
  */
 import { REASONING_EFFORTS, type ReasoningEffort } from '../../config.js'
 import { effortOf } from './decide.js'
 import type { Fixtures } from './fixtures.js'
-import { MODELS } from './models.js'
+import { armKey, MODELS, modelOf } from './models.js'
 import type { DeliverableSummary } from './ratingFiles.js'
 import type { ExcludedDraft } from './ratingSets.js'
+import { LARGE_BASELINE, LARGE_CANDIDATE } from './suites/largeTier.js'
 import type { ArmStats, CallSiteId, CallSiteResult, SuiteName, SuiteResult } from './types.js'
 
 /** Calls per month (inventory of 2026-09-24: estimates from marketing copy and cron config; the app has no usage telemetry). */
@@ -41,7 +42,6 @@ const LUNA_TIERS: { tier: 'small' | 'medium'; sites: CallSiteId[] }[] = [
   { tier: 'medium', sites: ['preassess', 'assess', 'social-pick'] },
 ]
 const LARGE_SITES: CallSiteId[] = ['selection', 'newsletter-select', 'podcast']
-const SOL = 'gpt-6-sol@medium'
 
 function lunaTier(tier: 'small' | 'medium', ids: CallSiteId[], byId: Map<CallSiteId, CallSiteResult>): TierRecommendation {
   const missing = ids.filter(id => !byId.has(id))
@@ -74,17 +74,26 @@ export function recommendTierSettings(sites: CallSiteResult[]): TierRecommendati
   const byId = new Map(sites.map(s => [s.id, s]))
   const recs = LUNA_TIERS.map(t => lunaTier(t.tier, t.sites, byId))
   const large = LARGE_SITES.map(id => byId.get(id))
-  const failing = LARGE_SITES.filter((_, i) => !large[i]?.decision.passing.includes(SOL))
+  const candidate = armKey(LARGE_CANDIDATE)
+  const failing = LARGE_SITES.filter((_, i) => !large[i]?.decision.passing.includes(candidate))
+  const { model: cand, effort } = LARGE_CANDIDATE
+  const base = LARGE_BASELINE.model
   recs.push(
     failing.length === 0
       ? {
           tier: 'large',
-          model: 'gpt-6-sol',
-          effort: 'medium',
-          summary: 'gpt-6-sol at medium: automated gate passed; switch only after the owner rates the large-tier sets',
+          model: cand,
+          effort,
+          summary: `${cand} at ${effort}: automated gate passed; switch only after the owner rates the large-tier sets`,
           notes: [],
         }
-      : { tier: 'large', model: 'gpt-5.2', effort: 'medium', summary: `stay on gpt-5.2: Sol did not pass (or did not run) ${failing.join(', ')}`, notes: [] },
+      : {
+          tier: 'large',
+          model: base,
+          effort: LARGE_BASELINE.effort,
+          summary: `stay on ${base}: ${cand} did not pass (or did not run) ${failing.join(', ')}`,
+          notes: [],
+        },
   )
   return recs
 }
@@ -100,7 +109,7 @@ export function monthlyCost(site: CallSiteResult, arm: string): { low: number; h
   return { low: s.meanCostUsd * v.low, high: s.meanCostUsd * v.high }
 }
 
-/** The arm Phase 2 would run: the automated winner, else the highest-effort candidate tested (flagged). */
+/** The arm a switch would run: the automated winner, else the highest-effort candidate tested (flagged). */
 function proposedArm(site: CallSiteResult): { arm: string; flagged: boolean } {
   if (site.decision.verdict.kind === 'winner') return { arm: site.decision.verdict.arm, flagged: false }
   return { arm: site.candidates[site.candidates.length - 1] ?? site.baseline, flagged: true }
@@ -112,18 +121,19 @@ const usdPerCall = (v: number) => `$${v < 0.01 ? v.toFixed(5) : v.toFixed(4)}`
 const range = (r: { low: number; high: number } | null) => (r ? `${usd(r.low)}–${usd(r.high)}` : 'n/a')
 
 // ---------------------------------------------------------------------------
-// "Is gpt-5.2 better in any way?"
+// "Is the baseline better in any way?"
 // ---------------------------------------------------------------------------
 
 /** Every directional metric, latency percentile and $/call on which arm `a` strictly beats arm `b`. */
 function armWins(site: CallSiteResult, a: string, b: string): string[] {
-  const model = (arm: string) => arm.split('@')[0]
+  const ma = modelOf(a)
+  const mb = modelOf(b)
   const fromMetrics = site.metrics.flatMap(row => {
     const x = row.raw[a]
     const y = row.raw[b]
     if (!row.better || x == null || y == null) return []
     const wins = row.better === 'higher' ? x > y : x < y
-    return wins ? [`${site.id}: ${row.name} (${model(a)} ${row.values[a]} vs ${model(b)} ${row.values[b]})`] : []
+    return wins ? [`${site.id}: ${row.name} (${ma} ${row.values[a]} vs ${mb} ${row.values[b]})`] : []
   })
   const sa = site.stats.find(s => s.arm === a && s.calls > 0)
   const sb = site.stats.find(s => s.arm === b && s.calls > 0)
@@ -135,7 +145,7 @@ function armWins(site: CallSiteResult, a: string, b: string): string[] {
           { label: 'median latency', x: sa.latencyP50, y: sb.latencyP50, fmt: ms },
           { label: '95th-percentile latency', x: sa.latencyP95, y: sb.latencyP95, fmt: ms },
           { label: 'cost per call', x: sa.meanCostUsd, y: sb.meanCostUsd, fmt: (v: number) => `$${v.toFixed(4)}` },
-        ].flatMap(c => (c.x != null && c.y != null && c.x < c.y ? [`${site.id}: ${c.label} (${model(a)} ${c.fmt(c.x)} vs ${model(b)} ${c.fmt(c.y)})`] : []))
+        ].flatMap(c => (c.x != null && c.y != null && c.x < c.y ? [`${site.id}: ${c.label} (${ma} ${c.fmt(c.x)} vs ${mb} ${c.fmt(c.y)})`] : []))
   return [...fromMetrics, ...fromStats]
 }
 
@@ -248,8 +258,11 @@ function costSection(sites: CallSiteResult[]): string[] {
 function largeTierSection(sites: CallSiteResult[]): string[] {
   const large = sites.filter(s => LARGE_SITES.includes(s.id))
   if (large.length === 0) return ['The large-tier suite did not run.']
+  const base = LARGE_BASELINE.model
+  const cand = LARGE_CANDIDATE.model
+  const unverified = [base, cand].filter(m => !MODELS[m].verified).join(' and ')
   const wins = large.flatMap(baselineWins)
-  const solWins = large.flatMap(candidateWins)
+  const candWins = large.flatMap(candidateWins)
   const cost = (arm: string) =>
     large.reduce(
       (acc, s) => {
@@ -260,16 +273,16 @@ function largeTierSection(sites: CallSiteResult[]): string[] {
     )
   return [
     wins.length === 0
-      ? '**Not on any automated measure.** On every compliance, failure, rule-violation, latency and cost measure, gpt-6-sol is equal to or better than the gpt-5.2 rerun.'
+      ? `**Not on any automated measure.** On every compliance, failure, rule-violation, latency and cost measure, ${cand} is equal to or better than the ${base} rerun.`
       : `**Yes, on ${wins.length} automated measure${wins.length === 1 ? '' : 's'}:**`,
     ...wins.map(w => `- ${w}`),
     '',
-    'Where gpt-6-sol beats the gpt-5.2 rerun:',
-    ...(solWins.length > 0 ? solWins.map(w => `- ${w}`) : ['- none']),
+    `Where ${cand} beats the ${base} rerun:`,
+    ...(candWins.length > 0 ? candWins.map(w => `- ${w}`) : ['- none']),
     '',
-    'Measures not listed are ties. Cost per call uses the unverified gpt-5.2 price.',
+    `Measures not listed are ties.${unverified ? ` Cost per call uses the unverified ${unverified} price.` : ''}`,
     '',
-    `Monthly cost of the three large-tier call sites: gpt-5.2 ${range(cost('gpt-5.2@medium'))} vs gpt-6-sol ${range(cost(SOL))} (gpt-5.2 price unverified).`,
+    `Monthly cost of the three large-tier call sites: ${base} ${range(cost(armKey(LARGE_BASELINE)))} vs ${cand} ${range(cost(armKey(LARGE_CANDIDATE)))}${unverified ? ` (${unverified} price unverified)` : ''}.`,
     'Taste is not measured here: the owner rates the selection groups where the two disagree most and the podcast script.',
   ]
 }
@@ -292,15 +305,15 @@ export function renderResults(input: ReportInput): string {
       ? ['', `**Partial run:** at most ${input.limit} fixture items per suite (\`--limit\`). Verdicts from a partial run are not evidence.`]
       : []),
     '',
-    '## Recommendation for Phase 2',
+    '## Recommendation per tier',
     '',
     '| Tier | Setting | Notes |',
     '|---|---|---|',
     ...recs.map(r => `| ${r.tier} | ${r.summary} | ${r.notes.join('; ') || '–'} |`),
     '',
-    'Production defaults are unchanged. Phase 2 sets `OPENAI_MODEL_*` / `OPENAI_EFFORT_*` after the owner has rated the taste sets.',
+    'The eval changes no setting. A tier moves (its default in `config.ts`, or `OPENAI_MODEL_*` / `OPENAI_EFFORT_*`) only after the owner has rated the taste sets.',
     '',
-    '## Is gpt-5.2 better in any way?',
+    `## Is ${LARGE_BASELINE.model} better in any way?`,
     '',
     ...largeTierSection(sites),
     '',

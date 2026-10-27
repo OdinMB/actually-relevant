@@ -42,6 +42,18 @@ export const MODELS: Record<ModelId, ModelPrice> = {
   'gpt-5.2': { input: 1.75, cached: 0.175, output: 14.0, cacheWrite: 1, outputFactor: 1, source: 'from memory, not in the research brief', verified: false },
   'gpt-6-luna': { input: 0.1, cached: 0.01, output: 0.5, cacheWrite: 1.25, outputFactor: 1.25, source: 'research brief', verified: true },
   'gpt-6-sol': { input: 2.0, cached: 0.2, output: 10.0, cacheWrite: 1.25, outputFactor: 1, source: 'research brief', verified: true },
+  // Input and output from search snippets of OpenAI pages (2026-10-27). Secondary sources report
+  // cached input at 0.1; gpt-6-sol's 0.2 is kept as the upper bound so the budget guard never
+  // undercounts. Cache writes assumed at 1.25× like the rest of GPT-6.
+  'gpt-6.1-sol': {
+    input: 2.0,
+    cached: 0.2,
+    output: 10.0,
+    cacheWrite: 1.25,
+    outputFactor: 1,
+    source: 'OpenAI pages via search snippets, 2026-10-27; cached rate and cache write assumed as gpt-6-sol',
+    verified: false,
+  },
 }
 
 const EFFORT_OUTPUT_FACTOR: Partial<Record<ReasoningEffort, number>> = { low: 0.4, medium: 1, high: 1.5 }
@@ -52,6 +64,11 @@ export function arm(model: ModelId, effort: ReasoningEffort): Arm {
 
 export function armKey(a: Arm): string {
   return `${a.model}@${a.effort}`
+}
+
+/** The model part of an arm key, for report text. */
+export function modelOf(key: string): string {
+  return key.split('@')[0] ?? key
 }
 
 function priceOf(model: string): ModelPrice {

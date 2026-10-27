@@ -10,28 +10,28 @@ const base: SelectionArmMetrics = {
   jaccardOther: 0.7,
   upliftingShare: 0.3,
 }
-const B = 'gpt-5.2@medium'
-const S = 'gpt-6-sol@medium'
+const B = 'gpt-6-sol@medium'
+const S = 'gpt-6.1-sol@medium'
 
 describe('decideSelection', () => {
-  it('requires 100% exact-count compliance when gpt-5.2 achieves it', () => {
+  it('requires 100% exact-count compliance when the baseline achieves it', () => {
     expect(decideSelection({ [B]: base, [S]: { ...base, exactCount: 0.95 } }, B, S).verdict.kind).toBe('none')
     expect(decideSelection({ [B]: base, [S]: base }, B, S).verdict).toMatchObject({ kind: 'winner', arm: S })
   })
 
-  it("relaxes the bar to gpt-5.2's own rate only when gpt-5.2 misses 100%", () => {
+  it("relaxes the bar to the baseline's own rate only when the baseline misses 100%", () => {
     const missing = { ...base, exactCount: 0.9 }
     expect(decideSelection({ [B]: missing, [S]: { ...base, exactCount: 0.9 } }, B, S).verdict.kind).toBe('winner')
     expect(decideSelection({ [B]: missing, [S]: { ...base, exactCount: 0.85 } }, B, S).verdict.kind).toBe('none')
   })
 
-  it('does not pass Sol when no groups were evaluated', () => {
+  it('does not pass the candidate when no groups were evaluated', () => {
     const empty = { ...base, exactCount: null }
     expect(decideSelection({ [B]: empty, [S]: empty }, B, S).verdict.kind).toBe('none')
   })
 
-  it('fails Sol when it declines more often than gpt-5.2', () => {
+  it('fails the candidate when it declines more often than the baseline, naming the baseline model', () => {
     const d = decideSelection({ [B]: base, [S]: { ...base, declined: 2 } }, B, S)
-    expect(d.verdict.kind === 'none' && d.verdict.reasons.join()).toMatch(/declined/)
+    expect(d.verdict.kind === 'none' && d.verdict.reasons.join()).toMatch(/2 declined\/empty responses \(gpt-6-sol 0\)/)
   })
 })

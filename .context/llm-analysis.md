@@ -10,13 +10,13 @@ Configuration is centralized in `server/src/config.ts`. Three model tiers are av
 |------|--------------|-----------------|---------|
 | Small | `gpt-6-luna` | `low` | Dedup confirmation, related-stories re-rank, reclassification and emotion-only tagging |
 | Medium | `gpt-6-luna` | `medium` | Pre-assessment, full assessment, social story pick, social post text |
-| Large | `gpt-6-sol` | `medium` | Editorial selection, newsletter selection, podcast story selection and two-speaker dialogue (`config.podcast.selectModelTier` / `scriptModelTier`; `.context/podcast.md`) |
+| Large | `gpt-6.1-sol` | `medium` | Editorial selection, newsletter selection, podcast story selection and two-speaker dialogue (`config.podcast.selectModelTier` / `scriptModelTier`; `.context/podcast.md`) |
 
-These are the owner's GPT-6 choices of 2026-09-24, from the model eval and blind ratings (`DOCS/2026-09-24_gpt6-eval/results.md`, gitignored). Until then the tiers ran gpt-5-nano, gpt-5-mini and gpt-5.2, all at `medium`; gpt-5-mini/nano's dated snapshots shut down on 2026-12-11. Small and medium are the same model now, so the effort is what tells them apart.
+These are the owner's GPT-6 choices of 2026-09-24, from the model eval and blind ratings (`DOCS/2026-09-24_gpt6-eval/results.md`, gitignored). Until then the tiers ran gpt-5-nano, gpt-5-mini and gpt-5.2, all at `medium`; gpt-5-mini/nano's dated snapshots shut down on 2026-12-11. Small and medium are the same model now, so the effort is what tells them apart. The large tier ran gpt-6-sol from 2026-09-24 and was switched to gpt-6.1-sol (same price, same effort) on 2026-10-27, pending the owner's large-tier eval and a podcast listening check (`.context/model-eval.md`, "Large tier: gpt-6-sol vs gpt-6.1-sol"); its prompts were tuned on gpt-6-sol and are unchanged.
 
 Environment variables:
 - `OPENAI_MODEL_SMALL` / `OPENAI_MODEL_MEDIUM` / `OPENAI_MODEL_LARGE` — defaults as in the table
-- `OPENAI_EFFORT_SMALL` / `OPENAI_EFFORT_MEDIUM` / `OPENAI_EFFORT_LARGE` — reasoning effort per tier, defaults as in the table. One of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; any other value throws at startup. Each model accepts a subset: GPT-6 rejects `minimal`, gpt-5-mini/nano reject `none`, and `createChatModel` throws for those pairs.
+- `OPENAI_EFFORT_SMALL` / `OPENAI_EFFORT_MEDIUM` / `OPENAI_EFFORT_LARGE` — reasoning effort per tier, defaults as in the table. One of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; any other value throws at startup. Each model accepts a subset: GPT-6 rejects `minimal`, gpt-5-mini/nano and gpt-6.1-sol reject `none`, and `createChatModel` throws for those pairs.
 - `LLM_DELAY_MS` — rate limit delay between calls (default 500ms)
 
 A set variable beats the default, so a stale `OPENAI_MODEL_*` or `OPENAI_EFFORT_*` on the host silently keeps the old model. Leave them unset unless you mean to override.
@@ -25,7 +25,7 @@ Every chat client is built by `createChatModel()` in `server/src/services/llm.ts
 
 **Text to speech (podcast).** Not an OpenAI tier: the podcast audio is voiced by ElevenLabs `eleven_v4` through Text to Dialogue, pinned as `config.podcast.ttsModelId` with the voice ids beside it, called only from `server/src/lib/elevenlabs.ts` (`.context/podcast.md`). Track its retirement like an OpenAI model's: a model change re-voices the listening test before the job is enabled again, and changes the record in `.context/ai-transparency.md` (row 11).
 
-Before changing a tier's model or effort, run the model eval harness (`.context/model-eval.md`); it compares candidates against each suite's baseline arm on stored data without writing to the database. Those baselines are still the pre-switch gpt-5 models, so rebase them onto today's defaults first (`.context/model-eval.md`).
+Before changing a tier's model or effort, run the model eval harness (`.context/model-eval.md`); it compares candidates against each suite's baseline arm on stored data without writing to the database. The large-tier suite compares gpt-6-sol (the default until 2026-10-27) with gpt-6.1-sol; the small- and medium-tier suites' baselines are still the pre-switch gpt-5 models, so rebase those onto today's defaults first (`.context/model-eval.md`).
 
 ### Prompts and models change together
 

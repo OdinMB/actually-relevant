@@ -67,6 +67,14 @@ describe('llm client construction', () => {
       expect(() => createChatModel({ name: 'gpt-5-mini', reasoningEffort: 'none' })).toThrow(/none/)
     })
 
+    it('rejects none effort on gpt-6.1-sol and its dated snapshots, and keeps it for gpt-6-sol', async () => {
+      const { createChatModel } = await loadLlm()
+      expect(() => createChatModel({ name: 'gpt-6.1-sol', reasoningEffort: 'none' })).toThrow(/none/)
+      expect(() => createChatModel({ name: 'gpt-6.1-sol-2026-09-29', reasoningEffort: 'none' })).toThrow(/none/)
+      expect(() => createChatModel({ name: 'gpt-6.1-sol', reasoningEffort: 'low' })).not.toThrow()
+      expect(() => createChatModel({ name: 'gpt-6-sol', reasoningEffort: 'none' })).not.toThrow()
+    })
+
     it('constructs without an API key', async () => {
       const { createChatModel } = await loadLlm()
       expect(() => createChatModel({ name: 'gpt-6-sol', reasoningEffort: 'medium' })).not.toThrow()
