@@ -26,6 +26,7 @@ All skeletons are in `client/src/components/skeletons/`:
 | `HeroSkeleton` | HomePage hero section |
 | `IssueSectionSkeleton` | HomePage issue sections (layouts A, B, C) |
 | `IssuePageSkeleton` | IssuePage header and initial stories |
+| `IssueStoriesSkeleton` | IssuePage's story list alone, under a loaded issue (also inside `IssuePageSkeleton`) |
 | `StoryPageSkeleton` | Full story article page |
 | `IssueAccordionSkeleton` | IssuesPage accordion items |
 | `SearchResultsSkeleton` | SearchPage results grid |
@@ -99,7 +100,7 @@ Key classes:
 All public pages with dynamic data:
 
 - **HomePage** — HeroSkeleton, IssueSectionSkeleton
-- **IssuePage** — IssuePageSkeleton
+- **IssuePage** — IssuePageSkeleton while the issue loads; IssueStoriesSkeleton under the loaded issue while its first page of stories, or another issue's, loads (paging and the mood dial keep the current page on screen instead, `useIssueStories`)
 - **IssuesPage** — IssueAccordionSkeleton
 - **StoryPage** — StoryPageSkeleton
 - **SearchPage** — SearchResultsSkeleton

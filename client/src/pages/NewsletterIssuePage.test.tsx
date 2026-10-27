@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { inAutomatedBrowser } from '../test/automatedBrowser'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -125,6 +126,29 @@ describe('NewsletterIssuePage', () => {
     mockApi.newsletterIssue.mockRejectedValue(new ApiError(404, 'Issue not found'))
     renderPage('draft-issue')
     expect(await screen.findByRole('heading', { name: 'Issue Not Found' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('shows the not-found state and its noindex in an automated browser too, since issue pages are never prerendered', async () => {
+    await inAutomatedBrowser(async () => {
+      mockApi.newsletterIssue.mockRejectedValue(new ApiError(404, 'Issue not found'))
+      renderPage('draft-issue')
+      expect(await screen.findByRole('heading', { level: 1, name: 'Issue Not Found' })).toBeInTheDocument()
+      await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex'))
+    })
+  })
+
+  it('says the issue could not load right now on any other failure, and loads it in place on "Try again"', async () => {
+    mockApi.newsletterIssue.mockRejectedValueOnce(new ApiError(503, 'Service Unavailable'))
+    renderPage()
+
+    const heading = await screen.findByRole('heading', { level: 1, name: "This issue couldn't load" })
+    expect(screen.getByRole('alert')).toContainElement(heading)
+    expect(screen.queryByText(/not found|taken down/i)).toBeNull()
+    expect(screen.getByRole('link', { name: '← All issues' })).toHaveAttribute('href', '/newsletter')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Week 42, 2026' })).toBeInTheDocument()
   })
 
   it('has no detectable accessibility violations', async () => {

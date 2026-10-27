@@ -4,6 +4,8 @@ import { useHomepageData } from '../hooks/useHomepageData'
 import StoryCard from '../components/StoryCard'
 import PullQuote, { getQuoteVariant } from '../components/PullQuote'
 import { HeroSkeleton, IssueSectionSkeleton } from '../components/skeletons'
+import LoadFailure from '../components/LoadFailure'
+import { loadStateOf } from '../lib/loadState'
 import type { PublicIssue } from '../lib/api'
 import type { PublicStory } from '@shared/types'
 import { getCategoryColor } from '../lib/category-colors'
@@ -212,7 +214,10 @@ const LAYOUTS: LayoutVariant[] = ['A', 'B', 'C']
 export default function HomePage() {
   const { positivity } = usePositivity()
   // Single API call — both emotion buckets per issue, mixed client-side
-  const { data, isLoading } = useHomepageData()
+  const homepageQuery = useHomepageData()
+  const loadState = loadStateOf(homepageQuery)
+  const isLoading = loadState === 'loading'
+  const data = homepageQuery.data
 
   const issues = data?.issues ?? []
   const storiesByIssueBuckets = data?.storiesByIssue ?? {}
@@ -221,6 +226,11 @@ export default function HomePage() {
   const heroStory = pickHero(storiesByIssueBuckets, positivity)
 
   const sortedIssues = [...issues].filter(i => ISSUE_ORDER.includes(i.slug)).sort((a, b) => ISSUE_ORDER.indexOf(a.slug) - ISSUE_ORDER.indexOf(b.slug))
+  // "No stories published yet" only when the API answered with none, never when it did not answer
+  const hasStories = sortedIssues.some(issue => {
+    const buckets = storiesByIssueBuckets[issue.slug]
+    return !!buckets && buckets.uplifting.length + buckets.calm.length + buckets.negative.length > 0
+  })
 
   let quoteIdx = 0
 
@@ -251,7 +261,9 @@ export default function HomePage() {
             <IssueSectionSkeleton layout="C" />
             <IssueSectionSkeleton layout="A" />
           </>
-        ) : sortedIssues.length > 0 ? (
+        ) : loadState !== 'ready' ? (
+          <LoadFailure title="The stories couldn't load" query={homepageQuery} className="py-12" />
+        ) : hasStories ? (
           sortedIssues
             .map((issue, idx) => {
               const layout = LAYOUTS[idx % LAYOUTS.length]!

@@ -10,6 +10,8 @@ import { NewsletterCrossLink } from '../components/CrossLinks'
 import EpisodeStoryList, { PODCAST_LINK_CLASS } from '../components/podcast/EpisodeStoryList'
 import PodcastSubtitle from '../components/podcast/PodcastSubtitle'
 import { usePodcastEpisode } from '../hooks/usePodcastEpisodes'
+import LoadFailure from '../components/LoadFailure'
+import { loadStateOf } from '../lib/loadState'
 
 const BACK_LINK_CLASS = 'text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1'
 
@@ -92,15 +94,24 @@ function NotFound() {
  */
 export default function PodcastTranscriptPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { data: episode, isLoading, isError } = usePodcastEpisode(id)
+  const episodeQuery = usePodcastEpisode(id)
+  const episode = episodeQuery.data
+  // Never prerendered: an automated browser still sees the not-found view and its noindex (lib/loadState.ts)
+  const loadState = loadStateOf(episodeQuery, false)
 
-  if (isLoading)
+  if (loadState === 'loading')
     return (
       <div className="page-section py-16 min-h-[60vh]" aria-busy="true">
         <p className="text-neutral-500">Loading transcript…</p>
       </div>
     )
-  if (isError || !episode) return <NotFound />
+  if (loadState === 'failed')
+    return (
+      <LoadFailure title="This transcript couldn't load" query={episodeQuery} className="page-section">
+        <BackToPodcast />
+      </LoadFailure>
+    )
+  if (!episode) return <NotFound />
 
   const duration = formatEpisodeDuration(episode.durationSec)
   return (

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { inAutomatedBrowser } from '../test/automatedBrowser'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -142,6 +143,29 @@ describe('PodcastTranscriptPage', () => {
     await screen.findByRole('heading', { level: 1, name: /not found/i })
     expect(container.querySelector('audio')).toBeNull()
     expect(container.querySelector('a[href="/podcast"]')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('says the episode was not found, with noindex, in an automated browser too, since transcript pages are never prerendered', async () => {
+    await inAutomatedBrowser(async () => {
+      mockApi.podcastEpisode.mockRejectedValue(new ApiError(404, 'Episode not found'))
+      renderPage('gone')
+      expect(await screen.findByRole('heading', { level: 1, name: 'Episode Not Found' })).toBeInTheDocument()
+      await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex'))
+    })
+  })
+
+  it('says the transcript could not load right now on any other failure, and loads it in place on "Try again"', async () => {
+    mockApi.podcastEpisode.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const { container } = renderPage()
+
+    const heading = await screen.findByRole('heading', { level: 1, name: "This transcript couldn't load" })
+    expect(screen.getByRole('alert')).toContainElement(heading)
+    expect(screen.queryByText(/not found|taken down/i)).toBeNull()
+    expect(container.querySelector('a[href="/podcast"]')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Welcome to the week.')).toBeInTheDocument()
   })
 
   it('has no a11y violations', async () => {

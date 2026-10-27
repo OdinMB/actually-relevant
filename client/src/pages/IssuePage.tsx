@@ -3,12 +3,14 @@ import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { API_BASE } from '../lib/api'
 import { usePublicIssue } from '../hooks/usePublicIssues'
-import { usePublicStories } from '../hooks/usePublicStories'
+import { useIssueStories } from '../hooks/usePublicStories'
 import { getCategoryColor } from '../lib/category-colors'
 import StoryCard from '../components/StoryCard'
 import PullQuote, { getQuoteVariant } from '../components/PullQuote'
 import Pagination from '../components/Pagination'
-import { IssuePageSkeleton } from '../components/skeletons'
+import { IssuePageSkeleton, IssueStoriesSkeleton } from '../components/skeletons'
+import LoadFailure from '../components/LoadFailure'
+import { loadStateOf } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildCollectionPageSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
 import { usePositivity } from '../contexts/PositivityContext'
@@ -110,17 +112,21 @@ export default function IssuePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
   const { positivity } = usePositivity()
-  const { data: issue, isLoading, isError } = usePublicIssue(slug ?? '')
+  const issueQuery = usePublicIssue(slug ?? '')
+  const issue = issueQuery.data
+  const issueState = loadStateOf(issueQuery)
 
   const emotionTags = positivityToEmotionTags(positivity)
 
   // Server-side pagination with emotion tag filtering
-  const { data: storiesData } = usePublicStories({
+  const storiesQuery = useIssueStories({
     issueSlug: slug,
     emotionTags: emotionTags?.join(','),
     page,
     pageSize: PAGE_SIZE,
   })
+  const storiesData = storiesQuery.data
+  const storiesState = loadStateOf(storiesQuery)
 
   // Reset to page 1 when positivity changes
   useEffect(() => {
@@ -133,18 +139,30 @@ export default function IssuePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positivity])
 
-  if (isLoading) {
+  if (issueState === 'loading') {
     return <IssuePageSkeleton />
   }
 
-  if (isError || !issue) {
+  const allIssues = (
+    <Link to="/issues" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
+      &larr; View all issues
+    </Link>
+  )
+
+  if (issueState === 'failed') {
+    return (
+      <LoadFailure title="This issue couldn't load" query={issueQuery} className="page-section">
+        {allIssues}
+      </LoadFailure>
+    )
+  }
+
+  if (!issue) {
     return (
       <div className="page-section text-center">
         <h1 className="page-title">Issue Not Found</h1>
         <p className="text-neutral-500 mb-6">This issue category does not exist.</p>
-        <Link to="/issues" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
-          &larr; View all issues
-        </Link>
+        {allIssues}
       </div>
     )
   }
@@ -235,7 +253,11 @@ export default function IssuePage() {
         )}
 
         {/* Stories — rotating magazine layouts */}
-        {stories.length > 0 ? (
+        {storiesState === 'loading' ? (
+          <IssueStoriesSkeleton />
+        ) : storiesState !== 'ready' ? (
+          <LoadFailure title="The stories couldn't load" headingLevel={2} query={storiesQuery} className="py-8" />
+        ) : stories.length > 0 ? (
           <>
             {storyGroups.map((group, idx) => {
               const layout = LAYOUTS[idx % LAYOUTS.length]!

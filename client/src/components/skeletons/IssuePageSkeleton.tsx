@@ -1,4 +1,4 @@
-import StoryCardSkeleton from './StoryCardSkeleton'
+import IssueStoriesSkeleton from './IssueStoriesSkeleton'
 
 /**
  * Skeleton placeholder for IssuePage.
@@ -26,16 +26,7 @@ export default function IssuePageSkeleton() {
       </div>
 
       {/* Stories grid - Layout A style */}
-      <div className="grid gap-5 md:grid-cols-3 mb-8">
-        <div className="md:col-span-2">
-          <StoryCardSkeleton variant="featured" />
-        </div>
-        <div className="space-y-3">
-          <StoryCardSkeleton variant="compact" />
-          <StoryCardSkeleton variant="compact" />
-          <StoryCardSkeleton variant="compact" />
-        </div>
-      </div>
+      <IssueStoriesSkeleton />
     </div>
   )
 }

@@ -9,7 +9,7 @@
  * True in the prerenderer's browser, which Puppeteer drives, so `navigator.webdriver` is set
  * (also in Playwright and other automated browsers). The build's API may be unreachable, so a
  * state that only means "the API did not answer" must not render then, or it is baked into every
- * page's static HTML.
+ * page's static HTML. `loadStateOf` (lib/loadState.ts) applies this to the data a page loads.
  */
 export function isPrerendering(nav: Pick<Navigator, 'webdriver'> = navigator): boolean {
   return nav.webdriver === true

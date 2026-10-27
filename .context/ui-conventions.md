@@ -57,6 +57,22 @@ Whatever a route throws, during render or loading, that no `ChunkErrorBoundary` 
 - **Focus** moves to the h1 (`tabIndex={-1}`) when it appears, so a screen reader announces it.
 - **Logging**: `main.tsx` passes `logRouteError` to `RouterProvider` as `onError`, which logs each route error once with `console.error` and its route pattern (`Route error on /stories/:slug:`), replacing React Router's own console line. No error leaves the browser.
 
+## Load failures
+
+A public page whose data does not load tells "not there" apart from "not reachable right now". `loadStateOf(query)` (`client/src/lib/loadState.ts`) sorts the page's query into four states, and the page renders one view for each:
+
+| State | When | The page shows |
+|---|---|---|
+| `loading` | the first answer is on its way | its skeleton |
+| `ready` | the data is there (kept when a later refetch fails) | the content; a list's empty state ("No stories published yet...") only here, when the API answered with none |
+| `not-found` | the API answered 404 (`isNotFound()` in `lib/api.ts`), or a query disabled for want of its slug | the page's own not-found view ("Story Not Found"), unchanged |
+| `failed` | anything else: a dropped connection, a busy server, a 5xx, an answer that is not JSON, the browser offline | `LoadFailure` (`client/src/components/LoadFailure.tsx`) |
+
+- **`LoadFailure`**: a heading naming what did not load ("This story couldn't load", "The stories couldn't load"), the line "The connection may have dropped, or the site is busy right now. Please try again." and a "Try again" button that refetches the query in place, without a page reload. An h1 where the failure is the whole page, an h2 for one part of a page that keeps its own h1 (an issue page's story list). Page-level failures keep the not-found view's way back ("← Back to home", "← All issues").
+- **Announced, focus untouched**: heading and line sit in a `role="alert"`, so screen readers read them when they appear; focus stays where it was. While a retry runs the state stays `failed` and the button reads "Trying again..." (TanStack Query reports a retry of a query without data as loading, or fills it with another page's placeholder data, and either would take the focused button away). Each failed attempt inserts a new alert (keyed by the query's `errorUpdatedAt`), so a failed retry is announced again, with focus still on the button. After a retry that succeeds, the content replaces the message and focus is not moved.
+- **Prerender rule**: in the prerenderer (`isPrerendering()`, `lib/renderComplete.ts`) `loadStateOf` returns only `ready` or `loading`. The build's API may be missing or answer anything, so a prerendered page (`/`, the issue pages) never bakes "not found" or "couldn't load" into its static HTML; it bakes its skeleton. `dist/index.html` is also the shell every story page is served in (`.context/seo.md`, "Story link previews"). `isPrerendering()` is only `navigator.webdriver`, true in any automated browser, so the pages that are never prerendered (story, newsletter issue and transcript pages) call `loadStateOf(query, false)`: a 404 there shows the not-found view, with its `noindex` where the page has one, in every browser.
+- **In use on**: `/` (`HomePage`), `/stories/:slug`, `/issues/:slug` (the issue, and its story list under the issue's heading: a skeleton while the first page loads, the current page kept on screen while another page or mood loads, `useIssueStories`), `/newsletter/:slug`, `/podcast/:id/transcript`. A failure there carries no `noindex`: it is transient, unlike a not-found page.
+
 ## Accessibility (WCAG 2.2 AA)
 
 See `.context/accessibility.md` for full WCAG patterns, ARIA, and testing checklist.

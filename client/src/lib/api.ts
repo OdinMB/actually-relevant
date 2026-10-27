@@ -35,6 +35,11 @@ export class ApiError extends Error {
   }
 }
 
+/** The API answered 404: what was asked for does not exist or is not published. Any other failure may pass on a retry. */
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, options)
 

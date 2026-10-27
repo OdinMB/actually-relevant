@@ -1,10 +1,24 @@
 import { useQuery } from '@tanstack/react-query'
 import { publicApi } from '../lib/api'
 
-export function usePublicStories(params?: { page?: number; pageSize?: number; issueSlug?: string; search?: string; emotionTags?: string }) {
+type StoryListParams = { page?: number; pageSize?: number; issueSlug?: string; search?: string; emotionTags?: string }
+
+export function usePublicStories(params?: StoryListParams) {
   return useQuery({
     queryKey: ['public-stories', params],
     queryFn: () => publicApi.stories.list(params),
+  })
+}
+
+/**
+ * One page of an issue's stories. While another page or mood of the same issue loads, the page on
+ * screen stays; another issue's stories never stand in for this one's.
+ */
+export function useIssueStories(params: StoryListParams) {
+  return useQuery({
+    queryKey: ['public-stories', params] as const,
+    queryFn: () => publicApi.stories.list(params),
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[1].issueSlug === params.issueSlug ? previous : undefined),
   })
 }
 

@@ -11,6 +11,8 @@ import StoryTitleLabel from '../components/StoryTitleLabel'
 import AiBadge from '../components/ai/AiBadge'
 import { PodcastCrossLink } from '../components/CrossLinks'
 import { NewsletterIssueSkeleton } from '../components/skeletons'
+import LoadFailure from '../components/LoadFailure'
+import { loadStateOf } from '../lib/loadState'
 import { useNewsletterIssue } from '../hooks/useNewsletterArchive'
 import { NEWSLETTER_FEED_URL } from '../lib/api'
 
@@ -131,10 +133,19 @@ function NotFound() {
  */
 export default function NewsletterIssuePage() {
   const { slug = '' } = useParams<{ slug: string }>()
-  const { data: issue, isLoading, isError } = useNewsletterIssue(slug)
+  const issueQuery = useNewsletterIssue(slug)
+  const issue = issueQuery.data
+  // Never prerendered: an automated browser still sees the not-found view and its noindex (lib/loadState.ts)
+  const loadState = loadStateOf(issueQuery, false)
 
-  if (isLoading) return <NewsletterIssueSkeleton />
-  if (isError || !issue) return <NotFound />
+  if (loadState === 'loading') return <NewsletterIssueSkeleton />
+  if (loadState === 'failed')
+    return (
+      <LoadFailure title="This issue couldn't load" query={issueQuery} className="page-section">
+        <BackToArchive />
+      </LoadFailure>
+    )
+  if (!issue) return <NotFound />
 
   return (
     <>

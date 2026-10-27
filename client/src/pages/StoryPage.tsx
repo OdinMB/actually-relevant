@@ -17,6 +17,8 @@ import AlsoCoveredBy from '../components/AlsoCoveredBy'
 import AiLabel from '../components/ai/AiLabel'
 import { AI_DISCLOSURE_COPY, quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { StoryPageSkeleton } from '../components/skeletons'
+import LoadFailure from '../components/LoadFailure'
+import { loadStateOf } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { storyOgImageUrl } from '../lib/api'
 import { buildArticleSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
@@ -78,7 +80,10 @@ export default function StoryPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const { openFeedback } = useFeedback()
-  const { data: story, isLoading, error } = usePublicStory(slug || '')
+  const storyQuery = usePublicStory(slug || '')
+  const story = storyQuery.data
+  // Never prerendered: an automated browser still sees the real states (lib/loadState.ts)
+  const loadState = loadStateOf(storyQuery, false)
 
   // Redirect to primary story's URL if this slug was a non-primary cluster member
   useEffect(() => {
@@ -92,18 +97,30 @@ export default function StoryPage() {
     if (slug && story) markAsRead(slug)
   }, [slug, story])
 
-  if (isLoading) {
+  if (loadState === 'loading') {
     return <StoryPageSkeleton />
   }
 
-  if (error || !story) {
+  const backHome = (
+    <Link to="/" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
+      &larr; Back to home
+    </Link>
+  )
+
+  if (loadState === 'failed') {
+    return (
+      <LoadFailure title="This story couldn't load" query={storyQuery} className="page-section">
+        {backHome}
+      </LoadFailure>
+    )
+  }
+
+  if (!story) {
     return (
       <div className="page-section text-center">
         <h1 className="page-title">Story Not Found</h1>
         <p className="text-neutral-500 mb-6">This story may have been removed or is not yet published.</p>
-        <Link to="/" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
-          &larr; Back to home
-        </Link>
+        {backHome}
       </div>
     )
   }
