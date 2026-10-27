@@ -5,9 +5,9 @@ import { KOFI_URL } from '../../config'
 import { MoodDialPanel } from '../../components/PositivitySlider'
 import BrandLogo from '../../components/BrandLogo'
 import { ISSUE_LINKS, isActiveIssue } from './navLinks'
-import { CategoryColorStrip, HeartIcon, NewsletterIcon, PodcastIcon, SavedIcon } from './icons'
+import { CategoryColorStrip, HeartIcon, NewsletterIcon, PodcastIcon, SavedIcon, ThisWeekIcon } from './icons'
 
-/** Class for each action link (Newsletter, Podcast, Saved, Support) in the mobile menu. */
+/** Class for each action link (This week, Newsletter, Podcast, Saved, Support) in the mobile menu. */
 const MENU_ACTION_LINK =
   'flex items-center gap-2 py-2.5 text-sm font-bold text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded'
 
@@ -15,10 +15,12 @@ interface MobileMenuProps {
   open: boolean
   onClose: () => void
   savedCount: number
+  /** This week's issue's web edition, or null to leave the link out (`useThisWeekIssuePath`). */
+  thisWeekPath: string | null
 }
 
 /** Full-screen mobile navigation in a native <dialog>, for its built-in focus trap. */
-export default function MobileMenu({ open, onClose, savedCount }: MobileMenuProps) {
+export default function MobileMenu({ open, onClose, savedCount, thisWeekPath }: MobileMenuProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const { pathname } = useLocation()
 
@@ -94,8 +96,14 @@ export default function MobileMenu({ open, onClose, savedCount }: MobileMenuProp
             })}
           </ul>
 
-          {/* Newsletter, Podcast, Saved & Support — each on its own line */}
+          {/* This week, Newsletter, Podcast, Saved & Support — each on its own line */}
           <div className="border-t border-neutral-100 pt-3 px-2 flex flex-col">
+            {thisWeekPath && (
+              <Link to={thisWeekPath} onClick={onClose} className={MENU_ACTION_LINK}>
+                <ThisWeekIcon className="w-3.5 h-3.5 shrink-0" />
+                This week
+              </Link>
+            )}
             <Link to="/newsletter" onClick={onClose} className={MENU_ACTION_LINK}>
               <NewsletterIcon className="w-3.5 h-3.5 shrink-0" />
               Newsletter

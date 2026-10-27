@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useSavedCount } from '../../hooks/useSavedCount'
+import { useThisWeekIssuePath } from '../../hooks/useNewsletterArchive'
 import { MoodDialPanel } from '../../components/PositivitySlider'
 import BrandLogo from '../../components/BrandLogo'
 import IssueNav from './IssueNav'
 import MobileMenu from './MobileMenu'
 import SearchPanel from './SearchPanel'
-import { NewsletterIcon, PodcastIcon, SavedIcon, SearchIcon } from './icons'
+import { NewsletterIcon, PodcastIcon, SavedIcon, SearchIcon, ThisWeekIcon } from './icons'
 
-/** Class for the desktop header actions (Newsletter, Podcast, Saved) beside the logo. */
+/** Class for the desktop header actions (This week, Newsletter, Podcast, Saved) beside the logo. */
 const HEADER_ACTION_LINK =
   'inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-2 py-1 text-neutral-500 hover:text-brand-700'
+
+/**
+ * Their icons, left out while Saved is shown: four links with icons reach under the centered logo
+ * on a 1024px screen and crowd it at full width, while as text they clear it. Saved is known on
+ * the client's first render, so the icons go then (a prerendered page, which has no Saved, shows
+ * them until the script starts) or when the reader saves a first story, and never later on their
+ * own (This week, which arrives later, moves none of the others).
+ */
+const headerActionIcon = (savedShown: boolean) => (savedShown ? 'hidden' : 'w-4 h-4 shrink-0')
 
 /**
  * The site header: logo bar with its actions, the desktop issue nav, the
@@ -21,6 +31,8 @@ export default function SiteHeader() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const savedCount = useSavedCount()
+  const thisWeekPath = useThisWeekIssuePath()
+  const actionIcon = headerActionIcon(savedCount > 0)
   const { pathname } = useLocation()
 
   const closeMenu = useCallback(() => setMenuOpen(false), [])
@@ -45,20 +57,28 @@ export default function SiteHeader() {
             <MoodDialPanel />
           </div>
 
-          {/* Desktop: newsletter, podcast, saved — vertically centered on logo */}
+          {/* Desktop: this week, newsletter, podcast, saved — vertically centered on logo */}
           <div className="hidden lg:flex items-center gap-1 absolute right-12 top-4 h-16">
+            {/* Only once this week's issue is known. First, so its arrival (after the page) moves
+                none of the links in this right-anchored group */}
+            {thisWeekPath && (
+              <Link to={thisWeekPath} className={HEADER_ACTION_LINK}>
+                <ThisWeekIcon className={actionIcon} />
+                This week
+              </Link>
+            )}
             <Link to="/newsletter" className={HEADER_ACTION_LINK}>
-              <NewsletterIcon className="w-4 h-4 shrink-0" />
+              <NewsletterIcon className={actionIcon} />
               Newsletter
             </Link>
             <Link to="/podcast" className={HEADER_ACTION_LINK}>
-              <PodcastIcon className="w-4 h-4 shrink-0" />
+              <PodcastIcon className={actionIcon} />
               Podcast
             </Link>
             {/* Only once a story is saved (useSavedCount follows every save and removal) */}
             {savedCount > 0 && (
               <Link to="/saved" className={HEADER_ACTION_LINK}>
-                <SavedIcon className="w-4 h-4 shrink-0" />
+                <SavedIcon className={actionIcon} />
                 Saved ({savedCount})
               </Link>
             )}
@@ -105,7 +125,7 @@ export default function SiteHeader() {
       <IssueNav searchOpen={searchOpen} onToggleSearch={() => setSearchOpen(!searchOpen)} />
 
       {/* Mobile nav — dialog for built-in focus trap */}
-      <MobileMenu open={menuOpen} onClose={closeMenu} savedCount={savedCount} />
+      <MobileMenu open={menuOpen} onClose={closeMenu} savedCount={savedCount} thisWeekPath={thisWeekPath} />
 
       {/* Search bar */}
       {searchOpen && <SearchPanel query={searchQuery} onQueryChange={setSearchQuery} onClose={closeSearch} />}
