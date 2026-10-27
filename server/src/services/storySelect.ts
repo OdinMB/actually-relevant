@@ -1,6 +1,10 @@
 // Public endpoints serve limited fields, and only published stories.
 
-/** Fields the public API serves. The public routes add the aiGenerated marker (lib/aiProvenance.ts). */
+/**
+ * Fields the public API serves. The public routes add the aiGenerated marker (lib/aiProvenance.ts).
+ * `npm run typecheck` fails until a field added or removed here is documented in lib/openapi.ts
+ * (publicStorySchema), and the reverse (lib/publicStoryContract.ts).
+ */
 export const PUBLIC_STORY_SELECT = {
   id: true,
   slug: true,

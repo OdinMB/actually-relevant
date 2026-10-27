@@ -26,6 +26,7 @@
     "db:migrate:diff": "prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script",
     "db:generate": "prisma generate",
     "check:migrations": "tsx src/scripts/check-migrations/index.ts",
+    "api:snapshot": "tsx src/scripts/api-snapshot/index.ts",
     "db:prepare": "tsx src/scripts/db-prepare/index.ts",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",

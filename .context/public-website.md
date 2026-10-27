@@ -53,6 +53,8 @@ Every story page ends the same way with `StoryNewsletterLine`: "Get stories like
 
 Every story object the public JSON routes return (`/api/stories`, `/api/stories/:slug`, `/api/stories/:slug/related`, `/api/homepage`) carries a machine-readable `aiGenerated` marker, added in the route with `withAiGeneratedMarker()` (`server/src/lib/aiProvenance.ts`). A new public route that returns stories must add it too; the compliance record (`.context/ai-transparency.md`) relies on it.
 
+The documented contract is checked in CI against a committed snapshot, against `PUBLIC_STORY_SELECT` and against real responses (`.context/ci.md`, "Public API contract"): a change to a public field or parameter needs `npm run api:snapshot --prefix server`.
+
 API client: `client/src/lib/api.ts` (exports `publicApi` and `API_BASE`)
 Hooks: `usePublicStories.ts`, `usePublicIssues.ts`
 

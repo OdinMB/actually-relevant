@@ -58,7 +58,11 @@ const aiGeneratedSchema = z
       'Unsigned metadata in the API response: it is not a watermark, and text copied out of the response does not carry it.',
   })
 
-const publicStorySchema = z
+/**
+ * A story as the public routes serve it. publicStoryContract.ts checks it against PUBLIC_STORY_SELECT
+ * at type level, and stories.db.test.ts checks real responses against it, strictly.
+ */
+export const publicStorySchema = z
   .object({
     id: z.string().uuid(),
     slug: z.string().nullable().openapi({ example: 'new-coral-reef-discovered-pacific' }),
@@ -143,7 +147,7 @@ const paginationMeta = {
   totalPages: z.number().int().openapi({ example: 6 }),
 }
 
-const storyListResponseSchema = z
+export const storyListResponseSchema = z
   .object({
     data: z.array(publicStorySchema),
     ...paginationMeta,

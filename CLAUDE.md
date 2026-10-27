@@ -109,6 +109,7 @@ npm run db:seed:synthetic --prefix server  # Fill a local *_synthetic DB with ma
 
 - **OpenAPI spec** generated from Zod schemas in `server/src/lib/openapi.ts`
 - When adding/modifying public API endpoints: update Zod schema, route definition in `openapi.ts`, add `.openapi()` metadata
+- Then refresh the contract snapshot, which a unit test compares: `npm run api:snapshot --prefix server`. A breaking change needs `-- --accept-breaking`, and a breaking public-API change is the owner's call (`.context/ci.md`, "Public API contract")
 - Verify with `npm run build --prefix server`
 
 ## Known Issues
