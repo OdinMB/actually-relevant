@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import StoryCard from './StoryCard'
 import { makeStory, announcedText } from '../test/stories'
+import { phoneAfterReach } from '../test/classes'
 
 const VARIANTS = ['featured', 'compact', 'horizontal', 'equal'] as const
 
@@ -31,5 +32,18 @@ describe('StoryCard AI badge', () => {
   it.each(VARIANTS)('%s: shows the badge even when the story has no title label', variant => {
     renderCard(variant, makeStory({ titleLabel: null, title: 'Headline without a label' }))
     expect(screen.getByRole('link', { name: 'AI-generated Headline without a label' })).toBeInTheDocument()
+  })
+})
+
+describe('StoryCard bookmark', () => {
+  // A tap beside the title must still open the story: the bookmark's phone hit area stays inside the gap
+  it.each(VARIANTS)('%s: reaches toward the title no further than the gap between them', variant => {
+    renderCard(variant)
+    const bookmark = screen.getByRole('button', { name: 'Bookmark story' })
+    const gapClass = [...bookmark.parentElement!.classList].find(c => /^gap(?:-x)?-\d+(?:\.5)?$/.test(c))
+    expect(gapClass, 'the row has no gap').toBeDefined()
+    const gapPx = Number(gapClass!.split('-').pop()) * 4
+    expect(phoneAfterReach(bookmark).left).toBeLessThanOrEqual(gapPx)
+    expect(phoneAfterReach(bookmark).right).toBeGreaterThan(0)
   })
 })

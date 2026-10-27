@@ -58,7 +58,7 @@ export default function SubscribeModal({ open, onClose }: SubscribeModalProps) {
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors rounded focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="absolute top-3 right-3 p-1.5 text-neutral-500 hover:text-neutral-700 transition-colors rounded focus-visible:ring-2 focus-visible:ring-brand-500"
           aria-label="Close"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

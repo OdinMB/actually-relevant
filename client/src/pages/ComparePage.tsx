@@ -330,7 +330,7 @@ export default function ComparePage() {
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-neutral-400 mt-2">As of February 2026.</p>
+        <p className="text-xs text-neutral-500 mt-2">As of February 2026.</p>
 
         {/* Who We're Best For — colored cards */}
         <h2 className="section-heading mt-12">Who We're Best For</h2>

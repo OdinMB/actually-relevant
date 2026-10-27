@@ -22,6 +22,7 @@ import { loadStateOf } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { storyOgImageUrl } from '../lib/api'
 import { buildArticleSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
+import { TEXT_LINK } from '../lib/control-classes'
 
 // ---------------------------------------------------------------------------
 // Analysis section with ruled heading + numbered points
@@ -229,24 +230,25 @@ export default function StoryPage() {
               {/* AI label as plain text, so it doesn't read as one more navigation link */}
               <span className="inline-flex flex-wrap items-center gap-x-2">
                 <AiLabel text={AI_DISCLOSURE_COPY.storyLabel} />
-                <Link
-                  to={AI_DISCLOSURE_COPY.howItWorksHref}
-                  className="text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
-                >
+                <Link to={AI_DISCLOSURE_COPY.howItWorksHref} className={TEXT_LINK}>
                   {AI_DISCLOSURE_COPY.howItWorksLinkText}
                 </Link>
               </span>
               {story.slug && (
                 <>
-                  <span className="text-neutral-300">|</span>
-                  <BookmarkButton slug={story.slug} size="sm" className="!pt-0.5 !pb-0.5" />
-                  <span className="text-neutral-300">|</span>
-                  <span className="inline-flex items-center gap-0.5">
-                    <ShareButtons
-                      url={`${SEO.siteUrl}/stories/${story.slug}`}
-                      title={displayTitle}
-                      description={story.marketingBlurb || story.summary || displayTitle}
-                    />
+                  {/* Phones: the actions take a line of their own as 44px tap targets, the first icon
+                      level with the text above, so no separator leads into them */}
+                  <span className="text-neutral-300 max-md:hidden">|</span>
+                  <span className="inline-flex flex-wrap items-center gap-x-3 max-md:basis-full max-md:-ml-3.5 max-md:gap-x-0.5">
+                    <BookmarkButton slug={story.slug} size="sm" placement="row" />
+                    <span className="text-neutral-300 max-md:hidden">|</span>
+                    <span className="inline-flex flex-wrap items-center gap-0.5">
+                      <ShareButtons
+                        url={`${SEO.siteUrl}/stories/${story.slug}`}
+                        title={displayTitle}
+                        description={story.marketingBlurb || story.summary || displayTitle}
+                      />
+                    </span>
                   </span>
                 </>
               )}
@@ -298,11 +300,7 @@ export default function StoryPage() {
           {/* Report an error: the feedback dialog, bound to this story */}
           <p className="text-sm text-neutral-600 mb-3">
             Spotted a mistake?{' '}
-            <button
-              type="button"
-              onClick={() => openFeedback({ id: story.id, title: displayTitle })}
-              className="text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
-            >
+            <button type="button" onClick={() => openFeedback({ id: story.id, title: displayTitle })} className={TEXT_LINK}>
               Report an error
             </button>
           </p>

@@ -61,6 +61,12 @@
     @apply leading-relaxed;
   }
 
+  /* Every field's placeholder: 4.7:1 on white, 4.5:1 on the public forms' neutral-50 (.context/accessibility.md) */
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-neutral-500;
+  }
+
   .prose a {
     @apply text-brand-700 hover:text-brand-800 underline underline-offset-2 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded;
   }
@@ -157,7 +163,7 @@
 
   /* Ruled heading: ——— TITLE ——— */
   .ruled-heading {
-    @apply flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-neutral-400;
+    @apply flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-neutral-500;
   }
 
   .ruled-heading::before,

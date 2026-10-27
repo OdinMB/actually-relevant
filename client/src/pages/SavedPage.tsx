@@ -60,7 +60,7 @@ export default function SavedPage() {
         {savedSlugs.length === 0 && (
           <div className="text-center py-12">
             <p className="text-neutral-500 mb-4">You haven't saved any stories yet.</p>
-            <p className="text-sm text-neutral-400 mb-6">Click the bookmark icon on any story to save it here.</p>
+            <p className="text-sm text-neutral-500 mb-6">Click the bookmark icon on any story to save it here.</p>
           </div>
         )}
 
@@ -74,7 +74,7 @@ export default function SavedPage() {
           </div>
         )}
 
-        {savedSlugs.length > 0 && <p className="text-xs text-neutral-400 mt-8 text-center">Saved stories are stored in this browser only.</p>}
+        {savedSlugs.length > 0 && <p className="text-xs text-neutral-500 mt-8 text-center">Saved stories are stored in this browser only.</p>}
       </div>
     </>
   )

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AI_DISCLOSURE_COPY } from './ai/aiDisclosureCopy'
+import { ROW_ICON_TARGET } from '../lib/control-classes'
 
 interface ShareButtonsProps {
   url: string
@@ -7,12 +8,26 @@ interface ShareButtonsProps {
   description: string
 }
 
-const btnClass = 'p-1 rounded text-neutral-400 hover:text-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500'
+const btnClass = `${ROW_ICON_TARGET} rounded text-neutral-500 hover:text-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500`
+
+const COPIED_VISIBLE_MS = 2000
+
+/** How long the status stays empty before a result shows: long enough for screen readers to register the change. */
+const REANNOUNCE_DELAY_MS = 100
+
+const COPY_STATUS = {
+  idle: { text: '', className: '' },
+  copied: { text: 'Copied!', className: 'text-green-700' },
+  failed: { text: 'Could not copy. Please copy the address from your browser.', className: 'text-neutral-600' },
+} as const
 
 export default function ShareButtons({ url, title, description }: ShareButtonsProps) {
-  const [copied, setCopied] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<keyof typeof COPY_STATUS>('idle')
+  const timer = useRef<ReturnType<typeof setTimeout>>()
   // The prefill becomes the visitor's own post text, so it says that the blurb is AI-written
   const shareText = `${description} ${AI_DISCLOSURE_COPY.shareSuffix}`
+
+  useEffect(() => () => clearTimeout(timer.current), [])
 
   // Try native Web Share API on supported devices
   async function handleNativeShare() {
@@ -23,14 +38,28 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
     }
   }
 
-  function handleCopy() {
-    navigator.clipboard
-      .writeText(url)
-      .then(() => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      })
-      .catch(() => {})
+  /**
+   * The status region is always in the page, so screen readers announce the result when its text
+   * changes. Each press empties it first, so a second "Copied!" in a row is a change too.
+   */
+  function showCopyResult(result: 'copied' | 'failed') {
+    clearTimeout(timer.current)
+    setCopyStatus('idle')
+    timer.current = setTimeout(() => {
+      setCopyStatus(result)
+      if (result === 'copied') timer.current = setTimeout(() => setCopyStatus('idle'), COPIED_VISIBLE_MS)
+    }, REANNOUNCE_DELAY_MS)
+  }
+
+  async function handleCopy() {
+    clearTimeout(timer.current)
+    try {
+      // Throws where the browser has no Clipboard API (an insecure context, an old browser)
+      await navigator.clipboard.writeText(url)
+      showCopyResult('copied')
+    } catch {
+      showCopyResult('failed')
+    }
   }
 
   const encodedUrl = encodeURIComponent(url)
@@ -87,8 +116,8 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
       </a>
 
       {/* Copy link */}
-      <button onClick={handleCopy} className={btnClass} aria-label="Copy link">
-        {copied ? (
+      <button onClick={() => void handleCopy()} className={btnClass} aria-label="Copy link">
+        {copyStatus === 'copied' ? (
           <svg className="w-3.5 h-3.5 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
@@ -102,11 +131,9 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
           </svg>
         )}
       </button>
-      {copied && (
-        <span className="text-xs text-green-600" role="status">
-          Copied!
-        </span>
-      )}
+      <span className={`text-xs ${COPY_STATUS[copyStatus].className}`} role="status">
+        {COPY_STATUS[copyStatus].text}
+      </span>
     </>
   )
 }

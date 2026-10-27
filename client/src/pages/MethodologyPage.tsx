@@ -70,7 +70,7 @@ export default function MethodologyPage() {
           {/* Process funnel */}
           <div className="my-6">
             {/* Legend */}
-            <div className="flex items-center gap-1.5 justify-end mb-4 text-xs text-neutral-400">
+            <div className="flex items-center gap-1.5 justify-end mb-4 text-xs text-neutral-500">
               <span className="w-2.5 h-2.5 rounded-full bg-brand-500 shrink-0" aria-hidden="true" />
               <span>= story</span>
             </div>

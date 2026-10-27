@@ -88,9 +88,9 @@ export default function NoAdsNoTrackingPage() {
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-neutral-400 mt-1">
+          <p className="text-xs text-neutral-500 mt-1">
             * Our newsletter provider tracks email opens and link clicks. We cannot disable this. We do not use this data for profiling or advertising. See our{' '}
-            <Link to="/privacy" className="underline hover:text-neutral-300">
+            <Link to="/privacy" className="underline hover:text-neutral-700">
               privacy policy
             </Link>{' '}
             for details.

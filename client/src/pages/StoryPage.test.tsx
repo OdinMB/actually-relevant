@@ -6,6 +6,8 @@ import { HelmetProvider } from 'react-helmet-async'
 import StoryPage from './StoryPage'
 import FeedbackProvider from '../components/FeedbackProvider'
 import SubscribeProvider from '../components/SubscribeProvider'
+import { TEXT_LINK } from '../lib/control-classes'
+import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
 
 const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -106,6 +108,35 @@ describe('StoryPage "Report an error"', () => {
 
     expect(mockApi.submitFeedback).toHaveBeenCalledWith({ category: 'correction', message: 'Wrong date', storyId: 'story-1', formToken: 'form-token' })
   })
+
+  it('shows only the brand ring on keyboard focus, in the shared in-sentence link style', () => {
+    renderStory(story)
+    const button = screen.getByRole('button', { name: 'Report an error' })
+    expect(focusRingProblems(button)).toEqual([])
+    expect(button).toHaveClass(...TEXT_LINK.split(' '))
+  })
+})
+
+describe('StoryPage actions under the headline', () => {
+  it('puts the bookmark and share buttons on a line of their own on phones, with no separator leading into it', () => {
+    renderStory(story)
+    const bookmark = screen.getByRole('button', { name: 'Bookmark story' })
+    const copy = screen.getByRole('button', { name: 'Copy link' })
+    const actions = bookmark.parentElement!
+    expect(actions.contains(copy)).toBe(true)
+    expect(actions).toHaveClass('max-md:basis-full')
+    expect(actions.previousElementSibling).toHaveTextContent('|')
+    expect(actions.previousElementSibling).toHaveClass('max-md:hidden')
+  })
+
+  it('gives the bookmark a 44px square box on phones and a 24px one from md up, like the share buttons', () => {
+    renderStory(story)
+    const bookmark = screen.getByRole('button', { name: 'Bookmark story' })
+    for (const axis of ['w', 'h'] as const) {
+      expect(sizeByBreakpoint(bookmark, axis).get('')).toBeGreaterThanOrEqual(44)
+      expect(sizeByBreakpoint(bookmark, axis).get('md')).toBeGreaterThanOrEqual(24)
+    }
+  })
 })
 
 describe('StoryPage newsletter line', () => {
@@ -182,6 +213,11 @@ describe('StoryPage', () => {
   it('follows the label with a separate "How it works" link to the methodology page', () => {
     renderStory(story)
     expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology')
+  })
+
+  it('shows only the brand ring when "How it works" has keyboard focus', () => {
+    renderStory(story)
+    expect(focusRingProblems(screen.getByRole('link', { name: 'How it works' }))).toEqual([])
   })
 
   it('follows the quote attribution with the AI selection note', () => {

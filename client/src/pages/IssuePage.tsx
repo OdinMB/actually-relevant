@@ -222,7 +222,7 @@ export default function IssuePage() {
             </div>
             <a
               href={`${API_BASE}/feed/${slug}`}
-              className="shrink-0 p-1.5 text-neutral-400 hover:text-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+              className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
               title={`RSS feed for ${issue.name}`}
               aria-label={`RSS feed for ${issue.name}`}
             >

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useSubscribe } from './SubscribeProvider'
+import { TEXT_LINK } from '../lib/control-classes'
 
 /*
  * The newsletter and the podcast are the site's two weekly products. The pages of each end with a
@@ -7,14 +8,12 @@ import { useSubscribe } from './SubscribeProvider'
  * content (.context/public-website.md, "Cross-links").
  */
 
-const LINK_CLASS = 'text-brand-700 underline hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5'
-
 /** On /newsletter and each issue page: the podcast. */
 export function PodcastCrossLink({ className = '' }: { className?: string }) {
   return (
     <p className={`text-sm text-neutral-600 ${className}`}>
       Prefer to listen?{' '}
-      <Link to="/podcast" className={LINK_CLASS}>
+      <Link to="/podcast" className={TEXT_LINK}>
         Try the weekly podcast
       </Link>
       , a five-minute briefing on the news that matters most.
@@ -28,11 +27,11 @@ export function NewsletterCrossLink({ className = '' }: { className?: string }) 
   return (
     <p className={`text-sm text-neutral-600 ${className}`}>
       Prefer to read?{' '}
-      <button type="button" onClick={() => openSubscribe()} className={LINK_CLASS}>
+      <button type="button" onClick={() => openSubscribe()} className={TEXT_LINK}>
         Get the weekly newsletter
       </button>{' '}
       by email, or{' '}
-      <Link to="/newsletter" className={LINK_CLASS}>
+      <Link to="/newsletter" className={TEXT_LINK}>
         read past issues
       </Link>{' '}
       on the web.
@@ -49,7 +48,7 @@ export function StoryNewsletterLine({ className = '' }: { className?: string }) 
   return (
     <p className={`text-sm text-neutral-600 ${className}`}>
       Get stories like this once a week.{' '}
-      <button type="button" onClick={() => openSubscribe()} className={`inline-flex items-center min-h-6 ${LINK_CLASS}`}>
+      <button type="button" onClick={() => openSubscribe()} className={`inline-flex items-center min-h-6 ${TEXT_LINK}`}>
         Subscribe to the newsletter
       </button>
     </p>

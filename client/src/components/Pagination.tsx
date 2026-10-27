@@ -29,7 +29,7 @@ export default function Pagination({ page, totalPages, onPageChange }: Paginatio
 
       {pages.map((p, i) =>
         p === '...' ? (
-          <span key={`ellipsis-${i}`} className="px-2 text-neutral-400">
+          <span key={`ellipsis-${i}`} className="px-2 text-neutral-500">
             ...
           </span>
         ) : (
