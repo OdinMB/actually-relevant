@@ -5,7 +5,7 @@ import type { z } from 'zod'
 import type { ReasoningEffort } from '../../config.js'
 import type { Fixtures } from './fixtures.js'
 
-export type ModelId = 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-5.2' | 'gpt-6-luna' | 'gpt-6-sol'
+export type ModelId = 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-5.2' | 'gpt-6-luna' | 'gpt-6-sol' | 'gpt-6.1-sol'
 
 /** One model at one reasoning effort. Its key is `model@effort`. */
 export interface Arm {

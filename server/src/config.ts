@@ -202,7 +202,8 @@ export const config = {
     // GPT-6 defaults from the 2026-09-24 model eval (.context/model-eval.md). The
     // rating, dedup, social, assessment and selection prompts are tuned for these
     // models: overriding a tier back to a gpt-5 model without the matching prompts
-    // shifts ratings and dedup (.context/llm-analysis.md).
+    // shifts ratings and dedup (.context/llm-analysis.md). The large tier moved from
+    // gpt-6-sol to gpt-6.1-sol on 2026-10-27, pending the owner's large-tier eval.
     models: {
       small: {
         name: process.env.OPENAI_MODEL_SMALL || 'gpt-6-luna',
@@ -213,7 +214,7 @@ export const config = {
         reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_MEDIUM, 'medium', 'OPENAI_EFFORT_MEDIUM'),
       },
       large: {
-        name: process.env.OPENAI_MODEL_LARGE || 'gpt-6-sol',
+        name: process.env.OPENAI_MODEL_LARGE || 'gpt-6.1-sol',
         reasoningEffort: parseEffort(process.env.OPENAI_EFFORT_LARGE, 'medium', 'OPENAI_EFFORT_LARGE'),
       },
     },
@@ -321,7 +322,8 @@ export const config = {
     spokenCharBand: [4200, 6200] as const,
     // The whole-episode length the prompt states (about 4,700 for the model's own turns), set below
     // the band's middle on purpose: gpt-6-sol writes about 20% over its stated aim, so aiming at the
-    // middle (5,000 own) overshot the top in 2 of 3 drafts (.context/prompting.md).
+    // middle (5,000 own) overshot the top in 2 of 3 drafts (.context/prompting.md). Measured on
+    // gpt-6-sol only; gpt-6.1-sol (the large tier since 2026-10-27) has not been measured yet.
     spokenCharAim: 4900,
     maxTurnChars: 400,
     maxTagsPerTurn: 2,

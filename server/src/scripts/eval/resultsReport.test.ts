@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { armKey } from './models.js'
 import { recommendTierSettings, monthlyCost, baselineWins, candidateWins, VOLUMES } from './resultsReport.js'
+import { LARGE_BASELINE, LARGE_CANDIDATE } from './suites/largeTier.js'
 import type { ArmStats, CallSiteId, CallSiteResult, Decision, MetricRow } from './types.js'
 
 function stats(arm: string, meanCostUsd: number): ArmStats {
@@ -52,12 +54,20 @@ describe('recommendTierSettings', () => {
     expect(recs.find(r => r.tier === 'small')).toMatchObject({ model: null, effort: null })
   })
 
-  it('recommends Sol for the large tier only when all three call sites pass', () => {
+  it("recommends the large-tier suite's candidate only when all three call sites pass it, else its baseline", () => {
     const large = ['selection', 'newsletter-select', 'podcast'] as const
-    const pass = recommendTierSettings(large.map(id => site(id, ['gpt-6-sol@medium'])))
-    expect(pass.find(r => r.tier === 'large')).toMatchObject({ model: 'gpt-6-sol', effort: 'medium' })
-    const fail = recommendTierSettings([...large.slice(0, 2).map(id => site(id, ['gpt-6-sol@medium'])), site('podcast', [])])
-    expect(fail.find(r => r.tier === 'large')).toMatchObject({ model: 'gpt-5.2' })
+    const cand = armKey(LARGE_CANDIDATE)
+    const pass = recommendTierSettings(large.map(id => site(id, [cand])))
+    expect(pass.find(r => r.tier === 'large')).toMatchObject({ model: LARGE_CANDIDATE.model, effort: LARGE_CANDIDATE.effort })
+    const fail = recommendTierSettings([...large.slice(0, 2).map(id => site(id, [cand])), site('podcast', [])])
+    expect(fail.find(r => r.tier === 'large')).toMatchObject({ model: LARGE_BASELINE.model, effort: LARGE_BASELINE.effort })
+    expect(fail.find(r => r.tier === 'large')?.summary).toMatch(/podcast/)
+  })
+
+  it('does not count a pass by the baseline model as a pass for the candidate', () => {
+    const large = ['selection', 'newsletter-select', 'podcast'] as const
+    const recs = recommendTierSettings(large.map(id => site(id, [armKey(LARGE_BASELINE)])))
+    expect(recs.find(r => r.tier === 'large')).toMatchObject({ model: LARGE_BASELINE.model })
   })
 })
 

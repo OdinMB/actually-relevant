@@ -42,6 +42,10 @@ function assertEffortSupported({ name, reasoningEffort }: ChatModelSpec): void {
   if (reasoningEffort === 'none' && /^gpt-5-(mini|nano)\b/.test(name)) {
     throw new Error(`Reasoning effort "none" is not supported by ${name}; use "minimal" or higher`)
   }
+  // OpenAI's "Using GPT-6" guide: GPT-6.1 Sol (like GPT-6 Astra) does not support none.
+  if (reasoningEffort === 'none' && /^gpt-6\.1-sol\b/.test(name)) {
+    throw new Error(`Reasoning effort "none" is not supported by ${name}; use "low" or higher`)
+  }
 }
 
 let nextAvailableTime = 0
