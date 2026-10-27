@@ -21,6 +21,8 @@ import SupportBanner from '../components/SupportBanner'
 import NewsletterBanner from '../components/NewsletterBanner'
 import { usePositivity } from '../contexts/PositivityContext'
 import { mixHomepageStories, pickHero } from '../lib/mix-stories'
+import { useLatestNewsletterIssue, type LatestNewsletterIssue } from '../hooks/useNewsletterArchive'
+import LatestIssueCard from '../components/LatestIssueCard'
 
 // ---------------------------------------------------------------------------
 // Hero
@@ -110,6 +112,7 @@ function IssueSection({
   layout,
   divider,
   quoteVariantIndex,
+  flushTop = false,
 }: {
   issue: PublicIssue
   allStories: PublicStory[]
@@ -117,6 +120,8 @@ function IssueSection({
   layout: LayoutVariant
   divider?: 'quote' | 'diamond' | 'none'
   quoteVariantIndex?: number
+  /** No top margin: the space above it is already there (the first section, under LatestIssueSlot) */
+  flushTop?: boolean
 }) {
   // Exclude the hero story from this section
   const stories = heroStoryId ? allStories.filter(s => s.id !== heroStoryId) : allStories
@@ -126,7 +131,7 @@ function IssueSection({
 
   return (
     <>
-      <section className="relative mb-6 mt-14 md:mt-28">
+      <section className={`relative mb-6 ${flushTop ? '' : 'mt-14 md:mt-28'}`}>
         {/* Pre-rendered PNG to avoid Chromium inline-SVG compositing bug */}
         <div className="absolute -left-12 top-0 -translate-y-[40%] z-10 pointer-events-none select-none hidden md:block w-[200px] h-[200px]">
           <img src={`/illustrations/${issue.slug}.png`} alt="" className="opacity-[0.18] w-full h-full" />
@@ -204,6 +209,23 @@ function QuoteDivider({ stories, variantIndex }: { stories: PublicStory[]; varia
 }
 
 // ---------------------------------------------------------------------------
+// This week's newsletter, above the first section
+// ---------------------------------------------------------------------------
+
+/**
+ * The newest issue's card, in a place kept for it whether or not it comes: the slot takes the
+ * place of the first section's top margin, so the card, which loads on its own and may arrive
+ * after the stories, never pushes them down, and without it the page looks as it always did.
+ */
+function LatestIssueSlot({ issue }: { issue: LatestNewsletterIssue | null }) {
+  return (
+    <div data-testid="latest-issue-slot" className="flex min-h-20 items-start justify-center md:min-h-28 md:items-center">
+      {issue && <LatestIssueCard issue={issue} />}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Home page
 // ---------------------------------------------------------------------------
 
@@ -218,6 +240,8 @@ export default function HomePage() {
   const loadState = loadStateOf(homepageQuery)
   const isLoading = loadState === 'loading'
   const data = homepageQuery.data
+  // Asked for from the start, alongside the stories, so it is usually there when they are
+  const latestIssue = useLatestNewsletterIssue()
 
   const issues = data?.issues ?? []
   const storiesByIssueBuckets = data?.storiesByIssue ?? {}
@@ -264,41 +288,45 @@ export default function HomePage() {
         ) : loadState !== 'ready' ? (
           <LoadFailure title="The stories couldn't load" query={homepageQuery} className="py-12" />
         ) : hasStories ? (
-          sortedIssues
-            .map((issue, idx) => {
-              const layout = LAYOUTS[idx % LAYOUTS.length]!
-              const isLast = idx === sortedIssues.length - 1
-              const divider: 'quote' | 'diamond' | 'none' = isLast ? 'none' : idx % 2 === 0 ? 'quote' : 'none'
+          <>
+            <LatestIssueSlot issue={latestIssue} />
+            {sortedIssues
+              .map((issue, idx) => {
+                const layout = LAYOUTS[idx % LAYOUTS.length]!
+                const isLast = idx === sortedIssues.length - 1
+                const divider: 'quote' | 'diamond' | 'none' = isLast ? 'none' : idx % 2 === 0 ? 'quote' : 'none'
 
-              const currentQuoteIdx = divider === 'quote' ? quoteIdx++ : 0
+                const currentQuoteIdx = divider === 'quote' ? quoteIdx++ : 0
 
-              const buckets = storiesByIssueBuckets[issue.slug]
-              const mixed = buckets ? mixHomepageStories(buckets, 7, positivity) : []
+                const buckets = storiesByIssueBuckets[issue.slug]
+                const mixed = buckets ? mixHomepageStories(buckets, 7, positivity) : []
 
-              return (
-                <IssueSection
-                  key={issue.id}
-                  issue={issue}
-                  allStories={mixed}
-                  heroStoryId={heroStory?.id ?? null}
-                  layout={layout}
-                  divider={divider}
-                  quoteVariantIndex={currentQuoteIdx}
-                />
-              )
-            })
-            .reduce<React.ReactNode[]>((acc, section, idx) => {
-              acc.push(section)
-              // Insert newsletter banner after the 1st issue section (Human Development)
-              if (idx === 0) {
-                acc.push(<NewsletterBanner key="newsletter-banner" />)
-              }
-              // Insert support banner after the 2nd issue section
-              if (idx === 1) {
-                acc.push(<SupportBanner key="support-banner" />)
-              }
-              return acc
-            }, [])
+                return (
+                  <IssueSection
+                    key={issue.id}
+                    issue={issue}
+                    allStories={mixed}
+                    heroStoryId={heroStory?.id ?? null}
+                    layout={layout}
+                    divider={divider}
+                    quoteVariantIndex={currentQuoteIdx}
+                    flushTop={idx === 0}
+                  />
+                )
+              })
+              .reduce<React.ReactNode[]>((acc, section, idx) => {
+                acc.push(section)
+                // Insert newsletter banner after the 1st issue section (Human Development)
+                if (idx === 0) {
+                  acc.push(<NewsletterBanner key="newsletter-banner" />)
+                }
+                // Insert support banner after the 2nd issue section
+                if (idx === 1) {
+                  acc.push(<SupportBanner key="support-banner" />)
+                }
+                return acc
+              }, [])}
+          </>
         ) : (
           <p className="text-center text-neutral-500 py-12">No stories published yet. Check back soon.</p>
         )}

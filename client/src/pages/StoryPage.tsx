@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import Markdown from 'react-markdown'
 import { usePublicStory } from '../hooks/usePublicStories'
+import { useLatestNewsletterIssue } from '../hooks/useNewsletterArchive'
 import { getCategoryColor, shiftHex } from '../lib/category-colors'
 import { parsePoints } from '../lib/parse-points'
 import { getTitleLabel, getHeadline } from '../lib/title-label'
@@ -85,6 +86,8 @@ export default function StoryPage() {
   const story = storyQuery.data
   // Never prerendered: an automated browser still sees the real states (lib/loadState.ts)
   const loadState = loadStateOf(storyQuery, false)
+  // For the newsletter line at the end; asked for alongside the story, so it is usually there by then
+  const latestIssue = useLatestNewsletterIssue()
 
   // Redirect to primary story's URL if this slug was a non-primary cluster member
   useEffect(() => {
@@ -306,7 +309,7 @@ export default function StoryPage() {
           </p>
 
           {/* Where the reader finishes: the newsletter, in the site's subscribe dialog */}
-          <StoryNewsletterLine className="mb-10" />
+          <StoryNewsletterLine latestIssue={latestIssue} className="mb-10" />
 
           {/* Related stories */}
           {story.slug && <RelatedStories slug={story.slug} />}

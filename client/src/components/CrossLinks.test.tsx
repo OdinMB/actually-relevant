@@ -5,12 +5,14 @@ import { NewsletterCrossLink, PodcastCrossLink, StoryNewsletterLine } from './Cr
 import { TEXT_LINK } from '../lib/control-classes'
 import { focusRingProblems } from '../test/classes'
 
+const LATEST_ISSUE = { slug: 'week-43-2026', title: 'Week 43, 2026', publishedAt: '2026-10-24T04:30:00.000Z', storyCount: 6, thisWeek: true }
+
 function renderLines() {
   return render(
     <MemoryRouter>
       <PodcastCrossLink />
       <NewsletterCrossLink />
-      <StoryNewsletterLine />
+      <StoryNewsletterLine latestIssue={LATEST_ISSUE} />
     </MemoryRouter>,
   )
 }
@@ -21,6 +23,7 @@ const CONTROLS = [
   ['button', 'Get the weekly newsletter'],
   ['link', 'read past issues'],
   ['button', 'Subscribe to the newsletter'],
+  ['link', 'read this week’s issue'],
 ] as const
 
 describe('CrossLinks', () => {

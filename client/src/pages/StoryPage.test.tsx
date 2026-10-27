@@ -1,15 +1,17 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
+import type { ReactNode } from 'react'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import StoryPage from './StoryPage'
 import FeedbackProvider from '../components/FeedbackProvider'
 import SubscribeProvider from '../components/SubscribeProvider'
 import { TEXT_LINK } from '../lib/control-classes'
 import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
 
-const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn() }))
+const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn(), newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
@@ -62,21 +64,55 @@ beforeAll(() => {
   }
 })
 
+const NOW = new Date('2026-10-25T09:00:00Z')
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** One page of the newsletter archive holding one issue published `daysAgo` before NOW, or none. */
+function archive(latest?: { slug: string; daysAgo: number }) {
+  const data = latest
+    ? [{ slug: latest.slug, title: 'Week 43, 2026', publishedAt: new Date(NOW.getTime() - latest.daysAgo * DAY_MS).toISOString(), storyCount: 6 }]
+    : []
+  return { data, total: data.length, page: 1, pageSize: 20, totalPages: data.length }
+}
+
+let queryClient: QueryClient
+
 beforeEach(() => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  mockApi.newsletterArchive.mockReset().mockResolvedValue(archive())
   mockStory.isLoading = false
   mockStory.error = null
   mockRelated.current = []
 })
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+/** The providers every story page renders inside, plus any the test adds. */
+function Providers({ children }: { children: ReactNode }) {
+  return (
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>{children}</MemoryRouter>
+      </QueryClientProvider>
+    </HelmetProvider>
+  )
+}
+
 function renderStory(data: unknown) {
   mockStory.current = data
   return render(
-    <HelmetProvider>
-      <MemoryRouter>
-        <StoryPage />
-      </MemoryRouter>
-    </HelmetProvider>,
+    <Providers>
+      <StoryPage />
+    </Providers>,
   )
+}
+
+/** Waits until the archive request has answered or failed. */
+async function archiveSettled() {
+  await waitFor(() => expect(['success', 'error']).toContain(queryClient.getQueryState(['public-newsletter-archive', 1])?.status))
 }
 
 describe('StoryPage "Report an error"', () => {
@@ -88,13 +124,11 @@ describe('StoryPage "Report an error"', () => {
   it('opens the feedback dialog bound to the story and sends a correction with its id', async () => {
     mockStory.current = story
     render(
-      <HelmetProvider>
-        <MemoryRouter>
-          <FeedbackProvider>
-            <StoryPage />
-          </FeedbackProvider>
-        </MemoryRouter>
-      </HelmetProvider>,
+      <Providers>
+        <FeedbackProvider>
+          <StoryPage />
+        </FeedbackProvider>
+      </Providers>,
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Report an error' }))
@@ -157,24 +191,54 @@ describe('StoryPage newsletter line', () => {
     expect(button).toHaveClass('inline-flex', 'min-h-6')
   })
 
-  it("opens the site's signup dialog", async () => {
+  it("opens the site's signup dialog, with the link to this week's issue beside it", async () => {
     mockApi.getSubscribeToken.mockReset().mockResolvedValue({ token: 'form-token' })
+    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
     mockStory.current = story
     render(
-      <HelmetProvider>
-        <MemoryRouter>
-          <SubscribeProvider>
-            <StoryPage />
-          </SubscribeProvider>
-        </MemoryRouter>
-      </HelmetProvider>,
+      <Providers>
+        <SubscribeProvider>
+          <StoryPage />
+        </SubscribeProvider>
+      </Providers>,
     )
+    await screen.findByRole('link', { name: 'read this week’s issue' })
     expect(screen.queryByRole('dialog', { name: 'Stay informed' })).toBeNull()
 
     await userEvent.click(subscribeButton()!)
 
     const dialog = screen.getByRole('dialog', { name: 'Stay informed' })
     await waitFor(() => expect(within(dialog).getByRole('textbox', { name: 'Email address' })).toHaveFocus())
+  })
+
+  it("goes on, in the same sentence, to a link to this week's issue on the web", async () => {
+    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
+    renderStory(story)
+
+    const link = await screen.findByRole('link', { name: 'read this week’s issue' })
+    expect(link).toHaveAttribute('href', '/newsletter/week-43-2026')
+    expect(link.closest('p')).toBe(subscribeButton()!.closest('p'))
+    expect(link.closest('p')).toHaveTextContent(/^Get stories like this once a week\. Subscribe to the newsletter, or read this week’s issue$/)
+    expect(link).toHaveClass('inline-flex', 'min-h-6')
+  })
+
+  it('calls an issue a week old or older the latest issue', async () => {
+    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-40-2026', daysAgo: 20 }))
+    renderStory(story)
+
+    expect(await screen.findByRole('link', { name: 'read the latest issue' })).toHaveAttribute('href', '/newsletter/week-40-2026')
+  })
+
+  it.each([
+    ['no issue is published', () => mockApi.newsletterArchive.mockResolvedValue(archive())],
+    ['the archive fails to load', () => mockApi.newsletterArchive.mockRejectedValue(new Error('Network error'))],
+  ])('keeps to the subscribe offer alone when %s', async (_, arrange) => {
+    arrange()
+    renderStory(story)
+    await archiveSettled()
+
+    expect(subscribeButton()!.closest('p')).toHaveTextContent(/^Get stories like this once a week\. Subscribe to the newsletter$/)
+    expect(screen.queryByRole('link', { name: /issue/ })).toBeNull()
   })
 
   it.each([

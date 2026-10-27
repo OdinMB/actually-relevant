@@ -7,7 +7,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import { makeStory } from '../test/stories'
 import { inAutomatedBrowser } from '../test/automatedBrowser'
 
-const mockApi = vi.hoisted(() => ({ homepage: vi.fn() }))
+const mockApi = vi.hoisted(() => ({ homepage: vi.fn(), newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
@@ -52,6 +52,7 @@ const EMPTY = 'No stories published yet. Check back soon.'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockApi.newsletterArchive.mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
 })
 
 afterEach(() => {
@@ -111,5 +112,49 @@ describe('HomePage when the stories do not load', () => {
       expect(screen.queryByRole('alert')).toBeNull()
       expect(screen.queryByText(EMPTY)).toBeNull()
     })
+  })
+})
+
+describe('HomePage newsletter card beside the load states', () => {
+  beforeEach(() => {
+    const publishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    mockApi.newsletterArchive.mockResolvedValue({
+      data: [{ slug: 'week-43-2026', title: 'Week 43, 2026', publishedAt, storyCount: 6 }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    })
+  })
+
+  /** Waits until the newest issue is known, so its absence below is the page's doing. */
+  const issueKnown = (client: QueryClient) => waitFor(() => expect(client.getQueryState(['public-newsletter-archive', 1])?.status).toBe('success'))
+  const issueLink = () => screen.queryByRole('link', { name: /newsletter Week 43, 2026/ })
+
+  it('comes with the stories', async () => {
+    mockApi.homepage.mockResolvedValue(WITH_STORIES)
+    renderHome()
+
+    expect(await screen.findByRole('link', { name: /newsletter Week 43, 2026/ })).toHaveAttribute('href', '/newsletter/week-43-2026')
+  })
+
+  it('has no place on the page when the stories could not load', async () => {
+    mockApi.homepage.mockRejectedValue(new TypeError('Failed to fetch'))
+    const client = renderHome()
+    await failure()
+    await issueKnown(client)
+
+    expect(screen.queryByTestId('latest-issue-slot')).toBeNull()
+    expect(issueLink()).toBeNull()
+  })
+
+  it('has no place on the page when no stories are published', async () => {
+    mockApi.homepage.mockResolvedValue({ issues: ISSUES, storiesByIssue: { 'human-development': noStories, 'planet-climate': noStories } })
+    const client = renderHome()
+    await screen.findByText(EMPTY)
+    await issueKnown(client)
+
+    expect(screen.queryByTestId('latest-issue-slot')).toBeNull()
+    expect(issueLink()).toBeNull()
   })
 })

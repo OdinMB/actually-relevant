@@ -7,7 +7,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import { makeStory } from '../test/stories'
 import { inAutomatedBrowser } from '../test/automatedBrowser'
 
-const mockApi = vi.hoisted(() => ({ stories: { get: vi.fn(), related: vi.fn(), cluster: vi.fn() } }))
+const mockApi = vi.hoisted(() => ({ stories: { get: vi.fn(), related: vi.fn(), cluster: vi.fn() }, newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
@@ -40,6 +40,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockApi.stories.related.mockResolvedValue([])
   mockApi.stories.cluster.mockResolvedValue({ sources: [] })
+  mockApi.newsletterArchive.mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
 })
 
 describe('StoryPage when the story does not load', () => {
