@@ -102,6 +102,11 @@ describeDb('admin notices (PostgreSQL)', () => {
       await recordNotice({ ...input, dedupeKey: 'a', source: 'plunk', severity: 'critical' })
       await recordNotice({ ...input, dedupeKey: 'b', source: 'plunk' })
       await recordNotice({ ...input, dedupeKey: 'c', source: 'podcast', severity: 'critical' })
+      // Back to back, two records can share a millisecond; space them a minute apart so order is a, b, c.
+      await prisma.$executeRaw`
+        UPDATE admin_notices
+        SET first_occurred_at = (now() AT TIME ZONE 'UTC') - make_interval(mins => CASE dedupe_key WHEN 'a' THEN 3 WHEN 'b' THEN 2 ELSE 1 END),
+            last_occurred_at = (now() AT TIME ZONE 'UTC') - make_interval(mins => CASE dedupe_key WHEN 'a' THEN 3 WHEN 'b' THEN 2 ELSE 1 END)`
     }
 
     it('markNoticesSeen with a source touches only unseen notices of that source', async () => {
