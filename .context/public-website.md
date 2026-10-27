@@ -168,7 +168,7 @@ Preload hints: `client/index.html`
 - `client/src/layouts/PublicLayout.tsx` — Providers, skip link, RSS autodiscovery, scroll reset; composes the parts in `client/src/layouts/public/`:
   - `SiteHeader.tsx` — logo bar and its actions, positivity slider placement; owns menu and search state
   - `IssueNav.tsx` (desktop issue bar), `MobileMenu.tsx` (menu dialog), `SearchPanel.tsx` (search bar)
-  - `SiteFooter.tsx` — sign-off, brand, Navigate, Connect and Issues columns
+  - `SiteFooter.tsx` — color strip, brand, Navigate, Connect and Issues columns (no sign-off above it since 2026-10-27)
   - `navLinks.ts` (`ISSUE_LINKS`, `FOOTER_NAV`, `FOOTER_LEGAL`), `icons.tsx`
 - `client/src/pages/HomePage.tsx` — Homepage with issue sections
 - `client/src/pages/StoryPage.tsx` — Story detail

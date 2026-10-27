@@ -48,12 +48,6 @@ describe('PublicLayout', () => {
     expect(mockTokens.getFeedbackToken).not.toHaveBeenCalled()
   })
 
-  it('exposes the site-wide AI statement to assistive technology', () => {
-    renderLayout()
-    const statement = screen.getByText(BRAND.claimSupport)
-    expect(statement.closest('[aria-hidden="true"]')).toBeNull()
-  })
-
   it('shows the AI line in the header on every page, as its own link to the explainer, not inside the home link', () => {
     renderLayout()
     const header = screen.getByRole('banner')
@@ -119,15 +113,9 @@ describe('PublicLayout', () => {
     expect(within(screen.getByRole('main')).queryByText(/curated/i)).toBeNull()
   })
 
-  it('keeps the bottom sign-off as it was', () => {
+  it('has no bottom sign-off above the footer: the header AI line is the site-wide notice', () => {
     renderLayout()
-    expect(screen.getByText('Curated with care by AI.')).toBeInTheDocument()
-  })
-
-  it('places the bottom sign-off inside the footer landmark, so no page content sits outside a landmark', () => {
-    renderLayout()
-    const footer = screen.getByRole('contentinfo')
-    expect(footer).toContainElement(screen.getByText(BRAND.claimSupport))
+    expect(screen.queryByText(BRAND.claimSupport)).toBeNull()
   })
 
   describe('Search panel', () => {
