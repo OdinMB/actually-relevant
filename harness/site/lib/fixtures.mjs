@@ -653,19 +653,31 @@ export function buildFixtures(now, apiOrigin) {
 
   /** @type {PublicNewsletterIssue[]} */
   const newsletters = [0, 1, 2].map(week => {
-    const picked = ISSUE_SPECS.map(spec => stories.filter(story => storyTopLevel(story) === spec.slug)[week]).filter(s => s !== undefined)
+    // Two stories per section, laid out as buildContent() in server/src/services/newsletter.ts
+    // writes them (after toWebMarkdown() took the markers out): a publisher line, then the
+    // summary, or the quote for every third story that has one
+    const picked = ISSUE_SPECS.flatMap(spec => stories.filter(story => storyTopLevel(story) === spec.slug).slice(week, week + 2))
+    let position = 0
+    const storyBlock = (/** @type {FixtureStory} */ story) => {
+      const useQuote = position++ % 3 === 2 && story.quote && story.quoteAttribution
+      const meta = [
+        story.feed.displayTitle ?? story.feed.title,
+        `[original article](${story.sourceUrl})`,
+        `[relevance analysis](https://actuallyrelevant.news/stories/${story.slug})`,
+      ].join(' · ')
+      const body = useQuote ? `> "${story.quote}"\n> — ${story.quoteAttribution}` : story.summary
+      return `## ${story.title}\n${meta}\n\n${body}`
+    }
     const sections = ISSUE_SPECS.map(spec => {
       const own = picked.filter(story => storyTopLevel(story) === spec.slug)
       if (own.length === 0) return ''
-      const body = own
-        .map(story => `## ${story.title}\n\n${story.summary}\n\n[Read the analysis](https://actuallyrelevant.news/stories/${story.slug})`)
-        .join('\n\n')
-      return `# ${spec.name}\n\n${body}`
+      return `# ${spec.name}\n\n${own.map(storyBlock).join('\n\n')}`
     }).filter(Boolean)
     const number = 3 - week
     return {
       slug: `fixture-issue-${number}`,
-      title: `Fixture week ${number}: ${picked.map(s => String(s.titleLabel).toLowerCase()).join(', ')}`,
+      // Shaped like a real issue title ("Week 42, 2026")
+      title: `Fixture week ${number}, 2026`,
       publishedAt: hoursAgo(30 + week * 24 * 7),
       aiLabel: { lead: NEWSLETTER_TOP_LABEL.lead, text: NEWSLETTER_TOP_LABEL.text },
       content: `${sections.join('\n\n---\n\n')}\n`,

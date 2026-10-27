@@ -8,7 +8,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import type { PublicNewsletterIssue } from '@shared/types'
 import { ApiError } from '../lib/api'
 
-const mockApi = vi.hoisted(() => ({ newsletterIssue: vi.fn() }))
+const mockApi = vi.hoisted(() => ({ newsletterIssue: vi.fn(), issues: { list: vi.fn() } }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
@@ -72,7 +72,13 @@ function renderPage(slug = 'week-42-2026') {
 beforeEach(() => {
   vi.clearAllMocks()
   mockApi.newsletterIssue.mockResolvedValue(ISSUE)
+  mockApi.issues.list.mockResolvedValue([])
 })
+
+/** The colored dot in a section heading. */
+function dotOf(heading: HTMLElement): string {
+  return heading.querySelector('.rounded-full')?.className ?? ''
+}
 
 describe('NewsletterIssuePage', () => {
   it("shows the issue's AI label before any AI-written text", async () => {
@@ -111,6 +117,37 @@ describe('NewsletterIssuePage', () => {
     renderPage()
     expect(await screen.findByRole('heading', { level: 1, name: 'Week 42, 2026' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: 'Planet & Climate' })).toBeInTheDocument()
+  })
+
+  it("colors a section's dot by its category, found by name among the site's categories", async () => {
+    // Renamed since: the slug, not the name, picks the color
+    mockApi.issues.list.mockResolvedValue([{ name: 'Planet & Climate', slug: 'existential-threats', children: [] }])
+    renderPage()
+    const section = await screen.findByRole('heading', { level: 2, name: 'Planet & Climate' })
+    await waitFor(() => expect(dotOf(section)).toContain('bg-red-400'))
+  })
+
+  it("colors a section's dot from its name while the categories cannot load", async () => {
+    mockApi.issues.list.mockRejectedValue(new ApiError(503, 'Service Unavailable'))
+    renderPage()
+    const section = await screen.findByRole('heading', { level: 2, name: 'Planet & Climate' })
+    expect(dotOf(section)).toContain('bg-teal-400')
+  })
+
+  it("sets each story's publisher line in small type, apart from its text", async () => {
+    renderPage()
+    const meta = (await screen.findAllByRole('link', { name: 'original article' }))[0]!.closest('p')!
+    expect(meta.textContent).toContain('Nation')
+    expect(meta.className).toContain('text-sm')
+    expect(screen.getByText('Why it matters for millions.').className).not.toContain('text-sm')
+  })
+
+  it('shows a quote and its attribution apart, as the email does', async () => {
+    renderPage()
+    const quote = await screen.findByText('“A quote.”')
+    const attribution = screen.getByText('— Someone')
+    expect(quote.closest('blockquote')).toContainElement(attribution)
+    expect(quote).not.toContainElement(attribution)
   })
 
   it('offers the podcast after the issue text', async () => {
