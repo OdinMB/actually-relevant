@@ -124,7 +124,7 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 Two ways in, one form (`FeedbackForm`), one endpoint (`POST /api/feedback`, `server/src/routes/public/feedback.ts`: honeypot, per-IP rate limit, the signup's bot gate, the visitor IP stored only as an HMAC, ADR-0037):
 
 - **`/feedback`** (prerendered page): the general form, categories Feedback, Bug, Suggestion, Other.
-- **"Report an error" on every story page** (`StoryPage`, below the analysis: "Spotted a mistake? Report an error"): a button that opens `FeedbackModal` through `FeedbackProvider` (mounted once in `PublicLayout`; `useFeedback().openFeedback(story)`), bound to the story: heading "Report an error", the story's title as the page shows it, no category choice (always `correction`), a visible "What is wrong?" label, button "Send report". The native `<dialog>` moves focus to the message on open, closes on Escape or backdrop click, and returns focus to the button.
+- **"Report an error" on every story page** (`StoryPage`, below the analysis: "Spotted a mistake? Report an error"): a button that opens `FeedbackModal` through `FeedbackProvider` (mounted once in `PublicLayout`; `useFeedback().openFeedback(story)`), bound to the story: heading "Report an error", the story's title as the page shows it, no category choice (always `correction`), a visible "What is wrong?" label, button "Send report". The dialog is `ModalDialog`, the shell the signup dialog shares (Key Files): it moves focus to the message on open, closes on Escape, backdrop click or its Close button, returns focus to the button, and stays named "Report an error" (or "Send feedback") after the thank-you replaces the form.
 
 **Bot gate**, the newsletter signup's (`.context/subscription.md`, steps 2 to 4, and "Client Behavior"), in this order before anything is stored:
 
@@ -170,6 +170,7 @@ Preload hints: `client/index.html`
   - `IssueNav.tsx` (desktop issue bar), `MobileMenu.tsx` (menu dialog), `SearchPanel.tsx` (search bar)
   - `SiteFooter.tsx` — color strip, brand, Navigate, Connect and Issues columns (no sign-off above it since 2026-10-27)
   - `navLinks.ts` (`ISSUE_LINKS`, `FOOTER_NAV`, `FOOTER_LEGAL`), `icons.tsx`
+- `client/src/components/ModalDialog.tsx` — the shell of the signup and feedback dialogs (`SubscribeModal`, `FeedbackModal`): a native `<dialog>` that closes on Escape, a backdrop click or its Close button, gives focus back to what opened it, is named by its `title` whatever the form inside shows (its thank-you has another heading), and mounts its content only while open. Its open, Escape and focus handling is `useModalDialog` (`client/src/hooks/`), which `MobileMenu` uses too.
 - `client/src/pages/HomePage.tsx` — Homepage with issue sections
 - `client/src/pages/StoryPage.tsx` — Story detail
 - `client/src/pages/IssuePage.tsx` — Issue page with stories + static content

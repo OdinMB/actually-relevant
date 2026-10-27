@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import FeedbackModal from './FeedbackModal'
 import { FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
 
@@ -65,5 +66,26 @@ describe('FeedbackModal', () => {
 
     rerender(modal(true))
     await waitFor(() => expect(mockApi.getFeedbackToken).toHaveBeenCalledTimes(3))
+  })
+
+  it('is named by the form heading, and keeps that name once the thank-you replaces the form', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    mockApi.submitFeedback.mockResolvedValue({ success: true })
+    render(modal(true))
+    const dialog = screen.getByRole('dialog', { name: 'Report an error' })
+    expect(within(dialog).getByRole('heading', { name: 'Report an error' })).toBeInTheDocument()
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'What is wrong?' }), 'Wrong date')
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Send report' })).toBeEnabled())
+    await user.click(within(dialog).getByRole('button', { name: 'Send report' }))
+    expect(await within(dialog).findByRole('heading', { name: 'Thanks for your report!' })).toBeInTheDocument()
+    expect(dialog).toHaveAccessibleName('Report an error')
+  })
+
+  it('is named "Send feedback" when no story is given', () => {
+    render(<FeedbackModal open onClose={onClose} />)
+
+    const dialog = screen.getByRole('dialog', { name: 'Send feedback' })
+    expect(within(dialog).getByRole('heading', { name: 'Send feedback' })).toBeInTheDocument()
   })
 })

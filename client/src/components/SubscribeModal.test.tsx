@@ -70,6 +70,20 @@ describe('SubscribeModal', () => {
     expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue('')
   })
 
+  it('is named by the form heading, and keeps that name once "Check your email" replaces the form', async () => {
+    const user = userEvent.setup()
+    mockApi.subscribe.mockResolvedValue({ success: true })
+    renderModal()
+    const dialog = screen.getByRole('dialog', { name: 'Stay informed' })
+    expect(within(dialog).getByRole('heading', { name: 'Stay informed' })).toBeInTheDocument()
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Email address' }), 'reader@example.com')
+    await user.click(within(dialog).getByRole('button', { name: /^subscribe$/i }))
+    expect(await within(dialog).findByRole('heading', { name: 'Check your email' })).toBeInTheDocument()
+    expect(dialog).toHaveAccessibleName('Stay informed')
+  })
+
   it('says what a subscriber gets, centered under the form', async () => {
     renderModal()
     await waitFor(() => expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled())

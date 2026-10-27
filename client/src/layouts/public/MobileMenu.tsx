@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useModalDialog } from '../../hooks/useModalDialog'
 import { getCategoryColor } from '../../lib/category-colors'
 import { KOFI_URL } from '../../config'
 import { MoodDialPanel } from '../../components/PositivitySlider'
@@ -17,37 +17,18 @@ interface MobileMenuProps {
   savedCount: number
 }
 
-/** Full-screen mobile navigation in a native <dialog>, for its built-in focus trap. */
+/**
+ * Full-screen mobile navigation in a native <dialog>, for its built-in focus trap. Unlike the
+ * signup and feedback dialogs (`ModalDialog`), its links stay in the page while it is closed, and
+ * the dimmed tap area below the menu closes it instead of a backdrop click.
+ */
 export default function MobileMenu({ open, onClose, savedCount }: MobileMenuProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
+  const dialogProps = useModalDialog(open, onClose)
   const { pathname } = useLocation()
-
-  // Sync the dialog with the open state
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (open) {
-      dialog.showModal()
-    } else {
-      dialog.close()
-    }
-  }, [open])
-
-  // Handle dialog cancel (Escape key / native close)
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    const handleCancel = (e: Event) => {
-      e.preventDefault()
-      onClose()
-    }
-    dialog.addEventListener('cancel', handleCancel)
-    return () => dialog.removeEventListener('cancel', handleCancel)
-  }, [onClose])
 
   return (
     <dialog
-      ref={dialogRef}
+      {...dialogProps}
       id="mobile-nav-menu"
       className="lg:hidden fixed top-0 left-0 w-full h-[100dvh] max-w-none max-h-none m-0 p-0 bg-transparent backdrop:bg-transparent overflow-hidden open:flex open:flex-col"
       aria-label="Mobile navigation"

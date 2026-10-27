@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import ModalDialog from './ModalDialog'
 import FeedbackForm, { type FeedbackStory } from './FeedbackForm'
 
 interface FeedbackModalProps {
@@ -8,70 +8,11 @@ interface FeedbackModalProps {
   story?: FeedbackStory
 }
 
-/**
- * The feedback dialog (native <dialog>, so focus moves in on open, Escape closes, and focus goes
- * back to the button that opened it on close).
- */
+/** The feedback dialog: a story's "Report an error", or general feedback. */
 export default function FeedbackModal({ open, onClose, story }: FeedbackModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-
-    if (open) {
-      dialog.showModal()
-    } else {
-      dialog.close()
-    }
-  }, [open])
-
-  // Handle backdrop click
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-
-    const handleClick = (e: MouseEvent) => {
-      if (e.target === dialog) onClose()
-    }
-    dialog.addEventListener('click', handleClick)
-    return () => dialog.removeEventListener('click', handleClick)
-  }, [onClose])
-
-  // Handle Escape
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-
-    const handleCancel = (e: Event) => {
-      e.preventDefault()
-      onClose()
-    }
-    dialog.addEventListener('cancel', handleCancel)
-    return () => dialog.removeEventListener('cancel', handleCancel)
-  }, [onClose])
-
   return (
-    <dialog
-      ref={dialogRef}
-      className="fixed inset-0 z-50 m-auto w-full max-w-md rounded-xl bg-white p-0 shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
-      aria-labelledby="feedback-modal-title"
-    >
-      <div className="p-6 sm:p-8">
-        {/* Mounted only while open, as in SubscribeModal: the form fetches a form token on mount and
-            refreshes it while mounted, so a closed dialog requests nothing. */}
-        {open && <FeedbackForm key={story?.id ?? ''} autoFocus onSuccess={onClose} idPrefix="feedback-modal" story={story} />}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 text-neutral-500 hover:text-neutral-700 transition-colors rounded focus-visible:ring-2 focus-visible:ring-brand-500"
-          aria-label="Close"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </dialog>
+    <ModalDialog open={open} onClose={onClose} title={story ? 'Report an error' : 'Send feedback'}>
+      <FeedbackForm key={story?.id ?? ''} autoFocus onSuccess={onClose} idPrefix="feedback-modal" story={story} />
+    </ModalDialog>
   )
 }
