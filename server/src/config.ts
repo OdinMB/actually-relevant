@@ -349,9 +349,10 @@ export const config = {
     continuityMode: 'text' as const,
     segmentPauseMs: 700,
     chunkMaxChars: 1800,
-    // About 4.3 episodes at ~5,500 plus one full re-voice (owner, 2026-10-06). Provisional:
-    // S2 measured a promotional rate; re-measure one call after 2026-10-12.
-    monthlyTtsCharCap: 32000,
+    // Five Fridays at the band's top (6,200) plus a re-voice and a standalone episode (owner,
+    // 2026-10-28; was 32,000). The ElevenLabs balance covers it even at 1 credit per character.
+    // The podcast key's own monthly limit in ElevenLabs must be at least this.
+    monthlyTtsCharCap: 44000,
     ownerEmail: 'contact@actuallyrelevant.news',
     // Audio (phase 2). ElevenLabs returns CBR MP3 at this format; the episode is re-encoded at the bitrate.
     ttsOutputFormat: 'mp3_44100_128',
