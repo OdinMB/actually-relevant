@@ -89,8 +89,9 @@ export default function PrivacyPage() {
             transfer to the USA, which Plunk covers with the EU standard contractual clauses.
           </p>
           <p className="mt-3">
-            Our newsletter provider, Plunk, automatically tracks email opens and link clicks as part of their delivery infrastructure. We cannot disable this
-            functionality. We do not use this data for profiling, advertising, or any purpose beyond basic delivery monitoring.
+            Open and click tracking is switched off for our emails, so Plunk does not record whether you opened an email or which links you clicked. Plunk still
+            records whether each email was delivered, bounced, or reported as spam. We use these records only to monitor delivery, never for profiling or
+            advertising.
           </p>
           <p>You can unsubscribe at any time using the unsubscribe link included in every email.</p>
 
@@ -147,7 +148,10 @@ export default function PrivacyPage() {
                     </a>
                   </td>
                   <td className="align-top py-2 pr-4">Privacy-first analytics</td>
-                  <td className="align-top py-2">Anonymous page views only. No cookies, no personal data.</td>
+                  <td className="align-top py-2">
+                    Anonymous page views. Your IP address reaches it with each page view, and it states that it drops the address without storing it. No
+                    cookies.
+                  </td>
                 </tr>
                 <tr className="border-b border-neutral-100">
                   <td className="align-top py-2 pr-4">
@@ -231,9 +235,11 @@ export default function PrivacyPage() {
             We also use OpenAI models to analyze news articles, which involves no visitor data.
           </p>
           <p className="mt-4">
-            All fonts used on this site are self-hosted. We do not load fonts, scripts, or other resources from external CDNs like Google, meaning your IP
-            address is not shared with third parties when you visit. There are two exceptions. On the podcast page, an episode loads from Bunny.net only when
-            you press play. On the newsletter signup and feedback forms, Cloudflare Turnstile loads only when you submit the form.
+            All fonts used on this site are self-hosted. We do not load fonts, scripts, or other resources from external CDNs like Google, so your IP address is
+            not shared with them when you visit. There are three exceptions. On every page, your browser loads the Simple Analytics script and sends it the page
+            view, so Simple Analytics receives your IP address; it states that it drops the address from every request and never stores it. On the podcast page,
+            an episode loads from Bunny.net only when you press play. On the newsletter signup and feedback forms, Cloudflare Turnstile loads only when you
+            submit the form.
           </p>
 
           <h2 className="section-heading mt-10">Your Rights</h2>
