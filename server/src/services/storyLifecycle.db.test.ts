@@ -317,6 +317,20 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     }
   })
 
+  it('publishing sets status, slug and date in one write, keeping a slug or date already set', async () => {
+    const earlier = new Date('2026-01-02T03:04:05.000Z')
+    const kept = await story({ status: 'selected', title: 'Kept', slug: 'old-slug', datePublished: earlier })
+    const fresh = await story({ status: 'selected', title: 'Fresh Story' })
+
+    const result = await transition([kept.id, fresh.id], { to: 'published' }, 'pipeline')
+
+    expect(result.moved.sort()).toEqual([kept.id, fresh.id].sort())
+    expect(await row(kept.id)).toMatchObject({ status: 'published', rejectionReason: null, slug: 'old-slug', datePublished: earlier })
+    const freshRow = await row(fresh.id)
+    expect(freshRow).toMatchObject({ status: 'published', slug: 'fresh-story' })
+    expect(Math.abs(freshRow.datePublished!.getTime() - Date.now())).toBeLessThan(60_000)
+  })
+
   it('the selection job rejects a below-threshold backlog in bounded transactions', async () => {
     const chunkSize = config.database.moveChunkSize
     config.database.moveChunkSize = 2

@@ -20,6 +20,9 @@ import { analysisFrom, partition, recordAnalysis, transition, type Actor, type A
 
 const log = createLogger('analysis')
 
+/** Post-assessment dedup runs detached; this bounds how many hold a connection at once. */
+const dedupSemaphore = new Semaphore(config.concurrency.dedup)
+
 export type ProgressCallback = (event: { type: 'completed'; count: number } | { type: 'failed'; count: number; error: string }) => void
 
 // --- Shared batch classification helper ---
@@ -326,7 +329,8 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
 
   // Dedup runs after the transaction — embedding is guaranteed to exist
   if (config.dedup.enabled) {
-    detectAndCluster(storyId)
+    dedupSemaphore
+      .run(() => detectAndCluster(storyId))
       .then(result => {
         if (result.clusterId) {
           log.info({ storyId, ...result }, 'post-assessment dedup result')
@@ -390,7 +394,18 @@ export async function selectStories(storyIds: string[]): Promise<SelectionResult
   // Only `analyzed` stories enter the pool; any other id is skipped, never selected or rejected
   const stories = await prisma.story.findMany({
     where: { id: { in: storyIds }, status: StoryStatus.analyzed },
-    include: { cluster: { select: { primaryStoryId: true } } },
+    // Only what the prompt reads: the article text would sit in memory for every group at once
+    select: {
+      id: true,
+      title: true,
+      summary: true,
+      relevanceReasons: true,
+      antifactors: true,
+      relevanceCalculation: true,
+      emotionTag: true,
+      sourceDatePublished: true,
+      cluster: { select: { primaryStoryId: true } },
+    },
   })
   const poolIds = new Set(stories.map(s => s.id))
   const skipped = [...new Set(storyIds)].filter(id => !poolIds.has(id))

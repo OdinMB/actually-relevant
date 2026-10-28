@@ -26,7 +26,7 @@ import { saveEmbeddingTx } from '../lib/vectors.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 import { ensureEmbeddings } from './embedding.js'
 import { forgetRelatedStories } from './relatedStories.js'
-import { generateUniqueSlugs, saveSlugs, withSlugLock } from './storySlugs.js'
+import { generateUniqueSlugs, withSlugLock } from './storySlugs.js'
 
 const log = createLogger('story-lifecycle')
 
@@ -316,29 +316,25 @@ async function ensureEmbeddingsBeforePublish(chunk: string[], from: StoryStatus[
 async function publishChunk(tx: Tx, chunk: string[], from: StoryStatus[], actor: Actor): Promise<MoveResult> {
   const before = await lockForMove(tx, chunk)
 
-  const flipped = await tx.story.updateManyAndReturn({
+  // The rows are locked, so what this reads is what the write below flips
+  const flipped = await tx.story.findMany({
     where: {
       id: { in: chunk },
       status: { in: from },
       // The job publishes one story per cluster: its primary (decision 7)
       ...(actor === 'pipeline' ? { OR: [{ clusterId: null }, { primaryOfCluster: { isNot: null } }] } : {}),
     },
-    data: { status: published, rejectionReason: null },
     select: { id: true, slug: true, title: true, sourceTitle: true, clusterId: true },
   })
   const moved = flipped.map(s => s.id)
-
-  // Slugs and dates only for rows that actually moved; a slug or date already set is kept
-  await saveSlugs(
+  const slugs = await generateUniqueSlugs(
+    flipped.filter(s => !s.slug),
     tx,
-    await generateUniqueSlugs(
-      flipped.filter(s => !s.slug),
-      tx,
-    ),
   )
-  if (moved.length > 0) {
-    await tx.story.updateMany({ where: { id: { in: moved }, datePublished: null }, data: { datePublished: new Date() } })
-  }
+  await publishRows(
+    tx,
+    moved.map(id => ({ id, slug: slugs.get(id) ?? null })),
+  )
 
   // Every cluster the chunk touches, not only the moved stories': a `selected` non-primary the
   // job left alone is rejected as a duplicate here rather than waiting in `selected` for good
@@ -350,6 +346,26 @@ async function publishChunk(tx: Tx, chunk: string[], from: StoryStatus[], actor:
   const skippedIds = chunk.filter(id => !movedSet.has(id))
   const after = await currentStatuses(tx, skippedIds)
   return { moved, skipped: skippedIds.map(id => ({ id, status: after.get(id) ?? null })) }
+}
+
+/**
+ * Status, slug and publish date in one statement. Every write to these indexed columns adds a
+ * new entry to each of the table's indexes, the vector index included, so writing them in three
+ * statements tripled the work that holds the slug lock. A slug or date already set is kept.
+ */
+async function publishRows(tx: Tx, rows: { id: string; slug: string | null }[]): Promise<void> {
+  if (rows.length === 0) return
+  const values = rows.map(r => Prisma.sql`(${r.id}::text, ${r.slug}::text)`)
+  await tx.$executeRaw`
+    UPDATE stories AS s
+    SET status = ${published}::"StoryStatus",
+        rejection_reason = NULL,
+        slug = COALESCE(s.slug, v.slug),
+        date_published = COALESCE(s.date_published, now() AT TIME ZONE 'UTC'),
+        updated_at = now() AT TIME ZONE 'UTC'
+    FROM (VALUES ${Prisma.join(values)}) AS v(id, slug)
+    WHERE s.id = v.id
+  `
 }
 
 // ──── Cluster primaries ─────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { it, expect, beforeEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import { generateUniqueSlugs, saveSlugs, withSlugLock } from './storySlugs.js'
+import { generateUniqueSlugs, withSlugLock } from './storySlugs.js'
 
 let feedId: string
 
@@ -50,28 +50,13 @@ describeDb('story slugs (PostgreSQL)', () => {
     expect(result.get(story.id)).toBe('test-article')
   })
 
-  it('saveSlugs writes every slug in one statement and leaves other stories alone', async () => {
-    const [a, b, other] = await Promise.all([createStory({ feedId }), createStory({ feedId }), createStory({ feedId, slug: 'keep-me' })])
-    await prisma.$transaction(tx =>
-      saveSlugs(
-        tx,
-        new Map([
-          [a.id, 'first'],
-          [b.id, 'second'],
-        ]),
-      ),
-    )
-    expect([await slugOf(a.id), await slugOf(b.id), await slugOf(other.id)]).toEqual(['first', 'second', 'keep-me'])
-    await prisma.$transaction(tx => saveSlugs(tx, new Map()))
-  })
-
   it('withSlugLock serializes concurrent publishers, so the same title still gets distinct slugs', async () => {
     const stories = await Promise.all(Array.from({ length: 4 }, () => createStory({ feedId, title: 'Same Title' })))
     await Promise.all(
       stories.map(story =>
         withSlugLock(async tx => {
           const slugs = await generateUniqueSlugs([{ id: story.id, title: story.title, sourceTitle: story.sourceTitle }], tx)
-          await saveSlugs(tx, slugs)
+          await tx.story.update({ where: { id: story.id }, data: { slug: slugs.get(story.id) } })
         }),
       ),
     )

@@ -83,19 +83,3 @@ export async function generateUniqueSlugs(
 
   return result
 }
-
-/**
- * Write the slugs in one statement. A per-story update loop here costs one round trip per story,
- * which blows past the transaction timeout once a publish chunk grows; every slug is unique by
- * construction (generateUniqueSlugs), so a batched UPDATE cannot violate the constraint.
- */
-export async function saveSlugs(tx: Prisma.TransactionClient, slugs: Map<string, string>): Promise<void> {
-  if (slugs.size === 0) return
-  const rows = [...slugs.entries()].map(([storyId, slug]) => Prisma.sql`(${storyId}::text, ${slug}::text)`)
-  await tx.$executeRaw`
-    UPDATE stories AS s
-    SET slug = v.slug
-    FROM (VALUES ${Prisma.join(rows)}) AS v(id, slug)
-    WHERE s.id = v.id
-  `
-}

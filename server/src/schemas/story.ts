@@ -48,7 +48,7 @@ export const updateStoryStatusSchema = z.object({
 })
 
 export const bulkUpdateStatusSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, 'At least one ID is required'),
+  ids: z.array(z.string().uuid()).min(1, 'At least one ID is required').max(500, 'Maximum 500 story IDs allowed'),
   status: storyStatusEnum,
 })
 

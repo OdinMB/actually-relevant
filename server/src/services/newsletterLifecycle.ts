@@ -117,7 +117,8 @@ async function readIssue(id: string): Promise<Newsletter> {
 export async function assignStories(id: string): Promise<Newsletter> {
   return underLock(id, async (tx, newsletter) => {
     await assertNotFrozen(tx, newsletter)
-    const storyIds = await recentStoryIds()
+    // On the transaction's connection: a second one from the pool could starve a small pool
+    const storyIds = await recentStoryIds(tx)
     return tx.newsletter.update({ where: { id }, data: { storyIds } })
   })
 }

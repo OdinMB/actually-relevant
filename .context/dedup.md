@@ -56,7 +56,7 @@ After `assessStories()` completes, each newly analyzed story:
 1. Gets its embedding generated (via `generateStoryEmbedding`)
 2. Runs through `detectAndCluster()` which finds candidates, confirms duplicates via LLM, and creates/joins clusters
 
-Dedup runs fire-and-forget after the assessment transaction commits (`assessStory()` in `server/src/services/analysis.ts`), so the embedding always exists by then. A dedup failure never rolls back or blocks the assessment. `DEDUP_ENABLED=false` skips it entirely. A cluster is formed or joined only when the LLM confirms at least one candidate as `isDuplicate`. Out-of-range candidate numbers in the LLM response are ignored.
+Dedup runs fire-and-forget after the assessment transaction commits (`assessStory()` in `server/src/services/analysis.ts`), so the embedding always exists by then. At most `config.concurrency.dedup` (2) run at once, queued behind a semaphore, so a large assess run never opens a cluster-locking transaction per story at the same time. A dedup failure never rolls back or blocks the assessment. `DEDUP_ENABLED=false` skips it entirely. A cluster is formed or joined only when the LLM confirms at least one candidate as `isDuplicate`. Out-of-range candidate numbers in the LLM response are ignored.
 
 ## Cluster Formation
 

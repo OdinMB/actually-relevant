@@ -197,6 +197,9 @@ export const config = {
     // 15s is generous headroom for the (now single-statement) slug + status writes while
     // still failing fast rather than pinning a connection from the small pool for too long.
     transactionTimeoutMs: parseWholeNumber(process.env.DB_TRANSACTION_TIMEOUT_MS, 15_000, 'DB_TRANSACTION_TIMEOUT_MS'),
+    // How long a transaction waits for a pooled connection before failing (Prisma's default is
+    // 2s). Concurrent analysis workers share a small pool, so a brief wait is normal, not an error.
+    transactionMaxWaitMs: 10_000,
     // Status moves other than publishing run in transactions of at most this many stories. A
     // status write re-indexes every row it touches, the vector index included, so one
     // transaction over a whole backlog (the selection job's below-threshold rejection) outlasted
@@ -458,6 +461,9 @@ export const config = {
     assess: parseWholeNumber(process.env.CONCURRENCY_ASSESS, 10, 'CONCURRENCY_ASSESS'),
     select: parseWholeNumber(process.env.CONCURRENCY_SELECT, 10, 'CONCURRENCY_SELECT'),
     reclassify: parseWholeNumber(process.env.CONCURRENCY_RECLASSIFY, 10, 'CONCURRENCY_RECLASSIFY'),
+    // Post-assessment dedup runs detached from the assess workers; this caps how many run at
+    // once, so a large assess run can't queue a cluster-locking transaction per story at once
+    dedup: 2,
     // Heavy: each concurrent crawl runs a JSDOM parse, which both saturates the
     // 0.5 vCPU AND allocates native/CSSOM memory counted against Render's ~512 MiB
     // RSS limit (NOT the V8 heap that --max-old-space-size bounds). Peak concurrent

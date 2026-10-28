@@ -355,6 +355,13 @@ describe('Admin Stories API', () => {
       const res = await request(app).post('/api/admin/stories/bulk-status').set(authHeader()).send({ ids: [], status: 'published' })
       expect(res.status).toBe(400)
     })
+
+    it('rejects more than 500 ids, like the other bulk actions', async () => {
+      const ids = Array.from({ length: 501 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`)
+      const res = await request(app).post('/api/admin/stories/bulk-status').set(authHeader()).send({ ids, status: 'trashed' })
+      expect(res.status).toBe(400)
+      expect(mockTransition).not.toHaveBeenCalled()
+    })
   })
 
   describe('POST /api/admin/stories/preassess', () => {

@@ -76,8 +76,8 @@ export async function createNewsletter(data: { title: string; weekKey?: string }
 // --- Content builders: they compute, and newsletterLifecycle.ts writes what they return ---
 
 /** The longlist: ids of the stories published in the last `storyAssignmentDays` days, newest first. */
-export async function recentStoryIds(): Promise<string[]> {
-  const stories = await prisma.story.findMany({
+export async function recentStoryIds(client: Prisma.TransactionClient = prisma): Promise<string[]> {
+  const stories = await client.story.findMany({
     where: {
       status: StoryStatus.published,
       dateCrawled: { gte: new Date(Date.now() - config.content.storyAssignmentDays * 24 * 60 * 60 * 1000) },
