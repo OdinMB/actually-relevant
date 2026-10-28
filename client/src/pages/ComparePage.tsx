@@ -192,7 +192,7 @@ const DIFFERENTIATORS: { icon: ReactNode; title: string; description: string; bo
       </svg>
     ),
     title: 'No Ads, No Tracking',
-    description: 'No ads, no cookies, no third-party trackers. Privacy-first analytics only.',
+    description: 'No ads, no third-party trackers, no cookies of our own. Privacy-first analytics only.',
     border: 'border-l-amber-400',
   },
   {

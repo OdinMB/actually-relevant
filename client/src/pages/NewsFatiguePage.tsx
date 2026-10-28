@@ -272,7 +272,7 @@ export default function NewsFatiguePage() {
               </Link>
             </li>
             <li>
-              <strong>No tracking.</strong> No cookies, no analytics profiles, no third-party trackers.
+              <strong>No tracking.</strong> We set no cookies, build no analytics profiles, and use no third-party trackers.
             </li>
             <li>
               <strong>No personalization bubbles.</strong> Everyone sees the same curated stories.

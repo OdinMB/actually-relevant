@@ -9,7 +9,7 @@ import { KOFI_URL } from '../config'
 const META = {
   title: 'News Without Ads or Tracking \u2014 Actually Relevant',
   description:
-    'A daily news digest with zero ads, zero tracking, and zero clickbait. No cookies, no analytics profiles, no engagement optimization. Just the stories that matter.',
+    'News and a weekly newsletter with zero ads, zero tracking, and zero clickbait. We set no cookies and build no analytics profiles. Just the stories that matter.',
   url: `${SEO.siteUrl}/no-ads-no-tracking`,
 }
 
@@ -34,7 +34,7 @@ const breadcrumb = buildBreadcrumbSchema([
 
 const COMPARISON = [
   { us: 'No ads', them: 'Display, native, and sponsored ads' },
-  { us: 'No tracking*', them: 'Dozens of third-party trackers' },
+  { us: 'No tracking', them: 'Dozens of third-party trackers' },
   { us: 'No clickbait', them: 'Engagement-optimized headlines' },
   { us: 'Funded by donations', them: 'Funded by advertising' },
   { us: 'Never sells data', them: 'Data often sold or shared' },
@@ -88,13 +88,6 @@ export default function NoAdsNoTrackingPage() {
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-neutral-500 mt-1">
-            * Our newsletter provider tracks email opens and link clicks. We cannot disable this. We do not use this data for profiling or advertising. See our{' '}
-            <Link to="/privacy" className="underline hover:text-neutral-700">
-              privacy policy
-            </Link>{' '}
-            for details.
-          </p>
           <p className="mt-4">
             Want the full comparison?{' '}
             <Link to="/compare" className="text-brand-700 hover:text-brand-800 underline focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
