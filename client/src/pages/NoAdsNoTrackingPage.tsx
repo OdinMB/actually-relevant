@@ -7,9 +7,9 @@ import LandingCta from '../components/LandingCta'
 import { KOFI_URL } from '../config'
 
 const META = {
-  title: 'News Without Ads or Tracking \u2014 Actually Relevant',
+  title: 'A News Site Without Ads or Tracking \u2014 Actually Relevant',
   description:
-    'A daily news digest with zero ads, zero tracking, and zero clickbait. No cookies, no analytics profiles, no engagement optimization. Just the stories that matter.',
+    'News without ads, clickbait, or engagement optimization, on a site with no cookies, no tracking, and no analytics profiles. Just the stories that matter.',
   url: `${SEO.siteUrl}/no-ads-no-tracking`,
 }
 
@@ -29,12 +29,12 @@ const pageSchema = {
 
 const breadcrumb = buildBreadcrumbSchema([
   { name: 'Home', url: SEO.siteUrl },
-  { name: 'No Ads, No Tracking', url: META.url },
+  { name: 'No Ads, No Tracking on the Site', url: META.url },
 ])
 
 const COMPARISON = [
   { us: 'No ads', them: 'Display, native, and sponsored ads' },
-  { us: 'No tracking*', them: 'Dozens of third-party trackers' },
+  { us: 'No tracking on the site*', them: 'Dozens of third-party trackers' },
   { us: 'No clickbait', them: 'Engagement-optimized headlines' },
   { us: 'Funded by donations', them: 'Funded by advertising' },
   { us: 'Never sells data', them: 'Data often sold or shared' },
@@ -63,7 +63,7 @@ export default function NoAdsNoTrackingPage() {
       <StructuredData data={[pageSchema, breadcrumb]} />
 
       <div className="page-section">
-        <h1 className="page-title">News Without Ads, Tracking, or Clickbait</h1>
+        <h1 className="page-title">A News Site Without Ads, Tracking, or Clickbait</h1>
         <div className="prose max-w-none">
           <p className="text-lg text-neutral-600 leading-relaxed">
             Most free news services make money from your data. Here's how Actually Relevant is different.
@@ -89,7 +89,8 @@ export default function NoAdsNoTrackingPage() {
             </tbody>
           </table>
           <p className="text-xs text-neutral-500 mt-1">
-            * Our newsletter provider tracks email opens and link clicks. We cannot disable this. We do not use this data for profiling or advertising. See our{' '}
+            * The newsletter is different: its email service counts opens and link clicks, and we can&apos;t turn that off. We don&apos;t use this data for
+            profiling or advertising. See our{' '}
             <Link to="/privacy" className="underline hover:text-neutral-700">
               privacy policy
             </Link>{' '}

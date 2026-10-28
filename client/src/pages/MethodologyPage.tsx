@@ -216,7 +216,7 @@ export default function MethodologyPage() {
               .
             </li>
             <li>
-              <strong>We don't sell data.</strong> No tracking, no analytics profiles, no ad targeting.
+              <strong>We don't sell data.</strong> No tracking on the site, no analytics profiles, no ad targeting.
             </li>
           </ul>
 

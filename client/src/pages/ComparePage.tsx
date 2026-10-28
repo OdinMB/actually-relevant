@@ -92,7 +92,7 @@ const ROWS: { us: CellValue; them: CellValue[] }[] = [
     ],
   },
   {
-    us: { text: 'No tracking', check: true },
+    us: { text: 'No tracking on the site', check: true },
     them: [
       'Google account + cross-product tracking',
       'Device data + ad targeting',
@@ -191,8 +191,8 @@ const DIFFERENTIATORS: { icon: ReactNode; title: string; description: string; bo
         />
       </svg>
     ),
-    title: 'No Ads, No Tracking',
-    description: 'No ads, no cookies, no third-party trackers. Privacy-first analytics only.',
+    title: 'No Ads, No Tracking on the Site',
+    description: 'No ads anywhere. On the site: no cookies, no third-party trackers, privacy-first analytics only.',
     border: 'border-l-amber-400',
   },
   {
@@ -228,7 +228,7 @@ const PERSONAS: { title: string; description: string; link: string; linkText: st
   },
   {
     title: 'Privacy-conscious readers',
-    description: 'No ads, no tracking, no data harvesting.',
+    description: 'No ads, no data harvesting, no tracking on the site.',
     link: '/no-ads-no-tracking',
     linkText: 'Our commitment',
     border: 'border-l-amber-400',
@@ -280,7 +280,7 @@ export default function ComparePage() {
         <h1 className="page-title">How Does Actually Relevant Compare?</h1>
         <p className="text-lg text-neutral-600 leading-relaxed">
           Most news aggregators optimize for engagement. More clicks, more time on site, more ad impressions. Actually Relevant does something different: it
-          uses AI to find the stories that matter most to humanity, with no ads, no tracking, and full source transparency.
+          uses AI to find the stories that matter most to humanity, with no ads, no tracking on the site, and full source transparency.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">

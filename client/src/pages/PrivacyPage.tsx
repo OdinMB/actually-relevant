@@ -9,12 +9,12 @@ export default function PrivacyPage() {
         <title>Privacy Policy - {SEO.siteName}</title>
         <meta
           name="description"
-          content="Actually Relevant respects your privacy. We set no cookies and use no tracking pixels or invasive analytics. Learn what minimal data we collect."
+          content="Actually Relevant respects your privacy. On our website we set no cookies and use no tracking pixels or invasive analytics. Learn what minimal data we collect."
         />
         <meta property="og:title" content={`Privacy Policy - ${SEO.siteName}`} />
         <meta
           property="og:description"
-          content="Actually Relevant respects your privacy. We set no cookies and use no tracking pixels or invasive analytics."
+          content="Actually Relevant respects your privacy. On our website we set no cookies and use no tracking pixels or invasive analytics."
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={`${SEO.siteUrl}/privacy`} />
@@ -26,8 +26,8 @@ export default function PrivacyPage() {
 
         <div className="prose max-w-none">
           <p>
-            We do not set cookies, and we do not use tracking pixels, Google Analytics, advertising scripts, or any other invasive data collection. Your browser
-            keeps your dial position, saved stories, and reading history on your device, and they never leave it.
+            On this website, we do not set cookies, and we do not use tracking pixels, Google Analytics, advertising scripts, or any other invasive data
+            collection. Your browser keeps your dial position, saved stories, and reading history on your device, and they never leave it.
           </p>
 
           <h2 className="section-heading mt-10">What We Collect</h2>

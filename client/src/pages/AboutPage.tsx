@@ -52,8 +52,8 @@ export default function AboutPage() {
           </p>
           <p>
             So I built what I wanted: an AI that reads lots of news sources across multiple languages and surfaces only the stories that genuinely matter to
-            humanity. No ads, no tracking, no personalization bubbles. When assessing relevance, every human counts the same, no matter where they live. A
-            policy change that affects the entire elderly care system in China is more important than most policy debates in Washington.
+            humanity. No ads, no personalization bubbles, and no tracking on the site. When assessing relevance, every human counts the same, no matter where
+            they live. A policy change that affects the entire elderly care system in China is more important than most policy debates in Washington.
           </p>
 
           {/* Profile card — floated before h2 so it top-aligns with the section title */}
@@ -130,7 +130,7 @@ export default function AboutPage() {
             </li>
             <li>
               <Link to="/no-ads-no-tracking" className="text-brand-700 hover:text-brand-800 font-normal">
-                No Ads, No Tracking
+                No Ads, No Tracking on the Site
               </Link>{' '}
               &mdash; Our commitment to privacy and independence
             </li>

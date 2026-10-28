@@ -33,7 +33,7 @@ export const FOOTER_NAV = [
 export const FOOTER_LEGAL = [
   { label: 'Legal notice / Impressum', href: '/imprint' },
   { label: 'Privacy', href: '/privacy' },
-  { label: 'No tracking', href: '/no-ads-no-tracking' },
+  { label: 'No tracking here', href: '/no-ads-no-tracking' },
 ]
 
 /** True on an issue page and on any page below it. */
