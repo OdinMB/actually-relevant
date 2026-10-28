@@ -48,7 +48,7 @@ export default function PrivacyPage() {
               Does <strong>not</strong> track individual visitors
             </li>
             <li>
-              Does <strong>not</strong> collect personal data
+              Does <strong>not</strong> store personal data
             </li>
             <li>
               Does <strong>not</strong> store your IP address
@@ -89,9 +89,9 @@ export default function PrivacyPage() {
             transfer to the USA, which Plunk covers with the EU standard contractual clauses.
           </p>
           <p className="mt-3">
-            Open and click tracking is switched off for our emails, so Plunk does not record whether you opened an email or which links you clicked. Plunk still
-            records whether each email was delivered, bounced, or reported as spam. We use these records only to monitor delivery, never for profiling or
-            advertising.
+            Since October 28, 2026, open and click tracking is switched off for our emails, so Plunk does not record whether you opened an email or which links
+            you clicked. Plunk still holds the open and click records of emails we sent before then. It also records whether each email was delivered, bounced,
+            or reported as spam. We use these records only to monitor delivery, never for profiling or advertising.
           </p>
           <p>You can unsubscribe at any time using the unsubscribe link included in every email.</p>
 
@@ -235,11 +235,10 @@ export default function PrivacyPage() {
             We also use OpenAI models to analyze news articles, which involves no visitor data.
           </p>
           <p className="mt-4">
-            All fonts used on this site are self-hosted. We do not load fonts, scripts, or other resources from external CDNs like Google, so your IP address is
-            not shared with them when you visit. There are three exceptions. On every page, your browser loads the Simple Analytics script and sends it the page
-            view, so Simple Analytics receives your IP address; it states that it drops the address from every request and never stores it. On the podcast page,
-            an episode loads from Bunny.net only when you press play. On the newsletter signup and feedback forms, Cloudflare Turnstile loads only when you
-            submit the form.
+            All fonts used on this site are self-hosted. We load no fonts, scripts, or other resources from external CDNs like Google, with three exceptions
+            that receive your IP address. On every page, your browser loads the Simple Analytics script and sends it the page view, so Simple Analytics receives
+            your IP address; it states that it drops the address from every request and never stores it. On the podcast page, an episode loads from Bunny.net
+            only when you press play. On the newsletter signup and feedback forms, Cloudflare Turnstile loads only when you submit the form.
           </p>
 
           <h2 className="section-heading mt-10">Your Rights</h2>
