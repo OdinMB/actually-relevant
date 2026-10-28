@@ -89,9 +89,9 @@ export default function PrivacyPage() {
             transfer to the USA, which Plunk covers with the EU standard contractual clauses.
           </p>
           <p className="mt-3">
-            Since October 28, 2026, open and click tracking is switched off for our emails, so Plunk does not record whether you opened an email or which links
-            you clicked. Plunk still holds the open and click records of emails we sent before then. It also records whether each email was delivered, bounced,
-            or reported as spam. We use these records only to monitor delivery, never for profiling or advertising.
+            Open and click tracking is switched off for our emails, so Plunk does not record whether you opened an email or which links you clicked. Plunk does
+            record whether each email was delivered, bounced, or reported as spam. We use these records only to monitor delivery, never for profiling or
+            advertising.
           </p>
           <p>You can unsubscribe at any time using the unsubscribe link included in every email.</p>
 
