@@ -317,6 +317,24 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     }
   })
 
+  it('the selection job rejects a below-threshold backlog in bounded transactions', async () => {
+    const chunkSize = config.database.moveChunkSize
+    config.database.moveChunkSize = 2
+    const transactions = vi.spyOn(prisma, '$transaction')
+    try {
+      const ids = []
+      for (let i = 0; i < 5; i++) ids.push((await story({ status: 'analyzed', relevance: 1 })).id)
+
+      await runSelectStories()
+
+      expect(transactions).toHaveBeenCalledTimes(3)
+      for (const r of (await statusesOf(ids)).values()) expect(r).toMatchObject({ status: 'rejected', rejectionReason: 'select_threshold' })
+    } finally {
+      transactions.mockRestore()
+      config.database.moveChunkSize = chunkSize
+    }
+  })
+
   it('the publish job publishes a cluster primary, not a selected non-primary', async () => {
     const primary = await story({ status: 'selected', title: 'Primary', relevance: 9 })
     const member = await story({ status: 'selected', title: 'Member', relevance: 5 })

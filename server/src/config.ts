@@ -197,6 +197,11 @@ export const config = {
     // 15s is generous headroom for the (now single-statement) slug + status writes while
     // still failing fast rather than pinning a connection from the small pool for too long.
     transactionTimeoutMs: parseWholeNumber(process.env.DB_TRANSACTION_TIMEOUT_MS, 15_000, 'DB_TRANSACTION_TIMEOUT_MS'),
+    // Status moves other than publishing run in transactions of at most this many stories. A
+    // status write re-indexes every row it touches, the vector index included, so one
+    // transaction over a whole backlog (the selection job's below-threshold rejection) outlasted
+    // the timeout above.
+    moveChunkSize: 100,
   },
   llm: {
     // GPT-6 defaults from the 2026-09-24 model eval (.context/model-eval.md). The

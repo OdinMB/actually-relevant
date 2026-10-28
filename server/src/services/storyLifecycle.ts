@@ -4,8 +4,8 @@
  * `stories.status` and `stories.rejection_reason` (held by `test/statusWriters.test.ts`):
  *
  * - the transition table: which statuses each move may start from, per actor;
- * - conditional moves: one `UPDATE ... WHERE status IN (allowed)` per move, reporting which ids
- *   moved and which were skipped, so a story trashed while a model call ran stays trashed;
+ * - conditional moves: one `UPDATE ... WHERE status IN (allowed)` per chunk of a move, reporting
+ *   which ids moved and which were skipped, so a story trashed while a model call ran stays trashed;
  * - publishing: embeddings outside the transaction, then slugs, dates and the flip under the slug
  *   lock;
  * - cluster primaries: election, auto-rejection of duplicates, restoring them; and the cluster
@@ -216,10 +216,7 @@ export async function transition(ids: string[], move: Move, actor: Actor): Promi
   if (unique.length === 0) return { moved: [], skipped: [] }
   const from = allowedFrom(move, actor)
 
-  const result =
-    move.to === published
-      ? await publishIds(unique, from, actor)
-      : await retryOnClusterChange(() => inTransaction(tx => (actor === 'editor' ? editorMove(tx, unique, move, from) : pipelineMove(tx, unique, move, from))))
+  const result = move.to === published ? await publishIds(unique, from, actor) : await moveIds(unique, move, from, actor)
 
   if (actor === 'editor' && move.to !== published) forgetRelatedStories(result.moved)
   log.info(
@@ -231,6 +228,24 @@ export async function transition(ids: string[], move: Move, actor: Actor): Promi
     },
     'story status move',
   )
+  return result
+}
+
+/**
+ * Move in bounded chunks (`config.database.moveChunkSize`), each its own transaction, so a large
+ * backlog never holds one transaction past the timeout. A later chunk's failure leaves earlier
+ * chunks moved; the moves are conditional, so a re-run picks up only what is left.
+ */
+async function moveIds(ids: string[], move: Move, from: StoryStatus[], actor: Actor): Promise<MoveResult> {
+  const result: MoveResult = { moved: [], skipped: [] }
+  for (let i = 0; i < ids.length; i += config.database.moveChunkSize) {
+    const chunk = ids.slice(i, i + config.database.moveChunkSize)
+    const part = await retryOnClusterChange(() =>
+      inTransaction(tx => (actor === 'editor' ? editorMove(tx, chunk, move, from) : pipelineMove(tx, chunk, move, from))),
+    )
+    result.moved.push(...part.moved)
+    result.skipped.push(...part.skipped)
+  }
   return result
 }
 
