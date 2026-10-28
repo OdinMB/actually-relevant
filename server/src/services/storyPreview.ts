@@ -11,6 +11,7 @@ import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { withRetry } from '../lib/retry.js'
 import { BoundedCache } from '../lib/boundedCache.js'
+import { registerPublicCache } from '../lib/publicCaches.js'
 import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
 import { escapeHtml } from '../lib/xml.js'
 import { createStoryImage, OG_IMAGE_SIZE } from './carousel.js'
@@ -69,6 +70,7 @@ export function displayTitleOf(story: PreviewStory): string {
 // --- og:image ---
 
 const imageCache = new BoundedCache<Buffer>(config.storyPreview.imageCacheEntries, config.storyPreview.imageCacheTtlSeconds * 1000)
+registerPublicCache('story-preview-images', imageCache)
 
 /** The story's 1200x630 preview PNG (AI-marked in pixels and XMP), or null if it is not published. */
 export async function getStoryOgImage(slug: string): Promise<Buffer | null> {
@@ -101,6 +103,15 @@ interface Shell {
 
 let shell: Shell | null = null
 let inflight: Promise<string | null> | null = null
+// Clearing only marks the shell stale: the next request revalidates it and keeps the last good copy if the fetch fails
+registerPublicCache('client-shell', {
+  get size() {
+    return shell ? 1 : 0
+  },
+  clear() {
+    if (shell) shell = { ...shell, fetchedAt: 0 }
+  },
+})
 
 class ShellFetchError extends Error {
   constructor(public response: { status: number }) {
@@ -213,6 +224,7 @@ export function injectHeadTags(html: string, tags: string): string {
 }
 
 const pageCache = new BoundedCache<string>(config.storyPreview.pageCacheEntries, config.storyPreview.pageCacheSeconds * 1000)
+registerPublicCache('story-preview-pages', pageCache)
 
 /**
  * The HTML for `/stories/<slug>`: the shell with the story's tags, or the unchanged shell when

@@ -1,5 +1,6 @@
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
 import { PlayIcon } from '@heroicons/react/24/outline'
 import { STORY_STATUSES } from '@shared/constants'
 import type { LifetimeStoryStats } from '@shared/types'
@@ -16,7 +17,8 @@ import { formatStatus, STATUS_VARIANTS, jobDisplayName, JOB_PIPELINE_ORDER } fro
 import { TimeWithRelative } from '../../components/admin/TimeWithRelative'
 import { UnseenNoticesCard } from '../../components/admin/UnseenNoticesCard'
 import { useToast } from '../../components/ui/Toast'
-import { ApiError } from '../../lib/admin-api'
+import { adminApi, ApiError } from '../../lib/admin-api'
+import { Button } from '../../components/ui/Button'
 
 function StatsGrid({ stats }: { stats: Record<string, number> }) {
   return (
@@ -57,6 +59,7 @@ export default function DashboardPage() {
   const lifetimeQuery = useLifetimeStoryStats()
   const jobsQuery = useJobs()
   const runJob = useRunJob()
+  const clearCache = useMutation({ mutationFn: () => adminApi.cache.clear() })
   const { toast } = useToast()
 
   return (
@@ -65,7 +68,30 @@ export default function DashboardPage() {
         <title>Dashboard — Admin — Actually Relevant</title>
       </Helmet>
 
-      <PageHeader title="Dashboard" description="Overview of stories and jobs" />
+      <PageHeader
+        title="Dashboard"
+        description="Overview of stories and jobs"
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={clearCache.isPending}
+            title="Visitors' next page loads read the latest data instead of copies kept for up to a few minutes (related stories: days)"
+            onClick={() =>
+              clearCache.mutate(undefined, {
+                onSuccess: ({ entries }) =>
+                  toast(
+                    'success',
+                    `Site cache cleared (${entries} cached ${entries === 1 ? 'item' : 'items'}). Visitors get the latest data on their next page load.`,
+                  ),
+                onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to clear the site cache'),
+              })
+            }
+          >
+            Clear site cache
+          </Button>
+        }
+      />
 
       <UnseenNoticesCard />
 

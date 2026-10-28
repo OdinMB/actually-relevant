@@ -11,6 +11,7 @@ import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { buildRelatedStoriesPrompt } from '../prompts/related-stories.js'
 import { relatedStoriesResultSchema } from '../schemas/llm.js'
 import { TTLCache, cached } from '../lib/cache.js'
+import { registerPublicCache } from '../lib/publicCaches.js'
 import { PUBLIC_STORY_SELECT } from './storySelect.js'
 import { relatedCandidate, relatedNeedsRanking, relatedSource, type RelatedRow } from './promptInputs.js'
 
@@ -26,6 +27,8 @@ interface RelatedEntry {
 // so the cache never serves an unpublished story; unpublishing also drops the story's own entry.
 const MAX_RELATED_CACHE_SIZE = 500
 const relatedCache = new TTLCache<RelatedEntry | null>(config.relatedStories.cacheHours * 60 * 60 * 1000, { maxEntries: MAX_RELATED_CACHE_SIZE })
+// Clearing it re-ranks each story's related list (one small-tier call) on its next view
+registerPublicCache('related-stories', relatedCache)
 
 /** Drop the cached related lists of these stories, which left `published` or were deleted. */
 export function forgetRelatedStories(storyIds: string[]): void {

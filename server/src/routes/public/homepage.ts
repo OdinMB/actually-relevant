@@ -2,6 +2,7 @@ import { Router } from 'express'
 import * as storyService from '../../services/story.js'
 import * as issueService from '../../services/issue.js'
 import { TTLCache, cached } from '../../lib/cache.js'
+import { registerPublicCache } from '../../lib/publicCaches.js'
 import { withAiGeneratedMarker, type AiStoryText } from '../../lib/aiProvenance.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 
@@ -10,6 +11,7 @@ const router = Router()
 // Cache homepage data for 1 minute
 const HOMEPAGE_TTL = 60 * 1000
 const homepageCache = new TTLCache<unknown>(HOMEPAGE_TTL)
+registerPublicCache('homepage', homepageCache)
 
 // Issue slugs in display order for homepage
 const HOMEPAGE_ISSUE_SLUGS = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']

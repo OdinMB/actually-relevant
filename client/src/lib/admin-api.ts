@@ -348,6 +348,11 @@ export const adminApi = {
     serverTime: () => request<{ time: string; timezone: string }>('/jobs/server-time'),
   },
 
+  // Public caches: empty the server's in-memory copies so visitors' next requests read the database
+  cache: {
+    clear: () => request<{ caches: { name: string; entries: number }[]; entries: number }>('/cache/clear', { method: 'POST' }),
+  },
+
   // Clusters
   clusters: {
     list: () => request<StoryCluster[]>('/clusters'),

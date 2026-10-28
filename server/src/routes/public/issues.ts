@@ -1,12 +1,14 @@
 import { Router } from 'express'
 import * as issueService from '../../services/issue.js'
 import { TTLCache, cached } from '../../lib/cache.js'
+import { registerPublicCache } from '../../lib/publicCaches.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 
 const router = Router()
 
 const ISSUES_TTL = 5 * 60 * 1000 // 5 minutes
 const issuesCache = new TTLCache<unknown>(ISSUES_TTL)
+registerPublicCache('issues', issuesCache)
 
 router.get('/', failsWith('Failed to fetch issues'), async (_req, res) => {
   const issues = await cached(issuesCache, 'public-issues', () => issueService.getPublicIssues())

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { config } from '../../config.js'
 import { createLogger } from '../../lib/logger.js'
 import { TTLCache, cached } from '../../lib/cache.js'
+import { registerPublicCache } from '../../lib/publicCaches.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import prisma from '../../lib/prisma.js'
 import { listPublishedEpisodeDates } from '../../services/podcastPublish.js'
@@ -12,6 +13,7 @@ const router = Router()
 const log = createLogger('sitemap')
 
 export const sitemapCache = new TTLCache<string>(config.sitemap.cacheMaxAge * 1000)
+registerPublicCache('sitemap', sitemapCache)
 
 function getSiteUrl(): string {
   return config.siteUrl

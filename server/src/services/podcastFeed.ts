@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto'
 import { config } from '../config.js'
 import { TTLCache, cached } from '../lib/cache.js'
+import { registerPublicCache } from '../lib/publicCaches.js'
 import { prepareRepresentation, type Representation } from '../lib/httpRepresentation.js'
 import { escapeXml } from '../lib/xml.js'
 import { episodeDescriptionHtml, episodeDescriptionText, podcastShowInfo, type PodcastCategory, type PublishedEpisode } from './podcastShow.js'
@@ -90,6 +91,7 @@ export function buildPodcastFeedXml(episodes: PublishedEpisode[], now: Date = ne
 }
 
 const feedCache = new TTLCache<Representation>(config.feed.cacheMaxAge * 1000)
+registerPublicCache('podcast-feed', feedCache)
 const cacheSlot = 'podcast-feed'
 
 /** Fixed date for comparing content: the document without its build date. */

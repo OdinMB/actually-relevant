@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { config } from '../../config.js'
 import { TTLCache, cached } from '../../lib/cache.js'
+import { registerPublicCache } from '../../lib/publicCaches.js'
 import { RSS_ITEM_PREFIX, rssChannelDescription } from '../../lib/aiLabelCopy.js'
 import type { Feed } from 'feed'
 import { buildFeed, setRssHeaders } from '../../lib/rssFeed.js'
@@ -13,6 +14,7 @@ import { feedQuerySchema } from '../../schemas/story.js'
 const router = Router()
 
 const feedCache = new TTLCache<string>(config.feed.cacheMaxAge * 1000)
+registerPublicCache('rss-feeds', feedCache)
 
 type FeedStory = Awaited<ReturnType<typeof storyService.getPublishedStories>>['data'][number]
 

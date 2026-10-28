@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import prisma from '../../lib/prisma.js'
 import { TTLCache, cached } from '../../lib/cache.js'
+import { registerPublicCache } from '../../lib/publicCaches.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import type { FeedRegion } from '@prisma/client'
 
@@ -8,6 +9,7 @@ const router = Router()
 
 const SOURCES_TTL = 5 * 60 * 1000 // 5 minutes
 const sourcesCache = new TTLCache<unknown>(SOURCES_TTL)
+registerPublicCache('sources', sourcesCache)
 
 const REGION_LABELS: Record<FeedRegion, string> = {
   north_america: 'North America',

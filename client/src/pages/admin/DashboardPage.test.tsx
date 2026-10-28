@@ -52,6 +52,9 @@ vi.mock('../../lib/admin-api', () => ({
     notices: {
       list: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 5, unseenCount: 0 }),
     },
+    cache: {
+      clear: vi.fn().mockResolvedValue({ caches: [{ name: 'homepage', entries: 3 }], entries: 3 }),
+    },
   },
   ApiError: class ApiError extends Error {
     status: number
@@ -117,5 +120,19 @@ describe('DashboardPage', () => {
     renderDashboard()
     fireEvent.click(await screen.findByRole('button', { name: 'Run Crawl Feeds' }))
     expect(await screen.findByText('Job crawl_feeds is already running')).toBeInTheDocument()
+  })
+
+  it('clears the site cache and says how much it dropped', async () => {
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear site cache' }))
+    expect(await screen.findByText(/Site cache cleared \(3 cached items\)/)).toBeInTheDocument()
+    expect(adminApi.cache.clear).toHaveBeenCalledTimes(1)
+  })
+
+  it('says so when clearing the site cache fails', async () => {
+    vi.mocked(adminApi.cache.clear).mockRejectedValueOnce(new Error('network'))
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear site cache' }))
+    expect(await screen.findByText('Failed to clear the site cache')).toBeInTheDocument()
   })
 })
