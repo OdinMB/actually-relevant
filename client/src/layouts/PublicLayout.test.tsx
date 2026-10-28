@@ -53,7 +53,7 @@ describe('PublicLayout', () => {
     const header = screen.getByRole('banner')
     const aiLine = within(header).getByRole('link', { name: 'Written and curated by AI: how it works' })
     expect(aiLine).toHaveAttribute('href', '/methodology')
-    expect(aiLine.textContent).toContain('Written & curated by AI')
+    expect(aiLine.textContent).toContain('Written & curated byAI')
     expect(aiLine.parentElement?.closest('a')).toBeNull()
 
     const home = within(header).getByRole('link', { name: /Actually Relevant/ })

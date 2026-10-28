@@ -58,12 +58,12 @@ describe('HeaderAiLine', () => {
     )
   }
 
-  it('is one link to the explainer showing the badge and the approved line, announced naturally', () => {
+  it('is one link to the explainer showing the approved line ending in the badge, announced naturally', () => {
     renderLine()
     const link = screen.getByRole('link', { name: 'Written and curated by AI: how it works' })
     expect(link).toHaveAttribute('href', '/methodology')
     expect(link.closest('[aria-hidden="true"]')).toBeNull()
-    expect(link.textContent).toMatch(/^AIWritten & curated by AI/)
+    expect(link.textContent).toBe('Written & curated byAI›')
   })
 
   it('calls onClick when followed, so the mobile menu can close', () => {

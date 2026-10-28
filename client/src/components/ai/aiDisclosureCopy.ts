@@ -14,10 +14,11 @@ export const AI_DISCLOSURE_COPY = {
   quoteNote: 'selected and potentially translated by AI',
   /**
    * Header AI line on every public page: a second line under the claim on phones, the same
-   * line as the claim from md up. Links to howItWorksHref
-   * (owner-approved 2026-10-07; replaced the band "Written and curated with care by AI.").
+   * line as the claim from md up. The "AI" badge follows it and is the line's only "AI".
+   * Links to howItWorksHref (owner-approved 2026-10-07, replacing the band "Written and
+   * curated with care by AI."; badge moved from the front of the line to its end on 2026-10-28).
    */
-  headerAiLine: 'Written & curated by AI',
+  headerAiLine: 'Written & curated by',
   /** What screen readers announce for the header AI line, which is a link to the explainer. */
   headerAiLineAccessibleName: 'Written and curated by AI: how it works',
   /** Link after the story page's AI label. */
