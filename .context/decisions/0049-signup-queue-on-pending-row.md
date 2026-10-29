@@ -3,7 +3,7 @@ id: ADR-0049
 title: Queue signups over the hourly confirmation limit on their pending_subscriptions row, waiting while sent_at is null, and send them from a scheduled job within that limit
 status: accepted
 date: 2026-10-29
-deciders: ["claude-code (AI)"]
+deciders: ["claude-code (AI)", "Odin Mühlenbein"]
 context-repo: OdinMB/actually-relevant
 themes: [personal-data, data]
 tags: ["subscription", "scheduler"]
@@ -21,6 +21,8 @@ back. Accepting such a signup and emailing it later needs somewhere to hold it t
 deploy, that both instances of a zero-downtime deploy see, and that lets the hourly count keep
 counting sent emails only, not accepted signups.
 
+The owner decided on 2026-10-29 that signups over the limit are accepted and queued; the agent chose where the queue lives.
+
 ## Decision
 
 We keep the queue on the row the signup already writes. `pending_subscriptions` gains `sent_at`:
@@ -33,11 +35,21 @@ keeps emails in signup order.
 
 The `send_queued_confirmations` job (`server/src/jobs/sendQueuedConfirmations.ts`, every ten
 minutes, seeded enabled, idle while `SUBSCRIPTIONS_ENABLED` is off) deletes waiting rows past their
-expiry or whose address has confirmed, reads the room left in the rolling hour, and takes that many
-waiting rows oldest first. It claims each with a conditional update (`sent_at`, a fresh link
-expiry, only where `sent_at` is still null) before calling Plunk. A failure that proves nothing was
-sent (no connection, a 4xx) puts the row back; any other failure keeps it as sent; either stops the
-run and fails it.
+expiry and records a `signup-queue-expired` owner notice with their count, reads the room left in
+the rolling hour, and takes that many waiting rows oldest first; among the rows it takes, it
+deletes unsent those whose address has confirmed meanwhile. It claims each remaining row with a
+conditional update (`sent_at`, a fresh link expiry, only where `sent_at` is still null) before
+calling Plunk. A 400 or 422 from Plunk refuses that one request as invalid, so the row is deleted
+unsent and the run carries on; any other 4xx or no connection proves nothing was sent and puts the
+row back; any other failure (timeout, reset, 5xx) keeps it as sent. Those two stop the run; any
+failure fails it, so the scheduler raises a job-failure notice. When a signup queues behind waiting
+ones with room in the hour, only the job can be holding it up: `checkSendAllowance` then reads the
+job's `job_runs` row and, when it is missing, disabled or has completed no run within
+`queueStalledAfterMinutes` (30), records a `signup-queue-stalled` owner notice, at most hourly per
+process and naming no address.
+
+This replaces two parts of ADR-0022: refusing a signup at the cap, and counting the hourly limit
+over rows by `created_at`.
 
 `sent_at` defaults to `CURRENT_TIMESTAMP`, and migration `20261029120000_signup_queue` is written by
 hand: it adds the column without a default, backfills it from `created_at`, then sets the default.
@@ -54,11 +66,12 @@ The job claim makes a retry, an overlapping run or a crash send nothing twice.
 
 What got worse: a success reply no longer means an email has gone out, so the signup form says the
 link may take a while to arrive. A signup waits at most `confirmTokenExpiryHours` (24) from signing
-up and is then removed unsent, with nothing telling the visitor; they can sign up again at once. A
-queued send that ends in a timeout or 5xx is kept as sent and may never have arrived; that address
+up and is then removed unsent, with nothing telling the visitor (only the owner gets a notice);
+they can sign up again at once. A queued send that ends in a crash, timeout or 5xx after its claim
+is kept as sent and may never have arrived; that address
 can sign up again only after the per-address window. Paused signups stop the job entirely, so
 expired rows are only removed once signups reopen. The admin Subscribers page shows a waiting
-signup as pending like a sent one; only the cap alert reports how many wait. The hourly count and
+signup as pending like a sent one; only the cap and stalled-queue alerts report how many wait. The hourly count and
 the queue reads have no index on `sent_at` (only `email` is indexed); add a partial index if the
 job's queries ever show up as slow. A later Prisma-generated migration touching this
 column must not re-add it with its default in one statement.
