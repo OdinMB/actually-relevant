@@ -93,7 +93,7 @@ The build-time sitemap generator (`client/scripts/generate-sitemap.ts`) is kept 
 
 ## Adding a New Route
 
-When adding a page, add its entry (`path`, `priority`, `changefreq`) to **`shared/routes.json`**, its route to `App.tsx`, and its rewrite to `render.yaml` (the blueprint test prints the lines). That one file feeds both the prerender and the sitemap.
+When adding a page, add its entry (`path`, `priority`, `changefreq`) to **`shared/routes.json`**, its route to `App.tsx`, and its rewrite to `render.yaml` (the blueprint test prints the lines). `shared/routes.json` feeds both the prerender and the sitemap.
 
 ### The static route list
 
