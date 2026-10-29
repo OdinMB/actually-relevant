@@ -25,6 +25,8 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 | `podcastMissedWeek.ts` missed week | `podcast` / `warning` | none (claimed once per week) | episode or list |
 | `podcastBootCheck.ts` configuration incomplete | `podcast` / `warning` | `podcast-config` | `/admin/jobs` |
 | `subscribeLimits.ts` signup cap (signups queued, with the number waiting; `.context/subscription.md`) | `subscriptions` / `warning` | `signup-cap` | `/admin/subscribers` |
+| `subscribeLimits.ts` queue stalled (signups queue behind waiting ones while `send_queued_confirmations` is missing, disabled or has completed no run in 30 minutes; at most hourly per process, with the number waiting) | `subscriptions` / `warning` | `signup-queue-stalled` | `/admin/jobs` |
+| `sendQueuedConfirmations.ts` queued signups expired (removed unsent, with the count) | `subscriptions` / `warning` | `signup-queue-expired` | `/admin/subscribers` |
 | `generateNewsletter.ts` no stories this week | `newsletter` / `warning` | `newsletter-no-stories:<weekKey>` | `/admin/jobs` |
 | `publishNewsletter.ts` issue sent | `newsletter` / `info` | none | `/admin/newsletters` |
 | `publishNewsletter.ts` already sent or published | `newsletter` / `info` | `newsletter-already-sent:<weekKey>` | `/admin/newsletters` |
