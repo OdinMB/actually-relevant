@@ -1,6 +1,24 @@
 import { describe, it, expect, vi } from 'vitest'
 import { APIError } from 'openai'
-import { withRetry, isRetryableError, isConnectionNotEstablished } from './retry.js'
+import { withRetry, isRetryableError, isConnectionNotEstablished, provedNotSent } from './retry.js'
+
+describe('provedNotSent', () => {
+  it('is true when no connection was made, or the server refused the request (4xx)', () => {
+    expect(provedNotSent({ code: 'ECONNREFUSED' })).toBe(true)
+    expect(provedNotSent({ response: { status: 400 } })).toBe(true)
+    expect(provedNotSent({ response: { status: 403 } })).toBe(true)
+    expect(provedNotSent({ response: { status: 429 } })).toBe(true)
+  })
+
+  it('is false when the server may have accepted the request', () => {
+    expect(provedNotSent({ code: 'ECONNABORTED' })).toBe(false)
+    expect(provedNotSent({ code: 'ECONNRESET' })).toBe(false)
+    expect(provedNotSent({ response: { status: 500 } })).toBe(false)
+    expect(provedNotSent({ response: { status: 503 } })).toBe(false)
+    expect(provedNotSent(new Error('timeout of 15000ms exceeded'))).toBe(false)
+    expect(provedNotSent(null)).toBe(false)
+  })
+})
 
 describe('isConnectionNotEstablished', () => {
   it('is true when the connection was refused or the host did not resolve', () => {

@@ -33,6 +33,7 @@ export const JOB_DISPLAY_NAMES: Record<JobName, string> = {
   generate_podcast: 'Generate Podcast',
   publish_podcast: 'Publish Podcast',
   poll_plunk_activity: 'Plunk Complaints',
+  send_queued_confirmations: 'Send Queued Confirmations',
   cleanup_old_stories: 'Clean Up Old Stories',
 }
 
@@ -59,6 +60,7 @@ export const JOB_PIPELINE_ORDER: JobName[] = [
   'generate_podcast',
   'publish_podcast',
   'poll_plunk_activity',
+  'send_queued_confirmations',
   'cleanup_old_stories',
 ]
 

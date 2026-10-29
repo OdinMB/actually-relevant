@@ -45,6 +45,16 @@ export function isConnectionNotEstablished(err: unknown): boolean {
   return typeof code === 'string' && NOT_CONNECTED_CODES.has(code)
 }
 
+/**
+ * True when a failed send certainly sent nothing: no connection was made, or the server refused the
+ * request (4xx). Anything else (a timeout, a reset, a 5xx) may come after the server accepted it.
+ */
+export function provedNotSent(err: unknown): boolean {
+  if (isConnectionNotEstablished(err)) return true
+  const status = (err as { response?: { status?: unknown } } | null)?.response?.status
+  return typeof status === 'number' && status >= 400 && status < 500
+}
+
 export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const { retries = 3, baseDelayMs = 1000, retryOn = isRetryableError } = options
 

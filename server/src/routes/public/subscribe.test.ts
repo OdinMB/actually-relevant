@@ -19,7 +19,6 @@ const mockVerifyTurnstile = vi.hoisted(() => vi.fn())
 
 class EmailValidationError extends Error {}
 class ConfirmationEmailError extends Error {}
-class SignupUnavailableError extends Error {}
 class ConfirmationLinkError extends Error {
   constructor(readonly reason: 'invalid' | 'expired') {
     super(reason)
@@ -31,7 +30,6 @@ vi.mock('../../services/subscribe.js', () => ({
   confirmSubscription: (...args: any[]) => mockConfirm(...args),
   EmailValidationError,
   ConfirmationEmailError,
-  SignupUnavailableError,
   ConfirmationLinkError,
 }))
 
@@ -199,15 +197,6 @@ describe('Public Subscribe API', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(false)
       expect(res.body.message).toMatch(/try again/i)
-    })
-
-    it('returns success:false with the message at the global cap', async () => {
-      mockSubscribe.mockRejectedValue(new SignupUnavailableError('Signups are unavailable right now. Please try again later.'))
-
-      const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token' })
-
-      expect(res.body.success).toBe(false)
-      expect(res.body.message).toMatch(/try again later/i)
     })
 
     it('passes only the trimmed email to the service, never a first name', async () => {

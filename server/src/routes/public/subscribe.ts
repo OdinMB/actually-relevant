@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { config } from '../../config.js'
 import { validateBody } from '../../middleware/validate.js'
 import * as subscribeService from '../../services/subscribe.js'
-import { EmailValidationError, ConfirmationEmailError, SignupUnavailableError, ConfirmationLinkError } from '../../services/subscribe.js'
+import { EmailValidationError, ConfirmationEmailError, ConfirmationLinkError } from '../../services/subscribe.js'
 import { issueFormToken, verifyFormToken } from '../../lib/formToken.js'
 import { verifyTurnstile, type TurnstileResult } from '../../lib/turnstile.js'
 import { createLogger } from '../../lib/logger.js'
@@ -105,13 +105,15 @@ router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, va
   }
 
   try {
+    // A signup over the hourly limit is queued and gets this same reply, as does an
+    // already-confirmed or throttled address, so the reply never tells them apart.
     await subscribeService.subscribe({ email: req.body.email })
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
   } catch (err) {
     // Surface real failures to the visitor rather than falsely claiming the email
     // was sent. (An already-confirmed or throttled address returns success earlier,
     // so this path can't leak subscription status — these are genuine errors.)
-    if (err instanceof EmailValidationError || err instanceof ConfirmationEmailError || err instanceof SignupUnavailableError) {
+    if (err instanceof EmailValidationError || err instanceof ConfirmationEmailError) {
       res.json({ success: false, message: err.message })
       return
     }

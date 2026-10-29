@@ -28,7 +28,7 @@ vi.mock('./subscribeLimits.js', () => ({
 const mockLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }))
 vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLogger }))
 
-const { subscribe, confirmSubscription, EmailValidationError, ConfirmationEmailError, SignupUnavailableError } = await import('./subscribe.js')
+const { subscribe, confirmSubscription, EmailValidationError, ConfirmationEmailError } = await import('./subscribe.js')
 
 describe('subscribe service', () => {
   beforeEach(() => {
@@ -47,7 +47,9 @@ describe('subscribe service', () => {
   describe('logging', () => {
     const allLogged = () => JSON.stringify([mockLogger.info, mockLogger.warn, mockLogger.error, mockLogger.debug].flatMap(fn => fn.mock.calls))
 
-    it('logs no email address on signup, a failed send or a failed verification', async () => {
+    it('logs no email address on signup, a queued signup, a failed send or a failed verification', async () => {
+      await subscribe({ email: 'person@example.com' })
+      mockCheckSendAllowance.mockResolvedValueOnce('queue')
       await subscribe({ email: 'person@example.com' })
       mockPlunk.verifyEmail.mockRejectedValueOnce(new Error('verify down'))
       mockPlunk.sendTransactional.mockRejectedValueOnce(new Error('send down'))
@@ -157,14 +159,49 @@ describe('subscribe service', () => {
       expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
     })
 
-    it('refuses with SignupUnavailableError at the global cap, sending nothing', async () => {
-      mockCheckSendAllowance.mockResolvedValue('global-cap')
+    it('accepts a signup the limits queue: a row that waits for its email, and no send', async () => {
+      mockCheckSendAllowance.mockResolvedValue('queue')
+      mockPrisma.pendingSubscription.create.mockResolvedValue({ id: 'row-q' })
 
-      await expect(subscribe({ email: 'test@example.com' })).rejects.toThrow(SignupUnavailableError)
+      await expect(subscribe({ email: 'test@example.com' })).resolves.toBeUndefined()
 
-      expect(mockPlunk.verifyEmail).not.toHaveBeenCalled()
-      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      const data = mockPrisma.pendingSubscription.create.mock.calls[0][0].data
+      expect(data).toMatchObject({ email: 'test@example.com', sentAt: null })
+      expect(data.token).toEqual(expect.any(String))
+      expect(data.expiresAt.getTime()).toBeGreaterThan(Date.now())
       expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.delete).not.toHaveBeenCalled()
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: 'row-q' }), expect.stringMatching(/queued/))
+    })
+
+    it('runs the address checks on a queued signup as on one sent at once', async () => {
+      mockCheckSendAllowance.mockResolvedValue('queue')
+      const callOrder: string[] = []
+      mockPlunk.verifyEmail.mockImplementation(async () => {
+        callOrder.push('verify')
+        return { valid: true, domainExists: true, isDisposable: false }
+      })
+      mockPrisma.pendingSubscription.deleteMany.mockImplementation(async () => {
+        callOrder.push('deleteMany')
+        return { count: 0 }
+      })
+      mockPrisma.pendingSubscription.create.mockImplementation(async () => {
+        callOrder.push('create')
+        return { id: 'row-q' }
+      })
+
+      await subscribe({ email: 'test@example.com' })
+      expect(callOrder).toEqual(['verify', 'deleteMany', 'create'])
+
+      mockPlunk.verifyEmail.mockResolvedValue({ valid: true, domainExists: true, isDisposable: true })
+      await expect(subscribe({ email: 'temp@mailinator.com' })).rejects.toThrow(EmailValidationError)
+      expect(mockPrisma.pendingSubscription.create).toHaveBeenCalledTimes(1)
+    })
+
+    it('marks a row sent at once as sent', async () => {
+      await subscribe({ email: 'test@example.com' })
+
+      expect(mockPrisma.pendingSubscription.create.mock.calls[0][0].data.sentAt).toBeInstanceOf(Date)
     })
 
     it('does not consult the limits for an already-confirmed address', async () => {

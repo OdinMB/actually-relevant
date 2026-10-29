@@ -80,6 +80,12 @@ async function main() {
       update: {},
       create: { jobName: 'poll_plunk_activity', cronExpression: '20 * * * *', enabled: false },
     }),
+    // Every ten minutes: sends the confirmation emails of signups queued over the hourly limit
+    prisma.jobRun.upsert({
+      where: { jobName: 'send_queued_confirmations' },
+      update: {},
+      create: { jobName: 'send_queued_confirmations', cronExpression: '*/10 * * * *', enabled: false },
+    }),
     // Monthly story retention: roll up, then delete old unkept stories (.context/story-retention.md)
     prisma.jobRun.upsert({
       where: { jobName: 'cleanup_old_stories' },

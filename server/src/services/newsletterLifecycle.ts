@@ -22,7 +22,7 @@ import type { ContentStatus, Newsletter, NewsletterSend, Prisma } from '@prisma/
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { isConnectionNotEstablished } from '../lib/retry.js'
+import { provedNotSent } from '../lib/retry.js'
 import { BadRequestError, ConflictError, NotFoundError, summarizeError } from '../utils/errors.js'
 import * as plunk from './plunk.js'
 import { ensureNewsletterSlug, newsletterIssueUrl } from './newsletterArchive.js'
@@ -283,13 +283,6 @@ async function claimLiveSend(tx: Tx, newsletter: Newsletter): Promise<Newsletter
   })
   if (!currentTest) throw new NewsletterRefusedError('no_current_test', 'Send a test email of the current HTML first')
   return tx.newsletterSend.create({ data: { newsletterId: newsletter.id, isTest: false, status: 'draft', htmlContent: newsletter.html } })
-}
-
-/** True when a failed Plunk call certainly sent nothing: no connection was made, or Plunk refused the request (4xx). */
-function provedNotSent(err: unknown): boolean {
-  if (isConnectionNotEstablished(err)) return true
-  const status = (err as { response?: { status?: unknown } } | null)?.response?.status
-  return typeof status === 'number' && status >= 400 && status < 500
 }
 
 /** Record what a failed Plunk call means for the claimed row. A failure to record leaves it unconfirmed (blocked). */
