@@ -49,6 +49,7 @@ const JOB_FAILURE_HOMES: Record<string, { source: NoticeSource; link: string }> 
   publish_newsletter: { source: 'newsletter', link: '/admin/newsletters' },
   generate_podcast: { source: 'podcast', link: '/admin/podcasts' },
   publish_podcast: { source: 'podcast', link: '/admin/podcasts' },
+  send_queued_confirmations: { source: 'subscriptions', link: '/admin/subscribers' },
 }
 
 /** The notice for a failed job run: one row per job, reopened by each new failure. */

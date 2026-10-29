@@ -454,6 +454,9 @@ model PendingSubscription {
   confirmedAt    DateTime? @map("confirmed_at")
   expiresAt      DateTime  @map("expires_at")
   createdAt      DateTime  @default(now()) @map("created_at")
+  // When the confirmation email went out; null while the signup waits in the queue for the
+  // send_queued_confirmations job. A row written without it counts as sent (the default).
+  sentAt         DateTime? @default(now()) @map("sent_at")
 
   @@index([email])
   @@map("pending_subscriptions")

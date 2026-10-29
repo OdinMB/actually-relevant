@@ -252,7 +252,8 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
         </div>
         <h2 className="text-xl font-bold text-neutral-900 mb-2">Check your email</h2>
         <p className="text-neutral-600 text-sm mb-6">
-          We sent a confirmation link to <strong>{email}</strong>. Click the link to start receiving our weekly newsletter.
+          A confirmation link is on its way to <strong>{email}</strong>. It may take a little while to arrive. Click the link to start receiving our weekly
+          newsletter.
         </p>
         {onSuccess && (
           <button
