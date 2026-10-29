@@ -7,6 +7,10 @@ import { createLogger } from '../lib/logger.js'
 const log = createLogger('subscribe-limits')
 
 const HOUR_MS = 60 * 60 * 1000
+const MINUTE_MS = 60 * 1000
+
+/** The job that sends queued signups' confirmation emails. */
+const QUEUE_JOB = 'send_queued_confirmations'
 
 /**
  * `ok`: a confirmation email may be sent now.
@@ -16,8 +20,15 @@ const HOUR_MS = 60 * 60 * 1000
  */
 export type SendAllowance = 'ok' | 'address-limited' | 'queue'
 
-// Module-level, so a deploy resets it: at most one extra alert per deploy.
+// Module-level, so a deploy resets them: at most one extra alert of each kind per deploy.
 let lastCapAlertAt = 0
+let lastStallAlertAt = 0
+
+/** Test-only: forget when the alerts last went out. */
+export function _resetAlertThrottles(): void {
+  lastCapAlertAt = 0
+  lastStallAlertAt = 0
+}
 
 /**
  * The signups waiting for their confirmation email: no email sent yet, and not expired. A waiting
@@ -62,7 +73,44 @@ export async function checkSendAllowance(email: string): Promise<SendAllowance> 
   // Room in the hour, but earlier signups still wait: join the queue behind them, so emails go out
   // oldest first and a steady stream of new signups never starves the queue.
   const waiting = await prisma.pendingSubscription.findFirst({ where: waitingSignupsWhere(now), select: { id: true } })
-  return waiting ? 'queue' : 'ok'
+  if (!waiting) return 'ok'
+  await alertIfQueueStalled(now)
+  return 'queue'
+}
+
+/**
+ * Signups wait with room in the hour, so only the queue job can be holding them up. When it is not
+ * running, nothing sends them, the hour never fills and the cap alert never fires: warn the owner,
+ * at most once an hour per process, naming no address.
+ */
+async function alertIfQueueStalled(now: Date): Promise<void> {
+  if (now.getTime() - lastStallAlertAt < HOUR_MS) return
+  const job = await prisma.jobRun.findUnique({ where: { jobName: QUEUE_JOB }, select: { enabled: true, lastCompletedAt: true } })
+  const problem = queueJobProblem(job, now)
+  if (!problem) return
+
+  lastStallAlertAt = now.getTime()
+  const waiting = await prisma.pendingSubscription.count({ where: waitingSignupsWhere(now) })
+  log.warn({ waiting, problem }, 'signups are queuing but the queue job is not running')
+  await notify({
+    source: 'subscriptions',
+    severity: 'warning',
+    title: 'Queued signups are not being sent',
+    message: `Signups are queuing but ${problem}; ${waiting} waiting. Their confirmation emails go out only when that job runs: check it on the Jobs page, and that the scheduler is on (SCHEDULER_ENABLED).`,
+    link: '/admin/jobs',
+    dedupeKey: 'signup-queue-stalled',
+  })
+}
+
+/** Why the queue job is not sending, as a sentence end; null while it is enabled and completed a run recently. */
+function queueJobProblem(job: { enabled: boolean; lastCompletedAt: Date | null } | null, now: Date): string | null {
+  if (!job) return `${QUEUE_JOB} has no job row`
+  if (!job.enabled) return `${QUEUE_JOB} is disabled`
+  if (!job.lastCompletedAt) return `${QUEUE_JOB} has never completed a run`
+  if (now.getTime() - job.lastCompletedAt.getTime() > config.subscribe.queueStalledAfterMinutes * MINUTE_MS) {
+    return `${QUEUE_JOB} has not completed a run since ${job.lastCompletedAt.toISOString()}`
+  }
+  return null
 }
 
 async function alertCapReached(sentLastHour: number, now: Date): Promise<void> {

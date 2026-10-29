@@ -10,6 +10,9 @@ const mockPrisma = vi.hoisted(() => ({
     findFirst: vi.fn(),
     count: vi.fn(),
   },
+  jobRun: {
+    findUnique: vi.fn(),
+  },
 }))
 const mockNotify = vi.hoisted(() => vi.fn())
 
@@ -17,17 +20,42 @@ vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 
 const { config } = await import('../config.js')
+const limits = await import('./subscribeLimits.js')
 
 const HOUR_MS = 60 * 60 * 1000
+const MINUTE_MS = 60 * 1000
 
-/** A fresh module per test, so the once-per-hour alert throttle starts clean. */
+/** The module, with its once-per-hour alert throttles starting clean. */
 async function loadModule() {
-  vi.resetModules()
-  return import('./subscribeLimits.js')
+  limits._resetAlertThrottles()
+  return limits
 }
 
-/** What the database holds, as the limits ask for it: rows for the address, waiting signups, sends in the last hour. */
-function given({ addressRow = false, waiting = 0, sentLastHour = 0 }: { addressRow?: boolean; waiting?: number; sentLastHour?: number }) {
+interface JobRow {
+  enabled: boolean
+  lastCompletedAt: Date | null
+}
+
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * MINUTE_MS)
+
+/** The send_queued_confirmations job as it normally is: enabled, and its last run a few minutes ago. */
+const runningJob = (): JobRow => ({ enabled: true, lastCompletedAt: minutesAgo(5) })
+
+/**
+ * What the database holds, as the limits ask for it: rows for the address, waiting signups, sends in
+ * the last hour, and the send_queued_confirmations job's row (null: there is none).
+ */
+function given({
+  addressRow = false,
+  waiting = 0,
+  sentLastHour = 0,
+  job = runningJob(),
+}: {
+  addressRow?: boolean
+  waiting?: number
+  sentLastHour?: number
+  job?: JobRow | null
+}) {
   const isWaitingQuery = (where: Where) => where.sentAt === null
   mockPrisma.pendingSubscription.findFirst.mockImplementation(async ({ where }: { where: Where }) => {
     if (where.email) return addressRow ? { id: 'p1' } : null
@@ -35,6 +63,7 @@ function given({ addressRow = false, waiting = 0, sentLastHour = 0 }: { addressR
     throw new Error(`unexpected findFirst: ${JSON.stringify(where)}`)
   })
   mockPrisma.pendingSubscription.count.mockImplementation(async ({ where }: { where: Where }) => (isWaitingQuery(where) ? waiting : sentLastHour))
+  mockPrisma.jobRun.findUnique.mockResolvedValue(job)
 }
 
 describe('checkSendAllowance', () => {
@@ -54,6 +83,7 @@ describe('checkSendAllowance', () => {
     const { checkSendAllowance } = await loadModule()
 
     expect(await checkSendAllowance('a@example.com')).toBe('ok')
+    expect(mockPrisma.jobRun.findUnique).not.toHaveBeenCalled()
   })
 
   it('limits an address that got a confirmation email, or signed up, within the window', async () => {
@@ -101,14 +131,63 @@ describe('checkSendAllowance', () => {
     expect(await checkSendAllowance('a@example.com')).toBe('ok')
   })
 
-  it('queues behind earlier signups still waiting, even with room in the hour, without an alert', async () => {
+  it('queues behind earlier signups still waiting, even with room in the hour, without an alert while the job runs', async () => {
     given({ sentLastHour: 0, waiting: 1 })
     const { checkSendAllowance } = await loadModule()
 
     expect(await checkSendAllowance('a@example.com')).toBe('queue')
     const waitingQuery = mockPrisma.pendingSubscription.findFirst.mock.calls.find(([{ where }]) => where.sentAt === null)
     expect(waitingQuery?.[0].where.expiresAt.gt.getTime()).toBe(Date.now())
+    expect(mockPrisma.jobRun.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { jobName: 'send_queued_confirmations' } }))
     expect(mockNotify).not.toHaveBeenCalled()
+  })
+
+  it('raises no alert while the job last completed a run just inside the stall limit', async () => {
+    given({ waiting: 1, job: { enabled: true, lastCompletedAt: minutesAgo(config.subscribe.queueStalledAfterMinutes - 1) } })
+    const { checkSendAllowance } = await loadModule()
+
+    expect(await checkSendAllowance('a@example.com')).toBe('queue')
+    expect(mockNotify).not.toHaveBeenCalled()
+  })
+
+  describe('when signups queue behind waiting ones but nothing sends them', () => {
+    // Rows and texts are built inside the test, on its fake clock
+    it.each<[string, () => JobRow | null, () => string]>([
+      ['is disabled', () => ({ enabled: false, lastCompletedAt: minutesAgo(5) }), () => 'send_queued_confirmations is disabled'],
+      [
+        'has not completed a run within the stall limit',
+        () => ({ enabled: true, lastCompletedAt: minutesAgo(config.subscribe.queueStalledAfterMinutes + 1) }),
+        () => `send_queued_confirmations has not completed a run since ${minutesAgo(config.subscribe.queueStalledAfterMinutes + 1).toISOString()}`,
+      ],
+      ['has never completed a run', () => ({ enabled: true, lastCompletedAt: null }), () => 'send_queued_confirmations has never completed a run'],
+      ['has no job row', () => null, () => 'send_queued_confirmations has no job row'],
+    ])('still queues the signup, and warns the owner once that the job %s, without the address', async (_label, job, expected) => {
+      given({ waiting: 2, job: job() })
+      const { checkSendAllowance } = await loadModule()
+
+      expect(await checkSendAllowance('victim@example.com')).toBe('queue')
+
+      expect(mockNotify).toHaveBeenCalledTimes(1)
+      const notice = mockNotify.mock.calls[0][0]
+      expect(notice).toMatchObject({ source: 'subscriptions', severity: 'warning', dedupeKey: 'signup-queue-stalled', link: '/admin/jobs' })
+      expect(notice.message).toContain(expected())
+      expect(notice.message).toMatch(/\b2 waiting/)
+      expect(JSON.stringify(mockNotify.mock.calls)).not.toContain('victim@example.com')
+    })
+
+    it('warns at most once an hour, and again after it', async () => {
+      given({ waiting: 1, job: { enabled: false, lastCompletedAt: null } })
+      const { checkSendAllowance } = await loadModule()
+
+      await checkSendAllowance('a@example.com')
+      vi.setSystemTime(Date.now() + 30 * MINUTE_MS)
+      expect(await checkSendAllowance('b@example.com')).toBe('queue')
+      expect(mockNotify).toHaveBeenCalledTimes(1)
+
+      vi.setSystemTime(Date.now() + HOUR_MS)
+      await checkSendAllowance('c@example.com')
+      expect(mockNotify).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('sends no second alert within the hour, and alerts again after it', async () => {

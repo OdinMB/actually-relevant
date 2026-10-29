@@ -138,4 +138,20 @@ describeDb('runSendQueuedConfirmations (PostgreSQL)', () => {
     expect(after.sentAt).toBeNull()
     expect(after.expiresAt).toEqual(row.expiresAt)
   })
+
+  it('removes a signup Plunk refuses as invalid, sends the one behind it, and the next run never tries it again', async () => {
+    const refused = await queued('refused@example.com', 30 * MINUTE_MS)
+    const next = await queued('next@example.com', 20 * MINUTE_MS)
+    mockSendTransactional.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 422'), { response: { status: 422 } }))
+
+    await expect(runSendQueuedConfirmations()).rejects.toThrow('1 queued signup refused by Plunk (HTTP 422) and removed')
+
+    expect(sentTo()).toEqual(['refused@example.com', 'next@example.com'])
+    expect(await prisma.pendingSubscription.count({ where: { id: refused.id } })).toBe(0)
+    expect((await prisma.pendingSubscription.findUniqueOrThrow({ where: { id: next.id } })).sentAt).not.toBeNull()
+
+    mockSendTransactional.mockClear()
+    await runSendQueuedConfirmations()
+    expect(mockSendTransactional).not.toHaveBeenCalled()
+  })
 })

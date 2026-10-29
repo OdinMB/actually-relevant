@@ -39,13 +39,25 @@ async function queued(email: string, ageMs: number) {
   })
 }
 
-// Only one test reaches the cap, so the module's once-per-hour alert throttle needs no reset
-const { checkSendAllowance, remainingHourlyBudget } = await import('./subscribeLimits.js')
+const { checkSendAllowance, remainingHourlyBudget, _resetAlertThrottles } = await import('./subscribeLimits.js')
+
+/** The send_queued_confirmations job row; `completedMinutesAgo` is stamped on the database clock, as finishJobRun does. */
+async function queueJob(enabled: boolean, completedMinutesAgo: number | null) {
+  await prisma.jobRun.create({ data: { jobName: 'send_queued_confirmations', cronExpression: '*/10 * * * *', enabled } })
+  if (completedMinutesAgo !== null) {
+    await prisma.$executeRaw`
+      UPDATE "job_runs" SET "last_completed_at" = (now() AT TIME ZONE 'UTC') - make_interval(mins => ${completedMinutesAgo}::int)
+      WHERE "job_name" = 'send_queued_confirmations'`
+  }
+}
+
+const stallNotices = () => mockNotify.mock.calls.filter(([notice]) => notice.dedupeKey === 'signup-queue-stalled')
 
 describeDb('checkSendAllowance (PostgreSQL)', () => {
   useTestDatabase()
   beforeEach(() => {
     mockNotify.mockReset().mockResolvedValue(undefined)
+    _resetAlertThrottles()
   })
 
   it('allows a first send', async () => {
@@ -108,5 +120,30 @@ describeDb('checkSendAllowance (PostgreSQL)', () => {
     await queued('stale@example.com', (config.subscribe.confirmTokenExpiryHours + 1) * HOUR_MS)
 
     expect(await checkSendAllowance('new@example.com')).toBe('ok')
+  })
+
+  it('raises no stall alert while the job is enabled and completed a run minutes ago', async () => {
+    await queueJob(true, 5)
+    await queued('first@example.com', 10 * 60 * 1000)
+
+    expect(await checkSendAllowance('second@example.com')).toBe('queue')
+    expect(stallNotices()).toHaveLength(0)
+  })
+
+  it('warns that signups are stalling when the job last completed a run longer ago than the stall limit', async () => {
+    await queueJob(true, config.subscribe.queueStalledAfterMinutes + 5)
+    await queued('first@example.com', 10 * 60 * 1000)
+
+    expect(await checkSendAllowance('second@example.com')).toBe('queue')
+    expect(stallNotices()).toHaveLength(1)
+    expect(stallNotices()[0]?.[0].message).toMatch(/has not completed a run since .*; 1 waiting/)
+  })
+
+  it('warns that signups are stalling when the job is disabled', async () => {
+    await queueJob(false, 5)
+    await queued('first@example.com', 10 * 60 * 1000)
+
+    expect(await checkSendAllowance('second@example.com')).toBe('queue')
+    expect(stallNotices()[0]?.[0].message).toContain('send_queued_confirmations is disabled')
   })
 })
