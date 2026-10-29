@@ -50,3 +50,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0046 · Record why a story is rejected in a nullable rejection_reason column, backfilled by a guess, and restore only duplicate rejections](decisions/0046-story-rejection-reason.md)
 - [ADR-0047 · Deploy both Render services only after the commit's GitHub checks pass, with both builds and a migration check in CI](decisions/0047-deploy-after-ci-checks-pass.md)
 - [ADR-0048 · Make one module, newsletterLifecycle.ts, the only writer of newsletter issue state and sends, with live sends claimed under the issue's row lock before Plunk](decisions/0048-newsletter-lifecycle-owner.md)
+- [ADR-0049 · Queue signups over the hourly confirmation limit on their pending_subscriptions row, waiting while sent_at is null, and send them from a scheduled job within that limit](decisions/0049-signup-queue-on-pending-row.md)
