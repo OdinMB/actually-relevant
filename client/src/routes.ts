@@ -7,6 +7,9 @@
  * 1. Add its entry to shared/routes.json (path, priority, changefreq)
  * 2. Create page component in src/pages/
  * 3. Add route in App.tsx
+ * 4. Add its rewrite (`/<path>` → `/<path>/index.html`) to the static site's routes in render.yaml,
+ *    above the catch-all, so its no-slash address serves the prerendered page;
+ *    server/src/blueprint.test.ts fails until it is there
  */
 import staticRoutes from '../../shared/routes.json'
 

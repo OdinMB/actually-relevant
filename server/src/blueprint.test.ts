@@ -189,11 +189,19 @@ interface EnvVar {
   generateValue?: string
 }
 
+interface Route {
+  type: string
+  source?: string
+  destination?: string
+}
+
 interface Service {
   fields: Record<string, string>
   /** Plain scalar lists under a four-space field, such as `domains:`. */
   lists: Record<string, string[]>
   envVars: EnvVar[]
+  /** The static site's redirect and rewrite rules, in file order: Render applies the first that matches. */
+  routes: Route[]
 }
 
 /** Strip surrounding quotes, or an inline comment from an unquoted scalar. */
@@ -210,26 +218,29 @@ const indentOf = (line: string) => line.length - line.trimStart().length
 /**
  * A line-by-line reader for the two services. A `  - type:` line starts a service; its
  * four-space fields are recorded; inside `envVars:` each entry is `- key:` with `value:`,
- * `sync:` or `generateValue:`, and any other line throws, so a shape this reader cannot
- * read fails loudly instead of being skipped.
+ * `sync:` or `generateValue:`, and inside `routes:` each entry is `- type:` with `source:`
+ * and `destination:`. Any other line in those two blocks throws, so a shape this reader
+ * cannot read fails loudly instead of being skipped.
  */
 function readBlueprint(text: string): Service[] {
   const services: Service[] = []
   let current: Service | undefined
-  let inEnvVars = false
+  let block: 'envVars' | 'routes' | undefined
   let entry: EnvVar | undefined
+  let route: Route | undefined
   let list: string[] | undefined
 
   for (const [index, line] of text.split(/\r?\n/).entries()) {
     if (isBlankOrComment(line)) continue
     const fail = (why: string) => new Error(`render.yaml line ${index + 1}: ${why}: ${line}`)
 
-    if (inEnvVars && indentOf(line) <= 4) {
-      inEnvVars = false
+    if (block && indentOf(line) <= 4) {
+      block = undefined
       entry = undefined
+      route = undefined
     }
 
-    if (inEnvVars) {
+    if (block === 'envVars') {
       const key = /^ {6}- key:\s*(.+)$/.exec(line)
       if (key) {
         entry = { key: scalar(key[1]) }
@@ -242,9 +253,22 @@ function readBlueprint(text: string): Service[] {
       continue
     }
 
+    if (block === 'routes') {
+      const type = /^ {6}- type:\s*(.+)$/.exec(line)
+      if (type) {
+        route = { type: scalar(type[1]) }
+        current!.routes.push(route)
+        continue
+      }
+      const field = /^ {8}(source|destination):\s*(.*)$/.exec(line)
+      if (!field || !route) throw fail('unexpected line in routes')
+      route[field[1] as 'source' | 'destination'] = scalar(field[2])
+      continue
+    }
+
     const start = /^ {2}- type:\s*(.+)$/.exec(line)
     if (start) {
-      current = { fields: { type: scalar(start[1]) }, lists: {}, envVars: [] }
+      current = { fields: { type: scalar(start[1]) }, lists: {}, envVars: [], routes: [] }
       services.push(current)
       list = undefined
       continue
@@ -257,15 +281,24 @@ function readBlueprint(text: string): Service[] {
     const field = /^ {4}([A-Za-z]+):\s*(.*)$/.exec(line)
     if (!field || !current) continue
     list = undefined
-    if (field[1] !== 'envVars') {
+    if (field[1] !== 'envVars' && field[1] !== 'routes') {
       current.fields[field[1]] = scalar(field[2])
       if (field[2].trim() === '') list = current.lists[field[1]] = []
       continue
     }
-    if (field[2].trim() !== '') throw fail('envVars must be a block list')
-    inEnvVars = true
+    if (field[2].trim() !== '') throw fail(`${field[1]} must be a block list`)
+    block = field[1]
   }
   return services
+}
+
+/** Whether a Render rule's source matches a path: `*` matches the rest of the path, `:name` one segment. */
+function sourceMatches(source: string, path: string): boolean {
+  const pattern = source
+    .split(/(\*|:[A-Za-z]+)/)
+    .map(part => (part === '*' ? '.*' : /^:[A-Za-z]+$/.test(part) ? '[^/]+' : part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')))
+    .join('')
+  return new RegExp(`^${pattern}$`).test(path)
 }
 
 const blueprintText = readRepoFile('render.yaml')
@@ -421,10 +454,92 @@ describe('render.yaml', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Prerendered pages at their canonical address
+// ---------------------------------------------------------------------------
+
+/** Every page the client prerenders: each entry of shared/routes.json (`routePaths`, client/src/routes.ts). */
+const prerenderedPaths = (JSON.parse(readRepoFile('shared', 'routes.json')) as { routes: { path: string }[] }).routes.map(r => r.path)
+
+describe('render.yaml: each prerendered page at its no-slash address', () => {
+  // Render serves a file that exists at the requested path before applying any rule. The prerender
+  // writes a page to dist/<path>/index.html, which exists at /<path>/ but not at /<path>, the address
+  // the sitemap, the site's links, og:url and the canonical use. There the SPA catch-all would answer
+  // with dist/index.html, the prerendered homepage, so crawlers and link previews would see the
+  // homepage. So each page has its own rewrite above the catch-all, kept to shared/routes.json here.
+  const rules = staticSite?.routes ?? []
+  const catchAll = rules.findIndex(r => r.source === '/*')
+  const pageRule = (path: string): Route => ({ type: 'rewrite', source: path, destination: `${path}/index.html` })
+  const sameRule = (a: Route | undefined, b: Route) => a?.type === b.type && a.source === b.source && a.destination === b.destination
+  const asYaml = (r: Route) => `      - type: ${r.type}\n        source: ${r.source}\n        destination: ${r.destination}`
+
+  it('reads the static site rules, the SPA catch-all last', () => {
+    expect(rules.length).toBeGreaterThan(1)
+    expect(catchAll).toBe(rules.length - 1)
+    expect(rules[catchAll]).toEqual({ type: 'rewrite', source: '/*', destination: '/index.html' })
+    expect(prerenderedPaths).toContain('/compare')
+  })
+
+  it('rewrites every prerendered page but the root to its own index.html, above the catch-all', () => {
+    const missing = prerenderedPaths
+      .filter(path => path !== '/')
+      .map(pageRule)
+      .filter(expected => {
+        const at = rules.findIndex(r => r.source === expected.source)
+        return at === -1 || at > catchAll || !sameRule(rules[at], expected)
+      })
+    expect(missing, `render.yaml needs these static-site routes above the catch-all:\n${missing.map(asYaml).join('\n')}`).toEqual([])
+    // Render allows no rule on the root, and serves dist/index.html there as a file.
+    expect(rules.map(r => r.source)).not.toContain('/')
+  })
+
+  it('rewrites to a page index.html only for a page the client prerenders', () => {
+    // A rule left behind after its page was removed would point that address at a file the build no
+    // longer writes, instead of letting the SPA answer.
+    const stale = rules
+      .filter(r => r.destination !== '/index.html' && r.destination?.startsWith('/') && r.destination.endsWith('/index.html'))
+      .filter(r => !prerenderedPaths.includes(r.source ?? '') || !sameRule(r, pageRule(r.source ?? '')))
+    expect(stale).toEqual([])
+  })
+
+  it('puts no rule below one that already matches its source, so none is unreachable', () => {
+    // Render applies the first rule that matches: a page rule must not hide the sitemap, podcast
+    // feed or story-page proxies, and nothing may sit below the catch-all.
+    const shadowed = rules.filter((rule, i) => rules.slice(0, i).some(above => sourceMatches(above.source ?? '', rule.source ?? '')))
+    expect(shadowed).toEqual([])
+  })
+})
+
+describe('sourceMatches', () => {
+  it('matches a literal source exactly, a trailing * any rest of the path and :name one segment', () => {
+    expect(sourceMatches('/podcast', '/podcast')).toBe(true)
+    expect(sourceMatches('/podcast', '/podcast/abc/transcript')).toBe(false)
+    expect(sourceMatches('/podcast.xml', '/podcastxxml')).toBe(false)
+    expect(sourceMatches('/stories/*', '/stories/some-slug')).toBe(true)
+    expect(sourceMatches('/stories/*', '/compare')).toBe(false)
+    expect(sourceMatches('/*', '/stories/*')).toBe(true)
+    expect(sourceMatches('/updates/:month', '/updates/03')).toBe(true)
+    expect(sourceMatches('/updates/:month', '/updates/03/2024')).toBe(false)
+  })
+})
+
 describe('readBlueprint', () => {
   it('throws on a line it cannot read inside envVars', () => {
     const text = ['services:', '  - type: web', '    envVars:', '      - key: A', '        sync: false', '        surprise: 1'].join('\n')
     expect(() => readBlueprint(text)).toThrow(/line 6/)
+  })
+
+  it('reads routes in order, and throws on a line it cannot read inside them', () => {
+    const routes = ['services:', '  - type: web', '    routes:', '      - type: rewrite', '        source: /a', '        destination: /a/index.html']
+    const [service] = readBlueprint(
+      [...routes, '      # a comment', '      - type: rewrite', '        source: /*', '        destination: /index.html'].join('\n'),
+    )
+    expect(service.routes).toEqual([
+      { type: 'rewrite', source: '/a', destination: '/a/index.html' },
+      { type: 'rewrite', source: '/*', destination: '/index.html' },
+    ])
+    expect(() => readBlueprint([...routes, '        status: 301'].join('\n'))).toThrow(/line 7: unexpected line in routes/)
+    expect(() => readBlueprint(['services:', '  - type: web', '    routes: []'].join('\n'))).toThrow(/routes must be a block list/)
   })
 
   it('ends envVars at a line no deeper than the key, and strips quotes and comments', () => {
@@ -449,7 +564,8 @@ describe('readBlueprint', () => {
       '      - stray.example.org',
     ].join('\n')
     const [service] = readBlueprint(text)
-    expect(service.lists).toEqual({ domains: ['example.org', 'www.example.org'], routes: [] })
+    expect(service.lists).toEqual({ domains: ['example.org', 'www.example.org'] })
+    expect(service.routes).toEqual([{ type: 'rewrite', source: '/*' }])
   })
 })
 

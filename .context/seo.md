@@ -57,7 +57,7 @@ Both rewrites (this one and the podcast feed's below) target the API's custom do
 
 **Critical — Rule Order:**
 - Render evaluates rewrite rules **top-to-bottom, first match wins**
-- The `/sitemap.xml`, `/podcast.xml` and `/stories/*` rules must stay **before** the SPA catch-all rule (`/*` → `/index.html`)
+- The `/sitemap.xml`, `/podcast.xml` and `/stories/*` rules and the prerendered-page rules must stay **before** the SPA catch-all rule (`/*` → `/index.html`)
 - Render merges the file's routes with rules already in the dashboard, so check the order in the static site's Redirects/Rewrites tab after a blueprint sync
 - If reversed, the catch-all matches first and serves the SPA shell, which then 404s on the client
 
@@ -93,9 +93,11 @@ The build-time sitemap generator (`client/scripts/generate-sitemap.ts`) is kept 
 
 ## Adding a New Route
 
-When adding a page, add its entry (`path`, `priority`, `changefreq`) to **`shared/routes.json`**, and its route to `App.tsx`. That one file feeds both the prerender and the sitemap.
+When adding a page, add its entry (`path`, `priority`, `changefreq`) to **`shared/routes.json`**, its route to `App.tsx`, and its rewrite to `render.yaml` (the blueprint test prints the lines). That one file feeds both the prerender and the sitemap.
 
 ### The static route list
+
+**Served at the no-slash address.** Render serves a file that exists at the requested path before any rule; the prerender writes each page to `dist/<path>/index.html`, which Render finds only at `/<path>/`, so until 2026-10-29 the catch-all answered `/<path>` (the address the sitemap, links, `og:url` and canonical use) with the prerendered homepage. Each entry except `/` has its own rewrite `/<path>` → `/<path>/index.html` in `render.yaml`, after the proxy rewrites and above the catch-all (Render allows no rule on the root and serves `dist/index.html` there). Guarantee: each prerendered page's no-slash address serves its own HTML; `/<path>/` serves the same file. `server/src/blueprint.test.ts` fails on a missing, misplaced or stale page rule and on any rule an earlier one already matches, and prints the YAML to add. Render keeps dashboard rules the file no longer names, so removing a page rule also means deleting it in the Redirects/Rewrites tab.
 
 `shared/routes.json` is the only list of static pages (it replaced two hand-kept copies, which had drifted: the sitemap lacked `/feedback` and gave `/widgets` 0.4 against the client's 0.5; 0.4 was kept).
 

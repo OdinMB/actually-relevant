@@ -153,9 +153,11 @@ services:
         name: Content-Usage
         value: "train-ai=n, search=y"
     # Order matters: Render applies the first matching rule, so /sitemap.xml,
-    # /podcast.xml and /stories/* must stay above the SPA catch-all. No static sitemap.xml or
-    # podcast.xml may exist in client/public/, and nothing may be built under dist/stories/.
-    # The rewrites target the API's custom domain, not the onrender.com host (ADR-0019, .context/seo.md).
+    # /podcast.xml, /stories/* and the prerendered pages must stay above the SPA catch-all. No
+    # static sitemap.xml or podcast.xml may exist in client/public/, and nothing may be built
+    # under dist/stories/. The proxy rewrites target the API's custom domain, not the
+    # onrender.com host (ADR-0019, .context/seo.md). Render serves a file that exists at the
+    # requested path without applying any rule.
     routes:
       - type: rewrite
         source: /sitemap.xml
@@ -169,6 +171,82 @@ services:
       - type: rewrite
         source: /stories/*
         destination: https://api.actuallyrelevant.news/api/story-page/*
+      # Prerendered pages at their canonical address, without a trailing slash. The prerender
+      # writes each to dist/<path>/index.html, which Render finds as a file only at /<path>/;
+      # without these rules the catch-all answers /<path> with the prerendered homepage, and
+      # crawlers and link previews see the homepage. One rule per entry of shared/routes.json
+      # except / (Render allows no rule on the root and serves dist/index.html there);
+      # server/src/blueprint.test.ts fails on a missing, misplaced or stale rule.
+      - type: rewrite
+        source: /issues
+        destination: /issues/index.html
+      - type: rewrite
+        source: /issues/existential-threats
+        destination: /issues/existential-threats/index.html
+      - type: rewrite
+        source: /issues/planet-climate
+        destination: /issues/planet-climate/index.html
+      - type: rewrite
+        source: /issues/human-development
+        destination: /issues/human-development/index.html
+      - type: rewrite
+        source: /issues/science-technology
+        destination: /issues/science-technology/index.html
+      - type: rewrite
+        source: /methodology
+        destination: /methodology/index.html
+      - type: rewrite
+        source: /about
+        destination: /about/index.html
+      - type: rewrite
+        source: /imprint
+        destination: /imprint/index.html
+      - type: rewrite
+        source: /privacy
+        destination: /privacy/index.html
+      - type: rewrite
+        source: /search
+        destination: /search/index.html
+      - type: rewrite
+        source: /developers
+        destination: /developers/index.html
+      - type: rewrite
+        source: /widgets
+        destination: /widgets/index.html
+      - type: rewrite
+        source: /compare
+        destination: /compare/index.html
+      - type: rewrite
+        source: /no-ads-no-tracking
+        destination: /no-ads-no-tracking/index.html
+      - type: rewrite
+        source: /news-fatigue
+        destination: /news-fatigue/index.html
+      - type: rewrite
+        source: /free-api
+        destination: /free-api/index.html
+      - type: rewrite
+        source: /stewardship
+        destination: /stewardship/index.html
+      - type: rewrite
+        source: /newsletter
+        destination: /newsletter/index.html
+      - type: rewrite
+        source: /podcast
+        destination: /podcast/index.html
+      - type: rewrite
+        source: /feedback
+        destination: /feedback/index.html
+      - type: rewrite
+        source: /thank-you
+        destination: /thank-you/index.html
+      - type: rewrite
+        source: /saved
+        destination: /saved/index.html
+      - type: rewrite
+        source: /subscribed
+        destination: /subscribed/index.html
+      # SPA catch-all, last: the remaining client routes get dist/index.html and the client router.
       - type: rewrite
         source: /*
         destination: /index.html
