@@ -528,6 +528,9 @@ export const config = {
     perAddressWindowHours: parseWholeNumber(process.env.SUBSCRIBE_PER_ADDRESS_WINDOW_HOURS, 24, 'SUBSCRIBE_PER_ADDRESS_WINDOW_HOURS'),
     // At most this many confirmation emails per rolling hour across all addresses.
     globalHourlyMax: parseWholeNumber(process.env.SUBSCRIBE_GLOBAL_HOURLY_MAX, 30, 'SUBSCRIBE_GLOBAL_HOURLY_MAX'),
+    // A signup queued behind waiting ones warns the owner when send_queued_confirmations has not
+    // completed a run for this long: three of its 10-minute intervals (failed runs count as completed).
+    queueStalledAfterMinutes: 30,
   },
   relatedStories: {
     displayCount: 4,

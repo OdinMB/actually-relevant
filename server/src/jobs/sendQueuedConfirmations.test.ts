@@ -15,10 +15,11 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 const mockPlunk = vi.hoisted(() => ({ sendTransactional: vi.fn() }))
 const mockLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }))
+const mockNotify = vi.hoisted(() => vi.fn())
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../services/plunk.js', () => mockPlunk)
-vi.mock('../lib/notify.js', () => ({ notify: vi.fn() }))
+vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLogger }))
 
 const { config } = await import('../config.js')
@@ -43,6 +44,10 @@ function given({ sentLastHour = 0, rows = waiting, confirmed = [] as string[] } 
 const allLogged = () => JSON.stringify([mockLogger.info, mockLogger.warn, mockLogger.error, mockLogger.debug].flatMap(fn => fn.mock.calls))
 const notConnected = () => Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:443'), { code: 'ECONNREFUSED' })
 const timedOut = () => Object.assign(new Error('timeout of 15000ms exceeded'), { code: 'ECONNABORTED' })
+const plunkAnswered = (status: number) => Object.assign(new Error(`Request failed with status code ${status}`), { response: { status } })
+
+/** The updateMany calls that put a signup back in the queue (its claim undone). */
+const putBacks = () => mockPrisma.pendingSubscription.updateMany.mock.calls.filter(([{ data }]) => data.sentAt === null)
 
 describe('runSendQueuedConfirmations', () => {
   beforeEach(() => {
@@ -54,6 +59,7 @@ describe('runSendQueuedConfirmations', () => {
     mockPrisma.pendingSubscription.deleteMany.mockResolvedValue({ count: 0 })
     mockPrisma.pendingSubscription.updateMany.mockResolvedValue({ count: 1 })
     mockPlunk.sendTransactional.mockResolvedValue(undefined)
+    mockNotify.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -61,7 +67,7 @@ describe('runSendQueuedConfirmations', () => {
     config.subscribe.enabled = false
   })
 
-  it('sends nothing and touches no row while signups are paused', async () => {
+  it('sends nothing, touches no row and logs only at debug level while signups are paused', async () => {
     config.subscribe.enabled = false
 
     await runSendQueuedConfirmations()
@@ -69,6 +75,8 @@ describe('runSendQueuedConfirmations', () => {
     expect(mockPrisma.pendingSubscription.findMany).not.toHaveBeenCalled()
     expect(mockPrisma.pendingSubscription.deleteMany).not.toHaveBeenCalled()
     expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+    expect(mockLogger.info).not.toHaveBeenCalled()
+    expect(mockLogger.debug).toHaveBeenCalled()
   })
 
   it('sends each waiting signup its own confirmation link and gives the link a full lifetime from now', async () => {
@@ -123,36 +131,102 @@ describe('runSendQueuedConfirmations', () => {
     expect(mockPlunk.sendTransactional.mock.calls[0][0].to).toBe('second@example.com')
   })
 
-  it('puts a signup back in the queue when Plunk certainly got nothing, and fails the run without the address', async () => {
-    mockPlunk.sendTransactional.mockRejectedValueOnce(notConnected())
+  describe('signups that waited past their expiry', () => {
+    it('removes them and tells the owner how many, in one notice that a repeat reopens, without an address', async () => {
+      mockPrisma.pendingSubscription.deleteMany.mockResolvedValueOnce({ count: 3 })
 
-    const run = runSendQueuedConfirmations()
+      await runSendQueuedConfirmations()
 
-    await expect(run).rejects.toThrow(/queued confirmation email/i)
-    await run.catch((err: Error) => expect(err.message).not.toContain('first@example.com'))
-    expect(mockPrisma.pendingSubscription.updateMany).toHaveBeenCalledTimes(2)
-    expect(mockPrisma.pendingSubscription.updateMany.mock.calls[1][0]).toEqual({
-      where: { id: 'q1' },
-      data: { sentAt: null, expiresAt: waiting[0].expiresAt },
+      expect(mockPrisma.pendingSubscription.deleteMany.mock.calls[0][0].where).toEqual({ sentAt: null, confirmedAt: null, expiresAt: { lte: NOW } })
+      expect(mockNotify).toHaveBeenCalledTimes(1)
+      const notice = mockNotify.mock.calls[0][0]
+      expect(notice).toMatchObject({ source: 'subscriptions', severity: 'warning', dedupeKey: 'signup-queue-expired', link: '/admin/subscribers' })
+      expect(notice.message).toMatch(/^3 queued signups /)
+      expect(notice.message).toContain(`${config.subscribe.confirmTokenExpiryHours} hours`)
+      expect(JSON.stringify(mockNotify.mock.calls)).not.toMatch(/@example\.com/)
     })
-    expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(1)
+
+    it('raises no notice when none expired', async () => {
+      await runSendQueuedConfirmations()
+
+      expect(mockNotify).not.toHaveBeenCalled()
+    })
   })
 
-  it('treats a 4xx answer as nothing sent', async () => {
-    mockPlunk.sendTransactional.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 403'), { response: { status: 403 } }))
+  describe('when a send fails', () => {
+    it('puts a signup back in the queue when Plunk certainly got nothing, and fails the run without the address', async () => {
+      mockPlunk.sendTransactional.mockRejectedValueOnce(notConnected())
 
-    await expect(runSendQueuedConfirmations()).rejects.toThrow()
+      const run = runSendQueuedConfirmations()
 
-    expect(mockPrisma.pendingSubscription.updateMany.mock.calls[1][0].data.sentAt).toBeNull()
+      await expect(run).rejects.toThrow(/queued confirmation email/i)
+      await run.catch((err: Error) => expect(err.message).not.toContain('first@example.com'))
+      expect(mockPrisma.pendingSubscription.updateMany).toHaveBeenCalledTimes(2)
+      expect(mockPrisma.pendingSubscription.updateMany.mock.calls[1][0]).toEqual({
+        where: { id: 'q1' },
+        data: { sentAt: null, expiresAt: waiting[0].expiresAt },
+      })
+      expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(1)
+    })
+
+    // 401, 403 (PROJECT_DISABLED) and 429 are about the account or the rate, not this address:
+    // every later signup would get the same answer, so they wait for the next run.
+    it.each([401, 403, 404, 409, 429])('puts the signup back and stops the run on a %i from Plunk', async status => {
+      mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(status))
+
+      await expect(runSendQueuedConfirmations()).rejects.toThrow(/queued confirmation email failed to send/i)
+
+      expect(putBacks()).toHaveLength(1)
+      expect(putBacks()[0][0].where).toEqual({ id: 'q1' })
+      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledTimes(1) // the expiry sweep only
+      expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ['a timeout', timedOut],
+      ['a 500', () => plunkAnswered(500)],
+      ['a 503', () => plunkAnswered(503)],
+    ])('never sends a signup again after %s, when Plunk may have accepted it, and stops the run', async (_label, failure) => {
+      mockPlunk.sendTransactional.mockRejectedValueOnce(failure())
+
+      await expect(runSendQueuedConfirmations()).rejects.toThrow(/queued confirmation email/i)
+
+      expect(mockPrisma.pendingSubscription.updateMany).toHaveBeenCalledTimes(1)
+      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledTimes(1) // the expiry sweep only
+      expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(1)
+    })
   })
 
-  it('never sends a signup again when Plunk may have accepted it, and stops the run', async () => {
-    mockPlunk.sendTransactional.mockRejectedValueOnce(timedOut())
+  describe('when Plunk refuses one signup as invalid', () => {
+    it.each([400, 422])('removes the signup refused with a %i unsent, sends the next, then fails the run naming the count and status', async status => {
+      mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(status))
 
-    await expect(runSendQueuedConfirmations()).rejects.toThrow(/queued confirmation email/i)
+      await expect(runSendQueuedConfirmations()).rejects.toThrow(`1 queued signup refused by Plunk (HTTP ${status}) and removed`)
 
-    expect(mockPrisma.pendingSubscription.updateMany).toHaveBeenCalledTimes(1)
-    expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(1)
+      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: 'q1' } })
+      expect(putBacks()).toHaveLength(0)
+      expect(mockPlunk.sendTransactional.mock.calls.map(([opts]) => opts.to)).toEqual(['first@example.com', 'second@example.com'])
+      expect(mockLogger.warn).toHaveBeenCalledWith({ subscriptionId: 'q1', status }, expect.any(String))
+    })
+
+    it('counts every refused signup, with each status once, in the one failure', async () => {
+      given({ rows: [...waiting, { id: 'q3', email: 'third@example.com', token: 'token-3', expiresAt: waiting[1].expiresAt }] })
+      mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422)).mockRejectedValueOnce(plunkAnswered(400)).mockRejectedValueOnce(plunkAnswered(422))
+
+      await expect(runSendQueuedConfirmations()).rejects.toThrow(/^3 queued signups refused by Plunk \(HTTP 400, 422\) and removed$/)
+
+      expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(3)
+    })
+
+    it('names the refused signups too when a later send stops the run', async () => {
+      mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422)).mockRejectedValueOnce(notConnected())
+
+      const run = runSendQueuedConfirmations()
+
+      await expect(run).rejects.toThrow(/queued confirmation email failed to send/i)
+      await run.catch((err: Error) => expect(err.message).toContain('1 queued signup refused by Plunk (HTTP 422) and removed'))
+      expect(putBacks().map(([{ where }]) => where)).toEqual([{ id: 'q2' }])
+    })
   })
 
   it('logs no email address, whatever happens', async () => {
@@ -163,8 +237,11 @@ describe('runSendQueuedConfirmations', () => {
     await runSendQueuedConfirmations().catch(() => {})
     mockPlunk.sendTransactional.mockRejectedValueOnce(notConnected())
     await runSendQueuedConfirmations().catch(() => {})
+    mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422))
+    await runSendQueuedConfirmations().catch(() => {})
 
     expect(mockLogger.info).toHaveBeenCalled()
+    expect(mockLogger.warn).toHaveBeenCalled()
     expect(mockLogger.error).toHaveBeenCalled()
     expect(allLogged()).not.toMatch(/(first|second)@example\.com/)
   })

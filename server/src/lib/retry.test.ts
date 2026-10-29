@@ -1,6 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
 import { APIError } from 'openai'
-import { withRetry, isRetryableError, isConnectionNotEstablished, provedNotSent } from './retry.js'
+import { withRetry, isRetryableError, isConnectionNotEstablished, provedNotSent, responseStatus } from './retry.js'
+
+describe('responseStatus', () => {
+  it('is the HTTP status of the answer an axios error carries', () => {
+    expect(responseStatus({ response: { status: 422 } })).toBe(422)
+  })
+
+  it('is undefined when no answer came, or it has no numeric status', () => {
+    expect(responseStatus({ code: 'ECONNREFUSED' })).toBeUndefined()
+    expect(responseStatus({ response: { status: '422' } })).toBeUndefined()
+    expect(responseStatus(new Error('timeout of 15000ms exceeded'))).toBeUndefined()
+    expect(responseStatus(null)).toBeUndefined()
+  })
+})
 
 describe('provedNotSent', () => {
   it('is true when no connection was made, or the server refused the request (4xx)', () => {
