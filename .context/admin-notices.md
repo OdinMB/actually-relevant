@@ -15,7 +15,7 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 
 | Caller | Source / severity | Dedupe key | Link |
 |---|---|---|---|
-| `scheduler.ts` `runJob` failure (`jobFailureNotice`) | `generate_newsletter`, `publish_newsletter` → `newsletter`; `generate_podcast`, `publish_podcast` → `podcast`; else `jobs`; `warning` | `job-failure:<jobName>` | `/admin/newsletters`, `/admin/podcasts`, else `/admin/jobs` |
+| `scheduler.ts` `runJob` failure (`jobFailureNotice`) | `generate_newsletter`, `publish_newsletter` → `newsletter`; `generate_podcast`, `publish_podcast` → `podcast`; `send_queued_confirmations` → `subscriptions`; else `jobs`; `warning` | `job-failure:<jobName>` | `/admin/newsletters`, `/admin/podcasts`, `/admin/subscribers`, else `/admin/jobs` |
 | `scheduler.ts` boot retry: cannot start | `jobs` / `critical` | `job-failure:scheduler` | `/admin/jobs` |
 | `scheduler.ts`: started after that alert | `jobs` / `warning` ("scheduler started after N failed attempts: …") | `job-failure:scheduler` | `/admin/jobs` |
 | `lib/processErrors.ts` crash (unhandled rejection or uncaught exception; best effort, 3 s wait, then exit 1; `.context/logging.md`, "Fatal errors") | `jobs` / `critical` (kind and error type only, never the message) | `process-crash` | `/admin/jobs` |
@@ -24,7 +24,7 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 | `generatePodcast.ts` waiting for you | `podcast` / `info` | none (claimed once per episode) | episode |
 | `podcastMissedWeek.ts` missed week | `podcast` / `warning` | none (claimed once per week) | episode or list |
 | `podcastBootCheck.ts` configuration incomplete | `podcast` / `warning` | `podcast-config` | `/admin/jobs` |
-| `subscribeLimits.ts` signup cap | `subscriptions` / `warning` | `signup-cap` | `/admin/subscribers` |
+| `subscribeLimits.ts` signup cap (signups queued, with the number waiting; `.context/subscription.md`) | `subscriptions` / `warning` | `signup-cap` | `/admin/subscribers` |
 | `generateNewsletter.ts` no stories this week | `newsletter` / `warning` | `newsletter-no-stories:<weekKey>` | `/admin/jobs` |
 | `publishNewsletter.ts` issue sent | `newsletter` / `info` | none | `/admin/newsletters` |
 | `publishNewsletter.ts` already sent or published | `newsletter` / `info` | `newsletter-already-sent:<weekKey>` | `/admin/newsletters` |
