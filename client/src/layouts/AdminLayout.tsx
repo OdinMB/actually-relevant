@@ -118,7 +118,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-full flex-col">
       <div className="px-4 py-5 border-b border-neutral-200">
         <span className="text-lg font-bold text-neutral-900">Admin</span>
       </div>
@@ -172,14 +172,16 @@ function AdminShell() {
         <BackgroundTaskProvider>
           <div className="flex h-screen bg-neutral-50">
             {/* Desktop sidebar */}
-            <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-neutral-200 lg:bg-white">
+            {/* Scrolls on its own when the window is shorter than the nav, so the shell stays one screen tall;
+                `relative` keeps the visually hidden link text inside that scroll box instead of lengthening the page */}
+            <aside className="relative hidden lg:flex lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-neutral-200 lg:bg-white">
               <Sidebar />
             </aside>
 
             {/* Mobile sidebar */}
             <Dialog open={mobileOpen} onClose={setMobileOpen} className="relative z-40 lg:hidden">
               <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-              <DialogPanel className="fixed inset-y-0 left-0 z-50 w-60 bg-white shadow-xl">
+              <DialogPanel className="fixed inset-y-0 left-0 z-50 w-60 overflow-y-auto bg-white shadow-xl">
                 <div className="absolute right-2 top-2">
                   <button
                     onClick={() => setMobileOpen(false)}
