@@ -84,6 +84,19 @@ describe('SubscribeModal', () => {
     expect(dialog).toHaveAccessibleName('Stay informed')
   })
 
+  it('moves focus to "Check your email" inside the dialog once the signup succeeds', async () => {
+    const user = userEvent.setup()
+    mockApi.subscribe.mockResolvedValue({ success: true })
+    renderModal()
+    const dialog = screen.getByRole('dialog', { name: 'Stay informed' })
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: /^subscribe$/i })).toBeEnabled())
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Email address' }), 'reader@example.com')
+    await user.click(within(dialog).getByRole('button', { name: /^subscribe$/i }))
+
+    expect(await within(dialog).findByRole('heading', { name: 'Check your email' })).toHaveFocus()
+  })
+
   it('says what a subscriber gets, centered under the form', async () => {
     renderModal()
     await waitFor(() => expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled())

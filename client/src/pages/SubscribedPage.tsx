@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { BRAND } from '../config'
@@ -13,6 +13,13 @@ export default function SubscribedPage() {
   const [confirmState, setConfirmState] = useState<'idle' | 'confirming' | 'confirmed' | 'failed'>('idle')
   const [failReason, setFailReason] = useState<'expired' | 'invalid'>('invalid')
   const [confirmError, setConfirmError] = useState('')
+  const welcomeHeadingRef = useRef<HTMLHeadingElement>(null)
+
+  // Confirming replaces the focused button with the welcome state; focus moves to its heading so a
+  // screen reader announces it. Loading the page moves no focus.
+  useEffect(() => {
+    if (confirmState === 'confirmed') welcomeHeadingRef.current?.focus()
+  }, [confirmState])
 
   const handleConfirm = async () => {
     if (!token || !email) return
@@ -123,7 +130,9 @@ export default function SubscribedPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-neutral-900 mb-4">Welcome to the newsletter!</h1>
+        <h1 ref={welcomeHeadingRef} tabIndex={-1} className="text-2xl md:text-3xl font-bold text-neutral-900 mb-4 focus:outline-none">
+          Welcome to the newsletter!
+        </h1>
         <p className="text-neutral-600 mb-4 max-w-md mx-auto">
           {BRAND.claim}
           <br className="sm:hidden" />

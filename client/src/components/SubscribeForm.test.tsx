@@ -215,6 +215,19 @@ describe('SubscribeForm', () => {
     )
   })
 
+  // The pressed Subscribe button goes with the form, so focus would otherwise drop to the page unannounced.
+  it('moves focus to the "Check your email" heading on success, as on /newsletter, so a screen reader announces it', async () => {
+    mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
+    const user = userEvent.setup()
+    render(<SubscribeForm idPrefix="test" hideHeading />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
+
+    await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+    await user.click(screen.getByRole('button', { name: /subscribe/i }))
+
+    expect(await screen.findByRole('heading', { name: 'Check your email' })).toHaveFocus()
+  })
+
   // The signup POST sits behind the public API's request limit as well as its own per-minute and daily limits.
   it.each([
     ['a signup limit', signupLimitError],

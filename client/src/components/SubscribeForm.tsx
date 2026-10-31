@@ -109,12 +109,19 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
   const [turnstileFailed, setTurnstileFailed] = useState(false)
   const { containerRef: turnstileContainerRef, getToken: getTurnstileToken } = useTurnstileChallenge()
   const emailInputRef = useRef<HTMLInputElement>(null)
+  const successHeadingRef = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
     if (autoFocus) {
       requestAnimationFrame(() => emailInputRef.current?.focus())
     }
   }, [autoFocus])
+
+  // "Check your email" replaces the form and its focused Subscribe button; focus moves to its
+  // heading so a screen reader announces it, and keyboard focus stays where the form was.
+  useEffect(() => {
+    if (status === 'success') successHeadingRef.current?.focus()
+  }, [status])
 
   // Fetch the anti-bot form token on mount; its answer also says whether signups are open.
   // If both attempts fail, submit stays disabled (the API is unreachable anyway) and the
@@ -280,7 +287,9 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-xl font-bold text-neutral-900 mb-2">Check your email</h2>
+        <h2 ref={successHeadingRef} tabIndex={-1} className="text-xl font-bold text-neutral-900 mb-2 focus:outline-none">
+          Check your email
+        </h2>
         <p className="text-neutral-600 text-sm mb-3">
           A confirmation link is on its way to <strong>{email}</strong>. Click the link to start receiving our weekly newsletter.
         </p>
