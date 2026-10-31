@@ -22,6 +22,19 @@ describe('LoadFailure', () => {
     expect(screen.getByRole('heading', { level: 2, name: "The stories couldn't load" })).toBeInTheDocument()
   })
 
+  it('says what to do instead of the usual line when given a hint', () => {
+    render(<LoadFailure title="The search results couldn't load" hint="Please try again in a few minutes." query={query()} />)
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Please try again in a few minutes.')
+    expect(alert).not.toHaveTextContent('The connection may have dropped')
+  })
+
+  it('heads a list inside a section that has its own h2 with an h3', () => {
+    render(<LoadFailure title="The episodes couldn't load" headingLevel={3} query={query()} />)
+    expect(screen.getByRole('heading', { level: 3, name: "The episodes couldn't load" })).toBeInTheDocument()
+  })
+
   it('asks the query again when "Try again" is pressed, without reloading the page', async () => {
     const q = query()
     render(<LoadFailure title="This story couldn't load" query={q} />)

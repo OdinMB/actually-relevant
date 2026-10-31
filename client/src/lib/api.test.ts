@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { ApiError, isNotFound, publicApi } from './api'
+import { ApiError, isNotFound, isRateLimited, publicApi } from './api'
 
 describe('isNotFound', () => {
   it('is true only for a 404 answer from the API', () => {
@@ -8,6 +8,15 @@ describe('isNotFound', () => {
     expect(isNotFound(new ApiError(503, 'Service Unavailable'))).toBe(false)
     expect(isNotFound(new TypeError('Failed to fetch'))).toBe(false)
     expect(isNotFound(null)).toBe(false)
+  })
+})
+
+describe('isRateLimited', () => {
+  it('is true only for a 429 answer from the API', () => {
+    expect(isRateLimited(new ApiError(429, 'Too many search requests. Please try again later.'))).toBe(true)
+    expect(isRateLimited(new ApiError(503, 'Service Unavailable'))).toBe(false)
+    expect(isRateLimited(new TypeError('Failed to fetch'))).toBe(false)
+    expect(isRateLimited(null)).toBe(false)
   })
 })
 

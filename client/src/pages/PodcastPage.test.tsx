@@ -8,6 +8,7 @@ import type { PublicPodcastResponse } from '@shared/types'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { APPLE_PODCASTS_URL } from '../config'
 import { PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
+import { inAutomatedBrowser } from '../test/automatedBrowser'
 
 const mockApi = vi.hoisted(() => ({ podcast: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -21,6 +22,7 @@ vi.mock('../components/SubscribeProvider', () => ({
 }))
 
 import PodcastPage, { PODCAST_FEED_URL } from './PodcastPage'
+import { ApiError } from '../lib/api'
 
 const AUDIO_URL = 'https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.mp3'
 const POCKET_CASTS_URL = 'https://pca.st/example'
@@ -58,7 +60,7 @@ const RESPONSE: PublicPodcastResponse = {
 
 function renderPage(path = '/podcast') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const result = render(
     <HelmetProvider>
       <MemoryRouter initialEntries={[path]}>
         <QueryClientProvider client={client}>
@@ -67,7 +69,10 @@ function renderPage(path = '/podcast') {
       </MemoryRouter>
     </HelmetProvider>,
   )
+  return { ...result, client }
 }
+
+const episodesFailure = () => screen.findByRole('heading', { level: 3, name: "The episodes couldn't load" })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -181,8 +186,62 @@ describe('PodcastPage', () => {
     renderPage()
     const apple = within(subscribeSection()).getByRole('link', { name: 'Listen on Apple Podcasts (opens in new tab)' })
     expect(apple.getAttribute('href')).toBe(APPLE_PODCASTS_URL)
-    await screen.findByText('The episodes could not be loaded. Please try again later.')
+    await episodesFailure()
     expect(within(subscribeSection()).getByRole('link', { name: /Listen on Apple Podcasts/ })).toBeInTheDocument()
+  })
+
+  describe('when the episodes do not load', () => {
+    it.each([
+      ['the server fails', new ApiError(500, 'Failed to fetch podcast')],
+      ['the API is not there', new ApiError(404, 'Not Found')],
+      ['the connection drops', new TypeError('Failed to fetch')],
+    ])('says the episodes could not load, under their heading, when %s', async (_, error) => {
+      mockApi.podcast.mockRejectedValue(error)
+      renderPage()
+
+      const heading = await episodesFailure()
+      expect(screen.getByRole('alert')).toContainElement(heading)
+      expect(screen.getByRole('region', { name: 'Episodes' })).toContainElement(heading)
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+      expect(screen.queryByText('The first episode is on its way.')).toBeNull()
+    })
+
+    it('shows the episodes in place when "Try again" succeeds', async () => {
+      mockApi.podcast.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(RESPONSE)
+      renderPage()
+      await episodesFailure()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+      expect(await screen.findByRole('heading', { name: /W42: Clean air/ })).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(mockApi.podcast).toHaveBeenCalledTimes(2)
+    })
+
+    it('has no a11y violations', async () => {
+      mockApi.podcast.mockRejectedValue(new TypeError('Failed to fetch'))
+      const { container } = renderPage()
+      await episodesFailure()
+      expect(await axe(container)).toHaveNoViolations()
+    })
+
+    it('shows "Loading episodes" in the prerenderer, so the failure is never baked into the static page', async () => {
+      await inAutomatedBrowser(async () => {
+        mockApi.podcast.mockRejectedValue(new TypeError('Failed to fetch'))
+        const { client } = renderPage()
+
+        await waitFor(() => expect(client.getQueryState(['public-podcast'])?.status).toBe('error'))
+        expect(screen.getByText('Loading episodes…')).toBeInTheDocument()
+        expect(screen.queryByRole('alert')).toBeNull()
+      })
+    })
+  })
+
+  it('says the first episode is on its way only when the show has none', async () => {
+    mockApi.podcast.mockResolvedValue({ ...RESPONSE, episodes: [] })
+    renderPage()
+    expect(await screen.findByText('The first episode is on its way.')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('shows the feed address as text to select, not as a link to the XML', () => {

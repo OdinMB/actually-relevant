@@ -11,8 +11,10 @@ import { PodcastCrossLink } from '../components/CrossLinks'
 import AiSubtitle from '../components/ai/AiSubtitle'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { NewsletterArchiveSkeleton } from '../components/skeletons'
+import LoadFailure from '../components/LoadFailure'
 import { useNewsletterArchive } from '../hooks/useNewsletterArchive'
 import { NEWSLETTER_FEED_URL } from '../lib/api'
+import { loadStateOf } from '../lib/loadState'
 
 const META = {
   title: 'Newsletter - Actually Relevant',
@@ -34,10 +36,12 @@ const INLINE_LINK_CLASS = `${LINK_CLASS} underline`
 /** Every published issue, newest first, paginated. Loads client-side (the prerenderer does not wait for data). */
 function IssueList({ onPageChange }: { onPageChange: () => void }) {
   const [page, setPage] = useState(1)
-  const { data, isLoading, isError } = useNewsletterArchive(page)
+  const archiveQuery = useNewsletterArchive(page)
+  const { data } = archiveQuery
+  const loadState = loadStateOf(archiveQuery)
 
-  if (isLoading) return <NewsletterArchiveSkeleton />
-  if (isError) return <p className="text-neutral-600">The past issues could not be loaded. Please try again later.</p>
+  if (loadState === 'loading') return <NewsletterArchiveSkeleton />
+  if (loadState !== 'ready') return <LoadFailure title="The past issues couldn't load" headingLevel={3} query={archiveQuery} className="py-8" />
   if (!data || data.data.length === 0) return <p className="text-neutral-600">No issues have been published yet.</p>
   return (
     <>
