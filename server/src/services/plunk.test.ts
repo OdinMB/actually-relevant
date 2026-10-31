@@ -52,9 +52,11 @@ const {
   sendTransactional,
   verifyEmail,
   listContacts,
+  findContactsByEmail,
   parseContactsResponse,
   parseActivityResponse,
   listActivity,
+  hasComplaintOrBounce,
 } = await import('./plunk.js')
 
 describe('Plunk API client', () => {
@@ -330,6 +332,63 @@ describe('Plunk API client', () => {
     })
   })
 
+  describe('findContactsByEmail', () => {
+    it('asks for one page of contacts matching the address, passed as a query parameter, and keeps only exact matches', async () => {
+      mockAxiosInstance.get.mockResolvedValue({
+        data: {
+          data: [
+            { id: 'c1', email: 'xreader@example.com', subscribed: true },
+            { id: 'c2', email: 'Reader@Example.com', subscribed: false },
+            { id: 'c3', email: 'reader@example.com.au', subscribed: true },
+          ],
+          cursor: null,
+          hasMore: false,
+          total: 3,
+        },
+      })
+
+      const contacts = await findContactsByEmail('reader@example.com')
+
+      // A query parameter, never the path: the error serializer logs a failed request's path
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/contacts', { params: { search: 'reader@example.com', limit: 100 } })
+      expect(contacts.map(c => c.id)).toEqual(['c2'])
+    })
+
+    it('returns no contact when the complete answer holds none with the address', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { data: [{ id: 'c1', email: 'other@example.com', subscribed: true }], cursor: null, hasMore: false } })
+
+      await expect(findContactsByEmail('reader@example.com')).resolves.toEqual([])
+    })
+
+    it('reads a { success, data } envelope', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { success: true, data: [{ id: 'c1', email: 'reader@example.com', subscribed: true }] } })
+
+      await expect(findContactsByEmail('reader@example.com')).resolves.toEqual([{ id: 'c1', email: 'reader@example.com', subscribed: true }])
+    })
+
+    it('throws when more pages follow, since the answer is then incomplete', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { data: [{ id: 'c1', email: 'reader@example.com', subscribed: false }], cursor: 'nx', hasMore: true } })
+
+      await expect(findContactsByEmail('reader@example.com')).rejects.toThrow(/more than one page/)
+    })
+
+    it('throws on an unrecognized shape instead of reporting no contact', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { weird: true } })
+
+      await expect(findContactsByEmail('reader@example.com')).rejects.toThrow(/unrecognized Plunk response shape/)
+    })
+
+    it('never logs the address', async () => {
+      mockAxiosInstance.get.mockResolvedValueOnce({ data: { weird: true } })
+      await findContactsByEmail('reader@example.com').catch(() => {})
+      mockAxiosInstance.get.mockResolvedValueOnce({ data: { data: [], cursor: 'nx', hasMore: true } })
+      await findContactsByEmail('reader@example.com').catch(() => {})
+
+      const logged = JSON.stringify([...mockLogger.info.mock.calls, ...mockLogger.warn.mock.calls, ...mockLogger.debug.mock.calls])
+      expect(logged).not.toContain('reader@example.com')
+    })
+  })
+
   describe('parseActivityResponse', () => {
     const item = { id: 'e1_complaint', type: 'email.complaint', timestamp: '2026-10-01T10:00:00Z', metadata: {} }
 
@@ -381,6 +440,72 @@ describe('Plunk API client', () => {
     it('throws on an unrecognized shape', async () => {
       mockAxiosInstance.get.mockResolvedValue({ data: { results: [] } })
       await expect(listActivity({ types: ['email.complaint'], startDate, limit: 20 })).rejects.toThrow(/unrecognized/)
+    })
+  })
+
+  describe('hasComplaintOrBounce', () => {
+    const activity = (type: string, contactId: unknown = 'contact-7') => ({
+      id: `e1_${type}`,
+      type,
+      timestamp: '2026-03-01T10:00:00Z',
+      contactId,
+      metadata: {},
+    })
+
+    it("asks for one complaint or bounce of this contact's whole history, with no start date", async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { data: [], hasMore: false } })
+
+      await hasComplaintOrBounce('contact-7')
+
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/activity', { params: { contactId: 'contact-7', types: 'email.complaint,email.bounced', limit: 1 } })
+    })
+
+    it.each([
+      ['a spam complaint', 'email.complaint'],
+      ['a bounce', 'email.bounced'],
+    ])('is true when Plunk has %s on record for the contact', async (_label, type) => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { data: [activity(type)], hasMore: false } })
+
+      await expect(hasComplaintOrBounce('contact-7')).resolves.toBe(true)
+    })
+
+    it('is false when the contact has neither on record', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { data: [], hasMore: false } })
+
+      await expect(hasComplaintOrBounce('contact-7')).resolves.toBe(false)
+    })
+
+    it('reads a { success, data } envelope', async () => {
+      mockAxiosInstance.get.mockResolvedValue({ data: { success: true, data: { data: [activity('email.complaint')], hasMore: false } } })
+
+      await expect(hasComplaintOrBounce('contact-7')).resolves.toBe(true)
+    })
+
+    it.each([
+      ['an unrecognized shape', { results: [] }, /unrecognized/],
+      ['another type of activity (the type filter was not applied)', { data: [activity('email.opened')] }, /type filter/],
+      ["another contact's activity (the contact filter was not applied)", { data: [activity('email.complaint', 'contact-9')] }, /contact filter/],
+    ])('throws rather than answer on %s', async (_label, body, message) => {
+      mockAxiosInstance.get.mockResolvedValue({ data: body })
+
+      await expect(hasComplaintOrBounce('contact-7')).rejects.toThrow(message)
+    })
+
+    it('throws without asking Plunk when there is no contact id', async () => {
+      await expect(hasComplaintOrBounce('')).rejects.toThrow(/contact id/)
+      expect(mockAxiosInstance.get).not.toHaveBeenCalled()
+    })
+
+    it('never logs or throws the contact id', async () => {
+      const errors: string[] = []
+      for (const body of [{ results: [] }, { data: [activity('email.opened')] }, { data: [activity('email.complaint', 'contact-9')] }]) {
+        mockAxiosInstance.get.mockResolvedValueOnce({ data: body })
+        await hasComplaintOrBounce('contact-7').catch((err: Error) => errors.push(err.message))
+      }
+
+      expect(errors).toHaveLength(3)
+      const logged = JSON.stringify([...mockLogger.info.mock.calls, ...mockLogger.warn.mock.calls, ...mockLogger.debug.mock.calls, ...errors])
+      expect(logged).not.toMatch(/contact-[79]/)
     })
   })
 })

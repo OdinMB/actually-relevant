@@ -13,6 +13,8 @@ const mockPrisma = {
 
 const mockPlunk = {
   createContact: vi.fn(),
+  findContactsByEmail: vi.fn(),
+  hasComplaintOrBounce: vi.fn(),
   sendTransactional: vi.fn(),
   verifyEmail: vi.fn(),
 }
@@ -40,6 +42,9 @@ describe('subscribe service', () => {
     mockPrisma.pendingSubscription.delete.mockResolvedValue({ id: '1' })
     mockPrisma.pendingSubscription.update.mockResolvedValue({ id: '1' })
     mockPlunk.createContact.mockResolvedValue({ id: 'contact-1' })
+    // A confirmed address is still subscribed unless a test says otherwise
+    mockPlunk.findContactsByEmail.mockResolvedValue([{ id: 'contact-1', email: 'x@example.com', subscribed: true, snoozedUntil: null }])
+    mockPlunk.hasComplaintOrBounce.mockResolvedValue(false)
     mockPlunk.sendTransactional.mockResolvedValue(undefined)
     mockPlunk.verifyEmail.mockResolvedValue({ valid: true, domainExists: true, isDisposable: false })
   })
@@ -248,6 +253,176 @@ describe('subscribe service', () => {
 
       expect(mockPlunk.verifyEmail).not.toHaveBeenCalled()
       expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+    })
+
+    it('asks Plunk nothing for an address that never confirmed', async () => {
+      await subscribe({ email: 'new@example.com' })
+
+      expect(mockPlunk.findContactsByEmail).not.toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).toHaveBeenCalled()
+    })
+  })
+
+  describe('a confirmed address (a returning reader)', () => {
+    const contact = (fields: { subscribed: unknown; snoozedUntil?: string | null; id?: unknown }) => ({
+      id: 'contact-1',
+      email: 'back@example.com',
+      snoozedUntil: null,
+      ...fields,
+    })
+
+    beforeEach(() => {
+      mockPrisma.pendingSubscription.findFirst.mockResolvedValue({ id: 'old-row', confirmedAt: new Date('2026-03-01T00:00:00Z') })
+      mockPrisma.pendingSubscription.create.mockResolvedValue({ id: 'new-row' })
+    })
+
+    it('asks Plunk, once, about the normalized address', async () => {
+      await subscribe({ email: ' Back@Example.com ' })
+
+      expect(mockPlunk.findContactsByEmail).toHaveBeenCalledTimes(1)
+      expect(mockPlunk.findContactsByEmail).toHaveBeenCalledWith('back@example.com')
+    })
+
+    it('sends nothing and writes nothing while Plunk still has the address subscribed', async () => {
+      mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: true })])
+
+      await expect(subscribe({ email: 'back@example.com' })).resolves.toBeUndefined()
+
+      expect(mockCheckSendAllowance).not.toHaveBeenCalled()
+      expect(mockPlunk.verifyEmail).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.deleteMany).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['Plunk has them unsubscribed', [contact({ subscribed: false })]],
+      ['Plunk has no contact for the address', []],
+    ])('signs them up like a first-time signup when %s', async (_label, contacts) => {
+      mockPlunk.findContactsByEmail.mockResolvedValue(contacts)
+
+      await subscribe({ email: 'back@example.com' })
+
+      expect(mockCheckSendAllowance).toHaveBeenCalledWith('back@example.com')
+      expect(mockPlunk.verifyEmail).toHaveBeenCalledWith('back@example.com')
+      // The earlier confirmed row stays: only unconfirmed rows are replaced
+      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { email: 'back@example.com', confirmedAt: null } })
+      expect(mockPrisma.pendingSubscription.create.mock.calls[0][0].data).toMatchObject({ email: 'back@example.com', sentAt: expect.any(Date) })
+      expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(1)
+      expect(mockPlunk.sendTransactional.mock.calls[0][0].to).toBe('back@example.com')
+    })
+
+    it("signs them up only after Plunk shows no spam complaint or bounce on each contact's record", async () => {
+      mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: false }), contact({ subscribed: false, id: 'contact-2' })])
+      const callOrder: string[] = []
+      mockPlunk.hasComplaintOrBounce.mockImplementation(async (id: string) => {
+        callOrder.push(`activity ${id}`)
+        return false
+      })
+      mockCheckSendAllowance.mockImplementation(async () => {
+        callOrder.push('limits')
+        return 'ok'
+      })
+
+      await subscribe({ email: 'back@example.com' })
+
+      expect(callOrder).toEqual(['activity contact-1', 'activity contact-2', 'limits'])
+      expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads no activity when Plunk has no contact for the address, or the address is still subscribed', async () => {
+      mockPlunk.findContactsByEmail.mockResolvedValueOnce([])
+      await subscribe({ email: 'back@example.com' })
+      mockPlunk.findContactsByEmail.mockResolvedValueOnce([contact({ subscribed: true })])
+      await subscribe({ email: 'back@example.com' })
+
+      expect(mockPlunk.hasComplaintOrBounce).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      [
+        'Plunk has a spam complaint or a bounce on record for their contact',
+        [contact({ subscribed: false })],
+        () => mockPlunk.hasComplaintOrBounce.mockResolvedValue(true),
+      ],
+      [
+        'one of their two contacts has a complaint or a bounce on record',
+        [contact({ subscribed: false }), contact({ subscribed: false, id: 'contact-2' })],
+        () => mockPlunk.hasComplaintOrBounce.mockImplementation(async (id: string) => id === 'contact-2'),
+      ],
+      [
+        'the activity read fails',
+        [contact({ subscribed: false })],
+        () => mockPlunk.hasComplaintOrBounce.mockRejectedValue(Object.assign(new Error('Request failed with status code 503'), { response: { status: 503 } })),
+      ],
+      [
+        'their contact carries no id to read its activity by',
+        [contact({ subscribed: false, id: undefined })],
+        // As the client does: no id, no request (an unfiltered read would be the whole account's)
+        () =>
+          mockPlunk.hasComplaintOrBounce.mockImplementation(async (id: unknown) => {
+            if (!id) throw new Error('hasComplaintOrBounce: no contact id')
+            return false
+          }),
+      ],
+    ])('sends nothing, writes nothing and warns without the address when %s', async (_label, contacts, arrange) => {
+      mockPlunk.findContactsByEmail.mockResolvedValue(contacts)
+      arrange()
+
+      await expect(subscribe({ email: 'back@example.com' })).resolves.toBeUndefined()
+
+      expect(mockCheckSendAllowance).not.toHaveBeenCalled()
+      expect(mockPlunk.verifyEmail).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.deleteMany).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: 'old-row' }), expect.stringMatching(/Plunk/))
+      expect(JSON.stringify(mockLogger.warn.mock.calls)).not.toContain('back@example.com')
+    })
+
+    it('applies the send limits to them: an address emailed within the window gets nothing more', async () => {
+      mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: false })])
+      mockCheckSendAllowance.mockResolvedValue('address-limited')
+
+      await subscribe({ email: 'back@example.com' })
+
+      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+    })
+
+    it('queues them like anyone else when the hour is full', async () => {
+      mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: false })])
+      mockCheckSendAllowance.mockResolvedValue('queue')
+
+      await subscribe({ email: 'back@example.com' })
+
+      expect(mockPrisma.pendingSubscription.create.mock.calls[0][0].data).toMatchObject({ email: 'back@example.com', sentAt: null })
+      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['snoozed (Plunk resubscribes them when the snooze ends)', [contact({ subscribed: false, snoozedUntil: '2026-12-01T00:00:00Z' })]],
+      ['a subscribed flag that is not a boolean', [contact({ subscribed: 'yes' })]],
+      ['one of two contacts for the address subscribed', [contact({ subscribed: false }), contact({ subscribed: true })]],
+    ])('counts them as still subscribed, and sends nothing, when the contact is %s', async (_label, contacts) => {
+      mockPlunk.findContactsByEmail.mockResolvedValue(contacts)
+
+      await subscribe({ email: 'back@example.com' })
+
+      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+    })
+
+    it('sends nothing, writes nothing and warns without the address when the lookup fails', async () => {
+      mockPlunk.findContactsByEmail.mockRejectedValue(Object.assign(new Error('Request failed with status code 503'), { response: { status: 503 } }))
+
+      await expect(subscribe({ email: 'back@example.com' })).resolves.toBeUndefined()
+
+      expect(mockCheckSendAllowance).not.toHaveBeenCalled()
+      expect(mockPrisma.pendingSubscription.create).not.toHaveBeenCalled()
+      expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: 'old-row' }), expect.stringMatching(/Plunk/))
+      expect(JSON.stringify(mockLogger.warn.mock.calls)).not.toContain('back@example.com')
     })
   })
 

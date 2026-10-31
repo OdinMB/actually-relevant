@@ -82,6 +82,8 @@ export interface Contact {
   id: string
   email: string
   subscribed: boolean
+  /** When a snooze ends and Plunk resubscribes the contact; null unless snoozed (then `subscribed` is false). */
+  snoozedUntil?: string | null
   data: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -223,14 +225,45 @@ export async function listContacts(cursor?: string, limit = 50): Promise<{ items
       // rawClient, not client: the shared client's `{ success, data }` unwrap would drop a
       // `cursor`/`hasMore` beside a `data` array and silently end paging after page one.
       const { data: body } = await rawClient.get('/contacts', { params })
-      // No recognizable contact array means the Plunk shape changed: fail rather than
-      // return an empty page that a backup or restore would take for "no contacts".
-      if (!hasContactsArray(body)) {
-        const shape = body && typeof body === 'object' ? Object.keys(body) : typeof body
-        log.warn({ shape }, 'listContacts: unrecognized Plunk response shape')
-        throw new Error(`listContacts: unrecognized Plunk response shape (${Array.isArray(shape) ? shape.join(', ') : shape})`)
-      }
+      // A backup or restore would take an empty page for "no contacts"
+      requireContactsArray(body, 'listContacts')
       return parseContactsResponse(body)
+    },
+    { retries: 3, retryOn: isRetryableError },
+  )
+}
+
+/**
+ * Throw when a contact-list response carries no contact array: the Plunk shape changed, and reading
+ * it as an empty page would answer "no contacts". The log and the error name the keys, never values.
+ */
+function requireContactsArray(body: unknown, caller: string): void {
+  if (hasContactsArray(body)) return
+  const shape = body && typeof body === 'object' ? Object.keys(body) : typeof body
+  log.warn({ shape }, `${caller}: unrecognized Plunk response shape`)
+  throw new Error(`${caller}: unrecognized Plunk response shape (${Array.isArray(shape) ? shape.join(', ') : shape})`)
+}
+
+/** Plunk's largest page; it clamps any higher limit to this. */
+const CONTACT_PAGE_MAX = 100
+
+/**
+ * The contacts Plunk holds for exactly this address (compared trimmed and lowercased); empty when it
+ * holds none. One read-only page of `GET /contacts?search=`: Plunk's search is a case-insensitive
+ * substring match, so the page can hold other addresses too, and only exact matches are kept. Throws
+ * rather than answer from part of the list: on a response without a contact array, and when more
+ * pages follow. The address goes in a query parameter, never the path, since a failed request's
+ * path is logged.
+ */
+export async function findContactsByEmail(email: string): Promise<Contact[]> {
+  const wanted = email.trim().toLowerCase()
+  return withRetry(
+    async () => {
+      const { data: body } = await rawClient.get('/contacts', { params: { search: wanted, limit: CONTACT_PAGE_MAX } })
+      requireContactsArray(body, 'findContactsByEmail')
+      const page = parseContactsResponse(body)
+      if (page.hasMore) throw new Error('findContactsByEmail: the contacts matching the address span more than one page')
+      return page.items.filter(c => typeof c?.email === 'string' && c.email.trim().toLowerCase() === wanted)
     },
     { retries: 3, retryOn: isRetryableError },
   )
@@ -292,6 +325,17 @@ export function parseActivityResponse(body: unknown): ActivityPage | null {
 const keysOf = (value: unknown): string[] | string =>
   value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value) : Array.isArray(value) ? 'array' : typeof value
 
+/**
+ * The activity page in a response, or a throw when it carries no recognizable list, so a changed
+ * shape fails the caller instead of passing as "nothing on record". Logs the key names only.
+ */
+function readActivityPage(body: unknown, caller: string): ActivityPage {
+  const page = parseActivityResponse(body)
+  if (page) return page
+  log.warn({ shape: keysOf(body) }, `${caller}: unrecognized Plunk response shape`)
+  throw new Error(`unrecognized Plunk activity response shape (keys: ${JSON.stringify(keysOf(body))})`)
+}
+
 export interface ListActivityOpts {
   types: PlunkActivityType[]
   startDate: Date
@@ -314,11 +358,7 @@ export async function listActivity(opts: ListActivityOpts): Promise<ActivityPage
       }
       if (opts.cursor) params.cursor = opts.cursor
       const { data: body } = await rawClient.get('/activity', { params })
-      const page = parseActivityResponse(body)
-      if (!page) {
-        log.warn({ shape: keysOf(body) }, 'listActivity: unrecognized Plunk response shape')
-        throw new Error(`unrecognized Plunk activity response shape (keys: ${JSON.stringify(keysOf(body))})`)
-      }
+      const page = readActivityPage(body, 'listActivity')
       // Shape check for the first live runs (ADR-0029): key names and counts only, never values.
       log.info(
         {
@@ -337,6 +377,40 @@ export async function listActivity(opts: ListActivityOpts): Promise<ActivityPage
         'listActivity: page shape',
       )
       return page
+    },
+    { retries: 3, retryOn: isRetryableError },
+  )
+}
+
+const COMPLAINT_OR_BOUNCE: PlunkActivityType[] = ['email.complaint', 'email.bounced']
+
+/**
+ * Whether Plunk has a spam complaint or a bounce on record for one contact, over its whole history:
+ * one read-only `GET /activity?contactId=&types=email.complaint,email.bounced&limit=1`. A
+ * contact-scoped read has no default 30-day window in Plunk's activity service, and a bounce is
+ * recorded only when permanent or of unknown type (ADR-0029). Throws rather than answer when it
+ * cannot tell: no contact id (the read would then be the whole account's), a response without a
+ * recognizable list, or an item that shows a filter was not applied (another type, which with a page
+ * of one could hide an older complaint, or another contact). Logs and throws key names only, never
+ * the contact id.
+ */
+export async function hasComplaintOrBounce(contactId: string): Promise<boolean> {
+  if (typeof contactId !== 'string' || !contactId) throw new Error('hasComplaintOrBounce: no contact id')
+  return withRetry(
+    async () => {
+      const { data: body } = await rawClient.get('/activity', { params: { contactId, types: COMPLAINT_OR_BOUNCE.join(','), limit: 1 } })
+      const page = readActivityPage(body, 'hasComplaintOrBounce')
+      for (const item of page.items) {
+        if (typeof item.contactId === 'string' && item.contactId !== contactId) {
+          throw new Error("hasComplaintOrBounce: Plunk answered with another contact's activity (the contact filter was not applied)")
+        }
+        if (!COMPLAINT_OR_BOUNCE.some(type => type === item.type)) {
+          throw new Error(
+            `hasComplaintOrBounce: Plunk answered with activity of another type (the type filter was not applied; keys: ${JSON.stringify(keysOf(item))})`,
+          )
+        }
+      }
+      return page.items.length > 0
     },
     { retries: 3, retryOn: isRetryableError },
   )

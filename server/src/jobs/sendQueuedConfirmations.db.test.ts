@@ -97,8 +97,9 @@ describeDb('runSendQueuedConfirmations (PostgreSQL)', () => {
   })
 
   it('removes, unsent, a waiting signup whose address confirmed meanwhile', async () => {
-    await sent('a@example.com', 3 * HOUR_MS, true)
+    const earlier = await sent('a@example.com', 3 * HOUR_MS)
     await queued('a@example.com', 10 * MINUTE_MS)
+    await prisma.pendingSubscription.update({ where: { id: earlier.id }, data: { confirmedAt: new Date(Date.now() - MINUTE_MS) } })
 
     await runSendQueuedConfirmations()
 
@@ -106,6 +107,17 @@ describeDb('runSendQueuedConfirmations (PostgreSQL)', () => {
     const rows = await prisma.pendingSubscription.findMany({ where: { email: 'a@example.com' } })
     expect(rows).toHaveLength(1)
     expect(rows[0]?.confirmedAt).not.toBeNull()
+  })
+
+  it('sends a waiting signup whose address confirmed only before it signed up, and keeps that confirmed row', async () => {
+    const before = await sent('back@example.com', 30 * 24 * HOUR_MS, true)
+    const waiting = await queued('back@example.com', 10 * MINUTE_MS)
+
+    await runSendQueuedConfirmations()
+
+    expect(sentTo()).toEqual(['back@example.com'])
+    expect((await prisma.pendingSubscription.findUniqueOrThrow({ where: { id: waiting.id } })).sentAt).not.toBeNull()
+    expect(await prisma.pendingSubscription.findUniqueOrThrow({ where: { id: before.id } })).toEqual(before)
   })
 
   it('leaves rows already sent alone', async () => {
