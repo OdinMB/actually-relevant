@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { AxiosError, AxiosHeaders } from 'axios'
 
 // Mock dependencies
 const mockPrisma = {
@@ -20,17 +21,23 @@ const mockPlunk = {
 }
 
 const mockCheckSendAllowance = vi.fn()
+const mockNotify = vi.fn()
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./plunk.js', () => mockPlunk)
 vi.mock('./subscribeLimits.js', () => ({
   checkSendAllowance: (...args: unknown[]) => mockCheckSendAllowance(...args),
 }))
+vi.mock('../lib/notify.js', () => ({ notify: (...args: unknown[]) => mockNotify(...args) }))
 
 const mockLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }))
 vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLogger }))
 
 const { subscribe, confirmSubscription, EmailValidationError, ConfirmationEmailError } = await import('./subscribe.js')
+
+const plunkAnswered = (status: number) => Object.assign(new Error(`Request failed with status code ${status}`), { response: { status } })
+const timedOut = () => Object.assign(new Error('timeout of 5000ms exceeded'), { code: 'ECONNABORTED' })
+const notices = () => mockNotify.mock.calls.map(([notice]) => notice as { source: string; title: string; message: string; dedupeKey: string })
 
 describe('subscribe service', () => {
   beforeEach(() => {
@@ -45,6 +52,7 @@ describe('subscribe service', () => {
     // A confirmed address is still subscribed unless a test says otherwise
     mockPlunk.findContactsByEmail.mockResolvedValue([{ id: 'contact-1', email: 'x@example.com', subscribed: true, snoozedUntil: null }])
     mockPlunk.hasComplaintOrBounce.mockResolvedValue(false)
+    mockNotify.mockResolvedValue(undefined)
     mockPlunk.sendTransactional.mockResolvedValue(undefined)
     mockPlunk.verifyEmail.mockResolvedValue({ valid: true, domainExists: true, isDisposable: false })
   })
@@ -424,6 +432,104 @@ describe('subscribe service', () => {
       expect(mockLogger.warn).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: 'old-row' }), expect.stringMatching(/Plunk/))
       expect(JSON.stringify(mockLogger.warn.mock.calls)).not.toContain('back@example.com')
     })
+
+    describe('when Plunk cannot tell, the owner is told', () => {
+      it.each([
+        ['the contact lookup fails', () => mockPlunk.findContactsByEmail.mockRejectedValue(plunkAnswered(503)), "Plunk's contact lookup failed (HTTP 503)"],
+        [
+          'the lookup answers in a shape it cannot read',
+          () => mockPlunk.findContactsByEmail.mockRejectedValue(new Error('findContactsByEmail: unrecognized Plunk response shape (weird)')),
+          "Plunk's contact lookup failed (unreadable answer)",
+        ],
+        [
+          'the activity read times out',
+          () => {
+            mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: false })])
+            mockPlunk.hasComplaintOrBounce.mockRejectedValue(timedOut())
+          },
+          "Plunk's activity read failed (timed out)",
+        ],
+        [
+          'their contact carries no id to read its activity by',
+          () => {
+            mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: false, id: undefined })])
+            mockPlunk.hasComplaintOrBounce.mockRejectedValue(new Error('hasComplaintOrBounce: no contact id'))
+          },
+          "Plunk's activity read failed (unreadable answer)",
+        ],
+      ])('in one deduped notice without the address when %s, and the reader still gets the usual reply', async (_label, arrange, reason) => {
+        arrange()
+
+        await expect(subscribe({ email: 'back@example.com' })).resolves.toBeUndefined()
+
+        expect(mockPlunk.sendTransactional).not.toHaveBeenCalled()
+        expect(notices()).toHaveLength(1)
+        expect(notices()[0]).toMatchObject({
+          source: 'subscriptions',
+          severity: 'warning',
+          dedupeKey: 'signup-returning-check-failed',
+          link: '/admin/subscribers',
+        })
+        expect(notices()[0]?.message).toContain(reason)
+        expect(JSON.stringify(notices())).not.toMatch(/back@example\.com|contact-1|old-row/)
+      })
+
+      it.each([
+        ['Plunk has them subscribed', () => mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: true })])],
+        [
+          'Plunk has a complaint or bounce on record',
+          () => {
+            mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: false })])
+            mockPlunk.hasComplaintOrBounce.mockResolvedValue(true)
+          },
+        ],
+        ['Plunk has them unsubscribed and clean', () => mockPlunk.findContactsByEmail.mockResolvedValue([contact({ subscribed: false })])],
+      ])('raises no notice when %s', async (_label, arrange) => {
+        arrange()
+
+        await subscribe({ email: 'back@example.com' })
+
+        expect(mockNotify).not.toHaveBeenCalled()
+      })
+
+      it('replies without waiting for the notice to be recorded', async () => {
+        mockPlunk.findContactsByEmail.mockRejectedValue(plunkAnswered(503))
+        mockNotify.mockReturnValue(new Promise(() => {}))
+
+        await expect(subscribe({ email: 'back@example.com' })).resolves.toBeUndefined()
+        expect(mockNotify).toHaveBeenCalledTimes(1)
+      })
+
+      it('logs the failed request without the address it searched for', async () => {
+        const { serializeError } = await vi.importActual<typeof import('../lib/logger.js')>('../lib/logger.js')
+        // A failed lookup as axios raises it: the search is in the request's params and its path
+        const request = { url: '/contacts', params: { search: 'back@example.com', limit: 100 }, headers: new AxiosHeaders() }
+        const err = new AxiosError(
+          'Request failed with status code 503',
+          AxiosError.ERR_BAD_RESPONSE,
+          request,
+          { path: '/contacts?search=back%40example.com&limit=100' },
+          {
+            status: 503,
+            statusText: 'Service Unavailable',
+            data: { error: 'no answer for back@example.com' },
+            headers: {},
+            config: request,
+          },
+        )
+        mockPlunk.findContactsByEmail.mockRejectedValue(err)
+
+        await subscribe({ email: 'back@example.com' })
+
+        // Logged under `err`, so pino writes it through serializeError
+        const logged = mockLogger.warn.mock.calls.find(([fields]) => fields?.err === err)
+        expect(logged).toBeDefined()
+        const written = JSON.stringify({ ...logged?.[0], err: serializeError(logged?.[0].err) })
+        expect(written).toContain('503')
+        expect(written).not.toMatch(/back@example\.com|back%40example\.com/)
+        expect(JSON.stringify(notices())).not.toMatch(/back@example\.com|back%40example\.com/)
+      })
+    })
   })
 
   describe('re-subscribe (unconfirmed)', () => {
@@ -545,6 +651,56 @@ describe('subscribe service', () => {
       const update = mockPrisma.pendingSubscription.update.mock.calls[0][0]
       expect(update.data.confirmedAt).toBeInstanceOf(Date)
       expect(update.data.plunkContactId).toBeNull()
+    })
+
+    describe('when Plunk could not mark the reader subscribed', () => {
+      beforeEach(() => {
+        mockPrisma.pendingSubscription.findFirst.mockResolvedValue({ id: 'p1', confirmedAt: null, expiresAt: future, plunkContactId: null })
+        mockPlunk.createContact.mockRejectedValue(plunkAnswered(500))
+      })
+
+      it('tells the owner, in one deduped notice without the address, once the confirmation is saved', async () => {
+        const order: string[] = []
+        mockPrisma.pendingSubscription.update.mockImplementation(async () => order.push('confirmed'))
+        mockNotify.mockImplementation(async () => {
+          order.push('notice')
+        })
+
+        await confirmSubscription('t', 'x@example.com')
+
+        expect(order).toEqual(['confirmed', 'notice'])
+        expect(notices()).toHaveLength(1)
+        expect(notices()[0]).toMatchObject({
+          source: 'subscriptions',
+          severity: 'warning',
+          dedupeKey: 'signup-confirm-plunk-failed',
+          link: '/admin/subscribers',
+        })
+        expect(notices()[0]?.message).toContain('(HTTP 500)')
+        expect(JSON.stringify(notices())).not.toMatch(/x@example\.com|p1/)
+      })
+
+      it('raises no notice when the confirmation itself is not saved', async () => {
+        mockPrisma.pendingSubscription.update.mockRejectedValue(new Error('database unavailable'))
+
+        await expect(confirmSubscription('t', 'x@example.com')).rejects.toThrow('database unavailable')
+        expect(mockNotify).not.toHaveBeenCalled()
+      })
+
+      it('confirms without waiting for the notice to be recorded', async () => {
+        mockNotify.mockReturnValue(new Promise(() => {}))
+
+        await expect(confirmSubscription('t', 'x@example.com')).resolves.toBeUndefined()
+        expect(mockNotify).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    it('raises no notice when Plunk marks the reader subscribed', async () => {
+      mockPrisma.pendingSubscription.findFirst.mockResolvedValue({ id: 'p1', confirmedAt: null, expiresAt: future, plunkContactId: null })
+
+      await confirmSubscription('t', 'x@example.com')
+
+      expect(mockNotify).not.toHaveBeenCalled()
     })
   })
 })

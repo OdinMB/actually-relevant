@@ -14,7 +14,7 @@ const mockPlunk = vi.hoisted(() => ({
   createContact: vi.fn(),
 }))
 vi.mock('./plunk.js', () => mockPlunk)
-vi.mock('../lib/notify.js', () => ({ notify: vi.fn() }))
+vi.mock('../lib/notify.js', () => ({ notify: vi.fn(async () => {}) }))
 
 const { subscribe, confirmSubscription } = await import('./subscribe.js')
 const { runSendQueuedConfirmations } = await import('../jobs/sendQueuedConfirmations.js')

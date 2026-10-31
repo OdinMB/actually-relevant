@@ -350,7 +350,7 @@ describe('Plunk API client', () => {
       const contacts = await findContactsByEmail('reader@example.com')
 
       // A query parameter, never the path: the error serializer logs a failed request's path
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/contacts', { params: { search: 'reader@example.com', limit: 100 } })
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/contacts', { params: { search: 'reader@example.com', limit: 100 }, timeout: 5000 })
       expect(contacts.map(c => c.id)).toEqual(['c2'])
     })
 
@@ -457,7 +457,10 @@ describe('Plunk API client', () => {
 
       await hasComplaintOrBounce('contact-7')
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/activity', { params: { contactId: 'contact-7', types: 'email.complaint,email.bounced', limit: 1 } })
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/activity', {
+        params: { contactId: 'contact-7', types: 'email.complaint,email.bounced', limit: 1 },
+        timeout: 5000,
+      })
     })
 
     it.each([
@@ -506,6 +509,48 @@ describe('Plunk API client', () => {
       expect(errors).toHaveLength(3)
       const logged = JSON.stringify([...mockLogger.info.mock.calls, ...mockLogger.warn.mock.calls, ...mockLogger.debug.mock.calls, ...errors])
       expect(logged).not.toMatch(/contact-[79]/)
+    })
+  })
+
+  // Both reads run inside the signup request of a returning reader, who waits for the reply
+  describe.each([
+    ['findContactsByEmail', () => findContactsByEmail('reader@example.com')],
+    ['hasComplaintOrBounce', () => hasComplaintOrBounce('contact-7')],
+  ])('%s against a slow Plunk', (_name, read) => {
+    const timedOut = () => Object.assign(new Error('timeout of 5000ms exceeded'), { code: 'ECONNABORTED' })
+
+    it('gives up after two attempts of at most 5 s each, so the reply waits seconds instead of a minute', async () => {
+      vi.useFakeTimers()
+      try {
+        mockAxiosInstance.get.mockRejectedValue(timedOut())
+
+        const outcome = read().then(
+          () => 'answered',
+          (err: Error) => err.message,
+        )
+        await vi.runAllTimersAsync()
+
+        expect(await outcome).toMatch(/timeout/)
+        expect(mockAxiosInstance.get).toHaveBeenCalledTimes(2)
+        for (const [, request] of mockAxiosInstance.get.mock.calls) expect(request).toMatchObject({ timeout: 5000 })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('answers from the retry when the first attempt timed out', async () => {
+      vi.useFakeTimers()
+      try {
+        mockAxiosInstance.get.mockRejectedValueOnce(timedOut()).mockResolvedValueOnce({ data: { data: [], hasMore: false } })
+
+        const outcome = read()
+        await vi.runAllTimersAsync()
+
+        await expect(outcome).resolves.toBeDefined()
+        expect(mockAxiosInstance.get).toHaveBeenCalledTimes(2)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

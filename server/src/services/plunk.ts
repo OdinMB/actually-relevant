@@ -253,19 +253,21 @@ const CONTACT_PAGE_MAX = 100
  * substring match, so the page can hold other addresses too, and only exact matches are kept. Throws
  * rather than answer from part of the list: on a response without a contact array, and when more
  * pages follow. The address goes in a query parameter, never the path, since a failed request's
- * path is logged.
+ * path is logged. It runs while a returning reader waits for the signup reply, so each attempt has
+ * a short timeout and a transient error is retried once (`config.plunk.contactCheck*`).
  */
 export async function findContactsByEmail(email: string): Promise<Contact[]> {
   const wanted = email.trim().toLowerCase()
   return withRetry(
     async () => {
-      const { data: body } = await rawClient.get('/contacts', { params: { search: wanted, limit: CONTACT_PAGE_MAX } })
+      const params = { search: wanted, limit: CONTACT_PAGE_MAX }
+      const { data: body } = await rawClient.get('/contacts', { params, timeout: config.plunk.contactCheckTimeoutMs })
       requireContactsArray(body, 'findContactsByEmail')
       const page = parseContactsResponse(body)
       if (page.hasMore) throw new Error('findContactsByEmail: the contacts matching the address span more than one page')
       return page.items.filter(c => typeof c?.email === 'string' && c.email.trim().toLowerCase() === wanted)
     },
-    { retries: 3, retryOn: isRetryableError },
+    { retries: config.plunk.contactCheckRetries, retryOn: isRetryableError },
   )
 }
 
@@ -392,13 +394,14 @@ const COMPLAINT_OR_BOUNCE: PlunkActivityType[] = ['email.complaint', 'email.boun
  * cannot tell: no contact id (the read would then be the whole account's), a response without a
  * recognizable list, or an item that shows a filter was not applied (another type, which with a page
  * of one could hide an older complaint, or another contact). Logs and throws key names only, never
- * the contact id.
+ * the contact id. Like `findContactsByEmail`, a short timeout and one retry (`config.plunk.contactCheck*`).
  */
 export async function hasComplaintOrBounce(contactId: string): Promise<boolean> {
   if (typeof contactId !== 'string' || !contactId) throw new Error('hasComplaintOrBounce: no contact id')
   return withRetry(
     async () => {
-      const { data: body } = await rawClient.get('/activity', { params: { contactId, types: COMPLAINT_OR_BOUNCE.join(','), limit: 1 } })
+      const params = { contactId, types: COMPLAINT_OR_BOUNCE.join(','), limit: 1 }
+      const { data: body } = await rawClient.get('/activity', { params, timeout: config.plunk.contactCheckTimeoutMs })
       const page = readActivityPage(body, 'hasComplaintOrBounce')
       for (const item of page.items) {
         if (typeof item.contactId === 'string' && item.contactId !== contactId) {
@@ -412,7 +415,7 @@ export async function hasComplaintOrBounce(contactId: string): Promise<boolean> 
       }
       return page.items.length > 0
     },
-    { retries: 3, retryOn: isRetryableError },
+    { retries: config.plunk.contactCheckRetries, retryOn: isRetryableError },
   )
 }
 

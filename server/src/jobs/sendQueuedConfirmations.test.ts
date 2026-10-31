@@ -135,6 +135,15 @@ describe('runSendQueuedConfirmations', () => {
     expect(mockPlunk.sendTransactional.mock.calls[0][0].to).toBe('second@example.com')
   })
 
+  it('removes, unsent, a waiting signup whose address confirmed at the very moment it was made', async () => {
+    given({ confirmed: [{ email: 'first@example.com', at: new Date(SIGNED_UP.getTime()) }] })
+
+    await runSendQueuedConfirmations()
+
+    expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: 'q1', sentAt: null } })
+    expect(mockPlunk.sendTransactional.mock.calls.map(([opts]) => opts.to)).toEqual(['second@example.com'])
+  })
+
   it('sends a waiting signup whose address confirmed only before it signed up (a returning reader)', async () => {
     given({ confirmed: [{ email: 'first@example.com', at: new Date(SIGNED_UP.getTime() - 30 * 24 * HOUR_MS) }] })
 

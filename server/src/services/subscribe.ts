@@ -4,6 +4,9 @@ import prisma from '../lib/prisma.js'
 import * as plunk from './plunk.js'
 import { checkSendAllowance } from './subscribeLimits.js'
 import { confirmationLinkExpiry, sendConfirmationEmail } from './confirmationEmail.js'
+import type { NoticeInput } from './adminNotices.js'
+import { notify } from '../lib/notify.js'
+import { responseStatus } from '../lib/retry.js'
 import { createLogger } from '../lib/logger.js'
 
 const log = createLogger('subscribe')
@@ -147,16 +150,19 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
  * transactional email regardless, so the activity record is what tells them apart; one more
  * complaint can disable the sending account. Anything else sends nothing: a contact still
  * subscribed, a snoozed one (Plunk resubscribes it when the snooze ends), a flag that is not a
- * boolean, a complaint or bounce on record, and a Plunk call that fails or cannot be read. Logs name
+ * boolean, a complaint or bounce on record, and a Plunk call that fails or cannot be read; that last
+ * one also alerts the owner, since the reader is told to check their email and gets none. Logs name
  * the confirmed row's id only, never the address.
  */
 async function mayResubscribe(email: string, subscriptionId: string): Promise<boolean> {
+  let read: 'contact lookup' | 'activity read' = 'contact lookup'
   try {
     const contacts = await plunk.findContactsByEmail(email)
     if (contacts.some(contact => contact.subscribed !== false || contact.snoozedUntil != null)) {
       log.info({ subscriptionId }, 'already subscribed, returning success without action')
       return false
     }
+    read = 'activity read'
     for (const contact of contacts) {
       if (await plunk.hasComplaintOrBounce(contact.id)) {
         log.warn({ subscriptionId }, 'Plunk has a spam complaint or a bounce on record for a confirmed address signing up again, sending nothing')
@@ -166,8 +172,34 @@ async function mayResubscribe(email: string, subscriptionId: string): Promise<bo
     return true
   } catch (err) {
     log.warn({ err, subscriptionId }, 'could not ask Plunk whether a confirmed address may sign up again, sending nothing')
+    alertOwner({
+      source: 'subscriptions',
+      severity: 'warning',
+      title: 'Returning reader got no confirmation email',
+      message: `An address that confirmed before signed up again, but Plunk's ${read} failed (${plunkFailure(err)}), so the server could not tell whether it had left cleanly and sent no confirmation email. The reader was told to check their email. The count shows how many signups this hit. If it keeps coming back, check Plunk's status and that the API key can read contacts and activity; once Plunk answers, the reader can sign up again.`,
+      link: '/admin/subscribers',
+      dedupeKey: 'signup-returning-check-failed',
+    })
     return false
   }
+}
+
+/**
+ * Why a Plunk call failed, in words that carry nothing Plunk sent back (a notice must never quote
+ * an address): its HTTP status, a timeout, a network error code, or an answer it could not read.
+ */
+function plunkFailure(err: unknown): string {
+  const status = responseStatus(err)
+  if (status !== undefined) return `HTTP ${status}`
+  const code = (err as { code?: unknown } | null)?.code
+  if (code === 'ECONNABORTED' || code === 'ETIMEDOUT') return 'timed out'
+  if (typeof code === 'string') return code
+  return 'unreadable answer'
+}
+
+/** Record an owner notice without holding up the reply; `notify` never throws, the catch only guards that. */
+function alertOwner(notice: NoticeInput): void {
+  notify(notice).catch(() => {})
 }
 
 export async function confirmSubscription(token: string, rawEmail: string) {
@@ -192,12 +224,16 @@ export async function confirmSubscription(token: string, rawEmail: string) {
   // Upsert the Plunk contact to subscribed:true. The contact already exists —
   // the confirmation email's send created it as unsubscribed — so the
   // create-contact call updates it to subscribed (Plunk upserts on email).
-  // Graceful: if Plunk fails, still mark confirmed locally.
+  // Graceful: if Plunk fails, still mark confirmed locally, and tell the owner
+  // once that is saved: the reader is told they are subscribed but Plunk has
+  // them unsubscribed until someone fixes it.
   let plunkContactId: string | null = pending.plunkContactId
+  let upsertFailure: { err: unknown } | null = null
   try {
     const contact = await plunk.createContact({ email, subscribed: true })
     plunkContactId = contact.id
   } catch (err) {
+    upsertFailure = { err }
     log.warn({ err, subscriptionId: pending.id }, 'failed to create Plunk contact on confirm, marking confirmed anyway')
   }
 
@@ -207,4 +243,15 @@ export async function confirmSubscription(token: string, rawEmail: string) {
   })
 
   log.info({ subscriptionId: pending.id, plunkContactId }, 'subscription confirmed')
+
+  if (upsertFailure) {
+    alertOwner({
+      source: 'subscriptions',
+      severity: 'warning',
+      title: 'Confirmed reader not subscribed in Plunk',
+      message: `A reader confirmed their subscription, but marking their Plunk contact subscribed failed (${plunkFailure(upsertFailure.err)}). They were told they are subscribed and count as confirmed here, but Plunk sends the newsletter only to subscribed contacts. On the Subscribers page their row shows drift (confirmed here, not subscribed in Plunk), confirmed at the time of this notice; the count shows how many readers this hit. Subscribe the contact in Plunk, or ask them to sign up again, which sends a new confirmation link.`,
+      link: '/admin/subscribers',
+      dedupeKey: 'signup-confirm-plunk-failed',
+    })
+  }
 }

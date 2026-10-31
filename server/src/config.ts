@@ -489,6 +489,11 @@ export const config = {
     activityMaxPages: 20,
     // Activity items carry the email's body in metadata, so a page is far larger than the client's 1 MB cap.
     activityMaxResponseBytes: 5 * 1024 * 1024,
+    // The returning-reader check (findContactsByEmail, hasComplaintOrBounce) runs inside the signup
+    // request, so each of its reads gets this timeout and one retry instead of the clients' 15 s and
+    // three: a slow Plunk holds the reply about 11 s per read (two attempts and a 1 s backoff).
+    contactCheckTimeoutMs: 5_000,
+    contactCheckRetries: 1,
   },
   storyRetention: {
     // The cleanup_old_stories job (.context/story-retention.md): stories crawled longer ago than this
