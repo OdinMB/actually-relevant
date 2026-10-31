@@ -28,16 +28,20 @@ const { runSendQueuedConfirmations } = await import('./sendQueuedConfirmations.j
 const HOUR_MS = 60 * 60 * 1000
 const NOW = new Date('2026-10-29T12:00:00Z')
 
+const SIGNED_UP = new Date(NOW.getTime() - 2 * HOUR_MS)
 const waiting = [
-  { id: 'q1', email: 'first@example.com', token: 'token-1', expiresAt: new Date(NOW.getTime() + 2 * HOUR_MS) },
-  { id: 'q2', email: 'second@example.com', token: 'token-2', expiresAt: new Date(NOW.getTime() + 3 * HOUR_MS) },
+  { id: 'q1', email: 'first@example.com', token: 'token-1', createdAt: SIGNED_UP, expiresAt: new Date(NOW.getTime() + 2 * HOUR_MS) },
+  { id: 'q2', email: 'second@example.com', token: 'token-2', createdAt: SIGNED_UP, expiresAt: new Date(NOW.getTime() + 3 * HOUR_MS) },
 ]
 
-/** The database as the job reads it: sends in the last hour, the waiting signups, addresses confirmed elsewhere. */
-function given({ sentLastHour = 0, rows = waiting, confirmed = [] as string[] } = {}) {
+/**
+ * The database as the job reads it: sends in the last hour, the waiting signups, and confirmed rows
+ * elsewhere for their addresses, confirmed now (after the signups) unless `at` says when.
+ */
+function given({ sentLastHour = 0, rows = waiting, confirmed = [] as { email: string; at?: Date }[] } = {}) {
   mockPrisma.pendingSubscription.count.mockResolvedValue(sentLastHour)
   mockPrisma.pendingSubscription.findMany.mockImplementation(async ({ where }: { where: Where }) =>
-    where.sentAt === null ? rows : confirmed.map(email => ({ email })),
+    where.sentAt === null ? rows : confirmed.map(({ email, at = NOW }) => ({ email, confirmedAt: at })),
   )
 }
 
@@ -122,13 +126,31 @@ describe('runSendQueuedConfirmations', () => {
   })
 
   it('removes a waiting signup whose address confirmed meanwhile, without sending it', async () => {
-    given({ confirmed: ['first@example.com'] })
+    given({ confirmed: [{ email: 'first@example.com' }] })
 
     await runSendQueuedConfirmations()
 
     expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: 'q1', sentAt: null } })
     expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(1)
     expect(mockPlunk.sendTransactional.mock.calls[0][0].to).toBe('second@example.com')
+  })
+
+  it('sends a waiting signup whose address confirmed only before it signed up (a returning reader)', async () => {
+    given({ confirmed: [{ email: 'first@example.com', at: new Date(SIGNED_UP.getTime() - 30 * 24 * HOUR_MS) }] })
+
+    await runSendQueuedConfirmations()
+
+    expect(mockPlunk.sendTransactional.mock.calls.map(([opts]) => opts.to)).toEqual(['first@example.com', 'second@example.com'])
+    expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledTimes(1) // the expiry sweep only
+  })
+
+  it('removes the waiting signup of a returning reader who confirmed again after it, going by the latest confirmation', async () => {
+    given({ confirmed: [{ email: 'first@example.com', at: new Date(SIGNED_UP.getTime() - 30 * 24 * HOUR_MS) }, { email: 'first@example.com' }] })
+
+    await runSendQueuedConfirmations()
+
+    expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: 'q1', sentAt: null } })
+    expect(mockPlunk.sendTransactional.mock.calls.map(([opts]) => opts.to)).toEqual(['second@example.com'])
   })
 
   describe('signups that waited past their expiry', () => {
@@ -230,7 +252,7 @@ describe('runSendQueuedConfirmations', () => {
   })
 
   it('logs no email address, whatever happens', async () => {
-    given({ confirmed: ['second@example.com'] })
+    given({ confirmed: [{ email: 'second@example.com' }] })
     await runSendQueuedConfirmations()
     given()
     mockPlunk.sendTransactional.mockRejectedValueOnce(timedOut())

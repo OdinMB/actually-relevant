@@ -47,18 +47,22 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
   const email = normalizeEmail(rawEmail)
   const token = randomUUID()
 
-  // Check if already confirmed
-  const existing = await prisma.pendingSubscription.findFirst({
+  // A confirmed address is done unless Plunk shows a reader who left through its unsubscribe link: a
+  // confirmed row stays here when they do, so Plunk is asked (`mayResubscribe`), and only then do
+  // they sign up like anyone else below. That confirmed row stays as it is: only unconfirmed rows
+  // are replaced, and the queue job skips a waiting signup only for a confirmation made after it.
+  const confirmed = await prisma.pendingSubscription.findFirst({
     where: { email, confirmedAt: { not: null } },
+    select: { id: true },
   })
-  if (existing) {
-    log.info({ subscriptionId: existing.id }, 'already subscribed, returning success without action')
-    return
+  if (confirmed) {
+    if (!(await mayResubscribe(email, confirmed.id))) return
+    log.info({ subscriptionId: confirmed.id }, 'confirmed earlier but no longer subscribed in Plunk, signing up again')
   }
 
-  // Send limits, before any external call. A throttled address gets the same
-  // generic success as a real signup (the route cannot tell them apart), so a bot
-  // learns nothing; nothing is written or sent. A queued signup gets that success
+  // Send limits, before verification and any write or send. A throttled address gets
+  // the same generic success as a real signup (the route cannot tell them apart), so a
+  // bot learns nothing; nothing is written or sent. A queued signup gets that success
   // too, and its row waits for send_queued_confirmations.
   const allowance = await checkSendAllowance(email)
   if (allowance === 'address-limited') {
@@ -133,6 +137,36 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
       log.error({ err: deleteErr, subscriptionId: pending.id }, 'failed to remove the pending row after a failed send')
     })
     throw new ConfirmationEmailError("We couldn't send the confirmation email right now. Please try again in a few minutes.")
+  }
+}
+
+/**
+ * Whether a confirmed address may sign up again: only when Plunk holds no contact for it, or only
+ * plainly unsubscribed ones (`subscribed: false`, no snooze) with no spam complaint or bounce on
+ * record. Plunk marks a complaint and a permanent bounce just like an unsubscribe and sends
+ * transactional email regardless, so the activity record is what tells them apart; one more
+ * complaint can disable the sending account. Anything else sends nothing: a contact still
+ * subscribed, a snoozed one (Plunk resubscribes it when the snooze ends), a flag that is not a
+ * boolean, a complaint or bounce on record, and a Plunk call that fails or cannot be read. Logs name
+ * the confirmed row's id only, never the address.
+ */
+async function mayResubscribe(email: string, subscriptionId: string): Promise<boolean> {
+  try {
+    const contacts = await plunk.findContactsByEmail(email)
+    if (contacts.some(contact => contact.subscribed !== false || contact.snoozedUntil != null)) {
+      log.info({ subscriptionId }, 'already subscribed, returning success without action')
+      return false
+    }
+    for (const contact of contacts) {
+      if (await plunk.hasComplaintOrBounce(contact.id)) {
+        log.warn({ subscriptionId }, 'Plunk has a spam complaint or a bounce on record for a confirmed address signing up again, sending nothing')
+        return false
+      }
+    }
+    return true
+  } catch (err) {
+    log.warn({ err, subscriptionId }, 'could not ask Plunk whether a confirmed address may sign up again, sending nothing')
+    return false
   }
 }
 
