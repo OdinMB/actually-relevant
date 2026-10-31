@@ -31,6 +31,11 @@ describe('loadSitemapRoutes', () => {
     expect(paths).not.toContain('/saved')
   })
 
+  it('leaves out /subscribed, the newsletter confirmation page, which is noindex', () => {
+    const paths = loadSitemapRoutes().map(r => r.path)
+    expect(paths).not.toContain('/subscribed')
+  })
+
   it('refuses a malformed file, so a bad entry stops the server at boot', () => {
     const file = fileWith({ routes: [{ path: '/x', priority: 2, changefreq: 'daily' }] })
     expect(() => loadSitemapRoutes(file)).toThrow()
