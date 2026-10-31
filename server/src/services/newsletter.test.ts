@@ -167,6 +167,27 @@ describe('renderHtml', () => {
     expect(html.indexOf('View in browser')).toBeLessThan(html.indexOf(NEWSLETTER_TOP_LABEL_TEXT))
   })
 
+  it('opens the body with the preview text, hidden from the opened email and escaped', () => {
+    const html = renderHtml(
+      { title: 'Week 42, 2026', content: 'Text only.' },
+      'https://actuallyrelevant.news/newsletter/week-42-2026',
+      'Also: Fish & "chips" <win> · Two',
+    )
+    const doc = new JSDOM(html).window.document
+
+    const preview = doc.body.firstElementChild as HTMLElement
+    expect(preview.textContent).toBe('Also: Fish & "chips" <win> · Two')
+    expect(preview.getAttribute('style')).toContain('display: none')
+    expect(preview.getAttribute('style')).toContain('mso-hide: all')
+    expect(html).toContain('Also: Fish &amp; &quot;chips&quot; &lt;win&gt; · Two')
+    expect(html.indexOf('Also: Fish')).toBeLessThan(html.indexOf('View in browser'))
+  })
+
+  it('has no preview block without preview text', () => {
+    const doc = new JSDOM(render('Text only.')).window.document
+    expect(doc.body.firstElementChild?.tagName).toBe('TABLE')
+  })
+
   it('handles multiple issues with separate section headers', async () => {
     const content = [
       storyBlock({

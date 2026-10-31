@@ -19,7 +19,7 @@ Newsletters are generated from published stories through a create-assign-select-
 
 ## Issue lifecycle
 
-**`server/src/services/newsletterLifecycle.ts` owns every move of an issue** (ADR-0048, owner decision 2026-10-25): it is the only code that writes `status`, `publishedAt`, `content`, `html`, `selectedStoryIds`, deletes an issue or writes a `newsletter_sends` row, held by `server/src/test/newsletterWriters.test.ts` (a source scan sharing `test/writeFence.ts` with the story status fence). Outside it: `stats` (`refreshSendStats`), the slug (`ensureNewsletterSlug`), `createNewsletter`, and `deleteStory`'s removal of a deleted story from `storyIds`. `services/newsletter.ts` builds what the moves write (`recentStoryIds`, `pickShortlist`, `buildContent`, `renderHtml`) and writes none of it. The admin routes and both jobs call the moves.
+**`server/src/services/newsletterLifecycle.ts` owns every move of an issue** (ADR-0048, owner decision 2026-10-25): it is the only code that writes `status`, `publishedAt`, `content`, `html`, `selectedStoryIds`, deletes an issue or writes a `newsletter_sends` row, held by `server/src/test/newsletterWriters.test.ts` (a source scan sharing `test/writeFence.ts` with the story status fence). Outside it: `stats` (`refreshSendStats`), the slug (`ensureNewsletterSlug`), `createNewsletter`, and `deleteStory`'s removal of a deleted story from `storyIds`. `services/newsletter.ts` builds what the moves write (`recentStoryIds`, `pickShortlist`, `buildContent`, `renderHtml`), and `services/newsletterInbox.ts` the sends' subject and the HTML's preview text; neither writes any of it. The admin routes and both jobs call the moves.
 
 **Frozen** := an unconfirmed live send exists (a live row in `draft`, below), **or** a live non-failed send exists (`isTest = false AND status <> 'failed'`) and the issue is `published`.
 
@@ -68,6 +68,7 @@ Selected stories are sorted by a fixed issue order, then alphabetically by title
 Converts the markdown content into a responsive HTML email (`renderHtml()` in `newsletter.ts`, pure) and saves it to the newsletter record (the lifecycle's html move). Rendering needs `content` (otherwise 400 "No content to convert"). An issue counts as **built** once `html` is non-empty; the weekly job's guards key on this.
 
 Template structure:
+- **Inbox preview text** — a hidden block first in the body, only for an issue with two stories or more (see Subject and inbox preview)
 - **View in browser** — a small link above the logo to the issue's web edition, `https://actuallyrelevant.news/newsletter/<slug>`. Building the HTML assigns the slug if the issue has none (`ensureNewsletterSlug()`), so the link exists before the issue is published; it opens only once the issue is published (until then the page is "Issue Not Found"). A live send publishes the issue, so the link works from the moment the email goes out
 - **Header** — Logo, tagline, four-color category strip (amber/teal/red/indigo), newsletter title (uppercase, bold)
 - **AI label** — directly under the week title, before any AI text: "**AI-generated:** AI selected the stories in this issue and wrote the headlines and summaries." (`NEWSLETTER_TOP_LABEL` in `server/src/lib/aiLabelCopy.ts`; owner reworded it 2026-10-26 when the intro was removed, and issues generated before then keep their intro under the same label)
@@ -77,6 +78,15 @@ Template structure:
 - **Support Us** — Ko-fi link with "Free. Independent. Without ads." tagline
 - **AI disclaimer** — "Curated and written with care by AI" + bug/mistake notice
 - **Footer** — Website link. Our template carries no unsubscribe link (removed in February); Plunk adds its own footer unsubscribe link and, since 2026-08-09, one-click unsubscribe headers
+
+### Subject and inbox preview (`services/newsletterInbox.ts`)
+
+What the inbox shows before the email is opened, built from the stored content and the stories' stored `relevance` (the final rating), with no model call. The stories are the `##` headings the email shows, in the content's order (`storyHeadings()`), each matched to its story by its `{story:<id>}` marker; an unmarked heading (an issue generated before the marker, or one typed by hand) and a deleted story count as unrated. The archive, the web edition, the RSS feed and the Plunk campaign name (which the admin notices show) keep the issue title.
+
+- **Subject**: `<label>: <lead headline> and <N> more`, e.g. "Week 43: Cities cut smog by a third and 7 more". The label is "Week 43" when the title is a weekly title ("Week 43, 2026", `getWeekTitle()`), else the whole title. The lead is the most relevant story; ties, and unrated stories (ranked below every rated one), keep the content's order. N counts the other stories. One story: `<label>: <headline>`; none: the title, as before. A subject over 95 characters gets its lead headline shortened at a word, ending in "…", keeping at least 30 characters of it behind a long title. Plain text on one line: line breaks and control characters become spaces, nothing is HTML-escaped. The test email's subject is the same with `[TEST] ` in front.
+- **Preview text** (preheader): `Also: <second> · <third>`, the next two stories by the same ranking, as a hidden block first in the body (`display: none`, `mso-hide: all`), HTML-escaped. With fewer than two stories there is no block, so such an issue renders exactly as before. Nothing pads it: a client that shows more preview text than that goes on with the email's opening text ("View in browser", the tagline, the title, the AI label).
+- **When each is built**: the preview text by the html move, into the stored HTML, so the test of the current HTML shows it; the subject by each send, from the content and ratings as they are then (the live send reads it before claiming, so a failed read claims nothing). Editing the content without rebuilding the HTML can make the subject name a heading the email does not show, as it already makes the email and the content disagree.
+- **The live subject is not the tested one by rule**: it is rebuilt at send time, so a re-rating or a content edit between the test and the live send can change it from the subject the `[TEST]` email carried (the test unlocks the live send by its HTML alone).
 
 ### Carousel images (`POST /api/admin/newsletters/:id/carousel`)
 
@@ -127,8 +137,8 @@ Handler: `server/src/jobs/publishNewsletter.ts`.
 
 Both sends need the stored `html` (400 "No HTML content — generate HTML first"). Each send has a `NewsletterSend` row: `plunkCampaignId`, `isTest`, `status`, a snapshot of `htmlContent`, `sentAt`, `errorMessage`, and `stats` (`{}` until first refreshed).
 
-- **Test** (`sendTest`, allowed in any state): name and subject are `[TEST] <title>`. The audience is the Plunk segment `PLUNK_TEST_SEGMENT_ID` only. The row is written after Plunk accepted the send, so a row means the test went out: `isTest: true`, `status: sent`, `sentAt: now`. Without a segment the send is refused (see the test-segment note above). A test unlocks the live send only while its `htmlContent` equals the issue's `html`; regenerating or editing the HTML needs a new test (re-rendering identical HTML keeps it valid).
-- **Live** (`sendLive`, optional `scheduledFor`; the job and `POST /:id/send-live` alike): name and subject are the title, audience `ALL`. Claimed before Plunk is called (owner decision 2026-10-25):
+- **Test** (`sendTest`, allowed in any state): name `[TEST] <title>`, subject `[TEST] <subject>` (Subject and inbox preview). The audience is the Plunk segment `PLUNK_TEST_SEGMENT_ID` only. The row is written after Plunk accepted the send, so a row means the test went out: `isTest: true`, `status: sent`, `sentAt: now`. Without a segment the send is refused (see the test-segment note above). A test unlocks the live send only while its `htmlContent` equals the issue's `html`; regenerating or editing the HTML needs a new test (re-rendering identical HTML keeps it valid).
+- **Live** (`sendLive`, optional `scheduledFor`; the job and `POST /:id/send-live` alike): name the title, subject as in Subject and inbox preview, audience `ALL`. Claimed before Plunk is called (owner decision 2026-10-25):
   1. **Claim**, under the issue's row lock: refuse without HTML, with a live non-failed send (`already_sent`) or without a current test (`no_current_test`); else insert the live row with `status: draft` and no campaign id. A second caller (double click, second editor, the job) waits for the lock, then sees the claim and is refused.
   2. Create the campaign and store its id on the row (so stats work even if later steps fail). A failure here sent nothing: the row becomes `failed` with the error.
   3. Send it. A failure that proves nothing went out (no connection, `isConnectionNotEstablished()`, or a 4xx) marks the row `failed`. Any other (timeout, reset, 5xx: Plunk may have accepted it) leaves the row `draft` with `errorMessage` "Plunk may have accepted this send; check the campaign in Plunk, then mark it not sent if it was not". The error is rethrown either way.
@@ -180,6 +190,7 @@ Both sends need the stored `html` (400 "No HTML content — generate HTML first"
 | `server/src/services/newsletterLifecycle.ts` | Every move of an issue: the transition rules, row lock, claimed live sends, freeze, publish/unpublish, delete (the only writer of status, content, HTML and sends) |
 | `server/src/services/newsletter.ts` | Reads, create, the non-writing builders (longlist, LLM shortlist, markdown, HTML template), carousel, send list and stats. Named debt: still both the LLM builders and the HTML template and parser |
 | `server/src/services/newsletterContent.ts` | The stored content's markers (`{story:}`, `{feed:}`, section slug) for the email and the web edition |
+| `server/src/services/newsletterInbox.ts` | The email's subject and inbox preview text, from the content's headings and the stories' relevance |
 | `server/src/services/newsletterArchive.ts` | Web edition: slugs, public queries, story matching |
 | `client/src/lib/newsletter-state.ts` | The lifecycle rule mirrored for the admin's button states |
 | `server/src/routes/public/newsletters.ts` | Public archive and issue endpoints |
@@ -196,6 +207,7 @@ Both sends need the stored `html` (400 "No HTML content — generate HTML first"
 ## Modifying
 
 - **To change newsletter format:** Edit the template loop in `newsletter.ts:buildContent()` and the HTML parser in `renderHtml()`; a new marker goes in `newsletterContent.ts`
+- **To change the subject or inbox preview text:** `newsletterInbox.ts` (`inboxPreview()` is pure; its tests hold each case)
 - **To change what an issue may do in a state:** the move's rule in `newsletterLifecycle.ts`, and its mirror in `client/src/lib/newsletter-state.ts`
 - **To add new carousel image layouts:** Edit `createStoryImage()` in `carousel.ts`
 - **To use real branded assets:** Replace placeholder files in `server/assets/images/` and `server/assets/fonts/`

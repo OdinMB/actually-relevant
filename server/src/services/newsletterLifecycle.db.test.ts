@@ -173,7 +173,7 @@ describeDb('newsletter lifecycle', () => {
     const after = await issueOf(issue.id)
     expect(send).toMatchObject({ status: 'sending', plunkCampaignId: 'campaign-1' })
     expect(after).toMatchObject({ status: 'published', slug: 'week-8-2026', publishedAt: send.sentAt })
-    expect(fakePlunk.campaigns[0]).toMatchObject({ audienceType: 'ALL', subject: 'Week 8, 2026', body: HTML })
+    expect(fakePlunk.campaigns[0]).toMatchObject({ audienceType: 'ALL', name: 'Week 8, 2026', subject: 'Week 8: A story', body: HTML })
   })
 
   it('records a scheduled send as scheduled, and publishes at once', async () => {
@@ -255,6 +255,30 @@ describeDb('newsletter lifecycle', () => {
     const html = await lifecycle.generateHtml(issue.id)
     expect(html).toContain('/newsletter/week-9-2026')
     expect(await issueOf(issue.id)).toMatchObject({ html, slug: 'week-9-2026', status: 'draft' })
+  })
+
+  it("leads the test and the live subject with the most relevant story, and names the next two in the HTML's preview text", async () => {
+    const topic = await createIssue()
+    const feed = await createFeed(topic.id)
+    // The content lists them alphabetically; the ranking is by stored relevance
+    const stories = [
+      await createStory({ feedId: feed.id, status: 'published', title: 'Atlas of coral recovery', relevance: 7 }),
+      await createStory({ feedId: feed.id, status: 'published', title: 'Bees return to farmland', relevance: 6 }),
+      await createStory({ feedId: feed.id, status: 'published', title: 'Clean water reaches villages', relevance: 9 }),
+    ]
+    const issue = await createNewsletter({ title: 'Week 9, 2026', selectedStoryIds: stories.map(s => s.id) })
+    await lifecycle.generateContent(issue.id)
+
+    const html = await lifecycle.generateHtml(issue.id)
+    expect(html).toContain('>Also: Atlas of coral recovery · Bees return to farmland</div>')
+    await sendTest(issue.id)
+    await sendLive(issue.id)
+
+    expect(fakePlunk.campaigns.map(c => [c.name, c.subject])).toEqual([
+      ['[TEST] Week 9, 2026', '[TEST] Week 9: Clean water reaches villages and 2 more'],
+      ['Week 9, 2026', 'Week 9: Clean water reaches villages and 2 more'],
+    ])
+    expect((await issueOf(issue.id)).title).toBe('Week 9, 2026')
   })
 
   it('answers 404 for an unknown issue and 400 for missing inputs', async () => {
@@ -343,7 +367,9 @@ describeDb('newsletter lifecycle', () => {
 
     const send = await sendTest(issue.id)
 
-    expect(fakePlunk.campaigns).toEqual([expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-test', subject: '[TEST] Week 8, 2026' })])
+    expect(fakePlunk.campaigns).toEqual([
+      expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-test', name: '[TEST] Week 8, 2026', subject: '[TEST] Week 8: A story' }),
+    ])
     expect(fakePlunk.liveSends()).toEqual([])
     expect(send).toMatchObject({ isTest: true, status: 'sent', htmlContent: HTML })
   })
