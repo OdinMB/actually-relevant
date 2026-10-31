@@ -30,6 +30,12 @@
       "sitemap": false,
       "sitemapNote": "Left out of the sitemap on purpose: a personal page whose saved stories live in the visitor's own browser, so there is nothing to index."
     },
-    { "path": "/subscribed", "priority": 0.2, "changefreq": "yearly" }
+    {
+      "path": "/subscribed",
+      "priority": 0.2,
+      "changefreq": "yearly",
+      "sitemap": false,
+      "sitemapNote": "Left out of the sitemap on purpose: the newsletter confirmation page, noindex in every state (its prerendered head included), so there is nothing to index."
+    }
   ]
 }

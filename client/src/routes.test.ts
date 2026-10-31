@@ -18,6 +18,14 @@ describe('static routes (shared/routes.json)', () => {
     expect(sitemapRoutes.map(r => r.path)).toContain('/feedback')
   })
 
+  it('prerenders /subscribed, the newsletter confirmation page, but keeps it out of the sitemap, with its reason', () => {
+    const subscribed = routes.find(r => r.path === '/subscribed')
+    expect(routePaths).toContain('/subscribed')
+    expect(subscribed?.sitemap).toBe(false)
+    expect(subscribed?.sitemapNote).toBeTruthy()
+    expect(sitemapRoutes.map(r => r.path)).not.toContain('/subscribed')
+  })
+
   it('gives every route a path, a priority between 0 and 1 and a sitemap change frequency, once', () => {
     for (const route of routes) {
       expect(route.path.startsWith('/')).toBe(true)

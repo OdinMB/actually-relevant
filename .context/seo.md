@@ -103,7 +103,7 @@ When adding a page, add its entry (`path`, `priority`, `changefreq`) to **`share
 
 - **Client:** `client/src/routes.ts` imports it: `routePaths` (every entry) goes to the prerender in `vite.config.ts`; `sitemapRoutes` feeds the legacy `generate-sitemap.ts`.
 - **Server:** the server's tsconfig cannot import files outside `server/src`, so `server/src/lib/staticRoutes.ts` reads the file at startup (`loadSitemapRoutes()`, the path resolves the same from `src/lib/` and `dist/lib/`) and validates it with Zod. A missing or malformed file stops the server at boot, so Render keeps the previous instance serving. This relies on the repository root being on disk beside `server/` at runtime on Render, as it is at build time (the build runs `../scripts/install-dev-deps.mjs`); if a deploy ever fails at boot on `shared/routes.json`, that assumption broke.
-- **Prerendered but not in the sitemap:** an entry with `"sitemap": false` and its reason in `"sitemapNote"`. Only `/saved`, on purpose: a personal page whose saved stories live in the visitor's browser, so there is nothing to index.
+- **Prerendered but not in the sitemap:** an entry with `"sitemap": false` and its reason in `"sitemapNote"`. Two, on purpose: `/saved`, a personal page whose saved stories live in the visitor's browser, so there is nothing to index; and `/subscribed`, the newsletter confirmation page, `noindex` in every state. The confirmation link, `/subscribed` with its `token` and `email` query, is served that page's prerendered HTML, which is its no-token state, before the script runs, so that state says the page is loading, claims nothing is confirmed and carries the `noindex` (`SubscribedPage.test.tsx`; `.context/subscription.md`, "Client Behavior").
 - **Deploys:** with a root directory set, Render auto-deploys a service only for changes inside it, so a commit that changes only `shared/routes.json` redeploys neither service (`BACKLOG.md`, `buildFilter.paths`). Ship such a change with a commit that touches both, or deploy both by hand.
 - Held by `server/src/lib/staticRoutes.test.ts`, `server/src/routes/public/sitemap.test.ts` and `client/src/routes.test.ts`.
 
@@ -117,14 +117,14 @@ When adding a page, add its entry (`path`, `priority`, `changefreq`) to **`share
 | 0.6 | Individual published stories |
 | 0.5 | Utility pages (imprint, privacy) |
 | 0.3 | Low-priority pages (search) |
-| 0.2 | Non-indexable pages (subscribed confirmation) |
+| 0.2 | Pages with `"sitemap": false` (`/saved`, `/subscribed`): `shared/routes.json` requires a value, but none is published |
 
 ### Change Frequency Options
 
 - `daily` — Homepage, search (new stories published regularly)
 - `weekly` — Issue/category pages
 - `monthly` — Static pages (methodology, about), individual stories
-- `yearly` — Pages that rarely change (imprint, privacy, subscribed)
+- `yearly` — Pages that rarely change (imprint, privacy)
 
 ## Head Tags: One of Each per Page
 
