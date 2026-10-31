@@ -250,8 +250,10 @@ export async function generateCarouselForNewsletter(newsletterId: string): Promi
  *   body text (relevanceSummary or blockquote with quote + attribution)
  *
  * `webUrl` is the web edition's address, for "View in browser"; it opens once the issue is published.
+ * `preheader` is the inbox preview text (`newsletterInbox.ts`), hidden at the top of the body; none
+ * when empty.
  */
-export function renderHtml(newsletter: { title: string; content: string }, webUrl: string): string {
+export function renderHtml(newsletter: { title: string; content: string }, webUrl: string, preheader = ''): string {
   // Split on --- separators to get individual blocks
   const sections = newsletter.content.split(/\n---\n/).filter(s => s.trim())
 
@@ -417,6 +419,13 @@ export function renderHtml(newsletter: { title: string; content: string }, webUr
           </tr>`
     : ''
 
+  // The inbox shows the body's first text after the subject: this block, never seen once the email is opened
+  const previewBlock = preheader
+    ? `
+  <!-- Inbox preview text -->
+  <div style="display: none; max-height: 0; max-width: 0; overflow: hidden; opacity: 0; font-size: 1px; line-height: 1px; color: #f5f5f5; mso-hide: all;">${escapeHtml(preheader)}</div>`
+    : ''
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -424,7 +433,7 @@ export function renderHtml(newsletter: { title: string; content: string }, webUr
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(newsletter.title)}</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">${previewBlock}
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
     <tr>
       <td align="center" style="padding: 32px 16px;">

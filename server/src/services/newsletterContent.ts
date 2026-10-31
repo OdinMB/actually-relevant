@@ -25,13 +25,22 @@ export function parseStoryHeading(line: string): { headline: string; storyId: st
   return { headline: text.slice(0, marker.index).trim(), storyId: marker[1]! }
 }
 
-/** Every marked story heading in `content`, in order, with the headline it shows. */
-export function storyHeadlines(content: string): { storyId: string; headline: string }[] {
+/** Every `## ` heading line in `content`, in order, parsed. */
+function headingLines(content: string): { headline: string; storyId: string | null }[] {
   return content
     .split('\n')
     .filter(line => line.trimStart().startsWith('## '))
     .map(parseStoryHeading)
-    .flatMap(({ headline, storyId }) => (storyId ? [{ storyId, headline }] : []))
+}
+
+/** Every story heading the email shows, in order, marked or not (a heading with no text shows nothing). */
+export function storyHeadings(content: string): { headline: string; storyId: string | null }[] {
+  return headingLines(content).filter(({ headline }) => headline)
+}
+
+/** Every marked story heading in `content`, in order, with the headline it shows. */
+export function storyHeadlines(content: string): { storyId: string; headline: string }[] {
+  return headingLines(content).flatMap(({ headline, storyId }) => (storyId ? [{ storyId, headline }] : []))
 }
 
 /** The stored markdown as the web edition shows it: without any of the markers above. */

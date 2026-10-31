@@ -3,7 +3,8 @@
  * `.context/newsletter-podcast.md` "Issue lifecycle"). This module is the only code that writes an
  * issue's lifecycle fields (`status`, `published_at`, `content`, `html`, `selected_story_ids`),
  * deletes an issue, or writes `newsletter_sends` rows, held by `test/newsletterWriters.test.ts`.
- * `newsletter.ts` builds what the moves write (shortlist, markdown, HTML) and writes nothing of it.
+ * `newsletter.ts` builds what the moves write (shortlist, markdown, HTML) and `newsletterInbox.ts`
+ * the email's subject and preview text; neither writes any of it.
  *
  * - Every write move runs in a transaction that first locks the issue's row
  *   (`SELECT ... FOR UPDATE`), re-checks its rule, then writes, so moves on one issue serialize.
@@ -27,6 +28,7 @@ import { BadRequestError, ConflictError, NotFoundError, summarizeError } from '.
 import * as plunk from './plunk.js'
 import { ensureNewsletterSlug, newsletterIssueUrl } from './newsletterArchive.js'
 import { buildContent, pickShortlist, recentStoryIds, renderHtml } from './newsletter.js'
+import { loadInboxPreview } from './newsletterInbox.js'
 
 const log = createLogger('newsletter-lifecycle')
 
@@ -148,7 +150,10 @@ export async function generateContent(id: string): Promise<Newsletter> {
   })
 }
 
-/** html: the email, rendered from the content; assigns the slug its "View in browser" link needs. */
+/**
+ * html: the email, rendered from the content, with its inbox preview text; assigns the slug its
+ * "View in browser" link needs.
+ */
 export async function generateHtml(id: string): Promise<string> {
   const newsletter = await readIssue(id)
   await assertNotFrozen(prisma, newsletter)
@@ -158,7 +163,9 @@ export async function generateHtml(id: string): Promise<string> {
   return underLock(id, async (tx, current) => {
     await assertNotFrozen(tx, current)
     if (!current.content) throw new BadRequestError('No content to convert')
-    const html = renderHtml(current, webUrl)
+    // From the content under the lock, on the transaction's connection
+    const { preheader } = await loadInboxPreview(current, tx)
+    const html = renderHtml(current, webUrl, preheader)
     await tx.newsletter.update({ where: { id }, data: { html } })
     return html
   })
@@ -238,7 +245,8 @@ export async function deleteNewsletter(id: string): Promise<void> {
 /**
  * sendTest: the email to the test segment only, in any state (it changes nothing the public
  * sees). Its row is written after Plunk accepted the send, so a row means the test went out; a
- * `sent` test row whose HTML is the issue's current HTML is what unlocks the live send.
+ * `sent` test row whose HTML is the issue's current HTML is what unlocks the live send. Its
+ * subject is the live send's, marked `[TEST]`.
  */
 export async function sendTest(id: string): Promise<NewsletterSend> {
   const segmentId = config.plunk.testSegmentId
@@ -251,11 +259,12 @@ export async function sendTest(id: string): Promise<NewsletterSend> {
   const newsletter = await readIssue(id)
   if (!newsletter.html) throw new BadRequestError(NO_HTML)
   const html = newsletter.html
+  const { subject } = await loadInboxPreview(newsletter)
 
   log.info({ newsletterId: id }, 'creating test campaign in Plunk')
   const campaign = await plunk.createCampaign({
     name: `[TEST] ${newsletter.title}`,
-    subject: `[TEST] ${newsletter.title}`,
+    subject: `[TEST] ${subject}`,
     body: html,
     audienceType: 'SEGMENT',
     segmentId,
@@ -310,13 +319,15 @@ export async function sendLive(id: string, scheduledFor?: string): Promise<Newsl
   // Before the claim (and outside the lock: it writes through its own connection), so publishing
   // after Plunk accepted the send has nothing left that can fail on the slug
   await ensureNewsletterSlug(newsletter)
+  // Before the claim too: a failed read claims nothing
+  const { subject } = await loadInboxPreview(newsletter)
 
   const claim = await underLock(id, claimLiveSend)
   log.info({ newsletterId: id, sendId: claim.id, scheduledFor }, 'live send claimed, creating campaign in Plunk')
 
   let campaignId: string
   try {
-    campaignId = (await plunk.createCampaign({ name: newsletter.title, subject: newsletter.title, body: claim.htmlContent, audienceType: 'ALL' })).id
+    campaignId = (await plunk.createCampaign({ name: newsletter.title, subject, body: claim.htmlContent, audienceType: 'ALL' })).id
   } catch (err) {
     await recordSendFailure(claim.id, err, true)
     throw err

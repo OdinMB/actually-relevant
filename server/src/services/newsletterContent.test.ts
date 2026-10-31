@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseStoryHeading, storyHeading, storyHeadlines, toWebMarkdown } from './newsletterContent.js'
+import { parseStoryHeading, storyHeading, storyHeadings, storyHeadlines, toWebMarkdown } from './newsletterContent.js'
 
 const ID = '3f2b8c1e-0000-4000-8000-000000000001'
 
@@ -23,6 +23,24 @@ describe('story headings', () => {
     expect(storyHeadlines(content)).toEqual([
       { storyId: ID, headline: 'First' },
       { storyId: 'other-id', headline: 'Second' },
+    ])
+  })
+
+  it('storyHeadings lists every story heading in order, marked or not, and skips one with no text', () => {
+    const content = [
+      `## First {story:${ID}}`,
+      'meta',
+      '',
+      '## Unmarked',
+      '',
+      '## {story:empty}',
+      '# Section {planet-climate}',
+      '## Second {story:other-id}',
+    ].join('\n')
+    expect(storyHeadings(content)).toEqual([
+      { headline: 'First', storyId: ID },
+      { headline: 'Unmarked', storyId: null },
+      { headline: 'Second', storyId: 'other-id' },
     ])
   })
 })
