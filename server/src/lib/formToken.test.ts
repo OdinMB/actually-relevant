@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { FORM_TOKEN_MAX_AGE_MS, FORM_TOKEN_MIN_AGE_MS } from '../../../client/src/lib/formToken.js'
 
 // Secret must be set before config.js is first imported.
 process.env.FORM_TOKEN_SECRET = 'test-form-token-secret'
@@ -71,5 +72,25 @@ describe('formToken', () => {
     expect(verifyFormToken('', 'subscribe').ok).toBe(false)
     expect(verifyFormToken('no-dot', 'subscribe').ok).toBe(false)
     expect(verifyFormToken('a.b.c', 'subscribe').ok).toBe(false)
+  })
+})
+
+describe("the forms' token timing (client/src/lib/formToken.ts)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  // The signup and feedback forms time their tokens by copies of these two defaults, since the
+  // client cannot read the server's config. A token outside the server's window is dropped while
+  // the reply still says success, so a default changed on one side alone loses signups unseen.
+  it("uses the server's default minimum and maximum token age", async () => {
+    vi.stubEnv('SUBSCRIBE_MIN_FORM_FILL_MS', '')
+    vi.stubEnv('SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS', '')
+    vi.resetModules()
+    const { config: defaults } = await import('../config.js')
+
+    expect(FORM_TOKEN_MIN_AGE_MS).toBe(defaults.subscribe.minFormFillMs)
+    expect(FORM_TOKEN_MAX_AGE_MS).toBe(defaults.subscribe.formTokenMaxAgeMs)
   })
 })

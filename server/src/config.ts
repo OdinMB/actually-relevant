@@ -516,6 +516,9 @@ export const config = {
     rateLimitDailyWindowMs: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS, 24 * 60 * 60 * 1000, 'SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS'),
     rateLimitDailyMax: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_MAX, 20, 'SUBSCRIBE_RATE_LIMIT_DAILY_MAX'),
     // Form-token anti-bot gate. Min fill time trips instant submitters; max age bounds replay.
+    // The forms time their tokens by these two defaults (client/src/lib/formToken.ts; lib/formToken.test.ts
+    // fails when they differ). An override that raises the minimum, or lowers the maximum below the
+    // 25 minutes up to which a form still posts a token, drops real submissions while answering success.
     minFormFillMs: parseWholeNumber(process.env.SUBSCRIBE_MIN_FORM_FILL_MS, 1500, 'SUBSCRIBE_MIN_FORM_FILL_MS', 0),
     formTokenMaxAgeMs: parseWholeNumber(process.env.SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS, 30 * 60 * 1000, 'SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS'),
     // HMAC key for form tokens. Dedicated secret, falling back to JWT_SECRET so it works out of the box.
