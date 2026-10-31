@@ -18,7 +18,7 @@ Crawls news sources, assesses relevance with structured AI analysis, and publish
 
 ### Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 22 and npm (the exact version CI and Render use is in `.node-version`)
 - Docker (for the local PostgreSQL + pgvector database)
 - OpenAI API key
 
@@ -220,7 +220,7 @@ Please do not intentionally remove or tamper with the machine-readable markings 
 ### Build Fails
 Check the build logs. Common issues:
 - Wrong root directory: check `rootDir` in `render.yaml` (`server` for the backend, `client` for the static site)
-- Node version mismatch — add `engines` to package.json if needed
+- Node version mismatch: Render takes Node from `NODE_VERSION` in `render.yaml`, which must equal `.node-version` on both services (`server/src/blueprint.test.ts` checks this)
 - Missing `npx prisma generate` before server build
 
 ### API Calls Fail (CORS Error)

@@ -95,7 +95,7 @@ const APPROACH_CARDS = [
       </svg>
     ),
     title: 'Fewer, Better Stories',
-    description: 'AI reads 82+ sources and selects 10\u201320 stories by real-world significance. No filler, no rage-bait.',
+    description: 'AI reads curated sources from around the world and selects 10\u201320 stories by real-world significance. No filler, no rage-bait.',
     border: 'border-l-brand-400',
   },
   {

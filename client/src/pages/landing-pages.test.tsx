@@ -59,7 +59,7 @@ describe('StewardshipPage', () => {
   it('renders heading and dynamic source count', () => {
     renderPage(<StewardshipPage />)
     expect(screen.getByRole('heading', { level: 1, name: /long-term home/i })).toBeInTheDocument()
-    expect(screen.getByText(/82\+/)).toBeInTheDocument()
+    expect(screen.getByText(/with 82 curated sources across/)).toBeInTheDocument()
   })
 })
 

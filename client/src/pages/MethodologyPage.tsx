@@ -12,7 +12,7 @@ import { getCategoryColor } from '../lib/category-colors'
 const META = {
   title: 'Our Methodology \u2014 How AI Curates the News | Actually Relevant',
   description:
-    '82 sources, a multi-stage AI pipeline, and full transparency. Learn exactly how Actually Relevant selects the stories that matter most to humanity.',
+    'Curated global sources, a multi-stage AI pipeline, and full transparency. Learn exactly how Actually Relevant selects the stories that matter most to humanity.',
   url: `${SEO.siteUrl}/methodology`,
 }
 
@@ -20,7 +20,7 @@ const techArticleSchema = {
   '@context': 'https://schema.org',
   '@type': 'TechArticle',
   headline: 'Our Methodology \u2014 How AI Curates the News',
-  description: "Detailed explanation of Actually Relevant's multi-stage AI news curation pipeline, covering 82+ sources across 5 languages.",
+  description: "Detailed explanation of Actually Relevant's multi-stage AI news curation pipeline, covering curated sources in multiple languages.",
   url: META.url,
   author: {
     '@type': 'Organization',
@@ -80,8 +80,8 @@ export default function MethodologyPage() {
                 {
                   label: 'Collection',
                   desc: sources
-                    ? `We crawl ${sources.totalCount} curated news sources across five languages and four issue areas. Article content is extracted automatically using a three-tier system that handles different site formats.`
-                    : 'We crawl curated news sources across five languages and four issue areas. Article content is extracted automatically using a three-tier system that handles different site formats.',
+                    ? `We crawl ${sources.totalCount} curated news sources in multiple languages across four issue areas. Article content is extracted automatically using a three-tier system that handles different site formats.`
+                    : 'We crawl curated news sources in multiple languages across four issue areas. Article content is extracted automatically using a three-tier system that handles different site formats.',
                   dots: 20,
                 },
                 {
