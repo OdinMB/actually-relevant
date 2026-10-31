@@ -29,8 +29,34 @@ interface SubscribeFormProps {
  */
 type Availability = 'checking' | 'open' | 'paused' | 'unavailable'
 
+type SubmitStatus = 'idle' | 'verifying' | 'loading' | 'success' | 'error'
+
+/** Why the form token could not be fetched, which decides the line shown under the form. */
+type UnavailableReason = 'unreachable' | 'rate-limited'
+
+const UNAVAILABLE_NOTES: Record<UnavailableReason, string> = {
+  unreachable: "The signup form can't load right now. Please reload the page or try again later.",
+  // The token route has only the public API's request limits, not the signup limits.
+  'rate-limited': "Too many requests from this network right now, so the signup form can't load. Please try again in a few minutes.",
+}
+
+const GENERIC_ERROR = 'Something went wrong. Please try again.'
+// Told by the status alone: the signup POST sits behind the public API's request limit, shared with
+// the other public routes, as well as its own per-minute and daily limits, so the line names none of them.
+const RATE_LIMIT_ERROR = 'Too many requests from this network right now. Please try again in a few minutes, or tomorrow if this keeps happening.'
+
 function isSignupsPaused(err: unknown): boolean {
   return err instanceof ApiError && err.code === 'SIGNUPS_PAUSED'
+}
+
+function isRateLimited(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 429
+}
+
+function submitLabel(status: SubmitStatus, availability: Availability): string {
+  if (status === 'verifying') return 'Verifying...'
+  if (status === 'loading') return 'Subscribing...'
+  return availability === 'checking' ? 'Loading...' : 'Subscribe'
 }
 
 /** A plausible address: something@domain.suffix, no spaces. The server validates fully. */
@@ -71,13 +97,14 @@ function sleep(ms: number): Promise<void> {
 
 export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix = 'subscribe', hideHeading = false, onPastIssuesClick }: SubscribeFormProps) {
   const [email, setEmail] = useState('')
-  const [status, setStatus] = useState<'idle' | 'verifying' | 'loading' | 'success' | 'error'>('idle')
+  const [status, setStatus] = useState<SubmitStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [website, setWebsite] = useState('') // honeypot — humans never fill this
   // Never rendered, so a ref: `availability` turns 'open' when the first token arrives.
   const tokenRef = useRef<HeldToken | null>(null)
   const replacementRef = useRef<Promise<HeldToken> | null>(null)
   const [availability, setAvailability] = useState<Availability>('checking')
+  const [unavailableReason, setUnavailableReason] = useState<UnavailableReason>('unreachable')
   // Turnstile loads only on submit, so visitors who never sign up never contact Cloudflare.
   const [turnstileFailed, setTurnstileFailed] = useState(false)
   const { containerRef: turnstileContainerRef, getToken: getTurnstileToken } = useTurnstileChallenge()
@@ -106,7 +133,10 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
         if (isSignupsPaused(err)) setAvailability('paused')
         // Not while prerendering: the build's API may be unreachable, and the message would be
         // baked into every page's static HTML.
-        else if (!isPrerendering()) setAvailability('unavailable')
+        else if (!isPrerendering()) {
+          setUnavailableReason(isRateLimited(err) ? 'rate-limited' : 'unreachable')
+          setAvailability('unavailable')
+        }
       },
     )
     return () => {
@@ -202,7 +232,7 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
       })
       if (!result.success) {
         setStatus('error')
-        setErrorMessage(result.message || 'Something went wrong. Please try again.')
+        setErrorMessage(result.message || GENERIC_ERROR)
         return
       }
       setStatus('success')
@@ -212,7 +242,7 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
         return
       }
       setStatus('error')
-      setErrorMessage('Something went wrong. Please try again.')
+      setErrorMessage(isRateLimited(err) ? RATE_LIMIT_ERROR : GENERIC_ERROR)
     }
   }
 
@@ -251,9 +281,11 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
           </svg>
         </div>
         <h2 className="text-xl font-bold text-neutral-900 mb-2">Check your email</h2>
+        <p className="text-neutral-600 text-sm mb-3">
+          A confirmation link is on its way to <strong>{email}</strong>. Click the link to start receiving our weekly newsletter.
+        </p>
         <p className="text-neutral-600 text-sm mb-6">
-          A confirmation link is on its way to <strong>{email}</strong>. It may take a little while to arrive. Click the link to start receiving our weekly
-          newsletter.
+          It usually arrives within minutes, but at busy times it can take a few hours. If you can't find it, please check your spam folder.
         </p>
         {onSuccess && (
           <button
@@ -327,7 +359,7 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
           disabled={!canSubmit}
           className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {status === 'verifying' ? 'Verifying...' : status === 'loading' ? 'Subscribing...' : 'Subscribe'}
+          {submitLabel(status, availability)}
         </button>
       </form>
 
@@ -335,7 +367,7 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
       <div role="status">
         {availability === 'unavailable' && (
           <p id={`${idPrefix}-unavailable`} className={`mt-4 ${noteAlign} text-sm text-neutral-700`}>
-            The signup form can't load right now. Please reload the page or try again later.
+            {UNAVAILABLE_NOTES[unavailableReason]}
           </p>
         )}
       </div>

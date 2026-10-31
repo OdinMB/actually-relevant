@@ -47,6 +47,13 @@ function finishScriptLoad(api: ReturnType<typeof stubTurnstile>['api']) {
 }
 
 const pausedError = () => new ApiError(503, 'Newsletter signups are paused.', 'SIGNUPS_PAUSED')
+// The bodies the server's rate limiters answer with (server/src/routes/public/subscribe.ts, middleware/rateLimit.ts).
+const signupLimitError = () => new ApiError(429, 'Too many subscription attempts. Please try again later.')
+const requestLimitError = () => new ApiError(429, 'Too many requests. Please try again later.')
+
+const UNREACHABLE_NOTE = "The signup form can't load right now. Please reload the page or try again later."
+const REQUEST_LIMIT_NOTE = "Too many requests from this network right now, so the signup form can't load. Please try again in a few minutes."
+const RATE_LIMIT_ERROR = 'Too many requests from this network right now. Please try again in a few minutes, or tomorrow if this keeps happening.'
 
 /** Render and wait until the form token has loaded (submit is disabled until then). */
 async function renderReady() {
@@ -77,12 +84,17 @@ describe('SubscribeForm', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
   })
 
-  it('disables submit until the form token has loaded, without a message meanwhile', async () => {
-    mockGetToken.mockReturnValue(new Promise(() => {})) // never resolves
+  it('reads "Loading..." on the disabled button until the form token has loaded, without a message meanwhile', async () => {
+    let deliver!: (value: { token: string }) => void
+    mockGetToken.mockReturnValue(new Promise(resolve => (deliver = resolve)))
     render(<SubscribeForm idPrefix="test" />)
 
-    expect(screen.getByRole('button', { name: /subscribe/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Loading...' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /subscribe/i })).not.toBeInTheDocument()
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
+
+    await act(async () => deliver({ token: 'test-token' }))
+    expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled()
   })
 
   it('retries the token fetch once and submits the retried token', async () => {
@@ -102,10 +114,10 @@ describe('SubscribeForm', () => {
   })
 
   describe('when both token attempts fail', () => {
-    /** Render with an unreachable API and wait until both attempts have settled. */
-    async function renderUnreachable() {
+    /** Render with an API that refuses every token request, and wait until both attempts have settled. */
+    async function renderUnreachable(error: () => unknown = () => new Error('API down')) {
       mockGetToken.mockReset()
-      mockGetToken.mockRejectedValue(new Error('API down'))
+      mockGetToken.mockImplementation(() => Promise.reject(error()))
       render(<SubscribeForm idPrefix="test" />)
       await waitFor(() => expect(mockGetToken).toHaveBeenCalledTimes(2))
       await act(() => new Promise(resolve => setTimeout(resolve, 0)))
@@ -119,12 +131,20 @@ describe('SubscribeForm', () => {
       await renderUnreachable()
 
       const status = screen.getByRole('status')
-      expect(status).toHaveTextContent("The signup form can't load right now. Please reload the page or try again later.")
+      expect(status).toHaveTextContent(UNREACHABLE_NOTE)
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: /subscribe/i })).toBeDisabled()
       const email = screen.getByRole('textbox', { name: /email/i })
       expect(email.getAttribute('aria-describedby')?.split(' ')[0]).toBe('test-unavailable')
       expect(email).toHaveAccessibleDescription(/^The signup form can.t load right now/)
+    })
+
+    it('says the network has sent too many requests when the token request is rate-limited', async () => {
+      await renderUnreachable(requestLimitError)
+
+      expect(screen.getByRole('status')).toHaveTextContent(REQUEST_LIMIT_NOTE)
+      expect(screen.getByRole('textbox', { name: /email/i })).toHaveAccessibleDescription(new RegExp(`^${REQUEST_LIMIT_NOTE}`))
+      expect(screen.getByRole('button', { name: /subscribe/i })).toBeDisabled()
     })
 
     it('says nothing while prerendering, so the static HTML never carries the message', async () => {
@@ -177,6 +197,40 @@ describe('SubscribeForm', () => {
       expect(screen.getByText(/check your email/i)).toBeInTheDocument()
     })
     expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'test-token' })
+  })
+
+  it('says on success that the email can take a few hours at busy times and may be in the spam folder', async () => {
+    mockSubscribe.mockResolvedValue({ success: true, message: 'Check your email to confirm your subscription.' })
+    const user = userEvent.setup()
+
+    await renderReady()
+    await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+    await user.click(screen.getByRole('button', { name: /subscribe/i }))
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Check your email' })).toBeInTheDocument())
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('A confirmation link is on its way to hello@example.com. Click the link to start receiving our weekly newsletter.')
+    expect(status).toHaveTextContent(
+      "It usually arrives within minutes, but at busy times it can take a few hours. If you can't find it, please check your spam folder.",
+    )
+  })
+
+  // The signup POST sits behind the public API's request limit as well as its own per-minute and daily limits.
+  it.each([
+    ['a signup limit', signupLimitError],
+    ['the public request limit', requestLimitError],
+  ])('says the network has sent too many requests, naming no limit, when the signup is refused by %s', async (_limit, error) => {
+    mockSubscribe.mockRejectedValue(error())
+    const user = userEvent.setup()
+
+    await renderReady()
+    await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com')
+    await user.click(screen.getByRole('button', { name: /subscribe/i }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(RATE_LIMIT_ERROR))
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Something went wrong')
+    expect(screen.getByRole('textbox', { name: /email/i })).toHaveAccessibleDescription(new RegExp(`^${RATE_LIMIT_ERROR}`))
+    expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled()
   })
 
   describe('with Turnstile configured', () => {
