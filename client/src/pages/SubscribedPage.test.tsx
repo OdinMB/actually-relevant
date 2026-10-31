@@ -14,6 +14,13 @@ vi.mock('../lib/api', () => ({
   },
 }))
 
+const openSubscribe = vi.hoisted(() => vi.fn())
+vi.mock('../components/SubscribeProvider', () => ({
+  useSubscribe: () => ({ openSubscribe }),
+}))
+
+const CONFIRM_LINK = '/subscribed?token=abc&email=u%40example.com'
+
 function renderAt(path: string) {
   return render(
     <HelmetProvider>
@@ -37,6 +44,7 @@ async function robotsOnceHeadIs(title: string) {
 describe('SubscribedPage', () => {
   beforeEach(() => {
     mockConfirm.mockReset()
+    openSubscribe.mockReset()
     document.title = ''
     document.head.querySelectorAll('meta[name="robots"]').forEach(tag => tag.remove())
   })
@@ -107,6 +115,34 @@ describe('SubscribedPage', () => {
 
     expect(screen.getByRole('heading', { name: /invalid link/i })).toBeInTheDocument()
     expect(mockConfirm).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['an expired link, from the redirect', '/subscribed?error=expired', null, /link expired/i],
+    ['an invalid link, from the redirect', '/subscribed?error=invalid', null, /invalid link/i],
+    ['an expired link, from the confirm request', CONFIRM_LINK, 'expired', /link expired/i],
+    ['an invalid link, from the confirm request', CONFIRM_LINK, 'invalid', /invalid link/i],
+  ])('offers to subscribe again in the signup dialog, and the way home: %s', async (_case, path, reason, heading) => {
+    const user = userEvent.setup()
+    renderAt(path)
+    if (reason) {
+      mockConfirm.mockResolvedValue({ success: false, reason })
+      await user.click(screen.getByRole('button', { name: /confirm my subscription/i }))
+    }
+    expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Subscribe again' }))
+
+    expect(openSubscribe).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/')
+  })
+
+  it('tells a reader on an invalid link that they are subscribed if they already confirmed, and points the others to their newest email first', () => {
+    renderAt('/subscribed?error=invalid')
+
+    const message = screen.getByText(/if you already confirmed your subscription, you're subscribed/i)
+    expect(message).toHaveTextContent(/if not, use the link in your most recent confirmation email, or subscribe again to get a new one\./i)
+    expect(message).not.toHaveTextContent(/already been used/i)
   })
 
   it.each([
