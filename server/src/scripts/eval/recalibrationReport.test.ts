@@ -17,6 +17,8 @@ const input = (sections: StepSection[], over: Partial<RecalibrationReportInput> 
   generatedAt: '2026-09-24T00:00:00Z',
   half: 'calibration',
   fixtures: { createdAt: 'c', anchor: '2026-02-08T00:00:00Z', floor: '2026-02-01' },
+  phase1Sample: true,
+  repeat: 1,
   sections,
   skipped: [],
   thisRunUsd: 0,
@@ -42,7 +44,13 @@ describe('renderRecalibration', () => {
     effort: 'medium',
     dedupEffort: 'low',
     steps: ['preassess', 'assess', 'dedup'],
+    repeat: 1,
     ...over,
+  })
+
+  it('gives a repeated run its own file', () => {
+    expect(recalibrationReportName(run({ repeat: 3 }))).toBe('recalibration-holdout-repeat-3.md')
+    expect(recalibrationReportName(run({ half: 'all', steps: ['assess'], repeat: 2 }))).toBe('recalibration-all-assess-repeat-2.md')
   })
 
   it('names the report by half, and gives a non-default effort its own file', () => {
@@ -58,6 +66,14 @@ describe('renderRecalibration', () => {
     )
     expect(recalibrationReportName(run({ limit: 3 }))).toBe('recalibration-holdout-limit-3.md')
     expect(recalibrationReportName(run({ steps: ['dedup', 'assess', 'preassess'] }))).toBe('recalibration-holdout.md')
+  })
+
+  it('says which sample it ran on and how many runs per prompt', () => {
+    expect(renderRecalibration(input([]))).toMatch(/calibration half of the phase-1 sample/)
+    const fresh = renderRecalibration(input([], { phase1Sample: false, half: 'all', repeat: 3 }))
+    expect(fresh).toMatch(/the whole fresh sample in this folder/)
+    expect(fresh).toMatch(/3 runs of each rating prompt/)
+    expect(fresh).not.toMatch(/phase 1's labelled set/)
   })
 
   it('says a partial run is not evidence and lists skipped steps', () => {

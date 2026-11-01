@@ -129,13 +129,19 @@ function shareNearStored(name: string, share: number | null, stored: number | nu
 const atLeast = (name: string, value: number | null, bar: number, source: string, required = true) =>
   criterion(name, value, `≥ ${pct(bar)} (${source})`, v => v >= bar - EPS, pct, required)
 
-export function preassessCriteria(m: PreassessArmMetrics): Criterion[] {
+/**
+ * `phase1Sample: false` (a fresh sample): phase 1's agreement numbers were
+ * measured on other stories, so they are shown for reference but not
+ * required; the rating bars against stored values hold on any sample.
+ */
+export function preassessCriteria(m: PreassessArmMetrics, { phase1Sample = true }: { phase1Sample?: boolean } = {}): Criterion[] {
+  const phase1 = phase1Sample ? 'phase 1' : 'phase 1, measured on the phase-1 sample: reference only here'
   return [
     offset('Mean rating offset vs stored', m.meanShift),
     shareNearStored(`Share passing the ≥${GATE} gate`, m.passRate, m.storedPassRate),
     atLeast('Published stories passing the gate', m.publishedRecall, TOLERANCE.publishedPass, 'owner'),
-    atLeast('Issue agreement with stored', m.issueAgreement, PHASE1_PREASSESS.issueAgreement, 'phase 1'),
-    atLeast('Emotion agreement with stored', m.emotionAgreement, PHASE1_PREASSESS.emotionAgreement, 'phase 1'),
+    atLeast('Issue agreement with stored', m.issueAgreement, PHASE1_PREASSESS.issueAgreement, phase1, phase1Sample),
+    atLeast('Emotion agreement with stored', m.emotionAgreement, PHASE1_PREASSESS.emotionAgreement, phase1, phase1Sample),
     atLeast("Emotion agreement, owner's aim", m.emotionAgreement, PHASE1_PREASSESS.emotionAim, 'aim, not required', false),
   ]
 }

@@ -7,7 +7,8 @@ import { config } from '../../../config.js'
 import { buildAssessPrompt } from '../../../prompts/assess.js'
 import { assessResultSchema, type AssessResult } from '../../../schemas/llm.js'
 import type { AssessItem, Fixtures } from '../fixtures.js'
-import { TARGETS } from '../fixtures.js'
+import { LEGACY_ASSESS_SIZE } from '../freshSample.js'
+import { assessQuotas } from '../sampling.js'
 import { arm, armKey } from '../models.js'
 import { ASSESS_FORMAT_CHECKS, checkAssessFormat, findJunk, mean, num, pct, rate, type AssessFormatCheck } from '../checks.js'
 import { findAssessMetaCommentary } from '../metaCommentary.js'
@@ -189,11 +190,12 @@ export const assessSuite: Suite = {
   arms: ARMS,
   describe(fx, limit) {
     const s = items(fx, limit)
+    const t = assessQuotas(fx.assessSize ?? LEGACY_ASSESS_SIZE)
     return [
-      `assess: ${s.length} stories (target ${TARGETS.assess.total}); ` +
-        `${s.filter(x => x.stored.rating >= 4 && x.stored.rating <= 6).length} rated 4-6 (≥${TARGETS.assess.band}), ` +
-        `${s.filter(x => x.language !== 'en').length} non-English (≥${TARGETS.assess.nonEnglish}), ` +
-        `${s.filter(x => x.han).length} Han-script (≥${TARGETS.assess.han})`,
+      `assess: ${s.length} stories (target ${t.total}); ` +
+        `${s.filter(x => x.stored.rating >= 4 && x.stored.rating <= 6).length} rated 4-6 (≥${t.band}), ` +
+        `${s.filter(x => x.language !== 'en').length} non-English (≥${t.nonEnglish}), ` +
+        `${s.filter(x => x.han).length} Han-script (≥${t.han})`,
     ]
   },
   plan(fx, limit) {

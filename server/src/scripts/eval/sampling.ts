@@ -17,6 +17,15 @@ export function byEvalHash<T>(items: T[], key: (t: T) => string): T[] {
   return [...items].sort((a, b) => (evalHash(key(a)) < evalHash(key(b)) ? -1 : 1))
 }
 
+/**
+ * Full-assessment sample size and its minimums: half rated 4-6 (where the
+ * ≥5 split is decided), a fifth non-English, a tenth Han-script. At 50 these
+ * are phase 1's targets (25, 10, 5).
+ */
+export function assessQuotas(total: number): { total: number; band: number; nonEnglish: number; han: number } {
+  return { total, band: Math.round(total / 2), nonEnglish: Math.round(total / 5), han: Math.max(1, Math.round(total / 10)) }
+}
+
 export interface Quota<T> {
   name: string
   test: (t: T) => boolean

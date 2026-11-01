@@ -118,6 +118,18 @@ describe('preassessCriteria', () => {
   it('never accepts an arm with nothing measured', () => {
     expect(accepted(preassessCriteria(preassess({ meanShift: null, passRate: null, issueAgreement: null })))).toBe(false)
   })
+
+  it("on a fresh sample, shows phase 1's agreement numbers for reference without requiring them", () => {
+    const criteria = preassessCriteria(preassess({ issueAgreement: 0.6, emotionAgreement: 0.6 }), { phase1Sample: false })
+    expect(accepted(criteria)).toBe(true)
+    const issue = criteria.find(c => c.name === 'Issue agreement with stored')
+    expect(issue).toMatchObject({ pass: false, required: false })
+    expect(issue?.bar).toMatch(/phase-1 sample/)
+  })
+
+  it('still requires the rating bars on a fresh sample', () => {
+    expect(accepted(preassessCriteria(preassess({ meanShift: 0.3 }), { phase1Sample: false }))).toBe(false)
+  })
 })
 
 const format = (over: Partial<Record<AssessFormatCheck, number>> = {}) =>

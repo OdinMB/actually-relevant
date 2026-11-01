@@ -5,6 +5,7 @@
  */
 import { parseArgs } from 'node:util'
 import { parseEffort, type ReasoningEffort } from '../../config.js'
+import { MAX_REPEAT } from './repeats.js'
 import type { Half } from './sampling.js'
 import type { SuiteName } from './types.js'
 
@@ -18,6 +19,9 @@ export const MAX_BUDGET_USD = 20
  * report states the floor used).
  */
 export const DEFAULT_FLOOR = '2026-03-01'
+/** Phase 1's full-assessment sample size; `--assess-size` draws a larger fresh one. */
+export const DEFAULT_ASSESS_SIZE = 50
+export const MAX_ASSESS_SIZE = 300
 
 export interface EvalOptions {
   out: string
@@ -31,6 +35,10 @@ export interface EvalOptions {
   refreshFixtures: boolean
   /** Earliest crawl date (UTC, `YYYY-MM-DD`) for the stored-data suites. */
   floor: string
+  /** Full-assessment stories to sample. */
+  assessSize: number
+  /** Eval folders whose pre-assessment and full-assessment stories leave the pools (spent samples). */
+  exclude: string[]
 }
 
 function positiveInt(flag: string, value: string | undefined, fallback?: number): number | undefined {
@@ -77,10 +85,19 @@ export function parseOptions(argv: string[]): EvalOptions {
       concurrency: { type: 'string' },
       'refresh-fixtures': { type: 'boolean', default: false },
       floor: { type: 'string' },
+      'assess-size': { type: 'string' },
+      exclude: { type: 'string' },
     },
   })
   if (!values.out) throw new Error('--out is required')
+  const assessSize = positiveInt('--assess-size', values['assess-size'], DEFAULT_ASSESS_SIZE) ?? DEFAULT_ASSESS_SIZE
+  if (assessSize > MAX_ASSESS_SIZE) throw new Error(`--assess-size must be at most ${MAX_ASSESS_SIZE}`)
   return {
+    assessSize,
+    exclude: (values.exclude ?? '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s !== ''),
     out: values.out,
     suites: listOf('--suites', values.suites, SUITE_NAMES, SUITE_NAMES),
     limit: positiveInt('--limit', values.limit),
@@ -125,6 +142,8 @@ export interface RecalibrationOptions {
   concurrency: number
   /** When given, must match the cached fixtures' floor (the recalibration never resamples). */
   floor?: string
+  /** Runs of each rating prompt (pre-assessment and full assessment); run k ≥ 2 has its own cache key. */
+  repeat: number
 }
 
 export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions {
@@ -142,9 +161,12 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
       budget: { type: 'string' },
       concurrency: { type: 'string' },
       floor: { type: 'string' },
+      repeat: { type: 'string' },
     },
   })
   if (!values.out) throw new Error('--out is required')
+  const repeat = positiveInt('--repeat', values.repeat, 1) ?? 1
+  if (repeat > MAX_REPEAT) throw new Error(`--repeat must be at most ${MAX_REPEAT}`)
   const half = HALVES.find(h => h === (values.half ?? 'all'))
   if (!half) throw new Error(`--half must be one of ${HALVES.join(', ')}`)
   const steps = listOf('--steps', values.steps, RECALIBRATION_STEPS, RECALIBRATION_DEFAULT_STEPS)
@@ -163,5 +185,6 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
     budget: budgetOf(values.budget),
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
     ...(values.floor !== undefined ? { floor: floorOf(values.floor) } : {}),
+    repeat,
   }
 }

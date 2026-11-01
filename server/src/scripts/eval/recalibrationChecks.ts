@@ -9,10 +9,11 @@
  * never answered from the cache of the previous wording.
  */
 import type { z } from 'zod'
-import type { ReasoningEffort } from '../../config.js'
-import { assessResultSchema, dedupConfirmationSchema, preAssessResultSchema } from '../../schemas/llm.js'
+import { config, type ReasoningEffort } from '../../config.js'
+import { assessResultSchema, dedupConfirmationSchema, preAssessResultSchema, type PreAssessResult } from '../../schemas/llm.js'
 import { num, pct, summarizeCalls } from './checks.js'
-import type { Fixtures } from './fixtures.js'
+import type { Fixtures, PreassessItem } from './fixtures.js'
+import { repeatDetails, runNumbers, runSchemaName } from './repeats.js'
 import { arm, armKey, versionedSchemaName } from './models.js'
 import type { RecalibrationOptions, RecalibrationStep } from './options.js'
 import { replaceRatingSetFiles } from './ratingFiles.js'
@@ -40,12 +41,16 @@ const MINI = arm('gpt-5-mini', 'medium')
 const luna = (effort: ReasoningEffort) => arm('gpt-6-luna', effort)
 /** Owner's decision: the regenerated full-assessment set is `actually-relevant-full-assessment-v2`. */
 export const RATING_SET_VERSION = 2
+const GATE = config.assess.fullAssessmentThreshold
+const SPLIT = config.selection.relevanceMin
 
 export interface StepInput {
   fx: Fixtures
-  /** The half (or whole) of the phase-1 sample the checks run on. */
+  /** The half (or whole) of the folder's sample the checks run on. */
   sample: RecalibrationSample
   opts: RecalibrationOptions
+  /** The folder holds the 2026-09-24 phase-1 sample (freshSample.ts), whose ledger has phase 1's reference answers. */
+  phase1Sample: boolean
 }
 
 export interface StepSection {
@@ -62,6 +67,11 @@ export interface StepSection {
 
 export interface RecalibrationStepDef {
   name: RecalibrationStep
+  /**
+   * Set when the step reads reference data that only the phase-1 folder holds;
+   * the reason is printed and the step skipped on any other sample.
+   */
+  phase1Only?: string
   plan(input: StepInput): PlannedCall[]
   /** A free check run before anything is paid for (dry runs included); throws when the step cannot run. */
   preflight?(input: StepInput, phase1: SuiteContext): Promise<string>
@@ -94,29 +104,68 @@ const pairLines = (label: string, pairs: DedupPair[]) =>
 
 const preassessBatches = ({ sample, opts }: StepInput) => limited(batchStories(sample.preassess), opts.limit)
 
+/** Every run's schema name: run 1 keeps the plain one, so earlier ledger entries answer it. */
+const runSchemas = (schemaName: string, { opts }: StepInput) => runNumbers(opts.repeat).map(r => runSchemaName(schemaName, r))
+const repeatNote = ({ opts }: StepInput) => (opts.repeat > 1 ? `; ${opts.repeat} runs each, criteria on all runs pooled` : '')
+
+/** One run's pre-assessment answers per story, in the batches' story order. */
+function preassessAnswers(bs: PreassessItem[][], records: CallRecord<PreAssessResult>[]) {
+  const byId = new Map<string, PreAssessResult['articles'][number]>()
+  bs.forEach((_, i) => {
+    for (const a of parsedOf(records[i])?.articles ?? []) if (!byId.has(a.articleId)) byId.set(a.articleId, a)
+  })
+  return bs.flat().map(s => byId.get(s.id) ?? null)
+}
+
 const preassessStep: RecalibrationStepDef = {
   name: 'preassess',
   plan: input =>
-    preassessBatches(input).map(b => ({
-      arm: luna(input.opts.effort),
-      schemaName: PREASSESS_SCHEMA,
-      prompt: preassessPrompt(b, input.fx.issues),
-      baseOutputTokens: PREASSESS_OUTPUT_TOKENS,
-    })),
+    runSchemas(PREASSESS_SCHEMA, input).flatMap(schemaName =>
+      preassessBatches(input).map(b => ({
+        arm: luna(input.opts.effort),
+        schemaName,
+        prompt: preassessPrompt(b, input.fx.issues),
+        baseOutputTokens: PREASSESS_OUTPUT_TOKENS,
+      })),
+    ),
   async run(input, ctx) {
     const a = luna(input.opts.effort)
     const bs = preassessBatches(input)
-    const records = await runOne(ctx, a, bs, PREASSESS_SCHEMA, preAssessResultSchema, b => preassessPrompt(b, input.fx.issues))
-    const m = scorePreassess(bs, records, input.fx.issues)
-    const stats = summarizeCalls(armKey(a), records)
+    const runs = await Promise.all(
+      runSchemas(PREASSESS_SCHEMA, input).map(schemaName => runOne(ctx, a, bs, schemaName, preAssessResultSchema, b => preassessPrompt(b, input.fx.issues))),
+    )
+    // Pooled over runs: each run's batches count as further batches, so every rate is the runs' average.
+    const m = scorePreassess(
+      runs.flatMap(() => bs),
+      runs.flat(),
+      input.fx.issues,
+    )
+    const stats = summarizeCalls(armKey(a), runs.flat())
+    const answers = runs.map(recs => preassessAnswers(bs, recs))
+    const repeat =
+      runs.length > 1
+        ? repeatDetails({
+            runs: runs.map(recs => {
+              const r = scorePreassess(bs, recs, input.fx.issues)
+              return { ok: r.returned, shift: r.meanShift, share: r.passRate }
+            }),
+            ratings: answers.map(run => run.map(x => x?.rating ?? null)),
+            threshold: GATE,
+            categories: [
+              { name: 'Issue', perRun: answers.map(run => run.map(x => x?.issueSlug ?? null)) },
+              { name: 'Emotion', perRun: answers.map(run => run.map(x => x?.emotionTag ?? null)) },
+            ],
+          })
+        : []
     return {
       title: 'Pre-assessment',
       arm: armKey(a),
-      sample: `${bs.flat().length} stories in ${bs.length} batches, ${bs.flat().filter(s => s.status === 'published').length} published`,
-      criteria: preassessCriteria(m),
+      sample: `${bs.flat().length} stories in ${bs.length} batches, ${bs.flat().filter(s => s.status === 'published').length} published${repeatNote(input)}`,
+      criteria: preassessCriteria(m, { phase1Sample: input.phase1Sample }),
       details: [
-        `≥5 gate agreement with stored ${pct(m.gateAgreement)}; share ≥4 ${pct(m.passRateOneLower)}, published passing at ≥4 ${pct(m.publishedRecallOneLower)}.`,
+        `≥${GATE} gate agreement with stored ${pct(m.gateAgreement)}; share ≥${GATE - 1} ${pct(m.passRateOneLower)}, published passing at ≥${GATE - 1} ${pct(m.publishedRecallOneLower)}.`,
         `Returned ${m.returned}; omitted ${m.omitted}, unknown IDs ${m.unknownIds}, invalid slugs ${m.invalidSlugs}, failed batches ${m.failures}, foreign-script junk ${m.junk.length}.`,
+        ...(repeat.length > 0 ? ['', ...repeat] : []),
       ],
       stats: [stats],
       monthly: monthlyAt('preassess', stats),
@@ -129,28 +178,47 @@ const assessStories = ({ sample, opts }: StepInput) => limited(sample.assess, op
 const assessStep: RecalibrationStepDef = {
   name: 'assess',
   plan: input =>
-    assessStories(input).map(s => ({
-      arm: luna(input.opts.effort),
-      schemaName: ASSESS_SCHEMA,
-      prompt: assessPrompt(s),
-      baseOutputTokens: ASSESS_OUTPUT_TOKENS,
-    })),
+    runSchemas(ASSESS_SCHEMA, input).flatMap(schemaName =>
+      assessStories(input).map(s => ({
+        arm: luna(input.opts.effort),
+        schemaName,
+        prompt: assessPrompt(s),
+        baseOutputTokens: ASSESS_OUTPUT_TOKENS,
+      })),
+    ),
   async run(input, ctx) {
     const a = luna(input.opts.effort)
     const stories = assessStories(input)
-    const records = await runOne(ctx, a, stories, ASSESS_SCHEMA, assessResultSchema, assessPrompt)
-    const m = scoreAssess(stories, records, [])
-    const stats = summarizeCalls(armKey(a), records)
+    const runs = await Promise.all(runSchemas(ASSESS_SCHEMA, input).map(schemaName => runOne(ctx, a, stories, schemaName, assessResultSchema, assessPrompt)))
+    // Pooled over runs: each run's outputs count as further stories, so every rate is the runs' average.
+    const m = scoreAssess(
+      runs.flatMap(() => stories),
+      runs.flat(),
+      [],
+    )
+    const stats = summarizeCalls(armKey(a), runs.flat())
+    const repeat =
+      runs.length > 1
+        ? repeatDetails({
+            runs: runs.map(recs => {
+              const r = scoreAssess(stories, recs, [])
+              return { ok: r.ok, shift: r.vsStored.shift, share: r.atLeastSplit }
+            }),
+            ratings: runs.map(recs => stories.map((_, i) => parsedOf(recs[i])?.conservativeRating ?? null)),
+            threshold: SPLIT,
+          })
+        : []
     return {
       title: 'Full assessment',
       arm: armKey(a),
-      sample: `${stories.length} stories, ${stories.filter(s => s.language !== 'en').length} non-English`,
+      sample: `${stories.length} stories, ${stories.filter(s => s.language !== 'en').length} non-English${repeatNote(input)}`,
       criteria: assessCriteria(m),
       details: [
-        `Rating MAD vs stored ${num(m.vsStored.mad)}; ≥5 split agreement with stored ${pct(m.vsStored.splitAgreement)} (n=${m.vsStored.n}).`,
+        `Rating MAD vs stored ${num(m.vsStored.mad)}; ≥${SPLIT} split agreement with stored ${pct(m.vsStored.splitAgreement)} (n=${m.vsStored.n}).`,
         `Parsed ${m.ok}; failed calls ${m.failures}; unsupported numbers per output ${num(m.unsupportedPerOutput)}; foreign-script junk ${m.junk.length}.`,
         ...m.unsupported.map(u => `- unsupported numbers, story ${u.storyId}: ${u.numbers.join(', ')}`),
         ...m.metaCommentary.map(x => `- meta-commentary, story ${x.storyId}: ${x.fields.join('; ')}`),
+        ...(repeat.length > 0 ? ['', ...repeat] : []),
       ],
       stats: [stats],
       monthly: monthlyAt('assess', stats),
@@ -162,6 +230,7 @@ const dedupSets = ({ sample, opts }: StepInput) => limited(sample.dedup, opts.li
 
 const dedupStep: RecalibrationStepDef = {
   name: 'dedup',
+  phase1Only: "its labelled pairs and gpt-5-nano's verdicts on them are phase 1's, read from that folder's ledger",
   plan: input =>
     dedupSets(input).map(s => ({
       arm: luna(input.opts.dedupEffort),
@@ -200,6 +269,7 @@ const ratingSetArms = (effort: ReasoningEffort): [Arm, Arm] => [MINI, luna(effor
 
 const ratingSetStep: RecalibrationStepDef = {
   name: 'rating-set',
+  phase1Only: "it swaps a set in the owner's phase-1 rating deliverable",
   plan: ({ fx, opts }) =>
     fx.assess.flatMap(s =>
       ratingSetArms(opts.effort).map(a => ({

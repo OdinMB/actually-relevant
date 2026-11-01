@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parseOptions, parseRecalibrationOptions, DEFAULT_BUDGET_USD, DEFAULT_FLOOR, SUITE_NAMES } from './options.js'
+import { parseOptions, parseRecalibrationOptions, DEFAULT_BUDGET_USD, DEFAULT_FLOOR, MAX_ASSESS_SIZE, SUITE_NAMES } from './options.js'
+import { MAX_REPEAT } from './repeats.js'
 
 describe('parseOptions', () => {
   it('requires --out', () => {
@@ -31,6 +32,20 @@ describe('parseOptions', () => {
   it('rejects a malformed crawl floor', () => {
     expect(() => parseOptions(['--out', 'x', '--floor', '2026-2-1'])).toThrow(/--floor/)
     expect(() => parseOptions(['--out', 'x', '--floor', '2026-13-40'])).toThrow(/--floor/)
+  })
+
+  it("defaults to phase 1's 50 full-assessment stories and no exclusions", () => {
+    expect(parseOptions(['--out', 'x'])).toMatchObject({ assessSize: 50, exclude: [] })
+  })
+
+  it('takes a larger full-assessment sample within the cap', () => {
+    expect(parseOptions(['--out', 'x', '--assess-size', '150']).assessSize).toBe(150)
+    expect(() => parseOptions(['--out', 'x', '--assess-size', '0'])).toThrow(/--assess-size/)
+    expect(() => parseOptions(['--out', 'x', '--assess-size', String(MAX_ASSESS_SIZE + 1)])).toThrow(/--assess-size/)
+  })
+
+  it('takes a comma list of folders whose stories leave the rating pools', () => {
+    expect(parseOptions(['--out', 'x', '--exclude', '../DOCS/a, ../DOCS/b']).exclude).toEqual(['../DOCS/a', '../DOCS/b'])
   })
 
   it('parses a smoke-run command line', () => {
@@ -79,6 +94,13 @@ describe('parseRecalibrationOptions', () => {
     expect(() => parseRecalibrationOptions(['--out', 'x', '--steps', 'assess,related'])).toThrow(/related/)
     expect(() => parseRecalibrationOptions(['--out', 'x', '--effort', 'max-ish'])).toThrow(/--effort/)
     expect(parseRecalibrationOptions(['--out', 'x', '--effort', 'high', '--dedup-effort', 'medium'])).toMatchObject({ effort: 'high', dedupEffort: 'medium' })
+  })
+
+  it('runs each rating prompt once unless asked to repeat, up to the cap', () => {
+    expect(parseRecalibrationOptions(['--out', 'x']).repeat).toBe(1)
+    expect(parseRecalibrationOptions(['--out', 'x', '--repeat', '3']).repeat).toBe(3)
+    expect(() => parseRecalibrationOptions(['--out', 'x', '--repeat', '0'])).toThrow(/--repeat/)
+    expect(() => parseRecalibrationOptions(['--out', 'x', '--repeat', String(MAX_REPEAT + 1)])).toThrow(/--repeat/)
   })
 
   it('applies the same spend cap and floor format as eval:models', () => {

@@ -9,23 +9,24 @@ import { accepted, type Criterion } from './recalibration.js'
 import type { StepSection } from './recalibrationChecks.js'
 import type { Half } from './sampling.js'
 
-export type ReportNameInput = Pick<RecalibrationOptions, 'half' | 'effort' | 'dedupEffort' | 'steps' | 'limit'>
+export type ReportNameInput = Pick<RecalibrationOptions, 'half' | 'effort' | 'dedupEffort' | 'steps' | 'limit' | 'repeat'>
 
 const isDefaultStepSet = (steps: readonly string[]) =>
   steps.length === RECALIBRATION_DEFAULT_STEPS.length && RECALIBRATION_DEFAULT_STEPS.every(s => steps.includes(s))
 
 /**
  * `recalibration-<half>.md` for the default checks at the efforts the
- * acceptance is judged at. Another effort, another step list or a `--limit`
- * run writes its own file (`recalibration-holdout-effort-high.md`,
- * `recalibration-all-assess-social-post.md`, `…-limit-3.md`), so a trial
- * never overwrites the report of record.
+ * acceptance is judged at. Another effort, another step list, a `--repeat`
+ * or a `--limit` run writes its own file (`recalibration-holdout-effort-high.md`,
+ * `recalibration-all-assess-social-post.md`, `…-repeat-3.md`, `…-limit-3.md`),
+ * so a trial never overwrites the report of record.
  */
-export function recalibrationReportName({ half, effort, dedupEffort, steps, limit }: ReportNameInput): string {
+export function recalibrationReportName({ half, effort, dedupEffort, steps, limit, repeat }: ReportNameInput): string {
   const tags = [
     ...(effort !== RECALIBRATION_DEFAULT_EFFORT ? [`effort-${effort}`] : []),
     ...(dedupEffort !== RECALIBRATION_DEFAULT_DEDUP_EFFORT ? [`dedup-${dedupEffort}`] : []),
     ...(isDefaultStepSet(steps) ? [] : steps),
+    ...(repeat > 1 ? [`repeat-${repeat}`] : []),
     ...(limit != null ? [`limit-${limit}`] : []),
   ]
   return `recalibration-${[half, ...tags].join('-')}.md`
@@ -35,6 +36,10 @@ export interface RecalibrationReportInput {
   generatedAt: string
   half: Half | 'all'
   fixtures: Pick<Fixtures, 'createdAt' | 'anchor' | 'floor'>
+  /** The 2026-09-24 sample, or a fresh one sampled into the folder. */
+  phase1Sample: boolean
+  /** Runs of each rating prompt (`--repeat`). */
+  repeat: number
   limit?: number
   sections: StepSection[]
   skipped: { step: string; reason: string }[]
@@ -79,12 +84,15 @@ function sectionLines(s: StepSection): string[] {
 }
 
 export function renderRecalibration(input: RecalibrationReportInput): string {
-  const half = input.half === 'all' ? 'the whole phase-1 sample' : `the ${input.half} half of the phase-1 sample`
+  const sample = input.phase1Sample ? 'the phase-1 sample' : 'the fresh sample in this folder'
+  const half = input.half === 'all' ? `the whole ${sample.replace(/^the /, '')}` : `the ${input.half} half of ${sample}`
   return [
     `# GPT-6 recalibration check: ${input.half}`,
     '',
     `Generated ${input.generatedAt} on ${half} (fixtures sampled ${input.fixtures.createdAt}, crawled ${input.fixtures.floor} to ${input.fixtures.anchor.slice(0, 10)}). ` +
-      "Prompts are the working tree at run time. Ratings are judged against the stored production values; dedup against phase 1's labelled set and gpt-5-nano's phase-1 verdicts on it.",
+      'Prompts are the working tree at run time. Ratings are judged against the stored production values' +
+      (input.phase1Sample ? "; dedup against phase 1's labelled set and gpt-5-nano's phase-1 verdicts on it." : '.') +
+      (input.repeat > 1 ? ` ${input.repeat} runs of each rating prompt; their criteria pool all runs.` : ''),
     ...(input.limit != null
       ? ['', `**Partial run:** at most ${input.limit} batches, stories or sets per check (\`--limit\`). A partial run is not evidence.`]
       : []),

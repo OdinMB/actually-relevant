@@ -126,6 +126,7 @@ const phase1Prompt = (g: SelectionGroup) => buildPhase1SelectPrompt(g.stories, g
 
 const selectionStep: RecalibrationStepDef = {
   name: 'selection',
+  phase1Only: "it compares with phase 1's gpt-6-sol picks, read from that folder's ledger",
   plan: input =>
     selectionGroups(input).map(g => ({
       arm: SOL,

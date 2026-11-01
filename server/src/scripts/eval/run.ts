@@ -12,9 +12,10 @@
  */
 import 'dotenv/config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { loadFixtures, type Fixtures } from './fixtures.js'
+import { excludedIds, fixtureMismatch } from './freshSample.js'
 import { classifyDb, openReadOnlyDb, readOnlyStatus } from './readOnlyDb.js'
 import { armKey, createEvalContext, estimateCallUsd, type EvalContext } from './models.js'
 import { parseOptions, type EvalOptions } from './options.js'
@@ -32,23 +33,35 @@ const SUITES: Suite[] = [preassessSuite, assessSuite, dedupSuite, relatedSuite, 
 const STALE_AFTER_DAYS = 14
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 
+/** The spent samples named by `--exclude`, by folder name, with the stories to leave out. */
+function readExcluded(folders: string[]): { folders: string[]; ids: Set<string> } {
+  const samples = folders.map(f => {
+    const file = join(resolve(f), '.cache', 'fixtures.json')
+    if (!existsSync(file)) throw new Error(`--exclude ${f}: no cached fixtures there`)
+    return JSON.parse(readFileSync(file, 'utf8')) as Fixtures
+  })
+  return { folders: folders.map(f => basename(resolve(f))), ids: excludedIds(samples) }
+}
+
 async function getFixtures(opts: EvalOptions, cacheDir: string): Promise<Fixtures> {
   const file = join(cacheDir, 'fixtures.json')
+  const excluded = readExcluded(opts.exclude)
   if (existsSync(file) && !opts.refreshFixtures) {
     const fx = JSON.parse(readFileSync(file, 'utf8')) as Fixtures
-    if (fx.floor === opts.floor) {
+    const mismatch = fixtureMismatch(fx, { floor: opts.floor, assessSize: opts.assessSize, exclude: excluded.folders })
+    if (mismatch == null) {
       console.log(
         `fixtures: cached from ${fx.createdAt} (database ${fx.dbClass}, read-only ${fx.readOnlyMode} mode, floor ${fx.floor}); pass --refresh-fixtures to resample`,
       )
       return fx
     }
-    console.log(`fixtures: cached with floor ${fx.floor ?? 'unrecorded'}, requested ${opts.floor}; resampling`)
+    console.log(`fixtures: ${mismatch}; resampling`)
   }
   console.log(`database: ${classifyDb(process.env.DATABASE_URL ?? '')}`)
   const db = await openReadOnlyDb()
   try {
     console.log(`read-only session: ${await readOnlyStatus(db)} (${db.mode} mode)`)
-    const fx = await loadFixtures(db, opts.floor)
+    const fx = await loadFixtures(db, opts.floor, { assessSize: opts.assessSize, exclude: excluded })
     writeFileSync(file, JSON.stringify(fx, null, 1))
     return fx
   } finally {

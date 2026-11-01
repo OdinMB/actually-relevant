@@ -28,9 +28,9 @@ import {
   socialPickStory,
 } from '../../services/promptInputs.js'
 import { mentionsModelName, tallyTerms, withoutModelNames } from './blinding.js'
-import { DEFAULT_FLOOR } from './options.js'
+import { DEFAULT_ASSESS_SIZE, DEFAULT_FLOOR } from './options.js'
 import type { Db, ReadOnlyDb } from './readOnlyDb.js'
-import { buildSelectionGroups, byEvalHash, stratifiedPick } from './sampling.js'
+import { assessQuotas, buildSelectionGroups, byEvalHash, stratifiedPick } from './sampling.js'
 
 // ---------------------------------------------------------------------------
 // Fixture shapes
@@ -142,6 +142,10 @@ export interface Fixtures {
   anchor: string
   /** Earliest crawl date (`YYYY-MM-DD`) for pre-assess, assess, dedup and social-post samples. */
   floor: string
+  /** Full-assessment target (`--assess-size`); absent in fixtures sampled before the option, which hold 50. */
+  assessSize?: number
+  /** Folders (by name) whose pre-assessment and full-assessment stories were left out of the pools (`--exclude`). */
+  exclude?: string[]
   dbClass: 'local' | 'remote'
   readOnlyMode: 'session' | 'transaction'
   issues: IssueForPrompt[]
@@ -162,7 +166,8 @@ export interface Fixtures {
 
 export const TARGETS = {
   preassess: { total: 300, han: 50, published: 60 },
-  assess: { total: 50, band: 25, nonEnglish: 10, han: 5 },
+  /** Phase 1's; `--assess-size` scales these (`assessQuotas`). */
+  assess: assessQuotas(DEFAULT_ASSESS_SIZE),
   dedup: { clusterMembers: 50, hardNegatives: 50, random: 20, candidates: 6, windowDays: 14 },
   related: { total: 30 },
   socialPick: { days: 10 },
@@ -194,7 +199,10 @@ async function loadIssues(db: Db): Promise<IssueForPrompt[]> {
   return db.issue.findMany({ select: { slug: true, name: true, description: true }, orderBy: { slug: 'asc' } })
 }
 
-async function loadPreassess(db: Db, floor: Date, shortfalls: string[]): Promise<PreassessItem[]> {
+/** Leaves a spent sample's stories out of a pool (`--exclude`); no clause at all when there are none. */
+const notIn = (exclude: string[]) => (exclude.length > 0 ? Prisma.sql`AND NOT (s.id = ANY(${exclude}))` : Prisma.empty)
+
+async function loadPreassess(db: Db, floor: Date, exclude: string[], shortfalls: string[]): Promise<PreassessItem[]> {
   const chars = Prisma.raw(String(config.preassess.contentMaxLength))
   const pool = await db.$queryRaw<{ id: string; language: string; status: string; han: boolean }[]>`
     SELECT s.id, f.language, s.status::text AS status,
@@ -202,7 +210,7 @@ async function loadPreassess(db: Db, floor: Date, shortfalls: string[]): Promise
     FROM stories s
     JOIN feeds f ON f.id = s.feed_id
     JOIN issues i ON i.id = s.issue_id
-    WHERE s.relevance_pre IS NOT NULL AND s.emotion_tag IS NOT NULL AND s.date_crawled >= ${floor}
+    WHERE s.relevance_pre IS NOT NULL AND s.emotion_tag IS NOT NULL AND s.date_crawled >= ${floor} ${notIn(exclude)}
     ORDER BY md5(s.id || 'gpt6-eval')`
   const t = TARGETS.preassess
   const { picked, shortfalls: missing } = stratifiedPick(pool, {
@@ -237,16 +245,16 @@ async function loadPreassess(db: Db, floor: Date, shortfalls: string[]): Promise
   })
 }
 
-async function loadAssess(db: Db, floor: Date, shortfalls: string[]): Promise<AssessItem[]> {
+async function loadAssess(db: Db, floor: Date, size: number, exclude: string[], shortfalls: string[]): Promise<AssessItem[]> {
   const chars = Prisma.raw(String(config.assess.contentMaxLength))
   const pool = await db.$queryRaw<{ id: string; language: string; relevance: number; issue_id: string; han: boolean }[]>`
     SELECT s.id, f.language, s.relevance, COALESCE(s.issue_id, f.issue_id) AS issue_id,
            (substring(s.source_content, 1, ${chars}) ~ ${HAN_RE}) AS han
     FROM stories s
     JOIN feeds f ON f.id = s.feed_id
-    WHERE s.relevance IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${floor}
+    WHERE s.relevance IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${floor} ${notIn(exclude)}
     ORDER BY md5(s.id || 'gpt6-eval')`
-  const t = TARGETS.assess
+  const t = assessQuotas(size)
   const { picked, shortfalls: missing } = stratifiedPick(pool, {
     total: t.total,
     quotas: [
@@ -692,12 +700,22 @@ async function loadPodcast(db: Db, anchor: Date, shortfalls: string[], adaptatio
   return { id: 'recent-stories', source: 'recent-stories', stories: kept }
 }
 
+export interface SampleOptions {
+  /** Full-assessment target (default 50, phase 1's). */
+  assessSize?: number
+  /** Stories of spent samples, left out of the pre-assessment and full-assessment pools, with the folders they came from. */
+  exclude?: { folders: string[]; ids: Set<string> }
+}
+
 /**
  * Sample every suite's inputs in one read-only pass. `floor` (`YYYY-MM-DD`,
  * UTC) is the earliest crawl date for the stored-data suites.
  */
-export async function loadFixtures(db: ReadOnlyDb, floorDay: string): Promise<Fixtures> {
+export async function loadFixtures(db: ReadOnlyDb, floorDay: string, sample: SampleOptions = {}): Promise<Fixtures> {
   const floor = new Date(`${floorDay}T00:00:00Z`)
+  const assessSize = sample.assessSize ?? DEFAULT_ASSESS_SIZE
+  const excludeIds = [...(sample.exclude?.ids ?? [])]
+  const excludeFolders = sample.exclude?.folders ?? []
   return db.read(async q => {
     const shortfalls: string[] = []
     const adaptations: string[] = []
@@ -707,9 +725,20 @@ export async function loadFixtures(db: ReadOnlyDb, floorDay: string): Promise<Fi
         `crawl floor moved from ${DEFAULT_FLOOR} to ${floorDay} for pre-assess, assess, dedup and social-post samples (newest assessed crawl in this database: ${anchor.toISOString().slice(0, 10)})`,
       )
     }
+    if (assessSize !== DEFAULT_ASSESS_SIZE) {
+      const t = assessQuotas(assessSize)
+      adaptations.push(
+        `assess: ${assessSize} stories instead of ${DEFAULT_ASSESS_SIZE} (--assess-size), minimums scaled to ${t.band} rated 4-6, ${t.nonEnglish} non-English, ${t.han} Han-script`,
+      )
+    }
+    if (excludeFolders.length > 0) {
+      adaptations.push(
+        `preassess and assess: ${excludeIds.length} stories of the spent sample(s) in ${excludeFolders.join(', ')} left out of the pools (--exclude)`,
+      )
+    }
     const issues = await loadIssues(q)
-    const preassess = await loadPreassess(q, floor, shortfalls)
-    const assess = await loadAssess(q, floor, shortfalls)
+    const preassess = await loadPreassess(q, floor, excludeIds, shortfalls)
+    const assess = await loadAssess(q, floor, assessSize, excludeIds, shortfalls)
     const dedup = await loadDedup(q, floor, shortfalls, adaptations)
     const related = byEvalHash(await loadRelated(q, shortfalls), r => r.id)
     const social = await loadSocialPick(q, anchor, shortfalls, adaptations)
@@ -722,6 +751,8 @@ export async function loadFixtures(db: ReadOnlyDb, floorDay: string): Promise<Fi
       createdAt: new Date().toISOString(),
       anchor: anchor.toISOString(),
       floor: floorDay,
+      ...(assessSize !== DEFAULT_ASSESS_SIZE ? { assessSize } : {}),
+      ...(excludeFolders.length > 0 ? { exclude: excludeFolders } : {}),
       dbClass: db.dbClass,
       readOnlyMode: db.mode,
       issues,

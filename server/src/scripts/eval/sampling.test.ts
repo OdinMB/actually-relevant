@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { stratifiedPick, buildSelectionGroups, splitHalves } from './sampling.js'
+import { stratifiedPick, buildSelectionGroups, splitHalves, assessQuotas } from './sampling.js'
+
+describe('assessQuotas', () => {
+  it("keeps phase 1's minimums for the 50-story sample", () => {
+    expect(assessQuotas(50)).toEqual({ total: 50, band: 25, nonEnglish: 10, han: 5 })
+  })
+
+  it('scales them with a larger sample', () => {
+    expect(assessQuotas(150)).toEqual({ total: 150, band: 75, nonEnglish: 30, han: 15 })
+    expect(assessQuotas(7)).toEqual({ total: 7, band: 4, nonEnglish: 1, han: 1 })
+  })
+})
 
 interface Item {
   id: string

@@ -8,10 +8,15 @@
  *   npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --half calibration --budget 5.9
  *   npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --steps rating-set --budget 5.9
  *   npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --steps assess,social-post --budget 4.9
+ *   npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-11-01_rating-eval --steps assess --repeat 3 --dry-run
  *
  * Needs no database: it reads the cached fixtures and never resamples,
  * because the calibration/holdout split and the labelled dedup set are
- * defined on them. Writes recalibration-<half>[-tags].md into --out; the
+ * defined on them. A fresh sample is drawn into a new folder by eval:models
+ * (`--dry-run --assess-size … --exclude …`); there the steps that need phase
+ * 1's ledger (dedup, selection, rating-set) are skipped with the reason.
+ * `--repeat N` runs each rating prompt N times under distinct cache keys.
+ * Writes recalibration-<half>[-tags].md into --out; the
  * rating-set step also swaps the full-assessment set in rating-sets.json.
  * Never prints env values. See .context/model-eval.md.
  */
@@ -19,6 +24,7 @@ import 'dotenv/config'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Fixtures } from './fixtures.js'
+import { isPhase1Sample, PHASE1_FOLDER } from './freshSample.js'
 import { createEvalContext, estimateCallUsd } from './models.js'
 import { parseRecalibrationOptions, type RecalibrationStep } from './options.js'
 import { sampleFor } from './recalibration.js'
@@ -33,7 +39,9 @@ const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 function readCachedFixtures(cacheDir: string, floor?: string): Fixtures {
   const file = join(cacheDir, 'fixtures.json')
   if (!existsSync(file))
-    throw new Error(`no cached fixtures in ${cacheDir}: the recalibration runs on the phase-1 sample, so eval:models must have sampled it there`)
+    throw new Error(
+      `no cached fixtures in ${cacheDir}: the recalibration runs on a sample eval:models cached there (the phase-1 folder, or a fresh one from eval:models --dry-run --assess-size … --exclude …)`,
+    )
   const fx = JSON.parse(readFileSync(file, 'utf8')) as Fixtures
   if (floor !== undefined && fx.floor !== floor) throw new Error(`the cached fixtures use floor ${fx.floor}, not ${floor}; the recalibration never resamples`)
   return fx
@@ -46,13 +54,24 @@ async function main(): Promise<void> {
   const cacheFile = join(cacheDir, 'calls.jsonl')
   console.log(`OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'present' : 'missing'}`)
   const fx = readCachedFixtures(cacheDir, opts.floor)
-  const input = { fx, sample: sampleFor(fx, opts.half), opts: { ...opts, out } }
+  const phase1Sample = isPhase1Sample(fx)
+  const input = { fx, sample: sampleFor(fx, opts.half), opts: { ...opts, out }, phase1Sample }
   const ctx = createEvalContext({ cacheFile, budgetUsd: opts.budget, concurrency: opts.concurrency, limit: opts.limit, offline: opts.dryRun })
   // Cache-only: phase 1's labelled dedup set is read from the ledger and never paid for again.
   const phase1 = createEvalContext({ cacheFile, budgetUsd: 0, concurrency: opts.concurrency, offline: true })
-  const steps = opts.steps.map(s => STEP_DEFS[s])
+  const skipped: { step: string; reason: string }[] = []
+  const steps = opts.steps
+    .map(s => STEP_DEFS[s])
+    .filter(s => {
+      if (phase1Sample || !s.phase1Only) return true
+      skipped.push({ step: s.name, reason: `needs the phase-1 folder (${PHASE1_FOLDER}): ${s.phase1Only}` })
+      return false
+    })
 
-  console.log(`fixtures: phase-1 sample from ${fx.createdAt} (floor ${fx.floor}); half: ${opts.half}`)
+  console.log(
+    `fixtures: ${phase1Sample ? 'phase-1' : 'fresh'} sample from ${fx.createdAt} (floor ${fx.floor}, crawled to ${fx.anchor.slice(0, 10)}, ${fx.assess.length} full-assessment and ${fx.preassess.length} pre-assessment stories); half: ${opts.half}; runs per rating prompt: ${opts.repeat}`,
+  )
+  for (const s of skipped) console.log(`${s.step}: skipped, ${s.reason}`)
   for (const s of steps) if (s.preflight) console.log(`${s.name}: ${await s.preflight(input, phase1)}`)
   console.log('estimates:')
   const estimates = new Map(
@@ -72,7 +91,6 @@ async function main(): Promise<void> {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is missing')
 
   const sections: StepSection[] = []
-  const skipped: { step: string; reason: string }[] = []
   for (const s of steps) {
     const est = estimates.get(s.name) ?? 0
     const remaining = opts.budget - ctx.spentUsd()
@@ -99,6 +117,8 @@ async function main(): Promise<void> {
       generatedAt: new Date().toISOString(),
       half: opts.half,
       fixtures: fx,
+      phase1Sample,
+      repeat: opts.repeat,
       limit: opts.limit,
       sections,
       skipped,
