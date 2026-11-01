@@ -15,6 +15,7 @@ import { EditPanel, PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
 import { buildIssueOptions } from './FeedForm'
 import { FeedPaywallFields } from './FeedPaywallFields'
+import { FeedContentSourceField } from './FeedContentSourceField'
 
 interface FeedEditPanelProps {
   feedId: string | null
@@ -36,6 +37,7 @@ function buildFormState(
     | 'htmlSelector'
     | 'paywallDetection'
     | 'paywallTitleMarker'
+    | 'contentSource'
     | 'active'
   >,
 ) {
@@ -51,6 +53,7 @@ function buildFormState(
     htmlSelector: feed.htmlSelector || '',
     paywallDetection: feed.paywallDetection,
     paywallTitleMarker: feed.paywallTitleMarker || '',
+    contentSource: feed.contentSource,
     active: feed.active,
   }
 }
@@ -159,6 +162,7 @@ function FeedEditForm({ feedId, issues, onClose }: { feedId: string; issues: Iss
       htmlSelector: f.htmlSelector || null,
       paywallDetection: f.paywallDetection,
       paywallTitleMarker: f.paywallTitleMarker.trim() || null,
+      contentSource: f.contentSource,
       active: f.active,
     }),
     successMessage: 'Feed updated',
@@ -230,6 +234,7 @@ function FeedEditForm({ feedId, issues, onClose }: { feedId: string; issues: Iss
           onChange={e => set('htmlSelector', e.target.value)}
           placeholder="e.g. article .content"
         />
+        <FeedContentSourceField value={form.contentSource} onChange={v => set('contentSource', v)} />
         <FeedPaywallFields
           detection={form.paywallDetection}
           titleMarker={form.paywallTitleMarker}

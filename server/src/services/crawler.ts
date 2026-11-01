@@ -1,20 +1,39 @@
-import { parseFeed, type ParseFeedResult } from './rssParser.js'
-import { extractContent, type ExtractionMethod } from './extractor.js'
-import type { PaywallPolicy } from '../lib/paywall.js'
+import type { Feed } from '@prisma/client'
+import { parseFeed, type ParseFeedResult, type RSSItem } from './rssParser.js'
+import { extractContent, type CrawlMethod, type ExtractionMethod } from './extractor.js'
+import { RSS_CRAWL_METHOD, storyFromRssItem } from './rssContent.js'
+import type { AccessTier, PaywallPolicy } from '../lib/paywall.js'
 import { getExistingUrls, createStory } from './story.js'
 import { getFeedById, getDueFeeds, updateCrawlStatus, updateFeedCacheHeaders } from './feed.js'
 import { createLogger } from '../lib/logger.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { config } from '../config.js'
 import { normalizeUrl } from '../utils/urlNormalization.js'
-import { ConflictError, NotFoundError, isUniqueViolation, summarizeError } from '../utils/errors.js'
+import { BadRequestError, ConflictError, NotFoundError, isUniqueViolation, summarizeError } from '../utils/errors.js'
 
 const log = createLogger('crawler')
 
 const LOCAL_METHODS: ReadonlySet<ExtractionMethod> = new Set(['selector', 'readability', 'teaser'])
 
+/** The feed fields a crawl reads. */
+type CrawledFeed = Pick<Feed, 'id' | 'title' | 'htmlSelector' | 'paywallDetection' | 'paywallTitleMarker'>
+
+/** The text and metadata a story is created with, from an extraction tier or from the RSS item. */
+interface StoryDraft {
+  title: string
+  content: string
+  datePublished: string | null
+  method: CrawlMethod
+  accessTier: AccessTier
+}
+
 function paywallPolicy(feed: { paywallDetection: boolean; paywallTitleMarker: string | null }): PaywallPolicy {
   return { detection: feed.paywallDetection, titleMarker: feed.paywallTitleMarker }
+}
+
+/** Whether the feed takes its article text from the RSS item rather than the article page. */
+function takesTextFromRss(feed: { contentSource: string }): boolean {
+  return feed.contentSource === 'rss'
 }
 
 export interface CrawlResult {
@@ -95,85 +114,8 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
   const newItems = uniqueItems.filter(item => !existingUrls.has(item.url))
   result.skipped = rssItems.length - newItems.length // includes RSS duplicates + DB matches
 
-  // Extract content and create stories (parallel with concurrency limit).
-  // The fail counters below are shared across concurrent tasks. This is safe because
-  // Node.js is single-threaded: mutations happen synchronously between await points,
-  // so concurrent tasks never interleave mid-increment. The first concurrent batch
-  // (size = crawlArticles) all read the initial values; thresholds take effect for
-  // subsequent batches after the first batch completes.
-  const articleSemaphore = new Semaphore(config.concurrency.crawlArticles)
-  const totalArticles = newItems.length
-  let localFailCount = 0
-  let totalFailCount = 0
-  let skipLocal = false
-  let skipAll = false
-  await Promise.allSettled(
-    newItems.map(item =>
-      articleSemaphore.run(async () => {
-        if (skipAll) {
-          result.errors++
-          return
-        }
-        try {
-          const extracted = await extractContent(item.url, {
-            htmlSelector: feed.htmlSelector,
-            skipLocalExtraction: skipLocal,
-            shouldAbort: () => skipAll,
-            paywall: paywallPolicy(feed),
-          })
-
-          if (!extracted) {
-            totalFailCount++
-            // Local extraction was attempted and failed — count toward skip-local threshold
-            if (!skipLocal) localFailCount++
-            if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
-            if (totalFailCount >= config.crawl.totalFailThreshold) {
-              skipAll = true
-              log.warn({ feed: feed.title, totalFailCount, totalArticles }, 'all extraction methods failing, skipping remaining articles')
-            }
-            log.warn({ url: item.url }, 'no content extracted')
-            result.errors++
-            return
-          }
-
-          totalFailCount = 0
-          // A teaser, or any result the HTML classified as locked, counts as local: the page was
-          // fetched and parsed, it is only locked. Counting it as a local failure would set skip-local
-          // and switch off paywall detection for the rest of the crawl.
-          if (LOCAL_METHODS.has(extracted.method) || extracted.accessTier === 'locked') {
-            localFailCount = 0
-          } else {
-            localFailCount++
-          }
-          if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
-
-          await createStory({
-            sourceUrl: item.url,
-            sourceTitle: extracted.title || item.title,
-            sourceContent: extracted.content,
-            feedId,
-            sourceDatePublished: extracted.datePublished || item.datePublished || undefined,
-            crawlMethod: extracted.method,
-            accessTier: extracted.accessTier,
-          })
-          if (extracted.accessTier === 'locked') {
-            log.info({ feed: feed.title, url: item.url, method: extracted.method }, 'paywall-locked story stored as rejected')
-          }
-
-          result.newStories++
-        } catch (err) {
-          // Unique constraint violation = URL was inserted by a concurrent crawl; treat as skip
-          if (isUniqueViolation(err)) {
-            log.info({ url: item.url }, 'story already exists (concurrent insert), skipping')
-            result.skipped++
-            return
-          }
-          log.error({ url: item.url, err }, 'failed to process item')
-          result.errors++
-        }
-      }),
-    ),
-  )
+  // Items whose text was too short to attempt are skips, not failures, so they stay out of this count.
+  const totalArticles = takesTextFromRss(feed) ? await storeRssItems(feed, newItems, result) : await extractAndStorePages(feed, newItems, result)
 
   if (result.errors > 0) {
     result.errorMessage = `${result.errors} of ${totalArticles} articles failed extraction`
@@ -190,6 +132,136 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
     crawlResult,
   })
   return result
+}
+
+/**
+ * Fetch each item's article page, extract its text through the tier chain and store the story.
+ * Returns how many items were attempted (all of them).
+ *
+ * Runs in parallel with a concurrency limit. The fail counters below are shared across concurrent
+ * tasks. This is safe because Node.js is single-threaded: mutations happen synchronously between
+ * await points, so concurrent tasks never interleave mid-increment. The first concurrent batch
+ * (size = crawlArticles) all read the initial values; thresholds take effect for subsequent batches
+ * after the first batch completes.
+ */
+async function extractAndStorePages(feed: CrawledFeed, items: RSSItem[], result: CrawlResult): Promise<number> {
+  const articleSemaphore = new Semaphore(config.concurrency.crawlArticles)
+  const totalArticles = items.length
+  let localFailCount = 0
+  let totalFailCount = 0
+  let skipLocal = false
+  let skipAll = false
+  await Promise.allSettled(
+    items.map(item =>
+      articleSemaphore.run(async () => {
+        if (skipAll) {
+          result.errors++
+          return
+        }
+        let extracted: Awaited<ReturnType<typeof extractContent>>
+        try {
+          extracted = await extractContent(item.url, {
+            htmlSelector: feed.htmlSelector,
+            skipLocalExtraction: skipLocal,
+            shouldAbort: () => skipAll,
+            paywall: paywallPolicy(feed),
+          })
+        } catch (err) {
+          log.error({ url: item.url, err }, 'failed to process item')
+          result.errors++
+          return
+        }
+
+        if (!extracted) {
+          totalFailCount++
+          // Local extraction was attempted and failed — count toward skip-local threshold
+          if (!skipLocal) localFailCount++
+          if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
+          if (totalFailCount >= config.crawl.totalFailThreshold) {
+            skipAll = true
+            log.warn({ feed: feed.title, totalFailCount, totalArticles }, 'all extraction methods failing, skipping remaining articles')
+          }
+          log.warn({ url: item.url }, 'no content extracted')
+          result.errors++
+          return
+        }
+
+        totalFailCount = 0
+        // A teaser, or any result the HTML classified as locked, counts as local: the page was
+        // fetched and parsed, it is only locked. Counting it as a local failure would set skip-local
+        // and switch off paywall detection for the rest of the crawl.
+        if (LOCAL_METHODS.has(extracted.method) || extracted.accessTier === 'locked') {
+          localFailCount = 0
+        } else {
+          localFailCount++
+        }
+        if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
+
+        await saveStory(
+          feed,
+          item,
+          {
+            title: extracted.title || item.title,
+            content: extracted.content,
+            datePublished: extracted.datePublished || item.datePublished,
+            method: extracted.method,
+            accessTier: extracted.accessTier,
+          },
+          result,
+        )
+      }),
+    ),
+  )
+  return totalArticles
+}
+
+/**
+ * Store each item's own text as its story (`contentSource` 'rss'), in order, fetching no page. An
+ * item whose text is shorter than `minContentLength` (a paid post's preview) is a skip, never an
+ * error and never a page fetch, which the publisher's terms forbid. Returns how many items were long
+ * enough to attempt.
+ */
+async function storeRssItems(feed: CrawledFeed, items: RSSItem[], result: CrawlResult): Promise<number> {
+  let attempted = 0
+  for (const item of items) {
+    const story = storyFromRssItem(item, paywallPolicy(feed))
+    if (!story) {
+      log.info({ feed: feed.title, url: item.url }, 'RSS item text below the minimum length (a preview?); skipped, page not fetched')
+      result.skipped++
+      continue
+    }
+    attempted++
+    await saveStory(feed, item, { ...story, method: RSS_CRAWL_METHOD }, result)
+  }
+  return attempted
+}
+
+/** Create the story and count it: a concurrent crawl's insert of the same URL is a skip, any other failure an error. */
+async function saveStory(feed: CrawledFeed, item: RSSItem, draft: StoryDraft, result: CrawlResult): Promise<void> {
+  try {
+    await createStory({
+      sourceUrl: item.url,
+      sourceTitle: draft.title,
+      sourceContent: draft.content,
+      feedId: feed.id,
+      sourceDatePublished: draft.datePublished || undefined,
+      crawlMethod: draft.method,
+      accessTier: draft.accessTier,
+    })
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      log.info({ url: item.url }, 'story already exists (concurrent insert), skipping')
+      result.skipped++
+      return
+    }
+    log.error({ url: item.url, err }, 'failed to process item')
+    result.errors++
+    return
+  }
+  if (draft.accessTier === 'locked') {
+    log.info({ feed: feed.title, url: item.url, method: draft.method }, 'paywall-locked story stored as rejected')
+  }
+  result.newStories++
 }
 
 export async function crawlAllDueFeeds(): Promise<CrawlResult[]> {
@@ -248,6 +320,8 @@ export async function crawlAllDueFeeds(): Promise<CrawlResult[]> {
 export async function crawlUrl(url: string, feedId: string): Promise<{ storyId: string } | null> {
   const feed = await getFeedById(feedId)
   if (!feed) throw new NotFoundError('Feed not found')
+  // Such a feed's publisher forbids fetching its pages; its text exists only in the RSS item.
+  if (takesTextFromRss(feed)) throw new BadRequestError("This feed takes article text from its RSS feed; single URLs can't be crawled")
 
   url = normalizeUrl(url)
 

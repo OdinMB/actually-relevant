@@ -16,6 +16,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { FeedTable } from '../../components/admin/FeedTable'
 import { FeedCreateForm } from '../../components/admin/FeedForm'
 import { FeedEditPanel } from '../../components/admin/FeedEditPanel'
+import { FeedChangesetControls } from '../../components/admin/FeedChangesetControls'
 import { useToast } from '../../components/ui/Toast'
 import type { Issue } from '@shared/types'
 
@@ -161,6 +162,7 @@ export default function FeedsPage() {
             <Button variant="secondary" onClick={handleCrawlAll}>
               Crawl All
             </Button>
+            <FeedChangesetControls issues={issuesQuery.data || []} />
             <Button onClick={() => setCreateOpen(true)}>Add Feed</Button>
           </>
         }

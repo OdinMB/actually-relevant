@@ -29,6 +29,13 @@ class ThrottleAbortError extends Error {
 
 export type ExtractionMethod = 'selector' | 'readability' | 'diffbot' | 'pipfeed' | 'teaser'
 
+/**
+ * What a story's `crawlMethod` records: the extraction tier that produced its text, or `rss` when its
+ * feed's own RSS item carried the text and no page was fetched (`rssContent.ts`). `rss` is never a
+ * tier of this chain.
+ */
+export type CrawlMethod = ExtractionMethod | 'rss'
+
 export interface ExtractionResult {
   title: string | null
   content: string

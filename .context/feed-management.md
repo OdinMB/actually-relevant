@@ -1,10 +1,12 @@
 # Feed Management
 
-Feed lifecycle, crawl scheduling and health tracking, quality metrics and favicons. Code: `server/src/services/feed.ts`, `server/src/services/favicon.ts`, `server/src/routes/admin/feeds.ts`. Crawling and extraction themselves are in `content-extraction.md`.
+Feed lifecycle, changesets, the source policy, crawl scheduling and health tracking, quality metrics and favicons. Code: `server/src/services/feed.ts`, `server/src/services/feedChangeset.ts`, `server/src/services/favicon.ts`, `server/src/routes/admin/feeds.ts`. Crawling and extraction themselves are in `content-extraction.md`.
 
 ## Creating and Updating Feeds
 
-Creating a feed requires `title`, `rssUrl` and an `issueId` that exists. An unknown issue fails with "Issue not found", and an update that changes `issueId` is checked the same way. New feeds start `active = true` with both failure counters at 0. `crawlIntervalHours` defaults to 24 in the schema and in Zod (`server/prisma/schema.prisma`, `server/src/schemas/feed.ts`); the admin form (`client/src/components/admin/FeedForm.tsx`) pre-fills 6. Optional fields: `url` (homepage), `displayTitle`, `language`, `region`, `htmlSelector`, and the paywall setting below.
+Creating a feed requires `title`, `rssUrl` and an `issueId` that exists. An unknown issue fails with "Issue not found", and an update that changes `issueId` is checked the same way. New feeds start `active = true` with both failure counters at 0. `crawlIntervalHours` defaults to 24 in the schema and in Zod (`server/prisma/schema.prisma`, `server/src/schemas/feed.ts`); the admin form (`client/src/components/admin/FeedForm.tsx`) pre-fills 6. Optional fields: `url` (homepage), `displayTitle`, `language`, `region`, `htmlSelector`, `contentSource`, and the paywall setting below.
+
+- **`contentSource`** ("Article text", `'page'` or `'rss'`, default `'page'`; a text column checked by Zod, not a Postgres enum). `'page'` fetches each article page and runs the extraction chain; `'rss'` takes the full text from the RSS item and never fetches the page, for publishers whose terms forbid fetching pages but whose feed carries each whole article, such as Substack newsletters (`content-extraction.md`, "Full Text from the RSS Item"). Shown in the create dialog and the edit panel (`FeedContentSourceField`). A single URL cannot be crawled into an `'rss'` feed.
 
 ## Paywall Setting
 
@@ -18,6 +20,44 @@ There is no "always locked" mode: that is the same as deactivating the feed. Cha
 ## Deleting Feeds (Soft Delete)
 
 `deleteFeed()` only deactivates a feed that has any stories (`active = false`, returning `action: 'deactivated'`). This keeps the link between stories and their source feed, which attribution, newsletters and favicons depend on. A feed with no stories is deleted outright (`action: 'deleted'`).
+
+## Changesets
+
+A changeset is one JSON file of feed changes, typically researched by an AI agent, that an admin uploads on the Feeds page ("Import changes"), previews and applies in one step. The info icon beside the button ("How to prepare a changeset") shows the agent instructions with a copy button; they are built in `client/src/components/admin/feedChangesetInstructions.ts` from the live issue list and `@shared/constants` (regions, format constants), so slugs and regions cannot drift. Keep them in step with the schema and the source policy below.
+
+**Format** (`server/src/schemas/feedChangeset.ts`; every object strict, an unknown key is an error):
+
+- Envelope: `format: "actually-relevant/feed-changeset"`, `version: 1`, optional `title` (≤ 200 chars) and `createdAt` (≤ 40), `changes`: 1 to 200 entries. A bad envelope is refused whole (400 "Validation failed" with Zod's flattened `details`); each change is checked on its own, so one malformed change is reported beside the others.
+- `{ action: "create", feed, reason }`: `feed` has the fields of `POST /api/admin/feeds` with `issue` (an issue **slug**) in place of `issueId`; `title`, `rssUrl` and `issue` required, `language` and `crawlIntervalHours` default as for the endpoint.
+- `{ action: "update", match, set, reason }`: `set` has the fields of `PUT /api/admin/feeds/:id` (including `active` and `contentSource`), with `issue` (slug) in place of `issueId`, and at least one field.
+- `{ action: "delete", match, reason }`: as `DELETE /api/admin/feeds/:id`, deleted without stories, deactivated with them.
+- `match`: exactly one of `id`, `rssUrl` (exact) or `title` (exact, case-sensitive), against every feed, active or not. `reason`: required, trimmed, 1 to 500 characters.
+
+**Resolution** (`planChangeset()` in `server/src/services/feedChangesetPlan.ts`, pure; preview and apply share it). Changes resolve in file order against the feeds as they were before the changeset, so a match never finds a feed the same file creates. Each change gets `status: 'ok' | 'noop' | 'error'`:
+
+- `error`: an invalid change (the Zod issue with its path, e.g. `set.region: …`), no feed or several feeds for the match, an unknown issue slug, an `rssUrl` held by another feed or by an earlier change in the file, or a second change to a feed that an earlier change already changes. A change can carry several problems, joined with "; ".
+- `noop`: an update whose fields already have those values (only the fields that differ are written), or a delete of an inactive feed that has stories.
+- RSS URLs are tracked in order: an update moving a feed off a URL, or a delete of a feed without stories, frees it for a later change; a delete that only deactivates does not.
+
+**Endpoints** (admin router, before `/:id`; body limit 512 kB for this path in `app.ts`, 100 kB elsewhere):
+
+- `POST /api/admin/feeds/changesets/preview` writes nothing and answers `{ title, results, counts: { ok, noop, error } }`. Each result is `{ index (from 0), action ('create' | 'update' | 'delete', or null for an unknown one), feedTitle (the matched or new feed's title, null when no single feed matched), reason, status, message, diff? }`, with `diff` on updates only, `[{ field, from, to }]`, `issue` shown as slugs.
+- `POST /api/admin/feeds/changesets/apply` resolves again inside one Prisma transaction (`config.database.transactionTimeoutMs`). **All or nothing:** if any change is `error` it writes nothing and answers 400 `{ error: "N of M changes have errors; nothing was applied" ("has an error" for one), applied: false, title, results, counts }` (`ChangesetHasErrorsError`); otherwise it performs every `ok` change through `createFeed`/`updateFeed`/`deleteFeed` with the transaction client and answers `{ applied: true, title, results, counts }`, the messages now saying what was done ("Created", "Updated N fields", "Deleted", "Deactivated (it has stories)"). A delete recounts stories inside the transaction, so a feed that gained a story since the preview is deactivated. A write the database refuses (a unique RSS URL taken meanwhile: 409 "A feed with this RSS URL already exists") rolls the whole changeset back.
+
+The import panel (`FeedChangesetImportPanel.tsx`) parses the file in the browser (not JSON: an error, no request), shows the preview, and enables "Apply N changes" only while no change has an error; a refused apply shows the new preview.
+
+## Source Policy: Publishers' AI Opt-Outs
+
+Which sources may be crawled, given publishers' reservations against AI use (owner decision, 2026-11-01, the "middle line"). It is applied when sources are chosen, by people and by the agent instructions above; **the crawler does not enforce it** (see the gap below). The public summary is on the Methodology page, "Publishers' AI Opt-Outs" (`client/src/pages/MethodologyPage.tsx`).
+
+A source is admissible unless its publisher has made a reservation that applies to us:
+
+- **Honored (exclude the source):** a general machine-readable reservation, which is TDMRep `tdm-reservation: 1` (in `/.well-known/tdmrep.json`, an HTTP header or the meta tag), a Cloudflare-style `Content-Signal` with `ai-input=no`, or a robots.txt rule that disallows `*` or our user agent `ActuallyRelevant` for the article pages; and terms of use that forbid AI processing, summarizing, or text and data mining of the content.
+- **Not treated as applying to us:** robots.txt rules that block only *named* AI-company crawlers (GPTBot, ClaudeBot, CCBot, Google-Extended, …), and terms that forbid only AI *training*. We do not train models, the crawler identifies itself (`USER_AGENT` in `server/src/services/extractor.ts`), it fetches one page per article (none for `contentSource: 'rss'`), and every story links to the original.
+- **Why:** the EU DSM Directive, Art. 4, permits text and data mining unless the rightsholder reserved it in machine-readable form; the general reservations above are that form.
+- **Publishers that forbid page fetching but carry the full text in the feed** (Substack): admissible with `contentSource: 'rss'`; a paid post whose item carries only a preview is skipped, never fetched.
+
+**Known gap, not built:** the crawler reads neither robots.txt nor TDM markers, so a publisher that adds a reservation later is crawled until someone removes or changes the feed; and the API tier (Diffbot) fetches pages itself, including those of publishers that block Diffbot. Open work in `BACKLOG.md`.
 
 ## When a Feed Is Due
 
@@ -53,7 +93,7 @@ A feed is stale once `consecutiveEmptyCrawls >= config.crawl.staleAfterEmptyCraw
 - `publishRate`: published ÷ total, rounded to 3 decimals, 0 when the feed has no stories.
 - `avgRelevancePre`: mean screening rating over every story that got one, deleted ones included, rounded to 1 decimal, otherwise null.
 - `avgRelevance`: mean `relevance` of stories in `analyzed`, `selected` or `published` that have a rating, rounded to 1 decimal, otherwise null.
-- `extractionMethods`: `crawlMethod → count`, counting only live stories with a `crawlMethod` (the archive keeps no crawl method). `teaser` appears for locked pages where every extraction tier failed.
+- `extractionMethods`: `crawlMethod → count`, counting only live stories with a `crawlMethod` (the archive keeps no crawl method). `teaser` appears for locked pages where every extraction tier failed, `rss` for stories whose text came from the RSS item (`contentSource: 'rss'`).
 
 Paywall-locked stories are stored (as `rejected`), so they count in `totalCrawled` and lower `publishRate`.
 
@@ -73,11 +113,18 @@ An accepted image must have an `image/*` content type, be non-empty and be at mo
 
 | File | Role |
 |------|------|
-| `server/src/services/feed.ts` | CRUD, due query, crawl status, quality metrics |
+| `server/src/services/feed.ts` | CRUD (each write takes an optional transaction client), due query, crawl status, quality metrics |
+| `server/src/services/feedChangesetPlan.ts` | Changeset resolution: matches, slugs, RSS URL tracking, noop and diff (pure) |
+| `server/src/services/feedChangeset.ts` | Changeset preview, and apply in one transaction |
 | `server/src/services/favicon.ts` | Favicon discovery and storage |
-| `server/src/routes/admin/feeds.ts` | Admin feed endpoints |
+| `server/src/routes/admin/feeds.ts` | Admin feed endpoints, changesets included |
 | `server/src/schemas/feed.ts` | Zod schemas and defaults |
+| `server/src/schemas/feedChangeset.ts` | Changeset file format |
 | `client/src/components/admin/FeedTable.tsx` | Feed table, stale warning, dominant extraction method |
 | `client/src/components/admin/FeedForm.tsx` | Create dialog |
 | `client/src/components/admin/FeedEditPanel.tsx` | Edit panel, quality card |
 | `client/src/components/admin/FeedPaywallFields.tsx` | Paywall setting fields, shared by both |
+| `client/src/components/admin/FeedContentSourceField.tsx` | Article text (content source) field, shared by both |
+| `client/src/components/admin/FeedChangesetControls.tsx` | "Import changes" button and the instructions info icon |
+| `client/src/components/admin/FeedChangesetImportPanel.tsx` | Import panel: file, preview, apply |
+| `client/src/components/admin/feedChangesetInstructions.ts` | The agent instructions text |

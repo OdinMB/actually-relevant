@@ -77,12 +77,14 @@ describe('parseFeed', () => {
       title: 'Article 1',
       datePublished: '2024-01-15T00:00:00Z',
       description: 'A short description',
+      contentHtml: null,
     })
     expect(result.items[1]).toEqual({
       url: 'https://example.com/article-2',
       title: 'Article 2',
       datePublished: 'Mon, 15 Jan 2024 00:00:00 GMT',
       description: '<p>HTML content</p>',
+      contentHtml: '<p>HTML content</p>',
     })
   })
 

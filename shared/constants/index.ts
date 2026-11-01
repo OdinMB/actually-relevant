@@ -1,4 +1,4 @@
-import type { StoryStatus, EmotionTag, FeedRegion } from '../types/index.js'
+import type { StoryStatus, EmotionTag, FeedRegion, FeedContentSource } from '../types/index.js'
 
 export const STORY_STATUSES: StoryStatus[] = [
   'fetched',
@@ -28,5 +28,18 @@ export const FEED_REGIONS: { value: FeedRegion; label: string }[] = [
   { value: 'latin_america', label: 'Latin America' },
   { value: 'global', label: 'Global' },
 ]
+
+export const FEED_CONTENT_SOURCES: { value: FeedContentSource; label: string }[] = [
+  { value: 'page', label: 'Fetch the article page' },
+  { value: 'rss', label: 'Use the full text in the RSS item' },
+]
+
+/** The feed changeset file format; the server's schema (`server/src/schemas/feedChangeset.ts`) is what checks it. */
+export const FEED_CHANGESET = {
+  format: 'actually-relevant/feed-changeset',
+  version: 1,
+  maxChanges: 200,
+  maxReasonLength: 500,
+} as const
 
 export const DEFAULT_PAGE_SIZE = 25

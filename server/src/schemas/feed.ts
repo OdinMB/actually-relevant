@@ -14,6 +14,10 @@ const feedRegionValues = [
 
 const feedRegionSchema = z.enum(feedRegionValues)
 
+/** Where the crawler takes a feed's article text: the article page, or the full text in the RSS item. */
+export const feedContentSourceSchema = z.enum(['page', 'rss'])
+export type FeedContentSource = z.infer<typeof feedContentSourceSchema>
+
 function compilesAsRegex(pattern: string): boolean {
   try {
     new RegExp(pattern)
@@ -49,6 +53,7 @@ export const createFeedSchema = z.object({
   htmlSelector: z.string().optional(),
   paywallDetection: z.boolean().optional(),
   paywallTitleMarker: paywallTitleMarkerSchema.nullable().optional(),
+  contentSource: feedContentSourceSchema.optional(),
 })
 
 export const updateFeedSchema = z.object({
@@ -63,5 +68,6 @@ export const updateFeedSchema = z.object({
   htmlSelector: z.string().nullable().optional(),
   paywallDetection: z.boolean().optional(),
   paywallTitleMarker: paywallTitleMarkerSchema.nullable().optional(),
+  contentSource: feedContentSourceSchema.optional(),
   active: z.boolean().optional(),
 })
