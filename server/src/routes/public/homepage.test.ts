@@ -24,23 +24,11 @@ vi.mock('../../services/crawler.js', () => ({
   crawlUrl: vi.fn(),
 }))
 
-// Bypass TTLCache in tests to avoid cross-test pollution
-vi.mock('../../lib/cache.js', () => ({
-  TTLCache: class {
-    get() {
-      return undefined
-    }
-    set() {}
-    delete() {}
-    clear() {}
-  },
-  cached: async <T>(_cache: unknown, _key: string, fn: () => Promise<T>) => fn(),
-}))
-
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
 const { aiGeneratedMarker } = await import('../../lib/aiProvenance.js')
+const { clearPublicCaches } = await import('../../lib/publicCaches.js')
 
 const mockIssue = {
   id: 'issue-1',
@@ -88,6 +76,8 @@ const mockStory = {
 describe('Homepage API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Each test builds the data from its own mocks (the admin "Clear cache" path)
+    clearPublicCaches()
   })
 
   describe('GET /api/homepage', () => {
@@ -156,6 +146,27 @@ describe('Homepage API', () => {
       const res = await request(app).get('/api/homepage')
       expect(res.status).toBe(200)
       expect(res.body.issues).toEqual([])
+    })
+
+    it('answers a second visitor from the warm copy without touching the database', async () => {
+      mockPrisma.issue.findMany.mockResolvedValue([mockIssue])
+      mockPrisma.story.findMany.mockResolvedValue([mockStory])
+
+      await request(app).get('/api/homepage')
+      const loads = mockPrisma.story.findMany.mock.calls.length
+      const res = await request(app).get('/api/homepage')
+
+      expect(res.status).toBe(200)
+      expect(res.body.issues).toHaveLength(1)
+      expect(mockPrisma.story.findMany).toHaveBeenCalledTimes(loads)
+    })
+
+    it('answers 500 when the first load fails', async () => {
+      mockPrisma.issue.findMany.mockRejectedValue(new Error('db down'))
+      mockPrisma.story.findMany.mockResolvedValue([])
+
+      const res = await request(app).get('/api/homepage')
+      expect(res.status).toBe(500)
     })
 
     it('sets cache headers', async () => {
