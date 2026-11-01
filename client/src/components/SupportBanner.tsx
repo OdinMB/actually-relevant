@@ -27,7 +27,7 @@ export default function SupportBanner() {
         className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-neutral-800 rounded-lg hover:bg-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
       >
         <HeartIcon className="w-4 h-4" />
-        Donate $5 toward hosting
+        Donate $5 toward running the site
         <span className="sr-only">(opens in new tab)</span>
       </a>
     </div>
