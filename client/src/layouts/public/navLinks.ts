@@ -24,8 +24,8 @@ export const ISSUE_LINKS = [
 export const FOOTER_NAV = [
   { label: 'About', href: '/about' },
   { label: 'Methodology', href: '/methodology' },
-  { label: 'Issues', href: '/issues' },
-  { label: 'Compare', href: '/compare' },
+  { label: 'Topics', href: '/issues' },
+  { label: 'How We Compare', href: '/compare' },
   { label: 'News Fatigue', href: '/news-fatigue' },
   { label: 'Thank You', href: '/thank-you' },
 ]

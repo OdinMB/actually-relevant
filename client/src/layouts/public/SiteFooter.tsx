@@ -26,7 +26,7 @@ const CONNECT_LINK = `group gap-1.5 ${LIST_LINK}`
 
 const CONNECT_ICON = 'w-3.5 h-3.5 shrink-0 transition-[filter] group-hover:brightness-[10]'
 
-/** The links inside the "Free API (Intro, Docs)" line: inline boxes, so the line reads as before. */
+/** The links inside the "Free API and Docs" line: inline boxes, so the line reads as plain text. */
 const INLINE_LINK = `${LINK_TARGET} hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded`
 
 /** 32px tall on phones like the list links; 24px from `md` up, where they sit under the social icons. */
@@ -155,7 +155,7 @@ export default function SiteFooter() {
               <li className="flex items-center">
                 <Link to="/widgets" className={CONNECT_LINK}>
                   <img src="/images/optimized/icons/code-embed-thumb-w.webp" alt="" width={14} height={14} className={CONNECT_ICON} aria-hidden="true" />
-                  For Your Website
+                  Add to Your Site
                 </Link>
               </li>
               <li className="flex items-center">
@@ -171,21 +171,16 @@ export default function SiteFooter() {
                   <Link to="/free-api" className={INLINE_LINK}>
                     Free API
                   </Link>{' '}
-                  (
-                  <Link to="/free-api" className={INLINE_LINK}>
-                    Intro
-                  </Link>
-                  ,{' '}
+                  and{' '}
                   <Link to="/developers" className={INLINE_LINK}>
                     Docs
                   </Link>
-                  )
                 </span>
               </li>
               <li className="flex items-center">
                 <Link to="/stewardship" className={CONNECT_LINK}>
                   <img src="/images/optimized/icons/stewardship-thumb-w.webp" alt="" width={14} height={14} className={CONNECT_ICON} aria-hidden="true" />
-                  Stewardship
+                  Who Runs This
                 </Link>
               </li>
               <li className="flex items-center">
@@ -204,10 +199,10 @@ export default function SiteFooter() {
             </ul>
           </div>
 
-          {/* Issues column */}
+          {/* Topics column (the site calls its four categories "issues" in URLs and the admin) */}
           <div className="col-span-2 md:col-span-1">
             <p className={COLUMN_HEADING} role="presentation">
-              Issues
+              Topics
             </p>
             <ul className="grid grid-cols-2 gap-x-6 md:grid-cols-1">
               {ISSUE_LINKS.map(link => {

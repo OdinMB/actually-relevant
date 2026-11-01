@@ -27,13 +27,14 @@ export default function PullQuote({ story, variant = 'centered' }: PullQuoteProp
       <AiBadge accessibleName={AI_DISCLOSURE_COPY.quoteBadgeAccessibleName} className="mr-1 align-middle" /> &mdash;{' '}
       {hasPersonAttribution ? (
         <>
-          {story.quoteAttribution}, via{' '}
+          {story.quoteAttribution}, quoted in &ldquo;
           <Link
             to={`/stories/${story.slug}`}
             className="text-brand-700 hover:text-brand-800 underline decoration-brand-300 hover:decoration-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
           >
             {story.title || story.sourceTitle}
           </Link>
+          &rdquo;
         </>
       ) : (
         <>

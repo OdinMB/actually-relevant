@@ -168,7 +168,7 @@ describe('HomePage AI disclosure', () => {
   it('follows the hero quote attribution with the AI selection note', () => {
     const { container } = renderHome()
     const heroSection = container.querySelector<HTMLElement>('.hero-section')!
-    expect(within(heroSection).getByText('— Dr. Hero · selected and potentially translated by AI')).toBeInTheDocument()
+    expect(within(heroSection).getByText('— Dr. Hero · chosen by AI, may be translated')).toBeInTheDocument()
   })
 
   it('badges every story card link', () => {
@@ -180,6 +180,6 @@ describe('HomePage AI disclosure', () => {
   it('shows the pull quote with the "Selected by AI" badge and the note', () => {
     const { container } = renderHome()
     const footer = container.querySelector('footer')!
-    expect(announcedText(footer)).toMatch(/^Selected by AI — .+ · selected and potentially translated by AI$/)
+    expect(announcedText(footer)).toMatch(/^Selected by AI — .+ · chosen by AI, may be translated$/)
   })
 })

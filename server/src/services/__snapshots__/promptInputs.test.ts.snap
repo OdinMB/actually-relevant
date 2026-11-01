@@ -108,18 +108,19 @@ Title label + Title — these two fields work as a pair
 Title label (1-3 short words, sentence case)
 - An ultra-short topic tag that identifies the key subject.
 - Must be a tight noun phrase — no conjunctions, no 'and'.
-- Keep words simple and short.
+- Keep words simple and short. No acronyms or proper names a general reader would not recognize; describe the thing instead.
   Good: 'EU AI Act'; 'Carbon inequality'; 'Deepfake laws'; 'Nuclear risk'; 'Ocean health'
   Bad: 'Carbon inequality and climate policy' (too long — just 'Carbon inequality')
   Bad: 'Non-consensual deepfake nudification' (words too complex — just 'Deepfake laws')
   Bad: 'Major shift in global politics' (sounds like a headline, not a label)
+  Bad: 'NavIC' (unknown acronym — 'India's GPS')
 
 Title (sentence case)
 - A standalone headline. Max 10 words — if you hit 10, cut something.
 - Write for a smart 16-year-old, not an expert. Avoid jargon and insider terms unless they're household names.
-- The headline must make sense on its own — a reader with no background should grasp the basic story.
+- The headline must make sense on its own — a reader with no background should grasp the basic story. It is often shown without its label (shares, feeds, previews), so it names its own subject: never 'Conditions worsened…' or 'Researchers count…' that only the label explains.
 - One story per headline. If there are two developments, lead with the bigger one.
-- Don't echo the label — the label already sets the topic. Use that word budget to say something new.
+- Don't echo the label's words — the label already sets the topic. Name the subject in other words and use the rest of the word budget to say something new.
 - Be concrete: name the actor, the action, or the stakes. A number often beats an adjective.
 - Replace noun stacks with plain words ('whistleblower channel' → 'hotline'; 'timeline changes' → 'delays').
 - Cut hedge words: 'could shape,' 'may impact' → say what's actually happening or proposed.
@@ -139,6 +140,11 @@ Examples (read label + title together as one unit):
   Problems: repeats 'climate finance' from label, vague hedge ('could reshape')
   Good: 'World Bank to double green loans by 2030'
 
+  Label: 'Online freedom'
+  Bad: 'Conditions worsened in 16 of 38 countries'
+  Problems: meaningless without the label (conditions of what?)
+  Good: 'Internet controls tightened in 16 of 38 countries'
+
 Marketing blurb (25-30 words, and never more than 230 characters including spaces)
 A condensed version of the summary and relevance analysis that can be used on social media and in newsletters.
 Some variation of "[Publisher] reports [key point]. [Relevance summary]."
@@ -146,6 +152,12 @@ Some variation of "[Publisher] reports [key point]. [Relevance summary]."
 
 <GUIDELINES>
 - Write for a smart 16-year-old, not an expert. Avoid jargon, insider terms, and acronyms unless they're household names. Replace technical terms with plain words.
+- Each published field is read on its own, so the first time a field mentions a named agreement, program, law, system or acronym, say in a few words what it is.
+  Bad: 'The pathway is a significant step in international cooperation…' Good: 'The Yerevan Pathway, a shared list of nature goals that governments agreed on, gives countries…'
+- Keep the impact analysis — how far-reaching the development is and what limits it — but say it in concrete terms: who is affected, how many, how soon, and what could stop or weaken it. Do not describe impact with rating vocabulary ('moderate', 'significant', 'notable', 'limit the impact', 'constrain', 'governance risk'); say what actually happens.
+  Bad: 'Private control of military communications creates a moderate governance risk.' Good: 'Militaries that rely on Starlink depend on one company that could raise prices or cut them off.'
+  Bad: 'Regional reach and commissioning limit the impact.' Good: 'It only covers India and nearby countries, and is not fully switched on yet.'
+  Bad: 'Low wages and uneven job quality constrain lasting gains.' Good: 'Low wages and insecure jobs could push many back into poverty.'
 - Quantify affected people on a logarithmic scale: 'millions', 'tens of millions', 'hundreds of millions', 'billions'.
 - Include concrete numbers when available (people affected, dollar amounts, percentages). A number often beats an adjective.
 - Draw on your knowledge beyond what is written in the article. Where the article leaves a detail open, give what you know or leave the detail out, without pointing out the gap.
@@ -268,18 +280,19 @@ Title label + Title — these two fields work as a pair
 Title label (1-3 short words, sentence case)
 - An ultra-short topic tag that identifies the key subject.
 - Must be a tight noun phrase — no conjunctions, no 'and'.
-- Keep words simple and short.
+- Keep words simple and short. No acronyms or proper names a general reader would not recognize; describe the thing instead.
   Good: 'EU AI Act'; 'Carbon inequality'; 'Deepfake laws'; 'Nuclear risk'; 'Ocean health'
   Bad: 'Carbon inequality and climate policy' (too long — just 'Carbon inequality')
   Bad: 'Non-consensual deepfake nudification' (words too complex — just 'Deepfake laws')
   Bad: 'Major shift in global politics' (sounds like a headline, not a label)
+  Bad: 'NavIC' (unknown acronym — 'India's GPS')
 
 Title (sentence case)
 - A standalone headline. Max 10 words — if you hit 10, cut something.
 - Write for a smart 16-year-old, not an expert. Avoid jargon and insider terms unless they're household names.
-- The headline must make sense on its own — a reader with no background should grasp the basic story.
+- The headline must make sense on its own — a reader with no background should grasp the basic story. It is often shown without its label (shares, feeds, previews), so it names its own subject: never 'Conditions worsened…' or 'Researchers count…' that only the label explains.
 - One story per headline. If there are two developments, lead with the bigger one.
-- Don't echo the label — the label already sets the topic. Use that word budget to say something new.
+- Don't echo the label's words — the label already sets the topic. Name the subject in other words and use the rest of the word budget to say something new.
 - Be concrete: name the actor, the action, or the stakes. A number often beats an adjective.
 - Replace noun stacks with plain words ('whistleblower channel' → 'hotline'; 'timeline changes' → 'delays').
 - Cut hedge words: 'could shape,' 'may impact' → say what's actually happening or proposed.
@@ -299,6 +312,11 @@ Examples (read label + title together as one unit):
   Problems: repeats 'climate finance' from label, vague hedge ('could reshape')
   Good: 'World Bank to double green loans by 2030'
 
+  Label: 'Online freedom'
+  Bad: 'Conditions worsened in 16 of 38 countries'
+  Problems: meaningless without the label (conditions of what?)
+  Good: 'Internet controls tightened in 16 of 38 countries'
+
 Marketing blurb (25-30 words, and never more than 230 characters including spaces)
 A condensed version of the summary and relevance analysis that can be used on social media and in newsletters.
 Some variation of "[Publisher] reports [key point]. [Relevance summary]."
@@ -306,6 +324,12 @@ Some variation of "[Publisher] reports [key point]. [Relevance summary]."
 
 <GUIDELINES>
 - Write for a smart 16-year-old, not an expert. Avoid jargon, insider terms, and acronyms unless they're household names. Replace technical terms with plain words.
+- Each published field is read on its own, so the first time a field mentions a named agreement, program, law, system or acronym, say in a few words what it is.
+  Bad: 'The pathway is a significant step in international cooperation…' Good: 'The Yerevan Pathway, a shared list of nature goals that governments agreed on, gives countries…'
+- Keep the impact analysis — how far-reaching the development is and what limits it — but say it in concrete terms: who is affected, how many, how soon, and what could stop or weaken it. Do not describe impact with rating vocabulary ('moderate', 'significant', 'notable', 'limit the impact', 'constrain', 'governance risk'); say what actually happens.
+  Bad: 'Private control of military communications creates a moderate governance risk.' Good: 'Militaries that rely on Starlink depend on one company that could raise prices or cut them off.'
+  Bad: 'Regional reach and commissioning limit the impact.' Good: 'It only covers India and nearby countries, and is not fully switched on yet.'
+  Bad: 'Low wages and uneven job quality constrain lasting gains.' Good: 'Low wages and insecure jobs could push many back into poverty.'
 - Quantify affected people on a logarithmic scale: 'millions', 'tens of millions', 'hundreds of millions', 'billions'.
 - Include concrete numbers when available (people affected, dollar amounts, percentages). A number often beats an adjective.
 - Draw on your knowledge beyond what is written in the article. Where the article leaves a detail open, give what you know or leave the detail out, without pointing out the gap.

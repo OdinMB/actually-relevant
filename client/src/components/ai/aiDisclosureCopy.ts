@@ -10,8 +10,11 @@ export const AI_DISCLOSURE_COPY = {
   badgeAccessibleName: 'AI-generated',
   /** Accessible name of the badge on a pull quote: a real person's words that AI picked, not AI text. */
   quoteBadgeAccessibleName: 'Selected by AI',
-  /** Follows the attribution of every AI-selected quote. */
-  quoteNote: 'selected and potentially translated by AI',
+  /**
+   * Follows the attribution of every AI-selected quote. Owner-approved 2026-11-01 (homepage
+   * plain-language review), replacing "selected and potentially translated by AI".
+   */
+  quoteNote: 'chosen by AI, may be translated',
   /**
    * Header AI line on every public page: a second line under the claim on phones, the same
    * line as the claim from md up. The "AI" badge follows it and is the line's only "AI".
