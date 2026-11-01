@@ -18,8 +18,14 @@ const mockPrisma = vi.hoisted(() => ({
   $disconnect: vi.fn(),
 }))
 
+const mockFetchFaviconsInBackground = vi.hoisted(() => vi.fn())
+
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/crawler.js', () => ({ crawlFeed: vi.fn(), crawlAllDueFeeds: vi.fn(), crawlUrl: vi.fn() }))
+vi.mock('../../services/favicon.js', async importOriginal => ({
+  ...(await importOriginal<object>()),
+  fetchFaviconsInBackground: mockFetchFaviconsInBackground,
+}))
 
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
@@ -149,6 +155,53 @@ describe('Admin feed changesets API', () => {
       expect(mockPrisma.feed.create).toHaveBeenCalledWith({
         data: { title: 'ECDC', rssUrl: 'https://www.ecdc.europa.eu/feed', issueId: CLIMATE, language: 'en', crawlIntervalHours: 24, contentSource: 'rss' },
       })
+    })
+
+    it('fetches favicons, once the transaction has committed, for created feeds and feeds whose address changed', async () => {
+      let committed = false
+      mockPrisma.$transaction.mockImplementation(async (work: (tx: typeof mockPrisma) => Promise<unknown>) => {
+        const result = await work(mockPrisma)
+        committed = true
+        return result
+      })
+      const committedAtFetch: boolean[] = []
+      mockFetchFaviconsInBackground.mockImplementation(async () => {
+        committedAtFetch.push(committed)
+      })
+      const retitle = { action: 'update', match: { id: EMPTY_ID }, set: { title: 'Renamed' }, reason }
+
+      const res = await request(app)
+        .post('/api/admin/feeds/changesets/apply')
+        .set(authHeader())
+        .send(changeset([moveSipri, retitle, addEcdc]))
+
+      expect(res.status).toBe(200)
+      expect(mockFetchFaviconsInBackground).toHaveBeenCalledTimes(1)
+      expect(committedAtFetch).toEqual([true])
+      const fetched = mockFetchFaviconsInBackground.mock.calls[0][0] as { id: string; rssUrl: string }[]
+      expect(fetched.map(f => [f.id, f.rssUrl])).toEqual([
+        [SIPRI_ID, 'https://www.sipri.org/rss/combined.xml'],
+        ['new-feed', 'https://www.ecdc.europa.eu/feed'],
+      ])
+    })
+
+    it('fetches no favicon when nothing applied touches an address, or nothing was applied', async () => {
+      const retitle = { action: 'update', match: { id: EMPTY_ID }, set: { title: 'Renamed' }, reason }
+      await request(app)
+        .post('/api/admin/feeds/changesets/apply')
+        .set(authHeader())
+        .send(changeset([retitle]))
+      await request(app)
+        .post('/api/admin/feeds/changesets/apply')
+        .set(authHeader())
+        .send(changeset([addEcdc, unknownIssue]))
+      mockPrisma.feed.create.mockRejectedValue(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }))
+      await request(app)
+        .post('/api/admin/feeds/changesets/apply')
+        .set(authHeader())
+        .send(changeset([addEcdc]))
+
+      expect(mockFetchFaviconsInBackground).not.toHaveBeenCalled()
     })
 
     it('reports a delete that finds stories at apply time as a deactivation', async () => {

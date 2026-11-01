@@ -25,12 +25,15 @@ const mockPrisma = vi.hoisted(() => ({
   $disconnect: vi.fn(),
 }))
 
+const mockFavicon = vi.hoisted(() => ({ fetchFavicon: vi.fn(), fetchAllFavicons: vi.fn(), fetchFaviconsInBackground: vi.fn() }))
+
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
   crawlAllDueFeeds: vi.fn(),
   crawlUrl: vi.fn(),
 }))
+vi.mock('../../services/favicon.js', async importOriginal => ({ ...(await importOriginal<object>()), ...mockFavicon }))
 
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
@@ -156,6 +159,36 @@ describe('Admin Feeds API', () => {
       })
       expect(res.status).toBe(400)
       expect(res.body.error).toBe('Issue not found')
+      expect(mockFavicon.fetchFaviconsInBackground).not.toHaveBeenCalled()
+    })
+
+    it("fetches the new feed's favicon in the background, without making the request wait for it", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue(sampleIssue())
+      mockPrisma.feed.create.mockResolvedValue(sampleFeed({ id: 'feed-new', rssUrl: 'https://news.example/rss', url: 'https://news.example' }))
+      mockFavicon.fetchFaviconsInBackground.mockReturnValue(new Promise(() => {})) // never settles
+
+      const res = await request(app).post('/api/admin/feeds').set(authHeader()).send({
+        title: 'News',
+        rssUrl: 'https://news.example/rss',
+        issueId: '00000000-0000-0000-0000-000000000001',
+      })
+
+      expect(res.status).toBe(201)
+      expect(mockFavicon.fetchFaviconsInBackground).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'feed-new', rssUrl: 'https://news.example/rss', url: 'https://news.example' }),
+      ])
+    })
+  })
+
+  describe('favicons', () => {
+    it("refetches one feed's favicon, replacing a stored one", async () => {
+      mockPrisma.feed.findUnique.mockResolvedValue({ ...sampleFeed(), issue: sampleIssue() })
+      mockFavicon.fetchFavicon.mockResolvedValue({ success: true, message: 'Favicon saved' })
+
+      const res = await request(app).post('/api/admin/feeds/feed-1/favicon').set(authHeader())
+
+      expect(res.body).toEqual({ success: true, message: 'Favicon saved' })
+      expect(mockFavicon.fetchFavicon).toHaveBeenCalledWith(expect.objectContaining({ id: 'feed-1' }), true)
     })
   })
 

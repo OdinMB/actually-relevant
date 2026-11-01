@@ -1,15 +1,17 @@
 /**
  * Preview and apply a feed changeset (`.context/feed-management.md`, "Changesets"). Both resolve it
  * with `planChangeset()`; apply writes only when no change has an error, every write in one
- * transaction, so a changeset lands whole or not at all.
+ * transaction, so a changeset lands whole or not at all. Once it has committed, the favicons of the
+ * feeds it created or readdressed are fetched in the background.
  */
-import type { Prisma } from '@prisma/client'
+import type { Feed, Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { ServiceError } from '../utils/errors.js'
 import type { FeedChangeset } from '../schemas/feedChangeset.js'
 import { createFeed, deleteFeed, updateFeed } from './feed.js'
+import { fetchFaviconsInBackground, setsFaviconSource } from './favicon.js'
 import {
   countResults,
   planChangeset,
@@ -84,7 +86,7 @@ export async function previewChangeset(changeset: FeedChangeset): Promise<FeedCh
  * (a unique RSS URL taken meanwhile) rolls the whole changeset back.
  */
 export async function applyChangeset(changeset: FeedChangeset): Promise<FeedChangesetReport & { applied: true }> {
-  const results = await prisma.$transaction(
+  const { results, needFavicon } = await prisma.$transaction(
     async tx => {
       const planned = planChangeset(changeset.changes, await loadSnapshot(tx))
       if (planned.some(change => change.result.status === 'error')) {
@@ -96,36 +98,45 @@ export async function applyChangeset(changeset: FeedChangeset): Promise<FeedChan
         )
       }
       const applied: FeedChangeResult[] = []
-      for (const change of planned) applied.push(await applyOne(change, tx))
-      return applied
+      const needFavicon: Feed[] = []
+      for (const change of planned) {
+        const { result, faviconFor } = await applyOne(change, tx)
+        applied.push(result)
+        if (faviconFor) needFavicon.push(faviconFor)
+      }
+      return { results: applied, needFavicon }
     },
     { timeout: config.database.transactionTimeoutMs },
   )
+  // After the commit, so each favicon's row can reference its feed
+  if (needFavicon.length > 0) void fetchFaviconsInBackground(needFavicon)
   const report = toReport(changeset, results)
   log.info({ title: report.title, ...report.counts }, 'feed changeset applied')
   return { applied: true, ...report }
 }
 
-async function applyOne({ result, write }: PlannedChange, tx: Prisma.TransactionClient): Promise<FeedChangeResult> {
-  if (!write) return result
-  return { ...result, message: await perform(write, tx) }
+/** Apply one planned change; `faviconFor` is the feed written when it was created or given a new address. */
+async function applyOne({ result, write }: PlannedChange, tx: Prisma.TransactionClient): Promise<{ result: FeedChangeResult; faviconFor?: Feed }> {
+  if (!write) return { result }
+  const { message, feed } = await perform(write, tx)
+  const readdressed = write.kind === 'create' || (write.kind === 'update' && setsFaviconSource(write.data))
+  return { result: { ...result, message }, faviconFor: readdressed ? feed : undefined }
 }
 
-/** Perform one write through the feed service, as the single-feed endpoints do; returns what it did. */
-async function perform(write: FeedWrite, tx: Prisma.TransactionClient): Promise<string> {
+/** Perform one write through the feed service, as the single-feed endpoints do; returns what it did and the feed written. */
+async function perform(write: FeedWrite, tx: Prisma.TransactionClient): Promise<{ message: string; feed?: Feed }> {
   switch (write.kind) {
     case 'create':
-      await createFeed(write.data, tx)
-      return 'Created'
+      return { message: 'Created', feed: await createFeed(write.data, tx) }
     case 'update': {
-      await updateFeed(write.feedId, write.data, tx)
+      const feed = await updateFeed(write.feedId, write.data, tx)
       const fields = Object.keys(write.data).length
-      return `Updated ${fields} field${fields === 1 ? '' : 's'}`
+      return { message: `Updated ${fields} field${fields === 1 ? '' : 's'}`, feed }
     }
     case 'delete': {
       // deleteFeed counts the stories again inside the transaction: one may have arrived since the preview.
       const { action } = await deleteFeed(write.feedId, tx)
-      return action === 'deleted' ? 'Deleted' : 'Deactivated (it has stories)'
+      return { message: action === 'deleted' ? 'Deleted' : 'Deactivated (it has stories)' }
     }
   }
 }

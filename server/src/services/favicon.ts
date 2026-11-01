@@ -1,15 +1,18 @@
-import { access, writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
+/**
+ * Finds a feed's favicon on the web and stores it (.context/feed-management.md, "Favicons"): for the
+ * homepage's host, then each shorter parent domain, the Google favicon API, the page's
+ * `<link rel=icon>` entries and `/favicon.ico`. Each image is made into the stored 32 px PNG
+ * (faviconImage.ts) and saved in the database (faviconStore.ts).
+ */
 import type { Readable } from 'stream'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
-import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { isAllowedUrl, ssrfGuard } from '../utils/urlValidation.js'
-import * as feedService from './feed.js'
+import { toFaviconPng } from './faviconImage.js'
+import { activeFeedsForFavicons, hasFavicon, saveFavicon } from './faviconStore.js'
 
 const log = createLogger('favicon')
-const FAVICON_DIR = config.crawl.faviconDir
 const MAX_FAVICON_BYTES = 100_000
 const FETCH_TIMEOUT_MS = 10_000
 const CONCURRENCY = 5
@@ -18,23 +21,22 @@ const CONCURRENCY = 5
 const MAX_HTML_BYTES = 2 * 1024 * 1024 // 2 MB cap for HTML pages when looking for favicon links
 const GOOGLE_GLOBE_MAX_BYTES = 400
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-async function ensureDir(dir: string) {
-  await mkdir(dir, { recursive: true })
+/** What the fetcher needs of a feed: its id, and the addresses whose host it looks under. */
+export interface FaviconSource {
+  id: string
+  rssUrl: string
+  url: string | null
 }
 
-function faviconPath(feedId: string): string {
-  return join(FAVICON_DIR, `${feedId}.png`)
+/** Whether a feed write sets an address the favicon is looked up from, so a stored one may be stale. */
+export function setsFaviconSource(changes: object): boolean {
+  return 'url' in changes || 'rssUrl' in changes
 }
 
-async function faviconExists(feedId: string): Promise<boolean> {
-  try {
-    await access(faviconPath(feedId))
-    return true
-  } catch {
-    return false
-  }
+/** A favicon found: the stored PNG, and the image it was made from. */
+interface Icon {
+  png: Buffer
+  sourceUrl: string
 }
 
 /**
@@ -96,17 +98,21 @@ async function fetchImage(url: string): Promise<Buffer | null> {
   }
 }
 
-/** Try Google Favicon API. Returns null if response is the generic globe icon. */
-async function tryGoogleApi(hostname: string): Promise<Buffer | null> {
-  const buffer = await fetchImage(`https://www.google.com/s2/favicons?domain=${hostname}&sz=32`)
-  if (!buffer) return null
-  // Filter out Google's generic globe icon for unknown domains
-  if (buffer.length <= GOOGLE_GLOBE_MAX_BYTES) return null
-  return buffer
+/** Download an image of at least `minBytes` and make it into the stored PNG; null when either fails. */
+async function fetchIcon(url: string, minBytes = 1): Promise<Icon | null> {
+  const image = await fetchImage(url)
+  if (!image || image.byteLength < minBytes) return null
+  const png = await toFaviconPng(image)
+  return png ? { png, sourceUrl: url } : null
+}
+
+/** Try Google Favicon API, passing over its generic globe icon. */
+function tryGoogleApi(hostname: string): Promise<Icon | null> {
+  return fetchIcon(`https://www.google.com/s2/favicons?domain=${hostname}&sz=32`, GOOGLE_GLOBE_MAX_BYTES + 1)
 }
 
 /** Parse HTML for <link rel="icon"> and download the best match. */
-async function tryHtmlParsing(origin: string): Promise<Buffer | null> {
+async function tryHtmlParsing(origin: string): Promise<Icon | null> {
   try {
     const res = await guardedGet(origin, 'text/html')
     if (!res) return null
@@ -135,9 +141,8 @@ async function tryHtmlParsing(origin: string): Promise<Buffer | null> {
     })
 
     for (const link of iconLinks) {
-      const iconUrl = new URL(link.href, origin).href
-      const buffer = await fetchImage(iconUrl)
-      if (buffer) return buffer
+      const icon = await fetchIcon(new URL(link.href, origin).href)
+      if (icon) return icon
     }
 
     return null
@@ -147,8 +152,8 @@ async function tryHtmlParsing(origin: string): Promise<Buffer | null> {
 }
 
 /** Try fetching /favicon.ico directly from the origin. */
-async function tryDirectFavicon(origin: string): Promise<Buffer | null> {
-  return fetchImage(`${origin}/favicon.ico`)
+function tryDirectFavicon(origin: string): Promise<Icon | null> {
+  return fetchIcon(`${origin}/favicon.ico`)
 }
 
 export interface FaviconResult {
@@ -156,18 +161,15 @@ export interface FaviconResult {
   message: string
 }
 
-export async function fetchFavicon(feedId: string, feedUrl: string, homeUrl?: string | null, force = false): Promise<FaviconResult> {
-  if (!UUID_RE.test(feedId)) {
-    throw new Error(`Invalid feed ID format: ${feedId}`)
-  }
-
-  if (!force && (await faviconExists(feedId))) {
-    log.debug({ feedId }, 'favicon already exists, skipping')
+/** Find and store the feed's favicon; without `force`, a feed that has one is left alone. */
+export async function fetchFavicon(feed: FaviconSource, force = false): Promise<FaviconResult> {
+  if (!force && (await hasFavicon(feed.id))) {
+    log.debug({ feedId: feed.id }, 'favicon already exists, skipping')
     return { success: true, message: 'Already exists' }
   }
 
   // Prefer homepage URL for favicon (cleaner domain), fall back to RSS URL
-  const primaryUrl = homeUrl ? new URL(homeUrl) : new URL(feedUrl)
+  const primaryUrl = new URL(feed.url || feed.rssUrl)
   const hostname = primaryUrl.hostname
 
   // Try the feed's hostname, then progressively shorter domains
@@ -178,56 +180,66 @@ export async function fetchFavicon(feedId: string, feedUrl: string, homeUrl?: st
     domains.push(parts.slice(i).join('.'))
   }
 
-  let buffer: Buffer | null = null
+  let icon: Icon | null = null
   for (const domain of domains) {
     const origin = `${primaryUrl.protocol}//${domain}`
-    buffer = (await tryGoogleApi(domain)) ?? (await tryHtmlParsing(origin)) ?? (await tryDirectFavicon(origin))
-    if (buffer) break
+    icon = (await tryGoogleApi(domain)) ?? (await tryHtmlParsing(origin)) ?? (await tryDirectFavicon(origin))
+    if (icon) break
   }
 
-  if (!buffer) {
-    log.warn({ feedId, hostname }, 'no favicon found')
+  if (!icon) {
+    log.warn({ feedId: feed.id, hostname }, 'no favicon found')
     return { success: false, message: `No favicon found for ${hostname}` }
   }
 
-  await ensureDir(FAVICON_DIR)
-  await writeFile(faviconPath(feedId), buffer)
-  log.info({ feedId, hostname }, 'favicon saved')
+  await saveFavicon(feed.id, icon.png, icon.sourceUrl)
+  log.info({ feedId: feed.id, hostname, sourceUrl: icon.sourceUrl }, 'favicon saved')
   return { success: true, message: 'Favicon saved' }
 }
 
-export async function fetchAllFavicons(): Promise<{ succeeded: number; failed: number; skipped: number; errors: string[] }> {
-  const feeds = await feedService.getFeeds({ active: true })
-  let succeeded = 0
-  let failed = 0
-  let skipped = 0
-  const errors: string[] = []
-
+/** Fetch each feed's favicon, CONCURRENCY at a time; one settled outcome per feed, in order. */
+async function fetchEach(feeds: FaviconSource[], force: boolean): Promise<PromiseSettledResult<FaviconResult>[]> {
+  const outcomes: PromiseSettledResult<FaviconResult>[] = []
   for (let i = 0; i < feeds.length; i += CONCURRENCY) {
-    const batch = feeds.slice(i, i + CONCURRENCY)
-    const results = await Promise.allSettled(
-      batch.map(async feed => {
-        if (await faviconExists(feed.id)) return 'skipped' as const
-        const result = await fetchFavicon(feed.id, feed.rssUrl, feed.url)
-        return result.success ? ('fetched' as const) : ('not_found' as const)
-      }),
-    )
-    for (const [idx, result] of results.entries()) {
-      const feed = batch[idx]!
-      if (result.status === 'fulfilled') {
-        if (result.value === 'skipped') skipped++
-        else if (result.value === 'fetched') succeeded++
-        else {
-          failed++
-          errors.push(`${feed.title}: not found`)
-        }
-      } else {
-        failed++
-        errors.push(`${feed.title}: ${result.reason?.message || 'Unknown error'}`)
-        log.warn({ feedId: feed.id, err: result.reason }, 'failed to fetch favicon')
-      }
+    outcomes.push(...(await Promise.allSettled(feeds.slice(i, i + CONCURRENCY).map(feed => fetchFavicon(feed, force)))))
+  }
+  return outcomes
+}
+
+/** Fill in the favicon of every active feed that has none stored ("Fetch All Favicons"). */
+export async function fetchAllFavicons(): Promise<{ succeeded: number; failed: number; skipped: number; errors: string[] }> {
+  const feeds = await activeFeedsForFavicons()
+  const missing = feeds.filter(feed => !feed.hasFavicon)
+  const outcomes = await fetchEach(missing, true)
+
+  let succeeded = 0
+  const errors: string[] = []
+  for (const [i, outcome] of outcomes.entries()) {
+    const feed = missing[i]!
+    if (outcome.status === 'fulfilled' && outcome.value.success) succeeded++
+    else if (outcome.status === 'fulfilled') errors.push(`${feed.title}: not found`)
+    else {
+      errors.push(`${feed.title}: ${outcome.reason?.message || 'Unknown error'}`)
+      log.warn({ feedId: feed.id, err: outcome.reason }, 'failed to fetch favicon')
     }
   }
 
-  return { succeeded, failed, skipped, errors }
+  return { succeeded, failed: errors.length, skipped: feeds.length - missing.length, errors }
+}
+
+/**
+ * Refetch these feeds' favicons after the caller has answered: a feed just created, or one whose
+ * address changed (after the write has committed, so the feed row exists for the favicon's key).
+ * CONCURRENCY at a time; every failure is logged, and the promise never rejects, so callers leave it
+ * unawaited.
+ */
+export async function fetchFaviconsInBackground(feeds: FaviconSource[]): Promise<void> {
+  try {
+    const outcomes = await fetchEach(feeds, true)
+    for (const [i, outcome] of outcomes.entries()) {
+      if (outcome.status === 'rejected') log.warn({ feedId: feeds[i]!.id, err: outcome.reason }, 'failed to fetch favicon')
+    }
+  } catch (err) {
+    log.error({ err }, 'background favicon fetch failed')
+  }
 }

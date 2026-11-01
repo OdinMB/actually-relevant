@@ -1,6 +1,3 @@
-import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
-
 /** Every `reasoning_effort` value an OpenAI model accepts; each model accepts a subset (see createChatModel). */
 export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
@@ -108,8 +105,6 @@ export function parseJobLeaseTiming(leaseValue: string | undefined, renewValue: 
 
 /** Canonical public URL for the site; one default for every setting built on it. */
 const siteUrl = process.env.SITE_URL || 'https://actuallyrelevant.news'
-
-const configDir = dirname(fileURLToPath(import.meta.url))
 
 /** Public API requests per window and client IP; the keyed limit defaults to ten times it. */
 const publicRateLimitMax = parseWholeNumber(process.env.RATE_LIMIT_PUBLIC_MAX, 100, 'RATE_LIMIT_PUBLIC_MAX')
@@ -293,10 +288,14 @@ export const config = {
     get pipfeedApiKey(): string {
       return process.env.PIPFEED_API_KEY || ''
     },
-    /** Where feed favicons are written; the client serves them from public/images/feeds. */
-    get faviconDir(): string {
-      return process.env.FAVICON_DIR || join(configDir, '..', '..', 'client', 'public', 'images', 'feeds')
-    },
+  },
+  /** Feed favicons, stored in the database and served by GET /api/feeds/:id/favicon (.context/feed-management.md). */
+  favicon: {
+    /** HTTP cache lifetime of a served favicon, in browsers and mail clients' image proxies. */
+    httpCacheSeconds: 86400,
+    /** In-memory copies of stored favicons (a few kB each), so page views do not each query the database. */
+    memoryCacheMinutes: 60,
+    memoryCacheEntries: 1000,
   },
   // Access classification at extraction (.context/content-extraction.md, "Access classification").
   // A page the publisher marks as not free is `locked` only with evidence of truncation: the

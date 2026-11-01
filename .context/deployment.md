@@ -127,7 +127,7 @@ The first adoption ran on 2026-10-13 (above). This is the procedure for any re-a
    - every redirect, rewrite and header rule, in order, noting whether `/sitemap.xml` and `/podcast.xml` already sit above `/*` and which host their destinations name;
    - every environment variable *name*;
    - custom domains and the `onrender.com` subdomain setting (`renderSubdomainPolicy`);
-   - whether `LOG_DIR`, `LOG_RETENTION_DAYS` or `FAVICON_DIR` are set; `NODE_VERSION` must equal `.node-version` on both services.
+   - whether `LOG_DIR` or `LOG_RETENTION_DAYS` are set (and `FAVICON_DIR`, which nothing reads since favicons moved to the database on 2026-11-01: delete it if it is there); `NODE_VERSION` must equal `.node-version` on both services.
 3. Edit `render.yaml`:
    1. **Service settings.** Diff the names, the backend's region and plan, `domains:` and `renderSubdomainPolicy` against the generated ones, and copy the generated values exactly (ADR-0038): Render matches services by name, and on adoption a setting the file leaves out is overridden by its default. The file already carries the values from the 2026-10-13 export; diff them against the new one.
    2. **Commands and paths.** Diff the build command, start command, root directories, publish path and health check against the generated ones. Where they differ, the generated value wins, because it is what production runs. The backend's build command no longer carries the old `migrate resolve --applied 20260209120000_add_feed_region` step (above); if a dashboard edit has brought it back, leave it out of the file. The publish path is relative to the root directory (`dist`, not `client/dist`), as the 2026-10-13 export showed.

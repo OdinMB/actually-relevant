@@ -140,13 +140,14 @@ describe('CORS', () => {
     '/api/podcast/feed.xml',
     '/api/newsletters',
     '/api/newsletters/week-42-2026',
+    '/api/feeds/11111111-2222-4333-8444-555555555555/favicon',
   ])('opens %s to any origin', async path => {
     const res = await request(app).options(path).set('Origin', 'https://widget.example.com')
     expect(res.status).toBe(204)
     expect(res.headers['access-control-allow-origin']).toBe('*')
   })
 
-  it.each(['/api/feedback', '/api/feeds', '/api/storiesx', '/api/subscribe', '/api/newslettersx', '/api/admin/newsletters'])(
+  it.each(['/api/feedback', '/api/feedsx', '/api/storiesx', '/api/subscribe', '/api/newslettersx', '/api/admin/newsletters'])(
     'keeps %s restricted even though it starts like a public path',
     async path => {
       const res = await request(app).post(path).set('Origin', 'https://evil-site.com')
