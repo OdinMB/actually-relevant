@@ -4,15 +4,18 @@
  * relevance, with no model call; the stories are the headings the email shows, so a heading edited
  * by hand appears as edited. The archive and the web edition keep the issue title.
  *
- * - Subject: `<label>: <lead headline> and <N> more`, where the label is "Week 43" for a weekly title
- *   ("Week 43, 2026", `getWeekTitle()`) and the whole title otherwise, the lead is the story with the
- *   highest `relevance` (ties and unrated stories in the issue's order, unrated last) and N the other
- *   stories. One story: no count. None: the title alone, as before.
- * - Preview text: the next two stories by the same ranking, empty below two stories.
+ * - Subject: `<label>: <lead headline>`, where the label is "Week 43" for a weekly title
+ *   ("Week 43, 2026", `getWeekTitle()`) and the whole title otherwise, and the lead is the story with
+ *   the highest `relevance` (ties and unrated stories in the issue's order, unrated last). No story:
+ *   the title alone, as before.
+ * - Preview text: the AI marker (`NEWSLETTER_PREVIEW_AI_MARKER`), then the next two stories by the
+ *   same ranking. One story: the email's own top label (`NEWSLETTER_TOP_LABEL`), so the subject's AI
+ *   headline always has a label beside it. None: empty.
  *
  * Both are plain text on one line; `renderHtml()` escapes the preview text into the email.
  */
 import type { Prisma } from '@prisma/client'
+import { NEWSLETTER_PREVIEW_AI_MARKER, NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import prisma from '../lib/prisma.js'
 import { storyHeadings } from './newsletterContent.js'
 
@@ -24,13 +27,16 @@ export interface InboxStory {
 
 export interface InboxPreview {
   subject: string
-  /** Empty when the issue has fewer than two stories: the email then carries no preview block. */
+  /** Empty only when the issue has no story: the email then carries no preview block. */
   preheader: string
 }
 
 /** The longest subject, in characters, before the lead headline is shortened. */
 export const SUBJECT_MAX_CHARS = 95
-/** A shortened headline keeps at least this many characters, however long the title in front of it. */
+/**
+ * A shortened headline gets at least this many characters of room, however long the title in front
+ * of it; the cut at a word can keep fewer.
+ */
 const MIN_HEADLINE_CHARS = 30
 /** How many stories after the lead the preview text names. */
 const PREVIEW_STORIES = 2
@@ -72,12 +78,12 @@ export function inboxPreview(title: string, stories: InboxStory[]): InboxPreview
   if (!lead) return { subject: title, preheader: '' }
 
   const prefix = `${issueLabel(title)}: `
-  const suffix = others.length > 0 ? ` and ${others.length} more` : ''
-  const room = Math.max(MIN_HEADLINE_CHARS, SUBJECT_MAX_CHARS - Array.from(prefix + suffix).length)
-  const subject = `${prefix}${shorten(oneLine(lead.headline), room)}${suffix}`
+  const room = Math.max(MIN_HEADLINE_CHARS, SUBJECT_MAX_CHARS - Array.from(prefix).length)
+  const subject = `${prefix}${shorten(oneLine(lead.headline), room)}`
 
   const next = others.slice(0, PREVIEW_STORIES).map(story => oneLine(story.headline))
-  return { subject, preheader: next.length > 0 ? `Also: ${next.join(' · ')}` : '' }
+  const preheader = next.length > 0 ? `${NEWSLETTER_PREVIEW_AI_MARKER} ${next.join(' · ')}` : `${NEWSLETTER_TOP_LABEL.lead} ${NEWSLETTER_TOP_LABEL.text}`
+  return { subject, preheader }
 }
 
 /** The stories the issue's email shows, in its order, each with its story's stored relevance. */

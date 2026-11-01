@@ -270,13 +270,13 @@ describeDb('newsletter lifecycle', () => {
     await lifecycle.generateContent(issue.id)
 
     const html = await lifecycle.generateHtml(issue.id)
-    expect(html).toContain('>Also: Atlas of coral recovery · Bees return to farmland</div>')
+    expect(html).toContain('>AI-curated: Atlas of coral recovery · Bees return to farmland</div>')
     await sendTest(issue.id)
     await sendLive(issue.id)
 
     expect(fakePlunk.campaigns.map(c => [c.name, c.subject])).toEqual([
-      ['[TEST] Week 9, 2026', '[TEST] Week 9: Clean water reaches villages and 2 more'],
-      ['Week 9, 2026', 'Week 9: Clean water reaches villages and 2 more'],
+      ['[TEST] Week 9, 2026', '[TEST] Week 9: Clean water reaches villages'],
+      ['Week 9, 2026', 'Week 9: Clean water reaches villages'],
     ])
     expect((await issueOf(issue.id)).title).toBe('Week 9, 2026')
   })

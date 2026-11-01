@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { Prisma } from '@prisma/client'
+import { NEWSLETTER_PREVIEW_AI_MARKER, NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { inboxPreview, inboxStories, SUBJECT_MAX_CHARS, type InboxStory } from './newsletterInbox.js'
 
 const story = (headline: string, relevance: number | null = 5): InboxStory => ({ headline, relevance })
@@ -9,19 +10,19 @@ describe('inboxPreview: the subject', () => {
     expect(inboxPreview('Week 43, 2026', [story('Cities cut smog by a third')]).subject).toBe('Week 43: Cities cut smog by a third')
   })
 
-  it('leads with the most relevant story and counts the others', () => {
+  it('leads with the most relevant story, without counting the others', () => {
     const stories = [story('Rated five', 5), story('Rated eight', 8), story('Rated six', 6), story('Rated three', 3)]
-    expect(inboxPreview('Week 7, 2026', stories).subject).toBe('Week 7: Rated eight and 3 more')
+    expect(inboxPreview('Week 7, 2026', stories).subject).toBe('Week 7: Rated eight')
   })
 
   it("breaks a tie in relevance by the issue's own order", () => {
     const stories = [story('First seven', 7), story('First nine', 9), story('Second nine', 9)]
-    expect(inboxPreview('Week 7, 2026', stories).subject).toBe('Week 7: First nine and 2 more')
+    expect(inboxPreview('Week 7, 2026', stories).subject).toBe('Week 7: First nine')
   })
 
   it('ranks unrated stories below every rated one, and leads with the first when none is rated', () => {
-    expect(inboxPreview('Week 7, 2026', [story('Unrated', null), story('Rated zero', 0)]).subject).toBe('Week 7: Rated zero and 1 more')
-    expect(inboxPreview('Week 7, 2026', [story('One', null), story('Two', null)]).subject).toBe('Week 7: One and 1 more')
+    expect(inboxPreview('Week 7, 2026', [story('Unrated', null), story('Rated zero', 0)]).subject).toBe('Week 7: Rated zero')
+    expect(inboxPreview('Week 7, 2026', [story('One', null), story('Two', null)]).subject).toBe('Week 7: One')
   })
 
   it('an issue with no story keeps its title as the subject', () => {
@@ -29,21 +30,22 @@ describe('inboxPreview: the subject', () => {
   })
 
   it('an issue whose title is not a week label puts the whole title in front', () => {
-    expect(inboxPreview('Climate special', [story('Lead'), story('Other')]).subject).toBe('Climate special: Lead and 1 more')
+    expect(inboxPreview('Climate special', [story('Lead'), story('Other')]).subject).toBe('Climate special: Lead')
     expect(inboxPreview('Week 43 recap, 2026', [story('Lead')]).subject).toBe('Week 43 recap, 2026: Lead')
   })
 
-  it('shortens a long lead headline at a word, with an ellipsis, and keeps the count', () => {
+  it('shortens a long lead headline at a word, with an ellipsis', () => {
     const headline = 'Global coalition of ninety countries agrees to phase out unabated coal power plants by the end of 2035 after marathon talks'
     const { subject } = inboxPreview('Week 43, 2026', [story(headline, 9), story('Other'), story('Third')])
 
+    expect(subject).toBe('Week 43: Global coalition of ninety countries agrees to phase out unabated coal power plants…')
     expect(Array.from(subject).length).toBeLessThanOrEqual(SUBJECT_MAX_CHARS)
-    expect(subject.startsWith('Week 43: Global coalition')).toBe(true)
-    expect(subject.endsWith('… and 2 more')).toBe(true)
-    const kept = subject.slice('Week 43: '.length, subject.indexOf('…'))
-    // Whole words only: the kept text is the headline up to a space
-    expect(headline.startsWith(kept)).toBe(true)
-    expect(headline[kept.length]).toBe(' ')
+  })
+
+  it('gives the lead headline the whole room behind the label, however many stories follow', () => {
+    const headline = 'x'.repeat(SUBJECT_MAX_CHARS - 'Week 1: '.length)
+    const stories = [story(headline, 9), ...Array.from({ length: 9 }, (_, i) => story(`Other ${i}`, 1))]
+    expect(inboxPreview('Week 1, 2026', stories).subject).toBe(`Week 1: ${headline}`)
   })
 
   it('cuts a single overlong word, and never splits a character made of two code units', () => {
@@ -77,7 +79,7 @@ describe('inboxPreview: the subject', () => {
   it('keeps the headline readable behind a very long title', () => {
     const title = 'A hand-made special issue whose title alone is longer than any inbox will ever show in its list view'
     const { subject } = inboxPreview(title, [story('Seas rise slower than feared along the Atlantic coast, a new survey finds'), story('Other')])
-    expect(subject).toBe(`${title}: Seas rise slower than feared… and 1 more`)
+    expect(subject).toBe(`${title}: Seas rise slower than feared…`)
   })
 
   it('is plain text: quotes, ampersands and angle brackets stay as they are, and line breaks become spaces', () => {
@@ -87,22 +89,47 @@ describe('inboxPreview: the subject', () => {
 })
 
 describe('inboxPreview: the preview text', () => {
-  it('names the next two stories by relevance after the lead', () => {
+  it('opens with the AI marker, then names the next two stories by relevance after the lead', () => {
     const stories = [story('Five', 5), story('Nine', 9), story('Seven', 7), story('Eight', 8)]
-    expect(inboxPreview('Week 7, 2026', stories).preheader).toBe('Also: Eight · Seven')
+    expect(inboxPreview('Week 7, 2026', stories).preheader).toBe('AI-curated: Eight · Seven')
   })
 
   it('names the one other story of a two-story issue', () => {
-    expect(inboxPreview('Week 7, 2026', [story('Lead', 9), story('Other', 3)]).preheader).toBe('Also: Other')
+    expect(inboxPreview('Week 7, 2026', [story('Lead', 9), story('Other', 3)]).preheader).toBe('AI-curated: Other')
   })
 
-  it('is empty for an issue with one story or none', () => {
-    expect(inboxPreview('Week 7, 2026', [story('Only')]).preheader).toBe('')
+  it("is the email's own top label for an issue with one story, so the subject's AI headline has a label beside it", () => {
+    const { subject, preheader } = inboxPreview('Week 7, 2026', [story('Only')])
+    expect(subject).toBe('Week 7: Only')
+    expect(preheader).toBe('AI-generated: AI selected the stories in this issue and wrote the headlines and summaries.')
+    expect(preheader).toBe(`${NEWSLETTER_TOP_LABEL.lead} ${NEWSLETTER_TOP_LABEL.text}`)
+  })
+
+  it('is empty for an issue with no story', () => {
     expect(inboxPreview('Week 7, 2026', []).preheader).toBe('')
   })
 
   it('is plain text on one line (renderHtml escapes it)', () => {
-    expect(inboxPreview('Week 7, 2026', [story('Lead', 9), story('Fish & "chips"\r\n<win>', 1)]).preheader).toBe('Also: Fish & "chips" <win>')
+    expect(inboxPreview('Week 7, 2026', [story('Lead', 9), story('Fish & "chips"\r\n<win>', 1)]).preheader).toBe('AI-curated: Fish & "chips" <win>')
+  })
+
+  it('takes its marker and the top label from the AI label copy, where label wording lives', async () => {
+    expect(NEWSLETTER_PREVIEW_AI_MARKER).toBe('AI-curated:')
+
+    vi.resetModules()
+    vi.doMock('../lib/aiLabelCopy.js', async importOriginal => ({
+      ...(await importOriginal<typeof import('../lib/aiLabelCopy.js')>()),
+      NEWSLETTER_PREVIEW_AI_MARKER: 'Marker:',
+      NEWSLETTER_TOP_LABEL: { lead: 'Lead-in:', text: 'Label text.' },
+    }))
+    try {
+      const { inboxPreview: withOtherCopy } = await import('./newsletterInbox.js')
+      expect(withOtherCopy('Week 7, 2026', [story('Lead', 9), story('Other', 3)]).preheader).toBe('Marker: Other')
+      expect(withOtherCopy('Week 7, 2026', [story('Only')]).preheader).toBe('Lead-in: Label text.')
+    } finally {
+      vi.doUnmock('../lib/aiLabelCopy.js')
+      vi.resetModules()
+    }
   })
 })
 
