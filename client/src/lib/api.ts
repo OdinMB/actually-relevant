@@ -40,6 +40,11 @@ export function isNotFound(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404
 }
 
+/** The API answered 429: this client asked too often, and a retry passes only once its rate-limit window has moved on. */
+export function isRateLimited(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 429
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, options)
 

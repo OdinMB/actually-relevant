@@ -105,13 +105,13 @@ router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, va
   }
 
   try {
-    // A signup over the hourly limit is queued and gets this same reply, as does an
-    // already-confirmed or throttled address, so the reply never tells them apart.
+    // A signup over the hourly limit is queued and gets this same reply, as does a
+    // still-subscribed or throttled address, so the reply never tells them apart.
     await subscribeService.subscribe({ email: req.body.email })
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
   } catch (err) {
     // Surface real failures to the visitor rather than falsely claiming the email
-    // was sent. (An already-confirmed or throttled address returns success earlier,
+    // was sent. (A still-subscribed or throttled address returns success earlier,
     // so this path can't leak subscription status — these are genuine errors.)
     if (err instanceof EmailValidationError || err instanceof ConfirmationEmailError) {
       res.json({ success: false, message: err.message })

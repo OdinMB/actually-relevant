@@ -1,6 +1,6 @@
 # Admin notices
 
-Every owner alert (job failures, podcast and newsletter notices, the signup cap, Plunk spam complaints and bounces) is kept as a row in `admin_notices` and shown in the admin with an unseen badge (ADR-0028). `WEBHOOK_URL` is optional: when set, each notice is also forwarded there; nothing checks for it. Admin UI patterns: `.context/admin-dashboard.md`.
+Every owner alert (job failures, podcast and newsletter notices, the signup cap and queue, signups Plunk could not check or subscribe, Plunk spam complaints and bounces) is kept as a row in `admin_notices` and shown in the admin with an unseen badge (ADR-0028). `WEBHOOK_URL` is optional: when set, each notice is also forwarded there; nothing checks for it. Admin UI patterns: `.context/admin-dashboard.md`.
 
 ## Rules and guarantees
 
@@ -9,7 +9,7 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 - **Dedupe and reopen.** No key: every call is a new row. With a key, one row per key: a repeat raises `count`, moves `lastOccurredAt`, replaces severity, title, message and link, and sets `seenAt` back to null, so a recurring problem comes back unseen but stays one row. It is one `INSERT … ON CONFLICT (dedupe_key) DO UPDATE`, so two processes cannot make two rows. **Insert-only** (`notify(n, { reopen: false })`, `ON CONFLICT DO NOTHING`): a repeat changes nothing and is not forwarded again; for events recorded once and never reopened (the Plunk poll).
 - **Seen is global**, one `seenAt` per notice: anyone with admin access (admins and editors) who marks a notice seen marks it for everyone.
 - **Retention**: each `recordNotice` call deletes seen notices whose `lastOccurredAt` is older than `config.notices.retentionDays` (90). Unseen notices are never pruned. No job is needed.
-- **No personal data in a notice.** No caller puts a subscriber's address (or any other person's data) in a title or message. A new caller must keep it that way, and must not pass arbitrary third-party error text that can quote an address (an SES bounce diagnostic does). Job error text is passed as it is: no current job error carries an address. The Plunk activity id in a Plunk notice's dedupe key (`plunk:<emailId>_complaint`) is Plunk's reference to one recipient's email, so it is pseudonymous personal data: it is needed to record each event once, it never leaves the table and the admin, and it goes with the row under the retention rule.
+- **No personal data in a notice.** No caller puts a subscriber's address (or any other person's data) in a title or message. A new caller must keep it that way, and must not pass arbitrary third-party error text that can quote an address (an SES bounce diagnostic does). Job error text is passed as it is: no current job error carries an address. The signup notices in `subscribe.ts` name a failed Plunk call only by HTTP status, `timed out`, a network error code or `unreadable answer` (`plunkFailure`), never by Plunk's error text. The Plunk activity id in a Plunk notice's dedupe key (`plunk:<emailId>_complaint`) is Plunk's reference to one recipient's email, so it is pseudonymous personal data: it is needed to record each event once, it never leaves the table and the admin, and it goes with the row under the retention rule.
 
 ## Who raises which notice
 
@@ -27,6 +27,8 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap,
 | `subscribeLimits.ts` signup cap (signups queued, with the number waiting; `.context/subscription.md`) | `subscriptions` / `warning` | `signup-cap` | `/admin/subscribers` |
 | `subscribeLimits.ts` queue stalled (signups queue behind waiting ones while `send_queued_confirmations` is missing, disabled or has completed no run in 30 minutes; at most hourly per process, with the number waiting) | `subscriptions` / `warning` | `signup-queue-stalled` | `/admin/jobs` |
 | `sendQueuedConfirmations.ts` queued signups expired (removed unsent, with the count) | `subscriptions` / `warning` | `signup-queue-expired` | `/admin/subscribers` |
+| `subscribe.ts` returning reader got no confirmation email (an address that confirmed before signed up again and Plunk's contact lookup or activity read failed, naming which and why; each failure raises the count; fired without holding up the reply) | `subscriptions` / `warning` | `signup-returning-check-failed` | `/admin/subscribers` |
+| `subscribe.ts` confirmed reader not subscribed in Plunk (the confirm's contact upsert failed, recorded once the confirmation is saved; each failure raises the count; what the owner does: `.context/subscription.md`, "Confirm") | `subscriptions` / `warning` | `signup-confirm-plunk-failed` | `/admin/subscribers` |
 | `generateNewsletter.ts` no stories this week | `newsletter` / `warning` | `newsletter-no-stories:<weekKey>` | `/admin/jobs` |
 | `publishNewsletter.ts` issue sent | `newsletter` / `info` | none | `/admin/newsletters` |
 | `publishNewsletter.ts` already sent or published | `newsletter` / `info` | `newsletter-already-sent:<weekKey>` | `/admin/newsletters` |

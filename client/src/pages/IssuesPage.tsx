@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { usePublicIssues } from '../hooks/usePublicIssues'
 import { getCategoryColor } from '../lib/category-colors'
 import { IssueAccordionSkeleton } from '../components/skeletons'
+import LoadFailure from '../components/LoadFailure'
+import { loadStateOf } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 import type { PublicIssue } from '../lib/api'
 
@@ -118,7 +120,9 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
 const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats', 'science-technology']
 
 export default function IssuesPage() {
-  const { data: issues, isLoading } = usePublicIssues()
+  const issuesQuery = usePublicIssues()
+  const issues = issuesQuery.data
+  const loadState = loadStateOf(issuesQuery)
   const sorted = [...(issues ?? [])].sort((a, b) => ISSUE_ORDER.indexOf(a.slug) - ISSUE_ORDER.indexOf(b.slug))
 
   return (
@@ -140,7 +144,7 @@ export default function IssuesPage() {
         </header>
 
         <div className="divide-y divide-neutral-200">
-          {isLoading ? (
+          {loadState === 'loading' ? (
             // Show skeleton accordions while loading
             <>
               <IssueAccordionSkeleton />
@@ -148,6 +152,8 @@ export default function IssuesPage() {
               <IssueAccordionSkeleton />
               <IssueAccordionSkeleton />
             </>
+          ) : loadState !== 'ready' ? (
+            <LoadFailure title="The issues couldn't load" headingLevel={2} query={issuesQuery} className="py-8" />
           ) : (
             sorted.map(issue => <IssueAccordion key={issue.slug} issue={issue} />)
           )}

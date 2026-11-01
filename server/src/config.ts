@@ -489,6 +489,11 @@ export const config = {
     activityMaxPages: 20,
     // Activity items carry the email's body in metadata, so a page is far larger than the client's 1 MB cap.
     activityMaxResponseBytes: 5 * 1024 * 1024,
+    // The returning-reader check (findContactsByEmail, hasComplaintOrBounce) runs inside the signup
+    // request, so each of its reads gets this timeout and one retry instead of the clients' 15 s and
+    // three: a slow Plunk holds the reply about 11 s per read (two attempts and a 1 s backoff).
+    contactCheckTimeoutMs: 5_000,
+    contactCheckRetries: 1,
   },
   storyRetention: {
     // The cleanup_old_stories job (.context/story-retention.md): stories crawled longer ago than this
@@ -516,6 +521,9 @@ export const config = {
     rateLimitDailyWindowMs: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS, 24 * 60 * 60 * 1000, 'SUBSCRIBE_RATE_LIMIT_DAILY_WINDOW_MS'),
     rateLimitDailyMax: parseWholeNumber(process.env.SUBSCRIBE_RATE_LIMIT_DAILY_MAX, 20, 'SUBSCRIBE_RATE_LIMIT_DAILY_MAX'),
     // Form-token anti-bot gate. Min fill time trips instant submitters; max age bounds replay.
+    // The forms time their tokens by these two defaults (client/src/lib/formToken.ts; lib/formToken.test.ts
+    // fails when they differ). An override that raises the minimum, or lowers the maximum below the
+    // 25 minutes up to which a form still posts a token, drops real submissions while answering success.
     minFormFillMs: parseWholeNumber(process.env.SUBSCRIBE_MIN_FORM_FILL_MS, 1500, 'SUBSCRIBE_MIN_FORM_FILL_MS', 0),
     formTokenMaxAgeMs: parseWholeNumber(process.env.SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS, 30 * 60 * 1000, 'SUBSCRIBE_FORM_TOKEN_MAX_AGE_MS'),
     // HMAC key for form tokens. Dedicated secret, falling back to JWT_SECRET so it works out of the box.

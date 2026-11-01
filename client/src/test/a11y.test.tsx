@@ -6,7 +6,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import SearchPage from '../pages/SearchPage'
 
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: {
     stories: {
       list: vi.fn().mockResolvedValue({
