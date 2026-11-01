@@ -3,6 +3,7 @@ import type {
   StoryCluster,
   ClusterStorySearchResult,
   Feed,
+  FeedChangesetReport,
   Issue,
   Newsletter,
   NewsletterSend,
@@ -269,6 +270,10 @@ export const adminApi = {
     fetchFavicon: (id: string) => request<{ success: boolean; message: string }>(`/feeds/${id}/favicon`, { method: 'POST' }),
     fetchAllFavicons: () => request<{ succeeded: number; failed: number; skipped: number; errors: string[] }>('/feeds/fetch-favicons', { method: 'POST' }),
     quality: () => request<Record<string, FeedQualityMetrics>>('/feeds/quality'),
+    /** Resolve an uploaded changeset file without writing; per-change results. */
+    previewChangeset: (changeset: unknown) => request<FeedChangesetReport>('/feeds/changesets/preview', { method: 'POST', body: JSON.stringify(changeset) }),
+    /** Apply it whole, or nothing (a 400 whose body is the preview) when any change has an error. */
+    applyChangeset: (changeset: unknown) => request<FeedChangesetReport>('/feeds/changesets/apply', { method: 'POST', body: JSON.stringify(changeset) }),
   },
 
   // Issues

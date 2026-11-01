@@ -196,6 +196,24 @@ export default function MethodologyPage() {
             </div>
           ) : null}
 
+          <h3 className="mt-8 font-bold text-neutral-800">Publishers&apos; AI Opt-Outs</h3>
+          <p>
+            We only crawl publishers who haven&apos;t opted out of the kind of automated reading we do. We don&apos;t add a source, and we remove an existing
+            one, if the publisher has made any of these general reservations: a text and data mining reservation under the TDMRep protocol, a content signal
+            that rules out AI input, a robots.txt rule that blocks all crawlers or ours, or terms of use that forbid AI processing, summarizing, or text and
+            data mining of its articles.
+          </p>
+          <p>
+            Rules aimed only at training AI models don&apos;t cover what we do, and neither do robots.txt rules that block the crawlers of specific AI
+            companies. We don&apos;t train AI models. Our crawler identifies itself as ActuallyRelevant and reads each article once, and every story links to
+            the original. EU law allows text and data mining unless the rightsholder has reserved it in a machine-readable way (Article 4 of the Directive on
+            Copyright in the Digital Single Market). We check these rules when we add a source and whenever we review our source list.
+          </p>
+          <p>
+            Some publishers, such as newsletters on Substack, don&apos;t allow their article pages to be fetched but publish each full article in their RSS
+            feed. For those, we read the article from the feed and never fetch the page.
+          </p>
+
           {/* What We Don't Do */}
           <h2 className="section-heading mt-10">What We Don't Do</h2>
           <ul className="list-disc pl-6 space-y-2 mt-3">

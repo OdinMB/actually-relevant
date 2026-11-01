@@ -8,7 +8,7 @@ import { type Story, Prisma, StoryStatus } from '@prisma/client'
 import { generateEmbeddingForContent } from './embedding.js'
 import { fetchStoryForEmbedding, saveEmbeddingTx } from '../lib/vectors.js'
 import { createLogger } from '../lib/logger.js'
-import type { ExtractionMethod } from './extractor.js'
+import type { CrawlMethod } from './extractor.js'
 import type { AccessTier } from '../lib/paywall.js'
 import type { z } from 'zod'
 import type { updateStorySchema } from '../schemas/story.js'
@@ -25,7 +25,7 @@ export async function createStory(data: {
   sourceContent: string
   feedId: string
   sourceDatePublished?: string
-  crawlMethod?: ExtractionMethod
+  crawlMethod?: CrawlMethod
   accessTier?: AccessTier
 }): Promise<Story> {
   const feed = await prisma.feed.findUnique({ where: { id: data.feedId } })

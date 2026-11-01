@@ -72,6 +72,9 @@ app.use((req, res, next) => {
   })(req, res, next)
 })
 
+// A feed changeset of up to 200 changes with their reasons can pass 100 kB; the parser that runs
+// first wins, so this one must come before the general limit.
+app.use('/api/admin/feeds/changesets', express.json({ limit: '512kb' }))
 app.use(express.json({ limit: '100kb' }))
 app.use(cookieParser())
 

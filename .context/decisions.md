@@ -51,3 +51,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0047 · Deploy both Render services only after the commit's GitHub checks pass, with both builds and a migration check in CI](decisions/0047-deploy-after-ci-checks-pass.md)
 - [ADR-0048 · Make one module, newsletterLifecycle.ts, the only writer of newsletter issue state and sends, with live sends claimed under the issue's row lock before Plunk](decisions/0048-newsletter-lifecycle-owner.md)
 - [ADR-0049 · Queue signups over the hourly confirmation limit on their pending_subscriptions row, waiting while sent_at is null, and send them from a scheduled job within that limit](decisions/0049-signup-queue-on-pending-row.md)
+- [ADR-0050 · Crawl a source only when its publisher has made no general reservation against automated or AI use; treat blocks of named AI crawlers and training-only bans as not applying to us](decisions/0050-source-policy-ai-opt-outs.md)

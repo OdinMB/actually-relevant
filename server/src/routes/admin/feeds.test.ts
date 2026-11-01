@@ -211,6 +211,38 @@ describe('Admin Feeds API', () => {
     })
   })
 
+  describe('content source', () => {
+    const newFeed = { title: 'A Newsletter', rssUrl: 'https://writer.substack.com/feed', issueId: '00000000-0000-0000-0000-000000000001' }
+
+    it('persists where the article text comes from on create and update', async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue(sampleIssue())
+      mockPrisma.feed.create.mockResolvedValue(sampleFeed({ contentSource: 'rss' }))
+      mockPrisma.feed.update.mockResolvedValue(sampleFeed())
+
+      const created = await request(app)
+        .post('/api/admin/feeds')
+        .set(authHeader())
+        .send({ ...newFeed, contentSource: 'rss' })
+      const updated = await request(app).put('/api/admin/feeds/feed-1').set(authHeader()).send({ contentSource: 'page' })
+
+      expect([created.status, updated.status]).toEqual([201, 200])
+      expect(mockPrisma.feed.create.mock.calls[0][0].data).toMatchObject({ contentSource: 'rss' })
+      expect(mockPrisma.feed.update.mock.calls[0][0].data).toMatchObject({ contentSource: 'page' })
+    })
+
+    it('refuses an unknown content source', async () => {
+      const created = await request(app)
+        .post('/api/admin/feeds')
+        .set(authHeader())
+        .send({ ...newFeed, contentSource: 'api' })
+      const updated = await request(app).put('/api/admin/feeds/feed-1').set(authHeader()).send({ contentSource: 'html' })
+
+      expect([created.status, updated.status]).toEqual([400, 400])
+      expect(mockPrisma.feed.create).not.toHaveBeenCalled()
+      expect(mockPrisma.feed.update).not.toHaveBeenCalled()
+    })
+  })
+
   describe('DELETE /api/admin/feeds/:id', () => {
     it('deletes a feed with no stories', async () => {
       mockPrisma.story.count.mockResolvedValue(0)

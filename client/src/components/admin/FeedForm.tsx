@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
-import type { Issue, FeedRegion } from '@shared/types'
+import type { Issue, FeedRegion, FeedContentSource } from '@shared/types'
 import { FEED_REGIONS } from '@shared/constants'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
@@ -8,6 +8,7 @@ import { Button } from '../ui/Button'
 import { useCreateFeed } from '../../hooks/useFeeds'
 import { useToast } from '../ui/Toast'
 import { FeedPaywallFields } from './FeedPaywallFields'
+import { FeedContentSourceField } from './FeedContentSourceField'
 
 /** Build hierarchical issue options: parents first, children indented under their parent. */
 function buildIssueOptions(issues: Issue[]): { value: string; label: string }[] {
@@ -44,6 +45,7 @@ const EMPTY_FORM = {
   htmlSelector: '',
   paywallDetection: true,
   paywallTitleMarker: '',
+  contentSource: 'page' as FeedContentSource,
   active: true,
 }
 
@@ -66,7 +68,7 @@ export function FeedCreateForm({ open, onClose, issues }: FeedCreateFormProps) {
     }
   }, [open])
 
-  const set = (key: string, value: string | boolean) => setForm(f => ({ ...f, [key]: value }))
+  const set = <K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) => setForm(f => ({ ...f, [key]: value }))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,6 +85,7 @@ export function FeedCreateForm({ open, onClose, issues }: FeedCreateFormProps) {
         htmlSelector: form.htmlSelector || null,
         paywallDetection: form.paywallDetection,
         paywallTitleMarker: form.paywallTitleMarker.trim() || null,
+        contentSource: form.contentSource,
         active: form.active,
       })
       toast('success', 'Feed created')
@@ -150,6 +153,7 @@ export function FeedCreateForm({ open, onClose, issues }: FeedCreateFormProps) {
               onChange={e => set('htmlSelector', e.target.value)}
               placeholder="e.g. article .content"
             />
+            <FeedContentSourceField value={form.contentSource} onChange={v => set('contentSource', v)} />
             <FeedPaywallFields
               detection={form.paywallDetection}
               titleMarker={form.paywallTitleMarker}

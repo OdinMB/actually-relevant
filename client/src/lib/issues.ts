@@ -1,4 +1,16 @@
-import type { Story } from '@shared/types'
+import type { Issue, Story } from '@shared/types'
+
+/** What `issueTree` needs of an issue. */
+export type IssueNode = Pick<Issue, 'id' | 'name' | 'slug' | 'parentId'>
+
+/** Top-level issues by name, each with its sub-issues by name. A sub-issue whose parent is missing is left out. */
+export function issueTree<T extends IssueNode>(issues: T[]): { parent: T; children: T[] }[] {
+  const byName = (a: T, b: T) => a.name.localeCompare(b.name)
+  return issues
+    .filter(issue => !issue.parentId)
+    .sort(byName)
+    .map(parent => ({ parent, children: issues.filter(child => child.parentId === parent.id).sort(byName) }))
+}
 
 /**
  * Resolves the top-level issue for a story, preferring story.issue over feed.issue

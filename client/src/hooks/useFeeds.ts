@@ -49,6 +49,19 @@ export function useDeleteFeed() {
   })
 }
 
+/** Apply an uploaded feed changeset (all or nothing), then refetch every feed view. */
+export function useApplyFeedChangeset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (changeset: unknown) => adminApi.feeds.applyChangeset(changeset),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+      queryClient.invalidateQueries({ queryKey: ['feed-quality'] })
+    },
+  })
+}
+
 export function useFeedQuality() {
   return useQuery<Record<string, FeedQualityMetrics>>({
     queryKey: ['feed-quality'],

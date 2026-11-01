@@ -151,6 +151,9 @@ model Feed {
   htmlSelector            String?   @map("html_selector")
   paywallDetection        Boolean   @default(true) @map("paywall_detection")
   paywallTitleMarker      String?   @map("paywall_title_marker")
+  // Where the crawler takes the article text: 'page' (fetch the article page) or 'rss' (the full
+  // text in the RSS item, never fetching the page). Checked by Zod in schemas/feed.ts, not an enum.
+  contentSource           String    @default("page") @map("content_source")
   stories            Story[]
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")

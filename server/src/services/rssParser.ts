@@ -10,13 +10,29 @@ import { BlockedUrlError, isAllowedUrl, ssrfGuard } from '../utils/urlValidation
 
 const log = createLogger('rssParser')
 
-const parser = new Parser()
+/** rss-parser copies an item's content:encoded under this key; its own typings leave it out. */
+interface ParsedItemExtras {
+  'content:encoded'?: string
+}
+
+const parser = new Parser<Record<string, unknown>, ParsedItemExtras>()
 
 export interface RSSItem {
   url: string
   title: string
   datePublished: string | null
   description: string | null
+  /**
+   * The item's own HTML: content:encoded (where publishers such as Substack put the full article),
+   * else the description or Atom content. Feeds whose contentSource is 'rss' take the story text
+   * from it (rssContent.ts); for the others it is unused.
+   */
+  contentHtml: string | null
+}
+
+/** A non-empty string, else null: xml2js can hand back an object for unusual markup inside an element. */
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null
 }
 
 export interface FeedCacheHeaders {
@@ -84,6 +100,7 @@ export async function parseFeed(feedUrl: string, cacheHeaders?: FeedCacheHeaders
         title: item.title || 'Untitled',
         datePublished: item.isoDate || item.pubDate || null,
         description: item.contentSnippet || item.content || null,
+        contentHtml: textOrNull(item['content:encoded']) ?? textOrNull(item.content),
       })
     }
 

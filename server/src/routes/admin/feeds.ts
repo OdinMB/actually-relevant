@@ -5,11 +5,23 @@ import { crawlFeed, crawlAllDueFeeds } from '../../services/crawler.js'
 import { validateBody } from '../../middleware/validate.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import { createFeedSchema, updateFeedSchema } from '../../schemas/feed.js'
+import { feedChangesetSchema } from '../../schemas/feedChangeset.js'
+import { applyChangeset, previewChangeset } from '../../services/feedChangeset.js'
 
-// Errors: an issueId naming no issue is a BadRequestError (400) from the feed service; the global
-// handler in app.ts answers it, and failsWith() names each route's 500 and Prisma texts.
+// Errors: an issueId naming no issue is a BadRequestError (400) from the feed service, and a
+// changeset with errors a ChangesetHasErrorsError (400, the preview in its body); the global
+// handler in app.ts answers them, and failsWith() names each route's 500 and Prisma texts.
 const router = Router()
 const feedErrors = { notFound: 'Feed not found', duplicate: 'A feed with this RSS URL already exists' }
+
+// Changesets (.context/feed-management.md, "Changesets"); their body limit is raised in app.ts.
+router.post('/changesets/preview', failsWith('Failed to preview feed changes'), validateBody(feedChangesetSchema), async (req, res) => {
+  res.json(await previewChangeset(req.body))
+})
+
+router.post('/changesets/apply', failsWith('Failed to apply feed changes', feedErrors), validateBody(feedChangesetSchema), async (req, res) => {
+  res.json(await applyChangeset(req.body))
+})
 
 router.get('/', failsWith('Failed to fetch feeds'), async (req, res) => {
   const filters: { issueId?: string; active?: boolean } = {}

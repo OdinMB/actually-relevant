@@ -1,6 +1,6 @@
 # Content Extraction
 
-The crawler fetches RSS feeds and extracts article content using a 3-tier fallback chain. Each tier is tried in order; the first one that produces enough text wins.
+The crawler fetches RSS feeds and extracts article content using a 3-tier fallback chain. Each tier is tried in order; the first one that produces enough text wins. A feed whose `contentSource` is `'rss'` skips the chain entirely and takes the text from its RSS items (see "Full Text from the RSS Item").
 
 ## Extraction Chain
 
@@ -40,7 +40,7 @@ When consecutive articles all fail extraction entirely (local + API both return 
 
 ### Extraction Method Tracking
 
-The extraction method that succeeded (`selector`, `readability`, `diffbot`, or `pipfeed`), or `teaser` for a locked page where every tier failed (see Access Classification), is persisted to `Story.crawlMethod` when the story is created. This field is used by the feed quality metrics to show a per-feed breakdown of which extraction tiers are working. The admin panel displays the dominant method in the feed table and a full percentage breakdown in the feed edit panel. Stories created before this feature have `crawlMethod = null` and are excluded from the breakdown.
+The extraction method that succeeded (`selector`, `readability`, `diffbot`, or `pipfeed`), `teaser` for a locked page where every tier failed (see Access Classification), or `rss` for a story whose text came from its RSS item (`CrawlMethod` in `extractor.ts`; `rss` is never a tier of the chain), is persisted to `Story.crawlMethod` when the story is created. This field is used by the feed quality metrics to show a per-feed breakdown of which extraction tiers are working. The admin panel displays the dominant method in the feed table and a full percentage breakdown in the feed edit panel. Stories created before this feature have `crawlMethod = null` and are excluded from the breakdown.
 
 ### Mid-Flight Cancellation
 
@@ -64,6 +64,17 @@ The classification runs whenever the page was fetched and is under `maxParseByte
 
 **Limits.** Classification is a snapshot: SPIEGEL unlocks some S+ pieces later, and a story rejected as locked stays rejected. Stories crawled before the column existed have `accessTier = null`. A publisher's subscribe prompt can push a teaser over `lockedMaxChars`: a SPIEGEL international S+ teaser extracted to about 3,100 characters on 2026-10-08, including the "weiterlesen mit SPIEGEL+" offer, and would be `metered` by the markup rule alone; SPIEGEL's `og:title` starts "(S+) ", which the feed's title marker `^\(S\+\)` catches. The crawler's user agent was served the full markup by SPIEGEL on that date. The second cheerio parse adds to the per-article memory in the CPU & Memory Budget, bounded by the same `maxParseBytes`.
 
+## Full Text from the RSS Item
+
+For publishers whose terms forbid fetching their article pages but whose feed carries each whole article, such as Substack newsletters, a feed's `contentSource` is `'rss'` (field in `feed-management.md`; which publishers qualify: its "Source Policy"). For such a feed `crawlFeed()` never fetches a page and never calls an extraction tier, the API tier included (`storeRssItems()` in `crawler.ts`, `server/src/services/rssContent.ts`):
+
+- **The text** is the item's `contentHtml` (`rssParser.ts`: `content:encoded`, else the RSS description or the Atom content) turned into plain text by `htmlToText()`: scripts, styles, embeds and forms dropped, whitespace inside a block collapsed, `<br>` a newline, one blank line between blocks (paragraphs, headings, list items, quotes).
+- **Too short** (under `config.crawl.minContentLength`, 300; e.g. a paid post whose item carries only a preview, or a feed without full text): the item is skipped, counted in `skipped`, logged at info. Never an error and never a fallback to the page, which would break the publisher's terms. It is looked at again on every crawl while it stays in the feed (no fetch, so cheap). Skipped items do not count as attempted, so a crawl where every new item was too short is "nothing new", not a total failure.
+- **The story** takes the item's title and date, `crawlMethod: 'rss'` and `accessTier: 'unknown'` (an item has no access markup), or `locked` when the feed's `paywallTitleMarker` matches the item title, and is then created `rejected` as any locked story. `paywallDetection` has no effect here.
+- **Single URLs** cannot be crawled into such a feed: `crawlUrl()` refuses with 400 "This feed takes article text from its RSS feed; single URLs can't be crawled" before any fetch.
+
+Limit: the length threshold is the only check that an item holds the whole article. A paid post whose free preview runs past 300 characters is stored as if it were the full text.
+
 ## Resource Limits
 
 HTTP responses from page fetches, RSS feeds, and external API calls (Diffbot, PipFeed) are capped at 5 MB (`maxContentLength`) to prevent OOM on pathological responses. Pages whose fetched HTML exceeds `config.crawl.maxParseBytes` (default 2 MB, env `MAX_PARSE_BYTES`) skip local parsing (tiers 1+2) and fall straight through to the API tier: a multi-MB HTML string expands ~10-20x as a DOM, and that allocation counts against Render's ~512 MiB RSS limit — which `--max-old-space-size=384` does **not** bound (it caps only the V8 heap) — so a single oversized page can OOM the crawl even at low concurrency. JSDOM DOM objects are explicitly released via `dom.window.close()` in a `finally` block after Readability extraction, as JSDOM windows hold timers, event listeners, and expanded DOM trees that are not reliably garbage collected without explicit cleanup. Outbound webhook and email service (Plunk) responses are capped at 1 MB. The Bluesky og:image fetch uses `AbortSignal.timeout(10_000)` to prevent hanging. Favicon fetches use streaming reads with per-chunk size checks to avoid allocating large buffers for unexpected responses.
@@ -86,10 +97,13 @@ JSDOM + Readability parsing is the most expensive operation in the server, on tw
 ```
 RSS Feed → Parse items (max config.crawl.rssItemLimit, default 30)
          → Deduplicate against existing story URLs
-         → For each new item (parallel, up to config.concurrency.crawlArticles):
+         → contentSource 'page' (default): for each new item (parallel, up to config.concurrency.crawlArticles):
             → Fetch page HTML (with retry, timeout config.crawl.httpTimeoutMs, default 10 s)
             → Extract content (3-tier chain) and classify access
             → Create story with status 'fetched', or 'rejected' when its access tier is 'locked'
+         → contentSource 'rss': for each new item, in order, no page fetched:
+            → Text from the item's HTML; skip the item if shorter than minContentLength
+            → Create story (crawlMethod 'rss'; 'rejected' when the title marker matches)
          → Update the feed's crawl status (see feed-management.md, "Crawl status and health counters")
 ```
 
@@ -115,7 +129,7 @@ URLs are normalized (HTTPS, no trailing slash, no tracking params, sorted query)
 - `POST /api/admin/feeds/:id/crawl` — trigger full RSS crawl for one feed
 - `POST /api/admin/feeds/crawl-all` — crawl all feeds that are due
 
-`crawl-url` normalizes the URL first. It rejects the request with "URL already crawled" when a story with that normalized URL already exists. It returns `null` and creates no story when every extraction tier fails, except on a page classified `locked`, where it stores the `teaser` result. Any URL classified `locked` is created `rejected` (ADR-0031), like a scheduled crawl's; the response and the "URL crawled successfully" toast do not say so, the story is found under the story list's Status "Rejected" and "Paywall: Locked" filters, and crawling the URL again returns "URL already crawled". There is no RSS item here, so a missing title becomes "Untitled" and a missing publish date stays empty (`crawlUrl()` in `server/src/services/crawler.ts`).
+`crawl-url` refuses a feed whose `contentSource` is `'rss'` (400, see "Full Text from the RSS Item"). It normalizes the URL first. It rejects the request with "URL already crawled" when a story with that normalized URL already exists. It returns `null` and creates no story when every extraction tier fails, except on a page classified `locked`, where it stores the `teaser` result. Any URL classified `locked` is created `rejected` (ADR-0031), like a scheduled crawl's; the response and the "URL crawled successfully" toast do not say so, the story is found under the story list's Status "Rejected" and "Paywall: Locked" filters, and crawling the URL again returns "URL already crawled". There is no RSS item here, so a missing title becomes "Untitled" and a missing publish date stays empty (`crawlUrl()` in `server/src/services/crawler.ts`).
 
 ## Key Files
 
@@ -125,7 +139,8 @@ URLs are normalized (HTTPS, no trailing slash, no tracking params, sorted query)
 | `server/src/services/extractor.ts` | 3-tier extraction chain, teaser result |
 | `server/src/lib/paywall.ts` | Access classification from publisher markup and the feed's paywall setting |
 | `server/src/scripts/scan-teaser-analyses.ts` | `npm run scan:teasers`: read-only list of published stories probably rated on a teaser |
-| `server/src/services/rssParser.ts` | RSS/Atom feed parsing (max `config.crawl.rssItemLimit` items) |
+| `server/src/services/rssParser.ts` | RSS/Atom feed parsing (max `config.crawl.rssItemLimit` items), each item's `contentHtml` |
+| `server/src/services/rssContent.ts` | Story text from the RSS item for `contentSource: 'rss'` feeds (`htmlToText()`, `storyFromRssItem()`) |
 | `server/src/lib/retry.ts` | Retry utility with exponential backoff (used by RSS parser, extractor) |
 | `server/src/jobs/crawlFeeds.ts` | Scheduled job handler |
 | `server/src/utils/urlValidation.ts` | SSRF guard: `isAllowedUrl()`, `safeLookup()`, `ssrfGuard` axios options |
@@ -134,8 +149,9 @@ Feed CRUD, the due rule, crawl-health counters, quality metrics and favicons: `f
 
 ## Adding a New Feed
 
-1. Create the feed via `POST /api/admin/feeds` with the RSS URL and issue ID
-2. Test the crawl: `POST /api/admin/feeds/:id/crawl`
-3. Check extracted content quality in the stories
-4. If content is noisy or incomplete, set `htmlSelector` on the feed via `PUT /api/admin/feeds/:id`
-5. For a publisher with subscriber articles, check that its locked articles come in as `rejected` with the Paywall badge; set a title marker for one that marks them only in the title, and switch detection off for a metered feed whose full-text articles are rejected
+1. Check the publisher against the source policy (`feed-management.md`, "Source Policy: Publishers' AI Opt-Outs"); for a publisher that forbids fetching pages but carries the full text in its feed, set `contentSource: 'rss'`
+2. Create the feed via `POST /api/admin/feeds` with the RSS URL and issue ID, or in a changeset (`feed-management.md`, "Changesets")
+3. Test the crawl: `POST /api/admin/feeds/:id/crawl`
+4. Check extracted content quality in the stories
+5. If content is noisy or incomplete, set `htmlSelector` on the feed via `PUT /api/admin/feeds/:id`
+6. For a publisher with subscriber articles, check that its locked articles come in as `rejected` with the Paywall badge; set a title marker for one that marks them only in the title, and switch detection off for a metered feed whose full-text articles are rejected

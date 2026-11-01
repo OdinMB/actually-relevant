@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js'
 import type { Feed, FeedRegion, Prisma } from '@prisma/client'
 import { config } from '../config.js'
 import { BadRequestError } from '../utils/errors.js'
+import type { FeedContentSource } from '../schemas/feed.js'
 
 interface FeedFilters {
   issueId?: string
@@ -38,10 +39,13 @@ export async function getFeedById(id: string) {
   return feed ? withStaleFlag(feed) : null
 }
 
-export async function createFeed(data: {
+/** The database the feed writes go to: the client, or the transaction of a changeset (feedChangeset.ts). */
+type Db = Prisma.TransactionClient
+
+export interface NewFeed {
   title: string
   rssUrl: string
-  url?: string
+  url?: string | null
   displayTitle?: string
   language?: string
   region?: FeedRegion | null
@@ -50,39 +54,42 @@ export async function createFeed(data: {
   htmlSelector?: string
   paywallDetection?: boolean
   paywallTitleMarker?: string | null
-}): Promise<Feed & { isStale: boolean }> {
+  contentSource?: FeedContentSource
+}
+
+export type FeedChanges = Partial<{
+  title: string
+  rssUrl: string
+  url: string | null
+  displayTitle: string | null
+  language: string
+  region: FeedRegion | null
+  issueId: string
+  crawlIntervalHours: number
+  htmlSelector: string | null
+  paywallDetection: boolean
+  paywallTitleMarker: string | null
+  contentSource: FeedContentSource
+  active: boolean
+}>
+
+export async function createFeed(data: NewFeed, db: Db = prisma): Promise<Feed & { isStale: boolean }> {
   // Verify issue exists
-  const issue = await prisma.issue.findUnique({ where: { id: data.issueId } })
+  const issue = await db.issue.findUnique({ where: { id: data.issueId } })
   if (!issue) {
     throw new BadRequestError('Issue not found')
   }
-  return withStaleFlag(await prisma.feed.create({ data }))
+  return withStaleFlag(await db.feed.create({ data }))
 }
 
-export async function updateFeed(
-  id: string,
-  data: Partial<{
-    title: string
-    rssUrl: string
-    url: string | null
-    displayTitle: string | null
-    language: string
-    region: FeedRegion | null
-    issueId: string
-    crawlIntervalHours: number
-    htmlSelector: string | null
-    paywallDetection: boolean
-    paywallTitleMarker: string | null
-    active: boolean
-  }>,
-): Promise<Feed & { isStale: boolean }> {
+export async function updateFeed(id: string, data: FeedChanges, db: Db = prisma): Promise<Feed & { isStale: boolean }> {
   if (data.issueId) {
-    const issue = await prisma.issue.findUnique({ where: { id: data.issueId } })
+    const issue = await db.issue.findUnique({ where: { id: data.issueId } })
     if (!issue) {
       throw new BadRequestError('Issue not found')
     }
   }
-  return withStaleFlag(await prisma.feed.update({ where: { id }, data }))
+  return withStaleFlag(await db.feed.update({ where: { id }, data }))
 }
 
 export async function getDueFeeds() {
@@ -179,13 +186,13 @@ export async function updateFeedCacheHeaders(id: string, headers: { etag?: strin
   })
 }
 
-export async function deleteFeed(id: string): Promise<{ action: 'deleted' | 'deactivated' }> {
-  const storyCount = await prisma.story.count({ where: { feedId: id } })
+export async function deleteFeed(id: string, db: Db = prisma): Promise<{ action: 'deleted' | 'deactivated' }> {
+  const storyCount = await db.story.count({ where: { feedId: id } })
   if (storyCount > 0) {
-    await prisma.feed.update({ where: { id }, data: { active: false } })
+    await db.feed.update({ where: { id }, data: { active: false } })
     return { action: 'deactivated' }
   }
-  await prisma.feed.delete({ where: { id } })
+  await db.feed.delete({ where: { id } })
   return { action: 'deleted' }
 }
 

@@ -160,8 +160,33 @@ export interface Feed {
   paywallDetection: boolean
   /** Regex tested on an article's title; a match marks it locked. */
   paywallTitleMarker: string | null
+  /** Where the crawler takes the article text: the article page, or the full text in the RSS item. */
+  contentSource: FeedContentSource
   createdAt: string
   updatedAt: string
+}
+
+export type FeedContentSource = 'page' | 'rss'
+
+/** One change of an uploaded feed changeset, as the server resolved it (`server/src/services/feedChangesetPlan.ts`). */
+export interface FeedChangeResult {
+  /** Position in the file's `changes`, from 0. */
+  index: number
+  action: 'create' | 'update' | 'delete' | null
+  feedTitle: string | null
+  reason: string | null
+  status: 'ok' | 'noop' | 'error'
+  message: string
+  diff?: { field: string; from: string | number | boolean | null; to: string | number | boolean | null }[]
+}
+
+/** The answer of the changeset preview and apply endpoints (`.context/feed-management.md`, "Changesets"). */
+export interface FeedChangesetReport {
+  title: string | null
+  results: FeedChangeResult[]
+  counts: { ok: number; noop: number; error: number }
+  /** Set by apply: true when written, false on its 400 when any change has an error. */
+  applied?: boolean
 }
 
 export interface CrawlResult {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { config } from '../config.js'
+import { BadRequestError } from '../utils/errors.js'
 
 const mockParseFeed = vi.hoisted(() => vi.fn())
 const mockExtractContent = vi.hoisted(() => vi.fn())
@@ -32,6 +33,7 @@ const sampleFeed = {
   htmlSelector: null,
   paywallDetection: true,
   paywallTitleMarker: null,
+  contentSource: 'page',
   lastEtag: null,
   lastModified: null,
 }
@@ -585,6 +587,78 @@ describe('crawlFeed', () => {
     }
   })
 
+  describe('a feed whose article text comes from its RSS items', () => {
+    const rssFeed = { ...sampleFeed, contentSource: 'rss' }
+    const fullText = 'A paragraph of the full post. '.repeat(20)
+
+    function rssItem(url: string, contentHtml: string | null, title = 'Post') {
+      return { url, title, datePublished: '2026-10-30T08:00:00.000Z', description: 'Teaser', contentHtml }
+    }
+
+    beforeEach(() => {
+      mockGetExistingUrls.mockResolvedValue(new Set())
+      mockCreateStory.mockResolvedValue({ id: 'story-1' })
+    })
+
+    it('creates the story from the item HTML and never fetches the page', async () => {
+      mockGetFeedById.mockResolvedValue(rssFeed)
+      mockParseFeed.mockResolvedValue(rssResult([rssItem('https://writer.substack.com/p/post', `<p>${fullText}</p><p>End.</p>`)]))
+
+      const result = await crawlFeed('feed-1')
+
+      expect(mockExtractContent).not.toHaveBeenCalled()
+      expect(result).toMatchObject({ newStories: 1, skipped: 0, errors: 0 })
+      expect(mockCreateStory).toHaveBeenCalledWith({
+        sourceUrl: 'https://writer.substack.com/p/post',
+        sourceTitle: 'Post',
+        sourceContent: `${fullText.trim()}\n\nEnd.`,
+        feedId: 'feed-1',
+        sourceDatePublished: '2026-10-30T08:00:00.000Z',
+        crawlMethod: 'rss',
+        accessTier: 'unknown',
+      })
+    })
+
+    it('skips an item whose text is too short, without an error, a page fetch or a failed crawl', async () => {
+      mockGetFeedById.mockResolvedValue(rssFeed)
+      mockParseFeed.mockResolvedValue(
+        rssResult([rssItem('https://writer.substack.com/p/paid', '<p>Only the preview.</p>'), rssItem('https://writer.substack.com/p/none', null)]),
+      )
+
+      const result = await crawlFeed('feed-1')
+
+      expect(result).toMatchObject({ newStories: 0, skipped: 2, errors: 0 })
+      expect(result.errorMessage).toBeUndefined()
+      expect(mockExtractContent).not.toHaveBeenCalled()
+      expect(mockCreateStory).not.toHaveBeenCalled()
+      // Nothing was attempted, so the crawl is "nothing new", not a total failure retried next run.
+      expect(mockUpdateCrawlStatus).toHaveBeenCalledWith('feed-1', expect.objectContaining({ hadSuccess: false, newItemCount: 0, rssItemCount: 2 }))
+    })
+
+    it('stores an item whose title matches the feed title marker as locked', async () => {
+      mockGetFeedById.mockResolvedValue({ ...rssFeed, paywallTitleMarker: '^\\(S\\+\\)' })
+      mockParseFeed.mockResolvedValue(rssResult([rssItem('https://example.com/s-plus', `<p>${fullText}</p>`, '(S+) Subscriber piece')]))
+
+      await crawlFeed('feed-1')
+
+      expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ crawlMethod: 'rss', accessTier: 'locked' }))
+    })
+
+    it('counts a concurrent insert of the same URL as a skip and a failed insert as an error', async () => {
+      mockGetFeedById.mockResolvedValue(rssFeed)
+      mockParseFeed.mockResolvedValue(
+        rssResult([rssItem('https://example.com/raced', `<p>${fullText}</p>`), rssItem('https://example.com/broken', `<p>${fullText}</p>`)]),
+      )
+      mockCreateStory
+        .mockRejectedValueOnce(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }))
+        .mockRejectedValueOnce(new Error('connection lost'))
+
+      const result = await crawlFeed('feed-1')
+
+      expect(result).toMatchObject({ newStories: 0, skipped: 1, errors: 1, errorMessage: '1 of 2 articles failed extraction' })
+    })
+  })
+
   it('counts an API-tier result the HTML classified as locked as a local success', async () => {
     const threshold = config.crawl.localFailThreshold
     mockGetFeedById.mockResolvedValue(sampleFeed)
@@ -689,6 +763,18 @@ describe('crawlUrl', () => {
     mockGetExistingUrls.mockResolvedValue(new Set(['https://example.com/article']))
 
     await expect(crawlUrl('https://example.com/article', 'feed-1')).rejects.toThrow('URL already crawled')
+  })
+
+  it('refuses a feed whose article text comes from its RSS items, without fetching the page', async () => {
+    mockGetFeedById.mockResolvedValue({ ...sampleFeed, contentSource: 'rss' })
+    mockGetExistingUrls.mockResolvedValue(new Set())
+
+    const refused = crawlUrl('https://writer.substack.com/p/post', 'feed-1')
+
+    await expect(refused).rejects.toBeInstanceOf(BadRequestError)
+    await expect(refused).rejects.toThrow("This feed takes article text from its RSS feed; single URLs can't be crawled")
+    expect(mockExtractContent).not.toHaveBeenCalled()
+    expect(mockCreateStory).not.toHaveBeenCalled()
   })
 
   it('returns null when extraction fails', async () => {
