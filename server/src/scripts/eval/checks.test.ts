@@ -48,6 +48,13 @@ describe('checkAssessFormat', () => {
     expect(Object.entries(result).filter(([, ok]) => !ok)).toEqual([])
   })
 
+  it('lets the title reuse one core subject word of the label', () => {
+    const a = compliantAssessment()
+    a.titleLabel = 'HIV funding'
+    a.relevanceTitle = 'US approves $5.88 billion for global HIV treatment'
+    expect(checkAssessFormat(a).labelTitleDistinct).toBe(true)
+  })
+
   const cases: [string, (a: AssessResult) => void, string][] = [
     [
       '3 factors',

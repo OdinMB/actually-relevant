@@ -83,7 +83,7 @@ export const assessResultSchema = z.object({
       'Ultra-short topic label (1-3 short words, sentence case). ' +
         "A tight noun phrase — no conjunctions, no 'and'. Keep words simple and short. " +
         'The label and title work as a pair: the label sets the topic, the title tells the story. ' +
-        'No word or phrase should appear in both. ' +
+        'Apart from one core subject word the title may reuse, no word or phrase should appear in both. ' +
         "Good: 'EU AI Act', 'Carbon inequality', 'Deepfake laws'. " +
         "Bad: 'Carbon inequality and climate policy' (too long). " +
         "Bad: 'Non-consensual deepfake nudification' (too complex — use 'Deepfake laws').",
@@ -94,8 +94,8 @@ export const assessResultSchema = z.object({
       'Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). ' +
         'Write for a smart 16-year-old — no jargon or insider terms. ' +
         'Must make sense to someone with no background, and without the label: name the subject. ' +
-        "One story per headline. Don't echo the label's words — use that word budget to say something new. " +
-        'No word or phrase should appear in both the label and the title. ' +
+        "One story per headline. Don't echo the label's phrasing — use that word budget to say something new. " +
+        "The title may reuse the label's one core subject word (e.g. 'HIV', 'AI') when it needs it to stand alone; no other label word or phrase. " +
         "Be concrete: name the actor, action, or stakes. Cut hedge words like 'could shape' or 'may impact'. " +
         "NEVER use the 'Label: headline' colon pattern — the label is a separate field.",
     ),
@@ -204,7 +204,7 @@ export const extractTitleLabelSchema = z.object({
       "Ultra-short topic label (1-3 short words, sentence case). Must be a tight noun phrase — no conjunctions, no 'and'. " +
         'Keep words simple and short. ' +
         'The label and title work as a pair: the label sets the topic, the title tells the story. ' +
-        'No word or phrase should appear in both. ' +
+        'Apart from one core subject word the title may reuse, no word or phrase should appear in both. ' +
         "Good: 'EU AI Act', 'Carbon inequality', 'Deepfake laws', 'Nuclear risk', 'Ocean health'. " +
         "Bad: 'Carbon inequality and climate policy' (too long). " +
         "Bad: 'Non-consensual deepfake nudification' (words too long/complex, use 'Deepfake laws').",
@@ -215,8 +215,8 @@ export const extractTitleLabelSchema = z.object({
       'Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). ' +
         'Write for a smart 16-year-old — no jargon or insider terms. ' +
         'Must make sense to someone with no background, and without the label: name the subject. ' +
-        "One story per headline. Don't echo the label's words — use that word budget to say something new. " +
-        'No word or phrase should appear in both the label and the title. ' +
+        "One story per headline. Don't echo the label's phrasing — use that word budget to say something new. " +
+        "The title may reuse the label's one core subject word (e.g. 'HIV', 'AI') when it needs it to stand alone; no other label word or phrase. " +
         "Be concrete: name the actor, action, or stakes. Cut hedge words like 'could shape' or 'may impact'. " +
         "NEVER use the 'Label: headline' colon pattern — the label is a separate field.",
     ),

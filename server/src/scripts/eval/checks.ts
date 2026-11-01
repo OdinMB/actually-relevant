@@ -87,7 +87,8 @@ export function checkAssessFormat(a: AssessResult): Record<AssessFormatCheck, bo
     titleWords: countWords(a.relevanceTitle) <= 10,
     titleNoColon: !/^[^:]{1,40}:\s/.test(a.relevanceTitle),
     labelWords: between(countWords(a.titleLabel), 1, 3) && !/\band\b/i.test(a.titleLabel),
-    labelTitleDistinct: ![...labelWords].some(w => titleWords.has(w)),
+    // The title may reuse one core subject word of the label (HIV, AI), never more of its phrasing.
+    labelTitleDistinct: [...labelWords].filter(w => titleWords.has(w)).length <= 1,
     blurbLength: a.marketingBlurb.length <= 230,
     factorFormat: a.factors.every(f => /^-\s\*\*[^*\n]+:\*\*/.test(f.trim())),
     dateFormat: /^\d{4}-\d{2}-\d{2} 00:00:00$/.test(a.publicationDate),
