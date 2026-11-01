@@ -29,6 +29,13 @@ export const NEWSLETTER_TOP_LABEL = {
   text: 'AI selected the stories in this issue and wrote the headlines and summaries.',
 } as const
 
+/**
+ * Lead-in of the newsletter email's hidden inbox preview text, in front of the AI headlines it names
+ * ("AI-curated: <headline> · <headline>", `services/newsletterInbox.ts`). Approved by the owner on
+ * 2026-11-01.
+ */
+export const NEWSLETTER_PREVIEW_AI_MARKER = 'AI-curated:'
+
 /** Last segment of the metadata line in every Bluesky and Mastodon post. */
 export const SOCIAL_POST_AI_SEGMENT = 'AI-generated'
 

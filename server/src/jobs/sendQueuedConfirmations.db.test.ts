@@ -6,8 +6,9 @@ import { describeDb, useTestDatabase } from '../test/db/harness.js'
 
 // No email leaves the test: the Plunk client is a mock that records what would be sent
 const mockSendTransactional = vi.hoisted(() => vi.fn())
+const mockNotify = vi.hoisted(() => vi.fn())
 vi.mock('../services/plunk.js', () => ({ sendTransactional: mockSendTransactional }))
-vi.mock('../lib/notify.js', () => ({ notify: vi.fn() }))
+vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 
 const { runSendQueuedConfirmations } = await import('./sendQueuedConfirmations.js')
 
@@ -32,12 +33,14 @@ async function queued(email: string, ageMs: number) {
 }
 
 const sentTo = () => mockSendTransactional.mock.calls.map(([opts]) => (opts as { to: string }).to)
+const refusedWith = (status: number) => Object.assign(new Error(`Request failed with status code ${status}`), { response: { status } })
 
 describeDb('runSendQueuedConfirmations (PostgreSQL)', () => {
   useTestDatabase()
   beforeEach(() => {
     config.subscribe.enabled = true
     mockSendTransactional.mockReset().mockResolvedValue(undefined)
+    mockNotify.mockReset().mockResolvedValue(undefined)
   })
   afterEach(() => {
     config.subscribe.enabled = false
@@ -154,7 +157,7 @@ describeDb('runSendQueuedConfirmations (PostgreSQL)', () => {
   it('removes a signup Plunk refuses as invalid, sends the one behind it, and the next run never tries it again', async () => {
     const refused = await queued('refused@example.com', 30 * MINUTE_MS)
     const next = await queued('next@example.com', 20 * MINUTE_MS)
-    mockSendTransactional.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 422'), { response: { status: 422 } }))
+    mockSendTransactional.mockRejectedValueOnce(refusedWith(422))
 
     await expect(runSendQueuedConfirmations()).rejects.toThrow('1 queued signup refused by Plunk (HTTP 422) and removed')
 
@@ -165,5 +168,40 @@ describeDb('runSendQueuedConfirmations (PostgreSQL)', () => {
     mockSendTransactional.mockClear()
     await runSendQueuedConfirmations()
     expect(mockSendTransactional).not.toHaveBeenCalled()
+  })
+
+  it('removes every signup Plunk refuses as invalid when another email of the run goes out', async () => {
+    const first = await queued('first@example.com', 40 * MINUTE_MS)
+    await queued('good@example.com', 30 * MINUTE_MS)
+    const third = await queued('third@example.com', 20 * MINUTE_MS)
+    mockSendTransactional.mockRejectedValueOnce(refusedWith(422)).mockResolvedValueOnce(undefined).mockRejectedValueOnce(refusedWith(400))
+
+    await expect(runSendQueuedConfirmations()).rejects.toThrow('2 queued signups refused by Plunk (HTTP 400, 422) and removed')
+
+    expect(await prisma.pendingSubscription.count({ where: { id: { in: [first.id, third.id] } } })).toBe(0)
+    expect((await prisma.pendingSubscription.findFirstOrThrow({ where: { email: 'good@example.com' } })).sentAt).not.toBeNull()
+    expect(mockNotify).not.toHaveBeenCalled()
+  })
+
+  it('keeps every signup waiting, unchanged, when Plunk refuses all of a run, and sends them once it accepts again, the refusals having taken no room in the hour', async () => {
+    for (let i = 0; i < globalHourlyMax - 2; i++) await sent(`s${i}@example.com`, 20 * MINUTE_MS)
+    const first = await queued('first@example.com', 30 * MINUTE_MS)
+    const second = await queued('second@example.com', 20 * MINUTE_MS)
+    mockSendTransactional.mockRejectedValue(refusedWith(422))
+
+    await expect(runSendQueuedConfirmations()).rejects.toThrow('2 queued signups refused by Plunk (HTTP 422) and kept for the next run')
+
+    // Still waiting, with the expiry they had: they expire a link lifetime after signing up, as any queued signup does
+    expect(await prisma.pendingSubscription.findUniqueOrThrow({ where: { id: first.id } })).toEqual(first)
+    expect(await prisma.pendingSubscription.findUniqueOrThrow({ where: { id: second.id } })).toEqual(second)
+    expect(mockNotify).toHaveBeenCalledTimes(1)
+    expect(mockNotify.mock.calls[0][0]).toMatchObject({ source: 'subscriptions', dedupeKey: 'signup-queue-refused' })
+    expect(JSON.stringify(mockNotify.mock.calls)).not.toContain('@example.com')
+
+    mockSendTransactional.mockReset().mockResolvedValue(undefined)
+    await runSendQueuedConfirmations()
+
+    expect(sentTo()).toEqual(['first@example.com', 'second@example.com'])
+    expect(await prisma.pendingSubscription.count({ where: { id: { in: [first.id, second.id] }, sentAt: null } })).toBe(0)
   })
 })
