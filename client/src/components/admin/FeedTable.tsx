@@ -6,6 +6,7 @@ import { FeedFaviconPreview } from '../FeedFavicon'
 import { ActionIconButton } from '../ui/ActionIconButton'
 import { formatDateWithTime } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
+import { dominantMethod } from './feedQuality'
 
 interface FeedTableProps {
   feeds: Feed[]
@@ -14,11 +15,6 @@ interface FeedTableProps {
   onEdit: (id: string) => void
   onCrawl: (id: string) => void
   onDelete: (id: string) => void
-}
-
-function getDominantMethod(methods?: Record<string, number>): string {
-  if (!methods || Object.keys(methods).length === 0) return '--'
-  return Object.entries(methods).sort((a, b) => b[1] - a[1])[0]![0]
 }
 
 export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDelete }: FeedTableProps) {
@@ -126,7 +122,7 @@ export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDe
                     </td>
                     <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">{m ? `${Math.round(m.publishRate * 100)}%` : '--'}</td>
                     <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">{m?.avgRelevance?.toFixed(1) ?? '--'}</td>
-                    <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">{getDominantMethod(m?.extractionMethods)}</td>
+                    <td className="hidden xl:table-cell px-3 py-2 text-center text-neutral-600 text-xs">{dominantMethod(m?.extractionMethods) ?? '--'}</td>
                   </>
                 )
               })()}

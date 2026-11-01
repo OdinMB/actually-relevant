@@ -1,5 +1,5 @@
-import type { Issue } from '@shared/types'
 import { FEED_CHANGESET, FEED_REGIONS } from '@shared/constants'
+import { issueTree, type IssueNode } from '../../lib/issues'
 
 /**
  * The instructions an AI agent gets for researching and writing a feed changeset, copied from the
@@ -10,21 +10,11 @@ import { FEED_CHANGESET, FEED_REGIONS } from '@shared/constants'
  */
 
 /** The crawler's user agent (`server/src/services/extractor.ts`), which the agent fetches pages with. */
-const CRAWLER_USER_AGENT = 'ActuallyRelevant/1.0 (news curation bot; +https://actuallyrelevant.news)'
-
-type IssueRef = Pick<Issue, 'id' | 'name' | 'slug' | 'parentId'>
+export const CRAWLER_USER_AGENT = 'ActuallyRelevant/1.0 (news curation bot; +https://actuallyrelevant.news)'
 
 /** Issues as `- slug: Name`, each parent followed by its children, indented. */
-function issueLines(issues: IssueRef[]): string[] {
-  const byName = (a: IssueRef, b: IssueRef) => a.name.localeCompare(b.name)
-  const parents = issues.filter(issue => !issue.parentId).sort(byName)
-  return parents.flatMap(parent => [
-    `- ${parent.slug}: ${parent.name}`,
-    ...issues
-      .filter(child => child.parentId === parent.id)
-      .sort(byName)
-      .map(child => `  - ${child.slug}: ${child.name}`),
-  ])
+function issueLines(issues: IssueNode[]): string[] {
+  return issueTree(issues).flatMap(({ parent, children }) => [`- ${parent.slug}: ${parent.name}`, ...children.map(child => `  - ${child.slug}: ${child.name}`)])
 }
 
 function example(issueSlug: string): string {
@@ -62,7 +52,7 @@ function example(issueSlug: string): string {
   )
 }
 
-export function buildChangesetInstructions(issues: IssueRef[]): string {
+export function buildChangesetInstructions(issues: IssueNode[]): string {
   const issueList = issueLines(issues)
   const exampleSlug = issues.find(issue => issue.parentId)?.slug ?? issues[0]?.slug ?? 'issue-slug'
   return [

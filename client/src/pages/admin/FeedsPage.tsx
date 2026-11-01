@@ -17,6 +17,7 @@ import { FeedTable } from '../../components/admin/FeedTable'
 import { FeedCreateForm } from '../../components/admin/FeedForm'
 import { FeedEditPanel } from '../../components/admin/FeedEditPanel'
 import { FeedChangesetControls } from '../../components/admin/FeedChangesetControls'
+import { FeedExportDialog } from '../../components/admin/FeedExportDialog'
 import { useToast } from '../../components/ui/Toast'
 import type { Issue } from '@shared/types'
 
@@ -57,6 +58,7 @@ export default function FeedsPage() {
   const queryClient = useQueryClient()
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   // The open edit panel is in the URL (?open=<id>), so other pages can link to a feed
   const [searchParams, setSearchParams] = useSearchParams()
   const editingFeedId = searchParams.get('open')
@@ -162,6 +164,9 @@ export default function FeedsPage() {
             <Button variant="secondary" onClick={handleCrawlAll}>
               Crawl All
             </Button>
+            <Button variant="secondary" onClick={() => setExportOpen(true)}>
+              Export
+            </Button>
             <FeedChangesetControls issues={issuesQuery.data || []} />
             <Button onClick={() => setCreateOpen(true)}>Add Feed</Button>
           </>
@@ -200,6 +205,8 @@ export default function FeedsPage() {
       )}
 
       <FeedCreateForm open={createOpen} onClose={() => setCreateOpen(false)} issues={issuesQuery.data || []} />
+
+      <FeedExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
 
       <FeedEditPanel feedId={editingFeedId} issues={issuesQuery.data || []} onClose={() => setEditingFeedId(null)} />
 

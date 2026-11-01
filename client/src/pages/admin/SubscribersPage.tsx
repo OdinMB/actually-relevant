@@ -9,6 +9,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { SubscribersTable } from '../../components/admin/SubscribersTable'
 import { Button } from '../../components/ui/Button'
 import { subscribersToCsv } from '../../lib/subscribersCsv'
+import { downloadFile } from '../../lib/download'
 
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
@@ -35,18 +36,6 @@ function PlunkNotice({ plunk }: { plunk: SubscriberReconciliation['plunk'] }) {
   )
 }
 
-/** Trigger a client-side download of CSV text. */
-function downloadCsv(filename: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  // Revoke after the click is processed; revoking synchronously can yield an
-  // empty download on Firefox/Safari before the Blob is read.
-  setTimeout(() => URL.revokeObjectURL(url), 0)
-}
-
 export default function SubscribersPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['subscribers'],
@@ -56,7 +45,7 @@ export default function SubscribersPage() {
   const handleExport = () => {
     if (!data) return
     const stamp = new Date().toISOString().slice(0, 10)
-    downloadCsv(`subscribers-${stamp}.csv`, subscribersToCsv(data.rows))
+    downloadFile(`subscribers-${stamp}.csv`, subscribersToCsv(data.rows), 'text/csv;charset=utf-8')
   }
 
   return (

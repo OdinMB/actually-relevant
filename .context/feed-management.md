@@ -1,6 +1,6 @@
 # Feed Management
 
-Feed lifecycle, changesets, the source policy, crawl scheduling and health tracking, quality metrics and favicons. Code: `server/src/services/feed.ts`, `server/src/services/feedChangeset.ts`, `server/src/services/favicon.ts`, `server/src/routes/admin/feeds.ts`. Crawling and extraction themselves are in `content-extraction.md`.
+Feed lifecycle, changesets, the feed export, the source policy, crawl scheduling and health tracking, quality metrics and favicons. Code: `server/src/services/feed.ts`, `server/src/services/feedChangeset.ts`, `server/src/services/favicon.ts`, `server/src/routes/admin/feeds.ts`. Crawling and extraction themselves are in `content-extraction.md`.
 
 ## Creating and Updating Feeds
 
@@ -45,6 +45,19 @@ A changeset is one JSON file of feed changes, typically researched by an AI agen
 - `POST /api/admin/feeds/changesets/apply` resolves again inside one Prisma transaction (`config.database.transactionTimeoutMs`). **All or nothing:** if any change is `error` it writes nothing and answers 400 `{ error: "N of M changes have errors; nothing was applied" ("has an error" for one), applied: false, title, results, counts }` (`ChangesetHasErrorsError`); otherwise it performs every `ok` change through `createFeed`/`updateFeed`/`deleteFeed` with the transaction client and answers `{ applied: true, title, results, counts }`, the messages now saying what was done ("Created", "Updated N fields", "Deleted", "Deactivated (it has stories)"). A delete recounts stories inside the transaction, so a feed that gained a story since the preview is deactivated. A write the database refuses (a unique RSS URL taken meanwhile: 409 "A feed with this RSS URL already exists") rolls the whole changeset back.
 
 The import panel (`FeedChangesetImportPanel.tsx`) parses the file in the browser (not JSON: an error, no request), shows the preview, and enables "Apply N changes" only while no change has an error; a refused apply shows the new preview.
+
+## Export
+
+"Export" beside "Import changes" (`FeedExportDialog.tsx`) hands the feeds to an AI agent that answers with a changeset. It is built in the browser, with no endpoint of its own: the dialog loads every feed, inactive ones included and whatever the page's filters, plus the quality metrics and issues.
+
+- **JSON** (`buildFeedExport()` in `feedExport.ts`): "Feeds with problems" or "All feeds", downloaded as `feeds-<problems|all>-YYYY-MM-DD.json` (local date) or copied. It holds `scope`, `exportedAt`, `problemDefinitions` (each code explained), the issue tree (`issues`: slug, name, `children`), and per feed its settings, issue slug and name (and the parent's name for a sub-issue), crawl state, `quality` (crawled, published, publish rate, average relevance, dominant method; null without metrics) and `problems`.
+- **Feeds with problems** (`findFeedProblems()` in `feedProblems.ts`, pure): an inactive feed never has one. An active feed has each of these that holds:
+  - `rss-fetch-failed`: `lastCrawlResult` starts with "RSS fetch failed". It reads the most recent crawl, so an RSS error that `lastCrawlError` still shows after a 304 or a crawl with only known items does not count.
+  - `extraction-failing`: `lastCrawlError` is "N of M articles failed extraction" with N/M above one half.
+  - `stale`: `isStale`, the stale-feed warning below.
+  - `nothing-analyzed`: quality metrics with `totalCrawled > 0`, `publishedCount` 0 and `avgRelevance` null. A feed added hours ago whose stories still await analysis can match; the fix prompt tells the agent to leave such a feed alone.
+  The first two parse the crawler's own messages (`server/src/services/crawler.ts`): change them together.
+- **Prompts** (`feedExportPrompts.ts`): "Copy fix prompt" holds the feeds with problems and asks for each cause, a source-policy check, at most one update or delete per feed, and a report; it is unavailable while no feed has problems. "Copy gap analysis prompt" holds every feed and asks for coverage per issue, sub-issue, region and language (feeds with problems and inactive feeds not counted), verified replacements and additions, and two changesets applied in order, fixes and deletions first, then additions. Both embed the full changeset instructions (`buildChangesetInstructions()`) and the export JSON, whichever scope is chosen for the JSON.
 
 ## Source Policy: Publishers' AI Opt-Outs
 
@@ -128,3 +141,7 @@ An accepted image must have an `image/*` content type, be non-empty and be at mo
 | `client/src/components/admin/FeedChangesetControls.tsx` | "Import changes" button and the instructions info icon |
 | `client/src/components/admin/FeedChangesetImportPanel.tsx` | Import panel: file, preview, apply |
 | `client/src/components/admin/feedChangesetInstructions.ts` | The agent instructions text |
+| `client/src/components/admin/FeedExportDialog.tsx` | Export dialog: scope, JSON download and copy, prompt copy |
+| `client/src/components/admin/feedExport.ts` | The export JSON and its file name |
+| `client/src/components/admin/feedProblems.ts` | Which feeds have problems (pure) |
+| `client/src/components/admin/feedExportPrompts.ts` | The fix and gap-analysis prompts |
