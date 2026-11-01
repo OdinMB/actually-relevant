@@ -6,8 +6,10 @@ import PodcastSubtitle from '../components/podcast/PodcastSubtitle'
 import PodcastEpisode from '../components/podcast/PodcastEpisode'
 import PodcastListenOptions from '../components/podcast/PodcastListenOptions'
 import { NewsletterCrossLink } from '../components/CrossLinks'
+import LoadFailure from '../components/LoadFailure'
 import { usePodcastEpisodes } from '../hooks/usePodcastEpisodes'
 import { useScrollToHash } from '../hooks/useScrollToHash'
+import { loadStateOf } from '../lib/loadState'
 
 /** The public feed URL: a Render rewrite to the API's feed route (.context/seo.md). Static, so it prerenders. */
 export const PODCAST_FEED_URL = `${SEO.siteUrl}/podcast.xml`
@@ -30,9 +32,11 @@ function SubscribeOptions() {
 }
 
 function EpisodeList() {
-  const { data, isLoading, isError } = usePodcastEpisodes()
-  if (isLoading) return <p className="text-neutral-500 min-h-[6rem]">Loading episodes…</p>
-  if (isError || !data) return <p className="text-neutral-600">The episodes could not be loaded. Please try again later.</p>
+  const episodesQuery = usePodcastEpisodes()
+  const { data } = episodesQuery
+  const loadState = loadStateOf(episodesQuery)
+  if (loadState === 'loading') return <p className="text-neutral-500 min-h-[6rem]">Loading episodes…</p>
+  if (loadState !== 'ready' || !data) return <LoadFailure title="The episodes couldn't load" headingLevel={3} query={episodesQuery} className="py-8" />
   if (data.episodes.length === 0) return <p className="text-neutral-600">The first episode is on its way.</p>
   return (
     <div className="space-y-8">

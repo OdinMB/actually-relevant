@@ -178,7 +178,7 @@ const DIFFERENTIATORS: { icon: ReactNode; title: string; description: string; bo
       </svg>
     ),
     title: 'Global Coverage',
-    description: '82+ sources across five languages, including regions most aggregators ignore.',
+    description: 'Curated sources in multiple languages, including regions most aggregators ignore.',
     border: 'border-l-teal-400',
   },
   {

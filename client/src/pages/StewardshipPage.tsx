@@ -175,8 +175,8 @@ export default function StewardshipPage() {
         {/* What You'd Receive — 2x2 colored cards, outside .prose */}
         <h2 className="section-heading mt-8">What You'd Receive</h2>
         <p className="text-neutral-600 mt-2 mb-6">
-          A fully automated news curation platform with {sources ? `${sources.totalCount}+` : '80+'} sources across multiple languages and everything needed to
-          run it.
+          A fully automated news curation platform with{sources ? ` ${sources.totalCount}` : ''} curated sources across multiple languages and everything needed
+          to run it.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {RECEIVE_CARDS.map(card => (

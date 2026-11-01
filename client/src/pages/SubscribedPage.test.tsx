@@ -43,6 +43,23 @@ describe('SubscribedPage', () => {
     expect(mockConfirm).toHaveBeenCalledWith({ token: 'abc', email: 'u@example.com' })
   })
 
+  // The pressed confirm button goes with the confirmation step, so focus would otherwise drop to the page unannounced.
+  it('moves focus to the welcome heading once the subscription is confirmed, so a screen reader announces it', async () => {
+    mockConfirm.mockResolvedValue({ success: true })
+    const user = userEvent.setup()
+
+    renderAt('/subscribed?token=abc&email=u%40example.com')
+    await user.click(screen.getByRole('button', { name: /confirm my subscription/i }))
+
+    expect(await screen.findByRole('heading', { name: /welcome to the newsletter/i })).toHaveFocus()
+  })
+
+  it('moves no focus when the page loads', () => {
+    renderAt('/subscribed')
+
+    expect(document.body).toHaveFocus()
+  })
+
   it('shows the expired state when confirmation reports expired', async () => {
     mockConfirm.mockResolvedValue({ success: false, reason: 'expired' })
     const user = userEvent.setup()

@@ -2,11 +2,11 @@
  * The send_queued_confirmations job: sends the confirmation emails of the signups `subscribe()`
  * queued (over the hourly limit, or behind earlier ones still waiting), oldest first, never more
  * than the rolling hour has room for (`globalHourlyMax`, counted by `sent_at`). A signup that waited
- * past its expiry (the owner is told how many), or whose address confirmed meanwhile, is removed
- * unsent. Nothing is sent while signups are paused (SUBSCRIPTIONS_ENABLED). Each email is claimed
- * before Plunk is called, so a retry, an overlapping run or a crash never sends one twice. A signup
- * Plunk refuses as invalid is removed and the run carries on; any other failed send stops the run.
- * Either fails the run, so the scheduler records a job-failure notice.
+ * past its expiry (the owner is told how many), or whose address confirmed after it was made, is
+ * removed unsent. Nothing is sent while signups are paused (SUBSCRIPTIONS_ENABLED). Each email is
+ * claimed before Plunk is called, so a retry, an overlapping run or a crash never sends one twice.
+ * A signup Plunk refuses as invalid is removed and the run carries on; any other failed send stops
+ * the run. Either fails the run, so the scheduler records a job-failure notice.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
@@ -31,6 +31,7 @@ interface WaitingSignup {
   id: string
   email: string
   token: string
+  createdAt: Date
   expiresAt: Date
 }
 
@@ -55,17 +56,17 @@ export async function runSendQueuedConfirmations(): Promise<void> {
     where: waitingSignupsWhere(now),
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take: budget,
-    select: { id: true, email: true, token: true, expiresAt: true },
+    select: { id: true, email: true, token: true, createdAt: true, expiresAt: true },
   })
   if (next.length === 0) return
 
-  const confirmed = await confirmedAddresses(next.map(row => row.email))
+  const latestConfirmed = await latestConfirmations(next.map(row => row.email))
   let sent = 0
   let skipped = 0
   const refused: number[] = []
   let stop: { err: unknown } | null = null
   for (const row of next) {
-    if (confirmed.has(row.email)) {
+    if (confirmedSince(latestConfirmed.get(row.email), row)) {
       await prisma.pendingSubscription.deleteMany({ where: { id: row.id, sentAt: null } })
       skipped++
       continue
@@ -101,10 +102,27 @@ async function removeExpired(now: Date): Promise<void> {
   })
 }
 
-/** Of these addresses, the ones with a confirmed subscription. */
-async function confirmedAddresses(emails: string[]): Promise<Set<string>> {
-  const rows = await prisma.pendingSubscription.findMany({ where: { email: { in: emails }, confirmedAt: { not: null } }, select: { email: true } })
-  return new Set(rows.map(row => row.email))
+/** Of these addresses, the ones with a confirmed subscription, each with its latest confirmation. */
+async function latestConfirmations(emails: string[]): Promise<Map<string, Date>> {
+  const rows = await prisma.pendingSubscription.findMany({
+    where: { email: { in: emails }, confirmedAt: { not: null } },
+    select: { email: true, confirmedAt: true },
+  })
+  const latest = new Map<string, Date>()
+  for (const { email, confirmedAt } of rows) {
+    const known = latest.get(email)
+    if (confirmedAt && (!known || confirmedAt > known)) latest.set(email, confirmedAt)
+  }
+  return latest
+}
+
+/**
+ * True when the address confirmed at or after this signup was made, so its email is not needed. A
+ * confirmation from before it belongs to a reader who has since unsubscribed: `subscribe()` queues a
+ * confirmed address only once Plunk has it unsubscribed.
+ */
+function confirmedSince(confirmedAt: Date | undefined, row: WaitingSignup): boolean {
+  return confirmedAt !== undefined && confirmedAt >= row.createdAt
 }
 
 /** "N queued signups refused by Plunk (HTTP 400, 422) and removed", each status once. */

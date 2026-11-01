@@ -6,7 +6,7 @@ Thanks for your interest in contributing to Actually Relevant! This is a non-com
 
 See [README.md](README.md) for local development setup (prerequisites, database, environment variables, dev servers).
 
-Once you're up and running, check the `.context/` directory — it has detailed documentation for every subsystem (content extraction, LLM analysis, newsletter pipeline, authentication, and more). The `.context/README.md` lists all available files and what they cover.
+Once you're up and running, check the `.context/` directory — it has detailed documentation for every subsystem (content extraction, LLM analysis, newsletter pipeline, authentication, and more). The "Context Files" table in [CLAUDE.md](CLAUDE.md) lists all available files and what they cover.
 
 ## How to Contribute
 

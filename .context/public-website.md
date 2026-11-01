@@ -117,7 +117,7 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 - `StoryCard` — Story card with title, rating, summary (used on homepage + issue pages)
 - `RatingDisplay` — Relevance rating with color coding
 - `Pagination` — Page navigation with ellipsis
-- `LoadFailure` — what a page shows when its data fails to load for any reason but a 404: "This story couldn't load" (or the stories, issue, transcript), a line on why, and "Try again", which refetches in place. A 404 still shows the page's not-found view, and "No stories published yet" appears only when the API answered with no stories. Used on the homepage, story, issue, newsletter issue and transcript pages; rules in `.context/ui-conventions.md`, "Load failures"
+- `LoadFailure` — what a page shows when its data fails to load for any reason but a 404: "This story couldn't load" (or the stories, issue, transcript, issues, search results, saved stories, past issues, episodes), a line on why (on `/search`, after the search rate limit's 429, to try again in a few minutes), and "Try again", which refetches in place. A 404 still shows the page's not-found view, and "No stories published yet" appears only when the API answered with no stories. Used on the homepage, story, issue, newsletter issue and transcript pages, and on the lists of `/issues`, `/search`, `/saved`, `/newsletter` and `/podcast`; rules in `.context/ui-conventions.md`, "Load failures"
 
 ## Feedback
 
