@@ -184,6 +184,15 @@ export const config = {
     mastodonProfile: 'https://mastodon.social/@actuallyrelevant',
   },
   /**
+   * Donation ask, one wording for the newsletter email, the podcast show notes and the feed's funding
+   * label (owner-approved, 2026-11-01: no specific cost figures). The site's own buttons keep their
+   * copy in the client.
+   */
+  donation: {
+    cta: 'Donate $5 toward running the site',
+    pitch: 'Actually Relevant is free, with no ads and no investors, but running it costs money.',
+  },
+  /**
    * AI usage preference (IETF AIPREF draft vocabulary): AI search may use the content, AI model
    * training may not (owner, 2026-10-25). Sent as the Content-Usage header on every API response;
    * client/public/robots.txt and the static site's headers in render.yaml state the same (app.test.ts).
@@ -374,8 +383,6 @@ export const config = {
     // "actuallyrelevant.news/podcast.xml". Never change it, even if the feed moves.
     feedGuid: '097a5224-a76e-5f98-98e0-151f653772ae',
     showAuthor: 'Actually Relevant',
-    // podcast:funding text beside config.links.kofi (Pocket Casts shows it as a Funding button).
-    fundingLabel: 'Support the show',
     // podcast:updateFrequency: an RFC 5545 rule for the weekly Saturday episode, and its display text.
     updateFrequency: { rrule: 'FREQ=WEEKLY', label: 'Weekly' },
     // Apple Podcasts categories (owner decision, 2026-10-07): Apple's exact names, a subcategory

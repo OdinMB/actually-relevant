@@ -74,7 +74,7 @@ Template structure:
 - **Opening text** — any text before the first heading, as paragraphs: the intro of an issue generated before 2026-10-26, or an opening a person wrote. New issues have none
 - **Issue sections** — Centered category headers with colored dot and decorative lines
 - **Story blocks** — Title (linked), publisher favicon + name + "original article" / "relevance analysis" links, body text or blockquote
-- **Support Us** — Ko-fi link with "Free. Independent. Without ads." tagline
+- **Donation ask** — "Actually Relevant is free, with no ads and no investors, but running it costs money. If this issue was worth something to you, please chip in." and a Ko-fi button "Donate $5 toward running the site". The wording is `config.donation`, shared with the podcast show notes and feed (owner, 2026-11-01: never name the actual running costs)
 - **AI disclaimer** — "Curated and written with care by AI" + bug/mistake notice
 - **Footer** — Website link. Our template carries no unsubscribe link (removed in February); Plunk adds its own footer unsubscribe link and, since 2026-08-09, one-click unsubscribe headers
 
