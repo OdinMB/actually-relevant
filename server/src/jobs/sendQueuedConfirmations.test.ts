@@ -33,6 +33,8 @@ const waiting = [
   { id: 'q1', email: 'first@example.com', token: 'token-1', createdAt: SIGNED_UP, expiresAt: new Date(NOW.getTime() + 2 * HOUR_MS) },
   { id: 'q2', email: 'second@example.com', token: 'token-2', createdAt: SIGNED_UP, expiresAt: new Date(NOW.getTime() + 3 * HOUR_MS) },
 ]
+const third = { id: 'q3', email: 'third@example.com', token: 'token-3', createdAt: SIGNED_UP, expiresAt: new Date(NOW.getTime() + 4 * HOUR_MS) }
+const fourth = { id: 'q4', email: 'fourth@example.com', token: 'token-4', createdAt: SIGNED_UP, expiresAt: new Date(NOW.getTime() + 5 * HOUR_MS) }
 
 /**
  * The database as the job reads it: sends in the last hour, the waiting signups, and confirmed rows
@@ -234,19 +236,30 @@ describe('runSendQueuedConfirmations', () => {
 
       await expect(runSendQueuedConfirmations()).rejects.toThrow(`1 queued signup refused by Plunk (HTTP ${status}) and removed`)
 
-      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: 'q1' } })
-      expect(putBacks()).toHaveLength(0)
+      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['q1'] }, sentAt: null } })
       expect(mockPlunk.sendTransactional.mock.calls.map(([opts]) => opts.to)).toEqual(['first@example.com', 'second@example.com'])
       expect(mockLogger.warn).toHaveBeenCalledWith({ subscriptionId: 'q1', status }, expect.any(String))
+      expect(mockNotify).not.toHaveBeenCalled()
+    })
+
+    it('removes a signup refused alone in its run, as one attempt cannot tell a bad address from a refusing Plunk', async () => {
+      given({ rows: [waiting[0]] })
+      mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422))
+
+      await expect(runSendQueuedConfirmations()).rejects.toThrow('1 queued signup refused by Plunk (HTTP 422) and removed')
+
+      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['q1'] }, sentAt: null } })
+      expect(mockNotify).not.toHaveBeenCalled()
     })
 
     it('counts every refused signup, with each status once, in the one failure', async () => {
-      given({ rows: [...waiting, { id: 'q3', email: 'third@example.com', token: 'token-3', expiresAt: waiting[1].expiresAt }] })
+      given({ rows: [...waiting, third, fourth] })
       mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422)).mockRejectedValueOnce(plunkAnswered(400)).mockRejectedValueOnce(plunkAnswered(422))
 
       await expect(runSendQueuedConfirmations()).rejects.toThrow(/^3 queued signups refused by Plunk \(HTTP 400, 422\) and removed$/)
 
-      expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(3)
+      expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(4)
+      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['q1', 'q2', 'q3'] }, sentAt: null } })
     })
 
     it('names the refused signups too when a later send stops the run', async () => {
@@ -256,7 +269,77 @@ describe('runSendQueuedConfirmations', () => {
 
       await expect(run).rejects.toThrow(/queued confirmation email failed to send/i)
       await run.catch((err: Error) => expect(err.message).toContain('1 queued signup refused by Plunk (HTTP 422) and removed'))
-      expect(putBacks().map(([{ where }]) => where)).toEqual([{ id: 'q2' }])
+      expect(mockPrisma.pendingSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['q1'] }, sentAt: null } })
+      expect(putBacks().at(-1)?.[0].where).toEqual({ id: 'q2' })
+    })
+  })
+
+  describe('when Plunk refuses every email of a run, two or more', () => {
+    /** The deleteMany calls besides the expiry sweep. */
+    const removals = () => mockPrisma.pendingSubscription.deleteMany.mock.calls.filter(([{ where }]) => where.expiresAt === undefined)
+
+    it.each([400, 422])(
+      'keeps each signup refused with a %i waiting with its old expiry, removes none, alerts the owner once, and fails the run',
+      async status => {
+        mockPlunk.sendTransactional.mockRejectedValue(plunkAnswered(status))
+
+        await expect(runSendQueuedConfirmations()).rejects.toThrow(`2 queued signups refused by Plunk (HTTP ${status}) and kept for the next run`)
+
+        expect(mockPlunk.sendTransactional).toHaveBeenCalledTimes(2)
+        expect(removals()).toHaveLength(0)
+        expect(putBacks().map(([call]) => call)).toEqual([
+          { where: { id: 'q1' }, data: { sentAt: null, expiresAt: waiting[0].expiresAt } },
+          { where: { id: 'q2' }, data: { sentAt: null, expiresAt: waiting[1].expiresAt } },
+        ])
+        expect(mockNotify).toHaveBeenCalledTimes(1)
+        const notice = mockNotify.mock.calls[0][0]
+        expect(notice).toMatchObject({ source: 'subscriptions', severity: 'warning', dedupeKey: 'signup-queue-refused', link: '/admin/subscribers' })
+        expect(notice.message).toMatch(new RegExp(`^Plunk refused 2 queued confirmation emails in one run \\(HTTP ${status}\\)`))
+        expect(notice.message).toContain(`${config.subscribe.confirmTokenExpiryHours} hours`)
+        expect(JSON.stringify(mockNotify.mock.calls)).not.toMatch(/@example\.com|q1|q2/)
+      },
+    )
+
+    it('names each status once and counts every refused signup', async () => {
+      given({ rows: [...waiting, third] })
+      mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422)).mockRejectedValueOnce(plunkAnswered(400)).mockRejectedValueOnce(plunkAnswered(422))
+
+      await expect(runSendQueuedConfirmations()).rejects.toThrow(/^3 queued signups refused by Plunk \(HTTP 400, 422\) and kept for the next run/)
+
+      expect(removals()).toHaveLength(0)
+      expect(mockNotify.mock.calls[0][0].message).toMatch(/^Plunk refused 3 queued confirmation emails in one run \(HTTP 400, 422\)/)
+    })
+
+    it('removes them as invalid after all when another email of the run goes out, before or after them', async () => {
+      given({ rows: [...waiting, third] })
+      mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422)).mockResolvedValueOnce(undefined).mockRejectedValueOnce(plunkAnswered(400))
+
+      await expect(runSendQueuedConfirmations()).rejects.toThrow(/^2 queued signups refused by Plunk \(HTTP 400, 422\) and removed$/)
+
+      expect(removals().map(([call]) => call)).toEqual([{ where: { id: { in: ['q1', 'q3'] }, sentAt: null } }])
+      expect(mockNotify).not.toHaveBeenCalled()
+    })
+
+    it('keeps them too when the run then stops on another failure, since no email of the run went out', async () => {
+      given({ rows: [...waiting, third] })
+      mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422)).mockRejectedValueOnce(plunkAnswered(422)).mockRejectedValueOnce(plunkAnswered(401))
+
+      const run = runSendQueuedConfirmations()
+
+      await expect(run).rejects.toThrow(/queued confirmation email failed to send \(.*401\)/i)
+      await run.catch((err: Error) => expect(err.message).toContain('2 queued signups refused by Plunk (HTTP 422) and kept for the next run'))
+      expect(removals()).toHaveLength(0)
+      expect(putBacks().map(([{ where }]) => where)).toEqual([{ id: 'q1' }, { id: 'q2' }, { id: 'q3' }])
+      expect(mockNotify).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not count a signup skipped as confirmed meanwhile as a sent email', async () => {
+      given({ rows: [...waiting, third], confirmed: [{ email: 'second@example.com' }] })
+      mockPlunk.sendTransactional.mockRejectedValue(plunkAnswered(422))
+
+      await expect(runSendQueuedConfirmations()).rejects.toThrow('2 queued signups refused by Plunk (HTTP 422) and kept for the next run')
+
+      expect(removals().map(([call]) => call)).toEqual([{ where: { id: 'q2', sentAt: null } }])
     })
   })
 
@@ -269,6 +352,8 @@ describe('runSendQueuedConfirmations', () => {
     mockPlunk.sendTransactional.mockRejectedValueOnce(notConnected())
     await runSendQueuedConfirmations().catch(() => {})
     mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422))
+    await runSendQueuedConfirmations().catch(() => {})
+    mockPlunk.sendTransactional.mockRejectedValueOnce(plunkAnswered(422)).mockRejectedValueOnce(plunkAnswered(422))
     await runSendQueuedConfirmations().catch(() => {})
 
     expect(mockLogger.info).toHaveBeenCalled()
