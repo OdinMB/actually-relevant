@@ -158,9 +158,10 @@ function FeedExportOptions() {
               variant="secondary"
               size="sm"
               reason={unavailable ?? (problemCount === 0 ? 'No feed has problems right now' : null)}
+              aria-label="Copy prompt: Fix problem feeds"
               onClick={withInput(input => copy(buildFixProblemFeedsPrompt(input), 'Fix prompt'))}
             >
-              Copy fix prompt
+              Copy prompt
             </ReasonButton>
           </PromptOption>
           <PromptOption
@@ -171,9 +172,10 @@ function FeedExportOptions() {
               variant="secondary"
               size="sm"
               reason={unavailable}
+              aria-label="Copy prompt: Analyze coverage gaps"
               onClick={withInput(input => copy(buildCoverageGapsPrompt(input), 'Gap analysis prompt'))}
             >
-              Copy gap analysis prompt
+              Copy prompt
             </ReasonButton>
           </PromptOption>
         </div>

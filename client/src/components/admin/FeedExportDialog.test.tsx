@@ -100,10 +100,10 @@ describe('FeedExportDialog', () => {
     await loaded()
     const input = { feeds: [healthy, broken, inactive], issues: feedIssues, quality, now }
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy fix prompt' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt: Fix problem feeds' }))
     await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(buildFixProblemFeedsPrompt(input)))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy gap analysis prompt' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt: Analyze coverage gaps' }))
     await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(buildCoverageGapsPrompt(input)))
   })
 
@@ -113,7 +113,7 @@ describe('FeedExportDialog', () => {
     renderDialog()
     await screen.findByRole('radio', { name: /Feeds with problems \(0\)/ })
 
-    const fix = screen.getByRole('button', { name: 'Copy fix prompt' })
+    const fix = screen.getByRole('button', { name: 'Copy prompt: Fix problem feeds' })
     expect(fix).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(fix)
 
@@ -130,7 +130,7 @@ describe('FeedExportDialog', () => {
     const download = screen.getByRole('button', { name: 'Download JSON' })
     expect(download).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(download)
-    fireEvent.click(screen.getByRole('button', { name: 'Copy gap analysis prompt' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt: Analyze coverage gaps' }))
 
     expect(mockDownload.downloadFile).not.toHaveBeenCalled()
     expect(writeText).not.toHaveBeenCalled()
