@@ -39,6 +39,9 @@ Every story page ends the same way with `StoryNewsletterLine`: "Get stories like
 
 - `GET /api/stories` — Paginated published stories, newest first, filterable by `issueSlug`, `emotionTags` and the incremental-sync filters below, or searched with `search` (hybrid search). Cached 60 seconds (`Cache-Control: public, max-age=60`, no server-side cache)
 - `GET /api/stories/:id` — Single published story
+- `GET /api/homepage` — The public issues plus, for each of the four top-level issues, its 7 newest published stories in each of three emotion buckets (uplifting, calm, negative), which the positivity slider mixes on the client. `Cache-Control: public, max-age=60`.
+
+**The homepage data is always warm** (`server/src/services/homepage.ts`, `RefreshingValue` in `server/src/lib/refreshingValue.ts`). Every API process builds it at startup and rebuilds it every `config.homepage.refreshMs` (60 s) in the background, and a request gets the copy it holds at once, so no visitor waits for the database. Guarantees: the copy a visitor gets is at most about one interval old (a read that finds it older also starts a refresh); a failed rebuild keeps the last good copy and logs a warning, so a database outage shows the last homepage rather than an error; only a request with no copy at all (the first after start, before the startup load lands, or the first after the admin "Clear site cache") waits for the load, and if that load fails it answers 500. A story published or unpublished therefore reaches the homepage within about a minute; use "Clear site cache" for at once. Why: built on demand behind a 60-second cache, the data was cold for most visitors at the site's traffic, and a cold build took 5 to 8 s in production (measured 2026-11-01), so most first visits showed placeholders for seconds. The stories are found newest first through the `(status, date_published, date_crawled)` index on `stories`; without it the newest-first scan walked every unpublished story first, whose empty publish dates lead a descending scan.
 
 **Incremental sync** (`publicStoryQuerySchema` in `server/src/schemas/story.ts`, applied in `getPublishedStories()`). These names are part of the public API contract: never rename them.
 
@@ -56,7 +59,7 @@ Every story page ends the same way with `StoryNewsletterLine`: "Get stories like
 - `GET /api/newsletters/:slug` — One published issue's web edition, with its `aiLabel` and an `aiGenerated` marker (404 unless published)
 - `GET /api/stories/:slug/og.png` — A published story's 1200x630 link-preview image (`.context/seo.md`)
 
-Every story object the public JSON routes return (`/api/stories`, `/api/stories/:slug`, `/api/stories/:slug/related`, `/api/homepage`) carries a machine-readable `aiGenerated` marker, added in the route with `withAiGeneratedMarker()` (`server/src/lib/aiProvenance.ts`). A new public route that returns stories must add it too; the compliance record (`.context/ai-transparency.md`) relies on it.
+Every story object the public JSON routes return (`/api/stories`, `/api/stories/:slug`, `/api/stories/:slug/related`, `/api/homepage`) carries a machine-readable `aiGenerated` marker, added in the route (for `/api/homepage`, where its data is built, `server/src/services/homepage.ts`) with `withAiGeneratedMarker()` (`server/src/lib/aiProvenance.ts`). A new public route that returns stories must add it too; the compliance record (`.context/ai-transparency.md`) relies on it.
 
 The documented contract is checked in CI against a committed snapshot, against `PUBLIC_STORY_SELECT` and against real responses (`.context/ci.md`, "Public API contract"): a change to a public field or parameter needs `npm run api:snapshot --prefix server`.
 

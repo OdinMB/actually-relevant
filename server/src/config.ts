@@ -628,4 +628,9 @@ export const config = {
   newsletterArchive: {
     cacheMaxAge: 300,
   },
+  homepage: {
+    // The server rebuilds the homepage data this often in the background and at startup, and
+    // serves the last copy meanwhile, so no visitor waits for the database (.context/public-website.md)
+    refreshMs: 60 * 1000,
+  },
 } as const

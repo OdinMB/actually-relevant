@@ -111,6 +111,9 @@ model Story {
   @@index([status, relevancePre])
   @@index([status, relevance])
   @@index([datePublished])
+  // Newest published first (homepage, public lists): walking `datePublished` alone reads every
+  // unpublished row first, since their NULL dates lead a descending scan.
+  @@index([status, datePublished, dateCrawled])
   @@index([issueId])
   @@index([clusterId])
   @@map("stories")

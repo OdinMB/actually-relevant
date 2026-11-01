@@ -55,6 +55,9 @@ const mockCheckPodcastConfigAtBoot = vi.hoisted(() => vi.fn().mockResolvedValue(
 vi.mock('./jobs/podcastBootCheck.js', () => ({ checkPodcastConfigAtBoot: mockCheckPodcastConfigAtBoot }))
 const mockInstallProcessErrorHandlers = vi.hoisted(() => vi.fn())
 vi.mock('./lib/processErrors.js', () => ({ installProcessErrorHandlers: mockInstallProcessErrorHandlers }))
+const mockStartHomepageRefresh = vi.hoisted(() => vi.fn())
+const mockStopHomepageRefresh = vi.hoisted(() => vi.fn())
+vi.mock('./services/homepage.js', () => ({ startHomepageRefresh: mockStartHomepageRefresh, stopHomepageRefresh: mockStopHomepageRefresh }))
 
 const { config } = await import('./config.js')
 
@@ -93,6 +96,7 @@ describe('server index', () => {
       await shutdownPromise
 
       expect(mockStopScheduler).toHaveBeenCalledTimes(1)
+      expect(mockStopHomepageRefresh).toHaveBeenCalledTimes(1)
       expect(mockServerClose).toHaveBeenCalledTimes(1)
       expect(mockTaskRegistryDestroy).toHaveBeenCalledTimes(1)
       expect(mockPrisma.$disconnect).toHaveBeenCalledTimes(1)
@@ -295,6 +299,15 @@ describe('server index', () => {
       config.scheduler.enabled = false
       indexModule.startBackgroundWork()
       expect(mockCheckPodcastConfigAtBoot).not.toHaveBeenCalled()
+    })
+
+    it('warms the homepage data whether or not this process schedules jobs', () => {
+      for (const enabled of [true, false]) {
+        config.scheduler.enabled = enabled
+        mockStartHomepageRefresh.mockClear()
+        indexModule.startBackgroundWork()
+        expect(mockStartHomepageRefresh).toHaveBeenCalledTimes(1)
+      }
     })
   })
 
