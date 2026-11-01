@@ -128,9 +128,9 @@ export default function IssuesPage() {
   return (
     <>
       <Helmet>
-        <title>All Issues - {SEO.siteName}</title>
-        <meta name="description" content="We cover issue areas critical to humanity, each evaluated with a rigorous framework." />
-        <meta property="og:title" content={`All Issues - ${SEO.siteName}`} />
+        <title>All Topics - {SEO.siteName}</title>
+        <meta name="description" content="We cover the topics most critical to humanity, each evaluated with a rigorous framework." />
+        <meta property="og:title" content={`All Topics - ${SEO.siteName}`} />
         <meta property="og:description" content="We cover issue areas critical to humanity." />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={`${SEO.siteUrl}/issues`} />
@@ -139,8 +139,8 @@ export default function IssuesPage() {
 
       <div className="page-section-wide">
         <header className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">All Issues</h1>
-          <p className="text-sm text-neutral-500">We cover the topics most relevant to humanity. Click an issue to explore.</p>
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">All Topics</h1>
+          <p className="text-sm text-neutral-500">We cover the topics most relevant to humanity. Open one to explore.</p>
         </header>
 
         <div className="divide-y divide-neutral-200">

@@ -9,15 +9,20 @@ const LABELS: Record<number, string> = {
 }
 
 /**
- * Compact Mood Dial — "Emotional weight" label above emoji slider.
+ * Compact mood dial: the current mix ("Mix of news: Balanced mix") above an emoji slider,
+ * so the label says what the slider does and updates as it moves.
  * Used directly in both mobile menu and desktop header.
  */
 export function MoodDialPanel({ className }: { className?: string }) {
   const { positivity, setPositivity } = usePositivity()
+  const current = LABELS[positivity] ?? 'Balanced mix'
 
   return (
     <div className={`flex flex-col items-center gap-1 ${className ?? ''}`}>
-      <span className="text-[10px] text-neutral-500 leading-none select-none">Emotional weight</span>
+      {/* Hidden from screen readers: the slider announces the same text as its name and value */}
+      <span className="text-[10px] text-neutral-500 leading-none select-none" aria-hidden="true">
+        Mix of news: <span className="font-medium text-neutral-700">{current}</span>
+      </span>
 
       <div className="flex items-center gap-2">
         <span className="text-sm select-none shrink-0 leading-none" aria-hidden="true">
@@ -32,11 +37,11 @@ export function MoodDialPanel({ className }: { className?: string }) {
           value={positivity}
           onChange={e => setPositivity(parseInt(e.target.value, 10))}
           className="positivity-slider w-40 lg:w-32 h-2 appearance-none bg-neutral-200 rounded-full cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-          aria-label={`Mood Dial: ${LABELS[positivity] ?? 'Balanced mix'}`}
+          aria-label="Mix of news, from heavy to uplifting"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={positivity}
-          aria-valuetext={LABELS[positivity] ?? 'Balanced mix'}
+          aria-valuetext={current}
         />
 
         <span className="text-sm select-none shrink-0 leading-none" aria-hidden="true">

@@ -286,12 +286,12 @@ describe('StoryPage', () => {
 
   it('follows the quote attribution with the AI selection note', () => {
     renderStory(story)
-    expect(screen.getByText(`— ${AI_TEXT.quoteAttribution} · selected and potentially translated by AI`)).toBeInTheDocument()
+    expect(screen.getByText(`— ${AI_TEXT.quoteAttribution} · chosen by AI, may be translated`)).toBeInTheDocument()
   })
 
   it('shows the AI selection note under a quote that has no attribution', () => {
     renderStory({ ...story, quoteAttribution: null })
-    expect(screen.getByText('Selected and potentially translated by AI')).toBeInTheDocument()
+    expect(screen.getByText('Chosen by AI, may be translated')).toBeInTheDocument()
   })
 
   it('marks every rendered AI-generated field with a machine-readable data attribute', () => {

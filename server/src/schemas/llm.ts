@@ -93,8 +93,8 @@ export const assessResultSchema = z.object({
     .describe(
       'Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). ' +
         'Write for a smart 16-year-old — no jargon or insider terms. ' +
-        'Must make sense to someone with no background. ' +
-        "One story per headline. Don't echo the label — use that word budget to say something new. " +
+        'Must make sense to someone with no background, and without the label: name the subject. ' +
+        "One story per headline. Don't echo the label's words — use that word budget to say something new. " +
         'No word or phrase should appear in both the label and the title. ' +
         "Be concrete: name the actor, action, or stakes. Cut hedge words like 'could shape' or 'may impact'. " +
         "NEVER use the 'Label: headline' colon pattern — the label is a separate field.",
@@ -214,8 +214,8 @@ export const extractTitleLabelSchema = z.object({
     .describe(
       'Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). ' +
         'Write for a smart 16-year-old — no jargon or insider terms. ' +
-        'Must make sense to someone with no background. ' +
-        "One story per headline. Don't echo the label — use that word budget to say something new. " +
+        'Must make sense to someone with no background, and without the label: name the subject. ' +
+        "One story per headline. Don't echo the label's words — use that word budget to say something new. " +
         'No word or phrase should appear in both the label and the title. ' +
         "Be concrete: name the actor, action, or stakes. Cut hedge words like 'could shape' or 'may impact'. " +
         "NEVER use the 'Label: headline' colon pattern — the label is a separate field.",

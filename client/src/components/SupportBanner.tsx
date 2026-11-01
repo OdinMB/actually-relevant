@@ -17,7 +17,7 @@ export default function SupportBanner() {
         <span className="flex-1 border-t border-neutral-200" aria-hidden="true" />
       </div>
       <p className="text-lg text-neutral-600 leading-relaxed mb-4">
-        Free. Independent. Without ads.
+        Free. Independent. No ads.
         <br /> Help us keep it that way.
       </p>
       <a
@@ -27,7 +27,7 @@ export default function SupportBanner() {
         className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-neutral-800 rounded-lg hover:bg-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
       >
         <HeartIcon className="w-4 h-4" />
-        Donate $5 toward running the site
+        Chip in $5 to keep it running
         <span className="sr-only">(opens in new tab)</span>
       </a>
     </div>

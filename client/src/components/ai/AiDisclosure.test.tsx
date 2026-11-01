@@ -81,10 +81,10 @@ describe('HeaderAiLine', () => {
 
 describe('quoteAttributionLine', () => {
   it('follows the attribution with the AI selection note', () => {
-    expect(quoteAttributionLine('Dr. Jane Doe, WHO')).toBe('— Dr. Jane Doe, WHO · selected and potentially translated by AI')
+    expect(quoteAttributionLine('Dr. Jane Doe, WHO')).toBe('— Dr. Jane Doe, WHO · chosen by AI, may be translated')
   })
 
   it('shows the note on its own when a quote has no attribution', () => {
-    expect(quoteAttributionLine(null)).toBe('Selected and potentially translated by AI')
+    expect(quoteAttributionLine(null)).toBe('Chosen by AI, may be translated')
   })
 })

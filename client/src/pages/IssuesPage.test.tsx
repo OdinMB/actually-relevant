@@ -59,7 +59,7 @@ describe('IssuesPage when the issues do not load', () => {
 
     const heading = await failure()
     expect(screen.getByRole('alert')).toContainElement(heading)
-    expect(screen.getByRole('heading', { level: 1, name: 'All Issues' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'All Topics' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
