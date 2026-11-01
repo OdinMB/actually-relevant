@@ -12,6 +12,7 @@ import feedbackRouter from './feedback.js'
 import podcastRouter from './podcast.js'
 import { storyImageRouter, storyPageRouter } from './storyPreview.js'
 import newslettersRouter from './newsletters.js'
+import feedFaviconRouter from './feedFavicon.js'
 
 const router = Router()
 
@@ -21,6 +22,9 @@ router.use('/podcast', podcastRouter)
 // Before the limiter for the same reason: the site's /stories/* rewrite proxies every story
 // page view here (routes/public/storyPreview.ts).
 router.use('/story-page', storyPageRouter)
+// Before the limiter: every page of story cards loads a favicon per feed shown, and mail clients'
+// image proxies fetch the newsletter's from few addresses (routes/public/feedFavicon.ts).
+router.use('/feeds', feedFaviconRouter)
 
 // Apply rate limiting to public API
 router.use(apiLimiter)

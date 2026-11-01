@@ -2,17 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Readable } from 'stream'
 
 const mockAxiosGet = vi.hoisted(() => vi.fn())
-const mockFs = vi.hoisted(() => ({ access: vi.fn(), writeFile: vi.fn(), mkdir: vi.fn() }))
-const mockGetFeeds = vi.hoisted(() => vi.fn())
+const mockStore = vi.hoisted(() => ({ hasFavicon: vi.fn(), saveFavicon: vi.fn(), activeFeedsForFavicons: vi.fn() }))
+const mockToFaviconPng = vi.hoisted(() => vi.fn())
 
 vi.mock('axios', () => ({ default: { get: mockAxiosGet } }))
-vi.mock('fs/promises', () => mockFs)
-vi.mock('./feed.js', () => ({ getFeeds: mockGetFeeds }))
+vi.mock('./faviconStore.js', () => mockStore)
+// Conversion has its own tests (faviconImage.test.ts); here it marks what it was given
+vi.mock('./faviconImage.js', () => ({ toFaviconPng: mockToFaviconPng }))
 
-const { fetchFavicon, fetchAllFavicons } = await import('./favicon.js')
+const { fetchFavicon, fetchAllFavicons, fetchFaviconsInBackground } = await import('./favicon.js')
 
 const FEED_ID = '11111111-2222-4333-8444-555555555555'
 const BIG_ICON = Buffer.alloc(1200, 1) // larger than Google's generic globe (<= 400 bytes)
+const UNDECODABLE = Buffer.alloc(1300, 2)
+const converted = (raw: Buffer) => Buffer.concat([Buffer.from('png:'), raw.subarray(0, 4)])
+
+const feed = (rssUrl: string, url: string | null = null, id = FEED_ID) => ({ id, rssUrl, url })
 
 type Reply = { status?: number; type?: string; body?: Buffer | string }
 
@@ -28,32 +33,27 @@ function serve(routes: Record<string, Reply>) {
 
 const requestedUrls = () => mockAxiosGet.mock.calls.map(c => c[0] as string)
 
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockStore.hasFavicon.mockResolvedValue(false)
+  mockStore.saveFavicon.mockResolvedValue(undefined)
+  mockToFaviconPng.mockImplementation(async (raw: Buffer) => (raw.equals(UNDECODABLE) ? null : converted(raw)))
+})
+
 describe('fetchFavicon', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockFs.access.mockRejectedValue(new Error('ENOENT')) // no favicon saved yet
-    mockFs.writeFile.mockResolvedValue(undefined)
-    mockFs.mkdir.mockResolvedValue(undefined)
-  })
-
-  it('refuses a feed id that is not a UUID (it becomes a file name)', async () => {
-    await expect(fetchFavicon('../../etc/passwd', 'https://example.com/rss')).rejects.toThrow('Invalid feed ID format')
-    expect(mockFs.writeFile).not.toHaveBeenCalled()
-  })
-
-  it('skips a feed whose favicon already exists unless forced', async () => {
-    mockFs.access.mockResolvedValue(undefined)
-    expect(await fetchFavicon(FEED_ID, 'https://example.com/rss')).toEqual({ success: true, message: 'Already exists' })
+  it('skips a feed whose favicon is stored unless forced', async () => {
+    mockStore.hasFavicon.mockResolvedValue(true)
+    expect(await fetchFavicon(feed('https://example.com/rss'))).toEqual({ success: true, message: 'Already exists' })
     expect(mockAxiosGet).not.toHaveBeenCalled()
   })
 
-  it("saves Google's favicon for the homepage's host", async () => {
+  it("stores Google's favicon for the homepage's host as a PNG, with the URL it came from", async () => {
     serve({ 'https://www.google.com/s2/favicons?domain=news.example.com': { body: BIG_ICON } })
 
-    const result = await fetchFavicon(FEED_ID, 'https://feeds.example.com/rss', 'https://news.example.com/')
+    const result = await fetchFavicon(feed('https://feeds.example.com/rss', 'https://news.example.com/'))
 
     expect(result).toEqual({ success: true, message: 'Favicon saved' })
-    expect(mockFs.writeFile).toHaveBeenCalledWith(expect.stringContaining(`${FEED_ID}.png`), BIG_ICON)
+    expect(mockStore.saveFavicon).toHaveBeenCalledWith(FEED_ID, converted(BIG_ICON), 'https://www.google.com/s2/favicons?domain=news.example.com&sz=32')
   })
 
   it("falls back to the page's <link rel=icon> when Google answers its generic globe", async () => {
@@ -66,12 +66,25 @@ describe('fetchFavicon', () => {
       },
     })
 
-    const result = await fetchFavicon(FEED_ID, 'https://example.com/rss', null, true)
+    const result = await fetchFavicon(feed('https://example.com/rss'), true)
 
     expect(result.success).toBe(true)
     // The 32px icon is preferred over the 16px one
     expect(requestedUrls()).toContain('https://example.com/static/icon-32.png')
     expect(requestedUrls()).not.toContain('https://example.com/static/icon-16.png')
+    expect(mockStore.saveFavicon).toHaveBeenCalledWith(FEED_ID, converted(BIG_ICON), 'https://example.com/static/icon-32.png')
+  })
+
+  it('passes over an image that cannot be made into a PNG and tries the next source', async () => {
+    serve({
+      'https://www.google.com/s2/favicons': { body: UNDECODABLE },
+      'https://example.com/favicon.ico': { type: 'image/x-icon', body: BIG_ICON },
+    })
+
+    const result = await fetchFavicon(feed('https://example.com/rss'), true)
+
+    expect(result.success).toBe(true)
+    expect(mockStore.saveFavicon).toHaveBeenCalledWith(FEED_ID, converted(BIG_ICON), 'https://example.com/favicon.ico')
   })
 
   it('never fetches a <link href> that points at a private address', async () => {
@@ -80,7 +93,7 @@ describe('fetchFavicon', () => {
       'https://example.com': { type: 'text/html', body: '<link rel="icon" href="http://169.254.169.254/latest/meta-data">' },
     })
 
-    const result = await fetchFavicon(FEED_ID, 'https://example.com/rss', null, true)
+    const result = await fetchFavicon(feed('https://example.com/rss'), true)
 
     expect(result.success).toBe(false)
     expect(requestedUrls()).not.toContain('http://169.254.169.254/latest/meta-data')
@@ -92,16 +105,17 @@ describe('fetchFavicon', () => {
       'https://example.com/favicon.ico': { body: Buffer.alloc(200_000, 1) },
     })
 
-    const result = await fetchFavicon(FEED_ID, 'https://example.com/rss', null, true)
+    const result = await fetchFavicon(feed('https://example.com/rss'), true)
 
     expect(result).toEqual({ success: false, message: 'No favicon found for example.com' })
-    expect(mockFs.writeFile).not.toHaveBeenCalled()
+    expect(mockToFaviconPng).not.toHaveBeenCalled()
+    expect(mockStore.saveFavicon).not.toHaveBeenCalled()
   })
 
   it('tries progressively shorter domains', async () => {
     serve({ 'https://www.google.com/s2/favicons?domain=politico.com': { body: BIG_ICON } })
 
-    const result = await fetchFavicon(FEED_ID, 'https://feeder-prod.int.politico.com/rss', null, true)
+    const result = await fetchFavicon(feed('https://feeder-prod.int.politico.com/rss'), true)
 
     expect(result.success).toBe(true)
     const googleCalls = requestedUrls().filter(u => u.startsWith('https://www.google.com'))
@@ -110,35 +124,63 @@ describe('fetchFavicon', () => {
 
   it('fetches through the SSRF guard', async () => {
     serve({ 'https://www.google.com/s2/favicons': { body: BIG_ICON } })
-    await fetchFavicon(FEED_ID, 'https://example.com/rss', null, true)
+    await fetchFavicon(feed('https://example.com/rss'), true)
     expect(mockAxiosGet.mock.calls[0][1]).toEqual(expect.objectContaining({ lookup: expect.any(Function), beforeRedirect: expect.any(Function) }))
   })
 })
 
 describe('fetchAllFavicons', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockFs.writeFile.mockResolvedValue(undefined)
-    mockFs.mkdir.mockResolvedValue(undefined)
-  })
-
-  it('counts saved, missing and skipped favicons over the active feeds', async () => {
+  it('fetches only the active feeds without a stored favicon, and counts the rest as skipped', async () => {
     const saved = '11111111-2222-4333-8444-000000000001'
-    const existing = '11111111-2222-4333-8444-000000000002'
+    const stored = '11111111-2222-4333-8444-000000000002'
     const missing = '11111111-2222-4333-8444-000000000003'
-    mockGetFeeds.mockResolvedValue([
-      { id: saved, title: 'Saved', rssUrl: 'https://saved.example.com/rss', url: null },
-      { id: existing, title: 'Existing', rssUrl: 'https://existing.example.com/rss', url: null },
-      { id: missing, title: 'Missing', rssUrl: 'https://missing.example.com/rss', url: null },
+    mockStore.activeFeedsForFavicons.mockResolvedValue([
+      { id: saved, title: 'Saved', rssUrl: 'https://saved.example.com/rss', url: null, hasFavicon: false },
+      { id: stored, title: 'Stored', rssUrl: 'https://stored.example.com/rss', url: null, hasFavicon: true },
+      { id: missing, title: 'Missing', rssUrl: 'https://missing.example.com/rss', url: null, hasFavicon: false },
     ])
-    mockFs.access.mockImplementation(async (path: string) => {
-      if (!path.includes(existing)) throw new Error('ENOENT')
-    })
     serve({ 'https://www.google.com/s2/favicons?domain=saved.example.com': { body: BIG_ICON } })
 
     const result = await fetchAllFavicons()
 
-    expect(mockGetFeeds).toHaveBeenCalledWith({ active: true })
     expect(result).toEqual({ succeeded: 1, failed: 1, skipped: 1, errors: ['Missing: not found'] })
+    expect(requestedUrls().some(u => u.includes('stored.example.com'))).toBe(false)
+    expect(mockStore.saveFavicon.mock.calls.map(c => c[0])).toEqual([saved])
+  })
+})
+
+describe('fetchFaviconsInBackground', () => {
+  it('refetches each feed, even one with a stored favicon (its address changed)', async () => {
+    mockStore.hasFavicon.mockResolvedValue(true)
+    serve({ 'https://www.google.com/s2/favicons': { body: BIG_ICON } })
+
+    await fetchFaviconsInBackground([feed('https://a.example/rss', null, 'a'), feed('https://b.example/rss', 'https://b.example', 'b')])
+
+    expect(mockStore.saveFavicon.mock.calls.map(c => c[0]).sort()).toEqual(['a', 'b'])
+  })
+
+  it('settles without an error when a fetch or a save fails, so it can never fail its caller', async () => {
+    serve({ 'https://www.google.com/s2/favicons': { body: BIG_ICON } })
+    mockStore.saveFavicon.mockRejectedValue(new Error('database down'))
+
+    await expect(fetchFaviconsInBackground([feed('https://a.example/rss', null, 'a'), feed('not a url', null, 'b')])).resolves.toBeUndefined()
+  })
+
+  it('fetches a few feeds at a time, not a whole changeset at once', async () => {
+    let inFlight = 0
+    let most = 0
+    mockAxiosGet.mockImplementation(async () => {
+      inFlight++
+      most = Math.max(most, inFlight)
+      await new Promise(resolve => setTimeout(resolve, 1))
+      inFlight--
+      return { status: 200, headers: { 'content-type': 'image/png' }, data: Readable.from([BIG_ICON]) }
+    })
+
+    await fetchFaviconsInBackground(Array.from({ length: 12 }, (_, i) => feed(`https://f${i}.example/rss`, null, `f${i}`)))
+
+    expect(mockStore.saveFavicon).toHaveBeenCalledTimes(12)
+    expect(most).toBeGreaterThan(1)
+    expect(most).toBeLessThanOrEqual(5)
   })
 })

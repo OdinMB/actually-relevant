@@ -17,6 +17,7 @@ import { createLogger } from '../lib/logger.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { escapeHtml } from '../lib/xml.js'
+import { feedFaviconUrl } from '../lib/feedFaviconUrl.js'
 import { parseStoryHeading, storyHeading } from './newsletterContent.js'
 import { newsletterIssue, newsletterOrder, newsletterSelectInput } from './promptInputs.js'
 import { buildNewsletterSelectPrompt } from '../prompts/index.js'
@@ -387,7 +388,7 @@ export function renderHtml(newsletter: { title: string; content: string }, webUr
         if (publisherName || originalUrl) {
           const parts: string[] = []
           const faviconHtml = feedId
-            ? `<img src="${config.siteUrl}/images/feeds/${feedId}.png" alt="" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; border-radius: 2px; margin-right: 4px;">`
+            ? `<img src="${escapeHtml(feedFaviconUrl(feedId))}" alt="" width="14" height="14" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; border-radius: 2px; margin-right: 4px;">`
             : ''
           if (publisherName) parts.push(`${faviconHtml}<span style="vertical-align: middle;">${escapeHtml(publisherName)}</span>`)
           if (originalUrl)

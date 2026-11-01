@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom'
 // renderHtml is pure; the write and the slug it links to are the lifecycle's (newsletterLifecycle.db.test.ts)
 const { renderHtml } = await import('./newsletter.js')
 const { config } = await import('../config.js')
+const { feedFaviconUrl } = await import('../lib/feedFaviconUrl.js')
 const NEWSLETTER_TOP_LABEL_TEXT = (await import('../lib/aiLabelCopy.js')).NEWSLETTER_TOP_LABEL.text
 
 describe('renderHtml', () => {
@@ -62,6 +63,22 @@ describe('renderHtml', () => {
       expect(html).not.toMatch(/(href|src)="https:\/\/actuallyrelevant\.news/)
     } finally {
       config.siteUrl = original
+    }
+  })
+
+  it("shows the publisher's favicon as served by the API, which stores it, not as a file of the static site", async () => {
+    const feedId = '11111111-2222-4333-8444-555555555555'
+    const original = config.apiUrl
+    config.apiUrl = 'https://api.staging.example'
+    try {
+      const content = storyBlock({ issue: 'Technology', title: 'T', publisher: `{feed:${feedId}} Nature`, url: 'https://example.com/t', body: 'B.' })
+      const doc = new JSDOM(render(content)).window.document
+
+      const favicon = [...doc.querySelectorAll('img')].find(img => img.nextElementSibling?.textContent === 'Nature')
+      expect(favicon?.getAttribute('src')).toBe(feedFaviconUrl(feedId))
+      expect(favicon?.getAttribute('src')).toMatch(/^https:\/\/api\.staging\.example\//)
+    } finally {
+      config.apiUrl = original
     }
   })
 

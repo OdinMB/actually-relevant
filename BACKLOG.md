@@ -8,7 +8,6 @@
 - Podcast: re-voice only the chunks whose text changed after a script edit (today a rewind to `scripted` re-voices the whole episode)
 - Podcast: re-tag the MP3's ID3 title after a title edit at `ready`
 - Podcast: periodic cleanup of orphaned Bunny objects under `episodes/` (an upload followed by a lost lease or a failed `ready` write leaves one)
-- Feed favicons: `server/src/services/favicon.ts` saves any `image/*` response unchanged as `<id>.png`, which is how seven ICO/BMP files arrived under `client/public/images/feeds/` (converted 2026-10-07); convert to PNG when saving
 - Move imports from `react-router-dom` to `react-router` (about 60 files) before react-router v8 drops the re-export
 - Podcast: freeze the spoken opener and sign-off per episode before their wording next changes, so older transcript pages keep the words their audio used (today `publicTranscript` takes the current wording from `aiLabelCopy.ts`)
 - Newsletter freshness: before an issue goes out, check whether a selected story has been overtaken by later events (e.g. "US orders total blockade of key oil route" became "US orders blockade of Iranian ports" days later). Options range from a warning for the editor (newer stories in the same dedup cluster, or a newer headline from the same source) to an LLM check of each pick against stories crawled since. Reader feedback, October 2026

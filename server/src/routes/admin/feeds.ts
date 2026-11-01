@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import * as feedService from '../../services/feed.js'
-import { fetchFavicon, fetchAllFavicons } from '../../services/favicon.js'
+import { fetchFavicon, fetchAllFavicons, fetchFaviconsInBackground } from '../../services/favicon.js'
 import { crawlFeed, crawlAllDueFeeds } from '../../services/crawler.js'
 import { validateBody } from '../../middleware/validate.js'
 import { failsWith } from '../../middleware/routeErrors.js'
@@ -48,7 +48,10 @@ router.get('/:id', failsWith('Failed to fetch feed'), async (req, res) => {
 })
 
 router.post('/', failsWith('Failed to create feed', feedErrors), validateBody(createFeedSchema), async (req, res) => {
-  res.status(201).json(await feedService.createFeed(req.body))
+  const feed = await feedService.createFeed(req.body)
+  // Not awaited, and it never rejects: the new feed is saved whatever the favicon fetch does
+  void fetchFaviconsInBackground([feed])
+  res.status(201).json(feed)
 })
 
 router.put('/:id', failsWith('Failed to update feed', feedErrors), validateBody(updateFeedSchema), async (req, res) => {
@@ -76,7 +79,7 @@ router.post('/:id/favicon', failsWith('Failed to fetch favicon'), async (req, re
     res.status(404).json({ error: 'Feed not found' })
     return
   }
-  res.json(await fetchFavicon(feed.id, feed.rssUrl, feed.url, true))
+  res.json(await fetchFavicon(feed, true))
 })
 
 router.post('/fetch-favicons', failsWith('Failed to fetch favicons'), async (_req, res) => {

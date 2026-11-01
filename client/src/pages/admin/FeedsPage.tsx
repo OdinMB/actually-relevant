@@ -156,11 +156,9 @@ export default function FeedsPage() {
             <Button variant={showInactive ? 'secondary' : 'ghost'} onClick={() => setShowInactive(!showInactive)}>
               {showInactive ? 'Hide inactive' : 'Show inactive'}
             </Button>
-            {import.meta.env.DEV && (
-              <Button variant="secondary" onClick={handleFetchAllFavicons}>
-                Fetch All Favicons
-              </Button>
-            )}
+            <Button variant="secondary" onClick={handleFetchAllFavicons}>
+              Fetch All Favicons
+            </Button>
             <Button variant="secondary" onClick={handleCrawlAll}>
               Crawl All
             </Button>

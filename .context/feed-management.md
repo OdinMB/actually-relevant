@@ -1,6 +1,6 @@
 # Feed Management
 
-Feed lifecycle, changesets, the feed export, the source policy, crawl scheduling and health tracking, quality metrics and favicons. Code: `server/src/services/feed.ts`, `server/src/services/feedChangeset.ts`, `server/src/services/favicon.ts`, `server/src/routes/admin/feeds.ts`. Crawling and extraction themselves are in `content-extraction.md`.
+Feed lifecycle, changesets, the feed export, the source policy, crawl scheduling and health tracking, quality metrics and favicons. Code: `server/src/services/feed.ts`, `server/src/services/feedChangeset.ts`, `server/src/services/favicon*.ts`, `server/src/routes/admin/feeds.ts`. Crawling and extraction themselves are in `content-extraction.md`.
 
 ## Creating and Updating Feeds
 
@@ -42,7 +42,7 @@ A changeset is one JSON file of feed changes, typically researched by an AI agen
 **Endpoints** (admin router, before `/:id`; body limit 512 kB for this path in `app.ts`, 100 kB elsewhere):
 
 - `POST /api/admin/feeds/changesets/preview` writes nothing and answers `{ title, results, counts: { ok, noop, error } }`. Each result is `{ index (from 0), action ('create' | 'update' | 'delete', or null for an unknown one), feedTitle (the matched or new feed's title, null when no single feed matched), reason, status, message, diff? }`, with `diff` on updates only, `[{ field, from, to }]`, `issue` shown as slugs.
-- `POST /api/admin/feeds/changesets/apply` resolves again inside one Prisma transaction (`config.database.transactionTimeoutMs`). **All or nothing:** if any change is `error` it writes nothing and answers 400 `{ error: "N of M changes have errors; nothing was applied" ("has an error" for one), applied: false, title, results, counts }` (`ChangesetHasErrorsError`); otherwise it performs every `ok` change through `createFeed`/`updateFeed`/`deleteFeed` with the transaction client and answers `{ applied: true, title, results, counts }`, the messages now saying what was done ("Created", "Updated N fields", "Deleted", "Deactivated (it has stories)"). A delete recounts stories inside the transaction, so a feed that gained a story since the preview is deactivated. A write the database refuses (a unique RSS URL taken meanwhile: 409 "A feed with this RSS URL already exists") rolls the whole changeset back.
+- `POST /api/admin/feeds/changesets/apply` resolves again inside one Prisma transaction (`config.database.transactionTimeoutMs`). **All or nothing:** if any change is `error` it writes nothing and answers 400 `{ error: "N of M changes have errors; nothing was applied" ("has an error" for one), applied: false, title, results, counts }` (`ChangesetHasErrorsError`); otherwise it performs every `ok` change through `createFeed`/`updateFeed`/`deleteFeed` with the transaction client and answers `{ applied: true, title, results, counts }`, the messages now saying what was done ("Created", "Updated N fields", "Deleted", "Deactivated (it has stories)"); once it has committed, the favicons of the feeds it created or gave a new `url` or `rssUrl` are fetched in the background ("Favicons"). A delete recounts stories inside the transaction, so a feed that gained a story since the preview is deactivated. A write the database refuses (a unique RSS URL taken meanwhile: 409 "A feed with this RSS URL already exists") rolls the whole changeset back.
 
 The import panel (`FeedChangesetImportPanel.tsx`) parses the file in the browser (not JSON: an error, no request), shows the preview, and enables "Apply N changes" only while no change has an error; a refused apply shows the new preview.
 
@@ -114,13 +114,29 @@ Feeds with no stories are included. Results are cached in process memory for `co
 
 ## Favicons
 
-The favicon is stored at `client/public/images/feeds/<feedId>.png` (`FAVICON_DIR` overrides the folder). The fetched bytes are written as they are, without converting them to PNG, and the feed ID must be a UUID. The source host is the homepage `url` if set, otherwise the `rssUrl`. The fetcher tries that hostname first, then each shorter parent domain down to two labels (`feeder-prod.int.politico.com` → `int.politico.com` → `politico.com`). For each domain it tries, in order:
+A feed's favicon is a 32 px PNG in the database (`feed_favicons`: `feed_id` as key, deleted with its feed; `png`; `source_url`, the image it was made from; `fetched_at`), so a feed added in production gets its icon on the site with no commit or deploy. A table of its own keeps the bytes out of every feed query. Code: `favicon.ts` (finding), `faviconImage.ts` (conversion), `faviconStore.ts` (storage), `routes/public/feedFavicon.ts` (serving).
+
+**Finding.** The source host is the homepage `url` if set, otherwise the `rssUrl`. The fetcher tries that hostname first, then each shorter parent domain down to two labels (`feeder-prod.int.politico.com` → `int.politico.com` → `politico.com`). For each domain it tries, in order, and keeps the first image that converts:
 
 1. The Google favicon API at 32 px. Responses of 400 bytes or less are treated as Google's generic globe and rejected.
 2. The homepage HTML (reading at most 2 MB): `<link rel*="icon">` entries are sorted by declared size closest to 32 px, and entries with no size go last.
 3. `/favicon.ico`.
 
-An accepted image must have an `image/*` content type, be non-empty and be at most 100,000 bytes. It is read in a stream that stops once it passes the limit, with a 10 s timeout. `POST /api/admin/feeds/:id/favicon` always refetches (`force = true`). `POST /api/admin/feeds/fetch-favicons` covers only active feeds, skips any feed that already has a favicon, runs 5 at a time, and returns succeeded, failed and skipped counts plus errors.
+A downloaded image must have an `image/*` content type, be non-empty and be at most 100,000 bytes. It is read in a stream that stops once it passes the limit, with a 10 s timeout, through the SSRF guard (`content-extraction.md`).
+
+**Conversion** (`toFaviconPng()`, with `@napi-rs/canvas`): PNG, JPEG, GIF, WebP, BMP and ICO become a 32 x 32 PNG, scaled to fit and centred on transparency. SVG and anything else is refused, and the fetcher moves on to the next source. Before decoding, the size the image declares is read from its header (`image-size`; for an ICO, from each embedded PNG or BMP, not the directory) and an image over 1024 px on either side is refused: a blank PNG of a few kB declares gigabytes of pixels, and decoding one took the test process down.
+
+**When it is fetched.**
+
+- After `POST /api/admin/feeds` creates a feed, and after a changeset apply has committed, for every feed it created and every update that changed `url` or `rssUrl` (`fetchFaviconsInBackground()`): not awaited, 5 at a time, failures logged, never failing or delaying the request. After the commit, because the favicon's row references the feed. `PUT /api/admin/feeds/:id` does not refetch; the edit panel's "Fetch Favicon" does.
+- `POST /api/admin/feeds/:id/favicon` ("Fetch Favicon" in the edit panel) always refetches and replaces the stored one.
+- `POST /api/admin/feeds/fetch-favicons` ("Fetch All Favicons" on the Feeds page) covers only active feeds, fetches those with no stored favicon, 5 at a time, and returns succeeded, failed and skipped (already stored) counts plus errors. It answers when all are done; a run longer than Cloudflare's 100 s proxy limit can show an error in the admin while the server carries on, and clicking again fills in the rest.
+
+**Serving.** `GET /api/feeds/:id/favicon` (public, no auth) answers the PNG with `Cache-Control: public, max-age=86400` (`config.favicon.httpCacheSeconds`), a strong ETag (304 on `If-None-Match`) and `Cross-Origin-Resource-Policy: cross-origin`, since the site and mail clients show it from other origins; 404 (not cached) when none is stored or the id is not a UUID. It is mounted before the shared rate limiter, as a page of story cards asks for one per feed, and is open to any origin (`publicReadPaths` in `app.ts`). It is not in the OpenAPI document: like a story's `og.png`, it is an asset of the site, not part of the data API. Stored favicons are kept in memory for an hour (`config.favicon.memoryCache*`, one of the caches "Clear site cache" empties); saving one drops its copy, and a missing one is never remembered.
+
+**Where it is shown.** `FeedFavicon` (story cards and story pages) tries the API (`API_BASE`, so `VITE_API_URL`), then the file committed under `client/public/images/feeds/<feedId>.png`, then hides itself; `FeedFaviconPreview` (feed table, edit panel) does the same and ends in a grey placeholder, with `?t=` after a refetch to get past the browser's copy. The newsletter email links `config.apiUrl` + `/api/feeds/<id>/favicon` (`feedFaviconUrl()`), and has no fallback: a feed without a stored favicon shows a broken image there.
+
+**The committed files** (about 110, from before 2026-11-01, when favicons were written into `client/public/images/feeds/` and reached the site only with a commit) stay as the site's fallback. Nothing writes there any more. After the deploy that introduced the table, "Fetch All Favicons" once moves every active feed onto a stored favicon, which the newsletter needs; stories of inactive feeds keep the committed file.
 
 ## Key Files
 
@@ -129,7 +145,11 @@ An accepted image must have an `image/*` content type, be non-empty and be at mo
 | `server/src/services/feed.ts` | CRUD (each write takes an optional transaction client), due query, crawl status, quality metrics |
 | `server/src/services/feedChangesetPlan.ts` | Changeset resolution: matches, slugs, RSS URL tracking, noop and diff (pure) |
 | `server/src/services/feedChangeset.ts` | Changeset preview, and apply in one transaction |
-| `server/src/services/favicon.ts` | Favicon discovery and storage |
+| `server/src/services/favicon.ts` | Favicon discovery: one feed, all missing, or in the background |
+| `server/src/services/faviconImage.ts` | Downloaded favicon to 32 px PNG, with the declared-size guard |
+| `server/src/services/faviconStore.ts` | `feed_favicons` reads and writes, the in-memory copy |
+| `server/src/routes/public/feedFavicon.ts` | `GET /api/feeds/:id/favicon` |
+| `client/src/components/FeedFavicon.tsx` | Public and admin favicon, with the API → committed file fallback |
 | `server/src/routes/admin/feeds.ts` | Admin feed endpoints, changesets included |
 | `server/src/schemas/feed.ts` | Zod schemas and defaults |
 | `server/src/schemas/feedChangeset.ts` | Changeset file format |

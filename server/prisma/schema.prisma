@@ -155,10 +155,24 @@ model Feed {
   // text in the RSS item, never fetching the page). Checked by Zod in schemas/feed.ts, not an enum.
   contentSource           String    @default("page") @map("content_source")
   stories            Story[]
+  favicon            FeedFavicon?
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
   @@map("feeds")
+}
+
+// A feed's favicon as a 32 px PNG, served by GET /api/feeds/:id/favicon (.context/feed-management.md,
+// "Favicons"). A table of its own, so that loading feeds never loads the bytes.
+model FeedFavicon {
+  feedId    String   @id @map("feed_id")
+  feed      Feed     @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  png       Bytes
+  // The image the PNG was made from (the Google favicon API, a <link rel=icon> href or /favicon.ico)
+  sourceUrl String   @map("source_url")
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+
+  @@map("feed_favicons")
 }
 
 model Issue {
