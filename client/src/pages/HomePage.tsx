@@ -316,13 +316,14 @@ export default function HomePage() {
               })
               .reduce<React.ReactNode[]>((acc, section, idx) => {
                 acc.push(section)
-                // Insert newsletter banner after the 1st issue section (Human Development)
-                if (idx === 0) {
-                  acc.push(<NewsletterBanner key="newsletter-banner" />)
-                }
-                // Insert support banner after the 2nd issue section
+                // Support banner after the 2nd issue section
                 if (idx === 1) {
                   acc.push(<SupportBanner key="support-banner" />)
+                }
+                // Newsletter banner after the 3rd, well apart from this week's issue card above the
+                // 1st section, so the page doesn't ask to subscribe twice in a row
+                if (idx === 2) {
+                  acc.push(<NewsletterBanner key="newsletter-banner" />)
                 }
                 return acc
               }, [])}

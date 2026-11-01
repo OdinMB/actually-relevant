@@ -191,7 +191,7 @@ export default function NoAdsNoTrackingPage() {
             className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-neutral-800 rounded-lg hover:bg-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             <HeartIcon className="w-4 h-4" />
-            Support Us
+            Donate $5 toward hosting
             <span className="sr-only">(opens in new tab)</span>
           </a>
         </div>
