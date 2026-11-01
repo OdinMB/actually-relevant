@@ -229,6 +229,12 @@ describe('buildShowNotes', () => {
     expect(notes).not.toContain('/stories/null')
   })
 
+  it('ends with the donation ask and its link', () => {
+    const lastLine = buildShowNotes('The summary.', stories, false, 'weekly').split('\n').at(-1)
+    expect(lastLine).toContain('Donate $5 toward running the site')
+    expect(lastLine).toContain('https://ko-fi.com/odinmb')
+  })
+
   it('starts with the edited line when a person edited the episode', () => {
     expect(buildShowNotes('The summary.', stories, true, 'weekly').split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE_EDITED)
   })

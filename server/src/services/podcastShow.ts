@@ -88,6 +88,7 @@ export function episodeDescriptionHtml(episode: PublishedEpisode): string {
     `<p>${escapeXml(episode.summary.trim())}</p>`,
     '<p>Stories in this episode:</p>',
     `<ol>${items.join('')}</ol>`,
+    `<p>${escapeXml(config.donation.pitch)} ${link(config.links.kofi, config.donation.cta)}</p>`,
   ].join('')
 }
 

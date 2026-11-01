@@ -219,7 +219,7 @@ export async function writeEpisodeScript(stories: SelectedStory[], kind: Podcast
 
 /**
  * Plain-text show notes: the AI line first (the edited wording when a person changed the stories or
- * the script), the summary, then each story with our analysis and its source.
+ * the script), the summary, then each story with our analysis and its source, and last the donation ask.
  */
 export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEdited: boolean, kind: PodcastKind): string {
   const items = stories.map(s =>
@@ -227,5 +227,14 @@ export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEd
       '\n',
     ),
   )
-  return [podcastEpisodeAiLine(humanEdited, kind), '', summary.trim(), '', 'Stories in this episode:', ...items].join('\n')
+  return [
+    podcastEpisodeAiLine(humanEdited, kind),
+    '',
+    summary.trim(),
+    '',
+    'Stories in this episode:',
+    ...items,
+    '',
+    `${config.donation.pitch} ${config.donation.cta}: ${config.links.kofi}`,
+  ].join('\n')
 }

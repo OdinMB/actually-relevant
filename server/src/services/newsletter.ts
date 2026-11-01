@@ -475,8 +475,8 @@ ${introSection}
           <!-- Support -->
           <tr>
             <td style="padding: 28px 32px; text-align: center; border-top: 1px solid #e5e5e5;">
-              <p style="margin: 0 0 14px; font-size: 14px; color: #525252;">Free. Independent. Without ads. Help us keep it that way.</p>
-              <a href="${config.links.kofi}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 10px 24px; font-size: 14px; font-weight: 600; color: #ffffff; background-color: #171717; border-radius: 8px; text-decoration: none;">&#10084; Support Us</a>
+              <p style="margin: 0 0 14px; font-size: 14px; color: #525252; line-height: 1.5;">${escapeHtml(config.donation.pitch)} If this issue was worth something to you, please chip in.</p>
+              <a href="${config.links.kofi}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 10px 24px; font-size: 14px; font-weight: 600; color: #ffffff; background-color: #171717; border-radius: 8px; text-decoration: none;">&#10084; ${escapeHtml(config.donation.cta)}</a>
             </td>
           </tr>
 

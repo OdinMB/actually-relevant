@@ -56,7 +56,7 @@ describe('buildPodcastFeedXml', () => {
     const xml = buildPodcastFeedXml([episode()], NOW)
     const channel = channelOnly(xml)
     expect(config.links.kofi).toBe('https://ko-fi.com/odinmb')
-    expect(channel).toContain('<podcast:funding url="https://ko-fi.com/odinmb">Support the show</podcast:funding>')
+    expect(channel).toContain('<podcast:funding url="https://ko-fi.com/odinmb">Donate $5 toward running the site</podcast:funding>')
     expect(channel).toContain('<podcast:updateFrequency rrule="FREQ=WEEKLY">Weekly</podcast:updateFrequency>')
     for (const item of items(xml)) expect(item).not.toMatch(/podcast:(funding|updateFrequency)/)
   })
