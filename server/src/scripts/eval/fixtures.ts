@@ -9,6 +9,7 @@
  */
 import { Prisma } from '@prisma/client'
 import { config } from '../../config.js'
+import { nearestSettings } from '../../lib/vectors.js'
 import type { Guidelines, IssueForPrompt } from '../../prompts/shared.js'
 import type { StoryForBlueskyPick, StoryForBlueskyPost } from '../../prompts/bluesky.js'
 import type { CandidateStory } from '../../prompts/related-stories.js'
@@ -321,7 +322,9 @@ async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations:
       WHERE c.id <> src.id
         AND c.status IN ('analyzed', 'selected', 'published', 'rejected') AND c.title IS NOT NULL AND c.summary IS NOT NULL
         AND c.date_crawled BETWEEN src.date_crawled - interval '14 days' AND src.date_crawled + interval '14 days'
-      ORDER BY ce.embedding <=> src.embedding
+      -- "+ 0": an order the vector index cannot serve, so distances are exact over the window, as
+      -- in findNearestCandidates (an index scan's nearest would mostly fall outside it)
+      ORDER BY (ce.embedding <=> src.embedding) + 0
       LIMIT 1
     ) nn
     ORDER BY md5(src.id || 'gpt6-eval')`
@@ -359,7 +362,8 @@ async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations:
       FROM stories s JOIN story_embeddings se ON se.story_id = s.id
       WHERE s.id <> src.id AND ${ASSESSED}
         AND s.date_crawled BETWEEN src.date_crawled - interval '14 days' AND src.date_crawled + interval '14 days'
-      ORDER BY se.embedding <=> srce.embedding
+      -- Exact over the window, as above
+      ORDER BY (se.embedding <=> srce.embedding) + 0
       LIMIT ${t.candidates}
     ) c
     WHERE src.id = ANY(${ids})
@@ -392,6 +396,8 @@ async function loadRelated(db: Db, shortfalls: string[]): Promise<RelatedItem[]>
     ORDER BY md5(s.id || 'gpt6-eval')
     LIMIT ${TARGETS.related.total}`
   const ids = sources.map(s => s.id)
+  // The index settings queryNearest gives the live query, for the rest of this read-only session
+  for (const setting of await nearestSettings(db, false)) await setting
   // The candidate query of relatedStories.ts rankRelatedStories, for every source at once: the 12 cosine-nearest published stories.
   const rows =
     ids.length === 0

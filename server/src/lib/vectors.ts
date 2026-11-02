@@ -11,18 +11,55 @@ import { Prisma } from '@prisma/client'
 import prisma from './prisma.js'
 import { config } from '../config.js'
 
+// ──── Filtered nearest-neighbour queries ───────────────────────────────────
+
+type RawClient = Pick<typeof prisma, '$queryRaw' | '$executeRaw'>
+
+let iterativeScan: Promise<boolean> | undefined
+
+/** pgvector 0.8 added iterative index scans; older versions reject the setting. Read once. */
+export function hasIterativeScan(client: RawClient = prisma): Promise<boolean> {
+  iterativeScan ??= client.$queryRaw<{ extversion: string }[]>`SELECT extversion FROM pg_extension WHERE extname = 'vector'`.then(
+    ([row]) => {
+      const [major = 0, minor = 0] = (row?.extversion ?? '0').split('.').map(Number)
+      return major > 0 || minor >= 8
+    },
+    err => {
+      iterativeScan = undefined // a failed read is retried next time
+      throw err
+    },
+  )
+  return iterativeScan
+}
+
+/** Test-only: forget the cached version. */
+export function _resetIterativeScan(): void {
+  iterativeScan = undefined
+}
+
 /**
- * Run a nearest-neighbour query through the HNSW index with a wider candidate list. The index
- * scan hands over its `hnsw.ef_search` nearest vectors before the query's own filters run (status,
- * issue), so the default of 40 leaves far fewer rows than the LIMIT whenever most embedded stories
- * are not published. `SET LOCAL` scopes the setting to this one transaction.
+ * The settings a filtered nearest-neighbour query needs. An HNSW scan hands over its
+ * `hnsw.ef_search` nearest vectors before the query's own filters run (status, issue), so on its
+ * own it returns far fewer rows than the LIMIT whenever most embedded stories fail the filter.
+ * With pgvector 0.8 `hnsw.iterative_scan = strict_order` keeps scanning until the LIMIT is filled
+ * (up to `hnsw.max_scan_tuples`, 20,000 by default), in exact distance order; a wider first batch
+ * (`config.embedding.efSearch`) also covers older versions. `local` scopes them to the transaction.
+ */
+export async function nearestSettings(client: RawClient, local: boolean): Promise<Prisma.PrismaPromise<number>[]> {
+  const settings = [client.$executeRaw`SELECT set_config('hnsw.ef_search', ${String(config.embedding.efSearch)}, ${local})`]
+  if (await hasIterativeScan(client)) settings.push(client.$executeRaw`SELECT set_config('hnsw.iterative_scan', 'strict_order', ${local})`)
+  return settings
+}
+
+/**
+ * Run a nearest-neighbour query that filters the index's rows (published, an issue) with the
+ * settings above, scoped to its own transaction. Every vector query with a structural filter goes
+ * through here, except dedup, which computes exact distances over its date window instead.
  */
 export async function queryNearest<T>(query: Prisma.Sql): Promise<T[]> {
-  const [, rows] = await prisma.$transaction([
-    prisma.$executeRaw`SELECT set_config('hnsw.ef_search', ${String(config.embedding.efSearch)}, true)`,
-    prisma.$queryRaw<T[]>(query),
-  ])
-  return rows
+  const settings = await nearestSettings(prisma, true)
+  const results = await prisma.$transaction([...settings, prisma.$queryRaw<T[]>(query)])
+  return results.at(-1) as T[]
 }
 
 // ──── Types ────────────────────────────────────────────────────────────────

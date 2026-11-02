@@ -13,10 +13,12 @@ const mockPrisma = vi.hoisted(() => ({
     count: vi.fn(),
   },
   $queryRaw: vi.fn(),
-  // A nearest-neighbour query runs as a batch: the ef_search setting, then the query
-  $executeRaw: vi.fn(),
-  $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
   $disconnect: vi.fn(),
+}))
+// A filtered nearest-neighbour query is one $queryRaw here, without its index settings
+vi.mock('../../lib/vectors.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../lib/vectors.js')>()),
+  queryNearest: (query: unknown) => mockPrisma.$queryRaw(query),
 }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))

@@ -12,9 +12,11 @@ const mockPrisma = vi.hoisted(() => ({
   blueskyPost: { findFirst: vi.fn() },
   mastodonPost: { findFirst: vi.fn() },
   $queryRaw: vi.fn(),
-  // A nearest-neighbour query runs as a batch: the ef_search setting, then the query
-  $executeRaw: vi.fn(),
-  $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
+}))
+// A filtered nearest-neighbour query is one $queryRaw here, without its index settings
+vi.mock('../lib/vectors.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lib/vectors.js')>()),
+  queryNearest: (query: unknown) => mockPrisma.$queryRaw(query),
 }))
 
 /** Every prompt a model was sent, in order. The model answers with `answers`, then fails. */
