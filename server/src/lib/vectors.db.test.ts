@@ -20,8 +20,8 @@ let issueId: string
 async function embeddingOf(id: string) {
   const [row] = await prisma.$queryRaw<{ axis: number | null; hash: string | null; generated: boolean }[]>`
     SELECT (SELECT i - 1 FROM unnest(embedding::real[]) WITH ORDINALITY AS u(v, i) WHERE v = 1 LIMIT 1)::int AS axis,
-           embedding_content_hash AS hash, embedding_generated_at IS NOT NULL AS generated
-    FROM stories WHERE id = ${id}`
+           content_hash AS hash, generated_at IS NOT NULL AS generated
+    FROM story_embeddings WHERE story_id = ${id}`
   return row
 }
 
@@ -38,7 +38,8 @@ describeDb('pgvector queries (PostgreSQL)', () => {
 
   it('fetchStoryForEmbedding maps the row to camelCase with its status, and null for an unknown id', async () => {
     const story = await createStory({ feedId, status: 'analyzed', title: 'T', summary: 'S' })
-    await prisma.$executeRaw`UPDATE stories SET title_label = 'Label', embedding_content_hash = 'h1' WHERE id = ${story.id}`
+    await prisma.$executeRaw`UPDATE stories SET title_label = 'Label' WHERE id = ${story.id}`
+    await setEmbedding(story.id, 0, 'h1')
 
     expect(await fetchStoryForEmbedding(story.id)).toEqual({
       id: story.id,
@@ -71,6 +72,28 @@ describeDb('pgvector queries (PostgreSQL)', () => {
     expect(await embeddingOf(c.id)).toEqual({ axis: 5, hash: 'hc', generated: true })
   })
 
+  it('a save replaces the story embedding and never writes the story row', async () => {
+    const story = await createStory({ feedId })
+    const before = await prisma.story.findUniqueOrThrow({ where: { id: story.id }, select: { updatedAt: true } })
+    const [{ xmin: xminBefore } = { xmin: '' }] = await prisma.$queryRaw<{ xmin: string }[]>`SELECT xmin::text FROM stories WHERE id = ${story.id}`
+
+    await saveEmbedding(story.id, axisVector(3), 'h1')
+    await saveEmbedding(story.id, axisVector(7), 'h2')
+
+    expect(await embeddingOf(story.id)).toEqual({ axis: 7, hash: 'h2', generated: true })
+    expect(await prisma.storyEmbedding.count({ where: { storyId: story.id } })).toBe(1)
+    const [{ xmin: xminAfter } = { xmin: '' }] = await prisma.$queryRaw<{ xmin: string }[]>`SELECT xmin::text FROM stories WHERE id = ${story.id}`
+    expect(xminAfter).toBe(xminBefore)
+    expect((await prisma.story.findUniqueOrThrow({ where: { id: story.id }, select: { updatedAt: true } })).updatedAt).toEqual(before.updatedAt)
+  })
+
+  it('deleting a story deletes its embedding', async () => {
+    const story = await createStory({ feedId })
+    await setEmbedding(story.id, 1)
+    await prisma.story.delete({ where: { id: story.id } })
+    expect(await prisma.storyEmbedding.count()).toBe(0)
+  })
+
   it('searchByEmbedding ranks published stories with an embedding by cosine distance, within the limit and filter', async () => {
     const other = await createIssue()
     const otherFeed = await createFeed(other.id)
@@ -95,15 +118,18 @@ describeDb('pgvector queries (PostgreSQL)', () => {
   })
 
   it('fetchEmbeddingBackfillBatch pages published stories by id, skipping hashed ones unless overriding', async () => {
-    const stories = await Promise.all(Array.from({ length: 4 }, () => createStory({ feedId, status: 'published' })))
+    const stories = await Promise.all(Array.from({ length: 5 }, () => createStory({ feedId, status: 'published' })))
     await createStory({ feedId, status: 'analyzed' })
     const ids = stories.map(s => s.id).sort()
-    await prisma.$executeRaw`UPDATE stories SET embedding_content_hash = 'done' WHERE id = ${ids[1]}`
+    await setEmbedding(ids[1]!, 1, 'done')
+    // A vector the migration copied without a hash still counts as missing
+    await setEmbedding(ids[4]!, 2, '')
 
     const first = await fetchEmbeddingBackfillBatch(undefined, 2, false)
     expect(first.map(r => r.id)).toEqual([ids[0], ids[2]])
     const second = await fetchEmbeddingBackfillBatch(first.at(-1)!.id, 2, false)
-    expect(second.map(r => r.id)).toEqual([ids[3]])
+    expect(second.map(r => r.id)).toEqual([ids[3], ids[4]])
+    expect(second[1]).toHaveProperty('embeddingContentHash', '')
 
     expect((await fetchEmbeddingBackfillBatch(undefined, 10, true)).map(r => r.id)).toEqual(ids)
   })

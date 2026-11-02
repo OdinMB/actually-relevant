@@ -6,8 +6,15 @@
  * an EXECUTE string is not caught, and a string literal that happens to read like one is.
  */
 
-/** The pgvector HNSW index Prisma cannot represent, so every generated migration proposes dropping it. */
-export const EMBEDDING_INDEX = 'stories_embedding_idx'
+/**
+ * The pgvector HNSW index Prisma cannot represent, so every generated migration proposes dropping
+ * it. Created in 20261102120000_story_embeddings_table, which also dropped its predecessor
+ * `stories_embedding_idx` together with the column it covered (ADR-0051).
+ */
+export const EMBEDDING_INDEX = 'story_embeddings_embedding_idx'
+
+/** The table the index is on. */
+export const EMBEDDING_TABLE = 'story_embeddings'
 
 /** The line a destructive migration carries once someone has reviewed it, with a reason. */
 export const DESTRUCTIVE_MARKER = /^[ \t]*--[ \t]*reviewed-destructive:[ \t]*\S/m
@@ -28,22 +35,19 @@ const namesIndex = new RegExp(`(^|[^a-z0-9_$])${EMBEDDING_INDEX}([^a-z0-9_$]|$)`
 /**
  * Drops are matched alone or in a list, quoted or not, schema-qualified or not, and in any
  * case (deliberately conservative: a quoted mixed-case name is a different index to Postgres).
- * An implicit drop through DROP COLUMN "embedding" / DROP TABLE "stories" is not caught here;
+ * An implicit drop through DROP COLUMN "embedding" / DROP TABLE "story_embeddings" is not caught here;
  * in a new migration the destructive rule below catches it.
  */
 function dropsIndex(s: string): boolean {
   return /^drop\s+index\b/i.test(s) && namesIndex.test(s)
 }
 
-/** A HNSW index of that name on stories. */
+const onTable = new RegExp(`^\\s*(only\\s+)?("?public"?\\.)?"?${EMBEDDING_TABLE}"?\\s`, 'i')
+
+/** A HNSW index of that name on its table. */
 function createsIndexStatement(s: string): boolean {
   const [head = '', ...rest] = s.split(/\bon\b/i)
-  return (
-    /^create\s+(unique\s+)?index\b/i.test(s) &&
-    namesIndex.test(head) &&
-    /^\s*(only\s+)?("?public"?\.)?"?stories"?\s/i.test(rest.join('on')) &&
-    /\busing\s+hnsw\b/i.test(s)
-  )
+  return /^create\s+(unique\s+)?index\b/i.test(s) && namesIndex.test(head) && onTable.test(rest.join('on')) && /\busing\s+hnsw\b/i.test(s)
 }
 
 /** True when the index ends the migration dropped: dropped, and not created again afterwards. */

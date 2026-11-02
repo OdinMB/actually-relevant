@@ -69,7 +69,7 @@ npm run db:seed:synthetic --prefix server  # Fill a local *_synthetic DB with ma
 ```
 
 **IMPORTANT database rules** (full workflow: `.context/database-migrations.md`):
-- **Migrations apply automatically on server dev start** -- `predev` runs `db:prepare`, which only touches a local `DATABASE_URL` (Docker DB on `localhost:5433`). Author with `db:migrate:create`, review the SQL (delete any `DROP INDEX "stories_embedding_idx"`), then restart the dev server.
+- **Migrations apply automatically on server dev start** -- `predev` runs `db:prepare`, which only touches a local `DATABASE_URL` (Docker DB on `localhost:5433`). Author with `db:migrate:create`, review the SQL (delete any `DROP INDEX "story_embeddings_embedding_idx"`), then restart the dev server.
 - **Never use `npx prisma` directly** -- use `npm run db:*` with `--prefix server`.
 - **Never apply with `prisma migrate dev` / `npm run db:migrate`** -- DLL locks on Windows. `--create-only` is fine.
 - **Never pass `--no-engine` to `prisma generate`** -- breaks all direct PostgreSQL queries.

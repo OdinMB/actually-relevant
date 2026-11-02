@@ -156,19 +156,20 @@ describeDb('story retention (PostgreSQL)', () => {
     const oldAnalyzed = await createStory({ feedId: feed.id, status: 'analyzed', dateCrawled: OLD() })
     const oldPublished = await createStory({ feedId: feed.id, status: 'published', dateCrawled: OLD() })
     const youngAnalyzed = await createStory({ feedId: feed.id, status: 'analyzed', dateCrawled: YOUNG() })
-    for (const [i, s] of [oldAnalyzed, oldPublished, youngAnalyzed].entries()) {
-      await setEmbedding(s.id, i)
-      await prisma.story.update({ where: { id: s.id }, data: { embeddingContentHash: 'h', embeddingGeneratedAt: new Date() } })
-    }
+    const oldSelected = await createStory({ feedId: feed.id, status: 'selected', dateCrawled: OLD() })
+    for (const [i, s] of [oldAnalyzed, oldPublished, youngAnalyzed, oldSelected].entries()) await setEmbedding(s.id, i, 'h')
+    const updatedAt = (await prisma.story.findUniqueOrThrow({ where: { id: oldAnalyzed.id } })).updatedAt
 
+    // Batched: one per call here, then the second, then none left
+    expect(await clearOldEmbeddingsBatch(6, 1)).toBe(1)
     expect(await clearOldEmbeddingsBatch(6, 100)).toBe(1)
+    expect(await clearOldEmbeddingsBatch(6, 100)).toBe(0)
 
-    const rows = await prisma.$queryRaw<{ id: string; has: boolean; embedding_content_hash: string | null }[]>`
-      SELECT id, embedding IS NOT NULL AS has, embedding_content_hash FROM stories`
-    const byId = new Map(rows.map(r => [r.id, r]))
-    expect(byId.get(oldAnalyzed.id)).toMatchObject({ has: false, embedding_content_hash: null })
-    expect(byId.get(oldPublished.id)).toMatchObject({ has: true, embedding_content_hash: 'h' })
-    expect(byId.get(youngAnalyzed.id)).toMatchObject({ has: true, embedding_content_hash: 'h' })
+    const rows = await prisma.storyEmbedding.findMany({ select: { storyId: true, contentHash: true } })
+    expect(rows.map(r => r.storyId).sort()).toEqual([oldPublished.id, youngAnalyzed.id].sort())
+    expect(rows.every(r => r.contentHash === 'h')).toBe(true)
+    // The story rows themselves are not written
+    expect((await prisma.story.findUniqueOrThrow({ where: { id: oldAnalyzed.id } })).updatedAt).toEqual(updatedAt)
   })
 
   it('the job repairs clusters like deleteStory: re-elects a lost primary, dissolves clusters left with one member or none', async () => {

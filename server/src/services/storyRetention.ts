@@ -74,19 +74,20 @@ export async function deleteOldStoriesBatch(
 
 /**
  * Clear the embedding of up to `limit` unpublished stories crawled before the cutoff (the ones the
- * delete keeps). The hash goes too, so publishing such a story generates a new one (`ensureEmbedding`).
+ * delete keeps): their `story_embeddings` rows are deleted, hash included, so publishing such a
+ * story generates a new one (`ensureEmbedding`). The `stories` rows are not written.
  */
 export async function clearOldEmbeddingsBatch(
   maxAgeMonths: number = config.storyRetention.maxAgeMonths,
   limit: number = config.storyRetention.batchSize,
 ): Promise<number> {
   return prisma.$executeRaw`
-    UPDATE "stories" SET "embedding" = NULL, "embedding_content_hash" = NULL, "embedding_generated_at" = NULL
-    WHERE "id" IN (
-      SELECT "id" FROM "stories"
-      WHERE "date_crawled" < ${cutoff(maxAgeMonths)}
-        AND "status" <> 'published'
-        AND "embedding" IS NOT NULL
+    DELETE FROM "story_embeddings"
+    WHERE "story_id" IN (
+      SELECT e."story_id" FROM "story_embeddings" e
+      JOIN "stories" s ON s."id" = e."story_id"
+      WHERE s."date_crawled" < ${cutoff(maxAgeMonths)}
+        AND s."status" <> 'published'
       LIMIT ${limit}::int
     )`
 }

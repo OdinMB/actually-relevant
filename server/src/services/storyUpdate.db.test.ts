@@ -23,7 +23,8 @@ async function story(status: 'analyzed' | 'published', title = 'A title') {
 const embeddingOf = async (id: string) =>
   (
     await prisma.$queryRaw<{ has: boolean; hash: string | null }[]>`
-    SELECT embedding IS NOT NULL AS has, embedding_content_hash AS hash FROM stories WHERE id = ${id}`
+    SELECT e.embedding IS NOT NULL AS has, e.content_hash AS hash
+    FROM stories s LEFT JOIN story_embeddings e ON e.story_id = s.id WHERE s.id = ${id}`
   )[0]
 
 describeDb('updateStory (PostgreSQL)', () => {

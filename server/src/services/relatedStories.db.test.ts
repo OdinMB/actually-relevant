@@ -31,9 +31,9 @@ async function seed(count: number) {
   for (let i = 0; i < count; i++) {
     const s = await createStory({ feedId: feed.id, status: 'published', slug: `${slug}-n${i}`, title: `N${i}` })
     // Mostly along axis 0, less so for later ones: cosine order is creation order
-    await prisma.$executeRaw`UPDATE stories SET embedding = (
+    await prisma.$executeRaw`INSERT INTO story_embeddings (story_id, embedding, content_hash) VALUES (${s.id}, (
       SELECT ('[' || string_agg(CASE WHEN g = 1 THEN '1' WHEN g = ${i + 2} THEN ${String(0.1 * (i + 1))} ELSE '0' END, ',') || ']')::vector
-      FROM generate_series(1, 1536) g) WHERE id = ${s.id}`
+      FROM generate_series(1, 1536) g), 'h')`
     neighbours.push(s)
   }
   return { slug, source, neighbours }

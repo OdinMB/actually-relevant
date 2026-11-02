@@ -84,7 +84,7 @@ The server still sends its model calls to OpenAI, which refuses the placeholder 
    npm run db:migrate:diff --prefix server
    ```
 
-3. **Review the generated SQL before committing it, and delete `DROP INDEX "stories_embedding_idx";`.** Both `db:migrate:create` and `db:migrate:diff` always emit that line, even with no schema change: the pgvector HNSW index was created by raw SQL in `20260206120000_add_embedding_fields`, and Prisma 6 cannot represent an index on an `Unsupported("vector(1536)")` column, so it treats it as unknown and proposes dropping it. Committing it would turn every vector search into a sequential scan. `server/src/test/migrations.test.ts` and `npm run check:migrations` (below) fail if any migration drops the index without re-creating it in the same migration (comments are ignored, so a migration may mention it). Apart from that line, a migrate diff from a fully migrated database is empty: the earlier drift (newsletter_sends defaults, two missing indexes, the `feeds_url_key` rename) was reconciled by `20261005120000_reconcile_schema_drift`. Anything else in a fresh diff is drift, and belongs in its own migration, not hidden in an unrelated one.
+3. **Review the generated SQL before committing it, and delete `DROP INDEX "story_embeddings_embedding_idx";`.** Both `db:migrate:create` and `db:migrate:diff` always emit that line, even with no schema change: the pgvector HNSW index on `story_embeddings` was created by raw SQL in `20261102120000_story_embeddings_table` (it replaced `stories_embedding_idx` from `20260206120000_add_embedding_fields` when the vectors left `stories`, ADR-0051), and Prisma 6 cannot represent an index on an `Unsupported("vector(1536)")` column, so it treats it as unknown and proposes dropping it. Committing it would turn every vector search into a sequential scan. `server/src/test/migrations.test.ts` and `npm run check:migrations` (below) fail if any migration drops the index without re-creating it in the same migration (comments are ignored, so a migration may mention it). Apart from that line, a migrate diff from a fully migrated database is empty: the earlier drift (newsletter_sends defaults, two missing indexes, the `feeds_url_key` rename) was reconciled by `20261005120000_reconcile_schema_drift`. Anything else in a fresh diff is drift, and belongs in its own migration, not hidden in an unrelated one.
 4. Restart the dev server (or run `npm run db:prepare --prefix server`): the migration is applied and the client regenerated. If a dev server is already running, stop it first, or the regenerate hits the DLL lock.
 5. Run `npm run check:migrations --prefix server` (below), then commit the migration folder with the schema change. Production applies it on the next green deploy.
 
@@ -92,7 +92,7 @@ The server still sends its model calls to OpenAI, which refuses the placeholder 
 
 `npm run check:migrations --prefix server` (`server/src/scripts/check-migrations/`, rules in `rules.ts`) runs in CI before anything else in the `server` job, so a failure keeps the commit from deploying (`deployment.md`, "CI gate"). It fails on:
 
-- **`stories_embedding_idx` dropped and not re-created, in any migration**, old or new. No marker excuses it.
+- **`story_embeddings_embedding_idx` dropped and not re-created (as an HNSW index on `story_embeddings`), in any migration**, old or new. No marker excuses it. Its predecessor `stories_embedding_idx` is not guarded: `20261102120000_story_embeddings_table` dropped it on purpose.
 - **Destructive statements in a migration the branch adds**: `DROP TABLE`, `TRUNCATE`, and any `ALTER ...` statement containing `DROP` (`DROP COLUMN`, `DROP CONSTRAINT`, `DROP DEFAULT`, `DROP NOT NULL`, ...). Migrations already on the base branch are not re-checked, so the historical drops (`drop_source_names`, `drop_email_events`, the schema restructure and the drift reconcile) pass.
 
 A destructive migration passes once a person has reviewed it and it carries the marker on its own comment line, with a reason:
@@ -167,7 +167,7 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 | `SYNTHETIC_DATABASE_URL=… npm run db:seed:synthetic --prefix server [-- --reset]` | Fill a local `*_synthetic` database with the synthetic data set ("Run Locally with Synthetic Data") |
 | `npm run db:migrate:create --prefix server -- --name <name>` | Generate migration SQL without applying |
 | `npm run db:migrate:status --prefix server` | Check which migrations are pending/applied |
-| `npm run db:migrate:diff --prefix server` | Print the SQL from the database to the schema, read-only (expected: only the `stories_embedding_idx` drop) |
+| `npm run db:migrate:diff --prefix server` | Print the SQL from the database to the schema, read-only (expected: only the `story_embeddings_embedding_idx` drop) |
 | `npm run check:migrations --prefix server [-- --base <ref>]` | Fail on the embedding-index drop anywhere, or an unmarked destructive statement in a new migration (runs in CI) |
 | `npm run db:migrate:resolve --prefix server -- --rolled-back <name>` | Mark a failed migration as rolled back |
 | `npm run db:migrate:deploy --prefix server` | Apply pending migrations to whatever `DATABASE_URL` points at (no local guard) |
@@ -213,7 +213,7 @@ To see what SQL would bring the database in line with the current schema (read-o
 npm run db:migrate:diff --prefix server
 ```
 
-On a fully migrated database the only expected output is `DROP INDEX "stories_embedding_idx";` (see "Authoring a Migration", step 3). Never apply that line; anything else is real drift.
+On a fully migrated database the only expected output is `DROP INDEX "story_embeddings_embedding_idx";` (see "Authoring a Migration", step 3). Never apply that line; anything else is real drift.
 
 ### Server Starts Against the Wrong Database
 

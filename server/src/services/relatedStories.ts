@@ -73,8 +73,9 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
 
   // 2. Find the source story and verify it has an embedding
   const rows = await prisma.$queryRaw<RelatedRow[]>`
-    SELECT id, title, title_label FROM stories
-    WHERE slug = ${slug} AND status = 'published' AND embedding IS NOT NULL
+    SELECT s.id, s.title, s.title_label FROM stories s
+    WHERE s.slug = ${slug} AND s.status = 'published'
+      AND EXISTS (SELECT 1 FROM story_embeddings e WHERE e.story_id = s.id)
     LIMIT 1
   `
   const [source] = rows
@@ -84,11 +85,11 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
   // 3. Get a larger candidate pool via cosine distance
   const candidates = await prisma.$queryRaw<RelatedRow[]>`
     SELECT s.id, s.title, s.title_label
-    FROM stories s
-    WHERE s.id != ${source.id}
+    FROM story_embeddings e
+    JOIN stories s ON s.id = e.story_id
+    WHERE e.story_id != ${source.id}
       AND s.status = 'published'
-      AND s.embedding IS NOT NULL
-    ORDER BY s.embedding <=> (SELECT embedding FROM stories WHERE id = ${source.id})
+    ORDER BY e.embedding <=> (SELECT embedding FROM story_embeddings WHERE story_id = ${source.id})
     LIMIT ${candidateCount}
   `
   if (candidates.length === 0) return { sourceId: source.id, ids: [] }

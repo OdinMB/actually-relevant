@@ -2,7 +2,7 @@
  * Fails when a migration would harm the production database on the next deploy
  * (.context/database-migrations.md, "Migration check"):
  *
- * - any migration that drops `stories_embedding_idx` without re-creating it, and
+ * - any migration that drops `story_embeddings_embedding_idx` without re-creating it, and
  * - a migration this branch adds that holds DROP TABLE, TRUNCATE or an ALTER ... DROP
  *   (DROP COLUMN and the rest), unless it carries `-- reviewed-destructive: <reason>`.
  *

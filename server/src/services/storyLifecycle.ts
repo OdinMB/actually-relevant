@@ -350,8 +350,9 @@ async function publishChunk(tx: Tx, chunk: string[], from: StoryStatus[], actor:
 
 /**
  * Status, slug and publish date in one statement. Every write to these indexed columns adds a
- * new entry to each of the table's indexes, the vector index included, so writing them in three
- * statements tripled the work that holds the slug lock. A slug or date already set is kept.
+ * new entry to each of the table's indexes, so writing them in three statements tripled the work
+ * that holds the slug lock. (The vector index is on `story_embeddings`, which this never
+ * touches: ADR-0051.) A slug or date already set is kept.
  */
 async function publishRows(tx: Tx, rows: { id: string; slug: string | null }[]): Promise<void> {
   if (rows.length === 0) return

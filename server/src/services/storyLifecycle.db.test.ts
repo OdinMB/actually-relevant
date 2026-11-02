@@ -10,7 +10,18 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { axisVector, createCluster, createFeed, createIssue, createStory, describeDb, setEmbedding, statusesOf, useTestDatabase } from '../test/db/harness.js'
+import {
+  axisVector,
+  createCluster,
+  createFeed,
+  createIssue,
+  createStory,
+  describeDb,
+  embeddingHash,
+  setEmbedding,
+  statusesOf,
+  useTestDatabase,
+} from '../test/db/harness.js'
 
 const mockInvoke = vi.hoisted(() => vi.fn())
 vi.mock('./llm.js', () => ({
@@ -183,7 +194,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
     expect(after.status).toBe('published')
     expect(after.title).toBe('New title')
-    expect(after.embeddingContentHash).toBe('assessed')
+    expect(await embeddingHash(s.id)).toBe('assessed')
     expect(await getPublishedStoryBySlug('live')).not.toBeNull()
   })
 
@@ -228,7 +239,7 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
     expect(after.status).toBe('trashed')
     expect(after.title).toBeNull()
-    expect(after.embeddingContentHash).toBeNull()
+    expect(await embeddingHash(s.id)).toBeNull()
   })
 
   it('re-screening a published story rewrites relevancePre and keeps it published', async () => {

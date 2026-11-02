@@ -1,9 +1,10 @@
 /**
  * Typed wrapper for pgvector raw SQL operations.
  *
- * Prisma's `Unsupported("vector(1536)")` doesn't generate typed fields,
- * so all embedding operations require `$queryRaw` / `$executeRaw`.
- * This module centralizes those queries with proper types and helpers.
+ * Vectors live in `story_embeddings` (one row per story, `.context/embeddings.md`), never on
+ * `stories`: a status write to `stories` would otherwise re-insert the vector into the HNSW
+ * index (ADR-0051). Prisma's `Unsupported("vector(1536)")` doesn't generate typed fields, so all
+ * embedding operations use `$queryRaw` / `$executeRaw`. This module centralizes those queries.
  */
 
 import { Prisma } from '@prisma/client'
@@ -16,6 +17,7 @@ export interface StoryEmbeddingRow {
   title: string | null
   titleLabel: string | null
   summary: string | null
+  /** The stored embedding's content hash; null when the story has no embedding. */
   embeddingContentHash: string | null
 }
 
@@ -38,6 +40,8 @@ function mapRow(row: RawStoryRow): StoryEmbeddingRow {
   }
 }
 
+type RawExecutor = { $executeRaw: typeof prisma.$executeRaw }
+
 // ──── Vector Helpers ───────────────────────────────────────────────────────
 
 /** Convert a number array to a pgvector literal string, e.g. "[0.1,0.2,...]" */
@@ -45,14 +49,27 @@ export function toVectorLiteral(embedding: number[]): string {
   return `[${embedding.join(',')}]`
 }
 
+/** Insert or replace a story's embedding row; never writes to `stories`. */
+async function upsertEmbedding(client: RawExecutor, storyId: string, embedding: number[], contentHash: string): Promise<void> {
+  await client.$executeRaw`
+    INSERT INTO story_embeddings (story_id, embedding, content_hash, generated_at)
+    VALUES (${storyId}, ${toVectorLiteral(embedding)}::vector, ${contentHash}, NOW())
+    ON CONFLICT (story_id) DO UPDATE
+    SET embedding = EXCLUDED.embedding,
+        content_hash = EXCLUDED.content_hash,
+        generated_at = EXCLUDED.generated_at
+  `
+}
+
 // ──── Queries ──────────────────────────────────────────────────────────────
 
 /** Fetch a single story's embedding-relevant fields (any status). */
 export async function fetchStoryForEmbedding(storyId: string): Promise<(StoryEmbeddingRow & { status: string }) | null> {
   const rows = await prisma.$queryRaw<(RawStoryRow & { status: string })[]>`
-    SELECT id, status, title, title_label, summary, embedding_content_hash
-    FROM stories
-    WHERE id = ${storyId}
+    SELECT s.id, s.status, s.title, s.title_label, s.summary, e.content_hash AS embedding_content_hash
+    FROM stories s
+    LEFT JOIN story_embeddings e ON e.story_id = s.id
+    WHERE s.id = ${storyId}
   `
   const [row] = rows
   if (!row) return null
@@ -63,38 +80,22 @@ export async function fetchStoryForEmbedding(storyId: string): Promise<(StoryEmb
 export async function fetchStoriesForEmbedding(storyIds: string[]): Promise<StoryEmbeddingRow[]> {
   if (storyIds.length === 0) return []
   const rows = await prisma.$queryRaw<RawStoryRow[]>`
-    SELECT id, title, title_label, summary, embedding_content_hash
-    FROM stories
-    WHERE id IN (${Prisma.join(storyIds)})
+    SELECT s.id, s.title, s.title_label, s.summary, e.content_hash AS embedding_content_hash
+    FROM stories s
+    LEFT JOIN story_embeddings e ON e.story_id = s.id
+    WHERE s.id IN (${Prisma.join(storyIds)})
   `
   return rows.map(mapRow)
 }
 
-/** Save an embedding vector + content hash to a story row. */
+/** Save a story's embedding vector + content hash. */
 export async function saveEmbedding(storyId: string, embedding: number[], contentHash: string): Promise<void> {
-  await prisma.$executeRaw`
-    UPDATE stories
-    SET embedding = ${JSON.stringify(embedding)}::vector,
-        embedding_content_hash = ${contentHash},
-        embedding_generated_at = NOW()
-    WHERE id = ${storyId}
-  `
+  await upsertEmbedding(prisma, storyId, embedding, contentHash)
 }
 
 /** Save an embedding vector + content hash inside an interactive transaction. */
-export async function saveEmbeddingTx(
-  tx: { $executeRaw: typeof prisma.$executeRaw },
-  storyId: string,
-  embedding: number[],
-  contentHash: string,
-): Promise<void> {
-  await tx.$executeRaw`
-    UPDATE stories
-    SET embedding = ${JSON.stringify(embedding)}::vector,
-        embedding_content_hash = ${contentHash},
-        embedding_generated_at = NOW()
-    WHERE id = ${storyId}
-  `
+export async function saveEmbeddingTx(tx: RawExecutor, storyId: string, embedding: number[], contentHash: string): Promise<void> {
+  await upsertEmbedding(tx, storyId, embedding, contentHash)
 }
 
 /** Search published stories by embedding cosine distance. */
@@ -111,49 +112,43 @@ export async function searchByEmbedding(
 
   return prisma.$queryRaw<{ id: string }[]>`
     SELECT s.id
-    FROM stories s
+    FROM story_embeddings e
+    JOIN stories s ON s.id = e.story_id
     WHERE s.status = 'published'
-      AND s.embedding IS NOT NULL
       ${issueFilter}
-    ORDER BY s.embedding <=> ${vectorStr}::vector
+    ORDER BY e.embedding <=> ${vectorStr}::vector
     LIMIT ${limit}
   `
 }
 
-/** Cursor-based fetch for backfill scripts. Uses its own PrismaClient if provided. */
+/**
+ * Cursor-based fetch for backfill scripts. Uses its own PrismaClient if provided. Without
+ * `overrideMode`, only stories with no embedding, or one whose hash is unknown (the empty hash the
+ * 20261102120000 migration gave a vector stored without one).
+ */
 export async function fetchEmbeddingBackfillBatch(
   cursor: string | undefined,
   limit: number,
   overrideMode: boolean,
   client: { $queryRaw: typeof prisma.$queryRaw } = prisma,
 ): Promise<StoryEmbeddingRow[]> {
-  const hashFilter = overrideMode ? Prisma.empty : Prisma.sql`AND embedding_content_hash IS NULL`
-  const cursorFilter = cursor ? Prisma.sql`AND id > ${cursor}` : Prisma.empty
+  const hashFilter = overrideMode ? Prisma.empty : Prisma.sql`AND (e.story_id IS NULL OR e.content_hash = '')`
+  const cursorFilter = cursor ? Prisma.sql`AND s.id > ${cursor}` : Prisma.empty
 
   const rows = await client.$queryRaw<RawStoryRow[]>`
-    SELECT id, title, title_label, summary, embedding_content_hash
-    FROM stories
-    WHERE status = 'published'
+    SELECT s.id, s.title, s.title_label, s.summary, e.content_hash AS embedding_content_hash
+    FROM stories s
+    LEFT JOIN story_embeddings e ON e.story_id = s.id
+    WHERE s.status = 'published'
     ${hashFilter}
     ${cursorFilter}
-    ORDER BY id ASC
+    ORDER BY s.id ASC
     LIMIT ${limit}
   `
   return rows.map(mapRow)
 }
 
 /** Save an embedding using a custom PrismaClient (for scripts with their own client). */
-export async function saveEmbeddingWithClient(
-  client: { $executeRaw: typeof prisma.$executeRaw },
-  storyId: string,
-  embedding: number[],
-  contentHash: string,
-): Promise<void> {
-  await client.$executeRaw`
-    UPDATE stories
-    SET embedding = ${JSON.stringify(embedding)}::vector,
-        embedding_content_hash = ${contentHash},
-        embedding_generated_at = NOW()
-    WHERE id = ${storyId}
-  `
+export async function saveEmbeddingWithClient(client: RawExecutor, storyId: string, embedding: number[], contentHash: string): Promise<void> {
+  await upsertEmbedding(client, storyId, embedding, contentHash)
 }

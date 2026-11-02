@@ -149,9 +149,21 @@ export async function createSend(data: {
   })
 }
 
-/** Store an embedding: a 1536-dimension unit vector along `axis` (cosine distance 0 to itself, 1 to any other axis). */
-export async function setEmbedding(storyId: string, axis: number): Promise<void> {
-  await prisma.$executeRaw`UPDATE stories SET embedding = ${axisVectorLiteral(axis)}::vector WHERE id = ${storyId}`
+/**
+ * Store an embedding: a 1536-dimension unit vector along `axis` (cosine distance 0 to itself, 1 to
+ * any other axis). The hash defaults to one that matches no content, so an ensure regenerates it.
+ */
+export async function setEmbedding(storyId: string, axis: number, contentHash = `axis-${axis}`): Promise<void> {
+  await prisma.$executeRaw`
+    INSERT INTO story_embeddings (story_id, embedding, content_hash)
+    VALUES (${storyId}, ${axisVectorLiteral(axis)}::vector, ${contentHash})
+    ON CONFLICT (story_id) DO UPDATE SET embedding = EXCLUDED.embedding, content_hash = EXCLUDED.content_hash`
+}
+
+/** A story's stored embedding hash, or null when it has no embedding row. */
+export async function embeddingHash(storyId: string): Promise<string | null> {
+  const row = await prisma.storyEmbedding.findUnique({ where: { storyId }, select: { contentHash: true } })
+  return row?.contentHash ?? null
 }
 
 export function axisVector(axis: number): number[] {

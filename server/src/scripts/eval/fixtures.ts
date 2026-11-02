@@ -302,8 +302,8 @@ async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations:
   const clustered = await db.$queryRaw<{ id: string }[]>`
     SELECT id FROM (
       SELECT DISTINCT ON (s.cluster_id) s.id, md5(s.id || 'gpt6-eval') AS h
-      FROM stories s
-      WHERE s.cluster_id IS NOT NULL AND s.embedding IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${floor}
+      FROM stories s JOIN story_embeddings se ON se.story_id = s.id
+      WHERE s.cluster_id IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${floor}
       ORDER BY s.cluster_id, md5(s.id || 'gpt6-eval')
     ) one_per_cluster
     ORDER BY h
@@ -311,17 +311,17 @@ async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations:
   const nearest = await db.$queryRaw<{ id: string; distance: number }[]>`
     SELECT src.id, nn.distance
     FROM (
-      SELECT s.id, s.embedding, s.date_crawled FROM stories s
-      WHERE s.cluster_id IS NULL AND s.embedding IS NOT NULL AND ${ASSESSED} AND s.date_crawled >= ${floor}
+      SELECT s.id, se.embedding, s.date_crawled FROM stories s JOIN story_embeddings se ON se.story_id = s.id
+      WHERE s.cluster_id IS NULL AND ${ASSESSED} AND s.date_crawled >= ${floor}
       ORDER BY md5(s.id || 'gpt6-eval')
       LIMIT 400
     ) src
     CROSS JOIN LATERAL (
-      SELECT (c.embedding <=> src.embedding)::float8 AS distance FROM stories c
-      WHERE c.id <> src.id AND c.embedding IS NOT NULL
+      SELECT (ce.embedding <=> src.embedding)::float8 AS distance FROM stories c JOIN story_embeddings ce ON ce.story_id = c.id
+      WHERE c.id <> src.id
         AND c.status IN ('analyzed', 'selected', 'published', 'rejected') AND c.title IS NOT NULL AND c.summary IS NOT NULL
         AND c.date_crawled BETWEEN src.date_crawled - interval '14 days' AND src.date_crawled + interval '14 days'
-      ORDER BY c.embedding <=> src.embedding
+      ORDER BY ce.embedding <=> src.embedding
       LIMIT 1
     ) nn
     ORDER BY md5(src.id || 'gpt6-eval')`
@@ -352,14 +352,14 @@ async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations:
   // source, so a later-crawled duplicate of an earlier source still appears.
   const rows = await db.$queryRaw<{ source_id: string; id: string; title: string; summary: string; distance: number; same_cluster: boolean }[]>`
     SELECT src.id AS source_id, c.id, c.title, c.summary, c.distance, c.same_cluster
-    FROM stories src
+    FROM stories src JOIN story_embeddings srce ON srce.story_id = src.id
     CROSS JOIN LATERAL (
-      SELECT s.id, s.title, s.summary, (s.embedding <=> src.embedding)::float8 AS distance,
+      SELECT s.id, s.title, s.summary, (se.embedding <=> srce.embedding)::float8 AS distance,
              (s.cluster_id IS NOT NULL AND s.cluster_id = src.cluster_id) AS same_cluster
-      FROM stories s
-      WHERE s.id <> src.id AND s.embedding IS NOT NULL AND ${ASSESSED}
+      FROM stories s JOIN story_embeddings se ON se.story_id = s.id
+      WHERE s.id <> src.id AND ${ASSESSED}
         AND s.date_crawled BETWEEN src.date_crawled - interval '14 days' AND src.date_crawled + interval '14 days'
-      ORDER BY s.embedding <=> src.embedding
+      ORDER BY se.embedding <=> srce.embedding
       LIMIT ${t.candidates}
     ) c
     WHERE src.id = ANY(${ids})
@@ -387,8 +387,8 @@ async function loadDedup(db: Db, floor: Date, shortfalls: string[], adaptations:
 async function loadRelated(db: Db, shortfalls: string[]): Promise<RelatedItem[]> {
   const count = config.relatedStories.displayCount * config.relatedStories.candidateMultiplier
   const sources = await db.$queryRaw<{ id: string; title: string | null; title_label: string | null }[]>`
-    SELECT s.id, s.title, s.title_label FROM stories s
-    WHERE s.status = 'published' AND s.embedding IS NOT NULL
+    SELECT s.id, s.title, s.title_label FROM stories s JOIN story_embeddings se ON se.story_id = s.id
+    WHERE s.status = 'published'
     ORDER BY md5(s.id || 'gpt6-eval')
     LIMIT ${TARGETS.related.total}`
   const ids = sources.map(s => s.id)
@@ -398,11 +398,12 @@ async function loadRelated(db: Db, shortfalls: string[]): Promise<RelatedItem[]>
       ? []
       : await db.$queryRaw<{ source_id: string; id: string; title: string | null; title_label: string | null }[]>`
     SELECT src.id AS source_id, c.id, c.title, c.title_label
-    FROM stories src
+    FROM stories src JOIN story_embeddings srce ON srce.story_id = src.id
     CROSS JOIN LATERAL (
-      SELECT s.id, s.title, s.title_label, s.embedding <=> src.embedding AS distance FROM stories s
-      WHERE s.id <> src.id AND s.status = 'published' AND s.embedding IS NOT NULL
-      ORDER BY s.embedding <=> src.embedding
+      SELECT s.id, s.title, s.title_label, se.embedding <=> srce.embedding AS distance
+      FROM story_embeddings se JOIN stories s ON s.id = se.story_id
+      WHERE s.id <> src.id AND s.status = 'published'
+      ORDER BY se.embedding <=> srce.embedding
       LIMIT ${count}
     ) c
     WHERE src.id = ANY(${ids})

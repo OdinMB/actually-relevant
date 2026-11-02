@@ -87,7 +87,7 @@ describeDb('synthetic data set (PostgreSQL)', () => {
       expect(rejected.find(r => r.rejectionReason === 'paywall')).toEqual({ rejectionReason: 'paywall', accessTier: 'locked', issueId: null })
 
       // No embeddings: nothing was sent to OpenAI to make them
-      const embedded = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM stories WHERE embedding IS NOT NULL`
+      const embedded = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM story_embeddings`
       expect(embedded).toEqual([{ n: 0 }])
 
       expect(await foreignRows(prisma)).toEqual({ feeds: 0, stories: 0, users: 0 })

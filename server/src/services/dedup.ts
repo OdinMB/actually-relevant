@@ -46,12 +46,12 @@ export async function findNearestCandidates(
 
   const rows = await prisma.$queryRaw<RawCandidateRow[]>`
     SELECT s.id, s.title, s.summary,
-           s.embedding <=> (SELECT embedding FROM stories WHERE id = ${storyId}) AS distance
-    FROM stories s
+           e.embedding <=> (SELECT embedding FROM story_embeddings WHERE story_id = ${storyId}) AS distance
+    FROM story_embeddings e
+    JOIN stories s ON s.id = e.story_id
     LEFT JOIN story_clusters sc ON sc.id = s.cluster_id
     WHERE s.id != ${storyId}
       AND s.status IN ('analyzed', 'selected', 'published')
-      AND s.embedding IS NOT NULL
       AND s.date_crawled > NOW() - ${timeWindowDays} * INTERVAL '1 day'
       AND (s.cluster_id IS NULL OR sc.primary_story_id = s.id)
     ORDER BY distance ASC

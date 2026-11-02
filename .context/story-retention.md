@@ -15,7 +15,7 @@ Each run, in this order (`jobs/cleanupOldStories.ts`, SQL in `services/storyRete
    `published`, `analyzed` and `selected` stories are never deleted. A "Report an error" sent from a deleted story stays, its `feedback.story_id` set to NULL by the foreign key.
 2. **Counts each deleted story in the same statement** (one data-modifying CTE: select with `FOR UPDATE SKIP LOCKED`, delete, insert the grouped counts into `story_archive_counts`). A story can never be deleted without being counted or counted twice.
 3. **Repairs the clusters it took members from**, as `deleteStory()` does (`repairClusters()`, `dedup.md`): the delete statement also returns the deleted stories' cluster ids, and after the last batch a cluster left with one member or none is dissolved, and one that keeps two or more members but lost its primary (`primary_story_id` is `ON DELETE SET NULL`) gets a new primary by the lifecycle module's election in pipeline mode (`reelectPrimary()`, one transaction per cluster under its lock), which never restores a rejected story: an elected `duplicate` stays rejected, and a trashed or otherwise rejected member is never elected. Without this a lost primary would leave every member a non-primary (selection and auto-reject skip such a cluster).
-4. **Clears the embeddings** (`embedding`, `embedding_content_hash`, `embedding_generated_at`) of every unpublished story crawled before the same cutoff, in batches. Clearing the hash is what makes `ensureEmbedding()` generate a new one.
+4. **Clears the embeddings** of every unpublished story crawled before the same cutoff, in batches: it deletes their `story_embeddings` rows (vector, content hash and generated time; `embeddings.md`, "Database"), and never writes the `stories` rows. A story with no row has no hash, which is what makes `ensureEmbedding()` generate a new one. Deleting a story deletes its row too (foreign key `ON DELETE CASCADE`), so step 1 needs no embedding step of its own.
 5. **Records a notice** (source `jobs`, severity `info`, no dedupe key, so one row per run) with the deleted count per status, the cleared embeddings, the dissolved clusters and the re-elected primaries, including on a run where nothing was due.
 
 `storyRetention.db.test.ts` runs all of this against PostgreSQL (`database-migrations.md`, "Integration Tests"): every deletable and kept status, each keep rule, the counts, batching and a second run, embedding clearing and the cluster repair.
@@ -44,7 +44,7 @@ One row per (crawl month, feed, issue, final status, screening rating, full rati
 
 ## Disk space
 
-Deleted rows and cleared embeddings free space Postgres reuses for new rows (autovacuum), so the database stops growing; the files do not shrink. That is the goal (owner, 2026-10-18). Shrinking would take a manual `VACUUM FULL stories`, which locks the table while it runs.
+Deleted rows and cleared embeddings free space Postgres reuses for new rows (autovacuum), so the database stops growing; the files do not shrink. That is the goal (owner, 2026-10-18). Shrinking would take a manual `VACUUM FULL stories` (and `VACUUM FULL story_embeddings` for the vectors), which locks the table while it runs.
 
 ## Schedule
 

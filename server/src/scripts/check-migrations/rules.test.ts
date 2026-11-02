@@ -43,7 +43,7 @@ describe('isReviewedDestructive', () => {
 })
 
 describe('findProblems', () => {
-  const dropIndex = { name: '2_drop_index', sql: 'DROP INDEX "stories_embedding_idx";' }
+  const dropIndex = { name: '2_drop_index', sql: 'DROP INDEX "story_embeddings_embedding_idx";' }
   const oldDrop = { name: '1_old_drop', sql: 'DROP TABLE "email_events";' }
   const newDrop = { name: '3_new_drop', sql: 'ALTER TABLE "x" DROP COLUMN "y";' }
   const reviewed = { name: '4_reviewed', sql: '-- reviewed-destructive: code stopped reading it last deploy\nDROP TABLE "z";' }

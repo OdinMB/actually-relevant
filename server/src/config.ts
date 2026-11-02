@@ -204,10 +204,10 @@ export const config = {
     // How long a transaction waits for a pooled connection before failing (Prisma's default is
     // 2s). Concurrent analysis workers share a small pool, so a brief wait is normal, not an error.
     transactionMaxWaitMs: 10_000,
-    // Status moves other than publishing run in transactions of at most this many stories. A
-    // status write re-indexes every row it touches, the vector index included, so one
-    // transaction over a whole backlog (the selection job's below-threshold rejection) outlasted
-    // the timeout above.
+    // Status moves other than publishing run in transactions of at most this many stories, so
+    // one move never holds a transaction over a whole backlog (the selection job's
+    // below-threshold rejection). The vectors live in `story_embeddings`, so a status write no
+    // longer re-inserts them into the HNSW index (ADR-0051, `.context/embeddings.md`).
     moveChunkSize: 100,
   },
   llm: {
