@@ -9,6 +9,21 @@
 
 import { Prisma } from '@prisma/client'
 import prisma from './prisma.js'
+import { config } from '../config.js'
+
+/**
+ * Run a nearest-neighbour query through the HNSW index with a wider candidate list. The index
+ * scan hands over its `hnsw.ef_search` nearest vectors before the query's own filters run (status,
+ * issue), so the default of 40 leaves far fewer rows than the LIMIT whenever most embedded stories
+ * are not published. `SET LOCAL` scopes the setting to this one transaction.
+ */
+export async function queryNearest<T>(query: Prisma.Sql): Promise<T[]> {
+  const [, rows] = await prisma.$transaction([
+    prisma.$executeRaw`SELECT set_config('hnsw.ef_search', ${String(config.embedding.efSearch)}, true)`,
+    prisma.$queryRaw<T[]>(query),
+  ])
+  return rows
+}
 
 // ──── Types ────────────────────────────────────────────────────────────────
 
@@ -110,7 +125,7 @@ export async function searchByEmbedding(
   const issueFilter = options?.issueFilter ?? Prisma.empty
   const vectorStr = toVectorLiteral(queryEmbedding)
 
-  return prisma.$queryRaw<{ id: string }[]>`
+  return queryNearest<{ id: string }>(Prisma.sql`
     SELECT s.id
     FROM story_embeddings e
     JOIN stories s ON s.id = e.story_id
@@ -118,7 +133,7 @@ export async function searchByEmbedding(
       ${issueFilter}
     ORDER BY e.embedding <=> ${vectorStr}::vector
     LIMIT ${limit}
-  `
+  `)
 }
 
 /**

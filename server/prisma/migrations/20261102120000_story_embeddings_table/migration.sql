@@ -46,9 +46,7 @@ LOCK TABLE "stories" IN SHARE ROW EXCLUSIVE MODE;
 DELETE FROM "story_embeddings" e WHERE NOT EXISTS (SELECT 1 FROM "stories" s WHERE s."id" = e."story_id");
 ALTER TABLE "story_embeddings" ADD CONSTRAINT "story_embeddings_story_id_fkey" FOREIGN KEY ("story_id") REFERENCES "stories"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- The old index and columns. Dropping the column would drop the index too; named for clarity.
-DROP INDEX "stories_embedding_idx";
-
+-- The old columns (their index went in 20261102115900_drop_stories_embedding_idx).
 -- reviewed-destructive: the vectors, hashes and dates were copied into "story_embeddings" above, in this same migration, and no code reads these columns any more
 ALTER TABLE "stories" DROP COLUMN "embedding",
 DROP COLUMN "embedding_content_hash",

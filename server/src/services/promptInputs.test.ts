@@ -12,6 +12,9 @@ const mockPrisma = vi.hoisted(() => ({
   blueskyPost: { findFirst: vi.fn() },
   mastodonPost: { findFirst: vi.fn() },
   $queryRaw: vi.fn(),
+  // A nearest-neighbour query runs as a batch: the ef_search setting, then the query
+  $executeRaw: vi.fn(),
+  $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
 }))
 
 /** Every prompt a model was sent, in order. The model answers with `answers`, then fails. */

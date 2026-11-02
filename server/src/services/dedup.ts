@@ -44,16 +44,23 @@ export async function findNearestCandidates(
   const limit = options?.limit ?? config.dedup.maxCandidates
   const timeWindowDays = options?.timeWindowDays ?? config.dedup.timeWindowDays
 
+  // Exact distances over the window, never the HNSW index: an index scan hands over its nearest
+  // vectors from all time before the window and status filters run, so most would be dropped and
+  // a duplicate missed. MATERIALIZED makes Postgres filter first; the window keeps it small.
   const rows = await prisma.$queryRaw<RawCandidateRow[]>`
-    SELECT s.id, s.title, s.summary,
-           e.embedding <=> (SELECT embedding FROM story_embeddings WHERE story_id = ${storyId}) AS distance
-    FROM story_embeddings e
-    JOIN stories s ON s.id = e.story_id
-    LEFT JOIN story_clusters sc ON sc.id = s.cluster_id
-    WHERE s.id != ${storyId}
-      AND s.status IN ('analyzed', 'selected', 'published')
-      AND s.date_crawled > NOW() - ${timeWindowDays} * INTERVAL '1 day'
-      AND (s.cluster_id IS NULL OR sc.primary_story_id = s.id)
+    WITH pool AS MATERIALIZED (
+      SELECT s.id, s.title, s.summary, e.embedding
+      FROM story_embeddings e
+      JOIN stories s ON s.id = e.story_id
+      LEFT JOIN story_clusters sc ON sc.id = s.cluster_id
+      WHERE s.id != ${storyId}
+        AND s.status IN ('analyzed', 'selected', 'published')
+        AND s.date_crawled > NOW() - ${timeWindowDays} * INTERVAL '1 day'
+        AND (s.cluster_id IS NULL OR sc.primary_story_id = s.id)
+    )
+    SELECT id, title, summary,
+           embedding <=> (SELECT embedding FROM story_embeddings WHERE story_id = ${storyId}) AS distance
+    FROM pool
     ORDER BY distance ASC
     LIMIT ${limit}
   `

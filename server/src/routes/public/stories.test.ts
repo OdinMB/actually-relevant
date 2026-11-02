@@ -13,6 +13,9 @@ const mockPrisma = vi.hoisted(() => ({
     count: vi.fn(),
   },
   $queryRaw: vi.fn(),
+  // A nearest-neighbour query runs as a batch: the ef_search setting, then the query
+  $executeRaw: vi.fn(),
+  $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
   $disconnect: vi.fn(),
 }))
 

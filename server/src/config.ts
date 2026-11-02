@@ -261,6 +261,10 @@ export const config = {
     batchSize: parseWholeNumber(process.env.EMBEDDING_BATCH_SIZE, 100, 'EMBEDDING_BATCH_SIZE'),
     concurrency: parseWholeNumber(process.env.EMBEDDING_CONCURRENCY, 5, 'EMBEDDING_CONCURRENCY'),
     delayMs: parseWholeNumber(process.env.EMBEDDING_DELAY_MS, 100, 'EMBEDDING_DELAY_MS', 0),
+    // HNSW candidate list for search and related stories (pgvector's default is 40). The index
+    // covers every embedded story and the published filter runs after it, so with 40 a search
+    // asking for 50 got 14 back when 30% of embedded stories were published (.context/embeddings.md)
+    efSearch: 400,
   },
   crawl: {
     rssItemLimit: parseWholeNumber(process.env.RSS_ITEM_LIMIT, 30, 'RSS_ITEM_LIMIT'),

@@ -3,7 +3,9 @@
  * small-tier model and cached per slug (`.context/embeddings.md`). The model call on the public
  * request path is deliberate (ADR-0043).
  */
+import { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
+import { queryNearest } from '../lib/vectors.js'
 import { HumanMessage } from '@langchain/core/messages'
 import { createLogger } from '../lib/logger.js'
 import { config } from '../config.js'
@@ -83,7 +85,7 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
   const candidateCount = displayCount * config.relatedStories.candidateMultiplier
 
   // 3. Get a larger candidate pool via cosine distance
-  const candidates = await prisma.$queryRaw<RelatedRow[]>`
+  const candidates = await queryNearest<RelatedRow>(Prisma.sql`
     SELECT s.id, s.title, s.title_label
     FROM story_embeddings e
     JOIN stories s ON s.id = e.story_id
@@ -91,7 +93,7 @@ async function rankRelatedStories(slug: string): Promise<RelatedEntry | null> {
       AND s.status = 'published'
     ORDER BY e.embedding <=> (SELECT embedding FROM story_embeddings WHERE story_id = ${source.id})
     LIMIT ${candidateCount}
-  `
+  `)
   if (candidates.length === 0) return { sourceId: source.id, ids: [] }
 
   // 4. If we have fewer candidates than needed, skip LLM and return all
