@@ -10,6 +10,7 @@ import FeedbackProvider from '../components/FeedbackProvider'
 import SubscribeProvider from '../components/SubscribeProvider'
 import { TEXT_LINK } from '../lib/control-classes'
 import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
+import { announcedText } from '../test/stories'
 
 const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn(), newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -263,15 +264,22 @@ describe('StoryPage', () => {
 
   it('labels the story as AI-generated in the metadata row under the headline, as plain text', () => {
     renderStory(story)
-    const label = screen.getByText('AI-generated summary and analysis')
+    const label = screen.getByText(
+      (_, el) => el?.tagName === 'SPAN' && el.textContent?.startsWith('Summary and analysis by') === true && !el.querySelector('a'),
+    )
     expect(label.closest('a')).toBeNull()
-    // The "AI" badge next to it is visible but not announced twice
-    expect(label.previousElementSibling?.getAttribute('aria-hidden')).toBe('true')
-    expect(label.previousElementSibling?.textContent).toBe('AI')
+    // The "AI" badge is the label's only "AI", announced as the word itself
+    expect(announcedText(label)).toBe('Summary and analysis by AI.')
     const headline = screen.getByRole('heading', { level: 1 })
     expect(headline.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // ...and above the AI summary
     expect(label.compareDocumentPosition(screen.getByText(AI_TEXT.summary)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('links the story issue only at the end of the page, not above the headline', () => {
+    renderStory(story)
+    const issueLinks = screen.getAllByRole('link').filter(link => link.getAttribute('href') === '/issues/planet-climate')
+    expect(issueLinks.map(link => link.textContent)).toEqual(['More in Planet & Climate →'])
   })
 
   it('follows the label with a separate "How it works" link to the methodology page', () => {

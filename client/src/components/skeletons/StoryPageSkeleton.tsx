@@ -8,12 +8,6 @@ export default function StoryPageSkeleton() {
       {/* Header */}
       <header className="border-b border-neutral-100 pb-8 mb-8">
         <div className="page-section !pb-0 !mb-0">
-          {/* Category */}
-          <div className="flex items-center gap-2 mb-6">
-            <div className="w-2.5 h-2.5 rounded-full bg-neutral-200" />
-            <div className="h-3 bg-neutral-200 rounded w-32" />
-          </div>
-
           {/* Title label */}
           <div className="h-3 bg-neutral-200 rounded w-24 mb-3" />
 

@@ -27,8 +27,15 @@ export const AI_DISCLOSURE_COPY = {
   /** Link after the story page's AI label. */
   howItWorksLinkText: 'How it works',
   howItWorksHref: '/methodology',
-  /** Label in the story page's metadata row. */
-  storyLabel: 'AI-generated summary and analysis',
+  /**
+   * Label in the story page's metadata row: "Summary and analysis by [AI]." The "AI" badge stands
+   * between lead and tail and is the label's only "AI" (owner's wording 2026-11-03, replacing
+   * "[AI] AI-generated summary and analysis", which led with the badge).
+   */
+  storyLabel: {
+    lead: 'Summary and analysis by',
+    tail: '.',
+  },
   /** Header of the /embed iframe (widget.js carries the same line). */
   embedHeader: 'AI-generated headlines from Actually Relevant',
   /** Appended to the AI blurb that the share buttons prefill. */

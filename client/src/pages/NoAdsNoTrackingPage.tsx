@@ -180,10 +180,7 @@ export default function NoAdsNoTrackingPage() {
             <span className="flex-1 border-t border-neutral-200" aria-hidden="true" />
           </div>
           <h2 className="text-2xl font-bold mb-3">How We Stay Free</h2>
-          <p className="text-lg text-neutral-600 leading-relaxed mb-4 max-w-xl mx-auto">
-            Free. Independent. No ads.
-            <br /> Help us keep it that way.
-          </p>
+          <p className="text-lg text-neutral-600 leading-relaxed mb-4 max-w-xl mx-auto">Free. Independent. No ads.</p>
           <a
             href={KOFI_URL}
             target="_blank"
@@ -191,7 +188,7 @@ export default function NoAdsNoTrackingPage() {
             className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-neutral-800 rounded-lg hover:bg-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             <HeartIcon className="w-4 h-4" />
-            Chip in $5 to keep it running
+            Chip in $5 to keep it that way
             <span className="sr-only">(opens in new tab)</span>
           </a>
         </div>

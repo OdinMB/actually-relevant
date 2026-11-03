@@ -15,7 +15,7 @@ import { useFeedback } from '../components/FeedbackProvider'
 import { StoryNewsletterLine } from '../components/CrossLinks'
 import RelatedStories from '../components/RelatedStories'
 import AlsoCoveredBy from '../components/AlsoCoveredBy'
-import AiLabel from '../components/ai/AiLabel'
+import AiBadge from '../components/ai/AiBadge'
 import { AI_DISCLOSURE_COPY, quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { StoryPageSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
@@ -180,17 +180,7 @@ export default function StoryPage() {
         {/* Article header with category accent */}
         <header className="border-b border-neutral-100 pb-8 mb-8">
           <div className="page-section !pb-0 !mb-0">
-            {/* Category label */}
-            <div className="flex items-center gap-2 mb-6">
-              <span className={`category-dot ${colors.dotBg}`} aria-hidden="true" />
-              <Link
-                to={`/issues/${issueSlug}`}
-                className="text-xs font-bold uppercase tracking-widest text-neutral-500 hover:text-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
-              >
-                {issueName}
-              </Link>
-            </div>
-
+            {/* No issue link above the title (owner, 2026-11-03): the issue is linked at the end, "More in {issue}" */}
             {/* Title. data-ai-generated marks AI-written text by API field name (.context/ai-transparency.md). */}
             {titleLabel && (
               <span className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3" data-ai-generated="titleLabel">
@@ -232,7 +222,11 @@ export default function StoryPage() {
               <span className="text-neutral-300">|</span>
               {/* AI label as plain text, so it doesn't read as one more navigation link */}
               <span className="inline-flex flex-wrap items-center gap-x-2">
-                <AiLabel text={AI_DISCLOSURE_COPY.storyLabel} />
+                {/* The badge is the label's only "AI"; screen readers hear it as the word, so the sentence reads the same aloud */}
+                <span>
+                  {AI_DISCLOSURE_COPY.storyLabel.lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
+                  {AI_DISCLOSURE_COPY.storyLabel.tail}
+                </span>
                 <Link to={AI_DISCLOSURE_COPY.howItWorksHref} className={TEXT_LINK}>
                   {AI_DISCLOSURE_COPY.howItWorksLinkText}
                 </Link>
