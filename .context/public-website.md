@@ -97,6 +97,7 @@ The podcast has its own hand-built feed (`GET /api/podcast/feed.xml`, public at 
 
 A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone of displayed stories. Default is 50% (balanced). Persisted in localStorage under `ar-positivity`. Filtering is done entirely client-side for instant response — no additional API requests on slider change.
 
+- **URL parameter `mix`:** Any public page accepts `?mix=heavy|mostly-heavy|balanced|mostly-uplifting|uplifting` (or a number 0–100, snapped to the nearest position), e.g. `https://actuallyrelevant.news/?mix=uplifting`. A recognized value wins over the stored preference and is saved as the new preference; an unrecognized one is ignored. Moving the slider writes the named value into the current page's URL (history replace, no new entry), keeping other parameters, so the address bar is always a shareable link to the current mix. Plain internal links do not carry the parameter; the mix still follows through localStorage.
 - **Desktop:** Positioned in the logo bar, left side
 - **Mobile:** First item in the hamburger menu (centered), above issue categories
 - **Scope:** Affects homepage and issue pages only. Search is not affected.
@@ -108,7 +109,7 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 
 **Key files:**
 - `client/src/components/PositivitySlider.tsx` — Slider UI with emoji labels and info tooltip
-- `client/src/contexts/PositivityContext.tsx` — React Context + localStorage persistence
+- `client/src/contexts/PositivityContext.tsx` — React Context, `?mix=` URL parameter + localStorage persistence
 - `client/src/lib/mix-stories.ts` — `mixHomepageStories()` and `filterStoriesByPositivity()` helpers
 - `server/src/services/publicStories.ts` — `getHomepageData()` returns `{ positive, negative }` per issue
 
