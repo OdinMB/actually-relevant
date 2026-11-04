@@ -23,7 +23,21 @@ import { loadStateOf } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { storyOgImageUrl } from '../lib/api'
 import { buildArticleSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
-import { TEXT_LINK } from '../lib/control-classes'
+import { FOCUS_RING, TEXT_LINK } from '../lib/control-classes'
+
+/*
+ * The metadata row's text items (date, source, "Original article", AI label). From `md` up this
+ * wrapper is `display: contents`, so they sit in the row with the actions and the "|" spans between
+ * them. On phones it is a row of its own, the "|" spans are hidden, and each item after the date
+ * draws its "|" with `::before` in the 28px gap in front of it (alt text '', so screen readers skip
+ * it), about where the span stood. An item a wrap puts at the start of a line has its "|" left of
+ * the row, and the row clips its left edge (`overflow-x-clip`) so no line starts with one. The row
+ * reaches 4px past each side (`-mx-1 px-1`, and as much wider) so a focus ring at a line's start or
+ * end stays visible.
+ */
+const META_TEXT_ROW = 'flex flex-wrap items-center gap-x-7 gap-y-1 basis-[calc(100%+0.5rem)] -mx-1 px-1 overflow-x-clip md:contents'
+const PHONE_SEPARATOR =
+  "max-md:relative max-md:before:absolute max-md:before:-left-4 max-md:before:top-1/2 max-md:before:-translate-y-1/2 max-md:before:text-neutral-300 max-md:before:content-['|'_/_'']"
 
 // ---------------------------------------------------------------------------
 // Analysis section with ruled heading + numbered points
@@ -33,11 +47,15 @@ function AnalysisSection({
   title,
   text,
   accentColor,
+  numberColor,
   aiField,
 }: {
   title: string
   text: string
+  /** The heading's dot */
   accentColor: string
+  /** The points' numbers: 24px bold, large text, so 3:1 is the bar; the 700 text shade clears it with room */
+  numberColor: string
   /** API field name of the AI-generated text, for the machine-readable marker */
   aiField: string
 }) {
@@ -59,7 +77,7 @@ function AnalysisSection({
           <div key={idx} className="flex gap-4">
             <span
               className="font-nexa text-2xl font-bold leading-none pt-1 select-none text-right"
-              style={{ color: accentColor, opacity: 0.25, width: '2ch' }}
+              style={{ color: numberColor, width: '2ch' }}
               aria-hidden="true"
             >
               {idx + 1}
@@ -106,7 +124,7 @@ export default function StoryPage() {
   }
 
   const backHome = (
-    <Link to="/" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
+    <Link to="/" className={`text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}>
       &larr; Back to home
     </Link>
   )
@@ -192,51 +210,53 @@ export default function StoryPage() {
               {headline}
             </h1>
 
-            {/* Metadata + share. The "|" separators are visual only (aria-hidden), so screen readers don't read them out */}
+            {/* Metadata + share. The "|" separators are visual only (aria-hidden, or alt text '' on a phone's ::before), so screen readers don't read them out */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500">
-              <time dateTime={displayDate}>{dateStr}</time>
-              <span className="text-neutral-300" aria-hidden="true">
-                |
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <FeedFavicon feedId={story.feed.id} />
+              <div className={META_TEXT_ROW}>
+                <time dateTime={displayDate}>{dateStr}</time>
+                <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
+                  |
+                </span>
+                <span className={`inline-flex items-center gap-1.5 ${PHONE_SEPARATOR}`}>
+                  <FeedFavicon feedId={story.feed.id} />
+                  <a
+                    href={story.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5`}
+                  >
+                    {story.feed.displayTitle || story.feed.title}
+                    <span className="sr-only"> (opens in new tab)</span>
+                  </a>
+                  {hasSourceDate && <>, {sourceDateStr}</>}
+                </span>
+                <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
+                  |
+                </span>
                 <a
                   href={story.sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
+                  className={`text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5 ${PHONE_SEPARATOR}`}
                 >
-                  {story.feed.displayTitle || story.feed.title}
+                  Original article
                   <span className="sr-only"> (opens in new tab)</span>
                 </a>
-                {hasSourceDate && <>, {sourceDateStr}</>}
-              </span>
-              <span className="text-neutral-300" aria-hidden="true">
-                |
-              </span>
-              <a
-                href={story.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5"
-              >
-                Original article
-                <span className="sr-only"> (opens in new tab)</span>
-              </a>
-              <span className="text-neutral-300" aria-hidden="true">
-                |
-              </span>
-              {/* AI label as plain text, so it doesn't read as one more navigation link */}
-              <span className="inline-flex flex-wrap items-center gap-x-2">
-                {/* The badge is the label's only "AI"; screen readers hear it as the word, so the sentence reads the same aloud */}
-                <span>
-                  {AI_DISCLOSURE_COPY.storyLabel.lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
-                  {AI_DISCLOSURE_COPY.storyLabel.tail}
+                <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
+                  |
                 </span>
-                <Link to={AI_DISCLOSURE_COPY.howItWorksHref} className={TEXT_LINK}>
-                  {AI_DISCLOSURE_COPY.howItWorksLinkText}
-                </Link>
-              </span>
+                {/* AI label as plain text, so it doesn't read as one more navigation link */}
+                <span className={`inline-flex flex-wrap items-center gap-x-2 ${PHONE_SEPARATOR}`}>
+                  {/* The badge is the label's only "AI"; screen readers hear it as the word, so the sentence reads the same aloud */}
+                  <span>
+                    {AI_DISCLOSURE_COPY.storyLabel.lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
+                    {AI_DISCLOSURE_COPY.storyLabel.tail}
+                  </span>
+                  <Link to={AI_DISCLOSURE_COPY.howItWorksHref} className={TEXT_LINK}>
+                    {AI_DISCLOSURE_COPY.howItWorksLinkText}
+                  </Link>
+                </span>
+              </div>
               {story.slug && (
                 <>
                   {/* Phones: the actions take a line of their own as 44px tap targets, the first icon
@@ -298,11 +318,25 @@ export default function StoryPage() {
 
           {/* Why This Matters */}
           {story.relevanceReasons && (
-            <AnalysisSection title="Why This Matters" text={story.relevanceReasons} accentColor={colors.hex} aiField="relevanceReasons" />
+            <AnalysisSection
+              title="Why This Matters"
+              text={story.relevanceReasons}
+              accentColor={colors.hex}
+              numberColor={colors.textHex}
+              aiField="relevanceReasons"
+            />
           )}
 
-          {/* Caveats */}
-          {story.antifactors && <AnalysisSection title="Caveats" text={story.antifactors} accentColor={shiftHex(colors.hex, -0.25)} aiField="antifactors" />}
+          {/* Caveats: a shade darker than "Why This Matters" */}
+          {story.antifactors && (
+            <AnalysisSection
+              title="Caveats"
+              text={story.antifactors}
+              accentColor={shiftHex(colors.hex, -0.25)}
+              numberColor={shiftHex(colors.textHex, -0.25)}
+              aiField="antifactors"
+            />
+          )}
 
           {/* Report an error: the feedback dialog, bound to this story */}
           <p className="text-sm text-neutral-600 mb-3">
@@ -322,7 +356,7 @@ export default function StoryPage() {
           <div className="text-center mt-6">
             <Link
               to={`/search?q=${encodeURIComponent(headline)}`}
-              className="text-sm text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
+              className={`text-sm text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}
             >
               Find similar stories &rarr;
             </Link>
@@ -330,13 +364,10 @@ export default function StoryPage() {
 
           {/* Navigation */}
           <div className="border-t border-neutral-200 pt-6 mt-10 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-            <Link to="/" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
+            <Link to="/" className={`text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}>
               &larr; Back to all stories
             </Link>
-            <Link
-              to={`/issues/${issueSlug}`}
-              className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
-            >
+            <Link to={`/issues/${issueSlug}`} className={`text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}>
               More in {issueName} &rarr;
             </Link>
           </div>

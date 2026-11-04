@@ -1,10 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { API_BASE } from '../lib/api'
 import { usePublicIssue } from '../hooks/usePublicIssues'
 import { useIssueStories } from '../hooks/usePublicStories'
+import { usePageTurn } from '../hooks/usePageTurn'
 import { getCategoryColor } from '../lib/category-colors'
+import { FOCUS_RING } from '../lib/control-classes'
 import StoryCard from '../components/StoryCard'
 import PullQuote, { getQuoteVariant } from '../components/PullQuote'
 import Pagination from '../components/Pagination'
@@ -127,6 +129,13 @@ export default function IssuePage() {
   })
   const storiesData = storiesQuery.data
   const storiesState = loadStateOf(storiesQuery)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const pageTurn = usePageTurn({
+    heading: headingRef,
+    page,
+    totalPages: storiesData?.totalPages ?? 1,
+    settled: storiesState === 'ready' && !storiesQuery.isPlaceholderData,
+  })
 
   // Reset to page 1 when positivity changes
   useEffect(() => {
@@ -144,7 +153,7 @@ export default function IssuePage() {
   }
 
   const allIssues = (
-    <Link to="/issues" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
+    <Link to="/issues" className={`text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}>
       &larr; View all issues
     </Link>
   )
@@ -210,7 +219,7 @@ export default function IssuePage() {
           {issue.parent && (
             <Link
               to={`/issues/${issue.parent.slug}`}
-              className="text-xs text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5 mb-1 inline-block"
+              className={`text-xs text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-0.5 mb-1 inline-block`}
             >
               &larr; {issue.parent.name}
             </Link>
@@ -218,11 +227,14 @@ export default function IssuePage() {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <span className={`w-3 h-3 rounded-full ${colors.dotBg} shrink-0`} aria-hidden="true" />
-              <h1 className="text-xl md:text-2xl font-bold">{issue.name}</h1>
+              {/* Focus comes here when the reader picks another page of stories; a heading is not a control, so no outline */}
+              <h1 ref={headingRef} className="text-xl md:text-2xl font-bold focus:outline-none">
+                {issue.name}
+              </h1>
             </div>
             <a
               href={`${API_BASE}/feed/${slug}`}
-              className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+              className={`shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors ${FOCUS_RING} rounded`}
               title={`RSS feed for ${issue.name}`}
               aria-label={`RSS feed for ${issue.name}`}
             >
@@ -232,6 +244,9 @@ export default function IssuePage() {
             </a>
           </div>
         </header>
+        <p role="status" className="sr-only">
+          {pageTurn.announcement}
+        </p>
 
         {/* Sub-topics — only those with stories */}
         {activeChildren.length > 0 && (
@@ -242,7 +257,7 @@ export default function IssuePage() {
                 <Link
                   key={child.slug}
                   to={`/issues/${child.slug}`}
-                  className="inline-flex items-center gap-1.5 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-sm font-normal px-3 py-1.5 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand-500"
+                  className={`inline-flex items-center gap-1.5 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-sm font-normal px-3 py-1.5 rounded-full transition-colors ${FOCUS_RING}`}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${childColors.dotBg}`} aria-hidden="true" />
                   {child.name}
@@ -283,6 +298,7 @@ export default function IssuePage() {
                   else prev.set('page', String(newPage))
                   return prev
                 })
+                pageTurn.turned(newPage)
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
             />
@@ -298,7 +314,9 @@ export default function IssuePage() {
 
             {/* Mobile: collapsible */}
             <details className="group mb-8 md:hidden">
-              <summary className="cursor-pointer select-none text-sm font-semibold text-neutral-500 uppercase tracking-wide py-3 list-none flex items-center gap-2 hover:text-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
+              <summary
+                className={`cursor-pointer select-none text-sm font-semibold text-neutral-500 uppercase tracking-wide py-3 list-none flex items-center gap-2 hover:text-neutral-700 transition-colors ${FOCUS_RING} rounded`}
+              >
                 <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
@@ -344,7 +362,7 @@ export default function IssuePage() {
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                            className={`text-sm text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded`}
                           >
                             {link.label}
                             <span className="sr-only"> (opens in new tab)</span>{' '}
@@ -410,7 +428,7 @@ export default function IssuePage() {
                               href={link.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-sm text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                              className={`text-sm text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded`}
                             >
                               {link.label}
                               <span className="sr-only"> (opens in new tab)</span>{' '}

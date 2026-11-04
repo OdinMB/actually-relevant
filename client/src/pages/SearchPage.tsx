@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { usePublicStories } from '../hooks/usePublicStories'
+import { usePageTurn } from '../hooks/usePageTurn'
 import StoryCard from '../components/StoryCard'
 import Pagination from '../components/Pagination'
 import { SearchResultsSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
 import { isRateLimited } from '../lib/api'
+import { FOCUS_RING } from '../lib/control-classes'
 import { loadStateOf } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 
@@ -43,6 +45,8 @@ export default function SearchPage() {
 
   const stories = data?.data ?? []
   const totalPages = data?.totalPages ?? 1
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const pageTurn = usePageTurn({ heading: headingRef, page, totalPages, settled: loadState === 'ready' })
 
   return (
     <>
@@ -58,9 +62,15 @@ export default function SearchPage() {
 
       <div className="page-section-wide">
         <header className="mb-6">
-          <h1 className="text-xl md:text-2xl font-bold">{q ? <>Search results for &ldquo;{q}&rdquo;</> : 'Search'}</h1>
+          {/* Focus comes here when the reader picks another page of results; a heading is not a control, so no outline */}
+          <h1 ref={headingRef} className="text-xl md:text-2xl font-bold focus:outline-none">
+            {q ? <>Search results for &ldquo;{q}&rdquo;</> : 'Search'}
+          </h1>
           {q && loadState === 'ready' && <p className="text-sm text-neutral-500 mt-1">{data?.total === 1 ? '1 result' : `${data?.total ?? 0} results`}</p>}
         </header>
+        <p role="status" className="sr-only">
+          {pageTurn.announcement}
+        </p>
 
         {!q ? (
           <p className="text-neutral-500 text-center py-8">Enter a search term to find stories.</p>
@@ -77,7 +87,7 @@ export default function SearchPage() {
         ) : stories.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-neutral-500 mb-4">No results found for &ldquo;{q}&rdquo;.</p>
-            <Link to="/" className="text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1">
+            <Link to="/" className={`text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}>
               &larr; Back to home
             </Link>
           </div>
@@ -88,7 +98,15 @@ export default function SearchPage() {
                 <StoryCard key={story.id} story={story} variant="equal" />
               ))}
             </div>
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={next => {
+                setPage(next)
+                pageTurn.turned(next)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+            />
           </>
         )}
       </div>

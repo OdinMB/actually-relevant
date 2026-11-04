@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SearchIcon } from './icons'
-import { FIELD_FOCUS } from '../../lib/control-classes'
+import { FIELD_FOCUS, FOCUS_RING } from '../../lib/control-classes'
 
 interface SearchPanelProps {
   query: string
@@ -67,7 +67,7 @@ export default function SearchPanel({ query, onQueryChange, onClose }: SearchPan
               if (query) onQueryChange('')
               else onClose()
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-500 hover:text-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+            className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-500 hover:text-neutral-700 transition-colors ${FOCUS_RING} rounded`}
             aria-label="Close search"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

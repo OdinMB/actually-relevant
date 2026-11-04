@@ -6,10 +6,10 @@ import { MoodDialPanel } from '../../components/PositivitySlider'
 import BrandLogo from '../../components/BrandLogo'
 import { ISSUE_LINKS, isActiveIssue } from './navLinks'
 import { CategoryColorStrip, HeartIcon, NewsletterIcon, PodcastIcon, SavedIcon } from './icons'
+import { FOCUS_RING } from '../../lib/control-classes'
 
 /** Class for each action link (Newsletter, Podcast, Saved, Support) in the mobile menu. */
-const MENU_ACTION_LINK =
-  'flex items-center gap-2 py-2.5 text-sm font-bold text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded'
+const MENU_ACTION_LINK = `flex items-center gap-2 py-2.5 text-sm font-bold text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded`
 
 interface MobileMenuProps {
   open: boolean
@@ -38,7 +38,7 @@ export default function MobileMenu({ open, onClose, savedCount }: MobileMenuProp
         <div className="border-b border-neutral-100 px-4 py-3 md:py-4 flex items-start justify-center relative">
           <BrandLogo onClick={onClose} />
           <div className="absolute right-4 top-3 md:top-4 h-14 md:h-16 flex items-center">
-            <button onClick={onClose} className="p-2 rounded focus-visible:ring-2 focus-visible:ring-brand-500" aria-label="Close menu">
+            <button onClick={onClose} className={`p-2 rounded ${FOCUS_RING}`} aria-label="Close menu">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -63,7 +63,7 @@ export default function MobileMenu({ open, onClose, savedCount }: MobileMenuProp
                   <Link
                     to={link.href}
                     onClick={onClose}
-                    className={`flex items-center gap-2 py-2.5 text-sm font-bold focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-2 ${
+                    className={`flex items-center gap-2 py-2.5 text-sm font-bold ${FOCUS_RING} rounded px-2 ${
                       isActiveIssue(pathname, link.href) ? 'text-neutral-900' : 'text-neutral-600 hover:text-neutral-900'
                     }`}
                   >

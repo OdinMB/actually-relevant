@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -159,6 +159,34 @@ describe('NewsletterPage when the past issues do not load', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('link', { name: 'Week 40, 2026' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('after another page is picked, moves focus to the Past issues heading and says which page shows once it is in', async () => {
+    const page2 = {
+      ...ARCHIVE,
+      data: [{ slug: 'week-40-2026', title: 'Week 40, 2026', publishedAt: '2026-10-04T09:00:00.000Z', storyCount: 5 }],
+      page: 2,
+      totalPages: 2,
+    }
+    let answerPage2: (value: typeof page2) => void = () => {}
+    mockApi.newsletterArchive.mockImplementation((page: number) =>
+      page === 1 ? Promise.resolve({ ...ARCHIVE, totalPages: 2 }) : new Promise(resolve => (answerPage2 = resolve)),
+    )
+    renderPage()
+    await screen.findByRole('link', { name: 'Week 42, 2026' })
+    const issues = screen.getByRole('region', { name: 'Past issues' })
+    const heading = within(issues).getByRole('heading', { name: 'Past issues' })
+    const status = within(issues).getByRole('status')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
+
+    expect(heading).toHaveFocus()
+    expect(status).toBeEmptyDOMElement()
+
+    answerPage2(page2)
+    await waitFor(() => expect(status).toHaveTextContent('Page 2 of 2'))
+    expect(screen.getByRole('link', { name: 'Week 40, 2026' })).toBeInTheDocument()
+    expect(heading).toHaveFocus()
   })
 
   it('keeps the signup form usable beside the failure', async () => {

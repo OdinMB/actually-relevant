@@ -6,6 +6,7 @@ import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import type { PublicStory } from '@shared/types'
 import { makeStory } from '../test/stories'
+import { focusRingProblems } from '../test/classes'
 
 const mockApi = vi.hoisted(() => ({ issues: { get: vi.fn() }, stories: { list: vi.fn() } }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -156,6 +157,26 @@ describe('IssuePage story list', () => {
     expect(screen.queryByText('Climate headline')).toBeNull()
   })
 
+  it('after another page is picked, moves focus to the issue heading and says which page shows once it is in', async () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const next = pending<ReturnType<typeof page>>()
+    mockApi.stories.list.mockResolvedValueOnce(page([climateStory], 1, 3)).mockReturnValueOnce(next.promise)
+    renderIssue()
+    await screen.findByText('Climate headline')
+    const heading = screen.getByRole('heading', { level: 1, name: 'Planet & Climate' })
+    const status = screen.getByRole('status')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Page 2' }))
+
+    expect(heading).toHaveFocus()
+    expect(status).toBeEmptyDOMElement()
+
+    next.answer(page([climateStory2], 2, 3))
+    await waitFor(() => expect(status).toHaveTextContent('Page 2 of 3'))
+    expect(screen.getByText('Second page headline')).toBeInTheDocument()
+    expect(heading).toHaveFocus()
+  })
+
   it('keeps the failure and the focused button, not the previous page, while a failed page is tried again', async () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
     const retry = pending<ReturnType<typeof page>>()
@@ -189,5 +210,25 @@ describe('IssuePage story list', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Human Development' })).toBeInTheDocument()
     expect(screen.queryByText('Climate headline')).toBeNull()
     expect(screen.queryByText(EMPTY)).toBeNull()
+  })
+})
+
+describe('IssuePage controls', () => {
+  it('shows only the brand ring on keyboard focus on the RSS icon, the sub-topics and the about section', async () => {
+    mockApi.issues.get.mockResolvedValue({
+      ...ISSUES['planet-climate']!,
+      children: [{ ...makeIssue('ecosystems', 'Ecosystems'), publishedStoryCount: 2 }],
+      makeADifference: [{ label: 'A way to help', url: 'https://example.org/help' }],
+    })
+    renderIssue()
+    await screen.findByText('Climate headline')
+
+    const controls = [
+      screen.getByRole('link', { name: 'RSS feed for Planet & Climate' }),
+      screen.getByRole('link', { name: 'Ecosystems' }),
+      ...screen.getAllByRole('link', { name: /A way to help/, hidden: true }),
+      screen.getByText('About Planet & Climate', { selector: 'summary' }),
+    ]
+    for (const control of controls) expect(focusRingProblems(control)).toEqual([])
   })
 })

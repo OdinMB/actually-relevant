@@ -7,10 +7,10 @@ import IssueNav from './IssueNav'
 import MobileMenu from './MobileMenu'
 import SearchPanel from './SearchPanel'
 import { NewsletterIcon, PodcastIcon, SavedIcon, SearchIcon } from './icons'
+import { FOCUS_RING } from '../../lib/control-classes'
 
 /** Class for the desktop header actions (Newsletter, Podcast, Saved) beside the logo. */
-const HEADER_ACTION_LINK =
-  'inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-2 py-1 text-neutral-500 hover:text-brand-700'
+const HEADER_ACTION_LINK = `inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors ${FOCUS_RING} rounded px-2 py-1 text-neutral-500 hover:text-brand-700`
 
 /**
  * The site header: logo bar with its actions, the desktop issue nav, the
@@ -71,9 +71,7 @@ export default function SiteHeader() {
                 setSearchOpen(!searchOpen)
                 setMenuOpen(false)
               }}
-              className={`p-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                searchOpen ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
-              }`}
+              className={`p-2 rounded transition-colors ${FOCUS_RING} ${searchOpen ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}
               aria-label={searchOpen ? 'Close search' : 'Open search'}
               aria-expanded={searchOpen}
               aria-controls="search-panel"
@@ -84,7 +82,7 @@ export default function SiteHeader() {
           <div className="lg:hidden absolute right-4 top-3 md:top-4 h-14 md:h-16 flex items-center">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="p-2 rounded focus-visible:ring-2 focus-visible:ring-brand-500"
+              className={`p-2 rounded ${FOCUS_RING}`}
               aria-expanded={menuOpen}
               aria-controls="mobile-nav-menu"
               aria-label={menuOpen ? 'Close menu' : 'Open menu'}

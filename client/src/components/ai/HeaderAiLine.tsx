@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import AiBadge from './AiBadge'
 import { AI_DISCLOSURE_COPY } from './aiDisclosureCopy'
+import { FOCUS_RING } from '../../lib/control-classes'
 
 /**
  * Site-wide AI notice in the header on every public page, so it is seen at first exposure
@@ -15,7 +16,7 @@ export default function HeaderAiLine({ onClick }: { onClick?: () => void }) {
       to={AI_DISCLOSURE_COPY.howItWorksHref}
       onClick={onClick}
       aria-label={AI_DISCLOSURE_COPY.headerAiLineAccessibleName}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded px-1 py-1 text-[10px] leading-4 md:text-[11px] uppercase tracking-[0.2em] text-neutral-600 transition-colors hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500"
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded px-1 py-1 text-[10px] leading-4 md:text-[11px] uppercase tracking-[0.2em] text-neutral-600 transition-colors hover:text-brand-700 ${FOCUS_RING}`}
     >
       <span>{AI_DISCLOSURE_COPY.headerAiLine}</span>
       {/* Lifted 1px from md up, like the chevron, onto the caps' center */}

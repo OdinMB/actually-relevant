@@ -132,6 +132,27 @@ describe('SearchPage', () => {
     expect(mockApi.stories.list).toHaveBeenCalledTimes(2)
   })
 
+  it('after another page is picked, moves focus to the results heading and says which page shows once it is in', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    let answerPage2: (value: typeof ONE_RESULT) => void = () => {}
+    mockApi.stories.list.mockResolvedValueOnce({ ...ONE_RESULT, total: 13, totalPages: 2 }).mockReturnValueOnce(new Promise(resolve => (answerPage2 = resolve)))
+    renderSearchPage('/search?q=climate')
+    const heading = screen.getByRole('heading', { level: 1, name: 'Search results for “climate”' })
+    const status = screen.getByRole('status')
+    expect(status).toBeEmptyDOMElement()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Page 2' }))
+
+    expect(heading).toHaveFocus()
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
+    expect(status).toBeEmptyDOMElement()
+
+    answerPage2({ ...ONE_RESULT, data: [makeStory({ id: 'story-13', slug: 'thirteenth', title: 'Thirteenth result' })], total: 13, page: 2, totalPages: 2 })
+    await waitFor(() => expect(status).toHaveTextContent('Page 2 of 2'))
+    expect(heading).toHaveFocus()
+    expect(mockApi.stories.list).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'climate', page: 2 }))
+  })
+
   it('says nothing was found only when the search answers with no results', async () => {
     mockApi.stories.list.mockResolvedValue(NO_RESULTS)
     renderSearchPage('/search?q=nothing')

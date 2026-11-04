@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { getCategoryColor } from '../../lib/category-colors'
 import { API_BASE } from '../../lib/api'
+import { FOCUS_RING } from '../../lib/control-classes'
 import { APPLE_PODCASTS_URL, BRAND, BLUESKY_PROFILE_URL, GITHUB_REPO_URL, KOFI_URL, MASTODON_PROFILE_URL } from '../../config'
 import { FOOTER_LEGAL, FOOTER_NAV, ISSUE_LINKS } from './navLinks'
 import { CategoryColorStrip, PodcastIcon } from './icons'
@@ -15,11 +16,10 @@ import { CategoryColorStrip, PodcastIcon } from './icons'
 const LINK_TARGET = 'inline-flex items-center min-h-8 md:min-h-7 py-1'
 
 /** Social icon buttons (Bluesky, Mastodon, Apple Podcasts, GitHub) in the brand column. */
-const SOCIAL_LINK =
-  'flex items-center justify-center w-8 h-8 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-brand-500'
+const SOCIAL_LINK = `flex items-center justify-center w-8 h-8 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors ${FOCUS_RING}`
 
 /** Links in the Navigate, Connect and Issues columns. */
-const LIST_LINK = `${LINK_TARGET} text-sm leading-5 text-neutral-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5`
+const LIST_LINK = `${LINK_TARGET} text-sm leading-5 text-neutral-400 hover:text-white transition-colors ${FOCUS_RING} rounded px-0.5`
 
 /** Links in the Connect column; the image icons brighten with the text on hover (`group`). */
 const CONNECT_LINK = `group gap-1.5 ${LIST_LINK}`
@@ -27,11 +27,10 @@ const CONNECT_LINK = `group gap-1.5 ${LIST_LINK}`
 const CONNECT_ICON = 'w-3.5 h-3.5 shrink-0 transition-[filter] group-hover:brightness-[10]'
 
 /** The links inside the "Free API and Docs" line: inline boxes, so the line reads as plain text. */
-const INLINE_LINK = `${LINK_TARGET} hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded`
+const INLINE_LINK = `${LINK_TARGET} hover:text-white transition-colors ${FOCUS_RING} rounded`
 
 /** 32px tall on phones like the list links; 24px from `md` up, where they sit under the social icons. */
-const LEGAL_LINK =
-  'inline-flex items-center min-h-8 md:min-h-6 text-xs text-neutral-400 hover:text-neutral-200 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5'
+const LEGAL_LINK = `inline-flex items-center min-h-8 md:min-h-6 text-xs text-neutral-400 hover:text-neutral-200 transition-colors ${FOCUS_RING} rounded px-0.5`
 
 /** The bottom margin allows for the space `LINK_TARGET` adds above the first link's text. */
 const COLUMN_HEADING = 'text-xs font-bold uppercase tracking-widest text-neutral-400 mb-1.5 md:mb-2 leading-none'
@@ -66,7 +65,7 @@ export default function SiteFooter() {
           <div className="col-span-2">
             <Link
               to="/"
-              className="inline-block min-h-7 mb-3 font-nexa text-xl font-bold text-white hover:text-brand-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+              className={`inline-block min-h-7 mb-3 font-nexa text-xl font-bold text-white hover:text-brand-300 transition-colors ${FOCUS_RING} rounded`}
             >
               Actually Relevant
             </Link>

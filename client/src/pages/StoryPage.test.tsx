@@ -10,6 +10,7 @@ import FeedbackProvider from '../components/FeedbackProvider'
 import SubscribeProvider from '../components/SubscribeProvider'
 import { TEXT_LINK } from '../lib/control-classes'
 import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
+import { contrastRatio } from '../test/contrast'
 import { announcedText } from '../test/stories'
 
 const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn(), newsletterArchive: vi.fn() }))
@@ -200,6 +201,57 @@ describe('StoryPage structure for screen readers', () => {
     for (const separator of separators) expect(separator).toHaveAttribute('aria-hidden', 'true')
     expect(announcedText(row)).not.toContain('|')
   })
+})
+
+describe('StoryPage metadata row on phones', () => {
+  // jsdom has no layout, so the classes that do it are what a test can check
+  it('draws each "|" in front of the item it leads into, so the row cuts off one that a wrap leaves at the start of a line', () => {
+    renderStory(story)
+    const row = screen.getByRole('heading', { level: 1 }).nextElementSibling!
+    for (const separator of [...row.querySelectorAll('span')].filter(span => span.childElementCount === 0 && span.textContent === '|')) {
+      expect(separator).toHaveClass('max-md:hidden')
+    }
+
+    const date = row.querySelector('time')!
+    const textItems = date.parentElement!
+    expect(textItems).toHaveClass('overflow-x-clip', 'md:contents')
+    // 4px of room past each clipped edge, for the focus ring of an item at a line's start or end
+    expect(textItems).toHaveClass('-mx-1', 'px-1', 'basis-[calc(100%+0.5rem)]')
+    const items = [...textItems.children].filter(child => child.textContent !== '|')
+    expect(items[0]).toBe(date)
+    for (const item of items.slice(1)) {
+      expect(item).toHaveClass('max-md:relative', "max-md:before:content-['|'_/_'']")
+    }
+    // The bookmark and share buttons reach left of the row on phones (their 44px boxes), so they stay outside what it cuts off
+    expect(textItems).not.toContainElement(screen.getByRole('button', { name: 'Bookmark story' }))
+  })
+})
+
+describe('StoryPage analysis points', () => {
+  /** The numbers in front of a section's points, which sighted readers see as text. */
+  const pointNumbers = (heading: string) =>
+    [...screen.getByRole('heading', { level: 2, name: heading }).closest('section')!.querySelectorAll('span[aria-hidden="true"]')].filter(span =>
+      /^\d+$/.test(span.textContent ?? ''),
+    ) as HTMLElement[]
+  /** jsdom reports an inline color as `rgb(r, g, b)`. */
+  const hexOf = (color: string) =>
+    `#${color
+      .match(/\d+/g)!
+      .map(n => Number(n).toString(16).padStart(2, '0'))
+      .join('')}`
+
+  it.each(['Why This Matters', 'Caveats'])(
+    'numbers the points under "%s" in the 700 text shade (above the 3:1 large-text bar) on white, at full opacity',
+    heading => {
+      renderStory(story)
+      const numbers = pointNumbers(heading)
+      expect(numbers).toHaveLength(1)
+      for (const number of numbers) {
+        expect(number.style.opacity).toBe('')
+        expect(contrastRatio(hexOf(number.style.color), '#ffffff')).toBeGreaterThanOrEqual(4.5)
+      }
+    },
+  )
 })
 
 describe('StoryPage newsletter line', () => {

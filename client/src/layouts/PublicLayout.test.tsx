@@ -6,6 +6,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import PublicLayout from './PublicLayout'
 import { BRAND } from '../config'
 import { toggleSaved } from '../lib/preferences'
+import { focusRingProblems } from '../test/classes'
 
 // The layout holds the signup and feedback dialogs, whose forms fetch a form token when they mount
 const mockTokens = vi.hoisted(() => ({ getSubscribeToken: vi.fn(), getFeedbackToken: vi.fn() }))
@@ -105,6 +106,23 @@ describe('PublicLayout', () => {
         .map(el => el.textContent?.replace(/\s*\(\d+\)$/, '').trim())
       expect(order).toEqual(['Newsletter', 'Podcast', 'Saved', 'Newsletter', 'Podcast', 'Saved Stories'])
     })
+  })
+
+  it('shows only the brand ring on keyboard focus on every link and button around the page: skip link, header, mobile menu and footer', () => {
+    renderLayout()
+    const controls = [
+      screen.getByRole('link', { name: 'Skip to content' }),
+      // The mobile menu is a closed dialog in the header, hence hidden
+      ...within(screen.getByRole('banner')).getAllByRole('link', { hidden: true }),
+      ...within(screen.getByRole('banner')).getAllByRole('button', { hidden: true }),
+      ...within(screen.getByRole('contentinfo')).getAllByRole('link'),
+    ]
+      // The issue tabs and the desktop search toggle get the same classes through `.issue-nav-link` in index.css
+      .filter(control => !control.classList.contains('issue-nav-link'))
+    expect(controls.length).toBeGreaterThan(30)
+
+    const problems = controls.map(control => [control.getAttribute('aria-label') ?? control.textContent, focusRingProblems(control)] as const)
+    expect(problems.filter(([, found]) => found.length > 0)).toEqual([])
   })
 
   it('no longer puts an AI notice band at the top of <main>', () => {
