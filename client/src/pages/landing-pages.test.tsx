@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -60,6 +61,34 @@ describe('StewardshipPage', () => {
     renderPage(<StewardshipPage />)
     expect(screen.getByRole('heading', { level: 1, name: /long-term home/i })).toBeInTheDocument()
     expect(screen.getByText(/with 82 curated sources across/)).toBeInTheDocument()
+  })
+
+  it('gives the running cost as one figure wherever the page names it', () => {
+    const { container } = renderPage(<StewardshipPage />)
+    expect(container.textContent!.match(/\$\d+/g)).toEqual(['$39', '$39', '$39'])
+    expect(screen.getByText(/costs about \$39 a month to operate/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Operating costs: about $39 a month' })).toBeInTheDocument()
+  })
+
+  it('itemizes the monthly costs with a date, adding up to the same total', async () => {
+    const { container } = renderPage(<StewardshipPage />)
+    await userEvent.click(screen.getByRole('button', { name: /operating costs/i }))
+
+    const rows = within(screen.getByRole('table'))
+      .getAllByRole('row')
+      .slice(1)
+      .map(row =>
+        within(row)
+          .getAllByRole('cell')
+          .map(cell => cell.textContent!),
+      )
+    const total = rows.pop()!
+    expect(total).toEqual(['Total', '~$39'])
+    const itemized = rows.flatMap(([, monthly]) => monthly!.match(/^~?\$(\d+)$/)?.[1] ?? []).reduce((sum, n) => sum + Number(n), 0)
+    expect(itemized).toBe(39)
+    expect(rows.map(([item]) => item).join(' ')).not.toMatch(/crawling/i)
+    expect(screen.getByText('As of November 2026.')).toBeInTheDocument()
+    expect(container.textContent).not.toContain('$85')
   })
 })
 
