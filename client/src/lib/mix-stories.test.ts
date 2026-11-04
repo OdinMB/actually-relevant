@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { mixHomepageStories, pickHero } from './mix-stories'
+import { mixHomepageSections, mixHomepageStories, pickHero } from './mix-stories'
 import type { StoryBuckets } from './mix-stories'
 import type { PublicStory, EmotionTag } from '@shared/types'
 
@@ -218,5 +218,51 @@ describe('pickHero', () => {
   it('returns null for empty buckets', () => {
     const hero = pickHero({}, 50)
     expect(hero).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// mixHomepageSections
+// ---------------------------------------------------------------------------
+
+describe('mixHomepageSections', () => {
+  const issueA = { slug: 'issue-a' }
+  const issueB = { slug: 'issue-b' }
+  const issueC = { slug: 'issue-c' }
+
+  it("gives each issue its section's mix, in the order of the issues", () => {
+    const storiesByIssue = { 'issue-a': makeBuckets(2, 2, 2), 'issue-b': makeBuckets(1, 1, 1) }
+    const sections = mixHomepageSections([issueB, issueA], storiesByIssue, 7, 50, null)
+
+    expect(sections.map(s => s.issue)).toEqual([issueB, issueA])
+    expect(sections[0]!.stories).toEqual(mixHomepageStories(storiesByIssue['issue-b'], 7, 50))
+    expect(sections[1]!.stories).toEqual(mixHomepageStories(storiesByIssue['issue-a'], 7, 50))
+  })
+
+  it('leaves out an issue the mix gives no story, and an issue with no buckets', () => {
+    const storiesByIssue = { 'issue-a': makeBuckets(0, 3, 3), 'issue-b': makeBuckets(2, 0, 0) }
+    const sections = mixHomepageSections([issueA, issueB, issueC], storiesByIssue, 7, 100, null)
+
+    expect(sections.map(s => s.issue)).toEqual([issueB])
+  })
+
+  it('takes the hero out of its section, and leaves out a section the hero was all of', () => {
+    const storiesByIssue = { 'issue-a': makeBuckets(1, 0, 0), 'issue-b': makeBuckets(2, 0, 0) }
+    const hero = storiesByIssue['issue-b'].uplifting[0]!
+    const lone = storiesByIssue['issue-a'].uplifting[0]!
+
+    const withHeroA = mixHomepageSections([issueA, issueB], storiesByIssue, 7, 100, lone.id)
+    expect(withHeroA.map(s => s.issue)).toEqual([issueB])
+
+    const [sectionB] = mixHomepageSections([issueB], storiesByIssue, 7, 100, hero.id)
+    expect(sectionB!.stories.map(s => s.id)).not.toContain(hero.id)
+    expect(sectionB!.stories).toHaveLength(1)
+    // The pull quote below a section may still quote the hero, as before
+    expect(sectionB!.mixed.map(s => s.id)).toContain(hero.id)
+  })
+
+  it('returns no section when the mix leaves every issue without a story', () => {
+    const storiesByIssue = { 'issue-a': makeBuckets(0, 2, 2), 'issue-b': makeBuckets(0, 0, 1) }
+    expect(mixHomepageSections([issueA, issueB], storiesByIssue, 7, 100, null)).toEqual([])
   })
 })

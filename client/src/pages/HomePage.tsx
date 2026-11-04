@@ -1,5 +1,5 @@
 import { Helmet } from 'react-helmet-async'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useHomepageData } from '../hooks/useHomepageData'
 import StoryCard from '../components/StoryCard'
 import PullQuote, { getQuoteVariant } from '../components/PullQuote'
@@ -19,8 +19,9 @@ import { SEO, CommonOgTags } from '../lib/seo'
 import { buildWebSiteSchema, buildOrganizationSchema, toJsonLd } from '../lib/structured-data'
 import SupportBanner from '../components/SupportBanner'
 import NewsletterBanner from '../components/NewsletterBanner'
-import { usePositivity } from '../contexts/PositivityContext'
-import { mixHomepageStories, pickHero } from '../lib/mix-stories'
+import { usePositivity, withMix } from '../contexts/PositivityContext'
+import { mixHomepageSections, pickHero } from '../lib/mix-stories'
+import { TEXT_LINK } from '../lib/control-classes'
 import { useLatestNewsletterIssue, type LatestNewsletterIssue } from '../hooks/useNewsletterArchive'
 import LatestIssueCard from '../components/LatestIssueCard'
 
@@ -107,25 +108,24 @@ type LayoutVariant = 'A' | 'B' | 'C'
 
 function IssueSection({
   issue,
-  allStories,
-  heroStoryId,
+  stories,
+  quoteStories,
   layout,
   divider,
   quoteVariantIndex,
   flushTop = false,
 }: {
   issue: PublicIssue
-  allStories: PublicStory[]
-  heroStoryId: string | null
+  /** What the section shows, the hero already taken out (`mixHomepageSections`) */
+  stories: PublicStory[]
+  /** What the pull quote below the section is drawn from */
+  quoteStories: PublicStory[]
   layout: LayoutVariant
   divider?: 'quote' | 'diamond' | 'none'
   quoteVariantIndex?: number
   /** No top margin: the space above it is already there (the first section, under LatestIssueSlot) */
   flushTop?: boolean
 }) {
-  // Exclude the hero story from this section
-  const stories = heroStoryId ? allStories.filter(s => s.id !== heroStoryId) : allStories
-
   const [featured, ...rest] = stories
   if (!featured) return null
 
@@ -191,7 +191,7 @@ function IssueSection({
       </section>
 
       {/* Section divider */}
-      {divider === 'quote' && <QuoteDivider stories={allStories} variantIndex={quoteVariantIndex ?? 0} />}
+      {divider === 'quote' && <QuoteDivider stories={quoteStories} variantIndex={quoteVariantIndex ?? 0} />}
       {divider === 'diamond' && <hr className="section-divider" />}
     </>
   )
@@ -226,6 +226,28 @@ function LatestIssueSlot({ issue }: { issue: LatestNewsletterIssue | null }) {
 }
 
 // ---------------------------------------------------------------------------
+// A mix with no stories
+// ---------------------------------------------------------------------------
+
+/**
+ * Stories are published, but the mix the reader chose shows none of them (at "Only uplifting",
+ * when no issue has an uplifting story). One link back to the balanced mix, which keeps the
+ * address's other parameters and, like the slider, replaces the history entry.
+ */
+function MixHasNoStories() {
+  const [searchParams] = useSearchParams()
+
+  return (
+    <p role="status" className="text-center text-neutral-500 py-12">
+      This mix of news has no stories right now.{' '}
+      <Link to={`/?${withMix(searchParams, 50)}`} replace preventScrollReset className={TEXT_LINK}>
+        Show the balanced mix
+      </Link>
+    </p>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Home page
 // ---------------------------------------------------------------------------
 
@@ -250,8 +272,11 @@ export default function HomePage() {
   const heroStory = pickHero(storiesByIssueBuckets, positivity)
 
   const sortedIssues = [...issues].filter(i => ISSUE_ORDER.includes(i.slug)).sort((a, b) => ISSUE_ORDER.indexOf(a.slug) - ISSUE_ORDER.indexOf(b.slug))
+  // Only the sections this mix gives stories; layouts, dividers and banners count these
+  const sections = mixHomepageSections(sortedIssues, storiesByIssueBuckets, 7, positivity, heroStory?.id ?? null)
+  const showsStories = heroStory !== null || sections.length > 0
   // "No stories published yet" only when the API answered with none, never when it did not answer
-  const hasStories = sortedIssues.some(issue => {
+  const hasPublishedStories = sortedIssues.some(issue => {
     const buckets = storiesByIssueBuckets[issue.slug]
     return !!buckets && buckets.uplifting.length + buckets.calm.length + buckets.negative.length > 0
   })
@@ -287,26 +312,23 @@ export default function HomePage() {
           </>
         ) : loadState !== 'ready' ? (
           <LoadFailure title="The stories couldn't load" query={homepageQuery} className="py-12" />
-        ) : hasStories ? (
+        ) : showsStories ? (
           <>
             <LatestIssueSlot issue={latestIssue} />
-            {sortedIssues
-              .map((issue, idx) => {
+            {sections
+              .map(({ issue, mixed, stories }, idx) => {
                 const layout = LAYOUTS[idx % LAYOUTS.length]!
-                const isLast = idx === sortedIssues.length - 1
+                const isLast = idx === sections.length - 1
                 const divider: 'quote' | 'diamond' | 'none' = isLast ? 'none' : idx % 2 === 0 ? 'quote' : 'none'
 
                 const currentQuoteIdx = divider === 'quote' ? quoteIdx++ : 0
-
-                const buckets = storiesByIssueBuckets[issue.slug]
-                const mixed = buckets ? mixHomepageStories(buckets, 7, positivity) : []
 
                 return (
                   <IssueSection
                     key={issue.id}
                     issue={issue}
-                    allStories={mixed}
-                    heroStoryId={heroStory?.id ?? null}
+                    stories={stories}
+                    quoteStories={mixed}
                     layout={layout}
                     divider={divider}
                     quoteVariantIndex={currentQuoteIdx}
@@ -328,6 +350,8 @@ export default function HomePage() {
                 return acc
               }, [])}
           </>
+        ) : hasPublishedStories ? (
+          <MixHasNoStories />
         ) : (
           <p className="text-center text-neutral-500 py-12">No stories published yet. Check back soon.</p>
         )}

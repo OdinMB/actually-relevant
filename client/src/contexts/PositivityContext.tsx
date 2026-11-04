@@ -51,6 +51,13 @@ export function parseMixParam(raw: string | null): number | null {
   return parsed <= 100 ? clampToValid(parsed) : null
 }
 
+/** `params` with the `mix` parameter naming `value` (snapped to a position); the other parameters are kept. */
+export function withMix(params: URLSearchParams, value: number): URLSearchParams {
+  const next = new URLSearchParams(params)
+  next.set(MIX_PARAM, MIX_NAMES[clampToValid(value)]!)
+  return next
+}
+
 function readStored(): number {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -78,14 +85,7 @@ export function PositivityProvider({ children }: { children: React.ReactNode }) 
     const next = clampToValid(value)
     setPositivityRaw(next)
     // Keep the address shareable: the current page's URL reflects the slider
-    setSearchParams(
-      prev => {
-        const params = new URLSearchParams(prev)
-        params.set(MIX_PARAM, MIX_NAMES[next]!)
-        return params
-      },
-      { replace: true, preventScrollReset: true },
-    )
+    setSearchParams(prev => withMix(prev, next), { replace: true, preventScrollReset: true })
   }
 
   useEffect(() => {
