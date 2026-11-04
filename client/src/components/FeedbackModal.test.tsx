@@ -26,26 +26,32 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockApi.getFeedbackToken.mockResolvedValue({ token: 'form-token' })
   vi.useFakeTimers({ shouldAdvanceTime: true })
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
 })
 
 afterEach(() => {
   vi.useRealTimers()
+  Reflect.deleteProperty(document, 'visibilityState')
 })
 
 const onClose = vi.fn()
 const modal = (open: boolean) => <FeedbackModal open={open} onClose={onClose} story={STORY} />
 
-/** Let the refresh interval come round twice. */
-async function waitTwoRefreshes() {
+/** The reader comes back to the window once the form's token is old enough to replace. */
+async function comeBackLater() {
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(FORM_TOKEN_REFRESH_MS * 2)
+    await vi.advanceTimersByTimeAsync(FORM_TOKEN_REFRESH_MS)
   })
+  act(() => {
+    window.dispatchEvent(new Event('focus'))
+  })
+  await act(async () => {})
 }
 
 describe('FeedbackModal', () => {
-  it('requests no form token while closed, not even when the refresh interval comes round', async () => {
+  it('requests no form token while closed, not even when the reader comes back to the page much later', async () => {
     render(modal(false))
-    await waitTwoRefreshes()
+    await comeBackLater()
 
     expect(mockApi.getFeedbackToken).not.toHaveBeenCalled()
   })
@@ -55,13 +61,11 @@ describe('FeedbackModal', () => {
     expect(screen.getByRole('dialog', { name: 'Report an error' })).toBeInTheDocument()
     await waitFor(() => expect(mockApi.getFeedbackToken).toHaveBeenCalledTimes(1))
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(FORM_TOKEN_REFRESH_MS)
-    })
+    await comeBackLater()
     expect(mockApi.getFeedbackToken).toHaveBeenCalledTimes(2)
 
     rerender(modal(false))
-    await waitTwoRefreshes()
+    await comeBackLater()
     expect(mockApi.getFeedbackToken).toHaveBeenCalledTimes(2)
 
     rerender(modal(true))

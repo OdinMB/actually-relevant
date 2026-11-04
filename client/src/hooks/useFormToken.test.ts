@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { StrictMode } from 'react'
 import { renderHook, act } from '@testing-library/react'
 import { useFormToken } from './useFormToken'
 import { FORM_TOKEN_MIN_AGE_MS, FORM_TOKEN_POST_MAX_AGE_MS, FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
@@ -114,6 +115,60 @@ describe('useFormToken', () => {
 
       expect(call.value).toBe('first')
       expect(fetchToken).toHaveBeenCalledTimes(1)
+    })
+
+    it('holds no token that arrives after the form is gone', async () => {
+      let deliverLate!: (token: string) => void
+      const fetchToken = vi.fn<() => Promise<string>>()
+      fetchToken.mockImplementationOnce(() => new Promise<string>(resolve => (deliverLate = resolve)))
+      fetchToken.mockImplementationOnce(async () => 'asked for again')
+      const { result, unmount } = renderHook(() => useFormToken(fetchToken))
+      const { getPostableToken } = result.current
+
+      unmount()
+      await act(async () => deliverLate('late'))
+      const call = startPostableToken(getPostableToken)
+      await wait(FORM_TOKEN_MIN_AGE_MS)
+
+      expect(call.value).toBe('asked for again')
+      expect(fetchToken).toHaveBeenCalledTimes(2)
+    })
+
+    // StrictMode (main.tsx) mounts, cleans up and mounts again in development: two first fetches.
+    it('holds the token of the mount that stays, when the cleaned-up mount gets its token later', async () => {
+      let deliverStale!: (token: string) => void
+      const fetchToken = vi.fn<() => Promise<string>>()
+      fetchToken.mockImplementationOnce(() => new Promise<string>(resolve => (deliverStale = resolve)))
+      fetchToken.mockImplementationOnce(async () => 'kept')
+      const { result } = renderHook(() => useFormToken(fetchToken), { wrapper: StrictMode })
+      await wait(0)
+      expect(fetchToken).toHaveBeenCalledTimes(2)
+      expect(result.current.status).toBe('ready')
+
+      await act(async () => deliverStale('stale'))
+      const call = startPostableToken(result.current.getPostableToken)
+      await wait(0)
+
+      expect(call.value).toBe('kept')
+    })
+
+    it('stays ready when the cleaned-up mount fails after the mount that stays got its token', async () => {
+      let failStale!: (err: unknown) => void
+      const fetchToken = vi.fn<() => Promise<string>>()
+      fetchToken.mockImplementationOnce(() => new Promise<string>((_, reject) => (failStale = reject)))
+      fetchToken.mockImplementationOnce(async () => 'kept')
+      fetchToken.mockImplementationOnce(async () => {
+        throw new Error('still down')
+      })
+      const { result } = renderHook(() => useFormToken(fetchToken), { wrapper: StrictMode })
+      await wait(0)
+      expect(result.current.status).toBe('ready')
+
+      await act(async () => failStale(new Error('down')))
+      await wait(0)
+
+      expect(fetchToken).toHaveBeenCalledTimes(3)
+      expect(result.current.status).toBe('ready')
     })
 
     it('keeps the token source of the first render', async () => {
