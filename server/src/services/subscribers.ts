@@ -1,6 +1,7 @@
 import axios from 'axios'
 import prisma from '../lib/prisma.js'
 import * as plunk from './plunk.js'
+import { contactPages } from './plunkContacts.js'
 import { createLogger } from '../lib/logger.js'
 
 const log = createLogger('subscribers')
@@ -198,59 +199,54 @@ function plunkErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'unknown error'
 }
 
-/** Page through every Plunk contact, bounded by a page cap and an overall deadline. */
+/**
+ * The page's contacts that carry an address. listContacts is declared to return { items }, but the
+ * live shape is unverified (it may return { contacts }), so it is read defensively.
+ */
+function pageContacts(page: { items?: unknown; contacts?: unknown }): PlunkContactLite[] {
+  const items: unknown = Array.isArray(page.items) ? page.items : Array.isArray(page.contacts) ? page.contacts : []
+  const contacts: PlunkContactLite[] = []
+  for (const raw of items as unknown[]) {
+    const c = raw as { email?: unknown; subscribed?: unknown; id?: unknown }
+    if (typeof c?.email === 'string' && c.email) {
+      contacts.push({ email: c.email, subscribed: coerceSubscribed(c.subscribed), id: typeof c.id === 'string' ? c.id : null })
+    }
+  }
+  return contacts
+}
+
+/**
+ * Page through every Plunk contact, bounded by a page cap and an overall deadline. A failed first
+ * page makes Plunk unavailable; a later failure, or a paging fault (`contactPages` throws when more
+ * pages are announced without a cursor, or a cursor repeats), keeps what loaded as partial.
+ */
 async function fetchAllPlunkContacts(): Promise<PlunkFetch> {
   const contacts: PlunkContactLite[] = []
   const deadline = Date.now() + PLUNK_OVERALL_TIMEOUT_MS
-  let cursor: string | undefined
   let pages = 0
-  let firstCall = true
   let partial = false
   let truncated = false
 
-  while (true) {
-    if (Date.now() > deadline) {
-      partial = true
-      break
-    }
-
-    let page: { items?: unknown; contacts?: unknown; hasMore?: boolean; nextCursor?: string | null }
-    try {
-      page = await plunk.listContacts(cursor, PLUNK_PAGE_SIZE)
-    } catch (err) {
-      if (firstCall) {
-        log.warn({ err }, 'failed to list Plunk contacts')
-        return { contacts: [], available: false, partial: false, truncated: false, error: plunkErrorMessage(err) }
+  try {
+    for await (const page of contactPages(plunk.listContacts, PLUNK_PAGE_SIZE)) {
+      pages++
+      contacts.push(...pageContacts(page))
+      if (pages >= PLUNK_MAX_PAGES) {
+        truncated = true
+        break
       }
-      log.warn({ err }, 'Plunk contact pagination failed partway; returning partial set')
-      partial = true
-      break
-    }
-    firstCall = false
-
-    // listContacts is declared to return { items }, but the live shape is unverified
-    // (it may return { contacts }). Normalize defensively before iterating.
-    const items: unknown = Array.isArray(page?.items) ? page.items : Array.isArray(page?.contacts) ? page.contacts : []
-    for (const raw of items as unknown[]) {
-      const c = raw as { email?: unknown; subscribed?: unknown; id?: unknown }
-      if (typeof c?.email === 'string' && c.email) {
-        contacts.push({ email: c.email, subscribed: coerceSubscribed(c.subscribed), id: typeof c.id === 'string' ? c.id : null })
+      if (page.hasMore && Date.now() > deadline) {
+        partial = true
+        break
       }
     }
-
-    pages++
-    if (pages >= PLUNK_MAX_PAGES) {
-      truncated = true
-      break
+  } catch (err) {
+    if (pages === 0) {
+      log.warn({ err }, 'failed to list Plunk contacts')
+      return { contacts: [], available: false, partial: false, truncated: false, error: plunkErrorMessage(err) }
     }
-    if (!page?.hasMore || !page?.nextCursor) break
-    if (page.nextCursor === cursor) {
-      // A repeated cursor would loop forever; stop and flag the data as partial.
-      log.warn({ cursor }, 'Plunk returned an unchanged pagination cursor; stopping to avoid a loop')
-      partial = true
-      break
-    }
-    cursor = page.nextCursor
+    log.warn({ err }, 'Plunk contact pagination failed partway; returning partial set')
+    partial = true
   }
 
   return { contacts, available: true, partial, truncated, error: null }

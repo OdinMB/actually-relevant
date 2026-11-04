@@ -29,12 +29,12 @@ import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
+import { contactPages, contactStatus } from '../services/plunkContacts.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
 const PAGE_SIZE = 100
-const MAX_PAGES = 10_000
 
 /** <repo>/DOCS, resolved from this file (server/src/scripts). */
 export const DOCS_DIR = path.resolve(__dirname, '../../../DOCS')
@@ -59,19 +59,16 @@ export interface FetchAllResult {
 }
 
 /**
- * Page through all contacts. Throws when Plunk announces more pages without a
- * cursor, or repeats a cursor, so a paging fault cannot pass as a complete list.
+ * Page through all contacts (`contactPages`). Throws when Plunk announces more
+ * pages without a cursor, or repeats a cursor, so a paging fault cannot pass as a
+ * complete list.
  */
 export async function fetchAllContacts(listPage: ListPage, pageSize = PAGE_SIZE): Promise<FetchAllResult> {
   const contacts: RawContact[] = []
-  const seenCursors = new Set<string>()
-  let cursor: string | undefined
   let pages = 0
   let reportedTotal: number | null = null
 
-  while (true) {
-    if (pages >= MAX_PAGES) throw new Error(`stopped after ${MAX_PAGES} pages; paging looks stuck`)
-    const page = await listPage(cursor, pageSize)
+  for await (const page of contactPages(listPage, pageSize)) {
     pages++
     if (pages === 1) {
       // parseContactsResponse fills `total` with the page length when Plunk sends none;
@@ -79,11 +76,6 @@ export async function fetchAllContacts(listPage: ListPage, pageSize = PAGE_SIZE)
       reportedTotal = page.total !== page.items.length || !page.hasMore ? page.total : null
     }
     contacts.push(...page.items)
-    if (!page.hasMore) break
-    if (!page.nextCursor) throw new Error(`Plunk reported more contacts after page ${pages} but sent no cursor`)
-    if (seenCursors.has(page.nextCursor)) throw new Error(`Plunk repeated a cursor after page ${pages}`)
-    seenCursors.add(page.nextCursor)
-    cursor = page.nextCursor
   }
   return { contacts, pages, reportedTotal }
 }
@@ -108,9 +100,10 @@ export function summarizeContacts(contacts: RawContact[]): BackupSummary {
   let unknownStatus = 0
   let missingEmail = 0
   for (const c of contacts) {
-    if (c.subscribed === true) subscribed++
-    else if (c.subscribed === false) unsubscribed++
-    else unknownStatus++
+    const status = contactStatus(c)
+    if (status === 'subscribed') subscribed++
+    else if (status === 'unknown') unknownStatus++
+    else unsubscribed++ // snoozed included: Plunk holds it as subscribed: false
     if (typeof c.email !== 'string' || !c.email.trim()) missingEmail++
     if (typeof c.id === 'string') {
       if (ids.has(c.id)) duplicateIds++

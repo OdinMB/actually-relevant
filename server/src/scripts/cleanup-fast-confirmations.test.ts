@@ -154,4 +154,11 @@ describe('planUnsubscribes', () => {
     expect(plan.toUnsubscribe).toEqual([{ id: 'c1', plunkEmail: 'SUB@x.com', email: 'sub@x.com', gapSeconds: 1 }])
     expect(plan.notSubscribed.sort()).toEqual(['already@x.com', 'gone@x.com'])
   })
+
+  it('leaves a snoozed contact alone, as not subscribed', () => {
+    const snoozed = { id: 'c3', email: 'snoozed@x.com', subscribed: false, snoozedUntil: '2026-12-01T00:00:00Z' }
+    const plan = planUnsubscribes([{ email: 'snoozed@x.com', gapSeconds: 1 }], [snoozed])
+    expect(plan.toUnsubscribe).toEqual([])
+    expect(plan.notSubscribed).toEqual(['snoozed@x.com'])
+  })
 })

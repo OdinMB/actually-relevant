@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import axios from 'axios'
 import prisma from '../lib/prisma.js'
 import * as plunk from './plunk.js'
+import { contactStatus } from './plunkContacts.js'
 import { checkSendAllowance } from './subscribeLimits.js'
 import { confirmationLinkExpiry, sendConfirmationEmail } from './confirmationEmail.js'
 import type { NoticeInput } from './adminNotices.js'
@@ -158,7 +159,7 @@ async function mayResubscribe(email: string, subscriptionId: string): Promise<bo
   let read: 'contact lookup' | 'activity read' = 'contact lookup'
   try {
     const contacts = await plunk.findContactsByEmail(email)
-    if (contacts.some(contact => contact.subscribed !== false || contact.snoozedUntil != null)) {
+    if (contacts.some(contact => contactStatus(contact) !== 'unsubscribed')) {
       log.info({ subscriptionId }, 'already subscribed, returning success without action')
       return false
     }

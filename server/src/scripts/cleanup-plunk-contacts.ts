@@ -53,6 +53,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
 import { PrismaClient } from '@prisma/client'
+import { contactPages, contactStatus } from '../services/plunkContacts.js'
 
 const PAGE_SIZE = 100
 const DELETE_DELAY_MS = 200
@@ -121,14 +122,16 @@ export type ContactVerdict = 'purge' | 'subscribed' | 'confirmed' | 'no-date' | 
 
 /**
  * Why a contact is or is not purged. A contact is purgeable only if it is
- * explicitly not subscribed, its email never confirmed locally, it was created
- * before `olderThan`, and its creation time falls in no protected window. A
- * missing or unparseable createdAt is "too new to judge" and kept. The window
- * check comes last, so 'import-window' counts exactly the contacts the import
- * guard saved from deletion.
+ * explicitly not subscribed (`subscribed: false`, which a snoozed contact reads
+ * too), its email never confirmed locally, it was created before `olderThan`, and
+ * its creation time falls in no protected window. A flag that is not a boolean
+ * keeps the contact, as subscribed. A missing or unparseable createdAt is "too
+ * new to judge" and kept. The window check comes last, so 'import-window' counts
+ * exactly the contacts the import guard saved from deletion.
  */
 export function classifyContact(contact: { email: string; subscribed: boolean; createdAt?: string }, rules: PurgeRules): ContactVerdict {
-  if (contact.subscribed !== false) return 'subscribed'
+  const status = contactStatus(contact)
+  if (status === 'subscribed' || status === 'unknown') return 'subscribed'
   if (rules.confirmedEmails.has(contact.email.toLowerCase())) return 'confirmed'
   if (!contact.createdAt) return 'no-date'
   const created = new Date(contact.createdAt)
@@ -181,22 +184,20 @@ async function main() {
 
   const rules: PurgeRules = { confirmedEmails, olderThan: cutoff, protectedWindows: args.protectedWindows }
 
-  // Page through all Plunk contacts and collect the purgeable ones.
+  // Page through all Plunk contacts and collect the purgeable ones. A paging fault
+  // throws (contactPages), so the run stops before deleting anything rather than
+  // judge part of the list as the whole.
   const purgeable: { id: string; email: string; createdAt: string }[] = []
   let importProtected = 0
-  let cursor: string | undefined
   let scanned = 0
 
-  while (true) {
-    const page = await plunk.listContacts(cursor, PAGE_SIZE)
+  for await (const page of contactPages(plunk.listContacts, PAGE_SIZE)) {
     for (const c of page.items) {
       scanned++
       const verdict = classifyContact(c, rules)
       if (verdict === 'purge') purgeable.push({ id: c.id, email: c.email, createdAt: c.createdAt as string })
       else if (verdict === 'import-window') importProtected++
     }
-    if (!page.hasMore || !page.nextCursor) break
-    cursor = page.nextCursor
   }
 
   console.log(

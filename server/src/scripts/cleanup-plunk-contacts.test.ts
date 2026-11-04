@@ -37,6 +37,12 @@ describe('shouldPurgeContact', () => {
   it('keeps a contact with an unparseable createdAt', () => {
     expect(shouldPurgeContact({ email: 'weird@example.com', subscribed: false, createdAt: 'not-a-date' }, rules)).toBe(false)
   })
+
+  it('judges a snoozed contact, which reads subscribed: false, like an unsubscribed one', () => {
+    const snoozed = { email: 'bot@example.com', subscribed: false, snoozedUntil: '2026-12-01T00:00:00.000Z', createdAt: aged }
+    expect(classifyContact(snoozed, rules)).toBe('purge')
+    expect(classifyContact({ ...snoozed, createdAt: recent }, rules)).toBe('too-new')
+  })
 })
 
 describe('import guard (protected creation window)', () => {

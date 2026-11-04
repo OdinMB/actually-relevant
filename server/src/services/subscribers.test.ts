@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockPrisma = vi.hoisted(() => ({
   pendingSubscription: { findMany: vi.fn() },
@@ -113,6 +113,7 @@ describe('reconcile', () => {
 describe('getSubscriberReconciliation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockPlunk.listContacts.mockReset()
     mockPrisma.pendingSubscription.findMany.mockResolvedValue([])
   })
 
@@ -182,6 +183,81 @@ describe('getSubscriberReconciliation', () => {
     const result = await getSubscriberReconciliation()
 
     expect(result.plunk.subscribed).toBe(1)
+  })
+
+  it('flags partial when Plunk says more pages follow but sends no cursor, instead of passing the list as complete', async () => {
+    mockPlunk.listContacts.mockResolvedValueOnce({ items: [plunkContact('a@x.com', true)], hasMore: true, nextCursor: null })
+
+    const result = await getSubscriberReconciliation()
+
+    expect(mockPlunk.listContacts).toHaveBeenCalledTimes(1)
+    expect(result.plunk.available).toBe(true)
+    expect(result.plunk.partial).toBe(true)
+    expect(result.plunk.total).toBe(1)
+  })
+
+  it('flags partial when a cursor seen pages earlier comes back', async () => {
+    mockPlunk.listContacts
+      .mockResolvedValueOnce({ items: [plunkContact('a@x.com', true)], hasMore: true, nextCursor: 'c1' })
+      .mockResolvedValueOnce({ items: [plunkContact('b@x.com', true)], hasMore: true, nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: [plunkContact('c@x.com', true)], hasMore: true, nextCursor: 'c1' })
+
+    const result = await getSubscriberReconciliation()
+
+    expect(mockPlunk.listContacts).toHaveBeenCalledTimes(3)
+    expect(result.plunk.partial).toBe(true)
+    expect(result.plunk.truncated).toBe(false)
+    expect(result.plunk.total).toBe(3)
+  })
+
+  it('stops at the page cap, flagged truncated, even when the last page read was the end', async () => {
+    let n = 0
+    mockPlunk.listContacts.mockImplementation(async () => {
+      n++
+      return { items: [plunkContact(`p${n}@x.com`, true)], hasMore: n < 100, nextCursor: n < 100 ? `c${n}` : null }
+    })
+
+    const result = await getSubscriberReconciliation()
+
+    expect(mockPlunk.listContacts).toHaveBeenCalledTimes(100)
+    expect(result.plunk.truncated).toBe(true)
+    expect(result.plunk.partial).toBe(false)
+    expect(result.plunk.total).toBe(100)
+  })
+
+  describe('against the overall deadline', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-11-04T12:00:00Z'))
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    /** A page that takes longer than the whole fetch may. */
+    const slowPage = (body: object) => async () => {
+      vi.setSystemTime(Date.now() + 11_000)
+      return body
+    }
+
+    it('asks for no further page once the deadline has passed, and flags partial', async () => {
+      mockPlunk.listContacts.mockImplementationOnce(slowPage({ items: [plunkContact('a@x.com', true)], hasMore: true, nextCursor: 'c2' }))
+
+      const result = await getSubscriberReconciliation()
+
+      expect(mockPlunk.listContacts).toHaveBeenCalledTimes(1)
+      expect(result.plunk.partial).toBe(true)
+      expect(result.plunk.total).toBe(1)
+    })
+
+    it('is not partial when the page that ran past the deadline was the last', async () => {
+      mockPlunk.listContacts.mockImplementationOnce(slowPage({ items: [plunkContact('a@x.com', true)], hasMore: false, nextCursor: null }))
+
+      const result = await getSubscriberReconciliation()
+
+      expect(result.plunk.partial).toBe(false)
+      expect(result.plunk.total).toBe(1)
+    })
   })
 
   it('aggregates contacts across multiple pages', async () => {
