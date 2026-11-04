@@ -69,14 +69,33 @@ export function focusRingProblems(el: Element): string[] {
 /**
  * Why a text field's focus indicator could miss 3:1 against the white around it (WCAG 1.4.11); empty
  * when it reaches it. The indicator is a `focus:ring-2`, and it and any `focus:border-` color are
- * brand-500 or darker: brand-500 is 4.0:1 on white, brand-400 2.6:1. Without `outline-none` the
- * browser's own outline draws beside the ring.
+ * opaque brand-500 or darker: brand-500 is 4.0:1 on white, brand-400 2.6:1, and an opacity suffix
+ * (`/50`) lets the white through. Without `outline-none` the browser's own outline draws beside the ring.
  */
 export function fieldFocusProblems(el: Element): string[] {
   const classes = [...el.classList]
   const problems = ['outline-none', 'focus:ring-2'].filter(needed => !classes.includes(needed)).map(missing => `no ${missing}`)
-  const colors = classes.filter(c => /^focus:(?:ring|border)-(?!offset-)[a-z]+-\d+$/.test(c))
+  const colors = classes.filter(c => /^focus:(?:ring|border)-(?!offset-)[a-z]+-\d+(?:\/\d+)?$/.test(c))
   if (!colors.some(c => c.startsWith('focus:ring-'))) problems.push('no focus:ring color')
-  problems.push(...colors.filter(c => !/^focus:(?:ring|border)-brand-[5-9]\d\d$/.test(c)).map(c => `${c} is not brand-500 or darker`))
+  problems.push(
+    ...colors
+      .filter(c => !/^focus:(?:ring|border)-brand-[5-9]\d\d$/.test(c))
+      .map(c => (c.includes('/') ? `${c} is translucent` : `${c} is not brand-500 or darker`)),
+  )
+  return problems
+}
+
+/**
+ * Why a field's resting border could miss 3:1 against the page and the field's own fill (WCAG
+ * 1.4.11); empty when it reaches it. The border is opaque `border-neutral-500` or darker: 4.7:1 on
+ * white and 4.5:1 on the forms' neutral-50 fill, where neutral-300 is 1.5:1 and neutral-400 2.5:1.
+ */
+export function fieldBorderProblems(el: Element): string[] {
+  const classes = [...el.classList]
+  const problems = classes.includes('border') ? [] : ['no border']
+  // Two letters or more after `border-`, so a side (`border-l-4`) is not taken for a color
+  const colors = classes.filter(c => /^border-[a-z]{2,}-\d+(?:\/\d+)?$/.test(c))
+  if (colors.length === 0) problems.push('no border color')
+  problems.push(...colors.filter(c => !/^border-neutral-[5-9]00$/.test(c)).map(c => `${c} is not an opaque neutral-500 or darker`))
   return problems
 }

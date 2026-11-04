@@ -12,7 +12,7 @@ vi.mock('../lib/api', async importOriginal => ({
 
 import FeedbackForm from './FeedbackForm'
 import { FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
-import { fieldFocusProblems } from '../test/classes'
+import { fieldBorderProblems, fieldFocusProblems } from '../test/classes'
 
 const STORY = { id: 'story-1', title: 'Air & Health: Cities cut smog' }
 
@@ -146,6 +146,14 @@ describe('FeedbackForm', () => {
     await ready()
     for (const name of ['Message', 'Email (optional)']) {
       expect(fieldFocusProblems(screen.getByRole('textbox', { name })), name).toEqual([])
+    }
+  })
+
+  it('outlines the message and email fields at rest in a grey that reaches 3:1 against the page and their fill', async () => {
+    render(<FeedbackForm />)
+    await ready()
+    for (const name of ['Message', 'Email (optional)']) {
+      expect(fieldBorderProblems(screen.getByRole('textbox', { name })), name).toEqual([])
     }
   })
 

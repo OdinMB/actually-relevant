@@ -252,7 +252,7 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
             placeholder="you@example.com"
             required
             autoComplete="email"
-            className={`w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors`}
+            className={`w-full px-4 py-3 text-base border border-neutral-500 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors`}
             aria-describedby={[availability === 'unavailable' && `${idPrefix}-unavailable`, errorMessage && `${idPrefix}-error`, `${idPrefix}-promise`]
               .filter(Boolean)
               .join(' ')}

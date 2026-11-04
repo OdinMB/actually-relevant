@@ -58,7 +58,7 @@ export default function SearchPanel({ query, onQueryChange, onClose }: SearchPan
             value={query}
             onChange={e => onQueryChange(e.target.value)}
             placeholder="Search stories..."
-            className={`w-full pl-10 pr-10 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors`}
+            className={`w-full pl-10 pr-10 py-3 text-base border border-neutral-500 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors`}
             aria-label="Search stories"
           />
           <button

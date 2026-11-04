@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import StoryCard from './StoryCard'
 import { makeStory, announcedText } from '../test/stories'
-import { phoneAfterReach } from '../test/classes'
+import { focusRingProblems, phoneAfterReach } from '../test/classes'
 
 const VARIANTS = ['featured', 'compact', 'horizontal', 'equal'] as const
 
@@ -32,6 +32,15 @@ describe('StoryCard AI badge', () => {
   it.each(VARIANTS)('%s: shows the badge even when the story has no title label', variant => {
     renderCard(variant, makeStory({ titleLabel: null, title: 'Headline without a label' }))
     expect(screen.getByRole('link', { name: 'AI-generated Headline without a label' })).toBeInTheDocument()
+  })
+})
+
+describe('StoryCard focus', () => {
+  it.each(VARIANTS)('%s: shows keyboard focus on the story link, the source link and the bookmark as the brand ring alone', variant => {
+    renderCard(variant)
+    const controls = [...screen.getAllByRole('link'), screen.getByRole('button', { name: 'Bookmark story' })]
+    expect(controls).toHaveLength(3)
+    for (const control of controls) expect(focusRingProblems(control), control.textContent ?? '').toEqual([])
   })
 })
 

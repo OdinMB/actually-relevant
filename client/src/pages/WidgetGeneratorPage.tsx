@@ -3,7 +3,10 @@ import { Helmet } from 'react-helmet-async'
 import { Link } from 'react-router-dom'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { SITE_URL } from '../config'
-import { FIELD_FOCUS } from '../lib/control-classes'
+import { FIELD_FOCUS, FOCUS_RING } from '../lib/control-classes'
+
+/** The summary and uplifting options: the brand ring from the keyboard, clear of the box by a white gap. */
+const CHECKBOX = `w-4 h-4 rounded border-neutral-300 text-brand-600 ${FOCUS_RING} focus-visible:ring-offset-2`
 
 const ISSUES = [
   { label: 'All issues', value: '' },
@@ -87,7 +90,7 @@ export default function WidgetGeneratorPage() {
                 id="widget-issue"
                 value={issue}
                 onChange={e => setIssue(e.target.value)}
-                className={`w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm bg-white ${FIELD_FOCUS}`}
+                className={`w-full border border-neutral-500 rounded-lg px-3 py-2 text-sm bg-white ${FIELD_FOCUS}`}
               >
                 {ISSUES.map(i => (
                   <option key={i.value} value={i.value}>
@@ -108,7 +111,7 @@ export default function WidgetGeneratorPage() {
                 max={5}
                 value={count}
                 onChange={e => setCount(parseInt(e.target.value, 10))}
-                className="w-full accent-brand-600"
+                className={`w-full accent-brand-600 rounded ${FOCUS_RING} focus-visible:ring-offset-2`}
                 aria-valuemin={1}
                 aria-valuemax={5}
                 aria-valuenow={count}
@@ -140,12 +143,7 @@ export default function WidgetGeneratorPage() {
 
             <div>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showSummary}
-                  onChange={e => setShowSummary(e.target.checked)}
-                  className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-2 focus:ring-brand-200"
-                />
+                <input type="checkbox" checked={showSummary} onChange={e => setShowSummary(e.target.checked)} className={CHECKBOX} />
                 <span className="text-sm font-medium text-neutral-700">Show relevance summaries</span>
               </label>
               <p className="text-xs text-neutral-500 mt-1 ml-6">Display a short summary explaining why each story matters.</p>
@@ -153,12 +151,7 @@ export default function WidgetGeneratorPage() {
 
             <div>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={upliftingOnly}
-                  onChange={e => setUpliftingOnly(e.target.checked)}
-                  className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-2 focus:ring-brand-200"
-                />
+                <input type="checkbox" checked={upliftingOnly} onChange={e => setUpliftingOnly(e.target.checked)} className={CHECKBOX} />
                 <span className="text-sm font-medium text-neutral-700">Only uplifting stories</span>
               </label>
               <p className="text-xs text-neutral-500 mt-1 ml-6">Show only stories tagged as uplifting.</p>

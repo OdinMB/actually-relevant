@@ -6,7 +6,7 @@ import SubscribeForm from './SubscribeForm'
 import { ApiError } from '../lib/api'
 import { NEWSLETTER_PROMISE } from '../config'
 import type { TurnstileRenderOptions } from '../lib/turnstile'
-import { fieldFocusProblems } from '../test/classes'
+import { fieldBorderProblems, fieldFocusProblems } from '../test/classes'
 
 const mockSubscribe = vi.fn()
 const mockGetToken = vi.fn()
@@ -88,6 +88,11 @@ describe('SubscribeForm', () => {
   it('rings the email field on focus in a brand shade that reaches 3:1 against white', async () => {
     await renderReady()
     expect(fieldFocusProblems(screen.getByRole('textbox', { name: 'Email address' }))).toEqual([])
+  })
+
+  it('outlines the email field at rest in a grey that reaches 3:1 against the page and its fill', async () => {
+    await renderReady()
+    expect(fieldBorderProblems(screen.getByRole('textbox', { name: 'Email address' }))).toEqual([])
   })
 
   it('reads "Loading..." on the disabled button until the form token has loaded, without a message meanwhile', async () => {

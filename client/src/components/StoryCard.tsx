@@ -9,6 +9,7 @@ import { isRead } from '../lib/reading-history'
 import FeedFavicon from './FeedFavicon'
 import BookmarkButton from './BookmarkButton'
 import StoryTitleLabel from './StoryTitleLabel'
+import { FOCUS_RING } from '../lib/control-classes'
 
 interface StoryCardProps {
   story: PublicStory
@@ -25,7 +26,7 @@ function StoryMeta({ story, size = 'sm' }: { story: PublicStory; size?: 'sm' | '
           href={story.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-neutral-600 hover:text-neutral-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+          className={`text-neutral-600 hover:text-neutral-700 transition-colors ${FOCUS_RING} rounded`}
         >
           {story.feed.displayTitle || story.feed.title}
           <span className="sr-only"> (opens in new tab)</span>
@@ -61,7 +62,7 @@ export default function StoryCard({ story, variant = 'featured' }: StoryCardProp
           {/* Left: title + meta */}
           <div className="p-6 md:p-8 md:flex-1">
             <div className="flex items-start justify-between gap-2">
-              <Link to={`/stories/${story.slug}`} className="block flex-1 min-w-0 focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
+              <Link to={`/stories/${story.slug}`} className={`block flex-1 min-w-0 ${FOCUS_RING} rounded`}>
                 <StoryTitleLabel story={story} className="mb-1" />
                 <h3 className="text-2xl md:text-3xl font-bold text-neutral-900 mb-2 group-hover:text-brand-800 transition-colors">{getHeadline(story)}</h3>
               </Link>
@@ -92,7 +93,7 @@ export default function StoryCard({ story, variant = 'featured' }: StoryCardProp
         {Pattern && <Pattern opacity={0.12} />}
         <div className="relative z-10 p-6 md:p-8">
           <div className="flex items-start justify-between gap-2">
-            <Link to={`/stories/${story.slug}`} className="block flex-1 min-w-0 focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
+            <Link to={`/stories/${story.slug}`} className={`block flex-1 min-w-0 ${FOCUS_RING} rounded`}>
               <StoryTitleLabel story={story} className="mb-1" />
               <h3 className={`text-3xl md:text-4xl font-bold text-neutral-900 mb-2 group-hover:text-brand-800 transition-colors leading-tight ${readClass}`}>
                 {getHeadline(story)}
@@ -118,7 +119,7 @@ export default function StoryCard({ story, variant = 'featured' }: StoryCardProp
       >
         <div className="relative z-10 p-5">
           <div className="flex items-start justify-between gap-1">
-            <Link to={`/stories/${story.slug}`} className="block flex-1 min-w-0 focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
+            <Link to={`/stories/${story.slug}`} className={`block flex-1 min-w-0 ${FOCUS_RING} rounded`}>
               <StoryTitleLabel story={story} className="mb-1" />
               <h3 className="text-lg font-bold text-neutral-900 mb-2 group-hover:text-brand-800 transition-colors leading-snug">{getHeadline(story)}</h3>
             </Link>
@@ -143,7 +144,7 @@ export default function StoryCard({ story, variant = 'featured' }: StoryCardProp
     >
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <Link to={`/stories/${story.slug}`} className="block focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
+          <Link to={`/stories/${story.slug}`} className={`block ${FOCUS_RING} rounded`}>
             <StoryTitleLabel story={story} className="mb-0.5" />
             <h3 className={`text-base font-bold text-neutral-900 mb-1.5 group-hover:text-brand-800 transition-colors leading-snug ${readClass}`}>
               {getHeadline(story)}

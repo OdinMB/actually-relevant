@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import BookmarkButton from './BookmarkButton'
-import { isBox, phoneAfterReach, sizeByBreakpoint } from '../test/classes'
+import { focusRingProblems, isBox, phoneAfterReach, sizeByBreakpoint } from '../test/classes'
 
 beforeEach(() => {
   localStorage.clear()
@@ -18,6 +18,11 @@ describe('BookmarkButton', () => {
     render(<BookmarkButton slug="a-story" />)
     const button = screen.getByRole('button', { name: 'Bookmark story' })
     expect([...button.classList].filter(c => /^text-neutral-[1-4]00$/.test(c))).toEqual([])
+  })
+
+  it.each(['corner', 'row'] as const)('%s: shows keyboard focus as the brand ring alone, without the browser outline beside it', placement => {
+    render(<BookmarkButton slug="a-story" placement={placement} />)
+    expect(focusRingProblems(screen.getByRole('button', { name: 'Bookmark story' }))).toEqual([])
   })
 })
 

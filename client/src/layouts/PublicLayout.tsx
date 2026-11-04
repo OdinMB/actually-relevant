@@ -48,7 +48,8 @@ function PublicLayoutInner() {
       {/* Category color strip — mobile only */}
       <CategoryColorStrip className="lg:hidden" />
 
-      <main id="main-content" className="flex-1">
+      {/* RouteAnnouncer focuses it after an in-app page change; it is not a control, so it draws no outline */}
+      <main id="main-content" className="flex-1 focus:outline-none">
         <Outlet />
       </main>
 

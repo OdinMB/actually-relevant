@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { isSaved, toggleSaved } from '../lib/preferences'
-import { ROW_ICON_TARGET } from '../lib/control-classes'
+import { FOCUS_RING, ROW_ICON_TARGET } from '../lib/control-classes'
 
 interface BookmarkButtonProps {
   slug: string
@@ -55,7 +55,7 @@ export default function BookmarkButton({ slug, size = 'sm', hoverReveal = false,
   return (
     <button
       onClick={handleToggle}
-      className={`${box} rounded transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 ${
+      className={`${box} rounded transition-colors ${FOCUS_RING} ${
         saved ? 'text-brand-600 hover:text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
       } ${visibilityClass} ${className}`}
       aria-label={saved ? 'Remove bookmark' : 'Bookmark story'}

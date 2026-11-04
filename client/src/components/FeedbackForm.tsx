@@ -209,7 +209,7 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
             placeholder={story ? 'A wrong fact, date, name or label' : "What's on your mind?"}
             required
             rows={4}
-            className={`w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors resize-y`}
+            className={`w-full px-4 py-3 text-base border border-neutral-500 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors resize-y`}
             aria-describedby={`${idPrefix}-char-count`}
           />
           <p id={`${idPrefix}-char-count`} className="text-xs text-neutral-500 text-right mt-1">
@@ -229,7 +229,7 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
             onChange={e => setEmail(e.target.value)}
             placeholder="your@email.com — if you'd like a response"
             autoComplete="email"
-            className={`w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors`}
+            className={`w-full px-4 py-3 text-base border border-neutral-500 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors`}
           />
         </div>
 

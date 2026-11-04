@@ -192,18 +192,15 @@
     background-color: var(--card-hover-color);
   }
 
+  /* Issue nav link: the hue's light shade underlines it and its 700 shade colors the text (4.5:1 on white) */
   .issue-nav-link {
     @apply inline-flex items-center gap-2 px-6 py-3.5 text-sm font-bold uppercase tracking-widest transition-colors;
-    @apply focus-visible:ring-2 focus-visible:ring-brand-500 border-b-2 border-transparent text-neutral-500;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 border-b-2 border-transparent text-neutral-500;
   }
 
-  .issue-nav-link:hover {
-    color: var(--issue-color);
-    border-bottom-color: var(--issue-color);
-  }
-
+  .issue-nav-link:hover,
   .issue-nav-link[data-active='true'] {
-    color: var(--issue-color);
+    color: var(--issue-text-color);
     border-bottom-color: var(--issue-color);
   }
 

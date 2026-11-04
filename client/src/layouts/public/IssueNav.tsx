@@ -32,7 +32,13 @@ export default function IssueNav({ searchOpen, onToggleSearch }: IssueNavProps) 
           const active = isActiveIssue(pathname, link.href)
           return (
             <li key={link.href}>
-              <Link to={link.href} className="issue-nav-link" data-active={active} style={{ '--issue-color': colors.hex } as React.CSSProperties}>
+              <Link
+                to={link.href}
+                className="issue-nav-link"
+                data-active={active}
+                aria-current={active ? 'page' : undefined}
+                style={{ '--issue-color': colors.hex, '--issue-text-color': colors.textHex } as React.CSSProperties}
+              >
                 <span className={`w-2.5 h-2.5 rounded-full -translate-y-px ${colors.dotBg} ${active ? 'opacity-100' : 'opacity-60'}`} aria-hidden="true" />
                 {link.label}
               </Link>

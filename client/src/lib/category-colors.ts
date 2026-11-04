@@ -16,6 +16,8 @@ export interface CategoryColor {
   dotBg: string
   /** Raw hex color for inline styles (CSS variables, hover effects) */
   hex: string
+  /** The hue's 700 shade, for text in it on white: 4.5:1 or more, where `hex` is 1.7:1 to 3:1 (the active issue tab) */
+  textHex: string
   /** Light tinted background for featured cards, e.g. "bg-amber-50/60" */
   bgTint: string
 }
@@ -28,6 +30,7 @@ const CATEGORY_COLORS: Record<string, CategoryColor> = {
     bg: 'bg-amber-50',
     dotBg: 'bg-amber-400',
     hex: '#fbbf24',
+    textHex: '#b45309',
     bgTint: 'bg-amber-50/60',
   },
   'planet-climate': {
@@ -37,6 +40,7 @@ const CATEGORY_COLORS: Record<string, CategoryColor> = {
     bg: 'bg-teal-50',
     dotBg: 'bg-teal-400',
     hex: '#2dd4bf',
+    textHex: '#0f766e',
     bgTint: 'bg-teal-50/60',
   },
   'existential-threats': {
@@ -46,6 +50,7 @@ const CATEGORY_COLORS: Record<string, CategoryColor> = {
     bg: 'bg-red-50',
     dotBg: 'bg-red-400',
     hex: '#f87171',
+    textHex: '#b91c1c',
     bgTint: 'bg-red-50/60',
   },
   'science-technology': {
@@ -55,6 +60,7 @@ const CATEGORY_COLORS: Record<string, CategoryColor> = {
     bg: 'bg-indigo-50',
     dotBg: 'bg-indigo-400',
     hex: '#818cf8',
+    textHex: '#4338ca',
     bgTint: 'bg-indigo-50/60',
   },
   'general-news': {
@@ -64,6 +70,7 @@ const CATEGORY_COLORS: Record<string, CategoryColor> = {
     bg: 'bg-brand-50',
     dotBg: 'bg-brand-400',
     hex: '#f472b6',
+    textHex: '#b01a6a',
     bgTint: 'bg-brand-50/60',
   },
 }
