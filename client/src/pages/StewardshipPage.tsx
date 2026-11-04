@@ -91,7 +91,7 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
       </svg>
     ),
     title: 'Low Cost',
-    description: 'Under $85/month total. Hosting, AI, and crawling services.',
+    description: 'About $39/month all in: hosting, AI, podcast voicing, and the domain. No weekly upkeep needed to run it as is.',
     border: 'border-l-indigo-400',
   },
 ]
@@ -124,9 +124,13 @@ const TECH_STACK = [
 ]
 
 const COSTS = [
-  { item: 'Hosting (Render.com)', monthly: '~$15' },
-  { item: 'AI pipeline (OpenAI API)', monthly: '~$30\u201360' },
-  { item: 'Crawling services', monthly: '~$10' },
+  { item: 'Hosting and database (Render.com)', monthly: '$14' },
+  { item: 'AI pipeline (OpenAI API, varies with the sources)', monthly: '~$10' },
+  { item: 'Podcast voicing (ElevenLabs)', monthly: '~$8' },
+  { item: 'Website-to-RSS conversion', monthly: '$5' },
+  { item: 'Domain', monthly: '~$2' },
+  { item: 'Podcast audio storage (Bunny)', monthly: 'cents' },
+  { item: 'Newsletter sending (Plunk) and Cloudflare', monthly: 'free' },
 ]
 
 export default function StewardshipPage() {
@@ -150,8 +154,8 @@ export default function StewardshipPage() {
       <div className="page-section">
         <h1 className="page-title">Looking for a Long-Term Home</h1>
         <p className="page-intro text-left max-w-none mx-0 mt-2 mb-6">
-          Actually Relevant works. It curates global news daily, runs on a clean codebase, and costs less than $85 a month to operate. But it's a side project
-          run by one person, and it deserves more than that.
+          Actually Relevant works. It curates global news daily, runs on a clean codebase, and costs about $39 a month to operate. But it's a side project run
+          by one person, and it deserves more than that.
         </p>
 
         <div className="prose max-w-none">
@@ -221,7 +225,7 @@ export default function StewardshipPage() {
             className="w-full flex items-center justify-between px-5 py-3 text-left bg-neutral-50 hover:bg-neutral-100 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset"
             aria-expanded={costsOpen}
           >
-            <span className="text-sm font-bold text-neutral-700">Operating costs: ~$55&ndash;85/month</span>
+            <span className="text-sm font-bold text-neutral-700">Operating costs: ~$39/month</span>
             <ChevronIcon open={costsOpen} className="w-5 h-5 text-neutral-400 shrink-0" />
           </button>
           {costsOpen && (
@@ -246,7 +250,7 @@ export default function StewardshipPage() {
                   ))}
                   <tr className="font-bold">
                     <td className="py-2 px-3 text-neutral-800 align-top">Total</td>
-                    <td className="py-2 px-3 text-neutral-800 align-top">~$55&ndash;85</td>
+                    <td className="py-2 px-3 text-neutral-800 align-top">~$39</td>
                   </tr>
                 </tbody>
               </table>
