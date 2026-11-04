@@ -6,6 +6,7 @@ import { usePublicStory } from '../hooks/usePublicStories'
 import { useLatestNewsletterIssue } from '../hooks/useNewsletterArchive'
 import { getCategoryColor, shiftHex } from '../lib/category-colors'
 import { parsePoints } from '../lib/parse-points'
+import { markdownToPlainText } from '../lib/plainText'
 import { getTitleLabel, getHeadline } from '../lib/title-label'
 import { markAsRead } from '../lib/reading-history'
 import FeedFavicon from '../components/FeedFavicon'
@@ -122,6 +123,10 @@ export default function StoryPage() {
   if (!story) {
     return (
       <div className="page-section text-center">
+        {/* The address answers 200 (a removed story included), so the view itself keeps search engines away */}
+        <Helmet>
+          <meta name="robots" content="noindex" />
+        </Helmet>
         <h1 className="page-title">Story Not Found</h1>
         <p className="text-neutral-500 mb-6">This story may have been removed or is not yet published.</p>
         {backHome}
@@ -147,7 +152,9 @@ export default function StoryPage() {
       })
     : null
 
-  const description = story.summary || displayTitle
+  // Previews and share text cannot render Markdown; the server builds the same description for crawlers
+  const description = markdownToPlainText(story.summary ?? '') || displayTitle
+  const shareDescription = markdownToPlainText(story.marketingBlurb ?? '') || description
   const issueSlug = story.issue?.slug ?? story.feed?.issue?.slug ?? 'general-news'
   const issueName = story.issue?.name ?? story.feed?.issue?.name ?? 'News'
   const colors = getCategoryColor(issueSlug)
@@ -250,11 +257,7 @@ export default function StoryPage() {
                       |
                     </span>
                     <span className="inline-flex flex-wrap items-center gap-0.5">
-                      <ShareButtons
-                        url={`${SEO.siteUrl}/stories/${story.slug}`}
-                        title={displayTitle}
-                        description={story.marketingBlurb || story.summary || displayTitle}
-                      />
+                      <ShareButtons url={`${SEO.siteUrl}/stories/${story.slug}`} title={displayTitle} description={shareDescription} />
                     </span>
                   </span>
                 </>

@@ -9,6 +9,14 @@ describe('buildArticleSchema', () => {
     expect(schema.publishingPrinciples).toBe('https://actuallyrelevant.news/methodology')
     expect(schema.author).toEqual({ '@type': 'Organization', name: 'Actually Relevant', url: 'https://actuallyrelevant.news' })
   })
+
+  it('describes the story by its summary as plain text, cut to 200 characters', () => {
+    expect(buildArticleSchema(makeStory({ summary: '**Cities** cut smog, [the agency](https://example.org/report) says.' })).description).toBe(
+      'Cities cut smog, the agency says.',
+    )
+    const long = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
+    expect(buildArticleSchema(makeStory({ summary: `_${long}_` })).description).toBe(long.slice(0, 200))
+  })
 })
 
 describe('buildPodcastEpisodeSchema', () => {

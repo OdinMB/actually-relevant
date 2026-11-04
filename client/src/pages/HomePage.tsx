@@ -10,7 +10,8 @@ import type { PublicIssue } from '../lib/api'
 import type { PublicStory } from '@shared/types'
 import { getCategoryColor } from '../lib/category-colors'
 import { getCategoryPattern } from '../lib/category-patterns'
-import { parsePoints, stripMarkdown, stripPrefix, limitSentences } from '../lib/parse-points'
+import { parsePoints, stripPrefix, limitSentences } from '../lib/parse-points'
+import { markdownToPlainText } from '../lib/plainText'
 import { formatDate } from '../lib/format'
 import { getHeadline } from '../lib/title-label'
 import StoryTitleLabel from '../components/StoryTitleLabel'
@@ -59,7 +60,7 @@ function HeroSection({ story }: { story: PublicStory }) {
 
         {story.relevanceReasons && parsePoints(story.relevanceReasons)[0] ? (
           <p className="text-lg text-neutral-600 leading-relaxed max-w-2xl">
-            {limitSentences(stripPrefix(stripMarkdown(parsePoints(story.relevanceReasons)[0]!)), 2)}
+            {limitSentences(stripPrefix(markdownToPlainText(parsePoints(story.relevanceReasons)[0]!)), 2)}
           </p>
         ) : story.quote ? (
           <blockquote className="decorative-quote max-w-2xl">

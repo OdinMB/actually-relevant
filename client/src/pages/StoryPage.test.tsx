@@ -358,3 +358,46 @@ describe('StoryPage', () => {
     })
   })
 })
+
+describe('StoryPage link-preview text', () => {
+  const metaContent = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+
+  it('describes the story by its summary as plain text, without Markdown marks or URLs', async () => {
+    renderStory({ ...story, summary: '**Cities** cut smog, [the agency](https://example.org/report) says, by _a third_.' })
+    const plain = 'Cities cut smog, the agency says, by a third.'
+    await waitFor(() => expect(metaContent('meta[name="description"]')).toBe(plain))
+    expect(metaContent('meta[property="og:description"]')).toBe(plain)
+  })
+
+  it('cuts the plain text, not the Markdown, to the description limits', async () => {
+    const long = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
+    renderStory({ ...story, summary: `**${long}**` })
+    await waitFor(() => expect(metaContent('meta[name="description"]')).toBe(long.slice(0, 160)))
+    expect(metaContent('meta[property="og:description"]')).toBe(long.slice(0, 200))
+  })
+
+  it('falls back to the title when the summary has no text', async () => {
+    renderStory({ ...story, summary: null })
+    await waitFor(() => expect(metaContent('meta[name="description"]')).toBe(`${AI_TEXT.titleLabel}: ${AI_TEXT.title}`))
+  })
+
+  it('pre-fills the share text with the blurb as plain text', () => {
+    renderStory({ ...story, marketingBlurb: '**Nation** reports [cleaner air](https://example.org/air).' })
+    const href = screen.getByRole('link', { name: 'Share on X' }).getAttribute('href')!
+    expect(new URL(href).searchParams.get('text')).toMatch(/^Nation reports cleaner air\. /)
+  })
+})
+
+describe('StoryPage for search engines', () => {
+  it('keeps the not-found view out of search results', async () => {
+    renderStory(null)
+    expect(screen.getByRole('heading', { level: 1, name: 'Story Not Found' })).toBeInTheDocument()
+    await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex'))
+  })
+
+  it('leaves a published story indexable', async () => {
+    renderStory(story)
+    await waitFor(() => expect(document.head.querySelector('meta[property="og:image"]')).not.toBeNull())
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
+  })
+})

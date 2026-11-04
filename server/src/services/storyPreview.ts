@@ -14,6 +14,7 @@ import { BoundedCache } from '../lib/boundedCache.js'
 import { registerPublicCache } from '../lib/publicCaches.js'
 import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
 import { escapeHtml } from '../lib/xml.js'
+import { markdownToPlainText } from '../lib/plainText.js'
 import { createStoryImage, OG_IMAGE_SIZE } from './carousel.js'
 
 const log = createLogger('story-preview')
@@ -180,7 +181,8 @@ export function _resetStoryPreviewCaches(): void {
 /** The head tags the story page's Helmet sets, as HTML. Marked data-rh so Helmet takes them over. */
 export function buildStoryHeadTags(story: PreviewStory): string {
   const displayTitle = displayTitleOf(story)
-  const description = story.summary || displayTitle
+  // Preview cards cannot render Markdown: the summary goes in as plain text, as StoryPage's Helmet sets it
+  const description = markdownToPlainText(story.summary ?? '') || displayTitle
   const url = `${config.siteUrl}/stories/${story.slug}`
   const image = storyOgImageUrl(story.slug!)
   const meta = (attr: 'name' | 'property', key: string, content: string) => `<meta data-rh="true" ${attr}="${key}" content="${escapeHtml(content)}" />`

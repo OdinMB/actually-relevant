@@ -1,12 +1,3 @@
-/** Strip markdown inline formatting (bold, italic, links, code) to plain text. */
-export function stripMarkdown(text: string): string {
-  return text
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url) → text
-    .replace(/[*_]{1,3}(.+?)[*_]{1,3}/g, '$1') // **bold**, *italic*, etc.
-    .replace(/`([^`]+)`/g, '$1') // `code`
-    .trim()
-}
-
 /** Strip the label prefix before the first colon, e.g. "Topic label: actual text" → "actual text". */
 export function stripPrefix(text: string): string {
   const idx = text.indexOf(':')

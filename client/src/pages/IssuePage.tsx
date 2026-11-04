@@ -160,6 +160,10 @@ export default function IssuePage() {
   if (!issue) {
     return (
       <div className="page-section text-center">
+        {/* The address answers 200, so the view itself keeps search engines away */}
+        <Helmet>
+          <meta name="robots" content="noindex" />
+        </Helmet>
         <h1 className="page-title">Issue Not Found</h1>
         <p className="text-neutral-500 mb-6">This issue category does not exist.</p>
         {allIssues}

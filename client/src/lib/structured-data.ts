@@ -1,5 +1,6 @@
 import type { PublicPodcastEpisode, PublicStory } from '@shared/types'
 import type { PublicIssue } from './api'
+import { markdownToPlainText } from './plainText'
 import { podcastTranscriptPath } from './podcast'
 import { SEO } from './seo'
 
@@ -38,7 +39,7 @@ export function buildArticleSchema(story: PublicStory) {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
     headline: displayTitle.slice(0, 110),
-    description: (story.summary || displayTitle).slice(0, 200),
+    description: (markdownToPlainText(story.summary ?? '') || displayTitle).slice(0, 200),
     datePublished: story.datePublished || story.dateCrawled,
     author: {
       '@type': 'Organization',

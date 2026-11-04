@@ -88,6 +88,19 @@ describe('IssuePage when the issue does not load', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
+  it('keeps the not-found view out of search results', async () => {
+    renderIssue('no-such-issue')
+    await screen.findByRole('heading', { level: 1, name: 'Issue Not Found' })
+    await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex'))
+  })
+
+  it('leaves an issue that exists indexable', async () => {
+    renderIssue()
+    await screen.findByRole('heading', { level: 1, name: 'Planet & Climate' })
+    await waitFor(() => expect(document.head.querySelector('meta[property="og:url"]')).not.toBeNull())
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
+  })
+
   it('says the issue could not load right now on any other failure, and loads it in place on "Try again"', async () => {
     mockApi.issues.get.mockRejectedValueOnce(new ApiError(503, 'Service Unavailable'))
     renderIssue()
