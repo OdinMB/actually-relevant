@@ -37,7 +37,8 @@ export default function Pagination({ page, totalPages, onPageChange }: Paginatio
             key={p}
             onClick={() => onPageChange(p)}
             className={`px-3 py-2 text-sm rounded border focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              p === page ? 'bg-brand-500 text-white border-brand-500' : 'border-neutral-200 hover:bg-neutral-50'
+              // White text on brand-700 is 6.6:1; on brand-500 it would be 4.0:1, under the 4.5:1 small text needs
+              p === page ? 'bg-brand-700 text-white border-brand-700' : 'border-neutral-200 hover:bg-neutral-50'
             }`}
             aria-current={p === page ? 'page' : undefined}
             aria-label={`Page ${p}`}

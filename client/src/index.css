@@ -161,9 +161,9 @@
     font-family: Georgia, 'Times New Roman', serif;
   }
 
-  /* Ruled heading: ——— TITLE ——— */
+  /* Ruled heading: ——— TITLE ———. In the body font, also on an h1-h6, which would otherwise take Nexa */
   .ruled-heading {
-    @apply flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-neutral-500;
+    @apply flex items-center gap-4 font-roboto text-xs font-bold uppercase tracking-widest text-neutral-500;
   }
 
   .ruled-heading::before,

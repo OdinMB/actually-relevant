@@ -21,6 +21,20 @@ describe('BookmarkButton', () => {
   })
 })
 
+describe('BookmarkButton revealed on hover (story cards)', () => {
+  it('appears on large screens on hover, on keyboard focus and while its card holds focus', () => {
+    render(<BookmarkButton slug="a-story" hoverReveal />)
+    const button = screen.getByRole('button', { name: 'Bookmark story' })
+    expect(button).toHaveClass('lg:opacity-0', 'lg:group-hover:opacity-100', 'focus-visible:opacity-100', 'group-focus-within:opacity-100')
+  })
+
+  it('stays visible once the story is saved', () => {
+    render(<BookmarkButton slug="a-story" hoverReveal />)
+    fireEvent.click(screen.getByRole('button', { name: 'Bookmark story' }))
+    expect(screen.getByRole('button', { name: 'Remove bookmark' })).not.toHaveClass('lg:opacity-0')
+  })
+})
+
 describe('BookmarkButton in a row of actions', () => {
   it('is a 44px square box on phones and a 24px one from md up', () => {
     render(<BookmarkButton slug="a-story" placement="row" />)

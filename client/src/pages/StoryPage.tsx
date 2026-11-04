@@ -45,13 +45,13 @@ function AnalysisSection({
 
   return (
     <section className="mb-10" data-ai-generated={aiField}>
-      {/* Ruled heading with colored dot — larger text */}
-      <div className="ruled-heading mb-6 !text-sm !tracking-wider">
+      {/* Ruled heading with colored dot — larger text. An h2 under the headline, like "Related Stories" */}
+      <h2 className="ruled-heading mb-6 !text-sm !tracking-wider">
         <span className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: accentColor }} aria-hidden="true" />
           {title}
         </span>
-      </div>
+      </h2>
 
       {/* Numbered points — fixed-width number column for alignment */}
       <div className="space-y-6">
@@ -192,10 +192,12 @@ export default function StoryPage() {
               {headline}
             </h1>
 
-            {/* Metadata + share */}
+            {/* Metadata + share. The "|" separators are visual only (aria-hidden), so screen readers don't read them out */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500">
               <time dateTime={displayDate}>{dateStr}</time>
-              <span className="text-neutral-300">|</span>
+              <span className="text-neutral-300" aria-hidden="true">
+                |
+              </span>
               <span className="inline-flex items-center gap-1.5">
                 <FeedFavicon feedId={story.feed.id} />
                 <a
@@ -209,7 +211,9 @@ export default function StoryPage() {
                 </a>
                 {hasSourceDate && <>, {sourceDateStr}</>}
               </span>
-              <span className="text-neutral-300">|</span>
+              <span className="text-neutral-300" aria-hidden="true">
+                |
+              </span>
               <a
                 href={story.sourceUrl}
                 target="_blank"
@@ -219,7 +223,9 @@ export default function StoryPage() {
                 Original article
                 <span className="sr-only"> (opens in new tab)</span>
               </a>
-              <span className="text-neutral-300">|</span>
+              <span className="text-neutral-300" aria-hidden="true">
+                |
+              </span>
               {/* AI label as plain text, so it doesn't read as one more navigation link */}
               <span className="inline-flex flex-wrap items-center gap-x-2">
                 {/* The badge is the label's only "AI"; screen readers hear it as the word, so the sentence reads the same aloud */}
@@ -235,10 +241,14 @@ export default function StoryPage() {
                 <>
                   {/* Phones: the actions take a line of their own as 44px tap targets, the first icon
                       level with the text above, so no separator leads into them */}
-                  <span className="text-neutral-300 max-md:hidden">|</span>
+                  <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
+                    |
+                  </span>
                   <span className="inline-flex flex-wrap items-center gap-x-3 max-md:basis-full max-md:-ml-3.5 max-md:gap-x-0.5">
                     <BookmarkButton slug={story.slug} size="sm" placement="row" />
-                    <span className="text-neutral-300 max-md:hidden">|</span>
+                    <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
+                      |
+                    </span>
                     <span className="inline-flex flex-wrap items-center gap-0.5">
                       <ShareButtons
                         url={`${SEO.siteUrl}/stories/${story.slug}`}

@@ -65,3 +65,18 @@ export function focusRingProblems(el: Element): string[] {
   problems.push(...classes.filter(c => /^focus:(?:ring|outline)/.test(c)).map(c => `${c} shows on a mouse click too`))
   return problems
 }
+
+/**
+ * Why a text field's focus indicator could miss 3:1 against the white around it (WCAG 1.4.11); empty
+ * when it reaches it. The indicator is a `focus:ring-2`, and it and any `focus:border-` color are
+ * brand-500 or darker: brand-500 is 4.0:1 on white, brand-400 2.6:1. Without `outline-none` the
+ * browser's own outline draws beside the ring.
+ */
+export function fieldFocusProblems(el: Element): string[] {
+  const classes = [...el.classList]
+  const problems = ['outline-none', 'focus:ring-2'].filter(needed => !classes.includes(needed)).map(missing => `no ${missing}`)
+  const colors = classes.filter(c => /^focus:(?:ring|border)-(?!offset-)[a-z]+-\d+$/.test(c))
+  if (!colors.some(c => c.startsWith('focus:ring-'))) problems.push('no focus:ring color')
+  problems.push(...colors.filter(c => !/^focus:(?:ring|border)-brand-[5-9]\d\d$/.test(c)).map(c => `${c} is not brand-500 or darker`))
+  return problems
+}

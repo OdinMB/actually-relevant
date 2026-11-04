@@ -174,6 +174,34 @@ describe('StoryPage actions under the headline', () => {
   })
 })
 
+describe('StoryPage structure for screen readers', () => {
+  it('titles the analysis sections as second-level headings, kept in the ruled style', () => {
+    renderStory(story)
+    for (const name of ['Why This Matters', 'Caveats']) {
+      expect(screen.getByRole('heading', { level: 2, name })).toHaveClass('ruled-heading')
+    }
+  })
+
+  it('has one h1 and never skips a heading level, down to the related stories', () => {
+    mockRelated.current = [{ ...story, id: 'story-2', slug: 'related-story', title: 'Related headline' }]
+    renderStory(story)
+    const levels = screen.getAllByRole('heading').map(heading => Number(heading.tagName.slice(1)))
+    expect(levels[0]).toBe(1)
+    expect(levels.filter(level => level === 1)).toHaveLength(1)
+    expect(levels).toContain(3) // the related story's card title, under "Related Stories"
+    levels.slice(1).forEach((level, i) => expect(level, `heading ${i + 2} after an h${levels[i]}`).toBeLessThanOrEqual(levels[i]! + 1))
+  })
+
+  it('hides the "|" separators in the metadata row from screen readers', () => {
+    renderStory(story)
+    const row = screen.getByRole('heading', { level: 1 }).nextElementSibling!
+    const separators = [...row.querySelectorAll('span')].filter(span => span.childElementCount === 0 && span.textContent === '|')
+    expect(separators).toHaveLength(5)
+    for (const separator of separators) expect(separator).toHaveAttribute('aria-hidden', 'true')
+    expect(announcedText(row)).not.toContain('|')
+  })
+})
+
 describe('StoryPage newsletter line', () => {
   const subscribeButton = () => screen.queryByRole('button', { name: 'Subscribe to the newsletter' })
 

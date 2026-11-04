@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SearchIcon } from './icons'
+import { FIELD_FOCUS } from '../../lib/control-classes'
 
 interface SearchPanelProps {
   query: string
@@ -57,7 +58,7 @@ export default function SearchPanel({ query, onQueryChange, onClose }: SearchPan
             value={query}
             onChange={e => onQueryChange(e.target.value)}
             placeholder="Search stories..."
-            className="w-full pl-10 pr-10 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-200 outline-none transition-colors"
+            className={`w-full pl-10 pr-10 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors`}
             aria-label="Search stories"
           />
           <button

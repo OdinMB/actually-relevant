@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async'
 import { Link } from 'react-router-dom'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { SITE_URL } from '../config'
+import { FIELD_FOCUS } from '../lib/control-classes'
 
 const ISSUES = [
   { label: 'All issues', value: '' },
@@ -86,7 +87,7 @@ export default function WidgetGeneratorPage() {
                 id="widget-issue"
                 value={issue}
                 onChange={e => setIssue(e.target.value)}
-                className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none"
+                className={`w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm bg-white ${FIELD_FOCUS}`}
               >
                 {ISSUES.map(i => (
                   <option key={i.value} value={i.value}>

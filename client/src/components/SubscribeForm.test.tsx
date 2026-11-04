@@ -6,6 +6,7 @@ import SubscribeForm from './SubscribeForm'
 import { ApiError } from '../lib/api'
 import { NEWSLETTER_PROMISE } from '../config'
 import type { TurnstileRenderOptions } from '../lib/turnstile'
+import { fieldFocusProblems } from '../test/classes'
 
 const mockSubscribe = vi.fn()
 const mockGetToken = vi.fn()
@@ -82,6 +83,11 @@ describe('SubscribeForm', () => {
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument()
     expect(screen.getAllByRole('textbox')).toHaveLength(1) // the honeypot is aria-hidden
     await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
+  })
+
+  it('rings the email field on focus in a brand shade that reaches 3:1 against white', async () => {
+    await renderReady()
+    expect(fieldFocusProblems(screen.getByRole('textbox', { name: 'Email address' }))).toEqual([])
   })
 
   it('reads "Loading..." on the disabled button until the form token has loaded, without a message meanwhile', async () => {
