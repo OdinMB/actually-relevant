@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { publicApi, ApiError } from '../lib/api'
 import { BRAND, NEWSLETTER_PROMISE } from '../config'
-import { FORM_TOKEN_MIN_AGE_MS, FORM_TOKEN_POST_MAX_AGE_MS, FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
 import { turnstileSiteKey } from '../lib/turnstile'
 import { isPrerendering } from '../lib/renderComplete'
+import { useFormToken, type FormTokenStatus } from '../hooks/useFormToken'
 import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
 
 interface SubscribeFormProps {
@@ -64,35 +64,20 @@ function isPlausibleEmail(address: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)
 }
 
-/** The anti-bot form token the form holds, with the times (`Date.now()`) that decide when it may be posted. */
-interface HeldToken {
-  value: string
-  receivedAt: number
-  /**
-   * From when the server takes it. The first token may be posted at once: its age is how long
-   * the form has been open, which is what the server's minimum fill time measures. A
-   * replacement's age says nothing about the reader, so it waits out that minimum.
-   */
-  postableFrom: number
+/** One request for a signup form token. */
+async function fetchSignupToken(): Promise<string> {
+  const { token } = await publicApi.getSubscribeToken()
+  return token
 }
 
-/** Asks for a form token, trying twice. A paused answer is final; otherwise the last error is thrown. */
-async function fetchFormToken(): Promise<string> {
-  let lastError: unknown
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const { token } = await publicApi.getSubscribeToken()
-      return token
-    } catch (err) {
-      if (isSignupsPaused(err)) throw err
-      lastError = err
-    }
-  }
-  throw lastError
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+/** Whether the form can be sent, from where its first form token stands. */
+function availabilityOf(first: FormTokenStatus): Availability {
+  if (first.status === 'loading') return 'checking'
+  if (first.status === 'ready') return 'open'
+  if (isSignupsPaused(first.error)) return 'paused'
+  // Not while prerendering: the build's API may be unreachable, and the message would be
+  // baked into every page's static HTML.
+  return isPrerendering() ? 'checking' : 'unavailable'
 }
 
 export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix = 'subscribe', hideHeading = false, onPastIssuesClick }: SubscribeFormProps) {
@@ -100,11 +85,14 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
   const [status, setStatus] = useState<SubmitStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [website, setWebsite] = useState('') // honeypot — humans never fill this
-  // Never rendered, so a ref: `availability` turns 'open' when the first token arrives.
-  const tokenRef = useRef<HeldToken | null>(null)
-  const replacementRef = useRef<Promise<HeldToken> | null>(null)
-  const [availability, setAvailability] = useState<Availability>('checking')
-  const [unavailableReason, setUnavailableReason] = useState<UnavailableReason>('unreachable')
+  // The anti-bot form token, fetched on mount; its answer also says whether signups are open.
+  // If both attempts fail, submit stays disabled (the API is unreachable anyway) and the
+  // reader is told.
+  const signupToken = useFormToken(fetchSignupToken, { isFinal: isSignupsPaused })
+  // The signup itself can be refused as paused too.
+  const [pausedAtSubmit, setPausedAtSubmit] = useState(false)
+  const availability = pausedAtSubmit ? 'paused' : availabilityOf(signupToken)
+  const unavailableReason: UnavailableReason = signupToken.status === 'failed' && isRateLimited(signupToken.error) ? 'rate-limited' : 'unreachable'
   // Turnstile loads only on submit, so visitors who never sign up never contact Cloudflare.
   const [turnstileFailed, setTurnstileFailed] = useState(false)
   const { containerRef: turnstileContainerRef, getToken: getTurnstileToken } = useTurnstileChallenge()
@@ -122,78 +110,6 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
   useEffect(() => {
     if (status === 'success') successHeadingRef.current?.focus()
   }, [status])
-
-  // Fetch the anti-bot form token on mount; its answer also says whether signups are open.
-  // If both attempts fail, submit stays disabled (the API is unreachable anyway) and the
-  // reader is told.
-  useEffect(() => {
-    let cancelled = false
-    fetchFormToken().then(
-      value => {
-        if (cancelled) return
-        const now = Date.now()
-        tokenRef.current = { value, receivedAt: now, postableFrom: now }
-        setAvailability('open')
-      },
-      err => {
-        if (cancelled) return
-        if (isSignupsPaused(err)) setAvailability('paused')
-        // Not while prerendering: the build's API may be unreachable, and the message would be
-        // baked into every page's static HTML.
-        else if (!isPrerendering()) {
-          setUnavailableReason(isRateLimited(err) ? 'rate-limited' : 'unreachable')
-          setAvailability('unavailable')
-        }
-      },
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  /** Fetches a token to replace the one held, joining a fetch already under way. */
-  const replaceToken = useCallback((): Promise<HeldToken> => {
-    if (!replacementRef.current) {
-      replacementRef.current = fetchFormToken()
-        .then(value => {
-          const receivedAt = Date.now()
-          const token = { value, receivedAt, postableFrom: receivedAt + FORM_TOKEN_MIN_AGE_MS }
-          tokenRef.current = token
-          return token
-        })
-        .finally(() => {
-          replacementRef.current = null
-        })
-    }
-    return replacementRef.current
-  }, [])
-
-  // Timers stop in a background tab, so the moment a reader comes back to the page is when an
-  // ageing token is replaced: the new one is then old enough by the time they submit.
-  useEffect(() => {
-    function replaceIfAgeing() {
-      const token = tokenRef.current
-      if (document.visibilityState !== 'visible' || !token) return
-      if (Date.now() - token.receivedAt < FORM_TOKEN_REFRESH_MS) return
-      // On failure the held token stays, and the submit tries again.
-      replaceToken().catch(() => {})
-    }
-    document.addEventListener('visibilitychange', replaceIfAgeing)
-    window.addEventListener('focus', replaceIfAgeing)
-    return () => {
-      document.removeEventListener('visibilitychange', replaceIfAgeing)
-      window.removeEventListener('focus', replaceIfAgeing)
-    }
-  }, [replaceToken])
-
-  /** The token to post: replaced first when it is too old for the server, and given once it is old enough. */
-  async function postableToken(): Promise<string> {
-    let token = tokenRef.current
-    if (!token || Date.now() - token.receivedAt > FORM_TOKEN_POST_MAX_AGE_MS) token = await replaceToken()
-    const wait = token.postableFrom - Date.now()
-    if (wait > 0) await sleep(wait)
-    return token.value
-  }
 
   const siteKey = turnstileSiteKey()
   const busy = status === 'verifying' || status === 'loading'
@@ -230,7 +146,7 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
     setStatus('loading')
     try {
       // A token the server would drop still gets a success reply, and no email would come.
-      const formToken = await postableToken()
+      const formToken = await signupToken.getPostableToken()
       const result = await publicApi.subscribe({
         email: address,
         ...(website ? { website } : {}),
@@ -245,7 +161,7 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
       setStatus('success')
     } catch (err) {
       if (isSignupsPaused(err)) {
-        setAvailability('paused')
+        setPausedAtSubmit(true)
         return
       }
       setStatus('error')

@@ -3,6 +3,7 @@
  * takes a token only while its age is between config.subscribe.minFormFillMs and
  * config.subscribe.formTokenMaxAgeMs, and drops any other while still answering success,
  * so a form must never post one outside that window (.context/subscription.md).
+ * `useFormToken` (hooks/useFormToken.ts) holds a form's token to these times.
  *
  * The two ages below are copies of those settings' server defaults, which the client cannot
  * read; server/src/lib/formToken.test.ts fails when either side changes one alone. An
