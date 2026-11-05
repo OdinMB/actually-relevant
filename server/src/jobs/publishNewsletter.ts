@@ -4,12 +4,14 @@
  * `sendLive` move. Seeded disabled, 30 minutes after generate_newsletter. The move refuses an issue
  * already sent (or with an unconfirmed send) and one without a test email of its current HTML, so
  * a retry, a manual Run, a boot catch-up or an editor's click never sends a second email.
+ * Once it went out, stories that newer coverage may have overtaken raise one advisory notice.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { NewsletterRefusedError, sendLive } from '../services/newsletterLifecycle.js'
+import { findNewerCoverage } from '../services/storyFreshness.js'
 import { getWeekKey } from './generateNewsletter.js'
 
 const log = createLogger('publish_newsletter')
@@ -52,7 +54,7 @@ export async function runPublishNewsletter(now: Date = new Date()): Promise<void
 
   const issue = await prisma.newsletter.findFirst({
     where: { weekKey, html: { not: '' }, status: 'draft', sends: { none: LIVE_SEND } },
-    select: { id: true, title: true },
+    select: { id: true, title: true, selectedStoryIds: true },
   })
   if (!issue) {
     const existing = await prisma.newsletter.findFirst({
@@ -94,5 +96,31 @@ export async function runPublishNewsletter(now: Date = new Date()): Promise<void
     title: 'Newsletter sent',
     message: `${issue.title} (${weekKey}) was sent to all subscribers and marked published.`,
     link: '/admin/newsletters',
+  })
+  await warnOfNewerCoverage(issue, weekKey)
+}
+
+/**
+ * Advisory, after the send so it never holds it up: one notice when stories of the sent issue may
+ * have been overtaken by later events (`services/storyFreshness.ts`). Counts only, no headlines; the
+ * issue page shows each flagged story with its newer one. Never throws.
+ */
+async function warnOfNewerCoverage(issue: { id: string; title: string; selectedStoryIds: string[] }, weekKey: string): Promise<void> {
+  let flagged: number
+  try {
+    flagged = (await findNewerCoverage(issue.selectedStoryIds)).length
+  } catch (err) {
+    log.warn({ err, weekKey, newsletterId: issue.id }, 'could not check the sent stories for newer coverage')
+    return
+  }
+  if (flagged === 0) return
+  log.info({ weekKey, newsletterId: issue.id, flagged }, 'sent newsletter has stories with newer coverage')
+  await notify({
+    source: 'newsletter',
+    severity: 'warning',
+    title: 'Newsletter stories may be outdated',
+    message: `${issue.title} (${weekKey}) went out with ${flagged} of ${issue.selectedStoryIds.length} stories that later coverage may have overtaken: a story on the same event a day or more later, or a nearly identical later headline from the same publisher. The issue page links each to the newer story.`,
+    link: `/admin/newsletters/${issue.id}`,
+    dedupeKey: `newsletter-newer-coverage:${weekKey}`,
   })
 }

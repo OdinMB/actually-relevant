@@ -236,6 +236,17 @@ export interface Newsletter {
   updatedAt: string
 }
 
+/**
+ * Later coverage that may have overtaken a chosen story (`GET /api/admin/stories/newer-coverage`,
+ * advisory): `same_event` is a story in its dedup cluster reported a day or more later,
+ * `same_source` a nearly identical later headline from its own feed.
+ */
+export interface StoryNewerCoverage {
+  storyId: string
+  /** Newest first, at most three */
+  newer: { id: string; title: string; publisher: string; reportedAt: string; reason: 'same_event' | 'same_source' }[]
+}
+
 /** One issue in the public newsletter archive (`GET /api/newsletters`). */
 export interface PublicNewsletterIssueSummary {
   slug: string

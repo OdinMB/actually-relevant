@@ -34,6 +34,7 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap 
 | `publishNewsletter.ts` issue sent | `newsletter` / `info` | none | `/admin/newsletters` |
 | `publishNewsletter.ts` already sent or published | `newsletter` / `info` | `newsletter-already-sent:<weekKey>` | `/admin/newsletters` |
 | `publishNewsletter.ts` no issue, issue not built, or its test email never went out, when the job ran | `newsletter` / `warning` | `newsletter-not-sent:<weekKey>` | `/admin/newsletters` |
+| `publishNewsletter.ts` issue sent with stories that newer coverage may have overtaken (after the send; the count only, never headlines; `.context/newsletter-podcast.md`, "Newer coverage") | `newsletter` / `warning` | `newsletter-newer-coverage:<weekKey>` | `/admin/newsletters/<id>` |
 | `cleanupOldStories.ts` monthly result (`.context/story-retention.md`) | `jobs` / `info` | none (one per run) | `/admin/jobs` |
 | `pollPlunkActivity.ts` spam complaint | `plunk` / `critical` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |
 | `pollPlunkActivity.ts` permanent bounce | `plunk` / `warning` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |

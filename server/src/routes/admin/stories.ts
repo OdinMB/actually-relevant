@@ -2,6 +2,7 @@ import { Router } from 'express'
 import * as storyService from '../../services/story.js'
 import * as analysisService from '../../services/analysis.js'
 import { getLifetimeStoryStats } from '../../services/storyRetention.js'
+import { findNewerCoverage } from '../../services/storyFreshness.js'
 import { crawlUrl } from '../../services/crawler.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
@@ -48,6 +49,11 @@ router.get('/batch', failsWith('Failed to fetch batch stories'), validateQuery(b
     return
   }
   res.json(await storyService.getStoriesByIds(ids))
+})
+
+// Advisory flags for chosen stories (a newsletter issue's): later coverage that may have overtaken them
+router.get('/newer-coverage', failsWith('Failed to check stories for newer coverage'), validateQuery(batchStoriesQuerySchema), async (req, res) => {
+  res.json(await findNewerCoverage(req.parsedQuery!.ids))
 })
 
 // --- Bulk task endpoints ---

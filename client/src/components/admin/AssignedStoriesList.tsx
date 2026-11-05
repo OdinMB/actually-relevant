@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import type { Story } from '@shared/types'
@@ -21,6 +21,8 @@ interface AssignedStoriesListProps {
   isActioning?: boolean
   collapsible?: boolean
   defaultExpanded?: boolean
+  /** A line under a story's title (the newsletter's newer-coverage flags); nothing when it returns null */
+  storyNote?: (storyId: string) => ReactNode
 }
 
 function groupByIssue(stories: Story[]): { issue: { id: string; name: string } | null; stories: Story[] }[] {
@@ -84,6 +86,7 @@ export function AssignedStoriesList({
   isActioning,
   collapsible = true,
   defaultExpanded = false,
+  storyNote,
 }: AssignedStoriesListProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const isOpen = !collapsible || expanded
@@ -192,6 +195,7 @@ export function AssignedStoriesList({
                               >
                                 {story.title || story.sourceTitle}
                               </Link>
+                              {storyNote?.(story.id)}
                               {/* Mobile metadata */}
                               <div className="flex flex-wrap items-center gap-1.5 mt-1 md:hidden">
                                 <span className="text-neutral-500 text-xs">{ratingDisplay(story)}</span>

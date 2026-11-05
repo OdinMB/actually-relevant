@@ -20,6 +20,18 @@ export function useStories(filters: StoryFilters) {
   })
 }
 
+/** Later coverage that may have overtaken these stories, by story id (advisory; stories without any are absent). */
+export function useNewerCoverage(storyIds: string[]) {
+  const idsKey = [...storyIds].sort().join(',')
+  return useQuery({
+    queryKey: ['stories', 'newer-coverage', idsKey],
+    queryFn: () => adminApi.stories.newerCoverage(storyIds),
+    enabled: storyIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    select: rows => new Map(rows.map(row => [row.storyId, row.newer])),
+  })
+}
+
 export function useStory(id: string) {
   return useQuery({
     queryKey: ['story', id],

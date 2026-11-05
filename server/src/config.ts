@@ -574,6 +574,19 @@ export const config = {
     enabled: process.env.DEDUP_ENABLED !== 'false',
     modelTier: 'small' as const,
   },
+  // Newer coverage of a chosen story (services/storyFreshness.ts): an advisory flag, with no model
+  // call, that later events may have overtaken a story picked for a newsletter issue.
+  freshness: {
+    // A later story in the chosen one's dedup cluster counts only this long after it, so other
+    // outlets' same-day reports of the same event are not flagged.
+    sameEventMinGapHours: 24,
+    // A later headline from the same feed counts when it shares at least this many words with the
+    // chosen story's headline and at least this share of both headlines' words (Dice, 0 to 1).
+    sameSourceMinSharedWords: 3,
+    sameSourceMinSimilarity: 0.7,
+    // Newer stories listed per chosen story, newest first.
+    maxNewerPerStory: 3,
+  },
   bluesky: {
     handle: process.env.BLUESKY_HANDLE || '',
     appPassword: process.env.BLUESKY_APP_PASSWORD || '',

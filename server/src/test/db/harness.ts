@@ -66,13 +66,16 @@ export async function createStory(data: {
   datePublished?: Date | null
   accessTier?: string | null
   rejectionReason?: RejectionReason | null
+  sourceTitle?: string
+  sourceDatePublished?: Date | null
 }) {
   const id = randomUUID()
   return prisma.story.create({
     data: {
       id,
       sourceUrl: `https://news.example/${id}`,
-      sourceTitle: `Source ${id.slice(0, 8)}`,
+      sourceTitle: data.sourceTitle ?? `Source ${id.slice(0, 8)}`,
+      sourceDatePublished: data.sourceDatePublished ?? null,
       sourceContent: 'text',
       feedId: data.feedId,
       status: data.status ?? 'fetched',

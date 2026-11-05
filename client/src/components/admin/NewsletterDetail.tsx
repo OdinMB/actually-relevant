@@ -20,8 +20,10 @@ import {
 import { ApiError } from '../../lib/admin-api'
 import { newsletterSendState } from '../../lib/newsletter-state'
 import { useToast } from '../ui/Toast'
+import { useNewerCoverage } from '../../hooks/useStories'
 import { AssignedStoriesList } from './AssignedStoriesList'
 import type { StoryListAction } from './AssignedStoriesList'
+import { NewerCoverageNote } from './NewerCoverageNote'
 
 interface NewsletterDetailProps {
   newsletter: Newsletter
@@ -174,6 +176,12 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
   const sendTest = useSendTestNewsletter()
   const sendLive = useSendLiveNewsletter()
   const { data: sends, isLoading: sendsLoading } = useNewsletterSends(newsletter.id)
+  // Advisory flags on the shortlist: later stories that may have overtaken a pick (never blocks a send)
+  const { data: newerCoverage } = useNewerCoverage(newsletter.selectedStoryIds)
+  const newerCoverageNote = (storyId: string) => {
+    const newer = newerCoverage?.get(storyId)
+    return newer ? <NewerCoverageNote newer={newer} /> : null
+  }
   // Mirrors the server's rule for button states; its 409 is the authority
   const { liveSent, unconfirmed, frozen, testCurrent } = newsletterSendState(newsletter, sends)
   const sendLiveBlock = unconfirmed ? 'A send is unconfirmed' : liveSent ? 'Already sent' : !testCurrent ? 'Send a test of the current HTML first' : null
@@ -413,6 +421,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           actions={selectedActions}
           isActioning={update.isPending || frozen}
           collapsible={false}
+          storyNote={newerCoverageNote}
         />
 
         {/* Story Longlist */}

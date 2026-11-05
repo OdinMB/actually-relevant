@@ -1,5 +1,6 @@
 import type {
   Story,
+  StoryNewerCoverage,
   StoryCluster,
   ClusterStorySearchResult,
   Feed,
@@ -250,6 +251,7 @@ export const adminApi = {
     delete: (id: string) => request<void>(`/stories/${id}`, { method: 'DELETE' }),
     crawlUrl: (url: string, feedId: string) => request<Story>('/stories/crawl-url', { method: 'POST', body: JSON.stringify({ url, feedId }) }),
     batch: (ids: string[]) => request<Story[]>(`/stories/batch?ids=${ids.join(',')}`),
+    newerCoverage: (ids: string[]) => request<StoryNewerCoverage[]>(`/stories/newer-coverage?ids=${ids.join(',')}`),
     bulkPreassess: (storyIds: string[]) => request<{ taskId: string }>('/stories/bulk-preassess', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     bulkReclassify: (storyIds: string[]) => request<{ taskId: string }>('/stories/bulk-reclassify', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     bulkAssess: (storyIds: string[]) => request<{ taskId: string }>('/stories/bulk-assess', { method: 'POST', body: JSON.stringify({ storyIds }) }),

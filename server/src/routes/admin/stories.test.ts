@@ -104,6 +104,9 @@ vi.mock('../../services/storyLifecycle.js', async importOriginal => ({
 }))
 const admitAll = async (ids: string[]) => ({ eligible: ids, skipped: [] })
 
+const mockFindNewerCoverage = vi.hoisted(() => vi.fn())
+vi.mock('../../services/storyFreshness.js', () => ({ findNewerCoverage: mockFindNewerCoverage }))
+
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
@@ -215,6 +218,35 @@ describe('Admin Stories API', () => {
       expect(res.status).toBe(200)
       expect(res.body.fetched).toBe(10)
       expect(res.body.published).toBe(5)
+    })
+  })
+
+  describe('GET /api/admin/stories/newer-coverage', () => {
+    const ID_A = '00000000-0000-4000-8000-00000000000a'
+    const ID_B = '00000000-0000-4000-8000-00000000000b'
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app).get(`/api/admin/stories/newer-coverage?ids=${ID_A}`)
+      expect(res.status).toBe(401)
+    })
+
+    it("answers each story's newer coverage", async () => {
+      const reportedAt = new Date('2026-10-28T09:00:00Z')
+      mockFindNewerCoverage.mockResolvedValue([{ storyId: ID_A, newer: [{ id: ID_B, title: 'Later', publisher: 'Feed', reportedAt, reason: 'same_event' }] }])
+
+      const res = await request(app).get(`/api/admin/stories/newer-coverage?ids=${ID_A},${ID_B}`).set(authHeader())
+
+      expect(res.status).toBe(200)
+      expect(mockFindNewerCoverage).toHaveBeenCalledWith([ID_A, ID_B])
+      expect(res.body).toEqual([
+        { storyId: ID_A, newer: [{ id: ID_B, title: 'Later', publisher: 'Feed', reportedAt: '2026-10-28T09:00:00.000Z', reason: 'same_event' }] },
+      ])
+    })
+
+    it('refuses ids that are not story ids', async () => {
+      const res = await request(app).get('/api/admin/stories/newer-coverage?ids=not-an-id').set(authHeader())
+      expect(res.status).toBe(400)
+      expect(mockFindNewerCoverage).not.toHaveBeenCalled()
     })
   })
 
