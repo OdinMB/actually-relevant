@@ -1,41 +1,50 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { NewsletterCrossLink, PodcastCrossLink, StoryNewsletterLine } from './CrossLinks'
+import { NewsletterCrossLink, PodcastCrossLink, StoryProductButtons } from './CrossLinks'
 import { TEXT_LINK } from '../lib/control-classes'
 import { focusRingProblems } from '../test/classes'
-
-const LATEST_ISSUE = { slug: 'week-43-2026', title: 'Week 43, 2026', publishedAt: '2026-10-24T04:30:00.000Z', storyCount: 6, thisWeek: true }
 
 function renderLines() {
   return render(
     <MemoryRouter>
       <PodcastCrossLink />
       <NewsletterCrossLink />
-      <StoryNewsletterLine latestIssue={LATEST_ISSUE} />
+      <StoryProductButtons />
     </MemoryRouter>,
   )
 }
 
-/** Every control in the three lines, by accessible name. */
-const CONTROLS = [
+/** Every in-sentence control in the two lines, by accessible name. */
+const LINE_CONTROLS = [
   ['link', 'Try the weekly podcast'],
   ['button', 'Get the weekly newsletter'],
   ['link', 'read past issues'],
-  ['button', 'Subscribe to the newsletter'],
-  ['link', 'read this week’s issue'],
+] as const
+
+/** The story page's two buttons. */
+const BUTTON_CONTROLS = [
+  ['button', 'Newsletter'],
+  ['link', 'Podcast'],
 ] as const
 
 describe('CrossLinks', () => {
-  it.each(CONTROLS)('%s "%s" keeps its name and shows only the brand ring, on keyboard focus', (role, name) => {
+  it.each([...LINE_CONTROLS, ...BUTTON_CONTROLS])('%s "%s" keeps its name and shows only the brand ring, on keyboard focus', (role, name) => {
     renderLines()
     const control = screen.getByRole(role, { name })
     expect(focusRingProblems(control)).toEqual([])
   })
 
-  it.each(CONTROLS)('%s "%s" uses the shared in-sentence link style', (role, name) => {
+  it.each(LINE_CONTROLS)('%s "%s" uses the shared in-sentence link style', (role, name) => {
     renderLines()
     expect(screen.getByRole(role, { name })).toHaveClass(...TEXT_LINK.split(' '))
+  })
+
+  it.each(BUTTON_CONTROLS)('%s "%s" on story pages is a button, not an in-sentence link', (role, name) => {
+    renderLines()
+    const control = screen.getByRole(role, { name })
+    expect(control).not.toHaveClass('underline')
+    expect(control).toHaveClass('rounded-md', 'border', 'min-h-11')
   })
 })
 

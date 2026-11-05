@@ -13,7 +13,7 @@ import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
 import { contrastRatio } from '../test/contrast'
 import { announcedText } from '../test/stories'
 
-const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn(), newsletterArchive: vi.fn() }))
+const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   publicApi: mockApi,
@@ -70,22 +70,12 @@ beforeAll(() => {
 })
 
 const NOW = new Date('2026-10-25T09:00:00Z')
-const DAY_MS = 24 * 60 * 60 * 1000
-
-/** One page of the newsletter archive holding one issue published `daysAgo` before NOW, or none. */
-function archive(latest?: { slug: string; daysAgo: number }) {
-  const data = latest
-    ? [{ slug: latest.slug, title: 'Week 43, 2026', publishedAt: new Date(NOW.getTime() - latest.daysAgo * DAY_MS).toISOString(), storyCount: 6 }]
-    : []
-  return { data, total: data.length, page: 1, pageSize: 20, totalPages: data.length }
-}
 
 let queryClient: QueryClient
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  mockApi.newsletterArchive.mockReset().mockResolvedValue(archive())
   mockStory.isLoading = false
   mockStory.error = null
   mockRelated.current = []
@@ -114,11 +104,6 @@ function renderStory(data: unknown) {
       <StoryPage />
     </Providers>,
   )
-}
-
-/** Waits until the archive request has answered or failed. */
-async function archiveSettled() {
-  await waitFor(() => expect(['success', 'error']).toContain(queryClient.getQueryState(['public-newsletter-archive', 1])?.status))
 }
 
 describe('StoryPage "Report an error"', () => {
@@ -258,27 +243,39 @@ describe('StoryPage analysis points', () => {
   )
 })
 
-describe('StoryPage newsletter line', () => {
-  const subscribeButton = () => screen.queryByRole('button', { name: 'Subscribe to the newsletter' })
+describe('StoryPage newsletter and podcast buttons', () => {
+  const newsletterButton = () => screen.queryByRole('button', { name: 'Newsletter' })
+  const podcastLink = () => screen.queryByRole('link', { name: 'Podcast' })
 
-  it('ends the story with one line offering the newsletter, after the analysis and before related stories', () => {
+  it('ends the story with a Newsletter and a Podcast button side by side, centered, after the analysis and before related stories', () => {
     mockRelated.current = [{ ...story, id: 'story-2', slug: 'related-story', title: 'Related headline' }]
     renderStory(story)
 
-    const button = subscribeButton()
-    expect(button).not.toBeNull()
-    expect(button!.closest('p')).toHaveTextContent(/^Get stories like this once a week\. Subscribe to the newsletter$/)
+    const newsletter = newsletterButton()!
+    const podcast = podcastLink()!
+    expect(newsletter.parentElement).toBe(podcast.parentElement)
+    expect(newsletter.parentElement).toHaveClass('flex', 'justify-center')
+    expect(newsletter.compareDocumentPosition(podcast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     const caveat = screen.getByText(AI_TEXT.antifactors)
-    expect(caveat.compareDocumentPosition(button!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(caveat.compareDocumentPosition(newsletter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     const related = screen.getByRole('heading', { level: 2, name: 'Related Stories' })
-    expect(button!.compareDocumentPosition(related) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // jsdom can't measure: a box with a 24px minimum height is the WCAG 2.5.8 target (.context/accessibility.md)
-    expect(button).toHaveClass('inline-flex', 'min-h-6')
+    expect(podcast.compareDocumentPosition(related) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByText(/stories like this/i)).toBeNull()
   })
 
-  it("opens the site's signup dialog, with the link to this week's issue beside it", async () => {
+  it.each([
+    ['button', 'Newsletter'],
+    ['link', 'Podcast'],
+  ] as const)('gives %s "%s" a 44px tap target and only the brand ring on keyboard focus', (role, name) => {
+    renderStory(story)
+    const control = screen.getByRole(role, { name })
+    // jsdom can't measure: a box with a 44px minimum height clears the WCAG 2.5.8 target (.context/accessibility.md)
+    expect(control).toHaveClass('inline-flex', 'min-h-11')
+    expect(focusRingProblems(control)).toEqual([])
+  })
+
+  it("opens the site's signup dialog from the Newsletter button", async () => {
     mockApi.getSubscribeToken.mockReset().mockResolvedValue({ token: 'form-token' })
-    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
     mockStory.current = story
     render(
       <Providers>
@@ -287,55 +284,29 @@ describe('StoryPage newsletter line', () => {
         </SubscribeProvider>
       </Providers>,
     )
-    await screen.findByRole('link', { name: 'read this week’s issue' })
     expect(screen.queryByRole('dialog', { name: 'Stay informed' })).toBeNull()
 
-    await userEvent.click(subscribeButton()!)
+    await userEvent.click(newsletterButton()!)
 
     const dialog = screen.getByRole('dialog', { name: 'Stay informed' })
     await waitFor(() => expect(within(dialog).getByRole('textbox', { name: 'Email address' })).toHaveFocus())
   })
 
-  it("goes on, in the same sentence, to a link to this week's issue on the web", async () => {
-    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
+  it("leads the Podcast button to the podcast page's Subscribe section", () => {
     renderStory(story)
-
-    const link = await screen.findByRole('link', { name: 'read this week’s issue' })
-    expect(link).toHaveAttribute('href', '/newsletter/week-43-2026')
-    expect(link.closest('p')).toBe(subscribeButton()!.closest('p'))
-    expect(link.closest('p')).toHaveTextContent(/^Get stories like this once a week\. Subscribe to the newsletter, or read this week’s issue$/)
-    expect(link).toHaveClass('inline-flex', 'min-h-6')
-  })
-
-  it('calls an issue a week old or older the latest issue', async () => {
-    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-40-2026', daysAgo: 20 }))
-    renderStory(story)
-
-    expect(await screen.findByRole('link', { name: 'read the latest issue' })).toHaveAttribute('href', '/newsletter/week-40-2026')
-  })
-
-  it.each([
-    ['no issue is published', () => mockApi.newsletterArchive.mockResolvedValue(archive())],
-    ['the archive fails to load', () => mockApi.newsletterArchive.mockRejectedValue(new Error('Network error'))],
-  ])('keeps to the subscribe offer alone when %s', async (_, arrange) => {
-    arrange()
-    renderStory(story)
-    await archiveSettled()
-
-    expect(subscribeButton()!.closest('p')).toHaveTextContent(/^Get stories like this once a week\. Subscribe to the newsletter$/)
-    expect(screen.queryByRole('link', { name: /issue/ })).toBeNull()
+    expect(podcastLink()).toHaveAttribute('href', '/podcast#podcast-subscribe-heading')
   })
 
   it.each([
     ['while the story loads', { isLoading: true }],
     ['when the story is not found', {}],
     ['when the story fails to load', { error: new Error('Network error') }],
-  ])('is not shown %s', (_, state: { isLoading?: boolean; error?: Error }) => {
+  ])('are not shown %s', (_, state: { isLoading?: boolean; error?: Error }) => {
     Object.assign(mockStory, state)
     renderStory(null)
 
-    expect(subscribeButton()).toBeNull()
-    expect(screen.queryByText(/stories like this/i)).toBeNull()
+    expect(newsletterButton()).toBeNull()
+    expect(podcastLink()).toBeNull()
   })
 })
 
@@ -356,9 +327,9 @@ describe('StoryPage newsletter issue and podcast episode', () => {
   }
   const issueLink = () => screen.queryByRole('link', { name: /^Featured in the newsletter/ })
   const episodeLink = () => screen.queryByRole('link', { name: /^Featured on the podcast/ })
-  const subscribeButton = () => screen.getByRole('button', { name: 'Subscribe to the newsletter' })
+  const newsletterButton = () => screen.getByRole('button', { name: 'Newsletter' })
 
-  it('names the issue and the episode the story was in, after "Report an error" and before the newsletter line', () => {
+  it('names the issue and the episode the story was in, after "Report an error" and before the newsletter and podcast buttons', () => {
     mockAppearances.current = { newsletterIssue: ISSUE, podcastEpisode: EPISODE }
     renderStory(story)
 
@@ -366,39 +337,18 @@ describe('StoryPage newsletter issue and podcast episode', () => {
     expect(episodeLink()).toHaveAttribute('href', '/podcast/episode-43/transcript')
     const report = screen.getByRole('button', { name: 'Report an error' })
     expect(report.compareDocumentPosition(issueLink()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(episodeLink()!.compareDocumentPosition(subscribeButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(episodeLink()!.compareDocumentPosition(newsletterButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it.each([
     ['while the answer is on its way, or after it failed', undefined],
     ['for a story in neither', { newsletterIssue: null, podcastEpisode: null }],
-  ])('adds nothing %s', async (_, appearances) => {
+  ])('adds nothing %s', (_, appearances) => {
     mockAppearances.current = appearances
-    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
     renderStory(story)
 
-    expect(await screen.findByRole('link', { name: 'read this week’s issue' })).toBeInTheDocument()
+    expect(newsletterButton()).toBeInTheDocument()
     expect(screen.queryByText(/^Featured/)).toBeNull()
-  })
-
-  it("drops the newsletter line's issue link when the story's issue is the newest one, which the card already links", async () => {
-    mockAppearances.current = { newsletterIssue: ISSUE, podcastEpisode: null }
-    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
-    renderStory(story)
-    await archiveSettled()
-
-    expect(subscribeButton().closest('p')).toHaveTextContent(/^Get stories like this once a week\. Subscribe to the newsletter$/)
-    const toIssue = screen.getAllByRole('link').filter(link => link.getAttribute('href') === '/newsletter/week-43-2026')
-    expect(toIssue).toEqual([issueLink()])
-  })
-
-  it("keeps the line's link to the newest issue when the story was in an older one", async () => {
-    mockAppearances.current = { newsletterIssue: { ...ISSUE, slug: 'week-40-2026', title: 'Week 40, 2026' }, podcastEpisode: null }
-    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
-    renderStory(story)
-
-    expect(await screen.findByRole('link', { name: 'read this week’s issue' })).toHaveAttribute('href', '/newsletter/week-43-2026')
-    expect(issueLink()).toHaveAttribute('href', '/newsletter/week-40-2026')
   })
 
   it.each([

@@ -3,7 +3,6 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import Markdown from 'react-markdown'
 import { usePublicStory, useStoryAppearances } from '../hooks/usePublicStories'
-import { useLatestNewsletterIssue } from '../hooks/useNewsletterArchive'
 import { getCategoryColor, shiftHex } from '../lib/category-colors'
 import { parsePoints } from '../lib/parse-points'
 import { markdownToPlainText } from '../lib/plainText'
@@ -13,7 +12,7 @@ import FeedFavicon from '../components/FeedFavicon'
 import BookmarkButton from '../components/BookmarkButton'
 import ShareButtons from '../components/ShareButtons'
 import { useFeedback } from '../components/FeedbackProvider'
-import { StoryNewsletterLine } from '../components/CrossLinks'
+import { StoryProductButtons } from '../components/CrossLinks'
 import StoryAppearances from '../components/StoryAppearances'
 import RelatedStories from '../components/RelatedStories'
 import AlsoCoveredBy from '../components/AlsoCoveredBy'
@@ -106,8 +105,6 @@ export default function StoryPage() {
   const story = storyQuery.data
   // Never prerendered: the real states always show (lib/loadState.ts)
   const loadState = loadStateOf(storyQuery, false)
-  // For the newsletter line at the end; asked for alongside the story, so it is usually there by then
-  const latestIssue = useLatestNewsletterIssue()
   // The issue and episode the story was in, for the cards at the end; by the address's slug, so also alongside the story
   const appearances = useStoryAppearances(slug).data
 
@@ -179,8 +176,6 @@ export default function StoryPage() {
   const issueSlug = story.issue?.slug ?? story.feed?.issue?.slug ?? 'general-news'
   const issueName = story.issue?.name ?? story.feed?.issue?.name ?? 'News'
   const colors = getCategoryColor(issueSlug)
-  // The line's link to the newest issue would repeat the card's when the story is in that issue
-  const lineIssue = latestIssue && appearances?.newsletterIssue?.slug === latestIssue.slug ? null : latestIssue
 
   return (
     <>
@@ -354,9 +349,9 @@ export default function StoryPage() {
             </button>
           </p>
 
-          {/* Where the reader finishes: the issue and episode this story was in, then the newsletter, in the site's subscribe dialog */}
+          {/* Where the reader finishes: the issue and episode this story was in, then a button for each weekly product */}
           <StoryAppearances appearances={appearances} className="mt-6 mb-4" />
-          <StoryNewsletterLine latestIssue={lineIssue} className="mb-10" />
+          <StoryProductButtons className="mb-10" />
 
           {/* Related stories */}
           {story.slug && <RelatedStories slug={story.slug} />}
