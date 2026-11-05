@@ -192,9 +192,9 @@ describe('HomePage AI disclosure', () => {
     expect(screen.getByRole('link', { name: 'AI-generated Other label Other headline' })).toBeInTheDocument()
   })
 
-  it('shows the pull quote with the "Selected by AI" badge and the note', () => {
+  it('shows the pull quote with the "AI" badge inline in the note', () => {
     const { container } = renderHome()
     const footer = container.querySelector('footer')!
-    expect(announcedText(footer)).toMatch(/^Selected by AI — .+ · chosen by AI, may be translated$/)
+    expect(announcedText(footer)).toMatch(/^— .+ · chosen by AI, may be translated$/)
   })
 })
