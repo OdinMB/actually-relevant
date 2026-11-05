@@ -13,6 +13,7 @@ import PodcastSubtitle from '../components/podcast/PodcastSubtitle'
 import { usePodcastEpisode } from '../hooks/usePodcastEpisodes'
 import LoadFailure from '../components/LoadFailure'
 import { loadStateOf } from '../lib/loadState'
+import { sectionOgImage } from '../lib/api'
 
 const BACK_LINK_CLASS = 'text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1'
 
@@ -43,7 +44,7 @@ function EpisodeHead({ episode }: { episode: PublicPodcastEpisodeDetail }) {
         <meta property="og:type" content="article" />
         <meta property="og:url" content={url} />
         <meta property="article:published_time" content={episode.publishedAt} />
-        {CommonOgTags({})}
+        {CommonOgTags(sectionOgImage('podcast'))}
       </Helmet>
       <StructuredData data={buildPodcastEpisodeSchema(episode)} />
       <StructuredData

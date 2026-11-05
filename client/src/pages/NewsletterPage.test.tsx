@@ -91,6 +91,14 @@ describe('NewsletterPage', () => {
     })
   })
 
+  it("previews as the newsletter: the newsletter's own image, with its type", async () => {
+    renderPage()
+    const meta = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+    await waitFor(() => expect(meta('meta[property="og:image"]')).toBe('/api/section-images/newsletter.png'))
+    expect(meta('meta[name="twitter:image"]')).toBe('/api/section-images/newsletter.png')
+    expect(meta('meta[property="og:image:type"]')).toBe('image/png')
+  })
+
   it('offers the podcast after the past issues', async () => {
     renderPage()
     const lastIssue = await screen.findByRole('link', { name: 'Week 41, 2026' })

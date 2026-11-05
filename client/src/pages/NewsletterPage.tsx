@@ -14,7 +14,7 @@ import { NewsletterArchiveSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
 import { useNewsletterArchive } from '../hooks/useNewsletterArchive'
 import { usePageTurn } from '../hooks/usePageTurn'
-import { NEWSLETTER_FEED_URL } from '../lib/api'
+import { NEWSLETTER_FEED_URL, sectionOgImage } from '../lib/api'
 import { FOCUS_RING } from '../lib/control-classes'
 import { loadStateOf } from '../lib/loadState'
 
@@ -114,7 +114,7 @@ export default function NewsletterPage() {
         <meta property="og:description" content={META.description} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={META.url} />
-        {CommonOgTags({})}
+        {CommonOgTags(sectionOgImage('newsletter'))}
       </Helmet>
       <StructuredData data={breadcrumb} />
 

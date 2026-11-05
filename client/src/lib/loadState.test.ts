@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { ApiError } from './api'
-import { loadStateOf } from './loadState'
+import { loadStateOf, prerenderWaitProps } from './loadState'
+import { PRERENDER_WAIT_ATTR } from './renderComplete'
 
 /** A query that has not started: no data, no error, not fetching. */
 const idle = { data: undefined, error: null, isLoading: false, isPaused: false, isPlaceholderData: false, errorUpdateCount: 0 }
@@ -59,5 +60,26 @@ describe('loadStateOf', () => {
   it('checks for the prerenderer itself when not told', () => {
     // jsdom is not an automated browser
     expect(loadStateOf({ ...idle, error: new TypeError('Failed to fetch') })).toBe('failed')
+  })
+})
+
+describe('prerenderWaitProps', () => {
+  const firstRequest = { isLoading: true, failureCount: 0 }
+
+  it('in the prerenderer, marks the loading view while the first request is on its way', () => {
+    expect(prerenderWaitProps(firstRequest, true)).toEqual({ [PRERENDER_WAIT_ATTR]: '' })
+  })
+
+  it('stops the wait once the first request failed: the build may have no API, and its retry would only delay the build', () => {
+    expect(prerenderWaitProps({ isLoading: true, failureCount: 1 }, true)).toEqual({})
+  })
+
+  it('marks nothing once the answer is there', () => {
+    expect(prerenderWaitProps({ isLoading: false, failureCount: 0 }, true)).toEqual({})
+  })
+
+  it('marks nothing outside the prerenderer, and checks for it itself when not told', () => {
+    expect(prerenderWaitProps(firstRequest, false)).toEqual({})
+    expect(prerenderWaitProps(firstRequest)).toEqual({})
   })
 })

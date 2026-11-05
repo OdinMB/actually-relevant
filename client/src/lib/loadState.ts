@@ -1,6 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query'
 import { isNotFound } from './api'
-import { isPrerendering } from './renderComplete'
+import { isPrerendering, PRERENDER_WAIT_ATTR } from './renderComplete'
 
 /**
  * What a public page shows for the query that loads its content (.context/ui-conventions.md, "Load failures"):
@@ -35,4 +35,18 @@ export function loadStateOf(
   // Paused: the browser is offline, and the query waits to be back online
   if (query.isPaused) return 'failed'
   return 'not-found'
+}
+
+/**
+ * Spread onto a prerendered page's loading view, so that the prerenderer waits for the page's
+ * content (renderComplete.ts) and snapshots the loaded page, its head included, rather than the
+ * skeleton under the homepage's head. Only in the prerenderer, and only while the first request is
+ * on its way: if it fails (the build's API may not answer), the snapshot goes ahead without the
+ * retry. `signalRenderComplete` stops waiting after its maximum anyway.
+ */
+export function prerenderWaitProps(
+  query: Pick<UseQueryResult<unknown>, 'isLoading' | 'failureCount'>,
+  prerendering = isPrerendering(),
+): Partial<Record<typeof PRERENDER_WAIT_ATTR, ''>> {
+  return prerendering && query.isLoading && query.failureCount === 0 ? { [PRERENDER_WAIT_ATTR]: '' } : {}
 }

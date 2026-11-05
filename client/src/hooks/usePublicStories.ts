@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { publicApi } from '../lib/api'
+import { isPrerendering } from '../lib/renderComplete'
 
 type StoryListParams = { page?: number; pageSize?: number; issueSlug?: string; search?: string; emotionTags?: string }
 
@@ -12,13 +13,16 @@ export function usePublicStories(params?: StoryListParams) {
 
 /**
  * One page of an issue's stories. While another page or mood of the same issue loads, the page on
- * screen stays; another issue's stories never stand in for this one's.
+ * screen stays; another issue's stories never stand in for this one's. Never asked for while
+ * prerendering: the stories (and the pull quotes drawn from them) would date the static HTML, so
+ * the prerendered topic page keeps their skeleton.
  */
 export function useIssueStories(params: StoryListParams) {
   return useQuery({
     queryKey: ['public-stories', params] as const,
     queryFn: () => publicApi.stories.list(params),
     placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[1].issueSlug === params.issueSlug ? previous : undefined),
+    enabled: !isPrerendering(),
   })
 }
 

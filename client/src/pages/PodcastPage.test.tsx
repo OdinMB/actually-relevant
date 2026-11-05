@@ -114,6 +114,14 @@ describe('PodcastPage', () => {
     expect(subtitle.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1)
   })
 
+  it("previews as the podcast: the podcast's own image, with its type", async () => {
+    renderPage()
+    const meta = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+    await waitFor(() => expect(meta('meta[property="og:image"]')).toBe('/api/section-images/podcast.png'))
+    expect(meta('meta[name="twitter:image"]')).toBe('/api/section-images/podcast.png')
+    expect(meta('meta[property="og:image:type"]')).toBe('image/png')
+  })
+
   it('does not repeat the per-episode AI line on the page', async () => {
     renderPage()
     await screen.findByRole('heading', { name: /W42: Clean air/ })

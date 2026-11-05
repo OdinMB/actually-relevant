@@ -10,6 +10,7 @@ import LoadFailure from '../components/LoadFailure'
 import { usePodcastEpisodes } from '../hooks/usePodcastEpisodes'
 import { useScrollToHash } from '../hooks/useScrollToHash'
 import { loadStateOf } from '../lib/loadState'
+import { sectionOgImage } from '../lib/api'
 
 /** The public feed URL: a Render rewrite to the API's feed route (.context/seo.md). Static, so it prerenders. */
 export const PODCAST_FEED_URL = `${SEO.siteUrl}/podcast.xml`
@@ -66,7 +67,7 @@ export default function PodcastPage() {
         <meta property="og:description" content={META.description} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={META.url} />
-        {CommonOgTags({})}
+        {CommonOgTags(sectionOgImage('podcast'))}
       </Helmet>
       <StructuredData data={breadcrumb} />
 

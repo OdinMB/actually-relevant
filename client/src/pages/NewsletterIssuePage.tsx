@@ -15,7 +15,7 @@ import LoadFailure from '../components/LoadFailure'
 import { loadStateOf } from '../lib/loadState'
 import { useNewsletterIssue } from '../hooks/useNewsletterArchive'
 import { usePublicIssues } from '../hooks/usePublicIssues'
-import { NEWSLETTER_FEED_URL, type PublicIssue } from '../lib/api'
+import { NEWSLETTER_FEED_URL, sectionOgImage, type PublicIssue } from '../lib/api'
 import { getCategoryColor } from '../lib/category-colors'
 import { ISSUE_CARD_CLASS, ISSUE_PAGE_CLASS, parseQuote, sectionSlug } from '../lib/newsletter-issue'
 import { BRAND } from '../config'
@@ -155,8 +155,11 @@ function Masthead() {
 }
 
 /**
- * The issue's head tags. The backend writes the same title and description for crawlers that run
- * no JavaScript (server/src/services/pagePreviews.ts); change both together.
+ * The issue's head tags. The backend writes the same for crawlers that run no JavaScript
+ * (server/src/services/pagePreviews.ts); change both together. Except: the backend's card title is
+ * the email's subject line, with the lead story's AI headline, and its description then starts with
+ * the AI label; the public JSON has no ratings to pick the lead by, so this head keeps the page's
+ * title, which carries no AI text, and its description no label.
  */
 function IssueHead({ issue }: { issue: PublicNewsletterIssue }) {
   const url = `${SEO.siteUrl}/newsletter/${issue.slug}`
@@ -174,7 +177,7 @@ function IssueHead({ issue }: { issue: PublicNewsletterIssue }) {
         <meta property="og:type" content="article" />
         <meta property="og:url" content={url} />
         <meta property="article:published_time" content={issue.publishedAt} />
-        {CommonOgTags({})}
+        {CommonOgTags(sectionOgImage('newsletter'))}
       </Helmet>
       <StructuredData
         data={buildBreadcrumbSchema([{ name: 'Home', url: SEO.siteUrl }, { name: 'Newsletter', url: `${SEO.siteUrl}/newsletter` }, { name: issue.title }])}
