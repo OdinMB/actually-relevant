@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { inPrerenderer } from '../test/prerenderer'
 import { announcedText } from '../test/stories'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -82,6 +82,21 @@ function dotOf(heading: HTMLElement): string {
 }
 
 describe('NewsletterIssuePage', () => {
+  it("sets the page's own title and description, unlabeled, and the newsletter's preview image", async () => {
+    renderPage()
+    await screen.findByRole('heading', { level: 1 })
+    const meta = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+    const description = 'Week 42, 2026 of the Actually Relevant weekly newsletter: the stories that matter to humanity this week, to read on the web.'
+    await waitFor(() => expect(meta('meta[property="og:image"]')).toBe('/api/section-images/newsletter.png'))
+    expect(document.title).toBe('Week 42, 2026 - Actually Relevant Newsletter')
+    expect(meta('meta[property="og:title"]')).toBe('Week 42, 2026 - Actually Relevant Newsletter')
+    // Its title carries no AI headline (the public JSON has no ratings to pick a lead by), so no AI label
+    expect(meta('meta[name="description"]')).toBe(description)
+    expect(meta('meta[property="og:description"]')).toBe(description)
+    expect(meta('meta[name="twitter:image"]')).toBe('/api/section-images/newsletter.png')
+    expect(meta('meta[property="og:image:type"]')).toBe('image/png')
+  })
+
   it("shows the issue's AI label before any AI-written text", async () => {
     renderPage()
     const label = await screen.findByText(ISSUE.aiLabel.text, { exact: false })
@@ -171,8 +186,8 @@ describe('NewsletterIssuePage', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
-  it('shows the not-found state and its noindex in an automated browser too, since issue pages are never prerendered', async () => {
-    await inAutomatedBrowser(async () => {
+  it('shows the not-found state and its noindex whatever the prerender flag says, since issue pages are never prerendered', async () => {
+    await inPrerenderer(async () => {
       mockApi.newsletterIssue.mockRejectedValue(new ApiError(404, 'Issue not found'))
       renderPage('draft-issue')
       expect(await screen.findByRole('heading', { level: 1, name: 'Issue Not Found' })).toBeInTheDocument()

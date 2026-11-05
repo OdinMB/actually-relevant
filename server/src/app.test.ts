@@ -135,6 +135,7 @@ describe('CORS', () => {
     '/api/feed',
     '/api/feed/some-issue',
     '/api/stories',
+    '/api/section-images/newsletter.png',
     '/api/sources',
     '/api/subscribe/token',
     '/api/podcast/feed.xml',

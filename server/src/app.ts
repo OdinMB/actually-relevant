@@ -79,9 +79,11 @@ const allowedOrigins = [...devPorts.flatMap(port => [`http://localhost:${port}`,
 // public signup form must fetch on render (the state-changing POSTs stay restricted below).
 // /api/feeds holds only the public feed favicons (routes/public/feedFavicon.ts).
 // /api/sources is the public list of source names behind the site's source count.
+// /api/section-images holds the link-preview images of the site's sections, like a story's og.png.
 const publicReadPaths = [
   '/api/sources',
   '/api/stories',
+  '/api/section-images',
   '/api/issues',
   '/api/homepage',
   '/api/feed',

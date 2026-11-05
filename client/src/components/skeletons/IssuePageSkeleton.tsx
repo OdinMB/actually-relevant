@@ -2,11 +2,12 @@ import IssueStoriesSkeleton from './IssueStoriesSkeleton'
 
 /**
  * Skeleton placeholder for IssuePage.
- * Matches the issue page layout to prevent CLS.
+ * Matches the issue page layout to prevent CLS. Takes data attributes, such as the prerenderer's
+ * content wait (`prerenderWaitProps`, lib/loadState.ts).
  */
-export default function IssuePageSkeleton() {
+export default function IssuePageSkeleton(attributes: Partial<Record<`data-${string}`, string>>) {
   return (
-    <div className="page-section-wide animate-pulse">
+    <div className="page-section-wide animate-pulse" {...attributes}>
       {/* Header */}
       <header className="mb-5">
         <div className="flex items-center justify-between gap-4">

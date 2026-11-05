@@ -9,10 +9,10 @@
  *   `/api/page` is.
  */
 import { Router } from 'express'
-import { config } from '../../config.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import { getStoryOgImage } from '../../services/storyPreview.js'
 import { previewPageHandler } from './pagePreview.js'
+import { sendPreviewImage } from './previewImage.js'
 
 export const storyImageRouter = Router()
 
@@ -22,11 +22,7 @@ storyImageRouter.get('/:slug/og.png', failsWith('Failed to render image'), async
     res.status(404).json({ error: 'Story not found' })
     return
   }
-  res.set('Content-Type', 'image/png')
-  res.set('Cache-Control', `public, max-age=${config.storyPreview.imageCacheSeconds}`)
-  // Helmet's default (same-origin) would stop browsers showing the image on other sites
-  res.set('Cross-Origin-Resource-Policy', 'cross-origin')
-  res.send(png)
+  sendPreviewImage(res, png)
 })
 
 export const storyPageRouter = Router()

@@ -18,6 +18,7 @@ import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { escapeHtml } from '../lib/xml.js'
 import { feedFaviconUrl } from '../lib/feedFaviconUrl.js'
+import { topicColor } from '../lib/topicColors.js'
 import { parseStoryHeading, storyHeading } from './newsletterContent.js'
 import { newsletterIssue, newsletterOrder, newsletterSelectInput } from './promptInputs.js'
 import { buildNewsletterSelectPrompt } from '../prompts/index.js'
@@ -25,19 +26,6 @@ import { newsletterSelectResultSchema } from '../schemas/llm.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 
 const log = createLogger('newsletter')
-
-/** Issue slug → dot color hex for email HTML (mirrors client/src/lib/category-colors.ts) */
-const ISSUE_DOT_COLORS: Record<string, string> = {
-  'human-development': '#fbbf24',
-  'planet-climate': '#2dd4bf',
-  'existential-threats': '#f87171',
-  'science-technology': '#818cf8',
-}
-const DEFAULT_DOT_COLOR = '#f472b6'
-
-function getIssueDotColor(slug: string): string {
-  return ISSUE_DOT_COLORS[slug] ?? DEFAULT_DOT_COLOR
-}
 
 interface NewsletterFilters {
   status?: string
@@ -317,7 +305,7 @@ export function renderHtml(newsletter: { title: string; content: string }, webUr
 
     // Render issue header with colored dot (matching website design)
     if (issueHeader) {
-      const dotColor = getIssueDotColor(issueSlug)
+      const dotColor = topicColor(issueSlug)
       htmlBlocks.push(`
     <tr>
       <td style="padding: 32px 0 12px; text-align: center;">

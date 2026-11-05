@@ -24,6 +24,27 @@ export function storyOgImageUrl(slug: string | null | undefined): string {
   return slug ? `${API_BASE}/stories/${encodeURIComponent(slug)}/og.png` : 'https://actuallyrelevant.news/images/og-image.png'
 }
 
+/** A link-preview image as `CommonOgTags` (lib/seo.tsx) takes it. */
+export interface OgImage {
+  image: string
+  imageType: string
+}
+
+/**
+ * The card image of every newsletter issue or every podcast transcript page, and of `/newsletter`
+ * and `/podcast` (1200x630 PNG, the logo and the section's name, the podcast's with the website's
+ * "AI" badge, served by the API). The server's
+ * link-preview pages name the same (server/src/services/sectionPreview.ts).
+ */
+export function sectionOgImage(section: 'newsletter' | 'podcast'): OgImage {
+  return { image: `${API_BASE}/section-images/${section}.png`, imageType: 'image/png' }
+}
+
+/** A topic page's card image: the logo and the topic's name, as `sectionOgImage`. */
+export function topicOgImage(slug: string): OgImage {
+  return { image: `${API_BASE}/section-images/issues/${encodeURIComponent(slug)}.png`, imageType: 'image/png' }
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,

@@ -1,6 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query'
 import { isNotFound } from './api'
-import { isPrerendering } from './renderComplete'
+import { isPrerendering, noteContentWait, PRERENDER_WAIT_ATTR } from './renderComplete'
 
 /**
  * What a public page shows for the query that loads its content (.context/ui-conventions.md, "Load failures"):
@@ -15,10 +15,9 @@ import { isPrerendering } from './renderComplete'
  *   that page would take the button, and the reader's focus, away.
  *
  * In the prerenderer it is only ever `ready` or `loading`: the build's API may not answer, and a page
- * must not bake "not found" or "couldn't load" into its static HTML (renderComplete.ts). That check
- * reads `navigator.webdriver`, which any automated browser sets, so a page that is never prerendered
- * (one only in App.tsx, not in shared/routes.json) passes `false` for `prerendering`: its not-found
- * view, with its `noindex`, must still show there.
+ * must not bake "not found" or "couldn't load" into its static HTML (renderComplete.ts). A page that
+ * is never prerendered (one only in App.tsx, not in shared/routes.json) passes `false` for
+ * `prerendering`: its not-found view, with its `noindex`, must always show.
  */
 export type LoadState = 'ready' | 'loading' | 'not-found' | 'failed'
 
@@ -35,4 +34,21 @@ export function loadStateOf(
   // Paused: the browser is offline, and the query waits to be back online
   if (query.isPaused) return 'failed'
   return 'not-found'
+}
+
+/**
+ * Spread onto a prerendered page's loading view, so that the prerenderer waits for the page's
+ * content (renderComplete.ts) and snapshots the loaded page, its head included, rather than the
+ * skeleton under the homepage's head. Only in the prerenderer, and only while the first request is
+ * on its way: if it fails (the build's API may not answer), the snapshot goes ahead without the
+ * retry. `signalRenderComplete` stops waiting after its maximum anyway. A marked wait is also noted,
+ * so the snapshot gives the head time to settle even if the marker clears between two of its checks.
+ */
+export function prerenderWaitProps(
+  query: Pick<UseQueryResult<unknown>, 'isLoading' | 'failureCount'>,
+  prerendering = isPrerendering(),
+): Partial<Record<typeof PRERENDER_WAIT_ATTR, ''>> {
+  if (!(prerendering && query.isLoading && query.failureCount === 0)) return {}
+  noteContentWait()
+  return { [PRERENDER_WAIT_ATTR]: '' }
 }

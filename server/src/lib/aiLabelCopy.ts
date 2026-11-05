@@ -158,6 +158,15 @@ export const PODCAST_SHOW_DESCRIPTION =
  */
 export const PODCAST_TRANSCRIPT_DESCRIPTION_PREFIX = 'AI: '
 
+/**
+ * The badge drawn on a link-preview image (`services/sectionImage.ts`, `services/sectionPreview.ts`),
+ * styled as the website's badge (`AI_DISCLOSURE_COPY.badgeText`, `AiBadge`): on a newsletter issue's
+ * image when the card's title is its lead story's AI headline (`newsletterIssueCard()` in
+ * `services/pagePreviews.ts`), and always on the podcast's image (/podcast and transcript cards).
+ * Owner decision, Odin Mühlenbein, 2026-11-05.
+ */
+export const PREVIEW_IMAGE_AI_BADGE = 'AI'
+
 /** Carousel: pixel footer on every slide, the post text line, and the alt-text prefix. */
 export const CAROUSEL_COPY = {
   slideFooter: 'actuallyrelevant.news · AI-generated',

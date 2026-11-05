@@ -18,11 +18,13 @@ export const SEO = {
  * Common OG meta tags that should appear on every page.
  * Use inside <Helmet> after page-specific tags.
  * Returns an array (not fragment) for react-helmet-async compatibility.
+ * `imageType` adds og:image:type, for a page whose image the backend's link preview names with one.
  */
-export function CommonOgTags({ image = SEO.ogImage }: { image?: string }): ReactNode {
+export function CommonOgTags({ image = SEO.ogImage, imageType }: { image?: string; imageType?: string }): ReactNode {
   return [
     <meta key="og:site_name" property="og:site_name" content={SEO.siteName} />,
     <meta key="og:image" property="og:image" content={image} />,
+    ...(imageType ? [<meta key="og:image:type" property="og:image:type" content={imageType} />] : []),
     <meta key="og:image:width" property="og:image:width" content={SEO.ogImageWidth} />,
     <meta key="og:image:height" property="og:image:height" content={SEO.ogImageHeight} />,
     <meta key="twitter:card" name="twitter:card" content={SEO.twitterCard} />,

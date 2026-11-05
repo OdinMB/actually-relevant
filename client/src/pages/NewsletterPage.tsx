@@ -14,7 +14,7 @@ import { NewsletterArchiveSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
 import { useNewsletterArchive } from '../hooks/useNewsletterArchive'
 import { usePageTurn } from '../hooks/usePageTurn'
-import { NEWSLETTER_FEED_URL } from '../lib/api'
+import { NEWSLETTER_FEED_URL, sectionOgImage } from '../lib/api'
 import { FOCUS_RING } from '../lib/control-classes'
 import { loadStateOf } from '../lib/loadState'
 
@@ -36,8 +36,8 @@ const LINK_CLASS = `text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px
 const INLINE_LINK_CLASS = `${LINK_CLASS} underline`
 
 /**
- * Every published issue, newest first, paginated. Loads client-side (the prerenderer does not wait
- * for data). Another page moves focus to the section's `heading` and is announced once it is in.
+ * Every published issue, newest first, paginated. Loads client-side (never asked for while
+ * prerendering, so no dated list is baked in). Another page moves focus to the section's `heading` and is announced once it is in.
  */
 function IssueList({ heading, onPageChange }: { heading: RefObject<HTMLHeadingElement | null>; onPageChange: () => void }) {
   const [page, setPage] = useState(1)
@@ -114,7 +114,7 @@ export default function NewsletterPage() {
         <meta property="og:description" content={META.description} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={META.url} />
-        {CommonOgTags({})}
+        {CommonOgTags(sectionOgImage('newsletter'))}
       </Helmet>
       <StructuredData data={breadcrumb} />
 

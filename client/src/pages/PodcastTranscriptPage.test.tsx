@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { inPrerenderer } from '../test/prerenderer'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -101,6 +101,14 @@ describe('PodcastTranscriptPage', () => {
     expect(metaContent('meta[property="og:description"]')).toBe('AI: Two stories.')
   })
 
+  it("names the podcast's preview image, with its type, as the backend does", async () => {
+    renderPage()
+    await screen.findByText('Welcome to the week.')
+    await waitFor(() => expect(metaContent('meta[property="og:image"]')).toBe('/api/section-images/podcast.png'))
+    expect(metaContent('meta[name="twitter:image"]')).toBe('/api/section-images/podcast.png')
+    expect(metaContent('meta[property="og:image:type"]')).toBe('image/png')
+  })
+
   it('cuts the labeled description, not the summary alone, to the description limits', async () => {
     const summary = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
     mockApi.podcastEpisode.mockResolvedValue({ ...EPISODE, summary })
@@ -164,8 +172,8 @@ describe('PodcastTranscriptPage', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
-  it('says the episode was not found, with noindex, in an automated browser too, since transcript pages are never prerendered', async () => {
-    await inAutomatedBrowser(async () => {
+  it('says the episode was not found, with noindex, whatever the prerender flag says, since transcript pages are never prerendered', async () => {
+    await inPrerenderer(async () => {
       mockApi.podcastEpisode.mockRejectedValue(new ApiError(404, 'Episode not found'))
       renderPage('gone')
       expect(await screen.findByRole('heading', { level: 1, name: 'Episode Not Found' })).toBeInTheDocument()

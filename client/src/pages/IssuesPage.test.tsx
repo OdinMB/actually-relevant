@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
-import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { inPrerenderer } from '../test/prerenderer'
 import { focusRingProblems } from '../test/classes'
 import { contrastRatio } from '../test/contrast'
 import { getCategoryColor } from '../lib/category-colors'
@@ -92,7 +92,7 @@ describe('IssuesPage when the issues do not load', () => {
   })
 
   it('shows the skeleton in the prerenderer, so the failure is never baked into the static page', async () => {
-    await inAutomatedBrowser(async () => {
+    await inPrerenderer(async () => {
       mockApi.issues.list.mockRejectedValue(new TypeError('Failed to fetch'))
       const { container, client } = renderPage()
 

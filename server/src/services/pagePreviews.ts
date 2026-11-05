@@ -10,8 +10,9 @@ import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { PODCAST_TRANSCRIPT_DESCRIPTION_PREFIX } from '../lib/aiLabelCopy.js'
 import type { PreviewedSection } from '../lib/linkPreviewPaths.js'
-import { SITE_NAME, SITE_OG_IMAGE, type LinkPreview, type PreviewTarget } from './linkPreview.js'
-import { findStoryLinkPreview, storyOgImage } from './storyPreview.js'
+import { SITE_NAME, type LinkPreview, type PreviewTarget } from './linkPreview.js'
+import { findStoryLinkPreview } from './storyPreview.js'
+import { sectionImage, topicImage } from './sectionPreview.js'
 import { findPublishedIssueHead, newsletterIssueUrl } from './newsletterArchive.js'
 import { storyHeadings } from './newsletterContent.js'
 import { byRelevance, leadLine } from './newsletterInbox.js'
@@ -19,8 +20,8 @@ import { findPublishedEpisodeHead } from './podcastPublish.js'
 
 // --- A newsletter issue, /newsletter/<slug> (IssueHead in NewsletterIssuePage.tsx) ---
 
-/** The issue's most relevant story that still has a page, with its heading as the issue shows it. */
-async function leadStory(content: string): Promise<{ headline: string; slug: string } | null> {
+/** The heading of the issue's most relevant story that still has a page, as the issue shows it. */
+async function leadHeadline(content: string): Promise<string | null> {
   const headings = storyHeadings(content)
   const ids = [...new Set(headings.flatMap(heading => (heading.storyId ? [heading.storyId] : [])))]
   if (ids.length === 0) return null
@@ -31,30 +32,39 @@ async function leadStory(content: string): Promise<{ headline: string; slug: str
   const byId = new Map(stories.map(story => [story.id, story]))
   const published = headings.flatMap(({ headline, storyId }) => {
     const story = storyId ? byId.get(storyId) : undefined
-    return story?.slug ? [{ headline, slug: story.slug, relevance: story.relevance }] : []
+    return story?.slug ? [{ headline, relevance: story.relevance }] : []
   })
-  return byRelevance(published)[0] ?? null
+  return byRelevance(published)[0]?.headline ?? null
 }
 
 /**
- * The page's title and description. Its card title is the email's subject line, the week and the
- * lead story's headline, with that story's image, so the AI headline travels with the image's
- * "AI-generated" footer. An issue whose stories all lost their pages (or whose headings predate the
- * story markers) keeps the page's title and the site image.
+ * The issue card's title, description and image. With a lead story, the title is the email's subject
+ * line, the week and the lead's AI headline, and the image is the newsletter's with the website's
+ * "AI" badge, the label that travels with the card. Without one (its stories all lost their pages, or
+ * its headings predate the story markers), the page's own title and the plain newsletter image. The
+ * badge as the label is the owner's decision (2026-11-05); this function alone makes the choice.
  */
+function newsletterIssueCard(pageTitle: string, description: string, aiTitle: string | null): Pick<LinkPreview, 'title' | 'description' | 'image'> {
+  return aiTitle
+    ? { title: aiTitle, description, image: sectionImage('newsletter-issue') }
+    : { title: pageTitle, description, image: sectionImage('newsletter') }
+}
+
 async function newsletterIssuePreview(slug: string): Promise<LinkPreview | null> {
   const issue = await findPublishedIssueHead(slug)
   if (!issue?.slug) return null
   const documentTitle = `${issue.title} - Actually Relevant Newsletter`
-  const lead = await leadStory(issue.content)
+  const headline = await leadHeadline(issue.content)
   return {
     documentTitle,
-    title: lead ? leadLine(issue.title, lead.headline) : documentTitle,
-    description: `${issue.title} of the Actually Relevant weekly newsletter: the stories that matter to humanity this week, to read on the web.`,
+    ...newsletterIssueCard(
+      documentTitle,
+      `${issue.title} of the Actually Relevant weekly newsletter: the stories that matter to humanity this week, to read on the web.`,
+      headline && leadLine(issue.title, headline),
+    ),
     url: newsletterIssueUrl(issue.slug),
     canonical: true,
     type: 'article',
-    image: lead ? storyOgImage(lead.slug) : SITE_OG_IMAGE,
     publishedTime: (issue.publishedAt ?? issue.createdAt).toISOString(),
   }
 }
@@ -73,7 +83,7 @@ async function podcastTranscriptPreview(id: string): Promise<LinkPreview | null>
     url: `${config.siteUrl}/podcast/${encodeURIComponent(episode.id)}/transcript`,
     canonical: true,
     type: 'article',
-    image: SITE_OG_IMAGE,
+    image: sectionImage('podcast'),
     publishedTime: episode.publishedAt.toISOString(),
   }
 }
@@ -92,7 +102,7 @@ async function topicPreview(slug: string): Promise<LinkPreview | null> {
     // IssuePage sets no canonical link
     canonical: false,
     type: 'website',
-    image: SITE_OG_IMAGE,
+    image: topicImage(issue.slug),
   }
 }
 

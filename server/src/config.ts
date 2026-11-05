@@ -635,7 +635,8 @@ export const config = {
   },
   /**
    * Link previews (.context/seo.md): the story og:image endpoint, and the shell and page settings
-   * every link-preview page shares (story pages and `/api/page`, `services/linkPreview.ts`).
+   * every link-preview page shares (story pages and `/api/page`, `services/linkPreview.ts`). The
+   * section images (`/api/section-images`) use the image settings too.
    */
   storyPreview: {
     /** The built client's index.html on the static site; the link-preview pages inject meta tags into it. */
@@ -647,11 +648,13 @@ export const config = {
     pageCacheSeconds: 60,
     /** In-memory cache of rendered link-preview pages, per site path, shared by every kind of page. */
     pageCacheEntries: 200,
-    /** HTTP cache lifetime of a story's og.png. */
+    /** HTTP cache lifetime of a story's og.png and of a section image. */
     imageCacheSeconds: parseWholeNumber(process.env.STORY_OG_IMAGE_CACHE_SECONDS, 86400, 'STORY_OG_IMAGE_CACHE_SECONDS', 0),
     /** In-memory cache of rendered og.png images (about 50-150 KB each). */
     imageCacheEntries: 50,
     imageCacheTtlSeconds: 6 * 60 * 60,
+    /** In-memory cache of section images (about 75-100 KB each): the newsletter, the podcast and every topic, about a dozen today. */
+    sectionImageCacheEntries: 30,
   },
   /** Public newsletter archive (the issue list on `/newsletter`, `.context/newsletter-podcast.md`). */
   newsletterArchive: {
