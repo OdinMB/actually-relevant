@@ -522,6 +522,15 @@ export interface PublicPodcastResponse {
   episodes: PublicPodcastEpisode[]
 }
 
+/**
+ * `GET /api/stories/:slug/appearances`: the first published newsletter issue and podcast episode
+ * that carried the story, each as its own public list serves it; null where none did.
+ */
+export interface PublicStoryAppearances {
+  newsletterIssue: PublicNewsletterIssueSummary | null
+  podcastEpisode: PublicPodcastEpisode | null
+}
+
 /** A saved script edit: the episode and the style warnings (segues, outro sign-off) the person may keep. */
 export interface PodcastScriptSaveResult {
   podcast: Podcast

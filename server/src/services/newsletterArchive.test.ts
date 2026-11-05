@@ -7,7 +7,7 @@ const mockPrisma = vi.hoisted(() => ({
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
 // Publication dates are the lifecycle's publish move (newsletterLifecycle.db.test.ts)
-const { newsletterSlugBase, ensureNewsletterSlug } = await import('./newsletterArchive.js')
+const { newsletterSlugBase, ensureNewsletterSlug, findFirstIssueWithStory } = await import('./newsletterArchive.js')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -41,5 +41,38 @@ describe('ensureNewsletterSlug', () => {
       .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('taken', { code: 'P2002', clientVersion: 'test' }))
       .mockResolvedValueOnce({})
     expect(await ensureNewsletterSlug({ id: 'n1', title: 'Week 42, 2026' })).toBe('week-42-2026-2')
+  })
+})
+
+describe('findFirstIssueWithStory', () => {
+  it('looks among the public issues for one with the story on its shortlist or under a story heading of its content, earliest first', async () => {
+    await findFirstIssueWithStory('story-1')
+    const query = mockPrisma.newsletter.findFirst.mock.calls[0]![0]
+    expect(query.where).toEqual({
+      status: 'published',
+      slug: { not: null },
+      OR: [{ selectedStoryIds: { has: 'story-1' } }, { content: { contains: '{story:story-1}' } }],
+    })
+    expect(query.orderBy).toEqual([{ publishedAt: 'asc' }, { createdAt: 'asc' }])
+  })
+
+  it('answers with the issue as the archive lists it', async () => {
+    mockPrisma.newsletter.findFirst.mockResolvedValueOnce({
+      slug: 'week-42-2026',
+      title: 'Week 42, 2026',
+      publishedAt: new Date('2026-10-17T04:30:00Z'),
+      createdAt: new Date('2026-10-17T04:00:00Z'),
+      selectedStoryIds: ['story-1', 'story-2', 'story-3'],
+    })
+    expect(await findFirstIssueWithStory('story-1')).toEqual({
+      slug: 'week-42-2026',
+      title: 'Week 42, 2026',
+      publishedAt: '2026-10-17T04:30:00.000Z',
+      storyCount: 3,
+    })
+  })
+
+  it('is null when no public issue carried the story', async () => {
+    expect(await findFirstIssueWithStory('story-1')).toBeNull()
   })
 })

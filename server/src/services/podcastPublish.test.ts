@@ -10,8 +10,15 @@ const mockFeed = vi.hoisted(() => ({ invalidateFeedCache: vi.fn() }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastFeed.js', () => mockFeed)
 
-const { publishEpisode, unpublishEpisode, getPublishedEpisodes, getPublishedEpisode, pickAutoPublishCandidate, publishBlockedReason } =
-  await import('./podcastPublish.js')
+const {
+  publishEpisode,
+  unpublishEpisode,
+  getPublishedEpisodes,
+  getPublishedEpisode,
+  getFirstPublishedEpisodeWithStory,
+  pickAutoPublishCandidate,
+  publishBlockedReason,
+} = await import('./podcastPublish.js')
 const { PodcastRefusedError, wasPublished, standaloneCopyRefusal } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-12T07:00:00Z') // Monday of 2026-W42
@@ -235,6 +242,44 @@ describe('getPublishedEpisode', () => {
       dialogue,
     })
     expect(await getPublishedEpisode('podcast-1')).toMatchObject({ id: 'podcast-1', summary: 'S.', publishedAt, dialogue })
+  })
+})
+
+describe('getFirstPublishedEpisodeWithStory', () => {
+  it('looks for the story among the published, ready, live episodes with audio, earliest first', async () => {
+    mockPrisma.podcast.findFirst.mockResolvedValueOnce(null)
+    expect(await getFirstPublishedEpisodeWithStory('story-1')).toBeNull()
+    const query = mockPrisma.podcast.findFirst.mock.calls[0][0]
+    expect(query.where).toMatchObject({
+      storyIds: { has: 'story-1' },
+      status: 'published',
+      stage: 'ready',
+      dryRun: false,
+      publishedAt: { not: null },
+      audioUrl: { not: null },
+      audioBytes: { not: null },
+    })
+    expect(query.orderBy).toEqual({ publishedAt: 'asc' })
+  })
+
+  it('returns the episode as the feed and the public JSON read it', async () => {
+    const publishedAt = new Date('2026-10-17T05:00:00Z')
+    const stories = [{ ref: 1, id: 'story-1', title: 'T', publisher: 'P', sourceUrl: 'https://x.example/1', slug: 't', issue: 'I' }]
+    mockPrisma.podcast.findFirst.mockResolvedValueOnce({
+      id: 'podcast-1',
+      title: 'W42: T',
+      kind: 'weekly',
+      episodeSummary: 'S.',
+      episodeStories: stories,
+      humanEdited: false,
+      audioUrl: 'https://audio.example/e.mp3',
+      audioBytes: 123,
+      durationSec: 360,
+      transcriptUrl: null,
+      chaptersUrl: null,
+      publishedAt,
+    })
+    expect(await getFirstPublishedEpisodeWithStory('story-1')).toMatchObject({ id: 'podcast-1', title: 'W42: T', stories, publishedAt })
   })
 })
 

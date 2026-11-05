@@ -12,7 +12,7 @@ import { paginate } from '../lib/paginate.js'
 import { isUniqueViolation } from '../utils/errors.js'
 import { NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import { AI_GENERATED_NEWSLETTER_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
-import { storyHeadlines, toWebMarkdown } from './newsletterContent.js'
+import { storyHeadlines, storyMarker, toWebMarkdown } from './newsletterContent.js'
 
 /** Path segments under /newsletter/ that belong to pages or redirects, never to an issue. */
 const RESERVED_SLUGS = new Set(['archive'])
@@ -55,6 +55,18 @@ export function newsletterIssueUrl(slug: string): string {
 
 const PUBLIC_WHERE = { status: 'published', slug: { not: null } } as const satisfies Prisma.NewsletterWhereInput
 
+const SUMMARY_SELECT = { slug: true, title: true, publishedAt: true, createdAt: true, selectedStoryIds: true } satisfies Prisma.NewsletterSelect
+
+/** A public issue as the archive lists it, and as a story page names the issue the story was in. */
+function toIssueSummary(issue: Prisma.NewsletterGetPayload<{ select: typeof SUMMARY_SELECT }>) {
+  return {
+    slug: issue.slug!,
+    title: issue.title,
+    publishedAt: (issue.publishedAt ?? issue.createdAt).toISOString(),
+    storyCount: issue.selectedStoryIds.length,
+  }
+}
+
 export async function listPublishedIssues(page: number, pageSize: number) {
   const result = await paginate({
     findMany: () =>
@@ -63,21 +75,27 @@ export async function listPublishedIssues(page: number, pageSize: number) {
         orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
-        select: { slug: true, title: true, publishedAt: true, createdAt: true, selectedStoryIds: true },
+        select: SUMMARY_SELECT,
       }),
     count: () => prisma.newsletter.count({ where: PUBLIC_WHERE }),
     page,
     pageSize,
   })
-  return {
-    ...result,
-    data: result.data.map(issue => ({
-      slug: issue.slug!,
-      title: issue.title,
-      publishedAt: (issue.publishedAt ?? issue.createdAt).toISOString(),
-      storyCount: issue.selectedStoryIds.length,
-    })),
-  }
+  return { ...result, data: result.data.map(toIssueSummary) }
+}
+
+/**
+ * The first public issue that carried the story, as the archive lists it: the story is on its
+ * shortlist or named by a story heading in its content, the stories its web edition shows
+ * (`getPublishedIssue`). Null when no public issue did.
+ */
+export async function findFirstIssueWithStory(storyId: string) {
+  const issue = await prisma.newsletter.findFirst({
+    where: { ...PUBLIC_WHERE, OR: [{ selectedStoryIds: { has: storyId } }, { content: { contains: storyMarker(storyId) } }] },
+    orderBy: [{ publishedAt: 'asc' }, { createdAt: 'asc' }],
+    select: SUMMARY_SELECT,
+  })
+  return issue && toIssueSummary(issue)
 }
 
 /** Slugs and dates of every public issue, for the sitemap. */
