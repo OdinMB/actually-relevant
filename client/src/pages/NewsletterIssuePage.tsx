@@ -241,8 +241,8 @@ export default function NewsletterIssuePage() {
               <time dateTime={issue.publishedAt}>{formatEpisodeDate(issue.publishedAt)}</time>
             </p>
             <p className="mx-auto mt-4 max-w-md text-sm leading-normal text-neutral-700" data-newsletter-ai-label>
-              <AiBadge decorative className="mr-2 align-middle" />
-              <strong>{issue.aiLabel.lead}</strong> {issue.aiLabel.text}
+              {/* The badge is the sentence's subject and its only "AI": "[AI] selected the stories …" */}
+              <AiBadge accessibleName={issue.aiLabel.lead} className="align-middle" /> {issue.aiLabel.text}
             </p>
           </div>
 

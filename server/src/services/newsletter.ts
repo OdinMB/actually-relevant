@@ -475,7 +475,7 @@ export function renderHtml(newsletter: { title: string; content: string }, webUr
             <td style="padding: 14px 32px 12px; text-align: center;">
               <p style="margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #404040;">${escapeHtml(newsletter.title)}</p>
               <!-- AI label at the top of every issue, not only in the footer (AI Act Art. 50(4)) -->
-              <p style="margin: 8px 0 0; font-size: 13px; color: #525252; line-height: 1.5;"><strong>${NEWSLETTER_TOP_LABEL.lead}</strong> ${NEWSLETTER_TOP_LABEL.text}</p>
+              <p style="margin: 8px 0 0; font-size: 13px; color: #525252; line-height: 1.5;"><span style="display: inline-block; padding: 1px 4px; border: 1px solid #525252; border-radius: 3px; font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: 0.05em; vertical-align: middle;">${NEWSLETTER_TOP_LABEL.lead}</span> ${NEWSLETTER_TOP_LABEL.text}</p>
             </td>
           </tr>
 ${introSection}
