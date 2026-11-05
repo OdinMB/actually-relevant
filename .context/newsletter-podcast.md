@@ -117,9 +117,9 @@ Category-specific header colors/images are mapped by keyword matching on the cat
 
 Located in `server/assets/`:
 - `images/` — Header images (1200x80) and logo (112x80). Placeholders used until branded versions are provided.
-- `fonts/` — Inter Bold and Inter Regular TTF files for image text rendering.
-- `fonts/Roboto/` (Roboto Bold with its Apache 2.0 licence) and `images/logo-text-horizontal.jpg` for the section preview images (`.context/seo.md`, "Section preview images").
-- The Inter fonts and the header images and logo named above are not in the repository, and no code loads a header image or that logo. The carousel checks for each Inter file and falls back, so story images (slides and `og.png`) render in a system font.
+- `fonts/Roboto/` — Roboto Bold and Regular with their Apache 2.0 licence, copies of the website's text font in `client/public/fonts/Roboto`. Story images (carousel slides and `og.png`) use both (`STORY_FONT_PATHS` in `carousel.ts`, a test fails if either file is missing); the section preview images use Bold (`.context/seo.md`, "Section preview images"). Until 2026-11-05 the carousel looked for Inter files that were never committed, so story images rendered in a system font.
+- `images/logo-text-horizontal.jpg` for the section preview images.
+- The header images and logo named above are not in the repository, and no code loads them.
 
 ### Automated generation (`generate_newsletter` cron job)
 

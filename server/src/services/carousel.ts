@@ -24,14 +24,21 @@ export interface CarouselStory {
   date: string | null
 }
 
+/**
+ * Roboto, the website's text font (Apache 2.0, its licence beside it in server/assets/fonts/Roboto;
+ * copies of client/public/fonts/Roboto). The section preview images use the same Bold file.
+ */
+export const STORY_FONT_PATHS = {
+  bold: join(ASSETS_DIR, 'fonts', 'Roboto', 'Roboto-Bold.ttf'),
+  regular: join(ASSETS_DIR, 'fonts', 'Roboto', 'Roboto-Regular.ttf'),
+} as const
+
 function registerFonts() {
-  const boldPath = join(ASSETS_DIR, 'fonts', 'Inter-Bold.ttf')
-  const regularPath = join(ASSETS_DIR, 'fonts', 'Inter-Regular.ttf')
-  if (existsSync(boldPath)) {
-    GlobalFonts.registerFromPath(boldPath, 'InterBold')
+  if (existsSync(STORY_FONT_PATHS.bold)) {
+    GlobalFonts.registerFromPath(STORY_FONT_PATHS.bold, 'StoryRobotoBold')
   }
-  if (existsSync(regularPath)) {
-    GlobalFonts.registerFromPath(regularPath, 'InterRegular')
+  if (existsSync(STORY_FONT_PATHS.regular)) {
+    GlobalFonts.registerFromPath(STORY_FONT_PATHS.regular, 'StoryRobotoRegular')
   }
 }
 
@@ -88,7 +95,7 @@ export function createStoryImage(story: CarouselStory, size: ImageSize = CAROUSE
 
   // Header text (category name on the header)
   ctx.fillStyle = '#ffffff'
-  ctx.font = '24px InterBold, Arial, sans-serif'
+  ctx.font = '24px StoryRobotoBold,Arial, sans-serif'
   ctx.fillText(story.category.toUpperCase(), PADDING, HEADER_HEIGHT / 2 + 8)
 
   // Content area starts below header
@@ -96,13 +103,13 @@ export function createStoryImage(story: CarouselStory, size: ImageSize = CAROUSE
 
   // Category text
   ctx.fillStyle = '#6b7280'
-  ctx.font = '15px InterRegular, Arial, sans-serif'
+  ctx.font = '15px StoryRobotoRegular,Arial, sans-serif'
   ctx.fillText(story.category, PADDING, currentY)
   currentY += 25
 
   // Title (bold, word-wrapped)
   ctx.fillStyle = '#000000'
-  ctx.font = '30px InterBold, Arial, sans-serif'
+  ctx.font = '30px StoryRobotoBold,Arial, sans-serif'
   const titleLines = wrapText(ctx, story.title, width - PADDING * 2)
   for (const line of titleLines) {
     ctx.fillText(line, PADDING, currentY)
@@ -112,7 +119,7 @@ export function createStoryImage(story: CarouselStory, size: ImageSize = CAROUSE
 
   // Publisher + date
   ctx.fillStyle = '#374151'
-  ctx.font = '20px InterRegular, Arial, sans-serif'
+  ctx.font = '20px StoryRobotoRegular,Arial, sans-serif'
   let publisherText = story.publisher
   if (story.date) {
     try {
@@ -130,7 +137,7 @@ export function createStoryImage(story: CarouselStory, size: ImageSize = CAROUSE
 
   // Summary (word-wrapped)
   ctx.fillStyle = '#374151'
-  ctx.font = '20px InterRegular, Arial, sans-serif'
+  ctx.font = '20px StoryRobotoRegular,Arial, sans-serif'
   const summaryLines = wrapText(ctx, story.summary, width - PADDING * 2)
   for (const line of summaryLines) {
     if (currentY > height - PADDING - 80) break // Leave room for logo area
@@ -142,7 +149,7 @@ export function createStoryImage(story: CarouselStory, size: ImageSize = CAROUSE
   // with the image when it is posted or reshared (AI Act Art. 50(4)). Right-aligned so the longer
   // text stays on the slide; the same gray as the category line, for contrast on white.
   ctx.fillStyle = '#6b7280'
-  ctx.font = '14px InterRegular, Arial, sans-serif'
+  ctx.font = '14px StoryRobotoRegular,Arial, sans-serif'
   ctx.textAlign = 'right'
   ctx.fillText(CAROUSEL_COPY.slideFooter, width - PADDING, height - PADDING / 2 - 10)
 

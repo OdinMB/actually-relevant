@@ -25,7 +25,7 @@ vi.mock('@napi-rs/canvas', async importOriginal => {
   }
 })
 
-const { createStoryImage, generateCarouselPdf, generateCarouselZip, buildCarouselPostText, slideAltText, CAROUSEL_POST_TEXT_FILE } =
+const { createStoryImage, generateCarouselPdf, generateCarouselZip, buildCarouselPostText, slideAltText, CAROUSEL_POST_TEXT_FILE, STORY_FONT_PATHS } =
   await import('./carousel.js')
 type CarouselStory = import('./carousel.js').CarouselStory
 const { IPTC_TRAINED_ALGORITHMIC_MEDIA } = await import('../lib/aiProvenance.js')
@@ -39,6 +39,11 @@ const sampleStory: CarouselStory = {
 }
 
 describe('createStoryImage', () => {
+  it('has its fonts in the repository, so images never fall back to a system font', () => {
+    expect(existsSync(STORY_FONT_PATHS.bold)).toBe(true)
+    expect(existsSync(STORY_FONT_PATHS.regular)).toBe(true)
+  })
+
   it('returns a PNG buffer', () => {
     const buffer = createStoryImage(sampleStory)
     expect(buffer).toBeInstanceOf(Buffer)
