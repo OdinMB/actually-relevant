@@ -21,10 +21,12 @@ export default function PullQuote({ story, variant = 'centered' }: PullQuoteProp
 
   const hasPersonAttribution = story.quoteAttribution && story.quoteAttribution !== 'Original article'
 
-  // AI picked (and may have translated) a real person's words, so the badge says "Selected by AI"
+  // AI picked (and may have translated) a real person's words: the badge stands inline in the note
+  // ("chosen by [AI], may be translated") as the line's only "AI".
+  const { lead, tail } = AI_DISCLOSURE_COPY.quoteNoteInline
   const attribution = (
     <footer className="mt-3 text-sm text-neutral-500">
-      <AiBadge accessibleName={AI_DISCLOSURE_COPY.quoteBadgeAccessibleName} className="mr-1 align-middle" /> &mdash;{' '}
+      &mdash;{' '}
       {hasPersonAttribution ? (
         <>
           {story.quoteAttribution}, quoted in &ldquo;
@@ -48,7 +50,8 @@ export default function PullQuote({ story, variant = 'centered' }: PullQuoteProp
         </>
       )}
       {' · '}
-      {AI_DISCLOSURE_COPY.quoteNote}
+      {lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
+      {tail}
     </footer>
   )
 

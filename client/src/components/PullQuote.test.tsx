@@ -13,16 +13,17 @@ function renderQuote(story = makeStory()) {
 }
 
 describe('PullQuote AI disclosure', () => {
-  it('shows the "AI" badge, announced as "Selected by AI", and the note after the attribution', () => {
+  it('puts the "AI" badge inline in the note after the attribution, as the line\'s only "AI"', () => {
     const { container } = renderQuote()
     const footer = container.querySelector('footer')!
     expect(footer.querySelector('[aria-hidden="true"]')?.textContent).toBe('AI')
-    expect(announcedText(footer)).toBe('Selected by AI — Dr. Jane Doe, WHO, quoted in “AI headline” · chosen by AI, may be translated')
+    expect(footer.textContent?.startsWith('—')).toBe(true)
+    expect(announcedText(footer)).toBe('— Dr. Jane Doe, WHO, quoted in “AI headline” · chosen by AI, may be translated')
   })
 
   it('adds the note after the "from" attribution too', () => {
     const { container } = renderQuote(makeStory({ quoteAttribution: 'Original article' }))
-    expect(announcedText(container.querySelector('footer')!)).toBe('Selected by AI — from AI headline · chosen by AI, may be translated')
+    expect(announcedText(container.querySelector('footer')!)).toBe('— from AI headline · chosen by AI, may be translated')
   })
 
   it('shows the disclosure right under the quote, in the same block', () => {
