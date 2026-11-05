@@ -247,7 +247,7 @@ describe('StoryPage newsletter and podcast buttons', () => {
   const newsletterButton = () => screen.queryByRole('button', { name: 'Newsletter' })
   const podcastLink = () => screen.queryByRole('link', { name: 'Podcast' })
 
-  it('ends the story with a Newsletter and a Podcast button side by side, centered, after the analysis and before related stories', () => {
+  it('ends the page with a band holding a Newsletter and a Podcast button side by side, centered, after related stories', () => {
     mockRelated.current = [{ ...story, id: 'story-2', slug: 'related-story', title: 'Related headline' }]
     renderStory(story)
 
@@ -256,11 +256,11 @@ describe('StoryPage newsletter and podcast buttons', () => {
     expect(newsletter.parentElement).toBe(podcast.parentElement)
     expect(newsletter.parentElement).toHaveClass('flex', 'justify-center')
     expect(newsletter.compareDocumentPosition(podcast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    const caveat = screen.getByText(AI_TEXT.antifactors)
-    expect(caveat.compareDocumentPosition(newsletter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    const related = screen.getByRole('heading', { level: 2, name: 'Related Stories' })
-    expect(podcast.compareDocumentPosition(related) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.queryByText(/stories like this/i)).toBeNull()
+    const band = screen.getByRole('region', { name: 'Get stories like this every week' })
+    expect(band).toContainElement(newsletter)
+    expect(band).toContainElement(podcast)
+    const findSimilar = screen.getByRole('link', { name: 'Find similar stories →' })
+    expect(findSimilar.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it.each([
@@ -390,6 +390,30 @@ describe('StoryPage', () => {
     renderStory(story)
     const issueLinks = screen.getAllByRole('link').filter(link => link.getAttribute('href') === '/issues/planet-climate')
     expect(issueLinks.map(link => link.textContent)).toEqual(['More in Planet & Climate →'])
+  })
+
+  it('ends in three groups: the error report under the analysis, then related stories with the topic and similar-stories links, then the weekly band', () => {
+    mockRelated.current = [{ ...story, id: 'story-2', slug: 'related-story', title: 'Related headline' }]
+    renderStory(story)
+
+    const report = screen.getByRole('button', { name: 'Report an error' })
+    expect(report.closest('p')).toHaveClass('text-right')
+    const order = [
+      screen.getByText(AI_TEXT.antifactors),
+      report,
+      screen.getByRole('heading', { level: 2, name: 'Related Stories' }),
+      screen.getByRole('link', { name: 'More in Planet & Climate →' }),
+      screen.getByRole('link', { name: 'Find similar stories →' }),
+      screen.getByRole('heading', { level: 2, name: 'Get stories like this every week' }),
+    ]
+    order.slice(1).forEach((el, i) => expect(order[i]!.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy())
+    expect(screen.queryByRole('link', { name: /Back to all stories/ })).toBeNull()
+  })
+
+  it('keeps the topic and similar-stories links when there are no related stories', () => {
+    renderStory(story)
+    expect(screen.queryByRole('heading', { name: 'Related Stories' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Find similar stories →' })).toHaveAttribute('href', `/search?q=${encodeURIComponent(AI_TEXT.title)}`)
   })
 
   it('follows the label with a separate "How it works" link to the methodology page', () => {

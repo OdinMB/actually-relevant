@@ -45,22 +45,27 @@ export function NewsletterCrossLink({ className = '' }: { className?: string }) 
 const STORY_PRODUCT_BUTTON = `inline-flex items-center justify-center gap-2 min-h-11 rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-50 ${FOCUS_RING}`
 
 /**
- * At the end of each story page: the two weekly products side by side, centered. "Newsletter"
- * opens the subscribe dialog, which returns focus to it on close; "Podcast" leads to the podcast
- * page's Subscribe section.
+ * The last thing on each story page: a brand-tinted band, "Get stories like this every week", with
+ * the two weekly products side by side, centered. "Newsletter" opens the subscribe dialog, which
+ * returns focus to it on close; "Podcast" leads to the podcast page's Subscribe section.
  */
 export function StoryProductButtons({ className = '' }: { className?: string }) {
   const { openSubscribe } = useSubscribe()
   return (
-    <div className={`flex flex-wrap justify-center gap-3 ${className}`}>
-      <button type="button" onClick={() => openSubscribe()} className={STORY_PRODUCT_BUTTON}>
-        <NewsletterIcon className="h-4 w-4 shrink-0 text-brand-700" />
-        Newsletter
-      </button>
-      <Link to={PODCAST_SUBSCRIBE_PATH} className={STORY_PRODUCT_BUTTON}>
-        <PodcastIcon className="h-4 w-4 shrink-0 text-brand-700" />
-        Podcast
-      </Link>
-    </div>
+    <section aria-labelledby="story-weekly-heading" className={`rounded-b-xl border-t-4 border-brand-700 bg-brand-50 px-4 py-7 text-center ${className}`}>
+      <h2 id="story-weekly-heading" className="mb-4 text-base font-semibold text-neutral-800 sm:text-lg">
+        Get stories like this every week
+      </h2>
+      <div className="flex flex-wrap justify-center gap-3">
+        <button type="button" onClick={() => openSubscribe()} className={STORY_PRODUCT_BUTTON}>
+          <NewsletterIcon className="h-4 w-4 shrink-0 text-brand-700" />
+          Newsletter
+        </button>
+        <Link to={PODCAST_SUBSCRIBE_PATH} className={STORY_PRODUCT_BUTTON}>
+          <PodcastIcon className="h-4 w-4 shrink-0 text-brand-700" />
+          Podcast
+        </Link>
+      </div>
+    </section>
   )
 }

@@ -40,6 +40,9 @@ const META_TEXT_ROW = 'flex flex-wrap items-center gap-x-7 gap-y-1 basis-[calc(1
 const PHONE_SEPARATOR =
   "max-md:relative max-md:before:absolute max-md:before:-left-4 max-md:before:top-1/2 max-md:before:-translate-y-1/2 max-md:before:text-neutral-300 max-md:before:content-['|'_/_'']"
 
+/** The links under Related Stories: a 24px box each (WCAG 2.5.8), not underlined since they stand alone. */
+const KEEP_READING_LINK = `inline-flex items-center min-h-6 text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-1`
+
 // ---------------------------------------------------------------------------
 // Analysis section with ruled heading + numbered points
 // ---------------------------------------------------------------------------
@@ -341,40 +344,30 @@ export default function StoryPage() {
             />
           )}
 
-          {/* Report an error: the feedback dialog, bound to this story */}
-          <p className="text-sm text-neutral-600 mb-3">
+          {/* Report an error: a note on the analysis above, so it sits right under it, small and to the side */}
+          <p className="text-sm text-neutral-600 text-right">
             Spotted a mistake?{' '}
             <button type="button" onClick={() => openFeedback({ id: story.id, title: displayTitle })} className={TEXT_LINK}>
               Report an error
             </button>
           </p>
 
-          {/* Where the reader finishes: the issue and episode this story was in, then a button for each weekly product */}
-          <StoryAppearances appearances={appearances} className="mt-6 mb-4" />
-          <StoryProductButtons className="mb-10" />
+          {/* The issue and episode this story was in */}
+          <StoryAppearances appearances={appearances} className="mt-6" />
 
-          {/* Related stories */}
+          {/* Keep reading: related stories, then the topic and a search for similar ones */}
           {story.slug && <RelatedStories slug={story.slug} />}
-
-          {/* Find similar — below related stories */}
-          <div className="text-center mt-6">
-            <Link
-              to={`/search?q=${encodeURIComponent(headline)}`}
-              className={`text-sm text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}
-            >
+          <div className="mt-6 flex flex-wrap justify-center gap-x-8 gap-y-2 text-sm">
+            <Link to={`/issues/${issueSlug}`} className={KEEP_READING_LINK}>
+              More in {issueName} &rarr;
+            </Link>
+            <Link to={`/search?q=${encodeURIComponent(headline)}`} className={KEEP_READING_LINK}>
               Find similar stories &rarr;
             </Link>
           </div>
 
-          {/* Navigation */}
-          <div className="border-t border-neutral-200 pt-6 mt-10 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-            <Link to="/" className={`text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}>
-              &larr; Back to all stories
-            </Link>
-            <Link to={`/issues/${issueSlug}`} className={`text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`}>
-              More in {issueName} &rarr;
-            </Link>
-          </div>
+          {/* Where the reader finishes: the two weekly products */}
+          <StoryProductButtons className="mt-12" />
         </div>
       </article>
     </>
