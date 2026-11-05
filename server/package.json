@@ -13,7 +13,7 @@
     "audit:prod": "node ../scripts/audit-check.mjs --audit-level high",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "start": "node --max-old-space-size=384 dist/index.js",
+    "start": "node --max-old-space-size=320 dist/index.js",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:db": "vitest run --project db",

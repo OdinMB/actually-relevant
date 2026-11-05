@@ -9,6 +9,7 @@ import { releaseHeldLeases } from './services/podcastPipeline.js'
 import { checkPodcastConfigAtBoot } from './jobs/podcastBootCheck.js'
 import { installProcessErrorHandlers } from './lib/processErrors.js'
 import { startHomepageRefresh, stopHomepageRefresh } from './services/homepage.js'
+import { logMemory, startMemoryMonitor, stopMemoryMonitor } from './lib/memoryMonitor.js'
 import app from './app.js'
 
 // Before the server listens and the scheduler starts, so every later crash goes through pino
@@ -32,6 +33,9 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 export function startBackgroundWork(): void {
   // Every process that serves visitors keeps its own warm copy (services/homepage.ts)
   startHomepageRefresh()
+  // A memory line now and every few minutes, so a host memory alert comes with numbers
+  logMemory()
+  startMemoryMonitor()
   // Retries with backoff while the database is unavailable; alerts once. Schedules nothing with
   // SCHEDULER_ENABLED=false (scheduler.ts)
   startScheduler()
@@ -71,6 +75,7 @@ export async function shutdown(): Promise<void> {
   // 1. Stop scheduler and cleanup timers
   stopScheduler()
   stopHomepageRefresh()
+  stopMemoryMonitor()
   clearInterval(tokenCleanupTimer)
 
   // 2. Close HTTP server (stop accepting new connections)
