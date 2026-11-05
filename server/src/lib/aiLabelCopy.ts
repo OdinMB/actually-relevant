@@ -23,10 +23,16 @@ export const OPENAPI_REPUBLISHER_NOTE =
 /** First sentence of every AI-generated field's OpenAPI description. */
 export const OPENAPI_AI_FIELD_PREFIX = 'AI-generated. '
 
-/** Newsletter label directly under the week title; the lead-in is set in bold. */
+/**
+ * Newsletter label directly under the week title. In the email and on the web edition `lead` is the
+ * "AI" badge, the subject of the sentence: "[AI] selected the stories in this issue and wrote the
+ * headlines and summaries." Plain-text surfaces (newsletter RSS item, inbox preview) join the two
+ * with a space. Owner's wording, 2026-11-05 (Odin Mühlenbein, in session), replacing
+ * "AI-generated: AI selected the stories …", which said "AI" twice after the badge.
+ */
 export const NEWSLETTER_TOP_LABEL = {
-  lead: 'AI-generated:',
-  text: 'AI selected the stories in this issue and wrote the headlines and summaries.',
+  lead: 'AI',
+  text: 'selected the stories in this issue and wrote the headlines and summaries.',
 } as const
 
 /**

@@ -90,10 +90,13 @@ describe('renderHtml', () => {
 
     const title = [...doc.querySelectorAll('p')].find(p => p.textContent === baseNewsletter.title)
     const label = title?.nextElementSibling
-    expect(label?.textContent).toBe('AI-generated: AI selected the stories in this issue and wrote the headlines and summaries.')
-    expect(label?.querySelector('strong')?.textContent).toBe('AI-generated:')
+    // The "AI" badge is the sentence's subject and its only "AI"
+    expect(label?.textContent).toBe('AI selected the stories in this issue and wrote the headlines and summaries.')
+    expect(label?.firstElementChild?.tagName).toBe('SPAN')
+    expect(label?.firstElementChild?.textContent).toBe('AI')
+    expect(label?.querySelector('strong')).toBeNull()
     // Seen before any AI text: the stories come after it
-    expect(html.indexOf('AI-generated:')).toBeLessThan(html.indexOf('First story'))
+    expect(html.indexOf('selected the stories in this issue')).toBeLessThan(html.indexOf('First story'))
     expect(html).not.toContain('<!-- Intro -->')
     expect(html).toContain('Curated and written with care by AI')
   })

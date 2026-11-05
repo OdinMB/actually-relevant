@@ -101,7 +101,7 @@ describe('inboxPreview: the preview text', () => {
   it("is the email's own top label for an issue with one story, so the subject's AI headline has a label beside it", () => {
     const { subject, preheader } = inboxPreview('Week 7, 2026', [story('Only')])
     expect(subject).toBe('Week 7: Only')
-    expect(preheader).toBe('AI-generated: AI selected the stories in this issue and wrote the headlines and summaries.')
+    expect(preheader).toBe('AI selected the stories in this issue and wrote the headlines and summaries.')
     expect(preheader).toBe(`${NEWSLETTER_TOP_LABEL.lead} ${NEWSLETTER_TOP_LABEL.text}`)
   })
 

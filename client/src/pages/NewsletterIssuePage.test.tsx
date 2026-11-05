@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { announcedText } from '../test/stories'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -20,7 +21,7 @@ const ISSUE: PublicNewsletterIssue = {
   slug: 'week-42-2026',
   title: 'Week 42, 2026',
   publishedAt: '2026-10-18T09:00:00.000Z',
-  aiLabel: { lead: 'AI-generated:', text: 'AI selected the stories in this issue and wrote the headlines and summaries.' },
+  aiLabel: { lead: 'AI', text: 'selected the stories in this issue and wrote the headlines and summaries.' },
   content: [
     'A hopeful week for clean air.',
     '',
@@ -85,9 +86,13 @@ describe('NewsletterIssuePage', () => {
     renderPage()
     const label = await screen.findByText(ISSUE.aiLabel.text, { exact: false })
     const intro = screen.getByText('A hopeful week for clean air.')
-    expect(label.closest('[data-newsletter-ai-label]')).not.toBeNull()
+    const line = label.closest('[data-newsletter-ai-label]')!
+    expect(line).not.toBeNull()
     expect(label.compareDocumentPosition(intro) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByText(ISSUE.aiLabel.lead).tagName).toBe('STRONG')
+    // The "AI" badge is the sentence's subject and its only "AI"
+    expect(line.querySelector('[aria-hidden="true"]')?.textContent).toBe('AI')
+    expect(line.querySelector('strong')).toBeNull()
+    expect(announcedText(line)).toBe('AI selected the stories in this issue and wrote the headlines and summaries.')
     expect(intro.closest('[data-ai-generated="content"]')).not.toBeNull()
   })
 

@@ -92,7 +92,7 @@ test('the newsletter archive and issues, with the approved AI label', () => {
   const archive = get(state, '/api/newsletters?page=1').json
   assert.equal(archive.total, 3)
   const issue = get(state, `/api/newsletters/${archive.data[0].slug}`).json
-  assert.equal(issue.aiLabel.lead, 'AI-generated:')
+  assert.equal(issue.aiLabel.lead, 'AI')
   for (const story of issue.stories) assert.ok(issue.content.includes(`## ${story.headline}\n`), story.headline)
   assert.deepEqual(get(state, '/api/newsletters/fixture-issue-99').json, { error: 'Issue not found' })
   assert.ok(get(state, '/api/newsletters/feed.xml').body.startsWith('<?xml'))

@@ -331,7 +331,8 @@ const newsletterIssueSchema = z
     title: z.string().openapi({ example: 'Week 42, 2026' }),
     publishedAt: z.string().datetime(),
     aiLabel: z.object({ lead: z.string(), text: z.string() }).openapi({
-      description: 'The AI label shown at the top of the issue, in the email and on the web.',
+      description:
+        'The AI label shown at the top of the issue, in the email and on the web: `lead` ("AI", shown as a badge) is the subject of the sentence `text` completes. Join them with a space for plain text.',
     }),
     content: z.string().openapi({
       description: aiField(
