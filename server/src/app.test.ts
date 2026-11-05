@@ -81,15 +81,14 @@ describe('App error handling', () => {
     })
   })
 
-  describe('500 error handler', () => {
-    it('returns 500 JSON when CORS rejects an origin on restricted endpoint', async () => {
-      // The CORS middleware throws "Not allowed by CORS" for disallowed origins
-      // on non-public endpoints (subscribe, auth, admin).
-      // Public read endpoints (stories, issues, homepage, feed, docs) allow all origins.
+  describe('refused origin', () => {
+    it('answers 403 JSON when CORS rejects an origin on a restricted endpoint', async () => {
+      // Non-public endpoints (subscribe, feedback, auth, admin) refuse other browser origins;
+      // public read endpoints allow all origins.
       const res = await request(app).post('/api/subscribe').set('Origin', 'https://evil-site.com')
 
-      expect(res.status).toBe(500)
-      expect(res.body).toEqual({ error: 'Internal server error' })
+      expect(res.status).toBe(403)
+      expect(res.body).toEqual({ error: 'Origin not allowed' })
     })
   })
 })
@@ -136,6 +135,7 @@ describe('CORS', () => {
     '/api/feed',
     '/api/feed/some-issue',
     '/api/stories',
+    '/api/sources',
     '/api/subscribe/token',
     '/api/podcast/feed.xml',
     '/api/newsletters',
@@ -147,12 +147,24 @@ describe('CORS', () => {
     expect(res.headers['access-control-allow-origin']).toBe('*')
   })
 
-  it.each(['/api/feedback', '/api/feedsx', '/api/storiesx', '/api/subscribe', '/api/newslettersx', '/api/admin/newsletters'])(
+  it.each(['/api/feedback', '/api/feedsx', '/api/storiesx', '/api/subscribe', '/api/newslettersx', '/api/admin/newsletters', '/api/sourcesx'])(
     'keeps %s restricted even though it starts like a public path',
     async path => {
       const res = await request(app).post(path).set('Origin', 'https://evil-site.com')
       expect(res.headers['access-control-allow-origin']).toBeUndefined()
-      expect(res.status).toBe(500) // "Not allowed by CORS"
+      expect(res.status).toBe(403)
     },
   )
+
+  it('refuses a GET from another origin with 403 and still serves the site and origin-less callers', async () => {
+    const refused = await request(app).get('/api/feedback/token').set('Origin', 'https://evil-site.com')
+    expect(refused.status).toBe(403)
+    expect(refused.headers['x-request-id']).toBeDefined()
+
+    const site = await request(app).options('/api/feedback/token').set('Origin', 'http://localhost:5173').set('Access-Control-Request-Method', 'GET')
+    expect(site.headers['access-control-allow-origin']).toBe('http://localhost:5173')
+
+    const noOrigin = await request(app).get('/api/feedback/token')
+    expect(noOrigin.status).not.toBe(403)
+  })
 })

@@ -95,6 +95,10 @@ An unhandled promise rejection or an uncaught exception still ends the process w
 
 A second fatal error while the first is handled is logged and exits at once. An error thrown while the modules load, before the handlers are installed, still crashes with Node's raw stderr trace.
 
+## Memory
+
+Render's starter instance is stopped at about 512 MiB of RSS, which counts native memory (JSDOM during crawls, canvas renders, the Prisma engine, the pino worker thread) as well as the V8 heap that `--max-old-space-size` caps. That cap (the `start` script) is 320 MB, lowered from 384 on 2026-11-05 after a memory-limit alert under light traffic: with 384 the heap alone could take three quarters of the instance and V8 collects lazily up to its cap, leaving too little for the native side. So the process logs its memory (`server/src/lib/memoryMonitor.ts`, `module: "memory"`): once at startup and every 5 minutes (`config.memory.logIntervalMs`) with `rssMb`, `heapUsedMb`, `heapTotalMb`, `externalMb` and `arrayBuffersMb`, as `info` "memory", or `warn` "memory high" from 400 MiB of RSS (`config.memory.warnRssMb`). Every scheduled job's `started` and `completed` lines carry `rssMb` too, so a jump can be pinned on a job. After a memory alert: a rising `heapUsedMb` points at JavaScript objects (a cache or a big query), a rising RSS with a flat heap at native memory (crawl parses, image renders).
+
 ## Error Serialization
 
 A custom `serializeError` function in `logger.ts` strips bulky axios internals from all logged errors. Without this, logging an axios error via `{ err }` serializes the full HTTP response body (potentially megabytes of HTML), socket objects, TLS session cache, and circular config references, which can cause OOM during the crawl job.

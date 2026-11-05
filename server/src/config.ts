@@ -633,6 +633,16 @@ export const config = {
   newsletterArchive: {
     cacheMaxAge: 300,
   },
+  /**
+   * Process memory log (lib/memoryMonitor.ts, .context/logging.md "Memory"). Render's starter
+   * instance is killed at about 512 MiB of RSS, which counts native memory (JSDOM, canvas, the
+   * Prisma engine, the pino worker) on top of the V8 heap that --max-old-space-size caps.
+   */
+  memory: {
+    logIntervalMs: 5 * 60 * 1000,
+    /** At or above this RSS the periodic line is a warn, so it stands out before the kill. */
+    warnRssMb: 400,
+  },
   homepage: {
     // The server rebuilds the homepage data this often in the background and at startup, and
     // serves the last copy meanwhile, so no visitor waits for the database (.context/public-website.md)

@@ -9,6 +9,7 @@ import type { Request, Response } from 'express'
 import { createLogger } from './lib/logger.js'
 import { config } from './config.js'
 import { errorHandler } from './middleware/routeErrors.js'
+import { ForbiddenError } from './utils/errors.js'
 import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import adminRouter from './routes/admin/index.js'
@@ -39,6 +40,34 @@ app.use(
   }),
 )
 
+// Request ID: inherit a well-formed one from the header (a proxy's trace id), else generate. The
+// value is echoed in a response header and written to logs, so anything else is replaced.
+const REQUEST_ID_RE = /^[A-Za-z0-9._-]{1,64}$/
+export function requestIdFrom(header: string | string[] | undefined): string {
+  return typeof header === 'string' && REQUEST_ID_RE.test(header) ? header : randomUUID()
+}
+app.use((req, res, next) => {
+  req.id = requestIdFrom(req.headers['x-request-id'])
+  res.set('X-Request-Id', req.id)
+  // AI usage preference on every response, story pages served from here included (.context/seo.md)
+  res.set('Content-Usage', config.contentUsage)
+  next()
+})
+
+// Request logging — single line per request, no redundant fields. Registered before CORS so a
+// refused origin's 403 gets its line too.
+app.use((req, res, next) => {
+  if (req.originalUrl === '/health') return next()
+  const start = Date.now()
+  res.on('finish', () => {
+    const ms = Date.now() - start
+    const status = res.statusCode
+    const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info'
+    httpLog[level]({ requestId: req.id }, `${req.method} ${req.originalUrl} ${status} ${ms}ms`)
+  })
+  next()
+})
+
 // CORS configuration.
 // Dev ports 5173-5180 (Vite increments when a port is taken) and preview ports
 // 4173-4174, on both localhost and 127.0.0.1.
@@ -49,7 +78,9 @@ const allowedOrigins = [...devPorts.flatMap(port => [`http://localhost:${port}`,
 // /api/subscribe/token is included: it's an anonymous, side-effect-free GET the
 // public signup form must fetch on render (the state-changing POSTs stay restricted below).
 // /api/feeds holds only the public feed favicons (routes/public/feedFavicon.ts).
+// /api/sources is the public list of source names behind the site's source count.
 const publicReadPaths = [
+  '/api/sources',
   '/api/stories',
   '/api/issues',
   '/api/homepage',
@@ -70,14 +101,16 @@ app.use((req, res, next) => {
     if (req.method === 'OPTIONS') return res.sendStatus(204)
     return next()
   }
-  // Restricted CORS for everything else (auth, admin, subscribe)
+  // Restricted CORS for everything else (auth, admin, subscribe). A browser origin outside the list
+  // is refused with a 403 (not run, so a form POST from another site changes nothing), which the
+  // error handler answers without logging it as a server error.
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true)
       if (allowedOrigins.includes(origin)) {
         return callback(null, true)
       }
-      return callback(new Error('Not allowed by CORS'))
+      return callback(new ForbiddenError('Origin not allowed'))
     },
     credentials: true,
   })(req, res, next)
@@ -88,33 +121,6 @@ app.use((req, res, next) => {
 app.use('/api/admin/feeds/changesets', express.json({ limit: '512kb' }))
 app.use(express.json({ limit: '100kb' }))
 app.use(cookieParser())
-
-// Request ID: inherit a well-formed one from the header (a proxy's trace id), else generate. The
-// value is echoed in a response header and written to logs, so anything else is replaced.
-const REQUEST_ID_RE = /^[A-Za-z0-9._-]{1,64}$/
-export function requestIdFrom(header: string | string[] | undefined): string {
-  return typeof header === 'string' && REQUEST_ID_RE.test(header) ? header : randomUUID()
-}
-app.use((req, res, next) => {
-  req.id = requestIdFrom(req.headers['x-request-id'])
-  res.set('X-Request-Id', req.id)
-  // AI usage preference on every response, story pages served from here included (.context/seo.md)
-  res.set('Content-Usage', config.contentUsage)
-  next()
-})
-
-// Request logging — single line per request, no redundant fields
-app.use((req, res, next) => {
-  if (req.originalUrl === '/health') return next()
-  const start = Date.now()
-  res.on('finish', () => {
-    const ms = Date.now() - start
-    const status = res.statusCode
-    const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info'
-    httpLog[level]({ requestId: req.id }, `${req.method} ${req.originalUrl} ${status} ${ms}ms`)
-  })
-  next()
-})
 
 // Routes
 app.use('/health', healthRouter)

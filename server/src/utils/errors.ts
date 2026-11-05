@@ -34,6 +34,13 @@ export class UnauthorizedError extends ServiceError {
   }
 }
 
+/** 403: the caller is known but not allowed to make this request (e.g. a browser origin outside the CORS list). */
+export class ForbiddenError extends ServiceError {
+  constructor(message: string) {
+    super(message, 403)
+  }
+}
+
 /** 404: the resource the request is about does not exist. */
 export class NotFoundError extends ServiceError {
   constructor(message: string) {

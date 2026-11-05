@@ -6,6 +6,7 @@ import { config } from '../config.js'
 import { JOB_HANDLERS, JOB_PIPELINE_ORDER } from './handlers.js'
 import { jobTimeZone } from './jobTimeZones.js'
 import { claimJobRun, finishJobRun, jobsWithLiveLease, withJobLeaseHeartbeat } from './jobLease.js'
+import { memorySnapshot } from '../lib/memoryMonitor.js'
 
 const log = createLogger('scheduler')
 
@@ -228,10 +229,11 @@ async function executeJob(jobName: string, handler: () => Promise<void>): Promis
       log.info({ jobName }, 'held by another process, skipping')
       return
     }
-    log.info({ jobName }, 'started')
+    // RSS on both lines ties a memory jump to the job that caused it (lib/memoryMonitor.ts)
+    log.info({ jobName, rssMb: memorySnapshot().rssMb }, 'started')
     await withJobLeaseHeartbeat(jobName, handler)
     await finishJobRun(jobName, null)
-    log.info({ jobName }, 'completed')
+    log.info({ jobName, rssMb: memorySnapshot().rssMb }, 'completed')
   } catch (err) {
     let errorMsg = err instanceof Error ? err.message : String(err)
     // Prisma errors include additional details in meta (e.g. raw query DB error code/message)

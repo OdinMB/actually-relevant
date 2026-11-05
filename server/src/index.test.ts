@@ -58,6 +58,8 @@ vi.mock('./lib/processErrors.js', () => ({ installProcessErrorHandlers: mockInst
 const mockStartHomepageRefresh = vi.hoisted(() => vi.fn())
 const mockStopHomepageRefresh = vi.hoisted(() => vi.fn())
 vi.mock('./services/homepage.js', () => ({ startHomepageRefresh: mockStartHomepageRefresh, stopHomepageRefresh: mockStopHomepageRefresh }))
+const mockMemory = vi.hoisted(() => ({ logMemory: vi.fn(), startMemoryMonitor: vi.fn(), stopMemoryMonitor: vi.fn() }))
+vi.mock('./lib/memoryMonitor.js', () => mockMemory)
 
 const { config } = await import('./config.js')
 
@@ -97,6 +99,7 @@ describe('server index', () => {
 
       expect(mockStopScheduler).toHaveBeenCalledTimes(1)
       expect(mockStopHomepageRefresh).toHaveBeenCalledTimes(1)
+      expect(mockMemory.stopMemoryMonitor).toHaveBeenCalledTimes(1)
       expect(mockServerClose).toHaveBeenCalledTimes(1)
       expect(mockTaskRegistryDestroy).toHaveBeenCalledTimes(1)
       expect(mockPrisma.$disconnect).toHaveBeenCalledTimes(1)
@@ -308,6 +311,14 @@ describe('server index', () => {
         indexModule.startBackgroundWork()
         expect(mockStartHomepageRefresh).toHaveBeenCalledTimes(1)
       }
+    })
+
+    it('logs memory at once and starts the periodic memory line', () => {
+      mockMemory.logMemory.mockClear()
+      mockMemory.startMemoryMonitor.mockClear()
+      indexModule.startBackgroundWork()
+      expect(mockMemory.logMemory).toHaveBeenCalledTimes(1)
+      expect(mockMemory.startMemoryMonitor).toHaveBeenCalledTimes(1)
     })
   })
 
