@@ -6,6 +6,7 @@ import { config } from '../config.js'
 import { JOB_HANDLERS, JOB_PIPELINE_ORDER } from './handlers.js'
 import { jobTimeZone } from './jobTimeZones.js'
 import { claimJobRun, finishJobRun, jobsWithLiveLease, withJobLeaseHeartbeat } from './jobLease.js'
+import { isResumable, sweepInterruptedRuns } from './interruptedRuns.js'
 import { memorySnapshot } from '../lib/memoryMonitor.js'
 
 const log = createLogger('scheduler')
@@ -15,8 +16,12 @@ const tasksByName = new Map<string, cron.ScheduledTask>()
 const runningJobs = new Set<string>()
 /** The promise of each run under way in this process, which graceful shutdown awaits (waitForRunningJobs). */
 const runningJobRuns = new Map<string, Promise<void>>()
-/** Bumped by stopScheduler, so a boot catch-up chain started before it ends at its next step. */
+/** Bumped by stopScheduler, so a catch-up chain started before it ends at its next step. */
 let catchUpGeneration = 0
+/** The end of the catch-up chain: each batch of catch-up runs waits for the batch before it. */
+let catchUpTail: Promise<void> = Promise.resolve()
+/** The second interrupted-run sweep, once a lease live at the scheduler's start would have run out. */
+let interruptedRecheckTimer: NodeJS.Timeout | null = null
 
 export async function initScheduler(): Promise<void> {
   log.info('initializing')
@@ -51,14 +56,39 @@ export async function initScheduler(): Promise<void> {
 
   log.info({ jobCount: tasksByName.size }, 'ready')
 
-  if (overdue.length > 0) {
-    const ordered = inPipelineOrder(overdue)
-    log.info({ jobs: ordered }, 'overdue at boot, catching up one after another')
-    const generation = catchUpGeneration
-    runCatchUp(ordered, generation).catch(err => {
-      log.error({ err }, 'boot catch-up stopped; the remaining jobs wait for their schedule')
+  if (overdue.length > 0) log.info({ jobs: inPipelineOrder(overdue) }, 'overdue at boot')
+  const generation = catchUpGeneration
+  launchSweep(overdue, generation)
+  // A run whose lease was live just now is left to its holder: the old instance during a zero-downtime
+  // deploy, or a dead holder whose lease has not run out yet. Once it would have, sweep again
+  if (interruptedRecheckTimer) clearTimeout(interruptedRecheckTimer)
+  interruptedRecheckTimer = setTimeout(() => launchSweep([], generation), config.scheduler.leaseSeconds * 1000 + config.scheduler.interruptedRecheckSlackMs)
+  interruptedRecheckTimer.unref()
+}
+
+/** Fire-and-forget sweepAndCatchUp, as at the start and from the recheck timer. */
+function launchSweep(overdue: string[], generation: number): void {
+  sweepAndCatchUp(overdue, generation).catch(err => {
+    log.error({ err }, 'interrupted-run sweep stopped; the jobs wait for their schedule')
+  })
+}
+
+/**
+ * Sweep for interrupted runs (interruptedRuns.ts), then queue the jobs to resume, with `overdue`, as
+ * one batch of the catch-up chain in pipeline order, a job in both once. The sweep itself never waits
+ * for the chain, so it records what it finds at once.
+ */
+async function sweepAndCatchUp(overdue: string[], generation: number): Promise<void> {
+  const resumes = await sweepInterruptedRuns(jobName => tasksByName.has(jobName))
+  if (generation !== catchUpGeneration) return
+  const jobs = inPipelineOrder([...new Set([...overdue, ...resumes])])
+  if (jobs.length === 0) return
+  log.info({ jobs }, 'catching up one after another')
+  catchUpTail = catchUpTail
+    .then(() => runCatchUp(jobs, generation))
+    .catch(err => {
+      log.error({ err }, 'catch-up stopped; the remaining jobs wait for their schedule')
     })
-  }
 }
 
 /** Sort job names by JOB_PIPELINE_ORDER; a name missing from it goes last. */
@@ -71,22 +101,31 @@ function inPipelineOrder(jobNames: string[]): string[] {
 }
 
 /**
- * Run the boot catch-up one job at a time. Before each step the job's row is read again: a job
- * disabled meanwhile, or no longer overdue because its cron tick ran it, is skipped. A stopScheduler
- * (a new generation) ends the chain before its next step.
+ * Run one catch-up batch one job at a time. Before each step the job's row is read again: a job
+ * disabled meanwhile, or neither overdue nor still to resume because a run (its cron tick, or an
+ * earlier batch) finished meanwhile, is skipped. A stopScheduler (a new generation) ends the chain
+ * before its next step.
  */
 async function runCatchUp(jobNames: string[], generation: number): Promise<void> {
   for (const jobName of jobNames) {
     if (generation !== catchUpGeneration) return
     const handler = JOB_HANDLERS[jobName]
     const job = await prisma.jobRun.findUnique({ where: { jobName } })
-    if (!handler || !tasksByName.has(jobName) || !job?.enabled || !isOverdue(job)) {
+    const due = job && catchUpReason(job)
+    if (!handler || !tasksByName.has(jobName) || !job?.enabled || !due) {
       log.info({ jobName }, 'no longer due for catch-up, skipping')
       continue
     }
-    log.info({ jobName }, 'overdue, running now')
+    log.info({ jobName }, due === 'overdue' ? 'overdue, running now' : 'interrupted, resuming now')
     await runJob(jobName, handler)
   }
+}
+
+/** Why a job is still due for catch-up by its re-read row, or null. */
+function catchUpReason(job: Parameters<typeof isOverdue>[0] & Parameters<typeof isResumable>[0]): 'overdue' | 'interrupted' | null {
+  if (isOverdue(job)) return 'overdue'
+  if (isResumable(job)) return 'interrupted'
+  return null
 }
 
 /**
@@ -396,9 +435,15 @@ async function attemptStart(attempt: number, alertedReason: string | null): Prom
 export function stopScheduler(): void {
   schedulerStopped = true
   catchUpGeneration++
+  // The old chain ends at its next step; a later start does not queue behind it
+  catchUpTail = Promise.resolve()
   if (initRetryTimer) {
     clearTimeout(initRetryTimer)
     initRetryTimer = null
+  }
+  if (interruptedRecheckTimer) {
+    clearTimeout(interruptedRecheckTimer)
+    interruptedRecheckTimer = null
   }
   for (const task of tasksByName.values()) {
     task.stop()

@@ -11,12 +11,17 @@ const variantClasses: Record<BadgeVariant, string> = {
   orange: 'bg-orange-100 text-orange-700',
 }
 
-interface BadgeProps {
+/** Other span attributes (e.g. `tabIndex` and `aria-describedby` for a Tooltip trigger) pass through. */
+interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant
   children: React.ReactNode
   className?: string
 }
 
-export function Badge({ variant = 'gray', children, className = '' }: BadgeProps) {
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${variantClasses[variant]} ${className}`}>{children}</span>
+export function Badge({ variant = 'gray', children, className = '', ...rest }: BadgeProps) {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${variantClasses[variant]} ${className}`} {...rest}>
+      {children}
+    </span>
+  )
 }

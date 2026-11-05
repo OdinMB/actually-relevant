@@ -25,8 +25,9 @@ export default defineConfig({
       // lifecycle's db tests: measured 74.83, 70.83, 69.65, 76.21. Raised 2026-10-25 with the shared
       // prompt-input builders: measured 75.28, 72.23, 70.46, 76.59. Raised 2026-10-27 with the public
       // API contract checks: measured 76.21, 73.31, 72.15, 77.39 (functions kept at 71: 72 would leave no
-      // margin, a few untested functions anywhere would fail it)
-      thresholds: { statements: 76, branches: 73, functions: 71, lines: 77 },
+      // margin, a few untested functions anywhere would fail it). Raised 2026-11-05 with the
+      // interrupted-run sweep: measured 77.27, 73.97, 73.20, 78.45 (functions kept at 72, as above)
+      thresholds: { statements: 77, branches: 73, functions: 72, lines: 78 },
     },
     projects: [
       {

@@ -405,6 +405,9 @@ model JobRun {
   // Cross-instance run lease (scheduler.ts): who holds it, and until when (UTC, database clock)
   lockedBy        String?   @map("locked_by")
   lockedUntil     DateTime? @map("locked_until")
+  // Consecutive runs cut off before they finished (shutdown at the drain deadline, or a process that
+  // died); a normal finish resets it. Bounds the automatic resume (interruptedRuns.ts)
+  interruptedRuns Int       @default(0) @map("interrupted_runs")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 

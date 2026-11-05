@@ -111,8 +111,9 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/**/*.d.ts'],
       // Measured 2026-10-25: statements 53.42, branches 53.68, functions 44.12, lines 53.53; raised the
-      // same day with the newsletter admin's tests: 55.11, 56.06, 45.31, 55.31
-      thresholds: { statements: 55, branches: 56, functions: 45, lines: 55 },
+      // same day with the newsletter admin's tests: 55.11, 56.06, 45.31, 55.31; raised 2026-11-05
+      // (coverage had risen since without a raise): 63.58, 63.88, 53.53, 63.81
+      thresholds: { statements: 63, branches: 63, functions: 53, lines: 63 },
     },
   },
 })
