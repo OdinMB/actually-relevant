@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { makeStory } from '../test/stories'
-import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { inPrerenderer } from '../test/prerenderer'
 
 const mockApi = vi.hoisted(() => ({ homepage: vi.fn(), newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -103,7 +103,7 @@ describe('HomePage when the stories do not load', () => {
   })
 
   it('shows the loading skeleton in the prerenderer, so the failure is never baked into the static page', async () => {
-    await inAutomatedBrowser(async () => {
+    await inPrerenderer(async () => {
       mockApi.homepage.mockRejectedValue(new TypeError('Failed to fetch'))
       const client = renderHome()
 

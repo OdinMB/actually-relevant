@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -7,7 +7,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { NEWSLETTER_PROMISE } from '../config'
-import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { inPrerenderer } from '../test/prerenderer'
 
 const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -89,6 +89,14 @@ describe('NewsletterPage', () => {
       expect(alternate?.getAttribute('href')).toBe('/api/newsletters/feed.xml')
       expect(alternate?.getAttribute('title')).toBe('Actually Relevant newsletter')
     })
+  })
+
+  it("previews as the newsletter: the newsletter's own image, with its type", async () => {
+    renderPage()
+    const meta = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+    await waitFor(() => expect(meta('meta[property="og:image"]')).toBe('/api/section-images/newsletter.png'))
+    expect(meta('meta[name="twitter:image"]')).toBe('/api/section-images/newsletter.png')
+    expect(meta('meta[property="og:image:type"]')).toBe('image/png')
   })
 
   it('offers the podcast after the past issues', async () => {
@@ -204,13 +212,15 @@ describe('NewsletterPage when the past issues do not load', () => {
     expect(await axe(container)).toHaveNoViolations()
   })
 
-  it('shows the skeleton in the prerenderer, so the failure is never baked into the static page', async () => {
-    await inAutomatedBrowser(async () => {
-      mockApi.newsletterArchive.mockRejectedValue(new TypeError('Failed to fetch'))
-      const { container, client } = renderPage()
+  it('asks for no issues in the prerenderer and shows the skeleton, so neither a dated list nor a failure is baked into the static page', async () => {
+    await inPrerenderer(async () => {
+      const { container } = renderPage()
 
-      await waitFor(() => expect(client.getQueryState(['public-newsletter-archive', 1])?.status).toBe('error'))
+      // Time for a request to be made and answered, were one made
+      await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+      expect(mockApi.newsletterArchive).not.toHaveBeenCalled()
       expect(container.querySelector('.animate-pulse')).not.toBeNull()
+      expect(screen.queryByRole('link', { name: 'Week 42, 2026' })).toBeNull()
       expect(screen.queryByRole('alert')).toBeNull()
     })
   })

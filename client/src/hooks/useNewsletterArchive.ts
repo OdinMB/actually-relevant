@@ -3,14 +3,17 @@ import type { PublicNewsletterIssueSummary } from '@shared/types'
 import { publicApi } from '../lib/api'
 import { isPrerendering } from '../lib/renderComplete'
 
-/** One page of published newsletter issues, newest first. */
-export function useNewsletterArchive(page: number, { enabled = true }: { enabled?: boolean } = {}) {
+/**
+ * One page of published newsletter issues, newest first. Never asked for while prerendering, so no
+ * static HTML (the /newsletter list, the newest-issue card) keeps a dated issue.
+ */
+export function useNewsletterArchive(page: number) {
   return useQuery({
     queryKey: ['public-newsletter-archive', page],
     queryFn: () => publicApi.newsletterArchive(page),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
-    enabled,
+    enabled: !isPrerendering(),
   })
 }
 
@@ -40,7 +43,7 @@ export interface LatestNewsletterIssue extends PublicNewsletterIssueSummary {
  * stays away; and while the page is prerendered, so no static HTML keeps a dated issue.
  */
 export function useLatestNewsletterIssue(): LatestNewsletterIssue | null {
-  const { data } = useNewsletterArchive(1, { enabled: !isPrerendering() })
+  const { data } = useNewsletterArchive(1)
   const latest = data?.data[0]
   if (!latest) return null
   return { ...latest, thisWeek: new Date().getTime() - new Date(latest.publishedAt).getTime() < WEEK_MS }

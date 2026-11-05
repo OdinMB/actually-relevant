@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { makeStory } from '../test/stories'
-import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { inPrerenderer } from '../test/prerenderer'
 
 const mockApi = vi.hoisted(() => ({ stories: { get: vi.fn(), related: vi.fn(), cluster: vi.fn() }, newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -53,8 +53,8 @@ describe('StoryPage when the story does not load', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
-  it('says the story was not found in an automated browser too, since story pages are never prerendered', async () => {
-    await inAutomatedBrowser(async () => {
+  it('says the story was not found whatever the prerender flag says, since story pages are never prerendered', async () => {
+    await inPrerenderer(async () => {
       mockApi.stories.get.mockRejectedValue(new ApiError(404, 'Story not found'))
       renderPage('gone')
       expect(await screen.findByRole('heading', { level: 1, name: 'Story Not Found' })).toBeInTheDocument()

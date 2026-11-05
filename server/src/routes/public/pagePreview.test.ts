@@ -57,7 +57,9 @@ function shellWith(tags: string[]): string {
 }
 
 const meta = (attr: 'name' | 'property', key: string, content: string) => `<meta data-rh="true" ${attr}="${key}" content="${content}" />`
-const SITE_IMAGE = `${config.siteUrl}/images/og-image.png`
+const NEWSLETTER_IMAGE = `${config.apiUrl}/api/section-images/newsletter.png`
+const NEWSLETTER_AI_IMAGE = `${config.apiUrl}/api/section-images/newsletter-issue.png`
+const PODCAST_IMAGE = `${config.apiUrl}/api/section-images/podcast.png`
 
 const STORY = {
   slug: 'clean-air',
@@ -167,14 +169,16 @@ describe('story pages', () => {
 })
 
 describe('newsletter issue pages', () => {
-  it("previews an issue by the email's subject line beside its lead story's image, with the page's own title and description", async () => {
+  const DESCRIPTION = 'Week 43, 2026 of the Actually Relevant weekly newsletter: the stories that matter to humanity this week, to read on the web.'
+
+  it("previews an issue by the email's subject line, with the newsletter image that carries the AI badge", async () => {
     const res = await request(app).get('/api/page/newsletter/week-43-2026')
     expect(res.status).toBe(200)
     const title = 'Week 43, 2026 - Actually Relevant Newsletter'
+    // The card title carries the lead story's AI headline, so the card's image carries the AI label
     const cardTitle = 'Week 43: Rivers &amp; lakes &lt;recover&gt;'
-    const description = 'Week 43, 2026 of the Actually Relevant weekly newsletter: the stories that matter to humanity this week, to read on the web.'
+    const description = DESCRIPTION
     const url = `${config.siteUrl}/newsletter/week-43-2026`
-    const image = `${config.apiUrl}/api/stories/rivers/og.png`
     expect(res.text).toBe(
       shellWith([
         `<title>${title}</title>`,
@@ -185,7 +189,7 @@ describe('newsletter issue pages', () => {
         meta('property', 'og:title', cardTitle),
         meta('property', 'og:description', description),
         meta('property', 'og:url', url),
-        meta('property', 'og:image', image),
+        meta('property', 'og:image', NEWSLETTER_AI_IMAGE),
         meta('property', 'og:image:type', 'image/png'),
         meta('property', 'og:image:width', '1200'),
         meta('property', 'og:image:height', '630'),
@@ -193,7 +197,7 @@ describe('newsletter issue pages', () => {
         meta('name', 'twitter:card', 'summary_large_image'),
         meta('name', 'twitter:title', cardTitle),
         meta('name', 'twitter:description', description),
-        meta('name', 'twitter:image', image),
+        meta('name', 'twitter:image', NEWSLETTER_AI_IMAGE),
       ]),
     )
     // Only story pages carry an article author
@@ -206,16 +210,20 @@ describe('newsletter issue pages', () => {
     mockPrisma.story.findMany.mockResolvedValue([ISSUE_STORIES[0], ISSUE_STORIES[2]])
     const html = (await request(app).get('/api/page/newsletter/week-43-2026')).text
     expect(html).toContain(meta('property', 'og:title', 'Week 43: Cities cut smog'))
-    expect(html).toContain(meta('property', 'og:image', `${config.apiUrl}/api/stories/clean-air/og.png`))
+    expect(html).toContain(meta('property', 'og:image', NEWSLETTER_AI_IMAGE))
   })
 
-  it("keeps the page's title and the site image when none of its stories has a page", async () => {
+  it("keeps the page's title and the plain newsletter image when none of its stories has a page", async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
     const html = (await request(app).get('/api/page/newsletter/week-43-2026')).text
     expect(html).toContain(meta('property', 'og:title', 'Week 43, 2026 - Actually Relevant Newsletter'))
-    expect(html).toContain(meta('property', 'og:image', SITE_IMAGE))
-    expect(html).toContain(meta('name', 'twitter:image', SITE_IMAGE))
-    expect(html).not.toContain('og:image:type')
+    expect(html).toContain(meta('name', 'description', DESCRIPTION))
+    expect(html).toContain(meta('property', 'og:description', DESCRIPTION))
+    expect(html).toContain(meta('name', 'twitter:description', DESCRIPTION))
+    expect(html).toContain(meta('property', 'og:image', NEWSLETTER_IMAGE))
+    expect(html).toContain(meta('property', 'og:image:type', 'image/png'))
+    expect(html).toContain(meta('name', 'twitter:image', NEWSLETTER_IMAGE))
+    expect(html).not.toContain('newsletter-issue.png')
   })
 
   it('reads no stories for an issue whose headings carry no story markers', async () => {
@@ -223,6 +231,7 @@ describe('newsletter issue pages', () => {
     const html = (await request(app).get('/api/page/newsletter/week-43-2026')).text
     expect(mockPrisma.story.findMany).not.toHaveBeenCalled()
     expect(html).toContain(meta('property', 'og:title', 'Week 43, 2026 - Actually Relevant Newsletter'))
+    expect(html).toContain(meta('property', 'og:description', DESCRIPTION))
     // An issue without a first-publication date is dated by its creation, as on its page
     expect(html).toContain(meta('property', 'article:published_time', '2026-10-24T09:00:00.000Z'))
   })
@@ -260,14 +269,15 @@ describe('podcast transcript pages', () => {
         meta('property', 'og:title', title),
         meta('property', 'og:description', description),
         meta('property', 'og:url', url),
-        meta('property', 'og:image', SITE_IMAGE),
+        meta('property', 'og:image', PODCAST_IMAGE),
+        meta('property', 'og:image:type', 'image/png'),
         meta('property', 'og:image:width', '1200'),
         meta('property', 'og:image:height', '630'),
         meta('property', 'article:published_time', '2026-10-24T07:00:00.000Z'),
         meta('name', 'twitter:card', 'summary_large_image'),
         meta('name', 'twitter:title', title),
         meta('name', 'twitter:description', description),
-        meta('name', 'twitter:image', SITE_IMAGE),
+        meta('name', 'twitter:image', PODCAST_IMAGE),
       ]),
     )
     // The public rule: published, ready, voiced, not a dry run
@@ -301,6 +311,7 @@ describe('topic pages', () => {
     const res = await request(app).get('/api/page/issues/air-quality')
     const title = 'Air &amp; Water - Actually Relevant'
     const url = `${config.siteUrl}/issues/air-quality`
+    const image = `${config.apiUrl}/api/section-images/issues/air-quality.png`
     expect(res.text).toBe(
       shellWith([
         `<title>${title}</title>`,
@@ -310,13 +321,14 @@ describe('topic pages', () => {
         meta('property', 'og:title', title),
         meta('property', 'og:description', 'Cleaner air and water for everyone.'),
         meta('property', 'og:url', url),
-        meta('property', 'og:image', SITE_IMAGE),
+        meta('property', 'og:image', image),
+        meta('property', 'og:image:type', 'image/png'),
         meta('property', 'og:image:width', '1200'),
         meta('property', 'og:image:height', '630'),
         meta('name', 'twitter:card', 'summary_large_image'),
         meta('name', 'twitter:title', title),
         meta('name', 'twitter:description', 'Cleaner air and water for everyone.'),
-        meta('name', 'twitter:image', SITE_IMAGE),
+        meta('name', 'twitter:image', image),
       ]),
     )
     expect(mockPrisma.issue.findFirst.mock.calls[0][0].where).toEqual({ slug: 'air-quality' })

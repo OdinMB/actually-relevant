@@ -152,6 +152,15 @@ export const PODCAST_SHOW_DESCRIPTION =
  */
 export const PODCAST_TRANSCRIPT_DESCRIPTION_PREFIX = 'AI: '
 
+/**
+ * The badge drawn on a newsletter issue's link-preview image (`services/sectionImage.ts`) when the
+ * card's title is its lead story's AI headline, styled as the website's badge
+ * (`AI_DISCLOSURE_COPY.badgeText`, `AiBadge`). The owner's confirmation of this label is pending;
+ * `newsletterIssueCard()` in `services/pagePreviews.ts` alone chooses it, so another choice changes
+ * that function only.
+ */
+export const PREVIEW_IMAGE_AI_BADGE = 'AI'
+
 /** Carousel: pixel footer on every slide, the post text line, and the alt-text prefix. */
 export const CAROUSEL_COPY = {
   slideFooter: 'actuallyrelevant.news · AI-generated',

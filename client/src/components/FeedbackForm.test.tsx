@@ -12,6 +12,7 @@ vi.mock('../lib/api', async importOriginal => ({
 
 import FeedbackForm from './FeedbackForm'
 import { fieldBorderProblems, fieldFocusProblems } from '../test/classes'
+import { setPrerendering } from '../test/prerenderer'
 
 const STORY = { id: 'story-1', title: 'Air & Health: Cities cut smog' }
 
@@ -119,7 +120,7 @@ describe('FeedbackForm', () => {
     }
 
     afterEach(() => {
-      Reflect.deleteProperty(navigator, 'webdriver')
+      setPrerendering(false)
     })
 
     it('says plainly that feedback cannot be sent, announced and describing the message field, with submit disabled', async () => {
@@ -142,7 +143,7 @@ describe('FeedbackForm', () => {
     })
 
     it('says nothing while prerendering, so the static /feedback page never carries the message', async () => {
-      Object.defineProperty(navigator, 'webdriver', { configurable: true, get: () => true })
+      setPrerendering(true)
       await renderUnreachable()
 
       expect(screen.getByRole('status')).toBeEmptyDOMElement()

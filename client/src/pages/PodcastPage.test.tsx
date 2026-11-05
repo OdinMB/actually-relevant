@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
+import { act, render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -8,7 +8,7 @@ import type { PublicPodcastResponse } from '@shared/types'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { APPLE_PODCASTS_URL } from '../config'
 import { PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
-import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { inPrerenderer } from '../test/prerenderer'
 
 const mockApi = vi.hoisted(() => ({ podcast: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -112,6 +112,14 @@ describe('PodcastPage', () => {
     const { lead, tail } = AI_DISCLOSURE_COPY.podcastSubtitle
     expect(`${lead} ${tail}`).not.toMatch(/\bAI\b/)
     expect(subtitle.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1)
+  })
+
+  it("previews as the podcast: the podcast's own image, with its type", async () => {
+    renderPage()
+    const meta = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+    await waitFor(() => expect(meta('meta[property="og:image"]')).toBe('/api/section-images/podcast.png'))
+    expect(meta('meta[name="twitter:image"]')).toBe('/api/section-images/podcast.png')
+    expect(meta('meta[property="og:image:type"]')).toBe('image/png')
   })
 
   it('does not repeat the per-episode AI line on the page', async () => {
@@ -225,13 +233,16 @@ describe('PodcastPage', () => {
       expect(await axe(container)).toHaveNoViolations()
     })
 
-    it('shows "Loading episodes" in the prerenderer, so the failure is never baked into the static page', async () => {
-      await inAutomatedBrowser(async () => {
-        mockApi.podcast.mockRejectedValue(new TypeError('Failed to fetch'))
-        const { client } = renderPage()
+    it('asks for no episodes in the prerenderer and shows "Loading episodes", so neither a dated list nor a failure is baked into the static page', async () => {
+      await inPrerenderer(async () => {
+        mockApi.podcast.mockResolvedValue(RESPONSE)
+        renderPage()
 
-        await waitFor(() => expect(client.getQueryState(['public-podcast'])?.status).toBe('error'))
+        // Time for a request to be made and answered, were one made
+        await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+        expect(mockApi.podcast).not.toHaveBeenCalled()
         expect(screen.getByText('Loading episodes…')).toBeInTheDocument()
+        expect(screen.queryByText('W42: Clean air')).toBeNull()
         expect(screen.queryByRole('alert')).toBeNull()
       })
     })

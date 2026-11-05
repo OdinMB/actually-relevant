@@ -7,6 +7,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import type { PublicStory } from '@shared/types'
 import { makeStory } from '../test/stories'
 import { focusRingProblems } from '../test/classes'
+import { inPrerenderer } from '../test/prerenderer'
 
 const mockApi = vi.hoisted(() => ({ issues: { get: vi.fn() }, stories: { list: vi.fn() } }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -223,6 +224,70 @@ describe('IssuePage story list', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Human Development' })).toBeInTheDocument()
     expect(screen.queryByText('Climate headline')).toBeNull()
     expect(screen.queryByText(EMPTY)).toBeNull()
+  })
+})
+
+describe('IssuePage head', () => {
+  const meta = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+
+  it("names the topic's own preview image, with its type, as the backend's link preview does", async () => {
+    renderIssue()
+    await screen.findByRole('heading', { level: 1, name: 'Planet & Climate' })
+    await waitFor(() => expect(meta('meta[property="og:image"]')).toBe('/api/section-images/issues/planet-climate.png'))
+    expect(meta('meta[name="twitter:image"]')).toBe('/api/section-images/issues/planet-climate.png')
+    expect(meta('meta[property="og:image:type"]')).toBe('image/png')
+    expect(meta('meta[property="og:image:width"]')).toBe('1200')
+    expect(meta('meta[property="og:image:height"]')).toBe('630')
+  })
+})
+
+describe('IssuePage in the prerenderer', () => {
+  const WAIT = '[data-prerender-wait]'
+
+  it("holds the snapshot while the topic loads, so the prerendered page carries the topic's head, not the homepage's", async () => {
+    await inPrerenderer(async () => {
+      const topic = pending<PublicIssue>()
+      mockApi.issues.get.mockReturnValue(topic.promise)
+      const { container } = renderIssue()
+      expect(container.querySelector(WAIT)).not.toBeNull()
+
+      topic.answer(ISSUES['planet-climate']!)
+      expect(await screen.findByRole('heading', { level: 1, name: 'Planet & Climate' })).toBeInTheDocument()
+      expect(container.querySelector(WAIT)).toBeNull()
+      await waitFor(() =>
+        expect(document.head.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe('https://actuallyrelevant.news/issues/planet-climate'),
+      )
+      expect(document.title).toBe('Planet & Climate - Actually Relevant')
+      expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe('/api/section-images/issues/planet-climate.png')
+    })
+  })
+
+  it('bakes no dated stories: the topic header stands over the stories skeleton, and no stories are asked for', async () => {
+    await inPrerenderer(async () => {
+      const { container } = renderIssue()
+      expect(await screen.findByRole('heading', { level: 1, name: 'Planet & Climate' })).toBeInTheDocument()
+      expect(container.querySelector(WAIT)).toBeNull()
+      expect(container.querySelector('.animate-pulse')).not.toBeNull()
+      expect(screen.queryByText('Climate headline')).toBeNull()
+      expect(mockApi.stories.list).not.toHaveBeenCalled()
+    })
+  })
+
+  it('lets the snapshot go ahead with the skeleton once the topic fails to load, baking in no failure', async () => {
+    await inPrerenderer(async () => {
+      mockApi.issues.get.mockRejectedValue(new TypeError('Failed to fetch'))
+      const { container } = renderIssue()
+      await waitFor(() => expect(mockApi.issues.get).toHaveBeenCalled())
+      await waitFor(() => expect(container.querySelector(WAIT)).toBeNull())
+      expect(container.querySelector('.animate-pulse')).not.toBeNull()
+      expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    })
+  })
+
+  it('marks nothing outside the prerenderer', () => {
+    mockApi.issues.get.mockReturnValue(pending<PublicIssue>().promise)
+    const { container } = renderIssue()
+    expect(container.querySelector(WAIT)).toBeNull()
   })
 })
 

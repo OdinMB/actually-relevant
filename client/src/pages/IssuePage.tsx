@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { API_BASE } from '../lib/api'
+import { API_BASE, topicOgImage } from '../lib/api'
 import { usePublicIssue } from '../hooks/usePublicIssues'
 import { useIssueStories } from '../hooks/usePublicStories'
 import { usePageTurn } from '../hooks/usePageTurn'
@@ -12,7 +12,7 @@ import PullQuote, { getQuoteVariant } from '../components/PullQuote'
 import Pagination from '../components/Pagination'
 import { IssuePageSkeleton, IssueStoriesSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
-import { loadStateOf } from '../lib/loadState'
+import { loadStateOf, prerenderWaitProps } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildCollectionPageSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
 import { usePositivity } from '../contexts/PositivityContext'
@@ -149,7 +149,9 @@ export default function IssuePage() {
   }, [positivity])
 
   if (issueState === 'loading') {
-    return <IssuePageSkeleton />
+    // The four top-level topics are prerendered: the snapshot waits for the topic, so their static
+    // HTML carries the topic's own head (.context/seo.md, "The static route list")
+    return <IssuePageSkeleton {...prerenderWaitProps(issueQuery)} />
   }
 
   const allIssues = (
@@ -204,7 +206,7 @@ export default function IssuePage() {
         <meta property="og:description" content={(issue.intro || issue.description).slice(0, 200)} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={`${SEO.siteUrl}/issues/${slug}`} />
-        {CommonOgTags({})}
+        {CommonOgTags(topicOgImage(issue.slug))}
         <link rel="alternate" type="application/rss+xml" title={`${issue.name} RSS Feed`} href={`${API_BASE}/feed/${slug}`} />
         <script type="application/ld+json">{toJsonLd(buildCollectionPageSchema(issue))}</script>
         <script type="application/ld+json">

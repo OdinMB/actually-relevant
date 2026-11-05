@@ -10,6 +10,7 @@ import LoadFailure from '../components/LoadFailure'
 import { usePodcastEpisodes } from '../hooks/usePodcastEpisodes'
 import { useScrollToHash } from '../hooks/useScrollToHash'
 import { loadStateOf } from '../lib/loadState'
+import { sectionOgImage } from '../lib/api'
 
 /** The public feed URL: a Render rewrite to the API's feed route (.context/seo.md). Static, so it prerenders. */
 export const PODCAST_FEED_URL = `${SEO.siteUrl}/podcast.xml`
@@ -49,8 +50,8 @@ function EpisodeList() {
 
 /**
  * The public podcast page. The heading, AI subtitle, Apple badge, copy button and feed address
- * are static, so they prerender; the other listen links and the episodes load client-side (the
- * prerenderer does not wait for data). Audio streams from the CDN (`preload="none"`), never
+ * are static, so they prerender; the other listen links and the episodes load client-side (never
+ * asked for while prerendering, so no dated episode list is baked in). Audio streams from the CDN (`preload="none"`), never
  * through our servers. A link to `PODCAST_SUBSCRIBE_PATH` lands on the Subscribe section.
  */
 export default function PodcastPage() {
@@ -66,7 +67,7 @@ export default function PodcastPage() {
         <meta property="og:description" content={META.description} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={META.url} />
-        {CommonOgTags({})}
+        {CommonOgTags(sectionOgImage('podcast'))}
       </Helmet>
       <StructuredData data={breadcrumb} />
 

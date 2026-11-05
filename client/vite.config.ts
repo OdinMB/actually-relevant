@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import prerender from '@prerenderer/rollup-plugin'
 import { routePaths } from './src/routes'
 import { BRAND } from './src/config'
+import { PRERENDER_FLAG } from './src/lib/prerenderFlag'
 import path from 'path'
 
 // Plugin to inject preconnect for cross-origin API and brand copy
@@ -62,6 +63,9 @@ export default defineConfig({
       rendererOptions: {
         maxConcurrentRoutes: 1,
         renderAfterDocumentEvent: 'render-complete',
+        // Tells the page it is being prerendered (isPrerendering() in src/lib/renderComplete.ts), set before its scripts run
+        injectProperty: PRERENDER_FLAG,
+        inject: true,
         launchOptions: {
           args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
         },

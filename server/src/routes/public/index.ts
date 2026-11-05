@@ -12,6 +12,7 @@ import feedbackRouter from './feedback.js'
 import podcastRouter from './podcast.js'
 import { storyImageRouter, storyPageRouter } from './storyPreview.js'
 import { pagePreviewRouter } from './pagePreview.js'
+import { sectionImageRouter } from './sectionImages.js'
 import newslettersRouter from './newsletters.js'
 import feedFaviconRouter from './feedFavicon.js'
 
@@ -35,6 +36,7 @@ router.use(apiLimiter)
 router.use('/homepage', homepageRouter)
 router.use('/stories', storyImageRouter)
 router.use('/stories', storiesRouter)
+router.use('/section-images', sectionImageRouter)
 router.use('/issues', issuesRouter)
 router.use('/sources', sourcesRouter)
 router.use('/feed', feedRouter)

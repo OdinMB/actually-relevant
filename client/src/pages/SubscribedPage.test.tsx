@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import SubscribedPage from './SubscribedPage'
-import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { inPrerenderer } from '../test/prerenderer'
 
 const mockConfirm = vi.fn()
 
@@ -180,7 +180,7 @@ describe('SubscribedPage', () => {
   })
 
   it('prerenders a loading view with noindex: the HTML the confirmation link shows until the script runs', async () => {
-    await inAutomatedBrowser(async () => {
+    await inPrerenderer(async () => {
       renderAt('/subscribed')
 
       expect(screen.getByRole('heading', { level: 1, name: /confirm your subscription/i })).toBeInTheDocument()
@@ -191,8 +191,8 @@ describe('SubscribedPage', () => {
     })
   })
 
-  it('shows the confirm button for a link with a token and an address in an automated browser too', async () => {
-    await inAutomatedBrowser(async () => {
+  it('shows the confirm button for a link with a token and an address whatever the prerender flag says', async () => {
+    await inPrerenderer(async () => {
       renderAt('/subscribed?token=abc&email=u%40example.com')
 
       expect(screen.getByRole('button', { name: /confirm my subscription/i })).toBeInTheDocument()

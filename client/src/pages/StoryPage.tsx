@@ -104,7 +104,7 @@ export default function StoryPage() {
   const { openFeedback } = useFeedback()
   const storyQuery = usePublicStory(slug || '')
   const story = storyQuery.data
-  // Never prerendered: an automated browser still sees the real states (lib/loadState.ts)
+  // Never prerendered: the real states always show (lib/loadState.ts)
   const loadState = loadStateOf(storyQuery, false)
   // For the newsletter line at the end; asked for alongside the story, so it is usually there by then
   const latestIssue = useLatestNewsletterIssue()

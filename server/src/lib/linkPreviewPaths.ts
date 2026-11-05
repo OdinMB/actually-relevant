@@ -10,3 +10,9 @@ export const PAGE_PREVIEW_MOUNT = '/api/page'
 export const PREVIEWED_SECTIONS = ['stories', 'newsletter', 'podcast', 'issues'] as const
 
 export type PreviewedSection = (typeof PREVIEWED_SECTIONS)[number]
+
+/**
+ * Where the section preview images are served (`routes/public/sectionImages.ts`): `newsletter.png`,
+ * `podcast.png` and `issues/<topic slug>.png`, on the API's public origin.
+ */
+export const SECTION_IMAGE_MOUNT = '/api/section-images'

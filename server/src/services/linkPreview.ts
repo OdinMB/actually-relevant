@@ -28,9 +28,6 @@ export interface PreviewImage {
   height: number
 }
 
-/** The site's 1200x630 card image, the one the client's `CommonOgTags` sets when a page has none of its own. */
-export const SITE_OG_IMAGE: PreviewImage = { url: `${config.siteUrl}/images/og-image.png`, width: 1200, height: 630 }
-
 /** What a page's head says about it: the values its Helmet sets. */
 export interface LinkPreview {
   /** The document's `<title>`. */

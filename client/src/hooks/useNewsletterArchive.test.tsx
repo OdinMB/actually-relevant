@@ -4,6 +4,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PublicNewsletterIssueSummary } from '@shared/types'
 import { useLatestNewsletterIssue } from './useNewsletterArchive'
+import { setPrerendering } from '../test/prerenderer'
 
 const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -35,7 +36,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
-  Reflect.deleteProperty(navigator, 'webdriver')
+  setPrerendering(false)
 })
 
 describe('useLatestNewsletterIssue', () => {
@@ -93,7 +94,7 @@ describe('useLatestNewsletterIssue', () => {
   })
 
   it('asks for nothing while the page is prerendered, so no static HTML carries a dated issue', () => {
-    Object.defineProperty(navigator, 'webdriver', { configurable: true, get: () => true })
+    setPrerendering(true)
     mockApi.newsletterArchive.mockResolvedValue(archive(issue('week-43-2026', 1)))
     const { result } = renderLatest()
 

@@ -7,6 +7,7 @@ import { ApiError } from '../lib/api'
 import { NEWSLETTER_PROMISE } from '../config'
 import type { TurnstileRenderOptions } from '../lib/turnstile'
 import { fieldBorderProblems, fieldFocusProblems } from '../test/classes'
+import { setPrerendering } from '../test/prerenderer'
 
 const mockSubscribe = vi.fn()
 const mockGetToken = vi.fn()
@@ -135,7 +136,7 @@ describe('SubscribeForm', () => {
     }
 
     afterEach(() => {
-      Reflect.deleteProperty(navigator, 'webdriver')
+      setPrerendering(false)
     })
 
     it('says calmly that the form cannot load, announced and describing the email field', async () => {
@@ -159,7 +160,7 @@ describe('SubscribeForm', () => {
     })
 
     it('says nothing while prerendering, so the static HTML never carries the message', async () => {
-      Object.defineProperty(navigator, 'webdriver', { configurable: true, get: () => true })
+      setPrerendering(true)
       await renderUnreachable()
 
       expect(screen.getByRole('status')).toBeEmptyDOMElement()

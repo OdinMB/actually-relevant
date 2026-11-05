@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ApiError } from './api'
-import { loadStateOf } from './loadState'
+import { loadStateOf, prerenderWaitProps } from './loadState'
+import { PRERENDER_WAIT_ATTR, _resetContentWait, signalRenderComplete } from './renderComplete'
 
 /** A query that has not started: no data, no error, not fetching. */
 const idle = { data: undefined, error: null, isLoading: false, isPaused: false, isPlaceholderData: false, errorUpdateCount: 0 }
@@ -57,7 +58,64 @@ describe('loadStateOf', () => {
   })
 
   it('checks for the prerenderer itself when not told', () => {
-    // jsdom is not an automated browser
+    // jsdom carries no prerender flag
     expect(loadStateOf({ ...idle, error: new TypeError('Failed to fetch') })).toBe('failed')
+  })
+})
+
+describe('prerenderWaitProps', () => {
+  const firstRequest = { isLoading: true, failureCount: 0 }
+
+  it('in the prerenderer, marks the loading view while the first request is on its way', () => {
+    expect(prerenderWaitProps(firstRequest, true)).toEqual({ [PRERENDER_WAIT_ATTR]: '' })
+  })
+
+  it('stops the wait once the first request failed: the build may have no API, and its retry would only delay the build', () => {
+    expect(prerenderWaitProps({ isLoading: true, failureCount: 1 }, true)).toEqual({})
+  })
+
+  it('marks nothing once the answer is there', () => {
+    expect(prerenderWaitProps({ isLoading: false, failureCount: 0 }, true)).toEqual({})
+  })
+
+  it('marks nothing outside the prerenderer, and checks for it itself when not told', () => {
+    expect(prerenderWaitProps(firstRequest, false)).toEqual({})
+    expect(prerenderWaitProps(firstRequest)).toEqual({})
+  })
+
+  describe('and the snapshot', () => {
+    let fired = 0
+    const onComplete = () => {
+      fired += 1
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      _resetContentWait()
+      fired = 0
+      document.addEventListener('render-complete', onComplete)
+    })
+
+    afterEach(() => {
+      document.removeEventListener('render-complete', onComplete)
+      vi.useRealTimers()
+    })
+
+    it('notes a wait it marks, so the snapshot gives the head time to settle even if no check sees the marker', () => {
+      prerenderWaitProps(firstRequest, true)
+      signalRenderComplete(document, { initialDelayMs: 100, pollMs: 50, maxWaitMs: 1000 })
+      vi.advanceTimersByTime(199)
+      expect(fired).toBe(0)
+      vi.advanceTimersByTime(1)
+      expect(fired).toBe(1)
+    })
+
+    it('notes nothing when it marks nothing, so other pages are snapshotted without the extra delay', () => {
+      prerenderWaitProps(firstRequest, false)
+      prerenderWaitProps({ isLoading: false, failureCount: 0 }, true)
+      signalRenderComplete(document, { initialDelayMs: 100, pollMs: 50, maxWaitMs: 1000 })
+      vi.advanceTimersByTime(100)
+      expect(fired).toBe(1)
+    })
   })
 })
