@@ -180,7 +180,7 @@ export default function SiteFooter() {
               <li className="flex items-center">
                 <Link to="/stewardship" className={CONNECT_LINK}>
                   <img src="/images/optimized/icons/stewardship-thumb-w.webp" alt="" width={14} height={14} className={CONNECT_ICON} aria-hidden="true" />
-                  Who Runs This
+                  Take Over This Project
                 </Link>
               </li>
               <li className="flex items-center">
