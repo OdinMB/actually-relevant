@@ -154,6 +154,10 @@ function Masthead() {
   )
 }
 
+/**
+ * The issue's head tags. The backend writes the same title and description for crawlers that run
+ * no JavaScript (server/src/services/pagePreviews.ts); change both together.
+ */
 function IssueHead({ issue }: { issue: PublicNewsletterIssue }) {
   const url = `${SEO.siteUrl}/newsletter/${issue.slug}`
   const title = `${issue.title} - Actually Relevant Newsletter`

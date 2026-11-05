@@ -619,16 +619,19 @@ export const config = {
     ),
     pickModelTier: 'medium' as const,
   },
-  /** Story link previews: the og:image endpoint and the story-page shell route (.context/seo.md). */
+  /**
+   * Link previews (.context/seo.md): the story og:image endpoint, and the shell and page settings
+   * every link-preview page shares (story pages and `/api/page`, `services/linkPreview.ts`).
+   */
   storyPreview: {
-    /** The built client's index.html on the static site; the story-page route injects meta tags into it. */
+    /** The built client's index.html on the static site; the link-preview pages inject meta tags into it. */
     shellUrl: `${siteUrl}/index.html`,
     /** How long the fetched shell is reused before it is revalidated (short: it names the build's hashed assets). */
     shellCacheSeconds: parseWholeNumber(process.env.STORY_PAGE_SHELL_CACHE_SECONDS, 60, 'STORY_PAGE_SHELL_CACHE_SECONDS', 0),
     shellFetchTimeoutMs: 5000,
-    /** Browser and CDN cache of the story-page HTML. */
+    /** Browser and CDN cache of a link-preview page's HTML. */
     pageCacheSeconds: 60,
-    /** In-memory cache of rendered pages, per slug. */
+    /** In-memory cache of rendered link-preview pages, per site path, shared by every kind of page. */
     pageCacheEntries: 200,
     /** HTTP cache lifetime of a story's og.png. */
     imageCacheSeconds: parseWholeNumber(process.env.STORY_OG_IMAGE_CACHE_SECONDS, 86400, 'STORY_OG_IMAGE_CACHE_SECONDS', 0),

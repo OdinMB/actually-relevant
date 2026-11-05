@@ -23,6 +23,10 @@ function BackToPodcast() {
   )
 }
 
+/**
+ * The episode's head tags. The backend writes the same for crawlers that run no JavaScript
+ * (server/src/services/pagePreviews.ts); change both together.
+ */
 function EpisodeHead({ episode }: { episode: PublicPodcastEpisodeDetail }) {
   const url = `${SEO.siteUrl}${podcastTranscriptPath(episode.id)}`
   const title = `Transcript: ${episode.title} - ${SEO.siteName}`

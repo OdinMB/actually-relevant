@@ -50,7 +50,7 @@ describe('POST /api/admin/cache/clear', () => {
         'podcast-feed',
         'related-stories',
         'story-preview-images',
-        'story-preview-pages',
+        'link-preview-pages',
         'client-shell',
       ]),
     )

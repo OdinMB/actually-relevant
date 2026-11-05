@@ -147,17 +147,18 @@ services:
     renderSubdomainPolicy: disabled
     # AI usage preference (IETF AIPREF draft) on every static response, the same value as
     # robots.txt and the API's Content-Usage header (config.contentUsage; server/src/app.test.ts).
-    # The API sets the same header itself on what the rewrites proxy (sitemap, podcast feed, story pages).
+    # The API sets the same header itself on what the rewrites proxy (sitemap, podcast feed, story
+    # pages and the other link-preview pages).
     headers:
       - path: /*
         name: Content-Usage
         value: "train-ai=n, search=y"
     # Order matters: Render applies the first matching rule, so /sitemap.xml,
-    # /podcast.xml, /stories/* and the prerendered pages must stay above the SPA catch-all. No
-    # static sitemap.xml or podcast.xml may exist in client/public/, and nothing may be built
-    # under dist/stories/. The proxy rewrites target the API's custom domain, not the
-    # onrender.com host (ADR-0019, .context/seo.md). Render serves a file that exists at the
-    # requested path without applying any rule.
+    # /podcast.xml, /stories/*, the prerendered pages and the dynamic-page proxies must stay above
+    # the SPA catch-all. No static sitemap.xml or podcast.xml may exist in client/public/, and
+    # nothing may be built under dist/stories/. The proxy rewrites target the API's custom
+    # domain, not the onrender.com host (ADR-0019, .context/seo.md). Render serves a file that
+    # exists at the requested path without applying any rule.
     routes:
       - type: rewrite
         source: /sitemap.xml
@@ -246,6 +247,21 @@ services:
       - type: rewrite
         source: /subscribed
         destination: /subscribed/index.html
+      # Dynamic pages that are not prerendered (a newsletter issue, a podcast transcript, a topic
+      # other than the four above): like story pages, the backend returns this build's index.html
+      # with the page's own title, description and og:/twitter: tags, or the shell unchanged on any
+      # failure (.context/seo.md, "Link previews"). Below the prerendered pages, so /newsletter,
+      # /podcast and the prerendered topics keep their own files; server/src/blueprint.test.ts
+      # holds these to server/src/lib/linkPreviewPaths.ts.
+      - type: rewrite
+        source: /newsletter/*
+        destination: https://api.actuallyrelevant.news/api/page/newsletter/*
+      - type: rewrite
+        source: /podcast/*
+        destination: https://api.actuallyrelevant.news/api/page/podcast/*
+      - type: rewrite
+        source: /issues/*
+        destination: https://api.actuallyrelevant.news/api/page/issues/*
       # SPA catch-all, last: the remaining client routes get dist/index.html and the client router.
       - type: rewrite
         source: /*

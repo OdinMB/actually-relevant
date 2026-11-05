@@ -90,6 +90,14 @@ export async function listPublishedIssueDates(): Promise<{ slug: string; publish
   return issues.map(issue => ({ slug: issue.slug!, publishedAt: issue.publishedAt ?? issue.createdAt }))
 }
 
+/** A public issue's title, stored content and dates, or null unless it is published: what its link preview reads. */
+export async function findPublishedIssueHead(slug: string) {
+  return prisma.newsletter.findFirst({
+    where: { ...PUBLIC_WHERE, slug },
+    select: { slug: true, title: true, content: true, publishedAt: true, createdAt: true },
+  })
+}
+
 /**
  * One public issue with its stories, or null unless it is published. The stories are those its
  * content's story headings name (`newsletterContent.ts`) plus its shortlist; a marked story's

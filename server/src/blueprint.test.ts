@@ -11,6 +11,7 @@ import { readFileSync, readdirSync } from 'fs'
 import { join, resolve, relative, sep } from 'path'
 import { fileURLToPath } from 'url'
 import { parseTrustProxyHops } from './config.js'
+import { PAGE_PREVIEW_MOUNT, PREVIEWED_SECTIONS } from './lib/linkPreviewPaths.js'
 
 const SERVER_SRC = fileURLToPath(new URL('.', import.meta.url))
 const REPO_ROOT = resolve(SERVER_SRC, '..', '..')
@@ -386,6 +387,21 @@ describe('render.yaml', () => {
     // Story pages go through the backend for their link-preview tags (.context/seo.md)
     expect(blueprintText.indexOf('source: /stories/*')).toBeGreaterThan(-1)
     expect(blueprintText.indexOf('source: /stories/*')).toBeLessThan(catchAll)
+  })
+
+  it('sends every section the backend previews to it, below the prerendered pages of that section', () => {
+    // Addition: a section without its rewrite would preview as the homepage again (.context/seo.md,
+    // "Link previews"); one above a prerendered page under it would serve that page through the backend.
+    const rules = staticSite?.routes ?? []
+    const api = `https://${backend?.lists.domains?.[0]}`
+    for (const section of PREVIEWED_SECTIONS) {
+      const at = rules.findIndex(r => r.source === `/${section}/*`)
+      const destination = section === 'stories' ? `${api}/api/story-page/*` : `${api}${PAGE_PREVIEW_MOUNT}/${section}/*`
+      expect(rules[at], section).toEqual({ type: 'rewrite', source: `/${section}/*`, destination })
+      expect(at, section).toBeLessThan(rules.findIndex(r => r.source === '/*'))
+      const pagesBelow = rules.slice(at + 1).filter(r => r.source === `/${section}` || r.source?.startsWith(`/${section}/`))
+      expect(pagesBelow, section).toEqual([])
+    }
   })
 
   it('names every variable the code reads, or leaves it out deliberately', () => {

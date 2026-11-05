@@ -153,6 +153,12 @@ export async function getPublishedEpisode(id: string): Promise<(PublishedEpisode
   return episode && { ...episode, dialogue: row.dialogue }
 }
 
+/** A published episode's title, summary and first publication, or null: what its transcript page's link preview reads. */
+export async function findPublishedEpisodeHead(id: string): Promise<{ id: string; title: string; summary: string; publishedAt: Date } | null> {
+  const row = await prisma.podcast.findFirst({ where: { id, ...PUBLISHED_WHERE }, select: { id: true, title: true, episodeSummary: true, publishedAt: true } })
+  return row?.publishedAt ? { id: row.id, title: row.title, summary: row.episodeSummary, publishedAt: row.publishedAt } : null
+}
+
 /** The ids and first publication dates of the published episodes, newest first (the sitemap's transcript pages). */
 export async function listPublishedEpisodeDates(): Promise<{ id: string; publishedAt: Date }[]> {
   const rows = await prisma.podcast.findMany({ where: PUBLISHED_WHERE, select: { id: true, publishedAt: true }, orderBy: { publishedAt: 'desc' } })

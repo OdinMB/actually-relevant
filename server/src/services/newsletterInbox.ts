@@ -2,7 +2,8 @@
  * What an issue's email shows in the inbox before it is opened: the subject line and the hidden
  * preview text (preheader). Built from the issue's stored content and its stories' stored
  * relevance, with no model call; the stories are the headings the email shows, so a heading edited
- * by hand appears as edited. The archive and the web edition keep the issue title.
+ * by hand appears as edited. The archive and the web edition keep the issue title; the web
+ * edition's link preview takes the subject's form for its og:title (`pagePreviews.ts`).
  *
  * - Subject: `<label>: <lead headline>`, where the label is "Week 43" for a weekly title
  *   ("Week 43, 2026", `getWeekTitle()`) and the whole title otherwise, and the lead is the story with
@@ -66,20 +67,28 @@ function shorten(text: string, max: number): string {
   return `${kept.replace(/[\s,;:–—-]+$/u, '')}…`
 }
 
-/** Most relevant first; the sort is stable, so ties keep the issue's order. Unrated stories go last. */
-function ranked(stories: InboxStory[]): InboxStory[] {
-  const rank = (story: InboxStory) => story.relevance ?? -1
+/**
+ * Most relevant first; the sort is stable, so ties keep the issue's order. Unrated stories go last.
+ * The first is the issue's lead story.
+ */
+export function byRelevance<T extends Pick<InboxStory, 'relevance'>>(stories: T[]): T[] {
+  const rank = (story: T) => story.relevance ?? -1
   return [...stories].sort((a, b) => rank(b) - rank(a))
+}
+
+/** `<label>: <lead headline>`, the headline shortened to fit: the subject, and the issue's link-preview title. */
+export function leadLine(title: string, leadHeadline: string): string {
+  const prefix = `${issueLabel(title)}: `
+  const room = Math.max(MIN_HEADLINE_CHARS, SUBJECT_MAX_CHARS - Array.from(prefix).length)
+  return `${prefix}${shorten(oneLine(leadHeadline), room)}`
 }
 
 /** The subject line and preview text for an issue with this title and these stories (in the email's order). */
 export function inboxPreview(title: string, stories: InboxStory[]): InboxPreview {
-  const [lead, ...others] = ranked(stories)
+  const [lead, ...others] = byRelevance(stories)
   if (!lead) return { subject: title, preheader: '' }
 
-  const prefix = `${issueLabel(title)}: `
-  const room = Math.max(MIN_HEADLINE_CHARS, SUBJECT_MAX_CHARS - Array.from(prefix).length)
-  const subject = `${prefix}${shorten(oneLine(lead.headline), room)}`
+  const subject = leadLine(title, lead.headline)
 
   const next = others.slice(0, PREVIEW_STORIES).map(story => oneLine(story.headline))
   const preheader = next.length > 0 ? `${NEWSLETTER_PREVIEW_AI_MARKER} ${next.join(' · ')}` : `${NEWSLETTER_TOP_LABEL.lead} ${NEWSLETTER_TOP_LABEL.text}`
