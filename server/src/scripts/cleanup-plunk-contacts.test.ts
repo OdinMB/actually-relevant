@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { shouldPurgeContact, classifyContact, parseArgs, countByCreatedDay, DEFAULT_PROTECTED_WINDOWS, type PurgeRules } from './cleanup-plunk-contacts.js'
+import {
+  shouldPurgeContact,
+  classifyContact,
+  scanContacts,
+  parseArgs,
+  countByCreatedDay,
+  DEFAULT_PROTECTED_WINDOWS,
+  type PurgeRules,
+  type ScannedContact,
+} from './cleanup-plunk-contacts.js'
 
 describe('shouldPurgeContact', () => {
   const rules: PurgeRules = {
@@ -36,6 +45,64 @@ describe('shouldPurgeContact', () => {
 
   it('keeps a contact with an unparseable createdAt', () => {
     expect(shouldPurgeContact({ email: 'weird@example.com', subscribed: false, createdAt: 'not-a-date' }, rules)).toBe(false)
+  })
+
+  it('keeps a snoozed contact, which reads subscribed: false, whatever its age', () => {
+    const snoozed = { email: 'bot@example.com', subscribed: false, snoozedUntil: '2026-12-01T00:00:00.000Z', createdAt: aged }
+    expect(shouldPurgeContact(snoozed, rules)).toBe(false)
+    expect(classifyContact(snoozed, rules)).toBe('snoozed')
+    expect(classifyContact({ ...snoozed, createdAt: recent }, rules)).toBe('snoozed')
+  })
+
+  it('reports a snoozed contact as snoozed even when it also confirmed locally or has no date', () => {
+    const snoozedUntil = '2026-12-01T00:00:00.000Z'
+    expect(classifyContact({ email: 'real@example.com', subscribed: false, snoozedUntil, createdAt: aged }, rules)).toBe('snoozed')
+    expect(classifyContact({ email: 'bot@example.com', subscribed: false, snoozedUntil }, rules)).toBe('snoozed')
+  })
+
+  it('purges a bounced or complained contact, which Plunk marks like an unsubscribe (no snooze), as before', () => {
+    expect(classifyContact({ email: 'bot@example.com', subscribed: false, snoozedUntil: null, createdAt: aged }, rules)).toBe('purge')
+  })
+})
+
+describe('scanContacts', () => {
+  const rules: PurgeRules = {
+    confirmedEmails: new Set(['real@example.com']),
+    olderThan: new Date('2026-06-01T00:00:00.000Z'),
+    protectedWindows: DEFAULT_PROTECTED_WINDOWS,
+  }
+  const aged = '2026-05-10T00:00:00.000Z'
+  const importMoment = '2026-02-15T00:36:00.000Z'
+  async function* pages(...lists: ScannedContact[][]) {
+    for (const items of lists) yield { items }
+  }
+
+  it('collects the purgeable contacts across pages and counts the snoozed and import-guarded ones it keeps', async () => {
+    const result = await scanContacts(
+      pages(
+        [
+          { id: 's1', email: 'sub@example.com', subscribed: true, snoozedUntil: null, createdAt: aged },
+          { id: 'z1', email: 'snoozed@example.com', subscribed: false, snoozedUntil: '2026-12-01T00:00:00.000Z', createdAt: aged },
+          { id: 'u1', email: 'bot@example.com', subscribed: false, snoozedUntil: null, createdAt: aged },
+        ],
+        [
+          { id: 'z2', email: 'imported-snoozed@example.com', subscribed: false, snoozedUntil: '2026-11-20T00:00:00.000Z', createdAt: importMoment },
+          { id: 'i1', email: 'imported@example.com', subscribed: false, snoozedUntil: null, createdAt: importMoment },
+          { id: 'c1', email: 'real@example.com', subscribed: false, snoozedUntil: null, createdAt: aged },
+        ],
+      ),
+      rules,
+    )
+    expect(result).toEqual({
+      scanned: 6,
+      purgeable: [{ id: 'u1', email: 'bot@example.com', createdAt: aged }],
+      importProtected: 1,
+      snoozed: 2,
+    })
+  })
+
+  it('finds nothing to purge in an empty list', async () => {
+    expect(await scanContacts(pages(), rules)).toEqual({ scanned: 0, purgeable: [], importProtected: 0, snoozed: 0 })
   })
 })
 

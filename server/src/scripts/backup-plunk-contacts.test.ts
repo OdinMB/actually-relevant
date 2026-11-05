@@ -102,4 +102,12 @@ describe('summarizeContacts', () => {
       ]),
     ).toEqual({ count: 4, subscribed: 1, unsubscribed: 2, unknownStatus: 1, duplicateIds: 1, missingEmail: 1 })
   })
+
+  it('counts a snoozed contact as unsubscribed', () => {
+    expect(summarizeContacts([{ id: '1', email: 'a@x.org', subscribed: false, snoozedUntil: '2026-12-01T00:00:00Z' }])).toMatchObject({
+      subscribed: 0,
+      unsubscribed: 1,
+      unknownStatus: 0,
+    })
+  })
 })

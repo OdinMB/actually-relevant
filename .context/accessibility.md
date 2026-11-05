@@ -9,7 +9,9 @@ This site targets WCAG 2.2 Level AA compliance.
 **Buttons and Links**
 - All buttons need descriptive text or `aria-label`
 - Links should describe their destination (avoid "click here")
-- Focus styles: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`. Without `focus-visible:outline-none`, Chrome draws its own black outline beside the ring. A link or link-styled button inside a sentence takes `TEXT_LINK` from `client/src/lib/control-classes.ts` (the cross-links, "Report an error", "How it works") rather than a copy of the string
+- Focus styles: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`. Without `focus-visible:outline-none`, Chrome draws its own black outline beside the ring. Controls take `FOCUS_RING` from `client/src/lib/control-classes.ts`: story cards, bookmarks, pagination, checkboxes and sliders, the news-mix slider, the header, mobile menu, search panel, skip link and footer, and the links on the story, search, topic and topics pages. The issue tabs and `.prose a` get the same classes through `@apply` in `client/src/index.css`. A filled button adds `focus-visible:ring-offset-2`, since the ring on the fill is under 3:1. Other older public controls (the home, about, methodology, podcast and newsletter-issue pages, the info pages, dialogs, toasts, banners, share buttons and forms) still spell the string without `focus-visible:outline-none`; move them to `FOCUS_RING` when touched. `client/src/test/focusColors.test.ts` fails on a brand-100 to -400 focus color in public code, and `PublicLayout.test.tsx` fails on a control in the skip link, header or footer without `FOCUS_RING`'s classes
+- Hover-revealed controls (the card bookmark) also appear on focus: `focus-visible:opacity-100 group-focus-within:opacity-100`
+- A link or link-styled button inside a sentence takes `TEXT_LINK` from `client/src/lib/control-classes.ts` (the cross-links, "Report an error", "How it works") rather than a copy of the string
 - Touch targets: minimum 24x24px (use padding if visual element is smaller); see Target size below
 
 **Target size (2.5.8)**
@@ -24,6 +26,7 @@ This site targets WCAG 2.2 Level AA compliance.
 - Every input needs a `<label>` with `htmlFor` matching the input's `id`
 - Group related inputs with `<fieldset>` and `<legend>`
 - Error messages should be associated with inputs via `aria-describedby`
+- Text fields and selects take `FIELD_FOCUS` (brand-500 border and 2px ring on `focus:`) and a resting `border-neutral-500` or darker (4.7:1 on white, 4.5:1 on neutral-50); checkboxes and sliders take `FOCUS_RING`. Tests: `fieldFocusProblems`, `fieldBorderProblems`, `focusRingProblems` (`client/src/test/classes.ts`)
 
 **Expandable Content (Accordions, Menus)**
 ```tsx
@@ -68,6 +71,7 @@ This site targets WCAG 2.2 Level AA compliance.
 - Placeholder text: one rule in `index.css` (`input::placeholder, textarea::placeholder`) sets `neutral-500` for every field, 4.5:1 on the public forms' `bg-neutral-50` and 4.7:1 on white; don't override it with a `placeholder:` class
 - Large text (18pt+ or 14pt+ bold): 3:1 minimum
 - UI components: 3:1 minimum, icons that are a control or name a field included (the search toggle, the search field's icon): `text-neutral-500` or darker, as for text
+- Text in a category hue uses `getCategoryColor(slug).textHex` (the 700 shade, at least 4.5:1 on white) at full opacity, never `hex` (the 400 shade, 1.7:1 to 3:1) or the 500 `dot` shade. The topics page's "View stories" links use it, and their hover underlines rather than fades, since a fade drops below 4.5:1. The story page's analysis numbers use it too ("Caveats" a quarter darker, `shiftHex(textHex, -0.25)`); they are 24px bold, large text, so their bar is 3:1 and the 700 shade clears it with room. Tests: `IssuesPage.test.tsx`, `StoryPage.test.tsx`
 
 **Don't Rely on Color Alone**
 - A link inside running text is underlined (`underline`, as in `CrossLinks.tsx` and `.prose a`): `text-brand-700` against the grey body text is under 3:1, so color alone does not mark it (1.4.1). A link that stands on its own line, such as a title in a list or a "back" link, needs no underline
@@ -116,11 +120,14 @@ Before deploying new pages/components:
 
 | Pattern | Location | Notes |
 |---------|----------|-------|
-| Skip link | `PublicLayout.tsx` | To be implemented |
+| Skip link | `PublicLayout.tsx` | The first tab stop, to `#main-content`, with `FOCUS_RING` |
 | Story filters | `StoryFilters.tsx` | To be implemented — use fieldset/legend |
 | Admin frame | `AdminLayout.tsx` | All text inside a landmark (axe "region"): desktop sidebar in `<aside>` with a labelled `<nav>`, mobile top bar a `<header>`, content in `<main>` |
 | Story list | `StoryList.tsx` | To be implemented — use semantic table or list |
-| Focus styles | All interactive elements | `focus-visible:ring-2` |
+| Focus styles | All interactive elements | `FOCUS_RING` (`control-classes.ts`); see Buttons and Links above |
+| Page changes | `RouteAnnouncer.tsx` (root layout), `lib/pageSettled.ts`, `lib/focusTarget.ts`, `hooks/useAnnouncement.ts` | On an in-app change of path (not the first load or a redirect while it loads, not a query-string or hash change, not /admin), focus moves to the section the link's `#hash` names when it is on the page (scrolled into view), else to `<main>` (no scroll). A hash section that comes with the page's data takes focus once the page has loaded, unless the reader has moved focus. A target that is not a control gets tabindex -1 until blur, removed at once if focus does not take (a modal is open). `document.title` is read into a polite `role="status"` once no route fallback shows and no query fetches (at most 5 s). The status empties 5 s later, and at once on a change to /admin. A page without `<main>` gets the announcement but no focus move; the developers page has none until its Scalar reference renders one. Tests: `RouteAnnouncer.test.tsx` (hash target and late hash target, a cluster redirect after a click announces only the final page, page without main, /admin clears), `focusTarget.test.ts`, `useAnnouncement.test.ts`, `pageSettled.test.ts`, `App.test.tsx` |
+| List pages | `hooks/usePageTurn.ts`; `SearchPage.tsx`, `IssuePage.tsx`, `NewsletterPage.tsx` ("Past issues") | Choosing a page in `Pagination` moves focus to the list's heading (tabindex -1 until blur, `focus:outline-none`, no scroll from focus; the page scrolls itself, to the top or to "Past issues"). Once that page's own items show (not a skeleton, a failure or the previous page kept as placeholder), "Page N of M" is read into an always-present polite `role="status"`, which empties 5 s later. Tests: `SearchPage.test.tsx`, `IssuePage.test.tsx`, `NewsletterPage.test.tsx` |
+| Story metadata | `StoryPage.tsx` (`META_TEXT_ROW`, `PHONE_SEPARATOR`) | The "\|" between the date, source, "Original article" and the AI label is visual only. From `md` up it is an `aria-hidden` span. Below `md` it is a `::before` with alt text `''` in the gap before each item, inside a row that clips its sides (`overflow-x-clip`, 4px of room each side for focus rings), so no line a wrap starts begins with "\|". From `md` up the row is `display: contents` and lays out as before. Test: `StoryPage.test.tsx` (classes; jsdom cannot lay out) |
 | Human check (Turnstile) | `SubscribeForm.tsx`, `FeedbackForm.tsx` | Widget is invisible unless Cloudflare needs the visitor to interact, so it adds no tab stop; the submit button's text says "Verifying..." while it runs; a failure is text with `role="alert"` (in `FeedbackForm` also linked to the button by `aria-describedby`) and the form stays usable. Covered by axe in `FeedbackForm.test.tsx` |
 | Load failure | `LoadFailure.tsx` | A page's data failed to load: heading and line in a `role="alert"`, announced without moving focus; "Try again" keeps its focus while it runs ("Trying again...") and after a failed retry, which is announced again. Rules: `.context/ui-conventions.md`, "Load failures". Covered by axe in `LoadFailure.test.tsx` |
 | Public dialogs | `ModalDialog.tsx`, `useModalDialog.ts` | Native `<dialog>` opened with `showModal()` (focus moves in and stays); Escape, a backdrop click and the Close button ask the parent to close; focus goes back to the opener. Named by its `title` (`aria-label`), not by the form's heading, which a thank-you or notice replaces. `MobileMenu` uses the hook only. Test: `ModalDialog.test.tsx` |

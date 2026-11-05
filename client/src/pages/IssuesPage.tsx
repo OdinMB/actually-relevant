@@ -2,6 +2,7 @@ import { Helmet } from 'react-helmet-async'
 import { Link } from 'react-router-dom'
 import { usePublicIssues } from '../hooks/usePublicIssues'
 import { getCategoryColor } from '../lib/category-colors'
+import { FOCUS_RING } from '../lib/control-classes'
 import { IssueAccordionSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
 import { loadStateOf } from '../lib/loadState'
@@ -15,7 +16,9 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
 
   return (
     <details className="group">
-      <summary className="cursor-pointer select-none list-none flex items-center gap-3 py-4 hover:bg-neutral-50 -mx-4 px-4 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-brand-500">
+      <summary
+        className={`cursor-pointer select-none list-none flex items-center gap-3 py-4 hover:bg-neutral-50 -mx-4 px-4 rounded-lg transition-colors ${FOCUS_RING}`}
+      >
         <svg
           className="w-4 h-4 shrink-0 text-neutral-400 transition-transform group-open:rotate-90"
           fill="none"
@@ -42,7 +45,7 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
                 <Link
                   key={child.slug}
                   to={`/issues/${child.slug}`}
-                  className="inline-flex items-center gap-1.5 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-sm font-normal px-3 py-1.5 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand-500"
+                  className={`inline-flex items-center gap-1.5 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-sm font-normal px-3 py-1.5 rounded-full transition-colors ${FOCUS_RING}`}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${childColors.dotBg}`} aria-hidden="true" />
                   {child.name}
@@ -86,12 +89,7 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
                 <ul className="space-y-1">
                   {issue.makeADifference.map(link => (
                     <li key={link.url}>
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-                      >
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" className={`text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded`}>
                         {link.label}
                         <span className="sr-only"> (opens in new tab)</span> &rarr;
                       </a>
@@ -103,11 +101,12 @@ function IssueAccordion({ issue }: { issue: PublicIssue }) {
           </div>
         )}
 
-        {/* View stories link */}
+        {/* View stories link, in the hue's 700 shade (4.5:1 or more on white); a hover underlines it rather than fading it */}
         <div>
           <Link
             to={`/issues/${issue.slug}`}
-            className={`inline-flex items-center gap-2 text-sm font-normal ${colors.dot} hover:opacity-80 transition-opacity focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5`}
+            className={`inline-flex items-center gap-2 text-sm font-normal hover:underline ${FOCUS_RING} rounded px-0.5`}
+            style={{ color: colors.textHex }}
           >
             View stories &rarr;
           </Link>

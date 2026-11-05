@@ -130,6 +130,25 @@ describe('GET /api/story-page/:slug', () => {
     expect(html).toContain('<div id="root"><main>Homepage</main></div>')
   })
 
+  it('describes the story by its summary as plain text, without Markdown marks or URLs', async () => {
+    mockPrisma.story.findFirst.mockResolvedValue({ ...STORY, summary: '**Cities** cut smog, [the agency](https://example.org/report) says, by _a third_.' })
+    const html = (await request(app).get('/api/story-page/clean-air')).text
+    const plain = 'Cities cut smog, the agency says, by a third.'
+    expect(html).toContain(`<meta data-rh="true" name="description" content="${plain}" />`)
+    expect(html).toContain(`<meta data-rh="true" property="og:description" content="${plain}" />`)
+    expect(html).toContain(`<meta data-rh="true" name="twitter:description" content="${plain}" />`)
+    expect(html).not.toContain('example.org')
+  })
+
+  it('cuts the plain text, not the Markdown, to the description limits', async () => {
+    const long = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
+    mockPrisma.story.findFirst.mockResolvedValue({ ...STORY, summary: `**${long}**` })
+    const html = (await request(app).get('/api/story-page/clean-air')).text
+    expect(html).toContain(`<meta data-rh="true" name="description" content="${long.slice(0, 160)}" />`)
+    expect(html).toContain(`<meta data-rh="true" property="og:description" content="${long.slice(0, 200)}" />`)
+    expect(html).toContain(`<meta data-rh="true" name="twitter:description" content="${long.slice(0, 200)}" />`)
+  })
+
   it("drops the API's security policy, which would block the site's own scripts", async () => {
     const res = await request(app).get('/api/story-page/clean-air')
     expect(res.headers['content-security-policy']).toBeUndefined()

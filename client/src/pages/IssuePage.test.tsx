@@ -6,6 +6,7 @@ import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import type { PublicStory } from '@shared/types'
 import { makeStory } from '../test/stories'
+import { focusRingProblems } from '../test/classes'
 
 const mockApi = vi.hoisted(() => ({ issues: { get: vi.fn() }, stories: { list: vi.fn() } }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -88,6 +89,19 @@ describe('IssuePage when the issue does not load', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
+  it('keeps the not-found view out of search results', async () => {
+    renderIssue('no-such-issue')
+    await screen.findByRole('heading', { level: 1, name: 'Issue Not Found' })
+    await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex'))
+  })
+
+  it('leaves an issue that exists indexable', async () => {
+    renderIssue()
+    await screen.findByRole('heading', { level: 1, name: 'Planet & Climate' })
+    await waitFor(() => expect(document.head.querySelector('meta[property="og:url"]')).not.toBeNull())
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
+  })
+
   it('says the issue could not load right now on any other failure, and loads it in place on "Try again"', async () => {
     mockApi.issues.get.mockRejectedValueOnce(new ApiError(503, 'Service Unavailable'))
     renderIssue()
@@ -156,6 +170,26 @@ describe('IssuePage story list', () => {
     expect(screen.queryByText('Climate headline')).toBeNull()
   })
 
+  it('after another page is picked, moves focus to the issue heading and says which page shows once it is in', async () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const next = pending<ReturnType<typeof page>>()
+    mockApi.stories.list.mockResolvedValueOnce(page([climateStory], 1, 3)).mockReturnValueOnce(next.promise)
+    renderIssue()
+    await screen.findByText('Climate headline')
+    const heading = screen.getByRole('heading', { level: 1, name: 'Planet & Climate' })
+    const status = screen.getByRole('status')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Page 2' }))
+
+    expect(heading).toHaveFocus()
+    expect(status).toBeEmptyDOMElement()
+
+    next.answer(page([climateStory2], 2, 3))
+    await waitFor(() => expect(status).toHaveTextContent('Page 2 of 3'))
+    expect(screen.getByText('Second page headline')).toBeInTheDocument()
+    expect(heading).toHaveFocus()
+  })
+
   it('keeps the failure and the focused button, not the previous page, while a failed page is tried again', async () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
     const retry = pending<ReturnType<typeof page>>()
@@ -189,5 +223,25 @@ describe('IssuePage story list', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Human Development' })).toBeInTheDocument()
     expect(screen.queryByText('Climate headline')).toBeNull()
     expect(screen.queryByText(EMPTY)).toBeNull()
+  })
+})
+
+describe('IssuePage controls', () => {
+  it('shows only the brand ring on keyboard focus on the RSS icon, the sub-topics and the about section', async () => {
+    mockApi.issues.get.mockResolvedValue({
+      ...ISSUES['planet-climate']!,
+      children: [{ ...makeIssue('ecosystems', 'Ecosystems'), publishedStoryCount: 2 }],
+      makeADifference: [{ label: 'A way to help', url: 'https://example.org/help' }],
+    })
+    renderIssue()
+    await screen.findByText('Climate headline')
+
+    const controls = [
+      screen.getByRole('link', { name: 'RSS feed for Planet & Climate' }),
+      screen.getByRole('link', { name: 'Ecosystems' }),
+      ...screen.getAllByRole('link', { name: /A way to help/, hidden: true }),
+      screen.getByText('About Planet & Climate', { selector: 'summary' }),
+    ]
+    for (const control of controls) expect(focusRingProblems(control)).toEqual([])
   })
 })

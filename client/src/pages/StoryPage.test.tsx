@@ -10,6 +10,7 @@ import FeedbackProvider from '../components/FeedbackProvider'
 import SubscribeProvider from '../components/SubscribeProvider'
 import { TEXT_LINK } from '../lib/control-classes'
 import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
+import { contrastRatio } from '../test/contrast'
 import { announcedText } from '../test/stories'
 
 const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn(), newsletterArchive: vi.fn() }))
@@ -174,6 +175,85 @@ describe('StoryPage actions under the headline', () => {
   })
 })
 
+describe('StoryPage structure for screen readers', () => {
+  it('titles the analysis sections as second-level headings, kept in the ruled style', () => {
+    renderStory(story)
+    for (const name of ['Why This Matters', 'Caveats']) {
+      expect(screen.getByRole('heading', { level: 2, name })).toHaveClass('ruled-heading')
+    }
+  })
+
+  it('has one h1 and never skips a heading level, down to the related stories', () => {
+    mockRelated.current = [{ ...story, id: 'story-2', slug: 'related-story', title: 'Related headline' }]
+    renderStory(story)
+    const levels = screen.getAllByRole('heading').map(heading => Number(heading.tagName.slice(1)))
+    expect(levels[0]).toBe(1)
+    expect(levels.filter(level => level === 1)).toHaveLength(1)
+    expect(levels).toContain(3) // the related story's card title, under "Related Stories"
+    levels.slice(1).forEach((level, i) => expect(level, `heading ${i + 2} after an h${levels[i]}`).toBeLessThanOrEqual(levels[i]! + 1))
+  })
+
+  it('hides the "|" separators in the metadata row from screen readers', () => {
+    renderStory(story)
+    const row = screen.getByRole('heading', { level: 1 }).nextElementSibling!
+    const separators = [...row.querySelectorAll('span')].filter(span => span.childElementCount === 0 && span.textContent === '|')
+    expect(separators).toHaveLength(5)
+    for (const separator of separators) expect(separator).toHaveAttribute('aria-hidden', 'true')
+    expect(announcedText(row)).not.toContain('|')
+  })
+})
+
+describe('StoryPage metadata row on phones', () => {
+  // jsdom has no layout, so the classes that do it are what a test can check
+  it('draws each "|" in front of the item it leads into, so the row cuts off one that a wrap leaves at the start of a line', () => {
+    renderStory(story)
+    const row = screen.getByRole('heading', { level: 1 }).nextElementSibling!
+    for (const separator of [...row.querySelectorAll('span')].filter(span => span.childElementCount === 0 && span.textContent === '|')) {
+      expect(separator).toHaveClass('max-md:hidden')
+    }
+
+    const date = row.querySelector('time')!
+    const textItems = date.parentElement!
+    expect(textItems).toHaveClass('overflow-x-clip', 'md:contents')
+    // 4px of room past each clipped edge, for the focus ring of an item at a line's start or end
+    expect(textItems).toHaveClass('-mx-1', 'px-1', 'basis-[calc(100%+0.5rem)]')
+    const items = [...textItems.children].filter(child => child.textContent !== '|')
+    expect(items[0]).toBe(date)
+    for (const item of items.slice(1)) {
+      expect(item).toHaveClass('max-md:relative', "max-md:before:content-['|'_/_'']")
+    }
+    // The bookmark and share buttons reach left of the row on phones (their 44px boxes), so they stay outside what it cuts off
+    expect(textItems).not.toContainElement(screen.getByRole('button', { name: 'Bookmark story' }))
+  })
+})
+
+describe('StoryPage analysis points', () => {
+  /** The numbers in front of a section's points, which sighted readers see as text. */
+  const pointNumbers = (heading: string) =>
+    [...screen.getByRole('heading', { level: 2, name: heading }).closest('section')!.querySelectorAll('span[aria-hidden="true"]')].filter(span =>
+      /^\d+$/.test(span.textContent ?? ''),
+    ) as HTMLElement[]
+  /** jsdom reports an inline color as `rgb(r, g, b)`. */
+  const hexOf = (color: string) =>
+    `#${color
+      .match(/\d+/g)!
+      .map(n => Number(n).toString(16).padStart(2, '0'))
+      .join('')}`
+
+  it.each(['Why This Matters', 'Caveats'])(
+    'numbers the points under "%s" in the 700 text shade (above the 3:1 large-text bar) on white, at full opacity',
+    heading => {
+      renderStory(story)
+      const numbers = pointNumbers(heading)
+      expect(numbers).toHaveLength(1)
+      for (const number of numbers) {
+        expect(number.style.opacity).toBe('')
+        expect(contrastRatio(hexOf(number.style.color), '#ffffff')).toBeGreaterThanOrEqual(4.5)
+      }
+    },
+  )
+})
+
 describe('StoryPage newsletter line', () => {
   const subscribeButton = () => screen.queryByRole('button', { name: 'Subscribe to the newsletter' })
 
@@ -328,5 +408,48 @@ describe('StoryPage', () => {
         'RelevanceAI by Actually Relevant',
       ])
     })
+  })
+})
+
+describe('StoryPage link-preview text', () => {
+  const metaContent = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+
+  it('describes the story by its summary as plain text, without Markdown marks or URLs', async () => {
+    renderStory({ ...story, summary: '**Cities** cut smog, [the agency](https://example.org/report) says, by _a third_.' })
+    const plain = 'Cities cut smog, the agency says, by a third.'
+    await waitFor(() => expect(metaContent('meta[name="description"]')).toBe(plain))
+    expect(metaContent('meta[property="og:description"]')).toBe(plain)
+  })
+
+  it('cuts the plain text, not the Markdown, to the description limits', async () => {
+    const long = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
+    renderStory({ ...story, summary: `**${long}**` })
+    await waitFor(() => expect(metaContent('meta[name="description"]')).toBe(long.slice(0, 160)))
+    expect(metaContent('meta[property="og:description"]')).toBe(long.slice(0, 200))
+  })
+
+  it('falls back to the title when the summary has no text', async () => {
+    renderStory({ ...story, summary: null })
+    await waitFor(() => expect(metaContent('meta[name="description"]')).toBe(`${AI_TEXT.titleLabel}: ${AI_TEXT.title}`))
+  })
+
+  it('pre-fills the share text with the blurb as plain text', () => {
+    renderStory({ ...story, marketingBlurb: '**Nation** reports [cleaner air](https://example.org/air).' })
+    const href = screen.getByRole('link', { name: 'Share on X' }).getAttribute('href')!
+    expect(new URL(href).searchParams.get('text')).toMatch(/^Nation reports cleaner air\. /)
+  })
+})
+
+describe('StoryPage for search engines', () => {
+  it('keeps the not-found view out of search results', async () => {
+    renderStory(null)
+    expect(screen.getByRole('heading', { level: 1, name: 'Story Not Found' })).toBeInTheDocument()
+    await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex'))
+  })
+
+  it('leaves a published story indexable', async () => {
+    renderStory(story)
+    await waitFor(() => expect(document.head.querySelector('meta[property="og:image"]')).not.toBeNull())
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
   })
 })

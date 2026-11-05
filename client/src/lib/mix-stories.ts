@@ -59,6 +59,34 @@ export function mixHomepageStories(buckets: StoryBuckets, slots: number, positiv
   return picked.sort(byDateDesc)
 }
 
+export interface HomepageSection<I> {
+  issue: I
+  /** The issue's mix, hero included: what its pull quote is drawn from */
+  mixed: PublicStory[]
+  /** What the section shows: the mix without the hero, never empty */
+  stories: PublicStory[]
+}
+
+/**
+ * The homepage's issue sections for a mix, in the order of `issues`: each issue's
+ * `mixHomepageStories`, less the hero shown above them. An issue the mix leaves with no story to
+ * show gets no section, so the page lays out, and places its banners by, the sections it shows.
+ */
+export function mixHomepageSections<I extends { slug: string }>(
+  issues: I[],
+  storiesByIssue: Record<string, StoryBuckets>,
+  slots: number,
+  positivity: number,
+  heroId: string | null,
+): HomepageSection<I>[] {
+  return issues.flatMap(issue => {
+    const buckets = storiesByIssue[issue.slug]
+    const mixed = buckets ? mixHomepageStories(buckets, slots, positivity) : []
+    const stories = mixed.filter(s => s.id !== heroId)
+    return stories.length > 0 ? [{ issue, mixed, stories }] : []
+  })
+}
+
 /**
  * Pick the hero story from all issue buckets based on positivity.
  * Returns the most recent story from the appropriate emotion pool.

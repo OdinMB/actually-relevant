@@ -79,7 +79,7 @@ See `.context/accessibility.md` for full WCAG patterns, ARIA, and testing checkl
 
 **Common requirements:**
 
-- **Links/buttons**: `focus-visible:ring-2 focus-visible:ring-brand-500`
+- **Links/buttons**: `FOCUS_RING` from `client/src/lib/control-classes.ts` (`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`); `.context/accessibility.md`, "Buttons and Links"
 - **Link color**: Use `text-brand-700` (not brand-600) for AA contrast
 - **Images**: Always include `alt` text (use `alt=""` for decorative)
 - **Forms**: Every input needs a `<label>` with matching `htmlFor`/`id`

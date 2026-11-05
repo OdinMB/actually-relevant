@@ -5,6 +5,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { inAutomatedBrowser } from '../test/automatedBrowser'
+import { focusRingProblems } from '../test/classes'
+import { contrastRatio } from '../test/contrast'
+import { getCategoryColor } from '../lib/category-colors'
+
+/** `#rrggbb` the way jsdom reports an inline color. */
+const rgb = (hex: string) => `rgb(${[1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
 
 const mockApi = vi.hoisted(() => ({ issues: { list: vi.fn() } }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -94,5 +100,24 @@ describe('IssuesPage when the issues do not load', () => {
       expect(container.querySelector('.animate-pulse')).not.toBeNull()
       expect(screen.queryByRole('alert')).toBeNull()
     })
+  })
+})
+
+describe('IssuesPage topic links', () => {
+  it('shows each topic’s "View stories" link in its hue’s text shade, 4.5:1 or more on white, with only the brand ring on focus', async () => {
+    mockApi.issues.list.mockResolvedValue([ISSUE, { ...ISSUE, id: 'i2', name: 'Human Development', slug: 'human-development' }])
+    renderPage()
+
+    const links = await screen.findAllByRole('link', { name: /View stories/, hidden: true })
+    expect(links).toHaveLength(2)
+    for (const link of links) {
+      const { textHex } = getCategoryColor(link.getAttribute('href')!.replace('/issues/', ''))
+      expect(link.style.color).toBe(rgb(textHex))
+      expect(contrastRatio(textHex, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+      expect([...link.classList].filter(c => /^text-[a-z]+-\d00$/.test(c))).toEqual([])
+      // A hover that fades the text would take it under 4.5:1
+      expect([...link.classList].filter(c => c.startsWith('hover:opacity'))).toEqual([])
+      expect(focusRingProblems(link)).toEqual([])
+    }
   })
 })

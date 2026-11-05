@@ -1,4 +1,5 @@
 import { usePositivity } from '../contexts/PositivityContext'
+import { FOCUS_RING } from '../lib/control-classes'
 
 const LABELS: Record<number, string> = {
   0: 'Only heavy news',
@@ -36,7 +37,7 @@ export function MoodDialPanel({ className }: { className?: string }) {
           step={25}
           value={positivity}
           onChange={e => setPositivity(parseInt(e.target.value, 10))}
-          className="positivity-slider w-40 lg:w-32 h-2 appearance-none bg-neutral-200 rounded-full cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+          className={`positivity-slider w-40 lg:w-32 h-2 appearance-none bg-neutral-200 rounded-full cursor-pointer ${FOCUS_RING} focus-visible:ring-offset-2`}
           aria-label="Mix of news, from heavy to uplifting"
           aria-valuemin={0}
           aria-valuemax={100}

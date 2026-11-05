@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -60,6 +60,24 @@ describe('StewardshipPage', () => {
     renderPage(<StewardshipPage />)
     expect(screen.getByRole('heading', { level: 1, name: /long-term home/i })).toBeInTheDocument()
     expect(screen.getByText(/with 82 curated sources across/)).toBeInTheDocument()
+  })
+
+  it('says what a steward inherits in its own section, between the tech stack and who we are looking for', () => {
+    renderPage(<StewardshipPage />)
+    const heading = screen.getByRole('heading', { level: 2, name: 'What a Steward Inherits' })
+    const techStack = screen.getByRole('button', { name: /tech stack/i })
+    const nextSection = screen.getByRole('heading', { level: 2, name: "Who We're Looking For" })
+    expect(techStack.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(heading.compareDocumentPosition(nextSection)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+
+    const section = heading.closest('div')!
+    expect(within(section).getByRole('heading', { level: 3, name: 'What moves' })).toBeInTheDocument()
+    expect(within(section).getByRole('heading', { level: 3, name: 'Keeping it running' })).toBeInTheDocument()
+    // The running cost is stated above, in the costs panel; this section only points back to it.
+    expect(section.textContent).not.toContain('$')
+    // The podcast feed answers with XML, so its address is plain text, not a link.
+    expect(within(section).getByText(/actuallyrelevant\.news\/podcast\.xml/)).toBeInTheDocument()
+    expect(within(section).queryAllByRole('link')).toHaveLength(0)
   })
 })
 

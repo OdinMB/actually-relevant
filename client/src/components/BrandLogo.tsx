@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { BRAND } from '../config'
+import { FOCUS_RING } from '../lib/control-classes'
 import HeaderAiLine from './ai/HeaderAiLine'
 
 /**
@@ -11,7 +12,7 @@ export default function BrandLogo({ onClick }: { onClick?: () => void }) {
   return (
     // md+: the logo is lifted out of the row (absolute) into this padding, so it stays centered over the whole line
     <div className="relative flex flex-col items-center shrink-0 md:flex-row md:pt-[4.25rem]">
-      <Link to="/" onClick={onClick} className="flex flex-col items-center rounded focus-visible:ring-2 focus-visible:ring-brand-500 md:flex-row">
+      <Link to="/" onClick={onClick} className={`flex flex-col items-center rounded ${FOCUS_RING} md:flex-row`}>
         <picture className="md:absolute md:top-0 md:left-1/2 md:-translate-x-1/2">
           <source srcSet="/images/optimized/logo-text-horizontal-small-h.webp" type="image/webp" />
           <img src="/images/logo-text-horizontal.png" alt="Actually Relevant" className="h-14 md:h-16 aspect-[5/2]" />

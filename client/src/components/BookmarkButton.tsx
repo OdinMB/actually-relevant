@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { isSaved, toggleSaved } from '../lib/preferences'
-import { ROW_ICON_TARGET } from '../lib/control-classes'
+import { FOCUS_RING, ROW_ICON_TARGET } from '../lib/control-classes'
 
 interface BookmarkButtonProps {
   slug: string
   size?: 'sm' | 'md'
-  /** On desktop (lg+): show only on hover unless bookmarked. On mobile/tablet: always visible. */
+  /**
+   * On desktop (lg+): hidden until the card is hovered, the button has keyboard focus or anything in
+   * its card has focus (WCAG 2.4.7), unless bookmarked. On mobile/tablet: always visible.
+   */
   hoverReveal?: boolean
   /**
    * 'corner' (default): beside a card's title, the icon level with the title label. Below `md` an
@@ -43,13 +46,16 @@ export default function BookmarkButton({ slug, size = 'sm', hoverReveal = false,
   const iconSize = size === 'md' ? 'w-5 h-5' : 'w-4 h-4'
   const box = placement === 'row' ? ROW_ICON_TARGET : `relative inline-flex justify-center items-start max-md:after:absolute ${CORNER[size]}`
 
-  // When hoverReveal: desktop-only hover reveal unless bookmarked (saved items always visible)
-  const visibilityClass = hoverReveal && !saved ? 'lg:opacity-0 lg:group-hover:opacity-100 transition-opacity' : 'transition-opacity'
+  // When hoverReveal: desktop-only reveal on hover or focus unless bookmarked (saved items always visible)
+  const visibilityClass =
+    hoverReveal && !saved
+      ? 'lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 transition-opacity'
+      : 'transition-opacity'
 
   return (
     <button
       onClick={handleToggle}
-      className={`${box} rounded transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 ${
+      className={`${box} rounded transition-colors ${FOCUS_RING} ${
         saved ? 'text-brand-600 hover:text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
       } ${visibilityClass} ${className}`}
       aria-label={saved ? 'Remove bookmark' : 'Bookmark story'}

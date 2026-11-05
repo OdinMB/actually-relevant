@@ -7,6 +7,7 @@ import NotFoundPage from './pages/NotFoundPage'
 import RouteErrorPage from './pages/RouteErrorPage'
 import { LoadingSpinner } from './components/ui/LoadingSpinner'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary'
+import RouteAnnouncer from './components/RouteAnnouncer'
 import { DefaultSeo } from './lib/seo'
 import { routeFallbackProps } from './lib/renderComplete'
 
@@ -92,11 +93,16 @@ function LazyPage({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** The root of every route: site-wide head defaults (pages override them with their own Helmet tags), then the matched route. */
+/**
+ * The root of every route: site-wide head defaults (pages override them with their own Helmet tags),
+ * the announcer that tells screen readers about in-app page changes (it lives here, above both
+ * public layouts and the standalone pages, so moving between them counts too), then the matched route.
+ */
 function RootLayout() {
   return (
     <>
       <DefaultSeo />
+      <RouteAnnouncer />
       <Outlet />
     </>
   )

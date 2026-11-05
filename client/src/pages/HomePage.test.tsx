@@ -34,6 +34,9 @@ const card = makeStory({
 })
 const other = makeStory({ id: 'other', slug: 'other', title: 'Other headline', titleLabel: 'Other label' })
 
+/** The hero's analysis points: none by default, so the hero shows its quote. */
+const heroReasons = vi.hoisted(() => ({ current: null as string | null }))
+
 vi.mock('../hooks/useHomepageData', () => ({
   useHomepageData: () => ({
     isLoading: false,
@@ -43,7 +46,7 @@ vi.mock('../hooks/useHomepageData', () => ({
         { id: 'i2', name: 'Planet & Climate', slug: 'planet-climate' },
       ],
       storiesByIssue: {
-        'human-development': { uplifting: [], calm: [hero, card], negative: [] },
+        'human-development': { uplifting: [], calm: [{ ...hero, relevanceReasons: heroReasons.current }, card], negative: [] },
         'planet-climate': { uplifting: [], calm: [other], negative: [] },
       },
     },
@@ -73,6 +76,7 @@ beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   mockApi.newsletterArchive.mockReset().mockResolvedValue(archive())
+  heroReasons.current = null
 })
 
 afterEach(() => {
@@ -152,6 +156,17 @@ describe('HomePage newsletter card', () => {
     // The slot takes the place of the first section's top margin (jsdom can't measure, so the classes stand in)
     expect(slot).toHaveClass('min-h-20', 'md:min-h-28')
     expect(firstSection).not.toHaveClass('mt-14')
+  })
+})
+
+describe('HomePage hero teaser', () => {
+  it("shows the first analysis point's first two sentences as plain text, without its lead-in label", () => {
+    heroReasons.current =
+      '- **Scale:** Power is _one_ of the [largest](https://example.org/data) sources of CO_2 and NO_x. It is growing. It is costly.\n- Second point.'
+    const { container } = renderHome()
+    const teaser = container.querySelector<HTMLElement>('.hero-section p.text-lg')!
+    expect(teaser).toHaveTextContent(/^Power is one of the largest sources of CO_2 and NO_x\. It is growing\.$/)
+    expect(within(container.querySelector<HTMLElement>('.hero-section')!).queryByText('Words from the hero story.', { exact: false })).toBeNull()
   })
 })
 

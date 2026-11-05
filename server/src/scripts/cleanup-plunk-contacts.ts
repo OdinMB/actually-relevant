@@ -6,11 +6,13 @@
  * recipient. Confirmed signups get upserted to subscribed:true; the ones that
  * never confirm (the bot flood that polluted the list and likely contributed to
  * the account suspension) linger as unsubscribed contacts. This script removes
- * Plunk contacts that are NOT subscribed, have no confirmed local
+ * Plunk contacts that are unsubscribed (subscribed:false with no snooze, which
+ * is also how Plunk marks a bounce or a spam complaint), have no confirmed local
  * PendingSubscription, AND were created more than PURGE_MIN_AGE_DAYS days ago.
  * The age gate avoids deleting a brand-new signup that simply hasn't confirmed
- * yet. Confirmed subscribers (subscribed:true) and anyone who ever confirmed
- * locally (even if later unsubscribed) are never touched.
+ * yet. Confirmed subscribers (subscribed:true), snoozed contacts (subscribed:false
+ * with a snoozedUntil date, which Plunk resubscribes when the snooze ends) and
+ * anyone who ever confirmed locally (even if later unsubscribed) are never touched.
  *
  * Import guard: subscribers from the previous provider were imported straight
  * into Plunk on 15 February 2026 (01:36 Berlin), so they have no local
@@ -24,8 +26,8 @@
  *
  * Dry run by default — pass --apply to actually delete. The dry run is
  * read-only: it lists what would go, how the purgeable contacts spread over
- * creation days (to spot other import spikes), and how many contacts the
- * import guard kept.
+ * creation days (to spot other import spikes), how many contacts the import
+ * guard kept, and how many snoozed contacts it kept.
  *
  * BACK UP FIRST: run backup-plunk-contacts.ts on the owner's machine before
  * --apply (npm run backup:plunk-contacts --prefix server); restore-plunk-contacts.ts
@@ -53,6 +55,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
 import { PrismaClient } from '@prisma/client'
+import { contactPages, contactStatus } from '../services/plunkContacts.js'
 
 const PAGE_SIZE = 100
 const DELETE_DELAY_MS = 200
@@ -117,18 +120,32 @@ export interface PurgeRules {
   protectedWindows: CreatedWindow[]
 }
 
-export type ContactVerdict = 'purge' | 'subscribed' | 'confirmed' | 'no-date' | 'too-new' | 'import-window'
+export type ContactVerdict = 'purge' | 'subscribed' | 'snoozed' | 'confirmed' | 'no-date' | 'too-new' | 'import-window'
+
+/** The fields of a Plunk contact the purge rules read. */
+export interface JudgedContact {
+  email: string
+  subscribed: boolean
+  snoozedUntil?: string | null
+  createdAt?: string
+}
 
 /**
  * Why a contact is or is not purged. A contact is purgeable only if it is
- * explicitly not subscribed, its email never confirmed locally, it was created
- * before `olderThan`, and its creation time falls in no protected window. A
- * missing or unparseable createdAt is "too new to judge" and kept. The window
- * check comes last, so 'import-window' counts exactly the contacts the import
- * guard saved from deletion.
+ * unsubscribed (`subscribed: false` with no `snoozedUntil`, as Plunk also marks a
+ * bounce or a spam complaint), its email never confirmed locally, it was created
+ * before `olderThan`, and its creation time falls in no protected window. A flag
+ * that is not a boolean keeps the contact, as subscribed. A snoozed contact
+ * (`subscribed: false` with a `snoozedUntil`) is kept as 'snoozed' before any
+ * other check, since Plunk resubscribes it when the snooze ends. A missing or
+ * unparseable createdAt is "too new to judge" and kept. The window check comes
+ * last, so 'import-window' counts exactly the contacts the import guard saved
+ * from deletion.
  */
-export function classifyContact(contact: { email: string; subscribed: boolean; createdAt?: string }, rules: PurgeRules): ContactVerdict {
-  if (contact.subscribed !== false) return 'subscribed'
+export function classifyContact(contact: JudgedContact, rules: PurgeRules): ContactVerdict {
+  const status = contactStatus(contact)
+  if (status === 'subscribed' || status === 'unknown') return 'subscribed'
+  if (status === 'snoozed') return 'snoozed'
   if (rules.confirmedEmails.has(contact.email.toLowerCase())) return 'confirmed'
   if (!contact.createdAt) return 'no-date'
   const created = new Date(contact.createdAt)
@@ -138,8 +155,36 @@ export function classifyContact(contact: { email: string; subscribed: boolean; c
   return 'purge'
 }
 
-export function shouldPurgeContact(contact: { email: string; subscribed: boolean; createdAt?: string }, rules: PurgeRules): boolean {
+export function shouldPurgeContact(contact: JudgedContact, rules: PurgeRules): boolean {
   return classifyContact(contact, rules) === 'purge'
+}
+
+export interface ScannedContact extends JudgedContact {
+  id: string
+}
+
+export interface ScanResult {
+  scanned: number
+  purgeable: { id: string; email: string; createdAt: string }[]
+  /** Contacts the import guard kept that would otherwise have been purged. */
+  importProtected: number
+  /** Snoozed contacts, all kept. */
+  snoozed: number
+}
+
+/** Judge every contact on every page: the ones to purge, and the counts the dry run reports. */
+export async function scanContacts(pages: AsyncIterable<{ items: ScannedContact[] }>, rules: PurgeRules): Promise<ScanResult> {
+  const result: ScanResult = { scanned: 0, purgeable: [], importProtected: 0, snoozed: 0 }
+  for await (const page of pages) {
+    for (const c of page.items) {
+      result.scanned++
+      const verdict = classifyContact(c, rules)
+      if (verdict === 'purge') result.purgeable.push({ id: c.id, email: c.email, createdAt: c.createdAt as string })
+      else if (verdict === 'import-window') result.importProtected++
+      else if (verdict === 'snoozed') result.snoozed++
+    }
+  }
+  return result
 }
 
 /** Count contacts per UTC creation day, most first (ties by day), at most `limit` rows. */
@@ -181,27 +226,15 @@ async function main() {
 
   const rules: PurgeRules = { confirmedEmails, olderThan: cutoff, protectedWindows: args.protectedWindows }
 
-  // Page through all Plunk contacts and collect the purgeable ones.
-  const purgeable: { id: string; email: string; createdAt: string }[] = []
-  let importProtected = 0
-  let cursor: string | undefined
-  let scanned = 0
-
-  while (true) {
-    const page = await plunk.listContacts(cursor, PAGE_SIZE)
-    for (const c of page.items) {
-      scanned++
-      const verdict = classifyContact(c, rules)
-      if (verdict === 'purge') purgeable.push({ id: c.id, email: c.email, createdAt: c.createdAt as string })
-      else if (verdict === 'import-window') importProtected++
-    }
-    if (!page.hasMore || !page.nextCursor) break
-    cursor = page.nextCursor
-  }
+  // Page through all Plunk contacts and collect the purgeable ones. A paging fault
+  // throws (contactPages), so the run stops before deleting anything rather than
+  // judge part of the list as the whole.
+  const { scanned, purgeable, importProtected, snoozed } = await scanContacts(contactPages(plunk.listContacts, PAGE_SIZE), rules)
 
   console.log(
     `Scanned ${scanned} contacts; ${purgeable.length} purgeable (unsubscribed + never confirmed locally + older than ${PURGE_MIN_AGE_DAYS} days + outside the import guard).`,
   )
+  console.log(`Kept as snoozed (Plunk resubscribes them when the snooze ends): ${snoozed}`)
   console.log(`Kept by the import guard (would otherwise be purgeable): ${importProtected}`)
 
   const byDay = countByCreatedDay(purgeable.map(c => c.createdAt))

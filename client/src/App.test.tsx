@@ -41,6 +41,15 @@ describe('appRoutes', () => {
     expect(matches[matches.length - 1]!.route.path).toBe('*')
   })
 
+  it('after an in-app page change, focuses the public main region and announces the new page title', async () => {
+    const router = renderAt('/no-such-page')
+    await screen.findByRole('main')
+    await act(() => router.navigate('/another-missing-page'))
+
+    expect(await screen.findByText('Page Not Found - Actually Relevant', { selector: '[role="status"]' }, { timeout: 3000 })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('main'))
+  })
+
   it('shows the branded error page, not the router default, when a route throws', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     function Boom(): never {
@@ -52,7 +61,9 @@ describe('appRoutes', () => {
     })
     render(
       <HelmetProvider>
-        <RouterProvider router={router} />
+        <QueryClientProvider client={new QueryClient()}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
       </HelmetProvider>,
     )
     expect(await screen.findByRole('heading', { level: 1, name: 'Something went wrong' })).toBeTruthy()

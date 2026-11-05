@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { publicApi } from '../lib/api'
-import { FORM_TOKEN_REFRESH_MS } from '../lib/formToken'
 import { turnstileSiteKey } from '../lib/turnstile'
+import { isPrerendering } from '../lib/renderComplete'
+import { useFormToken } from '../hooks/useFormToken'
 import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
+import { FIELD_FOCUS } from '../lib/control-classes'
 
 interface FeedbackFormProps {
   /** Called after successful submission (e.g. to close a modal) */
@@ -34,6 +36,14 @@ const CATEGORIES = [
 // Must match config.feedback.messageMaxLength on the server
 const MAX_MESSAGE_LENGTH = 2000
 
+const GENERIC_ERROR = 'Something went wrong. Please try again.'
+
+/** One request for a feedback form token. */
+async function fetchFeedbackToken(): Promise<string> {
+  const { token } = await publicApi.getFeedbackToken()
+  return token
+}
+
 export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 'feedback', hideHeading = false, story }: FeedbackFormProps) {
   const [chosenCategory, setCategory] = useState<string>('general')
   const category = story ? 'correction' : chosenCategory
@@ -42,7 +52,12 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
   const [website, setWebsite] = useState('') // honeypot
   const [status, setStatus] = useState<'idle' | 'verifying' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
-  const [formToken, setFormToken] = useState<string | null>(null)
+  // The anti-bot form token, fetched on mount (submit is disabled until it arrives) and kept
+  // within the server's age window, so a report is never posted with one the server drops.
+  const feedbackToken = useFormToken(fetchFeedbackToken)
+  // Both attempts failed, so the form cannot be sent. Not while prerendering: the build's API
+  // may be unreachable, and the message would be baked into the static /feedback page.
+  const unavailable = feedbackToken.status === 'failed' && !isPrerendering()
   // Turnstile loads only on submit, so visitors who never send feedback never contact Cloudflare.
   const [turnstileFailed, setTurnstileFailed] = useState(false)
   const { containerRef: turnstileContainerRef, getToken: getTurnstileToken } = useTurnstileChallenge()
@@ -54,41 +69,18 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
     }
   }, [autoFocus])
 
-  // Fetch the anti-bot form token on mount, and a fresh one while the form stays open, so a
-  // visitor who takes long over a message still holds one the server takes.
-  useEffect(() => {
-    let cancelled = false
-    async function loadToken() {
-      // Try up to twice; if both fail, the last token stays (or none, and submit stays
-      // disabled: the API is unreachable anyway).
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const { token } = await publicApi.getFeedbackToken()
-          if (!cancelled) setFormToken(token)
-          return
-        } catch {
-          // retry once
-        }
-      }
-    }
-    loadToken()
-    const refresh = setInterval(loadToken, FORM_TOKEN_REFRESH_MS)
-    return () => {
-      cancelled = true
-      clearInterval(refresh)
-    }
-  }, [])
-
   const siteKey = turnstileSiteKey()
   const busy = status === 'verifying' || status === 'loading'
+  const canSubmit = !busy && feedbackToken.status === 'ready' && message.trim() !== ''
   const submitLabel = story ? 'Send report' : 'Send feedback'
   const errorId = `${idPrefix}-error`
   const humanCheckErrorId = `${idPrefix}-human-check-error`
+  const unavailableId = `${idPrefix}-unavailable`
   const describedBy = [status === 'error' && errorId, turnstileFailed && humanCheckErrorId].filter(Boolean).join(' ') || undefined
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!message.trim() || busy || !formToken) return
+    if (!canSubmit) return
 
     setErrorMessage('')
     setTurnstileFailed(false)
@@ -107,6 +99,8 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
 
     setStatus('loading')
     try {
+      // A token the server would drop still gets a success reply, and nothing would be stored.
+      const formToken = await feedbackToken.getPostableToken()
       const result = await publicApi.submitFeedback({
         category,
         message: message.trim(),
@@ -118,13 +112,13 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
       })
       if (!result.success) {
         setStatus('error')
-        setErrorMessage(result.message || 'Something went wrong. Please try again.')
+        setErrorMessage(result.message || GENERIC_ERROR)
         return
       }
       setStatus('success')
     } catch {
       setStatus('error')
-      setErrorMessage('Something went wrong. Please try again.')
+      setErrorMessage(GENERIC_ERROR)
     }
   }
 
@@ -208,8 +202,8 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
             placeholder={story ? 'A wrong fact, date, name or label' : "What's on your mind?"}
             required
             rows={4}
-            className="w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-200 outline-none transition-colors resize-y"
-            aria-describedby={`${idPrefix}-char-count`}
+            className={`w-full px-4 py-3 text-base border border-neutral-500 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors resize-y`}
+            aria-describedby={[unavailable && unavailableId, `${idPrefix}-char-count`].filter(Boolean).join(' ')}
           />
           <p id={`${idPrefix}-char-count`} className="text-xs text-neutral-500 text-right mt-1">
             {message.length}/{MAX_MESSAGE_LENGTH}
@@ -228,7 +222,7 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
             onChange={e => setEmail(e.target.value)}
             placeholder="your@email.com — if you'd like a response"
             autoComplete="email"
-            className="w-full px-4 py-3 text-base border border-neutral-300 rounded-lg bg-neutral-50 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-200 outline-none transition-colors"
+            className={`w-full px-4 py-3 text-base border border-neutral-500 rounded-lg bg-neutral-50 focus:bg-white ${FIELD_FOCUS} transition-colors`}
           />
         </div>
 
@@ -255,13 +249,22 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
 
         <button
           type="submit"
-          disabled={busy || !formToken || !message.trim()}
+          disabled={!canSubmit}
           aria-describedby={describedBy}
           className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {status === 'verifying' ? 'Verifying...' : status === 'loading' ? 'Sending...' : submitLabel}
         </button>
       </form>
+
+      {/* Always mounted, so screen readers announce the message when it appears. */}
+      <div role="status">
+        {unavailable && (
+          <p id={unavailableId} className="mt-4 text-sm text-neutral-700">
+            {story ? 'Reports' : 'Feedback'} can&apos;t be sent right now. Please reload the page or try again later.
+          </p>
+        )}
+      </div>
     </>
   )
 }

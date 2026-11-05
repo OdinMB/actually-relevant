@@ -6,6 +6,7 @@ import SubscribeForm from './SubscribeForm'
 import { ApiError } from '../lib/api'
 import { NEWSLETTER_PROMISE } from '../config'
 import type { TurnstileRenderOptions } from '../lib/turnstile'
+import { fieldBorderProblems, fieldFocusProblems } from '../test/classes'
 
 const mockSubscribe = vi.fn()
 const mockGetToken = vi.fn()
@@ -82,6 +83,16 @@ describe('SubscribeForm', () => {
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument()
     expect(screen.getAllByRole('textbox')).toHaveLength(1) // the honeypot is aria-hidden
     await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
+  })
+
+  it('rings the email field on focus in a brand shade that reaches 3:1 against white', async () => {
+    await renderReady()
+    expect(fieldFocusProblems(screen.getByRole('textbox', { name: 'Email address' }))).toEqual([])
+  })
+
+  it('outlines the email field at rest in a grey that reaches 3:1 against the page and its fill', async () => {
+    await renderReady()
+    expect(fieldBorderProblems(screen.getByRole('textbox', { name: 'Email address' }))).toEqual([])
   })
 
   it('reads "Loading..." on the disabled button until the form token has loaded, without a message meanwhile', async () => {
@@ -574,6 +585,118 @@ describe('SubscribeForm', () => {
       await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong'))
       expect(mockSubscribe).not.toHaveBeenCalled()
       expect(screen.getByRole('button', { name: /^subscribe$/i })).toBeEnabled()
+    })
+
+    // Its age is how long the form has been open, which is what the server's minimum measures.
+    it('posts the first token at once, however soon after it arrives the reader submits', async () => {
+      let deliver!: () => void
+      let issuedAt = 0
+      mockGetToken.mockReset()
+      mockGetToken.mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            deliver = () => {
+              issuedAt = Date.now()
+              resolve({ token: 'first-token' })
+            }
+          }),
+      )
+      const postedAt = recordPosts()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<SubscribeForm idPrefix="test" />)
+
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      await act(async () => deliver())
+      await user.click(screen.getByRole('button', { name: /^subscribe$/i }))
+
+      await waitFor(() => expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'first-token' }))
+      expect(postedAt[0]! - issuedAt).toBeLessThan(SERVER_MIN_AGE_MS)
+    })
+
+    it('waits for a refresh already under way when the reader submits, asking for no second token', async () => {
+      let deliverFresh!: () => void
+      let freshIssuedAt = 0
+      mockGetToken.mockReset()
+      mockGetToken.mockResolvedValueOnce({ token: 'first-token' }).mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            deliverFresh = () => {
+              freshIssuedAt = Date.now()
+              resolve({ token: 'fresh-token' })
+            }
+          }),
+      )
+      const postedAt = recordPosts()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await renderReady()
+
+      await leaveAndReturn(31 * MINUTE)
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalledTimes(2))
+      await submit(user)
+      expect(mockSubscribe).not.toHaveBeenCalled()
+
+      await act(async () => deliverFresh())
+      await wait(SERVER_MIN_AGE_MS)
+      await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument())
+      expect(mockGetToken).toHaveBeenCalledTimes(2)
+      expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'fresh-token' })
+      expect(postedAt[0]! - freshIssuedAt).toBeGreaterThanOrEqual(SERVER_MIN_AGE_MS)
+    })
+
+    it('asks for one fresh token when the tab turning visible and the window getting focus come together', async () => {
+      issueTokens('first-token', 'fresh-token')
+      await renderReady()
+
+      await wait(31 * MINUTE)
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'))
+        window.dispatchEvent(new Event('focus'))
+      })
+      await wait(0)
+
+      expect(mockGetToken).toHaveBeenCalledTimes(2)
+    })
+
+    it('asks for no new token when the tab turns hidden, however old the token it holds', async () => {
+      await renderReady()
+
+      await wait(31 * MINUTE)
+      visibility = 'hidden'
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await wait(0)
+
+      expect(mockGetToken).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the token it holds, saying nothing, when the refresh on return fails, and posts it while young enough', async () => {
+      recordPosts()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await renderReady()
+      mockGetToken.mockRejectedValue(new Error('API down'))
+
+      await leaveAndReturn(21 * MINUTE)
+      await waitFor(() => expect(mockGetToken).toHaveBeenCalledTimes(3))
+      await wait(0)
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+      await submit(user)
+
+      await waitFor(() => expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'test-token' }))
+      expect(mockGetToken).toHaveBeenCalledTimes(3)
+    })
+
+    it('shows the paused notice, asking once and posting nothing, when the fresh token is refused as paused', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await renderReady()
+      mockGetToken.mockRejectedValue(pausedError())
+
+      await wait(31 * MINUTE)
+      await submit(user)
+
+      await waitFor(() => expect(screen.getByText(/signups are paused/i)).toBeInTheDocument())
+      expect(mockGetToken).toHaveBeenCalledTimes(2)
+      expect(mockSubscribe).not.toHaveBeenCalled()
     })
   })
 

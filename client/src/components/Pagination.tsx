@@ -1,3 +1,8 @@
+import { FOCUS_RING } from '../lib/control-classes'
+
+/** Previous and Next. */
+const STEP_BUTTON = `px-3 py-2 text-sm rounded border border-neutral-200 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed ${FOCUS_RING}`
+
 interface PaginationProps {
   page: number
   totalPages: number
@@ -18,12 +23,7 @@ export default function Pagination({ page, totalPages, onPageChange }: Paginatio
 
   return (
     <nav aria-label="Pagination" className="flex items-center justify-center gap-1 mt-8">
-      <button
-        onClick={() => onPageChange(page - 1)}
-        disabled={page <= 1}
-        className="px-3 py-2 text-sm rounded border border-neutral-200 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500"
-        aria-label="Previous page"
-      >
+      <button onClick={() => onPageChange(page - 1)} disabled={page <= 1} className={STEP_BUTTON} aria-label="Previous page">
         Previous
       </button>
 
@@ -36,8 +36,10 @@ export default function Pagination({ page, totalPages, onPageChange }: Paginatio
           <button
             key={p}
             onClick={() => onPageChange(p)}
-            className={`px-3 py-2 text-sm rounded border focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              p === page ? 'bg-brand-500 text-white border-brand-500' : 'border-neutral-200 hover:bg-neutral-50'
+            className={`px-3 py-2 text-sm rounded border ${FOCUS_RING} ${
+              // White text on brand-700 is 6.6:1; on brand-500 it would be 4.0:1, under the 4.5:1 small text needs.
+              // A white gap keeps the brand-500 ring off the brand-700 fill, which it barely differs from.
+              p === page ? 'bg-brand-700 text-white border-brand-700 focus-visible:ring-offset-2' : 'border-neutral-200 hover:bg-neutral-50'
             }`}
             aria-current={p === page ? 'page' : undefined}
             aria-label={`Page ${p}`}
@@ -47,12 +49,7 @@ export default function Pagination({ page, totalPages, onPageChange }: Paginatio
         ),
       )}
 
-      <button
-        onClick={() => onPageChange(page + 1)}
-        disabled={page >= totalPages}
-        className="px-3 py-2 text-sm rounded border border-neutral-200 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500"
-        aria-label="Next page"
-      >
+      <button onClick={() => onPageChange(page + 1)} disabled={page >= totalPages} className={STEP_BUTTON} aria-label="Next page">
         Next
       </button>
     </nav>

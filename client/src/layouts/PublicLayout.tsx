@@ -2,6 +2,7 @@ import { useLayoutEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { API_BASE } from '../lib/api'
+import { FOCUS_RING } from '../lib/control-classes'
 import SubscribeProvider from '../components/SubscribeProvider'
 import FeedbackProvider from '../components/FeedbackProvider'
 import { PositivityProvider } from '../contexts/PositivityContext'
@@ -38,7 +39,7 @@ function PublicLayoutInner() {
       {/* Skip to content */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-4 focus:py-2 focus:rounded focus:shadow-lg focus:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500"
+        className={`sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-4 focus:py-2 focus:rounded focus:shadow-lg focus:text-brand-700 ${FOCUS_RING}`}
       >
         Skip to content
       </a>
@@ -48,7 +49,8 @@ function PublicLayoutInner() {
       {/* Category color strip — mobile only */}
       <CategoryColorStrip className="lg:hidden" />
 
-      <main id="main-content" className="flex-1">
+      {/* RouteAnnouncer focuses it after an in-app page change; it is not a control, so it draws no outline */}
+      <main id="main-content" className="flex-1 focus:outline-none">
         <Outlet />
       </main>
 

@@ -49,7 +49,7 @@ const RECEIVE_CARDS: { icon: ReactNode; title: string; description: string; bord
       </svg>
     ),
     title: 'Automated Pipeline',
-    description: 'Daily crawl, AI analysis, selection, and publication with no manual intervention.',
+    description: 'Crawl, AI analysis, selection, and publication run by themselves.',
     border: 'border-l-brand-400',
   },
   {
@@ -133,6 +133,69 @@ const COSTS = [
   { item: 'Newsletter sending (Plunk) and Cloudflare', monthly: 'free' },
 ]
 
+type LeadItem = { lead: string; text: string }
+
+// No dollar figure in "What a Steward Inherits": it points back to the running costs given above it.
+const WHAT_MOVES: LeadItem[] = [
+  {
+    lead: 'The code.',
+    text: 'The GitHub repository with its full history and documentation, under the AGPL v3 license. It moves to your organization, and links to the old address redirect.',
+  },
+  { lead: 'The domain.', text: 'actuallyrelevant.news, with its email.' },
+  {
+    lead: 'The services it runs on.',
+    text: "Hosting (Render), newsletter email (Plunk), AI (OpenAI), the podcast's voices and audio (ElevenLabs and Bunny), a bot check on the forms (Cloudflare), page analytics (Simple Analytics), and a service that turns some sources' pages into feeds. The Bluesky and Mastodon accounts are handed over, and the podcast listings follow the feed, so followers and listings stay as they are. For hosting, AI, voices, and the bot check, you open your own accounts, and the site moves onto them.",
+  },
+  {
+    lead: 'The database.',
+    text: 'Every published story with its analysis, the newsletter issues, the podcast episodes, the sources, and the job schedules. It also holds some personal data, such as admin accounts, newsletter signups, and reader feedback, which moves only as the move plan and the law allow.',
+  },
+  {
+    lead: 'The newsletter.',
+    text: 'Its subscriber list lives in the email service, not the database. Subscribers are told about the new operator before anything changes for them.',
+  },
+  {
+    lead: 'The podcast.',
+    // Plain text, not a link: the feed answers with XML.
+    text: 'Its feed at actuallyrelevant.news/podcast.xml, listed in Apple Podcasts, Spotify, Pocket Casts, and Podcast Index. It moves with the site and keeps working for everyone who already listens.',
+  },
+]
+
+const OCCASIONAL_UPKEEP: LeadItem[] = [
+  {
+    lead: 'A source changes or drops its feed.',
+    text: "The admin flags a feed that brings nothing new five crawls in a row. You fix its address on the Feeds page or swap in another source, with no code. A new source first needs a check that its publisher hasn't opted out of AI use.",
+  },
+  {
+    lead: 'A serious security advisory hits a dependency.',
+    text: "The automated checks on GitHub block new deploys until a developer updates the package, or reviews the advisory and records why it doesn't affect the site. The live site keeps running meanwhile.",
+  },
+  {
+    lead: 'The podcast runs short of voice credits.',
+    text: "The week's episode waits in the admin with the reason. You add credits or wait for next month's allowance, then resume it there.",
+  },
+  {
+    lead: "The newsletter's email service is strict about spam complaints.",
+    text: 'Every issue goes out as a test before it can reach subscribers, and complaints and bounces show up in the admin within about an hour.',
+  },
+  {
+    lead: 'The database grows.',
+    text: 'When it neared its 1 GB of storage in November 2026, a setting in the hosting dashboard raised that to 5 GB. A monthly cleanup deletes old stories that were turned down or never fully analyzed.',
+  },
+]
+
+function LeadList({ items }: { items: LeadItem[] }) {
+  return (
+    <ul className="list-disc pl-6 space-y-1.5">
+      {items.map(item => (
+        <li key={item.lead}>
+          <strong>{item.lead}</strong> {item.text}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export default function StewardshipPage() {
   const { data: sources } = useSources()
   const [techOpen, setTechOpen] = useState(false)
@@ -215,7 +278,7 @@ export default function StewardshipPage() {
             GitHub
             <span className="sr-only"> (opens in new tab)</span>
           </a>
-          . If you need different license terms as steward, we'll make that work. The goal is to find the right home, not to impose constraints.
+          . If you need different license terms as steward, we'll make that work.
         </p>
 
         {/* Operating Costs — expandable */}
@@ -296,6 +359,30 @@ export default function StewardshipPage() {
               </p>
             </div>
           )}
+        </div>
+
+        <div className="prose max-w-none mt-8">
+          <h2 className="section-heading">What a Steward Inherits</h2>
+          <p>
+            A steward takes over the running site, not just a copy of the code. Moving it whole is what keeps every story link, feed, and podcast episode
+            working for the people who already use them.
+          </p>
+
+          <h3 className="mt-8 mb-2 font-bold text-neutral-800">What moves</h3>
+          <LeadList items={WHAT_MOVES} />
+          <p className="mt-4">
+            A step-by-step move plan for your technical lead covers each of these. It estimates that the move takes your technical lead about four to six
+            working days, spread over three to six weeks.
+          </p>
+          <p>The site's legal notice names its operator and the privacy page gives its contact, so both change to name you.</p>
+
+          <h3 className="mt-8 mb-2 font-bold text-neutral-800">Keeping it running</h3>
+          <p>
+            Besides the running costs above, it takes no regular hours, but a few things need someone when they come up. Failed jobs leave a notice in the admin
+            dashboard.
+          </p>
+          <LeadList items={OCCASIONAL_UPKEEP} />
+          <p className="mt-4">Most of this takes the admin or a service's dashboard, not code. Dependency updates need a developer who knows TypeScript.</p>
         </div>
 
         <div className="prose max-w-none mt-8">

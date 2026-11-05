@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { SEO, CommonOgTags } from '../lib/seo'
@@ -13,7 +13,9 @@ import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { NewsletterArchiveSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
 import { useNewsletterArchive } from '../hooks/useNewsletterArchive'
+import { usePageTurn } from '../hooks/usePageTurn'
 import { NEWSLETTER_FEED_URL } from '../lib/api'
+import { FOCUS_RING } from '../lib/control-classes'
 import { loadStateOf } from '../lib/loadState'
 
 const META = {
@@ -28,51 +30,68 @@ const breadcrumb = buildBreadcrumbSchema([
   { name: 'Newsletter', url: META.url },
 ])
 
-const LINK_CLASS = 'text-brand-700 hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-0.5'
+const LINK_CLASS = `text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5`
 
 /** A link inside a sentence is underlined: its color alone barely stands out from the text around it. */
 const INLINE_LINK_CLASS = `${LINK_CLASS} underline`
 
-/** Every published issue, newest first, paginated. Loads client-side (the prerenderer does not wait for data). */
-function IssueList({ onPageChange }: { onPageChange: () => void }) {
+/**
+ * Every published issue, newest first, paginated. Loads client-side (the prerenderer does not wait
+ * for data). Another page moves focus to the section's `heading` and is announced once it is in.
+ */
+function IssueList({ heading, onPageChange }: { heading: RefObject<HTMLHeadingElement | null>; onPageChange: () => void }) {
   const [page, setPage] = useState(1)
   const archiveQuery = useNewsletterArchive(page)
   const { data } = archiveQuery
   const loadState = loadStateOf(archiveQuery)
+  const pageTurn = usePageTurn({ heading, page, totalPages: data?.totalPages ?? 1, settled: loadState === 'ready' && !archiveQuery.isPlaceholderData })
 
-  if (loadState === 'loading') return <NewsletterArchiveSkeleton />
-  if (loadState !== 'ready') return <LoadFailure title="The past issues couldn't load" headingLevel={3} query={archiveQuery} className="py-8" />
-  if (!data || data.data.length === 0) return <p className="text-neutral-600">No issues have been published yet.</p>
   return (
     <>
-      <ul className="divide-y divide-neutral-100">
-        {data.data.map(issue => (
-          <li key={issue.slug} className="py-5">
-            <Link to={`/newsletter/${issue.slug}`} className={`text-xl font-bold ${LINK_CLASS}`}>
-              {issue.title}
-            </Link>
-            <p className="mt-1 text-sm text-neutral-600">
-              <time dateTime={issue.publishedAt}>{formatEpisodeDate(issue.publishedAt)}</time>
-              {issue.storyCount > 0 && (
-                <>
-                  {' '}
-                  · {issue.storyCount} {issue.storyCount === 1 ? 'story' : 'stories'}
-                </>
-              )}
-            </p>
-          </li>
-        ))}
-      </ul>
-      <Pagination
-        page={page}
-        totalPages={data.totalPages}
-        onPageChange={next => {
-          setPage(next)
-          onPageChange()
-        }}
-      />
+      {/* Always on the page, whatever the list shows, so the page a reader turned to is announced */}
+      <p role="status" className="sr-only">
+        {pageTurn.announcement}
+      </p>
+      {issueList()}
     </>
   )
+
+  function issueList(): ReactNode {
+    if (loadState === 'loading') return <NewsletterArchiveSkeleton />
+    if (loadState !== 'ready') return <LoadFailure title="The past issues couldn't load" headingLevel={3} query={archiveQuery} className="py-8" />
+    if (!data || data.data.length === 0) return <p className="text-neutral-600">No issues have been published yet.</p>
+    return (
+      <>
+        <ul className="divide-y divide-neutral-100">
+          {data.data.map(issue => (
+            <li key={issue.slug} className="py-5">
+              <Link to={`/newsletter/${issue.slug}`} className={`text-xl font-bold ${LINK_CLASS}`}>
+                {issue.title}
+              </Link>
+              <p className="mt-1 text-sm text-neutral-600">
+                <time dateTime={issue.publishedAt}>{formatEpisodeDate(issue.publishedAt)}</time>
+                {issue.storyCount > 0 && (
+                  <>
+                    {' '}
+                    · {issue.storyCount} {issue.storyCount === 1 ? 'story' : 'stories'}
+                  </>
+                )}
+              </p>
+            </li>
+          ))}
+        </ul>
+        <Pagination
+          page={page}
+          totalPages={data.totalPages}
+          onPageChange={next => {
+            setPage(next)
+            pageTurn.turned(next)
+            onPageChange()
+          }}
+        />
+      </>
+    )
+  }
 }
 
 /**
@@ -82,6 +101,7 @@ function IssueList({ onPageChange }: { onPageChange: () => void }) {
  */
 export default function NewsletterPage() {
   const issuesRef = useRef<HTMLElement>(null)
+  const issuesHeadingRef = useRef<HTMLHeadingElement>(null)
 
   return (
     <>
@@ -119,10 +139,11 @@ export default function NewsletterPage() {
         </section>
 
         <section ref={issuesRef} aria-labelledby="newsletter-issues-heading" className="mt-10">
-          <h2 id="newsletter-issues-heading" className="section-heading mb-2">
+          {/* Focus comes here when the reader picks another page of issues; a heading is not a control, so no outline */}
+          <h2 ref={issuesHeadingRef} id="newsletter-issues-heading" className="section-heading mb-2 focus:outline-none">
             Past issues
           </h2>
-          <IssueList onPageChange={() => issuesRef.current?.scrollIntoView?.({ block: 'start' })} />
+          <IssueList heading={issuesHeadingRef} onPageChange={() => issuesRef.current?.scrollIntoView?.({ block: 'start' })} />
         </section>
 
         <PodcastCrossLink className="mt-10 border-t border-neutral-200 pt-6" />

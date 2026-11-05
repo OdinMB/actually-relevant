@@ -46,6 +46,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
 import { completenessProblems, fetchAllContacts, type ContactsPage, type RawContact } from './backup-plunk-contacts.js'
+import { contactStatus, type ContactStatus } from '../services/plunkContacts.js'
 
 const UPDATE_DELAY_MS = 200
 
@@ -92,11 +93,11 @@ export function parseEmailList(text: string): string[] {
   return emails
 }
 
-export type ContactStatus = 'subscribed' | 'snoozed' | 'unsubscribed' | 'unknown' | 'not-found'
+export type ListedStatus = ContactStatus | 'not-found'
 
 export interface ListedAddress {
   email: string
-  status: ContactStatus
+  status: ListedStatus
   /** Plunk contact id; set when the address was found. */
   id?: string
 }
@@ -120,12 +121,7 @@ export function classifyAddresses(emails: string[], contacts: RawContact[]): Lis
     const c = byEmail.get(email)
     if (!c) return { email, status: 'not-found' as const }
     const id = typeof c.id === 'string' && c.id ? c.id : undefined
-    let status: ContactStatus
-    if (!id) status = 'unknown'
-    else if (c.subscribed === true) status = 'subscribed'
-    else if (c.subscribed === false) status = c.snoozedUntil != null ? 'snoozed' : 'unsubscribed'
-    else status = 'unknown'
-    return id ? { email, status, id } : { email, status }
+    return id ? { email, status: contactStatus(c), id } : { email, status: 'unknown' as const }
   })
 }
 
@@ -200,11 +196,12 @@ export async function applyUnsubscribes(
     const a = todo[i]!
     try {
       const updated = (await opts.unsubscribe(a.id as string)) as { subscribed?: unknown; snoozedUntil?: unknown } | null
-      if (!updated || typeof updated !== 'object' || updated.subscribed !== false) {
-        throw new Error(`Plunk did not confirm the unsubscribe (subscribed=${String(updated?.subscribed)})`)
+      const status = updated && typeof updated === 'object' ? contactStatus(updated) : 'unknown'
+      if (status === 'snoozed') {
+        throw new Error(`Plunk kept a snooze until ${String(updated?.snoozedUntil)}; the contact will be resubscribed then`)
       }
-      if (updated.snoozedUntil != null) {
-        throw new Error(`Plunk kept a snooze until ${String(updated.snoozedUntil)}; the contact will be resubscribed then`)
+      if (status !== 'unsubscribed') {
+        throw new Error(`Plunk did not confirm the unsubscribe (subscribed=${String(updated?.subscribed)})`)
       }
       result.unsubscribed++
       log(`  UNSUBSCRIBED: ${a.email}`)
@@ -222,7 +219,7 @@ export async function applyUnsubscribes(
   return result
 }
 
-const STATUS_LABEL: Record<ContactStatus, string> = {
+const STATUS_LABEL: Record<ListedStatus, string> = {
   subscribed: 'currently subscribed',
   snoozed: 'snoozed (Plunk resubscribes it later)',
   unsubscribed: 'already unsubscribed',

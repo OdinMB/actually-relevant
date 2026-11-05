@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { PositivityProvider, parseMixParam } from '../contexts/PositivityContext'
 import { MoodDialPanel } from './PositivitySlider'
+import { focusRingProblems } from '../test/classes'
 
 function LocationProbe() {
   const location = useLocation()
@@ -49,6 +50,12 @@ describe('MoodDialPanel', () => {
     localStorage.setItem('ar-positivity', '25')
     renderDial('/?mix=nonsense')
     expect(slider()).toHaveAttribute('aria-valuetext', 'Mostly heavy')
+  })
+
+  it('shows only the brand ring on keyboard focus, clear of the track by a white gap', () => {
+    renderDial()
+    expect(focusRingProblems(slider())).toEqual([])
+    expect(slider()).toHaveClass('focus-visible:ring-offset-2')
   })
 
   it('writes the mix into the address as the slider moves, keeping other parameters', () => {

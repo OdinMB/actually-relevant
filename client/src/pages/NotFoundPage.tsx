@@ -6,6 +6,8 @@ export default function NotFoundPage() {
     <>
       <Helmet>
         <title>Page Not Found - Actually Relevant</title>
+        {/* The static site answers every unknown address with the app and 200, so the view keeps search engines away */}
+        <meta name="robots" content="noindex" />
       </Helmet>
       <div className="page-section text-center">
         <h1 className="page-title">404</h1>

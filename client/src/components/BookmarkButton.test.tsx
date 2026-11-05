@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import BookmarkButton from './BookmarkButton'
-import { isBox, phoneAfterReach, sizeByBreakpoint } from '../test/classes'
+import { focusRingProblems, isBox, phoneAfterReach, sizeByBreakpoint } from '../test/classes'
 
 beforeEach(() => {
   localStorage.clear()
@@ -18,6 +18,25 @@ describe('BookmarkButton', () => {
     render(<BookmarkButton slug="a-story" />)
     const button = screen.getByRole('button', { name: 'Bookmark story' })
     expect([...button.classList].filter(c => /^text-neutral-[1-4]00$/.test(c))).toEqual([])
+  })
+
+  it.each(['corner', 'row'] as const)('%s: shows keyboard focus as the brand ring alone, without the browser outline beside it', placement => {
+    render(<BookmarkButton slug="a-story" placement={placement} />)
+    expect(focusRingProblems(screen.getByRole('button', { name: 'Bookmark story' }))).toEqual([])
+  })
+})
+
+describe('BookmarkButton revealed on hover (story cards)', () => {
+  it('appears on large screens on hover, on keyboard focus and while its card holds focus', () => {
+    render(<BookmarkButton slug="a-story" hoverReveal />)
+    const button = screen.getByRole('button', { name: 'Bookmark story' })
+    expect(button).toHaveClass('lg:opacity-0', 'lg:group-hover:opacity-100', 'focus-visible:opacity-100', 'group-focus-within:opacity-100')
+  })
+
+  it('stays visible once the story is saved', () => {
+    render(<BookmarkButton slug="a-story" hoverReveal />)
+    fireEvent.click(screen.getByRole('button', { name: 'Bookmark story' }))
+    expect(screen.getByRole('button', { name: 'Remove bookmark' })).not.toHaveClass('lg:opacity-0')
   })
 })
 

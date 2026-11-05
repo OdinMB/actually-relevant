@@ -51,6 +51,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
 import { PrismaClient } from '@prisma/client'
+import { contactPages, contactStatus } from '../services/plunkContacts.js'
 
 export const DEFAULT_CUTOFF = new Date('2026-06-03T00:00:00.000Z')
 const PAGE_SIZE = 100
@@ -175,7 +176,7 @@ export function selectFastConfirmations(rows: SignupRow[], cutoff: Date, maxSeco
   return { candidates, reconfirmed: protectedReconfirmed.sort() }
 }
 
-/** Match candidates to Plunk contacts; only currently subscribed contacts are acted on. */
+/** Match candidates to Plunk contacts; only currently subscribed contacts are acted on (a snoozed one is not). */
 export function planUnsubscribes(
   candidates: Candidate[],
   contacts: { id: string; email: string; subscribed: boolean }[],
@@ -185,7 +186,7 @@ export function planUnsubscribes(
   const notSubscribed: string[] = []
   for (const cand of candidates) {
     const contact = byEmail.get(cand.email)
-    if (contact && contact.subscribed === true) {
+    if (contact && contactStatus(contact) === 'subscribed') {
       toUnsubscribe.push({ id: contact.id, plunkEmail: contact.email, email: cand.email, gapSeconds: cand.gapSeconds })
     } else {
       notSubscribed.push(cand.email)
@@ -253,14 +254,10 @@ async function main() {
   }
 
   const plunk = await import('../services/plunk.js')
+  // A paging fault throws (contactPages), so the run stops before unsubscribing
+  // anyone rather than match candidates against part of the list.
   const contacts: { id: string; email: string; subscribed: boolean }[] = []
-  let cursor: string | undefined
-  while (true) {
-    const page = await plunk.listContacts(cursor, PAGE_SIZE)
-    contacts.push(...page.items)
-    if (!page.hasMore || !page.nextCursor) break
-    cursor = page.nextCursor
-  }
+  for await (const page of contactPages(plunk.listContacts, PAGE_SIZE)) contacts.push(...page.items)
   console.log(`\nScanned ${contacts.length} Plunk contacts.`)
 
   const { toUnsubscribe, notSubscribed } = planUnsubscribes(candidates, contacts)
