@@ -58,6 +58,13 @@ export const AI_DISCLOSURE_COPY = {
     tail: ". Two hosts talk through a handful of the week's stories.",
   },
   /**
+   * Prefix of the transcript page's description and og:description, in front of the AI episode
+   * summary; the 160 and 200 character cuts apply to the whole string. The backend's link preview
+   * uses the same prefix (PODCAST_TRANSCRIPT_DESCRIPTION_PREFIX in server/src/lib/aiLabelCopy.ts).
+   * Approved by Odin Mühlenbein in session, 2026-11-05.
+   */
+  podcastTranscriptDescriptionPrefix: 'AI: ',
+  /**
    * Subtitle under the /newsletter heading, modeled on podcastSubtitle: the "AI" badge stands
    * inline between lead and tail and is the subtitle's only "AI".
    * Owner-approved 2026-10-25 (added when the archive moved onto /newsletter).

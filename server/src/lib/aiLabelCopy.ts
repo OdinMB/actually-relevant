@@ -143,6 +143,15 @@ export function podcastEpisodeAiLine(humanEdited: boolean, kind: PodcastCopyKind
 export const PODCAST_SHOW_DESCRIPTION =
   "A weekly five-minute briefing on the news that matters most to humanity. Written and voiced by AI, based on Actually Relevant's AI analysis of the week's news."
 
+/**
+ * Prefix of the podcast transcript page's link-preview description (`description`, `og:description`,
+ * `twitter:description`; `services/pagePreviews.ts`), in front of the AI episode summary. The 160 and
+ * 200 character cuts apply to the whole string. The page's Helmet uses the same prefix
+ * (`AI_DISCLOSURE_COPY.podcastTranscriptDescriptionPrefix` in client/src/components/ai/aiDisclosureCopy.ts).
+ * Approved by Odin Mühlenbein in session, 2026-11-05.
+ */
+export const PODCAST_TRANSCRIPT_DESCRIPTION_PREFIX = 'AI: '
+
 /** Carousel: pixel footer on every slide, the post text line, and the alt-text prefix. */
 export const CAROUSEL_COPY = {
   slideFooter: 'actuallyrelevant.news · AI-generated',

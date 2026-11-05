@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Newsletter, NewsletterSend } from '@shared/types'
+import type { Newsletter, NewsletterSelection, NewsletterSend } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -20,8 +20,10 @@ import {
 import { ApiError } from '../../lib/admin-api'
 import { newsletterSendState } from '../../lib/newsletter-state'
 import { useToast } from '../ui/Toast'
+import { useNewerCoverage } from '../../hooks/useStories'
 import { AssignedStoriesList } from './AssignedStoriesList'
 import type { StoryListAction } from './AssignedStoriesList'
+import { NewerCoverageNote } from './NewerCoverageNote'
 
 interface NewsletterDetailProps {
   newsletter: Newsletter
@@ -57,6 +59,12 @@ export function PublishHint({ newsletter }: { newsletter: Pick<Newsletter, 'stat
 /** The server's refusal reason (a 409 says why) or, for anything else, the fallback. */
 function errorText(err: unknown, fallback: string): string {
   return err instanceof ApiError && err.message ? err.message : fallback
+}
+
+/** The selection's toast, naming each pick it gave way to newer coverage of it. */
+function selectedText({ replacedWithNewer }: Pick<NewsletterSelection, 'replacedWithNewer'>): string {
+  if (replacedWithNewer.length === 0) return 'Stories selected'
+  return `Stories selected. Replaced with newer coverage: ${replacedWithNewer.map(r => r.replacedTitle).join('; ')}`
 }
 
 function SendStatusBadge({ send }: { send: NewsletterSend }) {
@@ -174,6 +182,12 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
   const sendTest = useSendTestNewsletter()
   const sendLive = useSendLiveNewsletter()
   const { data: sends, isLoading: sendsLoading } = useNewsletterSends(newsletter.id)
+  // Advisory flags on the shortlist: later stories that may have overtaken a pick (never blocks a send)
+  const { data: newerCoverage } = useNewerCoverage(newsletter.selectedStoryIds)
+  const newerCoverageNote = (storyId: string) => {
+    const newer = newerCoverage?.get(storyId)
+    return newer ? <NewerCoverageNote newer={newer} /> : null
+  }
   // Mirrors the server's rule for button states; its 409 is the authority
   const { liveSent, unconfirmed, frozen, testCurrent } = newsletterSendState(newsletter, sends)
   const sendLiveBlock = unconfirmed ? 'A send is unconfirmed' : liveSent ? 'Already sent' : !testCurrent ? 'Send a test of the current HTML first' : null
@@ -370,7 +384,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
             size="sm"
             onClick={() =>
               selectStories.mutate(newsletter.id, {
-                onSuccess: () => toast('success', 'Stories selected'),
+                onSuccess: selection => toast('success', selectedText(selection)),
                 onError: err => toast('error', errorText(err, 'Selection failed')),
               })
             }
@@ -413,6 +427,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           actions={selectedActions}
           isActioning={update.isPending || frozen}
           collapsible={false}
+          storyNote={newerCoverageNote}
         />
 
         {/* Story Longlist */}

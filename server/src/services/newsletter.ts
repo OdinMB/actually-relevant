@@ -92,8 +92,14 @@ export async function recentStoryIds(client: Prisma.TransactionClient = prisma):
   return storyIds
 }
 
+/** The model's shortlist, and the longlist's stories by id with the top-level section each falls under (as the prompt names it). */
+export interface ShortlistPicks {
+  storyIds: string[]
+  sections: Map<string, string>
+}
+
 /** The shortlist the model picks from the issue's (non-empty) longlist; only longlist ids are kept. */
-export async function pickShortlist(newsletter: { id: string; storyIds: string[] }): Promise<string[]> {
+export async function pickShortlist(newsletter: { id: string; storyIds: string[] }): Promise<ShortlistPicks> {
   const newsletterId = newsletter.id
 
   // Fetch stories with title, summary, and issue info
@@ -132,7 +138,7 @@ export async function pickShortlist(newsletter: { id: string; storyIds: string[]
     'newsletter story selection complete',
   )
 
-  return selectedIds
+  return { storyIds: selectedIds, sections: new Map(storiesForPrompt.map(s => [s.id, s.issueName])) }
 }
 
 /** The issue's markdown, built from its (non-empty) shortlist by the template alone (no model call). */

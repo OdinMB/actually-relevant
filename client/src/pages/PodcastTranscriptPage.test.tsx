@@ -25,6 +25,8 @@ import PodcastTranscriptPage from './PodcastTranscriptPage'
 
 const AUDIO_URL = 'https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.mp3'
 
+const metaContent = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
+
 const EPISODE: PublicPodcastEpisodeDetail = {
   id: 'podcast-1',
   title: 'W42: Clean air',
@@ -90,6 +92,22 @@ describe('PodcastTranscriptPage', () => {
     const firstTurn = await screen.findByText('Welcome to the week.')
     const subtitle = screen.getByText(AI_DISCLOSURE_COPY.podcastSubtitle.lead, { exact: false })
     expect(subtitle.compareDocumentPosition(firstTurn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('describes the episode for search and link previews by its summary behind the AI label, as the backend does', async () => {
+    renderPage()
+    await screen.findByText('Welcome to the week.')
+    await waitFor(() => expect(metaContent('meta[name="description"]')).toBe('AI: Two stories.'))
+    expect(metaContent('meta[property="og:description"]')).toBe('AI: Two stories.')
+  })
+
+  it('cuts the labeled description, not the summary alone, to the description limits', async () => {
+    const summary = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
+    mockApi.podcastEpisode.mockResolvedValue({ ...EPISODE, summary })
+    renderPage()
+    const description = `AI: ${summary}`
+    await waitFor(() => expect(metaContent('meta[name="description"]')).toBe(description.slice(0, 160)))
+    expect(metaContent('meta[property="og:description"]')).toBe(description.slice(0, 200))
   })
 
   it('renders one paragraph per turn, each under its host name', async () => {

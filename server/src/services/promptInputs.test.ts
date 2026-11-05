@@ -224,6 +224,22 @@ describe('newsletter prompts', () => {
     expect(await promptsOf(() => pickShortlist({ id: 'nl-1', storyIds: rows.map(r => r.id) }))).toMatchSnapshot()
   })
 
+  it("pickShortlist answers the longlist picks and each longlist story's top-level section, as the prompt names it", async () => {
+    mockPrisma.story.findMany.mockResolvedValue(rows)
+    sent.answers = [{ selectedIds: ['story-2', 'not-on-the-longlist', 'story-5'] }]
+
+    expect(await pickShortlist({ id: 'nl-1', storyIds: rows.map(r => r.id) })).toEqual({
+      storyIds: ['story-2', 'story-5'],
+      sections: new Map([
+        ['story-1', 'Science & Technology'],
+        ['story-2', 'Human Development'],
+        ['story-3', 'Planet & Climate'],
+        ['story-4', 'General'],
+        ['story-5', 'Planet & Climate'],
+      ]),
+    })
+  })
+
   it('buildContent sends no prompt: the content is the template alone, with no intro', async () => {
     mockPrisma.story.findMany.mockResolvedValue(rows)
     let content = ''

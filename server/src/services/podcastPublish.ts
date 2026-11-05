@@ -1,7 +1,7 @@
 /**
  * Moving episodes in and out of the feed (ADR-0013): publish, unpublish, the published episodes the
- * public surfaces read (feed, public JSON, an episode's transcript page, sitemap), and the automatic
- * publish job's candidate. `status = published`
+ * public surfaces read (feed, public JSON, an episode's transcript page, a story's page, sitemap), and
+ * the automatic publish job's candidate. `status = published`
  * means listed; only this module changes it. Publishing needs a `ready`, non-dry-run episode; the
  * first publication date is kept for good (the episode is never regenerated or deleted after it);
  * unpublishing always works, deletes nothing on the CDN and is never undone by the automatic job.
@@ -94,7 +94,7 @@ export async function unpublishEpisode(id: string, now: Date = new Date()): Prom
   return true
 }
 
-/** What "published" means for every public surface: the feed, /podcast, an episode's transcript page, the sitemap. */
+/** What "published" means for every public surface: the feed, /podcast, an episode's transcript page, a story's page, the sitemap. */
 const PUBLISHED_WHERE = {
   status: ContentStatus.published,
   stage: PodcastStage.ready,
@@ -151,6 +151,22 @@ export async function getPublishedEpisode(id: string): Promise<(PublishedEpisode
   const row = await prisma.podcast.findFirst({ where: { id, ...PUBLISHED_WHERE }, select: { ...PUBLISHED_SELECT, dialogue: true } })
   const episode = row && toPublishedEpisode(row)
   return episode && { ...episode, dialogue: row.dialogue }
+}
+
+/** The first published episode with the story among its stories (for the story's page); null when none has it. */
+export async function getFirstPublishedEpisodeWithStory(storyId: string): Promise<PublishedEpisode | null> {
+  const row = await prisma.podcast.findFirst({
+    where: { ...PUBLISHED_WHERE, storyIds: { has: storyId } },
+    select: PUBLISHED_SELECT,
+    orderBy: { publishedAt: 'asc' },
+  })
+  return row && toPublishedEpisode(row)
+}
+
+/** A published episode's title, summary and first publication, or null: what its transcript page's link preview reads. */
+export async function findPublishedEpisodeHead(id: string): Promise<{ id: string; title: string; summary: string; publishedAt: Date } | null> {
+  const row = await prisma.podcast.findFirst({ where: { id, ...PUBLISHED_WHERE }, select: { id: true, title: true, episodeSummary: true, publishedAt: true } })
+  return row?.publishedAt ? { id: row.id, title: row.title, summary: row.episodeSummary, publishedAt: row.publishedAt } : null
 }
 
 /** The ids and first publication dates of the published episodes, newest first (the sitemap's transcript pages). */

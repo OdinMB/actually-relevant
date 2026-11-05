@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as storyService from '../../services/story.js'
+import { getStoryAppearances } from '../../services/storyAppearances.js'
 import { validateQuery } from '../../middleware/validate.js'
 import { searchLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
@@ -51,6 +52,13 @@ router.get('/:slug/related', failsWith('Failed to fetch related stories'), valid
   const stories = await storyService.getRelatedStories(req.params.slug!, req.parsedQuery!.limit)
   res.set('Cache-Control', `public, max-age=${config.relatedStories.httpCacheSeconds}`)
   res.json(stories.map(withAiGeneratedMarker))
+})
+
+// The newsletter issue and podcast episode the story was in, for the end of its page; as fresh as their own lists
+router.get('/:slug/appearances', failsWith('Failed to fetch story appearances'), async (req, res) => {
+  const appearances = await getStoryAppearances(req.params.slug!)
+  res.set('Cache-Control', 'public, max-age=300')
+  res.json(appearances)
 })
 
 router.get('/:slug', failsWith('Failed to fetch story'), async (req, res) => {

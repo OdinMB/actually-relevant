@@ -6,6 +6,7 @@ import { buildBreadcrumbSchema, buildPodcastEpisodeSchema } from '../lib/structu
 import { formatEpisodeDate, formatEpisodeDuration, podcastTranscriptPath, PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
 import StructuredData from '../components/StructuredData'
 import AiBadge from '../components/ai/AiBadge'
+import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { NewsletterCrossLink } from '../components/CrossLinks'
 import EpisodeStoryList, { PODCAST_LINK_CLASS } from '../components/podcast/EpisodeStoryList'
 import PodcastSubtitle from '../components/podcast/PodcastSubtitle'
@@ -23,17 +24,22 @@ function BackToPodcast() {
   )
 }
 
+/**
+ * The episode's head tags. The backend writes the same for crawlers that run no JavaScript
+ * (server/src/services/pagePreviews.ts); change both together.
+ */
 function EpisodeHead({ episode }: { episode: PublicPodcastEpisodeDetail }) {
   const url = `${SEO.siteUrl}${podcastTranscriptPath(episode.id)}`
   const title = `Transcript: ${episode.title} - ${SEO.siteName}`
+  const description = `${AI_DISCLOSURE_COPY.podcastTranscriptDescriptionPrefix}${episode.summary}`
   return (
     <>
       <Helmet>
         <title>{title}</title>
-        <meta name="description" content={episode.summary.slice(0, 160)} />
+        <meta name="description" content={description.slice(0, 160)} />
         <link rel="canonical" href={url} />
         <meta property="og:title" content={title} />
-        <meta property="og:description" content={episode.summary.slice(0, 200)} />
+        <meta property="og:description" content={description.slice(0, 200)} />
         <meta property="og:type" content="article" />
         <meta property="og:url" content={url} />
         <meta property="article:published_time" content={episode.publishedAt} />

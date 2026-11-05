@@ -194,6 +194,7 @@ export default function IssuePage() {
 
   return (
     <>
+      {/* The backend writes the same tags for a topic that is not prerendered (server/src/services/pagePreviews.ts): change both together */}
       <Helmet>
         <title>
           {issue.name} - {SEO.siteName}

@@ -49,11 +49,14 @@ const story = {
 /** What usePublicStory answers: the story in `current`, or the loading and error states. */
 const mockStory = vi.hoisted(() => ({ current: null as unknown, isLoading: false, error: null as Error | null }))
 const mockRelated = vi.hoisted(() => ({ current: [] as unknown[] }))
+/** What useStoryAppearances answers; undefined while it loads or when it failed. */
+const mockAppearances = vi.hoisted(() => ({ current: undefined as unknown }))
 
 vi.mock('../hooks/usePublicStories', () => ({
   usePublicStory: () => ({ data: mockStory.current, isLoading: mockStory.isLoading, error: mockStory.error }),
   useRelatedStories: () => ({ data: mockRelated.current, isLoading: false }),
   useClusterMembers: () => ({ data: null }),
+  useStoryAppearances: () => ({ data: mockAppearances.current }),
 }))
 
 // jsdom has no modal dialog support: opening and closing only toggle the `open` attribute here.
@@ -86,6 +89,7 @@ beforeEach(() => {
   mockStory.isLoading = false
   mockStory.error = null
   mockRelated.current = []
+  mockAppearances.current = undefined
 })
 
 afterEach(() => {
@@ -332,6 +336,82 @@ describe('StoryPage newsletter line', () => {
 
     expect(subscribeButton()).toBeNull()
     expect(screen.queryByText(/stories like this/i)).toBeNull()
+  })
+})
+
+describe('StoryPage newsletter issue and podcast episode', () => {
+  const ISSUE = { slug: 'week-43-2026', title: 'Week 43, 2026', publishedAt: '2026-10-24T04:30:00.000Z', storyCount: 6 }
+  const EPISODE = {
+    id: 'episode-43',
+    title: 'W43: Clean air',
+    aiLine: 'Written and voiced by AI.',
+    summary: 'Two hosts talk through the week.',
+    publishedAt: '2026-10-24T05:00:00.000Z',
+    durationSec: 372,
+    audioUrl: 'https://audio.example/e.mp3',
+    audioBytes: 123,
+    transcriptUrl: null,
+    stories: [],
+    aiGenerated: { fields: ['title'], digitalSourceType: 'trainedAlgorithmicMedia' },
+  }
+  const issueLink = () => screen.queryByRole('link', { name: /^Featured in the newsletter/ })
+  const episodeLink = () => screen.queryByRole('link', { name: /^Featured on the podcast/ })
+  const subscribeButton = () => screen.getByRole('button', { name: 'Subscribe to the newsletter' })
+
+  it('names the issue and the episode the story was in, after "Report an error" and before the newsletter line', () => {
+    mockAppearances.current = { newsletterIssue: ISSUE, podcastEpisode: EPISODE }
+    renderStory(story)
+
+    expect(issueLink()).toHaveAttribute('href', '/newsletter/week-43-2026')
+    expect(episodeLink()).toHaveAttribute('href', '/podcast/episode-43/transcript')
+    const report = screen.getByRole('button', { name: 'Report an error' })
+    expect(report.compareDocumentPosition(issueLink()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(episodeLink()!.compareDocumentPosition(subscribeButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it.each([
+    ['while the answer is on its way, or after it failed', undefined],
+    ['for a story in neither', { newsletterIssue: null, podcastEpisode: null }],
+  ])('adds nothing %s', async (_, appearances) => {
+    mockAppearances.current = appearances
+    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
+    renderStory(story)
+
+    expect(await screen.findByRole('link', { name: 'read this week’s issue' })).toBeInTheDocument()
+    expect(screen.queryByText(/^Featured/)).toBeNull()
+  })
+
+  it("drops the newsletter line's issue link when the story's issue is the newest one, which the card already links", async () => {
+    mockAppearances.current = { newsletterIssue: ISSUE, podcastEpisode: null }
+    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
+    renderStory(story)
+    await archiveSettled()
+
+    expect(subscribeButton().closest('p')).toHaveTextContent(/^Get stories like this once a week\. Subscribe to the newsletter$/)
+    const toIssue = screen.getAllByRole('link').filter(link => link.getAttribute('href') === '/newsletter/week-43-2026')
+    expect(toIssue).toEqual([issueLink()])
+  })
+
+  it("keeps the line's link to the newest issue when the story was in an older one", async () => {
+    mockAppearances.current = { newsletterIssue: { ...ISSUE, slug: 'week-40-2026', title: 'Week 40, 2026' }, podcastEpisode: null }
+    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', daysAgo: 1 }))
+    renderStory(story)
+
+    expect(await screen.findByRole('link', { name: 'read this week’s issue' })).toHaveAttribute('href', '/newsletter/week-43-2026')
+    expect(issueLink()).toHaveAttribute('href', '/newsletter/week-40-2026')
+  })
+
+  it.each([
+    ['while the story loads', { isLoading: true }],
+    ['when the story is not found', {}],
+    ['when the story fails to load', { error: new Error('Network error') }],
+  ])('is not shown %s', (_, state: { isLoading?: boolean; error?: Error }) => {
+    mockAppearances.current = { newsletterIssue: ISSUE, podcastEpisode: EPISODE }
+    Object.assign(mockStory, state)
+    renderStory(null)
+
+    expect(issueLink()).toBeNull()
+    expect(episodeLink()).toBeNull()
   })
 })
 

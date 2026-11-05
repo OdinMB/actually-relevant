@@ -12,6 +12,8 @@ const mockPrisma = vi.hoisted(() => ({
     findFirst: vi.fn(),
     count: vi.fn(),
   },
+  newsletter: { findFirst: vi.fn() },
+  podcast: { findFirst: vi.fn() },
   $queryRaw: vi.fn(),
   $disconnect: vi.fn(),
 }))
@@ -31,7 +33,8 @@ vi.mock('../../services/crawler.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
-const { aiGeneratedMarker } = await import('../../lib/aiProvenance.js')
+const { aiGeneratedMarker, AI_GENERATED_PODCAST_FIELDS } = await import('../../lib/aiProvenance.js')
+const { podcastEpisodeAiLine } = await import('../../lib/aiLabelCopy.js')
 
 /** The marker as JSON serializes it: the route must attach exactly this. */
 function expectedMarker(story: Parameters<typeof aiGeneratedMarker>[0]) {
@@ -224,6 +227,74 @@ describe('Public Stories API', () => {
     it.each(['0', '-3', '11', '2.5', 'abc'])('refuses limit=%s', async limit => {
       const res = await request(app).get(`/api/stories/source-slug/related?limit=${limit}`)
       expect(res.status).toBe(400)
+    })
+  })
+
+  describe('GET /api/stories/:slug/appearances', () => {
+    const issueRow = {
+      slug: 'week-42-2026',
+      title: 'Week 42, 2026',
+      publishedAt: new Date('2026-10-17T04:30:00Z'),
+      createdAt: new Date('2026-10-17T04:00:00Z'),
+      selectedStoryIds: ['story-1', 'story-2'],
+    }
+    const episodeRow = {
+      id: 'podcast-1',
+      title: 'W42: Clean air',
+      kind: 'weekly',
+      episodeSummary: 'Two hosts on clean air.',
+      episodeStories: [
+        { ref: 1, id: 'story-1', title: 'Published Article', publisher: 'Test Feed', sourceUrl: 'https://example.com/article', slug: 'published-article' },
+      ],
+      humanEdited: false,
+      audioUrl: 'https://audio.example/e.mp3',
+      audioBytes: 123,
+      durationSec: 372,
+      transcriptUrl: 'https://audio.example/e.vtt',
+      chaptersUrl: 'https://audio.example/e.chapters.json',
+      publishedAt: new Date('2026-10-17T05:00:00Z'),
+    }
+
+    it('names the newsletter issue and the podcast episode the published story appeared in, the episode with its AI line and marker', async () => {
+      mockPrisma.story.findFirst.mockResolvedValue({ id: 'story-1' })
+      mockPrisma.newsletter.findFirst.mockResolvedValue(issueRow)
+      mockPrisma.podcast.findFirst.mockResolvedValue(episodeRow)
+
+      const res = await request(app).get('/api/stories/published-article/appearances')
+      expect(res.status).toBe(200)
+      expect(res.headers['cache-control']).toBe('public, max-age=300')
+      expect(mockPrisma.story.findFirst.mock.calls[0]![0].where).toEqual({ slug: 'published-article', status: 'published' })
+      expect(res.body.newsletterIssue).toEqual({ slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: '2026-10-17T04:30:00.000Z', storyCount: 2 })
+      expect(res.body.podcastEpisode).toMatchObject({
+        id: 'podcast-1',
+        title: 'W42: Clean air',
+        aiLine: podcastEpisodeAiLine(false, 'weekly'),
+        publishedAt: '2026-10-17T05:00:00.000Z',
+        durationSec: 372,
+        aiGenerated: { fields: [...AI_GENERATED_PODCAST_FIELDS] },
+      })
+      // The public episode's fields only: the chapters file stays the feed's
+      expect(res.body.podcastEpisode.chaptersUrl).toBeUndefined()
+    })
+
+    it('answers with neither for a story that appeared in neither', async () => {
+      mockPrisma.story.findFirst.mockResolvedValue({ id: 'story-1' })
+      mockPrisma.newsletter.findFirst.mockResolvedValue(null)
+      mockPrisma.podcast.findFirst.mockResolvedValue(null)
+
+      const res = await request(app).get('/api/stories/published-article/appearances')
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ newsletterIssue: null, podcastEpisode: null })
+    })
+
+    it('answers with neither, and looks no further, for a slug with no published story', async () => {
+      mockPrisma.story.findFirst.mockResolvedValue(null)
+
+      const res = await request(app).get('/api/stories/not-published/appearances')
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ newsletterIssue: null, podcastEpisode: null })
+      expect(mockPrisma.newsletter.findFirst).not.toHaveBeenCalled()
+      expect(mockPrisma.podcast.findFirst).not.toHaveBeenCalled()
     })
   })
 

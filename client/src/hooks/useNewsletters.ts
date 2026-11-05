@@ -63,7 +63,8 @@ export function useSelectNewsletterStories() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => adminApi.newsletters.select(id),
-    onSuccess: newsletter => {
+    // The replacements are for the caller's message; the cache keeps the issue alone
+    onSuccess: ({ replacedWithNewer, ...newsletter }) => {
       queryClient.setQueryData(['newsletter', newsletter.id], newsletter)
       queryClient.invalidateQueries({ queryKey: ['newsletters'] })
     },

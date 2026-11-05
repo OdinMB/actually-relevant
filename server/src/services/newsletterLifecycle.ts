@@ -3,8 +3,9 @@
  * `.context/newsletter-podcast.md` "Issue lifecycle"). This module is the only code that writes an
  * issue's lifecycle fields (`status`, `published_at`, `content`, `html`, `selected_story_ids`),
  * deletes an issue, or writes `newsletter_sends` rows, held by `test/newsletterWriters.test.ts`.
- * `newsletter.ts` builds what the moves write (shortlist, markdown, HTML) and `newsletterInbox.ts`
- * the email's subject and preview text; neither writes any of it.
+ * `newsletter.ts` builds what the moves write (shortlist, markdown, HTML), `storyFreshness.ts` the
+ * shortlist's swaps for newer coverage and `newsletterInbox.ts` the email's subject and preview
+ * text; none of them writes any of it.
  *
  * - Every write move runs in a transaction that first locks the issue's row
  *   (`SELECT ... FOR UPDATE`), re-checks its rule, then writes, so moves on one issue serialize.
@@ -29,6 +30,7 @@ import * as plunk from './plunk.js'
 import { ensureNewsletterSlug, newsletterIssueUrl } from './newsletterArchive.js'
 import { buildContent, pickShortlist, recentStoryIds, renderHtml } from './newsletter.js'
 import { loadInboxPreview } from './newsletterInbox.js'
+import { preferNewerCoverage, type ShortlistReplacement } from './storyFreshness.js'
 
 const log = createLogger('newsletter-lifecycle')
 
@@ -125,16 +127,27 @@ export async function assignStories(id: string): Promise<Newsletter> {
   })
 }
 
-/** select: the shortlist, picked by the model from the longlist. */
-export async function selectStories(id: string): Promise<Newsletter> {
+/** The select move's answer: the issue, and each pick it replaced with newer coverage. */
+export type NewsletterSelection = Newsletter & { replacedWithNewer: ShortlistReplacement[] }
+
+/**
+ * select: the shortlist, picked by the model from the longlist. A pick with a later story of the same
+ * event the issue can carry (published, on the longlist, in the pick's section) gives its place to
+ * the newest such story before the write, so the content and HTML built from the shortlist carry
+ * it (`storyFreshness.ts`).
+ */
+export async function selectStories(id: string): Promise<NewsletterSelection> {
   const newsletter = await readIssue(id)
   await assertNotFrozen(prisma, newsletter)
   if (newsletter.storyIds.length === 0) throw new BadRequestError('No stories in longlist')
-  const selectedStoryIds = await pickShortlist(newsletter)
-  return underLock(id, async (tx, current) => {
+  const picks = await pickShortlist(newsletter)
+  const { storyIds: selectedStoryIds, replaced } = await preferNewerCoverage(picks.storyIds, picks.sections)
+  for (const replacement of replaced) log.info({ newsletterId: id, ...replacement }, 'replaced a pick with newer coverage')
+  const selected = await underLock(id, async (tx, current) => {
     await assertNotFrozen(tx, current)
     return tx.newsletter.update({ where: { id }, data: { selectedStoryIds } })
   })
+  return { ...selected, replacedWithNewer: replaced }
 }
 
 /** generate: the issue's markdown from its shortlist (the template alone, no model call). */

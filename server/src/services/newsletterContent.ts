@@ -12,9 +12,14 @@
 
 const STORY_MARKER = /[ \t]*\{story:([^}\s]+)\}[ \t]*$/
 
+/** The marker that names a story at the end of its `## ` heading. */
+export function storyMarker(storyId: string): string {
+  return `{story:${storyId}}`
+}
+
 /** The `## ` heading line for a story. */
 export function storyHeading(headline: string, storyId: string): string {
-  return `## ${headline} {story:${storyId}}`
+  return `## ${headline} ${storyMarker(storyId)}`
 }
 
 /** A `## ` heading line's text without its marker, and the story id it names (null: none). */

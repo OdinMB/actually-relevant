@@ -68,6 +68,10 @@ If no confirmed duplicate is in a cluster yet, a new cluster is created with the
 
 In `selectStories()` (`server/src/services/analysis.ts`), before passing candidates to the LLM, non-primary cluster members are removed from the pool and set back to `rejected`/`duplicate` (only from `analyzed`). Publishing likewise re-elects the cluster of every story it publishes, and the publish job publishes only unclustered stories and cluster primaries, so one cluster never goes live twice. A story is eligible for selection only if it is unclustered or is its cluster's primary. This catches edge cases where dedup hasn't run or a story was manually un-rejected.
 
+## Newer coverage
+
+The newsletter reads clusters for newer coverage of its picks (`services/storyFreshness.ts`, `newsletter-podcast.md` "Newer coverage"): a member reported a day or more after a pick, `duplicate` rejections included, flags it on the issue page, and such a member that is published and on the issue's longlist under the pick's section takes the pick's place at selection. Election and status writes are unchanged, so the usual later member, a `duplicate` rejection, only flags: a cluster has a later published member only when two stories published apart were clustered afterwards (formation keeps published members) or an editor published one by hand.
+
 ## Admin UI
 
 Stories that belong to a cluster show indicators in the admin panel:

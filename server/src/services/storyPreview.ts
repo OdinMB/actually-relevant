@@ -1,25 +1,19 @@
 /**
  * Story link previews (.context/seo.md, "Story link previews"):
  * - the per-story og:image, rendered with the carousel's canvas renderer at 1200x630;
- * - the story page HTML: the built client's index.html (the "shell", fetched from the static
- *   site and cached briefly) with the story's title, description, canonical, og:* and
- *   twitter:* tags injected, for crawlers that do not run JavaScript.
- * Both serve published stories only. Anything that goes wrong leaves the shell unchanged.
+ * - what the story page's head says, for the shared link-preview pages (`linkPreview.ts`): the
+ *   story's title, description, canonical, og:* and twitter:* tags, as StoryPage's Helmet sets them.
+ * Both serve published stories only.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { createLogger } from '../lib/logger.js'
-import { withRetry } from '../lib/retry.js'
 import { BoundedCache } from '../lib/boundedCache.js'
 import { registerPublicCache } from '../lib/publicCaches.js'
 import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
-import { escapeHtml } from '../lib/xml.js'
 import { markdownToPlainText } from '../lib/plainText.js'
 import { createStoryImage, OG_IMAGE_SIZE } from './carousel.js'
+import { _resetLinkPreviewCaches, SITE_NAME, type LinkPreview, type PreviewImage } from './linkPreview.js'
 
-const log = createLogger('story-preview')
-
-const SITE_NAME = 'Actually Relevant'
 /** The same author line StoryPage's Helmet sets. */
 const STORY_AUTHOR = 'RelevanceAI by Actually Relevant'
 
@@ -93,159 +87,38 @@ export async function getStoryOgImage(slug: string): Promise<Buffer | null> {
   return png
 }
 
-// --- The shell ---
-
-interface Shell {
-  html: string
-  etag: string | null
-  lastModified: string | null
-  fetchedAt: number
+/** A published story's preview image as a card names it. It carries "AI-generated" in its pixels and XMP. */
+export function storyOgImage(slug: string): PreviewImage {
+  return { url: storyOgImageUrl(slug), type: 'image/png', width: OG_IMAGE_SIZE.width, height: OG_IMAGE_SIZE.height }
 }
 
-let shell: Shell | null = null
-let inflight: Promise<string | null> | null = null
-// Clearing only marks the shell stale: the next request revalidates it and keeps the last good copy if the fetch fails
-registerPublicCache('client-shell', {
-  get size() {
-    return shell ? 1 : 0
-  },
-  clear() {
-    if (shell) shell = { ...shell, fetchedAt: 0 }
-  },
-})
-
-class ShellFetchError extends Error {
-  constructor(public response: { status: number }) {
-    super(`shell fetch failed with HTTP ${response.status}`)
-  }
-}
-
-async function fetchShell(previous: Shell | null): Promise<Shell> {
-  const headers: Record<string, string> = { Accept: 'text/html' }
-  if (previous?.etag) headers['If-None-Match'] = previous.etag
-  if (previous?.lastModified) headers['If-Modified-Since'] = previous.lastModified
-  const res = await withRetry(
-    async () => {
-      const response = await fetch(config.storyPreview.shellUrl, {
-        headers,
-        signal: AbortSignal.timeout(config.storyPreview.shellFetchTimeoutMs),
-      })
-      if (response.status >= 500) throw new ShellFetchError(response)
-      return response
-    },
-    { retries: 1, baseDelayMs: 200 },
-  )
-  if (res.status === 304 && previous) return { ...previous, fetchedAt: Date.now() }
-  if (!res.ok) throw new ShellFetchError(res)
-  const html = await res.text()
-  if (!/<\/head>/i.test(html) || !/<div id="root"/.test(html)) throw new Error('shell is not the client index.html')
-  return { html, etag: res.headers.get('etag'), lastModified: res.headers.get('last-modified'), fetchedAt: Date.now() }
-}
-
-/**
- * The client's built index.html, fetched from the static site and reused for
- * `shellCacheSeconds`, then revalidated. If a fetch fails, the last good copy is served;
- * null only when the shell has never been fetched.
- */
-export async function getShell(): Promise<string | null> {
-  const fresh = shell && Date.now() - shell.fetchedAt < config.storyPreview.shellCacheSeconds * 1000
-  if (shell && fresh) return shell.html
-  if (!inflight) {
-    inflight = fetchShell(shell)
-      .then(next => {
-        shell = next
-        return next.html
-      })
-      .catch(err => {
-        log.warn({ err, url: config.storyPreview.shellUrl, haveStale: Boolean(shell) }, 'failed to fetch the client shell')
-        if (shell) shell = { ...shell, fetchedAt: Date.now() } // retry after another TTL, not on every request
-        return shell?.html ?? null
-      })
-      .finally(() => {
-        inflight = null
-      })
-  }
-  return inflight
-}
-
-/** Tests only: forget the cached shell and pages. */
+/** Tests only: forget the cached shell, pages and images. */
 export function _resetStoryPreviewCaches(): void {
-  shell = null
-  inflight = null
-  pageCache.clear()
+  _resetLinkPreviewCaches()
   imageCache.clear()
 }
 
-// --- Meta tags ---
+// --- The story page's head ---
 
-/** The head tags the story page's Helmet sets, as HTML. Marked data-rh so Helmet takes them over. */
-export function buildStoryHeadTags(story: PreviewStory): string {
+/** What the story page's Helmet sets: the title label and headline, the summary as plain text. */
+export function storyLinkPreview(story: PreviewStory): LinkPreview {
   const displayTitle = displayTitleOf(story)
-  // Preview cards cannot render Markdown: the summary goes in as plain text, as StoryPage's Helmet sets it
-  const description = markdownToPlainText(story.summary ?? '') || displayTitle
-  const url = `${config.siteUrl}/stories/${story.slug}`
-  const image = storyOgImageUrl(story.slug!)
-  const meta = (attr: 'name' | 'property', key: string, content: string) => `<meta data-rh="true" ${attr}="${key}" content="${escapeHtml(content)}" />`
-  const tags = [
-    `<title>${escapeHtml(`${displayTitle} - ${SITE_NAME}`)}</title>`,
-    meta('name', 'description', description.slice(0, 160)),
-    `<link data-rh="true" rel="canonical" href="${escapeHtml(url)}" />`,
-    meta('property', 'og:type', 'article'),
-    meta('property', 'og:site_name', SITE_NAME),
-    meta('property', 'og:title', displayTitle),
-    meta('property', 'og:description', description.slice(0, 200)),
-    meta('property', 'og:url', url),
-    meta('property', 'og:image', image),
-    meta('property', 'og:image:type', 'image/png'),
-    meta('property', 'og:image:width', String(OG_IMAGE_SIZE.width)),
-    meta('property', 'og:image:height', String(OG_IMAGE_SIZE.height)),
-    meta('property', 'article:author', STORY_AUTHOR),
-    ...(story.datePublished ? [meta('property', 'article:published_time', story.datePublished.toISOString())] : []),
-    meta('name', 'twitter:card', 'summary_large_image'),
-    meta('name', 'twitter:title', displayTitle),
-    meta('name', 'twitter:description', description.slice(0, 200)),
-    meta('name', 'twitter:image', image),
-  ]
-  return tags.join('\n    ')
-}
-
-/**
- * Replace the shell's head tags that a page sets (the title and every Helmet-owned tag,
- * `data-rh="true"`: description, og:*, twitter:*, canonical, JSON-LD) with the story's.
- * Returns the shell unchanged if its head cannot be found.
- */
-export function injectHeadTags(html: string, tags: string): string {
-  const headEnd = html.search(/<\/head>/i)
-  if (headEnd < 0) return html
-  const head = html
-    .slice(0, headEnd)
-    .replace(/<title\b[^>]*>[\s\S]*?<\/title>\s*/gi, '')
-    .replace(/<(meta|link)\b[^>]*\bdata-rh="true"[^>]*>\s*/gi, '')
-    .replace(/<script\b[^>]*\bdata-rh="true"[^>]*>[\s\S]*?<\/script>\s*/gi, '')
-  return `${head}  ${tags}\n  ${html.slice(headEnd)}`
-}
-
-const pageCache = new BoundedCache<string>(config.storyPreview.pageCacheEntries, config.storyPreview.pageCacheSeconds * 1000)
-registerPublicCache('story-preview-pages', pageCache)
-
-/**
- * The HTML for `/stories/<slug>`: the shell with the story's tags, or the unchanged shell when
- * the story is not published (the SPA shows its own not-found page) or anything fails.
- * Null only when no shell could ever be fetched.
- */
-export async function renderStoryPage(slug: string | null): Promise<string | null> {
-  const html = await getShell()
-  if (!html || !slug) return html
-  const cacheKey = `${slug}\n${shell?.etag ?? shell?.fetchedAt ?? ''}`
-  const hit = pageCache.get(cacheKey)
-  if (hit) return hit
-  try {
-    const story = await findPreviewStory(slug)
-    const page = story ? injectHeadTags(html, buildStoryHeadTags(story)) : html
-    pageCache.set(cacheKey, page)
-    return page
-  } catch (err) {
-    log.error({ err, slug }, 'failed to build story page tags, serving the plain shell')
-    return html
+  return {
+    documentTitle: `${displayTitle} - ${SITE_NAME}`,
+    title: displayTitle,
+    // Preview cards cannot render Markdown: the summary goes in as plain text, as StoryPage's Helmet sets it
+    description: markdownToPlainText(story.summary ?? '') || displayTitle,
+    url: `${config.siteUrl}/stories/${story.slug}`,
+    canonical: true,
+    type: 'article',
+    image: storyOgImage(story.slug!),
+    author: STORY_AUTHOR,
+    publishedTime: story.datePublished?.toISOString(),
   }
+}
+
+/** The story page's preview, or null unless the story is published. */
+export async function findStoryLinkPreview(slug: string): Promise<LinkPreview | null> {
+  const story = await findPreviewStory(slug)
+  return story && storyLinkPreview(story)
 }

@@ -236,6 +236,22 @@ export interface Newsletter {
   updatedAt: string
 }
 
+/** `POST /api/admin/newsletters/:id/select`: the issue, and each pick replaced with newer coverage of it (reasons as in `StoryNewerCoverage`). */
+export interface NewsletterSelection extends Newsletter {
+  replacedWithNewer: { replacedId: string; replacedTitle: string; newerId: string; newerTitle: string; reason: 'same_event' | 'same_source' }[]
+}
+
+/**
+ * Later coverage that may have overtaken a chosen story (`GET /api/admin/stories/newer-coverage`,
+ * advisory): `same_event` is a story in its dedup cluster reported a day or more later,
+ * `same_source` a nearly identical later headline from its own feed.
+ */
+export interface StoryNewerCoverage {
+  storyId: string
+  /** Newest first, at most three */
+  newer: { id: string; title: string; publisher: string; reportedAt: string; reason: 'same_event' | 'same_source' }[]
+}
+
 /** One issue in the public newsletter archive (`GET /api/newsletters`). */
 export interface PublicNewsletterIssueSummary {
   slug: string
@@ -520,6 +536,15 @@ export interface PublicPodcastResponse {
     listenLinks: { name: string; url: string }[]
   }
   episodes: PublicPodcastEpisode[]
+}
+
+/**
+ * `GET /api/stories/:slug/appearances`: the first published newsletter issue and podcast episode
+ * that carried the story, each as its own public list serves it; null where none did.
+ */
+export interface PublicStoryAppearances {
+  newsletterIssue: PublicNewsletterIssueSummary | null
+  podcastEpisode: PublicPodcastEpisode | null
 }
 
 /** A saved script edit: the episode and the style warnings (segues, outro sign-off) the person may keep. */

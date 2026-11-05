@@ -2,13 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { Newsletter, NewsletterSend } from '@shared/types'
+import { MemoryRouter } from 'react-router-dom'
+import type { Newsletter, NewsletterSend, Story } from '@shared/types'
 import { ToastProvider } from '../ui/Toast'
 
-const mockNewsletters = vi.hoisted(() => ({ listSends: vi.fn(), markSendFailed: vi.fn() }))
+const mockNewsletters = vi.hoisted(() => ({ listSends: vi.fn(), markSendFailed: vi.fn(), select: vi.fn() }))
+const mockStories = vi.hoisted(() => ({ batch: vi.fn(), newerCoverage: vi.fn() }))
 vi.mock('../../lib/admin-api', async importOriginal => ({
   ...(await importOriginal<typeof import('../../lib/admin-api')>()),
-  adminApi: { newsletters: mockNewsletters, stories: { batch: vi.fn().mockResolvedValue([]) } },
+  adminApi: { newsletters: mockNewsletters, stories: mockStories },
 }))
 
 import { NewsletterDetail } from './NewsletterDetail'
@@ -48,11 +50,13 @@ const send = (overrides: Partial<NewsletterSend>): NewsletterSend => ({
 function renderDetail(newsletter: Newsletter) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(
-    <QueryClientProvider client={client}>
-      <ToastProvider>
-        <NewsletterDetail newsletter={newsletter} />
-      </ToastProvider>
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <ToastProvider>
+          <NewsletterDetail newsletter={newsletter} />
+        </ToastProvider>
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
@@ -64,7 +68,11 @@ const sendLiveButton = async () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockStories.batch.mockResolvedValue([])
+  mockStories.newerCoverage.mockResolvedValue([])
 })
+
+const story = (id: string, title: string) => ({ id, title, sourceTitle: title, dateCrawled: '2026-10-20T00:00:00Z', relevance: 7 }) as Story
 
 describe('NewsletterDetail', () => {
   it('locks building and editing of a sent, published issue, but not unpublishing it', async () => {
@@ -111,5 +119,47 @@ describe('NewsletterDetail', () => {
 
     await waitFor(() => expect(mockNewsletters.markSendFailed).toHaveBeenCalledWith('nl-1', 'live'))
     expect(confirm).toHaveBeenCalledTimes(2)
+  })
+
+  it('flags a selected story that newer coverage may have overtaken, linking the newer story, and still allows the send', async () => {
+    mockNewsletters.listSends.mockResolvedValue([send({ id: 'test', isTest: true, status: 'sent' })])
+    mockStories.batch.mockResolvedValue([story('s1', 'US orders total blockade of key oil route'), story('s2', 'Wetlands bill passes')])
+    mockStories.newerCoverage.mockResolvedValue([
+      {
+        storyId: 's1',
+        newer: [{ id: 's9', title: 'US orders blockade of Iranian ports', publisher: 'Wire A', reportedAt: '2026-10-29T10:00:00Z', reason: 'same_event' }],
+      },
+    ])
+    renderDetail(issue({ selectedStoryIds: ['s1', 's2'] }))
+
+    const newerLink = await screen.findByRole('link', { name: 'US orders blockade of Iranian ports' })
+    expect(newerLink).toHaveAttribute('href', '/admin/stories/s9')
+    expect(mockStories.newerCoverage).toHaveBeenCalledWith(['s1', 's2'])
+    const flaggedRow = screen.getByRole('link', { name: 'US orders total blockade of key oil route' }).closest('tr')!
+    expect(flaggedRow).toContainElement(newerLink)
+    const quietRow = screen.getByRole('link', { name: 'Wetlands bill passes' }).closest('tr')!
+    expect(quietRow).not.toHaveTextContent('Newer coverage')
+    expect(await sendLiveButton()).toBeEnabled()
+  })
+
+  it('names each pick the selection replaced with newer coverage', async () => {
+    mockNewsletters.listSends.mockResolvedValue([])
+    const replaced = {
+      replacedId: 's1',
+      replacedTitle: 'US orders total blockade of key oil route',
+      newerId: 's9',
+      newerTitle: 'US orders blockade of Iranian ports',
+    }
+    mockNewsletters.select
+      .mockResolvedValueOnce({ ...issue({ selectedStoryIds: ['s9'] }), replacedWithNewer: [{ ...replaced, reason: 'same_event' }] })
+      .mockResolvedValueOnce({ ...issue({ selectedStoryIds: ['s9'] }), replacedWithNewer: [] })
+    renderDetail(issue({ storyIds: ['s1', 's9'] }))
+
+    await userEvent.click(button('Select Stories'))
+    expect(await screen.findByText('Stories selected. Replaced with newer coverage: US orders total blockade of key oil route')).toBeInTheDocument()
+    expect(mockNewsletters.select).toHaveBeenCalledWith('nl-1')
+
+    await userEvent.click(button('Select Stories'))
+    expect(await screen.findByText('Stories selected')).toBeInTheDocument()
   })
 })

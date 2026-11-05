@@ -11,6 +11,7 @@ import sourcesRouter from './sources.js'
 import feedbackRouter from './feedback.js'
 import podcastRouter from './podcast.js'
 import { storyImageRouter, storyPageRouter } from './storyPreview.js'
+import { pagePreviewRouter } from './pagePreview.js'
 import newslettersRouter from './newsletters.js'
 import feedFaviconRouter from './feedFavicon.js'
 
@@ -20,8 +21,10 @@ const router = Router()
 // address behind the /podcast.xml rewrite. The router rate-limits its JSON route itself.
 router.use('/podcast', podcastRouter)
 // Before the limiter for the same reason: the site's /stories/* rewrite proxies every story
-// page view here (routes/public/storyPreview.ts).
+// page view here (routes/public/storyPreview.ts), and the /newsletter/*, /podcast/* and /issues/*
+// rewrites every view of those pages (routes/public/pagePreview.ts).
 router.use('/story-page', storyPageRouter)
+router.use('/page', pagePreviewRouter)
 // Before the limiter: every page of story cards loads a favicon per feed shown, and mail clients'
 // image proxies fetch the newsletter's from few addresses (routes/public/feedFavicon.ts).
 router.use('/feeds', feedFaviconRouter)

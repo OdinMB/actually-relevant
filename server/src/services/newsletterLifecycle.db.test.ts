@@ -6,7 +6,7 @@
 import { it, expect, vi, beforeEach, afterEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { createFeed, createIssue, createNewsletter, createSend, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
+import { createCluster, createFeed, createIssue, createNewsletter, createSend, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { fakePlunk } from '../test/fakePlunk.js'
 
 const mockInvoke = vi.hoisted(() => vi.fn())
@@ -255,6 +255,27 @@ describeDb('newsletter lifecycle', () => {
     const html = await lifecycle.generateHtml(issue.id)
     expect(html).toContain('/newsletter/week-9-2026')
     expect(await issueOf(issue.id)).toMatchObject({ html, slug: 'week-9-2026', status: 'draft' })
+  })
+
+  it("selecting puts newer coverage the issue can carry in place of the model's pick, so the content carries the newer story", async () => {
+    const topic = await createIssue()
+    const feed = await createFeed(topic.id)
+    const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000)
+    const older = await createStory({ feedId: feed.id, status: 'published', title: 'Blockade ordered on a key oil route', dateCrawled: hoursAgo(96) })
+    const newer = await createStory({ feedId: feed.id, status: 'published', title: 'Blockade extended to every port', dateCrawled: hoursAgo(48) })
+    await createCluster([older.id, newer.id], older.id)
+    const issue = await createNewsletter({ title: 'Week 9, 2026' })
+    await lifecycle.assignStories(issue.id)
+    mockInvoke.mockResolvedValueOnce({ selectedIds: [older.id] })
+
+    const selection = await lifecycle.selectStories(issue.id)
+
+    expect(selection.selectedStoryIds).toEqual([newer.id])
+    expect(selection.replacedWithNewer).toEqual([expect.objectContaining({ replacedId: older.id, newerId: newer.id, reason: 'same_event' })])
+    expect((await issueOf(issue.id)).selectedStoryIds).toEqual([newer.id])
+    const { content } = await lifecycle.generateContent(issue.id)
+    expect(content).toContain(`## Blockade extended to every port {story:${newer.id}}`)
+    expect(content).not.toContain(older.id)
   })
 
   it("leads the test and the live subject with the most relevant story, and names the next two in the HTML's preview text", async () => {
