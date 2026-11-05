@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { axe } from 'vitest-axe'
 import type { JobRun } from '@shared/types'
+import { formatDateWithTime } from '../../lib/constants'
 import { JobStatusBadge } from './JobStatusBadge'
 
 function makeJob(overrides: Partial<JobRun> = {}): JobRun {
@@ -44,6 +46,26 @@ describe('JobStatusBadge', () => {
       />,
     )
     expect(screen.getByText('Incomplete')).toBeTruthy()
+  })
+
+  it('explains Incomplete with the start of the unfinished run, on focus and to a screen reader', async () => {
+    const started = '2026-06-19T01:00:00.000Z'
+    const { container } = render(<JobStatusBadge job={makeJob({ lastStartedAt: started, lastCompletedAt: '2026-06-17T01:09:00.000Z' })} />)
+
+    const badge = screen.getByText('Incomplete')
+    expect(badge).toHaveAttribute('tabindex', '0')
+    expect(badge).toHaveAccessibleDescription(expect.stringContaining(`${formatDateWithTime(started)} UTC`))
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('explains Incomplete in the dot variant too, and adds nothing to the other states', () => {
+    const started = '2026-06-19T01:00:00.000Z'
+    const { rerender } = render(<JobStatusBadge variant="dot" job={makeJob({ lastStartedAt: started })} />)
+    expect(screen.getByTitle(new RegExp(`^Incomplete: .*${formatDateWithTime(started)} UTC`))).toBeInTheDocument()
+
+    rerender(<JobStatusBadge job={makeJob({ lastStartedAt: started, lastCompletedAt: '2026-06-19T01:05:00.000Z' })} />)
+    expect(screen.getByText('OK')).not.toHaveAttribute('aria-describedby')
+    expect(screen.getByText('OK')).not.toHaveAttribute('tabindex')
   })
 
   it('shows Incomplete when a run started but never completed', () => {

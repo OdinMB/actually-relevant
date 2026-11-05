@@ -28,6 +28,7 @@ vi.mock('node-cron', () => ({
 const mockNotify = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const mockRunCrawlFeeds = vi.hoisted(() => vi.fn())
 const mockRunAssessStories = vi.hoisted(() => vi.fn())
+const mockSweepInterruptedRuns = vi.hoisted(() => vi.fn())
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../lib/notify.js', async importOriginal => ({
@@ -38,6 +39,11 @@ vi.mock('../lib/notify.js', async importOriginal => ({
 /** The notice the scheduler sends for a failed run of `jobName` whose message matches `message`. */
 const failureOf = (jobName: string, message: unknown) => expect.objectContaining({ dedupeKey: `job-failure:${jobName}`, message })
 vi.mock('./jobLease.js', () => mockLease)
+// The sweep's own decisions are covered in interruptedRuns.test.ts; here it is the jobs it hands back
+vi.mock('./interruptedRuns.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('./interruptedRuns.js')>()),
+  sweepInterruptedRuns: mockSweepInterruptedRuns,
+}))
 vi.mock('./crawlFeeds.js', () => ({ runCrawlFeeds: mockRunCrawlFeeds }))
 vi.mock('./preassessStories.js', () => ({ runPreassessStories: vi.fn() }))
 vi.mock('./assessStories.js', () => ({ runAssessStories: mockRunAssessStories }))
@@ -55,10 +61,32 @@ const enabledCrawlJob = {
   cronExpression: '0 */6 * * *',
   lastCompletedAt: new Date(),
   lastStartedAt: null,
+  interruptedRuns: 0,
 }
 
 /** A row whose last finish is more than 2x its interval ago (overdue at boot). */
 const overdueRow = (jobName: string) => ({ ...enabledCrawlJob, jobName, lastCompletedAt: new Date(Date.now() - 48 * HOUR) })
+
+/** A row whose last run was interrupted `times` in a row and finished (recorded) just now: not overdue. */
+const interruptedRow = (jobName: string, times = 1) => ({ ...enabledCrawlJob, jobName, interruptedRuns: times })
+
+/** A findUnique stand-in answering from `rows`, as the catch-up chain re-reads each job. */
+const rowsByName =
+  (rows: (typeof enabledCrawlJob)[]) =>
+  ({ where }: { where: { jobName: string } }) =>
+    Promise.resolve(rows.find(row => row.jobName === where.jobName) ?? null)
+
+/** A handler that runs until the returned `finish` is called. */
+function blockingHandler(mock: ReturnType<typeof vi.fn>): () => void {
+  let finish: () => void = () => {}
+  mock.mockImplementation(
+    () =>
+      new Promise<void>(resolve => {
+        finish = resolve
+      }),
+  )
+  return () => finish()
+}
 
 /** Let pending promise chains run. */
 const flush = async () => {
@@ -79,6 +107,7 @@ describe('scheduler', () => {
     mockLease.jobsWithLiveLease.mockReset().mockResolvedValue(new Set())
     mockRunCrawlFeeds.mockReset().mockResolvedValue(undefined)
     mockRunAssessStories.mockReset().mockResolvedValue(undefined)
+    mockSweepInterruptedRuns.mockReset().mockResolvedValue([])
     config.scheduler.enabled = true
     stopScheduler()
     runningJobs.clear()
@@ -445,11 +474,6 @@ describe('scheduler', () => {
   })
 
   describe('boot catch-up', () => {
-    const rowsByName =
-      (rows: ReturnType<typeof overdueRow>[]) =>
-      ({ where }: { where: { jobName: string } }) =>
-        Promise.resolve(rows.find(row => row.jobName === where.jobName) ?? null)
-
     it('runs overdue jobs one after another in pipeline order', async () => {
       const rows = [overdueRow('assess_stories'), overdueRow('crawl_feeds')]
       mockPrisma.jobRun.findMany.mockResolvedValue(rows)
@@ -514,6 +538,110 @@ describe('scheduler', () => {
       await flush()
 
       expect(mockRunAssessStories).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('interrupted runs', () => {
+    const recheckMs = config.scheduler.leaseSeconds * 1000 + config.scheduler.interruptedRecheckSlackMs
+
+    afterEach(() => {
+      stopScheduler()
+      vi.useRealTimers()
+    })
+
+    it('reruns what the start sweep hands back with the overdue jobs, in pipeline order, a job both overdue and interrupted once', async () => {
+      const rows = [overdueRow('assess_stories'), interruptedRow('crawl_feeds')]
+      mockPrisma.jobRun.findMany.mockResolvedValue(rows)
+      mockPrisma.jobRun.findUnique.mockImplementation(rowsByName([{ ...overdueRow('assess_stories'), interruptedRuns: 1 }, interruptedRow('crawl_feeds')]))
+      mockSweepInterruptedRuns.mockResolvedValueOnce(['assess_stories', 'crawl_feeds'])
+      const finishCrawl = blockingHandler(mockRunCrawlFeeds)
+
+      await initScheduler()
+      await vi.waitFor(() => expect(mockRunCrawlFeeds).toHaveBeenCalledTimes(1))
+      await flush()
+      expect(mockRunAssessStories).not.toHaveBeenCalled()
+
+      finishCrawl()
+      await vi.waitFor(() => expect(mockRunAssessStories).toHaveBeenCalledTimes(1))
+      await flush()
+      expect(mockRunAssessStories).toHaveBeenCalledTimes(1)
+      expect(mockRunCrawlFeeds).toHaveBeenCalledTimes(1)
+    })
+
+    it('tells the sweep which jobs this process schedules', async () => {
+      mockPrisma.jobRun.findMany.mockResolvedValue([enabledCrawlJob, { ...enabledCrawlJob, jobName: 'assess_stories', enabled: false }])
+
+      await initScheduler()
+      await vi.waitFor(() => expect(mockSweepInterruptedRuns).toHaveBeenCalledTimes(1))
+
+      const isScheduled = mockSweepInterruptedRuns.mock.calls[0]![0] as (jobName: string) => boolean
+      expect(isScheduled('crawl_feeds')).toBe(true)
+      expect(isScheduled('assess_stories')).toBe(false)
+    })
+
+    it('skips a rerun whose re-read row shows the job finished meanwhile', async () => {
+      mockPrisma.jobRun.findMany.mockResolvedValue([interruptedRow('crawl_feeds')])
+      mockPrisma.jobRun.findUnique.mockResolvedValue({ ...interruptedRow('crawl_feeds'), interruptedRuns: 0 })
+      mockSweepInterruptedRuns.mockResolvedValueOnce(['crawl_feeds'])
+
+      await initScheduler()
+      await vi.waitFor(() => expect(mockPrisma.jobRun.findUnique).toHaveBeenCalled())
+      await flush()
+
+      expect(mockRunCrawlFeeds).not.toHaveBeenCalled()
+    })
+
+    it('sweeps once more after a lease live at the start would have run out, and reruns what that finds', async () => {
+      vi.useFakeTimers()
+      mockPrisma.jobRun.findMany.mockResolvedValue([enabledCrawlJob])
+      mockPrisma.jobRun.findUnique.mockResolvedValue(interruptedRow('crawl_feeds'))
+      mockSweepInterruptedRuns.mockResolvedValueOnce([]).mockResolvedValueOnce(['crawl_feeds'])
+
+      await initScheduler()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockSweepInterruptedRuns).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(recheckMs - 1)
+      expect(mockSweepInterruptedRuns).toHaveBeenCalledTimes(1)
+      expect(mockRunCrawlFeeds).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(mockSweepInterruptedRuns).toHaveBeenCalledTimes(2)
+      expect(mockRunCrawlFeeds).toHaveBeenCalledTimes(1)
+
+      // Only once
+      await vi.advanceTimersByTimeAsync(recheckMs * 3)
+      expect(mockSweepInterruptedRuns).toHaveBeenCalledTimes(2)
+    })
+
+    it('stopScheduler cancels the second sweep', async () => {
+      vi.useFakeTimers()
+      mockPrisma.jobRun.findMany.mockResolvedValue([enabledCrawlJob])
+
+      await initScheduler()
+      await vi.advanceTimersByTimeAsync(0)
+      stopScheduler()
+      await vi.advanceTimersByTimeAsync(recheckMs * 2)
+
+      expect(mockSweepInterruptedRuns).toHaveBeenCalledTimes(1)
+    })
+
+    it('a rerun the second sweep finds waits for the catch-up still running before it', async () => {
+      vi.useFakeTimers()
+      mockPrisma.jobRun.findMany.mockResolvedValue([overdueRow('crawl_feeds'), { ...enabledCrawlJob, jobName: 'assess_stories' }])
+      mockPrisma.jobRun.findUnique.mockImplementation(rowsByName([overdueRow('crawl_feeds'), interruptedRow('assess_stories')]))
+      mockSweepInterruptedRuns.mockResolvedValueOnce([]).mockResolvedValueOnce(['assess_stories'])
+      const finishCrawl = blockingHandler(mockRunCrawlFeeds)
+
+      await initScheduler()
+      await vi.advanceTimersByTimeAsync(recheckMs)
+      expect(mockSweepInterruptedRuns).toHaveBeenCalledTimes(2)
+      expect(mockRunCrawlFeeds).toHaveBeenCalledTimes(1)
+      expect(mockRunAssessStories).not.toHaveBeenCalled()
+
+      finishCrawl()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockRunAssessStories).toHaveBeenCalledTimes(1)
     })
   })
 

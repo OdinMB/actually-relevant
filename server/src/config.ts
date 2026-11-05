@@ -443,6 +443,13 @@ export const config = {
     // leaseRenewMs while the handler runs, so a crashed holder blocks its job for at most
     // leaseSeconds. JOB_LEASE_SECONDS (default 120) and JOB_LEASE_RENEW_SECONDS (default 30).
     ...parseJobLeaseTiming(process.env.JOB_LEASE_SECONDS, process.env.JOB_LEASE_RENEW_SECONDS),
+    // Interrupted runs (jobs/interruptedRuns.ts): a resumable job is rerun automatically while it has
+    // been interrupted at most this many times in a row, so a run that kills the server each time
+    // (out of memory) stops after this many reruns.
+    maxResumes: 2,
+    // The second interrupted-run sweep comes this long after a lease live at the scheduler's start
+    // would have run out (leaseSeconds), so a holder that died has stopped renewing by then.
+    interruptedRecheckSlackMs: 30_000,
   },
   feed: {
     size: parseWholeNumber(process.env.RSS_FEED_SIZE, 50, 'RSS_FEED_SIZE'),

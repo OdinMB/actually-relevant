@@ -51,6 +51,8 @@ const mockReleaseHeldLeases = vi.hoisted(() => vi.fn().mockResolvedValue(0))
 vi.mock('./services/podcastPipeline.js', () => ({ releaseHeldLeases: mockReleaseHeldLeases }))
 const mockReleaseHeldJobLeases = vi.hoisted(() => vi.fn().mockResolvedValue(0))
 vi.mock('./jobs/jobLease.js', () => ({ releaseHeldJobLeases: mockReleaseHeldJobLeases }))
+const mockRecordShutdownInterruptions = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock('./jobs/interruptedRuns.js', () => ({ recordShutdownInterruptions: mockRecordShutdownInterruptions }))
 const mockCheckPodcastConfigAtBoot = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 vi.mock('./jobs/podcastBootCheck.js', () => ({ checkPodcastConfigAtBoot: mockCheckPodcastConfigAtBoot }))
 const mockInstallProcessErrorHandlers = vi.hoisted(() => vi.fn())
@@ -275,6 +277,23 @@ describe('server index', () => {
       await shutdownPromise
       expect(mockReleaseHeldJobLeases).toHaveBeenCalledTimes(1)
       expect(mockPrisma.$disconnect).toHaveBeenCalledTimes(1)
+    })
+
+    it('records the jobs still running at the deadline as interrupted, before releasing the job leases', async () => {
+      mockWaitForRunningJobs.mockResolvedValue(['crawl_feeds'])
+      const shutdownPromise = indexModule.shutdown()
+      await vi.advanceTimersByTimeAsync(1000)
+      await shutdownPromise
+
+      expect(mockRecordShutdownInterruptions).toHaveBeenCalledWith(['crawl_feeds'])
+      expect(mockRecordShutdownInterruptions.mock.invocationCallOrder[0]).toBeLessThan(mockReleaseHeldJobLeases.mock.invocationCallOrder[0]!)
+    })
+
+    it('records no interruption when every job finished within the deadline', async () => {
+      const shutdownPromise = indexModule.shutdown()
+      await vi.advanceTimersByTimeAsync(1000)
+      await shutdownPromise
+      expect(mockRecordShutdownInterruptions).not.toHaveBeenCalled()
     })
 
     it('calls process.exit(0) on successful shutdown', async () => {

@@ -64,11 +64,11 @@ describe('Admin Jobs API', () => {
       expect(res.body[0].jobName).toBe('crawl_feeds')
     })
 
-    it("reports a job as running while another process's lease is live, and keeps the lease fields out", async () => {
+    it("reports a job as running while another process's lease is live, and keeps the lease and resume bookkeeping out", async () => {
       const lockedUntil = new Date(Date.now() + 60_000)
       mockPrisma.jobRun.findMany.mockResolvedValue([
-        { jobName: 'crawl_feeds', enabled: true, cronExpression: '0 */6 * * *', lockedBy: 'other:1:abcd', lockedUntil },
-        { jobName: 'assess_stories', enabled: true, cronExpression: '0 8 * * *', lockedBy: null, lockedUntil: null },
+        { jobName: 'crawl_feeds', enabled: true, cronExpression: '0 */6 * * *', lockedBy: 'other:1:abcd', lockedUntil, interruptedRuns: 1 },
+        { jobName: 'assess_stories', enabled: true, cronExpression: '0 8 * * *', lockedBy: null, lockedUntil: null, interruptedRuns: 0 },
       ])
       mockJobsWithLiveLease.mockResolvedValue(new Set(['crawl_feeds']))
 
@@ -78,6 +78,7 @@ describe('Admin Jobs API', () => {
       expect(res.body.map((job: { running: boolean }) => job.running)).toEqual([true, false])
       expect(res.body[0]).not.toHaveProperty('lockedBy')
       expect(res.body[0]).not.toHaveProperty('lockedUntil')
+      expect(res.body[0]).not.toHaveProperty('interruptedRuns')
     })
 
     it('returns 401 without auth', async () => {

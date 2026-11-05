@@ -1,5 +1,6 @@
 import { hostname } from 'os'
 import { randomUUID } from 'crypto'
+import { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
 import { config } from '../config.js'
@@ -7,9 +8,11 @@ import { config } from '../config.js'
 /**
  * The cross-instance job lease (ADR-0017): a run holds `locked_by`/`locked_until` on its job's
  * `job_runs` row, so two processes (old and new instance during a zero-downtime deploy, or a second
- * process against the same database) never run the same job at once. Every statement is raw SQL on
- * the database clock (`locked_until` is `timestamp without time zone` holding UTC, like the podcast
- * lease), which also keeps this working whether or not the generated Prisma client knows the columns.
+ * process against the same database) never run the same job at once. Here too are the run's other
+ * writes on that row, each fenced on the lease: the finish, and the record of an interrupted run
+ * (whose decisions are in interruptedRuns.ts). Every statement is raw SQL on the database clock
+ * (`locked_until` is `timestamp without time zone` holding UTC, like the podcast lease), which also
+ * keeps this working whether or not the generated Prisma client knows the columns.
  */
 
 const log = createLogger('job-lease')
@@ -74,7 +77,8 @@ export async function withJobLeaseHeartbeat<T>(jobName: string, fn: () => Promis
 
 /**
  * Finish a run: always record `last_completed_at` (and `last_succeeded_at` on success, `last_error`
- * on failure), and release the lease only where this process still holds it.
+ * on failure), start the count of interrupted runs again, and release the lease only where this
+ * process still holds it.
  */
 export async function finishJobRun(jobName: string, error: string | null): Promise<void> {
   await prisma.$executeRaw`
@@ -82,10 +86,78 @@ export async function finishJobRun(jobName: string, error: string | null): Promi
     SET "last_completed_at" = (now() AT TIME ZONE 'UTC'),
         "last_succeeded_at" = CASE WHEN ${error === null} THEN (now() AT TIME ZONE 'UTC') ELSE "last_succeeded_at" END,
         "last_error" = ${error},
+        "interrupted_runs" = 0,
         "locked_by" = CASE WHEN "locked_by" = ${LEASE_HOLDER} THEN NULL ELSE "locked_by" END,
         "locked_until" = CASE WHEN "locked_by" = ${LEASE_HOLDER} THEN NULL ELSE "locked_until" END,
         "updated_at" = (now() AT TIME ZONE 'UTC')
     WHERE "job_name" = ${jobName}`
+}
+
+/**
+ * What recording an interrupted run writes, whichever path found it: the reason as the run's error,
+ * the finish on the database clock, one more consecutive interrupted run, and no lease.
+ */
+const interruptionWrites = (reason: Prisma.Sql) => Prisma.sql`
+        "last_error" = ${reason},
+        "last_completed_at" = (now() AT TIME ZONE 'UTC'),
+        "interrupted_runs" = "interrupted_runs" + 1,
+        "locked_by" = NULL,
+        "locked_until" = NULL,
+        "updated_at" = (now() AT TIME ZONE 'UTC')`
+
+/**
+ * Graceful shutdown: record the runs of `jobNames` that this process still holds as interrupted.
+ * `reasonFormat` is a PostgreSQL `format()` template whose one `%s` is the minutes the run had been
+ * going. Returns the jobs recorded.
+ */
+export async function recordInterruptedHere(jobNames: string[], reasonFormat: string): Promise<string[]> {
+  if (jobNames.length === 0) return []
+  const minutes = Prisma.sql`round(EXTRACT(EPOCH FROM ((now() AT TIME ZONE 'UTC') - "last_started_at")) / 60)::int`
+  const rows = await prisma.$queryRaw<{ job_name: string }[]>`
+    UPDATE "job_runs"
+    SET ${interruptionWrites(Prisma.sql`format(${reasonFormat}, ${minutes})`)}
+    WHERE "job_name" IN (${Prisma.join(jobNames)}) AND "locked_by" = ${LEASE_HOLDER}
+    RETURNING "job_name"`
+  return rows.map(row => row.job_name)
+}
+
+/**
+ * The scheduler's sweep: record as interrupted every run that started, has not finished since and
+ * holds no live lease, so its process died without writing anything. A live lease (a run in this or
+ * another process, or a dead holder's lease not yet run out) is left alone. `reasonFormat`'s one `%s`
+ * is the run's start, UTC. Returns the jobs recorded.
+ */
+export async function recordAbandonedRuns(reasonFormat: string): Promise<string[]> {
+  const startedAt = Prisma.sql`to_char("last_started_at", 'YYYY-MM-DD HH24:MI')`
+  const rows = await prisma.$queryRaw<{ job_name: string }[]>`
+    UPDATE "job_runs"
+    SET ${interruptionWrites(Prisma.sql`format(${reasonFormat}, ${startedAt})`)}
+    WHERE "last_started_at" IS NOT NULL
+      AND ("last_completed_at" IS NULL OR "last_started_at" > "last_completed_at")
+      AND ("locked_until" IS NULL OR "locked_until" < (now() AT TIME ZONE 'UTC'))
+    RETURNING "job_name"`
+  return rows.map(row => row.job_name)
+}
+
+export interface InterruptedJobRun {
+  jobName: string
+  /** Consecutive interrupted runs, 1 or more. */
+  interruptedRuns: number
+  /** The reason recorded with the last interruption. */
+  lastError: string | null
+}
+
+/** The jobs whose last run was interrupted, with the count and the recorded reason. */
+export async function interruptedJobRuns(): Promise<InterruptedJobRun[]> {
+  const rows = await prisma.$queryRaw<{ job_name: string; interrupted_runs: number; last_error: string | null }[]>`
+    SELECT "job_name", "interrupted_runs", "last_error" FROM "job_runs" WHERE "interrupted_runs" > 0`
+  return rows.map(row => ({ jobName: row.job_name, interruptedRuns: row.interrupted_runs, lastError: row.last_error }))
+}
+
+/** Start the job's count of interrupted runs again, leaving the recorded reason in place. */
+export async function clearInterruptedRuns(jobName: string): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "job_runs" SET "interrupted_runs" = 0, "updated_at" = (now() AT TIME ZONE 'UTC') WHERE "job_name" = ${jobName}`
 }
 
 /** The jobs whose lease is live on the database clock, whichever process holds it. */

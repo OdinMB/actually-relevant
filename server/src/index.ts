@@ -2,6 +2,7 @@ import prisma from './lib/prisma.js'
 import { createLogger } from './lib/logger.js'
 import { startScheduler, stopScheduler, waitForRunningJobs } from './jobs/scheduler.js'
 import { releaseHeldJobLeases } from './jobs/jobLease.js'
+import { recordShutdownInterruptions } from './jobs/interruptedRuns.js'
 import { config } from './config.js'
 import { cleanupExpiredTokens } from './services/auth.js'
 import { taskRegistry } from './lib/taskRegistry.js'
@@ -95,10 +96,13 @@ export async function shutdown(): Promise<void> {
   }
 
   // 4. Wait for scheduled jobs this process is running (a crawl, a newsletter build, a cleanup batch),
-  // within the same deadline, so a deploy does not cut one between its steps
+  // within the same deadline, so a deploy does not cut one between its steps. One still running is
+  // recorded as interrupted (one statement, never throws), so the Jobs page says why and the next
+  // start can resume it (jobs/interruptedRuns.ts)
   const stillRunning = await waitForRunningJobs(drainDeadline - Date.now())
   if (stillRunning.length > 0) {
     log.warn({ jobs: stillRunning }, 'job drain timeout exceeded, proceeding with shutdown')
+    await recordShutdownInterruptions(stillRunning)
   }
 
   // 5. Clean up task registry
