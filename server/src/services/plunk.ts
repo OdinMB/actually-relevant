@@ -360,25 +360,7 @@ export async function listActivity(opts: ListActivityOpts): Promise<ActivityPage
       }
       if (opts.cursor) params.cursor = opts.cursor
       const { data: body } = await rawClient.get('/activity', { params })
-      const page = readActivityPage(body, 'listActivity')
-      // Shape check for the first live runs (ADR-0029): key names and counts only, never values.
-      log.info(
-        {
-          responseKeys: keysOf(body),
-          itemKeys: page.items[0] ? keysOf(page.items[0]) : null,
-          metadataKeys: page.items[0] ? keysOf(page.items[0].metadata) : null,
-          count: page.items.length,
-          hasMore: page.hasMore,
-          startDate: params.startDate,
-          oldestTimestamp:
-            page.items
-              .map(i => i.timestamp)
-              .filter((t): t is string => typeof t === 'string')
-              .sort()[0] ?? null,
-        },
-        'listActivity: page shape',
-      )
-      return page
+      return readActivityPage(body, 'listActivity')
     },
     { retries: 3, retryOn: isRetryableError },
   )
