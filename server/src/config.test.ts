@@ -1,6 +1,24 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { readFileSync } from 'fs'
-import { parseFraction, parseJobLeaseTiming, parseOneOf, parseSameSite, parseTrustProxyHops, parseWholeNumber } from './config.js'
+import { parseEditionSegments, parseFraction, parseJobLeaseTiming, parseOneOf, parseSameSite, parseTrustProxyHops, parseWholeNumber } from './config.js'
+
+describe('parseEditionSegments', () => {
+  it('leaves the editions closed when neither segment is set', () => {
+    expect(parseEditionSegments(undefined, '', 'seg-test')).toEqual({ fullEditionSegmentId: '', upliftingSegmentId: '' })
+  })
+
+  it('opens them with two distinct segments', () => {
+    expect(parseEditionSegments('seg-full', ' seg-up ', 'seg-test')).toEqual({ fullEditionSegmentId: 'seg-full', upliftingSegmentId: 'seg-up' })
+  })
+
+  it('refuses to start with one segment, the same segment twice, or the test segment', () => {
+    expect(() => parseEditionSegments('seg-full', undefined, '')).toThrow(/set both or neither/)
+    expect(() => parseEditionSegments('', 'seg-up', '')).toThrow(/set both or neither/)
+    expect(() => parseEditionSegments('seg-a', 'seg-a', '')).toThrow(/same segment/)
+    expect(() => parseEditionSegments('seg-test', 'seg-up', 'seg-test')).toThrow(/PLUNK_TEST_SEGMENT_ID/)
+    expect(() => parseEditionSegments('seg-full', 'seg-test', 'seg-test')).toThrow(/PLUNK_TEST_SEGMENT_ID/)
+  })
+})
 
 describe('parseWholeNumber', () => {
   it('falls back when unset or empty', () => {

@@ -414,6 +414,98 @@ All candidates are worthy of publication. Your job is to choose among them — p
 ]
 `;
 
+exports[`newsletter prompts > Actually Uplifting > pickUpliftingShortlist sends a longer longlist in the longlist's order, asking for the issue size 1`] = `
+[
+  "<ROLE>
+You are a senior editorial curator selecting stories for Actually Uplifting, a weekly newsletter of only positive news about the developments that matter most to humanity.
+</ROLE>
+
+<GOAL>
+Select exactly 10 of the following 11 stories for this week's issue.
+
+Return only the IDs of the selected stories.
+</GOAL>
+
+<SELECTION_CRITERIA>
+- Pick stories that complement each other — avoid two stories covering the same event or angle.
+- Prefer stories with concrete, demonstrated progress over announcements or speculation.
+- Prefer stories about systemic shifts (policy changes, new norms, international agreements) over isolated incidents.
+- Prefer stories with broad scale and lasting consequences.
+- Cover as many of the issue categories as the stories allow.
+- The articles are listed from the highest relevance rating down: between stories that are otherwise comparable, prefer the one listed first.
+</SELECTION_CRITERIA>
+
+<ARTICLES>
+<ARTICLE>
+<ID>story-11</ID>
+<ISSUE>Planet &amp; Climate</ISSUE>
+<TITLE>Title 11</TITLE>
+<SUMMARY>Summary 11</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-10</ID>
+<ISSUE>Human Development</ISSUE>
+<TITLE>Title 10</TITLE>
+<SUMMARY>Summary 10</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-9</ID>
+<ISSUE>Science &amp; Technology</ISSUE>
+<TITLE>Title 9</TITLE>
+<SUMMARY>Summary 9</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-8</ID>
+<ISSUE>General</ISSUE>
+<TITLE>Title 8</TITLE>
+<SUMMARY>Summary 8</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-7</ID>
+<ISSUE>Planet &amp; Climate</ISSUE>
+<TITLE>Title 7</TITLE>
+<SUMMARY>Summary 7</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-6</ID>
+<ISSUE>Human Development</ISSUE>
+<TITLE>Title 6</TITLE>
+<SUMMARY>Summary 6</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-5</ID>
+<ISSUE>Science &amp; Technology</ISSUE>
+<TITLE>Title 5</TITLE>
+<SUMMARY>Summary 5</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-4</ID>
+<ISSUE>General</ISSUE>
+<TITLE>Title 4</TITLE>
+<SUMMARY>Summary 4</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-3</ID>
+<ISSUE>Planet &amp; Climate</ISSUE>
+<TITLE>Title 3</TITLE>
+<SUMMARY></SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-2</ID>
+<ISSUE>Human Development</ISSUE>
+<TITLE>Source title 2</TITLE>
+<SUMMARY>Summary 2</SUMMARY>
+</ARTICLE>
+<ARTICLE>
+<ID>story-1</ID>
+<ISSUE>Science &amp; Technology</ISSUE>
+<TITLE>Title 1</TITLE>
+<SUMMARY>Summary 1</SUMMARY>
+</ARTICLE>
+</ARTICLES>",
+]
+`;
+
 exports[`newsletter prompts > pickShortlist sends the longlist with each story top-level issue 1`] = `
 [
   "<ROLE>

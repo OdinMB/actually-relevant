@@ -2,6 +2,7 @@ import type { Newsletter } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { TimeWithRelative } from './TimeWithRelative'
+import { BRAND } from '../../config'
 
 interface NewsletterTableProps {
   newsletters: Newsletter[]
@@ -42,6 +43,11 @@ export function NewsletterTable({ newsletters, onView, onDelete }: NewsletterTab
                 >
                   {nl.title}
                 </button>
+                {nl.edition === 'uplifting' && (
+                  <Badge variant="pink" className="ml-2">
+                    {BRAND.upliftingEdition}
+                  </Badge>
+                )}
               </td>
               <td className="px-3 py-2">
                 <Badge variant={nl.status === 'published' ? 'green' : 'gray'}>{nl.status === 'published' ? 'Published' : 'Draft'}</Badge>

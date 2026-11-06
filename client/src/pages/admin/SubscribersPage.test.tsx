@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
@@ -14,7 +14,17 @@ const listMock = vi.mocked(adminApi.subscribers.list)
 
 const baseReconciliation = {
   db: { total: 2, confirmed: 1, pending: 1 },
-  plunk: { available: true, partial: false, truncated: false, total: 3, subscribed: 2, unsubscribed: 1, unsubscribedNotInDb: 1, error: null },
+  plunk: {
+    available: true,
+    partial: false,
+    truncated: false,
+    total: 3,
+    subscribed: 2,
+    subscribedByEdition: { full: 1, uplifting: 1 },
+    unsubscribed: 1,
+    unsubscribedNotInDb: 1,
+    error: null,
+  },
   mismatches: 1,
   rows: [
     {
@@ -24,6 +34,7 @@ const baseReconciliation = {
       dbCreatedAt: '2026-01-01T00:00:00Z',
       plunkStatus: 'subscribed' as const,
       plunkContactId: 'p1',
+      plunkEdition: 'uplifting' as const,
       mismatch: false,
     },
     {
@@ -33,6 +44,7 @@ const baseReconciliation = {
       dbCreatedAt: '2026-01-01T00:00:00Z',
       plunkStatus: null,
       plunkContactId: null,
+      plunkEdition: null,
       mismatch: true,
     },
   ],
@@ -66,6 +78,18 @@ describe('SubscribersPage', () => {
     expect(screen.getByRole('button', { name: /export csv/i })).toBeInTheDocument()
   })
 
+  it("shows each contact's edition and the subscribed count per edition, for the check against Plunk's segments", async () => {
+    listMock.mockResolvedValue(baseReconciliation)
+    renderPage()
+
+    const alice = (await screen.findByText('alice@example.com')).closest('tr')!
+    expect(within(alice).getAllByText('uplifting').length).toBeGreaterThan(0)
+    expect(screen.getByRole('columnheader', { name: 'Edition' })).toBeInTheDocument()
+    expect(screen.getByText('Subscribed by edition')).toBeInTheDocument()
+    expect(screen.getByText('1 / 1')).toBeInTheDocument()
+    expect(screen.getByText('full / Actually Uplifting')).toBeInTheDocument()
+  })
+
   it('shows a "Plunk unavailable" notice when Plunk could not be read', async () => {
     listMock.mockResolvedValue({
       ...baseReconciliation,
@@ -75,6 +99,7 @@ describe('SubscribersPage', () => {
         truncated: false,
         total: null,
         subscribed: null,
+        subscribedByEdition: null,
         unsubscribed: null,
         unsubscribedNotInDb: null,
         error: 'PROJECT_DISABLED',
@@ -88,6 +113,7 @@ describe('SubscribersPage', () => {
           dbCreatedAt: '2026-01-01T00:00:00Z',
           plunkStatus: null,
           plunkContactId: null,
+          plunkEdition: null,
           mismatch: false,
         },
       ],
@@ -100,7 +126,17 @@ describe('SubscribersPage', () => {
   it('shows an empty state when there are no rows', async () => {
     listMock.mockResolvedValue({
       db: { total: 0, confirmed: 0, pending: 0 },
-      plunk: { available: true, partial: false, truncated: false, total: 0, subscribed: 0, unsubscribed: 0, unsubscribedNotInDb: 0, error: null },
+      plunk: {
+        available: true,
+        partial: false,
+        truncated: false,
+        total: 0,
+        subscribed: 0,
+        subscribedByEdition: { full: 0, uplifting: 0 },
+        unsubscribed: 0,
+        unsubscribedNotInDb: 0,
+        error: null,
+      },
       mismatches: 0,
       rows: [],
     })

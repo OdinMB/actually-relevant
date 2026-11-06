@@ -33,6 +33,12 @@ vi.mock('../../services/subscribe.js', () => ({
   ConfirmationLinkError,
 }))
 
+const mockSwitchEdition = vi.hoisted(() => vi.fn())
+vi.mock('../../services/editionSwitch.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../services/editionSwitch.js')>()),
+  switchEdition: mockSwitchEdition,
+}))
+
 vi.mock('../../lib/turnstile.js', () => ({
   verifyTurnstile: (...args: any[]) => mockVerifyTurnstile(...args),
 }))
@@ -49,6 +55,7 @@ process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
 const { config } = await import('../../config.js')
+const { EditionSwitchError } = await import('../../services/editionSwitch.js')
 
 describe('Public Subscribe API', () => {
   beforeEach(() => {
@@ -57,6 +64,7 @@ describe('Public Subscribe API', () => {
     mockSubscribe.mockResolvedValue(undefined)
     mockConfirm.mockResolvedValue(undefined)
     mockVerifyTurnstile.mockResolvedValue('ok')
+    mockSwitchEdition.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -144,9 +152,53 @@ describe('Public Subscribe API', () => {
       expect(res.status).toBe(200)
       expect(res.headers['access-control-allow-origin']).toBe('*')
     })
+
+    it('offers the edition choice only while the editions are open', async () => {
+      expect((await request(app).get('/api/subscribe/token')).body.editionChoice).toBe(false)
+
+      config.plunk.fullEditionSegmentId = 'seg-full'
+      config.plunk.upliftingSegmentId = 'seg-up'
+      try {
+        expect((await request(app).get('/api/subscribe/token')).body.editionChoice).toBe(true)
+      } finally {
+        config.plunk.fullEditionSegmentId = ''
+        config.plunk.upliftingSegmentId = ''
+      }
+    })
+  })
+
+  describe('POST /api/subscribe/edition', () => {
+    it("switches the link's contact to the edition the link offers", async () => {
+      const res = await request(app).post('/api/subscribe/edition').send({ contactId: 'contact-1', edition: 'uplifting' })
+
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ success: true, edition: 'uplifting' })
+      expect(mockSwitchEdition).toHaveBeenCalledWith('contact-1', 'uplifting')
+    })
+
+    it('answers a refusal with its status and code', async () => {
+      mockSwitchEdition.mockRejectedValueOnce(new EditionSwitchError('not_subscribed', 'This address is not subscribed to the newsletter.', 409))
+
+      const res = await request(app).post('/api/subscribe/edition').send({ contactId: 'contact-1', edition: 'full' })
+
+      expect(res.status).toBe(409)
+      expect(res.body).toEqual({ error: 'This address is not subscribed to the newsletter.', code: 'not_subscribed' })
+    })
+
+    it('refuses an edition that does not exist, and a missing contact id, without asking Plunk', async () => {
+      expect((await request(app).post('/api/subscribe/edition').send({ contactId: 'contact-1', edition: 'cheerful' })).status).toBe(400)
+      expect((await request(app).post('/api/subscribe/edition').send({ edition: 'full' })).status).toBe(400)
+      expect(mockSwitchEdition).not.toHaveBeenCalled()
+    })
   })
 
   describe('POST /api/subscribe', () => {
+    it('passes the chosen edition to the signup', async () => {
+      await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token', edition: 'uplifting' })
+
+      expect(mockSubscribe).toHaveBeenCalledWith({ email: 'user@example.com', edition: 'uplifting' })
+    })
+
     it('subscribes with a valid form token', async () => {
       const res = await request(app).post('/api/subscribe').send({ email: 'user@example.com', formToken: 'valid-token' })
 

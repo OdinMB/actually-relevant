@@ -1,16 +1,17 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import type { PublicNewsletterIssueSummary } from '@shared/types'
+import type { NewsletterEdition, PublicNewsletterIssueSummary } from '@shared/types'
 import { publicApi } from '../lib/api'
 import { isPrerendering } from '../lib/renderComplete'
 
 /**
- * One page of published newsletter issues, newest first. Never asked for while prerendering, so no
- * static HTML (the /newsletter list, the newest-issue card) keeps a dated issue.
+ * One page of published newsletter issues, newest first: both editions', or only `edition`'s. Never
+ * asked for while prerendering, so no static HTML (the /newsletter list, the newest-issue card) keeps
+ * a dated issue.
  */
-export function useNewsletterArchive(page: number) {
+export function useNewsletterArchive(page: number, edition?: NewsletterEdition) {
   return useQuery({
-    queryKey: ['public-newsletter-archive', page],
-    queryFn: () => publicApi.newsletterArchive(page),
+    queryKey: ['public-newsletter-archive', page, edition ?? 'all'],
+    queryFn: () => publicApi.newsletterArchive(page, edition),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
     enabled: !isPrerendering(),
@@ -38,12 +39,13 @@ export interface LatestNewsletterIssue extends PublicNewsletterIssueSummary {
 /**
  * The newest published newsletter issue, for the ways in to its web edition (the home page card,
  * the line at the end of each story). It is the first entry of the archive's first page, the
- * request the Past issues list on /newsletter makes, so the two share one cache entry. Null while
+ * request the Past issues list on /newsletter makes, so the two share one cache entry. With an
+ * `edition`, that edition's newest issue (the home page inside Actually Uplifting). Null while
  * loading, when no issue is published and when the archive fails to load, so the way in quietly
  * stays away; and while the page is prerendered, so no static HTML keeps a dated issue.
  */
-export function useLatestNewsletterIssue(): LatestNewsletterIssue | null {
-  const { data } = useNewsletterArchive(1)
+export function useLatestNewsletterIssue(edition?: NewsletterEdition): LatestNewsletterIssue | null {
+  const { data } = useNewsletterArchive(1, edition)
   const latest = data?.data[0]
   if (!latest) return null
   return { ...latest, thisWeek: new Date().getTime() - new Date(latest.publishedAt).getTime() < WEEK_MS }

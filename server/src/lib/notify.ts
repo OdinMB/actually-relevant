@@ -47,6 +47,8 @@ async function postWebhook(input: NoticeInput): Promise<void> {
 const JOB_FAILURE_HOMES: Record<string, { source: NoticeSource; link: string }> = {
   generate_newsletter: { source: 'newsletter', link: '/admin/newsletters' },
   publish_newsletter: { source: 'newsletter', link: '/admin/newsletters' },
+  generate_uplifting_newsletter: { source: 'newsletter', link: '/admin/newsletters' },
+  publish_uplifting_newsletter: { source: 'newsletter', link: '/admin/newsletters' },
   generate_podcast: { source: 'podcast', link: '/admin/podcasts' },
   publish_podcast: { source: 'podcast', link: '/admin/podcasts' },
   send_queued_confirmations: { source: 'subscriptions', link: '/admin/subscribers' },

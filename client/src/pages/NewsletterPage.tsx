@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildBreadcrumbSchema } from '../lib/structured-data'
@@ -17,6 +17,10 @@ import { usePageTurn } from '../hooks/usePageTurn'
 import { NEWSLETTER_FEED_URL, sectionOgImage } from '../lib/api'
 import { FOCUS_RING } from '../lib/control-classes'
 import { loadStateOf } from '../lib/loadState'
+import { ARCHIVE_FILTER_PARAM, archiveEdition, archiveFilterOf, withArchiveFilter, type ArchiveFilter } from '../lib/newsletterArchiveFilter'
+import { useUpliftingEdition } from '../contexts/PositivityContext'
+import NewsletterEditionTag from '../components/NewsletterEditionTag'
+import { BRAND } from '../config'
 
 const META = {
   title: 'Newsletter - Actually Relevant',
@@ -35,13 +39,39 @@ const LINK_CLASS = `text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px
 /** A link inside a sentence is underlined: its color alone barely stands out from the text around it. */
 const INLINE_LINK_CLASS = `${LINK_CLASS} underline`
 
+const FILTER_OPTIONS: { value: ArchiveFilter; label: string }[] = [
+  { value: 'all', label: 'All issues' },
+  { value: 'uplifting', label: BRAND.upliftingEdition },
+]
+
+/** The archive's two-option filter: toggle buttons, the pressed one the list shown. */
+function ArchiveFilterButtons({ filter, onChange }: { filter: ArchiveFilter; onChange: (filter: ArchiveFilter) => void }) {
+  return (
+    <div role="group" aria-label="Show issues" className="mb-2 flex flex-wrap gap-2">
+      {FILTER_OPTIONS.map(({ value, label }) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={filter === value}
+          onClick={() => onChange(value)}
+          className={`min-h-6 rounded-full border px-3 py-1.5 text-sm transition-colors ${FOCUS_RING} ${
+            filter === value ? 'border-brand-300 bg-brand-50 font-semibold text-brand-700' : 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /**
- * Every published issue, newest first, paginated. Loads client-side (never asked for while
+ * The published issues `filter` names, newest first, paginated. Loads client-side (never asked for while
  * prerendering, so no dated list is baked in). Another page moves focus to the section's `heading` and is announced once it is in.
  */
-function IssueList({ heading, onPageChange }: { heading: RefObject<HTMLHeadingElement | null>; onPageChange: () => void }) {
+function IssueList({ filter, heading, onPageChange }: { filter: ArchiveFilter; heading: RefObject<HTMLHeadingElement | null>; onPageChange: () => void }) {
   const [page, setPage] = useState(1)
-  const archiveQuery = useNewsletterArchive(page)
+  const archiveQuery = useNewsletterArchive(page, archiveEdition(filter))
   const { data } = archiveQuery
   const loadState = loadStateOf(archiveQuery)
   const pageTurn = usePageTurn({ heading, page, totalPages: data?.totalPages ?? 1, settled: loadState === 'ready' && !archiveQuery.isPlaceholderData })
@@ -59,15 +89,23 @@ function IssueList({ heading, onPageChange }: { heading: RefObject<HTMLHeadingEl
   function issueList(): ReactNode {
     if (loadState === 'loading') return <NewsletterArchiveSkeleton />
     if (loadState !== 'ready') return <LoadFailure title="The past issues couldn't load" headingLevel={3} query={archiveQuery} className="py-8" />
-    if (!data || data.data.length === 0) return <p className="text-neutral-600">No issues have been published yet.</p>
+    if (!data || data.data.length === 0)
+      return (
+        <p className="text-neutral-600">
+          {filter === 'uplifting' ? `No ${BRAND.upliftingEdition} issues have been published yet.` : 'No issues have been published yet.'}
+        </p>
+      )
     return (
       <>
         <ul className="divide-y divide-neutral-100">
           {data.data.map(issue => (
             <li key={issue.slug} className="py-5">
-              <Link to={`/newsletter/${issue.slug}`} className={`text-xl font-bold ${LINK_CLASS}`}>
-                {issue.title}
-              </Link>
+              <NewsletterEditionTag edition={issue.edition} className="mb-1" />
+              <div>
+                <Link to={`/newsletter/${issue.slug}`} className={`text-xl font-bold ${LINK_CLASS}`}>
+                  {issue.title}
+                </Link>
+              </div>
               <p className="mt-1 text-sm text-neutral-600">
                 <time dateTime={issue.publishedAt}>{formatEpisodeDate(issue.publishedAt)}</time>
                 {issue.storyCount > 0 && (
@@ -96,12 +134,16 @@ function IssueList({ heading, onPageChange }: { heading: RefObject<HTMLHeadingEl
 
 /**
  * `/newsletter`, laid out like the podcast page: heading and AI subtitle, the signup form, then
- * every published issue. The heading, subtitle and form are static, so they prerender; the
- * issue list loads client-side. `/newsletter/archive` redirects here (App.tsx).
+ * the published issues of both editions, filterable to Actually Uplifting (`?edition=`, opening on
+ * that filter inside the edition). The heading, subtitle, form and filter are static, so they
+ * prerender (as the All view: the prerender is never inside the edition); the issue list loads
+ * client-side. `/newsletter/archive` redirects here (App.tsx).
  */
 export default function NewsletterPage() {
   const issuesRef = useRef<HTMLElement>(null)
   const issuesHeadingRef = useRef<HTMLHeadingElement>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filter = archiveFilterOf(searchParams.get(ARCHIVE_FILTER_PARAM), useUpliftingEdition())
 
   return (
     <>
@@ -143,7 +185,12 @@ export default function NewsletterPage() {
           <h2 ref={issuesHeadingRef} id="newsletter-issues-heading" className="section-heading mb-2 focus:outline-none">
             Past issues
           </h2>
-          <IssueList heading={issuesHeadingRef} onPageChange={() => issuesRef.current?.scrollIntoView?.({ block: 'start' })} />
+          <ArchiveFilterButtons
+            filter={filter}
+            onChange={next => setSearchParams(prev => withArchiveFilter(prev, next), { replace: true, preventScrollReset: true })}
+          />
+          {/* Keyed by the filter, so another filter starts on its first page */}
+          <IssueList key={filter} filter={filter} heading={issuesHeadingRef} onPageChange={() => issuesRef.current?.scrollIntoView?.({ block: 'start' })} />
         </section>
 
         <PodcastCrossLink className="mt-10 border-t border-neutral-200 pt-6" />

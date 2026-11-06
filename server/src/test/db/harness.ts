@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeEach, describe } from 'vitest'
-import type { ContentStatus, NewsletterSendStatus, RejectionReason, StoryStatus } from '@prisma/client'
+import type { ContentStatus, EmotionTag, NewsletterEdition, NewsletterSendStatus, RejectionReason, StoryStatus } from '@prisma/client'
 import prisma from '../../lib/prisma.js'
 import { testDatabaseRefusal } from './guard.js'
 
@@ -68,6 +68,7 @@ export async function createStory(data: {
   rejectionReason?: RejectionReason | null
   sourceTitle?: string
   sourceDatePublished?: Date | null
+  emotionTag?: EmotionTag | null
 }) {
   const id = randomUUID()
   return prisma.story.create({
@@ -89,6 +90,7 @@ export async function createStory(data: {
       datePublished: data.datePublished ?? null,
       accessTier: data.accessTier ?? null,
       rejectionReason: data.rejectionReason ?? null,
+      emotionTag: data.emotionTag ?? null,
     },
   })
 }
@@ -120,10 +122,12 @@ export async function createNewsletter(
     weekKey?: string | null
     slug?: string | null
     publishedAt?: Date | null
+    edition?: NewsletterEdition
   } = {},
 ) {
   return prisma.newsletter.create({
     data: {
+      edition: data.edition ?? 'full',
       title: data.title ?? `Issue ${randomUUID().slice(0, 8)}`,
       status: data.status ?? 'draft',
       html: data.html ?? '',

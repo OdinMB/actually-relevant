@@ -20,6 +20,7 @@ import NewsletterIssuePage from './NewsletterIssuePage'
 const ISSUE: PublicNewsletterIssue = {
   slug: 'week-42-2026',
   title: 'Week 42, 2026',
+  edition: 'full',
   publishedAt: '2026-10-18T09:00:00.000Z',
   aiLabel: { lead: 'AI', text: 'selected the stories in this issue and wrote the headlines and summaries.' },
   content: [
@@ -95,6 +96,21 @@ describe('NewsletterIssuePage', () => {
     expect(meta('meta[property="og:description"]')).toBe(description)
     expect(meta('meta[name="twitter:image"]')).toBe('/api/section-images/newsletter.png')
     expect(meta('meta[property="og:image:type"]')).toBe('image/png')
+  })
+
+  it('tags an Actually Uplifting issue above its title, and names the edition in its page title; a full issue has no tag', async () => {
+    mockApi.newsletterIssue.mockResolvedValue({ ...ISSUE, slug: 'actually-uplifting-week-42-2026', edition: 'uplifting' })
+    const { unmount } = renderPage('actually-uplifting-week-42-2026')
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Week 42, 2026' })
+    const tag = screen.getByText('Actually Uplifting')
+    expect(tag.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await waitFor(() => expect(document.title).toBe('Actually Uplifting · Week 42, 2026 - Actually Relevant Newsletter'))
+    unmount()
+
+    mockApi.newsletterIssue.mockResolvedValue(ISSUE)
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Week 42, 2026' })
+    expect(screen.queryByText('Actually Uplifting')).toBeNull()
   })
 
   it("shows the issue's AI label before any AI-written text", async () => {

@@ -49,6 +49,7 @@ const { pickBestStoryForSocial } = await import('./socialMedia.js')
 const bluesky = await import('./bluesky.js')
 const mastodon = await import('./mastodon.js')
 const { pickShortlist, buildContent } = await import('./newsletter.js')
+const { pickUpliftingShortlist } = await import('./upliftingIssue.js')
 const { selectEpisodeStories, writeEpisodeScript, loadEpisodeStories } = await import('./podcastScript.js')
 
 /** The prompts sent while `run` ran; a model failure after the last prompt is expected. */
@@ -237,6 +238,30 @@ describe('newsletter prompts', () => {
         ['story-4', 'General'],
         ['story-5', 'Planet & Climate'],
       ]),
+    })
+  })
+
+  describe('Actually Uplifting', () => {
+    const issues = [otherIssue, childIssue, parentIssue, null]
+    const uplifting = Array.from({ length: 11 }, (_, i) => row(i + 1, issues[i % 4] ?? null, null, { emotionTag: 'uplifting' }))
+    // The longlist's order, most relevant first, as upliftingCandidateIds gives it
+    const longlist = [...uplifting].reverse().map(r => r.id)
+
+    it("pickUpliftingShortlist sends a longer longlist in the longlist's order, asking for the issue size", async () => {
+      // findMany keeps no order of its own
+      mockPrisma.story.findMany.mockResolvedValue(uplifting)
+      expect(await promptsOf(() => pickUpliftingShortlist({ id: 'nl-up', storyIds: longlist }))).toMatchSnapshot()
+    })
+
+    it('pickUpliftingShortlist sends no prompt while the longlist fits the issue', async () => {
+      mockPrisma.story.findMany.mockResolvedValue(uplifting.slice(0, 10))
+      let picks: Awaited<ReturnType<typeof pickUpliftingShortlist>> | undefined
+      expect(
+        await promptsOf(async () => {
+          picks = await pickUpliftingShortlist({ id: 'nl-up', storyIds: longlist.slice(1) })
+        }),
+      ).toEqual([])
+      expect(picks?.storyIds).toEqual(longlist.slice(1))
     })
   })
 

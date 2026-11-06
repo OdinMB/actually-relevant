@@ -10,6 +10,7 @@ import { SubscribersTable } from '../../components/admin/SubscribersTable'
 import { Button } from '../../components/ui/Button'
 import { subscribersToCsv } from '../../lib/subscribersCsv'
 import { downloadFile } from '../../lib/download'
+import { BRAND } from '../../config'
 
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
@@ -78,6 +79,12 @@ export default function SubscribersPage() {
               label="Never-confirmed in Plunk"
               value={data.plunk.available ? (data.plunk.unsubscribedNotInDb ?? 0) : '—'}
               hint="unsubscribed, no local row"
+            />
+            {/* The check against the two edition segments' counts in Plunk's dashboard (.context/subscription.md, "Editions") */}
+            <StatCard
+              label="Subscribed by edition"
+              value={data.plunk.subscribedByEdition ? `${data.plunk.subscribedByEdition.full} / ${data.plunk.subscribedByEdition.uplifting}` : '—'}
+              hint={data.plunk.subscribedByEdition ? `full / ${BRAND.upliftingEdition}` : 'unavailable'}
             />
           </div>
 

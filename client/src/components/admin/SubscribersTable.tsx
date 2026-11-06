@@ -2,6 +2,7 @@ import { Badge } from '../ui/Badge'
 import type { BadgeVariant } from '../../lib/constants'
 import { formatShortDate } from '../../lib/constants'
 import type { SubscriberRow, SubscriberDbStatus, SubscriberPlunkStatus } from '../../lib/admin-api'
+import type { NewsletterEdition } from '@shared/types'
 
 const DB_BADGE: Record<SubscriberDbStatus, BadgeVariant> = {
   confirmed: 'green',
@@ -11,6 +12,11 @@ const DB_BADGE: Record<SubscriberDbStatus, BadgeVariant> = {
 const PLUNK_BADGE: Record<SubscriberPlunkStatus, BadgeVariant> = {
   subscribed: 'green',
   unsubscribed: 'gray',
+}
+
+const EDITION_BADGE: Record<NewsletterEdition, BadgeVariant> = {
+  full: 'gray',
+  uplifting: 'pink',
 }
 
 /** "—" when a side has no entry (or Plunk status is unknown). */
@@ -33,6 +39,9 @@ export function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
             </th>
             <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
               In Plunk
+            </th>
+            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Edition
             </th>
             <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
               Confirmed
@@ -60,6 +69,7 @@ export function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
                   <StatusBadge status={row.dbStatus} variantMap={DB_BADGE} />
                   <span className="text-neutral-400 text-xs">Plunk</span>
                   <StatusBadge status={row.plunkStatus} variantMap={PLUNK_BADGE} />
+                  <StatusBadge status={row.plunkEdition} variantMap={EDITION_BADGE} />
                 </div>
               </td>
               <td className="hidden sm:table-cell whitespace-nowrap px-4 py-3 text-sm">
@@ -67,6 +77,9 @@ export function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
               </td>
               <td className="hidden sm:table-cell whitespace-nowrap px-4 py-3 text-sm">
                 <StatusBadge status={row.plunkStatus} variantMap={PLUNK_BADGE} />
+              </td>
+              <td className="hidden sm:table-cell whitespace-nowrap px-4 py-3 text-sm">
+                <StatusBadge status={row.plunkEdition} variantMap={EDITION_BADGE} />
               </td>
               <td className="hidden lg:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">{formatShortDate(row.dbConfirmedAt)}</td>
               <td className="hidden lg:table-cell whitespace-nowrap px-4 py-3 text-sm text-neutral-500">{formatShortDate(row.dbCreatedAt)}</td>

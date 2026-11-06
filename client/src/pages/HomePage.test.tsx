@@ -7,6 +7,7 @@ import type { PaginatedResponse, PublicNewsletterIssueSummary } from '@shared/ty
 import HomePage from './HomePage'
 import { makeStory, announcedText } from '../test/stories'
 import { focusRingProblems } from '../test/classes'
+import { PositivityProvider } from '../contexts/PositivityContext'
 
 const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -62,7 +63,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 function archive(...issues: { slug: string; title: string; daysAgo: number; storyCount: number }[]): PaginatedResponse<PublicNewsletterIssueSummary> {
   return {
-    data: issues.map(({ daysAgo, ...rest }) => ({ ...rest, publishedAt: new Date(NOW.getTime() - daysAgo * DAY_MS).toISOString() })),
+    data: issues.map(({ daysAgo, ...rest }) => ({ ...rest, edition: 'full', publishedAt: new Date(NOW.getTime() - daysAgo * DAY_MS).toISOString() })),
     total: issues.length,
     page: 1,
     pageSize: 20,
@@ -81,14 +82,17 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  localStorage.clear()
 })
 
-function renderHome() {
+function renderHome(path = '/') {
   return render(
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <HomePage />
+        <MemoryRouter initialEntries={[path]}>
+          <PositivityProvider>
+            <HomePage />
+          </PositivityProvider>
         </MemoryRouter>
       </QueryClientProvider>
     </HelmetProvider>,
@@ -97,7 +101,7 @@ function renderHome() {
 
 /** Waits until the archive request has answered or failed. */
 async function archiveSettled() {
-  await waitFor(() => expect(['success', 'error']).toContain(queryClient.getQueryState(['public-newsletter-archive', 1])?.status))
+  await waitFor(() => expect(['success', 'error']).toContain(queryClient.getQueryState(['public-newsletter-archive', 1, 'all'])?.status))
 }
 
 describe('HomePage newsletter card', () => {
@@ -123,6 +127,18 @@ describe('HomePage newsletter card', () => {
     renderHome()
 
     expect(await screen.findByRole('link', { name: 'Latest newsletter Week 40, 2026 · 1 story' })).toHaveAttribute('href', '/newsletter/week-40-2026')
+  })
+
+  it('asks for the newest issue of either edition on the main site, and for the newest Actually Uplifting issue inside that edition', async () => {
+    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'actually-uplifting-week-43-2026', title: 'Week 43, 2026', daysAgo: 1, storyCount: 4 }))
+    const { unmount } = renderHome()
+    await screen.findByRole('link', { name: /^This week’s newsletter/ })
+    expect(mockApi.newsletterArchive).toHaveBeenLastCalledWith(1, undefined)
+    unmount()
+
+    // (This file's stories are all calm, so the edition shows no section to put the card above)
+    renderHome('/?mix=uplifting')
+    await waitFor(() => expect(mockApi.newsletterArchive).toHaveBeenLastCalledWith(1, 'uplifting'))
   })
 
   it.each([

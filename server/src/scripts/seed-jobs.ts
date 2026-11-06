@@ -62,6 +62,17 @@ async function main() {
       update: {},
       create: { jobName: 'publish_newsletter', cronExpression: '30 4 * * 6', enabled: false },
     }),
+    // Actually Uplifting's weekly issue, 10 minutes after each of the full edition's jobs
+    prisma.jobRun.upsert({
+      where: { jobName: 'generate_uplifting_newsletter' },
+      update: {},
+      create: { jobName: 'generate_uplifting_newsletter', cronExpression: '10 4 * * 6', enabled: false },
+    }),
+    prisma.jobRun.upsert({
+      where: { jobName: 'publish_uplifting_newsletter' },
+      update: {},
+      create: { jobName: 'publish_uplifting_newsletter', cronExpression: '40 4 * * 6', enabled: false },
+    }),
     // Friday slots (UTC on Render); the handler does nothing outside its Friday window
     prisma.jobRun.upsert({
       where: { jobName: 'generate_podcast' },

@@ -16,6 +16,7 @@ import { sectionImage, topicImage } from './sectionPreview.js'
 import { findPublishedIssueHead, newsletterIssueUrl } from './newsletterArchive.js'
 import { storyHeadings } from './newsletterContent.js'
 import { byRelevance, leadLine } from './newsletterInbox.js'
+import { editionCopy, labeledTitle } from './newsletterEdition.js'
 import { findPublishedEpisodeHead } from './podcastPublish.js'
 
 // --- A newsletter issue, /newsletter/<slug> (IssueHead in NewsletterIssuePage.tsx) ---
@@ -53,14 +54,15 @@ function newsletterIssueCard(pageTitle: string, description: string, aiTitle: st
 async function newsletterIssuePreview(slug: string): Promise<LinkPreview | null> {
   const issue = await findPublishedIssueHead(slug)
   if (!issue?.slug) return null
-  const documentTitle = `${issue.title} - Actually Relevant Newsletter`
+  // An Actually Uplifting issue's title names its edition, so it is not taken for the full issue of its week
+  const documentTitle = `${labeledTitle(issue.edition, issue.title)} - Actually Relevant Newsletter`
   const headline = await leadHeadline(issue.content)
   return {
     documentTitle,
     ...newsletterIssueCard(
       documentTitle,
       `${issue.title} of the Actually Relevant weekly newsletter: the stories that matter to humanity this week, to read on the web.`,
-      headline && leadLine(issue.title, headline),
+      headline && leadLine(issue.title, headline, editionCopy(issue.edition).label),
     ),
     url: newsletterIssueUrl(issue.slug),
     canonical: true,

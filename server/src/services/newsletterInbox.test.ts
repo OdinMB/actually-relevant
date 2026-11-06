@@ -86,6 +86,17 @@ describe('inboxPreview: the subject', () => {
     const { subject } = inboxPreview('Week 2, 2026', [story('Cities & towns: "smog" <falls>\nby half')])
     expect(subject).toBe('Week 2: Cities & towns: "smog" <falls> by half')
   })
+
+  it("puts an edition's label in front, and still fits the subject in its room", () => {
+    const label = 'Actually Uplifting · '
+    expect(inboxPreview('Week 45, 2026', [story('Cities cut smog by a third')], label).subject).toBe('Actually Uplifting · Week 45: Cities cut smog by a third')
+    expect(inboxPreview('Week 45, 2026', [], label).subject).toBe('Actually Uplifting · Week 45, 2026')
+
+    const headline = 'Global coalition of ninety countries agrees to phase out unabated coal power plants by the end of 2035'
+    const { subject } = inboxPreview('Week 45, 2026', [story(headline)], label)
+    expect(subject).toBe('Actually Uplifting · Week 45: Global coalition of ninety countries agrees to phase out…')
+    expect(Array.from(subject).length).toBeLessThanOrEqual(SUBJECT_MAX_CHARS)
+  })
 })
 
 describe('inboxPreview: the preview text', () => {

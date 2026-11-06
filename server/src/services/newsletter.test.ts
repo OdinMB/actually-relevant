@@ -5,10 +5,11 @@ import { JSDOM } from 'jsdom'
 const { renderHtml } = await import('./newsletter.js')
 const { config } = await import('../config.js')
 const { feedFaviconUrl } = await import('../lib/feedFaviconUrl.js')
+const { editionCopy } = await import('./newsletterEdition.js')
 const NEWSLETTER_TOP_LABEL_TEXT = (await import('../lib/aiLabelCopy.js')).NEWSLETTER_TOP_LABEL.text
 
 describe('renderHtml', () => {
-  const baseNewsletter = { title: 'Week 1 — Jan 2025' }
+  const baseNewsletter = { title: 'Week 1 — Jan 2025', edition: 'full' as const }
   const render = (content: string) => renderHtml({ ...baseNewsletter, content }, 'https://actuallyrelevant.news/newsletter/week-1')
 
   /** Helper to build markdown content for a single story */
@@ -182,17 +183,15 @@ describe('renderHtml', () => {
   })
 
   it('links "View in browser", above the AI label, to the web edition it is given', () => {
-    const html = renderHtml({ title: 'Week 42, 2026', content: 'Text only.' }, 'https://actuallyrelevant.news/newsletter/week-42-2026')
+    const html = renderHtml({ title: 'Week 42, 2026', content: 'Text only.', edition: 'full' }, 'https://actuallyrelevant.news/newsletter/week-42-2026')
     expect(html).toContain('<a href="https://actuallyrelevant.news/newsletter/week-42-2026"')
     expect(html.indexOf('View in browser')).toBeLessThan(html.indexOf(NEWSLETTER_TOP_LABEL_TEXT))
   })
 
   it('opens the body with the preview text, hidden from the opened email and escaped', () => {
-    const html = renderHtml(
-      { title: 'Week 42, 2026', content: 'Text only.' },
-      'https://actuallyrelevant.news/newsletter/week-42-2026',
-      'AI-curated: Fish & "chips" <win> · Two',
-    )
+    const html = renderHtml({ title: 'Week 42, 2026', content: 'Text only.', edition: 'full' }, 'https://actuallyrelevant.news/newsletter/week-42-2026', {
+      preheader: 'AI-curated: Fish & "chips" <win> · Two',
+    })
     const doc = new JSDOM(html).window.document
 
     const preview = doc.body.firstElementChild as HTMLElement
@@ -201,6 +200,51 @@ describe('renderHtml', () => {
     expect(preview.getAttribute('style')).toContain('mso-hide: all')
     expect(html).toContain('AI-curated: Fish &amp; &quot;chips&quot; &lt;win&gt; · Two')
     expect(html.indexOf('AI-curated: Fish')).toBeLessThan(html.indexOf('View in browser'))
+  })
+
+  it('renders a full issue while the editions are closed exactly as before the editions', () => {
+    const content = storyBlock({
+      issue: 'Climate',
+      issueSlug: 'planet-climate',
+      title: 'Cities cut smog',
+      publisher: 'BBC',
+      url: 'https://example.com/smog',
+      body: 'A third less.',
+      relevanceUrl: 'https://actuallyrelevant.news/stories/smog',
+    })
+    // The snapshot was written by the template before the editions existed: a deploy with the
+    // editions closed must not change a byte of the full issue
+    expect(
+      renderHtml({ title: 'Week 45, 2026', content, edition: 'full' }, 'https://actuallyrelevant.news/newsletter/week-45-2026', {
+        preheader: 'AI-curated: Two · Three',
+        editionsOpen: false,
+      }),
+    ).toMatchSnapshot()
+  })
+
+  describe('editions', () => {
+    const content = storyBlock({ issue: 'Climate', title: 'Cities cut smog', publisher: 'BBC', url: 'https://example.com/smog', body: 'A third less.' })
+    const switchLinks = (html: string) =>
+      [...new JSDOM(html).window.document.querySelectorAll('a')].filter(a => a.getAttribute('href')?.includes('/newsletter-edition'))
+
+    it('offers the other edition in the footer only while the editions are open, with Plunk filling in the contact id', () => {
+      expect(switchLinks(renderHtml({ ...baseNewsletter, content }, 'https://x.example/n', { editionsOpen: false }))).toEqual([])
+      expect(switchLinks(renderHtml({ ...baseNewsletter, content, edition: 'uplifting' }, 'https://x.example/n', { editionsOpen: false }))).toEqual([])
+
+      const [toUplifting] = switchLinks(renderHtml({ ...baseNewsletter, content }, 'https://x.example/n', { editionsOpen: true }))
+      expect(toUplifting?.getAttribute('href')).toBe(`${config.siteUrl}/newsletter-edition?c={{id}}&to=uplifting`)
+      const [toFull] = switchLinks(renderHtml({ ...baseNewsletter, content, edition: 'uplifting' }, 'https://x.example/n', { editionsOpen: true }))
+      expect(toFull?.getAttribute('href')).toBe(`${config.siteUrl}/newsletter-edition?c={{id}}&to=full`)
+    })
+
+    it("names Actually Uplifting under the logo of its issues, in place of the full edition's tagline", () => {
+      const masthead = (edition: 'full' | 'uplifting') => {
+        const doc = new JSDOM(renderHtml({ ...baseNewsletter, content, edition }, 'https://x.example/n')).window.document
+        return doc.querySelector('img[alt="Actually Relevant"]')?.closest('td')?.textContent?.replace(/\s+/g, ' ').trim()
+      }
+      expect(masthead('uplifting')).toBe(editionCopy('uplifting').masthead!.line + ' ' + editionCopy('uplifting').masthead!.tagline)
+      expect(masthead('full')).not.toContain(editionCopy('uplifting').masthead!.line)
+    })
   })
 
   it('has no preview block without preview text', () => {

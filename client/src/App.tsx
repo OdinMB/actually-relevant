@@ -22,6 +22,7 @@ const ImprintPage = lazy(() => import('./pages/ImprintPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const SearchPage = lazy(() => import('./pages/SearchPage'))
 const SubscribedPage = lazy(() => import('./pages/SubscribedPage'))
+const NewsletterEditionPage = lazy(() => import('./pages/NewsletterEditionPage'))
 const DevelopersPage = lazy(() => import('./pages/DevelopersPage'))
 const EmbedPage = lazy(() => import('./pages/EmbedPage'))
 const WidgetGeneratorPage = lazy(() => import('./pages/WidgetGeneratorPage'))
@@ -198,6 +199,14 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
         element={
           <LazyPage>
             <SubscribedPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/newsletter-edition"
+        element={
+          <LazyPage>
+            <NewsletterEditionPage />
           </LazyPage>
         }
       />

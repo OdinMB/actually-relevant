@@ -9,7 +9,7 @@ import { join } from 'path'
 import { HumanMessage } from '@langchain/core/messages'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { type Prisma, ContentStatus, StoryStatus } from '@prisma/client'
+import { type NewsletterEdition, type Prisma, ContentStatus, StoryStatus } from '@prisma/client'
 import { paginate } from '../lib/paginate.js'
 import { generateCarouselZip, type CarouselStory } from './carousel.js'
 import * as plunk from './plunk.js'
@@ -20,6 +20,7 @@ import { escapeHtml } from '../lib/xml.js'
 import { feedFaviconUrl } from '../lib/feedFaviconUrl.js'
 import { topicColor } from '../lib/topicColors.js'
 import { parseStoryHeading, storyHeading } from './newsletterContent.js'
+import { editionCopy, switchLinkUrl } from './newsletterEdition.js'
 import { newsletterIssue, newsletterOrder, newsletterSelectInput } from './promptInputs.js'
 import { buildNewsletterSelectPrompt } from '../prompts/index.js'
 import { newsletterSelectResultSchema } from '../schemas/llm.js'
@@ -29,6 +30,7 @@ const log = createLogger('newsletter')
 
 interface NewsletterFilters {
   status?: string
+  edition?: NewsletterEdition
   page?: number
   pageSize?: number
 }
@@ -38,6 +40,7 @@ export async function getNewsletters(filters: NewsletterFilters) {
   const pageSize = filters.pageSize || 25
   const where: Prisma.NewsletterWhereInput = {}
   if (filters.status) where.status = filters.status as ContentStatus
+  if (filters.edition) where.edition = filters.edition
 
   return paginate({
     findMany: () =>
@@ -57,9 +60,9 @@ export async function getNewsletterById(id: string) {
   return prisma.newsletter.findUnique({ where: { id } })
 }
 
-/** `weekKey` is set only by the generate_newsletter job (its weekly guard keys on it). */
-export async function createNewsletter(data: { title: string; weekKey?: string }) {
-  return prisma.newsletter.create({ data: { title: data.title, weekKey: data.weekKey } })
+/** `weekKey` is set only by the weekly generate jobs (their weekly guard keys on it). An issue is `full` unless told otherwise. */
+export async function createNewsletter(data: { title: string; edition?: NewsletterEdition; weekKey?: string }) {
+  return prisma.newsletter.create({ data: { title: data.title, edition: data.edition, weekKey: data.weekKey } })
 }
 
 // --- Content builders: they compute, and newsletterLifecycle.ts writes what they return ---
@@ -246,9 +249,16 @@ export async function generateCarouselForNewsletter(newsletterId: string): Promi
  *
  * `webUrl` is the web edition's address, for "View in browser"; it opens once the issue is published.
  * `preheader` is the inbox preview text (`newsletterInbox.ts`), hidden at the top of the body; none
- * when empty.
+ * when empty. The issue's edition gives the masthead line under the logo (Actually Uplifting only)
+ * and, while `editionsOpen`, the footer link to the other edition (`newsletterEdition.ts`); a full
+ * issue rendered while the editions are closed is exactly the email from before the editions.
  */
-export function renderHtml(newsletter: { title: string; content: string }, webUrl: string, preheader = ''): string {
+export function renderHtml(
+  newsletter: { title: string; content: string; edition: NewsletterEdition },
+  webUrl: string,
+  { preheader = '', editionsOpen = false }: { preheader?: string; editionsOpen?: boolean } = {},
+): string {
+  const edition = editionCopy(newsletter.edition)
   // Split on --- separators to get individual blocks
   const sections = newsletter.content.split(/\n---\n/).filter(s => s.trim())
 
@@ -421,6 +431,23 @@ export function renderHtml(newsletter: { title: string; content: string }, webUr
   <div style="display: none; max-height: 0; max-width: 0; overflow: hidden; opacity: 0; font-size: 1px; line-height: 1px; color: #f5f5f5; mso-hide: all;">${escapeHtml(preheader)}</div>`
     : ''
 
+  // The logo is the raster image in both editions (no licence covers drawing Nexa into images); the
+  // edition's name is HTML text, in brand-700, which keeps AA contrast at this size
+  const mastheadHtml = edition.masthead
+    ? `
+              <p style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #b01a6a; line-height: 1.3;">${escapeHtml(edition.masthead.line)}</p>
+              <p style="margin: 2px 0 0; font-size: 15px; font-style: italic; color: #737373;">${escapeHtml(edition.masthead.tagline)}</p>`
+    : `
+              <p style="margin: -2px 0 0; font-size: 15px; font-style: italic; color: #a3a3a3;">News that matter to humanity</p>`
+
+  // The switch to the other edition; its link carries Plunk's per-recipient contact id
+  const switchHtml = editionsOpen
+    ? `
+              <p style="margin: 0 0 12px; font-size: 13px; color: #525252;">
+                <a href="${escapeHtml(switchLinkUrl(newsletter.edition))}" style="color: #b01a6a; text-decoration: underline;">${escapeHtml(edition.switchText)}</a>
+              </p>`
+    : ''
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -444,8 +471,7 @@ export function renderHtml(newsletter: { title: string; content: string }, webUr
             <td style="padding: 20px 32px 12px; text-align: center;">
               <a href="${config.siteUrl}" style="text-decoration: none;">
                 <img src="${config.siteUrl}/images/logo-text-horizontal.png" alt="Actually Relevant" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
-              </a>
-              <p style="margin: -2px 0 0; font-size: 15px; font-style: italic; color: #a3a3a3;">News that matter to humanity</p>
+              </a>${mastheadHtml}
             </td>
           </tr>
           <!-- Color strip -->
@@ -494,7 +520,7 @@ ${introSection}
 
           <!-- Footer -->
           <tr>
-            <td style="padding: 20px 32px 24px; text-align: center; background-color: #fafafa; border-top: 1px solid #e5e5e5; margin-top: 16px;">
+            <td style="padding: 20px 32px 24px; text-align: center; background-color: #fafafa; border-top: 1px solid #e5e5e5; margin-top: 16px;">${switchHtml}
               <p style="margin: 0 0 10px; font-size: 12px; color: #a3a3a3;">
                 <a href="${config.siteUrl}" style="color: #2563eb; text-decoration: none;">actuallyrelevant.news</a>
               </p>

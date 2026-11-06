@@ -8,17 +8,19 @@
  * - Subject: `<label>: <lead headline>`, where the label is "Week 43" for a weekly title
  *   ("Week 43, 2026", `getWeekTitle()`) and the whole title otherwise, and the lead is the story with
  *   the highest `relevance` (ties and unrated stories in the issue's order, unrated last). No story:
- *   the title alone, as before.
+ *   the title alone, as before. An Actually Uplifting issue's subject starts with its edition's
+ *   label: "Actually Uplifting · Week 43: …".
  * - Preview text: the AI marker (`NEWSLETTER_PREVIEW_AI_MARKER`), then the next two stories by the
  *   same ranking. One story: the email's own top label (`NEWSLETTER_TOP_LABEL`), so the subject's AI
  *   headline always has a label beside it. None: empty.
  *
  * Both are plain text on one line; `renderHtml()` escapes the preview text into the email.
  */
-import type { Prisma } from '@prisma/client'
+import type { NewsletterEdition, Prisma } from '@prisma/client'
 import { NEWSLETTER_PREVIEW_AI_MARKER, NEWSLETTER_TOP_LABEL } from '../lib/aiLabelCopy.js'
 import prisma from '../lib/prisma.js'
 import { storyHeadings } from './newsletterContent.js'
+import { editionCopy } from './newsletterEdition.js'
 
 /** A story as the email shows it: its heading, and its stored rating (null: unrated or not found). */
 export interface InboxStory {
@@ -76,19 +78,23 @@ export function byRelevance<T extends Pick<InboxStory, 'relevance'>>(stories: T[
   return [...stories].sort((a, b) => rank(b) - rank(a))
 }
 
-/** `<label>: <lead headline>`, the headline shortened to fit: the subject, and the issue's link-preview title. */
-export function leadLine(title: string, leadHeadline: string): string {
-  const prefix = `${issueLabel(title)}: `
+/**
+ * `<label>: <lead headline>`, the headline shortened to fit: the subject, and the issue's link-preview
+ * title. `editionLabel` goes in front ("Actually Uplifting · ", `newsletterEdition.ts`); the full
+ * edition has none.
+ */
+export function leadLine(title: string, leadHeadline: string, editionLabel = ''): string {
+  const prefix = `${editionLabel}${issueLabel(title)}: `
   const room = Math.max(MIN_HEADLINE_CHARS, SUBJECT_MAX_CHARS - Array.from(prefix).length)
   return `${prefix}${shorten(oneLine(leadHeadline), room)}`
 }
 
 /** The subject line and preview text for an issue with this title and these stories (in the email's order). */
-export function inboxPreview(title: string, stories: InboxStory[]): InboxPreview {
+export function inboxPreview(title: string, stories: InboxStory[], editionLabel = ''): InboxPreview {
   const [lead, ...others] = byRelevance(stories)
-  if (!lead) return { subject: title, preheader: '' }
+  if (!lead) return { subject: `${editionLabel}${title}`, preheader: '' }
 
-  const subject = leadLine(title, lead.headline)
+  const subject = leadLine(title, lead.headline, editionLabel)
 
   const next = others.slice(0, PREVIEW_STORIES).map(story => oneLine(story.headline))
   const preheader = next.length > 0 ? `${NEWSLETTER_PREVIEW_AI_MARKER} ${next.join(' · ')}` : `${NEWSLETTER_TOP_LABEL.lead} ${NEWSLETTER_TOP_LABEL.text}`
@@ -105,6 +111,9 @@ export async function inboxStories(content: string, client: Prisma.TransactionCl
 }
 
 /** The subject line and preview text of an issue as it is stored now. */
-export async function loadInboxPreview(newsletter: { title: string; content: string }, client: Prisma.TransactionClient = prisma): Promise<InboxPreview> {
-  return inboxPreview(newsletter.title, await inboxStories(newsletter.content, client))
+export async function loadInboxPreview(
+  newsletter: { title: string; content: string; edition: NewsletterEdition },
+  client: Prisma.TransactionClient = prisma,
+): Promise<InboxPreview> {
+  return inboxPreview(newsletter.title, await inboxStories(newsletter.content, client), editionCopy(newsletter.edition).label)
 }

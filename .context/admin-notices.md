@@ -15,7 +15,7 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap 
 
 | Caller | Source / severity | Dedupe key | Link |
 |---|---|---|---|
-| `scheduler.ts` `runJob` failure (`jobFailureNotice`) | `generate_newsletter`, `publish_newsletter` → `newsletter`; `generate_podcast`, `publish_podcast` → `podcast`; `send_queued_confirmations` → `subscriptions`; else `jobs`; `warning` | `job-failure:<jobName>` | `/admin/newsletters`, `/admin/podcasts`, `/admin/subscribers`, else `/admin/jobs` |
+| `scheduler.ts` `runJob` failure (`jobFailureNotice`) | `generate_newsletter`, `publish_newsletter`, `generate_uplifting_newsletter`, `publish_uplifting_newsletter` → `newsletter`; `generate_podcast`, `publish_podcast` → `podcast`; `send_queued_confirmations` → `subscriptions`; else `jobs`; `warning` | `job-failure:<jobName>` | `/admin/newsletters`, `/admin/podcasts`, `/admin/subscribers`, else `/admin/jobs` |
 | `scheduler.ts` boot retry: cannot start | `jobs` / `critical` | `job-failure:scheduler` | `/admin/jobs` |
 | `scheduler.ts`: started after that alert | `jobs` / `warning` ("scheduler started after N failed attempts: …") | `job-failure:scheduler` | `/admin/jobs` |
 | `lib/processErrors.ts` crash (unhandled rejection or uncaught exception; best effort, 3 s wait, then exit 1; `.context/logging.md`, "Fatal errors") | `jobs` / `critical` (kind and error type only, never the message) | `process-crash` | `/admin/jobs` |
@@ -33,7 +33,10 @@ Every owner alert (job failures, podcast and newsletter notices, the signup cap 
 | `generateNewsletter.ts` no stories this week | `newsletter` / `warning` | `newsletter-no-stories:<weekKey>` | `/admin/jobs` |
 | `publishNewsletter.ts` issue sent | `newsletter` / `info` | none | `/admin/newsletters` |
 | `publishNewsletter.ts` already sent or published | `newsletter` / `info` | `newsletter-already-sent:<weekKey>` | `/admin/newsletters` |
-| `publishNewsletter.ts` no issue, issue not built, or its test email never went out, when the job ran | `newsletter` / `warning` | `newsletter-not-sent:<weekKey>` | `/admin/newsletters` |
+| `publishNewsletter.ts` no issue, issue not built, or its test email never went out, when the job ran; or no audience (`no_audience`: the newsletter editions closed after a reader chose Actually Uplifting) | `newsletter` / `warning` | `newsletter-not-sent:<weekKey>` | `/admin/newsletters` |
+| `generateNewsletter.ts` no Actually Uplifting issue this week (no uplifting story to carry; the designed skip; `publishNewsletter.ts` repeats it on the same key when the week has neither issue nor story) | `newsletter` / `info` | `newsletter-uplifting-no-stories:<weekKey>` | `/admin/newsletters` |
+| `publishNewsletter.ts` Actually Uplifting issue sent / already sent / not sent (the full edition's three rows above, for `publish_uplifting_newsletter`; `.context/newsletter-podcast.md`, "Editions") | `newsletter` / `info`, `info`, `warning` | none / `newsletter-uplifting-already-sent:<weekKey>` / `newsletter-uplifting-not-sent:<weekKey>` | `/admin/newsletters` |
+| `editionSwitch.ts` edition switch link not filled in by Plunk (a reader opened a footer switch link still holding `{{id}}`, so every switch link of that issue is broken; no contact id or address; `.context/subscription.md`, "Editions") | `subscriptions` / `warning` | `edition-switch-link-broken` | `/admin/newsletters` |
 | `cleanupOldStories.ts` monthly result (`.context/story-retention.md`) | `jobs` / `info` | none (one per run) | `/admin/jobs` |
 | `pollPlunkActivity.ts` spam complaint | `plunk` / `critical` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |
 | `pollPlunkActivity.ts` permanent bounce | `plunk` / `warning` | `plunk:<activity id>` (insert-only) | `/admin/subscribers` |

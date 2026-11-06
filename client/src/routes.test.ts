@@ -26,6 +26,13 @@ describe('static routes (shared/routes.json)', () => {
     expect(sitemapRoutes.map(r => r.path)).not.toContain('/subscribed')
   })
 
+  it('prerenders /newsletter-edition, the footer switch page, but keeps it out of the sitemap, with its reason', () => {
+    const page = routes.find(r => r.path === '/newsletter-edition')
+    expect(page?.sitemap).toBe(false)
+    expect(page?.sitemapNote).toBeTruthy()
+    expect(sitemapRoutes.map(r => r.path)).not.toContain('/newsletter-edition')
+  })
+
   it('prerenders the Actually Uplifting landing page and lists it in the sitemap', () => {
     expect(routePaths).toContain('/uplifting')
     expect(sitemapRoutes.map(r => r.path)).toContain('/uplifting')

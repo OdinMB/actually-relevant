@@ -18,7 +18,7 @@ const dbRow = (email: string, confirmedAt: Date | null, createdAt = D('2026-01-0
   confirmedAt,
   createdAt,
 })
-const plunkContact = (email: string, subscribed: boolean, id = `id-${email}`) => ({ email, subscribed, id })
+const plunkContact = (email: string, subscribed: boolean, id = `id-${email}`, edition: 'full' | 'uplifting' = 'full') => ({ email, subscribed, id, edition })
 
 const rowFor = (rows: { email: string }[], email: string) => rows.find(r => r.email.toLowerCase() === email.toLowerCase())
 
@@ -258,6 +258,36 @@ describe('getSubscriberReconciliation', () => {
       expect(result.plunk.partial).toBe(false)
       expect(result.plunk.total).toBe(1)
     })
+  })
+
+  it("reads each contact's edition from its data, a contact without the field on the full edition, and counts subscribed contacts per edition", async () => {
+    mockPlunk.listContacts.mockResolvedValueOnce({
+      items: [
+        { email: 'up@x.com', subscribed: true, id: 'c1', data: { edition: 'uplifting' } },
+        { email: 'none@x.com', subscribed: true, id: 'c2', data: {} },
+        { email: 'nodata@x.com', subscribed: true, id: 'c3' },
+        { email: 'empty@x.com', subscribed: true, id: 'c4', data: { edition: '' } },
+        { email: 'left@x.com', subscribed: false, id: 'c5', data: { edition: 'uplifting' } },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    })
+
+    const result = await getSubscriberReconciliation()
+
+    expect(result.plunk.subscribedByEdition).toEqual({ full: 3, uplifting: 1 })
+    expect(Object.fromEntries(result.rows.map(r => [r.email, r.plunkEdition]))).toEqual({
+      'up@x.com': 'uplifting',
+      'none@x.com': 'full',
+      'nodata@x.com': 'full',
+      'empty@x.com': 'full',
+      'left@x.com': 'uplifting',
+    })
+  })
+
+  it('has no edition counts while Plunk is unavailable', async () => {
+    mockPlunk.listContacts.mockRejectedValueOnce(new Error('down'))
+    expect((await getSubscriberReconciliation()).plunk.subscribedByEdition).toBeNull()
   })
 
   it('aggregates contacts across multiple pages', async () => {

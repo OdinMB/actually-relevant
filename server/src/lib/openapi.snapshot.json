@@ -70,6 +70,7 @@
           },
           "aiLabel": { "properties": { "lead": { "type": "string" }, "text": { "type": "string" } }, "required": ["lead", "text"], "type": "object" },
           "content": { "type": "string" },
+          "edition": { "enum": ["full", "uplifting"], "type": "string" },
           "publishedAt": { "format": "date-time", "type": "string" },
           "slug": { "type": "string" },
           "stories": {
@@ -90,17 +91,18 @@
           },
           "title": { "type": "string" }
         },
-        "required": ["aiGenerated", "aiLabel", "content", "publishedAt", "slug", "stories", "title"],
+        "required": ["aiGenerated", "aiLabel", "content", "edition", "publishedAt", "slug", "stories", "title"],
         "type": "object"
       },
       "NewsletterIssueSummary": {
         "properties": {
+          "edition": { "enum": ["full", "uplifting"], "type": "string" },
           "publishedAt": { "format": "date-time", "type": "string" },
           "slug": { "type": "string" },
           "storyCount": { "type": "integer" },
           "title": { "type": "string" }
         },
-        "required": ["publishedAt", "slug", "storyCount", "title"],
+        "required": ["edition", "publishedAt", "slug", "storyCount", "title"],
         "type": "object"
       },
       "PodcastEpisode": {
@@ -383,6 +385,7 @@
       "get": {
         "operationId": "listNewsletterIssues",
         "parameters": [
+          { "in": "query", "name": "edition", "schema": { "enum": ["full", "uplifting"], "type": "string" } },
           { "in": "query", "name": "page", "schema": { "minimum": 1, "type": "integer" } },
           { "in": "query", "name": "pageSize", "schema": { "maximum": 50, "minimum": 1, "type": "integer" } }
         ],

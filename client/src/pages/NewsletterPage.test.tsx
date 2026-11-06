@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'vitest-axe'
@@ -8,6 +8,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { NEWSLETTER_PROMISE } from '../config'
 import { inPrerenderer } from '../test/prerenderer'
+import { PositivityProvider } from '../contexts/PositivityContext'
 
 const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -19,14 +20,16 @@ import NewsletterPage from './NewsletterPage'
 import { PublishHint } from '../components/admin/NewsletterDetail'
 import { ApiError } from '../lib/api'
 
-function renderPage() {
+function renderPage(path = '/newsletter') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const result = render(
     <HelmetProvider>
-      <MemoryRouter>
-        <QueryClientProvider client={client}>
-          <NewsletterPage />
-        </QueryClientProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <PositivityProvider>
+          <QueryClientProvider client={client}>
+            <NewsletterPage />
+          </QueryClientProvider>
+        </PositivityProvider>
       </MemoryRouter>
     </HelmetProvider>,
   )
@@ -35,8 +38,8 @@ function renderPage() {
 
 const ARCHIVE = {
   data: [
-    { slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: '2026-10-18T09:00:00.000Z', storyCount: 8 },
-    { slug: 'week-41-2026', title: 'Week 41, 2026', publishedAt: '2026-10-11T09:00:00.000Z', storyCount: 1 },
+    { slug: 'week-42-2026', title: 'Week 42, 2026', edition: 'full', publishedAt: '2026-10-18T09:00:00.000Z', storyCount: 8 },
+    { slug: 'week-41-2026', title: 'Week 41, 2026', edition: 'full', publishedAt: '2026-10-11T09:00:00.000Z', storyCount: 1 },
   ],
   total: 2,
   page: 1,
@@ -69,7 +72,7 @@ describe('NewsletterPage', () => {
     expect(screen.getByText('October 18, 2026')).toBeInTheDocument()
     expect(screen.getByText(/8 stories/)).toBeInTheDocument()
     expect(screen.getByText(/1 story$/)).toBeInTheDocument()
-    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1)
+    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1, undefined)
   })
 
   it('says what a subscriber gets in the left-aligned column, without a link back to this page', async () => {
@@ -118,6 +121,64 @@ describe('NewsletterPage', () => {
     const { container } = renderPage()
     await screen.findByRole('link', { name: 'Week 42, 2026' })
     expect(await axe(container)).toHaveNoViolations()
+  })
+})
+
+describe('NewsletterPage edition filter', () => {
+  const UPLIFTING_ARCHIVE = {
+    ...ARCHIVE,
+    data: [{ slug: 'actually-uplifting-week-42-2026', title: 'Week 42, 2026', edition: 'uplifting', publishedAt: '2026-10-18T09:10:00.000Z', storyCount: 4 }],
+    total: 1,
+  }
+  const option = (name: string) => within(screen.getByRole('group', { name: 'Show issues' })).getByRole('button', { name })
+
+  afterEach(() => localStorage.clear())
+
+  it('opens on all issues on the main site', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Week 42, 2026' })
+    expect(option('All issues')).toHaveAttribute('aria-pressed', 'true')
+    expect(option('Actually Uplifting')).toHaveAttribute('aria-pressed', 'false')
+    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1, undefined)
+  })
+
+  it('opens on Actually Uplifting inside that edition, and lists all issues once asked to', async () => {
+    mockApi.newsletterArchive.mockImplementation((_page: number, edition?: string) => Promise.resolve(edition === 'uplifting' ? UPLIFTING_ARCHIVE : ARCHIVE))
+    renderPage('/newsletter?mix=uplifting')
+
+    const link = await screen.findByRole('link', { name: 'Week 42, 2026' })
+    expect(link).toHaveAttribute('href', '/newsletter/actually-uplifting-week-42-2026')
+    expect(option('Actually Uplifting')).toHaveAttribute('aria-pressed', 'true')
+    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1, 'uplifting')
+
+    await userEvent.click(option('All issues'))
+    expect(await screen.findByRole('link', { name: 'Week 41, 2026' })).toBeInTheDocument()
+    expect(option('All issues')).toHaveAttribute('aria-pressed', 'true')
+    expect(mockApi.newsletterArchive).toHaveBeenLastCalledWith(1, undefined)
+  })
+
+  it.each([
+    ['/newsletter?edition=uplifting', 'uplifting', 'Actually Uplifting'],
+    ['/newsletter?mix=uplifting&edition=all', undefined, 'All issues'],
+  ])('honors %s', async (path, edition, pressed) => {
+    renderPage(path)
+    await waitFor(() => expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1, edition))
+    expect(option(pressed)).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('tags each Actually Uplifting issue with its edition, and no full issue', async () => {
+    mockApi.newsletterArchive.mockResolvedValue({ ...ARCHIVE, data: [...UPLIFTING_ARCHIVE.data, ARCHIVE.data[1]] })
+    renderPage()
+
+    const items = await screen.findAllByRole('listitem')
+    expect(within(items[0]!).getByText('Actually Uplifting')).toBeInTheDocument()
+    expect(within(items[1]!).queryByText('Actually Uplifting')).toBeNull()
+  })
+
+  it('says so when the edition has no issue yet', async () => {
+    mockApi.newsletterArchive.mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
+    renderPage('/newsletter?edition=uplifting')
+    expect(await screen.findByText('No Actually Uplifting issues have been published yet.')).toBeInTheDocument()
   })
 })
 

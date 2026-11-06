@@ -3,7 +3,7 @@
  * model mocked. A mocked model call that sends the issue mid-call is how the race between a build
  * move and a live send is reproduced.
  */
-import { it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createCluster, createFeed, createIssue, createNewsletter, createSend, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
@@ -174,6 +174,82 @@ describeDb('newsletter lifecycle', () => {
     expect(send).toMatchObject({ status: 'sending', plunkCampaignId: 'campaign-1' })
     expect(after).toMatchObject({ status: 'published', slug: 'week-8-2026', publishedAt: send.sentAt })
     expect(fakePlunk.campaigns[0]).toMatchObject({ audienceType: 'ALL', name: 'Week 8, 2026', subject: 'Week 8: A story', body: HTML })
+  })
+
+  describe('editions', () => {
+    const originalSegments = { full: config.plunk.fullEditionSegmentId, uplifting: config.plunk.upliftingSegmentId }
+    const openEditions = () => {
+      config.plunk.fullEditionSegmentId = 'seg-full'
+      config.plunk.upliftingSegmentId = 'seg-uplifting'
+    }
+    afterEach(() => {
+      config.plunk.fullEditionSegmentId = originalSegments.full
+      config.plunk.upliftingSegmentId = originalSegments.uplifting
+    })
+    const confirmedSignup = (edition: 'full' | 'uplifting') =>
+      prisma.pendingSubscription.create({
+        data: { email: `${edition}@example.com`, token: `token-${edition}`, edition, confirmedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000) },
+      })
+
+    it("sends each edition's issue to its own segment while the editions are open, its campaign named for the edition", async () => {
+      openEditions()
+      const full = await testedIssue()
+      const uplifting = await testedIssue({ edition: 'uplifting' })
+
+      await sendLive(full.id)
+      await sendLive(uplifting.id)
+
+      expect(fakePlunk.liveSends()).toEqual([])
+      expect(fakePlunk.segmentSends('seg-full')).toHaveLength(1)
+      expect(fakePlunk.segmentSends('seg-uplifting')).toHaveLength(1)
+      expect(fakePlunk.campaigns).toEqual([
+        expect.objectContaining({ audienceType: 'SEGMENT', segmentId: 'seg-full', name: 'Week 8, 2026', subject: 'Week 8: A story' }),
+        expect.objectContaining({
+          audienceType: 'SEGMENT',
+          segmentId: 'seg-uplifting',
+          name: 'Actually Uplifting · Week 8, 2026',
+          subject: 'Actually Uplifting · Week 8: A story',
+        }),
+      ])
+    })
+
+    it('refuses an Actually Uplifting send while the editions are closed, claiming nothing', async () => {
+      const issue = await testedIssue({ edition: 'uplifting' })
+
+      await expect(sendLive(issue.id)).rejects.toMatchObject({ status: 409, code: 'no_audience' })
+
+      expect(await liveRowsOf(issue.id)).toEqual([])
+      expect(fakePlunk.campaigns).toEqual([])
+      expect((await issueOf(issue.id)).status).toBe('draft')
+    })
+
+    it('sends the full issue to all subscribers while closed, but to nobody once a reader had chosen Actually Uplifting', async () => {
+      await confirmedSignup('full')
+      const first = await testedIssue()
+      await sendLive(first.id)
+      expect(fakePlunk.liveSends()).toHaveLength(1)
+
+      await confirmedSignup('uplifting')
+      const second = await testedIssue()
+      await expect(sendLive(second.id)).rejects.toMatchObject({ code: 'no_audience' })
+      expect(await liveRowsOf(second.id)).toEqual([])
+      expect(fakePlunk.liveSends()).toHaveLength(1)
+    })
+
+    it("names the test email's campaign for the edition, and sends it to the test segment only", async () => {
+      const issue = await builtIssue({ edition: 'uplifting' })
+
+      await sendTest(issue.id)
+
+      expect(fakePlunk.campaigns).toEqual([
+        expect.objectContaining({
+          audienceType: 'SEGMENT',
+          segmentId: 'seg-test',
+          name: '[TEST] Actually Uplifting · Week 8, 2026',
+          subject: '[TEST] Actually Uplifting · Week 8: A story',
+        }),
+      ])
+    })
   })
 
   it('records a scheduled send as scheduled, and publishes at once', async () => {

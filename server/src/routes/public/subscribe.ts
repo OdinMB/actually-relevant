@@ -3,7 +3,9 @@ import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { config } from '../../config.js'
 import { validateBody } from '../../middleware/validate.js'
+import { failsWith } from '../../middleware/routeErrors.js'
 import * as subscribeService from '../../services/subscribe.js'
+import { switchEdition } from '../../services/editionSwitch.js'
 import { EmailValidationError, ConfirmationEmailError, ConfirmationLinkError } from '../../services/subscribe.js'
 import { issueFormToken, verifyFormToken } from '../../lib/formToken.js'
 import { verifyTurnstile, type TurnstileResult } from '../../lib/turnstile.js'
@@ -54,11 +56,20 @@ const subscribeSchema = z.object({
   website: z.string().optional(), // honeypot — humans never fill this
   formToken: z.string().optional(),
   turnstileToken: z.string().max(4096).optional(),
+  // The edition chosen in the form, offered only while the editions are open (ADR-0052)
+  edition: z.enum(['full', 'uplifting']).optional(),
 })
 
 const confirmSchema = z.object({
   token: z.string().min(1).max(100),
   email: z.string().trim().email().max(255),
+})
+
+// The footer switch link's page posts the contact id Plunk filled into the link (`c`) and the
+// edition it offers (`to`); a Plunk id is short, so a long value is refused before Plunk is asked
+const editionSwitchSchema = z.object({
+  contactId: z.string().trim().min(1).max(100),
+  edition: z.enum(['full', 'uplifting']),
 })
 
 /**
@@ -74,10 +85,11 @@ const requireSignupsOpen: RequestHandler = (_req, res, next) => {
   next()
 }
 
-// Issue a short-lived anti-bot form token when the form is rendered.
+// Issue a short-lived anti-bot form token when the form is rendered. `editionChoice`: the form
+// offers the two editions, which it does only while they are open.
 router.get('/token', requireSignupsOpen, lightLimiter, (_req, res) => {
   res.set('Cache-Control', 'no-store')
-  res.json({ token: issueFormToken('subscribe') })
+  res.json({ token: issueFormToken('subscribe'), editionChoice: config.newsletter.editionsOpen })
 })
 
 router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, validateBody(subscribeSchema), async (req, res) => {
@@ -107,7 +119,7 @@ router.post('/', requireSignupsOpen, subscribeLimiter, subscribeDailyLimiter, va
   try {
     // A signup over the hourly limit is queued and gets this same reply, as does a
     // still-subscribed or throttled address, so the reply never tells them apart.
-    await subscribeService.subscribe({ email: req.body.email })
+    await subscribeService.subscribe({ email: req.body.email, edition: req.body.edition })
     res.json({ success: true, message: CHECK_EMAIL_MESSAGE })
   } catch (err) {
     // Surface real failures to the visitor rather than falsely claiming the email
@@ -149,5 +161,20 @@ router.post('/confirm', lightLimiter, validateBody(confirmSchema), async (req, r
     res.json({ success: false, reason })
   }
 })
+
+// A reader's click on the footer switch link's page (`services/editionSwitch.ts`). Each switch reads
+// and writes a Plunk contact, so it has the signup's per-minute limit as well as the light one.
+// Refusals are EditionSwitchErrors with a `code`, which the global handler answers.
+router.post(
+  '/edition',
+  failsWith('Switching editions failed. Please try again later.'),
+  lightLimiter,
+  subscribeLimiter,
+  validateBody(editionSwitchSchema),
+  async (req, res) => {
+    await switchEdition(req.body.contactId, req.body.edition)
+    res.json({ success: true, edition: req.body.edition })
+  },
+)
 
 export default router

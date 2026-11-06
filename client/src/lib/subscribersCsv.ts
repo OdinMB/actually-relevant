@@ -1,6 +1,6 @@
 import type { SubscriberRow } from './admin-api'
 
-const HEADERS = ['email', 'in_db', 'db_confirmed_at', 'db_created_at', 'in_plunk', 'plunk_contact_id'] as const
+const HEADERS = ['email', 'in_db', 'db_confirmed_at', 'db_created_at', 'in_plunk', 'plunk_contact_id', 'plunk_edition'] as const
 
 /**
  * Neutralize spreadsheet formula injection: a field that starts with =, +, -, @,
@@ -22,7 +22,7 @@ export function subscribersToCsv(rows: SubscriberRow[]): string {
   const lines = [HEADERS.join(',')]
   for (const r of rows) {
     lines.push(
-      [r.email, r.dbStatus ?? '', r.dbConfirmedAt ?? '', r.dbCreatedAt ?? '', r.plunkStatus ?? '', r.plunkContactId ?? '']
+      [r.email, r.dbStatus ?? '', r.dbConfirmedAt ?? '', r.dbCreatedAt ?? '', r.plunkStatus ?? '', r.plunkContactId ?? '', r.plunkEdition ?? '']
         .map(v => escapeCsv(String(v)))
         .join(','),
     )

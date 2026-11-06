@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { NewsletterTable } from '../../components/admin/NewsletterTable'
 import { CreateContentDialog } from '../../components/admin/CreateContentDialog'
 import { useToast } from '../../components/ui/Toast'
+import type { NewsletterEdition } from '@shared/types'
 
 export default function NewslettersPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
@@ -23,9 +24,9 @@ export default function NewslettersPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  const handleCreate = async (title: string) => {
+  const handleCreate = async (title: string, edition: NewsletterEdition) => {
     try {
-      const nl = await createNewsletter.mutateAsync({ title })
+      const nl = await createNewsletter.mutateAsync({ title, edition })
       toast('success', 'Newsletter created')
       setCreateOpen(false)
       navigate(`/admin/newsletters/${nl.id}`)

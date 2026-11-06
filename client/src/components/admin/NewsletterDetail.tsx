@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Newsletter, NewsletterSelection, NewsletterSend } from '@shared/types'
+import type { Newsletter, NewsletterEdition, NewsletterSelection, NewsletterSend } from '@shared/types'
+import { BRAND } from '../../config'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -27,6 +28,15 @@ import { NewerCoverageNote } from './NewerCoverageNote'
 
 interface NewsletterDetailProps {
   newsletter: Newsletter
+}
+
+/**
+ * Who a live send reaches, by the issue's edition (server/src/services/newsletterEdition.ts,
+ * `editionAudience`). Every subscriber is on the full edition until the editions are open.
+ */
+const SEND_AUDIENCE: Record<NewsletterEdition, { button: string; all: string }> = {
+  full: { button: 'Send to Subscribers', all: 'all full-edition subscribers' },
+  uplifting: { button: `Send to ${BRAND.upliftingEdition} subscribers`, all: `all ${BRAND.upliftingEdition} subscribers` },
 }
 
 function formatDate(dateStr: string | null) {
@@ -191,6 +201,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
   // Mirrors the server's rule for button states; its 409 is the authority
   const { liveSent, unconfirmed, frozen, testCurrent } = newsletterSendState(newsletter, sends)
   const sendLiveBlock = unconfirmed ? 'A send is unconfirmed' : liveSent ? 'Already sent' : !testCurrent ? 'Send a test of the current HTML first' : null
+  const audience = SEND_AUDIENCE[newsletter.edition]
 
   // Track whether local edits differ from server state
   const hasContentChanges = content !== newsletter.content
@@ -268,7 +279,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
   }
 
   const handleSendLive = async () => {
-    if (!confirm('This will send the newsletter to all subscribers and publish it on the website. It cannot be sent again. Continue?')) return
+    if (!confirm(`This will send the newsletter to ${audience.all} and publish it on the website. It cannot be sent again. Continue?`)) return
     try {
       await sendLive.mutateAsync({ id: newsletter.id })
       toast('success', 'Newsletter sent to subscribers and published')
@@ -343,6 +354,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
           ) : (
             <div className="flex items-center gap-3">
               <Badge variant={newsletter.status === 'published' ? 'green' : 'gray'}>{newsletter.status === 'published' ? 'Published' : 'Draft'}</Badge>
+              {newsletter.edition === 'uplifting' && <Badge variant="pink">{BRAND.upliftingEdition}</Badge>}
               <h1 className="text-xl font-bold text-neutral-900">{newsletter.title}</h1>
               <button
                 type="button"
@@ -511,7 +523,7 @@ export function NewsletterDetail({ newsletter }: NewsletterDetailProps) {
               disabled={sendsLoading || !!sendLiveBlock}
               title={sendLiveBlock ?? undefined}
             >
-              {sendLive.isPending ? 'Sending...' : 'Send to Subscribers'}
+              {sendLive.isPending ? 'Sending...' : audience.button}
             </Button>
           </div>
           {!sendsLoading && sendLiveBlock && <p className="text-xs text-neutral-500 -mt-2 mb-4">{sendLiveBlock}.</p>}

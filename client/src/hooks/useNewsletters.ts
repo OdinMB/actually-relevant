@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../lib/admin-api'
-import type { Newsletter } from '@shared/types'
+import type { Newsletter, NewsletterEdition } from '@shared/types'
 
 export function useNewsletters(params?: { status?: string }) {
   return useQuery({
@@ -20,7 +20,7 @@ export function useNewsletter(id: string) {
 export function useCreateNewsletter() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (data: { title: string }) => adminApi.newsletters.create(data),
+    mutationFn: (data: { title: string; edition?: NewsletterEdition }) => adminApi.newsletters.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['newsletters'] })
     },

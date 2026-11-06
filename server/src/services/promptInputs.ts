@@ -160,6 +160,17 @@ export function newsletterSelectInput(
   return { stories: storiesForPrompt, issueNames: [...new Set(storiesForPrompt.map(s => s.issueName))].sort() }
 }
 
+/**
+ * The Actually Uplifting longlist as its selection prompt lists it (`upliftingIssue.ts`): in the
+ * longlist's order, most relevant first, which the prompt tells the model, each story under its
+ * top-level issue name as in `newsletterSelectInput`.
+ */
+export function upliftingSelectInput(stories: Parameters<typeof newsletterSelectInput>[0], longlist: string[]): StoryForNewsletterSelect[] {
+  const rank = new Map(longlist.map((id, i) => [id, i]))
+  const ordered = [...stories].sort((a, b) => (rank.get(a.id) ?? longlist.length) - (rank.get(b.id) ?? longlist.length))
+  return newsletterSelectInput(ordered).stories
+}
+
 /** A story's top-level (parent) issue, or General. */
 export function newsletterIssue(story: WithIssue<SluggedIssue>): { name: string; slug: string } {
   const issue = story.issue ?? story.feed?.issue

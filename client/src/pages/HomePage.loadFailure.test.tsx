@@ -119,7 +119,7 @@ describe('HomePage newsletter card beside the load states', () => {
   beforeEach(() => {
     const publishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     mockApi.newsletterArchive.mockResolvedValue({
-      data: [{ slug: 'week-43-2026', title: 'Week 43, 2026', publishedAt, storyCount: 6 }],
+      data: [{ slug: 'week-43-2026', title: 'Week 43, 2026', edition: 'full', publishedAt, storyCount: 6 }],
       total: 1,
       page: 1,
       pageSize: 20,
@@ -128,7 +128,7 @@ describe('HomePage newsletter card beside the load states', () => {
   })
 
   /** Waits until the newest issue is known, so its absence below is the page's doing. */
-  const issueKnown = (client: QueryClient) => waitFor(() => expect(client.getQueryState(['public-newsletter-archive', 1])?.status).toBe('success'))
+  const issueKnown = (client: QueryClient) => waitFor(() => expect(client.getQueryState(['public-newsletter-archive', 1, 'all'])?.status).toBe('success'))
   const issueLink = () => screen.queryByRole('link', { name: /newsletter Week 43, 2026/ })
 
   it('comes with the stories', async () => {

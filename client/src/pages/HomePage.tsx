@@ -20,7 +20,7 @@ import { SEO, CommonOgTags } from '../lib/seo'
 import { buildWebSiteSchema, buildOrganizationSchema, toJsonLd } from '../lib/structured-data'
 import SupportBanner from '../components/SupportBanner'
 import NewsletterBanner from '../components/NewsletterBanner'
-import { isUpliftingPath, usePositivity, withMix } from '../contexts/PositivityContext'
+import { isUpliftingPath, usePositivity, useUpliftingEdition, withMix } from '../contexts/PositivityContext'
 import { mixHomepageSections, pickHero } from '../lib/mix-stories'
 import { TEXT_LINK } from '../lib/control-classes'
 import { useLatestNewsletterIssue, type LatestNewsletterIssue } from '../hooks/useNewsletterArchive'
@@ -297,8 +297,9 @@ export function HomeStories({ headingLevel = 1 }: { headingLevel?: FeedHeadingLe
   const loadState = loadStateOf(homepageQuery)
   const isLoading = loadState === 'loading'
   const data = homepageQuery.data
-  // Asked for from the start, alongside the stories, so it is usually there when they are
-  const latestIssue = useLatestNewsletterIssue()
+  // Asked for from the start, alongside the stories, so it is usually there when they are. Inside the
+  // Actually Uplifting edition, that edition's newest issue, so its home never points at a full issue
+  const latestIssue = useLatestNewsletterIssue(useUpliftingEdition() ? 'uplifting' : undefined)
 
   const issues = data?.issues ?? []
   const storiesByIssueBuckets = data?.storiesByIssue ?? {}

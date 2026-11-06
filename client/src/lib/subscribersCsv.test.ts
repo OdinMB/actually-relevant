@@ -9,6 +9,7 @@ const row = (overrides: Partial<SubscriberRow>): SubscriberRow => ({
   dbCreatedAt: null,
   plunkStatus: null,
   plunkContactId: null,
+  plunkEdition: null,
   mismatch: false,
   ...overrides,
 })
@@ -16,22 +17,30 @@ const row = (overrides: Partial<SubscriberRow>): SubscriberRow => ({
 describe('subscribersToCsv', () => {
   it('writes a header and one line per row, with blanks for nulls', () => {
     const csv = subscribersToCsv([
-      row({ email: 'a@x.com', dbStatus: 'confirmed', dbConfirmedAt: '2026-02-01', dbCreatedAt: '2026-01-01', plunkStatus: 'subscribed', plunkContactId: 'p1' }),
-      row({ email: 'b@x.com', plunkStatus: 'unsubscribed' }),
+      row({
+        email: 'a@x.com',
+        dbStatus: 'confirmed',
+        dbConfirmedAt: '2026-02-01',
+        dbCreatedAt: '2026-01-01',
+        plunkStatus: 'subscribed',
+        plunkContactId: 'p1',
+        plunkEdition: 'uplifting',
+      }),
+      row({ email: 'b@x.com', plunkStatus: 'unsubscribed', plunkEdition: 'full' }),
     ])
     const lines = csv.split('\r\n')
-    expect(lines[0]).toBe('email,in_db,db_confirmed_at,db_created_at,in_plunk,plunk_contact_id')
-    expect(lines[1]).toBe('a@x.com,confirmed,2026-02-01,2026-01-01,subscribed,p1')
-    expect(lines[2]).toBe('b@x.com,,,,unsubscribed,')
+    expect(lines[0]).toBe('email,in_db,db_confirmed_at,db_created_at,in_plunk,plunk_contact_id,plunk_edition')
+    expect(lines[1]).toBe('a@x.com,confirmed,2026-02-01,2026-01-01,subscribed,p1,uplifting')
+    expect(lines[2]).toBe('b@x.com,,,,unsubscribed,,full')
   })
 
   it('escapes values containing commas or quotes', () => {
     const csv = subscribersToCsv([row({ email: 'weird,"name"@x.com' })])
-    expect(csv.split('\r\n')[1]).toBe('"weird,""name""@x.com",,,,,')
+    expect(csv.split('\r\n')[1]).toBe('"weird,""name""@x.com",,,,,,')
   })
 
   it('neutralizes spreadsheet formula injection by prefixing a quote', () => {
     const csv = subscribersToCsv([row({ email: '=cmd@x.com' })])
-    expect(csv.split('\r\n')[1]).toBe("'=cmd@x.com,,,,,")
+    expect(csv.split('\r\n')[1]).toBe("'=cmd@x.com,,,,,,")
   })
 })

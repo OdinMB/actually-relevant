@@ -20,6 +20,7 @@ const HTML = '<p>v1</p>'
 const issue = (overrides: Partial<Newsletter> = {}): Newsletter => ({
   id: 'nl-1',
   title: 'Week 8, 2026',
+  edition: 'full',
   content: '## A story',
   html: HTML,
   storyIds: [],
@@ -92,6 +93,18 @@ describe('NewsletterDetail', () => {
 
     expect(await sendLiveButton()).toBeDisabled()
     expect(button('Generate Content')).toBeEnabled()
+  })
+
+  it("names an Actually Uplifting issue's audience on its send button and in the confirmation", async () => {
+    mockNewsletters.listSends.mockResolvedValue([send({ id: 'test', isTest: true, status: 'sent' })])
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderDetail(issue({ edition: 'uplifting' }))
+
+    await waitFor(() => expect(screen.queryByText(/Loading send history/)).toBeNull())
+    expect(screen.queryByRole('button', { name: 'Send to Subscribers' })).toBeNull()
+    await userEvent.click(button('Send to Actually Uplifting subscribers'))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('to all Actually Uplifting subscribers'))
+    confirm.mockRestore()
   })
 
   it('allows the live send only after a test email of the current HTML', async () => {

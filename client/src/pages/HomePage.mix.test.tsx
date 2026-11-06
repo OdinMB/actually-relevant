@@ -70,7 +70,8 @@ function renderHome(url: string) {
 const NOTE = 'This mix of news has no stories right now. Show the balanced mix'
 const EMPTY = 'No stories published yet. Check back soon.'
 const SUPPORT = 'Free. Independent. No ads.'
-const NEWSLETTER = 'Don’t miss what’s actually relevant.'
+// The newsletter banner's line inside the Actually Uplifting edition, where these tests' mix is
+const NEWSLETTER = 'Actually Uplifting, once a week.'
 const sectionHeadings = () => screen.queryAllByRole('heading', { level: 2 }).map(h => h.textContent)
 const section = (name: string) => screen.getByRole('heading', { level: 2, name }).closest('section')!
 const precedes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0

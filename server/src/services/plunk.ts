@@ -1,6 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios'
 import { config } from '../config.js'
-import { withRetry, isRetryableError, isConnectionNotEstablished } from '../lib/retry.js'
+import { withRetry, isRetryableError, isConnectionNotEstablished, responseStatus } from '../lib/retry.js'
 import { createLogger } from '../lib/logger.js'
 
 const log = createLogger('plunk')
@@ -150,6 +150,25 @@ export async function createContact(opts: CreateContactOpts): Promise<Contact> {
     },
     { retries: 3, retryOn: isRetryableError },
   )
+}
+
+/**
+ * One contact by its id, or null when Plunk has none (404). Read-only; retried on transient errors.
+ * The id is in the path, which a failed request's log carries, so callers log only the status.
+ */
+export async function getContact(id: string): Promise<Contact | null> {
+  try {
+    return await withRetry(
+      async () => {
+        const { data } = await client.get(`/contacts/${encodeURIComponent(id)}`)
+        return data as Contact
+      },
+      { retries: 3, retryOn: isRetryableError },
+    )
+  } catch (err) {
+    if (responseStatus(err) === 404) return null
+    throw err
+  }
 }
 
 export async function updateContact(id: string, updates: Partial<CreateContactOpts>): Promise<Contact> {

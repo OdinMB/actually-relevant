@@ -88,6 +88,7 @@ const ISSUE_CONTENT = [
 const ISSUE = {
   slug: 'week-43-2026',
   title: 'Week 43, 2026',
+  edition: 'full',
   content: ISSUE_CONTENT,
   publishedAt: new Date('2026-10-25T09:00:00Z'),
   createdAt: new Date('2026-10-24T09:00:00Z'),
@@ -224,6 +225,13 @@ describe('newsletter issue pages', () => {
     expect(html).toContain(meta('property', 'og:image:type', 'image/png'))
     expect(html).toContain(meta('name', 'twitter:image', NEWSLETTER_IMAGE))
     expect(html).not.toContain('newsletter-issue.png')
+  })
+
+  it('names the edition in the title and card title of an Actually Uplifting issue', async () => {
+    mockPrisma.newsletter.findFirst.mockResolvedValue({ ...ISSUE, slug: 'actually-uplifting-week-43-2026', edition: 'uplifting' })
+    const html = (await request(app).get('/api/page/newsletter/actually-uplifting-week-43-2026')).text
+    expect(html).toContain('<title>Actually Uplifting · Week 43, 2026 - Actually Relevant Newsletter</title>')
+    expect(html).toContain(meta('property', 'og:title', 'Actually Uplifting · Week 43: Rivers &amp; lakes &lt;recover&gt;'))
   })
 
   it('reads no stories for an issue whose headings carry no story markers', async () => {

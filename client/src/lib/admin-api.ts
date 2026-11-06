@@ -7,6 +7,7 @@ import type {
   FeedChangesetReport,
   Issue,
   Newsletter,
+  NewsletterEdition,
   NewsletterSelection,
   NewsletterSend,
   ActivePodcastRun,
@@ -90,6 +91,8 @@ export interface SubscriberRow {
   dbCreatedAt: string | null
   plunkStatus: SubscriberPlunkStatus | null
   plunkContactId: string | null
+  /** The edition the Plunk contact gets (no `edition` field counts as full); null without a contact. */
+  plunkEdition: NewsletterEdition | null
   mismatch: boolean
 }
 
@@ -101,6 +104,8 @@ export interface SubscriberReconciliation {
     truncated: boolean
     total: number | null
     subscribed: number | null
+    /** Subscribed contacts per edition, to compare with the two segments' counts in Plunk */
+    subscribedByEdition: Record<NewsletterEdition, number> | null
     unsubscribed: number | null
     unsubscribedNotInDb: number | null
     error: string | null
@@ -292,7 +297,7 @@ export const adminApi = {
   newsletters: {
     list: (params?: { status?: string }) => request<PaginatedResponse<Newsletter>>(`/newsletters${toQueryString((params || {}) as Record<string, unknown>)}`),
     get: (id: string) => request<Newsletter>(`/newsletters/${id}`),
-    create: (data: { title: string }) => request<Newsletter>('/newsletters', { method: 'POST', body: JSON.stringify(data) }),
+    create: (data: { title: string; edition?: NewsletterEdition }) => request<Newsletter>('/newsletters', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<Newsletter>) => request<Newsletter>(`/newsletters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/newsletters/${id}`, { method: 'DELETE' }),
     assign: (id: string) => request<Newsletter>(`/newsletters/${id}/assign`, { method: 'POST' }),

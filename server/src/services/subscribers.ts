@@ -15,6 +15,11 @@ const PLUNK_OVERALL_TIMEOUT_MS = 10_000
 
 export type DbStatus = 'confirmed' | 'pending'
 export type PlunkStatus = 'subscribed' | 'unsubscribed'
+/**
+ * The edition a Plunk contact gets (ADR-0052): Actually Uplifting when its `edition` field says
+ * `uplifting`, else the full edition, as the Full segment's "not uplifting, or no field" reads it.
+ */
+export type Edition = 'full' | 'uplifting'
 
 export interface SubscriberRow {
   email: string
@@ -22,6 +27,7 @@ export interface SubscriberRow {
   dbConfirmedAt: string | null
   dbCreatedAt: string | null
   plunkStatus: PlunkStatus | null // null = absent from Plunk, or Plunk unavailable
+  plunkEdition: Edition | null // null = absent from Plunk, or Plunk unavailable
   plunkContactId: string | null
   mismatch: boolean // DB and Plunk disagree (only meaningful when Plunk is available)
 }
@@ -34,6 +40,8 @@ export interface SubscriberReconciliation {
     truncated: boolean // true → hit the page cap
     total: number | null
     subscribed: number | null
+    /** The subscribed contacts by edition: what the owner compares with the two edition segments' counts in Plunk */
+    subscribedByEdition: Record<Edition, number> | null
     unsubscribed: number | null
     unsubscribedNotInDb: number | null // never-confirmed contacts, collapsed into a count
     error: string | null
@@ -52,6 +60,7 @@ interface PlunkContactLite {
   email: string
   subscribed: boolean
   id: string | null
+  edition: Edition
 }
 
 /**
@@ -101,7 +110,7 @@ export function reconcile(
 ): {
   rows: SubscriberRow[]
   db: { total: number; confirmed: number; pending: number }
-  plunkCounts: { total: number; subscribed: number; unsubscribed: number; unsubscribedNotInDb: number }
+  plunkCounts: { total: number; subscribed: number; subscribedByEdition: Record<Edition, number>; unsubscribed: number; unsubscribedNotInDb: number }
   mismatches: number
 } {
   const dbByEmail = dedupeDbRows(dbSubscribers)
@@ -114,10 +123,16 @@ export function reconcile(
     if (c.email) plunkByEmail.set(c.email.toLowerCase(), c)
   }
   let subscribed = 0
-  for (const c of plunkByEmail.values()) if (c.subscribed) subscribed++
+  const subscribedByEdition: Record<Edition, number> = { full: 0, uplifting: 0 }
+  for (const c of plunkByEmail.values()) {
+    if (!c.subscribed) continue
+    subscribed++
+    subscribedByEdition[c.edition]++
+  }
   const plunkCounts = {
     total: plunkByEmail.size,
     subscribed,
+    subscribedByEdition,
     unsubscribed: plunkByEmail.size - subscribed,
     unsubscribedNotInDb: 0,
   }
@@ -138,6 +153,7 @@ export function reconcile(
       dbConfirmedAt: s.confirmedAt ? s.confirmedAt.toISOString() : null,
       dbCreatedAt: s.createdAt.toISOString(),
       plunkStatus,
+      plunkEdition: contact?.edition ?? null,
       plunkContactId: contact?.id ?? null,
       mismatch,
     })
@@ -158,6 +174,7 @@ export function reconcile(
         dbConfirmedAt: null,
         dbCreatedAt: null,
         plunkStatus: contact.subscribed ? 'subscribed' : 'unsubscribed',
+        plunkEdition: contact.edition,
         plunkContactId: contact.id,
         mismatch,
       })
@@ -207,12 +224,17 @@ function pageContacts(page: { items?: unknown; contacts?: unknown }): PlunkConta
   const items: unknown = Array.isArray(page.items) ? page.items : Array.isArray(page.contacts) ? page.contacts : []
   const contacts: PlunkContactLite[] = []
   for (const raw of items as unknown[]) {
-    const c = raw as { email?: unknown; subscribed?: unknown; id?: unknown }
+    const c = raw as { email?: unknown; subscribed?: unknown; id?: unknown; data?: unknown }
     if (typeof c?.email === 'string' && c.email) {
-      contacts.push({ email: c.email, subscribed: coerceSubscribed(c.subscribed), id: typeof c.id === 'string' ? c.id : null })
+      contacts.push({ email: c.email, subscribed: coerceSubscribed(c.subscribed), id: typeof c.id === 'string' ? c.id : null, edition: contactEdition(c.data) })
     }
   }
   return contacts
+}
+
+/** A contact's edition from its data fields (`Edition`): only an `edition` of exactly `uplifting` is Actually Uplifting. */
+function contactEdition(data: unknown): Edition {
+  return data && typeof data === 'object' && (data as { edition?: unknown }).edition === 'uplifting' ? 'uplifting' : 'full'
 }
 
 /**
@@ -269,6 +291,7 @@ export async function getSubscriberReconciliation(): Promise<SubscriberReconcili
       truncated: fetched.truncated,
       total: fetched.available ? plunkCounts.total : null,
       subscribed: fetched.available ? plunkCounts.subscribed : null,
+      subscribedByEdition: fetched.available ? plunkCounts.subscribedByEdition : null,
       unsubscribed: fetched.available ? plunkCounts.unsubscribed : null,
       unsubscribedNotInDb: fetched.available ? plunkCounts.unsubscribedNotInDb : null,
       error: fetched.error,

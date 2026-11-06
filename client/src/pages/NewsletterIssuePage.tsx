@@ -12,6 +12,7 @@ import AiBadge from '../components/ai/AiBadge'
 import { PodcastCrossLink } from '../components/CrossLinks'
 import { NewsletterIssueSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
+import NewsletterEditionTag from '../components/NewsletterEditionTag'
 import { loadStateOf } from '../lib/loadState'
 import { useNewsletterIssue } from '../hooks/useNewsletterArchive'
 import { usePublicIssues } from '../hooks/usePublicIssues'
@@ -163,7 +164,8 @@ function Masthead() {
  */
 function IssueHead({ issue }: { issue: PublicNewsletterIssue }) {
   const url = `${SEO.siteUrl}/newsletter/${issue.slug}`
-  const title = `${issue.title} - Actually Relevant Newsletter`
+  // An Actually Uplifting issue's title names its edition, so it is not taken for the full issue of its week
+  const title = `${issue.edition === 'uplifting' ? `${BRAND.upliftingEdition} · ` : ''}${issue.title} - Actually Relevant Newsletter`
   const description = `${issue.title} of the Actually Relevant weekly newsletter: the stories that matter to humanity this week, to read on the web.`
   return (
     <>
@@ -239,6 +241,7 @@ export default function NewsletterIssuePage() {
         <article className={ISSUE_CARD_CLASS}>
           <Masthead />
           <div className="px-5 pt-8 text-center sm:px-10 sm:pt-6">
+            <NewsletterEditionTag edition={issue.edition} className="mb-2" />
             <h1 className="text-base font-bold uppercase tracking-widest text-neutral-800 md:text-lg">{issue.title}</h1>
             <p className="mt-1 text-sm text-neutral-600">
               <time dateTime={issue.publishedAt}>{formatEpisodeDate(issue.publishedAt)}</time>

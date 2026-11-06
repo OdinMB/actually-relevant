@@ -81,6 +81,18 @@ describe('Admin Newsletters API', () => {
       expect((await request(app).post('/api/admin/newsletters').set(authHeader()).send({})).status).toBe(400)
     })
 
+    it('creates and lists by edition, and refuses an edition that does not exist', async () => {
+      mockPrisma.newsletter.create.mockResolvedValue(sampleNewsletter())
+      mockPrisma.newsletter.findMany.mockResolvedValue([])
+      mockPrisma.newsletter.count.mockResolvedValue(0)
+
+      await request(app).post('/api/admin/newsletters').set(authHeader()).send({ title: 'Week 45, 2026', edition: 'uplifting' })
+      expect(mockPrisma.newsletter.create.mock.calls[0][0].data.edition).toBe('uplifting')
+      await request(app).get('/api/admin/newsletters?edition=uplifting').set(authHeader())
+      expect(mockPrisma.newsletter.findMany.mock.calls[0][0].where).toEqual({ edition: 'uplifting' })
+      expect((await request(app).post('/api/admin/newsletters').set(authHeader()).send({ title: 'x', edition: 'cheerful' })).status).toBe(400)
+    })
+
     it('answers 500 with the list route text when the query fails', async () => {
       mockPrisma.newsletter.findMany.mockRejectedValue(new Error('db down'))
       mockPrisma.newsletter.count.mockRejectedValue(new Error('db down'))

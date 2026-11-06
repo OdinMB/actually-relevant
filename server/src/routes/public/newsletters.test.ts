@@ -39,6 +39,7 @@ describe('GET /api/newsletters', () => {
       {
         slug: 'week-42-2026',
         title: 'Week 42, 2026',
+        edition: 'full',
         publishedAt: new Date('2026-10-18T09:00:00Z'),
         createdAt: new Date('2026-10-17T04:00:00Z'),
         selectedStoryIds: ['s1', 's2'],
@@ -51,7 +52,7 @@ describe('GET /api/newsletters', () => {
     expect(res.status).toBe(200)
     expect(res.headers['cache-control']).toMatch(/^public, max-age=\d+$/)
     expect(res.body).toEqual({
-      data: [{ slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: '2026-10-18T09:00:00.000Z', storyCount: 2 }],
+      data: [{ slug: 'week-42-2026', title: 'Week 42, 2026', edition: 'full', publishedAt: '2026-10-18T09:00:00.000Z', storyCount: 2 }],
       total: 1,
       page: 1,
       pageSize: 10,
@@ -68,6 +69,17 @@ describe('GET /api/newsletters', () => {
     expect((await request(app).get('/api/newsletters?pageSize=500')).status).toBe(400)
   })
 
+  it("lists one edition's issues when asked, and refuses an edition that does not exist", async () => {
+    mockPrisma.newsletter.findMany.mockResolvedValue([])
+    mockPrisma.newsletter.count.mockResolvedValue(0)
+
+    await request(app).get('/api/newsletters?edition=uplifting')
+
+    expect(mockPrisma.newsletter.findMany.mock.calls[0][0].where).toEqual({ status: 'published', slug: { not: null }, edition: 'uplifting' })
+    expect(mockPrisma.newsletter.count.mock.calls[0][0].where).toEqual({ status: 'published', slug: { not: null }, edition: 'uplifting' })
+    expect((await request(app).get('/api/newsletters?edition=cheerful')).status).toBe(400)
+  })
+
   it('answers 500 with its own text when the archive cannot be read', async () => {
     mockPrisma.newsletter.findMany.mockRejectedValue(new Error('db down'))
     const res = await request(app).get('/api/newsletters')
@@ -79,8 +91,15 @@ describe('GET /api/newsletters', () => {
 describe('GET /api/newsletters/feed.xml', () => {
   it('is an RSS feed of the published issues, each linking its web edition and carrying the AI label', async () => {
     mockPrisma.newsletter.findMany.mockResolvedValue([
-      { slug: 'week-42-2026', title: 'Week 42, 2026', publishedAt: new Date('2026-10-18T09:00:00Z'), createdAt: new Date(), selectedStoryIds: ['s1'] },
-      { slug: 'week-41-2026', title: 'Week 41 & more', publishedAt: null, createdAt: new Date('2026-10-11T09:00:00Z'), selectedStoryIds: [] },
+      {
+        slug: 'actually-uplifting-week-42-2026',
+        title: 'Week 42, 2026',
+        edition: 'uplifting',
+        publishedAt: new Date('2026-10-18T09:00:00Z'),
+        createdAt: new Date(),
+        selectedStoryIds: ['s1'],
+      },
+      { slug: 'week-41-2026', title: 'Week 41 & more', edition: 'full', publishedAt: null, createdAt: new Date('2026-10-11T09:00:00Z'), selectedStoryIds: [] },
     ])
     mockPrisma.newsletter.count.mockResolvedValue(2)
 
@@ -100,7 +119,9 @@ describe('GET /api/newsletters/feed.xml', () => {
     expect(channel).toContain('https://actuallyrelevant.news/newsletter')
     const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => m[1]!)
     expect(items).toHaveLength(2)
-    expect(items[0]).toContain('<link>https://actuallyrelevant.news/newsletter/week-42-2026</link>')
+    expect(items[0]).toContain('<link>https://actuallyrelevant.news/newsletter/actually-uplifting-week-42-2026</link>')
+    // Both editions in one feed, an Actually Uplifting issue named for its edition
+    expect(items[0]).toContain('<title><![CDATA[Actually Uplifting · Week 42, 2026]]></title>')
     expect(items[0]).toContain('Sun, 18 Oct 2026 09:00:00 GMT')
     expect(items[0]).toContain(`${NEWSLETTER_TOP_LABEL.lead} ${NEWSLETTER_TOP_LABEL.text}`)
     expect(items[1]).toContain('<title><![CDATA[Week 41 & more]]></title>')

@@ -21,6 +21,8 @@ vi.mock('../lib/prisma.js', () => ({
 }))
 
 vi.mock('../services/newsletter.js', () => ({ createNewsletter: mockCreateNewsletter }))
+const mockUpliftingCandidates = vi.hoisted(() => vi.fn())
+vi.mock('../services/upliftingIssue.js', () => ({ upliftingCandidateIds: mockUpliftingCandidates }))
 vi.mock('../services/newsletterLifecycle.js', () => ({
   assignStories: mockAssignStories,
   selectStories: mockSelectStoriesForNewsletter,
@@ -30,13 +32,14 @@ vi.mock('../services/newsletterLifecycle.js', () => ({
   deleteNewsletter: mockDelete,
 }))
 
-const { runGenerateNewsletter, getWeekTitle, getWeekKey } = await import('./generateNewsletter.js')
+const { runGenerateNewsletter, runGenerateUpliftingNewsletter, getWeekTitle, getWeekKey } = await import('./generateNewsletter.js')
 
 // --- A tiny in-memory newsletters table that evaluates the where clauses the job uses ---
 
 interface Row {
   id: string
   title: string
+  edition: 'full' | 'uplifting'
   weekKey: string | null
   html: string
   createdAt: Date
@@ -45,6 +48,7 @@ interface Row {
 
 type StringFilter = string | null | { not: string | null }
 interface Where {
+  edition?: string
   weekKey?: StringFilter
   html?: StringFilter
   createdAt?: { gte: Date }
@@ -57,6 +61,7 @@ function matchString(value: string | null, filter: StringFilter): boolean {
 }
 
 function matches(row: Row, where: Where): boolean {
+  if (where.edition !== undefined && row.edition !== where.edition) return false
   if (where.weekKey !== undefined && !matchString(row.weekKey, where.weekKey)) return false
   if (where.html !== undefined && !matchString(row.html, where.html)) return false
   if (where.createdAt && row.createdAt < where.createdAt.gte) return false
@@ -67,7 +72,7 @@ function matches(row: Row, where: Where): boolean {
 let rows: Row[] = []
 
 function row(partial: Partial<Row> & { createdAt: Date }): Row {
-  return { id: 'nl-old', title: 'Week 1, 2026', weekKey: null, html: '<p>built</p>', updatedAt: partial.createdAt, ...partial }
+  return { id: 'nl-old', title: 'Week 1, 2026', edition: 'full', weekKey: null, html: '<p>built</p>', updatedAt: partial.createdAt, ...partial }
 }
 
 const MIN = 60 * 1000
@@ -123,7 +128,7 @@ describe('runGenerateNewsletter', () => {
   it("creates the issue with this week's title and key", async () => {
     await runGenerateNewsletter()
 
-    expect(mockCreateNewsletter).toHaveBeenCalledWith({ title: 'Week 8, 2026', weekKey: '2026-W08' })
+    expect(mockCreateNewsletter).toHaveBeenCalledWith({ title: 'Week 8, 2026', edition: 'full', weekKey: '2026-W08' })
   })
 
   it('passes the newsletter ID through all pipeline steps', async () => {
@@ -249,6 +254,78 @@ describe('runGenerateNewsletter', () => {
     await expect(runGenerateNewsletter()).rejects.toThrow('plunk down')
 
     expect(mockDelete).not.toHaveBeenCalled()
+  })
+})
+
+describe('runGenerateUpliftingNewsletter', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(SATURDAY)
+    rows = []
+    mockFindFirst.mockImplementation(async ({ where }: { where: Where }) => rows.find(r => matches(r, where)) ?? null)
+    mockCount.mockResolvedValue(5)
+    mockUpliftingCandidates.mockResolvedValue(['story-1'])
+    mockCreateNewsletter.mockResolvedValue({ id: 'nl-up' })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('builds an Actually Uplifting issue from a single uplifting story, test email last', async () => {
+    await runGenerateUpliftingNewsletter()
+
+    expect(mockCreateNewsletter).toHaveBeenCalledWith({ title: 'Week 8, 2026', edition: 'uplifting', weekKey: '2026-W08' })
+    expect(mockAssignStories).toHaveBeenCalledWith('nl-up')
+    expect(mockSendTest).toHaveBeenCalledWith('nl-up')
+    expect(mockNotify).not.toHaveBeenCalled()
+  })
+
+  it('builds nothing in a week without uplifting stories, with one info notice keyed to the week', async () => {
+    mockUpliftingCandidates.mockResolvedValue([])
+
+    await runGenerateUpliftingNewsletter()
+
+    expect(mockCreateNewsletter).not.toHaveBeenCalled()
+    expect(mockNotify).toHaveBeenCalledOnce()
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'newsletter', severity: 'info', dedupeKey: 'newsletter-uplifting-no-stories:2026-W08' }),
+    )
+  })
+
+  it("is not blocked by this week's built full issue, nor does a built Actually Uplifting issue block the full one", async () => {
+    rows = [row({ id: 'nl-full', edition: 'full', weekKey: '2026-W08', createdAt: new Date(SATURDAY.getTime() - 10 * MIN) })]
+    await runGenerateUpliftingNewsletter()
+    expect(mockCreateNewsletter).toHaveBeenCalledTimes(1)
+
+    mockCreateNewsletter.mockClear()
+    rows = [row({ id: 'nl-up-built', edition: 'uplifting', weekKey: '2026-W08', createdAt: new Date(SATURDAY.getTime() - 10 * MIN) })]
+    await runGenerateNewsletter()
+    expect(mockCreateNewsletter).toHaveBeenCalledWith(expect.objectContaining({ edition: 'full' }))
+  })
+
+  it("skips when this week's Actually Uplifting issue is built, and leaves the full edition's fresh draft alone", async () => {
+    rows = [
+      row({ id: 'nl-full-draft', edition: 'full', weekKey: '2026-W08', html: '', createdAt: new Date(SATURDAY.getTime() - 2 * 60 * MIN) }),
+      row({ id: 'nl-up-built', edition: 'uplifting', weekKey: '2026-W08', createdAt: new Date(SATURDAY.getTime() - 10 * MIN) }),
+    ]
+
+    await runGenerateUpliftingNewsletter()
+
+    expect(mockCreateNewsletter).not.toHaveBeenCalled()
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+
+  // Its stories are now carried by its own built issue, so the week's count is zero
+  it("records no 'no issue this week' notice on a later run once this week's issue is built", async () => {
+    rows = [row({ id: 'nl-up-built', edition: 'uplifting', weekKey: '2026-W08', createdAt: new Date(SATURDAY.getTime() - 10 * MIN) })]
+    mockUpliftingCandidates.mockResolvedValue([])
+
+    await runGenerateUpliftingNewsletter()
+
+    expect(mockNotify).not.toHaveBeenCalled()
+    expect(mockCreateNewsletter).not.toHaveBeenCalled()
   })
 })
 

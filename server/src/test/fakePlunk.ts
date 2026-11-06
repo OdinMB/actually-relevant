@@ -42,6 +42,11 @@ class FakePlunk {
     return this.accepted.filter(send => send.audienceType === 'ALL')
   }
 
+  /** Accepted sends to one segment (an edition's, or the test segment). */
+  segmentSends(segmentId: string) {
+    return this.accepted.filter(send => this.campaigns.find(c => c.id === send.campaignId)?.segmentId === segmentId)
+  }
+
   async createCampaign(opts: CreateCampaignOpts): Promise<{ id: string }> {
     const failure = this.createFailures.shift()
     if (failure) throw failure

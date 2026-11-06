@@ -87,6 +87,11 @@ services:
         sync: false
       - key: PLUNK_TEST_SEGMENT_ID
         sync: false
+      # The newsletter editions' switch (ADR-0052): both Plunk segment ids, set together or not at all
+      - key: PLUNK_FULL_EDITION_SEGMENT_ID
+        sync: false
+      - key: PLUNK_UPLIFTING_SEGMENT_ID
+        sync: false
       # Newsletter signup (switch) and the Turnstile bot check on the signup and feedback forms
       - key: SUBSCRIPTIONS_ENABLED
         sync: false
@@ -250,6 +255,9 @@ services:
       - type: rewrite
         source: /subscribed
         destination: /subscribed/index.html
+      - type: rewrite
+        source: /newsletter-edition
+        destination: /newsletter-edition/index.html
       # Dynamic pages that are not prerendered (a newsletter issue, a podcast transcript, a topic
       # other than the four above): like story pages, the backend returns this build's index.html
       # with the page's own title, description and og:/twitter: tags, or the shell unchanged on any

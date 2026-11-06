@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { ReactNode } from 'react'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { PublicNewsletterIssueSummary } from '@shared/types'
+import type { NewsletterEdition, PublicNewsletterIssueSummary } from '@shared/types'
 import { useLatestNewsletterIssue } from './useNewsletterArchive'
 import { setPrerendering } from '../test/prerenderer'
 
@@ -15,18 +15,21 @@ vi.mock('../lib/api', async importOriginal => ({
 const NOW = new Date('2026-10-25T09:00:00Z')
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function issue(slug: string, daysAgo: number): PublicNewsletterIssueSummary {
-  return { slug, title: `Title of ${slug}`, publishedAt: new Date(NOW.getTime() - daysAgo * DAY_MS).toISOString(), storyCount: 6 }
+function issue(slug: string, daysAgo: number, edition: NewsletterEdition = 'full'): PublicNewsletterIssueSummary {
+  return { slug, title: `Title of ${slug}`, edition, publishedAt: new Date(NOW.getTime() - daysAgo * DAY_MS).toISOString(), storyCount: 6 }
 }
 
 function archive(...issues: PublicNewsletterIssueSummary[]) {
   return { data: issues, total: issues.length, page: 1, pageSize: 20, totalPages: issues.length > 0 ? 1 : 0 }
 }
 
-function renderLatest() {
+/** The cache entry of the archive's first page with both editions, which /newsletter's All view reads too. */
+const FIRST_PAGE_KEY = ['public-newsletter-archive', 1, 'all']
+
+function renderLatest(edition?: NewsletterEdition) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  return { queryClient, ...renderHook(() => useLatestNewsletterIssue(), { wrapper }) }
+  return { queryClient, ...renderHook(() => useLatestNewsletterIssue(edition), { wrapper }) }
 }
 
 beforeEach(() => {
@@ -46,7 +49,7 @@ describe('useLatestNewsletterIssue', () => {
 
     await waitFor(() => expect(result.current).not.toBeNull())
     expect(result.current).toMatchObject({ slug: 'week-43-2026', title: 'Title of week-43-2026', storyCount: 6 })
-    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1)
+    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1, undefined)
   })
 
   it('shares its request with the Past issues list on /newsletter', async () => {
@@ -54,7 +57,18 @@ describe('useLatestNewsletterIssue', () => {
     const { result, queryClient } = renderLatest()
 
     await waitFor(() => expect(result.current).not.toBeNull())
-    expect(queryClient.getQueryData(['public-newsletter-archive', 1])).toEqual(archive(issue('week-43-2026', 1)))
+    expect(queryClient.getQueryData(FIRST_PAGE_KEY)).toEqual(archive(issue('week-43-2026', 1)))
+  })
+
+  it("is one edition's newest issue when asked, from that edition's own cache entry", async () => {
+    mockApi.newsletterArchive.mockResolvedValue(archive(issue('actually-uplifting-week-43-2026', 1, 'uplifting')))
+    const { result, queryClient } = renderLatest('uplifting')
+
+    await waitFor(() => expect(result.current).not.toBeNull())
+    expect(result.current).toMatchObject({ slug: 'actually-uplifting-week-43-2026', edition: 'uplifting' })
+    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1, 'uplifting')
+    expect(queryClient.getQueryData(['public-newsletter-archive', 1, 'uplifting'])).toBeDefined()
+    expect(queryClient.getQueryData(FIRST_PAGE_KEY)).toBeUndefined()
   })
 
   it.each([
@@ -81,7 +95,7 @@ describe('useLatestNewsletterIssue', () => {
     mockApi.newsletterArchive.mockResolvedValue(archive())
     const { result, queryClient } = renderLatest()
 
-    await waitFor(() => expect(queryClient.getQueryState(['public-newsletter-archive', 1])?.status).toBe('success'))
+    await waitFor(() => expect(queryClient.getQueryState(FIRST_PAGE_KEY)?.status).toBe('success'))
     expect(result.current).toBeNull()
   })
 
@@ -89,7 +103,7 @@ describe('useLatestNewsletterIssue', () => {
     mockApi.newsletterArchive.mockRejectedValue(new Error('Network error'))
     const { result, queryClient } = renderLatest()
 
-    await waitFor(() => expect(queryClient.getQueryState(['public-newsletter-archive', 1])?.status).toBe('error'))
+    await waitFor(() => expect(queryClient.getQueryState(FIRST_PAGE_KEY)?.status).toBe('error'))
     expect(result.current).toBeNull()
   })
 

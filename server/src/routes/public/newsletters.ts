@@ -9,6 +9,7 @@ import { failsWith } from '../../middleware/routeErrors.js'
 import { validateQuery } from '../../middleware/validate.js'
 import { publicNewsletterQuerySchema } from '../../schemas/newsletter.js'
 import { getPublishedIssue, listPublishedIssues, newsletterIssueUrl } from '../../services/newsletterArchive.js'
+import { labeledTitle } from '../../services/newsletterEdition.js'
 import { NEWSLETTER_TOP_LABEL, rssChannelDescription } from '../../lib/aiLabelCopy.js'
 import { buildFeed, setRssHeaders } from '../../lib/rssFeed.js'
 
@@ -19,14 +20,15 @@ const router = Router()
 
 router.get('/', failsWith('Failed to load the newsletter archive'), validateQuery(publicNewsletterQuerySchema), async (req, res) => {
   const query = req.parsedQuery!
-  const result = await listPublishedIssues(query.page ?? 1, query.pageSize ?? 20)
+  const result = await listPublishedIssues(query.page ?? 1, query.pageSize ?? 20, query.edition)
   res.set('Cache-Control', `public, max-age=${config.newsletterArchive.cacheMaxAge}`)
   res.json(result)
 })
 
 /**
- * RSS of the published issues, newest first: one item per issue, linking its web edition. RSS
- * readers never see the site's labels, so each item description is the issue's AI label.
+ * RSS of the published issues of both editions, newest first: one item per issue, linking its web
+ * edition, an Actually Uplifting issue's title led by the edition's name. RSS readers never see the
+ * site's labels, so each item description is the issue's AI label.
  * Routed before `/:slug` (a slug never has a dot, but the order keeps it unambiguous).
  */
 router.get('/feed.xml', failsWith('Failed to generate the newsletter feed'), async (_req, res) => {
@@ -40,7 +42,7 @@ router.get('/feed.xml', failsWith('Failed to generate the newsletter feed'), asy
   for (const issue of data) {
     const url = newsletterIssueUrl(issue.slug)
     feed.addItem({
-      title: issue.title,
+      title: labeledTitle(issue.edition, issue.title),
       id: url,
       link: url,
       description: `${NEWSLETTER_TOP_LABEL.lead} ${NEWSLETTER_TOP_LABEL.text}`,

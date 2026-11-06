@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto'
 import axios from 'axios'
+import type { NewsletterEdition } from '@prisma/client'
 import prisma from '../lib/prisma.js'
+import { config } from '../config.js'
 import * as plunk from './plunk.js'
 import { contactStatus } from './plunkContacts.js'
 import { checkSendAllowance } from './subscribeLimits.js'
@@ -45,10 +47,14 @@ export function normalizeEmail(email: string): string {
 
 interface SubscribeParams {
   email: string
+  /** The edition chosen in the form (ADR-0052); `full` unless the editions are open */
+  edition?: NewsletterEdition
 }
 
-export async function subscribe({ email: rawEmail }: SubscribeParams) {
+export async function subscribe({ email: rawEmail, edition: chosen = 'full' }: SubscribeParams) {
   const email = normalizeEmail(rawEmail)
+  // While the editions are closed nobody is offered the choice, and nobody may end up on Actually Uplifting
+  const edition: NewsletterEdition = config.newsletter.editionsOpen ? chosen : 'full'
   const token = randomUUID()
 
   // A confirmed address is done unless Plunk shows a reader who left through its unsubscribe link: a
@@ -123,6 +129,7 @@ export async function subscribe({ email: rawEmail }: SubscribeParams) {
       token,
       expiresAt: confirmationLinkExpiry(now),
       sentAt: queued ? null : now,
+      edition,
     },
   })
   if (queued) {
@@ -225,13 +232,15 @@ export async function confirmSubscription(token: string, rawEmail: string) {
   // Upsert the Plunk contact to subscribed:true. The contact already exists —
   // the confirmation email's send created it as unsubscribed — so the
   // create-contact call updates it to subscribed (Plunk upserts on email).
+  // Its `edition` field is the edition chosen at signup, which the editions'
+  // Plunk segments read (ADR-0052).
   // Graceful: if Plunk fails, still mark confirmed locally, and tell the owner
   // once that is saved: the reader is told they are subscribed but Plunk has
   // them unsubscribed until someone fixes it.
   let plunkContactId: string | null = pending.plunkContactId
   let upsertFailure: { err: unknown } | null = null
   try {
-    const contact = await plunk.createContact({ email, subscribed: true })
+    const contact = await plunk.createContact({ email, subscribed: true, data: { edition: pending.edition } })
     plunkContactId = contact.id
   } catch (err) {
     upsertFailure = { err }

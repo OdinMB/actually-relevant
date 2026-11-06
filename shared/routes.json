@@ -37,6 +37,13 @@
       "changefreq": "yearly",
       "sitemap": false,
       "sitemapNote": "Left out of the sitemap on purpose: the newsletter confirmation page, noindex in every state (its prerendered head included), so there is nothing to index."
+    },
+    {
+      "path": "/newsletter-edition",
+      "priority": 0.2,
+      "changefreq": "yearly",
+      "sitemap": false,
+      "sitemapNote": "Left out of the sitemap on purpose: the page an issue's footer link opens to switch a subscriber's edition, noindex in every state (its prerendered head included), so there is nothing to index."
     }
   ]
 }

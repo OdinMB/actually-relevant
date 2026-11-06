@@ -4,8 +4,8 @@ import { runAssessStories } from './assessStories.js'
 import { runSelectStories } from './selectStories.js'
 import { runPublishStories } from './publishStories.js'
 import { runBlueskyUpdateMetrics } from './blueskyUpdateMetrics.js'
-import { runGenerateNewsletter } from './generateNewsletter.js'
-import { runPublishNewsletter } from './publishNewsletter.js'
+import { runGenerateNewsletter, runGenerateUpliftingNewsletter } from './generateNewsletter.js'
+import { runPublishNewsletter, runPublishUpliftingNewsletter } from './publishNewsletter.js'
 import { runSocialAutoPost } from './socialAutoPost.js'
 import { runMastodonUpdateMetrics } from './mastodonUpdateMetrics.js'
 import { runGeneratePodcast } from './generatePodcast.js'
@@ -26,6 +26,9 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   mastodon_update_metrics: runMastodonUpdateMetrics,
   // Called with no argument: the handlers' `now` parameter is for tests.
   publish_newsletter: () => runPublishNewsletter(),
+  // Actually Uplifting's weekly issue (ADR-0052): the same handlers, for the other edition
+  generate_uplifting_newsletter: runGenerateUpliftingNewsletter,
+  publish_uplifting_newsletter: () => runPublishUpliftingNewsletter(),
   generate_podcast: () => runGeneratePodcast(),
   publish_podcast: () => runPublishPodcast(),
   poll_plunk_activity: () => runPollPlunkActivity(),
@@ -51,6 +54,8 @@ export const JOB_PIPELINE_ORDER: readonly string[] = [
   'mastodon_update_metrics',
   'generate_newsletter',
   'publish_newsletter',
+  'generate_uplifting_newsletter',
+  'publish_uplifting_newsletter',
   'generate_podcast',
   'publish_podcast',
   'poll_plunk_activity',

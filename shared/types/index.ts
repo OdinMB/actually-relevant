@@ -56,6 +56,8 @@ export type JobName =
   | 'mastodon_update_metrics'
   | 'generate_newsletter'
   | 'publish_newsletter'
+  | 'generate_uplifting_newsletter'
+  | 'publish_uplifting_newsletter'
   | 'generate_podcast'
   | 'publish_podcast'
   | 'poll_plunk_activity'
@@ -220,6 +222,9 @@ export interface Issue {
   updatedAt: string
 }
 
+/** The newsletter's two editions: `full`, every kind of story, and `uplifting`, Actually Uplifting (uplifting stories only). */
+export type NewsletterEdition = 'full' | 'uplifting'
+
 export interface Newsletter {
   id: string
   title: string
@@ -228,6 +233,7 @@ export interface Newsletter {
   storyIds: string[]
   selectedStoryIds: string[]
   status: 'draft' | 'published'
+  edition: NewsletterEdition
   /** URL segment of the public web edition (/newsletter/<slug>), assigned on HTML build or first publish */
   slug: string | null
   /** First publication; the issue is public on the web while `status` is published */
@@ -256,6 +262,7 @@ export interface StoryNewerCoverage {
 export interface PublicNewsletterIssueSummary {
   slug: string
   title: string
+  edition: NewsletterEdition
   publishedAt: string
   storyCount: number
 }
@@ -264,6 +271,7 @@ export interface PublicNewsletterIssueSummary {
 export interface PublicNewsletterIssue {
   slug: string
   title: string
+  edition: NewsletterEdition
   publishedAt: string
   /** The issue's AI label, the same wording as at the top of the email */
   aiLabel: { lead: string; text: string }

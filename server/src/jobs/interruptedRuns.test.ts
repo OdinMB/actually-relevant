@@ -105,6 +105,8 @@ describe('interrupted runs', () => {
       for (const jobName of [
         'generate_newsletter',
         'publish_newsletter',
+        'generate_uplifting_newsletter',
+        'publish_uplifting_newsletter',
         'generate_podcast',
         'publish_podcast',
         'social_auto_post',

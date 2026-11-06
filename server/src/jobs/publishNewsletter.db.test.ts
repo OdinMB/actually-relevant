@@ -11,7 +11,7 @@ import { fakePlunk } from '../test/fakePlunk.js'
 vi.mock('../services/llm.js', () => ({ getLLMByTier: vi.fn(), rateLimitDelay: () => Promise.resolve() }))
 vi.mock('../services/plunk.js', () => import('../test/fakePlunk.js'))
 
-const { runPublishNewsletter, newsletterSendProblem } = await import('./publishNewsletter.js')
+const { runPublishNewsletter, runPublishUpliftingNewsletter, newsletterSendProblem } = await import('./publishNewsletter.js')
 const { getWeekKey } = await import('./generateNewsletter.js')
 
 // Saturday 2026-02-21 04:30 UTC, ISO week 8
@@ -109,6 +109,75 @@ describeDb('runPublishNewsletter', () => {
 
     expect(fakePlunk.liveSends()).toHaveLength(1)
     expect(await notices()).toEqual([expect.objectContaining({ severity: 'warning', message: expect.stringContaining('unconfirmed') })])
+  })
+})
+
+describeDb('runPublishUpliftingNewsletter', () => {
+  useTestDatabase()
+  const saved = { full: config.plunk.fullEditionSegmentId, uplifting: config.plunk.upliftingSegmentId }
+  beforeEach(() => {
+    fakePlunk.reset()
+    config.plunk.fullEditionSegmentId = 'seg-full'
+    config.plunk.upliftingSegmentId = 'seg-uplifting'
+  })
+  afterEach(() => {
+    config.plunk.fullEditionSegmentId = saved.full
+    config.plunk.upliftingSegmentId = saved.uplifting
+  })
+
+  const testedIssue = async (edition: 'full' | 'uplifting') => {
+    const issue = await weeklyIssue({ edition })
+    await createSend({ newsletterId: issue.id, isTest: true, status: 'sent' })
+    return issue
+  }
+
+  it("sends only this week's Actually Uplifting issue, to its segment, under its own notice", async () => {
+    const full = await testedIssue('full')
+    const uplifting = await testedIssue('uplifting')
+
+    await runPublishUpliftingNewsletter(SATURDAY)
+
+    expect(fakePlunk.segmentSends('seg-uplifting')).toHaveLength(1)
+    expect(fakePlunk.segmentSends('seg-full')).toEqual([])
+    expect((await prisma.newsletter.findUniqueOrThrow({ where: { id: uplifting.id } })).status).toBe('published')
+    expect((await prisma.newsletter.findUniqueOrThrow({ where: { id: full.id } })).status).toBe('draft')
+    expect(await notices()).toEqual([expect.objectContaining({ severity: 'info', title: 'Actually Uplifting issue sent' })])
+
+    // The full edition's job finds its own issue, not the one just sent
+    await runPublishNewsletter(SATURDAY)
+    expect(fakePlunk.segmentSends('seg-full')).toHaveLength(1)
+  })
+
+  it("keys its warnings to the edition, apart from the full edition's", async () => {
+    const issue = await weeklyIssue({ edition: 'uplifting' })
+    await createSend({ newsletterId: issue.id, isTest: true, status: 'sent', htmlContent: '<p>An older build</p>' })
+
+    await runPublishUpliftingNewsletter(SATURDAY)
+    await runPublishNewsletter(SATURDAY)
+
+    expect((await notices()).map(n => n.dedupeKey).sort()).toEqual([`newsletter-not-sent:${WEEK}`, `newsletter-uplifting-not-sent:${WEEK}`])
+  })
+
+  it('records the closed editions as "not sent", claiming nothing', async () => {
+    config.plunk.fullEditionSegmentId = ''
+    config.plunk.upliftingSegmentId = ''
+    const issue = await testedIssue('uplifting')
+
+    await runPublishUpliftingNewsletter(SATURDAY)
+
+    expect(fakePlunk.campaigns).toEqual([])
+    expect(await prisma.newsletterSend.count({ where: { newsletterId: issue.id, isTest: false } })).toBe(0)
+    expect(await notices()).toEqual([
+      expect.objectContaining({ severity: 'warning', dedupeKey: `newsletter-uplifting-not-sent:${WEEK}`, message: expect.stringContaining('no audience') }),
+    ])
+  })
+
+  it('repeats the info notice of a week without uplifting stories rather than warning', async () => {
+    await runPublishUpliftingNewsletter(SATURDAY)
+
+    expect(await notices()).toEqual([
+      expect.objectContaining({ severity: 'info', title: 'No Actually Uplifting issue this week', dedupeKey: `newsletter-uplifting-no-stories:${WEEK}` }),
+    ])
   })
 })
 

@@ -7,6 +7,9 @@ import { isPrerendering } from '../lib/renderComplete'
 import { useFormToken, type FormTokenStatus } from '../hooks/useFormToken'
 import { useTurnstileChallenge } from '../hooks/useTurnstileChallenge'
 import { FIELD_FOCUS } from '../lib/control-classes'
+import { useUpliftingEdition } from '../contexts/PositivityContext'
+import NewsletterEditionChoice from './NewsletterEditionChoice'
+import type { NewsletterEdition } from '@shared/types'
 
 interface SubscribeFormProps {
   /** Called after successful submission (e.g. to close a modal) */
@@ -65,10 +68,16 @@ function isPlausibleEmail(address: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)
 }
 
-/** One request for a signup form token. */
-async function fetchSignupToken(): Promise<string> {
-  const { token } = await publicApi.getSubscribeToken()
-  return token
+/**
+ * A request for a signup form token, which also says whether the form offers the two editions
+ * (`editionChoice`, the server has them open). Each answer is passed to `onEditionChoice`.
+ */
+function signupTokenFetcher(onEditionChoice: (offered: boolean) => void): () => Promise<string> {
+  return async () => {
+    const { token, editionChoice } = await publicApi.getSubscribeToken()
+    onEditionChoice(editionChoice === true)
+    return token
+  }
 }
 
 /** Whether the form can be sent, from where its first form token stands. */
@@ -86,10 +95,15 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
   const [status, setStatus] = useState<SubmitStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [website, setWebsite] = useState('') // honeypot — humans never fill this
+  // Offered only when the token's answer says so; preselected to where the reader is (inside the
+  // Actually Uplifting edition, that edition).
+  const [editionChoice, setEditionChoice] = useState(false)
+  const inUpliftingEdition = useUpliftingEdition()
+  const [edition, setEdition] = useState<NewsletterEdition>(inUpliftingEdition ? 'uplifting' : 'full')
   // The anti-bot form token, fetched on mount; its answer also says whether signups are open.
   // If both attempts fail, submit stays disabled (the API is unreachable anyway) and the
   // reader is told.
-  const signupToken = useFormToken(fetchSignupToken, { isFinal: isSignupsPaused })
+  const signupToken = useFormToken(signupTokenFetcher(setEditionChoice), { isFinal: isSignupsPaused })
   // The signup itself can be refused as paused too.
   const [pausedAtSubmit, setPausedAtSubmit] = useState(false)
   const availability = pausedAtSubmit ? 'paused' : availabilityOf(signupToken)
@@ -153,6 +167,7 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
         ...(website ? { website } : {}),
         formToken,
         ...(turnstileToken ? { turnstileToken } : {}),
+        ...(editionChoice ? { edition } : {}),
       })
       if (!result.success) {
         setStatus('error')
@@ -258,6 +273,8 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
               .join(' ')}
           />
         </div>
+
+        {editionChoice && <NewsletterEditionChoice idPrefix={idPrefix} value={edition} onChange={setEdition} />}
 
         {/* Honeypot — hidden from humans */}
         <div aria-hidden="true" className="absolute -left-[9999px] -top-[9999px]">

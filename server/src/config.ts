@@ -68,6 +68,36 @@ export function parseOneOf<T extends string>(value: string | undefined, fallback
   return match
 }
 
+export interface EditionSegments {
+  /** Plunk segment of the full edition's subscribers ('' while the editions are not open). */
+  fullEditionSegmentId: string
+  /** Plunk segment of Actually Uplifting's subscribers ('' while the editions are not open). */
+  upliftingSegmentId: string
+}
+
+/**
+ * Parse the two edition segment ids (ADR-0052), which together are the switch that opens the
+ * editions: both unset is closed, both set is open. Throws at startup on one without the other, on
+ * the same id twice, and on an id equal to the test segment, any of which would send an issue to the
+ * wrong people.
+ */
+export function parseEditionSegments(fullValue: string | undefined, upliftingValue: string | undefined, testSegmentId: string): EditionSegments {
+  const full = fullValue?.trim() ?? ''
+  const uplifting = upliftingValue?.trim() ?? ''
+  if (!full && !uplifting) return { fullEditionSegmentId: '', upliftingSegmentId: '' }
+  if (!full || !uplifting) {
+    throw new Error('PLUNK_FULL_EDITION_SEGMENT_ID and PLUNK_UPLIFTING_SEGMENT_ID open the editions together: set both or neither')
+  }
+  if (full === uplifting) throw new Error('PLUNK_FULL_EDITION_SEGMENT_ID and PLUNK_UPLIFTING_SEGMENT_ID name the same segment')
+  if (testSegmentId && (full === testSegmentId || uplifting === testSegmentId)) {
+    throw new Error('An edition segment id is PLUNK_TEST_SEGMENT_ID: the test segment never receives a live issue')
+  }
+  return { fullEditionSegmentId: full, upliftingSegmentId: uplifting }
+}
+
+const plunkTestSegmentId = process.env.PLUNK_TEST_SEGMENT_ID || ''
+const editionSegments = parseEditionSegments(process.env.PLUNK_FULL_EDITION_SEGMENT_ID, process.env.PLUNK_UPLIFTING_SEGMENT_ID, plunkTestSegmentId)
+
 export interface JobLeaseTiming {
   leaseSeconds: number
   leaseRenewMs: number
@@ -324,6 +354,19 @@ export const config = {
     // An unbuilt automatic draft for this week older than this is a run that was
     // killed mid-pipeline; the next run deletes it and rebuilds.
     abandonedDraftMinutes: 30,
+    /**
+     * The editions are open (ADR-0052): both Plunk edition segments are set. Until then everything
+     * is as before the editions: no choice at signup, no switch link, the full issue goes to all.
+     * Read from `plunk` when used, so the two can never disagree.
+     */
+    get editionsOpen(): boolean {
+      return Boolean(config.plunk.fullEditionSegmentId && config.plunk.upliftingSegmentId)
+    },
+    // Actually Uplifting's issue (services/upliftingIssue.ts). Code-only, no env overrides: up to
+    // maxStories uplifting stories of the week are all taken; more, and the model picks maxStories.
+    uplifting: {
+      maxStories: 10,
+    },
   },
   // Weekly two-speaker podcast (.context/podcast.md). Constants changed in code, no environment
   // overrides; on/off is the generate_podcast / publish_podcast job rows in the admin Jobs page.
@@ -497,7 +540,9 @@ export const config = {
     publicKey: process.env.PLUNK_PUBLIC_KEY || '',
     fromEmail: process.env.PLUNK_FROM_EMAIL || '',
     fromName: process.env.PLUNK_FROM_NAME || 'Actually Relevant',
-    testSegmentId: process.env.PLUNK_TEST_SEGMENT_ID || '',
+    testSegmentId: plunkTestSegmentId,
+    // The editions' audiences (ADR-0052), segments the owner creates in Plunk's dashboard
+    ...editionSegments,
 
     baseUrl: 'https://next-api.useplunk.com',
     // The poll_plunk_activity job (ADR-0029): every run reads this trailing window of complaints

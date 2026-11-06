@@ -76,7 +76,8 @@ describeDb('a returning reader signs up again (PostgreSQL)', () => {
 
     await confirmSubscription(tokenInLastEmail(), READER)
 
-    expect(mockPlunk.createContact).toHaveBeenCalledWith({ email: READER, subscribed: true })
+    // While the editions are closed every signup is on the full edition, written with the subscription
+    expect(mockPlunk.createContact).toHaveBeenCalledWith({ email: READER, subscribed: true, data: { edition: 'full' } })
     const confirmed = await prisma.pendingSubscription.findUniqueOrThrow({ where: { id: rows[1]?.id } })
     expect(confirmed.confirmedAt).not.toBeNull()
     expect(confirmed.plunkContactId).toBe('contact-1')

@@ -34,6 +34,7 @@ const mockLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.f
 vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLogger }))
 
 const { subscribe, confirmSubscription, EmailValidationError, ConfirmationEmailError } = await import('./subscribe.js')
+const { config } = await import('../config.js')
 
 const plunkAnswered = (status: number) => Object.assign(new Error(`Request failed with status code ${status}`), { response: { status } })
 const timedOut = () => Object.assign(new Error('timeout of 5000ms exceeded'), { code: 'ECONNABORTED' })
@@ -106,6 +107,23 @@ describe('subscribe service', () => {
       const data = mockPrisma.pendingSubscription.create.mock.calls[0][0].data
       expect(data).toMatchObject({ email: 'test@example.com' })
       expect(data.plunkContactId).toBeUndefined()
+    })
+
+    it('stores the chosen edition while the editions are open, and full while they are closed', async () => {
+      await subscribe({ email: 'closed@example.com', edition: 'uplifting' })
+      expect(mockPrisma.pendingSubscription.create.mock.calls[0][0].data.edition).toBe('full')
+
+      config.plunk.fullEditionSegmentId = 'seg-full'
+      config.plunk.upliftingSegmentId = 'seg-up'
+      try {
+        await subscribe({ email: 'open@example.com', edition: 'uplifting' })
+        await subscribe({ email: 'default@example.com' })
+      } finally {
+        config.plunk.fullEditionSegmentId = ''
+        config.plunk.upliftingSegmentId = ''
+      }
+      expect(mockPrisma.pendingSubscription.create.mock.calls[1][0].data.edition).toBe('uplifting')
+      expect(mockPrisma.pendingSubscription.create.mock.calls[2][0].data.edition).toBe('full')
     })
 
     it('verifies email before sending the confirmation email', async () => {
@@ -581,15 +599,32 @@ describe('subscribe service', () => {
         confirmedAt: null,
         expiresAt: future,
         plunkContactId: null,
+        edition: 'full',
       })
 
       await confirmSubscription('t', 'new@example.com')
 
-      expect(mockPlunk.createContact).toHaveBeenCalledWith({ email: 'new@example.com', subscribed: true })
+      expect(mockPlunk.createContact).toHaveBeenCalledWith({ email: 'new@example.com', subscribed: true, data: { edition: 'full' } })
       const update = mockPrisma.pendingSubscription.update.mock.calls[0][0]
       expect(update.where).toEqual({ id: 'p1' })
       expect(update.data.plunkContactId).toBe('contact-1')
       expect(update.data.confirmedAt).toBeInstanceOf(Date)
+    })
+
+    it("writes the edition chosen at signup to the contact's edition field", async () => {
+      mockPrisma.pendingSubscription.findFirst.mockResolvedValue({
+        id: 'p2',
+        token: 't',
+        email: 'up@example.com',
+        confirmedAt: null,
+        expiresAt: future,
+        plunkContactId: null,
+        edition: 'uplifting',
+      })
+
+      await confirmSubscription('t', 'up@example.com')
+
+      expect(mockPlunk.createContact).toHaveBeenCalledWith({ email: 'up@example.com', subscribed: true, data: { edition: 'uplifting' } })
     })
 
     it('is idempotent when already confirmed (no second contact created)', async () => {
@@ -611,6 +646,7 @@ describe('subscribe service', () => {
         confirmedAt: null,
         expiresAt: future,
         plunkContactId: null,
+        edition: 'full',
       })
 
       await confirmSubscription('t', 'Mixed@Example.com')
@@ -618,7 +654,7 @@ describe('subscribe service', () => {
       expect(mockPrisma.pendingSubscription.findFirst).toHaveBeenCalledWith({
         where: { token: 't', email: 'mixed@example.com' },
       })
-      expect(mockPlunk.createContact).toHaveBeenCalledWith({ email: 'mixed@example.com', subscribed: true })
+      expect(mockPlunk.createContact).toHaveBeenCalledWith(expect.objectContaining({ email: 'mixed@example.com', subscribed: true }))
     })
 
     it('throws on an invalid token', async () => {

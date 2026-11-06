@@ -57,6 +57,7 @@ Prompt templates live in `server/src/prompts/`:
 | `select.ts` | `buildSelectPrompt()` — editorial curation |
 | `podcast.ts` | `buildPodcastPrompt()` — the weekly two-speaker dialogue (segue rule, untrusted `<STORIES>`) |
 | `podcast-select.ts` | `buildPodcastSelectPrompt()` — the week's 4-5 stories for audio |
+| `uplifting-select.ts` | `buildUpliftingSelectPrompt()` — 10 of the week's uplifting stories for the Actually Uplifting newsletter, called only when there are more than 10 (`.context/newsletter-podcast.md`, "Editions") |
 | `index.ts` | Barrel re-exports all builders and types |
 
 A service turns its loaded rows into a builder's input with an exported pure function in `server/src/services/promptInputs.ts` (the Bluesky and Mastodon draft inputs live in those services), and the model-eval harness calls the same functions (`.context/model-eval.md`). Change a call site's input there, never inline in the service; `promptInputs.test.ts` pins the prompts each one sends, so update its snapshot only for an intended change.

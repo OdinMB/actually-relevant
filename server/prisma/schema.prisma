@@ -233,11 +233,19 @@ model Newsletter {
   slug        String?        @unique
   /// The public archive's date: the first live send if the issue was emailed, else when it was first set to published; kept when unpublished
   publishedAt DateTime?      @map("published_at")
+  /// Which edition the issue is (ADR-0052): its stories, its audience in Plunk, its subject and slug prefix
+  edition   NewsletterEdition @default(full)
   sends     NewsletterSend[]
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")
 
   @@map("newsletters")
+}
+
+/// The newsletter's two editions (ADR-0052): `full`, every kind of story, and `uplifting`, Actually Uplifting's uplifting stories only
+enum NewsletterEdition {
+  full
+  uplifting
 }
 
 enum NewsletterSendStatus {
@@ -497,6 +505,8 @@ model PendingSubscription {
   // When the confirmation email went out; null while the signup waits in the queue for the
   // send_queued_confirmations job. A row written without it counts as sent (the default).
   sentAt         DateTime? @default(now()) @map("sent_at")
+  /// The edition chosen at signup, written to the Plunk contact's `edition` field on confirm (ADR-0052)
+  edition        NewsletterEdition @default(full)
 
   @@index([email])
   @@map("pending_subscriptions")

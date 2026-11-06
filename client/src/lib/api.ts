@@ -6,6 +6,7 @@ import type {
   PublicNewsletterIssue,
   PublicNewsletterIssueSummary,
   PublicStoryAppearances,
+  NewsletterEdition,
 } from '@shared/types'
 
 export const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api'
@@ -134,22 +135,36 @@ export const publicApi = {
   /** One published episode with its readable transcript (404 unless published). */
   podcastEpisode: (id: string) => request<PublicPodcastEpisodeDetail>(`/podcast/episodes/${encodeURIComponent(id)}`),
 
-  /** Published newsletter issues, newest first (the web archive). */
-  newsletterArchive: (page = 1) => request<PaginatedResponse<PublicNewsletterIssueSummary>>(`/newsletters${toQueryString({ page })}`),
+  /** Published newsletter issues, newest first (the web archive): both editions', or one edition's. */
+  newsletterArchive: (page = 1, edition?: NewsletterEdition) =>
+    request<PaginatedResponse<PublicNewsletterIssueSummary>>(`/newsletters${toQueryString({ page, edition })}`),
 
   /** One published newsletter issue's web edition; 404 unless published. */
   newsletterIssue: (slug: string) => request<PublicNewsletterIssue>(`/newsletters/${encodeURIComponent(slug)}`),
 
   sources: () => request<{ byRegion: Record<string, string[]>; byIssue: Record<string, string[]>; totalCount: number }>('/sources'),
 
-  subscribe: (data: { email: string; website?: string; formToken?: string; turnstileToken?: string }) =>
+  /** `edition`: the edition chosen in the form, sent only when the token offered the choice. */
+  subscribe: (data: { email: string; website?: string; formToken?: string; turnstileToken?: string; edition?: NewsletterEdition }) =>
     request<{ success: boolean; message: string }>('/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }),
 
-  getSubscribeToken: () => request<{ token: string }>('/subscribe/token'),
+  /** A signup form token; `editionChoice`: the form offers the two editions (the server has them open). */
+  getSubscribeToken: () => request<{ token: string; editionChoice?: boolean }>('/subscribe/token'),
+
+  /**
+   * Switch a subscriber, named by the contact id of an issue's footer link, to an edition. A refusal
+   * is an ApiError whose `code` says why: `closed`, `broken_link`, `unknown_contact`, `not_subscribed`.
+   */
+  switchEdition: (data: { contactId: string; edition: NewsletterEdition }) =>
+    request<{ success: true; edition: NewsletterEdition }>('/subscribe/edition', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
 
   confirmSubscription: (data: { token: string; email: string }) =>
     request<{ success: boolean; reason?: string }>('/subscribe/confirm', {

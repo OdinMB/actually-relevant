@@ -6,7 +6,7 @@ import type { PublicStoryAppearances } from '@shared/types'
 import StoryAppearances from './StoryAppearances'
 import { focusRingProblems } from '../test/classes'
 
-const ISSUE = { slug: 'week-43-2026', title: 'Week 43, 2026', publishedAt: '2026-10-24T04:30:00.000Z', storyCount: 6 }
+const ISSUE = { slug: 'week-43-2026', title: 'Week 43, 2026', edition: 'full' as const, publishedAt: '2026-10-24T04:30:00.000Z', storyCount: 6 }
 const EPISODE = {
   id: 'episode-43',
   title: 'W43: Clean air and a new vaccine',

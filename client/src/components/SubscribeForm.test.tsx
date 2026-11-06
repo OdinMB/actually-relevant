@@ -8,6 +8,7 @@ import { NEWSLETTER_PROMISE } from '../config'
 import type { TurnstileRenderOptions } from '../lib/turnstile'
 import { fieldBorderProblems, fieldFocusProblems } from '../test/classes'
 import { setPrerendering } from '../test/prerenderer'
+import { PositivityProvider } from '../contexts/PositivityContext'
 
 const mockSubscribe = vi.fn()
 const mockGetToken = vi.fn()
@@ -25,7 +26,7 @@ vi.mock('../lib/api', async () => {
 
 vi.mock('../config', async importOriginal => ({
   ...(await importOriginal<typeof import('../config')>()),
-  BRAND: { claim: 'News that matters to humanity.', claimSupport: 'Curated with care by AI.' },
+  BRAND: { claim: 'News that matters to humanity.', claimSupport: 'Curated with care by AI.', upliftingEdition: 'Actually Uplifting' },
 }))
 
 // Cloudflare's script is never fetched in tests: a stand-in API is installed when the
@@ -433,6 +434,66 @@ describe('SubscribeForm', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /subscribing/i })).toBeDisabled()
+    })
+  })
+
+  describe('the edition choice', () => {
+    // By label text: jsdom puts a space before the colon in the accessible name, which browsers don't
+    const fullOption = () => screen.getByLabelText('Actually Relevant: the full picture')
+    const upliftingOption = () => screen.getByLabelText('Actually Uplifting: only uplifting news')
+
+    async function renderAt(path: string) {
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <PositivityProvider>
+            <SubscribeForm idPrefix="test" />
+          </PositivityProvider>
+        </MemoryRouter>,
+      )
+      await waitFor(() => expect(screen.getByRole('button', { name: /subscribe/i })).toBeEnabled())
+    }
+
+    afterEach(() => localStorage.clear())
+
+    it('is not offered, and no edition is posted, while the server keeps the editions closed', async () => {
+      mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
+      const user = userEvent.setup()
+      await renderAt('/?mix=uplifting')
+
+      expect(screen.queryByRole('group', { name: 'Which edition?' })).not.toBeInTheDocument()
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      await user.click(screen.getByRole('button', { name: /subscribe/i }))
+      await waitFor(() => expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'test-token' }))
+    })
+
+    it('preselects the full edition on the main site, and posts the one the reader picks', async () => {
+      mockGetToken.mockResolvedValue({ token: 'test-token', editionChoice: true })
+      mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
+      const user = userEvent.setup()
+      await renderAt('/')
+
+      expect(screen.getByRole('group', { name: 'Which edition?' })).toBeInTheDocument()
+      expect(fullOption()).toBeChecked()
+      await user.click(upliftingOption())
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'hello@example.com')
+      await user.click(screen.getByRole('button', { name: /subscribe/i }))
+      await waitFor(() => expect(mockSubscribe).toHaveBeenCalledWith({ email: 'hello@example.com', formToken: 'test-token', edition: 'uplifting' }))
+    })
+
+    it('preselects Actually Uplifting inside that edition, under the email field and above the promise line', async () => {
+      mockGetToken.mockResolvedValue({ token: 'test-token', editionChoice: true })
+      mockSubscribe.mockResolvedValue({ success: true, message: 'ok' })
+      const user = userEvent.setup()
+      await renderAt('/uplifting')
+
+      expect(upliftingOption()).toBeChecked()
+      const email = screen.getByPlaceholderText('you@example.com')
+      const group = screen.getByRole('group', { name: 'Which edition?' })
+      expect(email.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(group.compareDocumentPosition(screen.getByText(NEWSLETTER_PROMISE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      await user.type(email, 'hello@example.com')
+      await user.click(screen.getByRole('button', { name: /subscribe/i }))
+      await waitFor(() => expect(mockSubscribe).toHaveBeenCalledWith(expect.objectContaining({ edition: 'uplifting' })))
     })
   })
 

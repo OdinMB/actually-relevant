@@ -3,9 +3,10 @@
  * `.context/newsletter-podcast.md` "Issue lifecycle"). This module is the only code that writes an
  * issue's lifecycle fields (`status`, `published_at`, `content`, `html`, `selected_story_ids`),
  * deletes an issue, or writes `newsletter_sends` rows, held by `test/newsletterWriters.test.ts`.
- * `newsletter.ts` builds what the moves write (shortlist, markdown, HTML), `storyFreshness.ts` the
- * shortlist's swaps for newer coverage and `newsletterInbox.ts` the email's subject and preview
- * text; none of them writes any of it.
+ * `newsletter.ts` builds what the moves write (shortlist, markdown, HTML), `upliftingIssue.ts` an
+ * Actually Uplifting issue's longlist and shortlist, `storyFreshness.ts` the shortlist's swaps for
+ * newer coverage, `newsletterInbox.ts` the email's subject and preview text and `newsletterEdition.ts`
+ * what differs per edition (campaign name, audience); none of them writes any of it.
  *
  * - Every write move runs in a transaction that first locks the issue's row
  *   (`SELECT ... FOR UPDATE`), re-checks its rule, then writes, so moves on one issue serialize.
@@ -30,6 +31,8 @@ import * as plunk from './plunk.js'
 import { ensureNewsletterSlug, newsletterIssueUrl } from './newsletterArchive.js'
 import { buildContent, pickShortlist, recentStoryIds, renderHtml } from './newsletter.js'
 import { loadInboxPreview } from './newsletterInbox.js'
+import { editionAudience, labeledTitle } from './newsletterEdition.js'
+import { pickUpliftingShortlist, upliftingLonglist } from './upliftingIssue.js'
 import { preferNewerCoverage, type ShortlistReplacement } from './storyFreshness.js'
 
 const log = createLogger('newsletter-lifecycle')
@@ -38,8 +41,11 @@ type Tx = Prisma.TransactionClient
 
 // ──── Refusals ──────────────────────────────────────────────────────────
 
-/** Which rule refused a move; the publish_newsletter job maps them to its notices. */
-export type RefusalCode = 'frozen' | 'already_sent' | 'no_current_test' | 'sent_issue' | 'not_unconfirmed'
+/**
+ * Which rule refused a move; the weekly publish jobs map them to their notices. `no_audience`: the
+ * issue's edition has no audience to send to (`editionAudience`, `newsletterEdition.ts`).
+ */
+export type RefusalCode = 'frozen' | 'already_sent' | 'no_current_test' | 'sent_issue' | 'not_unconfirmed' | 'no_audience'
 
 /** A move the issue's state does not allow (409, `{ error }`). */
 export class NewsletterRefusedError extends ConflictError {
@@ -117,12 +123,15 @@ async function readIssue(id: string): Promise<Newsletter> {
 
 // ──── Build moves ───────────────────────────────────────────────────────
 
-/** assign: the longlist, the stories published in the last `storyAssignmentDays` days. */
+/**
+ * assign: the longlist, the stories published in the last `storyAssignmentDays` days; for Actually
+ * Uplifting, the uplifting ones no other of its issues carries (`upliftingIssue.ts`).
+ */
 export async function assignStories(id: string): Promise<Newsletter> {
   return underLock(id, async (tx, newsletter) => {
     await assertNotFrozen(tx, newsletter)
     // On the transaction's connection: a second one from the pool could starve a small pool
-    const storyIds = await recentStoryIds(tx)
+    const storyIds = newsletter.edition === 'uplifting' ? await upliftingLonglist(tx, id) : await recentStoryIds(tx)
     return tx.newsletter.update({ where: { id }, data: { storyIds } })
   })
 }
@@ -131,16 +140,17 @@ export async function assignStories(id: string): Promise<Newsletter> {
 export type NewsletterSelection = Newsletter & { replacedWithNewer: ShortlistReplacement[] }
 
 /**
- * select: the shortlist, picked by the model from the longlist. A pick with a later story of the same
- * event the issue can carry (published, on the longlist, in the pick's section) gives its place to
- * the newest such story before the write, so the content and HTML built from the shortlist carry
- * it (`storyFreshness.ts`).
+ * select: the shortlist, picked by the model from the longlist; for Actually Uplifting, the whole
+ * longlist up to its size, the model picking only beyond it (`upliftingIssue.ts`). A pick with a
+ * later story of the same event the issue can carry (published, on the longlist, in the pick's
+ * section) gives its place to the newest such story before the write, so the content and HTML built
+ * from the shortlist carry it (`storyFreshness.ts`).
  */
 export async function selectStories(id: string): Promise<NewsletterSelection> {
   const newsletter = await readIssue(id)
   await assertNotFrozen(prisma, newsletter)
   if (newsletter.storyIds.length === 0) throw new BadRequestError('No stories in longlist')
-  const picks = await pickShortlist(newsletter)
+  const picks = newsletter.edition === 'uplifting' ? await pickUpliftingShortlist(newsletter) : await pickShortlist(newsletter)
   const { storyIds: selectedStoryIds, replaced } = await preferNewerCoverage(picks.storyIds, picks.sections)
   for (const replacement of replaced) log.info({ newsletterId: id, ...replacement }, 'replaced a pick with newer coverage')
   const selected = await underLock(id, async (tx, current) => {
@@ -178,7 +188,7 @@ export async function generateHtml(id: string): Promise<string> {
     if (!current.content) throw new BadRequestError('No content to convert')
     // From the content under the lock, on the transaction's connection
     const { preheader } = await loadInboxPreview(current, tx)
-    const html = renderHtml(current, webUrl, preheader)
+    const html = renderHtml(current, webUrl, { preheader, editionsOpen: config.newsletter.editionsOpen })
     await tx.newsletter.update({ where: { id }, data: { html } })
     return html
   })
@@ -276,7 +286,7 @@ export async function sendTest(id: string): Promise<NewsletterSend> {
 
   log.info({ newsletterId: id }, 'creating test campaign in Plunk')
   const campaign = await plunk.createCampaign({
-    name: `[TEST] ${newsletter.title}`,
+    name: `[TEST] ${labeledTitle(newsletter.edition, newsletter.title)}`,
     subject: `[TEST] ${subject}`,
     body: html,
     audienceType: 'SEGMENT',
@@ -315,9 +325,10 @@ async function recordSendFailure(sendId: string, err: unknown, sentNothing: bool
 }
 
 /**
- * sendLive: the email to all subscribers, then the issue is published (also for a scheduled send,
- * at once). Refused with a live non-failed send (`already_sent`) or without a `sent` test of the
- * current HTML (`no_current_test`).
+ * sendLive: the email to the issue's edition's subscribers (`editionAudience`: all of them while the
+ * editions are closed), then the issue is published (also for a scheduled send, at once). Refused
+ * with a live non-failed send (`already_sent`), without a `sent` test of the current HTML
+ * (`no_current_test`), or when its edition has no audience (`no_audience`, before the claim).
  *
  * 1. Claim a `draft` live row under the lock: a second caller waits for the lock, then is refused.
  * 2. Create the campaign and store its id on the row; a failure here sent nothing (`failed`).
@@ -332,15 +343,18 @@ export async function sendLive(id: string, scheduledFor?: string): Promise<Newsl
   // Before the claim (and outside the lock: it writes through its own connection), so publishing
   // after Plunk accepted the send has nothing left that can fail on the slug
   await ensureNewsletterSlug(newsletter)
-  // Before the claim too: a failed read claims nothing
+  // Before the claim too: a failed read claims nothing, and neither does a refused audience
   const { subject } = await loadInboxPreview(newsletter)
+  const audience = await editionAudience(newsletter.edition)
+  if ('refused' in audience) throw new NewsletterRefusedError('no_audience', audience.refused)
 
   const claim = await underLock(id, claimLiveSend)
-  log.info({ newsletterId: id, sendId: claim.id, scheduledFor }, 'live send claimed, creating campaign in Plunk')
+  log.info({ newsletterId: id, sendId: claim.id, scheduledFor, edition: newsletter.edition }, 'live send claimed, creating campaign in Plunk')
 
   let campaignId: string
   try {
-    campaignId = (await plunk.createCampaign({ name: newsletter.title, subject, body: claim.htmlContent, audienceType: 'ALL' })).id
+    const name = labeledTitle(newsletter.edition, newsletter.title)
+    campaignId = (await plunk.createCampaign({ name, subject, body: claim.htmlContent, ...audience })).id
   } catch (err) {
     await recordSendFailure(claim.id, err, true)
     throw err
@@ -362,7 +376,7 @@ export async function sendLive(id: string, scheduledFor?: string): Promise<Newsl
     await publishLocked(tx, current)
     return send
   })
-  log.info({ newsletterId: id, sendId: claim.id }, 'newsletter sent to all subscribers and published')
+  log.info({ newsletterId: id, sendId: claim.id, audienceType: audience.audienceType }, "newsletter sent to its edition's subscribers and published")
   return confirmed
 }
 

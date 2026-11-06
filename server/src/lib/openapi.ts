@@ -306,10 +306,16 @@ const storySyncQuerySchema = z.object({
 
 const feedQueryDocSchema = z.object({ minRelevance: minRelevanceQuery })
 
+const newsletterEditionSchema = z.enum(['full', 'uplifting']).openapi({
+  description: 'The newsletter edition the issue belongs to: `full` (every kind of story) or `uplifting` (Actually Uplifting, uplifting stories only).',
+  example: 'full',
+})
+
 const newsletterIssueSummarySchema = z
   .object({
     slug: z.string().openapi({ description: 'URL segment of the issue; never changes once assigned.', example: 'week-42-2026' }),
     title: z.string().openapi({ example: 'Week 42, 2026' }),
+    edition: newsletterEditionSchema,
     publishedAt: z.string().datetime().openapi({ description: 'When the issue was first published.' }),
     storyCount: z.number().int(),
   })
@@ -329,6 +335,7 @@ const newsletterIssueSchema = z
   .object({
     slug: z.string().openapi({ example: 'week-42-2026' }),
     title: z.string().openapi({ example: 'Week 42, 2026' }),
+    edition: newsletterEditionSchema,
     publishedAt: z.string().datetime(),
     aiLabel: z.object({ lead: z.string(), text: z.string() }).openapi({
       description:
@@ -680,6 +687,13 @@ export function getOpenAPIDocument(): ReturnType<typeof createDocument> {
               required: false,
               schema: { type: 'integer', minimum: 1, maximum: 50 },
               description: 'Issues per page (default 20)',
+            },
+            {
+              name: 'edition',
+              in: 'query',
+              required: false,
+              schema: { type: 'string', enum: ['full', 'uplifting'] },
+              description: 'Only the issues of this edition (default: both)',
             },
           ],
           responses: {

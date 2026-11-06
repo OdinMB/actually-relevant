@@ -1,5 +1,6 @@
 import { useSubscribe } from './SubscribeProvider'
-import { NEWSLETTER_PROMISE } from '../config'
+import { BRAND, NEWSLETTER_PROMISE } from '../config'
+import { useUpliftingEdition } from '../contexts/PositivityContext'
 
 function MailIcon({ className }: { className?: string }) {
   return (
@@ -21,6 +22,7 @@ function MailIcon({ className }: { className?: string }) {
 
 export default function NewsletterBanner() {
   const { openSubscribe } = useSubscribe()
+  const inEdition = useUpliftingEdition()
 
   return (
     <div className="py-8 md:py-10 text-center max-w-2xl mx-auto">
@@ -29,7 +31,9 @@ export default function NewsletterBanner() {
         <MailIcon className="w-5 h-5 text-brand-300" />
         <span className="flex-1 border-t border-neutral-200" aria-hidden="true" />
       </div>
-      <p className="text-lg text-neutral-600 leading-relaxed mb-4">Don&rsquo;t miss what&rsquo;s actually relevant.</p>
+      <p className="text-lg text-neutral-600 leading-relaxed mb-4">
+        {inEdition ? `${BRAND.upliftingEdition}, once a week.` : <>Don&rsquo;t miss what&rsquo;s actually relevant.</>}
+      </p>
       <button
         type="button"
         onClick={() => openSubscribe()}

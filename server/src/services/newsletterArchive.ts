@@ -5,8 +5,9 @@
  * and first publication date stay, so republishing restores the same URL. Publishing and
  * unpublishing are moves of `newsletterLifecycle.ts`; this module holds slugs and the public reads.
  */
-import { Prisma } from '@prisma/client'
+import { type NewsletterEdition, Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
+import { editionCopy } from './newsletterEdition.js'
 import { config } from '../config.js'
 import { paginate } from '../lib/paginate.js'
 import { isUniqueViolation } from '../utils/errors.js'
@@ -18,20 +19,25 @@ import { storyHeadlines, storyMarker, toWebMarkdown } from './newsletterContent.
 const RESERVED_SLUGS = new Set(['archive'])
 const SLUG_MAX_LENGTH = 80
 
-/** "Week 42, 2026" -> "week-42-2026". The migration that added slugs backfilled with the same rule. */
-export function newsletterSlugBase(title: string): string {
-  const base =
+/**
+ * "Week 42, 2026" -> "week-42-2026", and "actually-uplifting-week-42-2026" for an Actually Uplifting
+ * issue, so the two editions' issues of one week never compete for a slug. The migration that added
+ * slugs backfilled with the same rule.
+ */
+export function newsletterSlugBase(title: string, edition: NewsletterEdition = 'full'): string {
+  const fromTitle =
     title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'issue'
+  const base = `${editionCopy(edition).slugPrefix}${fromTitle}`
   return RESERVED_SLUGS.has(base) ? `${base}-issue` : base.slice(0, SLUG_MAX_LENGTH)
 }
 
-/** The issue's slug, assigning a free one from its title the first time. Never changes it. */
-export async function ensureNewsletterSlug(newsletter: { id: string; title: string; slug?: string | null }): Promise<string> {
+/** The issue's slug, assigning a free one from its edition and title the first time. Never changes it. */
+export async function ensureNewsletterSlug(newsletter: { id: string; title: string; edition: NewsletterEdition; slug?: string | null }): Promise<string> {
   if (newsletter.slug) return newsletter.slug
-  const base = newsletterSlugBase(newsletter.title)
+  const base = newsletterSlugBase(newsletter.title, newsletter.edition)
   for (let n = 1; n <= 50; n++) {
     const candidate = n === 1 ? base : `${base}-${n}`
     const taken = await prisma.newsletter.findFirst({ where: { slug: candidate }, select: { id: true } })
@@ -55,29 +61,32 @@ export function newsletterIssueUrl(slug: string): string {
 
 const PUBLIC_WHERE = { status: 'published', slug: { not: null } } as const satisfies Prisma.NewsletterWhereInput
 
-const SUMMARY_SELECT = { slug: true, title: true, publishedAt: true, createdAt: true, selectedStoryIds: true } satisfies Prisma.NewsletterSelect
+const SUMMARY_SELECT = { slug: true, title: true, edition: true, publishedAt: true, createdAt: true, selectedStoryIds: true } satisfies Prisma.NewsletterSelect
 
 /** A public issue as the archive lists it, and as a story page names the issue the story was in. */
 function toIssueSummary(issue: Prisma.NewsletterGetPayload<{ select: typeof SUMMARY_SELECT }>) {
   return {
     slug: issue.slug!,
     title: issue.title,
+    edition: issue.edition,
     publishedAt: (issue.publishedAt ?? issue.createdAt).toISOString(),
     storyCount: issue.selectedStoryIds.length,
   }
 }
 
-export async function listPublishedIssues(page: number, pageSize: number) {
+/** The public issues, newest first: both editions', or one edition's. */
+export async function listPublishedIssues(page: number, pageSize: number, edition?: NewsletterEdition) {
+  const where: Prisma.NewsletterWhereInput = edition ? { ...PUBLIC_WHERE, edition } : PUBLIC_WHERE
   const result = await paginate({
     findMany: () =>
       prisma.newsletter.findMany({
-        where: PUBLIC_WHERE,
+        where,
         orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: SUMMARY_SELECT,
       }),
-    count: () => prisma.newsletter.count({ where: PUBLIC_WHERE }),
+    count: () => prisma.newsletter.count({ where }),
     page,
     pageSize,
   })
@@ -112,7 +121,7 @@ export async function listPublishedIssueDates(): Promise<{ slug: string; publish
 export async function findPublishedIssueHead(slug: string) {
   return prisma.newsletter.findFirst({
     where: { ...PUBLIC_WHERE, slug },
-    select: { slug: true, title: true, content: true, publishedAt: true, createdAt: true },
+    select: { slug: true, title: true, edition: true, content: true, publishedAt: true, createdAt: true },
   })
 }
 
@@ -125,7 +134,7 @@ export async function findPublishedIssueHead(slug: string) {
 export async function getPublishedIssue(slug: string) {
   const issue = await prisma.newsletter.findFirst({
     where: { ...PUBLIC_WHERE, slug },
-    select: { slug: true, title: true, content: true, publishedAt: true, createdAt: true, selectedStoryIds: true },
+    select: { slug: true, title: true, edition: true, content: true, publishedAt: true, createdAt: true, selectedStoryIds: true },
   })
   if (!issue) return null
 
@@ -150,6 +159,7 @@ export async function getPublishedIssue(slug: string) {
   return {
     slug: issue.slug!,
     title: issue.title,
+    edition: issue.edition,
     publishedAt: (issue.publishedAt ?? issue.createdAt).toISOString(),
     aiLabel: NEWSLETTER_TOP_LABEL,
     content: toWebMarkdown(issue.content),
