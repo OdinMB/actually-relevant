@@ -9,6 +9,7 @@ Saved appears only once the visitor has saved a story, and goes when the last is
 | Path | Component | Description |
 |---|---|---|
 | `/` | `HomePage` | Hero, the newest newsletter issue's card (see "Cross-links"), then the latest stories per issue |
+| `/uplifting` | `UpliftingPage` | The Actually Uplifting edition's landing page (see "Positivity Slider", "Actually Uplifting edition"). Its path puts the dial at "Only uplifting" (an explicit `?mix=` wins), saved as the preference. Its own head and canonical, default share image. An intro holding the page's one `h1` says what the edition is and that AI tags the tone, and ends with "see all news", a link to `/?mix=balanced` that keeps the other parameters. The homepage feed follows (`HomeStories headingLevel={2}`). If the dial moves off 100 here, the intro goes and the hero headline is the `h1` again, with no redirect, so focus stays on the slider |
 | `/stories/:id` | `StoryPage` | Story detail with AI analysis |
 | `/issues/:slug` | `IssuePage` | Issue description + paginated stories + evaluation criteria |
 | `/methodology` | `MethodologyPage` | Three-criteria framework explanation |
@@ -108,15 +109,28 @@ A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone o
 - **Emojis:** Frustrated/scared (left) to calm/uplifting (right), with text labels ("All FRUSTRATING & SCARY", "Balanced", "All CALM & UPLIFTING")
 - **Info tooltip:** Click info icon next to slider for explanation
 
+### Actually Uplifting edition
+
+The dial at "Only uplifting" is a visible second edition, Actually Uplifting (since 2026-11-06).
+
+- **The edition is the dial at 100** (`useUpliftingEdition()`, `UPLIFTING_MIX` in `PositivityContext.tsx`) and nothing else; there is no separate state.
+- **`/uplifting` and `/uplifting/` set 100** in `PositivityProvider` (`isUpliftingPath()`), in its `useState` initializer and its `[fromUrl]` effect. An explicit `?mix=` wins, and the value is saved. An in-app link to `/uplifting` flips the dial one render later, as `?mix=` links do.
+- **Prerender guard:** while `isPrerendering()`, the provider neither reads nor writes localStorage, so every prerendered page but `/uplifting` starts balanced. Checked in the build on 2026-11-06: `/`, `/issues` and `/about` carry no wordmark.
+- **Wordmark:** `BrandLogo` renders a private inline SVG in the same `h-14 md:h-16 aspect-[5/2]` box, viewBox 250x100. The 'ar' mark is an SVG `<image>` of `logo-no-text-small-h.webp`; "actually" is `#333` and "uplifting" `brand-500`, in Nexa Bold `<text>` sized against the mockups. It has `role="img"` and the name "Actually Uplifting" (`BRAND.upliftingEdition`). It is not a raster, since no licence on record covers drawing Nexa into images (`.context/seo.md`), and not HTML text, since a font swap could change the box width. Pink on white is about 4.0:1, exempt as a logotype (WCAG 1.4.3), and SVG text is outside axe's color-contrast rule. The home link stays `/`.
+- **Row:** `UpliftingEditionRow` sits between the logo bar and `IssueNav`, so on phones above the category color strip, and shows only at 100. "See all news" goes to `withMix(searchParams, 50)`: on the same path with replace and `preventScrollReset`, or from `/uplifting` to `/` as a push. A click moves focus to `<main>` first, since the link disappears with the row. It fits one line at 390 px; narrower, it wraps onto two centered lines with the link kept whole (`whitespace-nowrap`).
+- **Heading level:** a page that renders `HomeStories` under its own `h1` must pass `headingLevel={2}`. The hero headline, the hero skeleton's hidden "Loading stories" heading and the load-failure heading all default to `h1`, and the prerendered `/uplifting` is the loading state.
+- **Layout shift:** the Layout Instability API recorded 0 at 390 and 1280 px on 2026-11-06, with the JS delayed 1.5 s and the API held. Cases: prerendered `/about` and `/` with `ar-positivity=100`, and `/uplifting` with 50. The client replaces the prerendered nodes.
+
 **Key files:**
 - `client/src/components/PositivitySlider.tsx` — Slider UI with emoji labels and info tooltip
-- `client/src/contexts/PositivityContext.tsx` — React Context, `?mix=` URL parameter + localStorage persistence
+- `client/src/contexts/PositivityContext.tsx` — React Context, `?mix=` URL parameter + localStorage persistence; the edition's `UPLIFTING_MIX`, `UPLIFTING_PATH`, `isUpliftingPath()` and `useUpliftingEdition()`
+- `client/src/pages/UpliftingPage.tsx` — the `/uplifting` landing page
 - `client/src/lib/mix-stories.ts` — `mixHomepageStories()`, `mixHomepageSections()` and `filterStoriesByPositivity()` helpers
 - `server/src/services/publicStories.ts` — `getHomepageData()` returns `{ positive, negative }` per issue
 
 ## Shared Components
 
-- `BrandLogo` — the header's logo, claim and AI line (`client/src/components/BrandLogo.tsx`, used in the header and the mobile menu dialog). Phones: claim, then `HeaderAiLine` under it. From `md` up: one line, "claim · AI line [AI]", with the logo absolutely positioned and centered above it, so the home link (logo, claim) and the AI link stay separate links. The line clears the flanking controls only because they end within the logo's height (`.context/ai-transparency.md` §7). The two halves share one baseline only because both use 16px line boxes (`leading-4`) and the badge and chevron are lifted 1px onto the caps' center; change the claim's or the AI line's type size, line height or padding together, and check alignment by measuring the text (range rects, not element boxes) and looking at a zoomed screenshot
+- `BrandLogo` — the header's logo, claim and AI line (`client/src/components/BrandLogo.tsx`, used in the header and the mobile menu dialog). Phones: claim, then `HeaderAiLine` under it. From `md` up: one line, "claim · AI line [AI]", with the logo absolutely positioned and centered above it, so the home link (logo, claim) and the AI link stay separate links. The line clears the flanking controls only because they end within the logo's height (`.context/ai-transparency.md` §7). The two halves share one baseline only because both use 16px line boxes (`leading-4`) and the badge and chevron are lifted 1px onto the caps' center; change the claim's or the AI line's type size, line height or padding together, and check alignment by measuring the text (range rects, not element boxes) and looking at a zoomed screenshot. In the edition it renders the Actually Uplifting wordmark in the same box ("Positivity Slider", "Actually Uplifting edition")
 - `HeaderAiLine` — site-wide AI notice, a sibling link to `/methodology` (never inside the home link)
 - `StoryTitleLabel` — "AI" badge plus title label above every card and hero headline; new story listings should render headlines through `StoryCard` or this component so they carry the badge (`.context/ai-transparency.md`)
 - `StoryCard` — Story card with title, rating, summary (used on homepage + issue pages)
@@ -171,7 +185,7 @@ Preload hints: `client/index.html`
 ## Key Files
 
 - `client/src/layouts/PublicLayout.tsx` — Providers, skip link, RSS autodiscovery, scroll reset; composes the parts in `client/src/layouts/public/`:
-  - `SiteHeader.tsx` — logo bar and its actions, positivity slider placement; owns menu and search state
+  - `SiteHeader.tsx` — logo bar and its actions, positivity slider placement, the Actually Uplifting row (`UpliftingEditionRow.tsx`); owns menu and search state
   - `IssueNav.tsx` (desktop issue bar), `MobileMenu.tsx` (menu dialog), `SearchPanel.tsx` (search bar)
   - `SiteFooter.tsx` — color strip, brand, Navigate, Connect and Issues columns (no sign-off above it since 2026-10-27)
   - `navLinks.ts` (`ISSUE_LINKS`, `FOOTER_NAV`, `FOOTER_LEGAL`), `icons.tsx`
