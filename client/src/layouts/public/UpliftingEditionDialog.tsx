@@ -22,7 +22,7 @@ function AboutEdition({ onClose }: { onClose: () => void }) {
   }, [])
 
   return (
-    <div className="text-center">
+    <>
       <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-neutral-900 mb-3 focus:outline-none">
         {BRAND.upliftingEdition}
       </h2>
@@ -30,11 +30,11 @@ function AboutEdition({ onClose }: { onClose: () => void }) {
         Only the uplifting stories from Actually Relevant&rsquo;s daily selection of news that matters to humanity. AI tags each story&rsquo;s tone; Actually
         Uplifting shows the ones tagged uplifting.
       </p>
-      <p className="mt-3 text-neutral-600 leading-relaxed">Fewer stories make the cut, so this page changes more slowly.</p>
+      <p className="mt-3 text-neutral-600 leading-relaxed">Fewer stories make the cut, so this edition changes more slowly.</p>
       <div className="mt-6">
         <SeeAllNewsLink className={PRIMARY_LINK} onFollow={onClose} />
       </div>
-    </div>
+    </>
   )
 }
 
