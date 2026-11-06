@@ -86,17 +86,19 @@ beforeEach(() => {
 })
 
 describe('UpliftingPage', () => {
-  it('arrives in the edition over a stored balanced mix: one h1, the intro, the hero headline under it, uplifting sections only', async () => {
+  it('arrives in the edition over a stored balanced mix: one h1, visually hidden, the hero headline under it, uplifting sections only', async () => {
     localStorage.setItem('ar-positivity', '50')
     renderPage()
 
     expect(await screen.findByRole('heading', { level: 2, name: 'up-1 headline' })).toBeInTheDocument()
     expect(h1s()).toHaveLength(1)
     expect(h1s()[0]).toHaveTextContent(BRAND.upliftingEdition)
+    // No intro above the feed: the page looks like the homepage in the edition
+    expect(h1s()[0]).toHaveClass('sr-only')
     expect(sectionHeadings()).toEqual(['Human Development', 'Existential Threats'])
   })
 
-  it('keeps the intro as the only h1 while the stories load', () => {
+  it('keeps the hidden h1 as the only h1 while the stories load', () => {
     mockApi.homepage.mockReturnValue(new Promise(() => {}))
     renderPage()
 
@@ -113,14 +115,7 @@ describe('UpliftingPage', () => {
     expect(headAttr('meta[property="og:title"]', 'content')).toEqual([document.title])
   })
 
-  it("links the intro's way back to the homepage at the balanced mix, keeping the address's other parameters", async () => {
-    renderPage('/uplifting?ref=pitch')
-    await screen.findByRole('heading', { level: 2, name: 'up-1 headline' })
-
-    expect(screen.getByRole('link', { name: 'see all news' })).toHaveAttribute('href', '/?ref=pitch&mix=balanced')
-  })
-
-  it('drops the intro when the dial leaves Only uplifting on the page, so the balanced hero is the one h1', async () => {
+  it('drops the hidden h1 when the dial leaves Only uplifting on the page, so the balanced hero is the one h1', async () => {
     renderPage()
     await screen.findByRole('heading', { level: 2, name: 'up-1 headline' })
 
@@ -128,7 +123,6 @@ describe('UpliftingPage', () => {
 
     expect(h1s()).toHaveLength(1)
     expect(h1s()[0]).toHaveTextContent('calm-1 headline')
-    expect(screen.queryByRole('link', { name: 'see all news' })).toBeNull()
     expect(screen.getByTestId('location')).toHaveTextContent(/^\/uplifting\?mix=balanced$/)
   })
 
