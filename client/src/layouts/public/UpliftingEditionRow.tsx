@@ -1,10 +1,16 @@
+import type { MouseEvent } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { isUpliftingPath, useUpliftingEdition, withMix } from '../../contexts/PositivityContext'
 import { TEXT_LINK } from '../../lib/control-classes'
 import { focusWithoutTabStop } from '../../lib/focusTarget'
 
-/** Where focus goes when the link is clicked: the link leaves with the row, and focus would fall to `<body>` (WCAG 2.4.3). */
-function focusMain() {
+/**
+ * Where focus goes when the link is followed here: the link leaves with the row, and focus would
+ * fall to `<body>` (WCAG 2.4.3). A modified or non-primary click opens a new tab or window instead,
+ * and this page, row and focus included, stays as it was.
+ */
+function focusMain(event: MouseEvent<HTMLAnchorElement>) {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
   const main = document.querySelector<HTMLElement>('main')
   if (main) focusWithoutTabStop(main, { preventScroll: true })
 }
@@ -12,19 +18,20 @@ function focusMain() {
 /**
  * The Actually Uplifting edition's cue under the logo bar, shown only while the dial is at
  * "Only uplifting", with its one way out: "See all news" sets the balanced mix and keeps the
- * address's other parameters. On any page it stays on that page and replaces the history entry,
- * as the slider does; on the landing page it goes to the homepage as a new entry, since the reader
- * is leaving the edition's page. One line at 390px; narrower, it wraps onto two centered lines
- * (the link kept whole), never cut off, so it reflows down to 320px.
+ * address's other parameters. On any page it stays on that page, hash included, and replaces the
+ * history entry, as the slider does; on the landing page it goes to the homepage as a new entry,
+ * since the reader is leaving the edition's page. One line at 390px; narrower, it wraps onto two
+ * centered lines (the link kept whole), never cut off, so it reflows down to 320px.
  */
 export default function UpliftingEditionRow() {
   const inEdition = useUpliftingEdition()
-  const { pathname } = useLocation()
+  const { pathname, hash } = useLocation()
   const [searchParams] = useSearchParams()
   if (!inEdition) return null
 
   const onLandingPage = isUpliftingPath(pathname)
-  const to = { pathname: onLandingPage ? '/' : pathname, search: `?${withMix(searchParams, 50)}` }
+  const search = `?${withMix(searchParams, 50)}`
+  const to = onLandingPage ? { pathname: '/', search } : { pathname, search, hash }
 
   return (
     <div className="bg-brand-50 border-b border-brand-100">

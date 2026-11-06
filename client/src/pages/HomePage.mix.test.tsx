@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import type { PublicStory } from '@shared/types'
 import { makeStory, announcedText } from '../test/stories'
@@ -43,7 +43,12 @@ function homepage(byIssue: Record<string, Partial<Buckets>>) {
 
 function LocationProbe() {
   const location = useLocation()
-  return <div data-testid="location">{location.pathname + location.search}</div>
+  return (
+    <>
+      <div data-testid="location">{location.pathname + location.search}</div>
+      <div data-testid="navigation-type">{useNavigationType()}</div>
+    </>
+  )
 }
 
 function renderHome(url: string) {
@@ -114,8 +119,19 @@ describe('HomePage when the mix leaves it with no stories', () => {
     expect(sectionHeadings()).toEqual(['Human Development', 'Planet & Climate', 'Existential Threats', 'Science & Technology'])
     expect(screen.queryByRole('status')).toBeNull()
     expect(screen.getByTestId('location')).toHaveTextContent(/^\/\?mix=balanced$/)
+    expect(screen.getByTestId('navigation-type')).toHaveTextContent('REPLACE')
     expect(localStorage.getItem('ar-positivity')).toBe('50')
     expect(mockApi.homepage).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['/uplifting', '/uplifting/'])('leaves the landing page at %s for the homepage as a new history entry', async url => {
+    mockApi.homepage.mockResolvedValue(NO_UPLIFTING)
+    renderHome(url)
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Show the balanced mix' }))
+
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/\?mix=balanced$/)
+    expect(screen.getByTestId('navigation-type')).toHaveTextContent('PUSH')
   })
 
   it('keeps the other parameters of the address in the link', async () => {

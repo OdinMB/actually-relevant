@@ -1,5 +1,5 @@
 import { Helmet } from 'react-helmet-async'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { useHomepageData } from '../hooks/useHomepageData'
 import StoryCard from '../components/StoryCard'
 import PullQuote, { getQuoteVariant } from '../components/PullQuote'
@@ -20,7 +20,7 @@ import { SEO, CommonOgTags } from '../lib/seo'
 import { buildWebSiteSchema, buildOrganizationSchema, toJsonLd } from '../lib/structured-data'
 import SupportBanner from '../components/SupportBanner'
 import NewsletterBanner from '../components/NewsletterBanner'
-import { usePositivity, withMix } from '../contexts/PositivityContext'
+import { isUpliftingPath, usePositivity, withMix } from '../contexts/PositivityContext'
 import { mixHomepageSections, pickHero } from '../lib/mix-stories'
 import { TEXT_LINK } from '../lib/control-classes'
 import { useLatestNewsletterIssue, type LatestNewsletterIssue } from '../hooks/useNewsletterArchive'
@@ -239,15 +239,17 @@ function LatestIssueSlot({ issue }: { issue: LatestNewsletterIssue | null }) {
 /**
  * Stories are published, but the mix the reader chose shows none of them (at "Only uplifting",
  * when no issue has an uplifting story). One link back to the balanced mix, which keeps the
- * address's other parameters and, like the slider, replaces the history entry.
+ * address's other parameters and, like the slider, replaces the history entry; on the edition's
+ * landing page it goes to the homepage as a new entry, as the row's and the intro's links do.
  */
 function MixHasNoStories() {
   const [searchParams] = useSearchParams()
+  const onLandingPage = isUpliftingPath(useLocation().pathname)
 
   return (
     <p role="status" className="text-center text-neutral-500 py-12">
       This mix of news has no stories right now.{' '}
-      <Link to={`/?${withMix(searchParams, 50)}`} replace preventScrollReset className={TEXT_LINK}>
+      <Link to={`/?${withMix(searchParams, 50)}`} replace={!onLandingPage} preventScrollReset={!onLandingPage} className={TEXT_LINK}>
         Show the balanced mix
       </Link>
     </p>

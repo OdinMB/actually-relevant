@@ -171,6 +171,38 @@ describe('PublicLayout', () => {
       expect(screen.getByRole('main')).toHaveFocus()
     })
 
+    it('keeps the address hash when "See all news" stays on the same page', async () => {
+      renderLayout('/search?q=x&mix=uplifting#results')
+
+      expect(seeAllNews()).toHaveAttribute('href', '/search?q=x&mix=balanced#results')
+    })
+
+    it('drops the hash when "See all news" leaves the landing page for the homepage', () => {
+      renderLayout('/uplifting#stories')
+
+      expect(seeAllNews()).toHaveAttribute('href', '/?mix=balanced')
+    })
+
+    it.each([{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }])(
+      'leaves focus and the page alone on a click that opens a new tab or window (%o)',
+      init => {
+        renderLayout('/search?q=x&mix=uplifting')
+        // jsdom does not open tabs: stop the browser's own follow-through once the app has seen the click
+        const stopDefault = (event: Event) => event.preventDefault()
+        window.addEventListener('click', stopDefault)
+        window.addEventListener('auxclick', stopDefault)
+        try {
+          fireEvent.click(seeAllNews()!, init)
+        } finally {
+          window.removeEventListener('click', stopDefault)
+          window.removeEventListener('auxclick', stopDefault)
+        }
+
+        expect(screen.getByRole('main')).not.toHaveFocus()
+        expect(screen.getByTestId('navigation')).toHaveTextContent(/^POP \/search\?q=x&mix=uplifting$/)
+      },
+    )
+
     it('leaves the landing page for the homepage at the balanced mix, as a new history entry', async () => {
       renderLayout('/uplifting')
 
