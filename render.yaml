@@ -179,6 +179,9 @@ services:
       # except / (Render allows no rule on the root and serves dist/index.html there);
       # server/src/blueprint.test.ts fails on a missing, misplaced or stale rule.
       - type: rewrite
+        source: /uplifting
+        destination: /uplifting/index.html
+      - type: rewrite
         source: /issues
         destination: /issues/index.html
       - type: rewrite

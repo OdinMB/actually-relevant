@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
+import { isPrerendering } from '../lib/renderComplete'
 
 interface PositivityContextValue {
   /** 0 = all negative, 25, 50 = balanced, 75, 100 = all positive */
@@ -58,7 +59,23 @@ export function withMix(params: URLSearchParams, value: number): URLSearchParams
   return next
 }
 
+/** The dial's far end, "Only uplifting": while the dial is here, the reader is in the Actually Uplifting edition. */
+export const UPLIFTING_MIX = 100
+
+/** The edition's landing page, which puts the dial at `UPLIFTING_MIX` as `?mix=uplifting` does. */
+export const UPLIFTING_PATH = '/uplifting'
+
+/** Whether `pathname` is the landing page, with or without the trailing slash Render serves it at too. */
+export function isUpliftingPath(pathname: string): boolean {
+  return pathname === UPLIFTING_PATH || pathname === `${UPLIFTING_PATH}/`
+}
+
+/**
+ * The stored preference, or balanced. The build's prerenderer never reads it: one browser snapshots
+ * every page, and a mix stored by one snapshot must not reach the next.
+ */
 function readStored(): number {
+  if (isPrerendering()) return 50
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored !== null) {
@@ -73,10 +90,12 @@ function readStored(): number {
 
 export function PositivityProvider({ children }: { children: React.ReactNode }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const fromUrl = parseMixParam(searchParams.get(MIX_PARAM))
+  const { pathname } = useLocation()
+  // An explicit ?mix= wins over the landing page's path
+  const fromUrl = parseMixParam(searchParams.get(MIX_PARAM)) ?? (isUpliftingPath(pathname) ? UPLIFTING_MIX : null)
   const [positivity, setPositivityRaw] = useState(() => fromUrl ?? readStored())
 
-  // A link carrying ?mix= (on load or on later navigation) sets the mix
+  // A link carrying ?mix= or to the landing page (on load or on later navigation) sets the mix
   useEffect(() => {
     if (fromUrl !== null) setPositivityRaw(fromUrl)
   }, [fromUrl])
@@ -89,6 +108,7 @@ export function PositivityProvider({ children }: { children: React.ReactNode }) 
   }
 
   useEffect(() => {
+    if (isPrerendering()) return
     try {
       localStorage.setItem(STORAGE_KEY, String(positivity))
     } catch {
@@ -101,4 +121,9 @@ export function PositivityProvider({ children }: { children: React.ReactNode }) 
 
 export function usePositivity() {
   return useContext(PositivityContext)
+}
+
+/** Whether the reader is in the Actually Uplifting edition: the dial at its far end, nothing else. */
+export function useUpliftingEdition(): boolean {
+  return usePositivity().positivity === UPLIFTING_MIX
 }

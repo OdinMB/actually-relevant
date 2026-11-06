@@ -37,6 +37,7 @@ const PodcastPage = lazy(() => import('./pages/PodcastPage'))
 const PodcastTranscriptPage = lazy(() => import('./pages/PodcastTranscriptPage'))
 const FeedbackPagePublic = lazy(() => import('./pages/FeedbackPage'))
 const ThankYouPage = lazy(() => import('./pages/ThankYouPage'))
+const UpliftingPage = lazy(() => import('./pages/UpliftingPage'))
 
 // Admin pages — lazy-loaded so public visitors never download admin code
 const AdminLayout = lazy(() => import('./layouts/AdminLayout'))
@@ -119,6 +120,15 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
     {/* Public routes — homepage static, others lazy-loaded */}
     <Route element={<PublicLayout />}>
       <Route path="/" element={<HomePage />} />
+      {/* The Actually Uplifting edition's landing page; its path sets the dial (PositivityProvider) */}
+      <Route
+        path="/uplifting"
+        element={
+          <LazyPage>
+            <UpliftingPage />
+          </LazyPage>
+        }
+      />
       <Route
         path="/stories/:slug"
         element={

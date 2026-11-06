@@ -26,6 +26,11 @@ describe('static routes (shared/routes.json)', () => {
     expect(sitemapRoutes.map(r => r.path)).not.toContain('/subscribed')
   })
 
+  it('prerenders the Actually Uplifting landing page and lists it in the sitemap', () => {
+    expect(routePaths).toContain('/uplifting')
+    expect(sitemapRoutes.map(r => r.path)).toContain('/uplifting')
+  })
+
   it('gives every route a path, a priority between 0 and 1 and a sitemap change frequency, once', () => {
     for (const route of routes) {
       expect(route.path.startsWith('/')).toBe(true)

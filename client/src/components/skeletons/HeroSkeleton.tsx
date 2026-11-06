@@ -1,12 +1,14 @@
 /**
  * Skeleton placeholder for the HomePage hero section.
  * Matches dimensions of the real HeroSection to prevent CLS.
+ * Its hidden heading takes the hero headline's level: 2 where the page has its own h1 (UpliftingPage).
  */
-export default function HeroSkeleton() {
+export default function HeroSkeleton({ headingLevel = 1 }: { headingLevel?: 1 | 2 }) {
+  const Heading = headingLevel === 1 ? 'h1' : 'h2'
   return (
     <section className="hero-section">
       <div className="hero-section-inner animate-pulse">
-        <h1 className="sr-only">Loading stories</h1>
+        <Heading className="sr-only">Loading stories</Heading>
         {/* Title label */}
         <div className="h-3 bg-neutral-300 rounded w-24 mb-3" />
 

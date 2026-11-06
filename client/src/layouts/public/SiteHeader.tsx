@@ -6,6 +6,7 @@ import BrandLogo from '../../components/BrandLogo'
 import IssueNav from './IssueNav'
 import MobileMenu from './MobileMenu'
 import SearchPanel from './SearchPanel'
+import UpliftingEditionRow from './UpliftingEditionRow'
 import { NewsletterIcon, PodcastIcon, SavedIcon, SearchIcon } from './icons'
 import { FOCUS_RING } from '../../lib/control-classes'
 
@@ -13,8 +14,8 @@ import { FOCUS_RING } from '../../lib/control-classes'
 const HEADER_ACTION_LINK = `inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors ${FOCUS_RING} rounded px-2 py-1 text-neutral-500 hover:text-brand-700`
 
 /**
- * The site header: logo bar with its actions, the desktop issue nav, the
- * mobile menu dialog and the search panel. Owns the menu and search state.
+ * The site header: logo bar with its actions, the Actually Uplifting row, the desktop
+ * issue nav, the mobile menu dialog and the search panel. Owns the menu and search state.
  */
 export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -98,6 +99,9 @@ export default function SiteHeader() {
           </div>
         </div>
       </div>
+
+      {/* Actually Uplifting edition's cue and way back, only at "Only uplifting"; above the phones' category strip */}
+      <UpliftingEditionRow />
 
       {/* Issue category navigation — desktop */}
       <IssueNav searchOpen={searchOpen} onToggleSearch={() => setSearchOpen(!searchOpen)} />

@@ -2,6 +2,8 @@
 export const BRAND = {
   claim: 'News that matters to humanity.',
   claimSupport: 'Curated with care by AI.',
+  // The second edition: the site with the Mood Dial at "Only uplifting" (contexts/PositivityContext.tsx)
+  upliftingEdition: 'Actually Uplifting',
 } as const
 
 // What a subscriber gets, shown at every newsletter signup. Keep it true: one issue a week (the

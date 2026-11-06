@@ -57,12 +57,13 @@ describe('GET /api/sitemap.xml', () => {
     expect(mockPrisma.newsletter.findMany.mock.calls[0][0].where).toMatchObject({ status: 'published', slug: { not: null } })
   })
 
-  it('lists the static pages from shared/routes.json: /feedback in, /saved out, /widgets at 0.4', async () => {
+  it('lists the static pages from shared/routes.json: /feedback and /uplifting in, /saved out, /widgets at 0.4', async () => {
     mockPrisma.story.findMany.mockResolvedValue([])
 
     const res = await request(app).get('/api/sitemap.xml')
 
     expect(res.text).toContain('<loc>https://actuallyrelevant.news/feedback</loc>')
+    expect(res.text).toContain('<loc>https://actuallyrelevant.news/uplifting</loc>')
     expect(res.text).not.toContain('/saved')
     expect(res.text).toMatch(/<loc>https:\/\/actuallyrelevant\.news\/widgets<\/loc>\s*<changefreq>monthly<\/changefreq>\s*<priority>0\.4<\/priority>/)
   })

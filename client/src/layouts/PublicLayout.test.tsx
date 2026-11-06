@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { render, screen, within, act, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import PublicLayout from './PublicLayout'
 import { BRAND } from '../config'
@@ -15,13 +16,20 @@ vi.mock('../lib/api', async importOriginal => {
   return { ...actual, publicApi: { ...actual.publicApi, ...mockTokens } }
 })
 
-function renderLayout() {
+/** How the last navigation went (PUSH or REPLACE) and where it led. */
+function NavigationProbe() {
+  const { pathname, search } = useLocation()
+  return <div data-testid="navigation">{`${useNavigationType()} ${pathname}${search}`}</div>
+}
+
+function renderLayout(url = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <HelmetProvider>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[url]}>
         <QueryClientProvider client={queryClient}>
           <PublicLayout />
+          <NavigationProbe />
         </QueryClientProvider>
       </MemoryRouter>
     </HelmetProvider>,
@@ -123,6 +131,54 @@ describe('PublicLayout', () => {
 
     const problems = controls.map(control => [control.getAttribute('aria-label') ?? control.textContent, focusRingProblems(control)] as const)
     expect(problems.filter(([, found]) => found.length > 0)).toEqual([])
+  })
+
+  describe('Actually Uplifting edition', () => {
+    const claim = BRAND.claim.replace(/\.$/, '')
+    const home = () => within(screen.getByRole('banner')).getByRole('link', { name: /^Actually (Relevant|Uplifting)/ })
+    const seeAllNews = () => within(screen.getByRole('banner')).queryByRole('link', { name: 'See all news' })
+
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('at Only uplifting, names the home link after the edition, shows the row with its way back, and keeps the header AI line', () => {
+      renderLayout('/?mix=uplifting')
+      const header = screen.getByRole('banner')
+
+      expect(home()).toHaveAccessibleName(`${BRAND.upliftingEdition} ${claim}`)
+      expect(home()).toHaveAttribute('href', '/')
+      expect(seeAllNews()).toBeInTheDocument()
+      expect(focusRingProblems(seeAllNews()!)).toEqual([])
+      expect(within(header).getByRole('link', { name: 'Written and curated by AI: how it works' })).toBeInTheDocument()
+    })
+
+    it('at any other position, shows the Actually Relevant logo and no row', () => {
+      renderLayout('/?mix=mostly-uplifting')
+
+      expect(home()).toHaveAccessibleName(`Actually Relevant ${claim}`)
+      expect(seeAllNews()).toBeNull()
+    })
+
+    it('leaves the edition in place from "See all news": the same page at the balanced mix, history replaced, focus on <main>', async () => {
+      renderLayout('/search?q=x&mix=uplifting')
+
+      await userEvent.click(seeAllNews()!)
+
+      expect(screen.getByTestId('navigation')).toHaveTextContent(/^REPLACE \/search\?q=x&mix=balanced$/)
+      expect(seeAllNews()).toBeNull()
+      expect(home()).toHaveAccessibleName(`Actually Relevant ${claim}`)
+      expect(screen.getByRole('main')).toHaveFocus()
+    })
+
+    it('leaves the landing page for the homepage at the balanced mix, as a new history entry', async () => {
+      renderLayout('/uplifting')
+
+      await userEvent.click(seeAllNews()!)
+
+      expect(screen.getByTestId('navigation')).toHaveTextContent(/^PUSH \/\?mix=balanced$/)
+      expect(seeAllNews()).toBeNull()
+    })
   })
 
   it('no longer puts an AI notice band at the top of <main>', () => {

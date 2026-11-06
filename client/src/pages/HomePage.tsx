@@ -30,21 +30,27 @@ import LatestIssueCard from '../components/LatestIssueCard'
 // Hero
 // ---------------------------------------------------------------------------
 
-function HeroSection({ story }: { story: PublicStory }) {
+/** 1 where the feed's top headings are the page's h1; 2 under a page's own h1 (UpliftingPage's intro). */
+export type FeedHeadingLevel = 1 | 2
+
+const HEADING_TAGS = { 1: 'h1', 2: 'h2' } as const
+
+function HeroSection({ story, headingLevel }: { story: PublicStory; headingLevel: FeedHeadingLevel }) {
   const issueSlug = story.issue?.slug ?? story.feed?.issue?.slug ?? 'general-news'
   const Pattern = getCategoryPattern(issueSlug)
   const dateStr = story.datePublished ? formatDate(story.datePublished) : null
+  const Heading = HEADING_TAGS[headingLevel]
 
   return (
     <section className="hero-section">
       {Pattern && <Pattern opacity={0.2} />}
       <div className="hero-section-inner">
         <StoryTitleLabel story={story} className="mb-2" />
-        <h1 className="text-3xl md:text-5xl font-bold font-nexa text-neutral-900 mb-4 leading-tight">
+        <Heading className="text-3xl md:text-5xl font-bold font-nexa text-neutral-900 mb-4 leading-tight">
           <Link to={`/stories/${story.slug}`} className="hover:text-brand-800 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 rounded">
             {getHeadline(story)}
           </Link>
-        </h1>
+        </Heading>
 
         <div className="text-sm text-neutral-500 mb-6">
           <a
@@ -257,6 +263,32 @@ const ISSUE_ORDER = ['human-development', 'planet-climate', 'existential-threats
 const LAYOUTS: LayoutVariant[] = ['A', 'B', 'C']
 
 export default function HomePage() {
+  return (
+    <>
+      <Helmet>
+        <title>{SEO.defaultTitle}</title>
+        <meta name="description" content={SEO.defaultDescription} />
+        <meta property="og:title" content={SEO.defaultTitle} />
+        <meta property="og:description" content={SEO.defaultDescription} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={`${SEO.siteUrl}/`} />
+        {CommonOgTags({})}
+        <script type="application/ld+json">{toJsonLd(buildWebSiteSchema())}</script>
+        <script type="application/ld+json">{toJsonLd(buildOrganizationSchema())}</script>
+      </Helmet>
+
+      <HomeStories />
+    </>
+  )
+}
+
+/**
+ * The homepage feed at the dial's mix: the hero, the issue sections with their banners, and what the
+ * page says while it loads, when it fails and when the mix has no stories. `headingLevel` is the
+ * level of its top headings (the hero headline, the loading and failure headings): 2 on a page that
+ * has an h1 of its own above the feed, so the page keeps exactly one.
+ */
+export function HomeStories({ headingLevel = 1 }: { headingLevel?: FeedHeadingLevel }) {
   const { positivity } = usePositivity()
   // Single API call — both emotion buckets per issue, mixed client-side
   const homepageQuery = useHomepageData()
@@ -286,20 +318,8 @@ export default function HomePage() {
 
   return (
     <>
-      <Helmet>
-        <title>{SEO.defaultTitle}</title>
-        <meta name="description" content={SEO.defaultDescription} />
-        <meta property="og:title" content={SEO.defaultTitle} />
-        <meta property="og:description" content={SEO.defaultDescription} />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={`${SEO.siteUrl}/`} />
-        {CommonOgTags({})}
-        <script type="application/ld+json">{toJsonLd(buildWebSiteSchema())}</script>
-        <script type="application/ld+json">{toJsonLd(buildOrganizationSchema())}</script>
-      </Helmet>
-
       {/* Hero — show skeleton while loading */}
-      {isLoading ? <HeroSkeleton /> : heroStory ? <HeroSection story={heroStory} /> : null}
+      {isLoading ? <HeroSkeleton headingLevel={headingLevel} /> : heroStory ? <HeroSection story={heroStory} headingLevel={headingLevel} /> : null}
 
       {/* Issue sections with rotating layouts */}
       <div className="page-section-wide md:-mt-14 min-h-screen">
@@ -312,7 +332,7 @@ export default function HomePage() {
             <IssueSectionSkeleton layout="A" />
           </>
         ) : loadState !== 'ready' ? (
-          <LoadFailure title="The stories couldn't load" query={homepageQuery} className="py-12" />
+          <LoadFailure title="The stories couldn't load" headingLevel={headingLevel} query={homepageQuery} className="py-12" />
         ) : showsStories ? (
           <>
             <LatestIssueSlot issue={latestIssue} />
