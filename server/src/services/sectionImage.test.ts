@@ -28,8 +28,9 @@ vi.mock('@napi-rs/canvas', async importOriginal => {
   }
 })
 
-const { createSectionImage, fitLabel, SECTION_FONT_PATH, SECTION_LOGO_PATH } = await import('./sectionImage.js')
-const { createStoryImage, OG_IMAGE_SIZE } = await import('./carousel.js')
+const { createSectionImage, fitLabel, SECTION_FONT_PATH } = await import('./sectionImage.js')
+const { OG_IMAGE_SIZE, PREVIEW_LOGO_PATH } = await import('./previewImageParts.js')
+const { createStoryImage } = await import('./carousel.js')
 
 function pngSize(png: Buffer) {
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) }
@@ -82,16 +83,16 @@ describe('fitLabel', () => {
 
 describe('createSectionImage', () => {
   // First, while no section image has registered its font yet
-  it('leaves the story images as they were: registering its font changes no other text', async () => {
+  it('leaves the carousel slides as they were: registering its font changes no other text', async () => {
     const story = { title: 'A headline', category: 'Planet & Climate', summary: 'A summary.', publisher: 'Nation', date: null }
-    const before = createStoryImage(story, OG_IMAGE_SIZE)
+    const before = createStoryImage(story)
     await createSectionImage({ text: 'Newsletter' })
-    expect(createStoryImage(story, OG_IMAGE_SIZE).equals(before)).toBe(true)
+    expect(createStoryImage(story).equals(before)).toBe(true)
   })
 
   it('ships its font and logo with the server', () => {
     expect(existsSync(SECTION_FONT_PATH)).toBe(true)
-    expect(existsSync(SECTION_LOGO_PATH)).toBe(true)
+    expect(existsSync(PREVIEW_LOGO_PATH)).toBe(true)
   })
 
   it('renders a 1200x630 PNG', async () => {

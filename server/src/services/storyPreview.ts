@@ -1,6 +1,6 @@
 /**
  * Story link previews (.context/seo.md, "Story link previews"):
- * - the per-story og:image, rendered with the carousel's canvas renderer at 1200x630;
+ * - the per-story og:image, the 1200x630 card `storyCardImage.ts` draws;
  * - what the story page's head says, for the shared link-preview pages (`linkPreview.ts`): the
  *   story's title, description, canonical, og:* and twitter:* tags, as StoryPage's Helmet sets them.
  * Both serve published stories only.
@@ -11,11 +11,16 @@ import { BoundedCache } from '../lib/boundedCache.js'
 import { registerPublicCache } from '../lib/publicCaches.js'
 import { storyOgImageUrl } from '../lib/storyPreviewUrls.js'
 import { markdownToPlainText } from '../lib/plainText.js'
-import { createStoryImage, OG_IMAGE_SIZE } from './carousel.js'
+import { topicColor } from '../lib/topicColors.js'
+import { OG_IMAGE_SIZE } from './previewImageParts.js'
+import { createStoryCardImage, type StoryCard } from './storyCardImage.js'
 import { _resetLinkPreviewCaches, SITE_NAME, type LinkPreview, type PreviewImage } from './linkPreview.js'
 
 /** The same author line StoryPage's Helmet sets. */
 const STORY_AUTHOR = 'RelevanceAI by Actually Relevant'
+
+/** A topic's name, and its parent's slug for the dot's color. */
+const TOPIC_SELECT = { select: { name: true, slug: true, parent: { select: { slug: true } } } } as const
 
 const PREVIEW_STORY_SELECT = {
   slug: true,
@@ -25,8 +30,8 @@ const PREVIEW_STORY_SELECT = {
   summary: true,
   datePublished: true,
   sourceDatePublished: true,
-  issue: { select: { name: true } },
-  feed: { select: { title: true, displayTitle: true, issue: { select: { name: true } } } },
+  issue: TOPIC_SELECT,
+  feed: { select: { title: true, displayTitle: true, issue: TOPIC_SELECT } },
 } as const
 
 export async function findPreviewStory(slug: string) {
@@ -67,22 +72,29 @@ export function displayTitleOf(story: PreviewStory): string {
 const imageCache = new BoundedCache<Buffer>(config.storyPreview.imageCacheEntries, config.storyPreview.imageCacheTtlSeconds * 1000)
 registerPublicCache('story-preview-images', imageCache)
 
+/**
+ * What the story's card shows: the AI headline, the story's topic (else its feed's, else "General")
+ * with the dot in its top-level topic's color, as the topic pages' images have it, and the source
+ * and the day it published the story.
+ */
+function storyCardOf(story: PreviewStory): StoryCard {
+  const topic = story.issue ?? story.feed?.issue ?? null
+  return {
+    headline: headlineOf(story),
+    topic: topic?.name || 'General',
+    topicColor: topicColor(topic?.parent?.slug ?? topic?.slug ?? ''),
+    publisher: story.feed?.displayTitle || story.feed?.title || '',
+    date: (story.sourceDatePublished ?? story.datePublished)?.toISOString() ?? null,
+  }
+}
+
 /** The story's 1200x630 preview PNG (AI-marked in pixels and XMP), or null if it is not published. */
 export async function getStoryOgImage(slug: string): Promise<Buffer | null> {
   const hit = imageCache.get(slug)
   if (hit) return hit
   const story = await findPreviewStory(slug)
   if (!story) return null
-  const png = createStoryImage(
-    {
-      title: headlineOf(story),
-      category: story.issue?.name || story.feed?.issue?.name || 'General',
-      summary: story.summary || '',
-      publisher: story.feed?.displayTitle || story.feed?.title || '',
-      date: (story.sourceDatePublished ?? story.datePublished)?.toISOString() ?? null,
-    },
-    OG_IMAGE_SIZE,
-  )
+  const png = await createStoryCardImage(storyCardOf(story))
   imageCache.set(slug, png)
   return png
 }

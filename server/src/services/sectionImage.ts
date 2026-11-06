@@ -1,37 +1,30 @@
 /**
  * The link-preview image of a section of the site (.context/seo.md, "Section preview images"): the
  * logo on white above a band in the brand's deep purple that names the section ("Newsletter",
- * "Podcast", a topic's name), the four topic colors between them. 1200x630, drawn with the canvas
- * the carousel and the story images use.
+ * "Podcast", a topic's name), the four topic colors between them (`previewImageParts.ts`, shared
+ * with the story card). 1200x630, drawn with the canvas the carousel and the story images use.
  *
  * The font is Roboto Bold (Apache 2.0, its licence beside it in server/assets/fonts/Roboto), the
- * copy the website ships in client/public/fonts/Roboto. The logo is a copy of the website's
- * client/public/images/logo-text-horizontal.png (a JPEG), drawn no larger than its own size. The
- * image holds no AI-generated text, so it carries no AI mark; a label may add the website's "AI"
- * badge after the name, for a card whose text or subject is AI-written.
+ * copy the website ships in client/public/fonts/Roboto. The image holds no AI-generated text, so it
+ * carries no AI mark; a label may add the website's "AI" badge after the name, for a card whose
+ * text or subject is AI-written.
  */
-import { createCanvas, GlobalFonts, loadImage, type Image, type SKRSContext2D } from '@napi-rs/canvas'
-import { readFile } from 'fs/promises'
+import { createCanvas, GlobalFonts, type SKRSContext2D } from '@napi-rs/canvas'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { TOPIC_COLORS } from '../lib/topicColors.js'
-import { OG_IMAGE_SIZE } from './carousel.js'
+import { BAND_COLOR, OG_IMAGE_SIZE, STRIP_HEIGHT, drawTopicStrip, loadPreviewLogo } from './previewImageParts.js'
 
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets')
 export const SECTION_FONT_PATH = join(ASSETS_DIR, 'fonts', 'Roboto', 'Roboto-Bold.ttf')
-export const SECTION_LOGO_PATH = join(ASSETS_DIR, 'images', 'logo-text-horizontal.jpg')
 
 /** A family name of our own, so the font never stands in for another one. */
 const FONT_FAMILY = 'SectionRobotoBold'
 
 const { width: WIDTH, height: HEIGHT } = OG_IMAGE_SIZE
 const BAND_TOP = 360
-const STRIP_HEIGHT = 10
 /** The logo's width, or its own width if that is smaller: scaled up, it would blur. */
 const LOGO_MAX_WIDTH = 560
 const LABEL_MAX_WIDTH = 1080
-/** brand-800, the site's theme color. */
-const BAND_COLOR = '#661845'
 const LABEL_COLOR = '#ffffff'
 /** One line while the name fits at one of these sizes, else two lines at one of the next. */
 const ONE_LINE_SIZES = [100, 96, 92, 88, 84, 80, 76, 72]
@@ -63,20 +56,12 @@ export interface LabelExtras {
   trail: (size: number) => number
 }
 
-let logo: Promise<Image> | null = null
 let fontRegistered = false
 
-function prepare(): Promise<Image> {
+function registerFont(): void {
   if (!fontRegistered) {
     fontRegistered = GlobalFonts.registerFromPath(SECTION_FONT_PATH, FONT_FAMILY)
   }
-  logo ??= readFile(SECTION_LOGO_PATH)
-    .then(bytes => loadImage(bytes))
-    .catch(err => {
-      logo = null
-      throw err
-    })
-  return logo
 }
 
 const fontOf = (size: number) => `${size}px ${FONT_FAMILY}, sans-serif`
@@ -104,15 +89,6 @@ export function fitLabel(measure: (text: string, size: number) => number, text: 
   let cut = text
   while (cut.length > 1 && widest([`${cut}…`], size) > maxWidth) cut = cut.slice(0, -1)
   return { size, lines: [`${cut.trimEnd()}…`] }
-}
-
-function drawStrip(ctx: SKRSContext2D, y: number) {
-  const colors = Object.values(TOPIC_COLORS)
-  const segment = WIDTH / colors.length
-  colors.forEach((color, i) => {
-    ctx.fillStyle = color
-    ctx.fillRect(Math.round(i * segment), y, Math.ceil(segment), STRIP_HEIGHT)
-  })
 }
 
 /** The badge's outline and text, its left edge at `x`, centered on `midline`. */
@@ -171,7 +147,8 @@ function drawLabel(ctx: SKRSContext2D, { text, accent, badge }: SectionLabel, ce
 
 /** The section's 1200x630 preview PNG. */
 export async function createSectionImage(label: SectionLabel): Promise<Buffer> {
-  const logoImage = await prepare()
+  registerFont()
+  const logoImage = await loadPreviewLogo()
   const canvas = createCanvas(WIDTH, HEIGHT)
   const ctx = canvas.getContext('2d')
 
@@ -181,7 +158,7 @@ export async function createSectionImage(label: SectionLabel): Promise<Buffer> {
   const logoHeight = (logoWidth * logoImage.height) / logoImage.width
   ctx.drawImage(logoImage, (WIDTH - logoWidth) / 2, (BAND_TOP - STRIP_HEIGHT - logoHeight) / 2, logoWidth, logoHeight)
 
-  drawStrip(ctx, BAND_TOP - STRIP_HEIGHT)
+  drawTopicStrip(ctx, BAND_TOP - STRIP_HEIGHT)
   ctx.fillStyle = BAND_COLOR
   ctx.fillRect(0, BAND_TOP, WIDTH, HEIGHT - BAND_TOP)
   drawLabel(ctx, label, BAND_TOP + (HEIGHT - BAND_TOP) / 2)

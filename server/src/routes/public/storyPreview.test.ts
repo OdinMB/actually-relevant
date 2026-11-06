@@ -5,6 +5,13 @@ import request from 'supertest'
 
 const mockPrisma = vi.hoisted(() => ({ story: { findFirst: vi.fn() } }))
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
+// The real renderer, watched: what each card is given
+const createStoryCardImage = vi.hoisted(() => vi.fn())
+vi.mock('../../services/storyCardImage.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../services/storyCardImage.js')>()
+  createStoryCardImage.mockImplementation(actual.createStoryCardImage)
+  return { ...actual, createStoryCardImage }
+})
 // A limiter that refuses everything: whatever passes it was never rate-limited.
 vi.mock('../../middleware/rateLimit.js', () => ({
   apiLimiter: (_req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) => res.status(429).json({ error: 'limited' }),
@@ -47,7 +54,7 @@ const STORY = {
   summary: 'A summary that is AI-written.',
   datePublished: new Date('2026-10-12T07:30:00Z'),
   sourceDatePublished: new Date('2026-10-11T07:30:00Z'),
-  issue: { name: 'Planet & Climate' },
+  issue: { name: 'Planet & Climate', slug: 'planet-climate', parent: null },
   feed: { title: 'Nation Feed', displayTitle: 'Nation', issue: null },
 }
 
@@ -83,6 +90,46 @@ describe('GET /api/stories/:slug/og.png', () => {
 
     await request(app).get('/api/stories/clean-air/og.png')
     expect(mockPrisma.story.findFirst).toHaveBeenCalledOnce()
+  })
+
+  it("draws the story's AI headline without its label, its topic in that topic's color, its source and date", async () => {
+    await request(app).get('/api/stories/clean-air/og.png')
+    expect(createStoryCardImage).toHaveBeenCalledWith({
+      headline: 'Cities cut "smog" <fast>',
+      topic: 'Planet & Climate',
+      topicColor: '#2dd4bf',
+      publisher: 'Nation',
+      date: '2026-10-11T07:30:00.000Z',
+    })
+  })
+
+  it("colors a subtopic's dot as its parent topic", async () => {
+    mockPrisma.story.findFirst.mockResolvedValue({ ...STORY, issue: { name: 'Bioterrorism', slug: 'bioterrorism', parent: { slug: 'existential-threats' } } })
+    await request(app).get('/api/stories/clean-air/og.png')
+    expect(createStoryCardImage.mock.calls[0][0]).toMatchObject({ topic: 'Bioterrorism', topicColor: '#f87171' })
+  })
+
+  it("falls back to the feed's topic, then to General in the brand pink", async () => {
+    mockPrisma.story.findFirst.mockResolvedValue({
+      ...STORY,
+      issue: null,
+      feed: { ...STORY.feed, issue: { name: 'Human Development', slug: 'human-development', parent: null } },
+    })
+    await request(app).get('/api/stories/clean-air/og.png')
+    expect(createStoryCardImage.mock.calls[0][0]).toMatchObject({ topic: 'Human Development', topicColor: '#fbbf24' })
+
+    _resetStoryPreviewCaches()
+    mockPrisma.story.findFirst.mockResolvedValue({ ...STORY, issue: null })
+    await request(app).get('/api/stories/clean-air/og.png')
+    expect(createStoryCardImage.mock.calls[1][0]).toMatchObject({ topic: 'General', topicColor: '#f472b6' })
+  })
+
+  it('selects what the card needs: the topic and its parent, from the story or its feed', async () => {
+    await request(app).get('/api/stories/clean-air/og.png')
+    const topicSelect = { select: { name: true, slug: true, parent: { select: { slug: true } } } }
+    const { select } = mockPrisma.story.findFirst.mock.calls[0][0]
+    expect(select.issue).toEqual(topicSelect)
+    expect(select.feed.select.issue).toEqual(topicSelect)
   })
 
   it('looks up published stories only, and 404s otherwise', async () => {
