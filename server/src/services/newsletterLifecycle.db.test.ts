@@ -18,6 +18,7 @@ vi.mock('./plunk.js', () => import('../test/fakePlunk.js'))
 
 const lifecycle = await import('./newsletterLifecycle.js')
 const { sendLive, sendTest, markSendFailed, editNewsletter, publishNewsletter, unpublishNewsletter, deleteNewsletter } = lifecycle
+const { switchEdition } = await import('./editionSwitch.js')
 
 const HTML = '<p>The issue</p>'
 const CONTENT = '## A story\nPublisher · [original article](https://news.example/a)\n\nWhy it matters.'
@@ -182,13 +183,24 @@ describeDb('newsletter lifecycle', () => {
       config.plunk.fullEditionSegmentId = 'seg-full'
       config.plunk.upliftingSegmentId = 'seg-uplifting'
     }
+    const closeEditions = () => {
+      config.plunk.fullEditionSegmentId = ''
+      config.plunk.upliftingSegmentId = ''
+    }
     afterEach(() => {
       config.plunk.fullEditionSegmentId = originalSegments.full
       config.plunk.upliftingSegmentId = originalSegments.uplifting
     })
-    const confirmedSignup = (edition: 'full' | 'uplifting') =>
+    const confirmedSignup = (edition: 'full' | 'uplifting', plunkContactId: string | null = null) =>
       prisma.pendingSubscription.create({
-        data: { email: `${edition}@example.com`, token: `token-${edition}`, edition, confirmedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000) },
+        data: {
+          email: `${edition}@example.com`,
+          token: `token-${edition}`,
+          edition,
+          plunkContactId,
+          confirmedAt: new Date(),
+          expiresAt: new Date(Date.now() + 86_400_000),
+        },
       })
 
     it("sends each edition's issue to its own segment while the editions are open, its campaign named for the edition", async () => {
@@ -233,6 +245,40 @@ describeDb('newsletter lifecycle', () => {
       const second = await testedIssue()
       await expect(sendLive(second.id)).rejects.toMatchObject({ code: 'no_audience' })
       expect(await liveRowsOf(second.id)).toEqual([])
+      expect(fakePlunk.liveSends()).toHaveLength(1)
+    })
+
+    it('refuses the full send to all once the editions close after a full reader switched to Actually Uplifting from an issue footer', async () => {
+      await confirmedSignup('full', 'contact-1')
+      fakePlunk.addContact({ id: 'contact-1', data: { edition: 'full' } })
+      openEditions()
+      await switchEdition('contact-1', 'uplifting')
+      closeEditions()
+
+      const issue = await testedIssue()
+      await expect(sendLive(issue.id)).rejects.toMatchObject({ code: 'no_audience' })
+      expect(fakePlunk.liveSends()).toEqual([])
+    })
+
+    it('refuses it too for a footer switch by a reader with no signup on record here', async () => {
+      fakePlunk.addContact({ id: 'imported-1' })
+      openEditions()
+      await switchEdition('imported-1', 'uplifting')
+      closeEditions()
+
+      const issue = await testedIssue()
+      await expect(sendLive(issue.id)).rejects.toMatchObject({ code: 'no_audience' })
+    })
+
+    it('sends the full issue to all again once the reader who chose Actually Uplifting at signup switched back', async () => {
+      await confirmedSignup('uplifting', 'contact-1')
+      fakePlunk.addContact({ id: 'contact-1', data: { edition: 'uplifting' } })
+      openEditions()
+      await switchEdition('contact-1', 'full')
+      closeEditions()
+
+      const issue = await testedIssue()
+      await sendLive(issue.id)
       expect(fakePlunk.liveSends()).toHaveLength(1)
     })
 

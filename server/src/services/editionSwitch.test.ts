@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockPlunk = vi.hoisted(() => ({ getContact: vi.fn(), updateContact: vi.fn() }))
 const mockNotify = vi.hoisted(() => vi.fn())
+const mockRecordSwitch = vi.hoisted(() => vi.fn())
 vi.mock('./plunk.js', () => mockPlunk)
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
+vi.mock('./knownEditions.js', () => ({ recordSwitch: mockRecordSwitch }))
 
 const { switchEdition } = await import('./editionSwitch.js')
 const { config } = await import('../config.js')
@@ -23,6 +25,7 @@ describe('switchEdition', () => {
     vi.clearAllMocks()
     mockNotify.mockResolvedValue(undefined)
     mockPlunk.updateContact.mockResolvedValue({})
+    mockRecordSwitch.mockResolvedValue(undefined)
     config.plunk.fullEditionSegmentId = 'seg-full'
     config.plunk.upliftingSegmentId = 'seg-up'
   })
@@ -61,6 +64,36 @@ describe('switchEdition', () => {
       await expect(switchEdition('contact-1', 'uplifting')).rejects.toMatchObject({ status: 409, code: 'not_subscribed' })
     }
     expect(mockPlunk.updateContact).not.toHaveBeenCalled()
+    expect(mockRecordSwitch).not.toHaveBeenCalled()
+  })
+
+  // The closed-editions guard reads the local record (knownEditions.ts), so it must never say full
+  // while Plunk may have the reader on Actually Uplifting
+  it('records a switch to Actually Uplifting before writing Plunk, so a write Plunk applied but did not answer still counts', async () => {
+    mockPlunk.getContact.mockResolvedValue(contact({ edition: 'full' }))
+    mockPlunk.updateContact.mockRejectedValue(Object.assign(new Error('timeout of 15000ms exceeded'), { code: 'ECONNABORTED' }))
+
+    await expect(switchEdition('contact-1', 'uplifting')).rejects.toThrow('no answer')
+
+    expect(mockRecordSwitch).toHaveBeenCalledWith('contact-1', 'uplifting')
+  })
+
+  it('records a switch to the full edition only once Plunk has it', async () => {
+    mockPlunk.getContact.mockResolvedValue(contact({ edition: 'uplifting' }))
+    mockPlunk.updateContact.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 503'), { response: { status: 503 } }))
+
+    await expect(switchEdition('contact-1', 'full')).rejects.toThrow('HTTP 503')
+    expect(mockRecordSwitch).not.toHaveBeenCalled()
+
+    await switchEdition('contact-1', 'full')
+    expect(mockRecordSwitch).toHaveBeenCalledWith('contact-1', 'full')
+    expect(mockRecordSwitch.mock.invocationCallOrder[0]).toBeGreaterThan(mockPlunk.updateContact.mock.invocationCallOrder[1]!)
+  })
+
+  it('records a switch to the edition the contact is on already, which Plunk needs no write for', async () => {
+    mockPlunk.getContact.mockResolvedValue(contact({ edition: 'uplifting' }))
+    await switchEdition('contact-1', 'uplifting')
+    expect(mockRecordSwitch).toHaveBeenCalledWith('contact-1', 'uplifting')
   })
 
   it("writes the edition merged with the contact's other data fields", async () => {

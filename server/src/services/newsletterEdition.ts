@@ -8,6 +8,7 @@
 import type { NewsletterEdition, Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
+import { anyoneOnUplifting } from './knownEditions.js'
 
 /** The template variable Plunk fills with each recipient's contact id in a campaign body. */
 export const PLUNK_CONTACT_ID_VARIABLE = '{{id}}'
@@ -68,8 +69,9 @@ export type EditionAudience = { audienceType: 'ALL' } | { audienceType: 'SEGMENT
 /**
  * The audience of a live send of this edition's issue.
  * - Editions open: each edition's own Plunk segment.
- * - Not open: the full edition goes to all subscribers, as before the editions, unless someone chose
- *   Actually Uplifting while they were open (a confirmed signup with that edition), who would get it
+ * - Not open: the full edition goes to all subscribers, as before the editions, unless anyone got onto
+ *   Actually Uplifting while they were open and is still on it as far as this server knows (a
+ *   confirmed signup or a footer switch, the newer per contact; `knownEditions.ts`), who would get it
  *   too; then, and for Actually Uplifting itself, it goes to nobody.
  */
 export async function editionAudience(edition: NewsletterEdition, db: Prisma.TransactionClient = prisma): Promise<EditionAudience> {
@@ -82,8 +84,7 @@ export async function editionAudience(edition: NewsletterEdition, db: Prisma.Tra
         'Actually Uplifting has no audience while the editions are closed (PLUNK_FULL_EDITION_SEGMENT_ID and PLUNK_UPLIFTING_SEGMENT_ID unset), so this issue was not sent.',
     }
   }
-  const upliftingReader = await db.pendingSubscription.findFirst({ where: { edition: 'uplifting', confirmedAt: { not: null } }, select: { id: true } })
-  if (upliftingReader) {
+  if (await anyoneOnUplifting(db)) {
     return {
       refused:
         'Readers chose Actually Uplifting while the editions were open, and the edition segment variables (PLUNK_FULL_EDITION_SEGMENT_ID, PLUNK_UPLIFTING_SEGMENT_ID) are unset now, so a send to all subscribers would reach them too. This issue was not sent; set both variables again to send it to the full edition.',

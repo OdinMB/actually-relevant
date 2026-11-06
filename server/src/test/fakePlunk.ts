@@ -3,9 +3,10 @@
  * client with it, `vi.mock('../services/plunk.js', () => import('../test/fakePlunk.js'))`, and reads
  * `fakePlunk` for what was created and sent. It records campaigns and the sends it accepted, and
  * fails on script the way the real API can: refused before connecting, a 4xx answer, or an
- * ambiguous failure after Plunk already accepted the send (a lost response).
+ * ambiguous failure after Plunk already accepted the send (a lost response). It also holds the
+ * contacts a test adds, which the edition switch reads and writes.
  */
-import type { CampaignStats, CreateCampaignOpts } from '../services/plunk.js'
+import type { CampaignStats, Contact, CreateCampaignOpts, CreateContactOpts } from '../services/plunk.js'
 
 export type SendFailure = 'not_connected' | 'client_error' | 'ambiguous'
 
@@ -17,14 +18,34 @@ class FakePlunk {
   campaigns: FakeCampaign[] = []
   /** Sends Plunk accepted, in order (an ambiguous failure is accepted too). */
   accepted: { campaignId: string; audienceType: CreateCampaignOpts['audienceType']; scheduledFor?: string }[] = []
+  /** Contacts by id; a subscribed one with no data fields unless the test says otherwise. */
+  contacts = new Map<string, Contact>()
   private createFailures: Error[] = []
   private sendFailures: SendFailure[] = []
 
   reset(): void {
     this.campaigns = []
     this.accepted = []
+    this.contacts = new Map()
     this.createFailures = []
     this.sendFailures = []
+  }
+
+  addContact(contact: Partial<Contact> & { id: string }): void {
+    const at = '2026-01-01T00:00:00.000Z'
+    this.contacts.set(contact.id, { email: `${contact.id}@example.com`, subscribed: true, data: {}, createdAt: at, updatedAt: at, ...contact })
+  }
+
+  async getContact(id: string): Promise<Contact | null> {
+    return this.contacts.get(id) ?? null
+  }
+
+  async updateContact(id: string, updates: Partial<CreateContactOpts>): Promise<Contact> {
+    const contact = this.contacts.get(id)
+    if (!contact) throw Object.assign(new Error('Request failed with status code 404'), { response: { status: 404 } })
+    const updated = { ...contact, ...updates, data: updates.data ?? contact.data }
+    this.contacts.set(id, updated)
+    return updated
   }
 
   /** The next createCampaign call fails (after any already scripted). */
@@ -68,7 +89,9 @@ class FakePlunk {
 
 export const fakePlunk = new FakePlunk()
 
-// The plunk.js functions the newsletter code calls
+// The plunk.js functions the newsletter code and the edition switch call
 export const createCampaign = (opts: CreateCampaignOpts) => fakePlunk.createCampaign(opts)
 export const sendCampaign = (id: string, scheduledFor?: string) => fakePlunk.sendCampaign(id, scheduledFor)
 export const getCampaignStats = async (): Promise<CampaignStats> => ({ delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0 })
+export const getContact = (id: string) => fakePlunk.getContact(id)
+export const updateContact = (id: string, updates: Partial<CreateContactOpts>) => fakePlunk.updateContact(id, updates)

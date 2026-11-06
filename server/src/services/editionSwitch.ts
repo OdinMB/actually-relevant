@@ -9,7 +9,9 @@
  * (404); and one not subscribed (409), which is never written, so a switch can never resubscribe
  * anyone. Otherwise the contact's `edition` field is written, merged with the rest of its data so no
  * other field is lost whatever Plunk's PATCH does with `data`; a switch to the edition the contact is
- * on already writes nothing. Logs and notices never carry the contact id or the address.
+ * on already writes nothing to Plunk. Either way the switch is recorded here too, by contact id
+ * (`knownEditions.ts`), for the closed-editions guard. Logs and notices never carry the contact id or
+ * the address.
  */
 import type { NewsletterEdition } from '@prisma/client'
 import { config } from '../config.js'
@@ -17,6 +19,7 @@ import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { responseStatus } from '../lib/retry.js'
 import { ServiceError } from '../utils/errors.js'
+import { recordSwitch } from './knownEditions.js'
 import * as plunk from './plunk.js'
 import { contactStatus } from './plunkContacts.js'
 
@@ -80,8 +83,18 @@ export async function switchEdition(contactId: string, edition: NewsletterEditio
   if (contactStatus(contact) !== 'subscribed') {
     throw new EditionSwitchError('not_subscribed', 'This address is not subscribed to the newsletter.', 409)
   }
-  if (contact.data?.edition === edition) return
 
+  // The closed-editions guard reads the local record (`knownEditions.ts`), so it must never say full
+  // while Plunk may have the reader on Actually Uplifting: a switch to it is recorded before Plunk is
+  // written, a switch to the full edition only once Plunk has it.
+  const recordFirst = edition === 'uplifting'
+  if (recordFirst) await recordSwitch(contactId, edition)
+  if (contact.data?.edition !== edition) await writeEdition(contactId, contact, edition)
+  if (!recordFirst) await recordSwitch(contactId, edition)
+}
+
+/** Write the contact's `edition` field in Plunk, merged with its other data fields. */
+async function writeEdition(contactId: string, contact: plunk.Contact, edition: NewsletterEdition): Promise<void> {
   try {
     await plunk.updateContact(contactId, { data: { ...storableData(contact.data), edition } })
   } catch (err) {

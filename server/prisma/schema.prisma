@@ -512,6 +512,16 @@ model PendingSubscription {
   @@map("pending_subscriptions")
 }
 
+/// A subscriber's latest switch of newsletter edition from an issue's footer link, one row per Plunk
+/// contact, beside what Plunk holds; with the confirmed signups it tells the closed-editions guard
+/// who is on Actually Uplifting (ADR-0052, services/knownEditions.ts). No address: the contact id only.
+model EditionSwitch {
+  plunkContactId String            @id @map("plunk_contact_id")
+  edition        NewsletterEdition
+  switchedAt     DateTime          @default(now()) @map("switched_at")
+
+  @@map("edition_switches")
+}
 
 // --- Feedback Tables ---
 
