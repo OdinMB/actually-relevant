@@ -52,6 +52,11 @@ export function parseMixParam(raw: string | null): number | null {
   return parsed <= 100 ? clampToValid(parsed) : null
 }
 
+/** The `mix` name of a dial value (snapped to a position), e.g. 100 → `uplifting`. */
+export function mixName(value: number): string {
+  return MIX_NAMES[clampToValid(value)]!
+}
+
 /** `params` with the `mix` parameter naming `value` (snapped to a position); the other parameters are kept. */
 export function withMix(params: URLSearchParams, value: number): URLSearchParams {
   const next = new URLSearchParams(params)

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseFeedMix } from '../lib/feedMix.js'
 
 const storyStatusEnum = z.enum(['fetched', 'pre_analyzed', 'analyzed', 'selected', 'published', 'rejected', 'trashed'])
 
@@ -136,7 +137,20 @@ export const publicStoryQuerySchema = z
     path: ['search'],
   })
 
-/** Query of the public RSS feeds: only the relevance floor (a feed reader polls one fixed URL). */
+export const FEED_MIX_MESSAGE = 'Must be heavy, mostly-heavy, balanced, mostly-uplifting, uplifting, or a number from 0 to 100'
+
+/** The site's Mood Dial position (`lib/feedMix.ts`): a name or a number 0-100, snapped to a position. */
+export const feedMixParam = z.string().transform((value, ctx) => {
+  const mix = parseFeedMix(value)
+  if (mix === null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: FEED_MIX_MESSAGE })
+    return z.NEVER
+  }
+  return mix
+})
+
+/** Query of the public RSS feeds: the relevance floor and the dial position (a feed reader polls one fixed URL). */
 export const feedQuerySchema = z.object({
   minRelevance: minRelevanceParam.optional(),
+  mix: feedMixParam.optional(),
 })

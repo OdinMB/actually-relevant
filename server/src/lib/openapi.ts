@@ -311,7 +311,19 @@ const storySyncQuerySchema = z.object({
   minRelevance: minRelevanceQuery,
 })
 
-const feedQueryDocSchema = z.object({ minRelevance: minRelevanceQuery })
+const feedQueryDocSchema = z.object({
+  minRelevance: minRelevanceQuery,
+  mix: z
+    .string()
+    .optional()
+    .openapi({
+      description:
+        "The website's Mood Dial: `heavy`, `mostly-heavy`, `balanced`, `mostly-uplifting` or `uplifting`, or a number from 0 to 100 (snapped to the nearest of 0, 25, 50, 75, 100). " +
+        '`uplifting` is the Actually Uplifting edition: only stories tagged uplifting. The other positions mix positive (uplifting, calm) and negative (frustrating, scary) stories in that proportion, as the homepage does. ' +
+        'Without it, the feed has every story.',
+      example: 'uplifting',
+    }),
+})
 
 const newsletterEditionSchema = z.enum(['full', 'uplifting']).openapi({
   description: 'The newsletter edition the issue belongs to: `full` (every kind of story) or `uplifting` (Actually Uplifting, uplifting stories only).',

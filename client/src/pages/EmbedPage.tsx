@@ -6,6 +6,25 @@ import { formatRelativeTime } from '../lib/constants'
 import AiLabel from '../components/ai/AiLabel'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { SITE_URL } from '../config'
+import { UPLIFTING_MIX, parseMixParam } from '../contexts/PositivityContext'
+import { mixHomepageStories } from '../lib/mix-stories'
+
+/**
+ * The embed's stories. Without a mix, the newest ones. At "Only uplifting", only uplifting ones.
+ * At the other positions, the homepage's mix of positive (uplifting, calm) and negative stories,
+ * picked from the newest `MIX_POOL` in one request, as `public/widget.js` does; untagged stories
+ * are left out, as on the homepage.
+ */
+export async function loadEmbedStories({ count, issue, mix }: { count: number; issue?: string; mix: number | null }) {
+  const list = (pageSize: number, emotionTags?: string) => publicApi.stories.list({ page: 1, pageSize, issueSlug: issue, emotionTags })
+  if (mix === null) return list(count)
+  if (mix === UPLIFTING_MIX) return list(count, 'uplifting')
+  const pool = (await list(MIX_POOL)).data
+  const tagged = (...tags: string[]) => pool.filter(s => s.emotionTag !== null && tags.includes(s.emotionTag))
+  return { data: mixHomepageStories({ uplifting: tagged('uplifting', 'calm'), calm: [], negative: tagged('frustrating', 'scary') }, count, mix) }
+}
+
+const MIX_POOL = 50
 
 export default function EmbedPage() {
   const [params] = useSearchParams()
@@ -13,14 +32,13 @@ export default function EmbedPage() {
   const issue = params.get('issue') || undefined
   const theme = params.get('theme') === 'dark' ? 'dark' : 'light'
   const showSummary = params.get('summary') === 'true'
-  const mood = params.get('mood') || ''
+  // The Mood Dial's `mix`, as the site reads it; `mood=uplifting` is the older spelling of mix=uplifting
+  const mix = parseMixParam(params.get('mix')) ?? (params.get('mood') === 'uplifting' ? UPLIFTING_MIX : null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const emotionTags = mood === 'uplifting' ? 'uplifting' : undefined
-
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['embed-stories', issue, count, mood],
-    queryFn: () => publicApi.stories.list({ page: 1, pageSize: count, issueSlug: issue, emotionTags }),
+    queryKey: ['embed-stories', issue, count, mix],
+    queryFn: () => loadEmbedStories({ count, issue, mix }),
   })
 
   // Post height to parent for auto-resize
