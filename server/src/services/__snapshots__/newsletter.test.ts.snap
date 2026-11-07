@@ -23,16 +23,18 @@ exports[`renderHtml > renders a full issue while the editions are closed exactly
           </tr>
           <!-- Header -->
           <tr>
-            <td style="padding: 20px 32px 12px; text-align: center;">
-              <a href="https://actuallyrelevant.news" style="text-decoration: none;">
-                <img src="https://actuallyrelevant.news/images/logo-text-horizontal.png" alt="Actually Relevant" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
+            <td style="padding: 20px 32px 0; text-align: center;">
+              <!-- The logo cropped to its ink (block, fixed height): the full logo's built-in white band
+                   and an inline image's line-box gap left a wide hole above the tagline in mail clients -->
+              <a href="https://actuallyrelevant.news" style="display: block; text-decoration: none;">
+                <img src="https://actuallyrelevant.news/images/logo-email.jpg" alt="Actually Relevant" width="200" height="44" style="display: block; margin: 0 auto; width: 200px; max-width: 200px; height: 44px; border: 0;" />
               </a>
-              <p style="margin: -2px 0 0; font-size: 15px; font-style: italic; color: #a3a3a3;">News that matter to humanity</p>
+              <p style="margin: 8px 0 0; font-size: 15px; font-style: italic; color: #a3a3a3; line-height: 1.4;">News that matter to humanity</p>
             </td>
           </tr>
           <!-- Color strip -->
           <tr>
-            <td style="padding: 16px 0 0; font-size: 0; line-height: 0;">
+            <td style="padding: 18px 0 0; font-size: 0; line-height: 0;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
                 <td style="width: 25%; height: 4px; background-color: #fbbf24;"></td>
                 <td style="width: 25%; height: 4px; background-color: #2dd4bf;"></td>
@@ -42,7 +44,7 @@ exports[`renderHtml > renders a full issue while the editions are closed exactly
             </td>
           </tr>
           <tr>
-            <td style="padding: 14px 32px 12px; text-align: center;">
+            <td style="padding: 14px 32px 0; text-align: center;">
               <p style="margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #404040;">Week 45, 2026</p>
               <!-- AI label at the top of every issue, not only in the footer (AI Act Art. 50(4)) -->
               <p style="margin: 8px 0 0; font-size: 13px; color: #525252; line-height: 1.5;"><span style="display: inline-block; padding: 1px 4px; border: 1px solid #525252; border-radius: 3px; font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: 0.05em; vertical-align: middle;">AI</span> selected the stories in this issue and wrote the headlines and summaries.</p>

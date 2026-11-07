@@ -59,7 +59,7 @@ describe('renderHtml', () => {
       const html = renderHtml({ ...baseNewsletter, content }, 'https://staging.example/newsletter/week-1')
 
       expect(html).toContain('href="https://staging.example"')
-      expect(html).toContain('src="https://staging.example/images/logo-text-horizontal.png"')
+      expect(html).toContain('src="https://staging.example/images/logo-email.jpg"')
       expect(html).toContain('src="https://staging.example/images/social/bluesky.png"')
       expect(html).not.toMatch(/(href|src)="https:\/\/actuallyrelevant\.news/)
     } finally {

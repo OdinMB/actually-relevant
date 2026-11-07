@@ -435,10 +435,10 @@ export function renderHtml(
   // edition's name is HTML text, in brand-700, which keeps AA contrast at this size
   const mastheadHtml = edition.masthead
     ? `
-              <p style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #b01a6a; line-height: 1.3;">${escapeHtml(edition.masthead.line)}</p>
-              <p style="margin: 2px 0 0; font-size: 15px; font-style: italic; color: #737373;">${escapeHtml(edition.masthead.tagline)}</p>`
+              <p style="margin: 8px 0 0; font-size: 20px; font-weight: 700; color: #b01a6a; line-height: 1.3;">${escapeHtml(edition.masthead.line)}</p>
+              <p style="margin: 2px 0 0; font-size: 15px; font-style: italic; color: #737373; line-height: 1.4;">${escapeHtml(edition.masthead.tagline)}</p>`
     : `
-              <p style="margin: -2px 0 0; font-size: 15px; font-style: italic; color: #a3a3a3;">News that matter to humanity</p>`
+              <p style="margin: 8px 0 0; font-size: 15px; font-style: italic; color: #a3a3a3; line-height: 1.4;">News that matter to humanity</p>`
 
   // The switch to the other edition; its link carries Plunk's per-recipient contact id
   const switchHtml = editionsOpen
@@ -468,15 +468,17 @@ export function renderHtml(
           </tr>
           <!-- Header -->
           <tr>
-            <td style="padding: 20px 32px 12px; text-align: center;">
-              <a href="${config.siteUrl}" style="text-decoration: none;">
-                <img src="${config.siteUrl}/images/logo-text-horizontal.png" alt="Actually Relevant" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
+            <td style="padding: 20px 32px 0; text-align: center;">
+              <!-- The logo cropped to its ink (block, fixed height): the full logo's built-in white band
+                   and an inline image's line-box gap left a wide hole above the tagline in mail clients -->
+              <a href="${config.siteUrl}" style="display: block; text-decoration: none;">
+                <img src="${config.siteUrl}/images/logo-email.jpg" alt="Actually Relevant" width="200" height="44" style="display: block; margin: 0 auto; width: 200px; max-width: 200px; height: 44px; border: 0;" />
               </a>${mastheadHtml}
             </td>
           </tr>
           <!-- Color strip -->
           <tr>
-            <td style="padding: 16px 0 0; font-size: 0; line-height: 0;">
+            <td style="padding: 18px 0 0; font-size: 0; line-height: 0;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
                 <td style="width: 25%; height: 4px; background-color: #fbbf24;"></td>
                 <td style="width: 25%; height: 4px; background-color: #2dd4bf;"></td>
@@ -486,7 +488,7 @@ export function renderHtml(
             </td>
           </tr>
           <tr>
-            <td style="padding: 14px 32px 12px; text-align: center;">
+            <td style="padding: 14px 32px 0; text-align: center;">
               <p style="margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #404040;">${escapeHtml(newsletter.title)}</p>
               <!-- AI label at the top of every issue, not only in the footer (AI Act Art. 50(4)) -->
               <p style="margin: 8px 0 0; font-size: 13px; color: #525252; line-height: 1.5;"><span style="display: inline-block; padding: 1px 4px; border: 1px solid #525252; border-radius: 3px; font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: 0.05em; vertical-align: middle;">${NEWSLETTER_TOP_LABEL.lead}</span> ${NEWSLETTER_TOP_LABEL.text}</p>
