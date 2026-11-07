@@ -2,13 +2,15 @@
 # both packages type-check, lint, format check, tests with a coverage floor, the
 # production build (the client's with its prerender) and a production-dependency audit; for
 # the server also the migration check, and its coverage run includes the PostgreSQL
-# integration tests against a throwaway pgvector database (ADR-0044). Production deploys wait for it: render.yaml sets
-# `autoDeployTrigger: checksPass` on both services, so Render deploys a commit on main only
-# once every check on it has passed, and skips a red one (ADR-0047, .context/deployment.md).
-# Keep it running on every push to main with no path filter: Render deploys nothing for a
-# commit with no checks. The job names `server` and `client` are the required checks of the
+# integration tests against a throwaway pgvector database (ADR-0044). Production deploys come
+# from here: on a push to main, the `deploy` job waits for `server` and `client` and then calls
+# both Render services' deploy hooks for this exact commit (ADR-0054, .context/deployment.md).
+# render.yaml sets `autoDeployTrigger: off`, so Render deploys nothing by itself.
+# Keep it running on every push to main with no path filter: a commit without a run is never
+# deployed. The job names `server` and `client` are the required checks of the
 # GitHub ruleset `no-nonsense-main`: rename one only together with the ruleset.
-# No secrets are needed or used.
+# Secrets: only the `deploy` job uses any, the two hook URLs RENDER_DEPLOY_HOOK_API and
+# RENDER_DEPLOY_HOOK_WEBSITE (repository secrets). Never echo them: the URL is the credential.
 name: CI
 
 on:
@@ -18,7 +20,7 @@ on:
   pull_request:
 
 # A newer push to a pull request cancels its older run; runs on main are never cancelled,
-# because Render deploys a main commit only once its checks have passed
+# because a main commit deploys only from its own completed run
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -122,3 +124,62 @@ jobs:
         run: npm run build --prefix client
       - name: Production dependency audit (high and above, minus audit-allowlist.json)
         run: npm run audit:prod --prefix client
+
+  # Deploys both Render services once both checks are green, pinned to this run's commit with
+  # the hook's `ref` parameter, so Render's own root-directory rule cannot skip a service
+  # (ADR-0054). Not a required check. Runs one at a time; a run whose commit is no longer the
+  # head of main deploys nothing, so an older run that finishes late cannot roll production back.
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [server, client]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: render-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Trigger both Render deploys for this commit
+        env:
+          HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
+          HOOK_WEBSITE: ${{ secrets.RENDER_DEPLOY_HOOK_WEBSITE }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        # Never `set -x` or echo a hook: the URL carries the key. Messages name the secret only.
+        run: |
+          missing=""
+          [ -n "$HOOK_API" ] || missing="$missing RENDER_DEPLOY_HOOK_API"
+          [ -n "$HOOK_WEBSITE" ] || missing="$missing RENDER_DEPLOY_HOOK_WEBSITE"
+          if [ -n "$missing" ]; then
+            echo "::error title=Render deploy hook secret missing::Not set:$missing. Nothing was deployed. Copy each URL from the Render service's Settings > Deploy Hook into Settings > Secrets and variables > Actions, then re-run this job (.context/deployment.md, CI gate)."
+            exit 1
+          fi
+
+          head=$(gh api "repos/$REPO/commits/main" --jq .sha)
+          if [ "$head" != "$SHA" ]; then
+            echo "::notice title=Deploy skipped::main has moved on to $head; that commit's run deploys it, and it contains $SHA."
+            exit 0
+          fi
+
+          failed=0
+          for secret in RENDER_DEPLOY_HOOK_API RENDER_DEPLOY_HOOK_WEBSITE; do
+            if [ "$secret" = RENDER_DEPLOY_HOOK_API ]; then hook=$HOOK_API; else hook=$HOOK_WEBSITE; fi
+            case "$hook" in *\?*) sep='&' ;; *) sep='?' ;; esac
+            status=$(curl --silent --output response.json --write-out '%{http_code}' --max-time 30 --request POST "${hook}${sep}ref=${SHA}") || status=000
+            case "$status" in
+              200) echo "$secret: deploy of $SHA started ($(grep -o 'dep-[a-z0-9]*' response.json | head -n 1 || true))" ;;
+              202) echo "$secret: another deploy is running; Render queues $SHA after it" ;;
+              *)
+                case "$status" in
+                  401|404) why="the hook URL is wrong or was regenerated, or Render cannot find the commit" ;;
+                  409) why="the service is suspended or cannot be deployed" ;;
+                  000) why="no answer from Render (network error or timeout)" ;;
+                  *) why="unexpected answer" ;;
+                esac
+                echo "::error title=Render deploy failed::$secret answered HTTP $status: $why. That service was not deployed; re-run this job once fixed."
+                failed=1
+                ;;
+            esac
+          done
+          rm -f response.json
+          exit "$failed"

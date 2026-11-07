@@ -341,7 +341,9 @@ describe('render.yaml', () => {
   })
 
   it('has the two services, shaped as the deployment expects', () => {
-    // Both services deploy only once the commit's CI checks pass (`checksPass`, ADR-0047). Name,
+    // Render deploys neither service by itself (`off`): CI's `deploy` job calls both deploy hooks
+    // once a main commit's checks pass (ADR-0054). The value is quoted in the file, because YAML
+    // 1.1 reads a bare `off` as the boolean false. Name,
     // region and plan are copied from Render's export of the live services; only their
     // presence is checked.
     expect(services).toHaveLength(2)
@@ -350,7 +352,7 @@ describe('render.yaml', () => {
       runtime: 'node',
       rootDir: 'server',
       branch: 'main',
-      autoDeployTrigger: 'checksPass',
+      autoDeployTrigger: 'off',
       healthCheckPath: '/health',
     })
     expect(backend?.fields.region).toBeTruthy()
@@ -361,8 +363,15 @@ describe('render.yaml', () => {
       runtime: 'static',
       rootDir: 'client',
       branch: 'main',
-      autoDeployTrigger: 'checksPass',
+      autoDeployTrigger: 'off',
     })
+    // With `off`, nothing deploys unless CI's deploy job waits for both checks and calls both hooks.
+    const workflow = readRepoFile('.github', 'workflows', 'ci.yml')
+    const deployJob = /^ {2}deploy:\n([\s\S]*?)(?=^ {2}\S|(?![\s\S]))/m.exec(workflow)?.[1] ?? ''
+    expect(deployJob).toMatch(/^ {4}needs: \[server, client\]$/m)
+    expect(deployJob).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'")
+    for (const secret of ['RENDER_DEPLOY_HOOK_API', 'RENDER_DEPLOY_HOOK_WEBSITE']) expect(deployJob).toContain(`secrets.${secret}`)
+    expect(deployJob).toContain('ref=${SHA}')
     // Dropped: the shutdown-delay check. The app's force exit is 10 s, inside Render's
     // 30 s default (not verified, Render docs); setting maxShutdownDelaySeconds would
     // overwrite an unknown production setting.

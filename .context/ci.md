@@ -1,6 +1,6 @@
 # CI checks
 
-`.github/workflows/ci.yml` runs on every pull request and on every push to `main`, with no path filter. Its two jobs, `server` and `client`, are the GitHub checks Render waits for before deploying `main` (`deployment.md`, "CI gate"; ADR-0047), and the required checks of the GitHub ruleset `no-nonsense-main`, so a red check here means nothing deploys. Every check below also runs locally with the same command.
+`.github/workflows/ci.yml` runs on every pull request and on every push to `main`, with no path filter. Its two check jobs, `server` and `client`, are the required checks of the GitHub ruleset `no-nonsense-main`, and on a push to `main` a third job, `deploy`, waits for both and then calls the two Render deploy hooks for that commit (`deployment.md`, "CI gate"; ADR-0054), so a red check here means nothing deploys. `deploy` is not a required check and runs nothing locally. Every check below also runs locally with the same command.
 
 | Check | Server | Client | Fails when |
 |---|---|---|---|
@@ -71,9 +71,10 @@ Entries on 2026-10-26 (the 2026-10-19 `braces` entry was deleted once the @scala
 ## Triggers and cancelling
 
 - **Pull requests** run on every push to the pull request's branch. A push to any other branch without a pull request runs nothing; open a (draft) pull request to get checks.
-- **`main`** runs on every push, unfiltered: Render deploys a `main` commit only once its checks pass and deploys nothing for a commit with no checks, so a path filter or `[skip ci]` on `main` would leave that commit undeployed.
-- **Concurrency:** runs share the group `ci-<ref>`. A newer push to a pull request cancels the older run still going; runs on `main` are never cancelled (`cancel-in-progress` is false for `refs/heads/main`), so every `main` commit gets its own complete checks.
-- **Timeouts:** each job stops after 20 minutes (`timeout-minutes`), so a hung prerender or test cannot burn the default six hours.
+- **`main`** runs on every push, unfiltered: a `main` commit deploys only through its own run's `deploy` job, so a path filter or `[skip ci]` on `main` would leave that commit undeployed.
+- **Concurrency:** runs share the group `ci-<ref>`. A newer push to a pull request cancels the older run still going; runs on `main` are never cancelled (`cancel-in-progress` is false for `refs/heads/main`), so every `main` commit gets its own complete checks. The `deploy` jobs share a second group, `render-deploy`, so they run one at a time, and each deploys only if its commit is still the head of `main`.
+- **Secrets:** only `deploy` reads any, the repository secrets `RENDER_DEPLOY_HOOK_API` and `RENDER_DEPLOY_HOOK_WEBSITE`; pull-request runs never reach it.
+- **Timeouts:** each check job stops after 20 minutes (`timeout-minutes`), so a hung prerender or test cannot burn the default six hours; `deploy` after 5.
 - **Caches:** npm's cache per package lockfile (`actions/setup-node`), and puppeteer's Chrome (`~/.cache/puppeteer`, keyed on `client/package-lock.json`), which `npm ci` then does not download again.
 
 ## CI minutes
@@ -96,7 +97,7 @@ The repository is public, and GitHub Actions on standard GitHub-hosted runners (
 
 The heaviest steps are the client's unit tests (about 50 s) and its prerender build (about 45 s), and the server's unit tests (about 40–47 s). At about 6 billed minutes a run and two runs per merged change (its pull request and `main`), a private repository would spend roughly 12 minutes per merged change, plus 6 for every further push to an open pull request.
 
-**What starts a run.** One run (two jobs in parallel) per push to a pull request and per push to `main`. Merging a pull request is a push to `main`, so a merged change runs once on its pull request and once more on `main`; the second run is what Render waits for. Dependabot's own "Dependabot Updates" runs are a separate workflow GitHub manages, not this one.
+**What starts a run.** One run (two jobs in parallel) per push to a pull request and per push to `main`. Merging a pull request is a push to `main`, so a merged change runs once on its pull request and once more on `main`; the second run is the one that deploys. Dependabot's own "Dependabot Updates" runs are a separate workflow GitHub manages, not this one.
 
 **Levers, if minutes ever matter** (none is needed while the repository is public):
 

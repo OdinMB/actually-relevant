@@ -52,9 +52,11 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     branch: main
-    # Deploy a commit on main only once its GitHub checks (.github/workflows/ci.yml) pass;
-    # a red or check-less commit is not deployed (ADR-0047, .context/deployment.md).
-    autoDeployTrigger: checksPass
+    # Render deploys nothing by itself: the `deploy` job of .github/workflows/ci.yml calls this
+    # service's deploy hook (secret RENDER_DEPLOY_HOOK_API) once a main commit's checks are
+    # green, because Render's own trigger skipped services whose rootDir the push's last commit
+    # did not touch (ADR-0054, .context/deployment.md).
+    autoDeployTrigger: "off"
     # Custom domains as in the dashboard (ADR-0038). The static site's rewrites target it.
     domains:
       - api.actuallyrelevant.news
@@ -152,8 +154,8 @@ services:
     # Relative to rootDir (client/dist), as Render's export of the live service shows.
     staticPublishPath: dist
     branch: main
-    # As the backend: only once the commit's checks pass (ADR-0047)
-    autoDeployTrigger: checksPass
+    # As the backend: deployed by CI's hook call (secret RENDER_DEPLOY_HOOK_WEBSITE, ADR-0054)
+    autoDeployTrigger: "off"
     # Custom domains as in the dashboard (ADR-0038); the onrender.com subdomain is off.
     domains:
       - actuallyrelevant.news

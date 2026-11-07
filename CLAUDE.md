@@ -77,7 +77,7 @@ npm run db:seed:synthetic --prefix server  # Fill a local *_synthetic DB with ma
 
 ## CI and deploy gate
 
-- **CI must pass before Render deploys.** Both services use `autoDeployTrigger: checksPass`: a `main` commit deploys only once the `server` and `client` jobs of `.github/workflows/ci.yml` are green; a red `main` deploys nothing.
+- **CI must pass before Render deploys, and CI triggers the deploy.** Both services set `autoDeployTrigger: "off"`; on a push to `main`, the `deploy` job of `.github/workflows/ci.yml` waits for `server` and `client` and calls both Render deploy hooks for that commit (secrets `RENDER_DEPLOY_HOOK_API`, `RENDER_DEPLOY_HOOK_WEBSITE`); a red `main` deploys nothing.
 - **Pushes to `main` need green checks or the admin bypass** of the GitHub ruleset `no-nonsense-main` (required checks `server` and `client`, Repository admin bypass). A bypassing push prints `remote: Bypassed rule violations for refs/heads/main`; for this rule that is expected, not a broken pull-request rule.
 - **Never rename a CI job** without changing the ruleset in the same step (the rule would wait for a check that never comes), and never path-filter or `[skip ci]` a push to `main`.
 - **Before pushing, run what CI runs:** `npm run lint`, `npm run format` (CI runs `format:check`), `npm run test:coverage` (a floor; raise it, never lower it) in both packages, plus `check:migrations`, both typechecks, `test:db` and both builds.
@@ -163,7 +163,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `logging.md` | Pino config, error serialization, structured data, log levels |
 | `server-conventions.md` | Route errors (typed `ServiceError`s, `failsWith()`, the one global handler), test-only `_` exports |
 | `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands, the PostgreSQL integration tests (`*.db.test.ts`, `TEST_DATABASE_URL`, guard rules) and CI |
-| `ci.md` | The CI checks Render waits for (lint, format, types with `noUncheckedIndexedAccess`, coverage ratchet, audit allowlist, builds): commands, rules turned off and why, what to do when `main` is red; triggers, cancelling, caches; measuring CI minutes and the levers if they ever matter |
+| `ci.md` | The CI checks that gate deploys and the `deploy` job that triggers them (lint, format, types with `noUncheckedIndexedAccess`, coverage ratchet, audit allowlist, builds): commands, rules turned off and why, what to do when `main` is red; triggers, cancelling, caches; measuring CI minutes and the levers if they ever matter |
 | `deployment.md` | Render services and the `render.yaml` blueprint (service settings change there, not in the dashboard); why builds install devDependencies and pin `tsc` (read before touching build scripts or `render.yaml`, or adding an env var: `server/src/blueprint.test.ts` fails until it is in the code, `env.example` and `render.yaml`) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |
