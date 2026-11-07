@@ -26,24 +26,29 @@ import type { PublicStory } from '@shared/types'
 type LayoutVariant = 'A' | 'B' | 'C'
 const LAYOUTS: LayoutVariant[] = ['A', 'B', 'C']
 
+/**
+ * Desktop columns for a row of `count` cards, so every row is full: no card sits alone on a
+ * row with empty columns beside it. Four cards make two rows of two.
+ */
+const ROW_COLUMNS: Record<number, string> = { 1: 'md:grid-cols-1', 2: 'md:grid-cols-2', 3: 'md:grid-cols-3', 4: 'md:grid-cols-2' }
+
 function StoryGroup({ stories, layout }: { stories: PublicStory[]; layout: LayoutVariant }) {
   const [first, ...rest] = stories
   if (!first) return null
 
-  // Layout A: featured (2-col) + compact sidebar
+  // Layout A: featured (2-col) + compact sidebar; the featured card takes the row alone
   if (layout === 'A') {
+    if (rest.length === 0) return <StoryCard story={first} variant="featured" />
     return (
       <div className="grid gap-5 md:grid-cols-3">
         <div className="md:col-span-2">
           <StoryCard story={first} variant="featured" />
         </div>
-        {rest.length > 0 && (
-          <div className="space-y-3">
-            {rest.map(story => (
-              <StoryCard key={story.id} story={story} variant="compact" />
-            ))}
-          </div>
-        )}
+        <div className="space-y-3">
+          {rest.map(story => (
+            <StoryCard key={story.id} story={story} variant="compact" />
+          ))}
+        </div>
       </div>
     )
   }
@@ -54,7 +59,7 @@ function StoryGroup({ stories, layout }: { stories: PublicStory[]; layout: Layou
       <div className="space-y-5">
         <StoryCard story={first} variant="horizontal" />
         {rest.length > 0 && (
-          <div className="grid gap-5 md:grid-cols-3">
+          <div className={`grid gap-5 ${ROW_COLUMNS[rest.length] ?? 'md:grid-cols-3'}`}>
             {rest.map(story => (
               <StoryCard key={story.id} story={story} variant="compact" />
             ))}
@@ -64,21 +69,12 @@ function StoryGroup({ stories, layout }: { stories: PublicStory[]; layout: Layou
     )
   }
 
-  // Layout C: equal columns
+  // Layout C: equal cards, columns matched to the count (four as two by two)
   return (
-    <div className="space-y-5">
-      <div className="grid gap-5 md:grid-cols-3">
-        {stories.slice(0, 3).map(story => (
-          <StoryCard key={story.id} story={story} variant="equal" />
-        ))}
-      </div>
-      {stories.length > 3 && (
-        <div className="grid gap-5 md:grid-cols-3">
-          {stories.slice(3).map(story => (
-            <StoryCard key={story.id} story={story} variant="compact" />
-          ))}
-        </div>
-      )}
+    <div className={`grid gap-5 ${ROW_COLUMNS[stories.length] ?? 'md:grid-cols-3'}`}>
+      {stories.map(story => (
+        <StoryCard key={story.id} story={story} variant="equal" />
+      ))}
     </div>
   )
 }
