@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -167,5 +167,40 @@ describe('CORS', () => {
 
     const noOrigin = await request(app).get('/api/feedback/token')
     expect(noOrigin.status).not.toBe(403)
+  })
+})
+
+describe('usage counting (.context/public-website.md, "Usage counting")', () => {
+  const fetchMock = vi.fn<typeof fetch>()
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const { _resetAnalyticsState } = await import('./lib/simpleAnalytics.js')
+    _resetAnalyticsState()
+    fetchMock.mockImplementation(async () => new Response('', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    config.simpleAnalytics.eventsEnabled = true
+  })
+
+  afterEach(() => {
+    config.simpleAnalytics.eventsEnabled = false
+    vi.unstubAllGlobals()
+  })
+
+  /** The events the app posted to Simple Analytics. */
+  const sentEvents = () => fetchMock.mock.calls.filter(([url]) => url === config.simpleAnalytics.eventsUrl).map(([, init]) => JSON.parse(String(init?.body)))
+
+  it('reports an outside call and a widget load through the real routes, and nothing from the site', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([])
+    mockPrisma.story.count.mockResolvedValue(0)
+    await request(app).get('/api/docs/openapi.json').set('Origin', 'https://news.example.org').expect(200)
+    await request(app).get('/api/stories?pageSize=3&page=1&ref=widget').set('Origin', 'https://blog.example.com').expect(200)
+    await request(app).get('/api/stories').set('Origin', config.siteUrl).expect(200)
+
+    await vi.waitFor(() => expect(sentEvents()).toHaveLength(2))
+    expect(sentEvents()).toEqual([
+      expect.objectContaining({ event: 'api_request', metadata: { route: '/api/docs/openapi.json', caller: 'news.example.org', status: 200 } }),
+      expect.objectContaining({ event: 'widget_view', metadata: { site: 'blog.example.com' } }),
+    ])
   })
 })

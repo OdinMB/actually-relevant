@@ -96,6 +96,25 @@ The podcast has its own hand-built feed (`GET /api/podcast/feed.xml`, public at 
 - `server/src/routes/public/index.ts` — Registers feed router at `/feed`
 - `client/vite.config.ts` — Dev proxy for `/api` to `localhost:3001`
 
+### Usage counting
+
+Simple Analytics' browser script (`client/index.html`) counts page views. The API also counts two things the script cannot see, as Simple Analytics events sent from the server: `countUsage` (`server/src/middleware/usageCounting.ts`) on every request, deciding with `usageEvent()` (`server/src/lib/usageEvents.ts`) and sending with `sendAnalyticsEvent()` (`server/src/lib/simpleAnalytics.ts`).
+
+- **`widget_view`**, one per load of the embeddable widget (`client/public/widget.js`) on another site. The widget marks its story request with `ref=widget`: a query parameter, so the cross-origin request stays simple and needs no preflight. `publicStoryQuerySchema` drops unknown parameters, and a route test in `stories.test.ts` keeps the widget's request accepted. Metadata: `site`, the embedding page's hostname from `Origin`, else `Referer`, else `unknown`; `issue`, the widget's issue filter, only when it is shaped like a slug. A widget request is counted as a widget view only, never also as an `api_request`. The iframe embed (`/embed`) is a page of the site that loads the browser script, and its API calls come from the site's own origin, so it is never a `widget_view` (whether Simple Analytics records page views inside another site's iframe is not verified).
+- **`api_request`**, one per GET of a counted route by an outside caller. Metadata: `route`, the route pattern (`/api/stories/:slug`, never the slug, id or query string); `caller`, the calling site's hostname from `Origin`, else `Referer`, or `direct` with neither (server-to-server callers, apps); `status`, the HTTP status, so 400s and the rate limit's 429s show too.
+
+**Counted routes** (`COUNTED_ROUTES` in `usageEvents.ts`): the JSON public API (`/api/stories` with `/:slug`, `/:slug/related`, `/:slug/cluster` and `/:slug/appearances`, `/api/homepage`, `/api/issues` and `/:slug`, `/api/sources`, `/api/newsletters` and `/:slug`, `/api/podcast` and `/episodes/:id`) and the OpenAPI spec (`/api/docs/openapi.json`). Not counted: the RSS feeds, story, newsletter and podcast alike (readers poll them on a timer, so a count would measure polling rather than use), podcast audio, the link-preview pages and images (`/api/story-page`, `/api/page`, `og.png`, `/api/section-images`), feed favicons, signup, feedback, the sitemap, `/health`, auth and admin. A new public route is not counted until it joins the list. A `:name` segment matches one segment without a dot, so `feed.xml` never passes for a slug.
+
+**Never counted:** a call from our own site, meaning the hostnames of `FRONTEND_URL` and `SITE_URL` (without `www.`) and their subdomains, which covers the site's own calls, the widget generator's preview and `api.actuallyrelevant.news`; loopback origins (`localhost`, `127.0.0.1`, `[::1]`), which covers the client build's prerender, whose pages call the production API from a localhost origin; a browser sending `DNT: 1` or `Sec-GPC: 1`; anything but GET.
+
+**What leaves the server** is only the metadata above. Never the caller's IP address, user agent, cookies, query values (the widget's slug-shaped issue filter aside) or ids from the path; a site addressed by an IP address is reported as `ip-address`. `usageCounting.test.ts` sends a request carrying an IP, a user agent, query values and a slug and checks none reaches the event. A new metadata field needs the privacy page (`client/src/pages/PrivacyPage.tsx`, "Website Analytics" and the Third-Party Services table) to say so in the same change.
+
+**Sending.** A POST to `config.simpleAnalytics.eventsUrl` with the site's hostname (`config.simpleAnalytics.hostname`, taken from `SITE_URL`, where the page views are) and the user agent `SERVER_USER_AGENT`. Simple Analytics treats an event whose user agent names a bot, spider, crawler or agent, or is an HTTP library's default, as a robot's, so keep those words out of it. The event goes out after the response's `finish` and is never awaited, so it cannot delay or fail a request. A 3-second timeout and **no retry**, unlike the `withRetry()` convention for outside calls: a lost count is acceptable, and retries would keep a request's work alive for seconds after it was answered. A failed send is logged at warn once an hour, the rest at debug. At most `config.simpleAnalytics.maxEventsPerHour` (200) events per process and hour; past that the hour's counts are dropped with one warning, so one caller looping on the API cannot flood the counts.
+
+**Undercounts.** A response a cache answers never reaches the server (the browser's, for the `Cache-Control` max-age: 60 s on `/api/stories`). An embedding page that still has the old `widget.js` cached sends no marker, so its loads count as `api_request` on `/api/stories` until its copy expires.
+
+**Switch:** `SIMPLE_ANALYTICS_EVENTS_ENABLED` (`true` or `false`, read with `parseOneOf`), off by default and so in development, fixed to `true` for the API in `render.yaml` (owner, 2026-11-07; `.context/deployment.md`). Both vitest projects set it to `false`, so no test sends an event whatever a local `.env` says.
+
 ## Positivity Slider
 
 A 5-position slider (0%, 25%, 50%, 75%, 100%) that controls the emotional tone of displayed stories. Default is 50% (balanced). Persisted in localStorage under `ar-positivity`. Filtering is done entirely client-side for instant response — no additional API requests on slider change.
@@ -202,5 +221,6 @@ Preload hints: `client/index.html`
 - `client/src/contexts/PositivityContext.tsx` — Positivity state + localStorage
 - `client/src/data/issues-content.ts` — Static evaluation/sources/links per issue
 - `client/src/lib/api.ts` — Public API client
+- `server/src/middleware/usageCounting.ts`, `server/src/lib/usageEvents.ts`, `server/src/lib/simpleAnalytics.ts` — usage counting: the middleware, what is counted, the sender ("Usage counting")
 - `server/src/routes/public/issues.ts` — Public issues endpoint
 - `server/src/routes/public/homepage.ts` — Homepage data with emotion-bucketed stories

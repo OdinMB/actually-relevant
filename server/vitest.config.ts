@@ -38,7 +38,8 @@ export default defineConfig({
           exclude: [...configDefaults.exclude, 'src/**/*.db.test.ts'],
           // Nothing calls OpenAI in unit tests, but the openai SDK's constructor throws without a key
           // (services/embedding.ts builds one at import), so test files load without a `.env`.
-          env: { OPENAI_API_KEY: 'sk-test-dummy' },
+          // Usage counting stays off whatever a local `.env` says, so no test sends Simple Analytics an event.
+          env: { OPENAI_API_KEY: 'sk-test-dummy', SIMPLE_ANALYTICS_EVENTS_ENABLED: 'false' },
         },
       },
       {
@@ -49,7 +50,7 @@ export default defineConfig({
           globalSetup: ['src/test/db/globalSetup.ts'],
           // One database, truncated between tests: files must not run side by side
           fileParallelism: false,
-          env: testDatabaseUrl ? { DATABASE_URL: testDatabaseUrl } : {},
+          env: { SIMPLE_ANALYTICS_EVENTS_ENABLED: 'false', ...(testDatabaseUrl ? { DATABASE_URL: testDatabaseUrl } : {}) },
         },
       },
     ],

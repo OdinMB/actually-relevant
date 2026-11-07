@@ -13,10 +13,11 @@
 # Every variable is in exactly one of two modes:
 # - a fixed `value:` for settings that are not secret and are the same on every host
 #   (NODE_ENV, the measured TRUST_PROXY hop count, NODE_VERSION). A sync rewrites the
-#   dashboard with it, so it must equal what production runs.
+#   dashboard with it, so it must equal what production runs. One switch is fixed here
+#   too, SIMPLE_ANALYTICS_EVENTS_ENABLED, so that it goes live with the deploy.
 # - `sync: false` for secrets, canonical addresses (FRONTEND_URL, API_URL, VITE_API_URL),
-#   switches, and values production sets that this file cannot see. Their values live
-#   on each service's Environment page.
+#   the other switches, and values production sets that this file cannot see. Their
+#   values live on each service's Environment page.
 #
 # Left out on purpose: the PostgreSQL database (ADR-0035) and any fromDatabase; every
 # secret value; test-only and local-only variables (PORT, which Render sets, and
@@ -133,6 +134,11 @@ services:
       # Feedback form: HMAC key for the stored IP hash; unset refuses feedback (ADR-0037)
       - key: FEEDBACK_IP_HASH_SECRET
         sync: false
+      # Usage counting in Simple Analytics (.context/public-website.md, "Usage counting"). A switch,
+      # but a fixed value, so the counting starts with the deploy (owner, 2026-11-07); switch it off
+      # here, since a sync writes this value over the dashboard's.
+      - key: SIMPLE_ANALYTICS_EVENTS_ENABLED
+        value: "true"
 
   # Frontend: React static site with prerendered public routes.
   - type: web

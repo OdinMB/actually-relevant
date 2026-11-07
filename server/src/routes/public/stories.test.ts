@@ -112,6 +112,16 @@ describe('Public Stories API', () => {
       expect(res.body.pageSize).toBe(10)
     })
 
+    it("accepts the embeddable widget's request, its ref=widget marker included", async () => {
+      // client/public/widget.js runs on other sites, which a 400 here would break; usage counting reads the marker
+      mockPrisma.story.findMany.mockResolvedValue([publicStory])
+      mockPrisma.story.count.mockResolvedValue(1)
+
+      const res = await request(app).get('/api/stories?pageSize=3&page=1&issueSlug=ai-technology&ref=widget')
+      expect(res.status).toBe(200)
+      expect(res.body.pageSize).toBe(3)
+    })
+
     it('ignores positivity param (filtering is client-side)', async () => {
       mockPrisma.story.findMany.mockResolvedValue([publicStory])
       mockPrisma.story.count.mockResolvedValue(1)

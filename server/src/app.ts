@@ -9,6 +9,7 @@ import type { Request, Response } from 'express'
 import { createLogger } from './lib/logger.js'
 import { config } from './config.js'
 import { errorHandler } from './middleware/routeErrors.js'
+import { countUsage } from './middleware/usageCounting.js'
 import { ForbiddenError } from './utils/errors.js'
 import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
@@ -123,6 +124,10 @@ app.use((req, res, next) => {
 app.use('/api/admin/feeds/changesets', express.json({ limit: '512kb' }))
 app.use(express.json({ limit: '100kb' }))
 app.use(cookieParser())
+
+// Widget loads and outside calls of the public API, counted in Simple Analytics after each response
+// (off unless SIMPLE_ANALYTICS_EVENTS_ENABLED; .context/public-website.md, "Usage counting")
+app.use(countUsage)
 
 // Routes
 app.use('/health', healthRouter)

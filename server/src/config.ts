@@ -706,6 +706,23 @@ export const config = {
     cacheMaxAge: 300,
   },
   /**
+   * Usage counting (.context/public-website.md, "Usage counting"): an anonymous Simple Analytics
+   * event per widget load and per outside call of the public API. Off unless
+   * SIMPLE_ANALYTICS_EVENTS_ENABLED is `true`; render.yaml turns it on in production.
+   */
+  simpleAnalytics: {
+    eventsEnabled: parseOneOf(process.env.SIMPLE_ANALYTICS_EVENTS_ENABLED, 'false', ['true', 'false'] as const, 'SIMPLE_ANALYTICS_EVENTS_ENABLED') === 'true',
+    /** The Simple Analytics site the events count toward: the site's own, where its page views are. */
+    hostname: new URL(siteUrl).hostname,
+    eventsUrl: 'https://queue.simpleanalyticscdn.com/events',
+    timeoutMs: 3000,
+    /**
+     * At most this many events per process and hour; the rest are dropped. Every public API call can
+     * cause one, so the cap keeps a caller looping on the API from using up the plan's data points.
+     */
+    maxEventsPerHour: 200,
+  },
+  /**
    * Process memory log (lib/memoryMonitor.ts, .context/logging.md "Memory"). Render's starter
    * instance is killed at about 512 MiB of RSS, which counts native memory (JSDOM, canvas, the
    * Prisma engine, the pino worker) on top of the V8 heap that --max-old-space-size caps.

@@ -88,6 +88,9 @@
   params.set('pageSize', String(config.count))
   params.set('page', '1')
   if (config.issue) params.set('issueSlug', config.issue)
+  // Tells the API this request is a widget load, which it counts as a widget view (no other data
+  // is sent). A query parameter, not a header, so the request needs no CORS preflight.
+  params.set('ref', 'widget')
 
   var url = API_BASE + '/stories?' + params.toString()
 
