@@ -140,9 +140,9 @@ Category-specific header colors/images are mapped by keyword matching on the cat
 
 Located in `server/assets/`:
 - `images/` — Header images (1200x80) and logo (112x80). Placeholders used until branded versions are provided.
-- `fonts/` — Inter Bold and Inter Regular TTF files for image text rendering.
-- `fonts/Roboto/` (Roboto Bold with its Apache 2.0 licence) and `images/logo-text-horizontal.jpg` for the section preview images (`.context/seo.md`, "Section preview images").
-- The Inter fonts and the header images and logo named above are not in the repository, and no code loads a header image or that logo. The carousel checks for each Inter file and falls back, so story images (slides and `og.png`) render in a system font.
+- `fonts/Roboto/` — Roboto Bold and Regular with their Apache 2.0 licence, copies of the website's text font in `client/public/fonts/Roboto`. Story images (carousel slides and `og.png`) use both (`STORY_FONT_PATHS` in `carousel.ts`, a test fails if either file is missing); the section preview images use Bold (`.context/seo.md`, "Section preview images"). Until 2026-11-05 the carousel looked for Inter files that were never committed, so story images rendered in a system font.
+- `images/logo-text-horizontal.jpg` for the section preview images and the story card (`services/previewImageParts.ts`).
+- The header images and logo named above are not in the repository, and no code loads them.
 
 ### Automated generation (`generate_newsletter` cron job)
 
@@ -202,7 +202,7 @@ Both sends need the stored `html` (400 "No HTML content — generate HTML first"
 - **Public API.** `GET /api/newsletters` (paginated, `page`, `pageSize` up to 50, optional `edition` = `full` | `uplifting`; slug, title, edition, publishedAt, storyCount) and `GET /api/newsletters/:slug` (404 unless published; `edition`, `aiLabel`, web `content`, `stories` with headline, title, titleLabel, sourceTitle, sourceUrl, publisher and a slug only while the story is published, and an `aiGenerated` marker with `fields: ['content', 'stories']`, `AI_GENERATED_NEWSLETTER_FIELDS`). Both behind the shared rate limiter, `Cache-Control: public, max-age=300`, open to any origin like the other public read APIs (`publicReadPaths`, `server-conventions.md` "CORS"), documented in the OpenAPI spec. Code: `server/src/services/newsletterArchive.ts`, `server/src/routes/public/newsletters.ts`.
 - **RSS feed.** `GET /api/newsletters/feed.xml` (routed before `/:slug`, behind the shared rate limiter): RSS 2.0 built with the `feed` package like the story feeds (`server/src/lib/rssFeed.ts`), the newest `config.feed.size` (50) published issues from `listPublishedIssues`, one item each with the issue title, `link` and `guid` = its web address, `pubDate` = `publishedAt`, and as description the issue's AI label (`NEWSLETTER_TOP_LABEL`, lead and text), because RSS readers never see the site's labels. The channel links `/newsletter`, described by `rssChannelDescription('Weekly newsletter')`. No in-process cache (two cheap queries); `Cache-Control: public, max-age=900`. Linked from `/newsletter` (autodiscovery `<link rel="alternate">` and a visible "Follow new issues by RSS" under the signup form), from each issue page (autodiscovery), and listed on `/free-api`. The client's URL is `NEWSLETTER_FEED_URL` in `client/src/lib/api.ts` (`API_BASE`, so no Render rewrite is involved).
 - **Pages.** The issue list is the Past issues section of `/newsletter` (prerendered, `NewsletterPage`, below the signup form; `/newsletter/archive` redirects there), and each issue is at `/newsletter/:slug` (dynamic, `NewsletterIssuePage`, in the server sitemap), whose "All issues" link leads back to `/newsletter`. The newest issue is one tap from the home page (a card above the first section) and from the end of every story page (a link in the newsletter line), both from the archive's first page and hidden when no issue is published or the archive fails (`.context/public-website.md`, "Cross-links"). Every story page also links the first public issue the story was in, as a card above its newsletter line (`findFirstIssueWithStory` in `newsletterArchive.ts`; `.context/public-website.md`, "Cross-links").
-- **Link previews.** The backend serves each issue page with its own preview tags for crawlers that run no JavaScript; its og:title is the email subject's lead line and its og:image the lead story's preview image (`.context/seo.md`, "Link previews").
+- **Link previews.** The backend serves each issue page with its own preview tags for crawlers that run no JavaScript; its og:title is the email subject's lead line and its og:image the newsletter section image with the "AI" badge (plain when there is no lead headline; `.context/seo.md`, "Link previews").
 
 ## API Endpoints
 
@@ -245,7 +245,7 @@ Both sends need the stored `html` (400 "No HTML content — generate HTML first"
 | `client/src/lib/newsletter-state.ts` | The lifecycle rule mirrored for the admin's button states |
 | `server/src/routes/public/newsletters.ts` | Public archive and issue endpoints |
 | `client/src/pages/NewsletterPage.tsx`, `NewsletterIssuePage.tsx` | The signup-and-archive page and the issue pages |
-| `server/src/services/carousel.ts` | Canvas image generation, PDF creation, ZIP bundling (also the story og:image, `.context/seo.md`) |
+| `server/src/services/carousel.ts` | Canvas image generation, PDF creation, ZIP bundling (the story og:image is `storyCardImage.ts`, `.context/seo.md`) |
 | `server/src/services/plunk.ts` | Plunk campaigns, sends and stats |
 | `server/src/routes/admin/newsletters.ts` | Newsletter admin API endpoints |
 | `server/src/schemas/newsletter.ts` | Newsletter request validation schemas |

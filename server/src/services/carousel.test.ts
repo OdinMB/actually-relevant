@@ -25,7 +25,7 @@ vi.mock('@napi-rs/canvas', async importOriginal => {
   }
 })
 
-const { createStoryImage, generateCarouselPdf, generateCarouselZip, buildCarouselPostText, slideAltText, CAROUSEL_POST_TEXT_FILE } =
+const { createStoryImage, generateCarouselPdf, generateCarouselZip, buildCarouselPostText, slideAltText, CAROUSEL_POST_TEXT_FILE, STORY_FONT_PATHS } =
   await import('./carousel.js')
 type CarouselStory = import('./carousel.js').CarouselStory
 const { IPTC_TRAINED_ALGORITHMIC_MEDIA } = await import('../lib/aiProvenance.js')
@@ -39,6 +39,11 @@ const sampleStory: CarouselStory = {
 }
 
 describe('createStoryImage', () => {
+  it('has its fonts in the repository, so images never fall back to a system font', () => {
+    expect(existsSync(STORY_FONT_PATHS.bold)).toBe(true)
+    expect(existsSync(STORY_FONT_PATHS.regular)).toBe(true)
+  })
+
   it('returns a PNG buffer', () => {
     const buffer = createStoryImage(sampleStory)
     expect(buffer).toBeInstanceOf(Buffer)
@@ -82,19 +87,9 @@ describe('createStoryImage', () => {
     expect(footer!.x - footer!.width).toBeGreaterThanOrEqual(0)
   })
 
-  it('renders at the size it is given, with the AI marks, for the og:image', async () => {
-    const { OG_IMAGE_SIZE } = await import('./carousel.js')
-    drawnText.length = 0
-    const buffer = createStoryImage({ ...sampleStory, summary: 'Long summary sentence. '.repeat(80) }, OG_IMAGE_SIZE)
-    // IHDR width and height
-    expect(buffer.readUInt32BE(16)).toBe(1200)
-    expect(buffer.readUInt32BE(20)).toBe(630)
-    expect(buffer.includes(`DigitalSourceType="${IPTC_TRAINED_ALGORITHMIC_MEDIA}"`)).toBe(true)
-    expect(drawnText.some(d => d.text === 'actuallyrelevant.news · AI-generated')).toBe(true)
-  })
-
-  it('keeps the carousel slide size by default', () => {
+  it('renders the slide at 1200x675', () => {
     const buffer = createStoryImage(sampleStory)
+    // IHDR width and height
     expect(buffer.readUInt32BE(16)).toBe(1200)
     expect(buffer.readUInt32BE(20)).toBe(675)
   })

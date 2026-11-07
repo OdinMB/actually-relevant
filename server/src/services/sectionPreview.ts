@@ -11,7 +11,7 @@ import { registerPublicCache } from '../lib/publicCaches.js'
 import { SECTION_IMAGE_MOUNT } from '../lib/linkPreviewPaths.js'
 import { topicColor } from '../lib/topicColors.js'
 import { PREVIEW_IMAGE_AI_BADGE } from '../lib/aiLabelCopy.js'
-import { OG_IMAGE_SIZE } from './carousel.js'
+import { OG_IMAGE_SIZE } from './previewImageParts.js'
 import type { PreviewImage } from './linkPreview.js'
 import { createSectionImage, type SectionLabel } from './sectionImage.js'
 
