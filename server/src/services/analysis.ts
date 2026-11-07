@@ -290,7 +290,7 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
   log.info({ storyId, title: story.sourceTitle?.slice(0, 80) }, 'assessing story')
 
   const input = assessPromptInput(story)
-  const prompt = buildAssessPrompt(input.title, input.content, input.publisher, input.url, input.guidelines)
+  const prompt = buildAssessPrompt(input.title, input.content, input.publisher, input.url, input.guidelines, input.emotionTag)
 
   await rateLimitDelay()
   const llm = getLLMByTier(config.assess.modelTier)

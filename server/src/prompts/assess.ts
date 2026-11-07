@@ -1,9 +1,22 @@
 import { config } from '../config.js'
 import { Guidelines, buildGuidelinesXml } from './shared.js'
 
-export function buildAssessPrompt(title: string, content: string, publisher: string, url: string, guidelines: Guidelines): string {
+/**
+ * Added only for stories the pre-assessment tagged uplifting, so the headline agrees with the tag
+ * that puts the story into Actually Uplifting. Other stories get the prompt unchanged.
+ */
+const UPLIFTING_TONE_BLOCK = `
+<TONE>
+An earlier step tagged this story uplifting: its main development is clear progress. Lead the title with that progress, and open the marketing blurb with it. Obstacles and remaining gaps belong in the summary and the limiting factors, not in the title. Report the progress at its true size and never invent it. If the main development is not progress after all, write the title as for any other story.
+  Bad: 'Polio vaccines still cannot reach every child' (the story is polio's near-eradication; the title leads with the gap)
+  Good: 'Polio falls from 1,000 cases a day to about 60 this year'
+</TONE>
+`
+
+export function buildAssessPrompt(title: string, content: string, publisher: string, url: string, guidelines: Guidelines, emotionTag?: string | null): string {
   const guidelinesXml = buildGuidelinesXml(guidelines)
   const truncatedContent = content.substring(0, config.assess.contentMaxLength)
+  const toneBlock = emotionTag === 'uplifting' ? UPLIFTING_TONE_BLOCK : ''
 
   return `<ROLE>
 You are a relevance analyst evaluating a news article for its importance to humanity and its long-term future. You produce structured assessments that are clear, evidence-based, and written for a general audience.
@@ -20,7 +33,7 @@ URL: ${url}
 
 ${truncatedContent}
 </ARTICLE>
-
+${toneBlock}
 ${guidelinesXml}
 
 <GENERIC_LIMITING_FACTORS>

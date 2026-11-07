@@ -31,6 +31,8 @@ export interface AssessPromptInput {
   publisher: string
   url: string
   guidelines: Guidelines
+  /** The pre-assessment's tag; 'uplifting' asks for a headline that leads with the progress. */
+  emotionTag: string | null
 }
 
 /** The story's own issue guidelines, else its feed's; the feed title as publisher. */
@@ -38,11 +40,13 @@ export function assessPromptInput(story: {
   sourceTitle: string
   sourceContent: string
   sourceUrl: string
+  emotionTag?: string | null
   issue: GuidelineFields | null
   feed: { title: string; issue: GuidelineFields }
 }): AssessPromptInput {
   const issue = story.issue ?? story.feed.issue
   return {
+    emotionTag: story.emotionTag ?? null,
     title: story.sourceTitle,
     content: story.sourceContent,
     publisher: story.feed.title,
