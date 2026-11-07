@@ -7,6 +7,7 @@ import type {
   PublicNewsletterIssueSummary,
   PublicStoryAppearances,
   NewsletterEdition,
+  PodcastEdition,
 } from '@shared/types'
 
 export const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api'
@@ -129,8 +130,8 @@ export const publicApi = {
     get: (slug: string) => request<PublicIssue>(`/issues/${slug}`),
   },
 
-  /** The weekly podcast: show information and published episodes, newest first. */
-  podcast: () => request<PublicPodcastResponse>('/podcast'),
+  /** A podcast show (the main one by default): show information and published episodes, newest first. 404 for a show that is not public. */
+  podcast: (edition: PodcastEdition = 'full') => request<PublicPodcastResponse>(`/podcast${edition === 'full' ? '' : toQueryString({ edition })}`),
 
   /** One published episode with its readable transcript (404 unless published). */
   podcastEpisode: (id: string) => request<PublicPodcastEpisodeDetail>(`/podcast/episodes/${encodeURIComponent(id)}`),

@@ -1,11 +1,13 @@
 import { Router, type Response } from 'express'
+import type { PodcastEdition } from '@prisma/client'
 import { createLogger } from '../../lib/logger.js'
 import * as podcastService from '../../services/podcast.js'
 import { findOrCreateWeekEpisode, resumeEpisode, startAdminRun, type AdminRunRequest } from '../../services/podcastWeekly.js'
 import { getWeekSlot } from '../../services/podcastWeekSlot.js'
+import { editionRunRefusal } from '../../services/podcastEdition.js'
 import { rewindEpisode } from '../../services/podcastPipeline.js'
 import { getEpisodeStoryPool, replaceEpisodeStories, saveEpisodeScript, updateEpisodeMeta } from '../../services/podcastEditing.js'
-import { monthToDateChars } from '../../services/podcastGuards.js'
+import { monthToDateChars, PodcastRefusedError } from '../../services/podcastGuards.js'
 import { publishEpisode, unpublishEpisode } from '../../services/podcastPublish.js'
 import { createStandaloneEpisode, saveStandaloneStories, searchStandaloneStories, suggestStandaloneStories } from '../../services/podcastStandalone.js'
 import { config } from '../../config.js'
@@ -21,6 +23,8 @@ import {
   podcastScriptEditSchema,
   podcastStoryFiltersSchema,
   podcastStorySearchQuerySchema,
+  podcastEditionQuerySchema,
+  createWeekEpisodeSchema,
 } from '../../schemas/podcast.js'
 
 // Errors: the refusals every change shares are ServiceErrors the global handler in app.ts answers:
@@ -57,14 +61,20 @@ router.get('/', failsWith('Failed to fetch podcasts'), validateQuery(podcastQuer
   res.json(await podcastService.getPodcasts(req.parsedQuery || {}))
 })
 
-/** This ISO week's slot, read without creating a row (routed before /:id). */
-router.get('/weekly', failsWith("Failed to read this week's podcast slot"), async (_req, res) => {
-  res.json(await getWeekSlot())
+/** One show's ISO-week slot (the main show without `?edition=`), read without creating a row (routed before /:id). */
+router.get('/weekly', failsWith("Failed to read this week's podcast slot"), validateQuery(podcastEditionQuerySchema), async (req, res) => {
+  res.json(await getWeekSlot(new Date(), req.parsedQuery?.edition ?? 'full'))
 })
 
-/** Find or create this ISO week's episode; a person then starts it in a mode on its page. */
-router.post('/weekly', failsWith("Failed to open this week's episode"), async (_req, res) => {
-  const episode = await findOrCreateWeekEpisode()
+/**
+ * Find or create the show's ISO-week episode; a person then starts it in a mode on its page. A
+ * closed Actually Uplifting gets no row (409 naming what it waits for).
+ */
+router.post('/weekly', failsWith("Failed to open this week's episode"), validateBody(createWeekEpisodeSchema), async (req, res) => {
+  const edition: PodcastEdition = req.body.edition ?? 'full'
+  const refusal = editionRunRefusal(edition, config.podcast.dryRun)
+  if (refusal) throw new PodcastRefusedError(refusal)
+  const episode = await findOrCreateWeekEpisode(new Date(), edition)
   res.json(await podcastService.getPodcastById(episode.id))
 })
 

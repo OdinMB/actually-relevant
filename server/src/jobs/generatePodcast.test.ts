@@ -10,9 +10,15 @@ const mockPrisma = vi.hoisted(() => ({
 vi.mock('../services/podcastWeekly.js', () => mockWeekly)
 vi.mock('../lib/notify.js', () => mockNotify)
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
+// The real gate (Actually Uplifting is closed by default), wrapped so a test can open the show.
+vi.mock('../services/podcastEdition.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../services/podcastEdition.js')>()
+  return { ...actual, editionClosedReason: vi.fn(actual.editionClosedReason) }
+})
 
 // The window rule itself is tested in podcastWeekSlot.test.ts; the real one runs here.
-const { runGeneratePodcast } = await import('./generatePodcast.js')
+const { runGeneratePodcast, runGenerateUpliftingPodcast } = await import('./generatePodcast.js')
+const { editionClosedReason } = await import('../services/podcastEdition.js')
 
 // 2026-10-16 is a Friday.
 const FRIDAY_0600 = new Date('2026-10-16T06:00:00Z')
@@ -24,7 +30,7 @@ function waiting(overrides: Record<string, unknown> = {}) {
 }
 
 function episode(overrides: Record<string, unknown> = {}) {
-  return { id: 'pod-1', title: 'W42: Water', stage: 'scripted', blockedReason: null, lastError: null, leaseUntil: null, ...overrides }
+  return { id: 'pod-1', title: 'W42: Water', stage: 'scripted', blockedReason: null, lastError: null, leaseUntil: null, edition: 'full', ...overrides }
 }
 
 describe('runGeneratePodcast', () => {
@@ -44,7 +50,7 @@ describe('runGeneratePodcast', () => {
 
   it("runs the week's episode on the cron trigger inside the window", async () => {
     await runGeneratePodcast(FRIDAY_0600)
-    expect(mockWeekly.runWeeklyEpisode).toHaveBeenCalledWith({ trigger: 'cron', now: FRIDAY_0600 })
+    expect(mockWeekly.runWeeklyEpisode).toHaveBeenCalledWith({ trigger: 'cron', now: FRIDAY_0600, edition: 'full' })
   })
 
   it('throws on a block, so the scheduler alerts once', async () => {
@@ -80,7 +86,7 @@ describe('runGeneratePodcast', () => {
     await runGeneratePodcast(FRIDAY_1800)
     expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
     const [{ title, message, source, link }] = mockNotify.notify.mock.calls[0]
-    expect(title).toMatch(/waiting/i)
+    expect(title).toBe('Podcast episode waiting for you')
     expect({ source, link }).toEqual({ source: 'podcast', link: '/admin/podcasts/pod-1' })
     expect(message).toContain('W42: Water')
     expect(message).toContain('scripted')
@@ -106,5 +112,37 @@ describe('runGeneratePodcast', () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(episode({ blockedReason: 'dialogue invalid' }))
     await runGeneratePodcast(FRIDAY_1800)
     expect(mockNotify.notify.mock.calls[0][0].message).toContain('dialogue invalid')
+  })
+})
+
+describe('runGenerateUpliftingPodcast', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockWeekly.runWeeklyEpisode.mockResolvedValue({ outcome: 'done', podcastId: 'pod-u' })
+    mockPrisma.podcast.findUnique.mockResolvedValue(episode({ id: 'pod-u', edition: 'uplifting' }))
+    mockPrisma.$executeRaw.mockResolvedValue(1)
+  })
+
+  it('is a quiet no-op while Actually Uplifting is closed: no run, no throw, no notice', async () => {
+    await expect(runGenerateUpliftingPodcast(FRIDAY_1800)).resolves.toBeUndefined()
+    expect(mockWeekly.runWeeklyEpisode).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
+  })
+
+  it("runs the show's own week episode once open, and reminds under the show's name", async () => {
+    vi.mocked(editionClosedReason).mockReturnValueOnce(null)
+    mockWeekly.runWeeklyEpisode.mockResolvedValueOnce(waiting({ podcastId: 'pod-u' }))
+    await runGenerateUpliftingPodcast(FRIDAY_1800)
+    expect(mockWeekly.runWeeklyEpisode).toHaveBeenCalledWith({ trigger: 'cron', now: FRIDAY_1800, edition: 'uplifting' })
+    expect(mockNotify.notify.mock.calls[0][0]).toMatchObject({ title: 'Actually Uplifting episode waiting for you', link: '/admin/podcasts/pod-u' })
+  })
+
+  it('sends no reminder for a short week, which has no row', async () => {
+    vi.mocked(editionClosedReason).mockReturnValueOnce(null)
+    mockWeekly.runWeeklyEpisode.mockResolvedValueOnce({ outcome: 'skipped', podcastId: null, reason: 'short week', waitingForPerson: false })
+    await runGenerateUpliftingPodcast(FRIDAY_1800)
+    expect(mockWeekly.runWeeklyEpisode).toHaveBeenCalledOnce()
+    expect(mockPrisma.podcast.findUnique).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 })

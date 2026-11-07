@@ -8,7 +8,6 @@ const mockLog = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn()
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLog }))
 vi.mock('../services/podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('../services/podcastGuards.js')>()), ...mockGuards }))
-vi.mock('../services/podcastAudioStages.js', () => ({ GENERATE_PODCAST_JOB: 'generate_podcast' }))
 vi.mock('../lib/notify.js', () => mockNotify)
 
 const { checkPodcastConfigAtBoot } = await import('./podcastBootCheck.js')
@@ -31,12 +30,12 @@ describe('checkPodcastConfigAtBoot', () => {
     mockGuards.assertPodcastRunnable.mockReset()
   })
 
-  it('asks only about the podcast job rows that are enabled', async () => {
+  it("asks only about the podcast job rows that are enabled, both shows' jobs", async () => {
     mockPrisma.jobRun.findMany.mockResolvedValueOnce([])
     await checkPodcastConfigAtBoot()
     expect(mockPrisma.jobRun.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { jobName: { in: ['generate_podcast', 'publish_podcast'] }, enabled: true },
+        where: { jobName: { in: ['generate_podcast', 'publish_podcast', 'generate_uplifting_podcast', 'publish_uplifting_podcast'] }, enabled: true },
       }),
     )
   })

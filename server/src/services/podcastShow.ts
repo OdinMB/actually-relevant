@@ -1,14 +1,15 @@
 /**
- * How the show and its published episodes are presented to the public: the show's identity (title,
- * standing AI description, feed URL, artwork, listen links) and each episode's description, which
- * starts with its AI line (`humanEdited` picks the wording). The feed and the public JSON both read
- * it, so the two never disagree.
+ * How each show and its published episodes are presented to the public: the show's identity (title,
+ * standing AI description, feed URL and GUID, artwork, listen links) and each episode's description,
+ * which starts with its AI line (`humanEdited` picks the wording). The feed and the public JSON both
+ * read it, so the two never disagree.
  */
-import type { PodcastKind } from '@prisma/client'
+import type { PodcastEdition, PodcastKind } from '@prisma/client'
 import { config } from '../config.js'
 import { escapeXml } from '../lib/xml.js'
 import { AI_GENERATED_PODCAST_DETAIL_FIELDS, AI_GENERATED_PODCAST_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } from '../lib/aiProvenance.js'
-import { PODCAST_SHOW_DESCRIPTION, podcastEpisodeAiLine } from '../lib/aiLabelCopy.js'
+import { podcastEpisodeAiLine } from '../lib/aiLabelCopy.js'
+import { podcastEditionInfo } from './podcastEdition.js'
 import { buildShowNotes, type EpisodeStory } from './podcastScript.js'
 import { publicTranscript } from './podcastTranscript.js'
 
@@ -18,6 +19,8 @@ export interface PublishedEpisode {
   title: string
   /** Picks the AI line's wording (weekly or standalone). */
   kind: PodcastKind
+  /** The show it belongs to. */
+  edition: PodcastEdition
   summary: string
   stories: EpisodeStory[]
   humanEdited: boolean
@@ -51,29 +54,34 @@ export interface PodcastShowInfo {
   link: string
   /** The public feed URL (a Render rewrite to the API's feed route). */
   feedUrl: string
+  /** The channel's `podcast:guid`, fixed for good. */
+  feedGuid: string
   /** Square show artwork on the CDN (itunes:image). */
   artworkUrl: string
   listenLinks: ListenLink[]
 }
 
-export function podcastShowInfo(): PodcastShowInfo {
+/** The show's public identity; the author, owner and categories are the same for both shows. */
+export function podcastShowInfo(edition: PodcastEdition): PodcastShowInfo {
   const p = config.podcast
+  const show = podcastEditionInfo(edition)
   return {
-    title: p.showTitle,
-    description: PODCAST_SHOW_DESCRIPTION,
+    title: show.showTitle,
+    description: show.description,
     author: p.showAuthor,
     ownerEmail: p.ownerEmail,
     categories: p.categories,
-    link: `${config.siteUrl}/podcast`,
-    feedUrl: `${config.siteUrl}${p.feedPath}`,
-    artworkUrl: p.artworkUrl,
-    listenLinks: p.listenLinks,
+    link: `${config.siteUrl}${show.pagePath}`,
+    feedUrl: `${config.siteUrl}${show.feedPath}`,
+    feedGuid: show.feedGuid,
+    artworkUrl: show.artworkUrl,
+    listenLinks: show.listenLinks,
   }
 }
 
 /** The episode's plain-text description: the AI line, the summary, then each story with our analysis and its source. */
 export function episodeDescriptionText(episode: PublishedEpisode): string {
-  return buildShowNotes(episode.summary, episode.stories, episode.humanEdited, episode.kind)
+  return buildShowNotes(episode.summary, episode.stories, episode.humanEdited, episode.kind, episode.edition)
 }
 
 /** The same description as HTML (feed `content:encoded`), every value escaped. */
@@ -83,20 +91,23 @@ export function episodeDescriptionHtml(episode: PublishedEpisode): string {
     const analysis = s.slug ? ` ${link(`${config.siteUrl}/stories/${s.slug}`, 'Our AI analysis')} ·` : ''
     return `<li>${escapeXml(s.title)} (${escapeXml(s.publisher)}).${analysis} ${link(s.sourceUrl, 'Source')}</li>`
   })
+  const { moreLink } = podcastEditionInfo(episode.edition)
   return [
     `<p>${escapeXml(podcastEpisodeAiLine(episode.humanEdited, episode.kind))}</p>`,
     `<p>${escapeXml(episode.summary.trim())}</p>`,
     '<p>Stories in this episode:</p>',
     `<ol>${items.join('')}</ol>`,
+    ...(moreLink ? [`<p>${escapeXml(moreLink.text)}: ${link(moreLink.url, moreLink.url)}</p>`] : []),
     `<p>${escapeXml(config.donation.pitch)} ${link(config.links.kofi, config.donation.cta)}</p>`,
   ].join('')
 }
 
-/** A published episode in the public JSON, with its AI line and a machine-readable AI marker. */
+/** A published episode in the public JSON, with its show, its AI line and a machine-readable AI marker. */
 export function toPublicEpisode(episode: PublishedEpisode) {
   return {
     id: episode.id,
     title: episode.title,
+    edition: episode.edition,
     aiLine: podcastEpisodeAiLine(episode.humanEdited, episode.kind),
     summary: episode.summary,
     publishedAt: episode.publishedAt.toISOString(),

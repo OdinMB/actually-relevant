@@ -85,6 +85,18 @@ async function main() {
       update: {},
       create: { jobName: 'publish_podcast', cronExpression: '0 7 * * 6', enabled: false },
     }),
+    // The Actually Uplifting podcast: 30 minutes after each of the main show's Friday slots, and the
+    // same Saturday publish; enabling either is refused while the show is closed
+    prisma.jobRun.upsert({
+      where: { jobName: 'generate_uplifting_podcast' },
+      update: {},
+      create: { jobName: 'generate_uplifting_podcast', cronExpression: '30 2,6,10,14,18 * * 5', enabled: false },
+    }),
+    prisma.jobRun.upsert({
+      where: { jobName: 'publish_uplifting_podcast' },
+      update: {},
+      create: { jobName: 'publish_uplifting_podcast', cronExpression: '0 7 * * 6', enabled: false },
+    }),
     // Hourly read of Plunk spam complaints and bounces (ADR-0029)
     prisma.jobRun.upsert({
       where: { jobName: 'poll_plunk_activity' },

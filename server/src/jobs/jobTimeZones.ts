@@ -3,10 +3,11 @@
  * (UTC on Render). A job not listed here runs on the server's clock.
  */
 import { config } from '../config.js'
-import { PUBLISH_PODCAST_JOB } from './publishPodcast.js'
+import { PUBLISH_PODCAST_JOB, PUBLISH_UPLIFTING_PODCAST_JOB } from '../services/podcastEdition.js'
 
 const JOB_TIME_ZONES: Readonly<Record<string, string>> = {
   [PUBLISH_PODCAST_JOB]: config.podcast.publishTimeZone,
+  [PUBLISH_UPLIFTING_PODCAST_JOB]: config.podcast.publishTimeZone,
 }
 
 /** The IANA zone the job's cron expression is read in, or null for the server's own. */

@@ -5,7 +5,7 @@
  * the weekly runs, `podcastEditing.ts` and `podcastPublish.ts`.
  */
 import prisma from '../lib/prisma.js'
-import { type Prisma, type Podcast, ContentStatus, PodcastStage } from '@prisma/client'
+import { type Prisma, type Podcast, type PodcastEdition, ContentStatus, PodcastStage } from '@prisma/client'
 import { paginate } from '../lib/paginate.js'
 import { PodcastRefusedError, episodeTtsChars, wasPublished } from './podcastGuards.js'
 import { deleteEpisodeObjects, episodeChunks } from './podcastAudioStages.js'
@@ -29,6 +29,7 @@ const LIST_COLUMNS = {
   mode: true,
   weekKey: true,
   kind: true,
+  edition: true,
   storyIds: true,
   attempts: true,
   blockedAt: true,
@@ -95,9 +96,9 @@ export async function getPodcasts(filters: PodcastFilters) {
   })
 }
 
-/** The weekly episode of `weekKey` as a list row with its progress flags, or null when the week has none. */
-export async function getWeekEpisodeListItem(weekKey: string) {
-  const row = await prisma.podcast.findUnique({ where: { weekKey }, select: LIST_COLUMNS })
+/** The show's weekly episode of `weekKey` as a list row with its progress flags, or null when the week has none. */
+export async function getWeekEpisodeListItem(weekKey: string, edition: PodcastEdition) {
+  const row = await prisma.podcast.findUnique({ where: { edition_weekKey: { edition, weekKey } }, select: LIST_COLUMNS })
   return row ? withProgress(row) : null
 }
 

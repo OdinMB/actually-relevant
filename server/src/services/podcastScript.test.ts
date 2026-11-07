@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { PodcastDialogue } from '../schemas/llm.js'
 
-const mockPrisma = vi.hoisted(() => ({ story: { findMany: vi.fn() } }))
+const mockPrisma = vi.hoisted(() => ({ story: { findMany: vi.fn(), count: vi.fn() } }))
 const mockInvoke = vi.hoisted(() => vi.fn())
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
@@ -10,9 +10,19 @@ vi.mock('./llm.js', () => ({
   rateLimitDelay: vi.fn().mockResolvedValue(undefined),
 }))
 
-const { selectEpisodeStories, chooseStories, writeEpisodeScript, buildShowNotes, loadEpisodePool, loadEpisodeStories, TooFewStoriesError } =
-  await import('./podcastScript.js')
+const {
+  selectEpisodeStories,
+  chooseStories,
+  writeEpisodeScript,
+  buildShowNotes,
+  loadEpisodePool,
+  loadEpisodeStories,
+  episodePoolSize,
+  promptWordingKind,
+  TooFewStoriesError,
+} = await import('./podcastScript.js')
 const { PodcastBlockedError } = await import('./podcastGuards.js')
+const { podcastEditionInfo } = await import('./podcastEdition.js')
 const { PODCAST_EPISODE_AI_LINE, PODCAST_EPISODE_AI_LINE_EDITED, PODCAST_EPISODE_COPY } = await import('../lib/aiLabelCopy.js')
 const { config } = await import('../config.js')
 
@@ -44,7 +54,7 @@ describe('selectEpisodeStories', () => {
     mockPrisma.story.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6].map(n => poolStory(n)))
     mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-3', 'made-up', 'story-1', 'story-6', 'story-2', 'story-3'] }))
 
-    const selected = await selectEpisodeStories(new Date('2026-10-10T06:00:00Z'))
+    const selected = await selectEpisodeStories(new Date('2026-10-10T06:00:00Z'), 'full')
 
     expect(selected.map(s => s.snapshot.id)).toEqual(['story-3', 'story-1', 'story-6', 'story-2'])
     expect(selected.map(s => s.snapshot.ref)).toEqual([1, 2, 3, 4])
@@ -61,25 +71,42 @@ describe('selectEpisodeStories', () => {
   it('never takes more than five stories', async () => {
     mockPrisma.story.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6].map(n => poolStory(n)))
     mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-1', 'story-2', 'story-3', 'story-4', 'story-5', 'story-6'] }))
-    expect(await selectEpisodeStories(new Date())).toHaveLength(5)
+    expect(await selectEpisodeStories(new Date(), 'full')).toHaveLength(5)
   })
 
   it('fails closed when fewer than four valid stories come back', async () => {
     mockPrisma.story.findMany.mockResolvedValue([1, 2, 3, 4, 5].map(n => poolStory(n)))
     mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-1', 'story-2', 'nope', 'story-1'] }))
-    await expect(selectEpisodeStories(new Date())).rejects.toThrow(/2 valid stories/)
+    await expect(selectEpisodeStories(new Date(), 'full')).rejects.toThrow(/2 valid stories/)
   })
 
   it('fails before the call when the week has fewer than four published stories', async () => {
     mockPrisma.story.findMany.mockResolvedValue([poolStory(1), poolStory(2)])
-    await expect(selectEpisodeStories(new Date())).rejects.toThrow(/2 published stories/)
+    await expect(selectEpisodeStories(new Date(), 'full')).rejects.toThrow(/2 published stories/)
     expect(mockInvoke).not.toHaveBeenCalled()
   })
 
   it('throws when the model returns no parsable selection', async () => {
     mockPrisma.story.findMany.mockResolvedValue([1, 2, 3, 4].map(n => poolStory(n)))
     mockInvoke.mockResolvedValue(answer(null))
-    await expect(selectEpisodeStories(new Date())).rejects.toThrow(/parsable/)
+    await expect(selectEpisodeStories(new Date(), 'full')).rejects.toThrow(/parsable/)
+  })
+
+  it("asks for the Actually Uplifting show's selection, and names its short week as uplifting stories", async () => {
+    mockPrisma.story.findMany.mockResolvedValue([1, 2, 3, 4].map(n => poolStory(n)))
+    mockInvoke.mockResolvedValue(answer({ selectedIds: ['story-1', 'story-2', 'story-3', 'story-4'] }))
+    await selectEpisodeStories(new Date(), 'uplifting')
+    expect(JSON.stringify(mockInvoke.mock.calls[0][0])).toContain(podcastEditionInfo('uplifting').showTitle)
+    mockPrisma.story.findMany.mockResolvedValue([poolStory(1), poolStory(2)])
+    await expect(selectEpisodeStories(new Date(), 'uplifting')).rejects.toThrow(/only 2 published uplifting stories this week/)
+  })
+})
+
+describe('promptWordingKind', () => {
+  it('takes the uplifting wording for the uplifting show, and the kind otherwise', () => {
+    expect(promptWordingKind('weekly', 'uplifting')).toBe('uplifting')
+    expect(promptWordingKind('weekly', 'full')).toBe('weekly')
+    expect(promptWordingKind('standalone', 'full')).toBe('standalone')
   })
 })
 
@@ -173,14 +200,14 @@ describe('writeEpisodeScript', () => {
 
   it('returns a valid dialogue from the first call', async () => {
     mockInvoke.mockResolvedValueOnce(answer(valid))
-    const result = await writeEpisodeScript(selected, 'weekly')
+    const result = await writeEpisodeScript(selected, 'weekly', 'full')
     expect(result.dialogue).toEqual(valid)
     expect(mockInvoke).toHaveBeenCalledTimes(1)
   })
 
   it('regenerates once with the problems when the first dialogue is invalid', async () => {
     mockInvoke.mockResolvedValueOnce(answer(invalid)).mockResolvedValueOnce(answer(valid))
-    const result = await writeEpisodeScript(selected, 'weekly')
+    const result = await writeEpisodeScript(selected, 'weekly', 'full')
     expect(result.dialogue).toEqual(valid)
     expect(mockInvoke).toHaveBeenCalledTimes(2)
     const secondPrompt = JSON.stringify(mockInvoke.mock.calls[1][0])
@@ -190,17 +217,17 @@ describe('writeEpisodeScript', () => {
 
   it('counts an unparsable answer as the one regeneration', async () => {
     mockInvoke.mockResolvedValueOnce(answer(null)).mockResolvedValueOnce(answer(valid))
-    expect((await writeEpisodeScript(selected, 'weekly')).dialogue).toEqual(valid)
+    expect((await writeEpisodeScript(selected, 'weekly', 'full')).dialogue).toEqual(valid)
     mockInvoke.mockReset()
     mockInvoke.mockResolvedValueOnce(answer(null)).mockResolvedValueOnce(answer(invalid))
-    await expect(writeEpisodeScript(selected, 'weekly')).rejects.toBeInstanceOf(PodcastBlockedError)
+    await expect(writeEpisodeScript(selected, 'weekly', 'full')).rejects.toBeInstanceOf(PodcastBlockedError)
   })
 
   it('validates a standalone dialogue with the standalone rules and feeds a relative date back', async () => {
     const standalone = JSON.parse(JSON.stringify(valid).replace(' this week', '').replace('a week worth', 'an episode worth')) as PodcastDialogue
     const dated = { ...standalone, episodeSummary: 'Stories from last month. Plain ones.' }
     mockInvoke.mockResolvedValueOnce(answer(dated)).mockResolvedValueOnce(answer(standalone))
-    expect((await writeEpisodeScript(selected, 'standalone')).dialogue).toEqual(standalone)
+    expect((await writeEpisodeScript(selected, 'standalone', 'full')).dialogue).toEqual(standalone)
     const [firstPrompt, secondPrompt] = mockInvoke.mock.calls.map(c => JSON.stringify(c[0]))
     expect(firstPrompt).not.toMatch(/this week's episode|for humanity this week/)
     expect(secondPrompt).toContain('last month')
@@ -208,8 +235,16 @@ describe('writeEpisodeScript', () => {
 
   it('blocks the episode when the regeneration is still invalid', async () => {
     mockInvoke.mockResolvedValue(answer(invalid))
-    await expect(writeEpisodeScript(selected, 'weekly')).rejects.toBeInstanceOf(PodcastBlockedError)
+    await expect(writeEpisodeScript(selected, 'weekly', 'full')).rejects.toBeInstanceOf(PodcastBlockedError)
     expect(mockInvoke).toHaveBeenCalledTimes(2)
+  })
+
+  it("writes an Actually Uplifting episode with that show's wording and the weekly rules", async () => {
+    mockInvoke.mockResolvedValueOnce(answer(valid))
+    expect((await writeEpisodeScript(selected, 'weekly', 'uplifting')).dialogue).toEqual(valid)
+    const prompt = JSON.stringify(mockInvoke.mock.calls[0][0])
+    expect(prompt).toContain(podcastEditionInfo('uplifting').showTitle)
+    expect(prompt).toContain("this week's episode")
   })
 })
 
@@ -220,7 +255,7 @@ describe('buildShowNotes', () => {
   ]
 
   it('starts with the AI line and links our analysis and the source of each story', () => {
-    const notes = buildShowNotes('The summary.', stories, false, 'weekly')
+    const notes = buildShowNotes('The summary.', stories, false, 'weekly', 'full')
     expect(notes.split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE)
     expect(notes).toContain('The summary.')
     expect(notes).toContain('/stories/headline-1')
@@ -230,19 +265,27 @@ describe('buildShowNotes', () => {
   })
 
   it('ends with the donation ask and its link', () => {
-    const lastLine = buildShowNotes('The summary.', stories, false, 'weekly').split('\n').at(-1)
+    const lastLine = buildShowNotes('The summary.', stories, false, 'weekly', 'full').split('\n').at(-1)
     expect(lastLine).toContain('Donate $5 toward running the site')
     expect(lastLine).toContain('https://ko-fi.com/odinmb')
   })
 
   it('starts with the edited line when a person edited the episode', () => {
-    expect(buildShowNotes('The summary.', stories, true, 'weekly').split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE_EDITED)
+    expect(buildShowNotes('The summary.', stories, true, 'weekly', 'full').split('\n')[0]).toBe(PODCAST_EPISODE_AI_LINE_EDITED)
+  })
+
+  it("points an Actually Uplifting episode's listeners to more uplifting news, just before the donation ask", () => {
+    const { moreLink } = podcastEditionInfo('uplifting')
+    const lines = buildShowNotes('The summary.', stories, false, 'weekly', 'uplifting').split('\n')
+    expect(lines.at(-2)).toContain(moreLink!.url)
+    expect(lines.at(-1)).toContain('https://ko-fi.com/odinmb')
+    expect(buildShowNotes('The summary.', stories, false, 'weekly', 'full')).not.toContain(moreLink!.url)
   })
 
   it('picks the AI line by kind', () => {
     const { aiLine, aiLineEdited } = PODCAST_EPISODE_COPY.standalone
-    expect(buildShowNotes('The summary.', stories, false, 'standalone').split('\n')[0]).toBe(aiLine)
-    expect(buildShowNotes('The summary.', stories, true, 'standalone').split('\n')[0]).toBe(aiLineEdited)
+    expect(buildShowNotes('The summary.', stories, false, 'standalone', 'full').split('\n')[0]).toBe(aiLine)
+    expect(buildShowNotes('The summary.', stories, true, 'standalone', 'full').split('\n')[0]).toBe(aiLineEdited)
   })
 })
 
@@ -252,14 +295,31 @@ describe('the story pool', () => {
   it('is anchored on the given date: published stories crawled in the week before it', async () => {
     mockPrisma.story.findMany.mockResolvedValue([poolStory(1)])
     const anchor = new Date('2026-10-10T06:00:00Z')
-    const pool = await loadEpisodePool(anchor)
+    const pool = await loadEpisodePool(anchor, 'full')
     const { where } = mockPrisma.story.findMany.mock.calls[0][0]
     expect(where.status).toBe('published')
     expect(where.dateCrawled.lte).toEqual(anchor)
     expect(anchor.getTime() - where.dateCrawled.gte.getTime()).toBe(config.content.storyAssignmentDays * 24 * 60 * 60 * 1000)
+    expect(where.emotionTag).toBeUndefined()
     expect(pool).toEqual([
       { id: 'story-1', title: 'Headline 1', publisher: 'Publisher 1', sourceUrl: 'https://news.example/1', slug: 'headline-1', issue: 'Issue 1', relevance: 7 },
     ])
+  })
+
+  it("holds only the week's uplifting stories for the Actually Uplifting show, in the same window", async () => {
+    mockPrisma.story.findMany.mockResolvedValue([])
+    const anchor = new Date('2026-10-10T06:00:00Z')
+    await loadEpisodePool(anchor, 'uplifting')
+    const { where } = mockPrisma.story.findMany.mock.calls[0][0]
+    expect(where).toMatchObject({ status: 'published', emotionTag: 'uplifting', dateCrawled: { lte: anchor } })
+  })
+
+  it('is counted with the same filter, so a short week is known before any row or model call', async () => {
+    mockPrisma.story.count.mockResolvedValue(3)
+    const anchor = new Date('2026-10-10T06:00:00Z')
+    expect(await episodePoolSize(anchor, 'uplifting')).toBe(3)
+    await loadEpisodePool(anchor, 'uplifting')
+    expect(mockPrisma.story.count.mock.calls[0][0].where).toEqual(mockPrisma.story.findMany.mock.calls[0][0].where)
   })
 })
 

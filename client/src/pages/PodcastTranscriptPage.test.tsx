@@ -30,6 +30,7 @@ const metaContent = (selector: string) => document.head.querySelector(selector)?
 const EPISODE: PublicPodcastEpisodeDetail = {
   id: 'podcast-1',
   title: 'W42: Clean air',
+  edition: 'full',
   aiLine: 'AI-generated: Everything in this episode was written and voiced by AI.',
   summary: 'Two stories.',
   publishedAt: '2026-10-12T07:30:00.000Z',
@@ -149,6 +150,14 @@ describe('PodcastTranscriptPage', () => {
     await screen.findByText('Welcome to the week.')
     expect(screen.getByRole('link', { name: /All episodes/ }).getAttribute('href')).toBe('/podcast')
     expect(screen.getByRole('link', { name: 'Subscribe to the podcast' }).getAttribute('href')).toBe(PODCAST_SUBSCRIBE_PATH)
+  })
+
+  it("links an Actually Uplifting episode's own show and its Subscribe section", async () => {
+    mockApi.podcastEpisode.mockResolvedValue({ ...EPISODE, edition: 'uplifting' })
+    renderPage()
+    await screen.findByText('Welcome to the week.')
+    expect(screen.getByRole('link', { name: /All episodes/ }).getAttribute('href')).toBe('/podcast/uplifting')
+    expect(screen.getByRole('link', { name: 'Subscribe to the podcast' }).getAttribute('href')).toBe('/podcast/uplifting#podcast-subscribe-heading')
   })
 
   it('offers the newsletter after the transcript and the story list', async () => {

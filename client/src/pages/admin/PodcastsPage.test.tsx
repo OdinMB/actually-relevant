@@ -20,7 +20,30 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
   adminApi: mockApi,
 }))
 
-const FREE: PodcastWeekSlot = { weekKey: '2026-W41', episode: null, fridayRun: 'create', fridayWindow: 'ahead', automaticRunEnabled: true }
+const FREE: PodcastWeekSlot = {
+  edition: 'full',
+  weekKey: '2026-W41',
+  episode: null,
+  fridayRun: 'create',
+  fridayWindow: 'ahead',
+  automaticRunEnabled: true,
+  showProblem: null,
+}
+const CLOSED_UPLIFTING: PodcastWeekSlot = {
+  ...FREE,
+  edition: 'uplifting',
+  automaticRunEnabled: false,
+  showProblem: 'Actually Uplifting is switched off: PODCAST_UPLIFTING_ENABLED is not "true" on the API service',
+}
+
+/** The main show's slot answer, and Actually Uplifting's (switched off unless a test says otherwise). */
+function slots(full: PodcastWeekSlot | Promise<PodcastWeekSlot> | Error, uplifting: PodcastWeekSlot = CLOSED_UPLIFTING) {
+  mockApi.podcasts.weekSlot.mockImplementation(async (edition: string) => {
+    if (edition === 'uplifting') return uplifting
+    if (full instanceof Error) throw full
+    return full
+  })
+}
 
 function renderPage() {
   return renderAdminRoutes(
@@ -38,12 +61,12 @@ describe("PodcastsPage: this week's slot", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.podcasts.list.mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 25, totalPages: 0 })
-    mockApi.podcasts.weekSlot.mockResolvedValue(FREE)
+    slots(FREE)
     mockApi.podcasts.startWeekly.mockResolvedValue(makePodcast({ id: 'pod-new' }))
   })
 
   it('keeps the weekly button busy while the slot is still loading, so no dialog misstates it', async () => {
-    mockApi.podcasts.weekSlot.mockReturnValue(new Promise(() => {}))
+    slots(new Promise(() => {}))
     renderPage()
     const button = await weeklyButton()
     expect(button).toBeDisabled()
@@ -70,10 +93,11 @@ describe("PodcastsPage: this week's slot", () => {
     fireEvent.click(within(dialog).getByRole('button', { name: "Start this week's episode" }))
     expect(await screen.findByTestId('where')).toHaveTextContent('/admin/podcasts/pod-new')
     expect(mockApi.podcasts.startWeekly).toHaveBeenCalledTimes(1)
+    expect(mockApi.podcasts.startWeekly).toHaveBeenCalledWith('full')
   })
 
   it("opens a claimed slot's episode directly, with no dialog and no claim", async () => {
-    mockApi.podcasts.weekSlot.mockResolvedValue({ ...FREE, episode: makePodcast({ id: 'pod-7', title: 'Midweek test' }), fridayRun: 'waiting-for-person' })
+    slots({ ...FREE, episode: makePodcast({ id: 'pod-7', title: 'Midweek test' }), fridayRun: 'waiting-for-person' })
     renderPage()
     await screen.findByRole('link', { name: 'Midweek test' })
     fireEvent.click(await screen.findByRole('button', { name: "Open this week's episode" }))
@@ -83,11 +107,40 @@ describe("PodcastsPage: this week's slot", () => {
   })
 
   it('still asks first when the slot could not be read', async () => {
-    mockApi.podcasts.weekSlot.mockRejectedValue(new Error('down'))
+    slots(new Error('down'))
     renderPage()
-    await screen.findByText(/could not check/i)
+    await screen.findByText(/could not check this week's episode/i)
     fireEvent.click(await screen.findByRole('button', { name: "Start this week's episode" }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(mockApi.podcasts.startWeekly).not.toHaveBeenCalled()
+  })
+})
+
+describe("PodcastsPage: Actually Uplifting's slot", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockApi.podcasts.list.mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 25, totalPages: 0 })
+    mockApi.podcasts.startWeekly.mockResolvedValue(makePodcast({ id: 'pod-up', edition: 'uplifting' }))
+  })
+
+  const upliftingNotice = () => screen.findByRole('region', { name: "This week's Actually Uplifting episode" })
+
+  it('shows the show as switched off, naming what it waits for, with no button to start it', async () => {
+    slots(FREE)
+    renderPage()
+    expect(await upliftingNotice()).toHaveTextContent(/Actually Uplifting is switched off: PODCAST_UPLIFTING_ENABLED/)
+    expect(screen.queryByRole('button', { name: /Actually Uplifting episode/ })).not.toBeInTheDocument()
+  })
+
+  it('starts the show’s own episode once it is open, after asking', async () => {
+    slots(FREE, { ...CLOSED_UPLIFTING, automaticRunEnabled: true, showProblem: null })
+    renderPage()
+    await upliftingNotice()
+    fireEvent.click(await screen.findByRole('button', { name: "Start this week's Actually Uplifting episode" }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('heading', { name: "Start this week's Actually Uplifting episode?" })).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: "Start this week's Actually Uplifting episode" }))
+    expect(await screen.findByTestId('where')).toHaveTextContent('/admin/podcasts/pod-up')
+    expect(mockApi.podcasts.startWeekly).toHaveBeenCalledWith('uplifting')
   })
 })

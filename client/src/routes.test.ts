@@ -38,6 +38,10 @@ describe('static routes (shared/routes.json)', () => {
     expect(sitemapRoutes.map(r => r.path)).toContain('/uplifting')
   })
 
+  it("never prerenders Actually Uplifting's podcast page: no static file may show a show that is switched off", () => {
+    expect(routePaths).not.toContain('/podcast/uplifting')
+  })
+
   it('gives every route a path, a priority between 0 and 1 and a sitemap change frequency, once', () => {
     for (const route of routes) {
       expect(route.path.startsWith('/')).toBe(true)

@@ -27,8 +27,14 @@ vi.mock('../lib/elevenlabs.js', () => mockElevenLabs)
 vi.mock('../lib/podcastAudio.js', () => mockAudio)
 vi.mock('../lib/bunnyStorage.js', () => mockBunny)
 vi.mock('./podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('./podcastGuards.js')>()), ...mockGuards }))
+// The real gate (Actually Uplifting closed), which a test can open for one call.
+vi.mock('./podcastEdition.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('./podcastEdition.js')>()
+  return { ...actual, editionClosedReason: vi.fn(actual.editionClosedReason) }
+})
 
 const stages = await import('./podcastAudioStages.js')
+const edition = await import('./podcastEdition.js')
 const { PodcastBlockedError, PodcastStoppedError } = await import('./podcastGuards.js')
 const { config } = await import('../config.js')
 const { PODCAST_EPISODE_COPY } = await import('../lib/aiLabelCopy.js')
@@ -55,6 +61,7 @@ function episode(overrides: Record<string, unknown> = {}) {
     title: 'Week 41',
     weekKey: '2026-W41',
     kind: 'weekly',
+    edition: 'full',
     dryRun: false,
     dialogue,
     ...overrides,
@@ -177,6 +184,29 @@ describe('voiceEpisode', () => {
     await stages.voiceEpisode(episode(), context('admin'))
     expect(mockGuards.assertJobEnabled).not.toHaveBeenCalled()
   })
+
+  it('blocks a live Actually Uplifting voicing while the show is closed, before the balance check and any reservation or TTS call', async () => {
+    const err = await stages.voiceEpisode(episode({ edition: 'uplifting' }), context('admin')).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(PodcastBlockedError)
+    expect((err as Error).message).toMatch(/Actually Uplifting is switched off/)
+    expect(mockGuards.assertBalanceCovers).not.toHaveBeenCalled()
+    expect(mockGuards.reserveTtsChars).not.toHaveBeenCalled()
+    expect(mockElevenLabs.textToDialogue).not.toHaveBeenCalled()
+    expect(mockPrisma.podcastAudioChunk.findMany).not.toHaveBeenCalled()
+  })
+
+  it('voices an Actually Uplifting dry run with the stub while the show is closed (no spend)', async () => {
+    await stages.voiceEpisode(episode({ edition: 'uplifting', dryRun: true }), context('admin'))
+    expect(mockAudio.silentMp3).toHaveBeenCalled()
+    expect(mockElevenLabs.textToDialogue).not.toHaveBeenCalled()
+  })
+
+  it("on the cron trigger re-checks the Actually Uplifting show's own job row once it is open", async () => {
+    vi.mocked(edition.editionClosedReason).mockReturnValueOnce(null)
+    await stages.voiceEpisode(episode({ edition: 'uplifting' }), context('cron'))
+    expect(mockGuards.assertJobEnabled).toHaveBeenCalledWith(edition.GENERATE_UPLIFTING_PODCAST_JOB)
+    expect(mockGuards.assertJobEnabled).not.toHaveBeenCalledWith(edition.GENERATE_PODCAST_JOB)
+  })
 })
 
 describe('finishEpisode', () => {
@@ -248,6 +278,13 @@ describe('finishEpisode', () => {
     await stages.finishEpisode(episode({ stage: 'voiced' }), context())
     const paths = mockBunny.putObject.mock.calls.map(c => c[0])
     expect(new Set(paths).size).toBe(6)
+  })
+
+  it("tags and names an Actually Uplifting episode's files after its show", async () => {
+    await stages.finishEpisode(episode({ stage: 'voiced', edition: 'uplifting' }), context())
+    const showTitle = edition.podcastEditionInfo('uplifting').showTitle
+    expect(mockAudio.assembleEpisodeMp3.mock.calls[0][1]).toMatchObject({ artist: showTitle, album: showTitle })
+    expect(mockBunny.putObject.mock.calls[0][0]).toMatch(/^episodes\/uplifting-2026-W41-[0-9a-f]{8}\.mp3$/)
   })
 
   it('puts a dry run under dry-run/ without loudnorm', async () => {

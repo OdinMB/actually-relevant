@@ -12,6 +12,7 @@ import type {
   NewsletterSend,
   ActivePodcastRun,
   Podcast,
+  PodcastEdition,
   PodcastListItem,
   PodcastMode,
   PodcastScriptEdit,
@@ -322,10 +323,10 @@ export const adminApi = {
     /** The title and the "edited by a person" flag. */
     update: (id: string, data: { title?: string; humanEdited?: boolean }) => request<Podcast>(`/podcasts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/podcasts/${id}`, { method: 'DELETE' }),
-    /** This week's slot (its episode or none, what Friday's automatic run will do); creates nothing. */
-    weekSlot: () => request<PodcastWeekSlot>('/podcasts/weekly'),
-    /** Finds or creates this week's episode; nothing runs until a mode is chosen on its page. */
-    startWeekly: () => request<Podcast>('/podcasts/weekly', { method: 'POST' }),
+    /** A show's slot this week (its episode or none, what Friday's automatic run will do); creates nothing. */
+    weekSlot: (edition: PodcastEdition) => request<PodcastWeekSlot>(`/podcasts/weekly${toQueryString({ edition })}`),
+    /** Finds or creates the show's episode this week; nothing runs until a mode is chosen on its page. 409 while the show is switched off. */
+    startWeekly: (edition: PodcastEdition) => request<Podcast>('/podcasts/weekly', { method: 'POST', body: JSON.stringify({ edition }) }),
     /** Creates a standalone episode at `created`; a person then chooses its stories on its page. */
     createStandalone: () => request<Podcast>('/podcasts/standalone', { method: 'POST' }),
     /** Published stories of any date for a standalone episode's story finder, most relevant first. */

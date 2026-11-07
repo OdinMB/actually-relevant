@@ -19,6 +19,11 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
+// The real gate (Actually Uplifting is closed by default), wrapped so a test can open the show.
+vi.mock('../../services/podcastEdition.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../services/podcastEdition.js')>()
+  return { ...actual, isEditionOpen: vi.fn(actual.isEditionOpen) }
+})
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
   crawlAllDueFeeds: vi.fn(),
@@ -27,6 +32,7 @@ vi.mock('../../services/crawler.js', () => ({
 
 const { default: app } = await import('../../app.js')
 const { sitemapCache } = await import('./sitemap.js')
+const { isEditionOpen } = await import('../../services/podcastEdition.js')
 
 const publishedStories = [
   { slug: 'ai-breakthrough-2024', datePublished: new Date('2024-06-15') },
@@ -77,6 +83,20 @@ describe('GET /api/sitemap.xml', () => {
     expect(res.text).toContain('<loc>https://actuallyrelevant.news/podcast/ep-1/transcript</loc>')
     expect(res.text).toContain('<lastmod>2026-10-12</lastmod>')
     expect(mockPrisma.podcast.findMany.mock.calls[0][0].where).toMatchObject({ status: 'published', dryRun: false })
+  })
+
+  it("lists Actually Uplifting's show page only while the show is open", async () => {
+    mockPrisma.story.findMany.mockResolvedValue([])
+    const closed = await request(app).get('/api/sitemap.xml')
+    expect(closed.text).not.toContain('/podcast/uplifting')
+
+    sitemapCache.clear()
+    vi.mocked(isEditionOpen).mockImplementation(edition => edition === 'uplifting' || edition === 'full')
+    const open = await request(app).get('/api/sitemap.xml')
+    vi.mocked(isEditionOpen).mockReset()
+    expect(open.text).toMatch(
+      /<loc>https:\/\/actuallyrelevant\.news\/podcast\/uplifting<\/loc>\s*<changefreq>weekly<\/changefreq>\s*<priority>0\.7<\/priority>/,
+    )
   })
 
   it('returns valid XML with correct content type', async () => {

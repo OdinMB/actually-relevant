@@ -20,6 +20,7 @@ import { createLogger } from '../lib/logger.js'
 import { assembleSpokenSegments, renderScript } from './podcastDialogue.js'
 import { buildShowNotes, episodeSnapshots, loadEpisodeStories, selectEpisodeStories, writeEpisodeScript } from './podcastScript.js'
 import { deleteEpisodeObjects, finishEpisode, voiceEpisode, type AudioStageContext, type VoicedChunk } from './podcastAudioStages.js'
+import { podcastEditionInfo } from './podcastEdition.js'
 import { PodcastRefusedError, PodcastStoppedError, wasPublished } from './podcastGuards.js'
 
 const log = createLogger('podcast-pipeline')
@@ -145,11 +146,11 @@ export function pausesForReview(episode: Pick<Podcast, 'mode' | 'stage'>): boole
 }
 
 /**
- * The title a row starts with, and returns to when its script is discarded: the week key for a
- * weekly row, the UTC creation date for a standalone one (so several are told apart).
+ * The title a row starts with, and returns to when its script is discarded: its show's title with the
+ * week key for a weekly row, the UTC creation date for a standalone one (so several are told apart).
  */
-export function defaultEpisodeTitle(row: Pick<Podcast, 'weekKey' | 'createdAt'>): string {
-  return `Actually Relevant, ${row.weekKey ?? row.createdAt.toISOString().slice(0, 10)}`
+export function defaultEpisodeTitle(row: Pick<Podcast, 'weekKey' | 'createdAt' | 'edition'>): string {
+  return `${podcastEditionInfo(row.edition).showTitle}, ${row.weekKey ?? row.createdAt.toISOString().slice(0, 10)}`
 }
 
 /** "W41" for the ISO week key "2026-W41"; none without a week key. */
@@ -159,7 +160,7 @@ type StageWrite = Prisma.PodcastUpdateManyMutationInput & { stage: PodcastStage 
 type StageRunner = (episode: Podcast, ctx: AudioStageContext) => Promise<StageWrite>
 
 /**
- * created → selected: the model picks the stories from the week's pool as of now; the snapshot
+ * created → selected: the model picks the stories from the week's pool of the episode's show as of now; the snapshot
  * freezes them, and `storiesSelectedAt` keeps the pool's anchor so the story picker lists the
  * same pool the model chose from. A standalone episode's stories are chosen by a person
  * (ADR-0015); `startAdminRun` already refuses to run one from `created`, and this is the backstop.
@@ -167,20 +168,20 @@ type StageRunner = (episode: Podcast, ctx: AudioStageContext) => Promise<StageWr
 async function selectStage(episode: Podcast): Promise<StageWrite> {
   if (episode.kind === 'standalone') throw new PodcastRefusedError("a standalone episode's stories are chosen by a person; choose them first")
   const anchor = new Date()
-  const snapshots = (await selectEpisodeStories(anchor)).map(s => s.snapshot)
+  const snapshots = (await selectEpisodeStories(anchor, episode.edition)).map(s => s.snapshot)
   return { stage: 'selected', episodeStories: snapshots, storyIds: snapshots.map(s => s.id), storiesSelectedAt: anchor }
 }
 
 /** selected → scripted: write and validate the dialogue for the frozen stories; the title gets the week prefix. */
 async function writeScriptStage(episode: Podcast): Promise<StageWrite> {
   const snapshots = episodeSnapshots(episode)
-  const { dialogue, modelId } = await writeEpisodeScript(await loadEpisodeStories(snapshots), episode.kind)
+  const { dialogue, modelId } = await writeEpisodeScript(await loadEpisodeStories(snapshots), episode.kind, episode.edition)
   const label = weekLabel(episode.weekKey)
   return {
     stage: 'scripted',
     title: label ? `${label}: ${dialogue.episodeTitle}` : dialogue.episodeTitle,
     episodeSummary: dialogue.episodeSummary,
-    showNotes: buildShowNotes(dialogue.episodeSummary, snapshots, episode.humanEdited, episode.kind),
+    showNotes: buildShowNotes(dialogue.episodeSummary, snapshots, episode.humanEdited, episode.kind, episode.edition),
     script: renderScript(assembleSpokenSegments(dialogue, episode.kind)),
     dialogue,
     scriptModelId: modelId,

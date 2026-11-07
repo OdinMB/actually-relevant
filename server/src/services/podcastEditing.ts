@@ -53,10 +53,10 @@ export interface StoryPool {
 /** The anchor of the pool the model chose from (now, for an episode whose stories are not selected yet). */
 const poolAnchor = (episode: Pick<Podcast, 'storiesSelectedAt'>): Date => episode.storiesSelectedAt ?? new Date()
 
-/** The week's pool the model chose from, marking the episode's current stories. */
-export async function getEpisodeStoryPool(episode: Pick<Podcast, 'storiesSelectedAt' | 'storyIds'>): Promise<StoryPool> {
+/** The week's pool of the episode's show that the model chose from, marking the episode's current stories. */
+export async function getEpisodeStoryPool(episode: Pick<Podcast, 'storiesSelectedAt' | 'storyIds' | 'edition'>): Promise<StoryPool> {
   const chosen = new Set(episode.storyIds)
-  const pool = await loadEpisodePool(poolAnchor(episode))
+  const pool = await loadEpisodePool(poolAnchor(episode), episode.edition)
   return {
     stories: pool.map(s => ({ ...s, selected: chosen.has(s.id) })),
     minStories: config.podcast.minStories,
@@ -94,7 +94,7 @@ export async function replaceEpisodeStories(id: string, storyIds: string[]): Pro
     id,
     async ({ episode, update }) => {
       assertEditable(episode, 'selected')
-      const pool = new Map((await loadEpisodePool(poolAnchor(episode))).map(s => [s.id, s]))
+      const pool = new Map((await loadEpisodePool(poolAnchor(episode), episode.edition)).map(s => [s.id, s]))
       const outside = storyIds.filter(storyId => !pool.has(storyId))
       if (outside.length > 0) throw new PodcastEditRejectedError([`not in this week's pool: ${outside.join(', ')}`])
       const snapshots: EpisodeStory[] = storyIds.map((storyId, i) => {
@@ -140,7 +140,7 @@ export async function saveEpisodeScript(id: string, edit: DialogueTextEdit): Pro
         dialogue: applied.dialogue,
         episodeSummary: applied.dialogue.episodeSummary,
         script,
-        showNotes: buildShowNotes(applied.dialogue.episodeSummary, snapshots, humanEdited, episode.kind),
+        showNotes: buildShowNotes(applied.dialogue.episodeSummary, snapshots, humanEdited, episode.kind, episode.edition),
         humanEdited,
         ...FAILURE_CLEARED,
       })
@@ -187,7 +187,7 @@ export async function updateEpisodeMeta(id: string, edit: EpisodeMetaEdit): Prom
       }
       const notes =
         flagChanged && episode.showNotes !== ''
-          ? { showNotes: buildShowNotes(episode.episodeSummary, episodeSnapshots(episode), edit.humanEdited!, episode.kind) }
+          ? { showNotes: buildShowNotes(episode.episodeSummary, episodeSnapshots(episode), edit.humanEdited!, episode.kind, episode.edition) }
           : {}
       await update({
         ...(edit.title !== undefined ? { title: edit.title } : {}),

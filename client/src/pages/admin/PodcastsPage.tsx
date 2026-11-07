@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
+import type { PodcastEdition } from '@shared/types'
 import { usePodcasts, usePodcastWeekSlot, useStartWeeklyPodcast, useCreateStandalonePodcast, useDeletePodcast } from '../../hooks/usePodcasts'
 import { PodcastWeekSlotNotice } from '../../components/admin/PodcastWeekSlotNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -12,11 +13,28 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { PodcastTable } from '../../components/admin/PodcastTable'
 import { useToast } from '../../components/ui/Toast'
 
+/** The confirm before claiming a show's free slot. */
+const CLAIM_DIALOG: Record<PodcastEdition, { title: string; description: string; confirmLabel: string }> = {
+  full: {
+    title: "Start this week's episode?",
+    description:
+      "This becomes this week's episode. Friday's automatic run will then finish or skip it instead of making a new one. For a test or a one-off, use “New podcast” instead.",
+    confirmLabel: "Start this week's episode",
+  },
+  uplifting: {
+    title: "Start this week's Actually Uplifting episode?",
+    description: "This becomes this week's Actually Uplifting episode. Friday's automatic run will then finish or skip it instead of making a new one.",
+    confirmLabel: "Start this week's Actually Uplifting episode",
+  },
+}
+
 export default function PodcastsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const podcastsQuery = usePodcasts(statusFilter ? { status: statusFilter } : undefined)
-  const weekSlot = usePodcastWeekSlot()
+  const slots = { full: usePodcastWeekSlot('full'), uplifting: usePodcastWeekSlot('uplifting') }
+  const weekSlot = slots.full
   const claimedEpisode = weekSlot.data?.episode ?? null
+  const upliftingSlot = slots.uplifting.data
   const startWeekly = useStartWeeklyPodcast()
   const createStandalone = useCreateStandalonePodcast()
   const deletePodcast = useDeletePodcast()
@@ -24,7 +42,7 @@ export default function PodcastsPage() {
   const { toast } = useToast()
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [confirmClaim, setConfirmClaim] = useState(false)
+  const [confirmClaim, setConfirmClaim] = useState<PodcastEdition | null>(null)
 
   /**
    * A claimed slot's episode opens directly: the click claims nothing. Otherwise (free, or the
@@ -32,16 +50,19 @@ export default function PodcastsPage() {
    * Friday's automatic run then finishes or skips instead of making its own. While the slot is
    * still loading the button shows as loading, so the dialog never misstates a claimed week.
    */
-  const handleWeeklyClick = () => {
-    if (claimedEpisode) navigate(`/admin/podcasts/${claimedEpisode.id}`)
-    else setConfirmClaim(true)
+  const handleWeeklyClick = (edition: PodcastEdition) => {
+    const claimed = slots[edition].data?.episode
+    if (claimed) navigate(`/admin/podcasts/${claimed.id}`)
+    else setConfirmClaim(edition)
   }
 
-  /** Opens this week's episode (created on first use); it runs once a mode is chosen there. */
+  /** Opens the show's episode this week (created on first use); it runs once a mode is chosen there. */
   const handleStartWeekly = async () => {
-    setConfirmClaim(false)
+    const edition = confirmClaim
+    setConfirmClaim(null)
+    if (!edition) return
     try {
-      const pod = await startWeekly.mutateAsync()
+      const pod = await startWeekly.mutateAsync(edition)
       navigate(`/admin/podcasts/${pod.id}`)
     } catch {
       toast('error', "Failed to open this week's episode")
@@ -88,7 +109,7 @@ export default function PodcastsPage() {
             <Button variant="secondary" onClick={handleCreateStandalone} loading={createStandalone.isPending}>
               New podcast
             </Button>
-            <Button onClick={handleWeeklyClick} loading={startWeekly.isPending || weekSlot.isPending}>
+            <Button onClick={() => handleWeeklyClick('full')} loading={startWeekly.isPending || weekSlot.isPending}>
               {claimedEpisode ? "Open this week's episode" : "Start this week's episode"}
             </Button>
           </div>
@@ -96,6 +117,19 @@ export default function PodcastsPage() {
       />
 
       <PodcastWeekSlotNotice slot={weekSlot.data} failed={weekSlot.isError} />
+      {/* Actually Uplifting: its own slot; no button while it is switched off (the notice says why) */}
+      <PodcastWeekSlotNotice
+        edition="uplifting"
+        slot={upliftingSlot}
+        failed={slots.uplifting.isError}
+        action={
+          upliftingSlot && (
+            <Button size="sm" variant="secondary" onClick={() => handleWeeklyClick('uplifting')} loading={startWeekly.isPending}>
+              {upliftingSlot.episode ? "Open this week's Actually Uplifting episode" : "Start this week's Actually Uplifting episode"}
+            </Button>
+          )
+        }
+      />
 
       <div className="flex gap-1 mb-4">
         {tabs.map(tab => (
@@ -128,12 +162,10 @@ export default function PodcastsPage() {
       )}
 
       <ConfirmDialog
-        open={confirmClaim}
-        onClose={() => setConfirmClaim(false)}
+        open={confirmClaim !== null}
+        onClose={() => setConfirmClaim(null)}
         onConfirm={handleStartWeekly}
-        title="Start this week's episode?"
-        description="This becomes this week's episode. Friday's automatic run will then finish or skip it instead of making a new one. For a test or a one-off, use “New podcast” instead."
-        confirmLabel="Start this week's episode"
+        {...CLAIM_DIALOG[confirmClaim ?? 'full']}
       />
 
       <ConfirmDialog

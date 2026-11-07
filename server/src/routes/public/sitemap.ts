@@ -6,6 +6,7 @@ import { registerPublicCache } from '../../lib/publicCaches.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import prisma from '../../lib/prisma.js'
 import { listPublishedEpisodeDates } from '../../services/podcastPublish.js'
+import { isEditionOpen, podcastEditionInfo } from '../../services/podcastEdition.js'
 import { listPublishedIssueDates } from '../../services/newsletterArchive.js'
 import { loadSitemapRoutes } from '../../lib/staticRoutes.js'
 
@@ -23,6 +24,14 @@ function getSiteUrl(): string {
 // startup. Entries marked "sitemap": false (/saved) are left out.
 const STATIC_ROUTES = loadSitemapRoutes()
 
+/**
+ * Pages that exist only while a switch is on: Actually Uplifting's show page (not prerendered, so
+ * not in routes.json), listed like /podcast once the show is open.
+ */
+function switchedRoutes(): typeof STATIC_ROUTES {
+  return isEditionOpen('uplifting') ? [{ path: podcastEditionInfo('uplifting').pagePath, priority: 0.7, changefreq: 'weekly' }] : []
+}
+
 function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
@@ -33,7 +42,7 @@ function buildSitemapXml(
   episodes: { id: string; publishedAt: Date }[],
   issues: { slug: string; publishedAt: Date }[] = [],
 ): string {
-  const staticUrls = STATIC_ROUTES.map(
+  const staticUrls = [...STATIC_ROUTES, ...switchedRoutes()].map(
     route => `  <url>
     <loc>${baseUrl}${route.path}</loc>
     <changefreq>${route.changefreq}</changefreq>

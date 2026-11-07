@@ -419,12 +419,17 @@ describe('scheduler', () => {
     })
 
     it("schedules a job with a fixed time zone in that zone, and every other job in the server's own", async () => {
-      mockPrisma.jobRun.findMany.mockResolvedValue([enabledCrawlJob, { ...enabledCrawlJob, jobName: 'publish_podcast', cronExpression: '0 7 * * 6' }])
+      mockPrisma.jobRun.findMany.mockResolvedValue([
+        enabledCrawlJob,
+        { ...enabledCrawlJob, jobName: 'publish_podcast', cronExpression: '0 7 * * 6' },
+        { ...enabledCrawlJob, jobName: 'publish_uplifting_podcast', cronExpression: '5 7 * * 6' },
+      ])
 
       await initScheduler()
 
       expect(mockSchedule).toHaveBeenCalledWith('0 */6 * * *', expect.any(Function))
       expect(mockSchedule).toHaveBeenCalledWith('0 7 * * 6', expect.any(Function), { timezone: 'Europe/Berlin' })
+      expect(mockSchedule).toHaveBeenCalledWith('5 7 * * 6', expect.any(Function), { timezone: 'Europe/Berlin' })
     })
 
     it('skips disabled jobs', async () => {

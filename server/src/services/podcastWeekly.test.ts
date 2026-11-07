@@ -18,9 +18,11 @@ const mockGuards = vi.hoisted(() => ({
   monthToDateChars: vi.fn(async () => 10_800),
 }))
 const mockNotify = vi.hoisted(() => ({ notify: vi.fn() }))
+const mockScript = vi.hoisted(() => ({ episodePoolSize: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastPipeline.js', () => mockPipeline)
+vi.mock('./podcastScript.js', () => mockScript)
 vi.mock('./podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('./podcastGuards.js')>()), ...mockGuards }))
 vi.mock('../lib/notify.js', () => mockNotify)
 // Production settings: a row left over from a dry run must not occupy the week.
@@ -39,6 +41,7 @@ function row(overrides: Record<string, unknown> = {}) {
     id: 'pod-1',
     weekKey: '2026-W41',
     kind: 'weekly',
+    edition: 'full',
     stage: 'created',
     status: 'draft',
     mode: 'automated',
@@ -81,24 +84,94 @@ describe('findOrCreateWeekEpisode', () => {
 
   it("returns the week's existing row without creating one", async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(row())
-    expect(await findOrCreateWeekEpisode(NOW)).toEqual(row())
+    expect(await findOrCreateWeekEpisode(NOW, 'full')).toEqual(row())
+    expect(mockPrisma.podcast.findUnique).toHaveBeenCalledWith({ where: { edition_weekKey: { edition: 'full', weekKey: '2026-W41' } } })
     expect(mockPrisma.podcast.create).not.toHaveBeenCalled()
   })
 
-  it('creates the row with the week key and the dry-run flag', async () => {
+  it('creates the row with the week key, the show and the dry-run flag', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
     mockPrisma.podcast.create.mockResolvedValueOnce(row())
-    await findOrCreateWeekEpisode(NOW)
+    await findOrCreateWeekEpisode(NOW, 'full')
     expect(mockPrisma.podcast.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ weekKey: '2026-W41', dryRun: false, title: 'Actually Relevant, 2026-W41' }),
+      data: expect.objectContaining({ weekKey: '2026-W41', edition: 'full', dryRun: false, title: 'Actually Relevant, 2026-W41' }),
     })
+  })
+
+  it("looks up and creates the Actually Uplifting show's own row for the week", async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
+    mockPrisma.podcast.create.mockResolvedValueOnce(row({ edition: 'uplifting' }))
+    await findOrCreateWeekEpisode(NOW, 'uplifting')
+    expect(mockPrisma.podcast.findUnique).toHaveBeenCalledWith({ where: { edition_weekKey: { edition: 'uplifting', weekKey: '2026-W41' } } })
+    expect(mockPrisma.podcast.create).toHaveBeenCalledWith({ data: expect.objectContaining({ weekKey: '2026-W41', edition: 'uplifting' }) })
   })
 
   it('reads the row another process created first (unique week key)', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ id: 'pod-other' }))
     mockPrisma.podcast.create.mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002' }))
-    expect((await findOrCreateWeekEpisode(NOW)).id).toBe('pod-other')
+    expect((await findOrCreateWeekEpisode(NOW, 'full')).id).toBe('pod-other')
+  })
+})
+
+describe("runWeeklyEpisode for Actually Uplifting's short week", () => {
+  const FRIDAY_LAST_SLOT = new Date('2026-10-09T18:30:00Z')
+  const FRIDAY_EARLY_SLOT = new Date('2026-10-09T10:30:00Z')
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPipeline.advanceEpisode.mockResolvedValue({ status: 'done', stage: 'scripted' })
+    mockPrisma.podcast.update.mockResolvedValue(row())
+  })
+
+  it('creates no row and counts no attempt when the pool is short, and says so only at the last slot', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValue(null)
+    mockScript.episodePoolSize.mockResolvedValue(3)
+
+    expect(await runWeeklyEpisode({ trigger: 'cron', now: FRIDAY_EARLY_SLOT, edition: 'uplifting' })).toMatchObject({ outcome: 'skipped', podcastId: null })
+    expect(mockNotify.notify).not.toHaveBeenCalled()
+
+    expect((await runWeeklyEpisode({ trigger: 'cron', now: FRIDAY_LAST_SLOT, edition: 'uplifting' })).outcome).toBe('skipped')
+    expect(mockNotify.notify).toHaveBeenCalledTimes(1)
+    const [notice, options] = mockNotify.notify.mock.calls[0]
+    expect(notice).toMatchObject({ source: 'podcast', severity: 'info', dedupeKey: 'podcast-uplifting-no-stories:2026-W41' })
+    expect(options).toEqual({ reopen: false })
+
+    expect(mockPrisma.podcast.create).not.toHaveBeenCalled()
+    expect(mockPrisma.podcast.update).not.toHaveBeenCalled()
+    expect(mockPipeline.advanceEpisode).not.toHaveBeenCalled()
+  })
+
+  it('creates the uplifting row and runs it when the pool holds enough stories', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
+    mockScript.episodePoolSize.mockResolvedValue(4)
+    mockPrisma.podcast.create.mockResolvedValueOnce(row({ edition: 'uplifting', mode: null }))
+    expect((await runWeeklyEpisode({ trigger: 'cron', now: FRIDAY_EARLY_SLOT, edition: 'uplifting' })).outcome).toBe('done')
+    expect(mockPrisma.podcast.create).toHaveBeenCalledWith({ data: expect.objectContaining({ edition: 'uplifting', weekKey: '2026-W41' }) })
+    expect(mockPipeline.advanceEpisode).toHaveBeenCalled()
+  })
+
+  it("runs the week's uplifting row once it exists, without counting the pool again", async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ edition: 'uplifting', stage: 'selected' }))
+    expect((await runWeeklyEpisode({ trigger: 'cron', now: FRIDAY_LAST_SLOT, edition: 'uplifting' })).outcome).toBe('done')
+    expect(mockScript.episodePoolSize).not.toHaveBeenCalled()
+  })
+
+  it("never counts the main show's pool: its short week fails at selection, as before", async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
+    mockPrisma.podcast.create.mockResolvedValueOnce(row())
+    await runWeeklyEpisode({ trigger: 'cron', now: FRIDAY_LAST_SLOT })
+    expect(mockScript.episodePoolSize).not.toHaveBeenCalled()
+    expect(mockPrisma.podcast.create).toHaveBeenCalledWith({ data: expect.objectContaining({ edition: 'full' }) })
+  })
+
+  it("names the show in an uplifting episode's ready notice", async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(row({ edition: 'uplifting', stage: 'voiced' }))
+    mockPipeline.advanceEpisode.mockResolvedValueOnce({ status: 'done', stage: 'ready' })
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ edition: 'uplifting', stage: 'ready', title: 'W41: Good news', durationSec: 300 }))
+    await runWeeklyEpisode({ trigger: 'cron', now: FRIDAY_EARLY_SLOT, edition: 'uplifting' })
+    const { episodeNoticeTitle } = await import('./podcastEdition.js')
+    expect(mockNotify.notify.mock.calls[0][0].title).toBe(episodeNoticeTitle('uplifting', 'ready'))
   })
 })
 
@@ -325,6 +398,12 @@ describe('startAdminRun', () => {
     mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ kind: 'standalone', weekKey: null, stage: 'ready' }))
     await startAdminRun('pod-1', { rewindTo: 'selected' })
     expect(mockPipeline.claimEpisode).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses an Actually Uplifting episode while the show is closed, before claiming', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(row({ edition: 'uplifting', mode: 'interactive' }))
+    await expect(startAdminRun('pod-1', { mode: 'automated' })).rejects.toThrow(/Actually Uplifting is switched off/)
+    expect(mockPipeline.claimEpisode).not.toHaveBeenCalled()
   })
 
   it('releases the lease when the rewind is refused', async () => {

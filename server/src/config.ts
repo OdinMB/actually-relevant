@@ -369,7 +369,8 @@ export const config = {
     },
   },
   // Weekly two-speaker podcast (.context/podcast.md). Constants changed in code, no environment
-  // overrides; on/off is the generate_podcast / publish_podcast job rows in the admin Jobs page.
+  // overrides (one exception: `uplifting.enabled`, the second show's switch); on/off is the
+  // generate_podcast / publish_podcast job rows in the admin Jobs page.
   podcast: {
     // Derived, never set: dev always runs a dry run, production never does.
     dryRun: process.env.NODE_ENV !== 'production',
@@ -459,6 +460,26 @@ export const config = {
     // From this UTC hour on Friday (the last generation slot), an interactive episode still
     // waiting for its person gets the one reminder.
     reminderFromHourUtc: 18,
+    // The second show, Actually Uplifting (services/podcastEdition.ts, .context/podcast.md). Built and
+    // closed: it opens only when `enabled` is on, the owner has confirmed its show description
+    // (PODCAST_UPLIFTING_COPY_CONFIRMED in lib/aiLabelCopy.ts) and `artworkUrl` is set.
+    uplifting: {
+      // The one switch, and the podcast config's one environment value: the owner flips it on the
+      // API service in Render, and back, with no deploy. "true" opens; unset or "false" keeps closed.
+      enabled: parseOneOf(process.env.PODCAST_UPLIFTING_ENABLED, 'false', ['true', 'false'] as const, 'PODCAST_UPLIFTING_ENABLED') === 'true',
+      showTitle: 'Actually Uplifting',
+      pagePath: '/podcast/uplifting',
+      // Render rewrite of /podcast-uplifting.xml to /api/podcast/uplifting/feed.xml (.context/seo.md).
+      feedPath: '/podcast-uplifting.xml',
+      // podcast:guid, fixed for good: UUIDv5 (Podcasting 2.0 namespace ead4c236-…) of
+      // "actuallyrelevant.news/podcast-uplifting.xml". Never change it, even if the feed moves.
+      feedGuid: 'd9c75d86-b104-5e90-9439-fec127edf1c0',
+      // 3000x3000 JPEG of the edition's wordmark, made by the owner (Nexa licence) and uploaded to
+      // Bunny under a new name; empty keeps the show closed (Apple requires artwork).
+      artworkUrl: '',
+      // Directory listings, added as each one lists the show.
+      listenLinks: [] as { name: string; url: string }[],
+    },
   },
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY || '',

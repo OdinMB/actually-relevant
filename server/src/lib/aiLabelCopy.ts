@@ -150,6 +150,23 @@ export const PODCAST_SHOW_DESCRIPTION =
   "A weekly five-minute briefing on the news that matters most to humanity. Written and voiced by AI, based on Actually Relevant's AI analysis of the week's news."
 
 /**
+ * The second show's standing description (Actually Uplifting: feed channel, iTunes summary, the
+ * public JSON). DRAFT from the edition spec (2026-11-06), not yet approved: the show stays closed
+ * until `PODCAST_UPLIFTING_COPY_CONFIRMED` is true. The link is plain text; podcast apps linkify it.
+ */
+export const PODCAST_UPLIFTING_SHOW_DESCRIPTION =
+  "The uplifting selection from Actually Relevant: a weekly five-minute briefing on the week's good news that matters to humanity. Written and voiced by AI, based on Actually Relevant's AI analysis of the week's news. In a week with too few uplifting stories there is no episode. For the full picture, listen to Actually Relevant: https://actuallyrelevant.news/podcast"
+
+/**
+ * Whether the owner has confirmed `PODCAST_UPLIFTING_SHOW_DESCRIPTION` in his own words. While false,
+ * the Actually Uplifting show stays closed whatever PODCAST_UPLIFTING_ENABLED says
+ * (`upliftingShowProblem` in services/podcastEdition.ts): no public page or feed, no live voicing, no
+ * publishing. Set to true only on the owner's own confirmation, with a line here naming him and the
+ * date; the guard stays so that an unconfirmed wording change can set the flag back to false.
+ */
+export const PODCAST_UPLIFTING_COPY_CONFIRMED: boolean = false
+
+/**
  * Prefix of the podcast transcript page's link-preview description (`description`, `og:description`,
  * `twitter:description`; `services/pagePreviews.ts`), in front of the AI episode summary. The 160 and
  * 200 character cuts apply to the whole string. The page's Helmet uses the same prefix

@@ -105,6 +105,9 @@ services:
         sync: false
       - key: BUNNY_STORAGE_PASSWORD
         sync: false
+      # The Actually Uplifting podcast show (switch; closed unless "true")
+      - key: PODCAST_UPLIFTING_ENABLED
+        sync: false
       # Content extraction
       - key: DIFFBOT_TOKEN
         sync: false
@@ -177,6 +180,10 @@ services:
       - type: rewrite
         source: /podcast.xml
         destination: https://api.actuallyrelevant.news/api/podcast/feed.xml
+      # Actually Uplifting's feed: a 404 from the API while that show is closed
+      - type: rewrite
+        source: /podcast-uplifting.xml
+        destination: https://api.actuallyrelevant.news/api/podcast/uplifting/feed.xml
       # Story pages: the backend returns this build's index.html with the story's title,
       # description and og:/twitter: tags injected, so shared links preview as the story.
       # On any failure it returns the shell unchanged (.context/seo.md, "Story link previews").

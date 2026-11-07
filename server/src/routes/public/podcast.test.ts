@@ -3,11 +3,17 @@ import express from 'express'
 import request from 'supertest'
 
 const mockPublish = vi.hoisted(() => ({ getPublishedEpisodes: vi.fn(), getPublishedEpisode: vi.fn() }))
+// Actually Uplifting is closed unless a test opens it; the main show is always open.
+const uplifting = vi.hoisted(() => ({ open: false }))
 // A limiter that refuses everything: whatever passes it was never rate-limited.
 vi.mock('../../middleware/rateLimit.js', () => ({
   apiLimiter: (_req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) => res.status(429).json({ error: 'limited' }),
 }))
 vi.mock('../../services/podcastPublish.js', () => mockPublish)
+vi.mock('../../services/podcastEdition.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../services/podcastEdition.js')>()),
+  isEditionOpen: (edition: string) => edition === 'full' || uplifting.open,
+}))
 
 const { default: publicRouter } = await import('./index.js')
 const { default: podcastRouter } = await import('./podcast.js')
@@ -23,19 +29,31 @@ const EPISODE = {
   summary: 'Two stories.',
   stories: [{ ref: 1, id: 's1', title: 'Air', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air', issue: 'Planet' }],
   kind: 'weekly' as const,
+  edition: 'full' as const,
   humanEdited: false,
   audioUrl: 'https://audio.actuallyrelevant.news/episodes/2026-W42-1a2b3c4d.mp3',
   audioBytes: 123456,
   durationSec: 360,
   transcriptUrl: null,
+  chaptersUrl: null,
   publishedAt: new Date('2026-10-12T07:30:00Z'),
 }
+const UPLIFTING_EPISODE = { ...EPISODE, id: 'podcast-u1', title: 'W42: Good news', edition: 'uplifting' as const }
 
 beforeEach(() => {
   vi.clearAllMocks()
   invalidateFeedCache()
-  mockPublish.getPublishedEpisodes.mockResolvedValue([EPISODE])
+  uplifting.open = false
+  mockPublish.getPublishedEpisodes.mockImplementation(async (edition: string) => (edition === 'uplifting' ? [UPLIFTING_EPISODE] : [EPISODE]))
 })
+
+async function routerWithoutLimiter() {
+  vi.resetModules()
+  vi.doMock('../../middleware/rateLimit.js', () => ({ apiLimiter: (_req: unknown, _res: unknown, next: () => void) => next() }))
+  vi.doMock('../../services/podcastPublish.js', () => mockPublish)
+  const { default: router } = await import('./podcast.js')
+  return express().use('/api/podcast', router)
+}
 
 describe('GET /api/podcast/feed.xml', () => {
   it("serves RSS with the story feed's caching headers", async () => {
@@ -67,6 +85,31 @@ describe('GET /api/podcast/feed.xml', () => {
     await request(podcastOnly).get('/api/podcast/feed.xml')
     expect(mockPublish.getPublishedEpisodes).toHaveBeenCalledOnce()
   })
+
+  it("lists the main show's episodes only", async () => {
+    const res = await request(podcastOnly).get('/api/podcast/feed.xml')
+    expect(mockPublish.getPublishedEpisodes).toHaveBeenCalledWith('full')
+    expect(res.text).not.toContain('podcast-u1')
+  })
+})
+
+describe('GET /api/podcast/uplifting/feed.xml', () => {
+  it('answers 404 while Actually Uplifting is closed, reading no episode', async () => {
+    const res = await request(podcastOnly).get('/api/podcast/uplifting/feed.xml')
+    expect(res.status).toBe(404)
+    expect(mockPublish.getPublishedEpisodes).not.toHaveBeenCalled()
+  })
+
+  it("serves the show's own feed once open, before the shared rate limiter", async () => {
+    uplifting.open = true
+    const res = await request(viaPublicApi).get('/api/podcast/uplifting/feed.xml')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/rss+xml; charset=utf-8')
+    expect(res.text).toContain('<title>Actually Uplifting</title>')
+    expect(res.text).toContain('<guid isPermaLink="false">podcast-u1</guid>')
+    expect(res.text).not.toContain('<guid isPermaLink="false">podcast-1</guid>')
+    expect(mockPublish.getPublishedEpisodes).toHaveBeenCalledWith('uplifting')
+  })
 })
 
 describe('GET /api/podcast', () => {
@@ -75,22 +118,49 @@ describe('GET /api/podcast', () => {
   })
 
   it('returns the show and its published episodes with their AI line and machine-readable marker', async () => {
-    vi.resetModules()
-    vi.doMock('../../middleware/rateLimit.js', () => ({ apiLimiter: (_req: unknown, _res: unknown, next: () => void) => next() }))
-    vi.doMock('../../services/podcastPublish.js', () => mockPublish)
-    const { default: router } = await import('./podcast.js')
-    const res = await request(express().use('/api/podcast', router)).get('/api/podcast')
+    const res = await request(await routerWithoutLimiter()).get('/api/podcast')
     expect(res.status).toBe(200)
     expect(res.body.show.feedUrl).toMatch(/\/podcast\.xml$/)
     expect(res.body.episodes).toHaveLength(1)
     expect(res.body.episodes[0]).toMatchObject({
       id: 'podcast-1',
+      edition: 'full',
       aiLine: PODCAST_EPISODE_AI_LINE,
       audioUrl: EPISODE.audioUrl,
       publishedAt: '2026-10-12T07:30:00.000Z',
       aiGenerated: { fields: ['title', 'summary', 'audioUrl', 'transcriptUrl'] },
     })
     expect(res.body.episodes[0].stories[0]).toEqual({ title: 'Air', publisher: 'Nation', sourceUrl: 'https://news.example/1', slug: 'air' })
+  })
+
+  it("lists only the main show's episodes without a parameter, and says whether Actually Uplifting is public", async () => {
+    const app = await routerWithoutLimiter()
+    const closed = await request(app).get('/api/podcast')
+    expect(mockPublish.getPublishedEpisodes).toHaveBeenCalledWith('full')
+    expect(closed.body.upliftingShowOpen).toBe(false)
+    uplifting.open = true
+    expect((await request(app).get('/api/podcast')).body.upliftingShowOpen).toBe(true)
+  })
+
+  it('answers 404 for Actually Uplifting while it is closed', async () => {
+    const res = await request(await routerWithoutLimiter()).get('/api/podcast?edition=uplifting')
+    expect(res.status).toBe(404)
+    expect(mockPublish.getPublishedEpisodes).not.toHaveBeenCalled()
+  })
+
+  it("returns Actually Uplifting's show and episodes once it is open", async () => {
+    uplifting.open = true
+    const res = await request(await routerWithoutLimiter()).get('/api/podcast?edition=uplifting')
+    expect(res.status).toBe(200)
+    expect(res.body.show).toMatchObject({ title: 'Actually Uplifting' })
+    expect(res.body.show.feedUrl).toMatch(/\/podcast-uplifting\.xml$/)
+    expect(res.body.episodes.map((e: { id: string; edition: string }) => [e.id, e.edition])).toEqual([['podcast-u1', 'uplifting']])
+    expect(res.body.upliftingShowOpen).toBe(true)
+  })
+
+  it('answers 400 for an unknown show', async () => {
+    const res = await request(await routerWithoutLimiter()).get('/api/podcast?edition=sports')
+    expect(res.status).toBe(400)
   })
 })
 
@@ -103,14 +173,6 @@ describe('GET /api/podcast/episodes/:id', () => {
       { kind: 'story', storyRef: 1, turns: [{ speaker: 'HOST_B', text: '[thoughtful] Air data.' }] },
       { kind: 'outro', storyRef: null, turns: [{ speaker: 'HOST_B', text: 'Bye.' }] },
     ],
-  }
-
-  async function routerWithoutLimiter() {
-    vi.resetModules()
-    vi.doMock('../../middleware/rateLimit.js', () => ({ apiLimiter: (_req: unknown, _res: unknown, next: () => void) => next() }))
-    vi.doMock('../../services/podcastPublish.js', () => mockPublish)
-    const { default: router } = await import('./podcast.js')
-    return express().use('/api/podcast', router)
   }
 
   it('keeps the shared rate limiter on the episode route', async () => {
@@ -135,6 +197,7 @@ describe('GET /api/podcast/episodes/:id', () => {
       'audioBytes',
       'audioUrl',
       'durationSec',
+      'edition',
       'id',
       'publishedAt',
       'stories',

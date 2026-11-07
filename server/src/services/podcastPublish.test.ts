@@ -9,6 +9,11 @@ const mockFeed = vi.hoisted(() => ({ invalidateFeedCache: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./podcastFeed.js', () => mockFeed)
+// The real gate (Actually Uplifting closed), which a test can open.
+vi.mock('./podcastEdition.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('./podcastEdition.js')>()
+  return { ...actual, editionClosedReason: vi.fn(actual.editionClosedReason), openEditions: vi.fn(actual.openEditions) }
+})
 
 const {
   publishEpisode,
@@ -16,9 +21,13 @@ const {
   getPublishedEpisodes,
   getPublishedEpisode,
   getFirstPublishedEpisodeWithStory,
+  listPublishedEpisodeDates,
+  findPublishedEpisodeHead,
   pickAutoPublishCandidate,
   publishBlockedReason,
+  publishRefusal,
 } = await import('./podcastPublish.js')
+const edition = await import('./podcastEdition.js')
 const { PodcastRefusedError, wasPublished, standaloneCopyRefusal } = await import('./podcastGuards.js')
 
 const NOW = new Date('2026-10-12T07:00:00Z') // Monday of 2026-W42
@@ -161,12 +170,40 @@ describe('unpublishEpisode', () => {
   })
 })
 
+describe("what 'published' means for the public: open shows only", () => {
+  /** Every public read of published episodes, with the where clause it sends. */
+  const publicReads: [string, () => Promise<unknown>, () => { where: unknown }][] = [
+    ['the feed and /podcast list', () => getPublishedEpisodes('full'), () => mockPrisma.podcast.findMany.mock.calls.at(-1)![0]],
+    ['a transcript page', () => getPublishedEpisode('podcast-1'), () => mockPrisma.podcast.findFirst.mock.calls.at(-1)![0]],
+    ["a story's appearances card", () => getFirstPublishedEpisodeWithStory('story-1'), () => mockPrisma.podcast.findFirst.mock.calls.at(-1)![0]],
+    ["a transcript page's link preview", () => findPublishedEpisodeHead('podcast-1'), () => mockPrisma.podcast.findFirst.mock.calls.at(-1)![0]],
+    ['the sitemap', () => listPublishedEpisodeDates(), () => mockPrisma.podcast.findMany.mock.calls.at(-1)![0]],
+  ]
+
+  beforeEach(() => {
+    mockPrisma.podcast.findMany.mockResolvedValue([])
+    mockPrisma.podcast.findFirst.mockResolvedValue(null)
+  })
+
+  it.each(publicReads)('%s leaves out Actually Uplifting episodes while the show is closed', async (_label, read, query) => {
+    await read()
+    expect(query().where).toMatchObject({ edition: { in: ['full'] } })
+  })
+
+  it.each(publicReads)('%s includes them once it is open', async (_label, read, query) => {
+    vi.mocked(edition.openEditions).mockReturnValueOnce(['full', 'uplifting'])
+    await read()
+    expect(query().where).toMatchObject({ edition: { in: ['full', 'uplifting'] } })
+  })
+})
+
 describe('getPublishedEpisodes', () => {
-  it('lists only published, ready, live episodes with audio, newest first', async () => {
+  it("lists only one show's published, ready, live episodes with audio, newest first", async () => {
     mockPrisma.podcast.findMany.mockResolvedValueOnce([])
-    await getPublishedEpisodes()
+    await getPublishedEpisodes('full')
     const query = mockPrisma.podcast.findMany.mock.calls[0][0]
     expect(query.where).toMatchObject({ status: 'published', stage: 'ready', dryRun: false, publishedAt: { not: null }, audioUrl: { not: null } })
+    expect(query.where.AND).toContainEqual({ edition: 'full' })
     expect(query.orderBy).toEqual({ publishedAt: 'desc' })
   })
 
@@ -178,6 +215,7 @@ describe('getPublishedEpisodes', () => {
         id: 'podcast-1',
         title: 'W42: T',
         kind: 'weekly',
+        edition: 'full',
         episodeSummary: 'S.',
         episodeStories: stories,
         humanEdited: true,
@@ -189,11 +227,12 @@ describe('getPublishedEpisodes', () => {
         publishedAt,
       },
     ])
-    expect(await getPublishedEpisodes()).toEqual([
+    expect(await getPublishedEpisodes('full')).toEqual([
       {
         id: 'podcast-1',
         title: 'W42: T',
         kind: 'weekly',
+        edition: 'full',
         summary: 'S.',
         stories,
         humanEdited: true,
@@ -287,9 +326,10 @@ describe('pickAutoPublishCandidate', () => {
   it('asks for the newest never-published, never-unpublished, live ready episode of this or last ISO week, ready since the evening before', async () => {
     const saturdayMorning = new Date('2026-10-17T05:00:00Z') // 07:00 in Berlin, 2026-W42
     mockPrisma.podcast.findFirst.mockResolvedValueOnce(null)
-    expect(await pickAutoPublishCandidate(saturdayMorning)).toBeNull()
+    expect(await pickAutoPublishCandidate(saturdayMorning, 'full')).toBeNull()
     const query = mockPrisma.podcast.findFirst.mock.calls[0][0]
     expect(query.where).toMatchObject({
+      edition: 'full',
       kind: 'weekly',
       stage: 'ready',
       dryRun: false,
@@ -300,5 +340,27 @@ describe('pickAutoPublishCandidate', () => {
       weekKey: { in: ['2026-W42', '2026-W41'] },
     })
     expect(query.orderBy).toEqual({ readyAt: 'desc' })
+  })
+
+  it("takes only the Actually Uplifting show's episode for its job", async () => {
+    mockPrisma.podcast.findFirst.mockResolvedValueOnce(null)
+    await pickAutoPublishCandidate(new Date('2026-10-17T05:00:00Z'), 'uplifting')
+    expect(mockPrisma.podcast.findFirst.mock.calls[0][0].where).toMatchObject({ edition: 'uplifting', kind: 'weekly' })
+  })
+})
+
+describe('publishRefusal for a closed show', () => {
+  it('refuses a ready Actually Uplifting episode while the show is closed, and lists it once open', () => {
+    const episode = ready({ edition: 'uplifting', weekKey: '2026-W42' })
+    expect(publishRefusal(episode)).toMatch(/Actually Uplifting is switched off/)
+    vi.mocked(edition.editionClosedReason).mockReturnValueOnce(null)
+    expect(publishRefusal(episode)).toBeNull()
+    expect(publishRefusal(ready())).toBeNull()
+  })
+
+  it('publishes nothing of a closed show', async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(ready({ edition: 'uplifting', weekKey: '2026-W42' }))
+    await expect(publishEpisode('podcast-1', NOW)).rejects.toBeInstanceOf(PodcastRefusedError)
+    expect(writes()).toHaveLength(0)
   })
 })

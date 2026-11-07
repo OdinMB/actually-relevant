@@ -301,6 +301,15 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
           </LazyPage>
         }
       />
+      {/* Actually Uplifting's show: not prerendered, "Page not found" while the show is switched off */}
+      <Route
+        path="/podcast/uplifting"
+        element={
+          <LazyPage>
+            <PodcastPage edition="uplifting" />
+          </LazyPage>
+        }
+      />
       <Route
         path="/podcast/:id/transcript"
         element={

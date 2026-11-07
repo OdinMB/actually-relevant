@@ -174,6 +174,15 @@ describe('Admin Podcasts API', () => {
       mockWeekSlot.getWeekSlot.mockRejectedValue(new Error('db down'))
       expect((await request(app).get('/api/admin/podcasts/weekly').set(authHeader())).status).toBe(500)
     })
+
+    it("reads the main show's slot without a parameter, and Actually Uplifting's with ?edition=uplifting", async () => {
+      mockWeekSlot.getWeekSlot.mockResolvedValue(slot)
+      await request(app).get('/api/admin/podcasts/weekly').set(authHeader())
+      expect(mockWeekSlot.getWeekSlot).toHaveBeenLastCalledWith(expect.any(Date), 'full')
+      await request(app).get('/api/admin/podcasts/weekly?edition=uplifting').set(authHeader())
+      expect(mockWeekSlot.getWeekSlot).toHaveBeenLastCalledWith(expect.any(Date), 'uplifting')
+      expect((await request(app).get('/api/admin/podcasts/weekly?edition=sports').set(authHeader())).status).toBe(400)
+    })
   })
 
   describe('POST /api/admin/podcasts/weekly', () => {
@@ -190,8 +199,22 @@ describe('Admin Podcasts API', () => {
       const res = await request(app).post('/api/admin/podcasts/weekly').set(authHeader())
       expect(res.status).toBe(200)
       expect(res.body.weekKey).toBe('2026-W41')
+      expect(mockWeekly.findOrCreateWeekEpisode).toHaveBeenCalledWith(expect.any(Date), 'full')
       expect(mockWeekly.startAdminRun).not.toHaveBeenCalled()
       expect(mockWeekly.resumeEpisode).not.toHaveBeenCalled()
+    })
+
+    it('creates no Actually Uplifting row while the show is closed: 409 naming what it waits for', async () => {
+      const res = await request(app).post('/api/admin/podcasts/weekly').set(authHeader()).send({ edition: 'uplifting' })
+      expect(res.status).toBe(409)
+      expect(res.body.error).toMatch(/Actually Uplifting is switched off: PODCAST_UPLIFTING_ENABLED/)
+      expect(mockWeekly.findOrCreateWeekEpisode).not.toHaveBeenCalled()
+    })
+
+    it('refuses an unknown show or an unknown field', async () => {
+      expect((await request(app).post('/api/admin/podcasts/weekly').set(authHeader()).send({ edition: 'sports' })).status).toBe(400)
+      expect((await request(app).post('/api/admin/podcasts/weekly').set(authHeader()).send({ kind: 'standalone' })).status).toBe(400)
+      expect(mockWeekly.findOrCreateWeekEpisode).not.toHaveBeenCalled()
     })
   })
 

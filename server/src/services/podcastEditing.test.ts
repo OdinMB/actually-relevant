@@ -45,6 +45,7 @@ function episode(stage: string, overrides: Record<string, unknown> = {}) {
     stage,
     status: 'draft',
     kind: 'weekly',
+    edition: 'full',
     humanEdited: false,
     createdAt: new Date('2026-10-05T06:00:00Z'),
     storiesSelectedAt: SELECTED_AT,
@@ -282,14 +283,14 @@ describe('updateEpisodeMeta', () => {
 describe('getEpisodeStoryPool', () => {
   it('lists the pool the model chose from (anchored on the selection), marking its stories, with the limits', async () => {
     const pool = await getEpisodeStoryPool(episode('selected'))
-    expect(mockPool.loadEpisodePool).toHaveBeenCalledWith(SELECTED_AT)
+    expect(mockPool.loadEpisodePool).toHaveBeenCalledWith(SELECTED_AT, 'full')
     expect(pool.stories.filter(s => s.selected).map(s => s.id)).toEqual(['s1', 's2', 's3', 's4'])
     expect(pool.minStories).toBeLessThanOrEqual(pool.maxStories)
   })
 
-  it('checks a replacement against the same pool', async () => {
-    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('selected'))
+  it("checks a replacement against the same pool, the episode's show's", async () => {
+    mockPrisma.podcast.findUniqueOrThrow.mockResolvedValueOnce(episode('selected', { edition: 'uplifting' }))
     await replaceEpisodeStories('pod-1', ['s1', 's2', 's3', 's5'])
-    expect(mockPool.loadEpisodePool).toHaveBeenCalledWith(SELECTED_AT)
+    expect(mockPool.loadEpisodePool).toHaveBeenCalledWith(SELECTED_AT, 'uplifting')
   })
 })

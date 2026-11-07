@@ -60,6 +60,8 @@ export type JobName =
   | 'publish_uplifting_newsletter'
   | 'generate_podcast'
   | 'publish_podcast'
+  | 'generate_uplifting_podcast'
+  | 'publish_uplifting_podcast'
   | 'poll_plunk_activity'
   | 'send_queued_confirmations'
   | 'cleanup_old_stories'
@@ -331,6 +333,9 @@ export type PodcastMode = 'automated' | 'interactive'
 /** `weekly`: this ISO week's episode, the only kind the jobs touch; `standalone`: built by hand from any published stories, published by hand only. */
 export type PodcastKind = 'weekly' | 'standalone'
 
+/** The show: `full` is Actually Relevant; `uplifting` is Actually Uplifting, made from the week's uplifting stories (weekly only). */
+export type PodcastEdition = 'full' | 'uplifting'
+
 /** A story as the episode froze it when the script was written. */
 export interface PodcastEpisodeStory {
   ref: number
@@ -352,6 +357,7 @@ export interface PodcastListItem {
   /** Null for legacy and standalone rows. */
   weekKey: string | null
   kind: PodcastKind
+  edition: PodcastEdition
   storyIds: string[]
   attempts: number
   blockedAt: string | null
@@ -379,14 +385,18 @@ export type PodcastFridayRun = 'create' | 'finished' | 'waiting-for-person' | 'b
  * This ISO week's weekly-episode slot (UTC), read without creating a row. `fridayWindow`: `ahead`
  * before Friday, `open` while Friday's automatic slots still run, `passed` once the last slot has
  * gone by (Friday 19:00 UTC) through Sunday.
- * `automaticRunEnabled`: whether the generate_podcast job is switched on.
+ * `automaticRunEnabled`: whether the show's generate job (generate_podcast, generate_uplifting_podcast) is switched on.
+ * `showProblem`: why the show's week episode cannot be opened or run now (Actually Uplifting while it
+ * is switched off, naming what it waits for); null when it can.
  */
 export interface PodcastWeekSlot {
+  edition: PodcastEdition
   weekKey: string
   episode: PodcastListItem | null
   fridayRun: PodcastFridayRun
   fridayWindow: 'ahead' | 'open' | 'passed'
   automaticRunEnabled: boolean
+  showProblem: string | null
 }
 
 export type PodcastSpeaker = 'HOST_A' | 'HOST_B'
@@ -509,6 +519,8 @@ export interface ActivePodcastRun {
 export interface PublicPodcastEpisode {
   id: string
   title: string
+  /** The show the episode belongs to; its transcript page links that show. */
+  edition: PodcastEdition
   /** Disclosure line: written and voiced by AI, and whether a person edited it. */
   aiLine: string
   summary: string
@@ -534,7 +546,7 @@ export interface PublicPodcastEpisodeDetail extends PublicPodcastEpisode {
   transcript: PublicPodcastTranscriptSegment[]
 }
 
-/** `GET /api/podcast`: the show and its published episodes, newest first. */
+/** `GET /api/podcast[?edition=uplifting]`: the show and its published episodes, newest first. */
 export interface PublicPodcastResponse {
   show: {
     title: string
@@ -544,6 +556,8 @@ export interface PublicPodcastResponse {
     listenLinks: { name: string; url: string }[]
   }
   episodes: PublicPodcastEpisode[]
+  /** Whether Actually Uplifting is public; the pages link it only then. */
+  upliftingShowOpen: boolean
 }
 
 /**

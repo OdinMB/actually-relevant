@@ -1,10 +1,12 @@
 /**
- * The podcast RSS document and its cache. Hand-built RSS 2.0 with the itunes, podcast (Podcasting
- * 2.0), atom and content namespaces (ADR-0010): the channel and every item carry
+ * Each show's podcast RSS document and its cache. Hand-built RSS 2.0 with the itunes, podcast
+ * (Podcasting 2.0), atom and content namespaces (ADR-0010): the channel and every item carry
  * `<podcast:txt purpose="ai-content">true</podcast:txt>`, every item description starts with the
  * episode's AI line, the GUID is the row id and the enclosure the CDN URL with its exact byte length.
+ * The channel's identity (title, links, `podcast:guid`, artwork) is the show's own.
  */
 import { createHash } from 'node:crypto'
+import type { PodcastEdition } from '@prisma/client'
 import { config } from '../config.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { registerPublicCache } from '../lib/publicCaches.js'
@@ -60,10 +62,10 @@ function itemXml(episode: PublishedEpisode, artworkUrl: string): string {
 }
 
 /**
- * The feed for the given published episodes (newest first). Pure; an empty list is a valid feed.
+ * The show's feed for the given published episodes (newest first). Pure; an empty list is a valid feed.
  */
-export function buildPodcastFeedXml(episodes: PublishedEpisode[], now: Date = new Date()): string {
-  const show = podcastShowInfo()
+export function buildPodcastFeedXml(episodes: PublishedEpisode[], edition: PodcastEdition, now: Date = new Date()): string {
+  const show = podcastShowInfo(edition)
   const channel = [
     el('title', show.title),
     el('link', show.link),
@@ -81,7 +83,7 @@ export function buildPodcastFeedXml(episodes: PublishedEpisode[], now: Date = ne
     el('itunes:explicit', 'false'),
     el('itunes:type', 'episodic'),
     `<podcast:locked owner="${escapeXml(show.ownerEmail)}">no</podcast:locked>`,
-    el('podcast:guid', config.podcast.feedGuid),
+    el('podcast:guid', show.feedGuid),
     `<podcast:funding url="${escapeXml(config.links.kofi)}">${escapeXml(config.donation.cta)}</podcast:funding>`,
     `<podcast:updateFrequency rrule="${escapeXml(config.podcast.updateFrequency.rrule)}">${escapeXml(config.podcast.updateFrequency.label)}</podcast:updateFrequency>`,
     AI_CONTENT_TXT,
@@ -92,39 +94,45 @@ export function buildPodcastFeedXml(episodes: PublishedEpisode[], now: Date = ne
 
 const feedCache = new TTLCache<Representation>(config.feed.cacheMaxAge * 1000)
 registerPublicCache('podcast-feed', feedCache)
-const cacheSlot = 'podcast-feed'
+/** One cache slot per show. */
+const CACHE_SLOTS: Record<PodcastEdition, string> = { full: 'podcast-feed', uplifting: 'podcast-feed-uplifting' }
 
 /** Fixed date for comparing content: the document without its build date. */
 const CONTENT_ONLY = new Date(0)
 
 /**
- * When this process last saw the feed's content change. A rebuild that finds the same content keeps
- * the date, so lastBuildDate, Last-Modified and the ETag stay put and apps get their 304. After a
- * restart the date is the first build's: never earlier than a real change (a config change, an
+ * When this process last saw each show's feed content change. A rebuild that finds the same content
+ * keeps the date, so lastBuildDate, Last-Modified and the ETag stay put and apps get their 304. After
+ * a restart the date is the first build's: never earlier than a real change (a config change, an
  * unpublish), at the cost of one full refetch per deploy.
  */
-let contentState: { hash: string; changedAt: Date } | null = null
+const contentStates: Partial<Record<PodcastEdition, { hash: string; changedAt: Date }>> = {}
 
-function contentChangedAt(episodes: PublishedEpisode[], now: Date): Date {
-  const hash = createHash('sha256').update(buildPodcastFeedXml(episodes, CONTENT_ONLY)).digest('hex')
-  if (contentState?.hash !== hash) contentState = { hash, changedAt: new Date(Math.floor(now.getTime() / 1000) * 1000) }
-  return contentState.changedAt
+function contentChangedAt(episodes: PublishedEpisode[], edition: PodcastEdition, now: Date): Date {
+  const hash = createHash('sha256')
+    .update(buildPodcastFeedXml(episodes, edition, CONTENT_ONLY))
+    .digest('hex')
+  const state = contentStates[edition]
+  if (state?.hash === hash) return state.changedAt
+  const changedAt = new Date(Math.floor(now.getTime() / 1000) * 1000)
+  contentStates[edition] = { hash, changedAt }
+  return changedAt
 }
 
 /**
- * The feed, ready to serve (body, gzip and deflate, ETag, Last-Modified), cached in-process for
- * `config.feed.cacheMaxAge`; `load` reads the published episodes. lastBuildDate is the time the
+ * The show's feed, ready to serve (body, gzip and deflate, ETag, Last-Modified), cached in-process for
+ * `config.feed.cacheMaxAge`; `load` reads its published episodes. lastBuildDate is the time the
  * content last changed, so it matches Last-Modified.
  */
-export function getFeed(load: () => Promise<PublishedEpisode[]>, now: Date = new Date()): Promise<Representation> {
-  return cached(feedCache, cacheSlot, async () => {
+export function getFeed(edition: PodcastEdition, load: () => Promise<PublishedEpisode[]>, now: Date = new Date()): Promise<Representation> {
+  return cached(feedCache, CACHE_SLOTS[edition], async () => {
     const episodes = await load()
-    const changedAt = contentChangedAt(episodes, now)
-    return prepareRepresentation(buildPodcastFeedXml(episodes, changedAt), changedAt)
+    const changedAt = contentChangedAt(episodes, edition, now)
+    return prepareRepresentation(buildPodcastFeedXml(episodes, edition, changedAt), changedAt)
   })
 }
 
-/** Drop the cached feed, so the next request rebuilds it (after a publish, an unpublish or an AI-line change). */
+/** Drop both shows' cached feeds, so the next request rebuilds them (after a publish, an unpublish or an AI-line change). */
 export function invalidateFeedCache(): void {
-  feedCache.invalidate(cacheSlot)
+  for (const slot of Object.values(CACHE_SLOTS)) feedCache.invalidate(slot)
 }

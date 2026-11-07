@@ -55,26 +55,37 @@ export function podcastLengthTargets(budget: PodcastCharBudget, storyCount: numb
   }
 }
 
-export type PodcastPromptKind = 'weekly' | 'standalone'
+/** Which wording the prompt takes: the episode's kind, or `uplifting` for the Actually Uplifting show's weekly episode. */
+export type PodcastPromptKind = 'weekly' | 'standalone' | 'uplifting'
 
 /**
  * The wording that differs by episode kind. A standalone episode's stories are picked by a person and
  * may come from different weeks or months, so nothing in its prompt says "this week" and the model
- * is told never to date a story relative to now.
+ * is told never to date a story relative to now. The Actually Uplifting show's weekly episode covers
+ * the week's uplifting stories; its analysis is still Actually Relevant's own.
  */
-const KIND_WORDING: Record<PodcastPromptKind, { role: string; goal: string; introCovers: string; extraConstraints: string }> = {
+const KIND_WORDING: Record<PodcastPromptKind, { show: string; role: string; goal: string; introCovers: string; extraConstraints: string }> = {
   weekly: {
+    show: 'Actually Relevant',
     role: 'a weekly five-minute news briefing',
     goal: "this week's episode",
     introCovers: 'says the episode covers the stories rated most relevant for humanity this week',
     extraConstraints: '',
   },
   standalone: {
+    show: 'Actually Relevant',
     role: 'a five-minute news briefing',
     goal: 'this episode',
     introCovers: 'says the episode covers a selection of stories rated relevant for humanity',
     extraConstraints:
       "\n- The stories may come from different weeks or months. Never date a story relative to now ('this week', 'last month', 'yesterday'); when the material uses such words, paraphrase them or give the date only if the material states it.",
+  },
+  uplifting: {
+    show: 'Actually Uplifting',
+    role: "a weekly five-minute briefing on the week's uplifting news",
+    goal: "this week's episode",
+    introCovers: "says the episode covers this week's uplifting stories",
+    extraConstraints: '',
   },
 }
 
@@ -101,7 +112,7 @@ export function buildPodcastPrompt(stories: StoryForPodcast[], budget: PodcastCh
     .join('\n')
 
   let prompt = `<ROLE>
-You are the writer of "Actually Relevant", ${wording.role} spoken by two AI hosts.
+You are the writer of "${wording.show}", ${wording.role} spoken by two AI hosts.
 </ROLE>
 
 <GOAL>
@@ -109,7 +120,7 @@ Write the conversation for ${wording.goal}. It covers each of the ${stories.leng
 </GOAL>
 
 <HOSTS>
-HOST_A frames each story: what happened, where, and who reported it. HOST_B explains why it matters for humanity and names the caveats and limits. The hosts respond to each other with a question, a reaction or a follow-up, so the conversation never becomes two alternating monologues. Both are AI hosts without personal names, never modelled on a real person, and they never call each other by name. The intro is a single HOST_A turn: it welcomes listeners to Actually Relevant, ${wording.introCovers}, and leads straight into the first story. HOST_B does not speak in the intro; HOST_B's first turn opens the first story segment, picking up the story the intro led into. The outro is one or two short turns.
+HOST_A frames each story: what happened, where, and who reported it. HOST_B explains why it matters for humanity and names the caveats and limits. The hosts respond to each other with a question, a reaction or a follow-up, so the conversation never becomes two alternating monologues. Both are AI hosts without personal names, never modelled on a real person, and they never call each other by name. The intro is a single HOST_A turn: it welcomes listeners to ${wording.show}, ${wording.introCovers}, and leads straight into the first story. HOST_B does not speak in the intro; HOST_B's first turn opens the first story segment, picking up the story the intro led into. The outro is one or two short turns.
 </HOSTS>
 
 <CONSTRAINTS>

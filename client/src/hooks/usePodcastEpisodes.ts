@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
+import type { PodcastEdition } from '@shared/types'
 import { publicApi } from '../lib/api'
 import { isPrerendering } from '../lib/renderComplete'
 
 /**
- * The public podcast: show information (feed URL, listen links) and published episodes. Never asked
- * for while prerendering, so the static /podcast page keeps no dated episode list.
+ * A public podcast show (the main one by default): show information (feed URL, listen links) and
+ * published episodes. Never asked for while prerendering, so the static /podcast page keeps no dated
+ * episode list. Actually Uplifting answers 404 while it is switched off.
  */
-export function usePodcastEpisodes() {
+export function usePodcastEpisodes(edition: PodcastEdition = 'full', options: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: ['public-podcast'],
-    queryFn: () => publicApi.podcast(),
+    queryKey: ['public-podcast', edition],
+    queryFn: () => publicApi.podcast(edition),
     staleTime: 5 * 60 * 1000,
-    enabled: !isPrerendering(),
+    enabled: !isPrerendering() && (options.enabled ?? true),
   })
 }
 

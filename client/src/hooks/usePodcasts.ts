@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../lib/admin-api'
-import type { Podcast, PodcastMode, PodcastScriptEdit, PodcastStoryFilters } from '@shared/types'
+import type { Podcast, PodcastEdition, PodcastMode, PodcastScriptEdit, PodcastStoryFilters } from '@shared/types'
 import { usePodcastProgress } from './usePodcastProgress'
 
 /** How often an episode is re-read while a process works on it. */
@@ -14,13 +14,13 @@ export function usePodcasts(params?: { status?: string }) {
 }
 
 /**
- * This week's slot. The key sits under `['podcasts']`, so every invalidation of the list (create,
- * start, delete, a run ending in the progress provider) refreshes it too.
+ * The show's slot this week. The key sits under `['podcasts']`, so every invalidation of the list
+ * (create, start, delete, a run ending in the progress provider) refreshes it too.
  */
-export function usePodcastWeekSlot() {
+export function usePodcastWeekSlot(edition: PodcastEdition) {
   return useQuery({
-    queryKey: ['podcasts', 'week-slot'],
-    queryFn: () => adminApi.podcasts.weekSlot(),
+    queryKey: ['podcasts', 'week-slot', edition],
+    queryFn: () => adminApi.podcasts.weekSlot(edition),
   })
 }
 
@@ -83,7 +83,7 @@ export function useDeletePodcast() {
 export function useStartWeeklyPodcast() {
   const store = useStoreEpisode()
   return useMutation({
-    mutationFn: () => adminApi.podcasts.startWeekly(),
+    mutationFn: (edition: PodcastEdition) => adminApi.podcasts.startWeekly(edition),
     onSuccess: store,
   })
 }

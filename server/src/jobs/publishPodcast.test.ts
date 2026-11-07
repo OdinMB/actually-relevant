@@ -9,9 +9,15 @@ vi.mock('../services/podcastGuards.js', async importOriginal => ({ ...(await imp
 vi.mock('../lib/notify.js', () => mockNotify)
 const mockMissed = vi.hoisted(() => ({ alertMissedWeek: vi.fn() }))
 vi.mock('../services/podcastMissedWeek.js', () => mockMissed)
+// The real gate (Actually Uplifting is closed by default), wrapped so a test can open the show.
+vi.mock('../services/podcastEdition.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../services/podcastEdition.js')>()
+  return { ...actual, editionClosedReason: vi.fn(actual.editionClosedReason) }
+})
 
-const { runPublishPodcast, isPublishDay, PUBLISH_PODCAST_JOB } = await import('./publishPodcast.js')
+const { runPublishPodcast, runPublishUpliftingPodcast, isPublishDay, PUBLISH_PODCAST_JOB } = await import('./publishPodcast.js')
 const { PodcastBlockedError, PodcastStoppedError, PodcastRefusedError } = await import('../services/podcastGuards.js')
+const { editionClosedReason, PUBLISH_UPLIFTING_PODCAST_JOB } = await import('../services/podcastEdition.js')
 
 // Saturday 07:00 in Berlin (CEST, UTC+2): the cron slot.
 const SATURDAY = new Date('2026-10-17T05:00:00Z')
@@ -51,16 +57,18 @@ describe('runPublishPodcast', () => {
 
   it('publishes the candidate and sends a notice', async () => {
     await runPublishPodcast(SATURDAY)
-    expect(mockPublish.pickAutoPublishCandidate).toHaveBeenCalledWith(SATURDAY)
+    expect(mockPublish.pickAutoPublishCandidate).toHaveBeenCalledWith(SATURDAY, 'full')
     expect(mockPublish.publishEpisode).toHaveBeenCalledWith('pod-1', SATURDAY)
     expect(mockNotify.notify).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'podcast',
         severity: 'info',
+        title: 'Podcast episode published',
         link: '/admin/podcasts/pod-1',
         message: expect.stringContaining('W42: Water'),
       }),
     )
+    expect(mockNotify.notify.mock.calls[0][0].message).toContain('on /podcast.')
   })
 
   it('does nothing on a day other than Saturday in Berlin, so a boot catch-up never publishes on another day', async () => {
@@ -83,7 +91,7 @@ describe('runPublishPodcast', () => {
     await runPublishPodcast(SATURDAY)
     expect(mockPublish.publishEpisode).not.toHaveBeenCalled()
     expect(mockNotify.notify).not.toHaveBeenCalled()
-    expect(mockMissed.alertMissedWeek).toHaveBeenCalledWith(SATURDAY)
+    expect(mockMissed.alertMissedWeek).toHaveBeenCalledWith(SATURDAY, 'full')
   })
 
   it('sends no missed-week alert while the job is disabled, nor on another day', async () => {
@@ -119,5 +127,39 @@ describe('runPublishPodcast', () => {
     mockPublish.publishEpisode.mockRejectedValueOnce(new PodcastRefusedError('the edited AI line awaits confirmation'))
     await expect(runPublishPodcast(SATURDAY)).rejects.toBeInstanceOf(PodcastRefusedError)
     expect(mockNotify.notify).not.toHaveBeenCalled()
+  })
+})
+
+describe('runPublishUpliftingPodcast', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPublish.pickAutoPublishCandidate.mockResolvedValue({ ...CANDIDATE, id: 'pod-u', title: 'W42: Good news' })
+    mockGuards.assertJobEnabled.mockResolvedValue(undefined)
+  })
+
+  it('is a quiet no-op while Actually Uplifting is closed: it neither publishes nor alerts nor fails', async () => {
+    await expect(runPublishUpliftingPodcast(SATURDAY)).resolves.toBeUndefined()
+    expect(mockGuards.assertPodcastRunnable).not.toHaveBeenCalled()
+    expect(mockPublish.pickAutoPublishCandidate).not.toHaveBeenCalled()
+    expect(mockMissed.alertMissedWeek).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
+  })
+
+  it("once open, picks the show's own candidate, re-reads its own job row and names the show", async () => {
+    vi.mocked(editionClosedReason).mockReturnValueOnce(null)
+    await runPublishUpliftingPodcast(SATURDAY)
+    expect(mockPublish.pickAutoPublishCandidate).toHaveBeenCalledWith(SATURDAY, 'uplifting')
+    expect(mockGuards.assertJobEnabled).toHaveBeenCalledWith(PUBLISH_UPLIFTING_PODCAST_JOB)
+    expect(mockPublish.publishEpisode).toHaveBeenCalledWith('pod-u', SATURDAY)
+    const [{ title, message }] = mockNotify.notify.mock.calls[0]
+    expect(title).toBe('Actually Uplifting episode published')
+    expect(message).toContain('on /podcast/uplifting.')
+  })
+
+  it("sends the show's missed-week alert when it has no candidate", async () => {
+    vi.mocked(editionClosedReason).mockReturnValueOnce(null)
+    mockPublish.pickAutoPublishCandidate.mockResolvedValueOnce(null)
+    await runPublishUpliftingPodcast(SATURDAY)
+    expect(mockMissed.alertMissedWeek).toHaveBeenCalledWith(SATURDAY, 'uplifting')
   })
 })

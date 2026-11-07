@@ -1,9 +1,9 @@
 import { Link, useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import type { PublicPodcastEpisodeDetail, PublicPodcastTranscriptSegment } from '@shared/types'
+import type { PodcastEdition, PublicPodcastEpisodeDetail, PublicPodcastTranscriptSegment } from '@shared/types'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { buildBreadcrumbSchema, buildPodcastEpisodeSchema } from '../lib/structured-data'
-import { formatEpisodeDate, formatEpisodeDuration, podcastTranscriptPath, PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
+import { formatEpisodeDate, formatEpisodeDuration, podcastSubscribePath, podcastTranscriptPath, PODCAST_SHOWS } from '../lib/podcast'
 import StructuredData from '../components/StructuredData'
 import AiBadge from '../components/ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
@@ -17,9 +17,10 @@ import { sectionOgImage } from '../lib/api'
 
 const BACK_LINK_CLASS = 'text-brand-700 hover:text-brand-800 font-normal focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1'
 
-function BackToPodcast() {
+/** All episodes of the episode's show (the main show's page when the episode is not known). */
+function BackToPodcast({ edition = 'full' }: { edition?: PodcastEdition }) {
   return (
-    <Link to="/podcast" className={BACK_LINK_CLASS}>
+    <Link to={PODCAST_SHOWS[edition].path} className={BACK_LINK_CLASS}>
       &larr; All episodes
     </Link>
   )
@@ -48,7 +49,11 @@ function EpisodeHead({ episode }: { episode: PublicPodcastEpisodeDetail }) {
       </Helmet>
       <StructuredData data={buildPodcastEpisodeSchema(episode)} />
       <StructuredData
-        data={buildBreadcrumbSchema([{ name: 'Home', url: SEO.siteUrl }, { name: 'Podcast', url: `${SEO.siteUrl}/podcast` }, { name: episode.title }])}
+        data={buildBreadcrumbSchema([
+          { name: 'Home', url: SEO.siteUrl },
+          { name: episode.edition === 'uplifting' ? PODCAST_SHOWS.uplifting.name : 'Podcast', url: `${SEO.siteUrl}${PODCAST_SHOWS[episode.edition].path}` },
+          { name: episode.title },
+        ])}
       />
     </>
   )
@@ -96,8 +101,8 @@ function NotFound() {
  * A published episode's transcript page (`/podcast/:id/transcript`): the "AI" badge and title,
  * date and duration, the /podcast AI subtitle, the player, then the conversation as spoken (opener
  * and sign-off included) with a heading per story, then the story list, links to all episodes and
- * /podcast's Subscribe section, and the newsletter offer. Loads client-side like a story page; not
- * prerendered, listed in the server sitemap.
+ * the Subscribe section of the episode's own show (/podcast or /podcast/uplifting), and the
+ * newsletter offer. Loads client-side like a story page; not prerendered, listed in the server sitemap.
  */
 export default function PodcastTranscriptPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -156,8 +161,8 @@ export default function PodcastTranscriptPage() {
         )}
 
         <div className="border-t border-neutral-200 pt-6 mt-10 flex flex-wrap justify-between gap-4">
-          <BackToPodcast />
-          <Link to={PODCAST_SUBSCRIBE_PATH} className={BACK_LINK_CLASS}>
+          <BackToPodcast edition={episode.edition} />
+          <Link to={podcastSubscribePath(episode.edition)} className={BACK_LINK_CLASS}>
             Subscribe to the podcast
           </Link>
         </div>

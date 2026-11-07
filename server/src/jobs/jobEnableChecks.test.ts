@@ -5,11 +5,17 @@ const mockGuards = vi.hoisted(() => ({ assertPodcastRunnable: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: {} }))
 vi.mock('../services/podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('../services/podcastGuards.js')>()), ...mockGuards }))
+// The real gate (Actually Uplifting is closed by default), wrapped so a test can open the show.
+vi.mock('../services/podcastEdition.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../services/podcastEdition.js')>()
+  return { ...actual, upliftingShowProblem: vi.fn(actual.upliftingShowProblem) }
+})
 
 const { jobEnableRefusal } = await import('./jobEnableChecks.js')
 const { PodcastBlockedError } = await import('../services/podcastGuards.js')
 const { GENERATE_PODCAST_JOB } = await import('../services/podcastAudioStages.js')
 const { PUBLISH_PODCAST_JOB } = await import('./publishPodcast.js')
+const { GENERATE_UPLIFTING_PODCAST_JOB, PUBLISH_UPLIFTING_PODCAST_JOB, upliftingShowProblem } = await import('../services/podcastEdition.js')
 
 describe('jobEnableRefusal', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -61,6 +67,35 @@ describe('jobEnableRefusal', () => {
       expect(jobEnableRefusal('publish_uplifting_newsletter')).toMatch(/PLUNK_SECRET_KEY/)
       config.plunk.secretKey = 'sk_test'
       expect(jobEnableRefusal('publish_uplifting_newsletter')).toBeNull()
+    })
+  })
+
+  describe("the Actually Uplifting podcast's jobs", () => {
+    const UPLIFTING_PODCAST_JOBS = [GENERATE_UPLIFTING_PODCAST_JOB, PUBLISH_UPLIFTING_PODCAST_JOB]
+    // Back to the real gate (mockReset restores the implementation vi.fn was given)
+    afterEach(() => vi.mocked(upliftingShowProblem).mockReset())
+
+    it('refuses both while the show is closed, naming what it waits for, even with the podcast configured', () => {
+      mockGuards.assertPodcastRunnable.mockImplementation(() => {})
+      for (const job of UPLIFTING_PODCAST_JOBS) {
+        expect(jobEnableRefusal(job)).toMatch(/Actually Uplifting is switched off: PODCAST_UPLIFTING_ENABLED/)
+      }
+    })
+
+    it('once the show is open, refuses both only while the podcast configuration is incomplete', () => {
+      vi.mocked(upliftingShowProblem).mockReturnValue(null)
+      mockGuards.assertPodcastRunnable.mockImplementation(() => {
+        throw new PodcastBlockedError('podcast configuration missing: BUNNY_STORAGE_ZONE')
+      })
+      for (const job of UPLIFTING_PODCAST_JOBS) expect(jobEnableRefusal(job)).toMatch(/BUNNY_STORAGE_ZONE/)
+      mockGuards.assertPodcastRunnable.mockImplementation(() => {})
+      for (const job of UPLIFTING_PODCAST_JOBS) expect(jobEnableRefusal(job)).toBeNull()
+    })
+
+    it("leaves the main show's podcast jobs to the configuration alone", () => {
+      mockGuards.assertPodcastRunnable.mockImplementation(() => {})
+      expect(jobEnableRefusal(GENERATE_PODCAST_JOB)).toBeNull()
+      expect(jobEnableRefusal(PUBLISH_PODCAST_JOB)).toBeNull()
     })
   })
 

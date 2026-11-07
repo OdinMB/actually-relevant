@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { Podcast, PodcastMode } from '@shared/types'
 import { Badge } from '../ui/Badge'
+import { BRAND } from '../../config'
 import { formatDate } from '../../lib/constants'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { AssignedStoriesList } from './AssignedStoriesList'
@@ -29,6 +30,7 @@ function StatusBadges({ podcast }: { podcast: Podcast }) {
       {podcast.mode && <Badge variant="gray">{MODE_LABEL[podcast.mode]}</Badge>}
       {podcast.stage !== 'legacy' && <PodcastHumanEditedChip podcast={podcast} />}
       {podcast.kind === 'standalone' && <Badge variant="blue">Standalone</Badge>}
+      {podcast.edition === 'uplifting' && <Badge variant="pink">{BRAND.upliftingEdition}</Badge>}
       {podcast.weekKey && <span className="text-sm text-neutral-600">{podcast.weekKey}</span>}
       {podcast.publishedAt && <span className="text-sm text-neutral-600">first published {formatDate(podcast.publishedAt)}</span>}
     </div>

@@ -51,6 +51,8 @@ const JOB_FAILURE_HOMES: Record<string, { source: NoticeSource; link: string }> 
   publish_uplifting_newsletter: { source: 'newsletter', link: '/admin/newsletters' },
   generate_podcast: { source: 'podcast', link: '/admin/podcasts' },
   publish_podcast: { source: 'podcast', link: '/admin/podcasts' },
+  generate_uplifting_podcast: { source: 'podcast', link: '/admin/podcasts' },
+  publish_uplifting_podcast: { source: 'podcast', link: '/admin/podcasts' },
   send_queued_confirmations: { source: 'subscriptions', link: '/admin/subscribers' },
 }
 

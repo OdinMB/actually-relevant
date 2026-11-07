@@ -1,20 +1,25 @@
 /**
- * The podcast's configuration check outside a run. At boot: when either podcast job row is
- * enabled, a missing setting is logged and recorded as an admin notice at once, rather than at
- * the next Friday slot; a disabled podcast with no credentials stays silent, and the check never
- * throws. On enabling a
- * podcast job from the admin Jobs page, `jobEnableChecks.ts` asks `podcastConfigProblem` and
- * refuses the change while a setting is missing.
+ * The podcast's configuration check outside a run. At boot: when any of the four podcast job rows
+ * (both shows' generate and publish jobs) is enabled, a missing setting is logged and recorded as
+ * an admin notice at once, rather than at the next Friday slot; a disabled podcast with no
+ * credentials stays silent, and the check never throws. On enabling a podcast job from the admin
+ * Jobs page, `jobEnableChecks.ts` asks `podcastConfigProblem` and refuses the change while a
+ * setting is missing.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { assertPodcastRunnable, PodcastBlockedError } from '../services/podcastGuards.js'
-import { GENERATE_PODCAST_JOB } from '../services/podcastAudioStages.js'
-import { PUBLISH_PODCAST_JOB } from './publishPodcast.js'
+import { PODCAST_EDITIONS, podcastEditionInfo } from '../services/podcastEdition.js'
 
 const log = createLogger('podcast-boot-check')
+
+/** Both shows' generate and publish jobs. */
+const PODCAST_JOBS = PODCAST_EDITIONS.flatMap(edition => {
+  const { generateJob, publishJob } = podcastEditionInfo(edition)
+  return [generateJob, publishJob]
+})
 
 /**
  * The settings the automatic run would miss ("podcast configuration missing: …"), or null when it
@@ -33,7 +38,7 @@ export function podcastConfigProblem(): string | null {
 export async function checkPodcastConfigAtBoot(): Promise<void> {
   try {
     const enabled = await prisma.jobRun.findMany({
-      where: { jobName: { in: [GENERATE_PODCAST_JOB, PUBLISH_PODCAST_JOB] }, enabled: true },
+      where: { jobName: { in: PODCAST_JOBS }, enabled: true },
       select: { jobName: true },
     })
     if (enabled.length === 0) return

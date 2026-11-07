@@ -2,15 +2,17 @@
  * Moving episodes in and out of the feed (ADR-0013): publish, unpublish, the published episodes the
  * public surfaces read (feed, public JSON, an episode's transcript page, a story's page, sitemap), and
  * the automatic publish job's candidate. `status = published`
- * means listed; only this module changes it. Publishing needs a `ready`, non-dry-run episode; the
- * first publication date is kept for good (the episode is never regenerated or deleted after it);
- * unpublishing always works, deletes nothing on the CDN and is never undone by the automatic job.
+ * means listed; only this module changes it. Publishing needs a `ready`, non-dry-run episode of an
+ * open show; the first publication date is kept for good (the episode is never regenerated or
+ * deleted after it); unpublishing always works, deletes nothing on the CDN and is never undone by the
+ * automatic job. A public surface sees a published episode only while its show is open.
  */
-import { ContentStatus, PodcastStage, type Podcast, type Prisma } from '@prisma/client'
+import { ContentStatus, PodcastStage, type Podcast, type PodcastEdition, type Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { PodcastRefusedError, editedAiLineRefusal, standaloneCopyRefusal } from './podcastGuards.js'
+import { editionClosedReason, openEditions } from './podcastEdition.js'
 import { withEpisodeLease } from './podcastPipeline.js'
 import { invalidateFeedCache } from './podcastFeed.js'
 import { episodeSnapshots } from './podcastScript.js'
@@ -22,7 +24,7 @@ const log = createLogger('podcast-publish')
 const HOUR_MS = 60 * 60 * 1000
 const WEEK_MS = 7 * 24 * HOUR_MS
 
-type PublishFields = 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes' | 'humanEdited' | 'kind'
+type PublishFields = 'stage' | 'dryRun' | 'audioUrl' | 'audioBytes' | 'humanEdited' | 'kind' | 'edition'
 
 /**
  * The episode page's step (its tab) where an unfinished episode's work stands, for reasons a person
@@ -46,7 +48,7 @@ export function publishRefusal(episode: Pick<Podcast, PublishFields>): string | 
   if (episode.stage !== PodcastStage.ready) return unfinishedReason(episode.stage)
   if (episode.dryRun) return 'a dry-run episode (silent stub voice) cannot be published'
   if (!episode.audioUrl || episode.audioBytes == null) return 'the episode has no uploaded audio'
-  return standaloneCopyRefusal(episode.kind) ?? editedAiLineRefusal(episode.humanEdited)
+  return editionClosedReason(episode.edition) ?? standaloneCopyRefusal(episode.kind) ?? editedAiLineRefusal(episode.humanEdited)
 }
 
 /**
@@ -94,20 +96,27 @@ export async function unpublishEpisode(id: string, now: Date = new Date()): Prom
   return true
 }
 
-/** What "published" means for every public surface: the feed, /podcast, an episode's transcript page, a story's page, the sitemap. */
-const PUBLISHED_WHERE = {
-  status: ContentStatus.published,
-  stage: PodcastStage.ready,
-  dryRun: false,
-  publishedAt: { not: null },
-  audioUrl: { not: null },
-  audioBytes: { not: null },
-} satisfies Prisma.PodcastWhereInput
+/**
+ * What "published" means for every public surface: the feed, /podcast, an episode's transcript page, a
+ * story's page, the sitemap. Read per request, so closing a show takes its episodes off them at once.
+ */
+export function publishedWhere(): Prisma.PodcastWhereInput {
+  return {
+    status: ContentStatus.published,
+    stage: PodcastStage.ready,
+    dryRun: false,
+    publishedAt: { not: null },
+    audioUrl: { not: null },
+    audioBytes: { not: null },
+    edition: { in: openEditions() },
+  }
+}
 
 const PUBLISHED_SELECT = {
   id: true,
   title: true,
   kind: true,
+  edition: true,
   episodeSummary: true,
   episodeStories: true,
   humanEdited: true,
@@ -128,6 +137,7 @@ function toPublishedEpisode(row: PublishedRow): PublishedEpisode | null {
     id: row.id,
     title: row.title,
     kind: row.kind,
+    edition: row.edition,
     summary: row.episodeSummary,
     stories: Array.isArray(row.episodeStories) ? episodeSnapshots(row) : [],
     humanEdited: row.humanEdited,
@@ -140,15 +150,20 @@ function toPublishedEpisode(row: PublishedRow): PublishedEpisode | null {
   }
 }
 
-/** Published, ready, non-dry-run episodes with their audio, newest first: the feed's and the public page's list. */
-export async function getPublishedEpisodes(): Promise<PublishedEpisode[]> {
-  const rows = await prisma.podcast.findMany({ where: PUBLISHED_WHERE, select: PUBLISHED_SELECT, orderBy: { publishedAt: 'desc' } })
+/** The show's published, ready, non-dry-run episodes with their audio, newest first: its feed's and its public page's list. */
+export async function getPublishedEpisodes(edition: PodcastEdition): Promise<PublishedEpisode[]> {
+  const rows = await prisma.podcast.findMany({
+    // Narrowed beside the open-shows filter, never in its place
+    where: { ...publishedWhere(), AND: [{ edition }] },
+    select: PUBLISHED_SELECT,
+    orderBy: { publishedAt: 'desc' },
+  })
   return rows.flatMap(row => toPublishedEpisode(row) ?? [])
 }
 
 /** One published episode with its stored dialogue (for its transcript page); null when it is not published. */
 export async function getPublishedEpisode(id: string): Promise<(PublishedEpisode & { dialogue: unknown }) | null> {
-  const row = await prisma.podcast.findFirst({ where: { id, ...PUBLISHED_WHERE }, select: { ...PUBLISHED_SELECT, dialogue: true } })
+  const row = await prisma.podcast.findFirst({ where: { id, ...publishedWhere() }, select: { ...PUBLISHED_SELECT, dialogue: true } })
   const episode = row && toPublishedEpisode(row)
   return episode && { ...episode, dialogue: row.dialogue }
 }
@@ -156,7 +171,7 @@ export async function getPublishedEpisode(id: string): Promise<(PublishedEpisode
 /** The first published episode with the story among its stories (for the story's page); null when none has it. */
 export async function getFirstPublishedEpisodeWithStory(storyId: string): Promise<PublishedEpisode | null> {
   const row = await prisma.podcast.findFirst({
-    where: { ...PUBLISHED_WHERE, storyIds: { has: storyId } },
+    where: { ...publishedWhere(), storyIds: { has: storyId } },
     select: PUBLISHED_SELECT,
     orderBy: { publishedAt: 'asc' },
   })
@@ -165,13 +180,13 @@ export async function getFirstPublishedEpisodeWithStory(storyId: string): Promis
 
 /** A published episode's title, summary and first publication, or null: what its transcript page's link preview reads. */
 export async function findPublishedEpisodeHead(id: string): Promise<{ id: string; title: string; summary: string; publishedAt: Date } | null> {
-  const row = await prisma.podcast.findFirst({ where: { id, ...PUBLISHED_WHERE }, select: { id: true, title: true, episodeSummary: true, publishedAt: true } })
+  const row = await prisma.podcast.findFirst({ where: { id, ...publishedWhere() }, select: { id: true, title: true, episodeSummary: true, publishedAt: true } })
   return row?.publishedAt ? { id: row.id, title: row.title, summary: row.episodeSummary, publishedAt: row.publishedAt } : null
 }
 
 /** The ids and first publication dates of the published episodes, newest first (the sitemap's transcript pages). */
 export async function listPublishedEpisodeDates(): Promise<{ id: string; publishedAt: Date }[]> {
-  const rows = await prisma.podcast.findMany({ where: PUBLISHED_WHERE, select: { id: true, publishedAt: true }, orderBy: { publishedAt: 'desc' } })
+  const rows = await prisma.podcast.findMany({ where: publishedWhere(), select: { id: true, publishedAt: true }, orderBy: { publishedAt: 'desc' } })
   return rows.flatMap(r => (r.publishedAt ? [{ id: r.id, publishedAt: r.publishedAt }] : []))
 }
 
@@ -179,12 +194,13 @@ export async function listPublishedEpisodeDates(): Promise<{ id: string; publish
  * The episode the automatic publish job may publish: the newest `ready`, non-dry-run episode of the
  * current or the previous ISO week that was never published or taken down, and that has been ready
  * for at least `autoPublishMinAgeHours`, so the owner had the evening before to listen. Only a weekly
- * episode: a standalone one is published by hand only. Null when there is none.
+ * episode of the given show: a standalone one is published by hand only. Null when there is none.
  */
-export async function pickAutoPublishCandidate(now: Date = new Date()): Promise<Pick<Podcast, 'id' | 'title' | 'weekKey'> | null> {
+export async function pickAutoPublishCandidate(now: Date, edition: PodcastEdition): Promise<Pick<Podcast, 'id' | 'title' | 'weekKey'> | null> {
   const readyBefore = new Date(now.getTime() - config.podcast.autoPublishMinAgeHours * HOUR_MS)
   return prisma.podcast.findFirst({
     where: {
+      edition,
       kind: 'weekly',
       stage: PodcastStage.ready,
       dryRun: false,

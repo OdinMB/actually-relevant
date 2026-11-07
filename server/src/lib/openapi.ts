@@ -189,12 +189,18 @@ const homepageResponseSchema = z
   })
   .openapi({ ref: 'HomepageResponse' })
 
+const podcastEditionDocSchema = z.enum(['full', 'uplifting']).openapi({
+  description: 'The show the episode belongs to: `full` (Actually Relevant, every kind of story) or `uplifting` (Actually Uplifting, uplifting stories only).',
+  example: 'full',
+})
+
 const podcastEpisodeSchema = z
   .object({
     id: z.string().uuid().openapi({ description: 'Stable episode id; also the feed item GUID.' }),
     title: z
       .string()
       .openapi({ description: aiField('Episode title written by an AI model (a person may have edited it).'), example: 'W41: Clean air and new vaccines' }),
+    edition: podcastEditionDocSchema,
     aiLine: z.string().openapi({
       description:
         'Disclosure line that starts the episode description in the feed. Says the episode was written and voiced by AI, and whether a person edited it.',
@@ -279,6 +285,7 @@ const podcastResponseSchema = z
       listenLinks: z.array(z.object({ name: z.string(), url: z.string().url() })),
     }),
     episodes: z.array(podcastEpisodeSchema),
+    upliftingShowOpen: z.boolean().openapi({ description: 'Whether the Actually Uplifting show is public (`?edition=uplifting` answers 404 until it is).' }),
   })
   .openapi({ ref: 'PodcastResponse' })
 
@@ -630,11 +637,32 @@ export function getOpenAPIDocument(): ReturnType<typeof createDocument> {
             'Returns the weekly podcast: show information (with the RSS feed URL for podcast apps) and every published episode, newest first. ' +
             'Episodes are written and voiced by AI. The RSS feed itself is served at https://actuallyrelevant.news/podcast.xml.',
           tags: ['Podcast'],
+          parameters: [
+            {
+              name: 'edition',
+              in: 'query',
+              required: false,
+              schema: { type: 'string', enum: ['full', 'uplifting'] },
+              description: 'The show: `full` (Actually Relevant, the default) or `uplifting` (Actually Uplifting)',
+            },
+          ],
           responses: {
             '200': {
               description: 'Show information and published episodes',
               content: {
                 'application/json': { schema: podcastResponseSchema },
+              },
+            },
+            '400': {
+              description: 'Unknown edition',
+              content: {
+                'application/json': { schema: errorResponseSchema },
+              },
+            },
+            '404': {
+              description: 'The show is not public',
+              content: {
+                'application/json': { schema: errorResponseSchema },
               },
             },
           },

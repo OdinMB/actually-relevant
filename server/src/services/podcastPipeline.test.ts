@@ -49,6 +49,7 @@ function episode(stage: string, overrides: Record<string, unknown> = {}) {
     mode: null,
     weekKey: null,
     kind: 'weekly',
+    edition: 'full',
     humanEdited: false,
     createdAt: CREATED_AT,
     episodeStories: [1, 2, 3, 4].map(snapshot),
@@ -264,12 +265,23 @@ describe('advanceEpisode', () => {
     expect(scriptWrite.data.title).toBe('Episode title')
     expect(scriptWrite.data.script.startsWith(`HOST A: ${PODCAST_EPISODE_COPY.standalone.opener}`)).toBe(true)
   })
+
+  it("selects and writes an Actually Uplifting episode from its show's pool and wording", async () => {
+    stagesRead(['created', 'selected'], { mode: 'interactive', edition: 'uplifting', weekKey: '2026-W41' })
+    await advanceEpisode('pod-1', { trigger: 'admin' })
+    stagesRead(['selected', 'scripted'], { mode: 'interactive', edition: 'uplifting', weekKey: '2026-W41' })
+    await advanceEpisode('pod-1', { trigger: 'admin' })
+    expect(mockScript.selectEpisodeStories.mock.calls[0][1]).toBe('uplifting')
+    expect(mockScript.writeEpisodeScript.mock.calls[0].slice(1)).toEqual(['weekly', 'uplifting'])
+    expect(mockScript.buildShowNotes.mock.calls[0].slice(3)).toEqual(['weekly', 'uplifting'])
+  })
 })
 
 describe('defaultEpisodeTitle', () => {
-  it('names a weekly row by its week and a standalone row by its UTC creation date', () => {
-    expect(defaultEpisodeTitle({ weekKey: '2026-W41', createdAt: CREATED_AT })).toBe('Actually Relevant, 2026-W41')
-    expect(defaultEpisodeTitle({ weekKey: null, createdAt: new Date('2026-10-07T23:30:00Z') })).toBe('Actually Relevant, 2026-10-07')
+  it('names a weekly row by its show and week and a standalone row by its UTC creation date', () => {
+    expect(defaultEpisodeTitle({ weekKey: '2026-W41', createdAt: CREATED_AT, edition: 'full' })).toBe('Actually Relevant, 2026-W41')
+    expect(defaultEpisodeTitle({ weekKey: '2026-W41', createdAt: CREATED_AT, edition: 'uplifting' })).toBe('Actually Uplifting, 2026-W41')
+    expect(defaultEpisodeTitle({ weekKey: null, createdAt: new Date('2026-10-07T23:30:00Z'), edition: 'full' })).toBe('Actually Relevant, 2026-10-07')
   })
 })
 

@@ -27,13 +27,26 @@ describe('buildPodcastEpisodeSchema', () => {
     publishedAt: '2026-10-12T07:30:00.000Z',
     durationSec: 372,
     audioUrl: 'https://audio.example/e.mp3',
+    edition: 'full' as const,
   }
 
   it('states the duration as ISO 8601 and points at the transcript page and the show', () => {
     const schema = buildPodcastEpisodeSchema(episode)
     expect(schema.timeRequired).toBe('PT6M12S')
     expect(schema.url).toBe('https://actuallyrelevant.news/podcast/ep-1/transcript')
-    expect(schema.partOfSeries.url).toBe('https://actuallyrelevant.news/podcast')
+    expect(schema.partOfSeries).toMatchObject({
+      name: 'Actually Relevant',
+      url: 'https://actuallyrelevant.news/podcast',
+      webFeed: 'https://actuallyrelevant.news/podcast.xml',
+    })
+  })
+
+  it("names an Actually Uplifting episode's own show and feed", () => {
+    expect(buildPodcastEpisodeSchema({ ...episode, edition: 'uplifting' }).partOfSeries).toMatchObject({
+      name: 'Actually Uplifting',
+      url: 'https://actuallyrelevant.news/podcast/uplifting',
+      webFeed: 'https://actuallyrelevant.news/podcast-uplifting.xml',
+    })
   })
 
   it('leaves the duration out when it is not known', () => {

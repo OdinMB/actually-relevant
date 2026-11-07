@@ -8,8 +8,8 @@ import { runGenerateNewsletter, runGenerateUpliftingNewsletter } from './generat
 import { runPublishNewsletter, runPublishUpliftingNewsletter } from './publishNewsletter.js'
 import { runSocialAutoPost } from './socialAutoPost.js'
 import { runMastodonUpdateMetrics } from './mastodonUpdateMetrics.js'
-import { runGeneratePodcast } from './generatePodcast.js'
-import { runPublishPodcast } from './publishPodcast.js'
+import { runGeneratePodcast, runGenerateUpliftingPodcast } from './generatePodcast.js'
+import { runPublishPodcast, runPublishUpliftingPodcast } from './publishPodcast.js'
 import { runPollPlunkActivity } from './pollPlunkActivity.js'
 import { runCleanupOldStories } from './cleanupOldStories.js'
 import { runSendQueuedConfirmations } from './sendQueuedConfirmations.js'
@@ -31,6 +31,9 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   publish_uplifting_newsletter: () => runPublishUpliftingNewsletter(),
   generate_podcast: () => runGeneratePodcast(),
   publish_podcast: () => runPublishPodcast(),
+  // The Actually Uplifting podcast: the same handlers, for the other show (no-ops while it is closed)
+  generate_uplifting_podcast: () => runGenerateUpliftingPodcast(),
+  publish_uplifting_podcast: () => runPublishUpliftingPodcast(),
   poll_plunk_activity: () => runPollPlunkActivity(),
   send_queued_confirmations: runSendQueuedConfirmations,
   cleanup_old_stories: async () => {
@@ -58,6 +61,8 @@ export const JOB_PIPELINE_ORDER: readonly string[] = [
   'publish_uplifting_newsletter',
   'generate_podcast',
   'publish_podcast',
+  'generate_uplifting_podcast',
+  'publish_uplifting_podcast',
   'poll_plunk_activity',
   'send_queued_confirmations',
   'cleanup_old_stories',

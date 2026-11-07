@@ -298,6 +298,12 @@ enum PodcastKind {
   standalone
 }
 
+/// The podcast's two shows (`services/podcastEdition.ts`): `full`, "Actually Relevant", and `uplifting`, "Actually Uplifting", made from the week's uplifting stories only
+enum PodcastEdition {
+  full
+  uplifting
+}
+
 model Podcast {
   id             String        @id @default(uuid())
   title          String
@@ -305,10 +311,12 @@ model Podcast {
   script         String        @default("")
   storyIds       String[]      @map("story_ids")
   status         ContentStatus @default(draft)
-  /// ISO week in UTC (YYYY-Www) of the weekly episode; null for legacy and standalone rows
-  weekKey        String?       @unique @map("week_key")
+  /// ISO week in UTC (YYYY-Www) of the weekly episode, unique per show; null for legacy and standalone rows
+  weekKey        String?       @map("week_key")
   /// Weekly or standalone; a CHECK (podcasts_standalone_without_week_key) keeps a standalone row's week key null
   kind           PodcastKind   @default(weekly)
+  /// Which show the episode belongs to; a CHECK (podcasts_standalone_full_edition) keeps standalone episodes on the main show
+  edition        PodcastEdition @default(full)
   stage          PodcastStage  @default(created)
   /// The model's dialogue (segments of turns, storyRef = episodeStories[].ref)
   dialogue       Json?
@@ -361,6 +369,7 @@ model Podcast {
   audioChunks PodcastAudioChunk[]
   ttsUsage    PodcastTtsUsage[]
 
+  @@unique([edition, weekKey])
   @@map("podcasts")
 }
 
@@ -392,12 +401,14 @@ model PodcastTtsUsage {
   @@map("podcast_tts_usage")
 }
 
-/// One row per ISO week whose Saturday publish slot found no weekly episode to publish: the claim that makes the missed-week alert go out once
+/// One row per show and ISO week whose Saturday publish slot found no weekly episode to publish: the claim that makes the missed-week alert go out once
 model PodcastMissedWeekAlert {
-  weekKey String   @id @map("week_key")
+  edition PodcastEdition @default(full)
+  weekKey String         @map("week_key")
   reason  String
-  sentAt  DateTime @default(now()) @map("sent_at")
+  sentAt  DateTime       @default(now()) @map("sent_at")
 
+  @@id([edition, weekKey])
   @@map("podcast_missed_week_alerts")
 }
 

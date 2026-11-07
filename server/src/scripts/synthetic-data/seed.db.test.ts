@@ -140,11 +140,11 @@ describeDb('synthetic data set (PostgreSQL)', () => {
       expect(draft.selectedStoryIds).toHaveLength(3)
 
       // Two published episodes with transcripts; this week's episode waits after story selection
-      const episodes = await getPublishedEpisodes()
+      const episodes = await getPublishedEpisodes('full')
       expect(episodes.map(e => e.stories.length)).toEqual([4, 4])
       const detail = toPublicEpisodeDetail((await getPublishedEpisode(episodes[0]!.id))!)
       expect(detail.transcript.filter(segment => segment.story !== null)).toHaveLength(4)
-      expect(await prisma.podcast.findUniqueOrThrow({ where: { weekKey: isoWeek(NOW).key } })).toMatchObject({
+      expect(await prisma.podcast.findUniqueOrThrow({ where: { edition_weekKey: { edition: 'full', weekKey: isoWeek(NOW).key } } })).toMatchObject({
         status: 'draft',
         stage: 'selected',
         dryRun: true,

@@ -1,17 +1,19 @@
 /**
- * "This week's episode", the runs that advance an episode, and their retry and block policy. The
- * admin "Start this week's episode" only finds or creates the row; a person then starts it in a
- * mode, and `startAdminRun` + `resumeEpisode` run it under the lease the route claimed. The
- * generate_podcast job calls `runWeeklyEpisode({ trigger: 'cron' })`, which runs automated and
+ * "This week's episode" of each show, the runs that advance an episode, and their retry and block
+ * policy. The admin "Start this week's episode" only finds or creates the row; a person then starts
+ * it in a mode, and `startAdminRun` + `resumeEpisode` run it under the lease the route claimed. The
+ * generate jobs call `runWeeklyEpisode({ trigger: 'cron', edition })`, which runs automated and
  * leaves an interactive episode to the person reviewing it. Only automatic runs count attempts;
  * an admin action clears a block.
  */
-import { ContentStatus, PodcastStage, type Podcast, type PodcastMode } from '@prisma/client'
+import { ContentStatus, PodcastStage, type Podcast, type PodcastEdition, type PodcastMode } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { isUniqueViolation } from '../utils/errors.js'
+import { editionRunRefusal, episodeNoticeTitle } from './podcastEdition.js'
+import { recordShortWeek, shortWeekReason, shortWeekStoryCount } from './podcastShortWeek.js'
 import {
   advanceEpisode,
   claimEpisode,
@@ -32,7 +34,8 @@ export type WeeklyOutcome = 'done' | 'skipped' | 'stopped' | 'retry-later' | 'bl
 
 export interface WeeklyResult {
   outcome: WeeklyOutcome
-  podcastId: string
+  /** Null when the week has no episode: Actually Uplifting's short week, which creates none. */
+  podcastId: string | null
   reason?: string
   /** Skipped because a person runs the episode interactively: it waits for them, not for the job. */
   waitingForPerson?: true
@@ -51,19 +54,36 @@ export function isoWeekKey(date: Date): string {
   return `${day.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
-/** The week's row, created on first use; the unique week key makes a concurrent create harmless. */
-export async function findOrCreateWeekEpisode(now: Date = new Date()): Promise<Podcast> {
+/** The unique key of the show's row for `now`'s ISO week. */
+const weekEpisodeKey = (now: Date, edition: PodcastEdition) => ({ edition_weekKey: { edition, weekKey: isoWeekKey(now) } })
+
+/** The show's row for `now`'s ISO week, or null while the week has none. */
+export function findWeekEpisode(now: Date, edition: PodcastEdition): Promise<Podcast | null> {
+  return prisma.podcast.findUnique({ where: weekEpisodeKey(now, edition) })
+}
+
+/** Create the show's row for the week; the unique (show, week) key makes a concurrent create harmless. */
+async function createWeekEpisode(now: Date, edition: PodcastEdition): Promise<Podcast> {
   const weekKey = isoWeekKey(now)
-  const existing = await prisma.podcast.findUnique({ where: { weekKey } })
-  if (existing) return existing
   try {
     return await prisma.podcast.create({
-      data: { title: defaultEpisodeTitle({ weekKey, createdAt: now }), weekKey, stage: PodcastStage.created, dryRun: config.podcast.dryRun },
+      data: {
+        title: defaultEpisodeTitle({ weekKey, createdAt: now, edition }),
+        weekKey,
+        edition,
+        stage: PodcastStage.created,
+        dryRun: config.podcast.dryRun,
+      },
     })
   } catch (err) {
     if (!isUniqueViolation(err)) throw err
-    return prisma.podcast.findUniqueOrThrow({ where: { weekKey } })
+    return prisma.podcast.findUniqueOrThrow({ where: weekEpisodeKey(now, edition) })
   }
+}
+
+/** The show's row for the week, created on first use. */
+export async function findOrCreateWeekEpisode(now: Date, edition: PodcastEdition): Promise<Podcast> {
+  return (await findWeekEpisode(now, edition)) ?? createWeekEpisode(now, edition)
 }
 
 async function block(id: string, reason: string): Promise<void> {
@@ -100,7 +120,7 @@ async function announceReady(id: string, now: Date): Promise<void> {
     await notify({
       source: 'podcast',
       severity: 'info',
-      title: 'Podcast episode ready',
+      title: episodeNoticeTitle(episode.edition, 'ready'),
       message: lines.join('\n'),
       link: `/admin/podcasts/${id}`,
     })
@@ -187,10 +207,30 @@ async function runEpisode(episode: Podcast, { trigger, now, leaseHeld }: RunOpti
   }
 }
 
-/** Find or create this ISO week's episode and advance it as far as its mode lets it go. */
-export async function runWeeklyEpisode(opts: { trigger: AdvanceTrigger; now?: Date }): Promise<WeeklyResult> {
+/**
+ * Actually Uplifting's week with too few uplifting stories: no row, no attempt; the one info notice
+ * from the last Friday slot on, since stories may still be published earlier in the day.
+ */
+async function skipShortWeek(now: Date, available: number): Promise<WeeklyResult> {
+  const reason = shortWeekReason(available)
+  if (now.getUTCHours() >= config.podcast.reminderFromHourUtc) await recordShortWeek(isoWeekKey(now), available)
+  log.info({ edition: 'uplifting', weekKey: isoWeekKey(now), available }, 'podcast weekly run: too few uplifting stories, no episode')
+  return { outcome: 'skipped', podcastId: null, reason }
+}
+
+/**
+ * Find or create this ISO week's episode of the show and advance it as far as its mode lets it go.
+ * Actually Uplifting's pool is checked before its row is created, so a short week leaves no row.
+ */
+export async function runWeeklyEpisode(opts: { trigger: AdvanceTrigger; now?: Date; edition?: PodcastEdition }): Promise<WeeklyResult> {
   const now = opts.now ?? new Date()
-  return runEpisode(await findOrCreateWeekEpisode(now), { trigger: opts.trigger, now, leaseHeld: false })
+  const edition = opts.edition ?? 'full'
+  const existing = await findWeekEpisode(now, edition)
+  if (!existing) {
+    const short = await shortWeekStoryCount(now, edition)
+    if (short !== null) return skipShortWeek(now, short)
+  }
+  return runEpisode(existing ?? (await createWeekEpisode(now, edition)), { trigger: opts.trigger, now, leaseHeld: false })
 }
 
 export interface AdminRunRequest {
@@ -206,11 +246,14 @@ export interface AdminRunRequest {
  * block. The caller answers 202 and then runs `resumeEpisode` with the lease this leaves held.
  * A rewind without a given mode makes the episode interactive: a person stepped in, so the run
  * stops at the next review point instead of voicing unseen. Refusals are `PodcastRefusedError` (409).
- * No run starts a standalone episode from `created`: a person chooses its stories (ADR-0015).
+ * No run starts a standalone episode from `created`: a person chooses its stories (ADR-0015), and
+ * none starts an episode of a closed show (`editionRunRefusal`).
  */
 export async function startAdminRun(id: string, req: AdminRunRequest = {}): Promise<void> {
   const episode = await prisma.podcast.findUniqueOrThrow({ where: { id } })
   if (episode.stage === PodcastStage.legacy) throw new PodcastRefusedError('a legacy episode cannot be run')
+  const closed = editionRunRefusal(episode.edition, config.podcast.dryRun)
+  if (closed) throw new PodcastRefusedError(closed)
   if (episode.kind === 'standalone' && (req.rewindTo ?? episode.stage) === PodcastStage.created) {
     throw new PodcastRefusedError("choose the episode's stories first")
   }

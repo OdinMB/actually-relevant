@@ -42,6 +42,7 @@ const RESPONSE: PublicPodcastResponse = {
     {
       id: 'podcast-1',
       title: 'W42: Clean air',
+      edition: 'full',
       aiLine: 'AI-generated: Everything in this episode was written and voiced by AI.',
       summary: 'Two stories.',
       publishedAt: '2026-10-12T07:30:00.000Z',
@@ -56,15 +57,16 @@ const RESPONSE: PublicPodcastResponse = {
       aiGenerated: { fields: ['title', 'summary', 'audioUrl', 'transcriptUrl'], digitalSourceType: 'x' },
     },
   ],
+  upliftingShowOpen: false,
 }
 
-function renderPage(path = '/podcast') {
+function renderPage(path = '/podcast', edition: 'full' | 'uplifting' = 'full') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const result = render(
     <HelmetProvider>
       <MemoryRouter initialEntries={[path]}>
         <QueryClientProvider client={client}>
-          <PodcastPage />
+          <PodcastPage edition={edition} />
         </QueryClientProvider>
       </MemoryRouter>
     </HelmetProvider>,
@@ -363,6 +365,65 @@ describe('PodcastPage', () => {
     await screen.findByRole('heading', { name: /W42: Clean air/ })
     expect(await axe(container)).toHaveNoViolations()
     await expandStories()
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('asks for the main show, and points to Actually Uplifting only once that show is public', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: /W42: Clean air/ })
+    expect(mockApi.podcast).toHaveBeenCalledWith('full')
+    expect(screen.queryByRole('link', { name: 'Listen to Actually Uplifting' })).toBeNull()
+  })
+
+  it('points to Actually Uplifting under the subtitle once it is public', async () => {
+    mockApi.podcast.mockResolvedValue({ ...RESPONSE, upliftingShowOpen: true })
+    renderPage()
+    expect(await screen.findByRole('link', { name: 'Listen to Actually Uplifting' })).toHaveAttribute('href', '/podcast/uplifting')
+  })
+})
+
+describe('PodcastPage for Actually Uplifting', () => {
+  const UPLIFTING: PublicPodcastResponse = {
+    show: { ...RESPONSE.show, title: 'Actually Uplifting', feedUrl: 'https://actuallyrelevant.news/podcast-uplifting.xml', listenLinks: [] },
+    episodes: [{ ...RESPONSE.episodes[0]!, id: 'podcast-u1', title: 'W42: Good news', edition: 'uplifting' }],
+    upliftingShowOpen: true,
+  }
+  const renderUplifting = () => renderPage('/podcast/uplifting', 'uplifting')
+
+  it('is "Page not found", kept out of search, while the show is switched off', async () => {
+    mockApi.podcast.mockRejectedValue(new ApiError(404, 'Podcast not found'))
+    renderUplifting()
+    expect(await screen.findByText('Page not found.')).toBeInTheDocument()
+    expect(mockApi.podcast).toHaveBeenCalledWith('uplifting')
+    await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex'))
+    expect(screen.queryByRole('heading', { name: 'Actually Uplifting' })).toBeNull()
+  })
+
+  it('shows nothing of the show before the API says it is public', () => {
+    mockApi.podcast.mockReturnValue(new Promise(() => {}))
+    renderUplifting()
+    expect(screen.queryByRole('heading', { name: 'Actually Uplifting' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Subscribe' })).toBeNull()
+  })
+
+  it('shows the show with its own feed and episodes, without the main show’s Apple badge, and points back to the main show', async () => {
+    mockApi.podcast.mockResolvedValue(UPLIFTING)
+    renderUplifting()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Actually Uplifting' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /W42: Good news/ })).toBeInTheDocument()
+    expect(within(subscribeSection()).getByText('https://actuallyrelevant.news/podcast-uplifting.xml')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Apple Podcasts/ })).toBeNull()
+    expect(screen.getByRole('link', { name: 'listen to Actually Relevant' })).toHaveAttribute('href', '/podcast')
+    await waitFor(() =>
+      expect(document.head.querySelector('link[rel="alternate"]')?.getAttribute('href')).toBe('https://actuallyrelevant.news/podcast-uplifting.xml'),
+    )
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://actuallyrelevant.news/podcast/uplifting')
+  })
+
+  it('has no a11y violations', async () => {
+    mockApi.podcast.mockResolvedValue(UPLIFTING)
+    const { container } = renderUplifting()
+    await screen.findByRole('heading', { name: /W42: Good news/ })
     expect(await axe(container)).toHaveNoViolations()
   })
 })

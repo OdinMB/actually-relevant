@@ -1,7 +1,10 @@
 import { Link } from 'react-router-dom'
+import type { PodcastEdition } from '@shared/types'
 import { useSubscribe } from './SubscribeProvider'
+import { useUpliftingEdition } from '../contexts/PositivityContext'
+import { usePodcastEpisodes } from '../hooks/usePodcastEpisodes'
 import { FOCUS_RING, TEXT_LINK } from '../lib/control-classes'
-import { PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
+import { PODCAST_SHOWS, PODCAST_SUBSCRIBE_PATH } from '../lib/podcast'
 import { NewsletterIcon, PodcastIcon } from '../layouts/public/icons'
 
 /*
@@ -10,8 +13,25 @@ import { NewsletterIcon, PodcastIcon } from '../layouts/public/icons'
  * (.context/public-website.md, "Cross-links").
  */
 
-/** On /newsletter and each issue page: the podcast. */
+/**
+ * On /newsletter and each issue page: the podcast. Inside the Actually Uplifting edition (the dial at
+ * its far end) it offers the Actually Uplifting podcast instead, once that show is public; whether it
+ * is, is asked only inside the edition.
+ */
 export function PodcastCrossLink({ className = '' }: { className?: string }) {
+  const insideEdition = useUpliftingEdition()
+  const { data } = usePodcastEpisodes('full', { enabled: insideEdition })
+  if (insideEdition && data?.upliftingShowOpen) {
+    return (
+      <p className={`text-sm text-neutral-600 ${className}`}>
+        Prefer to listen?{' '}
+        <Link to={PODCAST_SHOWS.uplifting.path} className={TEXT_LINK}>
+          Try the Actually Uplifting podcast
+        </Link>
+        , a five-minute briefing on the week&apos;s uplifting news.
+      </p>
+    )
+  }
   return (
     <p className={`text-sm text-neutral-600 ${className}`}>
       Prefer to listen?{' '}
@@ -19,6 +39,30 @@ export function PodcastCrossLink({ className = '' }: { className?: string }) {
         Try the weekly podcast
       </Link>
       , a five-minute briefing on the news that matters most.
+    </p>
+  )
+}
+
+/** Under the subtitle of each show's page, once Actually Uplifting is public: the other show. */
+export function PodcastShowCrossLink({ edition, className = '' }: { edition: PodcastEdition; className?: string }) {
+  if (edition === 'uplifting') {
+    return (
+      <p className={`text-sm text-neutral-600 ${className}`}>
+        For the full picture,{' '}
+        <Link to={PODCAST_SHOWS.full.path} className={TEXT_LINK}>
+          listen to Actually Relevant
+        </Link>
+        , the week&apos;s most relevant news in five minutes.
+      </p>
+    )
+  }
+  return (
+    <p className={`text-sm text-neutral-600 ${className}`}>
+      Only the good news?{' '}
+      <Link to={PODCAST_SHOWS.uplifting.path} className={TEXT_LINK}>
+        Listen to Actually Uplifting
+      </Link>
+      , the week&apos;s uplifting stories in five minutes.
     </p>
   )
 }

@@ -298,7 +298,7 @@ describe('podcast prompts', () => {
   it('selects from the pool and scripts the chosen stories', async () => {
     mockPrisma.story.findMany.mockResolvedValue(pool)
     sent.answers = [{ raw: {}, parsed: { selectedIds: ['story-6', 'story-2', 'story-3', 'story-4', 'story-5'] } }]
-    const prompts = await promptsOf(async () => writeEpisodeScript(await selectEpisodeStories(new Date('2026-10-20T00:00:00Z')), 'weekly'))
+    const prompts = await promptsOf(async () => writeEpisodeScript(await selectEpisodeStories(new Date('2026-10-20T00:00:00Z'), 'full'), 'weekly', 'full'))
     expect(prompts).toHaveLength(2)
     expect(prompts).toMatchSnapshot()
   })
@@ -314,6 +314,6 @@ describe('podcast prompts', () => {
       slug: s.slug,
       issue: `Frozen issue ${i + 1}`,
     }))
-    expect(await promptsOf(async () => writeEpisodeScript(await loadEpisodeStories(snapshots), 'weekly'))).toMatchSnapshot()
+    expect(await promptsOf(async () => writeEpisodeScript(await loadEpisodeStories(snapshots), 'weekly', 'full'))).toMatchSnapshot()
   })
 })

@@ -94,6 +94,35 @@ describe('config numeric overrides', () => {
     const { config } = await import('./config.js')
     expect(config.auth.refreshReuseGraceMs).toBe(60_000)
     expect(config.mastodon.visibility).toBe('unlisted')
+    expect(config.podcast.uplifting.enabled).toBe(false)
+  })
+})
+
+describe('config one-of overrides', () => {
+  // Every override config.ts parses with parseOneOf, found by reading the source.
+  const source = readFileSync(new URL('./config.ts', import.meta.url), 'utf8')
+  const oneOfVars = [...source.matchAll(/parseOneOf\(\s*process\.env\.([A-Z0-9_]+)/g)].map(m => m[1])
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('finds the switches', () => {
+    expect(oneOfVars).toContain('PODCAST_UPLIFTING_ENABLED')
+  })
+
+  it.each(oneOfVars)('refuses to load with a typo in %s', async name => {
+    vi.stubEnv(name, 'ture')
+    await expect(import('./config.js')).rejects.toThrow(name)
+  })
+
+  it('opens the Actually Uplifting podcast switch only on "true"', async () => {
+    vi.stubEnv('PODCAST_UPLIFTING_ENABLED', 'true')
+    expect((await import('./config.js')).config.podcast.uplifting.enabled).toBe(true)
+    vi.resetModules()
+    vi.stubEnv('PODCAST_UPLIFTING_ENABLED', 'false')
+    expect((await import('./config.js')).config.podcast.uplifting.enabled).toBe(false)
   })
 })
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import type { PodcastFridayRun, PodcastWeekSlot } from '@shared/types'
+import type { PodcastEdition, PodcastFridayRun, PodcastWeekSlot } from '@shared/types'
 import { PodcastStageBadge } from './PodcastStageBadge'
 
 const LINK =
@@ -33,33 +33,68 @@ const OUTLOOK: Record<SlotOutlook, ReactNode> = {
   advance: "Friday's automatic run will continue and finish it.",
 }
 
+/** How the notice names the show's episode: the main show's is "this week's episode". */
+const EPISODE_NAME: Record<PodcastEdition, string> = {
+  full: 'episode',
+  uplifting: 'Actually Uplifting episode',
+}
+
+function outlookLine(slot: PodcastWeekSlot): ReactNode {
+  const outlook = slotOutlook(slot)
+  // Actually Uplifting skips a week with too few uplifting stories (fewer than 4)
+  if (outlook === 'create' && slot.edition === 'uplifting') {
+    return "Friday's automatic run will create and generate this week's episode, if the week has at least 4 uplifting stories."
+  }
+  return OUTLOOK[outlook]
+}
+
 /**
- * This week's weekly-episode slot in one or two lines: free, or the episode that claimed it, and
- * what Friday's automatic run will do. Renders nothing while the slot loads; not a live region, so
- * a refetch is not announced.
+ * This week's weekly-episode slot of one show in one or two lines: free, or the episode that claimed
+ * it, and what Friday's automatic run will do; for a show that is switched off (Actually Uplifting
+ * until it opens), what it waits for instead, and no `action`. `action` (a start or open button)
+ * follows the lines. Renders nothing while the slot loads; not a live region, so a refetch is not
+ * announced.
  */
-export function PodcastWeekSlotNotice({ slot, failed = false }: { slot?: PodcastWeekSlot; failed?: boolean }) {
+export function PodcastWeekSlotNotice({
+  slot,
+  failed = false,
+  edition = 'full',
+  action,
+}: {
+  slot?: PodcastWeekSlot
+  failed?: boolean
+  edition?: PodcastEdition
+  action?: ReactNode
+}) {
+  const name = EPISODE_NAME[edition]
   if (!slot) {
-    return failed ? <p className="mb-4 text-sm text-neutral-500">Could not check this week&apos;s episode.</p> : null
+    return failed ? <p className="mb-4 text-sm text-neutral-500">Could not check this week&apos;s {name}.</p> : null
   }
   return (
     <section
-      aria-label="This week's podcast"
+      aria-label={edition === 'full' ? "This week's podcast" : `This week's ${name}`}
       title={`ISO week ${slot.weekKey}`}
       className="mb-4 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700"
     >
-      {slot.episode ? (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span>This week&apos;s episode:</span>
-          <Link to={`/admin/podcasts/${slot.episode.id}`} className={LINK}>
-            {slot.episode.title}
-          </Link>
-          <PodcastStageBadge podcast={slot.episode} />
-        </p>
+      {slot.showProblem ? (
+        <p>{slot.showProblem}.</p>
       ) : (
-        <p>No episode for this week yet.</p>
+        <>
+          {slot.episode ? (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>This week&apos;s {name}:</span>
+              <Link to={`/admin/podcasts/${slot.episode.id}`} className={LINK}>
+                {slot.episode.title}
+              </Link>
+              <PodcastStageBadge podcast={slot.episode} />
+            </p>
+          ) : (
+            <p>{edition === 'full' ? 'No episode for this week yet.' : `No ${name} for this week yet.`}</p>
+          )}
+          <p className="mt-1 text-neutral-600">{outlookLine(slot)}</p>
+          {action && <div className="mt-2">{action}</div>}
+        </>
       )}
-      <p className="mt-1 text-neutral-600">{OUTLOOK[slotOutlook(slot)]}</p>
     </section>
   )
 }

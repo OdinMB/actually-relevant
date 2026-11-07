@@ -10,23 +10,36 @@ export interface StoryForPodcastSelect {
   emotionTag: string | null
 }
 
-export type PodcastSelectKind = 'weekly' | 'standalone'
+/** Which wording the prompt takes: the episode's kind, or `uplifting` for the Actually Uplifting show's weekly episode. */
+export type PodcastSelectKind = 'weekly' | 'standalone' | 'uplifting'
+
+/** Variety as a preference, for a pool that may not span every issue. */
+const PREFER_VARIETY = '- Prefer variety across issues when the articles span several; when they share one issue, choose complementary angles.'
 
 /**
  * The wording that differs by episode kind. A standalone episode's candidates come from a person's
- * filters, which may leave every candidate in one issue, so the per-issue rule becomes a preference.
+ * filters, which may leave every candidate in one issue, so the per-issue rule becomes a preference;
+ * so does the Actually Uplifting show's, whose pool of the week's uplifting stories is small.
  */
-const KIND_WORDING: Record<PodcastSelectKind, { role: string; goal: string; issueRule: (min: number, max: number) => string }> = {
+const KIND_WORDING: Record<PodcastSelectKind, { show: string; role: string; goal: string; issueRule: (min: number, max: number) => string }> = {
   weekly: {
+    show: 'Actually Relevant',
     role: 'a weekly five-minute spoken news briefing',
     goal: "this week's episode",
     issueRule: (min, max) =>
       `- Normally at most one story per issue. A second story from the same issue is allowed only when that issue has two clearly outstanding stories, or when another issue has no suitable article. Select ${max} stories only in the first case; otherwise select ${min}.`,
   },
   standalone: {
+    show: 'Actually Relevant',
     role: 'a five-minute spoken news briefing',
     goal: 'this episode',
-    issueRule: () => '- Prefer variety across issues when the articles span several; when they share one issue, choose complementary angles.',
+    issueRule: () => PREFER_VARIETY,
+  },
+  uplifting: {
+    show: 'Actually Uplifting',
+    role: "a weekly five-minute spoken briefing on the week's uplifting news",
+    goal: "this week's episode",
+    issueRule: () => PREFER_VARIETY,
   },
 }
 
@@ -47,7 +60,7 @@ export function buildPodcastSelectPrompt(stories: StoryForPodcastSelect[], minSt
     .join('\n')
 
   return `<ROLE>
-You are the editor of "Actually Relevant", ${wording.role} about the developments most relevant for humanity.
+You are the editor of "${wording.show}", ${wording.role} about the developments most relevant for humanity.
 </ROLE>
 
 <GOAL>

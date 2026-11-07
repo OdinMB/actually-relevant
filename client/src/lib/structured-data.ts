@@ -1,7 +1,7 @@
 import type { PublicPodcastEpisode, PublicStory } from '@shared/types'
 import type { PublicIssue } from './api'
 import { markdownToPlainText } from './plainText'
-import { podcastTranscriptPath } from './podcast'
+import { podcastTranscriptPath, PODCAST_SHOWS } from './podcast'
 import { SEO } from './seo'
 
 const LOGO_URL = `${SEO.siteUrl}/images/logo.png`
@@ -96,8 +96,11 @@ export function buildCollectionPageSchema(issue: PublicIssue) {
 }
 
 /** A published podcast episode, described on its transcript page. */
-export function buildPodcastEpisodeSchema(episode: Pick<PublicPodcastEpisode, 'id' | 'title' | 'summary' | 'publishedAt' | 'durationSec' | 'audioUrl'>) {
+export function buildPodcastEpisodeSchema(
+  episode: Pick<PublicPodcastEpisode, 'id' | 'title' | 'summary' | 'publishedAt' | 'durationSec' | 'audioUrl' | 'edition'>,
+) {
   const sec = episode.durationSec
+  const show = PODCAST_SHOWS[episode.edition]
   return {
     '@context': 'https://schema.org',
     '@type': 'PodcastEpisode',
@@ -109,9 +112,9 @@ export function buildPodcastEpisodeSchema(episode: Pick<PublicPodcastEpisode, 'i
     associatedMedia: { '@type': 'MediaObject', contentUrl: episode.audioUrl, encodingFormat: 'audio/mpeg' },
     partOfSeries: {
       '@type': 'PodcastSeries',
-      name: SEO.siteName,
-      url: `${SEO.siteUrl}/podcast`,
-      webFeed: `${SEO.siteUrl}/podcast.xml`,
+      name: episode.edition === 'uplifting' ? show.name : SEO.siteName,
+      url: `${SEO.siteUrl}${show.path}`,
+      webFeed: `${SEO.siteUrl}${show.feedPath}`,
     },
     publisher,
     // The page that explains that AI writes the episodes

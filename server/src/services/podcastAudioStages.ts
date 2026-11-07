@@ -18,11 +18,12 @@ import { assembleSpokenSegments, type SpokenSegment } from './podcastDialogue.js
 import { buildChapters, buildTranscriptVtt, chunkChars, chunkContinuity, chunkTurns, type ChapterStory, type Chunk } from './podcastChunks.js'
 import type { EpisodeStory } from './podcastScript.js'
 import { assertBalanceCovers, assertJobEnabled, PodcastBlockedError, reserveTtsChars, standaloneCopyRefusal } from './podcastGuards.js'
+import { editionClosedReason, podcastEditionInfo } from './podcastEdition.js'
 
 const log = createLogger('podcast-audio')
 
-/** The job row whose `enabled` flag the automatic path re-checks before every TTS call. */
-export const GENERATE_PODCAST_JOB = 'generate_podcast'
+/** The main show's generate job, whose row the automatic path re-checks before every TTS call (each show checks its own). */
+export { GENERATE_PODCAST_JOB } from './podcastEdition.js'
 /** `ttsModelId` stored on a dry-run episode: no model voiced it. */
 export const STUB_MODEL_ID = 'stub-silence'
 
@@ -110,14 +111,20 @@ async function voiceStub(chunks: Chunk[], index: number): Promise<Omit<VoicedChu
   return { bytes, requestId: null, chars, durationMs: cbrDurationMs(bytes.length) }
 }
 
+/** Why the episode may not be voiced live, or null: its show is closed, or its standalone wording is unconfirmed. */
+const liveVoicingRefusal = (episode: Pick<Podcast, 'edition' | 'kind'>): string | null =>
+  editionClosedReason(episode.edition) ?? standaloneCopyRefusal(episode.kind)
+
 /**
  * scripted → voiced: voice every chunk not stored yet, in order; a resume pays for nothing twice.
- * A live voicing of a standalone episode whose wording the owner has not confirmed is blocked before
- * any credits are spent; a dry run voices the silent stub as always.
+ * A live voicing of an episode of a closed show (Actually Uplifting before it opens), or of a
+ * standalone episode whose wording the owner has not confirmed, is blocked before any credits are
+ * spent; a dry run voices the silent stub as always. The cron trigger re-checks its show's job row.
  */
 export async function voiceEpisode(episode: Podcast, ctx: AudioStageContext): Promise<AudioStageWrite> {
-  const refusal = episode.dryRun ? null : standaloneCopyRefusal(episode.kind)
+  const refusal = episode.dryRun ? null : liveVoicingRefusal(episode)
   if (refusal) throw new PodcastBlockedError(refusal)
+  const { generateJob } = podcastEditionInfo(episode.edition)
   const chunks = episodeChunks(episode)
   const stored = await prisma.podcastAudioChunk.findMany({ where: { podcastId: episode.id }, select: { index: true } })
   const done = new Set(stored.map(c => c.index))
@@ -126,7 +133,7 @@ export async function voiceEpisode(episode: Podcast, ctx: AudioStageContext): Pr
   if (!episode.dryRun && pending.length > 0) await assertBalanceCovers(pending.reduce((n, i) => n + chunkChars(chunks[i]!), 0))
   for (const index of pending) {
     await ctx.renewLease()
-    if (ctx.trigger === 'cron') await assertJobEnabled(GENERATE_PODCAST_JOB)
+    if (ctx.trigger === 'cron') await assertJobEnabled(generateJob)
     const voiced = episode.dryRun ? await voiceStub(chunks, index) : await voiceLive(episode, chunks, index)
     await ctx.storeChunk({ index, ...voiced })
   }
@@ -137,10 +144,14 @@ export async function voiceEpisode(episode: Podcast, ctx: AudioStageContext): Pr
   }
 }
 
-/** A fresh, never reused base path: the CDN may still serve a deleted file under an old name. */
-export function episodeObjectBase(episode: Pick<Podcast, 'id' | 'weekKey' | 'dryRun'>): string {
+/**
+ * A fresh, never reused base path: the CDN may still serve a deleted file under an old name. The
+ * show's prefix tells the two shows' files of one week apart (`episodes/uplifting-2026-W45-…`).
+ */
+export function episodeObjectBase(episode: Pick<Podcast, 'id' | 'weekKey' | 'dryRun' | 'edition'>): string {
   const suffix = randomBytes(4).toString('hex')
-  return `${episode.dryRun ? 'dry-run/' : ''}episodes/${episode.weekKey ?? episode.id}-${suffix}`
+  const prefix = podcastEditionInfo(episode.edition).objectPrefix
+  return `${episode.dryRun ? 'dry-run/' : ''}episodes/${prefix}${episode.weekKey ?? episode.id}-${suffix}`
 }
 
 /**
@@ -167,10 +178,11 @@ export async function finishEpisode(episode: Podcast, ctx: AudioStageContext): P
   }
 
   const pauseMs = config.podcast.segmentPauseMs
+  const { showTitle } = podcastEditionInfo(episode.edition)
   const tags = {
     title: episode.title,
-    artist: config.podcast.showTitle,
-    album: config.podcast.showTitle,
+    artist: showTitle,
+    album: showTitle,
     comment: podcastEpisodeAiLine(episode.humanEdited, episode.kind),
   }
   const { buffer, durationSec } = await assembleEpisodeMp3(

@@ -39,7 +39,7 @@ export async function createStandaloneEpisode(now: Date = new Date()): Promise<P
       kind: 'standalone',
       stage: 'created',
       weekKey: null,
-      title: defaultEpisodeTitle({ weekKey: null, createdAt: now }),
+      title: defaultEpisodeTitle({ weekKey: null, createdAt: now, edition: 'full' }),
       createdAt: now,
       dryRun: config.podcast.dryRun,
     },

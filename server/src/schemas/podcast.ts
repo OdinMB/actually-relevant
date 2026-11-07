@@ -80,6 +80,22 @@ export const podcastStorySearchQuerySchema = podcastStoryFiltersSchema.extend({
   pageSize: z.coerce.number().int().positive().max(50).optional(),
 })
 
+/** Which show: Actually Relevant (`full`) or Actually Uplifting. */
+export const podcastEditionSchema = z.enum(['full', 'uplifting'])
+
+/** One show's public JSON or admin week slot; the main show when absent. */
+export const podcastEditionQuerySchema = z.object({
+  edition: podcastEditionSchema.optional(),
+})
+
+/** Open the show's week episode; the main show when absent. */
+export const createWeekEpisodeSchema = z
+  .object({
+    edition: podcastEditionSchema.optional(),
+  })
+  .strict()
+  .default({})
+
 export const podcastQuerySchema = z.object({
   status: z.enum(['draft', 'published']).optional(),
   stage: z.enum(STAGES).optional(),

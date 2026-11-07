@@ -1,18 +1,20 @@
 /**
- * An episode's stories and words: the week's story pool and the episode's frozen story snapshots,
- * the two LLM calls (story selection from a pool, dialogue), and the show notes.
+ * An episode's stories and words: the week's story pool of its show and the episode's frozen story
+ * snapshots, the two LLM calls (story selection from a pool, dialogue), and the show notes.
  */
 import { HumanMessage } from '@langchain/core/messages'
 import type { z } from 'zod'
-import { StoryStatus, type PodcastKind } from '@prisma/client'
+import { EmotionTag, StoryStatus, type PodcastEdition, type PodcastKind, type Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { podcastEpisodeAiLine } from '../lib/aiLabelCopy.js'
 import { buildPodcastPrompt, buildPodcastSelectPrompt, type StoryForPodcast } from '../prompts/index.js'
+import type { PodcastPromptKind } from '../prompts/podcast.js'
 import { podcastDialogueSchemaFor, podcastSelectResultSchema, type PodcastDialogue } from '../schemas/llm.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { dialogueCharBudget, validateDialogue } from './podcastDialogue.js'
+import { podcastEditionInfo } from './podcastEdition.js'
 import { PodcastBlockedError } from './podcastGuards.js'
 import { podcastHeading, podcastScriptStory, podcastSelectStory } from './promptInputs.js'
 
@@ -83,19 +85,36 @@ export const storySelect = {
 export type PoolStory = Awaited<ReturnType<typeof loadPool>>[number]
 
 /**
- * The newsletter's pool: stories published from the week's crawl before `anchor`, most relevant
- * first. The anchor is when the episode's stories were selected (`storiesSelectedAt`), so the
- * model and the story picker read the same list whenever either reads it.
+ * The newsletter's pool: stories published from the week's crawl before `anchor`. The anchor is when
+ * the episode's stories were selected (`storiesSelectedAt`), so the model and the story picker read
+ * the same list whenever either reads it. Actually Uplifting's pool is the same week's stories tagged
+ * uplifting, never an earlier week's.
  */
-function loadPool(anchor: Date) {
+function poolWhere(anchor: Date, edition: PodcastEdition): Prisma.StoryWhereInput {
+  return {
+    status: StoryStatus.published,
+    dateCrawled: { gte: new Date(anchor.getTime() - config.content.storyAssignmentDays * DAY_MS), lte: anchor },
+    ...(edition === 'uplifting' ? { emotionTag: EmotionTag.uplifting } : {}),
+  }
+}
+
+/** The show's pool before `anchor`, most relevant first. */
+function loadPool(anchor: Date, edition: PodcastEdition) {
   return prisma.story.findMany({
-    where: {
-      status: StoryStatus.published,
-      dateCrawled: { gte: new Date(anchor.getTime() - config.content.storyAssignmentDays * DAY_MS), lte: anchor },
-    },
+    where: poolWhere(anchor, edition),
     select: storySelect,
     orderBy: [{ relevance: 'desc' }, { dateCrawled: 'desc' }],
   })
+}
+
+/** How many stories the show's pool before `anchor` holds (a short week is known before any row is made). */
+export function episodePoolSize(anchor: Date, edition: PodcastEdition): Promise<number> {
+  return prisma.story.count({ where: poolWhere(anchor, edition) })
+}
+
+/** Which prompt wording an episode takes: the Actually Uplifting show's own, otherwise its kind's. */
+export function promptWordingKind(kind: PodcastKind, edition: PodcastEdition): PodcastPromptKind {
+  return edition === 'uplifting' ? 'uplifting' : kind
 }
 
 /** A story's facts as the episode shows them: title, publisher, links and top-level issue. */
@@ -116,8 +135,8 @@ function toSelected(s: PoolStory, ref: number): SelectedStory {
 export type PoolEntry = Omit<EpisodeStory, 'ref'> & { relevance: number | null }
 
 /** The pool the selection call chose from, for the story picker (same query, same order). */
-export async function loadEpisodePool(anchor: Date): Promise<PoolEntry[]> {
-  const pool = await loadPool(anchor)
+export async function loadEpisodePool(anchor: Date, edition: PodcastEdition): Promise<PoolEntry[]> {
+  const pool = await loadPool(anchor, edition)
   return pool.map(s => ({ ...storyFacts(s), relevance: s.relevance }))
 }
 
@@ -155,7 +174,7 @@ export class TooFewStoriesError extends Error {
  * the maximum. `TooFewStoriesError` before any call when the pool is under the minimum; an error
  * when the model's valid answer is.
  */
-export async function chooseStories<S extends PoolStory>(pool: S[], kind: PodcastKind): Promise<S[]> {
+export async function chooseStories<S extends PoolStory>(pool: S[], kind: PodcastPromptKind): Promise<S[]> {
   const { minStories, maxStories, selectModelTier } = config.podcast
   if (pool.length < minStories) throw new TooFewStoriesError(pool.length, minStories)
   const prompt = buildPodcastSelectPrompt(
@@ -175,25 +194,27 @@ export async function chooseStories<S extends PoolStory>(pool: S[], kind: Podcas
   return ids.map(id => byId.get(id)!)
 }
 
-/** The week's 4-5 stories for audio, in episode order, from the pool before `anchor`. Fails closed under the minimum. */
-export async function selectEpisodeStories(anchor: Date): Promise<SelectedStory[]> {
+/** The week's 4-5 stories for the show's audio, in episode order, from its pool before `anchor`. Fails closed under the minimum. */
+export async function selectEpisodeStories(anchor: Date, edition: PodcastEdition): Promise<SelectedStory[]> {
   try {
-    const chosen = await chooseStories(await loadPool(anchor), 'weekly')
+    const chosen = await chooseStories(await loadPool(anchor, edition), promptWordingKind('weekly', edition))
     return chosen.map((s, i) => toSelected(s, i + 1))
   } catch (err) {
     if (err instanceof TooFewStoriesError) {
-      throw new Error(`only ${err.available} published stories this week; an episode needs ${err.needed}`, { cause: err })
+      const which = edition === 'uplifting' ? 'published uplifting stories' : 'published stories'
+      throw new Error(`only ${err.available} ${which} this week; an episode needs ${err.needed}`, { cause: err })
     }
     throw err
   }
 }
 
 /**
- * The dialogue for the selected stories of an episode of `kind`. An invalid or unparsable answer
- * gets one regeneration with the problems listed; a second failure blocks the episode (never
- * truncated or patched).
+ * The dialogue for the selected stories of an episode of `kind` on the show `edition`, which picks
+ * the prompt's wording; the length budget, schema and validation follow the kind. An invalid or
+ * unparsable answer gets one regeneration with the problems listed; a second failure blocks the
+ * episode (never truncated or patched).
  */
-export async function writeEpisodeScript(stories: SelectedStory[], kind: PodcastKind): Promise<EpisodeScript> {
+export async function writeEpisodeScript(stories: SelectedStory[], kind: PodcastKind, edition: PodcastEdition): Promise<EpisodeScript> {
   const tier = config.podcast.scriptModelTier
   const refs = stories.map(s => ({ ref: s.snapshot.ref, title: s.snapshot.title, publisher: s.snapshot.publisher }))
   let problems: string[] = []
@@ -201,7 +222,7 @@ export async function writeEpisodeScript(stories: SelectedStory[], kind: Podcast
     const prompt = buildPodcastPrompt(
       stories.map(s => s.prompt),
       dialogueCharBudget(kind),
-      kind,
+      promptWordingKind(kind, edition),
       problems,
     )
     const dialogue = await invokeStructured(podcastDialogueSchemaFor(kind), tier, prompt, 'podcast-script')
@@ -219,14 +240,16 @@ export async function writeEpisodeScript(stories: SelectedStory[], kind: Podcast
 
 /**
  * Plain-text show notes: the AI line first (the edited wording when a person changed the stories or
- * the script), the summary, then each story with our analysis and its source, and last the donation ask.
+ * the script), the summary, then each story with our analysis and its source, the show's pointer to
+ * more of its news (Actually Uplifting's), and last the donation ask.
  */
-export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEdited: boolean, kind: PodcastKind): string {
+export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEdited: boolean, kind: PodcastKind, edition: PodcastEdition): string {
   const items = stories.map(s =>
     [`${s.ref}. ${s.title} (${s.publisher})`, ...(s.slug ? [`   Our AI analysis: ${config.siteUrl}/stories/${s.slug}`] : []), `   Source: ${s.sourceUrl}`].join(
       '\n',
     ),
   )
+  const { moreLink } = podcastEditionInfo(edition)
   return [
     podcastEpisodeAiLine(humanEdited, kind),
     '',
@@ -235,6 +258,7 @@ export function buildShowNotes(summary: string, stories: EpisodeStory[], humanEd
     'Stories in this episode:',
     ...items,
     '',
+    ...(moreLink ? [`${moreLink.text}: ${moreLink.url}`] : []),
     `${config.donation.pitch} ${config.donation.cta}: ${config.links.kofi}`,
   ].join('\n')
 }

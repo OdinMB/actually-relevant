@@ -119,6 +119,7 @@
           "audioBytes": { "type": "integer" },
           "audioUrl": { "format": "uri", "type": "string" },
           "durationSec": { "type": ["integer", "null"] },
+          "edition": { "enum": ["full", "uplifting"], "type": "string" },
           "id": { "format": "uuid", "type": "string" },
           "publishedAt": { "format": "date-time", "type": "string" },
           "stories": {
@@ -138,7 +139,20 @@
           "title": { "type": "string" },
           "transcriptUrl": { "format": "uri", "type": ["null", "string"] }
         },
-        "required": ["aiGenerated", "aiLine", "audioBytes", "audioUrl", "durationSec", "id", "publishedAt", "stories", "summary", "title", "transcriptUrl"],
+        "required": [
+          "aiGenerated",
+          "aiLine",
+          "audioBytes",
+          "audioUrl",
+          "durationSec",
+          "edition",
+          "id",
+          "publishedAt",
+          "stories",
+          "summary",
+          "title",
+          "transcriptUrl"
+        ],
         "type": "object"
       },
       "PodcastEpisodeDetail": {
@@ -155,6 +169,7 @@
           "audioBytes": { "type": "integer" },
           "audioUrl": { "format": "uri", "type": "string" },
           "durationSec": { "type": ["integer", "null"] },
+          "edition": { "enum": ["full", "uplifting"], "type": "string" },
           "id": { "format": "uuid", "type": "string" },
           "publishedAt": { "format": "date-time", "type": "string" },
           "stories": {
@@ -207,6 +222,7 @@
           "audioBytes",
           "audioUrl",
           "durationSec",
+          "edition",
           "id",
           "publishedAt",
           "stories",
@@ -237,9 +253,10 @@
             },
             "required": ["artworkUrl", "description", "feedUrl", "listenLinks", "title"],
             "type": "object"
-          }
+          },
+          "upliftingShowOpen": { "type": "boolean" }
         },
-        "required": ["episodes", "show"],
+        "required": ["episodes", "show", "upliftingShowOpen"],
         "type": "object"
       },
       "PublicIssue": {
@@ -408,7 +425,12 @@
     "/api/podcast": {
       "get": {
         "operationId": "getPodcast",
-        "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PodcastResponse" } } } } }
+        "parameters": [{ "in": "query", "name": "edition", "schema": { "enum": ["full", "uplifting"], "type": "string" } }],
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PodcastResponse" } } } },
+          "400": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
       }
     },
     "/api/podcast/episodes/{id}": {

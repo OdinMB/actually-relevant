@@ -83,6 +83,7 @@ function baseEpisode(overrides: Partial<Podcast>): Omit<Podcast, 'publishBlocked
     mode: 'interactive',
     weekKey: '2026-W41',
     kind: 'weekly',
+    edition: 'full',
     storyIds: ['s1', 's2'],
     attempts: 0,
     blockedAt: null,

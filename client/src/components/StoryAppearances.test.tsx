@@ -10,6 +10,7 @@ const ISSUE = { slug: 'week-43-2026', title: 'Week 43, 2026', edition: 'full' as
 const EPISODE = {
   id: 'episode-43',
   title: 'W43: Clean air and a new vaccine',
+  edition: 'full' as const,
   aiLine: 'Written and voiced by AI.',
   summary: 'Two hosts talk through the week.',
   publishedAt: '2026-10-24T05:00:00.000Z',

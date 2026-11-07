@@ -6,9 +6,11 @@ const mockPrisma = vi.hoisted(() => ({
   podcast: { findUnique: vi.fn() },
 }))
 const mockNotify = vi.hoisted(() => ({ notify: vi.fn() }))
+const mockPoolSize = vi.hoisted(() => vi.fn())
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../lib/notify.js', () => mockNotify)
+vi.mock('./podcastScript.js', async importOriginal => ({ ...(await importOriginal<typeof import('./podcastScript.js')>()), episodePoolSize: mockPoolSize }))
 
 const { alertMissedWeek, missedWeekReason } = await import('./podcastMissedWeek.js')
 const { config } = await import('../config.js')
@@ -83,31 +85,66 @@ describe('alertMissedWeek', () => {
 
   it('claims the ISO week and sends one notice with the reason', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
-    await alertMissedWeek(SATURDAY)
-    expect(mockPrisma.podcast.findUnique).toHaveBeenCalledWith({ where: { weekKey: '2026-W42' } })
-    expect(mockPrisma.$executeRaw.mock.calls[0].slice(1)).toContain('2026-W42')
+    await alertMissedWeek(SATURDAY, 'full')
+    expect(mockPrisma.podcast.findUnique).toHaveBeenCalledWith({ where: { edition_weekKey: { edition: 'full', weekKey: '2026-W42' } } })
+    expect(mockPrisma.$executeRaw.mock.calls[0].slice(1)).toEqual(expect.arrayContaining(['full', '2026-W42']))
     expect(mockNotify.notify).toHaveBeenCalledOnce()
     expect(mockNotify.notify).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'podcast',
         severity: 'warning',
+        title: 'No podcast episode ready to publish this Saturday',
         link: '/admin/podcasts',
         message: expect.stringMatching(/no episode was generated/),
       }),
     )
+    expect(mockPoolSize).not.toHaveBeenCalled()
   })
 
   it('sends nothing when the week was already claimed (a retry or a boot catch-up the same week)', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
     mockPrisma.$executeRaw.mockResolvedValueOnce(0)
-    await alertMissedWeek(SATURDAY)
+    await alertMissedWeek(SATURDAY, 'full')
     expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
   it('neither claims the week nor sends anything when the episode is already listed', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(readyEpisode({ status: 'published', publishedAt: SATURDAY }))
-    await alertMissedWeek(SATURDAY)
+    await alertMissedWeek(SATURDAY, 'full')
     expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
     expect(mockNotify.notify).not.toHaveBeenCalled()
+  })
+})
+
+describe('alertMissedWeek for Actually Uplifting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.$executeRaw.mockResolvedValue(1)
+  })
+
+  it("records the short week's info notice instead, with no claim, when Friday's pool was short", async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
+    mockPoolSize.mockResolvedValueOnce(2)
+    await alertMissedWeek(SATURDAY, 'uplifting')
+    // The pool as Friday's last run could have read it: this week's Friday at the window's end
+    expect(mockPoolSize).toHaveBeenCalledWith(new Date(`2026-10-16T${String(config.podcast.generateWindowEndHourUtc).padStart(2, '0')}:00:00Z`), 'uplifting')
+    expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
+    expect(mockNotify.notify).toHaveBeenCalledOnce()
+    expect(mockNotify.notify.mock.calls[0][0]).toMatchObject({ severity: 'info', dedupeKey: 'podcast-uplifting-no-stories:2026-W42' })
+  })
+
+  it("sends the show's own missed-week warning, claimed per show, when the week had enough stories", async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
+    mockPoolSize.mockResolvedValueOnce(6)
+    await alertMissedWeek(SATURDAY, 'uplifting')
+    expect(mockPrisma.$executeRaw.mock.calls[0].slice(1)).toEqual(expect.arrayContaining(['uplifting', '2026-W42']))
+    expect(mockNotify.notify.mock.calls[0][0]).toMatchObject({ severity: 'warning', title: 'No Actually Uplifting episode ready to publish this Saturday' })
+  })
+
+  it('warns about a blocked uplifting episode without counting the pool', async () => {
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(weekly({ edition: 'uplifting', stage: 'selected', blockedAt: SATURDAY, blockedReason: 'cap reached' }))
+    await alertMissedWeek(SATURDAY, 'uplifting')
+    expect(mockPoolSize).not.toHaveBeenCalled()
+    expect(mockNotify.notify.mock.calls[0][0]).toMatchObject({ severity: 'warning', message: expect.stringMatching(/blocked: cap reached/) })
   })
 })
