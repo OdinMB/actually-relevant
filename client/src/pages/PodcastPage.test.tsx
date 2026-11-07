@@ -61,7 +61,8 @@ const RESPONSE: PublicPodcastResponse = {
 }
 
 function renderPage(path = '/podcast', edition: 'full' | 'uplifting' = 'full') {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  // The episodes hook retries a failure other than 404 once by its own rule; no delay keeps it quick
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } })
   const result = render(
     <HelmetProvider>
       <MemoryRouter initialEntries={[path]}>
@@ -217,7 +218,9 @@ describe('PodcastPage', () => {
     })
 
     it('shows the episodes in place when "Try again" succeeds', async () => {
-      mockApi.podcast.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(RESPONSE)
+      // The load and its one retry fail; Try again succeeds
+      const failure = new TypeError('Failed to fetch')
+      mockApi.podcast.mockRejectedValueOnce(failure).mockRejectedValueOnce(failure).mockResolvedValueOnce(RESPONSE)
       renderPage()
       await episodesFailure()
 
@@ -225,7 +228,7 @@ describe('PodcastPage', () => {
 
       expect(await screen.findByRole('heading', { name: /W42: Clean air/ })).toBeInTheDocument()
       expect(screen.queryByRole('alert')).toBeNull()
-      expect(mockApi.podcast).toHaveBeenCalledTimes(2)
+      expect(mockApi.podcast).toHaveBeenCalledTimes(3)
     })
 
     it('has no a11y violations', async () => {

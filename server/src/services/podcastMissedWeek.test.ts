@@ -4,6 +4,7 @@ import { samplePodcast } from '../test/helpers.js'
 const mockPrisma = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
   podcast: { findUnique: vi.fn() },
+  adminNotice: { findUnique: vi.fn() },
 }))
 const mockNotify = vi.hoisted(() => ({ notify: vi.fn() }))
 const mockPoolSize = vi.hoisted(() => vi.fn())
@@ -122,8 +123,21 @@ describe('alertMissedWeek for Actually Uplifting', () => {
     mockPrisma.$executeRaw.mockResolvedValue(1)
   })
 
+  it("stays silent, without recounting, when Friday's run already recorded the short week", async () => {
+    // Friday's last slot counted 2 and recorded the notice; stories published since would now count 4
+    mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
+    mockPrisma.adminNotice.findUnique.mockResolvedValueOnce({ id: 'notice-1' })
+    mockPoolSize.mockResolvedValue(4)
+    await alertMissedWeek(SATURDAY, 'uplifting')
+    expect(mockPrisma.adminNotice.findUnique).toHaveBeenCalledWith({ where: { dedupeKey: 'podcast-uplifting-no-stories:2026-W42' }, select: { id: true } })
+    expect(mockPoolSize).not.toHaveBeenCalled()
+    expect(mockPrisma.$executeRaw).not.toHaveBeenCalled()
+    expect(mockNotify.notify).not.toHaveBeenCalled()
+  })
+
   it("records the short week's info notice instead, with no claim, when Friday's pool was short", async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
+    mockPrisma.adminNotice.findUnique.mockResolvedValueOnce(null)
     mockPoolSize.mockResolvedValueOnce(2)
     await alertMissedWeek(SATURDAY, 'uplifting')
     // The pool as Friday's last run could have read it: this week's Friday at the window's end
@@ -135,6 +149,7 @@ describe('alertMissedWeek for Actually Uplifting', () => {
 
   it("sends the show's own missed-week warning, claimed per show, when the week had enough stories", async () => {
     mockPrisma.podcast.findUnique.mockResolvedValueOnce(null)
+    mockPrisma.adminNotice.findUnique.mockResolvedValueOnce(null)
     mockPoolSize.mockResolvedValueOnce(6)
     await alertMissedWeek(SATURDAY, 'uplifting')
     expect(mockPrisma.$executeRaw.mock.calls[0].slice(1)).toEqual(expect.arrayContaining(['uplifting', '2026-W42']))

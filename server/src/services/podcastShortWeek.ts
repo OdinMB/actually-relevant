@@ -8,6 +8,7 @@
  */
 import type { PodcastEdition } from '@prisma/client'
 import { config } from '../config.js'
+import prisma from '../lib/prisma.js'
 import { notify } from '../lib/notify.js'
 import { podcastEditionInfo } from './podcastEdition.js'
 import { episodePoolSize } from './podcastScript.js'
@@ -27,6 +28,17 @@ export function shortWeekReason(available: number): string {
   return `only ${available} published uplifting stories this week; an episode needs ${config.podcast.minStories}`
 }
 
+const shortWeekNoticeKey = (weekKey: string) => `podcast-uplifting-no-stories:${weekKey}`
+
+/**
+ * Whether the week's short-week notice is already recorded. Saturday's check stops on it rather than
+ * recount: stories published after Friday's run would otherwise reach the count and contradict it.
+ */
+export async function shortWeekRecorded(weekKey: string): Promise<boolean> {
+  const notice = await prisma.adminNotice.findUnique({ where: { dedupeKey: shortWeekNoticeKey(weekKey) }, select: { id: true } })
+  return notice !== null
+}
+
 /** The week's one notice that it has no Actually Uplifting episode: insert-only, so a repeat neither reopens nor forwards it. */
 export async function recordShortWeek(weekKey: string, available: number): Promise<void> {
   const show = podcastEditionInfo('uplifting').showTitle
@@ -37,7 +49,7 @@ export async function recordShortWeek(weekKey: string, available: number): Promi
       title: `No ${show} episode this week`,
       message: `${weekKey}: ${shortWeekReason(available)}, counting the stories tagged uplifting that were crawled in the last ${config.content.storyAssignmentDays} days. Nothing needs doing; ${show} skips a week with too few uplifting stories and never fills it with an earlier week's.`,
       link: '/admin/podcasts',
-      dedupeKey: `podcast-uplifting-no-stories:${weekKey}`,
+      dedupeKey: shortWeekNoticeKey(weekKey),
     },
     { reopen: false },
   )

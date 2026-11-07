@@ -13,7 +13,7 @@ import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { podcastEditionInfo } from './podcastEdition.js'
 import { publishRefusal, unfinishedReason } from './podcastPublish.js'
-import { recordShortWeek, shortWeekStoryCount } from './podcastShortWeek.js'
+import { recordShortWeek, shortWeekRecorded, shortWeekStoryCount } from './podcastShortWeek.js'
 import { fridayWindowEnd } from './podcastWeekSlot.js'
 import { isoWeekKey } from './podcastWeekly.js'
 
@@ -77,13 +77,16 @@ export function missedWeekReason(episode: Pick<Podcast, ReasonFields> | null, no
 
 /**
  * Send the show's missed-week notice for `now`'s ISO week, unless the week's episode is listed or the
- * week was already alerted. When nothing was started on Actually Uplifting, its pool is read as
- * Friday's last run could have read it: too few uplifting stories is the short week's info notice.
+ * week was already alerted. When nothing was started on Actually Uplifting and Friday recorded the
+ * week as short, it stops there; when Friday never did, the pool is read as Friday's last run could
+ * have read it: too few uplifting stories is the short week's info notice.
  */
 export async function alertMissedWeek(now: Date, edition: PodcastEdition): Promise<void> {
   const weekKey = isoWeekKey(now)
   const episode = await prisma.podcast.findUnique({ where: { edition_weekKey: { edition, weekKey } } })
-  if (nothingStarted(episode)) {
+  if (nothingStarted(episode) && edition === 'uplifting') {
+    // Friday's run already found the week short: that notice stands, whatever was published since.
+    if (await shortWeekRecorded(weekKey)) return
     const short = await shortWeekStoryCount(fridayWindowEnd(now), edition)
     if (short !== null) {
       await recordShortWeek(weekKey, short)

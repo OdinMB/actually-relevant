@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { PodcastEdition } from '@shared/types'
-import { publicApi } from '../lib/api'
+import { isNotFound, publicApi } from '../lib/api'
 import { isPrerendering } from '../lib/renderComplete'
 
 /**
@@ -14,6 +14,8 @@ export function usePodcastEpisodes(edition: PodcastEdition = 'full', options: { 
     queryFn: () => publicApi.podcast(edition),
     staleTime: 5 * 60 * 1000,
     enabled: !isPrerendering() && (options.enabled ?? true),
+    // A 404 (the closed show) never passes on a retry: show Page not found at once
+    retry: (failures, error) => !isNotFound(error) && failures < 1,
   })
 }
 
