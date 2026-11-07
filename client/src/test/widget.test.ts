@@ -5,6 +5,8 @@ const AI_HEADER = 'AI-generated headlines from Actually Relevant'
 
 /** Stand-in for the XHR the widget sends to the public API: answers with one story. */
 class FakeXhr {
+  /** The URL of the last request a widget sent. */
+  static lastUrl = ''
   status = 200
   responseText = JSON.stringify({
     data: [
@@ -13,7 +15,9 @@ class FakeXhr {
   })
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
-  open() {}
+  open(_method: string, url: string) {
+    FakeXhr.lastUrl = url
+  }
   send() {
     this.onload?.()
   }
@@ -66,5 +70,20 @@ describe('widget.js AI header', () => {
   it('keeps the "Powered by" footer', () => {
     const shadow = runWidget()
     expect(shadow.querySelector('.ar-footer')?.textContent).toBe('Powered by Actually Relevant')
+  })
+})
+
+describe('widget.js request', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('marks itself as the widget, so the server counts a widget view rather than an API call', () => {
+    runWidget({ 'data-count': '4', 'data-issue': 'planet-climate' })
+    const url = new URL(FakeXhr.lastUrl)
+    expect(url.pathname).toBe('/api/stories')
+    expect(url.searchParams.get('ref')).toBe('widget')
+    expect(url.searchParams.get('issueSlug')).toBe('planet-climate')
+    expect(url.searchParams.get('pageSize')).toBe('4')
   })
 })

@@ -64,6 +64,12 @@ export default function PrivacyPage() {
             </a>
             .
           </p>
+          <p className="mt-3">
+            Our server also sends Simple Analytics anonymous counts of requests to our public API from other websites and apps, and of views of our news widget
+            on other websites. A count carries only the calling or embedding website&apos;s address (such as example.com), which part of the API was used or
+            which topic the widget shows, and whether the request succeeded. It never includes your IP address, your browser&apos;s details, or any other
+            personal data.
+          </p>
 
           <h3 className="text-lg font-normal mt-6 mb-2">Newsletter (Optional)</h3>
           <p>
@@ -149,7 +155,8 @@ export default function PrivacyPage() {
                   </td>
                   <td className="align-top py-2 pr-4">Privacy-first analytics</td>
                   <td className="align-top py-2">
-                    Anonymous page views. Your IP address reaches it with each page view, and it states that it drops the address without storing it. No
+                    Anonymous page views, and anonymous counts of API requests and widget views that our server sends with the calling or embedding
+                    website&apos;s address. Your IP address reaches it with each page view, and it states that it drops the address without storing it. No
                     cookies.
                   </td>
                 </tr>
