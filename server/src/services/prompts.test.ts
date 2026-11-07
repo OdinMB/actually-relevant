@@ -137,6 +137,20 @@ describe('buildAssessPrompt', () => {
     expect(prompt).toContain('</GENERIC_LIMITING_FACTORS>')
   })
 
+  it('asks an uplifting story for a headline that leads with the progress', () => {
+    const prompt = buildAssessPrompt('Title', 'Content', 'Pub', 'https://example.com', guidelines, 'uplifting')
+    expect(prompt).toContain('<TONE>')
+    expect(prompt).toContain('Lead the title with that progress')
+  })
+
+  it('leaves the prompt unchanged for every other tag and for no tag', () => {
+    const untagged = buildAssessPrompt('Title', 'Content', 'Pub', 'https://example.com', guidelines)
+    expect(untagged).not.toContain('<TONE>')
+    for (const tag of ['calm', 'frustrating', 'scary', null]) {
+      expect(buildAssessPrompt('Title', 'Content', 'Pub', 'https://example.com', guidelines, tag)).toBe(untagged)
+    }
+  })
+
   it('uses XML scaffolding structure', () => {
     const prompt = buildAssessPrompt('Title', 'Content', 'Pub', 'https://example.com', guidelines)
     expect(prompt).toContain('<ROLE>')
