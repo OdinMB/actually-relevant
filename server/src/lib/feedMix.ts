@@ -2,7 +2,8 @@
  * The site's Mood Dial (`mix`) for the RSS feeds. Same names, numbers and rules as the website:
  * `client/src/contexts/PositivityContext.tsx` (names, snapping) and `client/src/lib/mix-stories.ts`
  * (which stories a position shows). The client cannot share this file (the server does not import
- * TypeScript from `shared/`), so change both together.
+ * TypeScript from `shared/`). A third copy is `client/public/widget.js`: change all three together
+ * (`.context/public-website.md`, "Widgets and the Mood Dial").
  */
 
 /** Dial positions and their names, as the site's `?mix=` accepts them. */

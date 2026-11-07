@@ -86,6 +86,8 @@
 
   // The Mood Dial (data-mix), with the site's names and numbers (client/src/contexts/PositivityContext.tsx);
   // data-mood="uplifting" is the older spelling of data-mix="uplifting". null: every story, newest first.
+  // The mix rule is copied from client/src/lib/mix-stories.ts and also lives in server/src/lib/feedMix.ts:
+  // change all three together (.context/public-website.md, "Widgets and the Mood Dial").
   var MIX_NAMES = { heavy: 0, 'mostly-heavy': 25, balanced: 50, 'mostly-uplifting': 75, uplifting: 100 }
   function parseMix(raw) {
     if (raw === null) return null

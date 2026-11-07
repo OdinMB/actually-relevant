@@ -99,7 +99,15 @@ The podcast has its own hand-built feed (`GET /api/podcast/feed.xml`, public at 
 
 ### Widgets and the Mood Dial
 
-`/widgets` (`WidgetGeneratorPage`) has its own Mood Dial (`MoodDial` in `PositivitySlider.tsx`), which starts at the reader's site setting and never changes it. Both embed codes always carry the position: `data-mix="<name>"` on the script, `mix=<name>` on the iframe, with the site's names. The script widget (`public/widget.js`) and `/embed` (`EmbedPage`, `loadEmbedStories`) read the same names and numbers; the older `data-mood="uplifting"` / `mood=uplifting` still means only uplifting, and a code with neither shows the newest stories of every tone, as before 2026-11-07. At `uplifting` they list only uplifting stories; at the other positions they take the newest 50 stories in one request (so a widget load stays one `widget_view`), drop untagged ones and mix the slots like a homepage section (`mix-stories.ts`). `widget.js` copies those rules in plain JavaScript, so change it with the client's.
+`/widgets` (`WidgetGeneratorPage`) has its own Mood Dial (`MoodDial` in `PositivitySlider.tsx`), which starts at the reader's site setting and never changes it. Both embed codes always carry the position: `data-mix="<name>"` on the script, `mix=<name>` on the iframe, with the site's names. The script widget (`public/widget.js`) and `/embed` (`EmbedPage`, `loadEmbedStories`) read the same names and numbers; the older `data-mood="uplifting"` / `mood=uplifting` still means only uplifting, and a code with neither shows the newest stories of every tone, as before 2026-11-07. At `uplifting` they list only uplifting stories; at the other positions they take the newest 50 stories in one request (so a widget load stays one `widget_view`), drop untagged ones and mix the slots like a homepage section (`mix-stories.ts`).
+
+**The mix rule lives in three places; change all three together.** Which tags count as positive (uplifting, calm) or negative (frustrating, scary), the five positions and their names, how slots split (`round(slots × mix / 100)` positive, a shortfall filled from the other pool, newest first) and that untagged stories drop out are written out separately in:
+
+- `client/src/lib/mix-stories.ts` (and `PositivityContext.tsx` for the names): homepage, issue pages, `/embed`
+- `client/public/widget.js`: the script widget, plain JavaScript with no build step, so it cannot import the client's code
+- `server/src/lib/feedMix.ts` (and `routes/public/feed.ts` for the tags): RSS feeds
+
+Each has its own tests; none checks the other two.
 
 ### Usage counting
 
