@@ -21,6 +21,14 @@ describe('PullQuote AI disclosure', () => {
     expect(announcedText(footer)).toBe('— Dr. Jane Doe, WHO, quoted in “AI headline” · chosen by AI, may be translated')
   })
 
+  it('keeps the AI note, badge and comma included, on one line', () => {
+    const { container } = renderQuote(makeStory())
+    const badge = container.querySelector('footer [aria-hidden="true"]')!
+    const note = badge.closest('.whitespace-nowrap')
+    expect(note?.textContent).toContain('chosen by')
+    expect(note?.textContent).toContain(', may be translated')
+  })
+
   it('adds the note after the "from" attribution too', () => {
     const { container } = renderQuote(makeStory({ quoteAttribution: 'Original article' }))
     expect(announcedText(container.querySelector('footer')!)).toBe('— from AI headline · chosen by AI, may be translated')
