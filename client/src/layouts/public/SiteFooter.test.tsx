@@ -65,6 +65,24 @@ describe('SiteFooter tap targets (WCAG 2.5.8)', () => {
     expect(problems).toEqual([])
   })
 
+  it('carries the Simple Analytics credit link their badge checker looks for, on phones and from md up', () => {
+    render(
+      <MemoryRouter>
+        <SiteFooter />
+      </MemoryRouter>,
+    )
+    const credits = within(screen.getByRole('contentinfo')).getAllByRole('link', { name: /privacy-first analytics by simple analytics/i })
+    expect(credits).toHaveLength(2)
+    for (const credit of credits) {
+      const url = new URL(credit.getAttribute('href') ?? '')
+      expect(url.hostname).toBe('www.simpleanalytics.com')
+      expect(url.searchParams.get('utm_source')).toBe('actuallyrelevant.news')
+      expect(url.searchParams.get('utm_content')).toBe('badge')
+      expect(credit.getAttribute('referrerpolicy')).toBe('origin')
+      expect(credit.getAttribute('rel')).not.toMatch(/noreferrer/)
+    }
+  })
+
   it('flags a link that is inline, has no height class, or drops under 24px at a breakpoint', () => {
     const link = (className: string, text = 'About') => {
       const a = document.createElement('a')
