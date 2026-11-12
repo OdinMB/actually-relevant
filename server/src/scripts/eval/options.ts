@@ -1,7 +1,7 @@
 /**
- * Parse and validate the eval CLI flags (eval:models and eval:recalibrate).
- * Kept apart from the entry points so the spend cap can be tested without
- * loading `.env`.
+ * Parse and validate the eval CLI flags (eval:models, eval:recalibrate and
+ * eval:research). Kept apart from the entry points so the spend cap can be
+ * tested without loading `.env`.
  */
 import { parseArgs } from 'node:util'
 import { parseEffort, type ReasoningEffort } from '../../config.js'
@@ -49,8 +49,8 @@ function positiveInt(flag: string, value: string | undefined, fallback?: number)
 }
 
 /** `--budget` caps the ledger total for the output folder (all runs), never above the project cap. */
-function budgetOf(value: string | undefined): number {
-  const budget = value === undefined ? DEFAULT_BUDGET_USD : Number(value)
+function budgetOf(value: string | undefined, fallback: number = DEFAULT_BUDGET_USD): number {
+  const budget = value === undefined ? fallback : Number(value)
   if (!Number.isFinite(budget) || budget <= 0 || budget > MAX_BUDGET_USD) {
     throw new Error(`--budget must be between 0 and ${MAX_BUDGET_USD} (USD)`)
   }
@@ -186,5 +186,57 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
     ...(values.floor !== undefined ? { floor: floorOf(values.floor) } : {}),
     repeat,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// eval:research
+// ---------------------------------------------------------------------------
+
+/** A few dollars for the measurement (design, "Measuring it properly"); the $20 cap still applies. */
+export const RESEARCH_DEFAULT_BUDGET_USD = 3
+/** The newest published stories sampled (owner's call: ~30). */
+export const RESEARCH_DEFAULT_SIZE = 30
+export const RESEARCH_MAX_SIZE = 60
+
+export interface ResearchOptions {
+  out: string
+  /** Stories sampled into the fixtures. */
+  size: number
+  /** Research only the first N sampled stories. */
+  limit?: number
+  dryRun: boolean
+  /** Cap on the folder's model ledger plus its Tavily credits. */
+  budget: number
+  concurrency: number
+  refreshFixtures: boolean
+}
+
+export function parseResearchOptions(argv: string[]): ResearchOptions {
+  const { values } = parseArgs({
+    args: argv,
+    strict: true,
+    options: {
+      out: { type: 'string' },
+      size: { type: 'string' },
+      limit: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+      budget: { type: 'string' },
+      concurrency: { type: 'string' },
+      'refresh-fixtures': { type: 'boolean', default: false },
+    },
+  })
+  if (!values.out) throw new Error('--out is required')
+  const size = positiveInt('--size', values.size, RESEARCH_DEFAULT_SIZE) ?? RESEARCH_DEFAULT_SIZE
+  if (size > RESEARCH_MAX_SIZE) throw new Error(`--size must be at most ${RESEARCH_MAX_SIZE}`)
+  const limit = positiveInt('--limit', values.limit)
+  return {
+    out: values.out,
+    size,
+    ...(limit !== undefined ? { limit } : {}),
+    dryRun: values['dry-run'] ?? false,
+    budget: budgetOf(values.budget, RESEARCH_DEFAULT_BUDGET_USD),
+    concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
+    refreshFixtures: values['refresh-fixtures'] ?? false,
   }
 }

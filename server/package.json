@@ -57,7 +57,8 @@
     "migration:backfill-embeddings": "tsx src/scripts/migrations/backfill-embeddings.ts",
     "migration:backfill-embeddings:test": "tsx src/scripts/migrations/backfill-embeddings.ts --test",
     "eval:models": "tsx src/scripts/eval/run.ts",
-    "eval:recalibrate": "tsx src/scripts/eval/recalibrate.ts"
+    "eval:recalibrate": "tsx src/scripts/eval/recalibrate.ts",
+    "eval:research": "tsx src/scripts/eval/research.ts"
   },
   "dependencies": {
     "@atproto/api": "^0.29.4",

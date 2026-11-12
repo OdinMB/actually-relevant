@@ -55,15 +55,16 @@ DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevant_syn
   PLUNK_SECRET_KEY=none PLUNK_PUBLIC_KEY=none PLUNK_FROM_EMAIL=none@example.org PLUNK_TEST_SEGMENT_ID=none SUBSCRIPTIONS_ENABLED=false \
   BLUESKY_AUTO_POST_ENABLED=false BLUESKY_SERVICE_URL=http://localhost:9 BLUESKY_HANDLE=none.invalid BLUESKY_APP_PASSWORD=none \
   MASTODON_AUTO_POST_ENABLED=false MASTODON_URL=http://localhost:9 MASTODON_TOKEN=none \
-  ELEVENLABS_API_KEY=none BUNNY_STORAGE_ZONE=none BUNNY_STORAGE_PASSWORD=none WEBHOOK_URL=http://localhost:9 \
+  ELEVENLABS_API_KEY=none BUNNY_STORAGE_ZONE=none BUNNY_STORAGE_PASSWORD=none TAVILY_API_KEY=none WEBHOOK_URL=http://localhost:9 \
   npm run dev --prefix server
 ```
 
-**Keep the placeholders on the server line.** The server also loads `server/.env`, so without them its Plunk, Bluesky, Mastodon, ElevenLabs, Bunny, extraction and webhook credentials would be live, and a send, post or publish clicked in the admin of this made-up database could email real subscribers or post to the real accounts. A value set in the shell wins over `server/.env`. The placeholders are non-empty on purpose: on Windows an empty variable can be dropped on its way to the server, and the real value from `server/.env` would then load. Each one disarms its service:
+**Keep the placeholders on the server line.** The server also loads `server/.env`, so without them its Plunk, Bluesky, Mastodon, ElevenLabs, Bunny, Tavily, extraction and webhook credentials would be live, and a send, post or publish clicked in the admin of this made-up database could email real subscribers or post to the real accounts. A value set in the shell wins over `server/.env`. The placeholders are non-empty on purpose: on Windows an empty variable can be dropped on its way to the server, and the real value from `server/.env` would then load. Each one disarms its service:
 
 - the switches read `false`, so auto-posting and signups are off;
 - the Bluesky, Mastodon and webhook URLs point at `localhost:9`, where nothing listens, so those calls fail on the machine;
-- Plunk, ElevenLabs, Bunny, Diffbot and PipFeed have fixed hosts in the code, and each rejects its placeholder key, so a newsletter send, a subscriber listing or an upload is refused there. Under `NODE_ENV=development` the podcast episodes the server makes or rewinds are dry runs, like the seeded draft, and their silent stub voice never calls ElevenLabs.
+- Plunk, ElevenLabs, Bunny, Diffbot and PipFeed have fixed hosts in the code, and each rejects its placeholder key, so a newsletter send, a subscriber listing or an upload is refused there. Under `NODE_ENV=development` the podcast episodes the server makes or rewinds are dry runs, like the seeded draft, and their silent stub voice never calls ElevenLabs;
+- `TAVILY_API_KEY=none` keeps the real Tavily key from loading. It switches story research on, but a run started there fails its queries call on `sk-none` before any search, so it ends as `fallback` and spends nothing (a failed model call counts $0; a search would get Tavily's 401).
 
 A credential added to `env.example` later belongs on this line too.
 

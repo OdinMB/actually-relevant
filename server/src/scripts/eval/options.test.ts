@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { parseOptions, parseRecalibrationOptions, DEFAULT_BUDGET_USD, DEFAULT_FLOOR, MAX_ASSESS_SIZE, SUITE_NAMES } from './options.js'
+import {
+  parseOptions,
+  parseRecalibrationOptions,
+  parseResearchOptions,
+  DEFAULT_BUDGET_USD,
+  DEFAULT_FLOOR,
+  MAX_ASSESS_SIZE,
+  RESEARCH_DEFAULT_BUDGET_USD,
+  RESEARCH_DEFAULT_SIZE,
+  RESEARCH_MAX_SIZE,
+  SUITE_NAMES,
+} from './options.js'
 import { MAX_REPEAT } from './repeats.js'
 
 describe('parseOptions', () => {
@@ -107,5 +118,45 @@ describe('parseRecalibrationOptions', () => {
     expect(() => parseRecalibrationOptions(['--out', 'x', '--budget', '21'])).toThrow(/budget/)
     expect(() => parseRecalibrationOptions(['--out', 'x', '--floor', '2026-2-1'])).toThrow(/--floor/)
     expect(parseRecalibrationOptions(['--out', 'x', '--floor', '2026-02-01']).floor).toBe('2026-02-01')
+  })
+})
+
+describe('parseResearchOptions', () => {
+  it('requires --out', () => {
+    expect(() => parseResearchOptions([])).toThrow(/--out/)
+  })
+
+  it("defaults to the 30 newest stories, a live run and this CLI's own budget", () => {
+    expect(parseResearchOptions(['--out', 'x'])).toEqual({
+      out: 'x',
+      size: RESEARCH_DEFAULT_SIZE,
+      dryRun: false,
+      budget: RESEARCH_DEFAULT_BUDGET_USD,
+      concurrency: 4,
+      refreshFixtures: false,
+    })
+    expect(RESEARCH_DEFAULT_BUDGET_USD).toBeLessThan(DEFAULT_BUDGET_USD)
+  })
+
+  it('takes a sample size from 1 up to the cap', () => {
+    expect(parseResearchOptions(['--out', 'x', '--size', String(RESEARCH_MAX_SIZE)]).size).toBe(RESEARCH_MAX_SIZE)
+    expect(() => parseResearchOptions(['--out', 'x', '--size', String(RESEARCH_MAX_SIZE + 1)])).toThrow(/--size/)
+    expect(() => parseResearchOptions(['--out', 'x', '--size', '0'])).toThrow(/--size/)
+  })
+
+  it('applies the project spend cap to --budget', () => {
+    expect(parseResearchOptions(['--out', 'x', '--budget', '20']).budget).toBe(20)
+    expect(() => parseResearchOptions(['--out', 'x', '--budget', '20.01'])).toThrow(/budget/)
+    expect(() => parseResearchOptions(['--out', 'x', '--budget', '0'])).toThrow(/budget/)
+  })
+
+  it('parses a smoke-run command line', () => {
+    expect(parseResearchOptions(['--out', 'x', '--limit', '2', '--dry-run', '--refresh-fixtures', '--concurrency', '2'])).toMatchObject({
+      limit: 2,
+      dryRun: true,
+      refreshFixtures: true,
+      concurrency: 2,
+    })
+    expect(() => parseResearchOptions(['--out', 'x', '--limit', '0'])).toThrow(/--limit/)
   })
 })

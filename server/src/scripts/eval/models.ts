@@ -14,9 +14,13 @@ import { HumanMessage, type AIMessage } from '@langchain/core/messages'
 import { toJsonSchema } from '@langchain/core/utils/json_schema'
 import type { z } from 'zod'
 import type { ReasoningEffort } from '../../config.js'
+import { classifyOutcome, contentText, finishReasonOf, usageFrom, ZERO_USAGE } from '../../lib/llmUsage.js'
 import { Semaphore } from '../../lib/semaphore.js'
 import { createChatModel } from '../../services/llm.js'
-import type { Arm, CallOutcome, CallRecord, ModelId, PlannedCall, SuiteContext, TokenUsage } from './types.js'
+import type { Arm, CallRecord, ModelId, PlannedCall, SuiteContext, TokenUsage } from './types.js'
+
+/** Re-exported for the eval's own tests and callers; it lives with production's usage helpers. */
+export { classifyOutcome }
 
 interface ModelPrice {
   /** USD per 1M tokens. */
@@ -89,15 +93,6 @@ export function costOf(model: ModelId, usage: TokenUsage): number {
   return (uncached * p.input * p.cacheWrite + usage.cached * p.cached + usage.output * p.output) / 1_000_000
 }
 
-export type OutcomeInput = { parsed: unknown; content: string; finishReason: string | null } | { error: unknown }
-
-export function classifyOutcome(input: OutcomeInput): CallOutcome {
-  if ('error' in input) return 'error'
-  if (input.finishReason === 'length') return 'truncated'
-  if (input.parsed != null) return 'ok'
-  return input.content.trim() !== '' ? 'parse_failure' : 'empty'
-}
-
 const HAN = /\p{Script=Han}/gu
 
 /** Rough input-token estimate: Han characters ≈ 1 token each, other text ≈ 4 chars per token. */
@@ -139,7 +134,7 @@ export function versionedSchemaName(name: string, schema: z.ZodType): string {
 // ---------------------------------------------------------------------------
 
 export interface EvalContext extends SuiteContext {
-  /** Total USD recorded in the ledger (all runs against this output dir). */
+  /** Total USD recorded in the ledger (all runs against this output dir), plus `externalSpendUsd`. */
   spentUsd(): number
   /** USD recorded by calls made in this process. */
   spentThisRunUsd(): number
@@ -154,6 +149,11 @@ export interface EvalContextOptions {
   limit?: number
   /** When true, any uncached call throws: a dry run must not reach the API. */
   offline: boolean
+  /**
+   * Spend outside the model calls (eval:research's Tavily credits), added to the ledger total by
+   * the budget guard and `spentUsd()`. Unset: none.
+   */
+  externalSpendUsd?: () => number
 }
 
 function readLedger(file: string): Map<string, CallRecord> {
@@ -167,31 +167,11 @@ function readLedger(file: string): Map<string, CallRecord> {
   return records
 }
 
-function usageFrom(message: AIMessage): TokenUsage {
-  const u = message.usage_metadata
-  return {
-    input: u?.input_tokens ?? 0,
-    cached: u?.input_token_details?.cache_read ?? 0,
-    output: u?.output_tokens ?? 0,
-    reasoning: u?.output_token_details?.reasoning ?? 0,
-  }
-}
-
-function contentText(message: AIMessage): string {
-  return typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-}
-
-function finishReasonOf(message: AIMessage): string | null {
-  const reason = message.response_metadata?.finish_reason
-  return typeof reason === 'string' ? reason : null
-}
-
-const ZERO_USAGE: TokenUsage = { input: 0, cached: 0, output: 0, reasoning: 0 }
-
 export function createEvalContext(options: EvalContextOptions): EvalContext {
   mkdirSync(dirname(options.cacheFile), { recursive: true })
   const ledger = readLedger(options.cacheFile)
   const semaphore = new Semaphore(options.concurrency)
+  const external = options.externalSpendUsd ?? (() => 0)
   let spent = [...ledger.values()].reduce((sum, r) => sum + r.costUsd, 0)
   let spentThisRun = 0
   let live = 0
@@ -208,7 +188,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
 
   async function invoke<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: string, key: string): Promise<CallRecord<T>> {
     const base = { key, arm: armKey(a), schema: schemaName, at: new Date().toISOString() }
-    if (spent >= options.budgetUsd) {
+    if (spent + external() >= options.budgetUsd) {
       return {
         ...base,
         outcome: 'skipped',
@@ -267,7 +247,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
       if (options.offline) throw new Error(`offline run tried to call ${armKey(a)} (${schemaName})`)
       return semaphore.run(() => invoke(a, schemaName, schema, prompt, key))
     },
-    spentUsd: () => spent,
+    spentUsd: () => spent + external(),
     spentThisRunUsd: () => spentThisRun,
     isCached: call => ledger.has(cacheKey(call.arm, call.schemaName, call.prompt)),
     liveCalls: () => live,

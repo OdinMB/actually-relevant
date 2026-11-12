@@ -123,6 +123,7 @@ const RUNS_ON_ITS_CODE_DEFAULT: Record<string, string> = {
     'SOCIAL_LOOKBACK_HOURS',
   ]),
   ...tunables('local file paths and log rotation (config.log)', ['LOG_DIR', 'LOG_RETENTION_DAYS']),
+  ...tunables('research spend cap (.context/story-research.md)', ['RESEARCH_MONTHLY_CAP_USD']),
 }
 
 /**

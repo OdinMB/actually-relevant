@@ -284,6 +284,38 @@ export const config = {
     // backlog publishes over several bounded passes rather than one unbounded one.
     chunkSize: parseWholeNumber(process.env.PUBLISH_CHUNK_SIZE, 100, 'PUBLISH_CHUNK_SIZE'),
   },
+  /** Story research, the admin action (.context/story-research.md). */
+  research: {
+    /** Tavily's key, and the switch: research is off while it is empty. Read at call time. */
+    get tavilyApiKey(): string {
+      return process.env.TAVILY_API_KEY || ''
+    },
+    /** USD all runs started in a UTC month may cost together (runs of deleted stories included). */
+    monthlyCapUsd: parseWholeNumber(process.env.RESEARCH_MONTHLY_CAP_USD, 30, 'RESEARCH_MONTHLY_CAP_USD'),
+    /** A run's ceiling, reserved against the cap when it starts (about five times the expected cost). */
+    maxRunUsd: 0.25,
+    /** Pay-as-you-go price per credit; Tavily's free credits are counted as paid. */
+    tavilyUsdPerCredit: 0.008,
+    /**
+     * USD per 1M tokens, copied from the eval's verified table (scripts/eval/models.ts). A step whose
+     * model has no row here is refused before the run starts, so a tier override never runs uncounted.
+     */
+    modelPrices: {
+      'gpt-6-luna': { input: 0.1, cached: 0.01, output: 0.5 },
+      'gpt-6-sol': { input: 2.0, cached: 0.2, output: 10.0 },
+      'gpt-6.1-sol': { input: 2.0, cached: 0.2, output: 10.0 },
+    } as Record<string, { input: number; cached: number; output: number } | undefined>,
+    /** Uncached input is billed at this factor: Chat Completions reports no cache writes, so it is an upper bound. */
+    cacheWriteFactor: 1.25,
+    /**
+     * A `running` run older than this was cut off by a restart, and is marked failed. Above a live run's
+     * worst case (model calls with the SDK's default timeout and retries, Tavily with its retries), so a
+     * slow run is never marked interrupted while it still works.
+     */
+    staleRunMinutes: 60,
+    /** Runs the admin lists per story, newest first. */
+    runsListed: 10,
+  },
   embedding: {
     model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
     // Changing dimensions requires a DB migration to alter the vector(1536) column and rebuild the index

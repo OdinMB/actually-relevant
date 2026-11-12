@@ -95,6 +95,32 @@ describe('createEvalContext', () => {
     expect(ctx.spentThisRunUsd()).toBe(0)
   })
 
+  it('adds external spend to the ledger and stops live calls once both together reach the budget', async () => {
+    const file = tempLedger()
+    const cached: CallRecord = {
+      key: cacheKey(luna, 's', 'cached prompt'),
+      arm: 'gpt-6-luna@low',
+      schema: 's',
+      outcome: 'ok',
+      parsed: { ok: true },
+      content: '{"ok":true}',
+      finishReason: 'stop',
+      usage: { input: 10, cached: 0, output: 5, reasoning: 0 },
+      costUsd: 0.6,
+      latencyMs: 42,
+      at: '',
+    }
+    writeFileSync(file, JSON.stringify(cached) + '\n')
+    let external = 0.4
+    const ctx = createEvalContext({ cacheFile: file, budgetUsd: 1, concurrency: 1, offline: false, externalSpendUsd: () => external })
+    expect(ctx.spentUsd()).toBeCloseTo(1)
+    const rec = await ctx.call(luna, 's', schema, 'new prompt')
+    expect(rec.outcome).toBe('skipped')
+    expect(ctx.liveCalls()).toBe(0)
+    external = 0.5
+    expect(ctx.spentUsd()).toBeCloseTo(1.1)
+  })
+
   it('refuses any uncached call in an offline (dry) run', async () => {
     const ctx = createEvalContext({ cacheFile: tempLedger(), budgetUsd: 10, concurrency: 1, offline: true })
     await expect(ctx.call(luna, 's', schema, 'prompt')).rejects.toThrow(/offline/)

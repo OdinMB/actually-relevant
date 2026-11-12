@@ -102,6 +102,7 @@ model Story {
   blueskyPosts           BlueskyPost[]
   mastodonPosts          MastodonPost[]
   feedback               Feedback[]
+  researchRuns           StoryResearchRun[]
   createdAt              DateTime     @default(now()) @map("created_at")
   updatedAt              DateTime     @updatedAt @map("updated_at")
 
@@ -399,6 +400,34 @@ model PodcastTtsUsage {
 
   @@index([createdAt])
   @@map("podcast_tts_usage")
+}
+
+enum ResearchRunStatus {
+  running
+  completed
+  failed
+}
+
+/// One story research run, the admin action (.context/story-research.md). Every run is kept; a deleted story's runs keep a null story_id, so the month's spend still counts them. `cost_usd` holds the run's reservation while it runs, then its measured cost
+model StoryResearchRun {
+  id            String            @id @default(uuid())
+  storyId       String?           @map("story_id")
+  story         Story?            @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  status        ResearchRunStatus @default(running)
+  /// The gate verdict's kind; null until the run finishes
+  verdict       String?
+  costUsd       Float             @map("cost_usd")
+  tavilyCredits Int               @default(0) @map("tavily_credits")
+  /// The run's StoryResearch, with the model ids and prices it used
+  result        Json?
+  /// Why a run failed, sanitized: never fetched text
+  error         String?
+  startedAt     DateTime          @default(now()) @map("started_at")
+  finishedAt    DateTime?         @map("finished_at")
+
+  @@index([storyId, startedAt])
+  @@index([startedAt])
+  @@map("story_research_runs")
 }
 
 /// One row per show and ISO week whose Saturday publish slot found no weekly episode to publish: the claim that makes the missed-week alert go out once

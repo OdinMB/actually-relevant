@@ -168,6 +168,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |
 | `ai-transparency.md` | EU AI Act Art. 50 record: AI inventory, labels, machine-readable markers, text-watermark gap, open owner decisions |
+| `story-research.md` | Story research, the admin action: what a run does and never does (writes only its own `story_research_runs` row), eligibility, the `TAVILY_API_KEY` switch, the monthly cap and $0.25 reservation under its advisory lock, interrupted runs, cost recording (an upper bound), untrusted input, the AI opt-out seam, endpoints |
 | `client/.context/skeletons.md` | Skeleton components for loading states (prevents CLS) |
 
 ## Memory
