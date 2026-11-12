@@ -170,6 +170,11 @@ export const factCheckSchema = z.object({
             'True when every factual claim of the sentence (each number, name, date, place and event) is stated by its cited facts, with the same scope.',
           ),
         problem: z.string().describe('When not supported: the claim its cited facts do not state, in one short sentence. Empty string otherwise.'),
+        key: z
+          .boolean()
+          .describe(
+            'When not supported: true when the unsupported claim is the main development itself (that it happened, who did it, or its central figure); false for a detail such as an exact date, a side figure, an attribution or a background point. False when supported.',
+          ),
       }),
     )
     .describe('One entry per sentence in <SENTENCES>.'),

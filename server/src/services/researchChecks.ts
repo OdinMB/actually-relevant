@@ -29,6 +29,8 @@ export interface CitationProblem {
   label: string
   text: string
   problem: string
+  /** The fact check's judgment that the unsupported claim is the main development itself. */
+  key?: boolean
 }
 
 type DraftParts = Pick<Draft, 'story' | 'whyThisMatters' | 'caveats'>
@@ -73,23 +75,32 @@ export function checkCitations(draft: DraftParts, facts: ReadonlyMap<string, Poo
   return draftSentences(draft).flatMap(s => sentenceProblems(s, facts).map(problem => ({ label: s.label, text: s.text, problem })))
 }
 
-const LEAD = 'Story paragraph 1, sentence 1'
-/** More failing sentences than this after the rewrite and the draft is not worth saving. */
-const MAX_DROPPED = 3
+/**
+ * A source's publication date as a fact (id `S2F0`), so a sentence may date the development from
+ * it: the sources often say only "Wednesday", and the date is the one thing we know for sure.
+ */
+export function publishedFact(sourceId: string, outlet: string, date: string | null): PoolFact[] {
+  const day = date ? new Date(`${date.slice(0, 10)}T00:00:00Z`) : null
+  if (!day || Number.isNaN(day.getTime())) return []
+  const when = day.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+  return [{ id: `${sourceId}F0`, statement: `${outlet} published this on ${when}.`, supportingSentence: '', measures: '' }]
+}
 
 /**
- * After the rewrite: the draft without its failing sentences, or why it cannot be saved: the
- * opening sentence failed, more than three did, or a part was left empty.
+ * After the rewrite: the draft without its failing sentences, or why it cannot be saved: a key
+ * claim (the main development itself, as the fact check judges it) is unsupported, or a part was
+ * left empty. Any other failing sentence, the opening one included, is only dropped.
  */
 export function dropFailing<D extends DraftParts>(draft: D, problems: CitationProblem[]): { draft: D } | { failed: string } {
+  const key = problems.find(p => p.key)
+  if (key) return { failed: `a key claim failed the check after one rewrite (${key.label})` }
   const failing = new Set(problems.map(p => p.label))
-  if (failing.has(LEAD)) return { failed: 'the opening sentence failed the check after one rewrite' }
-  if (failing.size > MAX_DROPPED) return { failed: `${failing.size} sentences failed the check after one rewrite` }
   const story = draft.story
     .map((p, pi) => ({ ...p, sentences: p.sentences.filter((_, si) => !failing.has(`Story paragraph ${pi + 1}, sentence ${si + 1}`)) }))
     .filter(p => p.sentences.length > 0)
   const whyThisMatters = draft.whyThisMatters.filter((_, i) => !failing.has(`Why This Matters ${i + 1}`))
   const caveats = draft.caveats.filter((_, i) => !failing.has(`Caveat ${i + 1}`))
+  if (story.length === 0) return { failed: 'no story sentence passed the check after one rewrite' }
   if (whyThisMatters.length === 0) return { failed: 'no Why This Matters bullet passed the check after one rewrite' }
   if (caveats.length === 0) return { failed: 'no caveat passed the check after one rewrite' }
   return { draft: { ...draft, story, whyThisMatters, caveats } }

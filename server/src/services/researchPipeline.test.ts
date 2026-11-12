@@ -169,7 +169,7 @@ const earlier = (): Earlier => ({
   ],
 })
 const allSupported = (prompt: string): FactCheck => ({
-  sentences: [...prompt.matchAll(/<SENTENCE number="(\d+)">/g)].map(m => ({ number: Number(m[1]), supported: true, problem: '' })),
+  sentences: [...prompt.matchAll(/<SENTENCE number="(\d+)">/g)].map(m => ({ number: Number(m[1]), supported: true, problem: '', key: false })),
 })
 
 const baseResponders = (over: Responder = {}): Responder => ({
@@ -290,9 +290,30 @@ describe('researchStory', () => {
     expect(fake.steps.filter(c => c === 'write')).toHaveLength(1)
     expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
     expect(r.rewritten).toBe(true)
-    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'the opening sentence failed the check after one rewrite' })
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'no story sentence passed the check after one rewrite' })
     expect(r.problems[0]?.problem).toContain('S9F9')
     expect(r.draft).not.toBeNull()
+  })
+
+  it('falls back when the fact check judges an unsupported claim key after the rewrite, and runs it beside the citation check', async () => {
+    const failsKey = (p: string): FactCheck => ({
+      sentences: allSupported(p).sentences.map(s => (s.number === 1 ? { number: 1, supported: false, problem: 'no source says it happened', key: true } : s)),
+    })
+    const { deps: d, fake } = deps({ responders: baseResponders({ 'fact-check': failsKey, rewrite: () => goodDraft() }) })
+    const r = await researchStory(story(), d)
+    expect(fake.steps.filter(c => c === 'fact-check')).toHaveLength(2)
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'a key claim failed the check after one rewrite (Story paragraph 1, sentence 1)' })
+  })
+
+  it('lets a source date support the date a sentence gives', async () => {
+    const dated = (): Draft => ({
+      ...goodDraft(),
+      story: [{ sentences: [{ text: 'On Thursday, November 12, Pakistan said it had added 22 GW of rooftop solar in two years.', factIds: ['S0F1'] }] }],
+    })
+    const { deps: d, fake } = deps({ responders: baseResponders({ write: dated }) })
+    const r = await researchStory(story(), d)
+    expect(fake.steps).not.toContain('rewrite')
+    expect(r.verdict).toEqual({ kind: 'keep' })
   })
 
   it('drops a bullet that still fails after the rewrite and keeps the rest of the draft', async () => {
@@ -332,7 +353,7 @@ describe('researchStory', () => {
       responders: baseResponders({
         'fact-check': p => {
           checks++
-          return checks === 1 ? { sentences: [{ number: 1, supported: false, problem: 'two years is not stated' }] } : allSupported(p)
+          return checks === 1 ? { sentences: [{ number: 1, supported: false, problem: 'two years is not stated', key: false }] } : allSupported(p)
         },
         rewrite: () => goodDraft(['S0F1', 'S1F1']),
       }),

@@ -273,6 +273,7 @@ ${GENERIC_LIMITING_FACTORS}
 Citations
 - Every sentence of the story cites, by id, the facts that state what it says. A sentence says nothing its cited facts do not state: each number, name, date and place in it appears in one of them.
 - A number keeps the scope its fact records ('22 GW of rooftop solar in two years', not '22 GW of solar'). Where sources count differently, the story gives each figure with its scope and cites each.
+- A date may come from a SOURCE's date when that source dates the event by weekday or as "today"; the sentence then cites a fact of that source.
 - Facts with ids starting with E come from Actually Relevant's earlier stories: background, cited only where the story uses them.
 
 One development
@@ -281,18 +282,20 @@ One development
 Story (2-4 paragraphs, 150-250 words in total)
 - The first paragraph says what happened, who did it, where and when.
 - The rest says what drives it and who is affected, then what stands in the way or comes next.
-- Short sentences in plain language.
+- Short sentences in plain language. A technical term is put in everyday words or explained in a few; a symbol or variable from the sources (such as T or ε) never appears.
+- Concrete over general: the specific measures, amounts, groups covered and consequences in <FACTS> rather than a summary of them, and each point once, not restated from several sources.
 
 Summary (40-70 words)
 - The development for cards and feeds, consistent with the story, in plain language.
 
 Why This Matters (exactly 3 bullets, 1-2 sentences each)
-- Each bullet is about significance, not a retelling of the story: how many people, through which mechanism, how lasting, compared with what.
+- Each bullet is about significance, not a retelling of the story: how many people, through which mechanism, how lasting, compared with what. It names the specific measure, figure or group it is about.
 - A bullet that states a fact cites it; a bullet that only judges cites nothing. No number appears without a cited fact.
 
 Caveats (1-3 bullets, 1-2 sentences each)
 - What limits the development or makes it uncertain, checked against <TOPIC-SPECIFIC LIMITING FACTORS> and <GENERIC_LIMITING_FACTORS>, including where sources disagree or count differently, with each side cited.
-- Each caveat names a real limit: whose claim it is when only the party behind it vouches for it, what is still unverified, pending or unknown, what could stall or undo it. That something was checked, reviewed or praised is not a caveat.
+- Each caveat names a real limit: whose claim it is when only the party behind it vouches for it, what is still unverified, pending or unknown, what could stall or undo it. That something was checked, reviewed or praised is not a caveat, nor is "if the result holds" or a detail the party has not disclosed.
+- Where <FACTS> say no independent expert has assessed a claim yet, or that a confirmation is reported only by the party behind the claim, that is the first caveat.
 
 Key quote
 - The most telling exact words of a VOICE's QUOTE or a SENTENCE in <FACTS>, translated to English if needed, attributed to the person with their role, or to the organization or outlet, with the id of the source it comes from.
@@ -366,6 +369,7 @@ ${items}
 <RULES>
 - A sentence is supported when every number, name, date, place and event it states is stated by its cited facts, with the same scope: a figure for rooftop solar does not support a sentence about all solar.
 - A judgment of significance or consequence that adds no factual claim is supported.
-- The cited facts are the only evidence; what you know from elsewhere does not count.
+- The cited facts are the only evidence; what you know from elsewhere does not count. A fact giving the date a source was published supports a date the sentence gives for an event that source dates by weekday or as "today".
+- For a sentence that is not supported, judge whether the unsupported claim is key: the main development itself (that it happened, who did it, or its central figure). An exact date, a side figure, an attribution or a background point is not key.
 </RULES>`
 }
