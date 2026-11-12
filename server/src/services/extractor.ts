@@ -6,12 +6,19 @@ import { isAllowedUrl, ssrfGuard } from '../utils/urlValidation.js'
 import { summarizeError } from '../utils/errors.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { withRetry, isRetryableError } from '../lib/retry.js'
+import { withRetry, isRetryableError, responseStatus } from '../lib/retry.js'
 import { crawlLimiter } from '../lib/crawlLimiter.js'
+import { CRAWLER_USER_AGENT } from '../lib/crawlerIdentity.js'
+import { pageTdmReservation } from '../lib/tdmRep.js'
 import { classifyAccess, DEFAULT_PAYWALL_POLICY, type AccessTier, type PaywallPolicy } from '../lib/paywall.js'
 
 const log = createLogger('extractor')
-const USER_AGENT = 'ActuallyRelevant/1.0 (news curation bot; +https://actuallyrelevant.news)'
+
+/**
+ * The statuses by which a publisher refuses the crawler. A page fetch answered with one is never
+ * handed to an extraction API, which would fetch it anyway: the API tier is for technical failures.
+ */
+const REFUSAL_STATUSES: ReadonlySet<number> = new Set([401, 403, 429, 451])
 
 function isQuotaError(err: unknown): boolean {
   if (err instanceof Error && 'isAxiosError' in err) {
@@ -43,6 +50,22 @@ export interface ExtractionResult {
   /** `teaser`: every tier failed on a page classified as locked; content is the page description. */
   method: ExtractionMethod
   accessTier: AccessTier
+}
+
+/**
+ * The publisher said no to this page, so its text is not used and no extraction API is asked for it:
+ * `denied`, its fetch was answered 401, 403, 429 or 451; `reserved`, it carries a TDM reservation
+ * (the `tdm-reservation` header or meta tag).
+ */
+export interface PageRefusal {
+  refusal: 'denied' | 'reserved'
+  reason: string
+}
+
+export type ExtractionOutcome = ExtractionResult | PageRefusal | null
+
+export function isPageRefusal(outcome: ExtractionOutcome | string): outcome is PageRefusal {
+  return typeof outcome === 'object' && outcome !== null && 'refusal' in outcome
 }
 
 /** What a single extraction tier produces, before access classification. */
@@ -131,13 +154,17 @@ const apiThrottle = new ApiThrottle(
   30_000, // max 30s between calls
 )
 
-async function fetchPage(url: string): Promise<string | null> {
+/**
+ * Fetch the page's HTML. A refusal status or a page-level TDM reservation is a `PageRefusal`; any
+ * other failure (timeout, network, 5xx) is null, which the API tier may make up for.
+ */
+async function fetchPage(url: string): Promise<string | PageRefusal | null> {
   try {
     const response = await crawlLimiter.run(url, () =>
       withRetry(() =>
-        axios.get(url, {
+        axios.get<string>(url, {
           timeout: config.crawl.httpTimeoutMs,
-          headers: { 'User-Agent': USER_AGENT },
+          headers: { 'User-Agent': CRAWLER_USER_AGENT },
           maxRedirects: 5,
           responseType: 'text',
           maxContentLength: 5 * 1024 * 1024, // 5 MB cap to prevent OOM on huge pages
@@ -145,8 +172,18 @@ async function fetchPage(url: string): Promise<string | null> {
         }),
       ),
     )
+    const reservation = pageTdmReservation(response.headers?.['tdm-reservation'], response.data)
+    if (reservation) {
+      log.info({ url, reason: reservation }, 'page carries a TDM reservation; its text is discarded')
+      return { refusal: 'reserved', reason: reservation }
+    }
     return response.data
   } catch (err) {
+    const status = responseStatus(err)
+    if (status !== undefined && REFUSAL_STATUSES.has(status)) {
+      log.info({ url, status }, 'publisher refused the page fetch; no extraction API is asked for it')
+      return { refusal: 'denied', reason: `publisher refused the crawler (HTTP ${status})` }
+    }
     log.warn({ url, reason: summarizeError(err) }, 'page fetch failed')
     return null
   }
@@ -315,9 +352,9 @@ async function extractByApi(url: string, api: 'diffbot' | 'pipfeed', shouldAbort
  * limit), which can OOM the crawl; such pages are deferred to the API tier, which extracts
  * server-side without loading the DOM into our heap.
  */
-async function fetchParseablePage(url: string): Promise<string | null> {
+async function fetchParseablePage(url: string): Promise<string | PageRefusal | null> {
   const html = await fetchPage(url)
-  if (html == null) return null
+  if (html === null || isPageRefusal(html)) return html
   const htmlBytes = Buffer.byteLength(html, 'utf8')
   if (htmlBytes > config.crawl.maxParseBytes) {
     log.warn({ url, htmlBytes, maxParseBytes: config.crawl.maxParseBytes }, 'page exceeds maxParseBytes; skipping local parse, deferring to API tier')
@@ -326,23 +363,31 @@ async function fetchParseablePage(url: string): Promise<string | null> {
   return html
 }
 
+/**
+ * The article's text through the tier chain, classified for access; a `PageRefusal` when the
+ * publisher refused the page or reserved it (then no API is asked); null when every tier failed.
+ */
 export async function extractContent(
   url: string,
   options?: {
     htmlSelector?: string | null
     skipLocalExtraction?: boolean
     shouldAbort?: () => boolean
+    /** True once the crawl met a refusal: the API tier is then left out, read at the moment it would run. */
+    skipApiTier?: () => boolean
     /** The feed's paywall setting (ADR-0032); defaults to detection on, no title marker. */
     paywall?: PaywallPolicy
   },
-): Promise<ExtractionResult | null> {
+): Promise<ExtractionOutcome> {
   if (!isAllowedUrl(url)) {
     log.warn({ url }, 'blocked disallowed URL')
     return null
   }
 
   const policy = options?.paywall ?? DEFAULT_PAYWALL_POLICY
-  const html = options?.skipLocalExtraction ? null : await fetchParseablePage(url)
+  const page = options?.skipLocalExtraction ? null : await fetchParseablePage(url)
+  if (isPageRefusal(page)) return page
+  const html = page
   const classified = (result: TierResult): ExtractionResult => {
     const { accessTier } = classifyAccess({ html, extractedText: result.content, title: result.title, policy })
     log.info({ url, method: result.method, contentLength: result.content.length, accessTier }, 'extraction succeeded')
@@ -365,10 +410,14 @@ export async function extractContent(
     return null
   }
 
-  // Tier 3: External API extraction
-  const apiResult = await extractByApi(url, config.crawl.extractionApi, options?.shouldAbort)
-  if (apiResult) return classified(apiResult)
-  if (options?.shouldAbort?.()) return null
+  // Tier 3: External API extraction, unless a refusal earlier in the crawl ruled it out
+  if (options?.skipApiTier?.()) {
+    log.info({ url }, 'API tier skipped: the publisher refused the crawler earlier in this crawl')
+  } else {
+    const apiResult = await extractByApi(url, config.crawl.extractionApi, options?.shouldAbort)
+    if (apiResult) return classified(apiResult)
+    if (options?.shouldAbort?.()) return null
+  }
 
   // Every tier failed. A locked page is still stored, as a teaser, rather than returned as null:
   // null counts toward the crawler's skip-local/skip-all thresholds and is retried on every crawl.

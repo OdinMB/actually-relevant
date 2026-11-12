@@ -1,6 +1,7 @@
 import type { Feed } from '@prisma/client'
 import { parseFeed, type ParseFeedResult, type RSSItem } from './rssParser.js'
-import { extractContent, type CrawlMethod, type ExtractionMethod } from './extractor.js'
+import { extractContent, isPageRefusal, type CrawlMethod, type ExtractionMethod, type ExtractionOutcome } from './extractor.js'
+import { checkOptOut, optOutMessage, type Reservation } from './publisherOptOut.js'
 import { RSS_CRAWL_METHOD, storyFromRssItem } from './rssContent.js'
 import type { AccessTier, PaywallPolicy } from '../lib/paywall.js'
 import { getExistingUrls, createStory } from './story.js'
@@ -9,7 +10,7 @@ import { createLogger } from '../lib/logger.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { config } from '../config.js'
 import { normalizeUrl } from '../utils/urlNormalization.js'
-import { BadRequestError, ConflictError, NotFoundError, isUniqueViolation, summarizeError } from '../utils/errors.js'
+import { BadRequestError, ConflictError, NotFoundError, UnprocessableError, isUniqueViolation, summarizeError } from '../utils/errors.js'
 
 const log = createLogger('crawler')
 
@@ -43,6 +44,41 @@ export interface CrawlResult {
   skipped: number
   errors: number
   errorMessage?: string
+}
+
+/**
+ * What a crawl tells the feed besides its counts (content-extraction.md, "Publisher opt-out check"):
+ * the items it skipped for a publisher's opt-out, with the first reason, and the first refused fetch.
+ */
+class CrawlNotes {
+  /** Items skipped, never stored, for a reservation; looked at again on every crawl while they stay in the feed. */
+  optedOut = 0
+  private firstOptOut: Reservation | null = null
+  private firstRefusal: string | null = null
+
+  constructor(
+    private readonly feedTitle: string,
+    private readonly result: CrawlResult,
+  ) {}
+
+  skipForOptOut(url: string, reservation: Reservation): void {
+    log.info({ feed: this.feedTitle, url, reason: reservation.reason }, 'item skipped for the publisher opt-out')
+    this.result.skipped++
+    this.optedOut++
+    this.firstOptOut ??= reservation
+  }
+
+  refused(reason: string): void {
+    this.firstRefusal ??= reason
+  }
+
+  /** The notes the crawl's error carries after "N of M articles failed extraction", which feedProblems.ts reads as a prefix. */
+  messages(): string[] {
+    const notes: string[] = []
+    if (this.firstRefusal) notes.push(this.firstRefusal)
+    if (this.firstOptOut) notes.push(`${optOutMessage(this.firstOptOut)} (${this.optedOut} article${this.optedOut === 1 ? '' : 's'} skipped)`)
+    return notes
+  }
 }
 
 export async function crawlFeed(feedId: string): Promise<CrawlResult> {
@@ -114,15 +150,15 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
   const newItems = uniqueItems.filter(item => !existingUrls.has(item.url))
   result.skipped = rssItems.length - newItems.length // includes RSS duplicates + DB matches
 
-  // Items whose text was too short to attempt are skips, not failures, so they stay out of this count.
-  const totalArticles = takesTextFromRss(feed) ? await storeRssItems(feed, newItems, result) : await extractAndStorePages(feed, newItems, result)
+  // Items too short to attempt, or skipped for a publisher's opt-out, are skips, not failures, so they stay out of this count.
+  const notes = new CrawlNotes(feed.title, result)
+  const totalArticles = takesTextFromRss(feed) ? await storeRssItems(feed, newItems, result, notes) : await extractAndStorePages(feed, newItems, result, notes)
 
-  if (result.errors > 0) {
-    result.errorMessage = `${result.errors} of ${totalArticles} articles failed extraction`
-  }
+  // An opt-out is the feed's error even beside new stories, so the feed table shows it
+  const messages = [...(result.errors > 0 ? [`${result.errors} of ${totalArticles} articles failed extraction`] : []), ...notes.messages()]
+  if (messages.length > 0) result.errorMessage = messages.join('; ')
 
-  const crawlResult =
-    result.newStories > 0 ? `${result.newStories} new article${result.newStories > 1 ? 's' : ''}` : result.errors > 0 ? result.errorMessage! : 'No new articles'
+  const crawlResult = result.newStories > 0 ? `${result.newStories} new article${result.newStories > 1 ? 's' : ''}` : (result.errorMessage ?? 'No new articles')
 
   await updateCrawlStatus(feedId, {
     hadSuccess: result.newStories > 0,
@@ -135,8 +171,9 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
 }
 
 /**
- * Fetch each item's article page, extract its text through the tier chain and store the story.
- * Returns how many items were attempted (all of them).
+ * Check each item against the publisher's opt-out, fetch its article page, extract its text through
+ * the tier chain and store the story. Returns how many items were attempted: all but those skipped
+ * for an opt-out.
  *
  * Runs in parallel with a concurrency limit. The fail counters below are shared across concurrent
  * tasks. This is safe because Node.js is single-threaded: mutations happen synchronously between
@@ -144,13 +181,28 @@ export async function crawlFeed(feedId: string): Promise<CrawlResult> {
  * (size = crawlArticles) all read the initial values; thresholds take effect for subsequent batches
  * after the first batch completes.
  */
-async function extractAndStorePages(feed: CrawledFeed, items: RSSItem[], result: CrawlResult): Promise<number> {
+async function extractAndStorePages(feed: CrawledFeed, items: RSSItem[], result: CrawlResult, notes: CrawlNotes): Promise<number> {
   const articleSemaphore = new Semaphore(config.concurrency.crawlArticles)
-  const totalArticles = items.length
   let localFailCount = 0
   let totalFailCount = 0
   let skipLocal = false
   let skipAll = false
+  // Once the host refuses a page fetch or reserves a page, no extraction API is asked for the rest of
+  // this crawl: the API tier makes up for technical failures only, never for a publisher's no.
+  let apiBlocked = false
+
+  /** An attempted article that gave no story: toward skip-local (when its page was tried) and skip-all. */
+  const countFailure = () => {
+    totalFailCount++
+    if (!skipLocal) localFailCount++
+    if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
+    if (totalFailCount >= config.crawl.totalFailThreshold) {
+      skipAll = true
+      log.warn({ feed: feed.title, totalFailCount, totalArticles: items.length }, 'all extraction methods failing, skipping remaining articles')
+    }
+    result.errors++
+  }
+
   await Promise.allSettled(
     items.map(item =>
       articleSemaphore.run(async () => {
@@ -158,12 +210,18 @@ async function extractAndStorePages(feed: CrawledFeed, items: RSSItem[], result:
           result.errors++
           return
         }
-        let extracted: Awaited<ReturnType<typeof extractContent>>
+        let extracted: ExtractionOutcome
         try {
+          const verdict = await checkOptOut(item.url, { fetchesPage: true })
+          if (verdict.reserved) {
+            notes.skipForOptOut(item.url, verdict)
+            return
+          }
           extracted = await extractContent(item.url, {
             htmlSelector: feed.htmlSelector,
             skipLocalExtraction: skipLocal,
             shouldAbort: () => skipAll,
+            skipApiTier: () => apiBlocked,
             paywall: paywallPolicy(feed),
           })
         } catch (err) {
@@ -172,17 +230,21 @@ async function extractAndStorePages(feed: CrawledFeed, items: RSSItem[], result:
           return
         }
 
-        if (!extracted) {
-          totalFailCount++
-          // Local extraction was attempted and failed — count toward skip-local threshold
-          if (!skipLocal) localFailCount++
-          if (localFailCount >= config.crawl.localFailThreshold) skipLocal = true
-          if (totalFailCount >= config.crawl.totalFailThreshold) {
-            skipAll = true
-            log.warn({ feed: feed.title, totalFailCount, totalArticles }, 'all extraction methods failing, skipping remaining articles')
+        if (isPageRefusal(extracted)) {
+          apiBlocked = true
+          if (extracted.refusal === 'reserved') {
+            notes.skipForOptOut(item.url, { reason: extracted.reason, unverified: false })
+          } else {
+            log.warn({ url: item.url, reason: extracted.reason }, 'page fetch refused; no extraction API for the rest of this crawl')
+            notes.refused(extracted.reason)
+            countFailure()
           }
+          return
+        }
+
+        if (!extracted) {
           log.warn({ url: item.url }, 'no content extracted')
-          result.errors++
+          countFailure()
           return
         }
 
@@ -212,18 +274,24 @@ async function extractAndStorePages(feed: CrawledFeed, items: RSSItem[], result:
       }),
     ),
   )
-  return totalArticles
+  return items.length - notes.optedOut
 }
 
 /**
  * Store each item's own text as its story (`contentSource` 'rss'), in order, fetching no page. An
- * item whose text is shorter than `minContentLength` (a paid post's preview) is a skip, never an
- * error and never a page fetch, which the publisher's terms forbid. Returns how many items were long
- * enough to attempt.
+ * item the publisher reserved, or whose text is shorter than `minContentLength` (a paid post's
+ * preview), is a skip, never an error and never a page fetch, which the publisher's terms forbid.
+ * Returns how many items were attempted.
  */
-async function storeRssItems(feed: CrawledFeed, items: RSSItem[], result: CrawlResult): Promise<number> {
+async function storeRssItems(feed: CrawledFeed, items: RSSItem[], result: CrawlResult, notes: CrawlNotes): Promise<number> {
   let attempted = 0
   for (const item of items) {
+    // No page is fetched, so robots.txt path rules do not apply; TDMRep and Content-Signal reserve the use itself
+    const verdict = await checkOptOut(item.url, { fetchesPage: false })
+    if (verdict.reserved) {
+      notes.skipForOptOut(item.url, verdict)
+      continue
+    }
     const story = storyFromRssItem(item, paywallPolicy(feed))
     if (!story) {
       log.info({ feed: feed.title, url: item.url }, 'RSS item text below the minimum length (a preview?); skipped, page not fetched')
@@ -331,11 +399,18 @@ export async function crawlUrl(url: string, feedId: string): Promise<{ storyId: 
     throw new ConflictError('URL already crawled')
   }
 
+  const verdict = await checkOptOut(url, { fetchesPage: true })
+  if (verdict.reserved) throw new BadRequestError(optOutMessage(verdict))
+
   const extracted = await extractContent(url, {
     htmlSelector: feed.htmlSelector,
     paywall: paywallPolicy(feed),
   })
 
+  if (isPageRefusal(extracted)) {
+    if (extracted.refusal === 'reserved') throw new BadRequestError(optOutMessage({ reason: extracted.reason, unverified: false }))
+    throw new UnprocessableError(`Could not extract content from URL: ${extracted.reason}`)
+  }
   if (!extracted) return null
 
   const story = await createStory({

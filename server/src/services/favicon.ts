@@ -8,6 +8,8 @@ import type { Readable } from 'stream'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import { createLogger } from '../lib/logger.js'
+import { CRAWLER_USER_AGENT } from '../lib/crawlerIdentity.js'
+import { readCapped } from '../lib/streamRead.js'
 import { isAllowedUrl, ssrfGuard } from '../utils/urlValidation.js'
 import { toFaviconPng } from './faviconImage.js'
 import { activeFeedsForFavicons, hasFavicon, saveFavicon } from './faviconStore.js'
@@ -52,7 +54,7 @@ async function guardedGet(url: string, accept?: string): Promise<{ contentType: 
     responseType: 'stream',
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), // the whole exchange, body included
     maxRedirects: 5,
-    headers: accept ? { Accept: accept } : undefined,
+    headers: { 'User-Agent': CRAWLER_USER_AGENT, ...(accept ? { Accept: accept } : {}) },
     validateStatus: () => true,
     ...ssrfGuard,
   })
@@ -61,23 +63,6 @@ async function guardedGet(url: string, accept?: string): Promise<{ contentType: 
     return null
   }
   return { contentType: String(res.headers['content-type'] ?? ''), body: res.data }
-}
-
-/** Read a stream up to maxBytes; with `truncate`, keep the first maxBytes, else give up (null). */
-async function readCapped(body: Readable, maxBytes: number, truncate: boolean): Promise<Buffer | null> {
-  const chunks: Buffer[] = []
-  let totalBytes = 0
-  for await (const chunk of body) {
-    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    totalBytes += buf.byteLength
-    chunks.push(buf)
-    if (totalBytes > maxBytes) {
-      body.destroy()
-      if (!truncate) return null
-      break
-    }
-  }
-  return Buffer.concat(chunks)
 }
 
 async function fetchImage(url: string): Promise<Buffer | null> {

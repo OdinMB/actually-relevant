@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { config } from '../config.js'
-import { BadRequestError } from '../utils/errors.js'
+import { BadRequestError, UnprocessableError } from '../utils/errors.js'
 
 const mockParseFeed = vi.hoisted(() => vi.fn())
 const mockExtractContent = vi.hoisted(() => vi.fn())
+const mockCheckOptOut = vi.hoisted(() => vi.fn())
 const mockGetExistingUrls = vi.hoisted(() => vi.fn())
 const mockCreateStory = vi.hoisted(() => vi.fn())
 const mockGetFeedById = vi.hoisted(() => vi.fn())
@@ -12,7 +13,11 @@ const mockUpdateCrawlStatus = vi.hoisted(() => vi.fn().mockResolvedValue(undefin
 const mockUpdateFeedCacheHeaders = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('./rssParser.js', () => ({ parseFeed: mockParseFeed }))
-vi.mock('./extractor.js', () => ({ extractContent: mockExtractContent }))
+vi.mock('./extractor.js', async importOriginal => ({ ...(await importOriginal<typeof import('./extractor.js')>()), extractContent: mockExtractContent }))
+vi.mock('./publisherOptOut.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('./publisherOptOut.js')>()),
+  checkOptOut: mockCheckOptOut,
+}))
 vi.mock('./story.js', () => ({
   getExistingUrls: mockGetExistingUrls,
   createStory: mockCreateStory,
@@ -48,6 +53,14 @@ function rssResult(items: any[], opts?: { notModified?: boolean; etag?: string; 
     },
   }
 }
+
+const NOT_RESERVED = { reserved: false }
+const ROBOTS_RESERVED = { reserved: true, reason: 'robots.txt disallows ActuallyRelevant', unverified: false }
+
+beforeEach(() => {
+  mockCheckOptOut.mockReset()
+  mockCheckOptOut.mockResolvedValue(NOT_RESERVED)
+})
 
 describe('crawlFeed', () => {
   beforeEach(() => {
@@ -681,6 +694,118 @@ describe('crawlFeed', () => {
   })
 })
 
+describe("crawlFeed and the publisher's opt-out", () => {
+  const item = (slug: string) => ({ url: `https://example.com/${slug}`, title: slug, datePublished: null, description: null, contentHtml: null })
+  const extracted = { title: 'T', content: 'Content', datePublished: null, method: 'readability', accessTier: 'unknown' }
+  const statusUpdate = () => mockUpdateCrawlStatus.mock.calls[0]![1]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetFeedById.mockResolvedValue(sampleFeed)
+    mockGetExistingUrls.mockResolvedValue(new Set())
+    mockCreateStory.mockResolvedValue({ id: 'story-1' })
+    mockExtractContent.mockResolvedValue(extracted)
+  })
+
+  it('skips a reserved item without fetching or extracting it, counts it as skipped and shows the reason on the feed', async () => {
+    mockParseFeed.mockResolvedValue(rssResult([item('reserved'), item('open')]))
+    mockCheckOptOut.mockImplementation(async (url: string) => (url.endsWith('/reserved') ? ROBOTS_RESERVED : NOT_RESERVED))
+
+    const result = await crawlFeed('feed-1')
+
+    expect(mockCheckOptOut).toHaveBeenCalledWith('https://example.com/reserved', { fetchesPage: true })
+    expect(mockExtractContent).toHaveBeenCalledTimes(1)
+    expect(mockExtractContent).toHaveBeenCalledWith('https://example.com/open', expect.anything())
+    expect(result).toMatchObject({ newStories: 1, skipped: 1, errors: 0 })
+    expect(statusUpdate()).toMatchObject({ hadSuccess: true, newItemCount: 1, errorMessage: expect.stringContaining('robots.txt disallows ActuallyRelevant') })
+  })
+
+  it('does not let a feed whose every new item was reserved look healthy', async () => {
+    mockParseFeed.mockResolvedValue(rssResult([item('a'), item('b')]))
+    mockCheckOptOut.mockResolvedValue(ROBOTS_RESERVED)
+
+    const result = await crawlFeed('feed-1')
+
+    expect(mockExtractContent).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ newStories: 0, skipped: 2, errors: 0 })
+    // Nothing was attempted, so it is not a total failure retried next run; the reason is the feed's error
+    expect(statusUpdate()).toMatchObject({ hadSuccess: false, newItemCount: 0, errorMessage: expect.stringContaining('robots.txt disallows ActuallyRelevant') })
+    expect(statusUpdate().crawlResult).toBe(statusUpdate().errorMessage)
+  })
+
+  it('keeps reserved items out of the skip-local and skip-all counters', async () => {
+    const reservedCount = Math.max(config.crawl.localFailThreshold, config.crawl.totalFailThreshold) + 1
+    const items = [...Array.from({ length: reservedCount }, (_, i) => item(`reserved-${i}`)), item('open')]
+    mockParseFeed.mockResolvedValue(rssResult(items))
+    mockCheckOptOut.mockImplementation(async (url: string) => (url.includes('reserved') ? ROBOTS_RESERVED : NOT_RESERVED))
+
+    const result = await crawlFeed('feed-1')
+
+    expect(mockExtractContent).toHaveBeenCalledTimes(1)
+    expect(mockExtractContent).toHaveBeenCalledWith('https://example.com/open', expect.objectContaining({ skipLocalExtraction: false }))
+    expect(result).toMatchObject({ newStories: 1, skipped: reservedCount, errors: 0 })
+  })
+
+  it('reports extraction failures and the opt-out together, the failure count first', async () => {
+    mockParseFeed.mockResolvedValue(rssResult([item('reserved'), item('fails')]))
+    mockCheckOptOut.mockImplementation(async (url: string) => (url.endsWith('/reserved') ? ROBOTS_RESERVED : NOT_RESERVED))
+    mockExtractContent.mockResolvedValue(null)
+
+    const result = await crawlFeed('feed-1')
+
+    expect(result.errorMessage).toMatch(/^1 of 1 articles failed extraction; .*robots\.txt disallows ActuallyRelevant/)
+  })
+
+  it('asks no extraction API for the rest of the crawl once a page fetch is refused', async () => {
+    mockParseFeed.mockResolvedValue(rssResult([item('a'), item('b'), item('c')]))
+    const apiSkipped: boolean[] = []
+    mockExtractContent.mockImplementation(async (url: string, options: { skipApiTier: () => boolean }) => {
+      apiSkipped.push(options.skipApiTier())
+      return url.endsWith('/a') ? { refusal: 'denied', reason: 'publisher refused the crawler (HTTP 403)' } : extracted
+    })
+
+    const result = await crawlFeed('feed-1')
+
+    expect(apiSkipped).toEqual([false, true, true])
+    expect(result).toMatchObject({ newStories: 2, errors: 1 })
+    expect(result.errorMessage).toMatch(/^1 of 3 articles failed extraction; .*HTTP 403/)
+  })
+
+  it('skips a page that carries a reservation, not as an error, and asks no API for the rest of the crawl', async () => {
+    mockParseFeed.mockResolvedValue(rssResult([item('a'), item('b')]))
+    const apiSkipped: boolean[] = []
+    mockExtractContent.mockImplementation(async (url: string, options: { skipApiTier: () => boolean }) => {
+      apiSkipped.push(options.skipApiTier())
+      return url.endsWith('/a') ? { refusal: 'reserved', reason: 'TDMRep reservation (tdm-reservation meta tag)' } : extracted
+    })
+
+    const result = await crawlFeed('feed-1')
+
+    expect(apiSkipped).toEqual([false, true])
+    expect(result).toMatchObject({ newStories: 1, skipped: 1, errors: 0 })
+    expect(statusUpdate()).toMatchObject({ newItemCount: 1, errorMessage: expect.stringContaining('TDMRep reservation') })
+  })
+
+  it('checks the items of a feed that takes its text from RSS without robots.txt path rules, and skips the reserved ones', async () => {
+    const fullText = 'A paragraph of the full post. '.repeat(20)
+    const rssItem = (slug: string) => ({ ...item(slug), contentHtml: `<p>${fullText}</p>` })
+    mockGetFeedById.mockResolvedValue({ ...sampleFeed, contentSource: 'rss' })
+    mockParseFeed.mockResolvedValue(rssResult([rssItem('reserved'), rssItem('open')]))
+    mockCheckOptOut.mockImplementation(async (url: string) =>
+      url.endsWith('/reserved') ? { reserved: true, reason: 'Content-Signal ai-input=no', unverified: false } : NOT_RESERVED,
+    )
+
+    const result = await crawlFeed('feed-1')
+
+    expect(mockCheckOptOut).toHaveBeenCalledWith('https://example.com/reserved', { fetchesPage: false })
+    expect(mockCheckOptOut).not.toHaveBeenCalledWith(expect.anything(), { fetchesPage: true })
+    expect(mockCreateStory).toHaveBeenCalledTimes(1)
+    expect(mockCreateStory).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: 'https://example.com/open' }))
+    expect(result).toMatchObject({ newStories: 1, skipped: 1, errors: 0 })
+    expect(statusUpdate()).toMatchObject({ newItemCount: 1, errorMessage: expect.stringContaining('Content-Signal ai-input=no') })
+  })
+})
+
 describe('crawlAllDueFeeds', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -774,6 +899,34 @@ describe('crawlUrl', () => {
     await expect(refused).rejects.toBeInstanceOf(BadRequestError)
     await expect(refused).rejects.toThrow("This feed takes article text from its RSS feed; single URLs can't be crawled")
     expect(mockExtractContent).not.toHaveBeenCalled()
+    expect(mockCreateStory).not.toHaveBeenCalled()
+  })
+
+  it('refuses a reserved URL with 400 and the reason, before any page fetch', async () => {
+    mockGetFeedById.mockResolvedValue(sampleFeed)
+    mockGetExistingUrls.mockResolvedValue(new Set())
+    mockCheckOptOut.mockResolvedValue(ROBOTS_RESERVED)
+
+    const refused = crawlUrl('https://example.com/article', 'feed-1')
+
+    await expect(refused).rejects.toBeInstanceOf(BadRequestError)
+    await expect(refused).rejects.toThrow('robots.txt disallows ActuallyRelevant')
+    expect(mockCheckOptOut).toHaveBeenCalledWith('https://example.com/article', { fetchesPage: true })
+    expect(mockExtractContent).not.toHaveBeenCalled()
+    expect(mockCreateStory).not.toHaveBeenCalled()
+  })
+
+  it('refuses a page that turns out to carry a reservation with 400, and a refused fetch with 422', async () => {
+    mockGetFeedById.mockResolvedValue(sampleFeed)
+    mockGetExistingUrls.mockResolvedValue(new Set())
+    mockExtractContent.mockImplementation(async (url: string) =>
+      url.endsWith('/a')
+        ? { refusal: 'reserved', reason: 'TDMRep reservation (tdm-reservation header)' }
+        : { refusal: 'denied', reason: 'publisher refused the crawler (HTTP 403)' },
+    )
+
+    await expect(crawlUrl('https://example.com/a', 'feed-1')).rejects.toSatisfy(err => err instanceof BadRequestError && /TDMRep/.test(err.message))
+    await expect(crawlUrl('https://example.com/b', 'feed-1')).rejects.toSatisfy(err => err instanceof UnprocessableError && /HTTP 403/.test(err.message))
     expect(mockCreateStory).not.toHaveBeenCalled()
   })
 
