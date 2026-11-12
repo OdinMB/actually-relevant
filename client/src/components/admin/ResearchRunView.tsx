@@ -197,7 +197,11 @@ function Draft({ result }: { result: ResearchResult }) {
       </div>
       {result.problems.length > 0 && (
         <div>
-          <h5 className={H}>What the citation check found{result.rewritten ? ' after the rewrite' : ''}</h5>
+          <h5 className={H}>
+            {result.verdict.kind === 'fallback'
+              ? `What the citation check found${result.rewritten ? ' after the rewrite' : ''}`
+              : 'Left out of the draft above: still failing the citation check after the rewrite'}
+          </h5>
           <ul className="list-disc pl-5">
             {result.problems.map((p, i) => (
               <li key={i}>

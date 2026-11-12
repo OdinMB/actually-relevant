@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkCitations, decideGate, draftSentences, supportFound, type PoolFact } from './researchChecks.js'
+import { checkCitations, decideGate, draftSentences, dropFailing, evidenceFor, supportFound, type PoolFact } from './researchChecks.js'
 import type { Draft } from '../schemas/research.js'
 
 const fact = (id: string, statement: string, supportingSentence = statement, measures = ''): PoolFact => ({ id, statement, supportingSentence, measures })
@@ -60,6 +60,67 @@ describe('checkCitations', () => {
       POOL,
     )
     expect(problems.map(p => p.label)).toEqual(['Why This Matters 1'])
+  })
+})
+
+describe('evidenceFor', () => {
+  it('gives the cited facts first, then the other facts of their sources, since readers see a citation per source', () => {
+    const pool = new Map([fact('S0F1', 'a'), fact('S0F2', 'b'), fact('S1F1', 'c'), fact('E1F1', 'd'), fact('E1F2', 'e')].map(f => [f.id, f]))
+    expect(evidenceFor(['S0F2', 'E1F1', 'S9F1'], pool).map(f => f.id)).toEqual(['S0F2', 'E1F1', 'S0F1', 'E1F2'])
+  })
+
+  it('lets the number check find a figure in another fact of a cited source', () => {
+    const pool = new Map([...POOL, ['S0F2', fact('S0F2', 'The boom cut grid demand.')]])
+    expect(checkCitations(draft([['Pakistan added 22 GW of rooftop solar in two years.', ['S0F2']]]), pool)).toEqual([])
+  })
+})
+
+describe('dropFailing', () => {
+  const d = (): Parts => ({
+    story: [
+      { sentences: [{ text: 'lead', factIds: ['S0F1'] }] },
+      {
+        sentences: [
+          { text: 'second', factIds: ['S0F1'] },
+          { text: 'third', factIds: ['S0F1'] },
+        ],
+      },
+      { sentences: [{ text: 'alone', factIds: ['S0F1'] }] },
+    ],
+    whyThisMatters: [
+      { text: 'why 1', factIds: [] },
+      { text: 'why 2', factIds: [] },
+    ],
+    caveats: [{ text: 'caveat', factIds: [] }],
+  })
+  const problem = (label: string) => ({ label, text: '', problem: 'fails the fact check' })
+
+  it('drops the failing sentences and bullets, and a paragraph left empty', () => {
+    const out = dropFailing(d(), [problem('Story paragraph 2, sentence 1'), problem('Story paragraph 3, sentence 1'), problem('Why This Matters 2')])
+    expect(out).toEqual({
+      draft: {
+        story: [{ sentences: [{ text: 'lead', factIds: ['S0F1'] }] }, { sentences: [{ text: 'third', factIds: ['S0F1'] }] }],
+        whyThisMatters: [{ text: 'why 1', factIds: [] }],
+        caveats: [{ text: 'caveat', factIds: [] }],
+      },
+    })
+  })
+
+  it('counts a sentence with several problems once', () => {
+    const out = dropFailing(d(), [
+      problem('Why This Matters 2'),
+      problem('Why This Matters 2'),
+      problem('Story paragraph 2, sentence 2'),
+      problem('Story paragraph 2, sentence 1'),
+    ])
+    expect('draft' in out).toBe(true)
+  })
+
+  it('fails when the opening sentence fails, more than three do, or a part is left empty', () => {
+    expect(dropFailing(d(), [problem('Story paragraph 1, sentence 1')])).toEqual({ failed: 'the opening sentence failed the check after one rewrite' })
+    const four = ['Story paragraph 2, sentence 1', 'Story paragraph 2, sentence 2', 'Story paragraph 3, sentence 1', 'Why This Matters 1'].map(problem)
+    expect(dropFailing(d(), four)).toEqual({ failed: '4 sentences failed the check after one rewrite' })
+    expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after one rewrite' })
   })
 })
 

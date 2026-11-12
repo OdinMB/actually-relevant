@@ -290,9 +290,40 @@ describe('researchStory', () => {
     expect(fake.steps.filter(c => c === 'write')).toHaveLength(1)
     expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
     expect(r.rewritten).toBe(true)
-    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'check failed after one rewrite' })
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'the opening sentence failed the check after one rewrite' })
     expect(r.problems[0]?.problem).toContain('S9F9')
     expect(r.draft).not.toBeNull()
+  })
+
+  it('drops a bullet that still fails after the rewrite and keeps the rest of the draft', async () => {
+    const withBullets = (): Draft => ({
+      ...goodDraft(),
+      whyThisMatters: [
+        { text: 'Cheap power reaches millions.', factIds: [] },
+        { text: 'About 40 households benefit.', factIds: [] },
+      ],
+    })
+    const { deps: d } = deps({ responders: baseResponders({ write: withBullets, rewrite: withBullets }) })
+    const r = await researchStory(story(), d)
+    expect(r.rewritten).toBe(true)
+    expect(r.verdict).toEqual({ kind: 'keep' })
+    expect(r.problems.map(p => p.label)).toEqual(['Why This Matters 2'])
+    expect(r.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.'])
+  })
+
+  it('decodes the XML escapes a model copies from its prompt into its answer', async () => {
+    const { deps: d } = deps({
+      responders: baseResponders({
+        extract: () =>
+          extraction({
+            facts: [{ statement: 'It&apos;s growing.', supportingSentence: 'Pakistan has added 22GW of rooftop solar in just two years.', measures: '' }],
+          }),
+        write: () => ({ ...goodDraft(), quote: '&quot;We have added 22GW&quot;' }),
+      }),
+    })
+    const r = await researchStory(story(), d)
+    expect(r.sources[0]?.facts[0]?.statement).toBe(`It's growing.`)
+    expect(r.draft?.quote).toBe('"We have added 22GW"')
   })
 
   it('keeps a draft the rewrite fixed, after a fact check that found an unsupported sentence', async () => {
