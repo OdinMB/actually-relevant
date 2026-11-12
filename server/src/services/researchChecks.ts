@@ -106,6 +106,17 @@ export function dropFailing<D extends DraftParts>(draft: D, problems: CitationPr
   return { draft: { ...draft, story, whyThisMatters, caveats } }
 }
 
+/** A bracketed or parenthesised list of fact ids a writer left in its text: " [S1F7, S0F1]". */
+const INLINE_IDS = /\s*[[(](?:\s*[SE]\d+F\d+\s*[,;]?)+[\])]/g
+
+/** Every string of a draft without inline fact ids, which belong in `factIds` alone. */
+export function withoutInlineIds<T>(value: T): T {
+  if (typeof value === 'string') return value.replace(INLINE_IDS, '') as T
+  if (Array.isArray(value)) return value.map(v => withoutInlineIds(v)) as T
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withoutInlineIds(v)])) as T
+  return value
+}
+
 /** One line per problem, as the rewrite prompt and the drafts file show it. */
 export function describeProblem(p: CitationProblem): string {
   return `${p.label} ("${p.text}") ${p.problem}`

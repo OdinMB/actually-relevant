@@ -271,16 +271,17 @@ ${GENERIC_LIMITING_FACTORS}
 
 <REQUIREMENTS>
 Citations
-- Every sentence of the story cites, by id, the facts that state what it says. A sentence says nothing its cited facts do not state: each number, name, date and place in it appears in one of them.
+- Every sentence of the story cites, by id, the facts that state what it says. A sentence says nothing its cited facts do not state: each number, name, date and place in it appears in one of them. Ids go only in a sentence's fact ids, never in any text readers see.
 - A number keeps the scope its fact records ('22 GW of rooftop solar in two years', not '22 GW of solar'). Where sources count differently, the story gives each figure with its scope and cites each.
 - A date may come from a SOURCE's date when that source dates the event by weekday or as "today"; the sentence then cites a fact of that source.
 - Facts with ids starting with E come from Actually Relevant's earlier stories: background, cited only where the story uses them.
 
 One development
 - Every field is about one development: the main one in <ARTICLE>. Where the article covers several, as a roundup or newsletter does, the others stay out of every field, and so do facts that are only about them.
+- Each point appears once across the story, Why This Matters and Caveats: a bullet adds what the story does not already say, and the room it saves goes to facts the story has not used yet.
 
 Story (2-4 paragraphs, 150-250 words in total)
-- The first paragraph says what happened, who did it, where and when.
+- The first paragraph says what happened, who did it, where and when, with the month and day rather than only a weekday.
 - The rest says what drives it and who is affected, then what stands in the way or comes next.
 - Short sentences in plain language. A technical term is put in everyday words or explained in a few; a symbol or variable from the sources (such as T or ε) never appears.
 - Concrete over general: the specific measures, amounts, groups covered and consequences in <FACTS> rather than a summary of them, and each point once, not restated from several sources.

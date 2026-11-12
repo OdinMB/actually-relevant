@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { checkCitations, decideGate, draftSentences, dropFailing, evidenceFor, publishedFact, supportFound, type PoolFact } from './researchChecks.js'
+import {
+  checkCitations,
+  decideGate,
+  draftSentences,
+  dropFailing,
+  evidenceFor,
+  publishedFact,
+  supportFound,
+  withoutInlineIds,
+  type PoolFact,
+} from './researchChecks.js'
 import type { Draft } from '../schemas/research.js'
 
 const fact = (id: string, statement: string, supportingSentence = statement, measures = ''): PoolFact => ({ id, statement, supportingSentence, measures })
@@ -129,6 +139,17 @@ describe('dropFailing', () => {
     expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after one rewrite' })
     const allStory = ['Story paragraph 1, sentence 1', 'Story paragraph 2, sentence 1', 'Story paragraph 2, sentence 2', 'Story paragraph 3, sentence 1']
     expect(dropFailing(d(), allStory.map(problem))).toEqual({ failed: 'no story sentence passed the check after one rewrite' })
+  })
+})
+
+describe('withoutInlineIds', () => {
+  it('removes bracketed and parenthesised fact ids from every text, and keeps the factIds lists', () => {
+    const d = draft([['Pakistan added 22 GW. [S0F1] It grew [S1F7, E1F2] fast (S2F3).', ['S0F1']]], [['Why [S0F1; S1F1]', []]])
+    expect(withoutInlineIds(d)).toEqual(draft([['Pakistan added 22 GW. It grew fast.', ['S0F1']]], [['Why', []]]))
+  })
+
+  it('leaves other brackets alone', () => {
+    expect(withoutInlineIds('A rise (about 5%) [sic]')).toBe('A rise (about 5%) [sic]')
   })
 })
 
