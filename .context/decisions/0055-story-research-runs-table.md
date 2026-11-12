@@ -24,7 +24,7 @@ Rule: a run writes only its own row; never add research fields to `stories`.
 ## Consequences
 
 - Nothing that reads `stories` sees research; public selects stay unchanged.
-- Concurrent starts can't overrun the cap or run one story twice. A run cut off by a restart is marked failed after 15 minutes and keeps its reservation.
+- Concurrent starts can't overrun the cap or run one story twice. A run cut off by a restart is marked failed after 60 minutes and keeps its reservation.
 - A deleted story's runs stay as orphans, reached only by the month's sum, so the cap never undercounts.
 - The table grows by one row per run (the default cap bounds it to a few hundred a month); no retention job prunes it yet.
 
