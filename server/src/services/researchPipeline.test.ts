@@ -344,6 +344,13 @@ describe('researchStory', () => {
     expect(tavily.requests).toEqual([{ query: 'Pakistan rooftop solar 22 GW', startDate: '2026-10-29', endDate: '2026-11-19' }])
   })
 
+  it('never asks Tavily for a date after the run (production passes the run time as latestDate)', async () => {
+    const tavily = fakeTavily(searchResponse(['https://reuters.com/a']))
+    const { deps: d } = deps({ tavily })
+    await researchStory(story(), { ...d, latestDate: '2026-11-13T05:00:00.000Z' })
+    expect(tavily.requests).toEqual([{ query: 'Pakistan rooftop solar 22 GW', startDate: '2026-10-29', endDate: '2026-11-13' }])
+  })
+
   it('keeps only the neighbours the dedup prompt confirms', async () => {
     const neighbour = (n: number) => ({
       ...story().original,

@@ -307,8 +307,12 @@ export const config = {
     } as Record<string, { input: number; cached: number; output: number } | undefined>,
     /** Uncached input is billed at this factor: Chat Completions reports no cache writes, so it is an upper bound. */
     cacheWriteFactor: 1.25,
-    /** A `running` run older than this was cut off by a restart, and is marked failed. */
-    staleRunMinutes: 15,
+    /**
+     * A `running` run older than this was cut off by a restart, and is marked failed. Above a live run's
+     * worst case (model calls with the SDK's default timeout and retries, Tavily with its retries), so a
+     * slow run is never marked interrupted while it still works.
+     */
+    staleRunMinutes: 60,
     /** Runs the admin lists per story, newest first. */
     runsListed: 10,
   },

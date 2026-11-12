@@ -163,7 +163,14 @@ async function runInBackground(runId: string, taskId: string, story: ResearchSto
       ceilingUsd: config.research.maxRunUsd,
       monthRoomUsd: async () => config.research.monthlyCapUsd - (await monthSpendUsd(prisma, new Date(), runId)),
     })
-    const result = await researchStory(story, { call: meter.call, tavily: meter.tavily, admit: meter.admit, relevanceMin: config.selection.relevanceMin })
+    // The run time caps the search window, so a fresh story never asks Tavily for a future date
+    const result = await researchStory(story, {
+      call: meter.call,
+      tavily: meter.tavily,
+      admit: meter.admit,
+      relevanceMin: config.selection.relevanceMin,
+      latestDate: new Date().toISOString(),
+    })
     const { written, costUsd } = await finishRun(runId, result)
     if (!written) {
       log.warn({ runId, storyId: story.id }, 'research run finished after it was marked interrupted; its result was dropped')
