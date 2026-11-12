@@ -72,6 +72,12 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
 /** The pure modules the eval may import whole: config and prompt types only. */
 const PURE_SERVICE_MODULES = ['promptInputs.ts']
 
+/**
+ * Model calls are never retried (parse failures are what the eval measures). Tavily is plain
+ * external HTTP, which the project wraps in withRetry, so its client is the one exception.
+ */
+const WITH_RETRY_ALLOWED = ['research/tavily.ts']
+
 describe('eval harness has no write path', () => {
   it('finds the eval source files', () => {
     expect(files.map(f => f.name)).toEqual(expect.arrayContaining(['fixtures.ts', 'readOnlyDb.ts', 'models.ts', 'run.ts', 'suites/preassess.ts']))
@@ -119,8 +125,14 @@ describe('eval harness has no write path', () => {
       /\b[A-Za-z_]\w*\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(/,
       /\$executeRawUnsafe|\$queryRawUnsafe/,
     ]
-    const offenders = files.flatMap(f => forbidden.filter(re => re.test(f.text)).map(re => `${f.name}: ${re}`))
+    const offenders = files.flatMap(f =>
+      forbidden.filter(re => !(re.source === '\\bwithRetry\\b' && WITH_RETRY_ALLOWED.includes(f.name)) && re.test(f.text)).map(re => `${f.name}: ${re}`),
+    )
     expect(offenders).toEqual([])
+  })
+
+  it('uses withRetry only in the Tavily client, and there', () => {
+    expect(files.filter(f => /\bwithRetry\b/.test(f.text)).map(f => f.name)).toEqual(WITH_RETRY_ALLOWED)
   })
 
   it('uses $executeRaw only for SET TRANSACTION READ ONLY in readOnlyDb.ts', () => {

@@ -139,7 +139,7 @@ export function versionedSchemaName(name: string, schema: z.ZodType): string {
 // ---------------------------------------------------------------------------
 
 export interface EvalContext extends SuiteContext {
-  /** Total USD recorded in the ledger (all runs against this output dir). */
+  /** Total USD recorded in the ledger (all runs against this output dir), plus `externalSpendUsd`. */
   spentUsd(): number
   /** USD recorded by calls made in this process. */
   spentThisRunUsd(): number
@@ -154,6 +154,11 @@ export interface EvalContextOptions {
   limit?: number
   /** When true, any uncached call throws: a dry run must not reach the API. */
   offline: boolean
+  /**
+   * Spend outside the model calls (eval:research's Tavily credits), added to the ledger total by
+   * the budget guard and `spentUsd()`. Unset: none.
+   */
+  externalSpendUsd?: () => number
 }
 
 function readLedger(file: string): Map<string, CallRecord> {
@@ -192,6 +197,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
   mkdirSync(dirname(options.cacheFile), { recursive: true })
   const ledger = readLedger(options.cacheFile)
   const semaphore = new Semaphore(options.concurrency)
+  const external = options.externalSpendUsd ?? (() => 0)
   let spent = [...ledger.values()].reduce((sum, r) => sum + r.costUsd, 0)
   let spentThisRun = 0
   let live = 0
@@ -208,7 +214,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
 
   async function invoke<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: string, key: string): Promise<CallRecord<T>> {
     const base = { key, arm: armKey(a), schema: schemaName, at: new Date().toISOString() }
-    if (spent >= options.budgetUsd) {
+    if (spent + external() >= options.budgetUsd) {
       return {
         ...base,
         outcome: 'skipped',
@@ -267,7 +273,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
       if (options.offline) throw new Error(`offline run tried to call ${armKey(a)} (${schemaName})`)
       return semaphore.run(() => invoke(a, schemaName, schema, prompt, key))
     },
-    spentUsd: () => spent,
+    spentUsd: () => spent + external(),
     spentThisRunUsd: () => spentThisRun,
     isCached: call => ledger.has(cacheKey(call.arm, call.schemaName, call.prompt)),
     liveCalls: () => live,
