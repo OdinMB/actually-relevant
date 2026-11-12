@@ -42,7 +42,11 @@ const researchedSourceSchema = z.object({
   origin: z
     .enum(['original', 'source', 'earlier'])
     .describe('`original`: the article the story was initially found in. `earlier`: an earlier Actually Relevant story.'),
-  outlet: z.string().describe("The outlet's name or web address; `Actually Relevant` for an earlier story."),
+  outlet: z
+    .string()
+    .describe(
+      "The outlet's name: its feed's name for an article we crawled (the original among them); for a source found by search, the name an AI model read from its page, else its web address; `Actually Relevant` for an earlier story.",
+    ),
   host: z.string().nullable().describe('Host name of the source, without `www.`; null for an earlier story.'),
   // Readers' links take it as their href, so a stored value that is not http(s) fails the read-time parse
   url: z

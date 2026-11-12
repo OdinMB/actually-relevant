@@ -308,6 +308,19 @@ interface ExtractInput {
   text: string
 }
 
+/** Longest outlet name a search source takes from its extraction; a longer answer is taken for a misreading. */
+const MAX_OUTLET_CHARS = 60
+
+/**
+ * The name a source is shown under. A search result has only its address, so it takes the name the
+ * extraction read from its page, else its domain; the original and our own sources keep their feed's name.
+ */
+function outletOf(s: ExtractInput, extracted: string): string {
+  if (s.origin !== 'search') return s.outlet
+  const name = extracted.replace(/\s+/g, ' ').trim()
+  return name !== '' && name.length <= MAX_OUTLET_CHARS ? name : s.outlet
+}
+
 function researchSource(s: ExtractInput & { extraction: Extraction }, id: string): ResearchSource {
   const e = s.extraction
   return {
@@ -315,7 +328,7 @@ function researchSource(s: ExtractInput & { extraction: Extraction }, id: string
     origin: s.origin,
     url: s.url,
     title: s.title,
-    outlet: s.outlet,
+    outlet: outletOf(s, e.outlet),
     date: s.date,
     favicon: s.favicon,
     usedRawContent: s.usedRawContent,
