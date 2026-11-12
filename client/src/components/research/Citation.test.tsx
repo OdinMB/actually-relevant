@@ -76,10 +76,21 @@ describe('Citation', () => {
     expect(announcedText(earlier!)).toContain('AI-generated “The earlier sentence.”')
   })
 
+  it("notes that an outside source's sentence was chosen by AI, as the key quote does, and not our own story's", async () => {
+    renderCitation([
+      { sourceId: 'S1', sentence: 'The coverage sentence.' },
+      { sourceId: 'E1', sentence: 'The earlier sentence.' },
+    ])
+    const { card } = await openCard('Sources: Coverage Outlet, Actually Relevant')
+    const [outside, earlier] = within(card).getAllByRole('listitem')
+    expect(announcedText(outside!)).toContain('“The coverage sentence.” · chosen by AI, may be translated')
+    expect(announcedText(earlier!)).not.toContain('chosen by AI')
+  })
+
   it('offers no link to read a source whose address is not http(s)', async () => {
     renderCitation([{ sourceId: 'S2', sentence: 'An odd sentence.' }])
     const { card } = await openCard('Source: Odd Outlet')
-    expect(within(card).getByText('“An odd sentence.”')).toBeInTheDocument()
+    expect(within(card).getByText(/“An odd sentence\.”/)).toBeInTheDocument()
     expect(within(card).queryByText(/Read the source/)).toBeNull()
     expect(card.querySelector('[href]')).toBeNull()
   })

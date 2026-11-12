@@ -2,6 +2,7 @@ import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 import type { ResearchCitation, ResearchedSource } from '@shared/types'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
 import AiBadge from '../ai/AiBadge'
+import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
 import { SourceIcon } from './SourceIcon'
 import { SourceLink, sourceHref } from './SourceLink'
 import { EARLIER_LABEL, sourceDetails } from './sourceText'
@@ -27,13 +28,13 @@ function SourceCard({ source, sentence }: CitedSource) {
       {details.length > 0 && <p className="text-neutral-500">{details.join(' · ')}</p>}
       {sentence && (
         <p className="mt-1 text-neutral-700">
-          {/* Our earlier story's sentence is our own AI-written text; an outlet's is its own words */}
+          {/* Our earlier story's sentence is our own AI-written text; an outlet's is its own words, chosen by AI */}
           {source.origin === 'earlier' && (
             <>
               <AiBadge className="mr-1 align-middle" />{' '}
             </>
           )}
-          “{sentence}”
+          “{sentence}”{source.origin !== 'earlier' && <span className="text-neutral-500"> · {AI_DISCLOSURE_COPY.quoteNote}</span>}
         </p>
       )}
       {sourceHref(source) && (
