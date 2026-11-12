@@ -31,6 +31,7 @@ import {
   evidenceFor,
   publishedFact,
   supportFound,
+  withoutInlineIds,
   type CitationProblem,
   type GateVerdict,
   type PoolFact,
@@ -424,11 +425,11 @@ async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, call: C
  * Sentences that still fail are dropped (`r.problems` keeps them), unless `dropFailing` refuses.
  */
 async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFact>, call: Call, r: StoryResearch): Promise<Draft> {
-  r.draft = required(await call('write', writeSchema, buildWritePrompt(input)), 'write')
+  r.draft = withoutInlineIds(required(await call('write', writeSchema, buildWritePrompt(input)), 'write'))
   r.problems = await check(r.draft, facts, call)
   if (r.problems.length === 0) return r.draft
   r.rewritten = true
-  r.draft = required(await call('rewrite', writeSchema, buildWritePrompt({ ...input, problems: r.problems.map(describeProblem) })), 'rewrite')
+  r.draft = withoutInlineIds(required(await call('rewrite', writeSchema, buildWritePrompt({ ...input, problems: r.problems.map(describeProblem) })), 'rewrite'))
   r.problems = await check(r.draft, facts, call)
   if (r.problems.length === 0) return r.draft
   const kept = dropFailing(r.draft, r.problems)
