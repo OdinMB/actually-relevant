@@ -7,16 +7,18 @@ Stories are the core entity. They flow through a status pipeline from crawling t
 Every automated stage transition is driven by a scheduled polling job, not by events. Each job queries for the stories eligible for its stage (by status and threshold) and processes them in bulk, so a story waits in its status until the next run of that stage's job. The one chained step is dedup, which runs right after a story's assessment commits (see `dedup.md`). The crawler creates stories in `fetched` status, and this pipeline only consumes them. A paywall-locked story is created `rejected` instead (below).
 
 ```
-(crawl) → fetched → pre_analyzed → analyzed → selected → published
-        ↘ rejected              ↘ rejected  ↘ rejected
-          (paywall)               (assess)    (select)
+(crawl) → fetched → pre_analyzed → analyzed → selected → (research) → published
+        ↘ rejected              ↘ rejected  ↘ rejected  ↘ rejected
+          (paywall)               (assess)    (select)    (research, apply mode)
 
 rejected / trashed: from any status by an editor
 ```
 
+The research step (`research_stories`, `story-research.md`, "The pipeline step") is not a status: it researches `selected` stories in place, and while it is on, `publish_stories` waits for it (the publish gate). In apply mode it writes a story's researched version or rejects the story; in shadow mode, the default, it changes no story.
+
 **One module writes status.** `server/src/services/storyLifecycle.ts` is the only code that writes `stories.status` and `stories.rejection_reason` (ADR-0045); `server/src/test/statusWriters.test.ts` fails when any other source file does. Every move is conditional: it names the statuses it may move from and writes with `WHERE status IN (...)`, so a story an editor trashed or rejected while an LLM call or embedding pass was running is **skipped**, never forced. Every move returns `{ moved, skipped: { id, status }[] }` and logs both. Two actors: `pipeline` (the jobs and the bulk analysis and selection actions) and `editor` (explicit admin status and cluster actions).
 
-**Rejection reasons.** Every move into `rejected` records why, in `rejection_reason` (ADR-0046): `paywall`, `assess_threshold`, `select_threshold`, `selection`, `duplicate` (a non-primary cluster member) or `editor`. Every move out clears it, and a database CHECK (`stories_rejection_reason_only_when_rejected`) refuses a reason on any other status. Rows rejected before the column existed have a reason only where the migration could tell (`paywall` for locked stories, `duplicate` for non-primary cluster members that were never published); the rest are null, and null is never automatically restored.
+**Rejection reasons.** Every move into `rejected` records why, in `rejection_reason` (ADR-0046): `paywall`, `assess_threshold`, `select_threshold`, `selection`, `duplicate` (a non-primary cluster member), `research_rating`, `stale` or `contradicted` (the research step's verdicts: rated below the publish bar, old news, main claim contradicted), or `editor`. Every move out clears it, and a database CHECK (`stories_rejection_reason_only_when_rejected`) refuses a reason on any other status. Rows rejected before the column existed have a reason only where the migration could tell (`paywall` for locked stories, `duplicate` for non-primary cluster members that were never published); the rest are null, and null is never automatically restored.
 
 ### Paywall-Locked Stories
 
@@ -35,7 +37,7 @@ A story whose access tier is `locked` (`content-extraction.md`, "Access Classifi
 | `analyzed` | Assess (job or editor), or a restored duplicate | Full LLM analysis complete: detailed factors, ratings, summary, blurb, etc. |
 | `selected` | Select job or editor selection | LLM chose this story for publication from the analyzed pool. |
 | `published` | Publish job or admin action | Live on the public site. |
-| `rejected` | Crawler (paywall-locked), assess job, select job, dedup, or admin | Reason in `rejectionReason` (above). |
+| `rejected` | Crawler (paywall-locked), assess job, select job, dedup, research step (apply mode), or admin | Reason in `rejectionReason` (above). |
 | `trashed` | Admin action | Soft-deleted. |
 
 **Terminal statuses:** `published`, `rejected` and `trashed`. No automated job moves a story out of these; only an editor action does. Editor-triggered analysis (single or bulk pre-assess and re-assess) re-queues a `rejected` story, refreshes the fields of a `selected` or `published` one while keeping its status (a published one is re-embedded and its related-stories cache entry forgotten), and skips a `trashed` one: single re-assess answers 409 ("restore it first"), the bulk routes list it under `skipped`. Re-assess and pre-assess never move a story backward.
@@ -54,11 +56,13 @@ The table `storyLifecycle.ts` enforces. A move from a status not listed is skipp
 | assess result | pipeline | advance `fetched`, `pre_analyzed` → `analyzed`; refresh `analyzed`, `selected`, `published` | fields and embedding in one transaction; dedup after commit |
 | assess result | editor | as pipeline, plus advance `rejected` | a refreshed published story is re-embedded; `trashed` skipped before the LLM call and again at the write; clears a researched version (`research`, `preResearch`) |
 | research apply or revert (stage `research`) | editor (`applyResearchRun`, `revertResearch`) | refresh `analyzed`, `selected`, `published`, `rejected` (status kept; never advances) | the swapped fields, `research`, `preResearch` and the embedding in one write, fenced on the status and `updatedAt` read before the embedding call (the row's `where`); `trashed` 409 "restore it first"; a story that changed in between 409 (`story-research.md`, "Applying a run") |
+| research apply (stage `research`) | pipeline (research step, `applyVerdict`, apply mode) | refresh `selected` (the status read before the run; status kept) | as the editor's apply; a story moved or edited during the run is skipped, not refused (`story-research.md`, "The pipeline step") |
+| research verdict | pipeline (research step, apply mode) | `selected` | `rejected`/`research_rating`, `stale` or `contradicted`; no re-election |
 | assess threshold | pipeline | `pre_analyzed` | `rejected`/`assess_threshold` |
 | select threshold | pipeline | `analyzed` | `rejected`/`select_threshold` |
 | select | pipeline (job, `/select`, `/bulk-select`) | `analyzed` | `selected`, or `rejected`/`selection`; the pool read is `analyzed` only, other ids skipped |
 | selection safety net | pipeline | `analyzed` | non-primary cluster members `rejected`/`duplicate` |
-| publish | pipeline (job) | `selected`, unclustered or cluster primary | slug, `datePublished` where unset, embedding ensured outside the transaction; re-elects every cluster the chunk touches (pipeline mode), so a `selected` non-primary it left alone ends `rejected`/`duplicate` (reported as skipped with that status) |
+| publish | pipeline (job) | `selected`, unclustered or cluster primary; while the research step is on, not one it still owes (the publish gate) | slug, `datePublished` where unset, embedding ensured outside the transaction; re-elects every cluster the chunk touches (pipeline mode), so a `selected` non-primary it left alone ends `rejected`/`duplicate` (reported as skipped with that status) |
 | publish | editor | any but `published` (`trashed` included: the override) | as above; clears the reason |
 | reject | editor | any but `rejected`/`editor` (a story rejected for another reason, a `duplicate` say, gets reason `editor`, so no dissolve brings it back) | `rejected`/`editor`; re-elects (editor-story mode) if it was published or the primary |
 | trash | editor | any but `trashed` | `trashed`; re-elects as for reject |
@@ -102,7 +106,8 @@ Stories get a URL slug (e.g. `ai-breakthrough-in-protein-folding`) when they are
 | `preassess_stories` | Configurable | Batch pre-screens all `fetched` stories |
 | `assess_stories` | Configurable | Full analysis on `pre_analyzed` stories with `relevancePre >= threshold` (per-issue `minPreRating`, else `fullAssessmentThreshold`, default 5); rejects the rest (`assess_threshold`) |
 | `select_stories` | Configurable | Selects top ~50% of `analyzed` stories with `relevance >= 5` (both configurable via `config.selection.*`), batched into groups of ≤20; rejects the rest (`select_threshold`, `selection`) |
-| `publish_stories` | Configurable | Publishes the `selected` stories that are unclustered or their cluster's primary (in bounded chunks of `config.publish.chunkSize`); a selected non-primary is rejected as `duplicate` by the re-election |
+| `research_stories` | Hourly at :15, seeded disabled | Researches up to 20 `selected` stories it still owes, one at a time; in apply mode applies or rejects (`research_rating`, `stale`, `contradicted`) on each verdict, in shadow mode only stores the runs (`story-research.md`, "The pipeline step") |
+| `publish_stories` | Configurable | Publishes the `selected` stories that are unclustered or their cluster's primary (in bounded chunks of `config.publish.chunkSize`); a selected non-primary is rejected as `duplicate` by the re-election. While the research step is on, it leaves out the stories the step still owes (`awaitingResearch`, `services/researchQueue.ts`) and logs how many wait |
 
 Selection: candidates go through LLM selection (~`config.selection.ratio`, default 50%, rounded up); when there are more than `config.selection.maxGroupSize` (default 20), they are split into roughly equal groups (e.g. 25 stories → 13 + 12). Only unclustered stories and cluster primaries are eligible; before the LLM call `selectStories()` rejects any non-primary member in the pool as `duplicate` (`dedup.md`, "Selection Safety Net").
 
@@ -138,7 +143,8 @@ Selection: candidates go through LLM selection (~`config.selection.ratio`, defau
 | `server/src/jobs/preassessStories.ts` | Scheduled pre-assessment |
 | `server/src/jobs/assessStories.ts` | Scheduled full assessment |
 | `server/src/jobs/selectStories.ts` | Scheduled selection |
-| `server/src/jobs/publishStories.ts` | Scheduled publishing |
+| `server/src/jobs/researchStories.ts` | Scheduled research step (`story-research.md`) |
+| `server/src/jobs/publishStories.ts` | Scheduled publishing, behind the publish gate |
 | `server/src/routes/admin/stories.ts` | Admin API endpoints |
 | `server/src/routes/public/stories.ts` | Public API (published stories only) |
 | `server/src/services/storyLifecycle.db.test.ts` | PostgreSQL tests of the table, the races and the cluster rules (`npm run test:db`) |
@@ -169,7 +175,7 @@ Stories carry both crawled data and AI-generated analysis:
 - `antifactors` — limiting factor bullet points (newline-separated)
 - `relevanceCalculation` — rating calculation steps (newline-separated)
 
-**Researched version** (set when an editor applies a research run, `story-research.md`, "Applying a run"):
+**Researched version** (set when an editor applies a research run, or the research step does in apply mode, `story-research.md`, "Applying a run"):
 - The swapped fields (`title`, `titleLabel`, `summary`, `quote`, `quoteAttribution`, `marketingBlurb`, `relevanceReasons`, `antifactors`, `relevance`, `relevanceCalculation`) then hold the run's researched text, and `relevanceSummary` is null, so its readers fall back to the researched summary or bullets.
 - `research` (jsonb) — the cited version the story page shows (`services/researchedStory.ts`).
 - `preResearch` (jsonb) — every swapped field's value before the first apply, `relevanceSummary` included; `researched` on the public detail is whether it is set.

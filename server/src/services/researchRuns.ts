@@ -1,11 +1,14 @@
 /**
- * The story research run lifecycle, the admin action (`.context/story-research.md`): the switch,
- * price and eligibility checks, the reservation against the monthly cap under an advisory lock,
- * the background run as a one-story `research` task, the finish write, interrupted runs, the
- * story's run list and the month's spend. A run writes only its own `story_research_runs` row: it
- * never moves a status, writes a story field or applies its verdict. Refusals are ServiceErrors.
+ * The story research run lifecycle (`.context/story-research.md`): the switch, price and
+ * eligibility checks, the reservation against the monthly cap under an advisory lock, the run and
+ * its finish write (`executeRun`), interrupted runs, the story's run list and the month's spend.
+ * Two callers start runs: an editor's Research button, as a one-story `research` task, and the
+ * research step (`runPipelineResearch`, for `jobs/researchStories.ts`). A run writes only its own
+ * `story_research_runs` row: it never moves a status, writes a story field or applies its verdict;
+ * the research step applies one through the hook it passes, which runs before the finish write.
+ * Refusals are ServiceErrors.
  */
-import type { Prisma, StoryResearchRun } from '@prisma/client'
+import type { Prisma, ResearchRunTrigger, StoryResearchRun } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
@@ -14,6 +17,7 @@ import { ConflictError, NotFoundError } from '../utils/errors.js'
 import { utcMonthStart } from './podcastGuards.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
 import { createRunMeter } from './researchCalls.js'
+import type { GateVerdict } from './researchChecks.js'
 import { hasPrice, summarizeRunCost, type RunCostSummary } from './researchCost.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds, type ResearchStory } from './researchInput.js'
 import { researchStory, STEP_TIERS, STEPS, type StepName, type StoryResearch } from './researchPipeline.js'
@@ -42,6 +46,7 @@ export interface ResearchRunView {
   id: string
   storyId: string | null
   status: StoryResearchRun['status']
+  trigger: ResearchRunTrigger
   verdict: string | null
   /** The reservation while running; the measured cost once completed; a failed run keeps its reservation. */
   costUsd: number
@@ -79,7 +84,7 @@ function currentPrices(models: string[]): ResearchPrices {
 }
 
 /** Why no run can start now, whatever the story: switched off, or a step's model without a price. */
-function switchRefusal(): string | null {
+export function switchRefusal(): string | null {
   if (!config.research.tavilyApiKey) return 'Research is switched off: TAVILY_API_KEY is not set'
   const unpriced = [...new Set(Object.values(stepModels()))].filter(m => !hasPrice(m))
   if (unpriced.length > 0) return `Research is refused: ${unpriced.join(', ')} has no price in config.research.modelPrices, so its cost could not be counted`
@@ -102,32 +107,37 @@ async function monthSpendUsd(db: Db, now: Date, exceptRunId?: string): Promise<n
   return _sum.costUsd ?? 0
 }
 
+/** Before this, a `running` run is past the stale limit: a restart cut it off. */
+export function staleBefore(now: Date): Date {
+  return new Date(now.getTime() - config.research.staleRunMinutes * 60_000)
+}
+
 /** A run still `running` past the stale limit was cut off by a restart: failed, keeping its reservation as its cost. */
-async function markInterruptedRuns(db: Db, now: Date): Promise<void> {
+export async function markInterruptedRuns(db: Db, now: Date): Promise<void> {
   await db.storyResearchRun.updateMany({
-    where: { status: 'running', startedAt: { lt: new Date(now.getTime() - config.research.staleRunMinutes * 60_000) } },
+    where: { status: 'running', startedAt: { lt: staleBefore(now) } },
     data: { status: 'failed', error: INTERRUPTED, finishedAt: now },
   })
 }
+
+type Reservation = { runId: string } | { refused: 'in-progress' } | { refused: 'cap'; spentUsd: number }
 
 /**
  * Insert the run with the ceiling as its cost. The advisory lock, taken first, serialises
  * reservations, so concurrent starts cannot overrun the cap or run one story twice.
  */
-async function reserveRun(storyId: string, now: Date): Promise<string> {
+async function reserveRun(storyId: string, now: Date, trigger: ResearchRunTrigger): Promise<Reservation> {
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RESEARCH_RESERVATION_LOCK}::bigint)`
     await markInterruptedRuns(tx, now)
-    if ((await tx.storyResearchRun.count({ where: { storyId, status: 'running' } })) > 0) {
-      throw new ConflictError('A research run of this story is already in progress')
-    }
-    const spent = await monthSpendUsd(tx, now)
-    if (spent + config.research.maxRunUsd > config.research.monthlyCapUsd) throw new ConflictError(capRefusal(spent))
+    if ((await tx.storyResearchRun.count({ where: { storyId, status: 'running' } })) > 0) return { refused: 'in-progress' as const }
+    const spentUsd = await monthSpendUsd(tx, now)
+    if (spentUsd + config.research.maxRunUsd > config.research.monthlyCapUsd) return { refused: 'cap' as const, spentUsd }
     const run = await tx.storyResearchRun.create({
-      data: { storyId, status: 'running', costUsd: config.research.maxRunUsd, startedAt: now },
+      data: { storyId, status: 'running', trigger, costUsd: config.research.maxRunUsd, startedAt: now },
       select: { id: true },
     })
-    return run.id
+    return { runId: run.id }
   })
 }
 
@@ -157,8 +167,19 @@ async function finishRun(runId: string, result: StoryResearch): Promise<{ writte
   return { written: count > 0, costUsd }
 }
 
-/** Runs the research and records it. Any verdict, `fallback` included, completes the task; only an unexpected error fails it. */
-async function runInBackground(runId: string, taskId: string, story: ResearchStory): Promise<void> {
+/** How a run ended: completed with its verdict, dropped (marked interrupted before it finished), or failed. */
+export type RunEnd = { ended: 'completed'; verdict: GateVerdict['kind'] } | { ended: 'dropped' } | { ended: 'failed'; error: string }
+
+/** Runs before the finish write, with the run's result: the research step applies its verdict here. */
+export type BeforeFinish = (result: StoryResearch, runId: string) => Promise<void>
+
+/**
+ * Runs the research and records it; never throws. Any verdict, `fallback` included, completes the
+ * run. `beforeFinish` runs before the finish write, so while it works the run is still `running`
+ * and the publish gate keeps the story waiting. An unexpected error, in the research, the hook or
+ * the write, fails the run, which keeps its reservation as its cost.
+ */
+async function executeRun(runId: string, story: ResearchStory, beforeFinish?: BeforeFinish): Promise<RunEnd> {
   try {
     const meter = createRunMeter({
       ceilingUsd: config.research.maxRunUsd,
@@ -173,21 +194,30 @@ async function runInBackground(runId: string, taskId: string, story: ResearchSto
       latestDate: new Date().toISOString(),
       sourcePolicy: researchSourcePolicy,
     })
+    if (beforeFinish) await beforeFinish(result, runId)
     const { written, costUsd } = await finishRun(runId, result)
     if (!written) {
       log.warn({ runId, storyId: story.id }, 'research run finished after it was marked interrupted; its result was dropped')
-      taskRegistry.increment(taskId, 'failed', 'The run was marked interrupted before it finished')
-      return
+      return { ended: 'dropped' }
     }
     log.info({ runId, storyId: story.id, verdict: result.verdict.kind, costUsd }, 'research run finished')
-    taskRegistry.increment(taskId, 'completed')
+    return { ended: 'completed', verdict: result.verdict.kind }
   } catch (err) {
     const error = sanitizedError(err)
     log.error({ runId, storyId: story.id, error }, 'research run failed')
     await prisma.storyResearchRun
       .updateMany({ where: { id: runId, status: 'running' }, data: { status: 'failed', error, finishedAt: new Date() } })
       .catch((e: unknown) => log.error({ runId, error: sanitizedError(e) }, 'could not mark the research run failed'))
-    taskRegistry.increment(taskId, 'failed', error)
+    return { ended: 'failed', error }
+  }
+}
+
+/** An editor's run as a one-story task: any verdict completes it; a dropped or failed run fails it. */
+async function runAsTask(runId: string, taskId: string, story: ResearchStory): Promise<void> {
+  try {
+    const end = await executeRun(runId, story)
+    if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
+    else taskRegistry.increment(taskId, 'failed', end.ended === 'failed' ? end.error : 'The run was marked interrupted before it finished')
   } finally {
     taskRegistry.complete(taskId)
   }
@@ -208,11 +238,49 @@ export async function startResearchRun(storyId: string, now: Date = new Date()):
   const [story] = await researchStoriesByIds(prisma, [storyId])
   if (!story) throw new ConflictError('This story lacks the analysis research needs')
 
-  const runId = await reserveRun(storyId, now)
+  const reserved = await reserveRun(storyId, now, 'editor')
+  if ('refused' in reserved) {
+    throw new ConflictError(reserved.refused === 'cap' ? capRefusal(reserved.spentUsd) : 'A research run of this story is already in progress')
+  }
   const taskId = taskRegistry.create('research', 1, [storyId])
-  log.info({ runId, storyId, taskId }, 'research run started')
-  void runInBackground(runId, taskId, story)
-  return { taskId, runId }
+  log.info({ runId: reserved.runId, storyId, taskId }, 'research run started')
+  void runAsTask(reserved.runId, taskId, story)
+  return { taskId, runId: reserved.runId }
+}
+
+/**
+ * What a research step run came to: researched (the run ended as `end` says); refused, with the $0
+ * failed run recorded so the publish gate stops waiting (at the cap, or a story the loader cannot
+ * research); or busy, another run of the story in progress, with no row written, so the story is
+ * tried again next time.
+ */
+export type PipelineRunOutcome =
+  { outcome: 'researched'; runId: string; end: RunEnd } | { outcome: 'refused'; runId: string; reason: string } | { outcome: 'busy' }
+
+/** A pipeline run that never started: failed at $0, so it settles the story without counting against the cap. */
+async function recordRefusedRun(storyId: string, now: Date, reason: string): Promise<PipelineRunOutcome> {
+  const run = await prisma.storyResearchRun.create({
+    data: { storyId, status: 'failed', trigger: 'pipeline', costUsd: 0, error: `skipped: ${reason}`, startedAt: now, finishedAt: now },
+    select: { id: true },
+  })
+  log.info({ runId: run.id, storyId, reason }, 'research step skipped a story')
+  return { outcome: 'refused', runId: run.id, reason }
+}
+
+/**
+ * Research one selected story for the research step (`jobs/researchStories.ts`), in this call:
+ * a run marked `trigger = 'pipeline'`, reserved like an editor's against the monthly cap, and
+ * `beforeFinish` (which applies the verdict) before its finish write. A failure once the run is
+ * reserved fails that run (`executeRun`); before it, only a database error throws. The caller
+ * checks the switch first.
+ */
+export async function runPipelineResearch(storyId: string, beforeFinish: BeforeFinish, now: Date = new Date()): Promise<PipelineRunOutcome> {
+  const [story] = await researchStoriesByIds(prisma, [storyId])
+  if (!story) return recordRefusedRun(storyId, now, 'the story lacks the analysis research needs')
+  const reserved = await reserveRun(storyId, now, 'pipeline')
+  if ('refused' in reserved) return reserved.refused === 'cap' ? recordRefusedRun(storyId, now, 'monthly cap reached') : { outcome: 'busy' }
+  log.info({ runId: reserved.runId, storyId }, 'research step run started')
+  return { outcome: 'researched', runId: reserved.runId, end: await executeRun(reserved.runId, story, beforeFinish) }
 }
 
 function toView(run: StoryResearchRun): ResearchRunView {
@@ -221,6 +289,7 @@ function toView(run: StoryResearchRun): ResearchRunView {
     id: run.id,
     storyId: run.storyId,
     status: run.status,
+    trigger: run.trigger,
     verdict: run.verdict,
     costUsd: run.costUsd,
     tavilyCredits: run.tavilyCredits,

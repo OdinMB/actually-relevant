@@ -738,6 +738,17 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(mockInvoke).not.toHaveBeenCalled()
   })
 
+  it.each(['research_rating', 'stale', 'contradicted'] as const)('the research step rejects with %s only a selected story', async reason => {
+    const selected = await story({ status: 'selected' })
+    const others = await Promise.all((['analyzed', 'published', 'trashed'] as const).map(status => story({ status })))
+
+    const { moved, skipped } = await transition([selected.id, ...others.map(s => s.id)], { to: 'rejected', reason }, 'pipeline')
+
+    expect(moved).toEqual([selected.id])
+    expect(skipped.map(s => s.status).sort()).toEqual(['analyzed', 'published', 'trashed'])
+    expect(await row(selected.id)).toMatchObject({ status: 'rejected', rejectionReason: reason })
+  })
+
   it('the migration backfill marks only never-published rejected non-primaries as duplicates', async () => {
     const migration = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'prisma', 'migrations', '20261025130000_story_rejection_reason', 'migration.sql'),

@@ -133,4 +133,30 @@ describe('StoryTable', () => {
       expect(screen.queryByText('Cluster')).not.toBeInTheDocument()
     })
   })
+
+  describe('research rejection badge', () => {
+    it.each([
+      ['research_rating', /rated it below the publish bar/],
+      ['stale', /found it old news/],
+      ['contradicted', /found its main claim contradicted/],
+    ] as const)('marks a story the research step rejected for %s, saying why', (rejectionReason, why) => {
+      render(<StoryTable {...defaultProps} stories={[makeStory({ status: 'rejected', rejectionReason })]} />)
+      const badge = screen.getByTitle(why)
+      expect(badge).toHaveTextContent(/^Research: rejected by the research step, its research/)
+      expect(badge).toHaveTextContent(why)
+    })
+
+    it('marks no story rejected for another reason, and none that left the rejection', () => {
+      render(
+        <StoryTable
+          {...defaultProps}
+          stories={[
+            makeStory({ id: '1', status: 'rejected', rejectionReason: 'select_threshold' }),
+            makeStory({ id: '2', status: 'published', rejectionReason: null }),
+          ]}
+        />,
+      )
+      expect(screen.queryByTitle(/research step/)).not.toBeInTheDocument()
+    })
+  })
 })

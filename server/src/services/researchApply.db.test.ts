@@ -11,11 +11,13 @@ import { axisVector, createFeed, createIssue, createStory, describeDb, embedding
 import type { StoredResearch } from './researchRuns.js'
 import type { ResearchSource } from './researchPipeline.js'
 
-// The owner's gate (RESEARCH_APPLY_ENABLED) is read at startup, so the tests open it through the config
-const applyGate = vi.hoisted(() => ({ enabled: true }))
+// The owner's gate (RESEARCH_APPLY_ENABLED) and the research step's mode are read at startup, so the
+// tests set them through the config
+const applyGate = vi.hoisted(() => ({ enabled: true, mode: 'apply' as 'shadow' | 'apply' }))
 vi.mock('../config.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../config.js')>()
   Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => applyGate.enabled })
+  Object.defineProperty(actual.config.research.pipeline, 'mode', { get: () => applyGate.mode })
   return actual
 })
 const mockGenerate = vi.hoisted(() => vi.fn())
@@ -36,7 +38,7 @@ vi.mock('./relatedStories.js', async importOriginal => ({
   forgetRelatedStories: mockForget,
 }))
 
-const { applyResearchRun, revertResearch } = await import('./researchApply.js')
+const { applyResearchRun, applyVerdict, revertResearch } = await import('./researchApply.js')
 const { getPublishedStoryBySlug, updateStoryStatus } = await import('./story.js')
 
 const SINGLE_SOURCE = {
@@ -146,6 +148,7 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     // Research and applying switched on: an apply refuses while either is off
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
     applyGate.enabled = true
+    applyGate.mode = 'apply'
     mockGenerate.mockReset().mockResolvedValue({ embedding: axisVector(7), hash: 'researched' })
     mockFavicons.mockReset().mockResolvedValue(undefined)
     mockForget.mockReset()
@@ -260,14 +263,74 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     "a pipeline apply whose story an editor moved to %s during the run is skipped, and the editor's move stands",
     async moved => {
       const s = await story('selected')
-      const runId = await run(s.id)
       await updateStoryStatus(s.id, moved)
 
-      expect(await applyResearchRun(s.id, runId, 'pipeline', 'selected')).toBe('skipped')
+      expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1))).toBe('skipped')
       const after = await stored(s.id)
       expect(after).toMatchObject({ status: moved, title: SINGLE_SOURCE.title, research: null, preResearch: null })
     },
   )
+
+  it("a pipeline apply whose story an editor publishes during the embedding call is skipped by the status fence, and the editor's move stands", async () => {
+    const s = await story('selected')
+    mockGenerate.mockImplementationOnce(async () => {
+      await updateStoryStatus(s.id, 'published')
+      return { embedding: axisVector(7), hash: 'researched' }
+    })
+
+    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1))).toBe('skipped')
+    expect(await stored(s.id)).toMatchObject({ status: 'published', title: SINGLE_SOURCE.title, research: null, preResearch: null })
+    expect(mockFavicons).not.toHaveBeenCalled()
+  })
+
+  it('the research step puts a kept run on its selected story, which stays selected', async () => {
+    const s = await story('selected')
+
+    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1))).toBe('applied')
+    const after = await stored(s.id)
+    expect(after).toMatchObject({ status: 'selected', title: 'Researched headline 1', relevanceSummary: null })
+    expect(after.preResearch).toEqual(SINGLE_SOURCE)
+  })
+
+  it.each([
+    [{ kind: 'research-rating', rating: 3 }, 'research_rating'],
+    [{ kind: 'stale', firstHappened: '2026-09-01' }, 'stale'],
+    [{ kind: 'contradicted', factIds: ['S1F1'] }, 'contradicted'],
+  ] as const)('the research step rejects a selected story on a %o verdict with the reason %s, and writes no research', async (verdict, reason) => {
+    const s = await story('selected')
+
+    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1, { verdict }))).toBe('rejected')
+    expect(await stored(s.id)).toMatchObject({ status: 'rejected', rejectionReason: reason, title: SINGLE_SOURCE.title, research: null })
+  })
+
+  it('a research rejection leaves a story an editor published during the run published', async () => {
+    const s = await story('selected')
+    await updateStoryStatus(s.id, 'published')
+
+    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1, { verdict: { kind: 'stale', firstHappened: '2026-09-01' } }))).toBe('skipped')
+    expect(await stored(s.id)).toMatchObject({ status: 'published', rejectionReason: null })
+  })
+
+  it('a fallback leaves the story single-source and selected', async () => {
+    const s = await story('selected')
+    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1, { verdict: { kind: 'fallback', reason: 'budget' } }))).toBe('single-source')
+    expect(await stored(s.id)).toMatchObject({ ...SINGLE_SOURCE, status: 'selected', research: null, preResearch: null })
+  })
+
+  it.each([
+    ['shadow mode', () => (applyGate.mode = 'shadow')],
+    ['apply mode while the owner’s gate is closed', () => (applyGate.enabled = false)],
+  ])('in %s the research step changes no story, whatever the verdict', async (_name, arrange) => {
+    arrange()
+    const kept = await story('selected')
+    const low = await story('selected')
+
+    expect(await applyVerdict(kept.id, 'run-1', 'selected', result(kept.id, 1))).toBe('shadow')
+    expect(await applyVerdict(low.id, 'run-2', 'selected', result(low.id, 1, { verdict: { kind: 'research-rating', rating: 2 } }))).toBe('shadow')
+    for (const id of [kept.id, low.id]) {
+      expect(await stored(id)).toMatchObject({ ...SINGLE_SOURCE, status: 'selected', rejectionReason: null, research: null, preResearch: null })
+    }
+  })
 
   it('an editor applies research to a rejected story, which stays rejected', async () => {
     const s = await story('rejected')

@@ -123,6 +123,10 @@ services:
       # Left unset; he sets it on the service's Environment page after the press-publisher-right check
       - key: RESEARCH_APPLY_ENABLED
         sync: false
+      # The research step's mode: shadow (applies no verdict) unless "apply". Left unset; the owner
+      # sets "apply" on the Environment page after the shadow evaluation (.context/story-research.md)
+      - key: RESEARCH_PIPELINE_MODE
+        sync: false
       # Crawl concurrency: production sets both (code defaults 2 feeds, 1 article)
       - key: CONCURRENCY_CRAWL_FEEDS
         sync: false

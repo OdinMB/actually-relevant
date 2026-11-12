@@ -61,6 +61,10 @@ const PIPELINE_REJECTION_FROM: Partial<Record<RejectionReason, StoryStatus[]>> =
   select_threshold: [analyzed],
   selection: [analyzed],
   duplicate: DUPLICATE_FROM,
+  // The research step's verdicts, on the selected stories it researched (jobs/researchStories.ts)
+  research_rating: [selected],
+  stale: [selected],
+  contradicted: [selected],
 }
 
 const PIPELINE_FROM: Partial<Record<StoryStatus, StoryStatus[]>> = {

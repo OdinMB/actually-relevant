@@ -16,6 +16,10 @@ export type RejectionReason =
   | 'selection'
   | 'duplicate'
   | 'editor'
+  // The research step's verdicts
+  | 'research_rating'
+  | 'stale'
+  | 'contradicted'
 
 export type EmotionTag =
   | 'uplifting'
@@ -50,6 +54,7 @@ export type JobName =
   | 'preassess_stories'
   | 'assess_stories'
   | 'select_stories'
+  | 'research_stories'
   | 'publish_stories'
   | 'social_auto_post'
   | 'bluesky_update_metrics'
@@ -1023,6 +1028,8 @@ export interface ResearchRun {
   id: string
   storyId: string | null
   status: 'running' | 'completed' | 'failed'
+  /** Who started it: an editor's Research button, or the research_stories job. */
+  trigger: 'editor' | 'pipeline'
   verdict: ResearchVerdict['kind'] | null
   /** The reservation while running; the measured cost once completed; a failed run keeps its reservation. */
   costUsd: number

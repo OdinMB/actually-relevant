@@ -12,20 +12,27 @@ import type { ResearchSource } from './researchPipeline.js'
 const mockPrisma = vi.hoisted(() => ({ story: { findUnique: vi.fn() }, storyResearchRun: { findUnique: vi.fn() } }))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 const mockRecord = vi.hoisted(() => vi.fn())
-vi.mock('./storyLifecycle.js', async importOriginal => ({ ...(await importOriginal<typeof import('./storyLifecycle.js')>()), recordAnalysis: mockRecord }))
+const mockTransition = vi.hoisted(() => vi.fn())
+vi.mock('./storyLifecycle.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('./storyLifecycle.js')>()),
+  recordAnalysis: mockRecord,
+  transition: mockTransition,
+}))
 const mockEmbed = vi.hoisted(() => vi.fn())
 vi.mock('./embedding.js', () => ({ generateEmbeddingForContent: mockEmbed }))
 const mockFavicons = vi.hoisted(() => vi.fn())
 vi.mock('./sourceFavicons.js', () => ({ fetchSourceFaviconsInBackground: mockFavicons }))
-// The owner's gate (RESEARCH_APPLY_ENABLED) is read at startup; the key stays a getter on the real config
-const applyGate = vi.hoisted(() => ({ enabled: true }))
+// The owner's gate (RESEARCH_APPLY_ENABLED) and the research step's mode are read at startup; the key
+// stays a getter on the real config
+const applyGate = vi.hoisted(() => ({ enabled: true, mode: 'apply' as 'shadow' | 'apply' }))
 vi.mock('../config.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../config.js')>()
   Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => applyGate.enabled })
+  Object.defineProperty(actual.config.research.pipeline, 'mode', { get: () => applyGate.mode })
   return actual
 })
 
-const { applyResearchRun, applyRefusal, revertResearch } = await import('./researchApply.js')
+const { applyResearchRun, applyRefusal, applyVerdict, pipelineMode, revertResearch } = await import('./researchApply.js')
 const { buildResearchedStory } = await import('./researchedStory.js')
 
 const STORY = 'story-1'
@@ -130,6 +137,8 @@ beforeEach(() => {
   vi.unstubAllEnvs()
   vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
   applyGate.enabled = true
+  applyGate.mode = 'apply'
+  mockTransition.mockImplementation(async (ids: string[]) => ({ moved: ids, skipped: [] }))
   mockPrisma.story.findUnique.mockResolvedValue(storyRow())
   mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow())
   mockEmbed.mockResolvedValue(EMBEDDING)
@@ -258,11 +267,86 @@ describe('applyResearchRun', () => {
     await expect(applyResearchRun(STORY, RUN)).rejects.toThrow(/changed while this was written/)
     expect(mockFavicons).not.toHaveBeenCalled()
   })
+})
 
-  it('writes a pipeline apply against the status read before its run, and reports a skip without an error', async () => {
-    mockRecord.mockResolvedValue(new Map([[STORY, 'skipped']]))
-    await expect(applyResearchRun(STORY, RUN, 'pipeline', 'selected')).resolves.toBe('skipped')
-    expect(lastWrite()).toMatchObject({ actor: 'pipeline', expected: [[STORY, 'selected']] })
+describe('pipelineMode', () => {
+  it('is apply only when the mode is apply and the owner has opened applying', () => {
+    expect(pipelineMode()).toEqual({ mode: 'apply' })
+    applyGate.mode = 'shadow'
+    expect(pipelineMode()).toMatchObject({ mode: 'shadow' })
+  })
+
+  it('holds apply mode to shadow while applying is closed, and names the setting that holds it', () => {
+    applyGate.enabled = false
+    expect(pipelineMode()).toEqual({ mode: 'shadow', heldBack: 'RESEARCH_APPLY_ENABLED is not "true"' })
+    vi.stubEnv('TAVILY_API_KEY', '')
+    expect(pipelineMode()).toEqual({ mode: 'shadow', heldBack: 'TAVILY_API_KEY is not set' })
+  })
+})
+
+describe('applyVerdict', () => {
+  const selectedRow = () => storyRow({ status: 'selected' })
+
+  it("in apply mode, puts a kept run's version on the story as the pipeline, against the status read before the run", async () => {
+    mockPrisma.story.findUnique.mockResolvedValue(selectedRow())
+
+    await expect(applyVerdict(STORY, RUN, 'selected', result())).resolves.toBe('applied')
+
+    const { stage, actor, row, expected } = lastWrite()
+    expect([stage, actor, expected]).toEqual(['research', 'pipeline', [[STORY, 'selected']]])
+    expect(row.data).toMatchObject({ title: 'Researched headline', research: buildResearchedStory(result()), preResearch: singleSource })
+    expect(row.where).toEqual({ updatedAt: READ_AT })
+    // Applied from the run's own result: the run is still running, so its row is never read
+    expect(mockPrisma.storyResearchRun.findUnique).not.toHaveBeenCalled()
+    expect(mockFavicons).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['research-rating', { kind: 'research-rating', rating: 3 }, 'research_rating'],
+    ['stale', { kind: 'stale', firstHappened: '2026-09-01' }, 'stale'],
+    ['contradicted', { kind: 'contradicted', factIds: ['S1F1'] }, 'contradicted'],
+  ] as const)('in apply mode, rejects a %s verdict with its reason through the pipeline move', async (_name, verdict, reason) => {
+    await expect(applyVerdict(STORY, RUN, 'selected', result({ verdict }))).resolves.toBe('rejected')
+    expect(mockTransition).toHaveBeenCalledWith([STORY], { to: 'rejected', reason }, 'pipeline')
+    expect(mockRecord).not.toHaveBeenCalled()
+  })
+
+  it('reports a rejection the move skipped (an editor moved the story meanwhile) as skipped', async () => {
+    mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: STORY, status: 'published' }] })
+    await expect(applyVerdict(STORY, RUN, 'selected', result({ verdict: { kind: 'stale', firstHappened: '2026-09-01' } }))).resolves.toBe('skipped')
+  })
+
+  it('leaves the story single-source on a fallback, and on a kept run without a usable draft', async () => {
+    await expect(applyVerdict(STORY, RUN, 'selected', result({ verdict: { kind: 'fallback', reason: 'budget' } }))).resolves.toBe('single-source')
+    await expect(applyVerdict(STORY, RUN, 'selected', result({ draft: null }))).resolves.toBe('single-source')
+    expect(mockRecord).not.toHaveBeenCalled()
+    expect(mockTransition).not.toHaveBeenCalled()
+  })
+
+  const unknownKind = 'rumor' as ResearchSource['kind']
+  it.each<[string, () => unknown, StoredResearch]>([
+    ['the story changed during the run or the write', () => mockRecord.mockResolvedValue(new Map([[STORY, 'skipped']])), result()],
+    ['the story was trashed', () => mockPrisma.story.findUnique.mockResolvedValue(storyRow({ status: 'trashed' })), result()],
+    ['the story was deleted', () => mockPrisma.story.findUnique.mockResolvedValue(null), result()],
+    ["the run's sources make no version readers can be given", () => undefined, result({ sources: [source('S0', { origin: 'original', kind: unknownKind })] })],
+  ])('reports a kept run as skipped, without an error, when %s', async (_name, arrange, run) => {
+    mockPrisma.story.findUnique.mockResolvedValue(selectedRow())
+    arrange()
+    await expect(applyVerdict(STORY, RUN, 'selected', run)).resolves.toBe('skipped')
+    expect(mockFavicons).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['shadow mode', () => (applyGate.mode = 'shadow')],
+    ['apply mode while the owner’s gate is closed', () => (applyGate.enabled = false)],
+  ])('applies no verdict in %s', async (_name, arrange) => {
+    arrange()
+    for (const verdict of [{ kind: 'keep' }, { kind: 'research-rating', rating: 3 }, { kind: 'fallback', reason: 'budget' }] as const) {
+      await expect(applyVerdict(STORY, RUN, 'selected', result({ verdict }))).resolves.toBe('shadow')
+    }
+    expect(mockPrisma.story.findUnique).not.toHaveBeenCalled()
+    expect(mockRecord).not.toHaveBeenCalled()
+    expect(mockTransition).not.toHaveBeenCalled()
   })
 })
 
