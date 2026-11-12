@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { ResearchCitedText, ResearchEarlier, ResearchFact, ResearchResult, ResearchRun, ResearchSource, ResearchVerdict } from '@shared/types'
 import { formatDateWithTime } from '../../lib/constants'
+import { isHttpsUrl, isHttpUrl } from '../../lib/urls'
 
 /**
  * One story research run, read only (`.context/story-research.md`): its verdict, the draft with
@@ -13,16 +14,6 @@ const OUR_OUTLET = 'Actually Relevant'
 
 const usd = (v: number) => `$${v.toFixed(3)}`
 const count = (n: number) => n.toLocaleString('en-US')
-
-function protocolOf(url: string): string | null {
-  try {
-    return new URL(url).protocol
-  } catch {
-    return null
-  }
-}
-const isHttpUrl = (url: string) => protocolOf(url) === 'http:' || protocolOf(url) === 'https:'
-const isHttpsUrl = (url: string) => protocolOf(url) === 'https:'
 
 const VERDICT_NAMES: Record<ResearchVerdict['kind'], string> = {
   keep: 'Keep',

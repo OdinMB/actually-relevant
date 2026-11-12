@@ -1,8 +1,9 @@
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 import type { ResearchCitation, ResearchedSource } from '@shared/types'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
+import AiBadge from '../ai/AiBadge'
 import { SourceIcon } from './SourceIcon'
-import { SourceLink } from './SourceLink'
+import { SourceLink, sourceHref } from './SourceLink'
 import { EARLIER_LABEL, sourceDetails } from './sourceText'
 
 /** A researched story's sources by id, as the citations look them up. */
@@ -24,8 +25,18 @@ function SourceCard({ source, sentence }: CitedSource) {
         {outletName(source)}
       </p>
       {details.length > 0 && <p className="text-neutral-500">{details.join(' · ')}</p>}
-      {sentence && <p className="mt-1 text-neutral-700">“{sentence}”</p>}
-      {(source.url || source.slug) && (
+      {sentence && (
+        <p className="mt-1 text-neutral-700">
+          {/* Our earlier story's sentence is our own AI-written text; an outlet's is its own words */}
+          {source.origin === 'earlier' && (
+            <>
+              <AiBadge className="mr-1 align-middle" />{' '}
+            </>
+          )}
+          “{sentence}”
+        </p>
+      )}
+      {sourceHref(source) && (
         <p className="mt-1">
           <SourceLink source={source} className={TEXT_LINK}>
             {source.origin === 'earlier' ? 'Read the story' : 'Read the source'}
@@ -39,8 +50,9 @@ function SourceCard({ source, sentence }: CitedSource) {
 /**
  * One citation group, after a sentence or bullet: a 24 px button of the cited sources' overlapping
  * 16 px icons, named "Source: X" or "Sources: X, Y", that opens a card per source with its outlet,
- * country, kind, date, supporting sentence and a link to read it. Nothing for citations whose
- * sources the story does not list.
+ * country, kind, date, supporting sentence and a link to read it. The cards sit in one panel, a
+ * dialog named "Source(s) for this sentence" that takes focus on its first link. Nothing for
+ * citations whose sources the story does not list.
  */
 export function Citation({ citations, sources }: { citations: ResearchCitation[]; sources: SourcesById }) {
   const cited = citations.flatMap((c): CitedSource[] => {
@@ -60,7 +72,11 @@ export function Citation({ citations, sources }: { citations: ResearchCitation[]
           <SourceIcon key={c.source.id} source={c.source} className={i > 0 ? '-ml-1.5' : ''} />
         ))}
       </PopoverButton>
+      {/* Portaled to the end of the body, so it takes focus when it opens; Esc, or focus leaving it, closes it, Esc returning focus to the button */}
       <PopoverPanel
+        focus
+        role="dialog"
+        aria-label={`${cited.length === 1 ? 'Source' : 'Sources'} for this sentence`}
         anchor="bottom start"
         className="z-30 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-neutral-200 bg-white p-4 text-sm leading-normal shadow-lg [--anchor-gap:4px]"
       >

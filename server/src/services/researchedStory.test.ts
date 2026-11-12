@@ -127,6 +127,28 @@ describe('buildResearchedStory', () => {
   })
 })
 
+describe('researchedStorySchema', () => {
+  const stored = buildResearchedStory(run({ story: [{ sentences: [cited('All.', ['S0F1', 'E1F1'])] }] }))
+  const withUrl = (url: string | null) => ({ ...stored, sources: stored.sources.map(s => (s.id === 'S0' ? { ...s, url } : s)) })
+
+  it.each(['https://outlet.example/a', 'http://outlet.example/a', 'HTTPS://outlet.example/a', null])('accepts a source address of %s', url => {
+    expect(researchedStorySchema.safeParse(withUrl(url)).success).toBe(true)
+  })
+
+  // What reaches a link's href: a stored value that is not http(s) fails the parse, so the story is served without its researched version
+  it.each([
+    'javascript:alert(1)',
+    'JavaScript:alert(1)',
+    'java\tscript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'vbscript:x',
+    '//outlet.example/a',
+    'not a url',
+  ])('refuses a source address of %s', url => {
+    expect(researchedStorySchema.safeParse(withUrl(url)).success).toBe(false)
+  })
+})
+
 describe('forReaders', () => {
   const built = buildResearchedStory(
     run({

@@ -1,4 +1,5 @@
 import type { ResearchedSource } from '@shared/types'
+import AiBadge from '../ai/AiBadge'
 import { SourceIcon } from './SourceIcon'
 import { SourceLink } from './SourceLink'
 import { EARLIER_LABEL, sourceDetails } from './sourceText'
@@ -9,8 +10,8 @@ const HEADING_ID = 'sources-heading'
 /**
  * A researched story's sources, the `#sources` target of the header's "N sources": per source its
  * icon, outlet, country, kind and date, and its own headline linked. The original article says
- * "initially found here"; our earlier stories come last as "Earlier on Actually Relevant". It takes
- * over from "Also covered by".
+ * "initially found here"; our earlier stories come last as "Earlier on Actually Relevant", their AI
+ * headline behind the "AI" badge. It takes over from "Also covered by".
  */
 export function SourcesList({ sources }: { sources: ResearchedSource[] }) {
   return (
@@ -31,6 +32,12 @@ export function SourcesList({ sources }: { sources: ResearchedSource[] }) {
                   {source.origin === 'original' && ' · initially found here'}
                 </p>
                 <p className="mt-0.5 break-words">
+                  {/* Our earlier story's headline is AI-written, so it carries the badge, as on every story card; an outlet's is its own */}
+                  {earlier && (
+                    <>
+                      <AiBadge className="mr-1 align-middle" />{' '}
+                    </>
+                  )}
                   <SourceLink
                     source={source}
                     className="text-neutral-800 underline hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"

@@ -27,6 +27,16 @@ const citedTextSchema = z.object({
   citations: z.array(citationSchema).describe('One entry per cited source, in the order they are first cited; empty for text that only judges.'),
 })
 
+/** The address parsed, when it is http(s) (as a browser reads it); null for any other address. */
+function httpUrl(url: string): URL | null {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 const researchedSourceSchema = z.object({
   id: z.string().describe('`S0` is the article the story was initially found in; `E1`, `E2` … are earlier Actually Relevant stories.'),
   origin: z
@@ -34,7 +44,12 @@ const researchedSourceSchema = z.object({
     .describe('`original`: the article the story was initially found in. `earlier`: an earlier Actually Relevant story.'),
   outlet: z.string().describe("The outlet's name or web address; `Actually Relevant` for an earlier story."),
   host: z.string().nullable().describe('Host name of the source, without `www.`; null for an earlier story.'),
-  url: z.string().nullable().describe('The source article; null for an earlier story, which is linked by its slug.'),
+  // Readers' links take it as their href, so a stored value that is not http(s) fails the read-time parse
+  url: z
+    .string()
+    .refine(url => httpUrl(url) !== null, 'Not an http(s) address')
+    .nullable()
+    .describe('The source article, an http(s) address; null for an earlier story, which is linked by its slug.'),
   title: z.string().describe("The source's own headline (not AI-generated), or the earlier story's AI headline."),
   date: z.string().nullable().describe('When the source was published, as the source or search gives it.'),
   country: z.string().nullable().describe('Country the outlet is based in, as an AI model read it from the source.'),
@@ -95,13 +110,7 @@ function cite(item: { text: string; factIds: string[] }, pool: ReadonlyMap<strin
 
 /** The host of an http(s) address, without `www.`; null for any other address. */
 function hostOf(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-    return parsed.hostname.replace(/^www\./, '') || null
-  } catch {
-    return null
-  }
+  return httpUrl(url)?.hostname.replace(/^www\./, '') || null
 }
 
 function fromSource(s: ResearchSource): ResearchedSource {

@@ -591,7 +591,7 @@ describe('StoryPage researched format', () => {
     expect(items.map(item => [...item.querySelectorAll('p')].map(announcedText))).toEqual([
       ['Example Feed · Pakistan · Nov 10, 2026 · initially found here', 'Headline of S0 (opens in new tab)'],
       ['Coverage Outlet · Switzerland · analysis · Nov 10, 2026', 'Headline of S1 (opens in new tab)'],
-      ['Earlier on Actually Relevant · Mar 2026', 'Our earlier headline'],
+      ['Earlier on Actually Relevant · Mar 2026', 'AI-generated Our earlier headline'],
     ])
     expect(within(items[2]!).getByRole('link', { name: 'Our earlier headline' })).toHaveAttribute('href', '/stories/earlier-story')
   })
