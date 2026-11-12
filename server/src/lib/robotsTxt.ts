@@ -86,24 +86,50 @@ export function parseRobotsTxt(text: string, productToken: string): RobotsPolicy
 
 /** Whether the rules let the crawler fetch this path (pathname plus query): the longest matching rule wins, Allow on a tie, and no match allows. */
 export function isPathAllowed(rules: readonly RobotsRule[], path: string): boolean {
-  let best: RobotsRule | null = null
+  const target = normalizePercentEncoding(path)
+  let best: { allow: boolean; length: number } | null = null
   for (const rule of rules) {
-    if (!matchesPathPattern(rule.pattern, path)) continue
-    if (!best || rule.pattern.length > best.pattern.length || (rule.pattern.length === best.pattern.length && rule.allow)) best = rule
+    // Specificity counts the octets of the encoded pattern (RFC 9309 §2.2.2), so `/über` is as long as `/%C3%BCber`
+    const pattern = normalizePercentEncoding(rule.pattern)
+    if (!matchesNormalized(pattern, target)) continue
+    if (!best || pattern.length > best.length || (pattern.length === best.length && rule.allow)) best = { allow: rule.allow, length: pattern.length }
   }
   return best?.allow ?? true
 }
 
+const UNRESERVED = /^[A-Za-z0-9._~-]$/
+
+/**
+ * A path or pattern in the one percent-encoding RFC 9309 §2.2.2 compares (RFC 3986 §6.2.2): the hex
+ * digits of a `%XX` uppercase, a `%XX` of an unreserved character (`A-Z a-z 0-9 - . _ ~`) decoded, and
+ * non-ASCII characters (and ASCII controls) encoded as UTF-8. An encoded reserved character such as
+ * `%2F` stays encoded, distinct from `/`; `*` and `$` are left for the matcher.
+ */
+function normalizePercentEncoding(value: string): string {
+  return value.replace(/%[0-9A-Fa-f]{2}|[^\x20-\x7E]/gu, match => {
+    if (match.startsWith('%')) {
+      const char = String.fromCharCode(parseInt(match.slice(1), 16))
+      return UNRESERVED.test(char) ? char : match.toUpperCase()
+    }
+    // A lone surrogate (possible in a JSON string) has no UTF-8 form; encodeURIComponent would throw
+    return /^[\uD800-\uDFFF]$/.test(match) ? '%EF%BF%BD' : encodeURIComponent(match)
+  })
+}
+
 /**
  * Whether a robots.txt path pattern matches the path: a prefix match, where `*` stands for any
- * sequence and a final `$` anchors the end. Non-ASCII pattern characters are compared in the
- * percent-encoded form a URL's path carries. Linear-time wildcard matching (no regex), so a
- * publisher's pattern cannot make a match backtrack catastrophically.
+ * sequence and a final `$` anchors the end. Both are compared in one percent-encoding
+ * (`normalizePercentEncoding()`), so `/über/`, `/%c3%bcber/` and `/%C3%BCber/` are the same path.
+ * Linear-time wildcard matching (no regex), so a publisher's pattern cannot make a match backtrack
+ * catastrophically.
  */
 export function matchesPathPattern(pattern: string, path: string): boolean {
-  const encoded = pattern.replace(/[^ -~]/gu, c => encodeURIComponent(c))
-  const anchored = encoded.endsWith('$')
-  const p = anchored ? encoded.slice(0, -1) : `${encoded}*`
+  return matchesNormalized(normalizePercentEncoding(pattern), normalizePercentEncoding(path))
+}
+
+function matchesNormalized(pattern: string, path: string): boolean {
+  const anchored = pattern.endsWith('$')
+  const p = anchored ? pattern.slice(0, -1) : `${pattern}*`
   let pi = 0
   let si = 0
   let starPi = -1

@@ -63,6 +63,12 @@ describe('isPathAllowed: longest match', () => {
     expect(allowed(robots, '/today')).toBe(true)
   })
 
+  it('measures specificity on the percent-encoded pattern, so a raw non-ASCII rule is not counted short', () => {
+    const robots = 'User-agent: *\nAllow: /%C3%BCb\nDisallow: /über/\n'
+    expect(allowed(robots, '/%c3%bcber/story')).toBe(false)
+    expect(allowed(robots, '/%C3%BCbahn')).toBe(true)
+  })
+
   it('matches the query string as part of the path', () => {
     const robots = 'User-agent: *\nDisallow: /*?print=\n'
     expect(allowed(robots, '/story?print=1')).toBe(false)
@@ -87,6 +93,23 @@ describe('matchesPathPattern', () => {
 
   it('compares non-ASCII pattern characters with the percent-encoded path', () => {
     expect(matchesPathPattern('/über/', '/%C3%BCber/story')).toBe(true)
+  })
+
+  it('compares percent-encodings regardless of hex case, and unreserved characters encoded or not (RFC 9309 §2.2.2)', () => {
+    const cyrillic = '/%d0%bd%d0%be%d0%b2%d0%be%d1%81%d1%82%d0%b8/' // "новости", lowercase hex
+    expect(matchesPathPattern('/новости/', `${cyrillic}story`)).toBe(true)
+    expect(matchesPathPattern(cyrillic, '/%D0%BD%D0%BE%D0%B2%D0%BE%D1%81%D1%82%D0%B8/story')).toBe(true)
+    expect(matchesPathPattern('/~staff/', '/%7Estaff/page')).toBe(true)
+    expect(matchesPathPattern('/%7estaff/', '/~staff/page')).toBe(true)
+  })
+
+  it('keeps an encoded reserved character distinct from the character itself', () => {
+    expect(matchesPathPattern('/a%2Fb', '/a/b')).toBe(false)
+    expect(matchesPathPattern('/a%2fb', '/a%2Fb')).toBe(true)
+  })
+
+  it('does not throw on a lone surrogate, which a tdmrep.json string can carry', () => {
+    expect(matchesPathPattern(JSON.parse('"/\\ud800x"') as string, '/a')).toBe(false)
   })
 
   it('stays fast on a pattern full of wildcards that cannot match', () => {

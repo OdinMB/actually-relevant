@@ -92,6 +92,14 @@ describe('checkOptOut', () => {
     }
   })
 
+  it('treats a robots.txt behind more than 5 redirects as no file, allowing everything (RFC 9309 §2.3.1.2)', async () => {
+    // What axios rejects with once follow-redirects passes maxRedirects
+    const tooMany = Object.assign(new Error('Maximum number of redirects exceeded'), { code: 'ERR_FR_TOO_MANY_REDIRECTS' })
+    serve({ 'https://news.example/robots.txt': tooMany })
+    expect(await checkOptOut('https://news.example/a', PAGE)).toEqual({ reserved: false })
+    expect(mockAxiosGet.mock.calls.find(c => c[0] === 'https://news.example/robots.txt')?.[1]).toMatchObject({ maxRedirects: 5 })
+  })
+
   it('treats an unreachable tdmrep.json as no reservation', async () => {
     serve({ 'https://news.example/.well-known/tdmrep.json': { status: 502 } })
     expect(await checkOptOut('https://news.example/a', PAGE)).toEqual({ reserved: false })

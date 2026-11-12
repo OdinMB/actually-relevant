@@ -786,6 +786,20 @@ describe("crawlFeed and the publisher's opt-out", () => {
     expect(statusUpdate()).toMatchObject({ newItemCount: 1, errorMessage: expect.stringContaining('TDMRep reservation') })
   })
 
+  it('names a redirect target whose robots.txt could not be read as an unknown opt-out, not a known one', async () => {
+    mockParseFeed.mockResolvedValue(rssResult([item('a')]))
+    mockExtractContent.mockResolvedValue({
+      refusal: 'reserved',
+      reason: 'robots.txt unreachable (HTTP 503) (redirect target publisher.example)',
+      unverified: true,
+    })
+
+    const result = await crawlFeed('feed-1')
+
+    expect(result).toMatchObject({ skipped: 1, errors: 0 })
+    expect(result.errorMessage).toContain('Publisher opt-out unknown: robots.txt unreachable')
+  })
+
   it('checks the items of a feed that takes its text from RSS without robots.txt path rules, and skips the reserved ones', async () => {
     const fullText = 'A paragraph of the full post. '.repeat(20)
     const rssItem = (slug: string) => ({ ...item(slug), contentHtml: `<p>${fullText}</p>` })
@@ -928,6 +942,20 @@ describe('crawlUrl', () => {
     await expect(crawlUrl('https://example.com/a', 'feed-1')).rejects.toSatisfy(err => err instanceof BadRequestError && /TDMRep/.test(err.message))
     await expect(crawlUrl('https://example.com/b', 'feed-1')).rejects.toSatisfy(err => err instanceof UnprocessableError && /HTTP 403/.test(err.message))
     expect(mockCreateStory).not.toHaveBeenCalled()
+  })
+
+  it('refuses a URL that redirects to a host whose opt-out could not be read with 400 "Publisher opt-out unknown"', async () => {
+    mockGetFeedById.mockResolvedValue(sampleFeed)
+    mockGetExistingUrls.mockResolvedValue(new Set())
+    mockExtractContent.mockResolvedValue({
+      refusal: 'reserved',
+      reason: 'robots.txt unreachable (HTTP 503) (redirect target publisher.example)',
+      unverified: true,
+    })
+
+    await expect(crawlUrl('https://example.com/a', 'feed-1')).rejects.toSatisfy(
+      err => err instanceof BadRequestError && /^Publisher opt-out unknown/.test(err.message),
+    )
   })
 
   it('returns null when extraction fails', async () => {

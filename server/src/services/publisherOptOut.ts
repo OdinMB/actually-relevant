@@ -54,22 +54,34 @@ class ServerErrorStatus extends Error {
   }
 }
 
+/** What axios rejects with once follow-redirects has followed `maxRedirects` redirects. */
+function isTooManyRedirects(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === 'ERR_FR_TOO_MANY_REDIRECTS'
+}
+
 /**
- * GET a small file of the host: the first `maxFileBytes` of a 2xx body, '' for any other answer.
- * Throws on a 5xx, a timeout, a network error or a URL the SSRF guard refuses.
+ * GET a small file of the host: the first `maxFileBytes` of a 2xx body, '' for any other answer and
+ * for a file behind more than 5 redirects (RFC 9309 §2.3.1.2 lets a crawler take it as unavailable,
+ * as a 4xx is). Throws on a 5xx, a timeout, a network error or a URL the SSRF guard refuses.
  */
 async function fetchSmallFile(url: string): Promise<string> {
   if (!isAllowedUrl(url)) throw new BlockedUrlError(`Blocked URL: ${url}`)
   return crawlLimiter.run(url, () =>
     withRetry(async () => {
-      const res = await axios.get<Readable>(url, {
-        responseType: 'stream',
-        signal: AbortSignal.timeout(config.publisherOptOut.fetchTimeoutMs), // the whole exchange, body included
-        maxRedirects: 5,
-        headers: { 'User-Agent': CRAWLER_USER_AGENT },
-        validateStatus: () => true,
-        ...ssrfGuard, // resolved addresses and every redirect checked (utils/urlValidation.ts)
-      })
+      const res = await axios
+        .get<Readable>(url, {
+          responseType: 'stream',
+          signal: AbortSignal.timeout(config.publisherOptOut.fetchTimeoutMs), // the whole exchange, body included
+          maxRedirects: 5,
+          headers: { 'User-Agent': CRAWLER_USER_AGENT },
+          validateStatus: () => true,
+          ...ssrfGuard, // resolved addresses and every redirect checked (utils/urlValidation.ts)
+        })
+        .catch((err: unknown) => {
+          if (isTooManyRedirects(err)) return null
+          throw err
+        })
+      if (res === null) return ''
       if (res.status < 200 || res.status >= 300) {
         res.data.destroy()
         if (res.status >= 500) throw new ServerErrorStatus(res.status)

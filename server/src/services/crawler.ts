@@ -233,7 +233,7 @@ async function extractAndStorePages(feed: CrawledFeed, items: RSSItem[], result:
         if (isPageRefusal(extracted)) {
           apiBlocked = true
           if (extracted.refusal === 'reserved') {
-            notes.skipForOptOut(item.url, { reason: extracted.reason, unverified: false })
+            notes.skipForOptOut(item.url, { reason: extracted.reason, unverified: extracted.unverified ?? false })
           } else {
             log.warn({ url: item.url, reason: extracted.reason }, 'page fetch refused; no extraction API for the rest of this crawl')
             notes.refused(extracted.reason)
@@ -408,7 +408,7 @@ export async function crawlUrl(url: string, feedId: string): Promise<{ storyId: 
   })
 
   if (isPageRefusal(extracted)) {
-    if (extracted.refusal === 'reserved') throw new BadRequestError(optOutMessage({ reason: extracted.reason, unverified: false }))
+    if (extracted.refusal === 'reserved') throw new BadRequestError(optOutMessage({ reason: extracted.reason, unverified: extracted.unverified ?? false }))
     throw new UnprocessableError(`Could not extract content from URL: ${extracted.reason}`)
   }
   if (!extracted) return null

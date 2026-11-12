@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type AxiosResponse } from 'axios'
 import * as cheerio from 'cheerio'
 import { Readability } from '@mozilla/readability'
 import { JSDOM } from 'jsdom'
@@ -11,6 +11,7 @@ import { crawlLimiter } from '../lib/crawlLimiter.js'
 import { CRAWLER_USER_AGENT } from '../lib/crawlerIdentity.js'
 import { pageTdmReservation } from '../lib/tdmRep.js'
 import { classifyAccess, DEFAULT_PAYWALL_POLICY, type AccessTier, type PaywallPolicy } from '../lib/paywall.js'
+import { getFollowingCheckedRedirects } from './checkedRedirects.js'
 
 const log = createLogger('extractor')
 
@@ -55,11 +56,13 @@ export interface ExtractionResult {
 /**
  * The publisher said no to this page, so its text is not used and no extraction API is asked for it:
  * `denied`, its fetch was answered 401, 403, 429 or 451; `reserved`, it carries a TDM reservation
- * (the `tdm-reservation` header or meta tag).
+ * (the `tdm-reservation` header or meta tag), or a redirect led to a URL its publisher reserved.
  */
 export interface PageRefusal {
   refusal: 'denied' | 'reserved'
   reason: string
+  /** For a redirect target's reservation: the target host's robots.txt could not be read. */
+  unverified?: boolean
 }
 
 export type ExtractionOutcome = ExtractionResult | PageRefusal | null
@@ -115,6 +118,8 @@ export class ApiThrottle {
       // Enforce inter-call delay
       if (this.delayMs > 0) {
         await new Promise(resolve => setTimeout(resolve, this.delayMs))
+        // The delay reaches 30 s after a 429: check once more before the call
+        if (shouldAbort?.()) throw new ThrottleAbortError()
       }
 
       const result = await fn()
@@ -154,24 +159,37 @@ const apiThrottle = new ApiThrottle(
   30_000, // max 30s between calls
 )
 
+/** One GET of a page, redirects not followed: a 3xx comes back as the answer (`checkedRedirects.ts` follows it). */
+function getPageOnce(url: string): Promise<AxiosResponse<string>> {
+  return crawlLimiter.run(url, () =>
+    withRetry(() =>
+      axios.get<string>(url, {
+        timeout: config.crawl.httpTimeoutMs,
+        headers: { 'User-Agent': CRAWLER_USER_AGENT },
+        maxRedirects: 0,
+        validateStatus: status => status >= 200 && status < 400,
+        responseType: 'text',
+        maxContentLength: 5 * 1024 * 1024, // 5 MB cap to prevent OOM on huge pages
+        ...ssrfGuard, // resolved addresses checked (utils/urlValidation.ts)
+      }),
+    ),
+  )
+}
+
 /**
- * Fetch the page's HTML. A refusal status or a page-level TDM reservation is a `PageRefusal`; any
- * other failure (timeout, network, 5xx) is null, which the API tier may make up for.
+ * Fetch the page's HTML, following redirects one checked hop at a time. A refusal status, a
+ * page-level TDM reservation or a redirect to a reserved URL is a `PageRefusal`; any other failure
+ * (timeout, network, 5xx, a refused or excess redirect) is null, which the API tier may make up for.
  */
 async function fetchPage(url: string): Promise<string | PageRefusal | null> {
   try {
-    const response = await crawlLimiter.run(url, () =>
-      withRetry(() =>
-        axios.get<string>(url, {
-          timeout: config.crawl.httpTimeoutMs,
-          headers: { 'User-Agent': CRAWLER_USER_AGENT },
-          maxRedirects: 5,
-          responseType: 'text',
-          maxContentLength: 5 * 1024 * 1024, // 5 MB cap to prevent OOM on huge pages
-          ...ssrfGuard, // resolved addresses and every redirect checked (utils/urlValidation.ts)
-        }),
-      ),
-    )
+    const fetched = await getFollowingCheckedRedirects(url, getPageOnce)
+    if ('reservedHop' in fetched) {
+      const hop = fetched.reservedHop
+      log.info({ url, target: hop.url, reason: hop.reason }, 'redirect leads to a reserved URL; not followed')
+      return { refusal: 'reserved', reason: `${hop.reason} (redirect target ${new URL(hop.url).host})`, unverified: hop.unverified }
+    }
+    const { response } = fetched
     const reservation = pageTdmReservation(response.headers?.['tdm-reservation'], response.data)
     if (reservation) {
       log.info({ url, reason: reservation }, 'page carries a TDM reservation; its text is discarded')
@@ -332,7 +350,7 @@ async function extractByApi(url: string, api: 'diffbot' | 'pipfeed', shouldAbort
     return await apiThrottle.run(() => fn(url), shouldAbort)
   } catch (err) {
     if (err instanceof ThrottleAbortError) {
-      log.info({ url, api }, 'extraction aborted during throttle wait (feed bail-out)')
+      log.info({ url, api }, 'extraction aborted during throttle wait (feed bail-out or API tier blocked)')
       return null
     }
     if (isQuotaError(err)) {
@@ -414,7 +432,9 @@ export async function extractContent(
   if (options?.skipApiTier?.()) {
     log.info({ url }, 'API tier skipped: the publisher refused the crawler earlier in this crawl')
   } else {
-    const apiResult = await extractByApi(url, config.crawl.extractionApi, options?.shouldAbort)
+    // Read again in the throttle: a call queued behind others is left out if the crawl blocked the tier meanwhile
+    const abortApi = () => Boolean(options?.shouldAbort?.() || options?.skipApiTier?.())
+    const apiResult = await extractByApi(url, config.crawl.extractionApi, abortApi)
     if (apiResult) return classified(apiResult)
     if (options?.shouldAbort?.()) return null
   }
