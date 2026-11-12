@@ -30,6 +30,10 @@ enum RejectionReason {
   selection
   duplicate
   editor
+  /// The research step's verdicts (.context/story-research.md, "The pipeline step"), each only from `selected`
+  research_rating
+  stale
+  contradicted
 }
 
 enum EmotionTag {
@@ -76,6 +80,8 @@ model Story {
   issue                  Issue?       @relation(fields: [issueId], references: [id])
   status                 StoryStatus  @default(fetched)
   rejectionReason        RejectionReason? @map("rejection_reason")
+  /// When the story last entered `selected`, set by the lifecycle's move only; the publish gate's longest wait counts from it
+  selectedAt             DateTime?    @map("selected_at")
   dateCrawled            DateTime     @default(now()) @map("date_crawled")
   datePublished          DateTime?    @map("date_published")
   relevancePre           Int?         @map("relevance_pre")
@@ -427,22 +433,30 @@ enum ResearchRunStatus {
   failed
 }
 
-/// One story research run, the admin action (.context/story-research.md). Every run is kept; a deleted story's runs keep a null story_id, so the month's spend still counts them. `cost_usd` holds the run's reservation while it runs, then its measured cost
+/// Who started a research run: an editor's Research button, or the research_stories job
+enum ResearchRunTrigger {
+  editor
+  pipeline
+}
+
+/// One story research run, an editor's or the research_stories job's (.context/story-research.md). Every run is kept; a deleted story's runs keep a null story_id, so the month's spend still counts them. `cost_usd` holds the run's reservation while it runs, then its measured cost
 model StoryResearchRun {
-  id            String            @id @default(uuid())
-  storyId       String?           @map("story_id")
-  story         Story?            @relation(fields: [storyId], references: [id], onDelete: SetNull)
-  status        ResearchRunStatus @default(running)
+  id            String             @id @default(uuid())
+  storyId       String?            @map("story_id")
+  story         Story?             @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  status        ResearchRunStatus  @default(running)
+  /// A pipeline run settles the publish gate for its story (services/researchQueue.ts)
+  trigger       ResearchRunTrigger @default(editor)
   /// The gate verdict's kind; null until the run finishes
   verdict       String?
-  costUsd       Float             @map("cost_usd")
-  tavilyCredits Int               @default(0) @map("tavily_credits")
+  costUsd       Float              @map("cost_usd")
+  tavilyCredits Int                @default(0) @map("tavily_credits")
   /// The run's StoryResearch, with the model ids and prices it used
   result        Json?
   /// Why a run failed, sanitized: never fetched text
   error         String?
-  startedAt     DateTime          @default(now()) @map("started_at")
-  finishedAt    DateTime?         @map("finished_at")
+  startedAt     DateTime           @default(now()) @map("started_at")
+  finishedAt    DateTime?          @map("finished_at")
 
   @@index([storyId, startedAt])
   @@index([startedAt])

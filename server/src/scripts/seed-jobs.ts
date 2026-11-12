@@ -31,6 +31,12 @@ async function main() {
       update: {},
       create: { jobName: 'select_stories', cronExpression: '0 10 * * *', enabled: false },
     }),
+    // Hourly: researches the selected stories before publish_stories takes them (.context/story-research.md)
+    prisma.jobRun.upsert({
+      where: { jobName: 'research_stories' },
+      update: {},
+      create: { jobName: 'research_stories', cronExpression: '15 * * * *', enabled: false },
+    }),
     prisma.jobRun.upsert({
       where: { jobName: 'publish_stories' },
       update: {},

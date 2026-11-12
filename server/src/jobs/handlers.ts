@@ -2,6 +2,7 @@ import { runCrawlFeeds } from './crawlFeeds.js'
 import { runPreassessStories } from './preassessStories.js'
 import { runAssessStories } from './assessStories.js'
 import { runSelectStories } from './selectStories.js'
+import { runResearchStories } from './researchStories.js'
 import { runPublishStories } from './publishStories.js'
 import { runBlueskyUpdateMetrics } from './blueskyUpdateMetrics.js'
 import { runGenerateNewsletter, runGenerateUpliftingNewsletter } from './generateNewsletter.js'
@@ -19,6 +20,7 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   preassess_stories: runPreassessStories,
   assess_stories: runAssessStories,
   select_stories: runSelectStories,
+  research_stories: runResearchStories,
   publish_stories: runPublishStories,
   social_auto_post: runSocialAutoPost,
   bluesky_update_metrics: runBlueskyUpdateMetrics,
@@ -51,6 +53,7 @@ export const JOB_PIPELINE_ORDER: readonly string[] = [
   'preassess_stories',
   'assess_stories',
   'select_stories',
+  'research_stories',
   'publish_stories',
   'social_auto_post',
   'bluesky_update_metrics',

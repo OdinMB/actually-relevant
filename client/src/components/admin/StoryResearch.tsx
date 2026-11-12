@@ -23,14 +23,16 @@ export function researchRefusal(story: Pick<Story, 'status'>, usage: ResearchUsa
 
 function runLabel(run: ResearchRun): string {
   const outcome = run.status === 'completed' && run.verdict ? verdictName(run.verdict) : run.status
-  return `${formatDateWithTime(run.startedAt)} · ${outcome} · $${run.costUsd.toFixed(3)}`
+  const by = run.trigger === 'pipeline' ? 'pipeline' : 'editor'
+  return `${formatDateWithTime(run.startedAt)} · ${by} · ${outcome} · $${run.costUsd.toFixed(3)}`
 }
 
 /**
  * The story's research section in the edit form: the month's spend against the cap, the Research
- * button (visible with its reason when a run cannot start), the story's runs and which version the
- * story shows (`ResearchVersion.tsx`). Hidden against a backend without research. A run writes
- * nothing to the story until an editor uses its version.
+ * button (visible with its reason when a run cannot start), the story's runs, the research step's
+ * among them, and which version the story shows (`ResearchVersion.tsx`). Hidden against a backend
+ * without research. An editor's run writes nothing to the story until an editor uses its version;
+ * the research step applies its own verdicts in apply mode.
  */
 export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 'preResearch'> }) {
   const usage = useResearchUsage()
@@ -51,7 +53,7 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 
       <div>
         <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Research</h3>
         <p className="text-sm text-neutral-600">
-          Admin only: a run changes nothing on the story until you use its version.
+          Admin only: a run you start changes nothing on the story until you use its version.
           {usage.data &&
             ` This month: ${money(usage.data.monthToDateUsd)} of ${money(usage.data.monthlyCapUsd)} spent; each run reserves ${money(usage.data.reservationUsd)} until it ends.`}
         </p>

@@ -80,6 +80,7 @@ const run = (over: Partial<ResearchRun> = {}): ResearchRun => ({
   id: 'run-1',
   storyId: 'story-1',
   status: 'completed',
+  trigger: 'editor',
   verdict: 'keep',
   costUsd: 0.052,
   tavilyCredits: 4,
@@ -138,5 +139,35 @@ describe('ResearchRunView', () => {
   it('shows a failed run with its error and the reservation it keeps', () => {
     render(<ResearchRunView run={run({ status: 'failed', verdict: null, result: null, cost: null, costUsd: 0.25, error: 'unexpected error (Error)' })} />)
     expect(screen.getByText(/Failed: unexpected error \(Error\)\. Its reservation of \$0\.250/)).toBeInTheDocument()
+  })
+
+  it('shows a run that failed after its research with its measured cost, not the reservation, and its result', () => {
+    render(<ResearchRunView run={run({ status: 'failed', costUsd: 0.052, error: 'unexpected error (Error)' })} />)
+    expect(screen.getByText(/^Failed after its research: unexpected error \(Error\)\. Its measured cost of \$0\.052 stays counted/)).toBeInTheDocument()
+    expect(screen.queryByText(/reservation/)).toBeNull()
+    expect(screen.getByText(/Cost \(\$0\.052\)/)).toBeInTheDocument()
+  })
+
+  it('shows a running run whose result is stored at its measured cost', () => {
+    render(<ResearchRunView run={run({ status: 'running', costUsd: 0.052, finishedAt: null })} />)
+    expect(screen.getByText(/Its measured cost of \$0\.052 counts against the cap/)).toBeInTheDocument()
+  })
+
+  it.each([
+    ['editor', 'Editor'],
+    ['pipeline', 'Pipeline'],
+  ] as const)('names who started an %s run', (trigger, name) => {
+    render(<ResearchRunView run={run({ trigger })} />)
+    expect(screen.getByText('Started by:').parentElement).toHaveTextContent(`Started by: ${name}`)
+  })
+
+  it('shows a run the research step skipped as skipped, with nothing counted, rather than as a failure', () => {
+    render(
+      <ResearchRunView
+        run={run({ trigger: 'pipeline', status: 'failed', verdict: null, result: null, cost: null, costUsd: 0, error: 'skipped: monthly cap reached' })}
+      />,
+    )
+    expect(screen.getByText(/^Skipped by the research step: monthly cap reached\. Nothing was researched or counted against the cap/)).toBeInTheDocument()
+    expect(screen.queryByText(/^Failed:/)).toBeNull()
   })
 })

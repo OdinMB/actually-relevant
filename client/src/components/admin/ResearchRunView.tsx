@@ -2,10 +2,11 @@ import type { ReactNode } from 'react'
 import type { ResearchCitedText, ResearchEarlier, ResearchFact, ResearchResult, ResearchRun, ResearchSource, ResearchVerdict } from '@shared/types'
 import { formatDateWithTime } from '../../lib/constants'
 import { isHttpsUrl, isHttpUrl } from '../../lib/urls'
+import { Badge } from '../ui/Badge'
 
 /**
- * One story research run, read only (`.context/story-research.md`): its verdict, the draft with
- * citation chips, the sources, the facts and the cost. Every fetched or model-written text renders
+ * One story research run, read only (`.context/story-research.md`): who started it, its verdict, the
+ * draft with citation chips, the sources, the facts and the cost. Every fetched or model-written text renders
  * as React text, never as HTML; a URL becomes a link only when it is http(s), and a favicon loads
  * only from https, without a referrer.
  */
@@ -369,18 +370,46 @@ function CostTable({ run }: { run: ResearchRun }) {
   )
 }
 
+/** The prefix of the error the research step records on a run it skipped without researching (server: `recordSkippedRun`). */
+const SKIPPED = 'skipped: '
+
+/** Who started the run: an editor's Research button, or the research step (`research_stories`). */
+function RunTrigger({ run }: { run: Pick<ResearchRun, 'trigger'> }) {
+  const pipeline = run.trigger === 'pipeline'
+  return (
+    <Badge variant={pipeline ? 'purple' : 'gray'}>
+      <span className="sr-only">Started by: </span>
+      {pipeline ? 'Pipeline' : 'Editor'}
+    </Badge>
+  )
+}
+
+/**
+ * A run's cost as counted against the cap: the reservation until its result is stored, then the
+ * measured cost (also when it failed after that, e.g. in the research step's apply).
+ */
+const countedCost = (run: ResearchRun) => `${run.result ? 'Its measured cost of' : 'Its reservation of'} ${usd(run.costUsd)}`
+
 function RunStatus({ run }: { run: ResearchRun }) {
   if (run.status === 'running') {
     return (
       <p className="text-sm text-neutral-700">
-        Running since {formatDateWithTime(run.startedAt)}. Its reservation of {usd(run.costUsd)} counts against the cap until it ends.
+        Running since {formatDateWithTime(run.startedAt)}. {countedCost(run)} counts against the cap until it ends.
+      </p>
+    )
+  }
+  if (run.status === 'failed' && run.error?.startsWith(SKIPPED)) {
+    return (
+      <p className="text-sm text-neutral-700">
+        Skipped by the research step: {run.error.slice(SKIPPED.length)}. Nothing was researched or counted against the cap, and the story was not held back from
+        publishing.
       </p>
     )
   }
   if (run.status === 'failed') {
     return (
       <p className="text-sm text-red-700">
-        Failed: {run.error ?? 'no reason recorded'}. Its reservation of {usd(run.costUsd)} stays counted against the cap.
+        {run.result ? 'Failed after its research' : 'Failed'}: {run.error ?? 'no reason recorded'}. {countedCost(run)} stays counted against the cap.
       </p>
     )
   }
@@ -391,6 +420,7 @@ export function ResearchRunView({ run }: { run: ResearchRun }) {
   const result = run.result
   return (
     <div className="space-y-3">
+      <RunTrigger run={run} />
       <RunStatus run={run} />
       {result && (
         <>

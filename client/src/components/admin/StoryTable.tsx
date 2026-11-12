@@ -40,6 +40,25 @@ function PaywallBadge({ story }: { story: Story }) {
   )
 }
 
+/** Why the research step rejected a story, by its rejection reason. */
+const RESEARCH_REJECTIONS: Partial<Record<NonNullable<Story['rejectionReason']>, string>> = {
+  research_rating: 'its research rated it below the publish bar',
+  stale: 'its research found it old news',
+  contradicted: 'its research found its main claim contradicted',
+}
+
+function ResearchRejectionBadge({ story }: { story: Story }) {
+  const why = story.status === 'rejected' && story.rejectionReason ? RESEARCH_REJECTIONS[story.rejectionReason] : undefined
+  if (!why) return null
+  return (
+    <span title={`Rejected by the research step: ${why}`} className="shrink-0">
+      <Badge variant="red">
+        Research<span className="sr-only">: rejected by the research step, {why}</span>
+      </Badge>
+    </span>
+  )
+}
+
 interface StoryTableProps {
   stories: Story[]
   selectedIds: Set<string>
@@ -174,6 +193,7 @@ export function StoryTable({
                     </button>
                     <ClusterBadge story={story} />
                     <PaywallBadge story={story} />
+                    <ResearchRejectionBadge story={story} />
                     {(story._count?.blueskyPosts ?? 0) > 0 && (
                       <ChatBubbleLeftRightIcon className="h-4 w-4 shrink-0 text-blue-500" aria-label="Posted to Bluesky" title="Posted to Bluesky" />
                     )}

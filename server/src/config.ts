@@ -284,7 +284,7 @@ export const config = {
     // backlog publishes over several bounded passes rather than one unbounded one.
     chunkSize: parseWholeNumber(process.env.PUBLISH_CHUNK_SIZE, 100, 'PUBLISH_CHUNK_SIZE'),
   },
-  /** Story research, the admin action (.context/story-research.md). */
+  /** Story research: the admin action and the pipeline step (.context/story-research.md). */
   research: {
     /** Tavily's key, and the switch: research is off while it is empty. Read at call time. */
     get tavilyApiKey(): string {
@@ -321,6 +321,25 @@ export const config = {
     staleRunMinutes: 60,
     /** Runs the admin lists per story, newest first. */
     runsListed: 10,
+    /** The research step, the `research_stories` job (jobs/researchStories.ts; .context/story-research.md, "The pipeline step"). */
+    pipeline: {
+      /**
+       * `shadow` (default): runs are stored, no verdict is applied, and publishing does not wait for
+       * them (owner decision 2026-11-12). `apply`: verdicts are applied and the publish gate holds,
+       * only while the owner's gate (`applyEnabled`) is open too and the job is enabled; with the gate
+       * closed the step runs as shadow and says so. A Render restart picks up a change.
+       */
+      mode: parseOneOf(process.env.RESEARCH_PIPELINE_MODE, 'shadow', ['shadow', 'apply'] as const, 'RESEARCH_PIPELINE_MODE'),
+      /** Selected stories one run of the job researches, one after another. */
+      perRun: parseWholeNumber(process.env.RESEARCH_PIPELINE_PER_RUN, 20, 'RESEARCH_PIPELINE_PER_RUN'),
+      /**
+       * In apply mode, the publish gate's longest hold: it holds a selected story for its research
+       * only this long after the story entered `selected` (`selectedAt`); after that the next publish
+       * run takes it single-source. Two of the job's hourly runs. It bounds the wait to this only
+       * where `publish_stories` runs more often than this.
+       */
+      maxWaitMinutes: 120,
+    },
   },
   embedding: {
     model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',

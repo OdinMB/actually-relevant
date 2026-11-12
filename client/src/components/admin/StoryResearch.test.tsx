@@ -100,7 +100,22 @@ describe('StoryResearch', () => {
   it("shows the month's spend against the cap, and that a run changes nothing until its version is used", async () => {
     renderSection()
     const note = await screen.findByText(/This month: \$1\.50 of \$30\.00 spent/)
-    expect(note).toHaveTextContent(/a run changes nothing on the story until you use its version/)
+    expect(note).toHaveTextContent(/a run you start changes nothing on the story until you use its version/)
+  })
+
+  it('names who started each run in the run list', async () => {
+    const base = { storyId: 'story-1', status: 'failed', verdict: null, tavilyCredits: 0, finishedAt: null, result: null, cost: null } as const
+    mockResearch.runs.mockResolvedValue([
+      { ...base, id: 'run-2', trigger: 'pipeline', costUsd: 0, error: 'skipped: monthly cap reached', startedAt: '2026-11-12T11:00:00Z' },
+      { ...base, id: 'run-1', trigger: 'editor', costUsd: 0.25, error: 'unexpected error (Error)', startedAt: '2026-11-12T10:00:00Z' },
+    ])
+    renderSection()
+    const select = await screen.findByRole('combobox', { name: 'Run' })
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map(o => o.textContent),
+    ).toEqual([expect.stringMatching(/ · pipeline · failed · \$0\.000$/), expect.stringMatching(/ · editor · failed · \$0\.250$/)])
   })
 
   it.each([
@@ -123,6 +138,7 @@ describe('StoryResearch', () => {
         id: 'run-1',
         storyId: 'story-1',
         status: 'running',
+        trigger: 'editor',
         verdict: null,
         costUsd: 0.25,
         tavilyCredits: 0,
@@ -149,6 +165,7 @@ describe('StoryResearch', () => {
       id: 'run-1',
       storyId: 'story-1',
       status: 'completed',
+      trigger: 'editor',
       verdict: verdict.kind,
       costUsd: 0.04,
       tavilyCredits: 2,

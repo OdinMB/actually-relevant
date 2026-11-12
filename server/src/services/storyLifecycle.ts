@@ -1,7 +1,8 @@
 /**
  * How a story changes status, and what each change implies for its cluster (ADR-0045,
  * `.context/story-pipeline.md` "Transition Rules"). This module is the only code that writes
- * `stories.status` and `stories.rejection_reason` (held by `test/statusWriters.test.ts`):
+ * `stories.status`, `stories.rejection_reason` and `stories.selected_at` (held by
+ * `test/statusWriters.test.ts`):
  *
  * - the transition table: which statuses each move may start from, per actor;
  * - conditional moves: one `UPDATE ... WHERE status IN (allowed)` per chunk of a move, reporting
@@ -61,6 +62,10 @@ const PIPELINE_REJECTION_FROM: Partial<Record<RejectionReason, StoryStatus[]>> =
   select_threshold: [analyzed],
   selection: [analyzed],
   duplicate: DUPLICATE_FROM,
+  // The research step's verdicts, on the selected stories it researched (jobs/researchStories.ts)
+  research_rating: [selected],
+  stale: [selected],
+  contradicted: [selected],
 }
 
 const PIPELINE_FROM: Partial<Record<StoryStatus, StoryStatus[]>> = {
@@ -89,9 +94,11 @@ export function initialStatus(accessTier: string | null | undefined): { status: 
   return accessTier === 'locked' ? { status: rejected, rejectionReason: RejectionReason.paywall } : { status: fetched, rejectionReason: null }
 }
 
+/** A move's write: the status, its reason, and on entering `selected` when it did (the publish gate's longest wait counts from it). */
 const moveData = (move: Move) => ({
   status: move.to,
   rejectionReason: move.to === rejected ? move.reason : null,
+  ...(move.to === selected ? { selectedAt: new Date() } : {}),
 })
 
 const describeMove = (move: Move) => (move.to === rejected ? `rejected/${move.reason}` : move.to)
@@ -221,16 +228,25 @@ export async function partition(ids: string[], from: StoryStatus[]): Promise<{ e
 // ──── Moves ─────────────────────────────────────────────────────────────
 
 /**
- * Move stories by the transition table. Ids whose current status the move does not start from
- * are skipped and reported, never forced. Editor moves re-elect the cluster primary when they
- * move a cluster's primary or a published member; a publish re-elects in pipeline mode.
+ * A further condition every moved story must still meet, beside the transition table's: a story it
+ * no longer matches is skipped. The research step passes the `updatedAt` it read before its run, so
+ * a story an editor changed meanwhile is not rejected. Publishing takes none.
  */
-export async function transition(ids: string[], move: Move, actor: Actor): Promise<MoveResult> {
+export type MoveFence = { where: Prisma.StoryWhereInput }
+
+/**
+ * Move stories by the transition table. Ids whose current status the move does not start from
+ * (or that `fence` no longer matches) are skipped and reported, never forced. Editor moves re-elect
+ * the cluster primary when they move a cluster's primary or a published member; a publish
+ * re-elects in pipeline mode.
+ */
+export async function transition(ids: string[], move: Move, actor: Actor, fence?: MoveFence): Promise<MoveResult> {
   const unique = [...new Set(ids)]
   if (unique.length === 0) return { moved: [], skipped: [] }
   const from = allowedFrom(move, actor)
+  if (fence && move.to === published) throw new Error('A publish takes no move fence')
 
-  const result = move.to === published ? await publishIds(unique, from, actor) : await moveIds(unique, move, from, actor)
+  const result = move.to === published ? await publishIds(unique, from, actor) : await moveIds(unique, move, from, actor, fence?.where ?? {})
 
   if (actor === 'editor' && move.to !== published) forgetRelatedStories(result.moved)
   log.info(
@@ -250,12 +266,12 @@ export async function transition(ids: string[], move: Move, actor: Actor): Promi
  * backlog never holds one transaction past the timeout. A later chunk's failure leaves earlier
  * chunks moved; the moves are conditional, so a re-run picks up only what is left.
  */
-async function moveIds(ids: string[], move: Move, from: StoryStatus[], actor: Actor): Promise<MoveResult> {
+async function moveIds(ids: string[], move: Move, from: StoryStatus[], actor: Actor, fence: Prisma.StoryWhereInput): Promise<MoveResult> {
   const result: MoveResult = { moved: [], skipped: [] }
   for (let i = 0; i < ids.length; i += config.database.moveChunkSize) {
     const chunk = ids.slice(i, i + config.database.moveChunkSize)
     const part = await retryOnClusterChange(() =>
-      inTransaction(tx => (actor === 'editor' ? editorMove(tx, chunk, move, from) : pipelineMove(tx, chunk, move, from))),
+      inTransaction(tx => (actor === 'editor' ? editorMove(tx, chunk, move, from, fence) : pipelineMove(tx, chunk, move, from, fence))),
     )
     result.moved.push(...part.moved)
     result.skipped.push(...part.skipped)
@@ -263,18 +279,19 @@ async function moveIds(ids: string[], move: Move, from: StoryStatus[], actor: Ac
   return result
 }
 
-async function pipelineMove(tx: Tx, ids: string[], move: Move, from: StoryStatus[]): Promise<MoveResult> {
+// The fence goes under AND, so it can never widen the id and status condition
+async function pipelineMove(tx: Tx, ids: string[], move: Move, from: StoryStatus[], fence: Prisma.StoryWhereInput): Promise<MoveResult> {
   const before = await lockForMove(tx, ids)
-  const moved = await moveWhere(tx, { id: { in: ids }, status: { in: from } }, move)
+  const moved = await moveWhere(tx, { AND: [fence, { id: { in: ids }, status: { in: from } }] }, move)
   return { moved, skipped: skippedOf(ids, moved, before) }
 }
 
-async function editorMove(tx: Tx, ids: string[], move: Move, from: StoryStatus[]): Promise<MoveResult> {
+async function editorMove(tx: Tx, ids: string[], move: Move, from: StoryStatus[], fence: Prisma.StoryWhereInput): Promise<MoveResult> {
   const before = await lockForMove(tx, ids)
   // An editor's reject also overrides another reason (a duplicate stays rejected for good)
   const fromRejected: Prisma.StoryWhereInput[] =
     move.to === rejected ? [{ status: rejected, OR: [{ rejectionReason: null }, { rejectionReason: { not: move.reason } }] }] : []
-  const moved = await moveWhere(tx, { id: { in: ids }, OR: [{ status: { in: from } }, ...fromRejected] }, move)
+  const moved = await moveWhere(tx, { AND: [fence, { id: { in: ids }, OR: [{ status: { in: from } }, ...fromRejected] }] }, move)
 
   // Moving a cluster's face (its primary, or a published member) changes who should lead it
   const clusters = new Set<string>()

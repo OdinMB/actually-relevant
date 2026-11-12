@@ -10,7 +10,7 @@ import type { StoryResearch } from './researchPipeline.js'
 const mockPipeline = vi.hoisted(() => ({ researchStory: vi.fn() }))
 vi.mock('./researchPipeline.js', async importOriginal => ({ ...(await importOriginal<typeof import('./researchPipeline.js')>()), ...mockPipeline }))
 
-const { listResearchRuns, researchUsage, startResearchRun } = await import('./researchRuns.js')
+const { listResearchRuns, recordSkippedRun, researchUsage, runPipelineResearch, startResearchRun } = await import('./researchRuns.js')
 
 const RESERVATION = config.research.maxRunUsd
 const CAP = config.research.monthlyCapUsd
@@ -219,5 +219,94 @@ describeDb('story research runs', () => {
     expect(runs[0]?.cost?.totalUsd).toBeCloseTo(MEASURED, 10)
     expect(runs[1]?.cost).toBeNull()
     expect(runs.map(r => Date.parse(r.startedAt))).toEqual([...runs.map(r => Date.parse(r.startedAt))].sort((a, b) => b - a))
+  })
+
+  it("marks an editor's run as the editor's", async () => {
+    const story = await researchable()
+    const { runId } = await startResearchRun(story.id)
+    await settled(runId)
+    expect(await runOf(runId)).toMatchObject({ trigger: 'editor' })
+    expect((await listResearchRuns(story.id))[0]).toMatchObject({ trigger: 'editor' })
+  })
+
+  it("runs the research step's run in the call, marked as the pipeline's, with its hook after the result is stored and before the finish write", async () => {
+    const story = await researchable('selected')
+    const seen: { status: string; verdict: string | null; stored: boolean; costUsd: number; runId: string }[] = []
+    const beforeFinish = vi.fn(async (result: StoryResearch, runId: string) => {
+      expect(result.storyId).toBe(story.id)
+      const row = await runOf(runId)
+      seen.push({ status: row.status, verdict: row.verdict, stored: row.result !== null, costUsd: row.costUsd, runId })
+    })
+
+    const outcome = await runPipelineResearch(story.id, beforeFinish)
+
+    expect(outcome).toMatchObject({ outcome: 'researched', end: { ended: 'completed', verdict: 'keep' } })
+    const runId = outcome.outcome === 'researched' ? outcome.runId : ''
+    // Still running, so the publish gate keeps waiting; the result already durable, at its measured cost
+    expect(seen).toEqual([{ status: 'running', verdict: 'keep', stored: true, costUsd: expect.closeTo(MEASURED, 10), runId }])
+    expect(await runOf(runId)).toMatchObject({ trigger: 'pipeline', status: 'completed', verdict: 'keep' })
+    expect((await runOf(runId)).finishedAt).not.toBeNull()
+  })
+
+  it("fails the research step's run when its hook throws, keeping its stored result and its measured cost", async () => {
+    const story = await researchable('selected')
+    const outcome = await runPipelineResearch(story.id, async () => {
+      throw new Error('embedding down, with fetched text')
+    })
+    expect(outcome).toMatchObject({ outcome: 'researched', end: { ended: 'failed' } })
+    const runId = outcome.outcome === 'researched' ? outcome.runId : ''
+    const run = await runOf(runId)
+    expect(run).toMatchObject({ trigger: 'pipeline', status: 'failed', verdict: 'keep', result: expect.objectContaining({ storyId: story.id }) })
+    expect(run.costUsd).toBeCloseTo(MEASURED, 10)
+    expect(run.error).not.toContain('fetched text')
+  })
+
+  it('records a $0 skipped pipeline run, for a failure outside any run, so the story settles', async () => {
+    const story = await researchable('selected')
+    const runId = await recordSkippedRun(story.id, 'unexpected error (Error)')
+    expect(await runOf(runId)).toMatchObject({
+      storyId: story.id,
+      trigger: 'pipeline',
+      status: 'failed',
+      costUsd: 0,
+      error: 'skipped: unexpected error (Error)',
+    })
+  })
+
+  it('records a $0 failed pipeline run at the cap, without researching, so the story is no longer waited on', async () => {
+    const story = await researchable('selected')
+    await pastRun({ status: 'completed', costUsd: CAP - RESERVATION + 0.01 })
+    const beforeFinish = vi.fn()
+
+    const outcome = await runPipelineResearch(story.id, beforeFinish)
+
+    expect(outcome).toMatchObject({ outcome: 'refused', reason: 'monthly cap reached' })
+    const runId = outcome.outcome === 'refused' ? outcome.runId : ''
+    expect(await runOf(runId)).toMatchObject({ storyId: story.id, trigger: 'pipeline', status: 'failed', costUsd: 0, error: 'skipped: monthly cap reached' })
+    expect(mockPipeline.researchStory).not.toHaveBeenCalled()
+    expect(beforeFinish).not.toHaveBeenCalled()
+    expect((await researchUsage()).monthToDateUsd).toBeCloseTo(CAP - RESERVATION + 0.01, 10)
+  })
+
+  it('records a $0 failed pipeline run for a story the loader cannot research', async () => {
+    const issue = await createIssue()
+    const feed = await createFeed(issue.id)
+    const untitled = await createStory({ feedId: feed.id, status: 'selected', title: null, summary: 'Summary', relevance: 6 })
+
+    const outcome = await runPipelineResearch(untitled.id, vi.fn())
+
+    expect(outcome).toMatchObject({ outcome: 'refused', reason: expect.stringMatching(/lacks the analysis/) })
+    expect(await prisma.storyResearchRun.findMany({ where: { storyId: untitled.id } })).toEqual([
+      expect.objectContaining({ trigger: 'pipeline', status: 'failed', costUsd: 0 }),
+    ])
+  })
+
+  it('writes no row while another run of the story is in progress, so the step tries it again later', async () => {
+    mockPipeline.researchStory.mockImplementation(() => new Promise(() => {}))
+    const story = await researchable('selected')
+    await startResearchRun(story.id)
+
+    expect(await runPipelineResearch(story.id, vi.fn())).toEqual({ outcome: 'busy' })
+    expect(await prisma.storyResearchRun.count({ where: { storyId: story.id } })).toBe(1)
   })
 })

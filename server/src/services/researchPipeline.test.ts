@@ -88,6 +88,7 @@ const extraction = (over: Partial<Extraction> = {}): Extraction => ({
   usable: true,
   relation: 'same-development',
   kind: 'news-report',
+  outlet: '',
   country: 'Pakistan',
   facts: [
     {
@@ -384,6 +385,30 @@ describe('researchStory', () => {
     expect(r.earlier.map(e => [e.id, e.facts.map(f => f.id)])).toEqual([['E1', ['E1F1']]])
     // Found: the original's first supporting sentence and the earlier story's; the fakes' others are invented
     expect(r.support).toEqual({ facts: 9, found: 2 })
+  })
+
+  it('names a search source by the outlet name the extraction read from its page, else by its domain; the original and our own sources keep their feed names', async () => {
+    const tavily = fakeTavily(searchResponse(['https://www.cleantechnica.com/a', 'https://reuters.com/b', 'https://bbc.co.uk/c']))
+    const named: Record<string, string> = {
+      'https://www.cleantechnica.com/a': '  CleanTechnica\n',
+      'https://reuters.com/b': 'R'.repeat(61),
+      'https://bbc.co.uk/c': ' ',
+      'https://www.pakistantoday.com.pk/solar': 'Another Name',
+      'https://dawn.com/solar': 'Dawn News Online',
+    }
+    const { deps: d } = deps({
+      tavily,
+      responders: baseResponders({ extract: prompt => extraction({ outlet: named[/<URL>(.*?)<\/URL>/.exec(prompt)?.[1] ?? ''] ?? '' }) }),
+    })
+    const r = await researchStory(story(), d)
+    expect(r.sources.map(s => [s.origin, s.outlet])).toEqual([
+      ['original', 'Pakistan Today'],
+      ['cluster', 'Dawn'],
+      ['search', 'CleanTechnica'],
+      // Longer than an outlet's name: taken for a misreading
+      ['search', 'reuters.com'],
+      ['search', 'bbc.co.uk'],
+    ])
   })
 
   it('records every call by step and the credits of every search, in the story window', async () => {

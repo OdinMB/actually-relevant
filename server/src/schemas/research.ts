@@ -52,6 +52,12 @@ export const extractionSchema = z.object({
       'news-report: reporting by a news outlet or agency. analysis: an explanatory or analytical piece. opinion: an editorial, column or commentary. ' +
         "press-release: an organization's own announcement, or a copy of one. official-body: a government, court, international organization or research body publishing its own findings. other: anything else.",
     ),
+  outlet: z
+    .string()
+    .describe(
+      "Name of the outlet that publishes the page at <URL>, as its text or address shows it, in the outlet's own spelling (e.g. 'CleanTechnica' for cleantechnica.com). " +
+        'Never a news agency or another outlet the page credits. Empty string when neither the text nor the address shows a name.',
+    ),
   country: z.string().describe('Country where the outlet is based, as an English country name; "unknown" when neither the text nor the URL shows it.'),
   facts: z
     .array(factSchema)

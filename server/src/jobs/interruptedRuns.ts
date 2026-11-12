@@ -14,11 +14,19 @@ const log = createLogger('interrupted-runs')
 
 /**
  * The jobs that are rerun on their own after an interruption. Each works off what is still left to do
- * (feeds that are due, stories in its input status) and skips what is done, so a rerun does only the
- * rest and repeats no side effect. Every other job (newsletter, podcast, social posts and metrics,
- * Plunk, confirmations, cleanup) waits for its schedule or a person.
+ * (feeds that are due, stories in its input status, selected stories with no pipeline research run)
+ * and skips what is done, so a rerun does only the rest and repeats no side effect. Every other job
+ * (newsletter, podcast, social posts and metrics, Plunk, confirmations, cleanup) waits for its
+ * schedule or a person.
  */
-export const RESUMABLE_JOBS: ReadonlySet<string> = new Set(['crawl_feeds', 'preassess_stories', 'assess_stories', 'select_stories', 'publish_stories'])
+export const RESUMABLE_JOBS: ReadonlySet<string> = new Set([
+  'crawl_feeds',
+  'preassess_stories',
+  'assess_stories',
+  'select_stories',
+  'research_stories',
+  'publish_stories',
+])
 
 // PostgreSQL format() templates (jobLease.ts): the one %s is filled from the row
 const SHUTDOWN_REASON = 'Interrupted: the server shut down (deploy or restart) %s min into the run, before it finished.'

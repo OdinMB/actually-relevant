@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import MethodologyPage from './MethodologyPage'
 import StewardshipPage from './StewardshipPage'
 import ThankYouPage from './ThankYouPage'
@@ -52,6 +53,13 @@ describe('MethodologyPage', () => {
     )
     expect(screen.getByRole('link', { name: 'feedback page' })).toHaveAttribute('href', '/feedback')
     expect(screen.queryByText(/clearly labeled/)).toBeNull()
+  })
+
+  it('quotes the researched-story label as the story page shows it', () => {
+    renderPage(<MethodologyPage />)
+    const heading = screen.getByRole('heading', { name: 'Researched Stories' })
+    const { lead, tail } = AI_DISCLOSURE_COPY.researchedStoryLabel
+    expect(heading.nextElementSibling?.nextElementSibling?.textContent).toContain(`carry the label "${lead} AI${tail}" and list`)
   })
 })
 
