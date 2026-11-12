@@ -102,6 +102,11 @@ export interface Story {
   clusterId: string | null
   createdAt: string
   updatedAt: string
+  /**
+   * Admin reads only: the single-source values an applied research run replaced, which a revert
+   * restores; set while the story carries its researched version (`.context/story-research.md`).
+   */
+  preResearch?: Record<string, unknown> | null
   issue?: { id: string; name: string; slug: string; parentId?: string | null; parent?: { id: string; name: string; slug: string } | null } | null
   feed?: {
     title: string
@@ -868,6 +873,11 @@ export interface ResearchUsage {
   enabled: boolean
   /** Why a run would be refused now (switched off, unpriced model, cap reached), or null. */
   refusal: string | null
+  /**
+   * Why no run can be applied now (research switched off, or the owner's gate
+   * `RESEARCH_APPLY_ENABLED` closed), or null. Reverting is never refused for these.
+   */
+  applyRefusal: string | null
   monthToDateUsd: number
   monthlyCapUsd: number
   /** What each run reserves when it starts. */

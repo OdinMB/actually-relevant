@@ -81,6 +81,19 @@ describe('EmbedPage AI header', () => {
     })
   })
 
+  it.each([
+    ['its relevance summary', makeStory({ relevanceSummary: 'Why it matters.', summary: 'Long summary.' }), 'Why it matters.'],
+    [
+      'its summary when it has no relevance summary, as a researched story does',
+      makeStory({ relevanceSummary: null, summary: 'Researched summary.' }),
+      'Researched summary.',
+    ],
+  ])('with ?summary=true, shows %s', async (_name, story, shown) => {
+    vi.mocked(publicApi.stories.list).mockResolvedValueOnce({ data: [story], total: 1, page: 1, pageSize: 3, totalPages: 1 })
+    renderEmbed('?summary=true')
+    expect(await screen.findByText(shown)).toBeInTheDocument()
+  })
+
   it('keeps the "Powered by" footer', async () => {
     renderEmbed()
     await screen.findByText('AI label: AI headline')

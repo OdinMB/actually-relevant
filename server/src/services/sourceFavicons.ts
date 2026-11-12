@@ -4,7 +4,7 @@
  * in the background with the feed favicons' search (favicon.ts `findIcon`), Tavily's icon address
  * first; a host where none was found is recorded with a null PNG and not looked up again for
  * `config.favicon.sourceNegativeCacheDays`. Read by GET /api/source-favicons/:host, kept in memory
- * like the feed favicons. Nothing calls the fetch until a research run is applied to a story.
+ * like the feed favicons. Applying a research run to a story starts the fetch (researchApply.ts).
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'

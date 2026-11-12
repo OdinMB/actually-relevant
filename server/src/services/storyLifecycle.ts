@@ -98,14 +98,16 @@ const describeMove = (move: Move) => (move.to === rejected ? `rejected/${move.re
 
 // ──── Analysis results ──────────────────────────────────────────────────
 
-export type AnalysisStage = 'preassess' | 'assess'
+export type AnalysisStage = 'preassess' | 'assess' | 'research'
 export type AnalysisOutcome = 'advanced' | 'refreshed' | 'skipped'
 
 /**
  * Where an analysis result may land. `advance` moves the story to the stage's status; `refresh`
  * writes the fields and keeps the status, so re-assessing never moves a story backward (a
  * published story stays on the site). Only an editor's analysis re-queues a `rejected` story;
- * `trashed` is never written.
+ * `trashed` is never written. `research` (applying a run's researched version, and reverting it)
+ * never advances, so its `to` is unused: it refreshes in place, a rejected story included, which an
+ * editor may then publish with the researched version.
  */
 const ANALYSIS: Record<AnalysisStage, { to: StoryStatus; advance: Record<Actor, StoryStatus[]>; refresh: StoryStatus[] }> = {
   preassess: {
@@ -118,19 +120,30 @@ const ANALYSIS: Record<AnalysisStage, { to: StoryStatus; advance: Record<Actor, 
     advance: { pipeline: [fetched, pre_analyzed], editor: [fetched, pre_analyzed, rejected] },
     refresh: [analyzed, selected, published],
   },
+  research: {
+    to: selected,
+    advance: { pipeline: [], editor: [] },
+    refresh: [analyzed, selected, published, rejected],
+  },
 }
 
 export interface AnalysisRow {
   id: string
   data: Prisma.StoryUncheckedUpdateManyInput
+  /**
+   * A further condition the row must still meet, beside its id and expected status; a row it no
+   * longer matches is skipped. Research passes the `updatedAt` it read, so an edit saved during its
+   * embedding call is not overwritten.
+   */
+  where?: Prisma.StoryWhereInput
   embedding?: { embedding: number[]; hash: string } | null
 }
 
 /**
  * Write analysis results in one transaction, each row conditional on `expected`: the status the
- * caller read before its model call. A story whose status changed meanwhile (an editor trashed or
- * rejected it during the call) is skipped and gets neither the fields nor the embedding, so the
- * editor's move is never reverted.
+ * caller read before its model call, and on the row's own `where` when it has one. A story whose
+ * status changed meanwhile (an editor trashed or rejected it during the call) is skipped and gets
+ * neither the fields nor the embedding, so the editor's move is never reverted.
  */
 export async function recordAnalysis(
   stage: AnalysisStage,
@@ -156,7 +169,8 @@ export async function recordAnalysis(
           outcomes.set(row.id, outcome)
           if (outcome === 'skipped') continue
           const { count } = await tx.story.updateMany({
-            where: { id: row.id, status },
+            // The row's own condition first, so it can never widen the id and status fence
+            where: { ...row.where, id: row.id, status },
             data: outcome === 'advanced' ? { ...row.data, status: to, rejectionReason: null } : row.data,
           })
           if (count === 0) {
@@ -173,7 +187,7 @@ export async function recordAnalysis(
   // A refreshed published story has new content: its cached related list is stale
   forgetRelatedStories(rows.filter(r => outcomes.get(r.id) === 'refreshed').map(r => r.id))
   const skipped = [...outcomes].filter(([, o]) => o === 'skipped').map(([id]) => id)
-  if (skipped.length > 0) log.info({ stage, actor, skipped }, 'analysis results skipped: status no longer allows them')
+  if (skipped.length > 0) log.info({ stage, actor, skipped }, 'analysis results skipped: the status, or the row condition, no longer allows them')
   return outcomes
 }
 

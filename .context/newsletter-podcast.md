@@ -90,7 +90,7 @@ Generates markdown content from a template alone, with no model call (`buildCont
 - `# IssueName` section header (when the issue group changes)
 - Title as `##` heading, with the story's id as a marker: `## <headline> {story:<id>}` (`storyHeading()` in `services/newsletterContent.ts`, which owns the content's three markers for every reader). The email shows the heading without it; the web edition matches the heading to its story by it
 - Metadata line with `{feed:id}` tag, publisher name, and links (feed ID is used for favicon in HTML)
-- Body text: alternates between `relevanceSummary` (2/3 of stories) and `quote` + `quoteAttribution` blockquote (1/3)
+- Body text: alternates between `relevanceSummary` (2/3 of stories) and `quote` + `quoteAttribution` blockquote (1/3). A researched story (`story-research.md`, "Applying a run") has no relevance summary, so its body text is its researched blurb (`relevanceSummary || marketingBlurb`); every other field the issue reads (headline, quote, summary) holds researched text too
 
 **No intro** (owner decision, 2026-10-26: the model-written intro added no value). The content opens with the first `#` section. Issues generated before then start with a 2-3 sentence intro paragraph and a `---`; that stored text is left as it is and still renders, in the email (`renderHtml()` shows any text before the first heading as an opening paragraph, which also covers an opening a person types in) and on the web edition (which renders the stored markdown). The prompt, its schema, its prompt-input builder, the `contentModelTier` setting and the eval's intro call site were removed with it.
 

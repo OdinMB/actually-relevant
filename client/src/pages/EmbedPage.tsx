@@ -93,8 +93,11 @@ export default function EmbedPage() {
                   {story.titleLabel ? `${story.titleLabel}: ` : ''}
                   {story.title || story.sourceTitle}
                 </p>
-                {showSummary && story.relevanceSummary && (
-                  <p className={`text-[12px] leading-relaxed mb-1 ${isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>{story.relevanceSummary}</p>
+                {/* A researched story has no relevance summary: its summary stands in, as on StoryCard */}
+                {showSummary && (story.relevanceSummary || story.summary) && (
+                  <p className={`text-[12px] leading-relaxed mb-1 ${isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>
+                    {story.relevanceSummary || story.summary}
+                  </p>
                 )}
                 <span className={`text-[12px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
                   {story.feed?.displayTitle || story.feed?.title}

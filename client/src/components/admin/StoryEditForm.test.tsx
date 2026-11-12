@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -42,22 +43,31 @@ const story = {
   feed: null,
 } as unknown as Story
 
-/** The story's edit page as `StoryDetailPage` mounts it: Save and Cancel go back to the list. */
-function EditPage() {
+/**
+ * The story's edit page as `StoryDetailPage` mounts it: Save and Cancel go back to the list.
+ * "Refetch" swaps in `refetched`, as the story query does after an apply or a revert.
+ */
+function EditPage({ shown, refetched }: { shown: Story; refetched?: Story }) {
   const navigate = useNavigate()
+  const [current, setCurrent] = useState(shown)
   return (
     <>
       <Link to="/admin/feeds">Feeds</Link>
-      <StoryEditForm story={story} issues={[]} onDone={() => navigate('/admin/stories')} />
+      {refetched && (
+        <button type="button" onClick={() => setCurrent(refetched)}>
+          Refetch
+        </button>
+      )}
+      <StoryEditForm story={current} issues={[]} onDone={() => navigate('/admin/stories')} />
       <Where />
     </>
   )
 }
 
-function renderPage() {
+function renderPage(shown: Story = story, refetched?: Story) {
   return renderAdminRoutes(
     [
-      { path: '/admin/stories/:id', element: <EditPage /> },
+      { path: '/admin/stories/:id', element: <EditPage shown={shown} refetched={refetched} /> },
       { path: '*', element: <Where /> },
     ],
     { history: ['/admin/stories', '/admin/stories/story-1'] },
@@ -114,5 +124,73 @@ describe('StoryEditForm unsaved changes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(where()).toBe('/admin/stories'))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('StoryEditForm on a researched story', () => {
+  const swapped = [
+    'Title Label',
+    'Title',
+    'Rating',
+    'Summary',
+    'Quote',
+    'Quote Attribution',
+    'Marketing Blurb',
+    'Relevance Reasons',
+    'Relevance Summary',
+    'Antifactors',
+    'Relevance Calculation',
+  ]
+  const field = (label: string) => screen.getByLabelText(label, { exact: true })
+
+  it('locks the fields its researched version wrote, says why, and leaves the others editable', () => {
+    renderPage({ ...story, preResearch: { title: 'Single-source headline' } })
+    for (const label of swapped) {
+      expect(field(label)).toBeDisabled()
+      expect(field(label)).toHaveAccessibleDescription(/Revert to single-source first/)
+    }
+    expect(screen.getByText(/Revert to single-source first/)).toBeInTheDocument()
+    expect(field('Pre-rating')).toBeEnabled()
+    expect(field('Status')).toBeEnabled()
+  })
+
+  it('locks nothing on a single-source story', () => {
+    renderPage({ ...story, preResearch: null })
+    for (const label of swapped) expect(field(label)).toBeEnabled()
+    expect(screen.queryByText(/Revert to single-source first/)).toBeNull()
+  })
+
+  describe('when a revert or an apply lands while other edits are unsaved', () => {
+    const singleSource = { ...story, title: 'Single-source headline', relevance: 7, preResearch: null } as Story
+    const researched = { ...story, title: 'Researched headline', relevance: 5, preResearch: { title: 'Single-source headline' } } as Story
+    const editEmotion = () => fireEvent.change(field('Emotion'), { target: { value: 'uplifting' } })
+    const save = async () => {
+      mockApi.update.mockResolvedValue(story)
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(mockApi.update).toHaveBeenCalled())
+      return mockApi.update.mock.calls[0]![1] as Partial<Story>
+    }
+
+    it('after a revert, shows and saves the single-source fields, keeping the other edits', async () => {
+      renderPage(researched, singleSource)
+      editEmotion()
+      fireEvent.click(screen.getByRole('button', { name: 'Refetch' }))
+
+      expect(field('Title')).toHaveValue('Single-source headline')
+      expect(field('Title')).toBeEnabled()
+      expect(field('Emotion')).toHaveValue('uplifting')
+      expect(await save()).toMatchObject({ title: 'Single-source headline', relevance: 7, emotionTag: 'uplifting' })
+    })
+
+    it('after an apply, shows and saves the researched fields, keeping the other edits', async () => {
+      renderPage(singleSource, researched)
+      editEmotion()
+      fireEvent.click(screen.getByRole('button', { name: 'Refetch' }))
+
+      expect(field('Title')).toHaveValue('Researched headline')
+      expect(field('Title')).toBeDisabled()
+      expect(field('Emotion')).toHaveValue('uplifting')
+      expect(await save()).toMatchObject({ title: 'Researched headline', relevance: 5, emotionTag: 'uplifting' })
+    })
   })
 })

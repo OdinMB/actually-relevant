@@ -119,6 +119,10 @@ services:
       # remove it to switch research off
       - key: TAVILY_API_KEY
         sync: false
+      # The owner's gate on applying a research run ("Use this version"): closed unless "true".
+      # Left unset; he sets it on the service's Environment page after the press-publisher-right check
+      - key: RESEARCH_APPLY_ENABLED
+        sync: false
       # Crawl concurrency: production sets both (code defaults 2 feeds, 1 article)
       - key: CONCURRENCY_CRAWL_FEEDS
         sync: false

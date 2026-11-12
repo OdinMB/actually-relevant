@@ -52,7 +52,8 @@ The table `storyLifecycle.ts` enforces. A move from a status not listed is skipp
 | pre-assess result | pipeline | advance `fetched` → `pre_analyzed` | issue, `relevancePre`, emotion; trashed ids filtered out before the LLM call |
 | pre-assess result | editor | advance `fetched`, `rejected`; refresh `pre_analyzed`, `analyzed`, `selected`, `published` (status kept) | as above |
 | assess result | pipeline | advance `fetched`, `pre_analyzed` → `analyzed`; refresh `analyzed`, `selected`, `published` | fields and embedding in one transaction; dedup after commit |
-| assess result | editor | as pipeline, plus advance `rejected` | a refreshed published story is re-embedded; `trashed` skipped before the LLM call and again at the write |
+| assess result | editor | as pipeline, plus advance `rejected` | a refreshed published story is re-embedded; `trashed` skipped before the LLM call and again at the write; clears a researched version (`research`, `preResearch`) |
+| research apply or revert (stage `research`) | editor (`applyResearchRun`, `revertResearch`) | refresh `analyzed`, `selected`, `published`, `rejected` (status kept; never advances) | the swapped fields, `research`, `preResearch` and the embedding in one write, fenced on the status and `updatedAt` read before the embedding call (the row's `where`); `trashed` 409 "restore it first"; a story that changed in between 409 (`story-research.md`, "Applying a run") |
 | assess threshold | pipeline | `pre_analyzed` | `rejected`/`assess_threshold` |
 | select threshold | pipeline | `analyzed` | `rejected`/`select_threshold` |
 | select | pipeline (job, `/select`, `/bulk-select`) | `analyzed` | `selected`, or `rejected`/`selection`; the pool read is `analyzed` only, other ids skipped |
@@ -69,7 +70,7 @@ An editor move to the status the story already has is a no-op that answers 200 w
 
 **Moves run in bounded chunks.** Every move but publishing (below) takes its ids in chunks of `config.database.moveChunkSize` (100), one transaction each. A status write re-indexes each row it touches, so a single transaction over a large backlog outlasted the transaction timeout: the selection job's `select_threshold` rejection of the whole below-threshold `analyzed` backlog failed with P2028 after 18.8s, which aborted the job before any selection ran. Each chunk commits on its own; a failure on a later chunk leaves earlier chunks moved, and because moves are conditional a re-run moves only what is left. Chunks alone did not hold: while the vector sat on `stories`, every status write re-inserted it into the HNSW index (about 13 ms a story locally, over 15 s per 100-story chunk in production, so `select_stories` still hit P2028). The vectors moved to their own table, `story_embeddings`, so a status write no longer touches the vector index (ADR-0051, `embeddings.md`, "Database").
 
-**Analysis results are written against the status read before the model call** (`recordAnalysis(stage, actor, rows, expected)`): a story an editor moved during the call (trashed, rejected) is skipped, so the editor's move stands.
+**Analysis results are written against the status read before the model call** (`recordAnalysis(stage, actor, rows, expected)`): a story an editor moved during the call (trashed, rejected) is skipped, so the editor's move stands. A row may add its own condition (`AnalysisRow.where`), which can only narrow the fence: research passes the `updatedAt` it read, so its write is skipped rather than overwrite an edit saved during its embedding call. Preassess and assess pass none.
 
 **Lock order** in every transaction that writes status (moves, analysis results, publishing, cluster edits): the slug advisory lock (publish only), then the affected `story_clusters` rows `FOR UPDATE` ordered by id, then the story rows ordered by id; an election then locks its cluster's member rows in id order before writing. Publish locks the clusters of its chunk before the flip, so a concurrent cluster edit cannot deadlock against it. A move reads its stories' cluster ids before it can lock them, so a story can join a cluster (a manual cluster, a dedup formation, a merge) in between: after locking the story rows, the move compares their cluster ids with the clusters it locked, and when a new one appeared it rolls back and runs the whole transaction again, which then locks that cluster first. At most three attempts, then the move fails with "gave up moving stories after 3 attempts: their clusters kept changing" (`lockForMove`, `retryOnClusterChange`; `storyLifecycle.db.test.ts` reproduces the race).
 
@@ -167,3 +168,10 @@ Stories carry both crawled data and AI-generated analysis:
 - `relevanceReasons` — detailed factor bullet points (newline-separated)
 - `antifactors` — limiting factor bullet points (newline-separated)
 - `relevanceCalculation` — rating calculation steps (newline-separated)
+
+**Researched version** (set when an editor applies a research run, `story-research.md`, "Applying a run"):
+- The swapped fields (`title`, `titleLabel`, `summary`, `quote`, `quoteAttribution`, `marketingBlurb`, `relevanceReasons`, `antifactors`, `relevance`, `relevanceCalculation`) then hold the run's researched text, and `relevanceSummary` is null, so its readers fall back to the researched summary or bullets.
+- `research` (jsonb) — the cited version the story page shows (`services/researchedStory.ts`).
+- `preResearch` (jsonb) — every swapped field's value before the first apply, `relevanceSummary` included; `researched` on the public detail is whether it is set.
+- Both are null on a single-source story. A revert writes `preResearch` back and clears both; a re-assess clears both and writes a fresh single-source analysis.
+- While `preResearch` is set, `PUT /api/admin/stories/:id` refuses with 409 "Revert to single-source first" an edit that changes a swapped field (`SWAPPED_FIELDS`, `services/researchSwap.ts`); the edit form disables those fields and says why.

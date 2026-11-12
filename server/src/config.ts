@@ -290,6 +290,12 @@ export const config = {
     get tavilyApiKey(): string {
       return process.env.TAVILY_API_KEY || ''
     },
+    /**
+     * The owner's gate on applying a run, "Use this version" (services/researchApply.ts): closed
+     * until he has had the press-publisher-right question checked. "true" opens; unset or "false"
+     * keeps it closed; reverting works either way. A Render restart picks up a change.
+     */
+    applyEnabled: parseOneOf(process.env.RESEARCH_APPLY_ENABLED, 'false', ['true', 'false'] as const, 'RESEARCH_APPLY_ENABLED') === 'true',
     /** USD all runs started in a UTC month may cost together (runs of deleted stories included). */
     monthlyCapUsd: parseWholeNumber(process.env.RESEARCH_MONTHLY_CAP_USD, 30, 'RESEARCH_MONTHLY_CAP_USD'),
     /** A run's ceiling, reserved against the cap when it starts (about five times the expected cost). */

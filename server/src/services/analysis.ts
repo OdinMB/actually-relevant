@@ -311,6 +311,9 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
     antifactors: parsed.limitingFactors.join('\n'),
     relevanceCalculation: parsed.relevanceCalculation.join('\n'),
     relevance: parsed.conservativeRating,
+    // A fresh single-source analysis replaces an applied research run, and its snapshot with it
+    research: Prisma.DbNull,
+    preResearch: Prisma.DbNull,
   }
 
   // Generate embedding from analysis results BEFORE saving — throws on failure

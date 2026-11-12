@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { buildResearchedStory, earlierStoryIds, forReaders, researchedStorySchema, researchedStoryText, type ResearchRunForReaders } from './researchedStory.js'
+import {
+  buildResearchedStory,
+  earlierStoryIds,
+  forReaders,
+  researchedStorySchema,
+  researchedStoryText,
+  storedResearchText,
+  type ResearchRunForReaders,
+} from './researchedStory.js'
 import type { ResearchEarlier, ResearchSource } from './researchPipeline.js'
 
 function source(id: string, over: Partial<ResearchSource> = {}): ResearchSource {
@@ -190,5 +198,18 @@ describe('researchedStoryText', () => {
       run({ story: [{ sentences: [cited('One.', ['S0F1']), cited('Two.', ['S1F1'])] }, { sentences: [cited('Three.', ['S2F1'])] }] }),
     )
     expect(researchedStoryText(story)).toBe('One. Two.\n\nThree.')
+  })
+})
+
+describe('storedResearchText', () => {
+  const story = buildResearchedStory(run({ story: [{ sentences: [cited('One.', ['S0F1'])] }, { sentences: [cited('Two.', ['S1F1'])] }] }))
+
+  it("reads a stored version's text, as the database gives it back", () => {
+    expect(storedResearchText(JSON.parse(JSON.stringify(story)))).toBe('One.\n\nTwo.')
+  })
+
+  it('gives null for a story without one, or one that fails its schema, as the story page serves it', () => {
+    expect(storedResearchText(null)).toBeNull()
+    expect(storedResearchText({ ...story, sources: 'none' })).toBeNull()
   })
 })
