@@ -6,6 +6,7 @@ import { withRetry } from '../lib/retry.js'
 import { normalizeUrl } from '../utils/urlNormalization.js'
 import { summarizeError } from '../utils/errors.js'
 import { crawlLimiter } from '../lib/crawlLimiter.js'
+import { CRAWLER_USER_AGENT } from '../lib/crawlerIdentity.js'
 import { BlockedUrlError, isAllowedUrl, ssrfGuard } from '../utils/urlValidation.js'
 
 const log = createLogger('rssParser')
@@ -54,7 +55,7 @@ export interface ParseFeedResult {
 export async function parseFeed(feedUrl: string, cacheHeaders?: FeedCacheHeaders): Promise<ParseFeedResult> {
   try {
     if (!isAllowedUrl(feedUrl)) throw new BlockedUrlError(`Blocked feed URL: ${feedUrl}`)
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = { 'User-Agent': CRAWLER_USER_AGENT }
     if (cacheHeaders?.etag) {
       headers['If-None-Match'] = cacheHeaders.etag
     }

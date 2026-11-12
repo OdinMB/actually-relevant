@@ -19,8 +19,8 @@ export const FEED_PROBLEM_DEFINITIONS: Record<FeedProblem, string> = {
 
 type CrawlState = Pick<Feed, 'active' | 'lastCrawlResult' | 'lastCrawlError' | 'isStale'>
 
-/** The crawler's error for a crawl in which some articles failed extraction (`server/src/services/crawler.ts`). */
-const EXTRACTION_FAILURES = /^(\d+) of (\d+) articles failed extraction$/
+/** The crawler's error for a crawl in which some articles failed extraction, which may go on after a "; " with notes such as an opt-out (`server/src/services/crawler.ts`). */
+const EXTRACTION_FAILURES = /^(\d+) of (\d+) articles failed extraction(?:;|$)/
 
 function mostArticlesFailed(error: string | null): boolean {
   const match = error ? EXTRACTION_FAILURES.exec(error) : null

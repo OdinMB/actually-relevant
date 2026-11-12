@@ -207,7 +207,8 @@ export default function MethodologyPage() {
             Rules aimed only at training AI models don&apos;t cover what we do, and neither do robots.txt rules that block the crawlers of specific AI
             companies. We don&apos;t train AI models. Our crawler identifies itself as ActuallyRelevant and reads each article once, and every story links to
             the original. EU law allows text and data mining unless the rightsholder has reserved it in a machine-readable way (Article 4 of the Directive on
-            Copyright in the Digital Single Market). We check these rules when we add a source and whenever we review our source list.
+            Copyright in the Digital Single Market). We check these rules when we add a source and whenever we review our source list, and our crawler checks
+            the machine-readable ones again before it reads each article.
           </p>
           <p>
             Some publishers, such as newsletters on Substack, don&apos;t allow their article pages to be fetched but publish each full article in their RSS
