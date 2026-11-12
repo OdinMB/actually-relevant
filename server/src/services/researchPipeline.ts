@@ -29,6 +29,7 @@ import {
   draftSentences,
   dropFailing,
   evidenceFor,
+  publishedFact,
   supportFound,
   type CitationProblem,
   type GateVerdict,
@@ -396,18 +397,26 @@ async function buildPool(
   if (r.sources.length < 2) throw new Stop('no usable source')
 }
 
-/** Step 8's checks: the deterministic citation check, then (when it passes) the fact-check call. */
+/**
+ * Step 8's checks: the deterministic citation check and the fact-check call, both on every draft,
+ * so the rewrite hears of every problem and each failing sentence after it carries the fact
+ * check's key judgment. A problem only the citation check finds is never key.
+ */
 async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, call: Call): Promise<CitationProblem[]> {
   const problems = checkCitations(draft, facts)
-  if (problems.length > 0) return problems
   const cited = draftSentences(draft).filter(s => s.factIds.length > 0)
-  if (cited.length === 0) return []
+  if (cited.length === 0) return problems
   const prompt = buildFactCheckPrompt(cited.map(s => ({ text: s.text, facts: evidenceFor(s.factIds, facts) })))
   const verdicts = required(await call('fact-check', factCheckSchema, prompt), 'fact-check')
-  return verdicts.sentences.flatMap(v => {
-    const s = cited[v.number - 1]
-    return !v.supported && s ? [{ label: s.label, text: s.text, problem: `fails the fact check: ${v.problem || 'its cited facts do not state it'}` }] : []
-  })
+  return [
+    ...problems,
+    ...verdicts.sentences.flatMap(v => {
+      const s = cited[v.number - 1]
+      return !v.supported && s
+        ? [{ label: s.label, text: s.text, problem: `fails the fact check: ${v.problem || 'its cited facts do not state it'}`, key: v.key }]
+        : []
+    }),
+  ]
 }
 
 /**
@@ -458,7 +467,8 @@ async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r:
   const used = new Set([story.id, ...filtered.selected.flatMap(s => (s.storyId ? [s.storyId] : []))])
   await buildPool(story, inputs, used, call, deps, r)
 
-  const facts = new Map([...r.sources.flatMap(s => s.facts), ...r.earlier.flatMap(e => e.facts)].map(f => [f.id, f]))
+  const dated = [...r.sources.flatMap(s => publishedFact(s.id, s.outlet, s.date)), ...r.earlier.flatMap(e => publishedFact(e.id, 'Actually Relevant', e.date))]
+  const facts = new Map([...r.sources.flatMap(s => s.facts), ...r.earlier.flatMap(e => e.facts), ...dated].map(f => [f.id, f]))
   return writeChecked({ article: story.assess, articleDate, oldBefore: window.start, sources: r.sources, earlier: r.earlier }, facts, call, r)
 }
 

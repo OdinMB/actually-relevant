@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkCitations, decideGate, draftSentences, dropFailing, evidenceFor, supportFound, type PoolFact } from './researchChecks.js'
+import { checkCitations, decideGate, draftSentences, dropFailing, evidenceFor, publishedFact, supportFound, type PoolFact } from './researchChecks.js'
 import type { Draft } from '../schemas/research.js'
 
 const fact = (id: string, statement: string, supportingSentence = statement, measures = ''): PoolFact => ({ id, statement, supportingSentence, measures })
@@ -116,11 +116,33 @@ describe('dropFailing', () => {
     expect('draft' in out).toBe(true)
   })
 
-  it('fails when the opening sentence fails, more than three do, or a part is left empty', () => {
-    expect(dropFailing(d(), [problem('Story paragraph 1, sentence 1')])).toEqual({ failed: 'the opening sentence failed the check after one rewrite' })
-    const four = ['Story paragraph 2, sentence 1', 'Story paragraph 2, sentence 2', 'Story paragraph 3, sentence 1', 'Why This Matters 1'].map(problem)
-    expect(dropFailing(d(), four)).toEqual({ failed: '4 sentences failed the check after one rewrite' })
+  it('drops any number of non-key failures, the opening sentence included', () => {
+    const many = ['Story paragraph 1, sentence 1', 'Story paragraph 2, sentence 1', 'Story paragraph 2, sentence 2', 'Why This Matters 1'].map(problem)
+    const out = dropFailing(d(), many)
+    expect('draft' in out && out.draft.story).toEqual([{ sentences: [{ text: 'alone', factIds: ['S0F1'] }] }])
+  })
+
+  it('fails on an unsupported key claim, or when a part is left empty', () => {
+    expect(dropFailing(d(), [{ ...problem('Story paragraph 2, sentence 1'), key: true }])).toEqual({
+      failed: 'a key claim failed the check after one rewrite (Story paragraph 2, sentence 1)',
+    })
     expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after one rewrite' })
+    const allStory = ['Story paragraph 1, sentence 1', 'Story paragraph 2, sentence 1', 'Story paragraph 2, sentence 2', 'Story paragraph 3, sentence 1']
+    expect(dropFailing(d(), allStory.map(problem))).toEqual({ failed: 'no story sentence passed the check after one rewrite' })
+  })
+})
+
+describe('publishedFact', () => {
+  it('gives a source date as fact F0 with weekday, month and day, so a dated sentence passes the number check', () => {
+    const [f] = publishedFact('S1', 'qz.com', '2026-11-11T09:00:00Z')
+    expect(f).toEqual({ id: 'S1F0', statement: 'qz.com published this on Wednesday, November 11, 2026.', supportingSentence: '', measures: '' })
+    const pool = new Map([...POOL, ['S1F0', f!]])
+    expect(checkCitations(draft([['On Wednesday, November 11, analysts counted about 32 GW of all solar.', ['S1F1']]]), pool)).toEqual([])
+  })
+
+  it('gives nothing for a missing or unreadable date', () => {
+    expect(publishedFact('S1', 'x', null)).toEqual([])
+    expect(publishedFact('S1', 'x', 'unknown')).toEqual([])
   })
 })
 
