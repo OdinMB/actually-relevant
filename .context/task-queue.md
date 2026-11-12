@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bulk LLM operations run as background tasks on the server with concurrency control via `Semaphore`. The client submits a single request and polls for progress. Task types (`BulkTaskType` in `shared/types/index.ts` and `server/src/lib/taskRegistry.ts`): `preassess`, `assess`, `select`, `reclassify` (issue reassignment) and `emotion` (emotion tagging only).
+Bulk LLM operations run as background tasks on the server with concurrency control via `Semaphore`. The client submits a single request and polls for progress. Task types (`BulkTaskType` in `shared/types/index.ts` and `server/src/lib/taskRegistry.ts`): `preassess`, `assess`, `select`, `reclassify` (issue reassignment), `emotion` (emotion tagging only) and `research` (one story's research run, started by `POST /api/admin/research/stories/:storyId/runs`; `.context/story-research.md`).
 
 ## Architecture
 
@@ -94,6 +94,7 @@ The client sends up to 500 IDs in a single request. The server gates LLM calls t
 - **In-memory only** — Tasks are lost on server restart. Client shows an error on next poll.
 - **Per-process deduplication only** — Stories already in a running task are skipped (see API Endpoints), but the check lives in this process's memory. Semaphore prevents LLM overload.
 - **No persistence** — Task history is not stored in the database.
+- **A `research` task holds one story**, which counts as processing while its run lasts, so a bulk action started meanwhile skips it. Its record is the `story_research_runs` row, not the in-memory task: the row survives a restart, the task doesn't.
 
 ## Key Files
 
