@@ -53,7 +53,7 @@ The import panel (`FeedChangesetImportPanel.tsx`) parses the file in the browser
 - **JSON** (`buildFeedExport()` in `feedExport.ts`): "Feeds with problems" or "All feeds", downloaded as `feeds-<problems|all>-YYYY-MM-DD.json` (local date) or copied. It holds `scope`, `exportedAt`, `problemDefinitions` (each code explained), the issue tree (`issues`: slug, name, `children`), and per feed its settings, issue slug and name (and the parent's name for a sub-issue), crawl state, `quality` (crawled, published, publish rate, average relevance, dominant method; null without metrics) and `problems`.
 - **Feeds with problems** (`findFeedProblems()` in `feedProblems.ts`, pure): an inactive feed never has one. An active feed has each of these that holds:
   - `rss-fetch-failed`: `lastCrawlResult` starts with "RSS fetch failed". It reads the most recent crawl, so an RSS error that `lastCrawlError` still shows after a 304 or a crawl with only known items does not count.
-  - `extraction-failing`: `lastCrawlError` is "N of M articles failed extraction" with N/M above one half.
+  - `extraction-failing`: `lastCrawlError` starts "N of M articles failed extraction" with N/M above one half; notes such as a refusal or an opt-out may follow after "; " (`content-extraction.md`, "Crawl Flow"). A feed whose only error is an opt-out has no problem code; it shows in the feed table and the edit panel.
   - `stale`: `isStale`, the stale-feed warning below.
   - `nothing-analyzed`: quality metrics with `totalCrawled > 0`, `publishedCount` 0 and `avgRelevance` null. A feed added hours ago whose stories still await analysis can match; the fix prompt tells the agent to leave such a feed alone.
   The first two parse the crawler's own messages (`server/src/services/crawler.ts`): change them together.
@@ -61,16 +61,16 @@ The import panel (`FeedChangesetImportPanel.tsx`) parses the file in the browser
 
 ## Source Policy: Publishers' AI Opt-Outs
 
-Which sources may be crawled, given publishers' reservations against AI use (owner decision, 2026-11-01, the "middle line"). It is applied when sources are chosen, by people and by the agent instructions above; **the crawler does not enforce it** (see the gap below). The public summary is on the Methodology page, "Publishers' AI Opt-Outs" (`client/src/pages/MethodologyPage.tsx`).
+Which sources may be crawled, given publishers' reservations against AI use (owner decision, 2026-11-01, the "middle line"). It is applied when sources are chosen, by people and by the agent instructions above, and **the crawler enforces its machine-readable part** for each article on every crawl (ADR-0055; see "Enforced by the crawler" below). The public summary is on the Methodology page, "Publishers' AI Opt-Outs" (`client/src/pages/MethodologyPage.tsx`).
 
 A source is admissible unless its publisher has made a reservation that applies to us:
 
 - **Honored (exclude the source):** a general machine-readable reservation, which is TDMRep `tdm-reservation: 1` (in `/.well-known/tdmrep.json`, an HTTP header or the meta tag), a Cloudflare-style `Content-Signal` with `ai-input=no`, or a robots.txt rule that disallows `*` or our user agent `ActuallyRelevant` for the article pages; and terms of use that forbid AI processing, summarizing, or text and data mining of the content.
-- **Not treated as applying to us:** robots.txt rules that block only *named* AI-company crawlers (GPTBot, ClaudeBot, CCBot, Google-Extended, …), and terms that forbid only AI *training*. We do not train models, the crawler identifies itself (`USER_AGENT` in `server/src/services/extractor.ts`), it fetches one page per article (none for `contentSource: 'rss'`), and every story links to the original.
+- **Not treated as applying to us:** robots.txt rules that block only *named* AI-company crawlers (GPTBot, ClaudeBot, CCBot, Google-Extended, …), and terms that forbid only AI *training*. We do not train models, the crawler identifies itself (`CRAWLER_USER_AGENT` in `server/src/lib/crawlerIdentity.ts`, sent by every crawler request), it fetches one page per article (none for `contentSource: 'rss'`), and every story links to the original.
 - **Why:** the EU DSM Directive, Art. 4, permits text and data mining unless the rightsholder reserved it in machine-readable form; the general reservations above are that form.
 - **Publishers that forbid page fetching but carry the full text in the feed** (Substack): admissible with `contentSource: 'rss'`; a paid post whose item carries only a preview is skipped, never fetched.
 
-**Known gap, not built:** the crawler reads neither robots.txt nor TDM markers, so a publisher that adds a reservation later is crawled until someone removes or changes the feed; and the API tier (Diffbot) fetches pages itself, including those of publishers that block Diffbot. Open work in `BACKLOG.md`.
+**Enforced by the crawler:** before it reads an article, the crawler checks robots.txt (for `ActuallyRelevant`, else `*`), `Content-Signal: ai-input=no` and TDMRep (tdmrep.json, and a fetched page's header or meta tag), and skips a reserved article without storing it; a publisher that adds a reservation is honored within 24 hours, with no review. The API tier (Diffbot, PipFeed) never routes around a no: it is not asked for a page refused with 401, 403, 429 or 451 or carrying a reservation, nor for the rest of that feed's crawl. Rules and limits: `content-extraction.md`, "Publisher opt-out check" and "Tier 3: External API". **Not enforced:** terms of use stay a human check when a source is added or reviewed; and a page-level marker on an article whose page is not fetched (skip-local set for the rest of a crawl) goes unseen, though the host files are still checked.
 
 ## When a Feed Is Due
 
@@ -78,13 +78,14 @@ The crawl job (`crawlAllDueFeeds()`) takes the feeds that `getDueFeeds()` return
 
 ## Crawl Status and Health Counters
 
-All of this is in `updateCrawlStatus()` in `server/src/services/feed.ts`. Every outcome sets `lastCrawlResult`. Error fields change only on a new error (`lastCrawlError` and `lastCrawlErrorAt` are set) or a success (both cleared); any other outcome leaves the previous error visible.
+All of this is in `updateCrawlStatus()` in `server/src/services/feed.ts`. Every outcome sets `lastCrawlResult`. Error fields change only on a new error (`lastCrawlError` and `lastCrawlErrorAt` are set) or a success (both cleared); any other outcome leaves the previous error visible. A crawl that skipped items for a publisher opt-out sets the error even when it also created stories, so the opt-out stays visible beside them (`content-extraction.md`, "Crawl Flow"). Opt-out skips don't count as attempted, so they never make a crawl a total failure.
 
 | Outcome | `lastCrawledAt` | `consecutiveFailedCrawls` | `consecutiveEmptyCrawls` / `lastSuccessfulCrawlAt` |
 |---|---|---|---|
 | At least one story created | now | 0 | 0 / now |
 | Every new item failed extraction (total failure) | unchanged, so the feed is retried next run; on the 3rd consecutive total failure (`MAX_CONSECUTIVE_FAILURES`) it is forced to now and the counter resets, to break the retry loop | +1 (or reset at 3) | unchanged |
 | RSS had items but all were duplicates (nothing new) | now | 0 | unchanged |
+| Every new item skipped for a publisher opt-out (none attempted) | now | 0 | unchanged; the opt-out is set as the error ("Publisher opted out: … (N articles skipped)", or "Publisher opt-out unknown: …" while robots.txt can't be read) |
 | Reachable RSS returned zero items (not 304) | now (the crawler reports this as `hadSuccess: true`, so errors are cleared) | 0 | +1 / unchanged |
 | RSS could not be fetched or parsed (`fetchFailed`) | unchanged, so retried next run; forced to now on the 3rd consecutive failure, as for a total failure. Sets "RSS fetch failed: …" as the error | +1 (or reset at 3) | +1 / unchanged |
 | 304 Not Modified | now | 0 | unchanged; errors untouched. A 304 is not an empty crawl. |
