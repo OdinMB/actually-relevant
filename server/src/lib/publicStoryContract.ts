@@ -15,9 +15,10 @@
  */
 import type { Prisma } from '@prisma/client'
 import type { z } from 'zod'
+import type { getPublishedStoryBySlug } from '../services/publicStories.js'
 import type { PUBLIC_STORY_SELECT } from '../services/storySelect.js'
-import type { withAiGeneratedMarker } from './aiProvenance.js'
-import type { publicStorySchema } from './openapi.js'
+import type { withAiGeneratedDetailMarker, withAiGeneratedMarker } from './aiProvenance.js'
+import type { publicStoryDetailSchema, publicStorySchema } from './openapi.js'
 
 /** A value as JSON carries it: a Date becomes its ISO string. */
 type AsJson<T> = T extends Date ? string : T extends readonly (infer Item)[] ? AsJson<Item>[] : T extends object ? { [K in keyof T]: AsJson<T[K]> } : T
@@ -53,6 +54,13 @@ type ServedStory = ReturnType<typeof withAiGeneratedMarker<Omit<PublicStoryRow, 
 type DocumentedStory = z.infer<typeof publicStorySchema>
 
 export type PublicStoryContract = NoGaps<ContractGaps<ServedStory, DocumentedStory>>
+
+/** The single story: what getPublishedStoryBySlug reads, with the detail marker, against publicStoryDetailSchema. */
+type PublicStoryDetailRow = NonNullable<Awaited<ReturnType<typeof getPublishedStoryBySlug>>>
+type ServedStoryDetail = ReturnType<typeof withAiGeneratedDetailMarker<Omit<PublicStoryDetailRow, 'status'> & { status: 'published' }>>
+type DocumentedStoryDetail = z.infer<typeof publicStoryDetailSchema>
+
+export type PublicStoryDetailContract = NoGaps<ContractGaps<ServedStoryDetail, DocumentedStoryDetail>>
 
 // ──── The check's own tests: each line below must fail to compile, or the type-check fails ────
 

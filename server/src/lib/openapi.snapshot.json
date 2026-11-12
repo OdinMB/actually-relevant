@@ -334,6 +334,175 @@
         ],
         "type": "object"
       },
+      "PublicStoryDetail": {
+        "properties": {
+          "aiGenerated": {
+            "properties": {
+              "digitalSourceType": { "const": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia", "type": "string" },
+              "fields": {
+                "items": {
+                  "enum": [
+                    "antifactors",
+                    "marketingBlurb",
+                    "quote",
+                    "quoteAttribution",
+                    "relevanceReasons",
+                    "relevanceSummary",
+                    "research",
+                    "summary",
+                    "title",
+                    "titleLabel"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "model": { "type": "string" }
+            },
+            "required": ["digitalSourceType", "fields", "model"],
+            "type": "object"
+          },
+          "antifactors": { "type": ["null", "string"] },
+          "dateCrawled": { "format": "date-time", "type": "string" },
+          "datePublished": { "format": "date-time", "type": ["null", "string"] },
+          "emotionTag": { "enum": ["calm", "frustrating", "scary", "uplifting", null], "type": ["null", "string"] },
+          "feed": { "$ref": "#/components/schemas/FeedRef" },
+          "id": { "format": "uuid", "type": "string" },
+          "issue": { "oneOf": [{ "$ref": "#/components/schemas/IssueRef" }, { "type": "null" }] },
+          "marketingBlurb": { "type": ["null", "string"] },
+          "quote": { "type": ["null", "string"] },
+          "quoteAttribution": { "type": ["null", "string"] },
+          "relevance": { "maximum": 10, "minimum": 0, "type": ["integer", "null"] },
+          "relevancePre": { "maximum": 10, "minimum": 0, "type": ["integer", "null"] },
+          "relevanceReasons": { "type": ["null", "string"] },
+          "relevanceSummary": { "type": ["null", "string"] },
+          "research": {
+            "properties": {
+              "caveats": {
+                "items": {
+                  "properties": {
+                    "citations": {
+                      "items": {
+                        "properties": { "sentence": { "type": ["null", "string"] }, "sourceId": { "type": "string" } },
+                        "required": ["sentence", "sourceId"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "text": { "type": "string" }
+                  },
+                  "required": ["citations", "text"],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "paragraphs": {
+                "items": {
+                  "properties": {
+                    "sentences": {
+                      "items": {
+                        "properties": {
+                          "citations": {
+                            "items": {
+                              "properties": { "sentence": { "type": ["null", "string"] }, "sourceId": { "type": "string" } },
+                              "required": ["sentence", "sourceId"],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "text": { "type": "string" }
+                        },
+                        "required": ["citations", "text"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": ["sentences"],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "quoteSourceId": { "type": ["null", "string"] },
+              "sources": {
+                "items": {
+                  "properties": {
+                    "country": { "type": ["null", "string"] },
+                    "date": { "type": ["null", "string"] },
+                    "host": { "type": ["null", "string"] },
+                    "id": { "type": "string" },
+                    "kind": { "enum": ["analysis", "news-report", "official-body", "opinion", "other", "press-release", null], "type": ["null", "string"] },
+                    "origin": { "enum": ["earlier", "original", "source"], "type": "string" },
+                    "outlet": { "type": "string" },
+                    "slug": { "type": ["null", "string"] },
+                    "storyId": { "type": ["null", "string"] },
+                    "title": { "type": "string" },
+                    "url": { "type": ["null", "string"] }
+                  },
+                  "required": ["country", "date", "host", "id", "kind", "origin", "outlet", "slug", "storyId", "title", "url"],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "whyThisMatters": {
+                "items": {
+                  "properties": {
+                    "citations": {
+                      "items": {
+                        "properties": { "sentence": { "type": ["null", "string"] }, "sourceId": { "type": "string" } },
+                        "required": ["sentence", "sourceId"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "text": { "type": "string" }
+                  },
+                  "required": ["citations", "text"],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": ["caveats", "paragraphs", "quoteSourceId", "sources", "whyThisMatters"],
+            "type": ["null", "object"]
+          },
+          "researched": { "type": "boolean" },
+          "slug": { "type": ["null", "string"] },
+          "sourceTitle": { "type": "string" },
+          "sourceUrl": { "format": "uri", "type": "string" },
+          "status": { "enum": ["published"], "type": "string" },
+          "summary": { "type": ["null", "string"] },
+          "title": { "type": ["null", "string"] },
+          "titleLabel": { "type": ["null", "string"] }
+        },
+        "required": [
+          "aiGenerated",
+          "antifactors",
+          "dateCrawled",
+          "datePublished",
+          "emotionTag",
+          "feed",
+          "id",
+          "issue",
+          "marketingBlurb",
+          "quote",
+          "quoteAttribution",
+          "relevance",
+          "relevancePre",
+          "relevanceReasons",
+          "relevanceSummary",
+          "research",
+          "researched",
+          "slug",
+          "sourceTitle",
+          "sourceUrl",
+          "status",
+          "summary",
+          "title",
+          "titleLabel"
+        ],
+        "type": "object"
+      },
       "StoryListResponse": {
         "properties": {
           "data": { "items": { "$ref": "#/components/schemas/PublicStory" }, "type": "array" },
@@ -471,7 +640,7 @@
         "operationId": "getStory",
         "parameters": [{ "in": "path", "name": "slug", "required": true, "schema": { "type": "string" } }],
         "responses": {
-          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PublicStory" } } } },
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PublicStoryDetail" } } } },
           "404": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }

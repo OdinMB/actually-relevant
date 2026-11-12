@@ -1,7 +1,7 @@
 /**
  * The synthetic data set for local development (`seed.ts` writes it; `.context/database-migrations.md`,
  * "Run Locally with Synthetic Data"): issues, feeds, stories in every pipeline status, a dedup cluster,
- * newsletter issues and podcast episodes. Every place, organization and event is invented, every URL
+ * two published stories with a researched version (research.ts), newsletter issues and podcast episodes. Every place, organization and event is invented, every URL
  * is on synthetic.example.org (apart from the newsletters' links to story pages, which use `siteUrl`)
  * and every email address on example.org. Ids and text are fixed. The dates count back from `now` so
  * the site looks current, and the newsletter titles and slugs and the podcast week keys follow them:
@@ -12,6 +12,7 @@ import type { EmotionTag, FeedRegion, Prisma, RejectionReason, StoryStatus } fro
 import { slugify } from '../../utils/slugify.js'
 import { storyHeading } from '../../services/newsletterContent.js'
 import { newsletterSlugBase } from '../../services/newsletterArchive.js'
+import { researchedRow } from './research.js'
 
 export const SYNTHETIC_ORIGIN = 'https://synthetic.example.org'
 export const SYNTHETIC_EMAIL_DOMAIN = '@example.org'
@@ -960,9 +961,46 @@ export interface SyntheticDataset {
   podcasts: Prisma.PodcastCreateManyInput[]
 }
 
+/** How many of the newest published stories carry a researched version (research.ts). */
+const RESEARCHED_STORIES = 2
+
+/**
+ * The newest published stories with a researched version, each citing the oldest published story as
+ * earlier coverage, so the story page's researched format shows locally.
+ */
+function withResearch(stories: SyntheticStory[]): SyntheticStory[] {
+  const published = stories.filter(s => s.publishedHoursAgo !== null)
+  const earlier = published.at(-1)!
+  const researched = new Set(published.slice(0, RESEARCHED_STORIES).map(s => s.row.id))
+  const day = (date: Prisma.StoryCreateManyInput['datePublished']) => new Date(date!).toISOString().slice(0, 10)
+  return stories.map(s =>
+    researched.has(s.row.id)
+      ? {
+          ...s,
+          row: {
+            ...s.row,
+            ...researchedRow(
+              s.row,
+              {
+                title: s.seed.title,
+                gist: s.seed.gist,
+                why: s.seed.why,
+                sourceUrl: s.row.sourceUrl,
+                outlet: feedTitle(s.seed.feed),
+                date: day(s.row.sourceDatePublished),
+                earlier: { id: earlier.row.id, title: earlier.seed.title, slug: earlier.row.slug!, date: day(earlier.row.datePublished) },
+              },
+              SYNTHETIC_ORIGIN,
+            ),
+          },
+        }
+      : s,
+  )
+}
+
 /** Every row of the data set, dated back from `now`; `siteUrl` is the site the newsletter links point at. */
 export function buildSyntheticDataset(now: Date, siteUrl: string): SyntheticDataset {
-  const stories = STORIES.map((story, index) => buildStory(story, index, now))
+  const stories = withResearch(STORIES.map((story, index) => buildStory(story, index, now)))
   const published = stories.filter(s => s.publishedHoursAgo !== null)
   const publishedBetween = (fromHours: number, toHours: number) => published.filter(s => s.publishedHoursAgo! > fromHours && s.publishedHoursAgo! <= toHours)
   const lastWeek = publishedBetween(WEEK_HOURS, 2 * WEEK_HOURS).slice(0, 5)

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import type { ReactNode } from 'react'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { axe } from 'vitest-axe'
+import type { ResearchedSource, ResearchedStory } from '@shared/types'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -52,10 +54,13 @@ const mockRelated = vi.hoisted(() => ({ current: [] as unknown[] }))
 /** What useStoryAppearances answers; undefined while it loads or when it failed. */
 const mockAppearances = vi.hoisted(() => ({ current: undefined as unknown }))
 
+/** What useClusterMembers answers ("Also covered by"). */
+const mockCluster = vi.hoisted(() => ({ current: null as unknown }))
+
 vi.mock('../hooks/usePublicStories', () => ({
   usePublicStory: () => ({ data: mockStory.current, isLoading: mockStory.isLoading, error: mockStory.error }),
   useRelatedStories: () => ({ data: mockRelated.current, isLoading: false }),
-  useClusterMembers: () => ({ data: null }),
+  useClusterMembers: () => ({ data: mockCluster.current }),
   useStoryAppearances: () => ({ data: mockAppearances.current }),
 }))
 
@@ -80,6 +85,7 @@ beforeEach(() => {
   mockStory.error = null
   mockRelated.current = []
   mockAppearances.current = undefined
+  mockCluster.current = null
 })
 
 afterEach(() => {
@@ -462,6 +468,171 @@ describe('StoryPage', () => {
         'RelevanceAI by Actually Relevant',
       ])
     })
+  })
+})
+
+describe('StoryPage researched format', () => {
+  const source = (over: Partial<ResearchedSource> & Pick<ResearchedSource, 'id' | 'origin' | 'outlet'>): ResearchedSource => ({
+    host: null,
+    url: null,
+    title: `Headline of ${over.id}`,
+    date: '2026-11-10',
+    country: null,
+    kind: null,
+    storyId: null,
+    slug: null,
+    ...over,
+  })
+  const SOURCES = [
+    source({
+      id: 'S0',
+      origin: 'original',
+      outlet: 'Example Feed',
+      host: 'example.com',
+      url: 'https://example.com/article',
+      country: 'Pakistan',
+      kind: 'news-report',
+    }),
+    source({
+      id: 'S1',
+      origin: 'source',
+      outlet: 'Coverage Outlet',
+      host: 'coverage.example.org',
+      url: 'https://coverage.example.org/a',
+      country: 'Switzerland',
+      kind: 'analysis',
+    }),
+    source({
+      id: 'E1',
+      origin: 'earlier',
+      outlet: 'Actually Relevant',
+      title: 'Our earlier headline',
+      date: '2026-03-01',
+      storyId: 'story-0',
+      slug: 'earlier-story',
+    }),
+  ]
+  const research: ResearchedStory = {
+    paragraphs: [
+      {
+        sentences: [
+          { text: 'Researched first sentence.', citations: [{ sourceId: 'S0', sentence: 'The original sentence.' }] },
+          {
+            text: 'Two sources agree.',
+            citations: [
+              { sourceId: 'S1', sentence: 'The coverage sentence.' },
+              { sourceId: 'E1', sentence: 'The earlier sentence.' },
+            ],
+          },
+        ],
+      },
+    ],
+    whyThisMatters: [{ text: 'Researched reason.', citations: [{ sourceId: 'S1', sentence: null }] }],
+    caveats: [{ text: 'Researched caveat.', citations: [] }],
+    quoteSourceId: 'S1',
+    sources: SOURCES,
+  }
+  const researched = { ...story, summary: 'Researched short summary', relevanceReasons: '- Plain reason', research, researched: true }
+  const sourcesSection = () => document.getElementById('sources')!
+
+  it('announces the researched label, as plain text after the header line', () => {
+    renderStory(researched)
+    const label = screen.getByText(
+      (_, el) => el?.tagName === 'SPAN' && el.textContent?.startsWith('Researched and written by') === true && !el.querySelector('a'),
+    )
+    expect(announcedText(label)).toBe('Researched and written by AI.')
+    expect(screen.queryByText(/^Summary and analysis by/)).toBeNull()
+  })
+
+  it('opens the header with where the story was initially found and how many sources it has, linking the list', () => {
+    renderStory(researched)
+    const row = screen.getByRole('heading', { level: 1 }).nextElementSibling!
+    expect(announcedText(row)).toContain('Initially found on Example Feed (opens in new tab), Nov 10, 2026')
+    expect(row.querySelector('time')).toHaveAttribute('dateTime', '2026-11-10')
+    expect(within(row as HTMLElement).getByRole('link', { name: 'Example Feed (opens in new tab)' })).toHaveAttribute('href', 'https://example.com/article')
+    expect(within(row as HTMLElement).getByRole('link', { name: '3 sources' })).toHaveAttribute('href', '#sources')
+    expect(sourcesSection()).toContainElement(screen.getByRole('heading', { level: 2, name: 'Sources' }))
+    // Our own publish date and the separate original-article link are gone; the separators stay hidden
+    expect(within(row as HTMLElement).queryByRole('link', { name: /Original article/ })).toBeNull()
+    expect(announcedText(row)).not.toContain('|')
+  })
+
+  it('tells the story in cited paragraphs, in place of the summary, and the analysis as cited bullets', () => {
+    renderStory(researched)
+    expect(screen.getByText('Researched first sentence.')).toBeInTheDocument()
+    expect(screen.queryByText('Researched short summary')).toBeNull()
+    expect(screen.getByText('Researched reason.')).toBeInTheDocument()
+    expect(screen.queryByText('Plain reason')).toBeNull()
+    for (const text of ['Researched first sentence.', 'Researched reason.', 'Researched caveat.', 'Our earlier headline']) {
+      expect(screen.getByText(text).closest('[data-ai-generated]')!.getAttribute('data-ai-generated')).toBe('research')
+    }
+  })
+
+  it('names each citation after its sources and opens a card with the supporting sentence and a link to read the source', async () => {
+    renderStory(researched)
+    const citation = screen.getByRole('button', { name: 'Sources: Coverage Outlet, Actually Relevant' })
+    expect(focusRingProblems(citation)).toEqual([])
+    await userEvent.click(citation)
+
+    expect(await screen.findByText('“The coverage sentence.”')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Read the source (opens in new tab)' })).toHaveAttribute('href', 'https://coverage.example.org/a')
+    expect(screen.getByRole('link', { name: 'Read the story' })).toHaveAttribute('href', '/stories/earlier-story')
+  })
+
+  it("cites the quote's source after its attribution", () => {
+    renderStory(researched)
+    const attribution = screen.getByText(`— ${AI_TEXT.quoteAttribution} · chosen by AI, may be translated`)
+    expect(within(attribution.parentElement!).getByRole('button', { name: 'Source: Coverage Outlet' })).toBeInTheDocument()
+  })
+
+  it('lists the sources: the original marked as where it was found, an analysis by its kind, and our earlier story last, marked and linked', () => {
+    renderStory(researched)
+    const items = within(sourcesSection()).getAllByRole('listitem')
+    expect(items.map(item => [...item.querySelectorAll('p')].map(announcedText))).toEqual([
+      ['Example Feed · Pakistan · Nov 10, 2026 · initially found here', 'Headline of S0 (opens in new tab)'],
+      ['Coverage Outlet · Switzerland · analysis · Nov 10, 2026', 'Headline of S1 (opens in new tab)'],
+      ['Earlier on Actually Relevant · Mar 2026', 'Our earlier headline'],
+    ])
+    expect(within(items[2]!).getByRole('link', { name: 'Our earlier headline' })).toHaveAttribute('href', '/stories/earlier-story')
+  })
+
+  it("loads outlets' icons only from our own API, never from the outlets, and shows the initial when one fails", () => {
+    renderStory(researched)
+    const images = [...document.querySelectorAll('article img')].map(img => img.getAttribute('src')!)
+    const outletIcons = images.filter(src => src.includes('/source-favicons/'))
+    expect(outletIcons).toContain('/api/source-favicons/coverage.example.org')
+    for (const src of images) expect(src.startsWith('/'), src).toBe(true)
+
+    const row = within(sourcesSection()).getAllByRole('listitem')[1]!
+    fireEvent.error(row.querySelector('img')!)
+    expect(row.querySelector('img')).toBeNull()
+    expect(within(row).getByText('C')).toBeInTheDocument()
+  })
+
+  it('leaves out "Also covered by", which the sources list takes over', () => {
+    mockCluster.current = { sources: [{ feedTitle: 'Other Feed', sourceUrl: 'https://other.example/a' }] }
+    renderStory(researched)
+    expect(screen.queryByText(/Also covered by/)).toBeNull()
+  })
+
+  it('keeps the researched label over the plain layout when the researched version could not be served', () => {
+    mockCluster.current = { sources: [{ feedTitle: 'Other Feed', sourceUrl: 'https://other.example/a' }] }
+    renderStory({ ...researched, research: null })
+    expect(screen.getByText(/^Researched and written by/)).toBeInTheDocument()
+    expect(screen.getByText('Researched short summary')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Original article (opens in new tab)' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Sources' })).toBeNull()
+    expect(screen.getByText(/Also covered by/)).toBeInTheDocument()
+  })
+
+  it.each([
+    ['researched', researched],
+    ['single-source', story],
+  ])('passes axe in the %s format', async (_, data) => {
+    const { container } = renderStory(data)
+    const citation = screen.queryAllByRole('button', { name: /^Sources?: / })[0]
+    if (citation) await userEvent.click(citation)
+    expect(await axe(container)).toHaveNoViolations()
   })
 })
 

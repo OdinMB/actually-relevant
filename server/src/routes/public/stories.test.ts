@@ -309,8 +309,11 @@ describe('Public Stories API', () => {
   })
 
   describe('GET /api/stories/:id', () => {
+    // What the detail select reads for a story that was never researched
+    const detailRow = { ...publicStory, research: null, preResearch: null }
+
     it('returns a single published story', async () => {
-      mockPrisma.story.findFirst.mockResolvedValue(publicStory)
+      mockPrisma.story.findFirst.mockResolvedValue(detailRow)
 
       const res = await request(app).get('/api/stories/story-1')
       expect(res.status).toBe(200)
@@ -319,7 +322,7 @@ describe('Public Stories API', () => {
     })
 
     it('marks the AI-generated fields of the story', async () => {
-      mockPrisma.story.findFirst.mockResolvedValue(publicStory)
+      mockPrisma.story.findFirst.mockResolvedValue(detailRow)
 
       const res = await request(app).get('/api/stories/story-1')
       expect(res.body.aiGenerated).toEqual(expectedMarker(publicStory))
@@ -330,6 +333,87 @@ describe('Public Stories API', () => {
 
       const res = await request(app).get('/api/stories/not-published')
       expect(res.status).toBe(404)
+    })
+
+    describe('the researched version', () => {
+      const cited = (text: string, ...sourceIds: string[]) => ({ text, citations: sourceIds.map(sourceId => ({ sourceId, sentence: `From ${sourceId}.` })) })
+      const ourStory = (id: string, storyId: string) => ({
+        id,
+        origin: 'earlier',
+        outlet: 'Actually Relevant',
+        host: null,
+        url: null,
+        title: `Earlier ${id}`,
+        date: '2026-03-01',
+        country: null,
+        kind: null,
+        storyId,
+        slug: `old-${storyId}`,
+      })
+      const research = {
+        paragraphs: [{ sentences: [cited('It happened.', 'S0', 'E1', 'E2')] }],
+        whyThisMatters: [cited('It matters.', 'E2')],
+        caveats: [cited('A caveat.')],
+        quoteSourceId: 'E2',
+        sources: [
+          {
+            id: 'S0',
+            origin: 'original',
+            outlet: 'Test Feed',
+            host: 'example.com',
+            url: 'https://example.com/article',
+            title: 'Original',
+            date: '2026-11-10',
+            country: 'Kenya',
+            kind: 'news-report',
+            storyId: null,
+            slug: null,
+          },
+          ourStory('E1', 'still-published'),
+          ourStory('E2', 'since-unpublished'),
+        ],
+      }
+
+      it('serves it with the flag, dropping earlier stories no longer published and giving the rest their current slug', async () => {
+        mockPrisma.story.findFirst.mockResolvedValue({ ...publicStory, research, preResearch: { summary: 'single-source' } })
+        mockPrisma.story.findMany.mockResolvedValue([{ id: 'still-published', slug: 'current-slug' }])
+
+        const res = await request(app).get('/api/stories/story-1')
+
+        expect(res.status).toBe(200)
+        expect(res.body.researched).toBe(true)
+        expect(res.body.research.sources.map((s: { id: string }) => s.id)).toEqual(['S0', 'E1'])
+        expect(res.body.research.sources[1].slug).toBe('current-slug')
+        expect(res.body.research.paragraphs[0].sentences[0].citations.map((c: { sourceId: string }) => c.sourceId)).toEqual(['S0', 'E1'])
+        expect(res.body.research.quoteSourceId).toBeNull()
+        expect(res.body).not.toHaveProperty('preResearch')
+        // One lookup, by id and among published stories only
+        expect(mockPrisma.story.findMany).toHaveBeenCalledTimes(1)
+        expect(mockPrisma.story.findMany.mock.calls[0]![0].where).toMatchObject({ id: { in: ['still-published', 'since-unpublished'] }, status: 'published' })
+      })
+
+      it('names it in the marker only when it is served', async () => {
+        mockPrisma.story.findFirst.mockResolvedValue({ ...publicStory, research, preResearch: {} })
+        mockPrisma.story.findMany.mockResolvedValue([])
+        const researched = await request(app).get('/api/stories/story-1')
+        expect(researched.body.aiGenerated.fields).toEqual([...expectedMarker(publicStory).fields, 'research'])
+
+        mockPrisma.story.findFirst.mockResolvedValue({ ...publicStory, research: null, preResearch: null })
+        const plain = await request(app).get('/api/stories/story-1')
+        expect(plain.body.aiGenerated).toEqual(expectedMarker(publicStory))
+        expect(plain.body).toMatchObject({ research: null, researched: false })
+      })
+
+      it('serves a stored version that fails its schema as none, still flagged researched', async () => {
+        mockPrisma.story.findFirst.mockResolvedValue({ ...publicStory, research: { paragraphs: 'not a list' }, preResearch: { summary: 'single-source' } })
+
+        const res = await request(app).get('/api/stories/story-1')
+
+        expect(res.status).toBe(200)
+        expect(res.body).toMatchObject({ research: null, researched: true })
+        expect(res.body.aiGenerated.fields).not.toContain('research')
+        expect(mockPrisma.story.findMany).not.toHaveBeenCalled()
+      })
     })
   })
 })

@@ -92,6 +92,12 @@ model Story {
   relevanceSummary       String?      @map("relevance_summary")
   antifactors            String?
   relevanceCalculation   String?      @map("relevance_calculation")
+  // The researched version readers see, with its citations and sources (services/researchedStory.ts,
+  // .context/story-research.md, "Reader format"); null unless a research run was applied
+  research               Json?        @map("research")
+  // Every field an applied research run replaced, so a revert restores the single-source analysis;
+  // set while the text fields carry researched text (the public `researched` flag)
+  preResearch            Json?        @map("pre_research")
   crawlMethod            String?      @map("crawl_method")
   accessTier             String?      @map("access_tier")
   // The vector lives in its own table so writes to `stories` never touch the HNSW index (ADR-0051)
@@ -194,6 +200,19 @@ model FeedFavicon {
   fetchedAt DateTime @default(now()) @map("fetched_at")
 
   @@map("feed_favicons")
+}
+
+// A research source's favicon by host, as a 32 px PNG, served by GET /api/source-favicons/:host
+// (services/sourceFavicons.ts). A null `png` records "looked, none found", so the host is not
+// looked up again until `fetchedAt` is 30 days old.
+model SourceFavicon {
+  host      String   @id
+  png       Bytes?
+  // The image the PNG was made from; null when none was found
+  sourceUrl String?  @map("source_url")
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+
+  @@map("source_favicons")
 }
 
 model Issue {

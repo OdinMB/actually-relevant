@@ -2,7 +2,8 @@
  * Finds a feed's favicon on the web and stores it (.context/feed-management.md, "Favicons"): for the
  * homepage's host, then each shorter parent domain, the Google favicon API, the page's
  * `<link rel=icon>` entries and `/favicon.ico`. Each image is made into the stored 32 px PNG
- * (faviconImage.ts) and saved in the database (faviconStore.ts).
+ * (faviconImage.ts) and saved in the database (faviconStore.ts). The search itself (`findIcon`)
+ * also finds research sources' favicons (sourceFavicons.ts).
  */
 import type { Readable } from 'stream'
 import axios from 'axios'
@@ -36,7 +37,7 @@ export function setsFaviconSource(changes: object): boolean {
 }
 
 /** A favicon found: the stored PNG, and the image it was made from. */
-interface Icon {
+export interface Icon {
   png: Buffer
   sourceUrl: string
 }
@@ -146,6 +147,35 @@ export interface FaviconResult {
   message: string
 }
 
+/**
+ * Search for the favicon of `primaryUrl`'s site: `firstTry` first when given (an icon address
+ * someone already knows, such as Tavily's), then for the host and each shorter parent domain the
+ * Google favicon API, the page's `<link rel=icon>` and `/favicon.ico`. Every fetch goes through the
+ * SSRF guard. Null when none yields an image that makes a PNG.
+ */
+export async function findIcon(primaryUrl: URL, firstTry?: string): Promise<Icon | null> {
+  if (firstTry) {
+    const icon = await fetchIcon(firstTry)
+    if (icon) return icon
+  }
+
+  // Try the hostname, then progressively shorter domains
+  // e.g. feeder-prod.int.politico.com → int.politico.com → politico.com
+  const hostname = primaryUrl.hostname
+  const domains = [hostname]
+  const parts = hostname.split('.')
+  for (let i = 1; i <= parts.length - 2; i++) {
+    domains.push(parts.slice(i).join('.'))
+  }
+
+  for (const domain of domains) {
+    const origin = `${primaryUrl.protocol}//${domain}`
+    const icon = (await tryGoogleApi(domain)) ?? (await tryHtmlParsing(origin)) ?? (await tryDirectFavicon(origin))
+    if (icon) return icon
+  }
+  return null
+}
+
 /** Find and store the feed's favicon; without `force`, a feed that has one is left alone. */
 export async function fetchFavicon(feed: FaviconSource, force = false): Promise<FaviconResult> {
   if (!force && (await hasFavicon(feed.id))) {
@@ -156,21 +186,7 @@ export async function fetchFavicon(feed: FaviconSource, force = false): Promise<
   // Prefer homepage URL for favicon (cleaner domain), fall back to RSS URL
   const primaryUrl = new URL(feed.url || feed.rssUrl)
   const hostname = primaryUrl.hostname
-
-  // Try the feed's hostname, then progressively shorter domains
-  // e.g. feeder-prod.int.politico.com → int.politico.com → politico.com
-  const domains = [hostname]
-  const parts = hostname.split('.')
-  for (let i = 1; i <= parts.length - 2; i++) {
-    domains.push(parts.slice(i).join('.'))
-  }
-
-  let icon: Icon | null = null
-  for (const domain of domains) {
-    const origin = `${primaryUrl.protocol}//${domain}`
-    icon = (await tryGoogleApi(domain)) ?? (await tryHtmlParsing(origin)) ?? (await tryDirectFavicon(origin))
-    if (icon) break
-  }
+  const icon = await findIcon(primaryUrl)
 
   if (!icon) {
     log.warn({ feedId: feed.id, hostname }, 'no favicon found')

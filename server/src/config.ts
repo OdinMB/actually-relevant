@@ -380,6 +380,8 @@ export const config = {
     /** In-memory copies of stored favicons (a few kB each), so page views do not each query the database. */
     memoryCacheMinutes: 60,
     memoryCacheEntries: 1000,
+    /** A research source's host where no favicon was found is not looked up again for this long (services/sourceFavicons.ts). */
+    sourceNegativeCacheDays: 30,
   },
   // Access classification at extraction (.context/content-extraction.md, "Access classification").
   // A page the publisher marks as not free is `locked` only with evidence of truncation: the

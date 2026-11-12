@@ -1,5 +1,6 @@
 import type {
   PublicStory,
+  PublicStoryDetail,
   PaginatedResponse,
   PublicPodcastResponse,
   PublicPodcastEpisodeDetail,
@@ -118,7 +119,7 @@ export const publicApi = {
   stories: {
     list: (params?: { page?: number; pageSize?: number; issueSlug?: string; search?: string; emotionTags?: string }) =>
       request<PaginatedResponse<PublicStory>>(`/stories${toQueryString((params || {}) as Record<string, unknown>)}`),
-    get: (slug: string) => request<PublicStory>(`/stories/${slug}`),
+    get: (slug: string) => request<PublicStoryDetail>(`/stories/${slug}`),
     related: (slug: string, limit = 4) => request<PublicStory[]>(`/stories/${slug}/related?limit=${limit}`),
     cluster: (slug: string) => request<{ sources: { feedTitle: string; sourceUrl: string }[] }>(`/stories/${slug}/cluster`),
     /** The newsletter issue and podcast episode the story appeared in, each null when none. */

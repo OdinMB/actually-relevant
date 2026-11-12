@@ -7,7 +7,7 @@ import { loadStateOf } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 import StoryCard from '../components/StoryCard'
 import LoadFailure from '../components/LoadFailure'
-import type { PublicStory } from '@shared/types'
+import type { PublicStoryDetail } from '@shared/types'
 
 const META = {
   title: 'Saved Stories - Actually Relevant',
@@ -37,7 +37,7 @@ export default function SavedPage() {
       // Fetch each story individually (they're cached by the browser)
       const results = await Promise.allSettled(savedSlugs.map(slug => publicApi.stories.get(slug)))
       const stories = results
-        .filter((r): r is PromiseFulfilledResult<PublicStory> => r.status === 'fulfilled')
+        .filter((r): r is PromiseFulfilledResult<PublicStoryDetail> => r.status === 'fulfilled')
         .map(r => r.value)
         .reverse() // most recently saved first
       // A story that is gone (404) drops out of the list; when none loaded and one failed for

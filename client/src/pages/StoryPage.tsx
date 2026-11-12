@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
+import type { PublicStoryDetail, ResearchedCitedText } from '@shared/types'
 import { Helmet } from 'react-helmet-async'
 import Markdown from 'react-markdown'
 import { usePublicStory, useStoryAppearances } from '../hooks/usePublicStories'
@@ -17,6 +18,10 @@ import StoryAppearances from '../components/StoryAppearances'
 import RelatedStories from '../components/RelatedStories'
 import AlsoCoveredBy from '../components/AlsoCoveredBy'
 import AiBadge from '../components/ai/AiBadge'
+import { Citation, type SourcesById } from '../components/research/Citation'
+import { CitedParagraphs, CitedSentences } from '../components/research/CitedText'
+import { SourcesList } from '../components/research/SourcesList'
+import { sourceDate } from '../components/research/sourceText'
 import { AI_DISCLOSURE_COPY, quoteAttributionLine } from '../components/ai/aiDisclosureCopy'
 import { StoryPageSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
@@ -49,13 +54,14 @@ const KEEP_READING_LINK = `inline-flex items-center min-h-6 text-brand-700 hover
 
 function AnalysisSection({
   title,
-  text,
+  points,
   accentColor,
   numberColor,
   aiField,
 }: {
   title: string
-  text: string
+  /** The points, rendered: Markdown from the plain fields, or cited sentences from the researched version */
+  points: ReactNode[]
   /** The heading's dot */
   accentColor: string
   /** The points' numbers: 24px bold, large text, so 3:1 is the bar; the 700 text shade clears it with room */
@@ -63,8 +69,6 @@ function AnalysisSection({
   /** API field name of the AI-generated text, for the machine-readable marker */
   aiField: string
 }) {
-  const points = parsePoints(text)
-
   return (
     <section className="mb-10" data-ai-generated={aiField}>
       {/* Ruled heading with colored dot — larger text. An h2 under the headline, like "Related Stories" */}
@@ -86,13 +90,35 @@ function AnalysisSection({
             >
               {idx + 1}
             </span>
-            <div className="prose flex-1 min-w-0">
-              <Markdown>{point}</Markdown>
-            </div>
+            <div className="prose flex-1 min-w-0">{point}</div>
           </div>
         ))}
       </div>
     </section>
+  )
+}
+
+/** Analysis points from a plain field's Markdown bullets. */
+const markdownPoints = (text: string | null): ReactNode[] => (text ? parsePoints(text).map(point => <Markdown>{point}</Markdown>) : [])
+
+/** Analysis points from the researched version's cited bullets. */
+const citedPoints = (bullets: ResearchedCitedText[], sources: SourcesById): ReactNode[] =>
+  bullets.map(bullet => (
+    <p>
+      <CitedSentences items={[bullet]} sources={sources} />
+    </p>
+  ))
+
+/** The publisher's name with its favicon, linking the article the story was found in. */
+function OriginalSourceLink({ story }: { story: PublicStoryDetail }) {
+  return (
+    <>
+      <FeedFavicon feedId={story.feed.id} />
+      <a href={story.sourceUrl} target="_blank" rel="noopener noreferrer" className={`text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5`}>
+        {story.feed.displayTitle || story.feed.title}
+        <span className="sr-only"> (opens in new tab)</span>
+      </a>
+    </>
   )
 }
 
@@ -180,6 +206,16 @@ export default function StoryPage() {
   const issueName = story.issue?.name ?? story.feed?.issue?.name ?? 'News'
   const colors = getCategoryColor(issueSlug)
 
+  // The label keys on `researched` (the text fields carry researched text); the cited layout on `research`
+  const research = story.research ?? null
+  const storyLabel = story.researched ? AI_DISCLOSURE_COPY.researchedStoryLabel : AI_DISCLOSURE_COPY.storyLabel
+  const sourcesById: SourcesById = new Map((research?.sources ?? []).map(source => [source.id, source]))
+  const original = research?.sources.find(source => source.origin === 'original')
+  const originalDate = original ? sourceDate(original) : null
+  const sourceCount = research?.sources.length ?? 0
+  const reasonPoints = research ? citedPoints(research.whyThisMatters, sourcesById) : markdownPoints(story.relevanceReasons)
+  const caveatPoints = research ? citedPoints(research.caveats, sourcesById) : markdownPoints(story.antifactors)
+
   return (
     <>
       <Helmet>
@@ -223,35 +259,51 @@ export default function StoryPage() {
             {/* Metadata + share. The "|" separators are visual only (aria-hidden, or alt text '' on a phone's ::before), so screen readers don't read them out */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500">
               <div className={META_TEXT_ROW}>
-                <time dateTime={displayDate}>{dateStr}</time>
-                <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
-                  |
-                </span>
-                <span className={`inline-flex items-center gap-1.5 ${PHONE_SEPARATOR}`}>
-                  <FeedFavicon feedId={story.feed.id} />
-                  <a
-                    href={story.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5`}
-                  >
-                    {story.feed.displayTitle || story.feed.title}
-                    <span className="sr-only"> (opens in new tab)</span>
-                  </a>
-                  {hasSourceDate && <>, {sourceDateStr}</>}
-                </span>
-                <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
-                  |
-                </span>
-                <a
-                  href={story.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5 ${PHONE_SEPARATOR}`}
-                >
-                  Original article
-                  <span className="sr-only"> (opens in new tab)</span>
-                </a>
+                {research ? (
+                  <>
+                    {/* Researched (owner, 2026-11-12, the mockup): where it was found and its source's date; our publish date is dropped */}
+                    <span className="inline-flex flex-wrap items-center gap-x-1.5">
+                      Initially found on{' '}
+                      <span className="inline-flex items-center gap-1.5">
+                        <OriginalSourceLink story={story} />
+                        {originalDate && (
+                          <>
+                            , <time dateTime={original!.date!}>{originalDate}</time>
+                          </>
+                        )}
+                      </span>
+                    </span>
+                    <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
+                      |
+                    </span>
+                    <a href="#sources" className={`text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5 ${PHONE_SEPARATOR}`}>
+                      {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <time dateTime={displayDate}>{dateStr}</time>
+                    <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
+                      |
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 ${PHONE_SEPARATOR}`}>
+                      <OriginalSourceLink story={story} />
+                      {hasSourceDate && <>, {sourceDateStr}</>}
+                    </span>
+                    <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
+                      |
+                    </span>
+                    <a
+                      href={story.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5 ${PHONE_SEPARATOR}`}
+                    >
+                      Original article
+                      <span className="sr-only"> (opens in new tab)</span>
+                    </a>
+                  </>
+                )}
                 <span className="text-neutral-300 max-md:hidden" aria-hidden="true">
                   |
                 </span>
@@ -259,8 +311,8 @@ export default function StoryPage() {
                 <span className={`inline-flex flex-wrap items-center gap-x-2 ${PHONE_SEPARATOR}`}>
                   {/* The badge is the label's only "AI"; screen readers hear it as the word, so the sentence reads the same aloud */}
                   <span>
-                    {AI_DISCLOSURE_COPY.storyLabel.lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
-                    {AI_DISCLOSURE_COPY.storyLabel.tail}
+                    {storyLabel.lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
+                    {storyLabel.tail}
                   </span>
                   <Link to={AI_DISCLOSURE_COPY.howItWorksHref} className={TEXT_LINK}>
                     {AI_DISCLOSURE_COPY.howItWorksLinkText}
@@ -287,19 +339,27 @@ export default function StoryPage() {
               )}
             </div>
 
-            {/* Also covered by — cluster sources */}
-            {story.slug && <AlsoCoveredBy slug={story.slug} />}
+            {/* Also covered by — cluster sources; a researched story's Sources list takes it over */}
+            {story.slug && !research && <AlsoCoveredBy slug={story.slug} />}
           </div>
         </header>
 
         <div className="page-section !pt-0">
-          {/* Summary */}
-          {story.summary && (
-            <section className="mb-10" data-ai-generated="summary">
+          {/* The researched story in place of the summary, or the summary */}
+          {research ? (
+            <section className="mb-10" data-ai-generated="research">
               <div className="prose drop-cap" style={{ '--drop-cap-color': colors.hex } as React.CSSProperties}>
-                <Markdown>{story.summary}</Markdown>
+                <CitedParagraphs paragraphs={research.paragraphs} sources={sourcesById} />
               </div>
             </section>
+          ) : (
+            story.summary && (
+              <section className="mb-10" data-ai-generated="summary">
+                <div className="prose drop-cap" style={{ '--drop-cap-color': colors.hex } as React.CSSProperties}>
+                  <Markdown>{story.summary}</Markdown>
+                </div>
+              </section>
+            )
           )}
 
           {/* Key quote — editorial pull-quote style */}
@@ -317,32 +377,42 @@ export default function StoryPage() {
                   {/* No italic — avoids loading Roboto-Italic; decorative quotes provide visual distinction */}
                   <p className="text-xl md:text-2xl text-neutral-700 leading-relaxed px-4">{story.quote}</p>
                 </blockquote>
-                <p className="text-sm text-neutral-500 mt-3">{quoteAttributionLine(story.quoteAttribution)}</p>
+                <p className="text-sm text-neutral-500 mt-3">
+                  <span>{quoteAttributionLine(story.quoteAttribution)}</span>
+                  {research?.quoteSourceId && (
+                    <>
+                      {' '}
+                      <Citation citations={[{ sourceId: research.quoteSourceId, sentence: null }]} sources={sourcesById} />
+                    </>
+                  )}
+                </p>
               </div>
             </div>
           )}
 
           {/* Why This Matters */}
-          {story.relevanceReasons && (
+          {reasonPoints.length > 0 && (
             <AnalysisSection
               title="Why This Matters"
-              text={story.relevanceReasons}
+              points={reasonPoints}
               accentColor={colors.hex}
               numberColor={colors.textHex}
-              aiField="relevanceReasons"
+              aiField={research ? 'research' : 'relevanceReasons'}
             />
           )}
 
           {/* Caveats: a shade darker than "Why This Matters" */}
-          {story.antifactors && (
+          {caveatPoints.length > 0 && (
             <AnalysisSection
               title="Caveats"
-              text={story.antifactors}
+              points={caveatPoints}
               accentColor={shiftHex(colors.hex, -0.25)}
               numberColor={shiftHex(colors.textHex, -0.25)}
-              aiField="antifactors"
+              aiField={research ? 'research' : 'antifactors'}
             />
           )}
+
+          {research && <SourcesList sources={research.sources} />}
 
           {/* Report an error: a note on the analysis above, so it sits right under it, small and to the side */}
           <p className="text-sm text-neutral-600 text-right">
