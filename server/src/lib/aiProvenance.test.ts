@@ -1,6 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { config } from '../config.js'
-import { AI_GENERATED_STORY_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA, aiGeneratedMarker, withAiGeneratedMarker } from './aiProvenance.js'
+import {
+  AI_GENERATED_STORY_DETAIL_FIELDS,
+  AI_GENERATED_STORY_FIELDS,
+  IPTC_TRAINED_ALGORITHMIC_MEDIA,
+  aiGeneratedMarker,
+  withAiGeneratedDetailMarker,
+  withAiGeneratedMarker,
+} from './aiProvenance.js'
 
 const assessModel = config.llm.models[config.assess.modelTier]
 const originalModelName = assessModel.name
@@ -43,5 +50,22 @@ describe('withAiGeneratedMarker', () => {
     const marked = withAiGeneratedMarker(story)
     expect(marked).toMatchObject(story)
     expect(marked.aiGenerated.fields).toEqual(['summary'])
+  })
+})
+
+describe('withAiGeneratedDetailMarker', () => {
+  const research = { paragraphs: [], whyThisMatters: [], caveats: [], quoteSourceId: null, sources: [] }
+
+  it('names the researched version after the text fields when the story serves one', () => {
+    const marked = withAiGeneratedDetailMarker({ ...storyWithAllAiFields(), research, researched: true })
+    expect(marked.aiGenerated.fields).toEqual([...AI_GENERATED_STORY_FIELDS, 'research'])
+    expect(AI_GENERATED_STORY_DETAIL_FIELDS).toEqual([...AI_GENERATED_STORY_FIELDS, 'research'])
+  })
+
+  it('leaves it out when there is none, also for a researched story whose version could not be served', () => {
+    for (const researched of [false, true]) {
+      const marked = withAiGeneratedDetailMarker({ summary: 'AI summary', research: null, researched })
+      expect(marked.aiGenerated.fields).toEqual(['summary'])
+    }
   })
 })

@@ -137,6 +137,56 @@ export interface PublicStory extends Story {
   }
 }
 
+// --- Researched story (public; a hand-written mirror of server/src/services/researchedStory.ts) ---
+
+/** One cited source of a sentence or bullet, with the source's supporting sentence for the card. */
+export interface ResearchCitation {
+  sourceId: string
+  /** The source's own sentence, in its original language; null when only its date is cited. */
+  sentence: string | null
+}
+
+export interface ResearchedCitedText {
+  text: string
+  /** One per source, in first-cited order; empty for text that only judges. */
+  citations: ResearchCitation[]
+}
+
+export interface ResearchedSource {
+  /** `S0` is the original article; `E1`… are our earlier stories. */
+  id: string
+  origin: 'original' | 'source' | 'earlier'
+  outlet: string
+  /** For the stored favicon (`/api/source-favicons/:host`); null for our earlier stories. */
+  host: string | null
+  /** The source article; null for our earlier stories, linked by slug. */
+  url: string | null
+  title: string
+  date: string | null
+  country: string | null
+  kind: 'news-report' | 'analysis' | 'opinion' | 'press-release' | 'official-body' | 'other' | null
+  storyId: string | null
+  slug: string | null
+}
+
+/** The researched version readers see, served on the single story only. */
+export interface ResearchedStory {
+  paragraphs: { sentences: ResearchedCitedText[] }[]
+  whyThisMatters: ResearchedCitedText[]
+  caveats: ResearchedCitedText[]
+  quoteSourceId: string | null
+  /** The original article first, our earlier stories last. */
+  sources: ResearchedSource[]
+}
+
+/** `GET /api/stories/:slug`: the public story plus its researched version. */
+export interface PublicStoryDetail extends PublicStory {
+  /** The cited layout keys on this; null for a story not researched, or whose version could not be served. */
+  research: ResearchedStory | null
+  /** The text fields carry researched text: the label keys on this. */
+  researched: boolean
+}
+
 export interface Feed {
   id: string
   title: string

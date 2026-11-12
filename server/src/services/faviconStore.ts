@@ -19,7 +19,8 @@ export interface ServedFavicon {
 const cache = new TTLCache<ServedFavicon | null>(config.favicon.memoryCacheMinutes * 60_000, { maxEntries: config.favicon.memoryCacheEntries })
 registerPublicCache('feed-favicons', cache)
 
-const etagOf = (png: Buffer) => `"${createHash('sha256').update(png).digest('base64url').slice(0, 27)}"`
+/** Strong ETag of a favicon's bytes, quoted (also used for research sources' favicons, sourceFavicons.ts). */
+export const etagOf = (png: Buffer) => `"${createHash('sha256').update(png).digest('base64url').slice(0, 27)}"`
 
 /** The feed's stored favicon, or null when it has none. */
 export function getFavicon(feedId: string): Promise<ServedFavicon | null> {

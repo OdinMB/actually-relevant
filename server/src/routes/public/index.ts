@@ -15,6 +15,7 @@ import { pagePreviewRouter } from './pagePreview.js'
 import { sectionImageRouter } from './sectionImages.js'
 import newslettersRouter from './newsletters.js'
 import feedFaviconRouter from './feedFavicon.js'
+import sourceFaviconRouter from './sourceFavicon.js'
 
 const router = Router()
 
@@ -29,6 +30,8 @@ router.use('/page', pagePreviewRouter)
 // Before the limiter: every page of story cards loads a favicon per feed shown, and mail clients'
 // image proxies fetch the newsletter's from few addresses (routes/public/feedFavicon.ts).
 router.use('/feeds', feedFaviconRouter)
+// The same for a researched story page's sources (routes/public/sourceFavicon.ts)
+router.use('/source-favicons', sourceFaviconRouter)
 
 // Apply rate limiting to public API
 router.use(apiLimiter)

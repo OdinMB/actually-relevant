@@ -10,7 +10,7 @@ vi.mock('./faviconStore.js', () => mockStore)
 // Conversion has its own tests (faviconImage.test.ts); here it marks what it was given
 vi.mock('./faviconImage.js', () => ({ toFaviconPng: mockToFaviconPng }))
 
-const { fetchFavicon, fetchAllFavicons, fetchFaviconsInBackground } = await import('./favicon.js')
+const { fetchFavicon, fetchAllFavicons, fetchFaviconsInBackground, findIcon } = await import('./favicon.js')
 const { CRAWLER_USER_AGENT } = await import('../lib/crawlerIdentity.js')
 
 const FEED_ID = '11111111-2222-4333-8444-555555555555'
@@ -142,6 +142,31 @@ describe('fetchFavicon', () => {
     for (const [, options] of mockAxiosGet.mock.calls) {
       expect(options.headers).toMatchObject({ 'User-Agent': CRAWLER_USER_AGENT })
     }
+  })
+})
+
+describe('findIcon', () => {
+  const TAVILY_ICON = 'https://icons.example.net/outlet.png'
+
+  it('tries a given icon address before the search, and keeps the address the PNG came from', async () => {
+    serve({ [TAVILY_ICON]: { body: BIG_ICON }, 'https://www.google.com/s2/favicons': { body: BIG_ICON } })
+
+    expect(await findIcon(new URL('https://outlet.example.com/a'), TAVILY_ICON)).toEqual({ png: converted(BIG_ICON), sourceUrl: TAVILY_ICON })
+    expect(requestedUrls()).toEqual([TAVILY_ICON])
+  })
+
+  it('searches the host as fetchFavicon does when the given address has no usable image', async () => {
+    serve({ [TAVILY_ICON]: { type: 'text/html', body: '<html></html>' }, 'https://www.google.com/s2/favicons?domain=outlet.example.com': { body: BIG_ICON } })
+
+    const icon = await findIcon(new URL('https://outlet.example.com/a'), TAVILY_ICON)
+
+    expect(icon?.sourceUrl).toBe('https://www.google.com/s2/favicons?domain=outlet.example.com&sz=32')
+    expect(requestedUrls()[0]).toBe(TAVILY_ICON)
+  })
+
+  it('answers null when no source has one', async () => {
+    serve({})
+    expect(await findIcon(new URL('https://outlet.example.com/a'))).toBeNull()
   })
 })
 

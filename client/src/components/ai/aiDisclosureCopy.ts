@@ -44,6 +44,15 @@ export const AI_DISCLOSURE_COPY = {
     lead: 'Summary and analysis by',
     tail: '.',
   },
+  /**
+   * The same label on a researched story (one written from several sources, with citations):
+   * "Researched and written by [AI]." Owner-approved 2026-11-12 (multi-source stories design,
+   * "AI label"); stories in the single-source format keep storyLabel.
+   */
+  researchedStoryLabel: {
+    lead: 'Researched and written by',
+    tail: '.',
+  },
   /** Header of the /embed iframe (widget.js carries the same line). */
   embedHeader: 'AI-generated headlines from Actually Relevant',
   /** Appended to the AI blurb that the share buttons prefill. */

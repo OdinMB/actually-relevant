@@ -6,7 +6,7 @@ import { searchLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import { publicStoryQuerySchema, relatedStoriesQuerySchema } from '../../schemas/story.js'
 import { config } from '../../config.js'
-import { withAiGeneratedMarker } from '../../lib/aiProvenance.js'
+import { withAiGeneratedDetailMarker, withAiGeneratedMarker } from '../../lib/aiProvenance.js'
 
 const router = Router()
 
@@ -75,7 +75,7 @@ router.get('/:slug', failsWith('Failed to fetch story'), async (req, res) => {
     return
   }
   res.set('Cache-Control', 'public, max-age=60')
-  res.json(withAiGeneratedMarker(story))
+  res.json(withAiGeneratedDetailMarker(story))
 })
 
 export default router

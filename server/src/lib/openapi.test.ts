@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { getOpenAPIDocument } from './openapi.js'
-import { AI_GENERATED_NEWSLETTER_FIELDS, AI_GENERATED_PODCAST_DETAIL_FIELDS, AI_GENERATED_PODCAST_FIELDS, AI_GENERATED_STORY_FIELDS } from './aiProvenance.js'
+import {
+  AI_GENERATED_NEWSLETTER_FIELDS,
+  AI_GENERATED_PODCAST_DETAIL_FIELDS,
+  AI_GENERATED_PODCAST_FIELDS,
+  AI_GENERATED_STORY_DETAIL_FIELDS,
+  AI_GENERATED_STORY_FIELDS,
+} from './aiProvenance.js'
 
 describe('getOpenAPIDocument', () => {
   // Read loosely: the assertions walk nested schemas by name, which the OpenAPI types keep optional
@@ -28,6 +34,19 @@ describe('getOpenAPIDocument', () => {
       expect(description.startsWith('AI-generated. '), field).toBe(true)
       expect(description.length, field).toBeGreaterThan('AI-generated. '.length)
     }
+  })
+
+  it('serves the researched version and its flag on the single story only, labeled and listed in its marker', () => {
+    const detail = schemas.PublicStoryDetail
+    expect(doc.paths['/api/stories/{slug}'].get.responses['200'].content['application/json'].schema.$ref).toBe('#/components/schemas/PublicStoryDetail')
+    expect(detail.required).toEqual(expect.arrayContaining(['research', 'researched']))
+    expect(detail.properties.researched.type).toBe('boolean')
+    expect(detail.properties.aiGenerated.properties.fields.items.enum).toEqual([...AI_GENERATED_STORY_DETAIL_FIELDS])
+    for (const field of AI_GENERATED_STORY_DETAIL_FIELDS) {
+      expect(detail.properties[field].description.startsWith('AI-generated. '), field).toBe(true)
+    }
+    expect(schemas.PublicStory.properties.research).toBeUndefined()
+    expect(schemas.PublicStory.properties.researched).toBeUndefined()
   })
 
   it('labels every AI-generated field of a podcast episode and lists exactly those in its marker', () => {

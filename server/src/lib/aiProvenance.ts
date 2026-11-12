@@ -51,6 +51,25 @@ export function withAiGeneratedMarker<T extends AiStoryText>(story: T): T & { ai
 }
 
 /**
+ * Fields of the single story (`GET /api/stories/:slug`) with AI-generated content: the text fields,
+ * plus `research`, the researched version with its cited text (services/researchedStory.ts), which
+ * only the single story serves. openapi.test.ts checks the detail marker lists exactly these.
+ */
+export const AI_GENERATED_STORY_DETAIL_FIELDS = [...AI_GENERATED_STORY_FIELDS, 'research'] as const
+
+export type AiGeneratedStoryDetailField = (typeof AI_GENERATED_STORY_DETAIL_FIELDS)[number]
+
+export interface AiGeneratedDetailMarker extends Omit<AiGeneratedMarker, 'fields'> {
+  fields: AiGeneratedStoryDetailField[]
+}
+
+/** The single story's marker: `research` joins the fields when the story serves a researched version. */
+export function withAiGeneratedDetailMarker<T extends AiStoryText & { research: object | null }>(story: T): T & { aiGenerated: AiGeneratedDetailMarker } {
+  const marker = aiGeneratedMarker(story)
+  return { ...story, aiGenerated: { ...marker, fields: [...marker.fields, ...(story.research ? (['research'] as const) : [])] } }
+}
+
+/**
  * Fields of a public podcast episode (`GET /api/podcast`) whose content an AI model generated: the
  * written title and summary, and the voiced audio and its transcript. Every episode carries all of
  * them, so the marker lists them all; openapi.test.ts checks each is described as AI-generated.
