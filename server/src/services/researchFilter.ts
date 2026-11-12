@@ -1,8 +1,9 @@
 /**
- * Which candidate sources a researched story keeps: the deterministic quality rule before
- * extraction (date window, the original's own domain, a blocklist, syndicated copies, one result
- * per domain, the caps and a spread across country domains, raw-content use), and the rule after
- * it (unusable, off-topic, opinion and press releases when a news report exists). Pure.
+ * Which candidate sources a researched story keeps: publishers' AI opt-outs (through an injected
+ * policy), the deterministic quality rule before extraction (date window, the original's own
+ * domain, a blocklist, syndicated copies, one result per domain, the caps and a spread across
+ * country domains, raw-content use), and the rule after it (unusable, off-topic, opinion and press
+ * releases when a news report exists). No I/O of its own.
  */
 
 /** Sources a story keeps, the original article (S0) included. */
@@ -67,7 +68,7 @@ export interface SelectedSource extends Omit<CandidateSource, 'passages' | 'rawC
   usedRawContent: boolean
 }
 
-export type DropReason = 'date' | 'undated' | 'original' | 'blocklist' | 'syndicated' | 'same-domain' | 'cap'
+export type DropReason = 'opt-out' | 'date' | 'undated' | 'original' | 'blocklist' | 'syndicated' | 'same-domain' | 'cap'
 
 export interface DroppedSource {
   url: string
@@ -221,6 +222,31 @@ function selectedText(c: CandidateSource): SelectedSource {
   const useRaw = c.origin === 'search' && passages.length < PASSAGE_MIN_CHARS && Boolean(rawContent)
   const text = useRaw && rawContent ? rawContent.slice(0, RAW_CONTENT_MAX_CHARS) : passages.slice(0, SOURCE_TEXT_MAX_CHARS)
   return { ...rest, text, usedRawContent: useRaw }
+}
+
+/**
+ * Publishers' AI opt-outs (design, Risks): whether a page's publisher refuses AI use. The crawler's
+ * check plugs in here; until then no run passes one, and its record says the opt-out went unchecked.
+ */
+export interface SourcePolicy {
+  optedOut(url: string): Promise<boolean>
+}
+
+/** Drops the own and search candidates the policy reports opted out; without a policy, keeps them all. */
+export async function dropOptedOut(
+  candidates: { own: CandidateSource[]; search: CandidateSource[] },
+  policy: SourcePolicy | undefined,
+): Promise<{ own: CandidateSource[]; search: CandidateSource[]; dropped: DroppedSource[] }> {
+  if (!policy) return { ...candidates, dropped: [] }
+  const dropped: DroppedSource[] = []
+  const keep = async (list: CandidateSource[]) => {
+    const refused = await Promise.all(list.map(c => policy.optedOut(c.url)))
+    for (const [i, c] of list.entries()) if (refused[i]) dropped.push({ url: c.url, origin: c.origin, reason: 'opt-out' })
+    return list.filter((_, i) => !refused[i])
+  }
+  const own = await keep(candidates.own)
+  const search = await keep(candidates.search)
+  return { own, search, dropped }
 }
 
 export function filterCandidates(input: FilterInput): FilterResult {

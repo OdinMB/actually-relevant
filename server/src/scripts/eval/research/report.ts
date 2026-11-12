@@ -5,12 +5,12 @@
  * `research-drafts.md`: per story, what is published today, then the researched draft with its
  * citations as outlet names and its source list, our earlier stories last. Pure.
  */
+import type { Draft } from '../../../schemas/research.js'
+import { GATE_KINDS, describeProblem, type GateKind } from '../../../services/researchChecks.js'
 import { armKey } from '../models.js'
-import { GATE_KINDS, describeProblem, type GateKind } from './checks.js'
 import { deskEstimateUsd, expectedCredits, MONTHLY_STORIES, projectMonthly, summarizeCosts, type CostLine } from './costs.js'
 import type { ResearchFixtures, ResearchStory } from './fixtures.js'
 import { STEP_ARMS, STEP_ESTIMATES, STEPS, type DropKind, type ResearchEarlier, type ResearchSource, type StoryResearch } from './pipeline.js'
-import type { Draft } from './schemas.js'
 import type { SkippedStory } from './storyQueue.js'
 import { TAVILY_USD_PER_CREDIT } from './tavily.js'
 

@@ -115,6 +115,10 @@ services:
         sync: false
       - key: PIPFEED_API_KEY
         sync: false
+      # Story research, the admin action (.context/story-research.md): the key is its switch;
+      # remove it to switch research off
+      - key: TAVILY_API_KEY
+        sync: false
       # Crawl concurrency: production sets both (code defaults 2 feeds, 1 article)
       - key: CONCURRENCY_CRAWL_FEEDS
         sync: false

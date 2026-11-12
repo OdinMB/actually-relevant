@@ -3,7 +3,8 @@ import { createLogger } from './logger.js'
 
 const log = createLogger('taskRegistry')
 
-export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion'
+/** `research`: one story's research run (services/researchRuns.ts); its story counts as processing while it runs. */
+export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research'
 type BulkTaskStatus = 'running' | 'completed' | 'failed'
 
 export interface TaskStateResponse {

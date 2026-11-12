@@ -3,10 +3,10 @@
  * month of 250 researched stories (credits inside and above Tavily's free 1,000), and the
  * design's desk estimate priced with the eval's price table (`costOf`). Pure.
  */
+import { queryCount } from '../../../prompts/research.js'
 import { costOf } from '../models.js'
 import type { CallOutcome, TokenUsage } from '../types.js'
 import { STEP_ARMS, STEP_ESTIMATES, STEPS, type StepName, type StoryResearch } from './pipeline.js'
-import { queryCount } from './prompts.js'
 import { CREDITS_PER_SEARCH, TAVILY_DEPTH, TAVILY_FREE_CREDITS_PER_MONTH, TAVILY_USD_PER_CREDIT } from './tavily.js'
 
 /** Selected stories a month that research would run on (design: ~150-330; its estimate uses 250). */

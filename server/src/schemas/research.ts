@@ -1,7 +1,7 @@
 /**
- * Structured outputs of the draft research prompts (`prompts.ts`). Format guidance lives in the
- * `.describe()`s (`.context/prompting.md`, "Schema carries format guidance"); the pipeline sends
- * them under `versionedSchemaName`, so editing a description is never answered from the old cache.
+ * Structured outputs of the draft research prompts (`prompts/research.ts`). Format guidance lives in
+ * the `.describe()`s (`.context/prompting.md`, "Schema carries format guidance"); eval:research
+ * sends them under `versionedSchemaName`, so editing a description is never answered from its old cache.
  */
 import { z } from 'zod'
 

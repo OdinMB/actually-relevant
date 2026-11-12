@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   anchorDate,
   domainOf,
+  dropOptedOut,
   filterCandidates,
   keepExtracted,
   searchWindow,
@@ -9,7 +10,7 @@ import {
   PASSAGE_MIN_CHARS,
   RAW_CONTENT_MAX_CHARS,
   type CandidateSource,
-} from './filter.js'
+} from './researchFilter.js'
 
 /** Text of `n` words unique to `seed`, so two sources only overlap where a test makes them. */
 const text = (seed: string, n = 120) => Array.from({ length: n }, (_, i) => `${seed}word${i}`).join(' ')
@@ -178,5 +179,27 @@ describe('keepExtracted', () => {
     ])
     expect(r.kept.map(k => k.name)).toEqual(['S0', 'older'])
     expect(r.dropped.map(d => d.reason)).toEqual(['unusable', 'off-topic'])
+  })
+})
+
+describe('dropOptedOut', () => {
+  const optedOut = new Set(['https://refuses.example/a', 'https://dawn.com/own'])
+  const policy = { optedOut: async (url: string) => optedOut.has(url) }
+
+  it('drops the candidates the policy reports opted out with opt-out, own and search alike, and keeps the rest in order', async () => {
+    const own = [source('https://dawn.com/own', { origin: 'cluster' }), source('https://geo.tv/own', { origin: 'neighbour' })]
+    const search = [source('https://reuters.com/a'), source('https://refuses.example/a'), source('https://bbc.co.uk/b')]
+    const r = await dropOptedOut({ own, search }, policy)
+    expect(r.own.map(c => c.url)).toEqual(['https://geo.tv/own'])
+    expect(r.search.map(c => c.url)).toEqual(['https://reuters.com/a', 'https://bbc.co.uk/b'])
+    expect(r.dropped).toEqual([
+      { url: 'https://dawn.com/own', origin: 'cluster', reason: 'opt-out' },
+      { url: 'https://refuses.example/a', origin: 'search', reason: 'opt-out' },
+    ])
+  })
+
+  it('keeps everything, checking nothing, without a policy', async () => {
+    const search = [source('https://refuses.example/a')]
+    expect(await dropOptedOut({ own: [], search }, undefined)).toEqual({ own: [], search, dropped: [] })
   })
 })

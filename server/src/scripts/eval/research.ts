@@ -21,7 +21,7 @@ import { parseResearchOptions, type ResearchOptions } from './options.js'
 import { classifyDb, openReadOnlyDb, readOnlyStatus } from './readOnlyDb.js'
 import { deskEstimateUsd, expectedCredits, storyBudgetUsd } from './research/costs.js'
 import { loadResearchFixtures, type ResearchFixtures, type ResearchStory } from './research/fixtures.js'
-import { researchStory, STEP_ESTIMATES, STEPS } from './research/pipeline.js'
+import { researchStoryInEval, STEP_ESTIMATES, STEPS } from './research/pipeline.js'
 import { renderDrafts, renderResearchReport, researchFileNames } from './research/report.js'
 import { runStories } from './research/storyQueue.js'
 import { createTavilyClient, TAVILY_USD_PER_CREDIT } from './research/tavily.js'
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
     budgetUsd: opts.budget,
     spentUsd: () => ctx.spentUsd(),
     storyUsd: s => storyBudgetUsd(s.original.language),
-    run: s => researchStory(s, { ctx, tavily, relevanceMin, latestDate: fx.createdAt }),
+    run: s => researchStoryInEval(s, { ctx, tavily, relevanceMin, latestDate: fx.createdAt }),
     onDone: (s, r, finished) =>
       console.log(
         `[${finished}/${stories.length}] ${s.id}: ${r.verdict.kind === 'fallback' ? `fallback (${r.verdict.reason})` : r.verdict.kind}; folder spend ${usd(ctx.spentUsd())}`,

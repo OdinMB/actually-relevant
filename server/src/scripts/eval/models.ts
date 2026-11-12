@@ -14,9 +14,13 @@ import { HumanMessage, type AIMessage } from '@langchain/core/messages'
 import { toJsonSchema } from '@langchain/core/utils/json_schema'
 import type { z } from 'zod'
 import type { ReasoningEffort } from '../../config.js'
+import { classifyOutcome, contentText, finishReasonOf, usageFrom, ZERO_USAGE } from '../../lib/llmUsage.js'
 import { Semaphore } from '../../lib/semaphore.js'
 import { createChatModel } from '../../services/llm.js'
-import type { Arm, CallOutcome, CallRecord, ModelId, PlannedCall, SuiteContext, TokenUsage } from './types.js'
+import type { Arm, CallRecord, ModelId, PlannedCall, SuiteContext, TokenUsage } from './types.js'
+
+/** Re-exported for the eval's own tests and callers; it lives with production's usage helpers. */
+export { classifyOutcome }
 
 interface ModelPrice {
   /** USD per 1M tokens. */
@@ -87,15 +91,6 @@ export function costOf(model: ModelId, usage: TokenUsage): number {
   const p = priceOf(model)
   const uncached = Math.max(0, usage.input - usage.cached)
   return (uncached * p.input * p.cacheWrite + usage.cached * p.cached + usage.output * p.output) / 1_000_000
-}
-
-export type OutcomeInput = { parsed: unknown; content: string; finishReason: string | null } | { error: unknown }
-
-export function classifyOutcome(input: OutcomeInput): CallOutcome {
-  if ('error' in input) return 'error'
-  if (input.finishReason === 'length') return 'truncated'
-  if (input.parsed != null) return 'ok'
-  return input.content.trim() !== '' ? 'parse_failure' : 'empty'
 }
 
 const HAN = /\p{Script=Han}/gu
@@ -171,27 +166,6 @@ function readLedger(file: string): Map<string, CallRecord> {
   }
   return records
 }
-
-function usageFrom(message: AIMessage): TokenUsage {
-  const u = message.usage_metadata
-  return {
-    input: u?.input_tokens ?? 0,
-    cached: u?.input_token_details?.cache_read ?? 0,
-    output: u?.output_tokens ?? 0,
-    reasoning: u?.output_token_details?.reasoning ?? 0,
-  }
-}
-
-function contentText(message: AIMessage): string {
-  return typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-}
-
-function finishReasonOf(message: AIMessage): string | null {
-  const reason = message.response_metadata?.finish_reason
-  return typeof reason === 'string' ? reason : null
-}
-
-const ZERO_USAGE: TokenUsage = { input: 0, cached: 0, output: 0, reasoning: 0 }
 
 export function createEvalContext(options: EvalContextOptions): EvalContext {
   mkdirSync(dirname(options.cacheFile), { recursive: true })

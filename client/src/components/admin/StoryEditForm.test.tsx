@@ -9,6 +9,8 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
   ...(await importOriginal<typeof import('../../lib/admin-api')>()),
   adminApi: { stories: mockApi },
 }))
+// The research section has its own tests (StoryResearch.test.tsx) and needs the background-task provider
+vi.mock('./StoryResearch', () => ({ StoryResearch: () => null }))
 
 import { StoryEditForm } from './StoryEditForm'
 

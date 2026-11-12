@@ -14,6 +14,7 @@ import { blueskyPostUrl } from '../../lib/bluesky'
 import { PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
 import { buildIssueOptions } from './StoryFiltersBar'
+import { StoryResearch } from './StoryResearch'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 
 const ACCESS_TIER_LABELS: Record<string, string> = {
@@ -332,6 +333,9 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
           )}
         </div>
       )}
+
+      {/* Research (admin only; writes nothing to the story) */}
+      <StoryResearch story={story} />
     </>
   )
 

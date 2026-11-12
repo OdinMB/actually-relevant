@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { checkCitations, decideGate, draftSentences, supportFound, type PoolFact } from './checks.js'
-import type { Draft } from './schemas.js'
+import { checkCitations, decideGate, draftSentences, supportFound, type PoolFact } from './researchChecks.js'
+import type { Draft } from '../schemas/research.js'
 
 const fact = (id: string, statement: string, supportingSentence = statement, measures = ''): PoolFact => ({ id, statement, supportingSentence, measures })
 const POOL = new Map(

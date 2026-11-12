@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { ResearchStory } from './fixtures.js'
 import type { ResearchSource, StoryResearch } from './pipeline.js'
 import { citedOutlets, dropTotals, ratingChange, renderDrafts, renderResearchReport, researchFileNames, verdictCounts } from './report.js'
-import type { Draft } from './schemas.js'
+import type { Draft } from '../../../schemas/research.js'
 
 const src = (id: string, outlet: string, origin: ResearchSource['origin'] = 'search'): ResearchSource => ({
   id,
@@ -40,7 +40,7 @@ const draft = (rating: number): Draft => ({
 function result(storyId: string, over: Partial<StoryResearch> = {}): StoryResearch {
   return {
     storyId,
-    calls: [{ step: 'write', outcome: 'ok', usage: { input: 1000, cached: 0, output: 500, reasoning: 100 }, costUsd: 0.002 }],
+    calls: [{ step: 'write', outcome: 'ok', usage: { input: 1000, cached: 0, output: 500, reasoning: 100 }, costUsd: 0.002, model: 'gpt-6-luna' }],
     credits: 2,
     searches: [{ query: 'q', language: 'en', results: 3, credits: 2, cached: false }],
     candidates: 4,
@@ -61,6 +61,7 @@ function result(storyId: string, over: Partial<StoryResearch> = {}): StoryResear
     rewritten: false,
     problems: [],
     support: { facts: 4, found: 3 },
+    optOutChecked: false,
     verdict: { kind: 'research-rating', rating: 4 },
     ...over,
   }

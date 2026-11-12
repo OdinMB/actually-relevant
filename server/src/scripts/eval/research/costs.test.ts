@@ -10,6 +10,7 @@ const call = (step: StepName, usd: number, outcome: CallOutcome = 'ok'): StepCal
   outcome,
   usage: { input: 1000, cached: 200, output: 300, reasoning: 100 },
   costUsd: usd,
+  model: 'gpt-6-luna',
 })
 
 const result = (storyId: string, calls: StepCall[], credits: number): StoryResearch => ({
@@ -25,6 +26,7 @@ const result = (storyId: string, calls: StepCall[], credits: number): StoryResea
   rewritten: false,
   problems: [],
   support: { facts: 0, found: 0 },
+  optOutChecked: false,
   verdict: { kind: 'keep' },
 })
 

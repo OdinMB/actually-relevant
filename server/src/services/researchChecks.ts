@@ -4,8 +4,8 @@
  * fact's supporting sentence occurs in its source text (a fidelity number for the report), and
  * the gate that turns a checked draft into a verdict. Pure.
  */
-import { findUnsupportedNumbers } from '../numbers.js'
-import type { Draft } from './schemas.js'
+import { findUnsupportedNumbers } from '../lib/numbers.js'
+import type { Draft } from '../schemas/research.js'
 
 export interface PoolFact {
   /** `S2F3`: source 2, fact 3; `E1F2` for our own earlier stories. */
