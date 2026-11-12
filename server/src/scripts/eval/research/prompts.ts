@@ -27,7 +27,7 @@ export interface QueriesInput {
 }
 
 /** One query for an English article, two (English, then the article's language) otherwise. */
-export const queryCount = (language: string) => (language === 'en' ? 1 : 2)
+export const queryCount = (language: string) => (language.toLowerCase().startsWith('en') ? 1 : 2)
 
 export function buildQueriesPrompt(input: QueriesInput): string {
   const count =

@@ -105,7 +105,7 @@ async function main(): Promise<void> {
     budgetUsd: opts.budget,
     spentUsd: () => ctx.spentUsd(),
     storyUsd: s => storyBudgetUsd(s.original.language),
-    run: s => researchStory(s, { ctx, tavily, relevanceMin }),
+    run: s => researchStory(s, { ctx, tavily, relevanceMin, latestDate: fx.createdAt }),
     onDone: (s, r, finished) =>
       console.log(
         `[${finished}/${stories.length}] ${s.id}: ${r.verdict.kind === 'fallback' ? `fallback (${r.verdict.reason})` : r.verdict.kind}; folder spend ${usd(ctx.spentUsd())}`,

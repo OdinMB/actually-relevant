@@ -164,6 +164,8 @@ export interface ResearchDeps {
   tavily: { search(request: TavilySearch): Promise<TavilyResponse> }
   /** Publish bar for the gate (`config.selection.relevanceMin`). */
   relevanceMin: number
+  /** The fixtures' sampling time; caps the search window's end. */
+  latestDate?: string
 }
 
 /** Ends a story's research early; its message is the fallback reason. */
@@ -381,7 +383,7 @@ async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFa
 async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r: StoryResearch): Promise<Draft> {
   const o = story.original
   const articleDate = anchorDate(o.datePublished, o.dateCrawled).slice(0, 10)
-  const window = searchWindow(articleDate)
+  const window = searchWindow(articleDate, deps.latestDate)
   const own = await ownSources(story, call)
   const found = await searchCoverage(story, articleDate, window, call, deps, r)
 

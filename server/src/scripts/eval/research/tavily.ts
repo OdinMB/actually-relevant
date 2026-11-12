@@ -122,11 +122,18 @@ function requestKey(body: ReturnType<typeof tavilyRequestBody>): string {
 function readCache(file: string): Map<string, CacheLine> {
   const lines = new Map<string, CacheLine>()
   if (!existsSync(file)) return lines
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    if (!line.trim()) continue
-    const entry = JSON.parse(line) as CacheLine
-    lines.set(entry.key, entry)
-  }
+  const all = readFileSync(file, 'utf8').split('\n')
+  all.forEach((line, i) => {
+    if (!line.trim()) return
+    try {
+      const entry = JSON.parse(line) as CacheLine
+      lines.set(entry.key, entry)
+    } catch (err) {
+      // A last line cut off by an interrupted run is skipped; a broken line elsewhere is a real problem.
+      if (all.slice(i + 1).some(l => l.trim())) throw err
+      console.warn(`tavily cache: skipped an unfinished last line in ${file}`)
+    }
+  })
   return lines
 }
 

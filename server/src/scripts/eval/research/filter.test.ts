@@ -40,6 +40,11 @@ describe('searchWindow and anchorDate', () => {
     expect(searchWindow('2026-11-12T09:30:00.000Z')).toEqual(WINDOW)
   })
 
+  it('caps the end at the sampling date, so a recent story never asks for a future date', () => {
+    expect(searchWindow('2026-11-12T09:30:00.000Z', '2026-11-13T08:00:00.000Z')).toEqual({ start: '2026-10-29', end: '2026-11-13' })
+    expect(searchWindow('2026-11-12T09:30:00.000Z', '2026-12-31T00:00:00.000Z')).toEqual(WINDOW)
+  })
+
   it("anchors on the article's own date when it is plausible, else on the crawl date", () => {
     expect(anchorDate('2026-11-11T20:00:00.000Z', '2026-11-12T06:00:00.000Z')).toBe('2026-11-11T20:00:00.000Z')
     expect(anchorDate(null, '2026-11-12T06:00:00.000Z')).toBe('2026-11-12T06:00:00.000Z')

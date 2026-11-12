@@ -114,6 +114,23 @@ npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-11-01_rating-eval
 - **The halves are small for the full assessment.** On 25 stories, gpt-5-mini's own phase-1 rerun sits 0.52 below stored on the calibration half and 0.24 above it on the holdout, so the ±0.25 offset bar is inside the noise there. The 2026-09-24 run therefore aimed the full assessment at parity with the gpt-5-mini rerun on the calibration half, not at that half's stored mean. Pre-assessment halves (150 stories) do not have this problem (mini rerun +0.05 / -0.01).
 - **Both halves are now spent.** The 2026-09-24 recalibration tuned on the calibration half and reported the holdout (results in `DOCS/2026-09-24_gpt6-eval/results.md`, "Recalibration"). A further rating-wording change is judged on the fresh sample in `DOCS/2026-11-01_rating-eval` with `--repeat` (above); the phase-1 folder stays the place for dedup, selection and the rating set.
 
+## Research measurement (`eval:research`)
+
+Measures what the planned multi-source story research would cost per story, before anything changes in production, and writes the researched drafts beside today's published text for a first look at quality. It is its own CLI, not an `eval:models` suite: its steps depend on each other and it needs Tavily, which `eval:models` must not require. Run it on the computer with the local database copy:
+
+```bash
+npm run eval:research --prefix server -- --out ../DOCS/2026-11-12_research-eval --dry-run    # sample, print the per-step estimate; no API calls
+npm run eval:research --prefix server -- --out ../DOCS/2026-11-12_research-eval --limit 1    # smoke run: one story, confirms SQL, Tavily parameters and real cost
+npm run eval:research --prefix server -- --out ../DOCS/2026-11-12_research-eval --budget 3   # full run
+```
+
+- **Sample:** the newest published stories (30 by default, `--size` at most 60), cached in `--out/.cache/research-fixtures.json` (`--refresh-fixtures` resamples).
+- **Steps per story** (models are constants, today's tier defaults): neighbour confirmation with production's dedup prompt (gpt-6-luna@low); queries (luna@low); Tavily news search (advanced depth, 14 days before to 7 after the article's date, 8 results a query); a deterministic filter (date window, one per domain, syndicated copies, a press-release and content-farm blocklist, up to 6 sources with the original article); extraction per source (luna@low); our earlier coverage from the last 12 months (luna@low); the write step (luna@medium); a citation check in code, then a fact check (luna@low); one rewrite on a failure (luna@medium); the gate (`keep`, `research-rating`, `stale`, `contradicted`, `fallback`).
+- **Budget:** one `--budget` (default $3, the $20 cap applies) covers the folder's model ledger plus every Tavily credit in `.cache/tavily.jsonl` at $0.008, free credits counted as paid. A story starts only while what is left covers one story's estimate; the rest are reported as skipped.
+- **Outputs:** `research-report.md` (tokens and USD per step and per story, Tavily credits, a 250-stories-a-month projection) and `research-drafts.md` (each draft with its sources, beside the published text); `-limit-N` in the names for a `--limit` run. Caches: `calls.jsonl`, `tavily.jsonl`.
+- **Safety:** the read-only session (SELECT only); Tavily is the eval's only HTTP besides OpenAI and its one `withRetry` exception (`imports.test.ts`); `TAVILY_API_KEY` is sent as a header, never cached, printed only as present or missing, and errors are reduced to a status; fetched text is untrusted input in the prompts. The key belongs only in the owner's local `server/.env`, never on Render.
+- **First drafts:** the prompts in `research/prompts.ts` are a measurement draft, not the production feature's; the write prompt copies the assess prompt's generic limiting factors rather than importing them, so production prompt modules stay untouched.
+
 ## Adding a suite or arm
 
 1. Add `suites/<name>.ts` exporting a `Suite` (`name`, `arms`, `describe`, `plan`, `run`) and a pure `decide*` function with a test; reuse `runArms`/`metricRow` from `suites/shared.ts` and `pickLowestPassing`/`effectiveBar` from `decide.ts`.
@@ -141,6 +158,8 @@ npm run eval:recalibrate --prefix server -- --out ../DOCS/2026-11-01_rating-eval
 | `server/src/scripts/eval/ratingSets.ts` | Blind-rating deliverable, versioned set replacement and validation (pure) |
 | `server/src/scripts/eval/ratingFiles.ts` | The deliverable on disk: write-once, and the byte-preserving swap of one set |
 | `server/src/scripts/eval/recalibrate.ts` | `eval:recalibrate` CLI orchestration |
+| `server/src/scripts/eval/research.ts` | `eval:research` CLI orchestration |
+| `server/src/scripts/eval/research/` | The research measurement: sampling (`fixtures`), Tavily client and cache (`tavily`), source filter (`filter`), prompts and schemas, the per-story steps (`pipeline`), citation check and gate (`checks`), estimates and totals (`costs`), the budget-gated story queue (`storyQueue`), the two reports (`report`) |
 | `server/src/scripts/eval/recalibration.ts` | Owner's acceptance rules, phase-1 reference numbers, the calibration/holdout sample |
 | `server/src/scripts/eval/recalibrationChecks.ts` | The recalibration steps (pre-assess, assess, dedup, rating set) |
 | `server/src/scripts/eval/recalibrationReport.ts` | `recalibration-<half>[-tags].md` and its name |

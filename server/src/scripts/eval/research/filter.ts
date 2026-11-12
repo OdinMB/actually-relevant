@@ -106,9 +106,15 @@ export function anchorDate(published: string | null, crawled: string): string {
   return p >= c - PLAUSIBLE_DAYS_BEFORE_CRAWL * DAY_MS && p <= c + DAY_MS ? published : crawled
 }
 
-export function searchWindow(anchor: string): SearchWindow {
+/**
+ * The search window around the anchor. `latest` (the fixtures' sampling date) caps the end, so a recent
+ * story never asks for a future date, and the request stays the same across resumed runs.
+ */
+export function searchWindow(anchor: string, latest?: string): SearchWindow {
   const at = Date.parse(`${anchor.slice(0, 10)}T00:00:00Z`)
-  return { start: day(at - WINDOW_DAYS_BEFORE * DAY_MS), end: day(at + WINDOW_DAYS_AFTER * DAY_MS) }
+  const end = day(at + WINDOW_DAYS_AFTER * DAY_MS)
+  const cap = latest?.slice(0, 10)
+  return { start: day(at - WINDOW_DAYS_BEFORE * DAY_MS), end: cap !== undefined && cap < end ? cap : end }
 }
 
 /** The registrable domain, roughly: the last two labels, three under a country code's `co.`, `com.` and the like. */
