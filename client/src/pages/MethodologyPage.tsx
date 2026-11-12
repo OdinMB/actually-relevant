@@ -6,6 +6,7 @@ import { buildBreadcrumbSchema } from '../lib/structured-data'
 import StructuredData from '../components/StructuredData'
 import LandingCta from '../components/LandingCta'
 import ChevronIcon from '../components/icons/ChevronIcon'
+import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { useSources } from '../hooks/useSources'
 import { getCategoryColor } from '../lib/category-colors'
 
@@ -213,6 +214,23 @@ export default function MethodologyPage() {
           <p>
             Some publishers, such as newsletters on Substack, don&apos;t allow their article pages to be fetched but publish each full article in their RSS
             feed. For those, we read the article from the feed and never fetch the page.
+          </p>
+
+          {/* Researched Stories (owner-approved wording, 2026-11-12); the label it quotes comes from the label copy */}
+          <h2 className="section-heading mt-10">Researched Stories</h2>
+          <p>
+            Some stories are researched further. For these, AI searches the news for other reports of the same event, published from two weeks before to one
+            week after the original article, and reads up to six sources, the original article included, plus our own earlier coverage. It skips any publisher
+            that has opted out in a machine-readable way, by the same checks our crawler runs before it reads an article. From the facts these sources report,
+            AI writes the story and cites a source after every sentence. Tap a citation to see the outlet, its date and the sentence from it that backs the
+            claim, chosen by AI and possibly translated.
+          </p>
+          <p>
+            Every sentence is then checked against the sources it cites, first by code and then by a second AI check. A sentence that fails is rewritten once
+            and removed if it still fails. If the story&apos;s main development can&apos;t be confirmed, we keep the single-source version instead. Researched
+            stories carry the label &quot;{AI_DISCLOSURE_COPY.researchedStoryLabel.lead} AI{AI_DISCLOSURE_COPY.researchedStoryLabel.tail}&quot; and list all
+            their sources at the end, starting with the article where we first found the story. For now, a person chooses which stories are researched and
+            whether the researched version is published.
           </p>
 
           {/* What We Don't Do */}
