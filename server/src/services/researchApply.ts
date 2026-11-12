@@ -4,8 +4,10 @@
  * (`researchSwap.ts`), keeps what they held in `pre_research`, written once so that a revert always
  * returns to the single-source analysis, and stores the cited version readers see in `research`. A
  * revert writes the snapshot back and clears both. Each write goes through
- * `recordAnalysis('research', …)` with a fresh embedding, so a status is never moved here and an
- * editor's move made meanwhile wins. Refusals are ServiceErrors.
+ * `recordAnalysis('research', …)` with a fresh embedding, fenced on the status and on `updatedAt` as
+ * read before the embedding call, so a status is never moved here, and an editor's move or edit made
+ * meanwhile wins. Applying waits behind the owner's gate (`applyRefusal`); reverting never does.
+ * Refusals are ServiceErrors.
  */
 import { Prisma, type StoryStatus } from '@prisma/client'
 import { config } from '../config.js'
@@ -22,16 +24,34 @@ import { analysisFrom, recordAnalysis, type Actor } from './storyLifecycle.js'
 
 const log = createLogger('research-apply')
 
-/** `skipped`: the pipeline's story changed status during its run (an editor's apply answers 409 instead). */
+/** `skipped`: the pipeline's story changed during its run or the write (an editor's apply answers 409 instead). */
 export type ApplyOutcome = 'applied' | 'skipped'
 
-const STATUS_CHANGED = "The story's status changed while this was written; reload it and try again"
+const STORY_CHANGED = 'The story changed while this was written; reload it and try again'
+
+/**
+ * Why no run can be applied now, whatever the story, or null: research switched off (no
+ * `TAVILY_API_KEY`), or the owner's gate closed (`RESEARCH_APPLY_ENABLED`, opened once the
+ * press-publisher-right question is checked). A revert is never refused for either.
+ */
+export function applyRefusal(): string | null {
+  if (!config.research.tavilyApiKey) return 'Research is switched off: TAVILY_API_KEY is not set, so no run can be applied (reverting still works)'
+  if (!config.research.applyEnabled)
+    return 'Applying research is not open yet: RESEARCH_APPLY_ENABLED is not "true". The owner opens it after the legal check (reverting still works)'
+  return null
+}
 
 async function loadStory(storyId: string) {
-  const story = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true, preResearch: true, ...SWAPPED_SELECT } })
+  const story = await prisma.story.findUnique({
+    where: { id: storyId },
+    select: { status: true, updatedAt: true, preResearch: true, ...SWAPPED_SELECT },
+  })
   if (!story) throw new NotFoundError('Story not found')
   return story
 }
+
+/** The story as read before the slow embedding call: the write lands only if neither has moved on. */
+type ReadState = { status: StoryStatus; updatedAt: Date }
 
 /** Why a story at `status` takes no research write (the stage's statuses: analyzed, selected, published, rejected); null when it takes one. */
 function statusRefusal(status: StoryStatus, action: 'take a researched version' | 'be reverted'): string | null {
@@ -60,11 +80,15 @@ function iconHints(research: ResearchedStory, sources: ResearchSource[]): Source
   return research.sources.flatMap(s => (s.host ? [{ host: s.host, favicon: favicons.get(s.id) ?? null }] : []))
 }
 
-/** The swapped columns and both versions in one lifecycle write, with the embedding of the text written; false when the status no longer allows it. */
+/**
+ * The swapped columns and both versions in one lifecycle write, with the embedding of the text
+ * written; false when the story changed since `read`: another status, or any write since (an
+ * editor's save during the embedding call, which the snapshot and values here would overwrite).
+ */
 async function write(
   storyId: string,
   actor: Actor,
-  status: StoryStatus,
+  read: ReadState,
   values: SwappedValues,
   versions: Pick<Prisma.StoryUncheckedUpdateManyInput, 'research' | 'preResearch'>,
 ): Promise<boolean> {
@@ -75,7 +99,8 @@ async function write(
     summary: values.summary,
     embeddingContentHash: null,
   })
-  const outcomes = await recordAnalysis('research', actor, [{ id: storyId, data: { ...values, ...versions }, embedding }], new Map([[storyId, status]]))
+  const row = { id: storyId, data: { ...values, ...versions }, where: { updatedAt: read.updatedAt }, embedding }
+  const outcomes = await recordAnalysis('research', actor, [row], new Map([[storyId, read.status]]))
   return outcomes.get(storyId) !== 'skipped'
 }
 
@@ -84,16 +109,16 @@ const asJson = (value: Prisma.JsonValue | object) => value as unknown as Prisma.
 /**
  * Put a run's researched version on the story. An editor's apply is written against the status read
  * now, the pipeline's against `expectedStatus`, the one it read before its run, so a story an editor
- * published or rejected meanwhile is skipped. 409 first while research is switched off (no
- * `TAVILY_API_KEY`): the switch stops new research going live, though a revert still works. Then 404
- * for an unknown story or run; 409 for a run of another story, one not completed, without a draft,
- * fallen back or of an older format, and for a status outside analyzed, selected, published and
- * rejected. Then the outlets' favicons are fetched in the background; the page shows each outlet's
- * initial until its icon is stored.
+ * published or rejected meanwhile is skipped; both against the `updatedAt` read now, so an edit saved
+ * during the embedding call is kept. 409 first while `applyRefusal` gives a reason. Then 404 for an
+ * unknown story or run; 409 for a run of another story, one not completed, without a draft, fallen
+ * back or of an older format, and for a status outside analyzed, selected, published and rejected.
+ * Then the outlets' favicons are fetched in the background; the page shows each outlet's initial
+ * until its icon is stored.
  */
 export async function applyResearchRun(storyId: string, runId: string, actor: Actor = 'editor', expectedStatus?: StoryStatus): Promise<ApplyOutcome> {
-  if (!config.research.tavilyApiKey)
-    throw new ConflictError('Research is switched off: TAVILY_API_KEY is not set, so no run can be applied (reverting still works)')
+  const closed = applyRefusal()
+  if (closed) throw new ConflictError(closed)
   const story = await loadStory(storyId)
   const run = await applicableRun(storyId, runId)
   const status = expectedStatus ?? story.status
@@ -108,10 +133,11 @@ export async function applyResearchRun(storyId: string, runId: string, actor: Ac
   // Written once: re-applying keeps the snapshot of the single-source analysis
   const preResearch = story.preResearch ?? snapshotOf(story)
 
-  const written = await write(storyId, actor, status, researchedValues(run.draft), { research: asJson(research), preResearch: asJson(preResearch) })
+  const read = { status, updatedAt: story.updatedAt }
+  const written = await write(storyId, actor, read, researchedValues(run.draft), { research: asJson(research), preResearch: asJson(preResearch) })
   if (!written) {
-    if (actor === 'editor') throw new ConflictError(STATUS_CHANGED)
-    log.info({ storyId, runId, actor }, 'research not applied: the story changed status during the run')
+    if (actor === 'editor') throw new ConflictError(STORY_CHANGED)
+    log.info({ storyId, runId, actor }, 'research not applied: the story changed during the run or the write')
     return 'skipped'
   }
   log.info({ storyId, runId, actor }, 'research applied')
@@ -121,7 +147,8 @@ export async function applyResearchRun(storyId: string, runId: string, actor: Ac
 
 /**
  * Give the story its single-source analysis back: the snapshot's values, both versions cleared, an
- * embedding of the restored text, written against the status read now. 404 for an unknown story;
+ * embedding of the restored text, written against the status and `updatedAt` read now (409 when
+ * either moved on), whatever `applyRefusal` says. 404 for an unknown story;
  * 409 without a researched version, for a trashed story or one not yet analyzed, and for a snapshot
  * that cannot be read (a re-assessment then replaces the researched version).
  */
@@ -136,7 +163,7 @@ export async function revertResearch(storyId: string): Promise<void> {
     throw new ConflictError('The saved single-source version cannot be read; re-assess the story to replace its researched version')
   }
 
-  if (!(await write(storyId, 'editor', story.status, restored, { research: Prisma.DbNull, preResearch: Prisma.DbNull })))
-    throw new ConflictError(STATUS_CHANGED)
+  const read = { status: story.status, updatedAt: story.updatedAt }
+  if (!(await write(storyId, 'editor', read, restored, { research: Prisma.DbNull, preResearch: Prisma.DbNull }))) throw new ConflictError(STORY_CHANGED)
   log.info({ storyId }, 'research reverted')
 }

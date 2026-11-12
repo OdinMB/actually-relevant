@@ -8,24 +8,15 @@ import { Select } from '../ui/Select'
 import { Button } from '../ui/Button'
 import { useUpdateStory, useDissolveCluster } from '../../hooks/useStories'
 import { useEditForm } from '../../hooks/useEditForm'
+import { useResearchLock } from '../../hooks/useResearchLock'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { formatStatus, formatDate } from '../../lib/constants'
 import { blueskyPostUrl } from '../../lib/bluesky'
 import { PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
-import { isResearched } from './ResearchVersion'
 import { buildIssueOptions } from './StoryFiltersBar'
 import { StoryResearch } from './StoryResearch'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
-
-/**
- * The props that lock a field a researched version wrote: the title label, title, rating, summary,
- * quote and its attribution, blurb and the analysis (server: `SWAPPED_FIELDS` in
- * services/researchSwap.ts, which refuses an edit to them with 409). Empty on a single-source story.
- */
-function researchLock(locked: boolean, noteId: string) {
-  return locked ? { disabled: true, 'aria-describedby': noteId, className: 'bg-neutral-50 text-neutral-500 cursor-not-allowed' } : {}
-}
 
 const ACCESS_TIER_LABELS: Record<string, string> = {
   locked: 'Paywall locked (rejected at crawl)',
@@ -76,7 +67,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
 
   const initialState = useMemo(() => buildFormState(story), [story])
 
-  const { form, set, isDirty, isPending, handleSubmit } = useEditForm({
+  const { form, setForm, set, isDirty, isPending, handleSubmit } = useEditForm({
     entityId: story.id,
     initialState,
     mutation: updateStory,
@@ -106,9 +97,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
     },
   })
   const leave = useUnsavedChangesGuard(isDirty)
-  const researched = isResearched(story)
-  const lockNoteId = `research-lock-${story.id}`
-  const lock = researchLock(researched, lockNoteId)
+  const { researched, noteId: lockNoteId, lock } = useResearchLock(story, initialState, setForm)
 
   const fields = (
     <>

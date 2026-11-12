@@ -70,7 +70,8 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 
             onChange={e => setChosenId(e.target.value)}
             options={list.map(r => ({ value: r.id, label: runLabel(r) }))}
           />
-          {canUseVersion(chosen) && <UseRunVersion story={story} run={chosen} switchedOff={usage.data?.enabled === false ? usage.data.refusal : null} />}
+          {/* An older backend sends no applyRefusal; it then answers an apply itself */}
+          {canUseVersion(chosen) && <UseRunVersion story={story} run={chosen} closed={usage.data?.applyRefusal ?? null} />}
           <ResearchRunView run={chosen} />
         </>
       )}

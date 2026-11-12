@@ -20,7 +20,7 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 const mockInput = vi.hoisted(() => ({ researchStoriesByIds: vi.fn() }))
 const mockPipeline = vi.hoisted(() => ({ researchStory: vi.fn() }))
-const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), revertResearch: vi.fn() }))
+const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), revertResearch: vi.fn(), applyRefusal: vi.fn() }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/crawler.js', () => ({ crawlFeed: vi.fn(), crawlAllDueFeeds: vi.fn(), crawlUrl: vi.fn() }))
@@ -77,6 +77,7 @@ beforeEach(() => {
   mockPrisma.storyResearchRun.aggregate.mockResolvedValue({ _sum: { costUsd: 1.5 } })
   mockApply.applyResearchRun.mockResolvedValue('applied')
   mockApply.revertResearch.mockResolvedValue(undefined)
+  mockApply.applyRefusal.mockReturnValue(null)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -178,11 +179,13 @@ describe('POST /api/admin/research/stories/:storyId/runs/:runId/apply and /rever
 })
 
 describe('GET /api/admin/research/usage', () => {
-  it('reports the month to date, the cap and the reservation', async () => {
+  it('reports the month to date, the cap, the reservation and why no run can be applied now', async () => {
+    mockApply.applyRefusal.mockReturnValue('Applying research is off')
     const res = await request(app).get('/api/admin/research/usage').set(authHeader())
     expect(res.body).toEqual({
       enabled: true,
       refusal: null,
+      applyRefusal: 'Applying research is off',
       monthToDateUsd: 1.5,
       monthlyCapUsd: config.research.monthlyCapUsd,
       reservationUsd: config.research.maxRunUsd,

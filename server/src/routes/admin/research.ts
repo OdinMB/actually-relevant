@@ -8,13 +8,14 @@
 import { Router } from 'express'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
-import { applyResearchRun, revertResearch } from '../../services/researchApply.js'
+import { applyRefusal, applyResearchRun, revertResearch } from '../../services/researchApply.js'
 import { listResearchRuns, researchUsage, startResearchRun } from '../../services/researchRuns.js'
 
 const router = Router()
 
+// The month's spend and whether a run may start, plus why no run can be applied now (or null)
 router.get('/usage', failsWith('Failed to fetch research usage'), async (_req, res) => {
-  res.json(await researchUsage())
+  res.json({ ...(await researchUsage()), applyRefusal: applyRefusal() })
 })
 
 router.get('/stories/:storyId/runs', failsWith('Failed to fetch research runs'), async (req, res) => {

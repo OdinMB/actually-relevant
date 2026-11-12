@@ -11,6 +11,13 @@ import { axisVector, createFeed, createIssue, createStory, describeDb, embedding
 import type { StoredResearch } from './researchRuns.js'
 import type { ResearchSource } from './researchPipeline.js'
 
+// The owner's gate (RESEARCH_APPLY_ENABLED) is read at startup, so the tests open it through the config
+const applyGate = vi.hoisted(() => ({ enabled: true }))
+vi.mock('../config.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../config.js')>()
+  Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => applyGate.enabled })
+  return actual
+})
 const mockGenerate = vi.hoisted(() => vi.fn())
 vi.mock('./embedding.js', () => ({
   generateEmbeddingForContent: mockGenerate,
@@ -136,8 +143,9 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
   useTestDatabase()
 
   beforeEach(async () => {
-    // Research switched on: an apply refuses while it is off
+    // Research and applying switched on: an apply refuses while either is off
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+    applyGate.enabled = true
     mockGenerate.mockReset().mockResolvedValue({ embedding: axisVector(7), hash: 'researched' })
     mockFavicons.mockReset().mockResolvedValue(undefined)
     mockForget.mockReset()
@@ -199,6 +207,44 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
 
     await revertResearch(s.id)
     expect(await getPublishedStoryBySlug(s.slug!)).toMatchObject({ researched: false, research: null, title: SINGLE_SOURCE.title })
+  })
+
+  it('an edit saved while the apply makes its embedding is kept: the apply writes nothing and answers 409', async () => {
+    const s = await story()
+    const runId = await run(s.id)
+    // As read before the edit, so the edit moves updatedAt on even within one millisecond
+    await prisma.story.update({ where: { id: s.id }, data: { updatedAt: new Date('2026-01-01T00:00:00Z') } })
+    mockGenerate.mockImplementationOnce(async () => {
+      await prisma.story.update({ where: { id: s.id }, data: { emotionTag: 'calm', summary: 'Edited during the apply.' } })
+      return { embedding: axisVector(7), hash: 'researched' }
+    })
+
+    await expect(applyResearchRun(s.id, runId)).rejects.toThrow(/changed while this was written/)
+
+    expect(await stored(s.id)).toMatchObject({
+      title: SINGLE_SOURCE.title,
+      summary: 'Edited during the apply.',
+      emotionTag: 'calm',
+      research: null,
+      preResearch: null,
+    })
+    expect(mockFavicons).not.toHaveBeenCalled()
+  })
+
+  it('an edit saved while the revert makes its embedding is kept: the story stays researched and the revert answers 409', async () => {
+    const s = await story()
+    await applyResearchRun(s.id, await run(s.id))
+    await prisma.story.update({ where: { id: s.id }, data: { updatedAt: new Date('2026-01-01T00:00:00Z') } })
+    mockGenerate.mockImplementationOnce(async () => {
+      await prisma.story.update({ where: { id: s.id }, data: { emotionTag: 'calm' } })
+      return { embedding: axisVector(3), hash: 'restored' }
+    })
+
+    await expect(revertResearch(s.id)).rejects.toThrow(/changed while this was written/)
+
+    const after = await stored(s.id)
+    expect(after).toMatchObject({ title: 'Researched headline 1', emotionTag: 'calm' })
+    expect(after.preResearch).toEqual(SINGLE_SOURCE)
   })
 
   it("an editor's apply is written against the status now: a run made while the story was selected applies after it was published", async () => {

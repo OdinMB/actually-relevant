@@ -17,8 +17,15 @@ const mockEmbed = vi.hoisted(() => vi.fn())
 vi.mock('./embedding.js', () => ({ generateEmbeddingForContent: mockEmbed }))
 const mockFavicons = vi.hoisted(() => vi.fn())
 vi.mock('./sourceFavicons.js', () => ({ fetchSourceFaviconsInBackground: mockFavicons }))
+// The owner's gate (RESEARCH_APPLY_ENABLED) is read at startup; the key stays a getter on the real config
+const applyGate = vi.hoisted(() => ({ enabled: true }))
+vi.mock('../config.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../config.js')>()
+  Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => applyGate.enabled })
+  return actual
+})
 
-const { applyResearchRun, revertResearch } = await import('./researchApply.js')
+const { applyResearchRun, applyRefusal, revertResearch } = await import('./researchApply.js')
 const { buildResearchedStory } = await import('./researchedStory.js')
 
 const STORY = 'story-1'
@@ -107,7 +114,9 @@ function result(over: Partial<StoredResearch> = {}): StoredResearch {
   }
 }
 
-const storyRow = (over: Record<string, unknown> = {}) => ({ status: 'published', preResearch: null, ...singleSource, ...over })
+/** When the story was last written, as the apply or revert read it; the write is fenced on it. */
+const READ_AT = new Date('2026-11-12T09:00:00Z')
+const storyRow = (over: Record<string, unknown> = {}) => ({ status: 'published', preResearch: null, updatedAt: READ_AT, ...singleSource, ...over })
 const runRow = (over: Record<string, unknown> = {}) => ({ storyId: STORY, status: 'completed', result: result(), ...over })
 
 /** The rows and expected statuses of the last lifecycle write. */
@@ -120,6 +129,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllEnvs()
   vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+  applyGate.enabled = true
   mockPrisma.story.findUnique.mockResolvedValue(storyRow())
   mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow())
   mockEmbed.mockResolvedValue(EMBEDDING)
@@ -128,7 +138,7 @@ beforeEach(() => {
 })
 
 describe('applyResearchRun', () => {
-  it('writes the researched texts, the cited version and a snapshot of the single-source columns, with a fresh embedding, against the status read now', async () => {
+  it('writes the researched texts, the cited version and a snapshot of the single-source columns, with a fresh embedding, against the status and the last write read now', async () => {
     await expect(applyResearchRun(STORY, RUN)).resolves.toBe('applied')
 
     const { stage, actor, row, expected } = lastWrite()
@@ -150,6 +160,7 @@ describe('applyResearchRun', () => {
         research: buildResearchedStory(result()),
         preResearch: singleSource,
       },
+      where: { updatedAt: READ_AT },
       embedding: EMBEDDING,
     })
     expect(mockEmbed).toHaveBeenCalledWith({
@@ -183,6 +194,7 @@ describe('applyResearchRun', () => {
       ConflictError,
       /switched off/,
     ],
+    ['any run until the owner opens applying after the legal check', () => (applyGate.enabled = false), ConflictError, /RESEARCH_APPLY_ENABLED/],
     ['an unknown story', () => mockPrisma.story.findUnique.mockResolvedValue(null), NotFoundError, /Story not found/],
     ['an unknown run', () => mockPrisma.storyResearchRun.findUnique.mockResolvedValue(null), NotFoundError, /run not found/],
     ['a run of another story', () => mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow({ storyId: 'story-2' })), ConflictError, /another story/],
@@ -241,9 +253,9 @@ describe('applyResearchRun', () => {
     expect(lastWrite().expected).toEqual([[STORY, 'rejected']])
   })
 
-  it("answers 409 when an editor's move lands during the write, and fetches no favicon", async () => {
+  it("answers 409 when an editor's move or edit lands before the write, and fetches no favicon", async () => {
     mockRecord.mockResolvedValue(new Map([[STORY, 'skipped']]))
-    await expect(applyResearchRun(STORY, RUN)).rejects.toThrow(/status changed/)
+    await expect(applyResearchRun(STORY, RUN)).rejects.toThrow(/changed while this was written/)
     expect(mockFavicons).not.toHaveBeenCalled()
   })
 
@@ -257,14 +269,19 @@ describe('applyResearchRun', () => {
 describe('revertResearch', () => {
   const researched = () => storyRow({ title: 'Researched headline', relevanceSummary: null, preResearch: singleSource, research: {} })
 
-  it('writes the snapshot back and clears both versions, with an embedding of the restored text, against the status read now', async () => {
+  it('writes the snapshot back and clears both versions, with an embedding of the restored text, against the status and the last write read now', async () => {
     mockPrisma.story.findUnique.mockResolvedValue(researched())
 
     await revertResearch(STORY)
 
     const { stage, actor, row, expected } = lastWrite()
     expect([stage, actor, expected]).toEqual(['research', 'editor', [[STORY, 'published']]])
-    expect(row).toEqual({ id: STORY, data: { ...singleSource, research: Prisma.DbNull, preResearch: Prisma.DbNull }, embedding: EMBEDDING })
+    expect(row).toEqual({
+      id: STORY,
+      data: { ...singleSource, research: Prisma.DbNull, preResearch: Prisma.DbNull },
+      where: { updatedAt: READ_AT },
+      embedding: EMBEDDING,
+    })
     expect(mockEmbed).toHaveBeenCalledWith({
       title: singleSource.title,
       titleLabel: singleSource.titleLabel,
@@ -292,16 +309,32 @@ describe('revertResearch', () => {
     expect(mockRecord).not.toHaveBeenCalled()
   })
 
-  it("answers 409 when an editor's move lands during the write", async () => {
+  it("answers 409 when an editor's move or edit lands before the write", async () => {
     mockPrisma.story.findUnique.mockResolvedValue(researched())
     mockRecord.mockResolvedValue(new Map([[STORY, 'skipped']]))
-    await expect(revertResearch(STORY)).rejects.toThrow(/status changed/)
+    await expect(revertResearch(STORY)).rejects.toThrow(/changed while this was written/)
   })
 
-  it('still reverts with research switched off, so a story can be taken back after the switch is killed', async () => {
-    vi.stubEnv('TAVILY_API_KEY', '')
+  it.each([
+    ['research is switched off', () => vi.stubEnv('TAVILY_API_KEY', '')],
+    ['applying is closed', () => (applyGate.enabled = false)],
+  ])('still reverts while %s, so a story can always be taken back', async (_name, close) => {
+    close()
     mockPrisma.story.findUnique.mockResolvedValue(researched())
     await expect(revertResearch(STORY)).resolves.toBeUndefined()
     expect(mockRecord).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('applyRefusal', () => {
+  it('is null while research is on and the owner has opened applying', () => {
+    expect(applyRefusal()).toBeNull()
+  })
+
+  it('names the missing key first, then the closed gate', () => {
+    applyGate.enabled = false
+    expect(applyRefusal()).toMatch(/RESEARCH_APPLY_ENABLED/)
+    vi.stubEnv('TAVILY_API_KEY', '')
+    expect(applyRefusal()).toMatch(/TAVILY_API_KEY/)
   })
 })

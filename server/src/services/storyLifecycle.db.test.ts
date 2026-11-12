@@ -280,6 +280,27 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).title).toBeNull()
   })
 
+  it("a row's extra condition fences its write: a story edited since it was read is skipped and keeps the edit; an unchanged one is written", async () => {
+    const readAt = new Date('2026-01-01T00:00:00Z')
+    const edited = await story({ status: 'published', slug: 'r-edited', datePublished: new Date() })
+    const unchanged = await story({ status: 'published', slug: 'r-unchanged', datePublished: new Date() })
+    // Both as they were read, then one edited: its updatedAt moves on
+    for (const s of [edited, unchanged]) await prisma.story.update({ where: { id: s.id }, data: { updatedAt: readAt } })
+    await prisma.story.update({ where: { id: edited.id }, data: { emotionTag: 'calm' } })
+
+    const outcomes = await recordAnalysis(
+      'research',
+      'editor',
+      [edited, unchanged].map(s => ({ id: s.id, data: { title: 'Researched' }, where: { updatedAt: readAt } })),
+      new Map([edited, unchanged].map(s => [s.id, 'published' as const])),
+    )
+
+    expect(outcomes.get(edited.id)).toBe('skipped')
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: edited.id } })).toMatchObject({ title: null, emotionTag: 'calm' })
+    expect(outcomes.get(unchanged.id)).toBe('refreshed')
+    expect((await prisma.story.findUniqueOrThrow({ where: { id: unchanged.id } })).title).toBe('Researched')
+  })
+
   it('re-assessing a researched story replaces its researched version with the fresh analysis', async () => {
     const s = await story({ status: 'published', slug: 'researched', datePublished: new Date() })
     await prisma.story.update({ where: { id: s.id }, data: { research: { paragraphs: [] }, preResearch: { title: 'single-source' } } })

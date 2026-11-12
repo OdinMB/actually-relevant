@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -42,22 +43,31 @@ const story = {
   feed: null,
 } as unknown as Story
 
-/** The story's edit page as `StoryDetailPage` mounts it: Save and Cancel go back to the list. */
-function EditPage({ shown }: { shown: Story }) {
+/**
+ * The story's edit page as `StoryDetailPage` mounts it: Save and Cancel go back to the list.
+ * "Refetch" swaps in `refetched`, as the story query does after an apply or a revert.
+ */
+function EditPage({ shown, refetched }: { shown: Story; refetched?: Story }) {
   const navigate = useNavigate()
+  const [current, setCurrent] = useState(shown)
   return (
     <>
       <Link to="/admin/feeds">Feeds</Link>
-      <StoryEditForm story={shown} issues={[]} onDone={() => navigate('/admin/stories')} />
+      {refetched && (
+        <button type="button" onClick={() => setCurrent(refetched)}>
+          Refetch
+        </button>
+      )}
+      <StoryEditForm story={current} issues={[]} onDone={() => navigate('/admin/stories')} />
       <Where />
     </>
   )
 }
 
-function renderPage(shown: Story = story) {
+function renderPage(shown: Story = story, refetched?: Story) {
   return renderAdminRoutes(
     [
-      { path: '/admin/stories/:id', element: <EditPage shown={shown} /> },
+      { path: '/admin/stories/:id', element: <EditPage shown={shown} refetched={refetched} /> },
       { path: '*', element: <Where /> },
     ],
     { history: ['/admin/stories', '/admin/stories/story-1'] },
@@ -148,5 +158,39 @@ describe('StoryEditForm on a researched story', () => {
     renderPage({ ...story, preResearch: null })
     for (const label of swapped) expect(field(label)).toBeEnabled()
     expect(screen.queryByText(/Revert to single-source first/)).toBeNull()
+  })
+
+  describe('when a revert or an apply lands while other edits are unsaved', () => {
+    const singleSource = { ...story, title: 'Single-source headline', relevance: 7, preResearch: null } as Story
+    const researched = { ...story, title: 'Researched headline', relevance: 5, preResearch: { title: 'Single-source headline' } } as Story
+    const editEmotion = () => fireEvent.change(field('Emotion'), { target: { value: 'uplifting' } })
+    const save = async () => {
+      mockApi.update.mockResolvedValue(story)
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(mockApi.update).toHaveBeenCalled())
+      return mockApi.update.mock.calls[0]![1] as Partial<Story>
+    }
+
+    it('after a revert, shows and saves the single-source fields, keeping the other edits', async () => {
+      renderPage(researched, singleSource)
+      editEmotion()
+      fireEvent.click(screen.getByRole('button', { name: 'Refetch' }))
+
+      expect(field('Title')).toHaveValue('Single-source headline')
+      expect(field('Title')).toBeEnabled()
+      expect(field('Emotion')).toHaveValue('uplifting')
+      expect(await save()).toMatchObject({ title: 'Single-source headline', relevance: 7, emotionTag: 'uplifting' })
+    })
+
+    it('after an apply, shows and saves the researched fields, keeping the other edits', async () => {
+      renderPage(singleSource, researched)
+      editEmotion()
+      fireEvent.click(screen.getByRole('button', { name: 'Refetch' }))
+
+      expect(field('Title')).toHaveValue('Researched headline')
+      expect(field('Title')).toBeDisabled()
+      expect(field('Emotion')).toHaveValue('uplifting')
+      expect(await save()).toMatchObject({ title: 'Researched headline', relevance: 5, emotionTag: 'uplifting' })
+    })
   })
 })

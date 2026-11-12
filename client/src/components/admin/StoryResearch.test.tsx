@@ -18,6 +18,7 @@ import { StoryResearch } from './StoryResearch'
 const usage = (over: Partial<ResearchUsage> = {}): ResearchUsage => ({
   enabled: true,
   refusal: null,
+  applyRefusal: null,
   monthToDateUsd: 1.5,
   monthlyCapUsd: 30,
   reservationUsd: 0.25,
@@ -192,13 +193,24 @@ describe('StoryResearch', () => {
       expect(b).toHaveAccessibleDescription(/restore it first/)
     })
 
-    it('keeps "Use this version" disabled while research is switched off, and "Revert to single-source" working', async () => {
-      mockResearch.usage.mockResolvedValue(usage({ enabled: false, refusal: 'Research is switched off: TAVILY_API_KEY is not set' }))
+    it.each([
+      [
+        'research is switched off',
+        usage({ enabled: false, refusal: 'Research is switched off', applyRefusal: 'Research is switched off: TAVILY_API_KEY is not set' }),
+        /TAVILY_API_KEY/,
+      ],
+      [
+        "the owner's gate on applying is closed",
+        usage({ applyRefusal: 'Applying research is not open yet: RESEARCH_APPLY_ENABLED' }),
+        /RESEARCH_APPLY_ENABLED/,
+      ],
+    ])('keeps "Use this version" disabled with the reason while %s, and "Revert to single-source" working', async (_name, answer, reason) => {
+      mockResearch.usage.mockResolvedValue(answer)
       mockResearch.runs.mockResolvedValue([completed()])
       renderSection('published', { title: 'Single-source headline' })
       const use = await screen.findByRole('button', { name: 'Use this version' })
       expect(use).toHaveAttribute('aria-disabled', 'true')
-      expect(use).toHaveAccessibleDescription(/switched off/)
+      expect(use).toHaveAccessibleDescription(reason)
       expect(revertButton()).not.toHaveAttribute('aria-disabled', 'true')
     })
 

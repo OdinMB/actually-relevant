@@ -32,10 +32,11 @@ const readers = (status: Story['status']) => (status === 'published' ? 'Readers 
 type StoryRef = Pick<Story, 'id' | 'status' | 'preResearch'>
 
 /**
- * "Use this version" for one run that can give the story its researched version. `switchedOff` is
- * why research is off (the server refuses an apply then, though a revert still works), or null.
+ * "Use this version" for one run that can give the story its researched version. `closed` is why
+ * no run can be applied now (research switched off, or the owner's gate `RESEARCH_APPLY_ENABLED`
+ * closed; the server refuses an apply then, though a revert still works), or null.
  */
-export function UseRunVersion({ story, run, switchedOff }: { story: StoryRef; run: ResearchRun; switchedOff: string | null }) {
+export function UseRunVersion({ story, run, closed }: { story: StoryRef; run: ResearchRun; closed: string | null }) {
   const [confirming, setConfirming] = useState(false)
   const apply = useApplyResearch(story.id)
   const { toast } = useToast()
@@ -52,7 +53,7 @@ export function UseRunVersion({ story, run, switchedOff }: { story: StoryRef; ru
       <ReasonButton
         type="button"
         variant="secondary"
-        reason={switchedOff ?? statusRefusal(story.status, 'take a researched version')}
+        reason={closed ?? statusRefusal(story.status, 'take a researched version')}
         onClick={() => setConfirming(true)}
       >
         Use this version
