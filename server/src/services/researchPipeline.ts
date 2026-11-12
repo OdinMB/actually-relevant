@@ -9,6 +9,7 @@
 import type { z } from 'zod'
 import type { LlmCallOutcome, LlmTokenUsage } from '../lib/llmUsage.js'
 import type { TavilyResult, TavilySearch } from '../lib/tavily.js'
+import { unescapeXmlDeep } from '../lib/xml.js'
 import { buildDedupPrompt } from '../prompts/dedup.js'
 import {
   buildEarlierPrompt,
@@ -26,6 +27,8 @@ import {
   decideGate,
   describeProblem,
   draftSentences,
+  dropFailing,
+  evidenceFor,
   supportFound,
   type CitationProblem,
   type GateVerdict,
@@ -399,7 +402,7 @@ async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, call: C
   if (problems.length > 0) return problems
   const cited = draftSentences(draft).filter(s => s.factIds.length > 0)
   if (cited.length === 0) return []
-  const prompt = buildFactCheckPrompt(cited.map(s => ({ text: s.text, facts: s.factIds.flatMap(id => facts.get(id) ?? []) })))
+  const prompt = buildFactCheckPrompt(cited.map(s => ({ text: s.text, facts: evidenceFor(s.factIds, facts) })))
   const verdicts = required(await call('fact-check', factCheckSchema, prompt), 'fact-check')
   return verdicts.sentences.flatMap(v => {
     const s = cited[v.number - 1]
@@ -407,7 +410,10 @@ async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, call: C
   })
 }
 
-/** Steps 7-8: write, check, and on a failure one rewrite with the problems and one more check. */
+/**
+ * Steps 7-8: write, check, and on a failure one rewrite with the problems and one more check.
+ * Sentences that still fail are dropped (`r.problems` keeps them), unless `dropFailing` refuses.
+ */
 async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFact>, call: Call, r: StoryResearch): Promise<Draft> {
   r.draft = required(await call('write', writeSchema, buildWritePrompt(input)), 'write')
   r.problems = await check(r.draft, facts, call)
@@ -415,7 +421,10 @@ async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFa
   r.rewritten = true
   r.draft = required(await call('rewrite', writeSchema, buildWritePrompt({ ...input, problems: r.problems.map(describeProblem) })), 'rewrite')
   r.problems = await check(r.draft, facts, call)
-  if (r.problems.length > 0) throw new Stop('check failed after one rewrite')
+  if (r.problems.length === 0) return r.draft
+  const kept = dropFailing(r.draft, r.problems)
+  if ('failed' in kept) throw new Stop(kept.failed)
+  r.draft = kept.draft
   return r.draft
 }
 
@@ -474,7 +483,8 @@ export async function researchStory(story: ResearchStory, deps: ResearchDeps): P
   const call: Call = async (step, schema, prompt) => {
     const rec = await deps.call(step, schema, prompt)
     r.calls.push({ step, outcome: rec.outcome, usage: rec.usage, costUsd: rec.costUsd, model: rec.model })
-    return { parsed: rec.outcome === 'ok' ? rec.parsed : null, outcome: rec.outcome }
+    // The prompts escape every fetched text, and the model copies the escapes into its answer
+    return { parsed: rec.outcome === 'ok' ? unescapeXmlDeep(rec.parsed) : null, outcome: rec.outcome }
   }
   try {
     r.verdict = decideGate({ draft: await research(story, deps, call, r) }, deps.relevanceMin)

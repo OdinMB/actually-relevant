@@ -43,13 +43,24 @@ export function draftSentences(draft: DraftParts): DraftSentence[] {
   ]
 }
 
+const sourceOf = (factId: string) => factId.replace(/F\d+$/, '')
+
+/**
+ * What a sentence may rest on: its cited facts first, then the other facts of the sources they
+ * come from. Readers see one citation per source, so a sentence its cited sources support is
+ * supported. Unknown ids add nothing.
+ */
+export function evidenceFor(factIds: string[], facts: ReadonlyMap<string, PoolFact>): PoolFact[] {
+  const cited = factIds.flatMap(id => facts.get(id) ?? [])
+  const sources = new Set(cited.map(f => sourceOf(f.id)))
+  const citedIds = new Set(cited.map(f => f.id))
+  return [...cited, ...[...facts.values()].filter(f => sources.has(sourceOf(f.id)) && !citedIds.has(f.id))]
+}
+
 function sentenceProblems(s: DraftSentence, facts: ReadonlyMap<string, PoolFact>): string[] {
   const unknown = s.factIds.filter(id => !facts.has(id))
-  const cited = s.factIds.flatMap(id => {
-    const f = facts.get(id)
-    return f ? [`${f.statement}\n${f.supportingSentence}\n${f.measures}`] : []
-  })
-  const numbers = findUnsupportedNumbers(s.text, cited.join('\n')).unsupported
+  const evidence = evidenceFor(s.factIds, facts).map(f => `${f.statement}\n${f.supportingSentence}\n${f.measures}`)
+  const numbers = findUnsupportedNumbers(s.text, evidence.join('\n')).unsupported
   return [
     ...unknown.map(id => `cites ${id}, which is not among the facts`),
     ...(s.part === 'story' && s.factIds.length === 0 ? ['cites no fact'] : []),
@@ -60,6 +71,28 @@ function sentenceProblems(s: DraftSentence, facts: ReadonlyMap<string, PoolFact>
 /** Every story sentence cites a fact; bullets may judge without one, but no number goes uncited. */
 export function checkCitations(draft: DraftParts, facts: ReadonlyMap<string, PoolFact>): CitationProblem[] {
   return draftSentences(draft).flatMap(s => sentenceProblems(s, facts).map(problem => ({ label: s.label, text: s.text, problem })))
+}
+
+const LEAD = 'Story paragraph 1, sentence 1'
+/** More failing sentences than this after the rewrite and the draft is not worth saving. */
+const MAX_DROPPED = 3
+
+/**
+ * After the rewrite: the draft without its failing sentences, or why it cannot be saved: the
+ * opening sentence failed, more than three did, or a part was left empty.
+ */
+export function dropFailing<D extends DraftParts>(draft: D, problems: CitationProblem[]): { draft: D } | { failed: string } {
+  const failing = new Set(problems.map(p => p.label))
+  if (failing.has(LEAD)) return { failed: 'the opening sentence failed the check after one rewrite' }
+  if (failing.size > MAX_DROPPED) return { failed: `${failing.size} sentences failed the check after one rewrite` }
+  const story = draft.story
+    .map((p, pi) => ({ ...p, sentences: p.sentences.filter((_, si) => !failing.has(`Story paragraph ${pi + 1}, sentence ${si + 1}`)) }))
+    .filter(p => p.sentences.length > 0)
+  const whyThisMatters = draft.whyThisMatters.filter((_, i) => !failing.has(`Why This Matters ${i + 1}`))
+  const caveats = draft.caveats.filter((_, i) => !failing.has(`Caveat ${i + 1}`))
+  if (whyThisMatters.length === 0) return { failed: 'no Why This Matters bullet passed the check after one rewrite' }
+  if (caveats.length === 0) return { failed: 'no caveat passed the check after one rewrite' }
+  return { draft: { ...draft, story, whyThisMatters, caveats } }
 }
 
 /** One line per problem, as the rewrite prompt and the drafts file show it. */

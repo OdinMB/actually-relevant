@@ -275,6 +275,9 @@ Citations
 - A number keeps the scope its fact records ('22 GW of rooftop solar in two years', not '22 GW of solar'). Where sources count differently, the story gives each figure with its scope and cites each.
 - Facts with ids starting with E come from Actually Relevant's earlier stories: background, cited only where the story uses them.
 
+One development
+- Every field is about one development: the main one in <ARTICLE>. Where the article covers several, as a roundup or newsletter does, the others stay out of every field, and so do facts that are only about them.
+
 Story (2-4 paragraphs, 150-250 words in total)
 - The first paragraph says what happened, who did it, where and when.
 - The rest says what drives it and who is affected, then what stands in the way or comes next.
@@ -289,6 +292,7 @@ Why This Matters (exactly 3 bullets, 1-2 sentences each)
 
 Caveats (1-3 bullets, 1-2 sentences each)
 - What limits the development or makes it uncertain, checked against <TOPIC-SPECIFIC LIMITING FACTORS> and <GENERIC_LIMITING_FACTORS>, including where sources disagree or count differently, with each side cited.
+- Each caveat names a real limit: whose claim it is when only the party behind it vouches for it, what is still unverified, pending or unknown, what could stall or undo it. That something was checked, reviewed or praised is not a caveat.
 
 Key quote
 - The most telling exact words of a VOICE's QUOTE or a SENTENCE in <FACTS>, translated to English if needed, attributed to the person with their role, or to the organization or outlet, with the id of the source it comes from.
@@ -355,7 +359,7 @@ For each sentence in <SENTENCES>, judge whether its cited facts state everything
 </GOAL>
 
 <SENTENCES>
-Sentences of a draft story, each with the facts it cites; a fact's SUPPORT is the sentence of its source that states it. ${UNTRUSTED}
+Sentences of a draft story, each with its cited facts: the facts it cites, then the other facts of the same sources, since readers see a citation per source. A fact's SUPPORT is the sentence of its source that states it. ${UNTRUSTED}
 ${items}
 </SENTENCES>
 
