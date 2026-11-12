@@ -14,6 +14,7 @@ import mastodonRouter from './mastodon.js'
 import feedbackRouter from './feedback.js'
 import noticeRouter from './notices.js'
 import cacheRouter from './cache.js'
+import researchRouter from './research.js'
 
 const router = Router()
 
@@ -34,5 +35,6 @@ router.use('/mastodon', mastodonRouter)
 router.use('/feedback', feedbackRouter)
 router.use('/notices', noticeRouter)
 router.use('/cache', cacheRouter)
+router.use('/research', researchRouter)
 
 export default router

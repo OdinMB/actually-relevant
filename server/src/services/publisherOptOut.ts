@@ -19,6 +19,7 @@ import { isPathAllowed, parseRobotsTxt, type RobotsPolicy } from '../lib/robotsT
 import { isTdmReserved, parseTdmRep, type TdmRule } from '../lib/tdmRep.js'
 import { BlockedUrlError, isAllowedUrl, ssrfGuard } from '../utils/urlValidation.js'
 import { summarizeError } from '../utils/errors.js'
+import type { SourcePolicy } from './researchFilter.js'
 
 const log = createLogger('publisherOptOut')
 
@@ -145,6 +146,15 @@ export async function checkOptOut(url: string, use: ArticleUse): Promise<OptOutV
   if (robots.aiInputDenied) return reserved('Content-Signal ai-input=no')
   if (isTdmReserved(signals.tdm, path)) return reserved('TDMRep reservation (/.well-known/tdmrep.json)')
   return { reserved: false }
+}
+
+/**
+ * Story research's source policy (ADR-0056, `story-research.md`): a source is dropped on any
+ * reservation, robots.txt path rules included, since Tavily reads the page on our behalf; an
+ * unreadable robots.txt drops it too.
+ */
+export const researchSourcePolicy: SourcePolicy = {
+  optedOut: async url => (await checkOptOut(url, { fetchesPage: true })).reserved,
 }
 
 /** The reservation as the admin reads it, on the feed and in a refused single-URL crawl. */

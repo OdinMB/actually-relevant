@@ -12,7 +12,7 @@ vi.mock('../lib/retry.js', async importOriginal => ({
   withRetry: (fn: () => Promise<unknown>) => fn(),
 }))
 
-const { checkOptOut, _resetOptOutCache } = await import('./publisherOptOut.js')
+const { checkOptOut, researchSourcePolicy, _resetOptOutCache } = await import('./publisherOptOut.js')
 const { CRAWLER_USER_AGENT } = await import('../lib/crawlerIdentity.js')
 const { config } = await import('../config.js')
 
@@ -127,6 +127,19 @@ describe('checkOptOut', () => {
       expect(options.signal).toBeInstanceOf(AbortSignal)
       expect(mockLimiterRun).toHaveBeenCalledWith(url, expect.any(Function))
     }
+  })
+})
+
+describe('researchSourcePolicy', () => {
+  it('reports a research source opted out on any reservation, robots.txt path rules included (Tavily reads the page for us)', async () => {
+    serve({ 'https://news.example/robots.txt': { body: 'User-agent: *\nDisallow: /blocked/\n' } })
+    expect(await researchSourcePolicy.optedOut('https://news.example/blocked/story')).toBe(true)
+    expect(await researchSourcePolicy.optedOut('https://news.example/open/story')).toBe(false)
+  })
+
+  it('reports a source opted out when its robots.txt cannot be read', async () => {
+    serve({ 'https://news.example/robots.txt': { status: 503 } })
+    expect(await researchSourcePolicy.optedOut('https://news.example/story')).toBe(true)
   })
 })
 

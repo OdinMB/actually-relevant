@@ -8,8 +8,8 @@ Configuration is centralized in `server/src/config.ts`. Three model tiers are av
 
 | Tier | Default Model | Reasoning Effort | Used By |
 |------|--------------|-----------------|---------|
-| Small | `gpt-6-luna` | `low` | Dedup confirmation, related-stories re-rank, reclassification and emotion-only tagging |
-| Medium | `gpt-6-luna` | `medium` | Pre-assessment, full assessment, social story pick, social post text |
+| Small | `gpt-6-luna` | `low` | Dedup confirmation, related-stories re-rank, reclassification and emotion-only tagging, story research steps (neighbour confirmation, queries, extraction, earlier coverage, fact check; `.context/story-research.md`) |
+| Medium | `gpt-6-luna` | `medium` | Pre-assessment, full assessment, social story pick, social post text, story research write and rewrite |
 | Large | `gpt-6.1-sol` | `medium` | Editorial selection, newsletter selection, podcast story selection and two-speaker dialogue (`config.podcast.selectModelTier` / `scriptModelTier`; `.context/podcast.md`) |
 
 These are the owner's GPT-6 choices of 2026-09-24, from the model eval and blind ratings (`DOCS/2026-09-24_gpt6-eval/results.md`, gitignored). Until then the tiers ran gpt-5-nano, gpt-5-mini and gpt-5.2, all at `medium`; gpt-5-mini/nano's dated snapshots shut down on 2026-12-11. Small and medium are the same model now, so the effort is what tells them apart. The large tier ran gpt-6-sol from 2026-09-24 and was switched to gpt-6.1-sol (same price, same effort) on 2026-10-27, pending the owner's large-tier eval and a podcast listening check (`.context/model-eval.md`, "Large tier: gpt-6-sol vs gpt-6.1-sol"); its prompts were tuned on gpt-6-sol and are unchanged.
@@ -58,6 +58,7 @@ Prompt templates live in `server/src/prompts/`:
 | `podcast.ts` | `buildPodcastPrompt()` — the weekly two-speaker dialogue (segue rule, untrusted `<STORIES>`) |
 | `podcast-select.ts` | `buildPodcastSelectPrompt()` — the week's 4-5 stories for audio |
 | `uplifting-select.ts` | `buildUpliftingSelectPrompt()` — 10 of the week's uplifting stories for the Actually Uplifting newsletter, called only when there are more than 10 (`.context/newsletter-podcast.md`, "Editions") |
+| `research.ts` | `buildQueriesPrompt()`, `buildExtractionPrompt()`, `buildEarlierPrompt()`, `buildWritePrompt()`, `buildFactCheckPrompt()` — story research, the admin action, and `eval:research` (`.context/story-research.md`; untrusted fetched text in escaped XML) |
 | `index.ts` | Barrel re-exports all builders and types |
 
 A service turns its loaded rows into a builder's input with an exported pure function in `server/src/services/promptInputs.ts` (the Bluesky and Mastodon draft inputs live in those services), and the model-eval harness calls the same functions (`.context/model-eval.md`). Change a call site's input there, never inline in the service; `promptInputs.test.ts` pins the prompts each one sends, so update its snapshot only for an intended change.

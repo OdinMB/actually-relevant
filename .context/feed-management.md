@@ -61,7 +61,7 @@ The import panel (`FeedChangesetImportPanel.tsx`) parses the file in the browser
 
 ## Source Policy: Publishers' AI Opt-Outs
 
-Which sources may be crawled, given publishers' reservations against AI use (owner decision, 2026-11-01, the "middle line"). It is applied when sources are chosen, by people and by the agent instructions above, and **the crawler enforces its machine-readable part** for each article on every crawl (ADR-0055; see "Enforced by the crawler" below). The public summary is on the Methodology page, "Publishers' AI Opt-Outs" (`client/src/pages/MethodologyPage.tsx`).
+Which sources may be crawled, given publishers' reservations against AI use (owner decision, 2026-11-01, the "middle line"). It is applied when sources are chosen, by people and by the agent instructions above, and **the crawler enforces its machine-readable part** for each article on every crawl (ADR-0056; see "Enforced by the crawler" below). The public summary is on the Methodology page, "Publishers' AI Opt-Outs" (`client/src/pages/MethodologyPage.tsx`).
 
 A source is admissible unless its publisher has made a reservation that applies to us:
 

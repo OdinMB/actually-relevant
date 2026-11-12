@@ -1,5 +1,5 @@
 ---
-id: ADR-0055
+id: ADR-0056
 title: Check each article against its publisher's machine-readable reservations in the crawler, by URL, and use the extraction API only for technical failures, never to get past a publisher's no
 status: accepted
 date: 2026-11-12
@@ -9,7 +9,7 @@ themes: [data, ai-risk]
 tags: ["crawler", "source-policy", "robots-txt", "tdmrep", "diffbot"]
 ---
 
-# ADR-0055 · Check each article against its publisher's machine-readable reservations in the crawler, by URL, and use the extraction API only for technical failures, never to get past a publisher's no
+# ADR-0056 · Check each article against its publisher's machine-readable reservations in the crawler, by URL, and use the extraction API only for technical failures, never to get past a publisher's no
 
 ## Context
 

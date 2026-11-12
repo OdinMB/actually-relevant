@@ -810,9 +810,174 @@ export interface PaginatedResponse<T> {
   totalPages: number
 }
 
+// --- Story research types (admin only; server/src/services/researchRuns.ts) ---
+
+/** This UTC month's research spend against the cap, and whether a run may start now. */
+export interface ResearchUsage {
+  /** Key present and every step's model priced. */
+  enabled: boolean
+  /** Why a run would be refused now (switched off, unpriced model, cap reached), or null. */
+  refusal: string | null
+  monthToDateUsd: number
+  monthlyCapUsd: number
+  /** What each run reserves when it starts. */
+  reservationUsd: number
+}
+
+export type ResearchStep = 'confirm' | 'queries' | 'extract' | 'earlier' | 'write' | 'fact-check' | 'rewrite'
+export type ResearchCallOutcome = 'ok' | 'parse_failure' | 'empty' | 'truncated' | 'error' | 'skipped'
+
+export interface ResearchTokenUsage {
+  input: number
+  cached: number
+  /** Reasoning tokens included. */
+  output: number
+  reasoning: number
+}
+
+export interface ResearchStepCall {
+  step: ResearchStep
+  outcome: ResearchCallOutcome
+  usage: ResearchTokenUsage
+  costUsd: number
+  model: string
+}
+
+export interface ResearchFact {
+  /** `S2F3`: source 2, fact 3; `E1F2` for our own earlier stories. */
+  id: string
+  statement: string
+  supportingSentence: string
+  measures: string
+  /** The supporting sentence occurs in the source text. */
+  found: boolean
+}
+
+export interface ResearchVoice {
+  name: string
+  role: string
+  stance: string
+  quote: string
+}
+
+export interface ResearchSource {
+  /** `S0` is the original article. */
+  id: string
+  origin: 'original' | 'cluster' | 'neighbour' | 'search'
+  url: string
+  title: string
+  outlet: string
+  date: string | null
+  favicon: string | null
+  usedRawContent: boolean
+  kind: 'news-report' | 'analysis' | 'opinion' | 'press-release' | 'official-body' | 'other'
+  country: string
+  relation: 'same-development' | 'background' | 'off-topic'
+  facts: ResearchFact[]
+  voices: ResearchVoice[]
+}
+
+export interface ResearchEarlier {
+  /** `E1`: our own earlier story. */
+  id: string
+  storyId: string
+  slug: string | null
+  title: string
+  date: string
+  relation: 'earlier-development' | 'background' | 'unrelated'
+  facts: ResearchFact[]
+}
+
+export interface ResearchCitedText {
+  text: string
+  factIds: string[]
+}
+
+/** The draft the write step returned, as its schema shapes it. */
+export interface ResearchDraft {
+  titleLabel: string
+  title: string
+  story: { sentences: ResearchCitedText[] }[]
+  summary: string
+  whyThisMatters: ResearchCitedText[]
+  caveats: ResearchCitedText[]
+  quote: string
+  quoteAttribution: string
+  quoteSourceId: string
+  marketingBlurb: string
+  relevanceCalculation: string[]
+  rating: number
+  oldNews: { isOld: boolean; firstHappened: string }
+  contradicted: { isContradicted: boolean; factIds: string[] }
+}
+
+export type ResearchVerdict =
+  | { kind: 'keep' }
+  | { kind: 'research-rating'; rating: number }
+  | { kind: 'stale'; firstHappened: string }
+  | { kind: 'contradicted'; factIds: string[] }
+  | { kind: 'fallback'; reason: string }
+
+/** A run's stored result: what the research found, the model of each step and the prices it ran at. */
+export interface ResearchResult {
+  storyId: string
+  calls: ResearchStepCall[]
+  credits: number
+  searches: { query: string; language: string; results: number; credits: number; cached: boolean }[]
+  candidates: number
+  drops: Partial<Record<string, number>>
+  sources: ResearchSource[]
+  earlier: ResearchEarlier[]
+  /** The last draft written, also when it failed the check. */
+  draft: ResearchDraft | null
+  rewritten: boolean
+  problems: { label: string; text: string; problem: string }[]
+  support: { facts: number; found: number }
+  /** Whether publishers' AI opt-outs were checked. */
+  optOutChecked: boolean
+  verdict: ResearchVerdict
+  models: Record<ResearchStep, string>
+  prices: {
+    models: Record<string, { input: number; cached: number; output: number }>
+    cacheWriteFactor: number
+    tavilyUsdPerCredit: number
+  }
+}
+
+export interface ResearchCostLine {
+  calls: number
+  usage: ResearchTokenUsage
+  usd: number
+  models: string[]
+}
+
+export interface ResearchRunCost {
+  /** Steps that made a call, in step order. */
+  steps: ({ step: ResearchStep } & ResearchCostLine)[]
+  model: ResearchCostLine
+  tavily: { credits: number; usd: number }
+  totalUsd: number
+}
+
+export interface ResearchRun {
+  id: string
+  storyId: string | null
+  status: 'running' | 'completed' | 'failed'
+  verdict: ResearchVerdict['kind'] | null
+  /** The reservation while running; the measured cost once completed; a failed run keeps its reservation. */
+  costUsd: number
+  tavilyCredits: number
+  error: string | null
+  startedAt: string
+  finishedAt: string | null
+  result: ResearchResult | null
+  cost: ResearchRunCost | null
+}
+
 // --- Background task types ---
 
-export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion'
+/** `research`: one story's research run; its story counts as processing while it runs. */
+export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research'
 export type BulkTaskStatus = 'running' | 'completed' | 'failed'
 
 export interface TaskState {

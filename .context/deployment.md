@@ -86,6 +86,10 @@ A zero-downtime deploy runs the old and the new backend side by side for a while
 
 The podcast assembles its MP3 with `ffmpeg-static` (exact version `5.3.0` in `server/package.json`), whose install script downloads a static ffmpeg binary (about 76 MB on Linux) into `server/node_modules/ffmpeg-static/` during `npm install`. Render's native Node runtime has no system ffmpeg, so a build that skips install scripts (`--ignore-scripts`) would leave the podcast unable to reach `ready` ("ffmpeg binary not found"). Measured on Render on 2026-10-06: joining and loudness-normalising a 5-minute episode took 16.5 s with a 73 MB ffmpeg peak, well inside the instance's memory. The podcast's environment variables (`ELEVENLABS_API_KEY`, `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`) are described in `.context/podcast.md`.
 
+## Story research key
+
+`TAVILY_API_KEY` on the API service (`sync: false` in `render.yaml`, set in the dashboard) is the switch of story research, the admin action (`.context/story-research.md`): set, editors can start runs within `RESEARCH_MONTHLY_CAP_USD` (code default 30, no `render.yaml` entry); removed, research is off and the admin says so.
+
 ## Client IPs behind Cloudflare and Render
 
 Requests reach the backend through Cloudflare and then one or more of Render's internal proxies. Express derives `req.ip` from `X-Forwarded-For` (XFF) by trusting a fixed number of hops, `TRUST_PROXY` (`config.trustProxyHops`, default 1). With N hops, `req.ip` is the entry N steps left of the socket address: for XFF `a, b, c`, N=1 gives `c`, N=2 gives `b`. Every rate limiter (search, which pays for embedding calls; subscribe; feedback; login; refresh; the general and expensive-op limiters) keys on `req.ip`, and feedback stores an HMAC-SHA256 of it keyed by `FEEDBACK_IP_HASH_SECRET` as `ipHash` ([ADR-0037](decisions/0037-feedback-ip-hmac.md); without the secret every feedback submission gets a 503 and nothing is stored; rows from before 2026-10-12 keep unkeyed hashes that never match new ones). So the count matters both ways:

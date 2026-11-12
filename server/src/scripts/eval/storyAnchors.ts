@@ -3,7 +3,7 @@
  * it adds: the "main actor or one key number" rule for social posts and a
  * pointer for the embellishment spot check. Pure heuristics over plain text.
  */
-import { occursIn, readNumbers, significant, type NumberToken } from './numbers.js'
+import { occursIn, readNumbers, significant, type NumberToken } from '../../lib/numbers.js'
 
 const WORD_RE = /\p{L}[\p{L}\p{M}\p{N}'’-]*/gu
 /** Capitalised mid-sentence without naming an actor: dates, and acronyms for topics rather than organisations. */

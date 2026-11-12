@@ -67,10 +67,22 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/mastodon.js': ['mastodonDraftInput'],
   // Pure dialogue rules (no I/O): the eval scores and renders with production's own validation.
   'services/podcastDialogue.js': ['validateDialogue', 'DialogueStoryRef', 'assembleSpokenSegments', 'renderScript', 'dialogueCharBudget'],
+  // Production's research steps, so eval:research measures what the admin action runs. Each is
+  // held below to doing no I/O of its own (the loader queries only the client it is given).
+  'services/researchPipeline.js': '*',
+  'services/researchInput.js': '*',
+  'services/researchFilter.js': '*',
+  'services/researchChecks.js': '*',
 }
 
 /** The pure modules the eval may import whole: config and prompt types only. */
 const PURE_SERVICE_MODULES = ['promptInputs.ts']
+
+/** The research modules the eval imports whole: no database client, model client, HTTP or retry of their own. */
+const RESEARCH_SERVICE_MODULES = ['researchPipeline.ts', 'researchInput.ts', 'researchFilter.ts', 'researchChecks.ts']
+
+/** Model calls are never retried (parse failures are what the eval measures), and the eval has no other HTTP of its own. */
+const WITH_RETRY_ALLOWED: string[] = []
 
 describe('eval harness has no write path', () => {
   it('finds the eval source files', () => {
@@ -110,6 +122,26 @@ describe('eval harness has no write path', () => {
     expect(offenders).toEqual([])
   })
 
+  it('imports whole only research modules that bring no client, HTTP or retry of their own', () => {
+    expect(RESEARCH_SERVICE_MODULES.map(name => `services/${name.replace(/\.ts$/, '.js')}`)).toEqual(
+      Object.entries(ALLOWED_SERVICE_IMPORTS)
+        .filter(([suffix, names]) => names === '*' && suffix.includes('/research'))
+        .map(([suffix]) => suffix),
+    )
+    const ioModule = /lib\/prisma\.js$|^@prisma\/client$|^\.\/llm\.js$|lib\/retry\.js$|^axios$|lib\/tavily\.js$|researchCalls\.js$|researchRuns\.js$|^node:/
+    const io = /\bprisma\.|\brateLimitDelay\b|\bwithRetry\b|\$executeRaw|\$queryRawUnsafe|\bwithStructuredOutput\b/
+    const offenders = RESEARCH_SERVICE_MODULES.flatMap(name => {
+      const text = stripComments(readFileSync(join(ROOT, '../../services', name), 'utf8'))
+      return [
+        ...importsOf(text)
+          .filter(i => !i.typeOnly && ioModule.test(i.specifier))
+          .map(i => `${name}: ${i.specifier}`),
+        ...(io.test(text) ? [`${name}: ${io.exec(text)?.[0]}`] : []),
+      ]
+    })
+    expect(offenders).toEqual([])
+  })
+
   it('never calls the rate limiter, withRetry, or a Prisma write', () => {
     const forbidden = [
       /\brateLimitDelay\b/,
@@ -119,8 +151,14 @@ describe('eval harness has no write path', () => {
       /\b[A-Za-z_]\w*\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(/,
       /\$executeRawUnsafe|\$queryRawUnsafe/,
     ]
-    const offenders = files.flatMap(f => forbidden.filter(re => re.test(f.text)).map(re => `${f.name}: ${re}`))
+    const offenders = files.flatMap(f =>
+      forbidden.filter(re => !(re.source === '\\bwithRetry\\b' && WITH_RETRY_ALLOWED.includes(f.name)) && re.test(f.text)).map(re => `${f.name}: ${re}`),
+    )
     expect(offenders).toEqual([])
+  })
+
+  it('uses withRetry nowhere', () => {
+    expect(files.filter(f => /\bwithRetry\b/.test(f.text)).map(f => f.name)).toEqual(WITH_RETRY_ALLOWED)
   })
 
   it('uses $executeRaw only for SET TRANSACTION READ ONLY in readOnlyDb.ts', () => {
