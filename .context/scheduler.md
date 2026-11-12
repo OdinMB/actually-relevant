@@ -68,8 +68,8 @@ Left open: an old instance that is SIGTERMed more than about 2.5 minutes after t
 | `preassess_stories` | `runPreassessStories` | Configurable |
 | `assess_stories` | `runAssessStories` | Configurable |
 | `select_stories` | `runSelectStories` | Configurable |
-| `research_stories` | `runResearchStories` | `15 * * * *` (hourly at :15); seeded **disabled** by its migration (`20261112200000_research_pipeline_step`); never overdue at boot (hour field `*`). Researches the selected stories before they publish, up to `RESEARCH_PIPELINE_PER_RUN` (20) a run, re-reading its own row's `enabled` before each story; the Jobs page shows its mode in effect (`jobSettings.ts`). While enabled, `publish_stories` waits for it. See `.context/story-research.md`, "The pipeline step" |
-| `publish_stories` | `runPublishStories` | Configurable; leaves out the stories the research step still owes (the publish gate) |
+| `research_stories` | `runResearchStories` | `15 * * * *` (hourly at :15); seeded **disabled** by its migration (`20261112200000_research_pipeline_step`); never overdue at boot (hour field `*`). Researches the selected stories, up to `RESEARCH_PIPELINE_PER_RUN` (20) a run, re-reading its own row's `enabled` before each story; the Jobs page shows its mode in effect and whether publishing waits (`jobSettings.ts`). Only while enabled in effective apply mode does `publish_stories` wait for it, holding only stories selected less than two hours ago (released ones go at the next publish run). "Run now" on the disabled job is a trial: it researches in shadow and never applies. See `.context/story-research.md`, "The pipeline step" |
+| `publish_stories` | `runPublishStories` | Configurable; in the research step's apply mode, leaves out the stories it still owes that were selected less than two hours ago (the publish gate) |
 | `social_auto_post` | `runSocialAutoPost` | Configurable |
 | `bluesky_update_metrics` | `runBlueskyUpdateMetrics` | Configurable |
 | `mastodon_update_metrics` | `runMastodonUpdateMetrics` | Configurable |

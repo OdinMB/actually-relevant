@@ -749,6 +749,45 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(await row(selected.id)).toMatchObject({ status: 'rejected', rejectionReason: reason })
   })
 
+  it('every move into selected stamps when the story entered it, and a move out keeps the stamp', async () => {
+    const selectedAtOf = async (id: string) => (await prisma.story.findUniqueOrThrow({ where: { id }, select: { selectedAt: true } })).selectedAt
+    const analyzed = await story({ status: 'analyzed' })
+    const before = new Date(Date.now() - 1000)
+    expect(await selectedAtOf(analyzed.id)).toBeNull()
+
+    await transition([analyzed.id], { to: 'selected' }, 'pipeline')
+    const entered = await selectedAtOf(analyzed.id)
+    expect(entered?.getTime()).toBeGreaterThanOrEqual(before.getTime())
+
+    await transition([analyzed.id], { to: 'rejected', reason: 'editor' }, 'editor')
+    expect(await selectedAtOf(analyzed.id)).toEqual(entered)
+
+    // An editor's re-queue to selected stamps it again
+    await new Promise(resolve => setTimeout(resolve, 5))
+    await transition([analyzed.id], { to: 'selected' }, 'editor')
+    expect((await selectedAtOf(analyzed.id))!.getTime()).toBeGreaterThan(entered!.getTime())
+  })
+
+  it("a move's fence skips a story it no longer matches and moves one it does; a publish takes none", async () => {
+    const edited = await story({ status: 'selected' })
+    const readAt = edited.updatedAt
+    await prisma.story.update({ where: { id: edited.id }, data: { title: 'An editor’s title' } })
+    const unchanged = await story({ status: 'selected' })
+
+    const skipped = await transition([edited.id], { to: 'rejected', reason: 'stale' }, 'pipeline', { where: { updatedAt: readAt } })
+    expect(skipped).toEqual({ moved: [], skipped: [{ id: edited.id, status: 'selected' }] })
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: edited.id } })).toMatchObject({
+      status: 'selected',
+      title: 'An editor’s title',
+      rejectionReason: null,
+    })
+
+    const moved = await transition([unchanged.id], { to: 'rejected', reason: 'stale' }, 'pipeline', { where: { updatedAt: unchanged.updatedAt } })
+    expect(moved.moved).toEqual([unchanged.id])
+
+    await expect(transition([unchanged.id], { to: 'published' }, 'editor', { where: {} })).rejects.toThrow(/no move fence/)
+  })
+
   it('the migration backfill marks only never-published rejected non-primaries as duplicates', async () => {
     const migration = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'prisma', 'migrations', '20261025130000_story_rejection_reason', 'migration.sql'),

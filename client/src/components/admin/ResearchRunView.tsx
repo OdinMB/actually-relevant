@@ -370,7 +370,7 @@ function CostTable({ run }: { run: ResearchRun }) {
   )
 }
 
-/** The prefix of the error the research step records on a run it skipped without researching (server: `recordRefusedRun`). */
+/** The prefix of the error the research step records on a run it skipped without researching (server: `recordSkippedRun`). */
 const SKIPPED = 'skipped: '
 
 /** Who started the run: an editor's Research button, or the research step (`research_stories`). */
@@ -384,11 +384,17 @@ function RunTrigger({ run }: { run: Pick<ResearchRun, 'trigger'> }) {
   )
 }
 
+/**
+ * A run's cost as counted against the cap: the reservation until its result is stored, then the
+ * measured cost (also when it failed after that, e.g. in the research step's apply).
+ */
+const countedCost = (run: ResearchRun) => `${run.result ? 'Its measured cost of' : 'Its reservation of'} ${usd(run.costUsd)}`
+
 function RunStatus({ run }: { run: ResearchRun }) {
   if (run.status === 'running') {
     return (
       <p className="text-sm text-neutral-700">
-        Running since {formatDateWithTime(run.startedAt)}. Its reservation of {usd(run.costUsd)} counts against the cap until it ends.
+        Running since {formatDateWithTime(run.startedAt)}. {countedCost(run)} counts against the cap until it ends.
       </p>
     )
   }
@@ -403,7 +409,7 @@ function RunStatus({ run }: { run: ResearchRun }) {
   if (run.status === 'failed') {
     return (
       <p className="text-sm text-red-700">
-        Failed: {run.error ?? 'no reason recorded'}. Its reservation of {usd(run.costUsd)} stays counted against the cap.
+        {run.result ? 'Failed after its research' : 'Failed'}: {run.error ?? 'no reason recorded'}. {countedCost(run)} stays counted against the cap.
       </p>
     )
   }

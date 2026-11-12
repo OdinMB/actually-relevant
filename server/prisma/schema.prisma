@@ -80,6 +80,8 @@ model Story {
   issue                  Issue?       @relation(fields: [issueId], references: [id])
   status                 StoryStatus  @default(fetched)
   rejectionReason        RejectionReason? @map("rejection_reason")
+  /// When the story last entered `selected`, set by the lifecycle's move only; the publish gate's longest wait counts from it
+  selectedAt             DateTime?    @map("selected_at")
   dateCrawled            DateTime     @default(now()) @map("date_crawled")
   datePublished          DateTime?    @map("date_published")
   relevancePre           Int?         @map("relevance_pre")

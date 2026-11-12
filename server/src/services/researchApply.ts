@@ -8,8 +8,9 @@
  * read before the embedding call, so a status is never moved by a write here, and an editor's move or
  * edit made meanwhile wins. Applying waits behind the owner's gate (`applyRefusal`); reverting never
  * does. An editor applies a completed run (`applyResearchRun`); the research step applies its run's
- * verdict before the run is finished (`applyVerdict`), rejecting through `transition`. An editor's
- * refusals are ServiceErrors; the research step's are outcomes.
+ * verdict once the run's result is stored and before the run is finished (`applyVerdict`), fenced on
+ * the story as read before the run started, rejecting through `transition`. An editor's refusals
+ * are ServiceErrors; the research step's are outcomes.
  */
 import { Prisma, type RejectionReason, type StoryStatus } from '@prisma/client'
 import { config } from '../config.js'
@@ -65,8 +66,11 @@ async function loadStory(storyId: string): Promise<StoryColumns> {
   return story
 }
 
-/** The story as read before the slow embedding call: the write lands only if neither has moved on. */
-type ReadState = { status: StoryStatus; updatedAt: Date }
+/**
+ * The story as read before the slow embedding call (the research step: before its run): the write
+ * lands only if neither has moved on.
+ */
+export type ReadState = { status: StoryStatus; updatedAt: Date }
 
 /** Why a story at `status` takes no research write (the stage's statuses: analyzed, selected, published, rejected); null when it takes one. */
 function statusRefusal(status: StoryStatus, action: 'take a researched version' | 'be reverted'): string | null {
@@ -181,29 +185,39 @@ const REJECTED_FOR = {
 /**
  * What the research step did with a verdict: `applied` (the researched version is on the story),
  * `rejected` (with the verdict's reason), `single-source` (a fallback, or a kept run without a
- * usable draft: the story publishes in today's format), `skipped` (the story moved, changed or went
- * during the run, or its sources make no version readers can be given; the editor's state is kept),
- * or `shadow` (nothing applied, by the mode).
+ * usable draft: the story publishes in today's format), `skipped` (the story moved, was written
+ * (an editor's edit or apply) or went during the run, or its sources make no version readers can
+ * be given; the editor's state is kept, and the completed run can still be applied by hand), or
+ * `shadow` (nothing applied: the step does not apply now).
  */
 export type VerdictOutcome = 'applied' | 'rejected' | 'single-source' | 'skipped' | 'shadow'
 
 /**
- * Apply the research step's verdict for its run, which is still `running` (the publish gate keeps
- * the story waiting meanwhile): `keep` puts the researched version on the story, fenced on
- * `expectedStatus`, the status read before the run; the three rejections move the story through
- * `transition`, which takes only a selected story; `fallback` changes nothing. Nothing at all
- * while `pipelineMode()` is shadow. Never throws a refusal; an embedding or database error throws.
+ * Apply the research step's verdict for its run, whose result is stored and which is still
+ * `running` (the publish gate keeps the story waiting meanwhile). Every write is fenced on `read`,
+ * the story's status and `updatedAt` as read before the run started, so an editor's move, edit or
+ * apply during the run always wins: `keep` puts the researched version on the story; the three
+ * rejections move it through `transition`, which takes only a selected story; `fallback` changes
+ * nothing. The caller applies only while `researchStepState().applies`; as a backstop, nothing is
+ * applied outside effective apply mode (`pipelineMode()`). Never throws a refusal; an embedding or
+ * database error throws.
  */
-export async function applyVerdict(storyId: string, runId: string, expectedStatus: StoryStatus, result: StoryResearch): Promise<VerdictOutcome> {
-  if (pipelineMode().mode === 'shadow') return 'shadow'
+export async function applyVerdict(storyId: string, runId: string, read: ReadState, result: StoryResearch): Promise<VerdictOutcome> {
+  if (pipelineMode().mode !== 'apply') return 'shadow'
   const { verdict } = result
   if (verdict.kind === 'fallback') return 'single-source'
 
   if (verdict.kind !== 'keep') {
     const reason = REJECTED_FOR[verdict.kind]
-    const { moved } = await transition([storyId], { to: 'rejected', reason }, 'pipeline')
-    const outcome = moved.includes(storyId) ? 'rejected' : 'skipped'
-    log.info({ storyId, runId, reason, outcome }, 'research verdict rejects the story')
+    // Checked first for the log's reason; the move is fenced on `read` too
+    const changed = whyChanged(await storyColumns(storyId), read)
+    const moved =
+      !changed && (await transition([storyId], { to: 'rejected', reason }, 'pipeline', { where: { updatedAt: read.updatedAt } })).moved.includes(storyId)
+    const outcome = moved ? 'rejected' : 'skipped'
+    log.info(
+      { storyId, runId, reason, outcome, ...(outcome === 'skipped' ? { why: changed ?? 'the story changed during the run' } : {}) },
+      'research verdict rejects the story',
+    )
     return outcome
   }
 
@@ -212,22 +226,30 @@ export async function applyVerdict(storyId: string, runId: string, expectedStatu
     log.warn({ storyId, runId, reason: applicable.refused }, 'research kept the story without a draft to apply; it stays single-source')
     return 'single-source'
   }
-  const refused = await putKeptRun(storyId, expectedStatus, { draft: applicable.draft, sources: result.sources, earlier: result.earlier })
+  const refused = await putKeptRun(storyId, read, { draft: applicable.draft, sources: result.sources, earlier: result.earlier })
   if (refused) {
-    log.info({ storyId, runId, reason: refused }, 'research not applied')
+    log.info({ storyId, runId, reason: refused }, 'research not applied; the completed run can still be applied by hand')
     return 'skipped'
   }
   log.info({ storyId, runId, actor: 'pipeline' }, 'research applied')
   return 'applied'
 }
 
-/** The research step's write of a kept run, or why it left the story alone: deleted, moved or changed during the run, or no version readers can be given. */
-async function putKeptRun(storyId: string, expectedStatus: StoryStatus, run: ApplicableRun): Promise<string | null> {
-  const story = await storyColumns(storyId)
+/** Why the story is no longer as `read` before the run (deleted, moved, or written: an editor's edit or apply), or null. */
+function whyChanged(story: StoryColumns | null, read: ReadState): string | null {
   if (!story) return 'the story was deleted during the run'
-  // Checked here too, before the embedding call, which a story that moved on does not need
-  if (story.status !== expectedStatus) return `the story moved to ${story.status} during the run`
-  return (await putResearch(storyId, 'pipeline', story, expectedStatus, run))?.refused ?? null
+  if (story.status !== read.status) return `the story moved to ${story.status} during the run`
+  if (story.updatedAt.getTime() !== read.updatedAt.getTime()) return 'the story was edited or given research during the run'
+  return null
+}
+
+/** The research step's write of a kept run, or why it left the story alone: changed during the run (`whyChanged`), or no version readers can be given. */
+async function putKeptRun(storyId: string, read: ReadState, run: ApplicableRun): Promise<string | null> {
+  const story = await storyColumns(storyId)
+  // Checked before the embedding call, which a story that changed does not need; the write is fenced on `read` too
+  const changed = whyChanged(story, read)
+  if (changed || !story) return changed
+  return (await putResearch(storyId, 'pipeline', story, read.status, run))?.refused ?? null
 }
 
 /**

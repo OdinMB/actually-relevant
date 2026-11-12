@@ -141,6 +141,18 @@ describe('ResearchRunView', () => {
     expect(screen.getByText(/Failed: unexpected error \(Error\)\. Its reservation of \$0\.250/)).toBeInTheDocument()
   })
 
+  it('shows a run that failed after its research with its measured cost, not the reservation, and its result', () => {
+    render(<ResearchRunView run={run({ status: 'failed', costUsd: 0.052, error: 'unexpected error (Error)' })} />)
+    expect(screen.getByText(/^Failed after its research: unexpected error \(Error\)\. Its measured cost of \$0\.052 stays counted/)).toBeInTheDocument()
+    expect(screen.queryByText(/reservation/)).toBeNull()
+    expect(screen.getByText(/Cost \(\$0\.052\)/)).toBeInTheDocument()
+  })
+
+  it('shows a running run whose result is stored at its measured cost', () => {
+    render(<ResearchRunView run={run({ status: 'running', costUsd: 0.052, finishedAt: null })} />)
+    expect(screen.getByText(/Its measured cost of \$0\.052 counts against the cap/)).toBeInTheDocument()
+  })
+
   it.each([
     ['editor', 'Editor'],
     ['pipeline', 'Pipeline'],

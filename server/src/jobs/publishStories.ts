@@ -14,8 +14,9 @@ export async function runPublishStories(): Promise<void> {
     return
   }
 
-  // The publish gate (.context/story-research.md, "The pipeline step"): while the research step is
-  // on, a selected story it still owes waits for a later run; an editor's publish never waits
+  // The publish gate (.context/story-research.md, "The pipeline step"): only while the research step
+  // applies (apply mode, the job enabled), a selected story it still owes waits for a later run, while
+  // it was selected less than config.research.pipeline.maxWaitMinutes ago; an editor's publish never waits
   const waiting = await awaitingResearch(selected)
   const ids = selected.filter(id => !waiting.has(id))
   if (waiting.size > 0) log.info({ waiting: waiting.size }, 'stories left for a later run: awaiting research')

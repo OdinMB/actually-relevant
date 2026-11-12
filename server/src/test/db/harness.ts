@@ -69,8 +69,11 @@ export async function createStory(data: {
   sourceTitle?: string
   sourceDatePublished?: Date | null
   emotionTag?: EmotionTag | null
+  /** When it entered `selected`; a selected story defaults to now, as the lifecycle's move stamps it */
+  selectedAt?: Date | null
 }) {
   const id = randomUUID()
+  const status = data.status ?? 'fetched'
   return prisma.story.create({
     data: {
       id,
@@ -79,7 +82,8 @@ export async function createStory(data: {
       sourceDatePublished: data.sourceDatePublished ?? null,
       sourceContent: 'text',
       feedId: data.feedId,
-      status: data.status ?? 'fetched',
+      status,
+      selectedAt: data.selectedAt !== undefined ? data.selectedAt : status === 'selected' ? new Date() : null,
       dateCrawled: data.dateCrawled ?? new Date(),
       issueId: data.issueId ?? null,
       clusterId: data.clusterId ?? null,

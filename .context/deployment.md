@@ -93,7 +93,7 @@ The podcast assembles its MP3 with `ffmpeg-static` (exact version `5.3.0` in `se
 Two more owner switches on the API service, both `sync: false` and unset in `render.yaml`, read at startup (a change takes a restart), and both parsed with `parseOneOf`, so a value outside their list stops the server at startup:
 
 - `RESEARCH_APPLY_ENABLED` (`"true"` opens, unset or `"false"` keeps closed): the owner's gate on applying research, by an editor or the research step.
-- `RESEARCH_PIPELINE_MODE` (`shadow`, the default, or `apply`): whether the `research_stories` job applies its verdicts. `apply` acts only while `RESEARCH_APPLY_ENABLED` is open; otherwise the job runs as shadow and says so in its log and on the Jobs page. The job itself is switched on and off on the Jobs page (seeded disabled); `RESEARCH_PIPELINE_PER_RUN` (code default 20, no `render.yaml` entry) caps the stories a run researches.
+- `RESEARCH_PIPELINE_MODE` (`shadow`, the default, or `apply`): whether the `research_stories` job applies its verdicts, and so whether publishing waits for it (in shadow it does not; in apply, it holds the stories selected less than two hours ago that the job still owes). `apply` acts only while `RESEARCH_APPLY_ENABLED` is open and the job is enabled; otherwise the job runs as shadow and says so in its log and on the Jobs page. The job itself is switched on and off on the Jobs page (seeded disabled); `RESEARCH_PIPELINE_PER_RUN` (code default 20, no `render.yaml` entry) caps the stories a run researches.
 
 ## Client IPs behind Cloudflare and Render
 

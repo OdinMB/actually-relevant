@@ -1,6 +1,6 @@
 /**
- * What the research step still owes, on PostgreSQL: the job's queue and the publish gate, which share
- * one definition (`researchQueue.ts`). A story's runs are inserted as rows; nothing researches here.
+ * The research step's state, its queue and the publish gate, on PostgreSQL (`researchQueue.ts`). A
+ * story's runs are inserted as rows; nothing researches here.
  */
 import { it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Prisma } from '@prisma/client'
@@ -8,7 +8,16 @@ import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 
-const { awaitingResearch, nextToResearch, researchPipelineOn, stillOwed } = await import('./researchQueue.js')
+// The research step's mode and the owner's gate are read at startup, so the tests set them through the config
+const switches = vi.hoisted(() => ({ mode: 'apply' as 'shadow' | 'apply', applyEnabled: true }))
+vi.mock('../config.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../config.js')>()
+  Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => switches.applyEnabled })
+  Object.defineProperty(actual.config.research.pipeline, 'mode', { get: () => switches.mode })
+  return actual
+})
+
+const { awaitingResearch, nextToResearch, owedStory, researchStepState } = await import('./researchQueue.js')
 
 const MINUTE_MS = 60_000
 const NOW = new Date()
@@ -16,7 +25,7 @@ const ago = (minutes: number) => new Date(NOW.getTime() - minutes * MINUTE_MS)
 
 let feedId = ''
 
-const selected = (dateCrawled = new Date()) => createStory({ feedId, status: 'selected', dateCrawled })
+const selected = (dateCrawled = new Date(), selectedAt: Date | null = NOW) => createStory({ feedId, status: 'selected', dateCrawled, selectedAt })
 
 async function runOf(storyId: string, data: { trigger?: 'editor' | 'pipeline'; status: 'running' | 'completed' | 'failed'; startedAt?: Date }) {
   await prisma.storyResearchRun.create({
@@ -31,11 +40,13 @@ const setJob = (enabled: boolean) =>
     create: { jobName: 'research_stories', cronExpression: '15 * * * *', enabled },
   })
 
-describeDb('research queue and publish gate (PostgreSQL)', () => {
+describeDb('research step state, queue and publish gate (PostgreSQL)', () => {
   useTestDatabase()
 
   beforeEach(async () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+    switches.mode = 'apply'
+    switches.applyEnabled = true
     await setJob(true)
     feedId = (await createFeed((await createIssue()).id)).id
   })
@@ -43,19 +54,28 @@ describeDb('research queue and publish gate (PostgreSQL)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('is on while the job row is enabled and research is switched on, and off otherwise', async () => {
-    expect(await researchPipelineOn()).toBe(true)
+  it('researches while research is switched on, and applies only with the job enabled in effective apply mode', async () => {
+    expect(await researchStepState()).toEqual({ researches: true, enabled: true, applies: true })
+
+    switches.mode = 'shadow'
+    expect(await researchStepState()).toEqual({ researches: true, enabled: true, applies: false })
+    switches.mode = 'apply'
+    switches.applyEnabled = false
+    expect(await researchStepState()).toEqual({ researches: true, enabled: true, applies: false })
+    switches.applyEnabled = true
+
+    // A disabled job still researches when run by hand, in shadow
     await setJob(false)
-    expect(await researchPipelineOn()).toBe(false)
+    expect(await researchStepState()).toEqual({ researches: true, enabled: false, applies: false })
+    await prisma.jobRun.deleteMany({ where: { jobName: 'research_stories' } })
+    expect(await researchStepState()).toEqual({ researches: true, enabled: false, applies: false })
+
     await setJob(true)
     vi.stubEnv('TAVILY_API_KEY', '')
-    expect(await researchPipelineOn()).toBe(false)
-    await prisma.jobRun.deleteMany({ where: { jobName: 'research_stories' } })
-    vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
-    expect(await researchPipelineOn()).toBe(false)
+    expect(await researchStepState()).toEqual({ researches: false, enabled: true, applies: false })
   })
 
-  it('keeps waiting a selected story with no run, one whose pipeline run is running within the stale limit, and one researched only by an editor', async () => {
+  it('in apply mode keeps waiting a selected story with no run, one whose pipeline run is running within the stale limit, and one researched only by an editor', async () => {
     const none = await selected()
     const running = await selected()
     await runOf(running.id, { status: 'running', startedAt: ago(config.research.staleRunMinutes - 5) })
@@ -79,12 +99,25 @@ describeDb('research queue and publish gate (PostgreSQL)', () => {
     expect(await awaitingResearch([completed.id, failed.id, cutOff.id, applied.id, analyzed.id], NOW)).toEqual(new Set())
   })
 
-  it('holds nothing while the job is disabled or research is switched off', async () => {
+  it('lets through a story selected longer ago than the longest wait, or with no record of when, whatever its runs', async () => {
+    const { maxWaitMinutes } = config.research.pipeline
+    const recent = await selected(new Date(), ago(maxWaitMinutes - 5))
+    const waitedLong = await selected(new Date(), ago(maxWaitMinutes + 5))
+    const waitedLongRunning = await selected(new Date(), ago(maxWaitMinutes + 5))
+    await runOf(waitedLongRunning.id, { status: 'running' })
+    const unknown = await selected(new Date(), null)
+
+    expect(await awaitingResearch([recent.id, waitedLong.id, waitedLongRunning.id, unknown.id], NOW)).toEqual(new Set([recent.id]))
+  })
+
+  it.each([
+    ['in shadow mode (owner decision 2026-11-12)', () => (switches.mode = 'shadow')],
+    ['while apply mode is held back by the owner’s gate', () => (switches.applyEnabled = false)],
+    ['while the job is disabled', () => setJob(false)],
+    ['while research is switched off', () => vi.stubEnv('TAVILY_API_KEY', '')],
+  ])('holds nothing %s', async (_name, arrange) => {
     const s = await selected()
-    await setJob(false)
-    expect(await awaitingResearch([s.id], NOW)).toEqual(new Set())
-    await setJob(true)
-    vi.stubEnv('TAVILY_API_KEY', '')
+    await arrange()
     expect(await awaitingResearch([s.id], NOW)).toEqual(new Set())
   })
 
@@ -104,15 +137,15 @@ describeDb('research queue and publish gate (PostgreSQL)', () => {
     expect(await nextToResearch(2)).toEqual([oldest.id, byEditor.id])
   })
 
-  it('tells whether one story is still owed, by the queue’s rule', async () => {
+  it('gives a story still owed by the queue’s rule with its last write, which the apply is fenced on, and nothing for any other', async () => {
     const owed = await selected()
     const done = await selected()
     await runOf(done.id, { status: 'failed' })
     const published = await createStory({ feedId, status: 'published' })
 
-    expect(await stillOwed(owed.id)).toBe(true)
-    expect(await stillOwed(done.id)).toBe(false)
-    expect(await stillOwed(published.id)).toBe(false)
-    expect(await stillOwed('no-such-story')).toBe(false)
+    expect(await owedStory(owed.id)).toEqual({ updatedAt: (await prisma.story.findUniqueOrThrow({ where: { id: owed.id } })).updatedAt })
+    expect(await owedStory(done.id)).toBeNull()
+    expect(await owedStory(published.id)).toBeNull()
+    expect(await owedStory('no-such-story')).toBeNull()
   })
 })

@@ -141,6 +141,15 @@ async function run(storyId: string, n = 1, over: { status?: 'running' | 'complet
 
 const stored = (id: string) => prisma.story.findUniqueOrThrow({ where: { id } })
 
+/**
+ * The selected story as the research step reads it before its run. Its last write is set back first,
+ * so a write during the run moves `updatedAt` on even within one millisecond.
+ */
+async function readBeforeRun(id: string) {
+  const { updatedAt } = await prisma.story.update({ where: { id }, data: { updatedAt: new Date('2026-01-01T00:00:00Z') }, select: { updatedAt: true } })
+  return { status: 'selected' as const, updatedAt }
+}
+
 describeDb('applying and reverting research (PostgreSQL)', () => {
   useTestDatabase()
 
@@ -263,30 +272,62 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     "a pipeline apply whose story an editor moved to %s during the run is skipped, and the editor's move stands",
     async moved => {
       const s = await story('selected')
+      const read = await readBeforeRun(s.id)
       await updateStoryStatus(s.id, moved)
 
-      expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1))).toBe('skipped')
+      expect(await applyVerdict(s.id, 'run-1', read, result(s.id, 1))).toBe('skipped')
       const after = await stored(s.id)
       expect(after).toMatchObject({ status: moved, title: SINGLE_SOURCE.title, research: null, preResearch: null })
     },
   )
 
-  it("a pipeline apply whose story an editor publishes during the embedding call is skipped by the status fence, and the editor's move stands", async () => {
+  it("a pipeline apply whose story an editor publishes during the embedding call is skipped by the fence, and the editor's move stands", async () => {
     const s = await story('selected')
+    const read = await readBeforeRun(s.id)
     mockGenerate.mockImplementationOnce(async () => {
       await updateStoryStatus(s.id, 'published')
       return { embedding: axisVector(7), hash: 'researched' }
     })
 
-    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1))).toBe('skipped')
+    expect(await applyVerdict(s.id, 'run-1', read, result(s.id, 1))).toBe('skipped')
     expect(await stored(s.id)).toMatchObject({ status: 'published', title: SINGLE_SOURCE.title, research: null, preResearch: null })
     expect(mockFavicons).not.toHaveBeenCalled()
+  })
+
+  it("an editor's edit during the run is kept: the step neither applies nor rejects, and its completed run can still be applied by hand", async () => {
+    const s = await story('selected')
+    const runId = await run(s.id)
+    const read = await readBeforeRun(s.id)
+    await prisma.story.update({ where: { id: s.id }, data: { emotionTag: 'calm', summary: 'Edited during the run.' } })
+
+    expect(await applyVerdict(s.id, runId, read, result(s.id, 1))).toBe('skipped')
+    expect(await applyVerdict(s.id, runId, read, result(s.id, 1, { verdict: { kind: 'stale', firstHappened: '2026-09-01' } }))).toBe('skipped')
+    expect(await stored(s.id)).toMatchObject({
+      status: 'selected',
+      rejectionReason: null,
+      summary: 'Edited during the run.',
+      emotionTag: 'calm',
+      research: null,
+    })
+    expect(mockGenerate).not.toHaveBeenCalled()
+
+    expect(await applyResearchRun(s.id, runId)).toBe('applied')
+    expect(await stored(s.id)).toMatchObject({ status: 'selected', title: 'Researched headline 1', emotionTag: 'calm' })
+  })
+
+  it("a version an editor applied during the run is kept: the step's own run is not written over it", async () => {
+    const s = await story('selected')
+    const read = await readBeforeRun(s.id)
+    await applyResearchRun(s.id, await run(s.id, 1))
+
+    expect(await applyVerdict(s.id, 'run-2', read, result(s.id, 2))).toBe('skipped')
+    expect(await stored(s.id)).toMatchObject({ status: 'selected', title: 'Researched headline 1' })
   })
 
   it('the research step puts a kept run on its selected story, which stays selected', async () => {
     const s = await story('selected')
 
-    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1))).toBe('applied')
+    expect(await applyVerdict(s.id, 'run-1', await readBeforeRun(s.id), result(s.id, 1))).toBe('applied')
     const after = await stored(s.id)
     expect(after).toMatchObject({ status: 'selected', title: 'Researched headline 1', relevanceSummary: null })
     expect(after.preResearch).toEqual(SINGLE_SOURCE)
@@ -299,21 +340,24 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
   ] as const)('the research step rejects a selected story on a %o verdict with the reason %s, and writes no research', async (verdict, reason) => {
     const s = await story('selected')
 
-    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1, { verdict }))).toBe('rejected')
+    expect(await applyVerdict(s.id, 'run-1', await readBeforeRun(s.id), result(s.id, 1, { verdict }))).toBe('rejected')
     expect(await stored(s.id)).toMatchObject({ status: 'rejected', rejectionReason: reason, title: SINGLE_SOURCE.title, research: null })
   })
 
   it('a research rejection leaves a story an editor published during the run published', async () => {
     const s = await story('selected')
+    const read = await readBeforeRun(s.id)
     await updateStoryStatus(s.id, 'published')
 
-    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1, { verdict: { kind: 'stale', firstHappened: '2026-09-01' } }))).toBe('skipped')
+    expect(await applyVerdict(s.id, 'run-1', read, result(s.id, 1, { verdict: { kind: 'stale', firstHappened: '2026-09-01' } }))).toBe('skipped')
     expect(await stored(s.id)).toMatchObject({ status: 'published', rejectionReason: null })
   })
 
   it('a fallback leaves the story single-source and selected', async () => {
     const s = await story('selected')
-    expect(await applyVerdict(s.id, 'run-1', 'selected', result(s.id, 1, { verdict: { kind: 'fallback', reason: 'budget' } }))).toBe('single-source')
+    expect(await applyVerdict(s.id, 'run-1', await readBeforeRun(s.id), result(s.id, 1, { verdict: { kind: 'fallback', reason: 'budget' } }))).toBe(
+      'single-source',
+    )
     expect(await stored(s.id)).toMatchObject({ ...SINGLE_SOURCE, status: 'selected', research: null, preResearch: null })
   })
 
@@ -325,8 +369,10 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     const kept = await story('selected')
     const low = await story('selected')
 
-    expect(await applyVerdict(kept.id, 'run-1', 'selected', result(kept.id, 1))).toBe('shadow')
-    expect(await applyVerdict(low.id, 'run-2', 'selected', result(low.id, 1, { verdict: { kind: 'research-rating', rating: 2 } }))).toBe('shadow')
+    expect(await applyVerdict(kept.id, 'run-1', await readBeforeRun(kept.id), result(kept.id, 1))).toBe('shadow')
+    expect(await applyVerdict(low.id, 'run-2', await readBeforeRun(low.id), result(low.id, 1, { verdict: { kind: 'research-rating', rating: 2 } }))).toBe(
+      'shadow',
+    )
     for (const id of [kept.id, low.id]) {
       expect(await stored(id)).toMatchObject({ ...SINGLE_SOURCE, status: 'selected', rejectionReason: null, research: null, preResearch: null })
     }

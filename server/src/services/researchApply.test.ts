@@ -285,12 +285,18 @@ describe('pipelineMode', () => {
 })
 
 describe('applyVerdict', () => {
-  const selectedRow = () => storyRow({ status: 'selected' })
+  const selectedRow = (over: Record<string, unknown> = {}) => storyRow({ status: 'selected', ...over })
+  /** The story as the job read it before the run started. */
+  const READ = { status: 'selected' as const, updatedAt: READ_AT }
+  const LATER = new Date(READ_AT.getTime() + 60_000)
+  const stale = { kind: 'stale', firstHappened: '2026-09-01' } as const
 
-  it("in apply mode, puts a kept run's version on the story as the pipeline, against the status read before the run", async () => {
+  beforeEach(() => {
     mockPrisma.story.findUnique.mockResolvedValue(selectedRow())
+  })
 
-    await expect(applyVerdict(STORY, RUN, 'selected', result())).resolves.toBe('applied')
+  it("in apply mode, puts a kept run's version on the story as the pipeline, against the status and last write read before the run", async () => {
+    await expect(applyVerdict(STORY, RUN, READ, result())).resolves.toBe('applied')
 
     const { stage, actor, row, expected } = lastWrite()
     expect([stage, actor, expected]).toEqual(['research', 'pipeline', [[STORY, 'selected']]])
@@ -303,46 +309,62 @@ describe('applyVerdict', () => {
 
   it.each([
     ['research-rating', { kind: 'research-rating', rating: 3 }, 'research_rating'],
-    ['stale', { kind: 'stale', firstHappened: '2026-09-01' }, 'stale'],
+    ['stale', stale, 'stale'],
     ['contradicted', { kind: 'contradicted', factIds: ['S1F1'] }, 'contradicted'],
-  ] as const)('in apply mode, rejects a %s verdict with its reason through the pipeline move', async (_name, verdict, reason) => {
-    await expect(applyVerdict(STORY, RUN, 'selected', result({ verdict }))).resolves.toBe('rejected')
-    expect(mockTransition).toHaveBeenCalledWith([STORY], { to: 'rejected', reason }, 'pipeline')
-    expect(mockRecord).not.toHaveBeenCalled()
-  })
+  ] as const)(
+    'in apply mode, rejects a %s verdict with its reason through the pipeline move, fenced on the last write read before the run',
+    async (_name, verdict, reason) => {
+      await expect(applyVerdict(STORY, RUN, READ, result({ verdict }))).resolves.toBe('rejected')
+      expect(mockTransition).toHaveBeenCalledWith([STORY], { to: 'rejected', reason }, 'pipeline', { where: { updatedAt: READ_AT } })
+      expect(mockRecord).not.toHaveBeenCalled()
+    },
+  )
 
-  it('reports a rejection the move skipped (an editor moved the story meanwhile) as skipped', async () => {
-    mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: STORY, status: 'published' }] })
-    await expect(applyVerdict(STORY, RUN, 'selected', result({ verdict: { kind: 'stale', firstHappened: '2026-09-01' } }))).resolves.toBe('skipped')
+  it('reports a rejection the fenced move skipped (an editor moved or edited the story just before it) as skipped', async () => {
+    mockTransition.mockResolvedValue({ moved: [], skipped: [{ id: STORY, status: 'selected' }] })
+    await expect(applyVerdict(STORY, RUN, READ, result({ verdict: stale }))).resolves.toBe('skipped')
   })
 
   it('leaves the story single-source on a fallback, and on a kept run without a usable draft', async () => {
-    await expect(applyVerdict(STORY, RUN, 'selected', result({ verdict: { kind: 'fallback', reason: 'budget' } }))).resolves.toBe('single-source')
-    await expect(applyVerdict(STORY, RUN, 'selected', result({ draft: null }))).resolves.toBe('single-source')
+    await expect(applyVerdict(STORY, RUN, READ, result({ verdict: { kind: 'fallback', reason: 'budget' } }))).resolves.toBe('single-source')
+    await expect(applyVerdict(STORY, RUN, READ, result({ draft: null }))).resolves.toBe('single-source')
     expect(mockRecord).not.toHaveBeenCalled()
     expect(mockTransition).not.toHaveBeenCalled()
   })
 
+  it.each<[string, Record<string, unknown> | null]>([
+    ['an editor edited it', { updatedAt: LATER, title: 'An editor’s headline' }],
+    ['an editor applied a run to it', { updatedAt: LATER, preResearch: singleSource }],
+    ['an editor moved it', { status: 'published' }],
+    ['it was deleted', null],
+  ])('neither applies nor rejects when, during the run, %s: the editor’s state is kept', async (_name, row) => {
+    mockPrisma.story.findUnique.mockResolvedValue(row && selectedRow(row))
+    for (const verdict of [{ kind: 'keep' }, stale] as const) {
+      await expect(applyVerdict(STORY, RUN, READ, result({ verdict }))).resolves.toBe('skipped')
+    }
+    expect(mockEmbed).not.toHaveBeenCalled()
+    expect(mockRecord).not.toHaveBeenCalled()
+    expect(mockTransition).not.toHaveBeenCalled()
+    expect(mockFavicons).not.toHaveBeenCalled()
+  })
+
   const unknownKind = 'rumor' as ResearchSource['kind']
   it.each<[string, () => unknown, StoredResearch]>([
-    ['the story changed during the run or the write', () => mockRecord.mockResolvedValue(new Map([[STORY, 'skipped']])), result()],
-    ['the story was trashed', () => mockPrisma.story.findUnique.mockResolvedValue(storyRow({ status: 'trashed' })), result()],
-    ['the story was deleted', () => mockPrisma.story.findUnique.mockResolvedValue(null), result()],
+    ['the story changed during the embedding call', () => mockRecord.mockResolvedValue(new Map([[STORY, 'skipped']])), result()],
     ["the run's sources make no version readers can be given", () => undefined, result({ sources: [source('S0', { origin: 'original', kind: unknownKind })] })],
   ])('reports a kept run as skipped, without an error, when %s', async (_name, arrange, run) => {
-    mockPrisma.story.findUnique.mockResolvedValue(selectedRow())
     arrange()
-    await expect(applyVerdict(STORY, RUN, 'selected', run)).resolves.toBe('skipped')
+    await expect(applyVerdict(STORY, RUN, READ, run)).resolves.toBe('skipped')
     expect(mockFavicons).not.toHaveBeenCalled()
   })
 
   it.each([
     ['shadow mode', () => (applyGate.mode = 'shadow')],
     ['apply mode while the owner’s gate is closed', () => (applyGate.enabled = false)],
-  ])('applies no verdict in %s', async (_name, arrange) => {
+  ])('as a backstop to its caller, applies no verdict in %s', async (_name, arrange) => {
     arrange()
     for (const verdict of [{ kind: 'keep' }, { kind: 'research-rating', rating: 3 }, { kind: 'fallback', reason: 'budget' }] as const) {
-      await expect(applyVerdict(STORY, RUN, 'selected', result({ verdict }))).resolves.toBe('shadow')
+      await expect(applyVerdict(STORY, RUN, READ, result({ verdict }))).resolves.toBe('shadow')
     }
     expect(mockPrisma.story.findUnique).not.toHaveBeenCalled()
     expect(mockRecord).not.toHaveBeenCalled()

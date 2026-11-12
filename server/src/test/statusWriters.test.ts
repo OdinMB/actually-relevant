@@ -4,8 +4,9 @@ import { join, relative, sep } from 'path'
 import { SRC, prismaWrites, rawUpdates, sourceFiles } from './writeFence.js'
 
 /**
- * Keeps `services/storyLifecycle.ts` the only code that writes `stories.status` and
- * `stories.rejection_reason` (ADR-0045, `.context/story-pipeline.md`).
+ * Keeps `services/storyLifecycle.ts` the only code that writes `stories.status`,
+ * `stories.rejection_reason` and `stories.selected_at` (ADR-0045, `.context/story-pipeline.md`):
+ * the publish gate's longest wait counts from `selected_at`, so only a move into `selected` sets it.
  *
  * Scans every non-test source file under `src/` except the module itself and `src/scripts/`
  * (one-off operator scripts) for:
@@ -22,14 +23,14 @@ import { SRC, prismaWrites, rawUpdates, sourceFiles } from './writeFence.js'
 const ALLOWED = new Set([join('services', 'storyLifecycle.ts')])
 const SKIPPED_DIRS = new Set([join('scripts'), join('test')])
 const OPERATIONS = ['create', 'createMany', 'update', 'updateMany', 'updateManyAndReturn', 'upsert']
-const STATUS_KEYS = new Set(['status', 'rejectionReason'])
+const STATUS_KEYS = new Set(['status', 'rejectionReason', 'selectedAt'])
 
 export function statusWrites(src: string): string[] {
-  return [...prismaWrites(src, 'story', OPERATIONS, STATUS_KEYS), ...rawUpdates(src, 'stories', /\b(status|rejection_reason)\b/i)]
+  return [...prismaWrites(src, 'story', OPERATIONS, STATUS_KEYS), ...rawUpdates(src, 'stories', /\b(status|rejection_reason|selected_at)\b/i)]
 }
 
 describe('story status writers', () => {
-  it('only the lifecycle module writes stories.status or rejection_reason', () => {
+  it('only the lifecycle module writes stories.status, rejection_reason or selected_at', () => {
     const offenders = sourceFiles(SRC, ALLOWED, SKIPPED_DIRS).flatMap(path =>
       statusWrites(readFileSync(path, 'utf8')).map(w => `${relative(SRC, path).split(sep).join('/')}: ${w}`),
     )
@@ -43,6 +44,8 @@ describe('story status writers', () => {
     expect(statusWrites(`await prisma.story.upsert({ where: { id }, create: { id }, update: { status } })`)).toHaveLength(1)
     expect(statusWrites("await prisma.$executeRaw`UPDATE stories SET status = 'trashed' WHERE id = ${id}`")).toHaveLength(1)
     expect(statusWrites('await prisma.$executeRaw`UPDATE "stories" s SET rejection_reason = NULL FROM x`')).toHaveLength(1)
+    expect(statusWrites(`await prisma.story.update({ where: { id }, data: { selectedAt: new Date() } })`)).toHaveLength(1)
+    expect(statusWrites('await prisma.$executeRaw`UPDATE stories SET selected_at = now() WHERE id = ${id}`')).toHaveLength(1)
   })
 
   it('the scan ignores status in filters and other tables', () => {

@@ -5,13 +5,18 @@
 import { config } from '../config.js'
 import { pipelineMode } from '../services/researchApply.js'
 
-/** The research step's mode in effect, so an apply held back by the owner's gate shows as shadow, with why. */
+/**
+ * The research step's mode in effect, so an apply held back by the owner's gate shows as shadow, with
+ * why, and whether publishing waits for it (only in apply mode, owner decision 2026-11-12).
+ */
 function researchMode(): string {
-  const perRun = `up to ${config.research.pipeline.perRun} stories a run`
+  const { perRun, maxWaitMinutes } = config.research.pipeline
+  const limit = `up to ${perRun} stories a run`
   const mode = pipelineMode()
-  if (mode.mode === 'apply') return `Apply mode: verdicts are applied; ${perRun}`
-  if (mode.heldBack) return `Shadow mode, apply held back (${mode.heldBack}); ${perRun}`
-  return `Shadow mode: runs are stored, no verdict is applied; ${perRun}`
+  if (mode.mode === 'apply')
+    return `Apply mode: verdicts are applied, publishing holds stories selected under ${maxWaitMinutes} min ago; a run while disabled is a shadow trial; ${limit}`
+  if (mode.heldBack) return `Shadow mode, apply held back (${mode.heldBack}): publishing does not wait; ${limit}`
+  return `Shadow mode: runs are stored, no verdict is applied, publishing does not wait; ${limit}`
 }
 
 const JOB_SETTINGS: Readonly<Record<string, () => string>> = {
