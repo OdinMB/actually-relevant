@@ -51,6 +51,7 @@ const mastodon = await import('./mastodon.js')
 const { pickShortlist, buildContent } = await import('./newsletter.js')
 const { pickUpliftingShortlist } = await import('./upliftingIssue.js')
 const { selectEpisodeStories, writeEpisodeScript, loadEpisodeStories } = await import('./podcastScript.js')
+const { buildResearchedStory } = await import('./researchedStory.js')
 
 /** The prompts sent while `run` ran; a model failure after the last prompt is expected. */
 async function promptsOf(run: () => Promise<unknown>): Promise<string[]> {
@@ -315,5 +316,32 @@ describe('podcast prompts', () => {
       issue: `Frozen issue ${i + 1}`,
     }))
     expect(await promptsOf(async () => writeEpisodeScript(await loadEpisodeStories(snapshots), 'weekly', 'full'))).toMatchSnapshot()
+  })
+
+  it('scripts a researched story from its story text and the others from their summary; a version that fails its schema falls back too', async () => {
+    const research = buildResearchedStory({
+      draft: {
+        story: [{ sentences: [{ text: 'Researched one.', factIds: [] }] }, { sentences: [{ text: 'Researched two.', factIds: [] }] }],
+        whyThisMatters: [],
+        caveats: [],
+        quoteSourceId: 'S0',
+      },
+      sources: [],
+      earlier: [],
+    })
+    const stored = JSON.parse(JSON.stringify(research)) as unknown
+    mockPrisma.story.findMany.mockResolvedValue(
+      pool.map(s => (s.id === 'story-1' ? { ...s, research: stored } : s.id === 'story-2' ? { ...s, research: { paragraphs: 'broken' } } : s)),
+    )
+    const snapshots = pool
+      .slice(0, 4)
+      .map((s, i) => ({ ref: i + 1, id: s.id, title: `T${i}`, publisher: 'P', sourceUrl: s.sourceUrl, slug: s.slug, issue: 'I' }))
+
+    const [prompt] = await promptsOf(async () => writeEpisodeScript(await loadEpisodeStories(snapshots), 'weekly', 'full'))
+
+    expect(prompt).toContain('<SUMMARY>Researched one.\n\nResearched two.</SUMMARY>')
+    expect(prompt).not.toContain('Summary 1<')
+    expect(prompt).toContain('<SUMMARY>Summary 2</SUMMARY>')
+    expect(prompt).toContain('<SUMMARY>Summary 4</SUMMARY>')
   })
 })

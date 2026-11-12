@@ -52,7 +52,8 @@ The table `storyLifecycle.ts` enforces. A move from a status not listed is skipp
 | pre-assess result | pipeline | advance `fetched` → `pre_analyzed` | issue, `relevancePre`, emotion; trashed ids filtered out before the LLM call |
 | pre-assess result | editor | advance `fetched`, `rejected`; refresh `pre_analyzed`, `analyzed`, `selected`, `published` (status kept) | as above |
 | assess result | pipeline | advance `fetched`, `pre_analyzed` → `analyzed`; refresh `analyzed`, `selected`, `published` | fields and embedding in one transaction; dedup after commit |
-| assess result | editor | as pipeline, plus advance `rejected` | a refreshed published story is re-embedded; `trashed` skipped before the LLM call and again at the write |
+| assess result | editor | as pipeline, plus advance `rejected` | a refreshed published story is re-embedded; `trashed` skipped before the LLM call and again at the write; clears a researched version (`research`, `preResearch`) |
+| research apply or revert (stage `research`) | editor (`applyResearchRun`, `revertResearch`) | refresh `analyzed`, `selected`, `published`, `rejected` (status kept; never advances) | the swapped fields, `research`, `preResearch` and the embedding in one write, fenced on the status read just before; `trashed` 409 "restore it first"; a status that changed in between 409 (`story-research.md`, "Applying a run") |
 | assess threshold | pipeline | `pre_analyzed` | `rejected`/`assess_threshold` |
 | select threshold | pipeline | `analyzed` | `rejected`/`select_threshold` |
 | select | pipeline (job, `/select`, `/bulk-select`) | `analyzed` | `selected`, or `rejected`/`selection`; the pool read is `analyzed` only, other ids skipped |
@@ -167,3 +168,10 @@ Stories carry both crawled data and AI-generated analysis:
 - `relevanceReasons` — detailed factor bullet points (newline-separated)
 - `antifactors` — limiting factor bullet points (newline-separated)
 - `relevanceCalculation` — rating calculation steps (newline-separated)
+
+**Researched version** (set when an editor applies a research run, `story-research.md`, "Applying a run"):
+- The swapped fields (`title`, `titleLabel`, `summary`, `quote`, `quoteAttribution`, `marketingBlurb`, `relevanceReasons`, `antifactors`, `relevance`, `relevanceCalculation`) then hold the run's researched text, and `relevanceSummary` is null, so its readers fall back to the researched summary or bullets.
+- `research` (jsonb) — the cited version the story page shows (`services/researchedStory.ts`).
+- `preResearch` (jsonb) — every swapped field's value before the first apply, `relevanceSummary` included; `researched` on the public detail is whether it is set.
+- Both are null on a single-source story. A revert writes `preResearch` back and clears both; a re-assess clears both and writes a fresh single-source analysis.
+- While `preResearch` is set, `PUT /api/admin/stories/:id` refuses with 409 "Revert to single-source first" an edit that changes a swapped field (`SWAPPED_FIELDS`, `services/researchSwap.ts`); the edit form disables those fields and says why.

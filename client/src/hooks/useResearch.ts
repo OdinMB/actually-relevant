@@ -1,8 +1,9 @@
 import { useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ResearchRun } from '@shared/types'
 import { adminApi, ApiError } from '../lib/admin-api'
 import { useBackgroundTasks } from './useBackgroundTasks'
+import { invalidateStoryQueries } from './useStories'
 
 /** How often a story's runs are re-read while one of them is running. */
 export const RESEARCH_POLL_MS = 5000
@@ -68,4 +69,22 @@ export function useStartResearch(storyId: string) {
   }, [launchPolledTask, refresh, storyId])
 
   return { start, running: processingIds.has(storyId) }
+}
+
+/** Put a run's researched version on the story. It rewrites the story's text fields, so every story query is re-read. */
+export function useApplyResearch(storyId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => adminApi.research.apply(storyId, runId),
+    onSuccess: () => invalidateStoryQueries(queryClient),
+  })
+}
+
+/** Give the story its single-source analysis back; every story query is re-read. */
+export function useRevertResearch(storyId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => adminApi.research.revert(storyId),
+    onSuccess: () => invalidateStoryQueries(queryClient),
+  })
 }

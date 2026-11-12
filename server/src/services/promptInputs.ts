@@ -232,9 +232,14 @@ export function podcastSelectStory(
   }
 }
 
-/** A story's dialogue-prompt material under the episode's frozen snapshot (its ref, issue, title and publisher). */
+/**
+ * A story's dialogue-prompt material under the episode's frozen snapshot (its ref, issue, title and
+ * publisher). A researched story gives its story text (`storyText`, the paragraphs without
+ * citations) in place of the summary; its "why it matters" is the researched bullets, since an
+ * applied run leaves no relevance summary.
+ */
 export function podcastScriptStory(
-  s: { summary: string | null; relevanceSummary?: string | null; relevanceReasons: string | null; antifactors: string | null },
+  s: { summary: string | null; storyText?: string | null; relevanceSummary?: string | null; relevanceReasons: string | null; antifactors: string | null },
   snapshot: { ref: number; issue: string; title: string; publisher: string },
 ): StoryForPodcast {
   return {
@@ -242,7 +247,7 @@ export function podcastScriptStory(
     issue: snapshot.issue,
     title: snapshot.title,
     publisher: snapshot.publisher,
-    summary: s.summary || '',
+    summary: s.storyText || s.summary || '',
     whyItMatters: s.relevanceSummary || s.relevanceReasons || '',
     limitingFactors: s.antifactors || '',
   }

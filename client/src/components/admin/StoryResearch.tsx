@@ -5,6 +5,7 @@ import { Select } from '../ui/Select'
 import { useResearchRuns, useResearchUsage, useStartResearch } from '../../hooks/useResearch'
 import { formatDateWithTime } from '../../lib/constants'
 import { ResearchRunView, verdictName } from './ResearchRunView'
+import { canUseVersion, RevertToSingleSource, UseRunVersion } from './ResearchVersion'
 
 /** The statuses a run may start from (server: `RESEARCHABLE_STATUSES` in services/researchInput.ts). */
 const RESEARCHABLE: readonly string[] = ['analyzed', 'selected', 'published']
@@ -27,10 +28,11 @@ function runLabel(run: ResearchRun): string {
 
 /**
  * The story's research section in the edit form: the month's spend against the cap, the Research
- * button (visible with its reason when a run cannot start) and the story's runs. Hidden against a
- * backend without research. A run writes nothing to the story; its verdict is only shown.
+ * button (visible with its reason when a run cannot start), the story's runs and which version the
+ * story shows (`ResearchVersion.tsx`). Hidden against a backend without research. A run writes
+ * nothing to the story until an editor uses its version.
  */
-export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status'> }) {
+export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 'preResearch'> }) {
   const usage = useResearchUsage()
   const runs = useResearchRuns(story.id, usage.data != null)
   const { start, running } = useStartResearch(story.id)
@@ -49,11 +51,12 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status'> }
       <div>
         <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Research</h3>
         <p className="text-sm text-neutral-600">
-          Admin only, nothing is published.
+          Admin only: a run changes nothing on the story until you use its version.
           {usage.data &&
             ` This month: ${money(usage.data.monthToDateUsd)} of ${money(usage.data.monthlyCapUsd)} spent; each run reserves ${money(usage.data.reservationUsd)} until it ends.`}
         </p>
       </div>
+      <RevertToSingleSource story={story} />
       <ReasonButton type="button" variant="secondary" reason={reason} onClick={start}>
         Research this story
       </ReasonButton>
@@ -67,6 +70,7 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status'> }
             onChange={e => setChosenId(e.target.value)}
             options={list.map(r => ({ value: r.id, label: runLabel(r) }))}
           />
+          {canUseVersion(chosen) && <UseRunVersion story={story} run={chosen} switchedOff={usage.data?.enabled === false ? usage.data.refusal : null} />}
           <ResearchRunView run={chosen} />
         </>
       )}

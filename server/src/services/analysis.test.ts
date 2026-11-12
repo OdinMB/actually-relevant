@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { sampleStory, sampleFeed, sampleIssue } from '../test/helpers.js'
 import { assessResultSchema } from '../schemas/llm.js'
 import { AI_GENERATED_STORY_FIELDS } from '../lib/aiProvenance.js'
@@ -264,6 +265,33 @@ describe('assessStory', () => {
     )
     // Written against the status read before the model call
     expect([...mockRecordAnalysis.mock.calls.at(-1)![3]]).toEqual([['story-1', expect.any(String)]])
+  })
+
+  it('clears a researched version: the fresh analysis is single-source', async () => {
+    mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1', status: 'published' }))
+    mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1], hash: 'h1' })
+    mockGetMediumLLM.mockReturnValue({
+      withStructuredOutput: () => ({
+        invoke: vi.fn().mockResolvedValue({
+          publicationDate: '',
+          quote: '',
+          quoteAttribution: '',
+          summary: 'Summary',
+          factors: ['Factor'],
+          limitingFactors: [],
+          relevanceCalculation: ['calc'],
+          conservativeRating: 5,
+          relevanceSummary: 'Rel',
+          titleLabel: 'Topic',
+          relevanceTitle: 'Title',
+          marketingBlurb: 'Blurb',
+        }),
+      }),
+    })
+
+    await assessStory('story-1', 'editor')
+
+    expect(recordedRows()[0].data).toMatchObject({ research: Prisma.DbNull, preResearch: Prisma.DbNull })
   })
 
   it('throws when story not found', async () => {

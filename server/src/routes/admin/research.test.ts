@@ -20,6 +20,7 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 const mockInput = vi.hoisted(() => ({ researchStoriesByIds: vi.fn() }))
 const mockPipeline = vi.hoisted(() => ({ researchStory: vi.fn() }))
+const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), revertResearch: vi.fn() }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/crawler.js', () => ({ crawlFeed: vi.fn(), crawlAllDueFeeds: vi.fn(), crawlUrl: vi.fn() }))
@@ -31,8 +32,10 @@ vi.mock('../../services/researchPipeline.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../../services/researchPipeline.js')>()),
   ...mockPipeline,
 }))
+vi.mock('../../services/researchApply.js', () => mockApply)
 
 const { default: app } = await import('../../app.js')
+const { ConflictError } = await import('../../utils/errors.js')
 const { taskRegistry } = await import('../../lib/taskRegistry.js')
 const { config } = await import('../../config.js')
 
@@ -72,6 +75,8 @@ beforeEach(() => {
   tx.storyResearchRun.aggregate.mockResolvedValue({ _sum: { costUsd: 1 } })
   tx.storyResearchRun.create.mockResolvedValue({ id: 'run-1' })
   mockPrisma.storyResearchRun.aggregate.mockResolvedValue({ _sum: { costUsd: 1.5 } })
+  mockApply.applyResearchRun.mockResolvedValue('applied')
+  mockApply.revertResearch.mockResolvedValue(undefined)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -129,6 +134,46 @@ describe('GET /api/admin/research/stories/:storyId/runs', () => {
     })
     expect(res.body[1]).toMatchObject({ status: 'failed', cost: null, result: null })
     expect(mockPrisma.storyResearchRun.updateMany).toHaveBeenCalled()
+  })
+})
+
+// What applying and reverting write is researchApply's tests'; here, what each request answers
+describe('POST /api/admin/research/stories/:storyId/runs/:runId/apply and /revert', () => {
+  const apply = () => request(app).post(`/api/admin/research/stories/${STORY}/runs/run-1/apply`).set(authHeader())
+  const revert = () => request(app).post(`/api/admin/research/stories/${STORY}/revert`).set(authHeader())
+
+  it("puts the run's researched version on the story as the editor, answering 204", async () => {
+    const res = await apply()
+    expect(res.status).toBe(204)
+    expect(mockApply.applyResearchRun).toHaveBeenCalledWith(STORY, 'run-1')
+  })
+
+  it('reverts the story to single-source, answering 204', async () => {
+    const res = await revert()
+    expect(res.status).toBe(204)
+    expect(mockApply.revertResearch).toHaveBeenCalledWith(STORY)
+  })
+
+  it.each([
+    ['apply', apply, mockApply.applyResearchRun],
+    ['revert', revert, mockApply.revertResearch],
+  ])('answers a refusal of %s with its status and reason', async (_name, send, service) => {
+    service.mockRejectedValue(new ConflictError('A trashed story cannot be reverted: restore it first'))
+    const res = await send()
+    expect(res.status).toBe(409)
+    expect(res.body).toEqual({ error: 'A trashed story cannot be reverted: restore it first' })
+  })
+
+  it('answers 500 with its own text when the embedding fails', async () => {
+    mockApply.applyResearchRun.mockRejectedValue(new Error('openai down'))
+    const res = await apply()
+    expect(res.status).toBe(500)
+    expect(res.body.error).toBe('Failed to apply the research')
+  })
+
+  it('needs a signed-in editor or admin', async () => {
+    expect((await request(app).post(`/api/admin/research/stories/${STORY}/revert`)).status).toBe(401)
+    expect(mockApply.revertResearch).not.toHaveBeenCalled()
   })
 })
 

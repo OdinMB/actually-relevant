@@ -356,12 +356,16 @@ export const adminApi = {
     unpublish: (id: string) => request<Podcast>(`/podcasts/${id}/unpublish`, { method: 'POST' }),
   },
 
-  // Story research (admin only; nothing is published). A backend without it answers 404.
+  // Story research (admin only; a run reaches readers only through apply). A backend without it answers 404.
   research: {
     usage: () => request<ResearchUsage>('/research/usage'),
     runs: (storyId: string) => request<ResearchRun[]>(`/research/stories/${storyId}/runs`),
     /** 409 when switched off, at the cap, for an ineligible story or while a run of it is in progress. */
     start: (storyId: string) => request<{ taskId: string; runId: string }>(`/research/stories/${storyId}/runs`, { method: 'POST' }),
+    /** Put the run's researched version on the story (published at once on a published story); 409 for a run or status that cannot take it. */
+    apply: (storyId: string, runId: string) => request<void>(`/research/stories/${storyId}/runs/${runId}/apply`, { method: 'POST' }),
+    /** Give the story its single-source analysis back; 409 without a researched version or on a trashed story. */
+    revert: (storyId: string) => request<void>(`/research/stories/${storyId}/revert`, { method: 'POST' }),
   },
 
   // Jobs

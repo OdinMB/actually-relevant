@@ -14,7 +14,8 @@ import type { z } from 'zod'
 import type { updateStorySchema } from '../schemas/story.js'
 import { repairClusters } from './clusterRepair.js'
 import { forgetRelatedStories } from './relatedStories.js'
-import { BadRequestError, NotFoundError } from '../utils/errors.js'
+import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors.js'
+import { SWAPPED_FIELDS, SWAPPED_SELECT, swappedEdits } from './researchSwap.js'
 import { dissolveCluster as dissolveClusterById, editorMoveTo, initialStatus, transition } from './storyLifecycle.js'
 
 const log = createLogger('story')
@@ -55,9 +56,11 @@ export type StoryUpdate = z.infer<typeof updateStorySchema>
  * Apply an admin edit: the fields first, then, if the edit names a status, the editor's move to
  * it (two steps, decision 13 of the lifecycle plan: a refused move leaves the saved fields). An
  * edit of a published story's title, label or summary regenerates its embedding before the write
- * and fails the edit if that fails; a publish ensures the embedding as every publish does.
+ * and fails the edit if that fails; a publish ensures the embedding as every publish does. While a
+ * research run is applied, an edit that changes one of its columns is refused (409).
  */
 export async function updateStory(id: string, input: StoryUpdate): Promise<Story> {
+  await refuseResearchedEdits(id, input)
   const { sourceDatePublished, status, ...fields } = input
   const updateData: Prisma.StoryUncheckedUpdateInput = {
     ...fields,
@@ -70,6 +73,22 @@ export async function updateStory(id: string, input: StoryUpdate): Promise<Story
   // for an unknown story) goes through the field write
   if (!status || Object.keys(updateData).length > 0) await writeFields(id, input, updateData)
   return status ? moveOne(id, status) : prisma.story.findUniqueOrThrow({ where: { id } })
+}
+
+/**
+ * While a research run is applied (`pre_research` set), the swapped columns hold its researched
+ * version: an edit of one would drift from the cited story and be lost on a revert. The edit form
+ * sends every field, so only a changed value is refused. Unknown stories pass, to answer 404 below.
+ */
+async function refuseResearchedEdits(id: string, input: StoryUpdate): Promise<void> {
+  if (!SWAPPED_FIELDS.some(field => input[field] !== undefined)) return
+  const story = await prisma.story.findUnique({ where: { id }, select: { preResearch: true, ...SWAPPED_SELECT } })
+  if (story?.preResearch == null) return
+  if (swappedEdits(input, story).length > 0) {
+    throw new ConflictError(
+      "Revert to single-source first: this story's headline, label, rating, summary, quote, blurb and analysis are its researched version",
+    )
+  }
 }
 
 async function writeFields(id: string, input: StoryUpdate, updateData: Prisma.StoryUncheckedUpdateInput): Promise<void> {

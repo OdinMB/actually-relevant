@@ -102,6 +102,11 @@ export interface Story {
   clusterId: string | null
   createdAt: string
   updatedAt: string
+  /**
+   * Admin reads only: the single-source values an applied research run replaced, which a revert
+   * restores; set while the story carries its researched version (`.context/story-research.md`).
+   */
+  preResearch?: Record<string, unknown> | null
   issue?: { id: string; name: string; slug: string; parentId?: string | null; parent?: { id: string; name: string; slug: string } | null } | null
   feed?: {
     title: string

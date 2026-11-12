@@ -17,6 +17,7 @@ import { dialogueCharBudget, validateDialogue } from './podcastDialogue.js'
 import { podcastEditionInfo } from './podcastEdition.js'
 import { PodcastBlockedError } from './podcastGuards.js'
 import { podcastHeading, podcastScriptStory, podcastSelectStory } from './promptInputs.js'
+import { storedResearchText } from './researchedStory.js'
 
 const log = createLogger('podcast-script')
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -77,6 +78,7 @@ export const storySelect = {
   antifactors: true,
   relevance: true,
   emotionTag: true,
+  research: true,
   issue: { select: { name: true, parent: { select: { name: true } } } },
   feed: { select: { title: true, displayTitle: true, issue: { select: { name: true, parent: { select: { name: true } } } } } },
 } as const
@@ -126,9 +128,12 @@ export const storyFacts = (s: PoolStory): Omit<EpisodeStory, 'ref'> => {
 /** The frozen snapshot of a story at position `ref` in the episode. */
 export const snapshotOf = (s: PoolStory, ref: number): EpisodeStory => ({ ref, ...storyFacts(s) })
 
+/** The dialogue prompt's material of a story: a researched one's story text in place of its summary. */
+const scriptMaterial = (s: PoolStory, snapshot: EpisodeStory) => podcastScriptStory({ ...s, storyText: storedResearchText(s.research) }, snapshot)
+
 function toSelected(s: PoolStory, ref: number): SelectedStory {
   const snapshot = snapshotOf(s, ref)
-  return { snapshot, prompt: podcastScriptStory(s, snapshot) }
+  return { snapshot, prompt: scriptMaterial(s, snapshot) }
 }
 
 /** A story of the week's pool as the story picker lists it, ready to become a snapshot. */
@@ -149,7 +154,7 @@ export async function loadEpisodeStories(snapshots: EpisodeStory[]): Promise<Sel
   return snapshots.map(snapshot => {
     const story = byId.get(snapshot.id)
     if (!story) throw new Error(`story "${snapshot.title}" is no longer published; change the selection`)
-    return { snapshot, prompt: podcastScriptStory(story, snapshot) }
+    return { snapshot, prompt: scriptMaterial(story, snapshot) }
   })
 }
 

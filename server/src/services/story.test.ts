@@ -5,6 +5,7 @@ const mockPrisma = vi.hoisted(() => ({
     findMany: vi.fn(),
     findFirst: vi.fn(),
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -27,13 +28,15 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
   },
   $disconnect: vi.fn(),
+  // No row for the embedding read: an edit of an unknown or unpublished story makes no embedding call
+  $queryRaw: vi.fn(async () => []),
   $transaction: vi.fn((args: any) => (Array.isArray(args) ? Promise.all(args) : args())),
 }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 
 // The dissolve itself runs on PostgreSQL in storyLifecycle.db.test.ts ("the per-story dissolve")
-const { getStoryIdsByStatus, getStories, deleteStory, dissolveCluster, getClusterRedirectSlug, createStory } = await import('./story.js')
+const { getStoryIdsByStatus, getStories, deleteStory, dissolveCluster, getClusterRedirectSlug, createStory, updateStory } = await import('./story.js')
 
 describe('getStories', () => {
   beforeEach(() => {
@@ -132,6 +135,50 @@ describe('createStory', () => {
     await createStory({ ...base, accessTier })
 
     expect(mockPrisma.story.create.mock.calls[0][0].data).toMatchObject({ status: 'fetched', accessTier: accessTier ?? null })
+  })
+})
+
+describe('updateStory on a researched story', () => {
+  const stored = {
+    title: 'Researched headline',
+    titleLabel: 'Label',
+    summary: 'Researched summary.',
+    quote: null,
+    quoteAttribution: null,
+    marketingBlurb: 'Blurb.',
+    relevanceReasons: '- It matters.',
+    relevanceSummary: null,
+    antifactors: '- A caveat.',
+    relevance: 5,
+    relevanceCalculation: '- **Scale:** 5',
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.story.findUnique.mockResolvedValue({ ...stored, preResearch: { title: 'Single-source headline' } })
+    mockPrisma.story.update.mockResolvedValue({ id: 'story-1', status: 'analyzed' })
+    mockPrisma.story.findUniqueOrThrow.mockResolvedValue({ id: 'story-1' })
+  })
+
+  it.each([
+    ['the headline', { title: 'Edited headline' }],
+    ['the rating', { relevance: 8 }],
+    ['the relevance summary, which the researched version leaves empty', { relevanceSummary: 'A new one.' }],
+    ['the blurb, by clearing it among unchanged fields', { ...stored, marketingBlurb: null }],
+  ])('refuses an edit of %s: revert to single-source first', async (_name, edit) => {
+    await expect(updateStory('story-1', edit)).rejects.toThrow(/Revert to single-source first/)
+    expect(mockPrisma.story.update).not.toHaveBeenCalled()
+  })
+
+  it('saves an edit that sends the researched fields unchanged, as the edit form does, with other fields changed', async () => {
+    await updateStory('story-1', { ...stored, emotionTag: 'scary' })
+    expect(mockPrisma.story.update).toHaveBeenCalledWith({ where: { id: 'story-1' }, data: expect.objectContaining({ emotionTag: 'scary' }) })
+  })
+
+  it('saves an edit of a story with no researched version', async () => {
+    mockPrisma.story.findUnique.mockResolvedValue({ ...stored, preResearch: null })
+    await updateStory('story-1', { title: 'Edited headline' })
+    expect(mockPrisma.story.update).toHaveBeenCalledWith({ where: { id: 'story-1' }, data: { title: 'Edited headline' } })
   })
 })
 

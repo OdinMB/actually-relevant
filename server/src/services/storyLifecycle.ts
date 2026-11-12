@@ -98,14 +98,16 @@ const describeMove = (move: Move) => (move.to === rejected ? `rejected/${move.re
 
 // ──── Analysis results ──────────────────────────────────────────────────
 
-export type AnalysisStage = 'preassess' | 'assess'
+export type AnalysisStage = 'preassess' | 'assess' | 'research'
 export type AnalysisOutcome = 'advanced' | 'refreshed' | 'skipped'
 
 /**
  * Where an analysis result may land. `advance` moves the story to the stage's status; `refresh`
  * writes the fields and keeps the status, so re-assessing never moves a story backward (a
  * published story stays on the site). Only an editor's analysis re-queues a `rejected` story;
- * `trashed` is never written.
+ * `trashed` is never written. `research` (applying a run's researched version, and reverting it)
+ * never advances, so its `to` is unused: it refreshes in place, a rejected story included, which an
+ * editor may then publish with the researched version.
  */
 const ANALYSIS: Record<AnalysisStage, { to: StoryStatus; advance: Record<Actor, StoryStatus[]>; refresh: StoryStatus[] }> = {
   preassess: {
@@ -117,6 +119,11 @@ const ANALYSIS: Record<AnalysisStage, { to: StoryStatus; advance: Record<Actor, 
     to: analyzed,
     advance: { pipeline: [fetched, pre_analyzed], editor: [fetched, pre_analyzed, rejected] },
     refresh: [analyzed, selected, published],
+  },
+  research: {
+    to: selected,
+    advance: { pipeline: [], editor: [] },
+    refresh: [analyzed, selected, published, rejected],
   },
 }
 

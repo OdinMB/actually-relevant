@@ -197,3 +197,9 @@ export function forReaders(research: ResearchedStory, publishedSlugs: ReadonlyMa
 export function researchedStoryText(research: Pick<ResearchedStory, 'paragraphs'>): string {
   return research.paragraphs.map(p => p.sentences.map(s => s.text).join(' ')).join('\n\n')
 }
+
+/** The text of a stored version (`stories.research`); null without one, or for one that fails its schema, as the story page then serves none. */
+export function storedResearchText(stored: unknown): string | null {
+  const parsed = researchedStorySchema.safeParse(stored)
+  return parsed.success ? researchedStoryText(parsed.data) : null
+}

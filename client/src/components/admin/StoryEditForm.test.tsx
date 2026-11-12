@@ -43,21 +43,21 @@ const story = {
 } as unknown as Story
 
 /** The story's edit page as `StoryDetailPage` mounts it: Save and Cancel go back to the list. */
-function EditPage() {
+function EditPage({ shown }: { shown: Story }) {
   const navigate = useNavigate()
   return (
     <>
       <Link to="/admin/feeds">Feeds</Link>
-      <StoryEditForm story={story} issues={[]} onDone={() => navigate('/admin/stories')} />
+      <StoryEditForm story={shown} issues={[]} onDone={() => navigate('/admin/stories')} />
       <Where />
     </>
   )
 }
 
-function renderPage() {
+function renderPage(shown: Story = story) {
   return renderAdminRoutes(
     [
-      { path: '/admin/stories/:id', element: <EditPage /> },
+      { path: '/admin/stories/:id', element: <EditPage shown={shown} /> },
       { path: '*', element: <Where /> },
     ],
     { history: ['/admin/stories', '/admin/stories/story-1'] },
@@ -114,5 +114,39 @@ describe('StoryEditForm unsaved changes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(where()).toBe('/admin/stories'))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('StoryEditForm on a researched story', () => {
+  const swapped = [
+    'Title Label',
+    'Title',
+    'Rating',
+    'Summary',
+    'Quote',
+    'Quote Attribution',
+    'Marketing Blurb',
+    'Relevance Reasons',
+    'Relevance Summary',
+    'Antifactors',
+    'Relevance Calculation',
+  ]
+  const field = (label: string) => screen.getByLabelText(label, { exact: true })
+
+  it('locks the fields its researched version wrote, says why, and leaves the others editable', () => {
+    renderPage({ ...story, preResearch: { title: 'Single-source headline' } })
+    for (const label of swapped) {
+      expect(field(label)).toBeDisabled()
+      expect(field(label)).toHaveAccessibleDescription(/Revert to single-source first/)
+    }
+    expect(screen.getByText(/Revert to single-source first/)).toBeInTheDocument()
+    expect(field('Pre-rating')).toBeEnabled()
+    expect(field('Status')).toBeEnabled()
+  })
+
+  it('locks nothing on a single-source story', () => {
+    renderPage({ ...story, preResearch: null })
+    for (const label of swapped) expect(field(label)).toBeEnabled()
+    expect(screen.queryByText(/Revert to single-source first/)).toBeNull()
   })
 })

@@ -13,9 +13,19 @@ import { formatStatus, formatDate } from '../../lib/constants'
 import { blueskyPostUrl } from '../../lib/bluesky'
 import { PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
+import { isResearched } from './ResearchVersion'
 import { buildIssueOptions } from './StoryFiltersBar'
 import { StoryResearch } from './StoryResearch'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
+
+/**
+ * The props that lock a field a researched version wrote: the title label, title, rating, summary,
+ * quote and its attribution, blurb and the analysis (server: `SWAPPED_FIELDS` in
+ * services/researchSwap.ts, which refuses an edit to them with 409). Empty on a single-source story.
+ */
+function researchLock(locked: boolean, noteId: string) {
+  return locked ? { disabled: true, 'aria-describedby': noteId, className: 'bg-neutral-50 text-neutral-500 cursor-not-allowed' } : {}
+}
 
 const ACCESS_TIER_LABELS: Record<string, string> = {
   locked: 'Paywall locked (rejected at crawl)',
@@ -96,11 +106,26 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
     },
   })
   const leave = useUnsavedChangesGuard(isDirty)
+  const researched = isResearched(story)
+  const lockNoteId = `research-lock-${story.id}`
+  const lock = researchLock(researched, lockNoteId)
 
   const fields = (
     <>
-      <Input id="edit-title-label" label="Title Label" value={form.titleLabel} onChange={e => set('titleLabel', e.target.value)} placeholder="e.g. EU AI Act" />
-      <Input id="edit-title" label="Title" value={form.title} onChange={e => set('title', e.target.value)} />
+      {researched && (
+        <p id={lockNoteId} className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+          This story shows a researched version, so the fields it wrote are locked. Revert to single-source first to edit them (Research, below).
+        </p>
+      )}
+      <Input
+        id="edit-title-label"
+        label="Title Label"
+        value={form.titleLabel}
+        onChange={e => set('titleLabel', e.target.value)}
+        placeholder="e.g. EU AI Act"
+        {...lock}
+      />
+      <Input id="edit-title" label="Title" value={form.title} onChange={e => set('title', e.target.value)} {...lock} />
       {story.slug &&
         (story.datePublished ? (
           <Input id="edit-slug" label="Slug" value={form.slug} readOnly className="bg-neutral-50 text-neutral-500 cursor-not-allowed" />
@@ -142,33 +167,52 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
           value={String(form.relevancePre)}
           onChange={e => set('relevancePre', e.target.value)}
         />
-        <Input id="edit-rating" label="Rating" type="number" min="1" max="10" value={String(form.relevance)} onChange={e => set('relevance', e.target.value)} />
+        <Input
+          id="edit-rating"
+          label="Rating"
+          type="number"
+          min="1"
+          max="10"
+          value={String(form.relevance)}
+          onChange={e => set('relevance', e.target.value)}
+          {...lock}
+        />
       </div>
-      <Textarea id="edit-summary" label="Summary" rows={3} value={form.summary} onChange={e => set('summary', e.target.value)} />
-      <Input id="edit-quote" label="Quote" value={form.quote} onChange={e => set('quote', e.target.value)} />
+      <Textarea id="edit-summary" label="Summary" rows={3} value={form.summary} onChange={e => set('summary', e.target.value)} {...lock} />
+      <Input id="edit-quote" label="Quote" value={form.quote} onChange={e => set('quote', e.target.value)} {...lock} />
       <Input
         id="edit-quote-attribution"
         label="Quote Attribution"
         value={form.quoteAttribution}
         onChange={e => set('quoteAttribution', e.target.value)}
         placeholder="e.g. Dr. Smith, University of Oxford"
+        {...lock}
       />
-      <Textarea id="edit-blurb" label="Marketing Blurb" rows={3} value={form.marketingBlurb} onChange={e => set('marketingBlurb', e.target.value)} />
-      <Textarea id="edit-reasons" label="Relevance Reasons" rows={3} value={form.relevanceReasons} onChange={e => set('relevanceReasons', e.target.value)} />
+      <Textarea id="edit-blurb" label="Marketing Blurb" rows={3} value={form.marketingBlurb} onChange={e => set('marketingBlurb', e.target.value)} {...lock} />
+      <Textarea
+        id="edit-reasons"
+        label="Relevance Reasons"
+        rows={3}
+        value={form.relevanceReasons}
+        onChange={e => set('relevanceReasons', e.target.value)}
+        {...lock}
+      />
       <Textarea
         id="edit-relevance-summary"
         label="Relevance Summary"
         rows={2}
         value={form.relevanceSummary}
         onChange={e => set('relevanceSummary', e.target.value)}
+        {...lock}
       />
-      <Textarea id="edit-antifactors" label="Antifactors" rows={3} value={form.antifactors} onChange={e => set('antifactors', e.target.value)} />
+      <Textarea id="edit-antifactors" label="Antifactors" rows={3} value={form.antifactors} onChange={e => set('antifactors', e.target.value)} {...lock} />
       <Textarea
         id="edit-calculation"
         label="Relevance Calculation"
         rows={3}
         value={form.relevanceCalculation}
         onChange={e => set('relevanceCalculation', e.target.value)}
+        {...lock}
       />
 
       {/* Source info (read-only) */}
@@ -334,7 +378,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
         </div>
       )}
 
-      {/* Research (admin only; writes nothing to the story) */}
+      {/* Research (admin only; a run writes to the story only when an editor uses its version) */}
       <StoryResearch story={story} />
     </>
   )

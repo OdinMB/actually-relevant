@@ -72,7 +72,7 @@ const { runPublishStories } = await import('../jobs/publishStories.js')
 const { runAssessStories } = await import('../jobs/assessStories.js')
 const { runSelectStories } = await import('../jobs/selectStories.js')
 const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
-const { transition, ClusterChangedError, _retryOnClusterChange } = await import('./storyLifecycle.js')
+const { transition, recordAnalysis, analysisFrom, ClusterChangedError, _retryOnClusterChange } = await import('./storyLifecycle.js')
 const { detectAndCluster } = await import('./dedup.js')
 const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary, createManualCluster, StoriesAlreadyClusteredError } = await import('./cluster.js')
 
@@ -240,6 +240,55 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(after.status).toBe('trashed')
     expect(after.title).toBeNull()
     expect(await embeddingHash(s.id)).toBeNull()
+  })
+
+  it('the research stage writes analyzed, selected, published and rejected stories in place, and never another status', async () => {
+    const stories = {
+      analyzed: await story({ status: 'analyzed' }),
+      selected: await story({ status: 'selected' }),
+      published: await story({ status: 'published', slug: 'r-live', datePublished: new Date() }),
+      rejected: await story({ status: 'rejected', rejectionReason: 'selection' }),
+      trashed: await story({ status: 'trashed' }),
+      fetched: await story({ status: 'fetched' }),
+      pre_analyzed: await story({ status: 'pre_analyzed' }),
+    }
+    const all = Object.values(stories)
+
+    const outcomes = await recordAnalysis(
+      'research',
+      'editor',
+      all.map(s => ({ id: s.id, data: { title: 'Researched' } })),
+      new Map(all.map(s => [s.id, s.status])),
+    )
+
+    for (const [status, s] of Object.entries(stories)) {
+      const refreshed = ['analyzed', 'selected', 'published', 'rejected'].includes(status)
+      expect(outcomes.get(s.id)).toBe(refreshed ? 'refreshed' : 'skipped')
+      const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
+      expect(after).toMatchObject({ status, rejectionReason: s.rejectionReason, title: refreshed ? 'Researched' : null })
+    }
+    expect(analysisFrom('research', 'pipeline')).toEqual(analysisFrom('research', 'editor'))
+  })
+
+  it('a research write skips a story whose status changed since it was read', async () => {
+    const s = await story({ status: 'selected' })
+    await updateStoryStatus(s.id, 'published')
+
+    const outcomes = await recordAnalysis('research', 'pipeline', [{ id: s.id, data: { title: 'Researched' } }], new Map([[s.id, 'selected' as const]]))
+
+    expect(outcomes.get(s.id)).toBe('skipped')
+    expect((await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).title).toBeNull()
+  })
+
+  it('re-assessing a researched story replaces its researched version with the fresh analysis', async () => {
+    const s = await story({ status: 'published', slug: 'researched', datePublished: new Date() })
+    await prisma.story.update({ where: { id: s.id }, data: { research: { paragraphs: [] }, preResearch: { title: 'single-source' } } })
+    mockInvoke.mockResolvedValue(assessAnswer())
+
+    await assessStory(s.id, 'editor')
+
+    const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
+    expect(after).toMatchObject({ title: 'New title', research: null, preResearch: null })
   })
 
   it('re-screening a published story rewrites relevancePre and keeps it published', async () => {
