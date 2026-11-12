@@ -333,6 +333,11 @@ curl "${API_BASE}/stories?publishedSince=2026-10-01T00:00:00Z&minRelevance=7"`}<
             Only want the most significant stories? Add <code>?minRelevance=7</code> to any feed, for example{' '}
             <span className="font-mono text-sm text-brand-700">{API_BASE}/feed/planet-climate?minRelevance=7</span>.
           </p>
+          <p className="mt-3">
+            Only want good news? Add <code>?mix=uplifting</code> for the Actually Uplifting stories, for example{' '}
+            <span className="font-mono text-sm text-brand-700">{API_BASE}/feed?mix=uplifting</span>. The other Mood Dial settings work too: <code>heavy</code>,{' '}
+            <code>mostly-heavy</code>, <code>balanced</code> and <code>mostly-uplifting</code>.
+          </p>
 
           {/* Widgets */}
           <h2 className="section-heading mt-10">Embeddable Widgets</h2>

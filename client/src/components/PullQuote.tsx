@@ -50,8 +50,12 @@ export default function PullQuote({ story, variant = 'centered' }: PullQuoteProp
         </>
       )}
       {' · '}
-      {lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
-      {tail}
+      {/* Browsers may break around the inline-block badge, which once left the comma alone on the
+          next line. The note is short, so it stays on one line as a whole. */}
+      <span className="whitespace-nowrap">
+        {lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
+        {tail}
+      </span>
     </footer>
   )
 

@@ -227,6 +227,28 @@ describe('IssuePage story list', () => {
   })
 })
 
+describe('IssuePage story grid on desktop', () => {
+  /** Columns each card grid fills on desktop, and how many columns its cards take. */
+  function gridRows(container: HTMLElement) {
+    return [...container.querySelectorAll<HTMLElement>('.grid')]
+      .filter(grid => /md:grid-cols-\d/.test(grid.className))
+      .map(grid => ({
+        columns: Number(/md:grid-cols-(\d)/.exec(grid.className)![1]),
+        cells: [...grid.children].reduce((sum, child) => sum + (/md:col-span-2/.test(child.className) ? 2 : 1), 0),
+      }))
+  }
+
+  it.each(Array.from({ length: 12 }, (_, i) => i + 1))('leaves no row part-empty with %i stories on the page', async count => {
+    const stories = Array.from({ length: count }, (_, i) => makeStory({ id: `s${i}`, slug: `s${i}`, title: `Story ${i}` }))
+    mockApi.stories.list.mockResolvedValue(page(stories))
+    const { container } = renderIssue()
+    await screen.findByText(`Story ${count - 1}`)
+
+    expect(container.querySelectorAll('article')).toHaveLength(count)
+    for (const row of gridRows(container)) expect(row.cells % row.columns).toBe(0)
+  })
+})
+
 describe('IssuePage head', () => {
   const meta = (selector: string) => document.head.querySelector(selector)?.getAttribute('content')
 

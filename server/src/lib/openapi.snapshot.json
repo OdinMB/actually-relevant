@@ -353,7 +353,10 @@
     "/api/feed": {
       "get": {
         "operationId": "getRssFeed",
-        "parameters": [{ "in": "query", "name": "minRelevance", "schema": { "maximum": 10, "minimum": 1, "type": "integer" } }],
+        "parameters": [
+          { "in": "query", "name": "minRelevance", "schema": { "maximum": 10, "minimum": 1, "type": "integer" } },
+          { "in": "query", "name": "mix", "schema": { "type": "string" } }
+        ],
         "responses": {
           "200": { "content": { "application/rss+xml": { "schema": { "type": "string" } } } },
           "400": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
@@ -365,7 +368,8 @@
         "operationId": "getRssFeedByIssue",
         "parameters": [
           { "in": "path", "name": "issueSlug", "required": true, "schema": { "type": "string" } },
-          { "in": "query", "name": "minRelevance", "schema": { "maximum": 10, "minimum": 1, "type": "integer" } }
+          { "in": "query", "name": "minRelevance", "schema": { "maximum": 10, "minimum": 1, "type": "integer" } },
+          { "in": "query", "name": "mix", "schema": { "type": "string" } }
         ],
         "responses": {
           "200": { "content": { "application/rss+xml": { "schema": { "type": "string" } } } },

@@ -4,8 +4,10 @@ import { Link } from 'react-router-dom'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { SITE_URL } from '../config'
 import { FIELD_FOCUS, FOCUS_RING } from '../lib/control-classes'
+import { MoodDial } from '../components/PositivitySlider'
+import { mixName, usePositivity } from '../contexts/PositivityContext'
 
-/** The summary and uplifting options: the brand ring from the keyboard, clear of the box by a white gap. */
+/** The summary option: the brand ring from the keyboard, clear of the box by a white gap. */
 const CHECKBOX = `w-4 h-4 rounded border-neutral-300 text-brand-600 ${FOCUS_RING} focus-visible:ring-offset-2`
 
 const ISSUES = [
@@ -24,7 +26,9 @@ export default function WidgetGeneratorPage() {
   const [count, setCount] = useState(3)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [showSummary, setShowSummary] = useState(false)
-  const [upliftingOnly, setUpliftingOnly] = useState(false)
+  // Starts where the reader has the site's dial, so the widget shows what they see
+  const { positivity } = usePositivity()
+  const [mix, setMix] = useState(positivity)
   const [copied, setCopied] = useState<'script' | 'iframe' | null>(null)
 
   const scriptAttrs = [
@@ -33,7 +37,7 @@ export default function WidgetGeneratorPage() {
     count !== 3 && `data-count="${count}"`,
     theme !== 'light' && `data-theme="${theme}"`,
     showSummary && `data-summary="true"`,
-    upliftingOnly && `data-mood="uplifting"`,
+    `data-mix="${mixName(mix)}"`,
   ]
     .filter(Boolean)
     .join(' ')
@@ -45,7 +49,7 @@ export default function WidgetGeneratorPage() {
   if (count !== 3) iframeParams.set('count', String(count))
   if (theme !== 'light') iframeParams.set('theme', theme)
   if (showSummary) iframeParams.set('summary', 'true')
-  if (upliftingOnly) iframeParams.set('mood', 'uplifting')
+  iframeParams.set('mix', mixName(mix))
   const qs = iframeParams.toString()
   const iframeCode = `<iframe src="${EMBED_URL}${qs ? '?' + qs : ''}" width="100%" height="${showSummary ? 600 : 400}" frameborder="0" title="Actually Relevant stories"></iframe>`
 
@@ -150,11 +154,10 @@ export default function WidgetGeneratorPage() {
             </div>
 
             <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={upliftingOnly} onChange={e => setUpliftingOnly(e.target.checked)} className={CHECKBOX} />
-                <span className="text-sm font-medium text-neutral-700">Only uplifting stories</span>
-              </label>
-              <p className="text-xs text-neutral-500 mt-1 ml-6">Show only stories tagged as uplifting.</p>
+              <MoodDial value={mix} onChange={setMix} label="Widget's mix of news, from heavy to uplifting" align="start" />
+              <p className="text-xs text-neutral-500 mt-1">
+                Like the dial in the site's header: from only heavy news to only uplifting stories. It starts at your own setting.
+              </p>
             </div>
           </div>
 

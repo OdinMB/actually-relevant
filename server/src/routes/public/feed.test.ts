@@ -78,6 +78,61 @@ describe('RSS feeds', () => {
     expect(itemDescriptions(res.text)).toEqual(['[AI-generated] Issue summary.', null])
   })
 
+  describe('mix', () => {
+    it('at uplifting, serves the Actually Uplifting feed: only uplifting stories, under its own name', async () => {
+      mockStoryService.getPublishedStories.mockReset()
+      mockStoryService.getPublishedStories.mockResolvedValueOnce({ data: [story('8', 'Good news.')] })
+
+      const res = await request(app).get('/api/feed?mix=uplifting&minRelevance=6')
+
+      expect(res.status).toBe(200)
+      expect(mockStoryService.getPublishedStories).toHaveBeenCalledWith(expect.objectContaining({ emotionTags: ['uplifting'], minRelevance: 6 }))
+      expect(res.text).toContain('<title>Actually Uplifting (relevance 6+)</title>')
+      expect(res.text).toContain('/api/feed?minRelevance=6&amp;mix=uplifting')
+      expect(channelDescription(res.text)).toBe('Actually Uplifting: news that matters to humanity. Written and curated by AI.')
+      expect(itemDescriptions(res.text)).toEqual(['[AI-generated] Good news.'])
+    })
+
+    it('accepts the site numbers too, and caches each position apart', async () => {
+      mockStoryService.getPublishedStories.mockReset()
+      mockStoryService.getPublishedStories.mockResolvedValueOnce({ data: [story('9', 'Same as uplifting.')] })
+
+      const res = await request(app).get('/api/feed?mix=100')
+
+      expect(res.status).toBe(200)
+      expect(mockStoryService.getPublishedStories).toHaveBeenCalledWith(expect.objectContaining({ emotionTags: ['uplifting'] }))
+      expect(res.text).toContain('<title>Actually Uplifting</title>')
+    })
+
+    it('below the far end, mixes positive and negative stories as the homepage does', async () => {
+      mockStoryService.getPublishedStories.mockReset()
+      mockIssueService.getIssueBySlug.mockResolvedValueOnce({ name: 'Planet & Climate' })
+      mockStoryService.getPublishedStories
+        .mockResolvedValueOnce({ data: [story('10', 'Calm one.')] })
+        .mockResolvedValueOnce({ data: [story('11', 'Scary one.')] })
+
+      const res = await request(app).get('/api/feed/planet-climate?mix=mostly-uplifting')
+
+      expect(res.status).toBe(200)
+      expect(mockStoryService.getPublishedStories).toHaveBeenCalledWith(
+        expect.objectContaining({ issueSlug: 'planet-climate', emotionTags: ['uplifting', 'calm'] }),
+      )
+      expect(mockStoryService.getPublishedStories).toHaveBeenCalledWith(
+        expect.objectContaining({ issueSlug: 'planet-climate', emotionTags: ['frustrating', 'scary'] }),
+      )
+      expect(res.text).toContain('<title>Actually Relevant — Planet &amp; Climate (mostly uplifting)</title>')
+      expect(itemDescriptions(res.text)).toHaveLength(2)
+    })
+
+    it.each(['happy', '101', '-1'])('rejects mix=%s with a 400', async value => {
+      mockStoryService.getPublishedStories.mockReset()
+      const res = await request(app).get(`/api/feed?mix=${value}`)
+      expect(res.status).toBe(400)
+      expect(res.body.details.fieldErrors.mix).toEqual(['Must be heavy, mostly-heavy, balanced, mostly-uplifting, uplifting, or a number from 0 to 100'])
+      expect(mockStoryService.getPublishedStories).not.toHaveBeenCalled()
+    })
+  })
+
   describe('minRelevance', () => {
     it('filters the global feed, names the floor in the title and caches it apart from the unfiltered feed', async () => {
       mockStoryService.getPublishedStories.mockReset()

@@ -5,6 +5,7 @@ import { FOCUS_RING } from '../../lib/control-classes'
 import { APPLE_PODCASTS_URL, BRAND, BLUESKY_PROFILE_URL, GITHUB_REPO_URL, KOFI_URL, MASTODON_PROFILE_URL } from '../../config'
 import { FOOTER_LEGAL, FOOTER_NAV, ISSUE_LINKS } from './navLinks'
 import { CategoryColorStrip, PodcastIcon } from './icons'
+import SimpleAnalyticsCredit from './SimpleAnalyticsCredit'
 
 /*
  * Tap targets (WCAG 2.2 target size, 2.5.8): every footer link is at least 24px tall. The list
@@ -109,6 +110,7 @@ export default function SiteFooter() {
             </div>
             <LegalLinks className="hidden md:flex gap-4 mt-4" />
             <Copyright className="hidden md:block text-xs text-neutral-400 mt-2" />
+            <SimpleAnalyticsCredit className="hidden md:block mt-1" />
           </div>
 
           {/* Navigation column */}
@@ -223,6 +225,7 @@ export default function SiteFooter() {
         <div className="mt-5 md:hidden text-center">
           <LegalLinks className="flex justify-center gap-5" />
           <Copyright className="text-xs text-neutral-400 mt-2" />
+          <SimpleAnalyticsCredit className="" />
         </div>
       </div>
     </footer>

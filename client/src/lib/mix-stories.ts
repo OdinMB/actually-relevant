@@ -1,3 +1,5 @@
+// The mix rule here is copied in client/public/widget.js and server/src/lib/feedMix.ts: change all
+// three together (.context/public-website.md, "Widgets and the Mood Dial").
 import type { PublicStory } from '@shared/types'
 
 export interface StoryBuckets {

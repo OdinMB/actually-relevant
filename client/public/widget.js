@@ -84,26 +84,104 @@
     return div.innerHTML
   }
 
-  var params = new URLSearchParams()
-  params.set('pageSize', String(config.count))
-  params.set('page', '1')
-  if (config.issue) params.set('issueSlug', config.issue)
-  // Tells the API this request is a widget load, which it counts as a widget view (no other data
-  // is sent). A query parameter, not a header, so the request needs no CORS preflight.
-  params.set('ref', 'widget')
+  // The Mood Dial (data-mix), with the site's names and numbers (client/src/contexts/PositivityContext.tsx);
+  // data-mood="uplifting" is the older spelling of data-mix="uplifting". null: every story, newest first.
+  // The mix rule is copied from client/src/lib/mix-stories.ts and also lives in server/src/lib/feedMix.ts:
+  // change all three together (.context/public-website.md, "Widgets and the Mood Dial").
+  var MIX_NAMES = { heavy: 0, 'mostly-heavy': 25, balanced: 50, 'mostly-uplifting': 75, uplifting: 100 }
+  function parseMix(raw) {
+    if (raw === null) return null
+    var value = String(raw).trim().toLowerCase()
+    if (Object.prototype.hasOwnProperty.call(MIX_NAMES, value)) return MIX_NAMES[value]
+    if (!/^\d{1,3}$/.test(value) || Number(value) > 100) return null
+    var n = Number(value)
+    var best = 0
+    ;[0, 25, 50, 75, 100].forEach(function (p) {
+      if (Math.abs(n - p) < Math.abs(n - best)) best = p
+    })
+    return best
+  }
+  var mix = parseMix(script.getAttribute('data-mix'))
+  if (mix === null && script.getAttribute('data-mood') === 'uplifting') mix = 100
 
-  var url = API_BASE + '/stories?' + params.toString()
+  // A mixed widget picks from the newest stories of every tone, so it still makes one request per load
+  var MIX_POOL = 50
 
-  var xhr = new XMLHttpRequest()
-  xhr.open('GET', url)
-  xhr.onload = function () {
-    if (xhr.status !== 200) {
+  function storiesUrl(emotionTags, pageSize) {
+    var params = new URLSearchParams()
+    params.set('pageSize', String(pageSize))
+    params.set('page', '1')
+    if (config.issue) params.set('issueSlug', config.issue)
+    if (emotionTags) params.set('emotionTags', emotionTags)
+    // Tells the API this request is a widget load, which it counts as a widget view (no other data
+    // is sent). A query parameter, not a header, so the request needs no CORS preflight.
+    params.set('ref', 'widget')
+    return API_BASE + '/stories?' + params.toString()
+  }
+
+  function getStories(url, done) {
+    var xhr = new XMLHttpRequest()
+    xhr.open('GET', url)
+    xhr.onload = function () {
+      if (xhr.status !== 200) return done(true)
+      try {
+        done(false, JSON.parse(xhr.responseText).data || [])
+      } catch (e) {
+        done(true)
+      }
+    }
+    xhr.onerror = function () {
+      done(true)
+    }
+    xhr.send()
+  }
+
+  function storyTime(s) {
+    return new Date(s.datePublished || s.dateCrawled).getTime()
+  }
+
+  // Below "Only uplifting", the homepage's mix (client/src/lib/mix-stories.ts): the dial's share of
+  // the slots from the positive stories, the rest from the negative ones, a shortfall filled from the other.
+  function mixStories(positive, negative) {
+    var positiveCount = Math.round((config.count * mix) / 100)
+    var picked = positive.slice(0, positiveCount).concat(negative.slice(0, config.count - positiveCount))
+    var used = {}
+    picked.forEach(function (s) {
+      used[s.id] = true
+    })
+    positive.concat(negative).forEach(function (s) {
+      if (picked.length < config.count && !used[s.id]) {
+        picked.push(s)
+        used[s.id] = true
+      }
+    })
+    return picked.sort(function (a, b) {
+      return storyTime(b) - storyTime(a)
+    })
+  }
+
+  function loadStories(done) {
+    if (mix === null) return getStories(storiesUrl('', config.count), done)
+    if (mix === 100) return getStories(storiesUrl('uplifting', config.count), done)
+    getStories(storiesUrl('', MIX_POOL), function (failed, stories) {
+      if (failed) return done(true)
+      // Untagged stories are left out, as on the homepage
+      var positive = stories.filter(function (s) {
+        return s.emotionTag === 'uplifting' || s.emotionTag === 'calm'
+      })
+      var negative = stories.filter(function (s) {
+        return s.emotionTag === 'frustrating' || s.emotionTag === 'scary'
+      })
+      done(false, mixStories(positive, negative))
+    })
+  }
+
+  loadStories(function (failed, stories) {
+    if (failed) {
       widget.innerHTML = '<div class="ar-error">Could not load stories</div>'
       return
     }
     try {
-      var data = JSON.parse(xhr.responseText)
-      var stories = data.data || []
       if (stories.length === 0) {
         widget.innerHTML = '<div class="ar-loading">No stories available</div>'
         return
@@ -135,9 +213,5 @@
     } catch (e) {
       widget.innerHTML = '<div class="ar-error">Could not load stories</div>'
     }
-  }
-  xhr.onerror = function () {
-    widget.innerHTML = '<div class="ar-error">Could not load stories</div>'
-  }
-  xhr.send()
+  })
 })()

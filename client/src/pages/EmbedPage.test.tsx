@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import EmbedPage from './EmbedPage'
+import EmbedPage, { loadEmbedStories } from './EmbedPage'
 import { makeStory, announcedText } from '../test/stories'
+import { publicApi } from '../lib/api'
+import type { PublicStory } from '@shared/types'
 
 vi.mock('../lib/api', () => ({
   publicApi: {
@@ -41,6 +43,42 @@ describe('EmbedPage AI header', () => {
     expect(announcedText(header)).toBe('AI-generated headlines from Actually Relevant')
     expect(header.querySelector('[aria-hidden="true"]')?.textContent).toBe('AI')
     expect(header.compareDocumentPosition(headline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  describe('mix', () => {
+    const list = vi.mocked(publicApi.stories.list)
+    const page = (stories: PublicStory[]) => ({ data: stories, total: stories.length, page: 1, pageSize: 3, totalPages: 1 })
+
+    it('without a mix, lists the newest stories as before', async () => {
+      list.mockClear()
+      await loadEmbedStories({ count: 3, mix: null })
+      expect(list).toHaveBeenCalledWith({ page: 1, pageSize: 3, issueSlug: undefined, emotionTags: undefined })
+    })
+
+    it('at uplifting, and for the older mood=uplifting, lists only uplifting stories', async () => {
+      list.mockClear()
+      renderEmbed('?mood=uplifting')
+      await screen.findByText('AI label: AI headline')
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ emotionTags: 'uplifting' }))
+    })
+
+    it('below the far end, mixes positive and negative stories as the homepage does', async () => {
+      list.mockClear()
+      list.mockResolvedValueOnce(
+        page([
+          makeStory({ id: 'p1', emotionTag: 'calm', datePublished: '2026-11-05T00:00:00Z' }),
+          makeStory({ id: 'n1', emotionTag: 'scary', datePublished: '2026-11-04T00:00:00Z' }),
+          makeStory({ id: 'p2', emotionTag: 'uplifting', datePublished: '2026-11-03T00:00:00Z' }),
+          makeStory({ id: 'n2', emotionTag: 'frustrating', datePublished: '2026-11-02T00:00:00Z' }),
+        ]),
+      )
+
+      const result = await loadEmbedStories({ count: 2, issue: 'planet-climate', mix: 50 })
+
+      expect(list).toHaveBeenCalledTimes(1)
+      expect(list).toHaveBeenCalledWith({ page: 1, pageSize: 50, issueSlug: 'planet-climate', emotionTags: undefined })
+      expect(result.data.map(s => s.id)).toEqual(['p1', 'n1'])
+    })
   })
 
   it('keeps the "Powered by" footer', async () => {
