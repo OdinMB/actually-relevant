@@ -225,8 +225,9 @@ function selectedText(c: CandidateSource): SelectedSource {
 }
 
 /**
- * Publishers' AI opt-outs (design, Risks): whether a page's publisher refuses AI use. The crawler's
- * check plugs in here; until then no run passes one, and its record says the opt-out went unchecked.
+ * Publishers' AI opt-outs (ADR-0056): whether a page's publisher refuses AI use. Production runs pass
+ * the crawler's check (`researchSourcePolicy` in publisherOptOut.ts); a run given none records the
+ * opt-out as unchecked (the eval harness).
  */
 export interface SourcePolicy {
   optedOut(url: string): Promise<boolean>

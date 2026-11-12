@@ -11,6 +11,7 @@ vi.mock('./faviconStore.js', () => mockStore)
 vi.mock('./faviconImage.js', () => ({ toFaviconPng: mockToFaviconPng }))
 
 const { fetchFavicon, fetchAllFavicons, fetchFaviconsInBackground } = await import('./favicon.js')
+const { CRAWLER_USER_AGENT } = await import('../lib/crawlerIdentity.js')
 
 const FEED_ID = '11111111-2222-4333-8444-555555555555'
 const BIG_ICON = Buffer.alloc(1200, 1) // larger than Google's generic globe (<= 400 bytes)
@@ -126,6 +127,21 @@ describe('fetchFavicon', () => {
     serve({ 'https://www.google.com/s2/favicons': { body: BIG_ICON } })
     await fetchFavicon(feed('https://example.com/rss'), true)
     expect(mockAxiosGet.mock.calls[0][1]).toEqual(expect.objectContaining({ lookup: expect.any(Function), beforeRedirect: expect.any(Function) }))
+  })
+
+  it('names the crawler in the user agent of every request, the page and icon fetches included', async () => {
+    serve({
+      'https://www.google.com/s2/favicons': { body: Buffer.alloc(300, 1) },
+      'https://example.com/icon.png': { body: BIG_ICON },
+      'https://example.com': { type: 'text/html', body: '<html><head><link rel="icon" href="/icon.png"></head></html>' },
+    })
+
+    await fetchFavicon(feed('https://example.com/rss'), true)
+
+    expect(mockAxiosGet.mock.calls.length).toBeGreaterThanOrEqual(3)
+    for (const [, options] of mockAxiosGet.mock.calls) {
+      expect(options.headers).toMatchObject({ 'User-Agent': CRAWLER_USER_AGENT })
+    }
   })
 })
 

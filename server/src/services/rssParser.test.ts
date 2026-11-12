@@ -21,6 +21,7 @@ vi.mock('rss-parser', () => {
 })
 
 const { parseFeed } = await import('./rssParser.js')
+const { CRAWLER_USER_AGENT } = await import('../lib/crawlerIdentity.js')
 
 function axiosResponse(data: string, status = 200, headers: Record<string, string> = {}) {
   return { status, data, headers }
@@ -193,6 +194,15 @@ describe('parseFeed', () => {
     const callHeaders = mockAxiosGet.mock.calls[0][1].headers
     expect(callHeaders['If-None-Match']).toBeUndefined()
     expect(callHeaders['If-Modified-Since']).toBeUndefined()
+  })
+
+  it('names the crawler in its user agent', async () => {
+    mockAxiosGet.mockResolvedValue(axiosResponse('<rss></rss>'))
+    mockParseString.mockResolvedValue({ items: [] })
+
+    await parseFeed('https://example.com/rss', { etag: '"e"' })
+
+    expect(mockAxiosGet.mock.calls[0][1].headers).toMatchObject({ 'User-Agent': CRAWLER_USER_AGENT, 'If-None-Match': '"e"' })
   })
 
   it('passes maxContentLength and responseType to axios', async () => {

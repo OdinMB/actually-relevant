@@ -36,7 +36,7 @@ Fetched text and search results are untrusted. The prompts wrap them in escaped 
 
 ## Publishers' AI opt-outs
 
-`ResearchDeps.sourcePolicy?` is the seam: when given, `dropOptedOut` (`researchFilter.ts`) drops own and search candidates it reports opted out, before the filter, under the drop reason `opt-out`. Production passes none yet, so every run records `optOutChecked: false` (derived in the pipeline from whether a policy was given) and the admin view says "AI opt-out not checked". The crawler's check (ADR-0050) plugs in here.
+**Research cites only sources whose publishers have not opted out** (owner decision, ADR-0056), even when that leaves fewer perspectives. `ResearchDeps.sourcePolicy?` is the seam: when given, `dropOptedOut` (`researchFilter.ts`) drops own and search candidates it reports opted out, before the filter, under the drop reason `opt-out`. Production runs pass `researchSourcePolicy` (`publisherOptOut.ts`), the crawler's check (`content-extraction.md`, "Publisher opt-out check") with robots.txt path rules applied, since Tavily reads the page on our behalf; a source whose robots.txt can't be read is dropped too. Those runs record `optOutChecked: true`. A run given no policy, as in the eval harness (`eval:research`), records `optOutChecked: false` and the admin view says "AI opt-out not checked". Limit: the check sees the result URL's host only, not a redirect Tavily may follow.
 
 ## Endpoints (admin, `routes/admin/research.ts`)
 

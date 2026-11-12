@@ -24,9 +24,24 @@ vi.mock('@mozilla/readability', () => ({
   },
 }))
 
-const { extractContent, _resetApiState, ApiThrottle } = await import('./extractor.js')
+// Retries have their own tests (retry.test.ts); here each attempt is the last, so a 429 or 503 costs no backoff wait
+vi.mock('../lib/retry.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lib/retry.js')>()),
+  withRetry: (fn: () => Promise<unknown>) => fn(),
+}))
+
+// The check itself has its own tests (publisherOptOut.test.ts, checkedRedirects.test.ts); here it is asked about redirect targets only
+const mockCheckOptOut = vi.hoisted(() => vi.fn())
+vi.mock('./publisherOptOut.js', () => ({ checkOptOut: mockCheckOptOut }))
+
+const { extractContent, isPageRefusal, _resetApiState, ApiThrottle } = await import('./extractor.js')
 
 const LONG_TEXT = 'A '.repeat(200)
+
+/** What axios throws for a non-2xx answer. */
+function httpError(status: number) {
+  return Object.assign(new Error(`Request failed with status code ${status}`), { isAxiosError: true, response: { status } })
+}
 
 describe('extractContent', () => {
   beforeEach(() => {
@@ -553,6 +568,134 @@ describe('access classification', () => {
   })
 })
 
+describe("the API tier and the publisher's refusal", () => {
+  const diffbotAnswer = { data: { objects: [{ title: 'API', text: LONG_TEXT }] } }
+  const diffbotCalls = () => mockAxiosGet.mock.calls.filter(c => String(c[0]).startsWith('https://api.diffbot.com')).length
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.PIPFEED_API_KEY
+    process.env.DIFFBOT_TOKEN = 'test-token'
+    _resetApiState()
+  })
+
+  it('never asks the API for a page whose fetch was refused with 401, 403, 429 or 451', async () => {
+    for (const status of [401, 403, 429, 451]) {
+      mockAxiosGet.mockReset()
+      mockAxiosGet.mockRejectedValueOnce(httpError(status)).mockResolvedValue(diffbotAnswer)
+
+      const result = await extractContent('https://example.com/article')
+
+      expect(isPageRefusal(result)).toBe(true)
+      expect(result).toEqual({ refusal: 'denied', reason: expect.stringContaining(`HTTP ${status}`) })
+      expect(diffbotCalls()).toBe(0)
+    }
+  })
+
+  it('still asks the API after a technical failure: a timeout, a 5xx, a network error', async () => {
+    const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), { isAxiosError: true, code: 'ECONNABORTED' })
+    for (const failure of [timeout, httpError(503), new Error('socket hang up')]) {
+      mockAxiosGet.mockReset()
+      mockAxiosGet.mockRejectedValueOnce(failure).mockResolvedValue(diffbotAnswer)
+
+      const result = await extractContent('https://example.com/article')
+
+      expect(result).toMatchObject({ method: 'diffbot' })
+      expect(diffbotCalls()).toBe(1)
+    }
+  })
+
+  it('skips the API tier when the caller says so, still storing a locked page as a teaser', async () => {
+    const locked = `<html><head><meta property="og:title" content="Locked"><meta property="og:description" content="Teaser">
+      <script type="application/ld+json">{"isAccessibleForFree":false}</script></head><body></body></html>`
+    mockAxiosGet.mockResolvedValueOnce({ data: '<html><body><p>Short</p></body></html>' }).mockResolvedValueOnce({ data: locked })
+    mockReadabilityParse.mockReturnValue(null)
+
+    const plain = await extractContent('https://example.com/a', { skipApiTier: () => true })
+    const teaser = await extractContent('https://example.com/b', { skipApiTier: () => true })
+
+    expect(plain).toBeNull()
+    expect(teaser).toMatchObject({ method: 'teaser' })
+    expect(diffbotCalls()).toBe(0)
+  })
+
+  it('discards a page that carries a TDM reservation in its header or meta tag, and asks no API', async () => {
+    mockReadabilityParse.mockReturnValue({ title: 'Would extract', textContent: LONG_TEXT })
+    mockAxiosGet.mockResolvedValueOnce({ data: '<html><body><p>Text</p></body></html>', headers: { 'tdm-reservation': '1' } })
+    const byHeader = await extractContent('https://example.com/a')
+    mockAxiosGet.mockResolvedValueOnce({ data: '<html><head><meta name="tdm-reservation" content="1"></head><body></body></html>', headers: {} })
+    const byMeta = await extractContent('https://example.com/b')
+
+    expect(byHeader).toEqual({ refusal: 'reserved', reason: expect.stringContaining('header') })
+    expect(byMeta).toEqual({ refusal: 'reserved', reason: expect.stringContaining('meta') })
+    expect(mockReadabilityParse).not.toHaveBeenCalled()
+    expect(diffbotCalls()).toBe(0)
+  })
+
+  it('never fetches the page a redirect leads to on a reserved host, nor asks the API for the URL', async () => {
+    mockCheckOptOut.mockResolvedValue({ reserved: true, reason: 'robots.txt disallows all crawlers', unverified: false })
+    mockAxiosGet.mockImplementation(async (url: string) => {
+      if (url === 'https://feeds.example/~r/1') return { status: 302, headers: { location: 'https://publisher.example/story' }, data: '' }
+      if (url.startsWith('https://api.diffbot.com')) return diffbotAnswer
+      throw new Error(`unexpected request: ${url}`)
+    })
+
+    const result = await extractContent('https://feeds.example/~r/1')
+
+    expect(result).toEqual({ refusal: 'reserved', reason: expect.stringContaining('publisher.example'), unverified: false })
+    expect(mockCheckOptOut).toHaveBeenCalledWith('https://publisher.example/story', { fetchesPage: true })
+    expect(mockAxiosGet.mock.calls.map(c => c[0])).toEqual(['https://feeds.example/~r/1'])
+    expect(diffbotCalls()).toBe(0)
+  })
+
+  it('follows a redirect to a host that allows the page, one checked hop at a time', async () => {
+    mockCheckOptOut.mockResolvedValue({ reserved: false })
+    mockReadabilityParse.mockReturnValue({ title: 'Story', textContent: LONG_TEXT })
+    mockAxiosGet.mockImplementation(async (url: string) =>
+      url === 'https://feeds.example/~r/1'
+        ? { status: 301, headers: { location: 'https://publisher.example/story' }, data: '' }
+        : { status: 200, headers: {}, data: '<html></html>' },
+    )
+
+    const result = await extractContent('https://feeds.example/~r/1')
+
+    expect(result).toMatchObject({ method: 'readability', title: 'Story' })
+    expect(mockAxiosGet.mock.calls.map(c => c[0])).toEqual(['https://feeds.example/~r/1', 'https://publisher.example/story'])
+    for (const [, options] of mockAxiosGet.mock.calls) expect(options).toMatchObject({ maxRedirects: 0, lookup: expect.any(Function) })
+  })
+
+  it('leaves out the API call of an article queued behind another once the crawl blocks the API tier', async () => {
+    let blocked = false
+    let answerFirst: (value: unknown) => void = () => {}
+    mockAxiosGet.mockImplementation((url: string) => {
+      if (!url.startsWith('https://api.diffbot.com')) return Promise.reject(new Error('Network error'))
+      return diffbotCalls() === 1 ? new Promise(resolve => (answerFirst = resolve)) : Promise.resolve(diffbotAnswer)
+    })
+    const options = { skipApiTier: () => blocked }
+
+    // Two articles at once (crawlArticles 2): both read skipApiTier before the throttle, one waits in its queue
+    const first = extractContent('https://example.com/a', options)
+    const second = extractContent('https://example.com/b', options)
+    await vi.waitFor(() => expect(diffbotCalls()).toBe(1))
+    blocked = true // a third article's page was refused meanwhile
+    answerFirst(diffbotAnswer)
+
+    expect(await first).toMatchObject({ method: 'diffbot' })
+    expect(await second).toBeNull()
+    expect(diffbotCalls()).toBe(1)
+  })
+
+  it('discards an oversized page that carries a reservation instead of deferring it to the API', async () => {
+    const huge = `<html><head><meta name="tdm-reservation" content="1"></head><body>${'x'.repeat(2 * 1024 * 1024 + 1)}</body></html>`
+    mockAxiosGet.mockResolvedValueOnce({ data: huge, headers: {} }).mockResolvedValue(diffbotAnswer)
+
+    const result = await extractContent('https://example.com/article')
+
+    expect(result).toMatchObject({ refusal: 'reserved' })
+    expect(diffbotCalls()).toBe(0)
+  })
+})
+
 describe('ApiThrottle', () => {
   it('doubles delay on 429 and reduces on success', async () => {
     const throttle = new ApiThrottle(0, 0, 1000) // no base delay, no backoff wait, 1s max
@@ -608,6 +751,18 @@ describe('ApiThrottle', () => {
 
     await Promise.all([p1, p2, p3])
     expect(order).toEqual([1, 2, 3])
+  })
+
+  it('makes no call when the caller aborts during the inter-call delay', async () => {
+    const throttle = new ApiThrottle(50, 0, 1000)
+    let aborted = false
+    const fn = vi.fn(async () => 'called')
+
+    const run = throttle.run(fn, () => aborted)
+    aborted = true
+
+    await expect(run).rejects.toThrow('aborted')
+    expect(fn).not.toHaveBeenCalled()
   })
 
   it('gradually reduces delay after successful calls', async () => {

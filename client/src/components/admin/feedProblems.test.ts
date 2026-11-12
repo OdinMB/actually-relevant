@@ -26,6 +26,14 @@ describe('findFeedProblems', () => {
     expect(withError('Crawl failed: connection terminated')).toEqual([])
   })
 
+  it('reads the failure count when the crawler adds notes after it', () => {
+    const withError = (lastCrawlError: string) => findFeedProblems(makeFeed({ lastCrawlError }), makeQuality())
+
+    expect(withError('3 of 3 articles failed extraction; publisher refused the crawler (HTTP 403)')).toEqual(['extraction-failing'])
+    expect(withError('1 of 4 articles failed extraction; Publisher opted out: robots.txt disallows ActuallyRelevant (2 articles skipped)')).toEqual([])
+    expect(withError('6 of 10 articles failed extractions')).toEqual([])
+  })
+
   it('flags a feed that has gone stale', () => {
     expect(findFeedProblems(makeFeed({ isStale: true, consecutiveEmptyCrawls: 7 }), makeQuality())).toEqual(['stale'])
   })

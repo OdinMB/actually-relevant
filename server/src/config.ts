@@ -356,6 +356,23 @@ export const config = {
       return process.env.PIPFEED_API_KEY || ''
     },
   },
+  /**
+   * The publisher opt-out check the crawler runs before it reads an article (services/publisherOptOut.ts;
+   * .context/content-extraction.md, "Publisher opt-out check"): each host's robots.txt and tdmrep.json,
+   * read once and kept in memory.
+   */
+  publisherOptOut: {
+    /** How long a host's files are trusted once read. */
+    cacheHours: 24,
+    /** A host whose robots.txt or tdmrep.json could not be read is asked again this soon; meanwhile an unreadable robots.txt skips its articles. */
+    retryMinutes: 60,
+    /** Hosts kept at once. */
+    cacheEntries: 5000,
+    /** Each fetch as a whole, body included. */
+    fetchTimeoutMs: 5_000,
+    /** RFC 9309: a crawler reads at least the first 500 KiB of robots.txt; the rest of a larger file (or tdmrep.json) is ignored. */
+    maxFileBytes: 500 * 1024,
+  },
   /** Feed favicons, stored in the database and served by GET /api/feeds/:id/favicon (.context/feed-management.md). */
   favicon: {
     /** HTTP cache lifetime of a served favicon, in browsers and mail clients' image proxies. */

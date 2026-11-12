@@ -138,7 +138,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | File | Topic |
 |------|-------|
 | `story-pipeline.md` | Status transitions (`storyLifecycle.ts` is the only status writer; a test fences it), rejection reasons, jobs, admin endpoints, slugs, field reference |
-| `content-extraction.md` | 3-tier extraction chain, crawl flow, conditional RSS, resource limits, adding feeds |
+| `content-extraction.md` | 3-tier extraction chain, publisher opt-out check (robots.txt, Content-Signal, TDMRep) and the API-tier rule, crawl flow, conditional RSS, resource limits, adding feeds |
 | `story-retention.md` | Monthly cleanup: which old stories are deleted or kept, the `story_archive_counts` roll-up, lifetime totals, cleared embeddings and how publishing restores them |
 | `feed-management.md` | Feed CRUD and soft delete, crawl due rule, crawl-health counters, quality metrics, favicons |
 | `llm-analysis.md` | Model tiers (GPT-6 defaults; prompts and models change together), prompt directory, schema-driven format, analysis stages |

@@ -12,6 +12,7 @@ import { createLogger } from '../lib/logger.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { ConflictError, NotFoundError } from '../utils/errors.js'
 import { utcMonthStart } from './podcastGuards.js'
+import { researchSourcePolicy } from './publisherOptOut.js'
 import { createRunMeter } from './researchCalls.js'
 import { hasPrice, summarizeRunCost, type RunCostSummary } from './researchCost.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds, type ResearchStory } from './researchInput.js'
@@ -170,6 +171,7 @@ async function runInBackground(runId: string, taskId: string, story: ResearchSto
       admit: meter.admit,
       relevanceMin: config.selection.relevanceMin,
       latestDate: new Date().toISOString(),
+      sourcePolicy: researchSourcePolicy,
     })
     const { written, costUsd } = await finishRun(runId, result)
     if (!written) {
