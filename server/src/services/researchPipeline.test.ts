@@ -382,6 +382,54 @@ describe('researchStory', () => {
     expect(prompts[0]).not.toContain('originalw42')
   })
 
+  it("names each voice's quote in the write prompt by the id the judge's flags use", async () => {
+    const writes: string[] = []
+    const checks: string[] = []
+    const voiced = () =>
+      extraction({
+        voices: [
+          { name: 'A farmer', role: 'grower', stance: 'Doubtful.', quote: '' },
+          { name: 'A minister', role: 'minister', stance: 'Pleased.', quote: 'Wir sind stolz.' },
+        ],
+      })
+    const { deps: d } = deps({
+      responders: baseResponders({
+        extract: voiced,
+        write: p => {
+          writes.push(p)
+          return goodDraft()
+        },
+        'fact-check': p => {
+          checks.push(p)
+          return allSupported(p)
+        },
+      }),
+    })
+    await researchStory(story(), d)
+    const ids = (prompt: string) => [...prompt.matchAll(/<QUOTE id="([^"]+)">Wir sind stolz\.<\/QUOTE>/g)].map(m => m[1])
+    expect(ids(writes[0]!)).toEqual(['S0Q2', 'S1Q2'])
+    expect(ids(checks[0]!)).toEqual(['S0Q2', 'S1Q2'])
+  })
+
+  it('records the items the fact check leaves out as unjudged, and keeps the draft', async () => {
+    const leavesOut = (p: string): FactCheck => ({
+      items: allSupported(p).items.filter(i => i.number !== itemNumber(p, 'Summary') && i.number !== itemNumber(p, 'Caveat 1')),
+    })
+    const { deps: d, fake } = deps({ responders: baseResponders({ 'fact-check': leavesOut }) })
+    const r = await researchStory(story(), d)
+    expect(r.checks.map(c => c.unjudged)).toEqual([['Caveat 1', 'Summary']])
+    expect(fake.steps).not.toContain('rewrite')
+    expect(r.verdict).toEqual({ kind: 'keep' })
+  })
+
+  it('falls back on a draft with no caveat even when it passes its checks, naming the part', async () => {
+    const { deps: d, fake } = deps({ responders: baseResponders({ write: () => ({ ...goodDraft(), caveats: [] }) }) })
+    const r = await researchStory(story(), d)
+    expect(fake.steps).not.toContain('rewrite')
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'the draft has no caveat', category: 'draft_failed_check' })
+    expect(r.failedOn).toBe('Caveats')
+  })
+
   it("sends every item to the judge in order, the uncited without cited facts, beside each outside source's own words and none of ours", async () => {
     const prompts: string[] = []
     const voiced = () => extraction({ voices: [{ name: 'A minister', role: 'minister', stance: 'Pleased.', quote: 'Wir sind stolz.' }] })
@@ -429,7 +477,10 @@ describe('researchStory', () => {
       }),
     })
     const r = await researchStory(story(), d)
-    expect(rewrites[0]).toMatch(/- Story paragraph 2 \(.*\) renders S1F2 closely/)
+    // The line quotes the source sentence it echoed, so the rewrite can see it
+    expect(rewrites[0]).toContain(
+      '- Story paragraph 2 (&quot;The boom cut grid demand, Dawn reports.&quot;) renders S1F2 (&quot;The boom cut grid demand.&quot;) closely',
+    )
     expect(r.verdict).toEqual({ kind: 'keep' })
     expect(r.draft?.story.map(p => p.text)).toEqual(['Pakistan added 22 GW of rooftop solar in two years.'])
     expect(r.checks.map(c => c.problems.map(p => [p.label, p.kind, p.by, p.sourceId]))).toEqual([

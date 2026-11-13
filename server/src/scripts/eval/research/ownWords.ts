@@ -1,11 +1,13 @@
 /**
  * What the own-words checks found across eval:research's runs (`.context/story-research.md`,
  * "Own words"): first-draft problems by cause, the rewrites they caused, the items dropped from
- * kept drafts, the `draft_failed_check` fallbacks by the causes of the item they failed on, the
+ * kept drafts, the `draft_failed_check` fallbacks by the causes of the item they failed on (and
+ * those on a part the draft had nothing in), the items the fact check left without a verdict, the
  * longest runs of shared words per kind, and the fact check's input per call. The shadow week
  * counts the same things in SQL. Pure.
  */
-import type { CitationProblem, CopiedFrom } from '../../../services/researchChecks.js'
+import type { CitationProblem } from '../../../services/researchChecks.js'
+import type { CopiedFrom } from '../../../services/researchCopying.js'
 import type { StoryResearch } from './pipeline.js'
 
 export const PROBLEM_CAUSES = [
@@ -47,6 +49,10 @@ export interface RunLengths {
 
 export interface OwnWords {
   byCause: Record<ProblemCause, CauseCounts>
+  /** `draft_failed_check` fallbacks whose `failedOn` no problem names: a part the draft had nothing in. */
+  emptyPartFallbacks: number
+  /** Items the fact check's answer left out, over every pass, and the runs with any. */
+  unjudged: { items: number; runs: number }
   runLengths: Record<CopiedFrom, RunLengths>
   factCheckInput: { calls: number; mean: number; max: number }
 }
@@ -79,17 +85,25 @@ export function ownWords(results: StoryResearch[]): OwnWords {
     ProblemCause,
     CauseCounts
   >
+  let emptyPartFallbacks = 0
   for (const r of results) {
     const first = r.checks[0]?.problems ?? []
     for (const p of first) byCause[causeOf(p)].firstDraftFlags++
     if (r.rewritten) for (const c of causes(first)) byCause[c].rewrites++
     const v = r.verdict
     if (v.kind !== 'fallback') for (const item of causesByItem(r.problems)) for (const c of item) byCause[c].dropped++
-    else if (v.category === 'draft_failed_check' && r.failedOn) for (const c of causes(r.problems.filter(p => p.label === r.failedOn))) byCause[c].fallbacks++
+    else if (v.category === 'draft_failed_check' && r.failedOn) {
+      const failedOn = causes(r.problems.filter(p => p.label === r.failedOn))
+      if (failedOn.size === 0) emptyPartFallbacks++
+      for (const c of failedOn) byCause[c].fallbacks++
+    }
   }
+  const unjudged = results.map(r => r.checks.reduce((n, pass) => n + pass.unjudged.length, 0))
   const inputs = results.flatMap(r => r.calls.filter(c => c.step === 'fact-check').map(c => c.usage.input))
   return {
     byCause,
+    emptyPartFallbacks,
+    unjudged: { items: unjudged.reduce((a, b) => a + b, 0), runs: unjudged.filter(n => n > 0).length },
     runLengths: { wording: runLengths(results, 'wording'), statement: runLengths(results, 'statement') },
     factCheckInput: {
       calls: inputs.length,
@@ -113,6 +127,10 @@ export function ownWordsLines(results: StoryResearch[]): string[] {
       const n = w.byCause[c]
       return `| ${c} | ${n.firstDraftFlags} | ${n.rewrites} | ${n.dropped} | ${n.fallbacks} |`
     }),
+    '',
+    "`copying: code, statement` is a run shared with an extracted fact's English statement, `copying: code, wording` one shared with the source's own words. The write prompt has a figure keep its fact's exact scope, so statement flags well above wording flags point at that rule rather than at copying from the source.",
+    '',
+    `\`draft_failed_check\` fallbacks on a part the draft had nothing in (no problem names it): ${w.emptyPartFallbacks}. Items the fact check left without a verdict (code checks only): ${w.unjudged.items}, in ${w.unjudged.runs} runs.`,
     '',
     "Each first-draft item's longest run of words shared with one outside source, per kind (the code flags 12 or more):",
     '',

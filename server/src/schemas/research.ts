@@ -143,7 +143,7 @@ export const writeSchema = z.object({
   quoteAttribution: z
     .string()
     .describe("The quoted person's full name and role (e.g. 'Maria Helena Semedo, FAO Deputy Director'), or the organization or outlet quoted."),
-  quoteSourceId: z.string().describe('Id of the source the quote comes from, e.g. "S2".'),
+  quoteSourceId: z.string().describe('Id of the source the quote comes from, e.g. "S2", never a quote\'s id such as "S2Q1".'),
   marketingBlurb: z
     .string()
     .describe('Plain text, 25-30 words and never more than 230 characters including spaces. Opens with the development itself, never with an outlet.'),

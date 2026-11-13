@@ -101,7 +101,7 @@ function result(storyId: string, n: number, over: Partial<StoredResearch> = {}):
     },
     rewritten: false,
     problems: [],
-    checks: [{ problems: [], longestRuns: [] }],
+    checks: [{ problems: [], longestRuns: [], unjudged: [] }],
     failedOn: null,
     support: { facts: 2, found: 2 },
     optOutChecked: true,

@@ -58,8 +58,8 @@ const storedResult = {
   credits: 2,
   problems: [flagged],
   checks: [
-    { problems: [flagged], longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }] },
-    { problems: [flagged], longestRuns: [] },
+    { problems: [flagged], longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }], unjudged: ['Blurb'] },
+    { problems: [flagged], longestRuns: [], unjudged: [] },
   ],
   failedOn: null,
   verdict: { kind: 'keep' },
@@ -154,14 +154,18 @@ describe('GET /api/admin/research/stories/:storyId/runs', () => {
     expect(mockPrisma.storyResearchRun.updateMany).toHaveBeenCalled()
   })
 
-  // The client's mirror (`ResearchResult` in shared/types) reads these: each check pass, the item a fallback failed on, each problem's cause
+  // The client's mirror (`ResearchResult` in shared/types) reads these: each check pass with its unjudged items, the item a fallback failed on, each problem's cause
   it("serves the run's check passes, the item a fallback failed on and each problem's cause", async () => {
     mockPrisma.storyResearchRun.findMany.mockResolvedValue([row()])
     const res = await request(app).get(`/api/admin/research/stories/${STORY}/runs`).set(authHeader())
     expect(res.body[0].result).toMatchObject({
       problems: [{ label: 'Story paragraph 2', kind: 'copying', by: 'judge', sourceId: 'S1', copiedSentence: 'S1F2' }],
       checks: [
-        { problems: [{ kind: 'copying', by: 'judge' }], longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }] },
+        {
+          problems: [{ kind: 'copying', by: 'judge' }],
+          longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }],
+          unjudged: ['Blurb'],
+        },
         {},
       ],
       failedOn: null,

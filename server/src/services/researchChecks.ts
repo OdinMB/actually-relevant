@@ -1,12 +1,14 @@
 /**
- * Deterministic judgments on a research draft: the citation check (every fact id exists, every
- * story paragraph cites one, every number an item states appears in its cited facts), the copying
- * check (runs of a source's words, quoted spans), the fact check's answer read back as problems,
+ * Deterministic judgments on a research draft: its items, the citation check (every fact id
+ * exists, every story paragraph cites one, every number an item states appears in its cited
+ * facts), the fact check's answer read back as problems, what the rewrite leaves of a draft,
  * whether a fact's supporting sentence occurs in its source text (a fidelity number for the
- * report), and the gate that turns a checked draft into a verdict. Pure.
+ * report), and the gate that turns a checked draft into a verdict. The copying check is
+ * `researchCopying.ts`. Pure.
  */
 import { findUnsupportedNumbers } from '../lib/numbers.js'
 import type { Draft, FactCheck } from '../schemas/research.js'
+import { againstOf, type CopiedFrom, type SourceLine } from './researchCopying.js'
 
 export interface PoolFact {
   /** `S2F3`: source 2, fact 3; `E1F2` for our own earlier stories. */
@@ -28,9 +30,6 @@ export interface DraftItem {
   cited: boolean
   factIds: string[]
 }
-
-/** Copying problems compare against a source's own words (title, supporting sentences, quotes) or its facts' statements. */
-export type CopiedFrom = 'wording' | 'statement'
 
 export interface CitationProblem {
   label: string
@@ -112,162 +111,6 @@ export function checkCitations(draft: DraftParts, facts: ReadonlyMap<string, Poo
     )
 }
 
-// ---------------------------------------------------------------------------
-// Copying: what the writer reads of the sources, and the code's check against it
-// ---------------------------------------------------------------------------
-
-/** What a source contributes to the copying checks. */
-export interface WordingSource {
-  id: string
-  title: string
-  facts: Pick<PoolFact, 'id' | 'statement' | 'supportingSentence'>[]
-  voices: { quote: string }[]
-}
-
-export interface SourceLine {
-  /** `S2T` the title, `S2F3` a fact's sentence (and its statement), `S2Q1` a voice's quote. */
-  id: string
-  sourceId: string
-  role: 'title' | 'sentence' | 'quote' | 'statement'
-  text: string
-}
-
-/** Outside sources (`S…`); our earlier stories (`E…`) are our own text. */
-const isOutside = (sourceId: string) => /^S\d+$/.test(sourceId)
-
-export const againstOf = (line: Pick<SourceLine, 'role'>): CopiedFrom => (line.role === 'statement' ? 'statement' : 'wording')
-
-/**
- * What the writer reads of each outside source: its title, each fact's supporting sentence and each
- * voice's quote, in the source's language, then each fact's statement, the extractor's English.
- * Both copying checks compare the draft against these lines; empty ones are left out.
- */
-export function sourceLines(sources: WordingSource[]): SourceLine[] {
-  return sources
-    .filter(s => isOutside(s.id))
-    .flatMap((s): SourceLine[] => [
-      { id: `${s.id}T`, sourceId: s.id, role: 'title', text: s.title },
-      ...s.facts.map(f => ({ id: f.id, sourceId: s.id, role: 'sentence' as const, text: f.supportingSentence })),
-      ...s.voices.map((v, i) => ({ id: `${s.id}Q${i + 1}`, sourceId: s.id, role: 'quote' as const, text: v.quote })),
-      ...s.facts.map(f => ({ id: f.id, sourceId: s.id, role: 'statement' as const, text: f.statement })),
-    ])
-    .filter(line => line.text.trim() !== '')
-}
-
-const DIGIT_GROUP = /(?<=\p{N})[,.'’   ](?=\p{N})/gu
-const WORD_APOSTROPHE = /(?<=\p{L})['’](?=\p{L})/gu
-const TOKEN = /[\p{L}\p{M}]+|\p{N}+|[%\p{Sc}]/gu
-
-/**
- * The words of a text as the copying check compares them: NFKC, soft hyphens gone, lowercase; a
- * token is a run of letters (with their marks) or of digits, or a `%` or currency symbol alone.
- * Digit groups join ("1,200", "1.200" and "1 200" give `1200`), an apostrophe inside a word goes
- * ("Pakistan's" gives `pakistans`), and everything else separates, hyphens and quote marks included.
- */
-export function wordTokens(text: string): string[] {
-  const normalized = text.normalize('NFKC').replace(/­/g, '').toLowerCase().replace(DIGIT_GROUP, '').replace(WORD_APOSTROPHE, '')
-  return normalized.match(TOKEN) ?? []
-}
-
-const DOUBLE_QUOTES = '“”„"«»'
-const SINGLE_QUOTES = "‘’‚'‹›"
-const OPENERS = '“„«»‹›‚‘"'
-const CLOSERS = '”“»«›‹’‘"'
-const isLetter = (c: string | undefined) => c !== undefined && /\p{L}/u.test(c)
-
-/**
- * The texts between quote marks: from an opener to the nearest closer of the same family (double
- * or single), so „…“, «…», »…« and “…” all count. A straight `'` opens only at a word's start and
- * closes only at its end, and an apostrophe inside a word never opens or closes.
- */
-export function quotedSpans(text: string): string[] {
-  const spans: string[] = []
-  let open: { family: string; start: number } | null = null
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!
-    const before = text[i - 1]
-    const after = text[i + 1]
-    if ("'’‘".includes(c) && isLetter(before) && isLetter(after)) continue
-    const family = DOUBLE_QUOTES.includes(c) ? DOUBLE_QUOTES : SINGLE_QUOTES.includes(c) ? SINGLE_QUOTES : null
-    if (!family) continue
-    if (open) {
-      const closes = c === "'" ? after === undefined || /[\s.,;:!?)\]]/.test(after) : CLOSERS.includes(c)
-      if (open.family === family && closes) {
-        spans.push(text.slice(open.start, i))
-        open = null
-      }
-    } else if (c === "'" ? (before === undefined || /[\s([]/.test(before)) && isLetter(after) : OPENERS.includes(c)) {
-      open = { family, start: i + 1 }
-    }
-  }
-  return spans
-}
-
-/** The longest run of consecutive tokens `a` shares with `b`. */
-function longestRun(a: string[], b: string[]): string[] {
-  let best = { length: 0, end: 0 }
-  let previous = new Array<number>(b.length + 1).fill(0)
-  for (let i = 1; i <= a.length; i++) {
-    const row = new Array<number>(b.length + 1).fill(0)
-    for (let j = 1; j <= b.length; j++) {
-      if (a[i - 1] !== b[j - 1]) continue
-      row[j] = previous[j - 1]! + 1
-      if (row[j]! > best.length) best = { length: row[j]!, end: i }
-    }
-    previous = row
-  }
-  return a.slice(best.end - best.length, best.end)
-}
-
-/** A quoted span this long or longer is a source's words outside the key quote. */
-const QUOTED_SPAN_WORDS = 4
-
-/** Each item's longest run of words shared with one source, per kind, recorded below the threshold too (the shadow week's distribution). */
-export interface LongestRun {
-  label: string
-  sourceId: string
-  against: CopiedFrom
-  words: number
-}
-
-/**
- * The code's copying check: for every item and every outside source, the longest run of words the
- * item shares with any one of that source's lines (each line compared on its own, so a run never
- * crosses from one into the next), per kind; a run of `minWords` or more is a problem. A quoted
- * span of four words or more in any item is one too, since a person's words go only in the key quote.
- */
-export function checkCopying(draft: DraftParts, sources: WordingSource[], minWords: number): { problems: CitationProblem[]; longestRuns: LongestRun[] } {
-  const lines = sourceLines(sources).map(line => ({ ...line, tokens: wordTokens(line.text) }))
-  const outside = sources.map(s => s.id).filter(isOutside)
-  const problems: CitationProblem[] = []
-  const longestRuns: LongestRun[] = []
-  for (const item of draftItems(draft)) {
-    const tokens = wordTokens(item.text)
-    const at = { label: item.label, text: item.text, kind: 'copying' as const, by: 'code' as const }
-    for (const sourceId of outside) {
-      for (const against of ['wording', 'statement'] as const) {
-        const run = lines
-          .filter(line => line.sourceId === sourceId && againstOf(line) === against)
-          .map(line => longestRun(tokens, line.tokens))
-          .reduce<string[]>((best, r) => (r.length > best.length ? r : best), [])
-        longestRuns.push({ label: item.label, sourceId, against, words: run.length })
-        if (run.length >= minWords) {
-          const of = against === 'wording' ? `${sourceId}'s own words` : `the fact statements of ${sourceId}`
-          problems.push({ ...at, sourceId, against, problem: `repeats ${run.length} words in a row from ${of}: "${run.join(' ')}"` })
-        }
-      }
-    }
-    for (const span of quotedSpans(item.text)) {
-      if (wordTokens(span).length >= QUOTED_SPAN_WORDS)
-        problems.push({ ...at, problem: `quotes a source ("${span}"); a person's words go only in the key quote` })
-    }
-  }
-  return { problems, longestRuns }
-}
-
-/** The source of a line id: `S2` of `S2T`, `S2F3` and `S2Q1`. */
-const lineSource = (lineId: string) => lineId.replace(/(?:F\d+|Q\d+|T)$/, '')
-
 /** The first id-shaped token of a judge's answer (it may add punctuation), when it is one of `known`. */
 function knownId(value: string, pattern: RegExp, known: ReadonlySet<string>): string | null {
   const id = pattern.exec(value)?.[0]
@@ -277,17 +120,19 @@ function knownId(value: string, pattern: RegExp, known: ReadonlySet<string>): st
 /**
  * The fact check's answer as problems, by item number (its place in `items`): an unsupported claim
  * of an item that has evidence, with its key judgment (`fact`); and on any item, a source line it
- * renders closely or a source whose order it follows (`copying`, never key). A support verdict on
- * an item without evidence, and an id the prompt did not give, count for nothing.
+ * renders closely, quoted so the rewrite sees what it echoed, or a source whose order it follows
+ * (`copying`, never key). A support verdict on an item without evidence, and an id the prompt did
+ * not give, count for nothing.
  */
 export function judgedProblems(answer: FactCheck, items: { item: DraftItem; evidence: PoolFact[] }[], lines: SourceLine[]): CitationProblem[] {
-  const wordingIds = new Set(lines.filter(line => againstOf(line) === 'wording').map(line => line.id))
+  const wording = new Map(lines.filter(line => againstOf(line) === 'wording').map(line => [line.id, line]))
   const sourceIds = new Set(lines.map(line => line.sourceId))
   return answer.items.flatMap((v): CitationProblem[] => {
     const at = items[v.number - 1]
     if (!at) return []
     const { label, text } = at.item
-    const copied = knownId(v.copiedSentence, /S\d+(?:F\d+|Q\d+|T)?/, wordingIds)
+    const copiedId = knownId(v.copiedSentence, /S\d+(?:F\d+|Q\d+|T)?/, new Set(wording.keys()))
+    const copied = copiedId ? wording.get(copiedId) : undefined
     const follows = knownId(v.followsSource, /S\d+/, sourceIds)
     return [
       ...(!v.supported && at.evidence.length > 0
@@ -307,11 +152,11 @@ export function judgedProblems(answer: FactCheck, items: { item: DraftItem; evid
             {
               label,
               text,
-              problem: `renders ${copied} closely`,
+              problem: `renders ${copied.id} ("${copied.text}") closely`,
               kind: 'copying' as const,
               by: 'judge' as const,
-              sourceId: lineSource(copied),
-              copiedSentence: copied,
+              sourceId: copied.sourceId,
+              copiedSentence: copied.id,
             },
           ]
         : []),
@@ -320,6 +165,15 @@ export function judgedProblems(answer: FactCheck, items: { item: DraftItem; evid
         : []),
     ]
   })
+}
+
+/**
+ * The labels of the items the fact check's answer gives no verdict for (no entry with their
+ * number). They are recorded, never failed: the code checks still ran on them.
+ */
+export function unjudgedLabels(answer: FactCheck, items: { item: DraftItem }[]): string[] {
+  const judged = new Set(answer.items.map(v => v.number))
+  return items.filter((_, i) => !judged.has(i + 1)).map(({ item }) => item.label)
 }
 
 /**
@@ -336,17 +190,23 @@ export function publishedFact(sourceId: string, outlet: string, date: string | n
 /** The items a draft cannot do without, so one still failing after the rewrite ends the run instead of being dropped. */
 const UNDROPPABLE = ['Title', LABELS.story(0), 'Summary', 'Blurb']
 
-const DROPPABLE_PARTS: [keyof typeof LABELS, string][] = [
-  ['story', 'story paragraph'],
-  ['whyThisMatters', 'Why This Matters bullet'],
-  ['caveats', 'caveat'],
+/**
+ * The parts paragraphs and bullets are dropped from, each with the label `failedOn` gives it when
+ * the draft has nothing in it: a part's name, as an item's label names the item.
+ */
+const DROPPABLE_PARTS: { part: keyof typeof LABELS; label: string; noun: string }[] = [
+  { part: 'story', label: 'Story', noun: 'story paragraph' },
+  { part: 'whyThisMatters', label: 'Why This Matters', noun: 'Why This Matters bullet' },
+  { part: 'caveats', label: 'Caveats', noun: 'caveat' },
 ]
 
 /**
- * After the rewrite: the draft without its failing paragraphs and bullets, or why it cannot be
- * saved, with the item it failed on: a key claim (the main development itself, as the fact check
- * judges it) is unsupported, an item that cannot be dropped still fails (the opening paragraph, the
- * title, the summary, the blurb), or a part was left empty.
+ * The last check's draft without its failing paragraphs and bullets, or why it cannot be saved,
+ * with the item it failed on: a key claim (the main development itself, as the fact check judges
+ * it) is unsupported, an item that cannot be dropped still fails (the opening paragraph, the title,
+ * the summary, the blurb), every item of a part failed (`failedOn` its first item), or the draft
+ * has nothing in a part at all (`failedOn` the part's name, `Story`, `Why This Matters` or
+ * `Caveats`), with or without problems: a researched story always has all three.
  */
 export function dropFailing<D extends DraftParts>(draft: D, problems: CitationProblem[]): { draft: D } | { failed: string; failedOn: string } {
   const key = problems.find(p => p.key)
@@ -355,9 +215,10 @@ export function dropFailing<D extends DraftParts>(draft: D, problems: CitationPr
   const whole = UNDROPPABLE.find(label => failing.has(label))
   if (whole) return { failed: `an item that cannot be dropped failed the check after one rewrite (${whole})`, failedOn: whole }
   const items = draftItems(draft)
-  for (const [part, noun] of DROPPABLE_PARTS) {
-    const ofPart = items.filter(i => i.part === part)
-    if (ofPart.every(i => failing.has(i.label))) return { failed: `no ${noun} passed the check after one rewrite`, failedOn: ofPart[0]?.label ?? noun }
+  for (const { part, label, noun } of DROPPABLE_PARTS) {
+    const [first, ...rest] = items.filter(i => i.part === part)
+    if (!first) return { failed: `the draft has no ${noun}`, failedOn: label }
+    if ([first, ...rest].every(i => failing.has(i.label))) return { failed: `no ${noun} passed the check after one rewrite`, failedOn: first.label }
   }
   const keep = (part: keyof typeof LABELS) => (_: unknown, i: number) => !failing.has(LABELS[part](i))
   return {
@@ -405,7 +266,7 @@ export function supportFound(sentence: string, text: string): boolean {
  * but the extraction kept none as reporting the story (each unreadable, about another development,
  * or an opinion piece or press release beside a news report). `draft_failed_check`: a key claim,
  * or an item the draft cannot do without, failed the checks after the rewrite, or a part of the
- * draft was left empty. `technical`: anything else (a failed model call or search, the run's
+ * draft was left empty or had nothing in it. `technical`: anything else (a failed model call or search, the run's
  * budget, an error).
  */
 export const FALLBACK_CATEGORIES = ['no_other_coverage', 'not_confirmed', 'draft_failed_check', 'technical'] as const

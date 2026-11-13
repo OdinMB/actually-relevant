@@ -73,13 +73,14 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/researchInput.js': '*',
   'services/researchFilter.js': '*',
   'services/researchChecks.js': '*',
+  'services/researchCopying.js': '*',
 }
 
 /** The pure modules the eval may import whole: config and prompt types only. */
 const PURE_SERVICE_MODULES = ['promptInputs.ts']
 
 /** The research modules the eval imports whole: no database client, model client, HTTP or retry of their own. */
-const RESEARCH_SERVICE_MODULES = ['researchPipeline.ts', 'researchInput.ts', 'researchFilter.ts', 'researchChecks.ts']
+const RESEARCH_SERVICE_MODULES = ['researchPipeline.ts', 'researchInput.ts', 'researchFilter.ts', 'researchChecks.ts', 'researchCopying.ts']
 
 /** Model calls are never retried (parse failures are what the eval measures), and the eval has no other HTTP of its own. */
 const WITH_RETRY_ALLOWED: string[] = []

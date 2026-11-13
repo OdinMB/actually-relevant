@@ -25,7 +25,6 @@ import { dedupConfirmationSchema } from '../schemas/llm.js'
 import { earlierSchema, extractionSchema, factCheckSchema, queriesSchema, writeSchema, type Draft, type Earlier, type Extraction } from '../schemas/research.js'
 import {
   checkCitations,
-  checkCopying,
   decideGate,
   describeProblem,
   draftItems,
@@ -33,15 +32,15 @@ import {
   evidenceFor,
   judgedProblems,
   publishedFact,
-  sourceLines,
   supportFound,
+  unjudgedLabels,
   withoutInlineIds,
   type CitationProblem,
   type FallbackCategory,
   type GateVerdict,
-  type LongestRun,
   type PoolFact,
 } from './researchChecks.js'
+import { checkCopying, sourceLines, type LongestRun } from './researchCopying.js'
 import {
   anchorDate,
   domainOf,
@@ -168,6 +167,8 @@ export interface CheckPass {
   problems: CitationProblem[]
   /** Each item's longest run of words shared with each outside source, per kind, below the threshold too. */
   longestRuns: LongestRun[]
+  /** The items the fact check's answer left out: no support or copying verdict from it, the code checks only. */
+  unjudged: string[]
 }
 
 export interface StoryResearch {
@@ -440,24 +441,34 @@ async function buildPool(
  * Step 8's checks, all on every draft, so the rewrite hears of every problem and each failing item
  * after it carries the fact check's key judgment: the deterministic citation and copying checks,
  * and one fact-check call that judges every item for support (those with evidence) and for copying
- * against the outside sources' own words. A problem only code finds is never key.
+ * against the outside sources' own words. A problem only code finds is never key. An item the
+ * answer leaves out is recorded as unjudged, and fails nothing.
  */
 async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, sources: ResearchSource[], call: Call): Promise<CheckPass> {
   const items = draftItems(draft).map(item => ({ item, evidence: item.cited ? evidenceFor(item.factIds, facts) : [] }))
   const lines = sourceLines(sources)
-  const copying = checkCopying(draft, sources, config.research.copiedRunWords)
+  const copying = checkCopying(
+    items.map(({ item }) => item),
+    sources,
+    config.research.copiedRunWords,
+  )
   const prompt = buildFactCheckPrompt(
     items.map(({ item, evidence }) => ({ label: item.label, text: item.text, facts: evidence })),
     lines,
   )
   const answer = required(await call('fact-check', factCheckSchema, prompt), 'fact-check')
-  return { problems: [...checkCitations(draft, facts), ...copying.problems, ...judgedProblems(answer, items, lines)], longestRuns: copying.longestRuns }
+  return {
+    problems: [...checkCitations(draft, facts), ...copying.problems, ...judgedProblems(answer, items, lines)],
+    longestRuns: copying.longestRuns,
+    unjudged: unjudgedLabels(answer, items),
+  }
 }
 
 /**
  * Steps 7-8: write, check, and on a failure one rewrite with the problems and one more check.
  * Paragraphs and bullets that still fail are dropped (`r.problems` keeps them), unless `dropFailing`
- * refuses; each pass is kept in `r.checks`.
+ * refuses, as it does for a draft with nothing in a part even when it passed; each pass is kept in
+ * `r.checks`.
  */
 async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFact>, call: Call, r: StoryResearch): Promise<Draft> {
   const checked = async (draft: Draft) => {
@@ -467,11 +478,13 @@ async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFa
   }
   r.draft = withoutInlineIds(required(await call('write', writeSchema, buildWritePrompt(input)), 'write'))
   await checked(r.draft)
-  if (r.problems.length === 0) return r.draft
-  r.rewritten = true
-  r.draft = withoutInlineIds(required(await call('rewrite', writeSchema, buildWritePrompt({ ...input, problems: r.problems.map(describeProblem) })), 'rewrite'))
-  await checked(r.draft)
-  if (r.problems.length === 0) return r.draft
+  if (r.problems.length > 0) {
+    r.rewritten = true
+    r.draft = withoutInlineIds(
+      required(await call('rewrite', writeSchema, buildWritePrompt({ ...input, problems: r.problems.map(describeProblem) })), 'rewrite'),
+    )
+    await checked(r.draft)
+  }
   const kept = dropFailing(r.draft, r.problems)
   if ('failed' in kept) {
     r.failedOn = kept.failedOn
