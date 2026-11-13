@@ -217,7 +217,9 @@ export default function MethodologyPage() {
           </p>
 
           {/* Researched Stories (owner-approved wording, 2026-11-12; the own-words sentences approved 2026-11-13); the label it quotes comes from the label copy */}
-          <h2 className="section-heading mt-10">Researched Stories</h2>
+          <h2 id="researched-stories" className="section-heading mt-10 scroll-mt-20">
+            Researched Stories
+          </h2>
           <p>
             Before a selected story is published, AI researches it further. It searches the news for other reports of the same event, published from two weeks
             before to one week after the original article, and reads up to six sources, the original article included, plus our own earlier coverage. It skips

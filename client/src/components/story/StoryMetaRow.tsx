@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { PublicStoryDetail, ResearchedStory } from '@shared/types'
 import FeedFavicon from '../FeedFavicon'
@@ -34,16 +35,22 @@ export function MetaSeparator() {
   )
 }
 
-/** The publisher's name with its favicon, linking the article the story was found in. */
-function OriginalSourceLink({ story }: { story: PublicStoryDetail }) {
+/**
+ * The publisher's name with its favicon, linking the article the story was found in. `children`
+ * (", <date>") follow the name with no gap, so the comma sits right after it.
+ */
+function OriginalSourceLink({ story, children }: { story: PublicStoryDetail; children?: ReactNode }) {
   return (
-    <>
+    <span className="inline-flex items-center gap-1.5">
       <FeedFavicon feedId={story.feed.id} />
-      <a href={story.sourceUrl} target="_blank" rel="noopener noreferrer" className={ROW_LINK}>
-        {story.feed.displayTitle || story.feed.title}
-        <span className="sr-only"> (opens in new tab)</span>
-      </a>
-    </>
+      <span>
+        <a href={story.sourceUrl} target="_blank" rel="noopener noreferrer" className={ROW_LINK}>
+          {story.feed.displayTitle || story.feed.title}
+          <span className="sr-only"> (opens in new tab)</span>
+        </a>
+        {children}
+      </span>
+    </span>
   )
 }
 
@@ -54,9 +61,10 @@ function PlainItems({ story }: { story: PublicStoryDetail }) {
     <>
       <time dateTime={displayDate}>{new Date(displayDate).toLocaleDateString('en-US', LONG_DATE)}</time>
       <MetaSeparator />
-      <span className={`inline-flex items-center gap-1.5 ${PHONE_SEPARATOR}`}>
-        <OriginalSourceLink story={story} />
-        {story.sourceDatePublished && <>, {new Date(story.sourceDatePublished).toLocaleDateString('en-US', LONG_DATE)}</>}
+      <span className={`inline-flex items-center ${PHONE_SEPARATOR}`}>
+        <OriginalSourceLink story={story}>
+          {story.sourceDatePublished && <>, {new Date(story.sourceDatePublished).toLocaleDateString('en-US', LONG_DATE)}</>}
+        </OriginalSourceLink>
       </span>
       <MetaSeparator />
       <a href={story.sourceUrl} target="_blank" rel="noopener noreferrer" className={`${ROW_LINK} ${PHONE_SEPARATOR}`}>
@@ -79,15 +87,14 @@ function ResearchedItems({ story, research }: { story: PublicStoryDetail; resear
   return (
     <>
       <span className="inline-flex flex-wrap items-center gap-x-1.5">
-        Initially found on{' '}
-        <span className="inline-flex items-center gap-1.5">
-          <OriginalSourceLink story={story} />
+        Found on{' '}
+        <OriginalSourceLink story={story}>
           {original?.date && originalDate && (
             <>
               , <time dateTime={original.date}>{originalDate}</time>
             </>
           )}
-        </span>
+        </OriginalSourceLink>
       </span>
       <MetaSeparator />
       <a href="#sources" className={`inline-flex min-h-6 items-center gap-1.5 ${ROW_LINK} ${PHONE_SEPARATOR}`}>
@@ -100,25 +107,40 @@ function ResearchedItems({ story, research }: { story: PublicStoryDetail; resear
 
 /**
  * The text items of the row under the headline: the single-source or the researched items, then the
- * AI label and "How it works". The label keys on `researched` (the text fields carry researched
- * text), the items on the cited version.
+ * AI label. A single-source label is plain text followed by "How it works"; a researched label links
+ * its own opening words to the methodology page's research section instead (owner, 2026-11-13). The
+ * label keys on `researched` (the text fields carry researched text), the items on the cited version.
  */
 export function StoryMetaRow({ story, research }: { story: PublicStoryDetail; research: ResearchedStory | null }) {
-  const storyLabel = story.researched ? AI_DISCLOSURE_COPY.researchedStoryLabel : AI_DISCLOSURE_COPY.storyLabel
+  const researchedLabel = AI_DISCLOSURE_COPY.researchedStoryLabel
+  const storyLabel = story.researched ? researchedLabel : AI_DISCLOSURE_COPY.storyLabel
+  // The badge is the label's only "AI"; screen readers hear it as the word, so the sentence reads the same aloud
+  const badge = <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="ml-1 align-middle" />
   return (
     <div className={META_TEXT_ROW}>
       {research ? <ResearchedItems story={story} research={research} /> : <PlainItems story={story} />}
       <MetaSeparator />
-      {/* AI label as plain text, so it doesn't read as one more navigation link */}
       <span className={`inline-flex flex-wrap items-center gap-x-2 ${PHONE_SEPARATOR}`}>
-        {/* The badge is the label's only "AI"; screen readers hear it as the word, so the sentence reads the same aloud */}
-        <span>
-          {storyLabel.lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle" />
-          {storyLabel.tail}
-        </span>
-        <Link to={AI_DISCLOSURE_COPY.howItWorksHref} className={TEXT_LINK}>
-          {AI_DISCLOSURE_COPY.howItWorksLinkText}
-        </Link>
+        {story.researched ? (
+          <span>
+            <Link to={researchedLabel.href} className={TEXT_LINK}>
+              {researchedLabel.linkText}
+            </Link>
+            {researchedLabel.lead.slice(researchedLabel.linkText.length)} {badge}
+            {researchedLabel.tail}
+          </span>
+        ) : (
+          <>
+            {/* AI label as plain text, so it doesn't read as one more navigation link */}
+            <span>
+              {storyLabel.lead} {badge}
+              {storyLabel.tail}
+            </span>
+            <Link to={AI_DISCLOSURE_COPY.howItWorksHref} className={TEXT_LINK}>
+              {AI_DISCLOSURE_COPY.howItWorksLinkText}
+            </Link>
+          </>
+        )}
       </span>
     </div>
   )

@@ -47,11 +47,15 @@ export const AI_DISCLOSURE_COPY = {
   /**
    * The same label on a researched story (one written from several sources, with citations):
    * "Researched and written by [AI]." Owner-approved 2026-11-12 (multi-source stories design,
-   * "AI label"); stories in the single-source format keep storyLabel.
+   * "AI label"); stories in the single-source format keep storyLabel. On the story page its first
+   * words, linkText, link to the methodology page's research section in place of "How it works"
+   * (owner, 2026-11-13).
    */
   researchedStoryLabel: {
     lead: 'Researched and written by',
     tail: '.',
+    linkText: 'Researched and written',
+    href: '/methodology#researched-stories',
   },
   /** Header of the /embed iframe (widget.js carries the same line). */
   embedHeader: 'AI-generated headlines from Actually Relevant',
