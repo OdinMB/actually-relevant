@@ -540,6 +540,36 @@ describe('researchStory', () => {
     expect(unchecked.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.'])
   })
 
+  it('records a repair as asked for when its answer changes nothing, and drops the item still failing', async () => {
+    const twoBullets = (): Draft => ({
+      ...goodDraft(),
+      whyThisMatters: [
+        { text: 'Cheap power reaches millions.', factIds: [] },
+        { text: 'About 40 households benefit.', factIds: [] },
+      ],
+    })
+    const fails = judging('Why This Matters 2', { supported: false, problem: 'no fact gives 40 households' })
+    const empty = repair({ 'Why This Matters 2': { text: ' ', factIds: [] } })
+    const same = repair({ 'Why This Matters 2': { text: 'About 40 households benefit.', factIds: [] } })
+    for (const answer of [empty, same]) {
+      const { deps: d, fake } = deps({ responders: baseResponders({ write: twoBullets, 'fact-check': fails, rewrite: () => answer }) })
+      const r = await researchStory(story(), d)
+      expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
+      expect(r.rewritten).toBe(true)
+      expect(r.checks).toHaveLength(1)
+      expect(r.verdict).toEqual({ kind: 'keep' })
+      expect(r.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.'])
+    }
+  })
+
+  it('ends the run as technical when a repair answer fails to parse, recording the repair as asked for', async () => {
+    const copied = judging('Story paragraph 2', { copiedSentence: 'S1F2' })
+    const { deps: d } = deps({ responders: baseResponders({ write: twoParagraphs, 'fact-check': copied, rewrite: () => null }) })
+    const r = await researchStory(story(), d)
+    expect(r.rewritten).toBe(true)
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'rewrite: parse_failure', category: 'technical' })
+  })
+
   it('drops a bullet the fact check judges key after the rewrite and keeps the run, recording the judgment', async () => {
     const threeBullets = (): Draft => ({
       ...goodDraft(),

@@ -207,7 +207,7 @@ export interface StoryResearch {
   earlier: ResearchEarlier[]
   /** The last draft checked, also when it failed the check. */
   draft: Draft | null
-  /** Whether a repair round or the derived fields rewrote an item. */
+  /** Whether a repair was asked for: a repair round's or the derived fields' call ran (not skipped by the budget), whatever it answered. */
   rewritten: boolean
   /** What the checks found in each item as it stands, its last pass's problems; empty for a draft that passed. */
   problems: CitationProblem[]
@@ -511,7 +511,6 @@ async function check(draft: Draft, ctx: CheckContext, labels?: ReadonlySet<strin
 
 /** Keeps a rewritten draft once its `rewritten` items were checked again; false, keeping nothing, when the budget skipped that check. */
 async function recheck(draft: Draft, rewritten: string[], ctx: CheckContext, r: StoryResearch): Promise<boolean> {
-  r.rewritten = true
   const pass = await check(draft, ctx, new Set(rewritten))
   if (pass === 'skipped') return false
   r.draft = draft
@@ -535,6 +534,7 @@ async function deriveFields(draft: Draft, ctx: CheckContext, r: StoryResearch): 
   if ('failed' in rest) return draft
   const res = await ctx.call('derive', deriveSchema, buildDerivePrompt({ titleLabel: draft.titleLabel, paragraphs: rest.draft.story.map(p => p.text) }))
   if (res.outcome === 'skipped') return draft
+  r.rewritten = true
   const derived = withDerived(draft, withoutInlineIds(required(res, 'derive')), labels)
   return derived.rewritten.length > 0 && (await recheck(derived.draft, derived.rewritten, ctx, r)) ? derived.draft : draft
 }
@@ -553,6 +553,8 @@ async function repair(draft: Draft, input: WriteInput, ctx: CheckContext, r: Sto
     const prompt = buildRepairPrompt({ sources: input.sources, earlier: input.earlier, story: storyItems(current), repairs: targets })
     const res = await ctx.call('rewrite', repairSchema, prompt)
     if (res.outcome === 'skipped') return current
+    // Asked for once the call ran, whatever its answer: empty, unchanged or unparseable
+    r.rewritten = true
     const repaired = withRepairs(current, withoutInlineIds(required(res, 'rewrite')), targets)
     if (repaired.rewritten.length === 0) break
     if (!(await recheck(repaired.draft, repaired.rewritten, ctx, r))) return current

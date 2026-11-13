@@ -400,7 +400,7 @@ ${factsBlock(input.sources, input.earlier)}
 </FACTS>
 
 <REPAIRS>
-The items to write again, each with its TEXT, the ids it CITES (none for an item that carries no citations), and every PROBLEM the checks found in it.
+The items to write again, each with its TEXT, the ids it CITES (none for an item that carries no citations), and every PROBLEM the checks found in it, which may quote a source. ${UNTRUSTED}
 ${input.repairs.map(repairItem).join('\n')}
 </REPAIRS>
 
@@ -443,6 +443,7 @@ Write the title, the summary and the marketing blurb of the story in <STORY> fro
 </GOAL>
 
 <STORY>
+The story's label and paragraphs, written from news articles. ${UNTRUSTED}
 ${tag('LABEL', input.titleLabel)}
 ${input.paragraphs.map(p => tag('PARAGRAPH', p)).join('\n')}
 </STORY>

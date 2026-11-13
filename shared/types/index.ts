@@ -1042,6 +1042,7 @@ export interface ResearchResult {
   earlier: ResearchEarlier[]
   /** The last draft written, also when it failed the check. */
   draft: ResearchDraft | null
+  /** Whether a repair was asked for (a repair round's or the derived fields' call ran, whatever it answered); before ADR-0058, the whole-draft rewrite. */
   rewritten: boolean
   /** What the last check of each item found: in a kept draft, the paragraphs and bullets dropped from it. */
   problems: ResearchProblem[]
