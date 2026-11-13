@@ -216,7 +216,7 @@ export default function MethodologyPage() {
             feed. For those, we read the article from the feed and never fetch the page.
           </p>
 
-          {/* Researched Stories (owner-approved wording, 2026-11-12; the own-words sentences, proposed 2026-11-13, await the owner's approval: put its date here); the label it quotes comes from the label copy */}
+          {/* Researched Stories (owner-approved wording, 2026-11-12; the own-words sentences approved 2026-11-13); the label it quotes comes from the label copy */}
           <h2 className="section-heading mt-10">Researched Stories</h2>
           <p>
             Before a selected story is published, AI researches it further. It searches the news for other reports of the same event, published from two weeks
