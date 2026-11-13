@@ -35,8 +35,6 @@ const singleSource: SwappedValues = {
   relevanceReasons: '- **Reason:** old',
   relevanceSummary: 'Old relevance summary.',
   antifactors: '- **Limit:** old',
-  relevance: 6,
-  relevanceCalculation: '- **Scale:** 6',
 }
 
 describe('researchedValues', () => {
@@ -51,9 +49,12 @@ describe('researchedValues', () => {
       relevanceReasons: '- Millions of homes now make their own power.\n- It cuts fuel imports.',
       relevanceSummary: null,
       antifactors: '- Officials and analysts count differently.',
-      relevance: 5,
-      relevanceCalculation: '- **Scale:** 6\n- **Early data:** -1',
     })
+  })
+
+  it("never swaps the rating or its calculation: the story keeps its own (owner decision 2026-11-12), and the run keeps the draft's", () => {
+    expect(SWAPPED_FIELDS).not.toContain('relevance')
+    expect(SWAPPED_FIELDS).not.toContain('relevanceCalculation')
   })
 
   it('writes an empty text as null, as the assessment does', () => {
@@ -78,19 +79,23 @@ describe('restoredValues', () => {
     expect(restoredValues(JSON.parse(JSON.stringify(singleSource)))).toEqual(singleSource)
   })
 
+  it('reads back the texts of a snapshot taken while applies still swapped the rating, leaving the rating out', () => {
+    expect(restoredValues({ ...singleSource, relevance: 6, relevanceCalculation: '- **Scale:** 6' })).toEqual(singleSource)
+  })
+
   it('refuses a stored value that is not a whole snapshot', () => {
     const { relevanceSummary: _dropped, ...partial } = singleSource
     expect(restoredValues(partial)).toBeNull()
-    expect(restoredValues({ ...singleSource, relevance: 'six' })).toBeNull()
+    expect(restoredValues({ ...singleSource, title: 6 })).toBeNull()
     expect(restoredValues(null)).toBeNull()
   })
 })
 
 describe('swappedEdits', () => {
-  const current = { ...singleSource, emotionTag: 'calm' }
+  const current = { ...singleSource, relevance: 6, emotionTag: 'calm' }
 
-  it('lists the swapped columns an edit changes', () => {
-    expect(swappedEdits({ title: 'New headline', relevance: 3, emotionTag: 'scary' }, current)).toEqual(['title', 'relevance'])
+  it('lists the swapped columns an edit changes; the rating is not one', () => {
+    expect(swappedEdits({ title: 'New headline', relevance: 3, emotionTag: 'scary' }, current)).toEqual(['title'])
   })
 
   it('lets an edit through that sends the swapped columns unchanged, as the edit form does', () => {

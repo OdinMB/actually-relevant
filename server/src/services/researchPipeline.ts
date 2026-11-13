@@ -33,6 +33,7 @@ import {
   supportFound,
   withoutInlineIds,
   type CitationProblem,
+  type FallbackCategory,
   type GateVerdict,
   type PoolFact,
 } from './researchChecks.js'
@@ -196,8 +197,15 @@ export interface ResearchDeps {
   sourcePolicy?: SourcePolicy
 }
 
-/** Ends a story's research early; its message is the fallback reason. */
-class Stop extends Error {}
+/** Ends a story's research early; its message is the fallback reason, recorded with its category (`technical` unless the stop says otherwise). */
+class Stop extends Error {
+  constructor(
+    reason: string,
+    readonly category: FallbackCategory = 'technical',
+  ) {
+    super(reason)
+  }
+}
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
@@ -408,7 +416,8 @@ async function buildPool(
   r.earlier = earlierPool(candidates, optional(earlier))
   const facts = [...r.sources.flatMap(s => s.facts), ...r.earlier.flatMap(e => e.facts)]
   r.support = { facts: facts.length, found: facts.filter(f => f.found).length }
-  if (r.sources.length < 2) throw new Stop('no usable source')
+  // Other reports passed the filter; the extraction read and dropped them, unless every one of its calls failed
+  if (r.sources.length < 2) throw new Stop('no usable source', judged.length > 1 ? 'not_confirmed' : 'technical')
 }
 
 /**
@@ -446,7 +455,7 @@ async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFa
   r.problems = await check(r.draft, facts, call)
   if (r.problems.length === 0) return r.draft
   const kept = dropFailing(r.draft, r.problems)
-  if ('failed' in kept) throw new Stop(kept.failed)
+  if ('failed' in kept) throw new Stop(kept.failed, 'draft_failed_check')
   r.draft = kept.draft
   return r.draft
 }
@@ -462,7 +471,7 @@ async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r:
   const filtered = filterCandidates({ original: { url: o.url, text: o.content }, own: allowed.own, search: allowed.search, window })
   r.candidates = own.length + found.length
   for (const d of [...allowed.dropped, ...filtered.dropped]) r.drops[d.reason] = (r.drops[d.reason] ?? 0) + 1
-  if (filtered.selected.length === 0) throw new Stop('no usable source')
+  if (filtered.selected.length === 0) throw new Stop('no usable source', 'no_other_coverage')
 
   const inputs: ExtractInput[] = [
     {
@@ -486,7 +495,7 @@ async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r:
   return writeChecked({ article: story.assess, articleDate, oldBefore: window.start, sources: r.sources, earlier: r.earlier }, facts, call, r)
 }
 
-/** Runs steps 1-8 for one story. Never throws: a failed research is the `fallback` verdict with its reason. */
+/** Runs steps 1-8 for one story. Never throws: a failed research is the `fallback` verdict with its reason and category. */
 export async function researchStory(story: ResearchStory, deps: ResearchDeps): Promise<StoryResearch> {
   const r: StoryResearch = {
     storyId: story.id,
@@ -502,7 +511,7 @@ export async function researchStory(story: ResearchStory, deps: ResearchDeps): P
     problems: [],
     support: { facts: 0, found: 0 },
     optOutChecked: deps.sourcePolicy !== undefined,
-    verdict: { kind: 'fallback', reason: 'not run' },
+    verdict: { kind: 'fallback', reason: 'not run', category: 'technical' },
   }
   const call: Call = async (step, schema, prompt) => {
     const rec = await deps.call(step, schema, prompt)
@@ -513,7 +522,9 @@ export async function researchStory(story: ResearchStory, deps: ResearchDeps): P
   try {
     r.verdict = decideGate({ draft: await research(story, deps, call, r) }, deps.relevanceMin)
   } catch (err) {
-    r.verdict = decideGate({ failed: err instanceof Stop ? err.message : `error: ${messageOf(err)}` }, deps.relevanceMin)
+    const failed =
+      err instanceof Stop ? { failed: err.message, category: err.category } : { failed: `error: ${messageOf(err)}`, category: 'technical' as const }
+    r.verdict = decideGate(failed, deps.relevanceMin)
   }
   return r
 }

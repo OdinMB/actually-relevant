@@ -85,9 +85,7 @@ async function refuseResearchedEdits(id: string, input: StoryUpdate): Promise<vo
   const story = await prisma.story.findUnique({ where: { id }, select: { preResearch: true, ...SWAPPED_SELECT } })
   if (story?.preResearch == null) return
   if (swappedEdits(input, story).length > 0) {
-    throw new ConflictError(
-      "Revert to single-source first: this story's headline, label, rating, summary, quote, blurb and analysis are its researched version",
-    )
+    throw new ConflictError("Revert to single-source first: this story's headline, label, summary, quote, blurb and analysis are its researched version")
   }
 }
 

@@ -1,5 +1,14 @@
 import type { ReactNode } from 'react'
-import type { ResearchCitedText, ResearchEarlier, ResearchFact, ResearchResult, ResearchRun, ResearchSource, ResearchVerdict } from '@shared/types'
+import type {
+  ResearchCitedText,
+  ResearchEarlier,
+  ResearchFact,
+  ResearchFallbackCategory,
+  ResearchResult,
+  ResearchRun,
+  ResearchSource,
+  ResearchVerdict,
+} from '@shared/types'
 import { formatDateWithTime } from '../../lib/constants'
 import { isHttpsUrl, isHttpUrl } from '../../lib/urls'
 import { Badge } from '../ui/Badge'
@@ -28,19 +37,36 @@ export function verdictName(kind: ResearchVerdict['kind']): string {
   return VERDICT_NAMES[kind]
 }
 
+const FALLBACK_NAMES: Record<ResearchFallbackCategory, string> = {
+  no_other_coverage: 'no other coverage',
+  not_confirmed: 'not confirmed',
+  draft_failed_check: 'draft failed the check',
+  technical: 'technical',
+}
+
+/** A fallback's category in words (server: `FallbackCategory`, recorded for the owner's count). */
+export function fallbackName(category: ResearchFallbackCategory): string {
+  return FALLBACK_NAMES[category]
+}
+
+/** The verdict's name, with a fallback's category when its run recorded one. */
+export function verdictLabel(v: ResearchVerdict): string {
+  return v.kind === 'fallback' && v.category ? `${VERDICT_NAMES.fallback} (${fallbackName(v.category)})` : VERDICT_NAMES[v.kind]
+}
+
 /** The verdict with its reason or rating, in one sentence. */
 export function verdictText(v: ResearchVerdict): string {
   switch (v.kind) {
     case 'keep':
       return 'Keep: the research supports the story at its rating.'
     case 'research-rating':
-      return `Below the publish bar: the research rates the story ${v.rating}.`
+      return `Below the publish bar: the research rates the story ${v.rating}. Recorded only: the story keeps its own rating and is not rejected.`
     case 'stale':
       return `Old news: the development first happened on ${v.firstHappened}.`
     case 'contradicted':
       return `Contradicted: ${v.factIds.join(', ')} contradict the main claim.`
     case 'fallback':
-      return `Today's format: ${v.reason}.`
+      return `${verdictLabel(v)}: ${v.reason}.`
   }
 }
 
@@ -180,7 +206,7 @@ function Draft({ result }: { result: ResearchResult }) {
         <p>{draft.marketingBlurb}</p>
       </div>
       <div>
-        <h5 className={H}>Rating: {draft.rating}</h5>
+        <h5 className={H}>Research&apos;s rating: {draft.rating} (recorded; the story keeps its own)</h5>
         <ul className="list-disc pl-5">
           {draft.relevanceCalculation.map((line, i) => (
             <li key={i}>{plainLine(line)}</li>

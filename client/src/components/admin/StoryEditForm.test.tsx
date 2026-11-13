@@ -128,30 +128,18 @@ describe('StoryEditForm unsaved changes', () => {
 })
 
 describe('StoryEditForm on a researched story', () => {
-  const swapped = [
-    'Title Label',
-    'Title',
-    'Rating',
-    'Summary',
-    'Quote',
-    'Quote Attribution',
-    'Marketing Blurb',
-    'Relevance Reasons',
-    'Relevance Summary',
-    'Antifactors',
-    'Relevance Calculation',
-  ]
+  const swapped = ['Title Label', 'Title', 'Summary', 'Quote', 'Quote Attribution', 'Marketing Blurb', 'Relevance Reasons', 'Relevance Summary', 'Antifactors']
   const field = (label: string) => screen.getByLabelText(label, { exact: true })
 
-  it('locks the fields its researched version wrote, says why, and leaves the others editable', () => {
+  it('locks the fields its researched version wrote, says why, and leaves the others editable, the rating among them', () => {
     renderPage({ ...story, preResearch: { title: 'Single-source headline' } })
     for (const label of swapped) {
       expect(field(label)).toBeDisabled()
       expect(field(label)).toHaveAccessibleDescription(/Revert to single-source first/)
     }
     expect(screen.getByText(/Revert to single-source first/)).toBeInTheDocument()
-    expect(field('Pre-rating')).toBeEnabled()
-    expect(field('Status')).toBeEnabled()
+    // Research never writes the rating or its calculation
+    for (const label of ['Rating', 'Relevance Calculation', 'Pre-rating', 'Status']) expect(field(label)).toBeEnabled()
   })
 
   it('locks nothing on a single-source story', () => {
@@ -161,8 +149,8 @@ describe('StoryEditForm on a researched story', () => {
   })
 
   describe('when a revert or an apply lands while other edits are unsaved', () => {
-    const singleSource = { ...story, title: 'Single-source headline', relevance: 7, preResearch: null } as Story
-    const researched = { ...story, title: 'Researched headline', relevance: 5, preResearch: { title: 'Single-source headline' } } as Story
+    const singleSource = { ...story, title: 'Single-source headline', summary: 'Single-source summary.', preResearch: null } as Story
+    const researched = { ...story, title: 'Researched headline', summary: 'Researched summary.', preResearch: { title: 'Single-source headline' } } as Story
     const editEmotion = () => fireEvent.change(field('Emotion'), { target: { value: 'uplifting' } })
     const save = async () => {
       mockApi.update.mockResolvedValue(story)
@@ -179,7 +167,7 @@ describe('StoryEditForm on a researched story', () => {
       expect(field('Title')).toHaveValue('Single-source headline')
       expect(field('Title')).toBeEnabled()
       expect(field('Emotion')).toHaveValue('uplifting')
-      expect(await save()).toMatchObject({ title: 'Single-source headline', relevance: 7, emotionTag: 'uplifting' })
+      expect(await save()).toMatchObject({ title: 'Single-source headline', summary: 'Single-source summary.', emotionTag: 'uplifting' })
     })
 
     it('after an apply, shows and saves the researched fields, keeping the other edits', async () => {
@@ -190,7 +178,7 @@ describe('StoryEditForm on a researched story', () => {
       expect(field('Title')).toHaveValue('Researched headline')
       expect(field('Title')).toBeDisabled()
       expect(field('Emotion')).toHaveValue('uplifting')
-      expect(await save()).toMatchObject({ title: 'Researched headline', relevance: 5, emotionTag: 'uplifting' })
+      expect(await save()).toMatchObject({ title: 'Researched headline', summary: 'Researched summary.', emotionTag: 'uplifting' })
     })
   })
 })

@@ -72,6 +72,6 @@ describe('researchStoryInEval', () => {
     expect(r.calls).toEqual([
       { step: 'queries', outcome: 'parse_failure', usage: { input: 10, cached: 0, output: 5, reasoning: 1 }, costUsd: 0.0001, model: 'gpt-6-luna' },
     ])
-    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'queries: parse_failure' })
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'queries: parse_failure', category: 'technical' })
   })
 })

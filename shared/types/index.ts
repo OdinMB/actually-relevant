@@ -16,7 +16,7 @@ export type RejectionReason =
   | 'selection'
   | 'duplicate'
   | 'editor'
-  // The research step's verdicts
+  // The research step's verdicts; `research_rating` is kept in the enum but no longer written (a rating below the bar rejects nothing)
   | 'research_rating'
   | 'stale'
   | 'contradicted'
@@ -887,7 +887,19 @@ export interface ResearchUsage {
   monthlyCapUsd: number
   /** What each run reserves when it starts. */
   reservationUsd: number
+  /**
+   * This UTC month's runs that fell back to today's format, by category; `unrecorded` for runs stored
+   * before categories were (2026-11-12). Absent from an older backend.
+   */
+  fallbacksThisMonth?: Record<ResearchFallbackCategory | 'unrecorded', number>
 }
+
+/**
+ * Why a run fell back to today's format (server: `FallbackCategory` in services/researchChecks.ts),
+ * recorded for evaluation only: no other report survived the filter; others did but none was kept
+ * as reporting the story; the draft failed the checks after the rewrite; anything else.
+ */
+export type ResearchFallbackCategory = 'no_other_coverage' | 'not_confirmed' | 'draft_failed_check' | 'technical'
 
 export type ResearchStep = 'confirm' | 'queries' | 'extract' | 'earlier' | 'write' | 'fact-check' | 'rewrite'
 export type ResearchCallOutcome = 'ok' | 'parse_failure' | 'empty' | 'truncated' | 'error' | 'skipped'
@@ -976,12 +988,14 @@ export interface ResearchDraft {
   contradicted: { isContradicted: boolean; factIds: string[] }
 }
 
+/** `research-rating` is recorded for evaluation only: it rejects nothing, and the story keeps its own rating. */
 export type ResearchVerdict =
   | { kind: 'keep' }
   | { kind: 'research-rating'; rating: number }
   | { kind: 'stale'; firstHappened: string }
   | { kind: 'contradicted'; factIds: string[] }
-  | { kind: 'fallback'; reason: string }
+  /** `category`: absent on a run stored before categories were (2026-11-12). */
+  | { kind: 'fallback'; reason: string; category?: ResearchFallbackCategory }
 
 /** A run's stored result: what the research found, the model of each step and the prices it ran at. */
 export interface ResearchResult {

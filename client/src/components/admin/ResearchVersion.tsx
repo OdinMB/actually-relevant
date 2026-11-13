@@ -63,7 +63,7 @@ export function UseRunVersion({ story, run, closed }: { story: StoryRef; run: Re
         onClose={() => setConfirming(false)}
         onConfirm={confirm}
         title="Use this version?"
-        description={`The story's headline, label, summary, quote, blurb, analysis and rating become this run's researched version, with its sources and the researched label. ${readers(story.status)} "Revert to single-source" gives back the version from before any research.`}
+        description={`The story's headline, label, summary, quote, blurb and analysis become this run's researched version, with its sources and the researched label. The story keeps its own rating. ${readers(story.status)} "Revert to single-source" gives back the version from before any research.`}
         confirmLabel="Use this version"
         loading={apply.isPending}
       />
@@ -97,7 +97,7 @@ export function RevertToSingleSource({ story }: { story: StoryRef }) {
         onClose={() => setConfirming(false)}
         onConfirm={confirm}
         title="Revert to single-source?"
-        description={`The story gets back the headline, summary, analysis and rating it had before research, and loses the researched version and its sources. ${readers(story.status)} The runs stay.`}
+        description={`The story gets back the headline, summary and analysis it had before research, and loses the researched version and its sources. ${readers(story.status)} The runs stay.`}
         confirmLabel="Revert"
         variant="danger"
         loading={revert.isPending}

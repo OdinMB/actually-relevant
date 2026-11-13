@@ -175,12 +175,17 @@ export async function applyResearchRun(storyId: string, runId: string): Promise<
   return 'applied'
 }
 
-/** The rejection reason of each verdict that rejects. */
+/**
+ * The rejection reason of each verdict that rejects: only what research found against the story.
+ * `research-rating` rejects nothing (owner decision 2026-11-12): its reason `research_rating` stays
+ * in the database enum, unused by the pipeline.
+ */
 const REJECTED_FOR = {
-  'research-rating': 'research_rating',
   stale: 'stale',
   contradicted: 'contradicted',
 } as const satisfies Partial<Record<GateKind, RejectionReason>>
+
+const rejects = (kind: GateKind): kind is keyof typeof REJECTED_FOR => kind in REJECTED_FOR
 
 /**
  * What the research step did with a verdict: `applied` (the researched version is on the story),
@@ -196,18 +201,18 @@ export type VerdictOutcome = 'applied' | 'rejected' | 'single-source' | 'skipped
  * Apply the research step's verdict for its run, whose result is stored and which is still
  * `running` (the publish gate keeps the story waiting meanwhile). Every write is fenced on `read`,
  * the story's status and `updatedAt` as read before the run started, so an editor's move, edit or
- * apply during the run always wins: `keep` puts the researched version on the story; the three
- * rejections move it through `transition`, which takes only a selected story; `fallback` changes
- * nothing. The caller applies only while `researchStepState().applies`; as a backstop, nothing is
- * applied outside effective apply mode (`pipelineMode()`). Never throws a refusal; an embedding or
- * database error throws.
+ * apply during the run always wins: `keep` and `research-rating` put the researched version on the
+ * story, which keeps its own rating; `stale` and `contradicted` reject it through `transition`,
+ * which takes only a selected story; `fallback` changes nothing. The caller applies only while
+ * `researchStepState().applies`; as a backstop, nothing is applied outside effective apply mode
+ * (`pipelineMode()`). Never throws a refusal; an embedding or database error throws.
  */
 export async function applyVerdict(storyId: string, runId: string, read: ReadState, result: StoryResearch): Promise<VerdictOutcome> {
   if (pipelineMode().mode !== 'apply') return 'shadow'
   const { verdict } = result
   if (verdict.kind === 'fallback') return 'single-source'
 
-  if (verdict.kind !== 'keep') {
+  if (rejects(verdict.kind)) {
     const reason = REJECTED_FOR[verdict.kind]
     // Checked first for the log's reason; the move is fenced on `read` too
     const changed = whyChanged(await storyColumns(storyId), read)

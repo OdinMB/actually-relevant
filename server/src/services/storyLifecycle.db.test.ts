@@ -738,7 +738,15 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect(mockInvoke).not.toHaveBeenCalled()
   })
 
-  it.each(['research_rating', 'stale', 'contradicted'] as const)('the research step rejects with %s only a selected story', async reason => {
+  it('the pipeline has no rejection for a research rating below the bar: the reason stays in the enum, unused', async () => {
+    const selected = await story({ status: 'selected' })
+    await expect(transition([selected.id], { to: 'rejected', reason: 'research_rating' }, 'pipeline')).rejects.toThrow(
+      /no move to rejected \(research_rating\)/,
+    )
+    expect((await row(selected.id)).status).toBe('selected')
+  })
+
+  it.each(['stale', 'contradicted'] as const)('the research step rejects with %s only a selected story', async reason => {
     const selected = await story({ status: 'selected' })
     const others = await Promise.all((['analyzed', 'published', 'trashed'] as const).map(status => story({ status })))
 

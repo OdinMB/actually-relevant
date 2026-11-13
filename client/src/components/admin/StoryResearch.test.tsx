@@ -101,6 +101,44 @@ describe('StoryResearch', () => {
     renderSection()
     const note = await screen.findByText(/This month: \$1\.50 of \$30\.00 spent/)
     expect(note).toHaveTextContent(/a run you start changes nothing on the story until you use its version/)
+    // An older backend sends no fallback counts
+    expect(note).not.toHaveTextContent(/Fallbacks/)
+  })
+
+  it("counts the month's fallbacks to today's format by category, and the unrecorded ones only when there are any", async () => {
+    const counts = { no_other_coverage: 3, not_confirmed: 1, draft_failed_check: 0, technical: 2, unrecorded: 0 }
+    mockResearch.usage.mockResolvedValue(usage({ fallbacksThisMonth: counts }))
+    renderSection()
+    expect(
+      await screen.findByText("Fallbacks to today's format this month: 3 no other coverage, 1 not confirmed, 0 draft failed the check, 2 technical."),
+    ).toBeInTheDocument()
+
+    mockResearch.usage.mockResolvedValue(usage({ fallbacksThisMonth: { ...counts, unrecorded: 4 } }))
+    renderSection()
+    expect(await screen.findByText(/2 technical, 4 unrecorded\.$/)).toBeInTheDocument()
+  })
+
+  it("names a fallback's category in the run list", async () => {
+    const result = researchResult({ kind: 'fallback', reason: 'no usable source', category: 'no_other_coverage' })
+    mockResearch.runs.mockResolvedValue([
+      {
+        id: 'run-1',
+        storyId: 'story-1',
+        status: 'completed',
+        trigger: 'pipeline',
+        verdict: 'fallback',
+        costUsd: 0.04,
+        tavilyCredits: 2,
+        error: null,
+        startedAt: '2026-11-12T10:00:00Z',
+        finishedAt: '2026-11-12T10:01:00Z',
+        result,
+        cost: null,
+      },
+    ])
+    renderSection()
+    const select = await screen.findByRole('combobox', { name: 'Run' })
+    expect(within(select).getByRole('option').textContent).toMatch(/ · pipeline · Today's format \(no other coverage\) · \$0\.040$/)
   })
 
   it('names who started each run in the run list', async () => {
@@ -181,8 +219,9 @@ describe('StoryResearch', () => {
 
     it.each([
       ['a kept run', true, completed()],
-      ['a run research rejected, which an editor may overrule', true, completed({}, { kind: 'research-rating', rating: 3 })],
-      ["a run that fell back to today's format", false, completed({}, { kind: 'fallback', reason: 'budget' })],
+      ['a run research rejected, which an editor may overrule', true, completed({}, { kind: 'stale', firstHappened: '2026-01-01' })],
+      ['a run that rated the story below the bar', true, completed({}, { kind: 'research-rating', rating: 3 })],
+      ["a run that fell back to today's format", false, completed({}, { kind: 'fallback', reason: 'budget', category: 'technical' })],
       ['a completed run without a draft', false, completed({}, { kind: 'keep' }, false)],
       ['a failed run', false, completed({ status: 'failed', result: null })],
     ])('for %s, offers "Use this version": %s', async (_name, offered, run) => {
@@ -197,6 +236,7 @@ describe('StoryResearch', () => {
       renderSection('published')
       fireEvent.click(await screen.findByRole('button', { name: 'Use this version' }))
       const dialog = await screen.findByRole('dialog')
+      expect(dialog).toHaveTextContent(/The story keeps its own rating\./)
       expect(mockResearch.apply).not.toHaveBeenCalled()
       fireEvent.click(within(dialog).getByRole('button', { name: 'Use this version' }))
       await waitFor(() => expect(mockResearch.apply).toHaveBeenCalledWith('story-1', 'run-1'))
@@ -240,7 +280,9 @@ describe('StoryResearch', () => {
     it('reverts a researched story once the editor confirms', async () => {
       renderSection('published', { title: 'Single-source headline' })
       fireEvent.click(await screen.findByRole('button', { name: 'Revert to single-source' }))
-      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Revert' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(dialog).toHaveTextContent(/gets back the headline, summary and analysis it had before research/)
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Revert' }))
       await waitFor(() => expect(mockResearch.revert).toHaveBeenCalledWith('story-1'))
     })
   })

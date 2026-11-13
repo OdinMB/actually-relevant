@@ -213,14 +213,19 @@ describe('decideGate', () => {
     expect(decideGate({ draft: ok }, 5)).toEqual({ kind: 'keep' })
   })
 
-  it('rejects on the rating first, then stale, then contradicted', () => {
+  it('names what research found first, old news then a contradiction, and only then a rating below the bar', () => {
     const all = { rating: 4, oldNews: { isOld: true, firstHappened: '2025-03-01' }, contradicted: { isContradicted: true, factIds: ['S2F1'] } }
-    expect(decideGate({ draft: all }, 5)).toEqual({ kind: 'research-rating', rating: 4 })
-    expect(decideGate({ draft: { ...all, rating: 5 } }, 5)).toEqual({ kind: 'stale', firstHappened: '2025-03-01' })
-    expect(decideGate({ draft: { ...all, rating: 5, oldNews: ok.oldNews } }, 5)).toEqual({ kind: 'contradicted', factIds: ['S2F1'] })
+    expect(decideGate({ draft: all }, 5)).toEqual({ kind: 'stale', firstHappened: '2025-03-01' })
+    expect(decideGate({ draft: { ...all, oldNews: ok.oldNews } }, 5)).toEqual({ kind: 'contradicted', factIds: ['S2F1'] })
+    expect(decideGate({ draft: { ...ok, rating: 4 } }, 5)).toEqual({ kind: 'research-rating', rating: 4 })
+    expect(decideGate({ draft: { ...ok, rating: 5 } }, 5)).toEqual({ kind: 'keep' })
   })
 
-  it('falls back with the reason when research failed', () => {
-    expect(decideGate({ failed: 'no usable source' }, 5)).toEqual({ kind: 'fallback', reason: 'no usable source' })
+  it('falls back with the reason and its category when research failed', () => {
+    expect(decideGate({ failed: 'no usable source', category: 'no_other_coverage' }, 5)).toEqual({
+      kind: 'fallback',
+      reason: 'no usable source',
+      category: 'no_other_coverage',
+    })
   })
 })

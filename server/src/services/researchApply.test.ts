@@ -39,6 +39,7 @@ const STORY = 'story-1'
 const RUN = 'run-1'
 const EMBEDDING = { embedding: [0.1, 0.2], hash: 'h' }
 
+/** The swapped columns before research: what the snapshot holds and a revert writes back. */
 const singleSource = {
   title: 'Single-source headline',
   titleLabel: 'Label',
@@ -49,9 +50,9 @@ const singleSource = {
   relevanceReasons: '- **Reason:** single',
   relevanceSummary: 'Why it matters, single-source.',
   antifactors: '- **Limit:** single',
-  relevance: 6,
-  relevanceCalculation: '- **Scale:** 6',
 }
+/** The story's own rating, which research never writes: the draft's rating differs. */
+const rating = { relevance: 6, relevanceCalculation: '- **Scale:** 6' }
 
 function source(id: string, over: Partial<ResearchSource> = {}): ResearchSource {
   return {
@@ -123,7 +124,7 @@ function result(over: Partial<StoredResearch> = {}): StoredResearch {
 
 /** When the story was last written, as the apply or revert read it; the write is fenced on it. */
 const READ_AT = new Date('2026-11-12T09:00:00Z')
-const storyRow = (over: Record<string, unknown> = {}) => ({ status: 'published', preResearch: null, updatedAt: READ_AT, ...singleSource, ...over })
+const storyRow = (over: Record<string, unknown> = {}) => ({ status: 'published', preResearch: null, updatedAt: READ_AT, ...singleSource, ...rating, ...over })
 const runRow = (over: Record<string, unknown> = {}) => ({ storyId: STORY, status: 'completed', result: result(), ...over })
 
 /** The rows and expected statuses of the last lifecycle write. */
@@ -147,11 +148,12 @@ beforeEach(() => {
 })
 
 describe('applyResearchRun', () => {
-  it('writes the researched texts, the cited version and a snapshot of the single-source columns, with a fresh embedding, against the status and the last write read now', async () => {
+  it('writes the researched texts, the cited version and a snapshot of the single-source columns, with a fresh embedding, against the status and the last write read now; never the rating', async () => {
     await expect(applyResearchRun(STORY, RUN)).resolves.toBe('applied')
 
     const { stage, actor, row, expected } = lastWrite()
     expect([stage, actor, expected]).toEqual(['research', 'editor', [[STORY, 'published']]])
+    // The draft rates the story 5; the story keeps its own 6 and its calculation (owner decision 2026-11-12)
     expect(row).toEqual({
       id: STORY,
       data: {
@@ -164,8 +166,6 @@ describe('applyResearchRun', () => {
         relevanceReasons: '- It matters.',
         relevanceSummary: null,
         antifactors: '- A caveat.',
-        relevance: 5,
-        relevanceCalculation: '- **Scale:** 5',
         research: buildResearchedStory(result()),
         preResearch: singleSource,
       },
@@ -227,7 +227,10 @@ describe('applyResearchRun', () => {
     ],
     [
       "a run that fell back to today's format",
-      () => mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow({ result: result({ verdict: { kind: 'fallback', reason: 'citation check' } }) })),
+      () =>
+        mockPrisma.storyResearchRun.findUnique.mockResolvedValue(
+          runRow({ result: result({ verdict: { kind: 'fallback', reason: 'citation check', category: 'technical' } }) }),
+        ),
       ConflictError,
       /fell back/,
     ],
@@ -307,8 +310,21 @@ describe('applyVerdict', () => {
     expect(mockFavicons).toHaveBeenCalledTimes(1)
   })
 
+  it('treats a run that rates the story below the bar as kept: it applies the researched version, rejects nothing, and the story keeps its rating', async () => {
+    await expect(applyVerdict(STORY, RUN, READ, result({ verdict: { kind: 'research-rating', rating: 3 } }))).resolves.toBe('applied')
+    expect(lastWrite().row.data).toMatchObject({ title: 'Researched headline', research: buildResearchedStory(result()) })
+    expect(lastWrite().row.data).not.toHaveProperty('relevance')
+    expect(lastWrite().row.data).not.toHaveProperty('relevanceCalculation')
+    expect(mockTransition).not.toHaveBeenCalled()
+  })
+
+  it('leaves a story single-source on a below-the-bar run without a usable draft', async () => {
+    await expect(applyVerdict(STORY, RUN, READ, result({ verdict: { kind: 'research-rating', rating: 3 }, draft: null }))).resolves.toBe('single-source')
+    expect(mockRecord).not.toHaveBeenCalled()
+    expect(mockTransition).not.toHaveBeenCalled()
+  })
+
   it.each([
-    ['research-rating', { kind: 'research-rating', rating: 3 }, 'research_rating'],
     ['stale', stale, 'stale'],
     ['contradicted', { kind: 'contradicted', factIds: ['S1F1'] }, 'contradicted'],
   ] as const)(
@@ -326,7 +342,9 @@ describe('applyVerdict', () => {
   })
 
   it('leaves the story single-source on a fallback, and on a kept run without a usable draft', async () => {
-    await expect(applyVerdict(STORY, RUN, READ, result({ verdict: { kind: 'fallback', reason: 'budget' } }))).resolves.toBe('single-source')
+    await expect(applyVerdict(STORY, RUN, READ, result({ verdict: { kind: 'fallback', reason: 'budget', category: 'technical' } }))).resolves.toBe(
+      'single-source',
+    )
     await expect(applyVerdict(STORY, RUN, READ, result({ draft: null }))).resolves.toBe('single-source')
     expect(mockRecord).not.toHaveBeenCalled()
     expect(mockTransition).not.toHaveBeenCalled()
@@ -363,7 +381,7 @@ describe('applyVerdict', () => {
     ['apply mode while the owner’s gate is closed', () => (applyGate.enabled = false)],
   ])('as a backstop to its caller, applies no verdict in %s', async (_name, arrange) => {
     arrange()
-    for (const verdict of [{ kind: 'keep' }, { kind: 'research-rating', rating: 3 }, { kind: 'fallback', reason: 'budget' }] as const) {
+    for (const verdict of [{ kind: 'keep' }, { kind: 'research-rating', rating: 3 }, { kind: 'fallback', reason: 'budget', category: 'technical' }] as const) {
       await expect(applyVerdict(STORY, RUN, READ, result({ verdict }))).resolves.toBe('shadow')
     }
     expect(mockPrisma.story.findUnique).not.toHaveBeenCalled()
@@ -382,6 +400,7 @@ describe('revertResearch', () => {
 
     const { stage, actor, row, expected } = lastWrite()
     expect([stage, actor, expected]).toEqual(['research', 'editor', [[STORY, 'published']]])
+    // The rating is not research's to restore: it stays as it is
     expect(row).toEqual({
       id: STORY,
       data: { ...singleSource, research: Prisma.DbNull, preResearch: Prisma.DbNull },

@@ -10,11 +10,11 @@ import { pipelineMode } from '../services/researchApply.js'
  * why, and whether publishing waits for it (only in apply mode, owner decision 2026-11-12).
  */
 function researchMode(): string {
-  const { perRun, maxWaitMinutes } = config.research.pipeline
-  const limit = `up to ${perRun} stories a run`
+  const { perRun, concurrency, maxWaitMinutes } = config.research.pipeline
+  const limit = `up to ${perRun} stories a run, ${concurrency} at once`
   const mode = pipelineMode()
   if (mode.mode === 'apply')
-    return `Apply mode: verdicts are applied, publishing holds stories selected under ${maxWaitMinutes} min ago; a run while disabled is a shadow trial; ${limit}`
+    return `Apply mode: verdicts are applied (only old news or a contradicted claim rejects; the rating stays), publishing holds stories selected under ${maxWaitMinutes} min ago; a run while disabled is a shadow trial; ${limit}`
   if (mode.heldBack) return `Shadow mode, apply held back (${mode.heldBack}): publishing does not wait; ${limit}`
   return `Shadow mode: runs are stored, no verdict is applied, publishing does not wait; ${limit}`
 }

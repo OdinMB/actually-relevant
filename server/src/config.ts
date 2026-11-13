@@ -330,13 +330,19 @@ export const config = {
        * closed the step runs as shadow and says so. A Render restart picks up a change.
        */
       mode: parseOneOf(process.env.RESEARCH_PIPELINE_MODE, 'shadow', ['shadow', 'apply'] as const, 'RESEARCH_PIPELINE_MODE'),
-      /** Selected stories one run of the job researches, one after another. */
+      /** Selected stories one run of the job researches. */
       perRun: parseWholeNumber(process.env.RESEARCH_PIPELINE_PER_RUN, 20, 'RESEARCH_PIPELINE_PER_RUN'),
+      /**
+       * Stories one run researches at once, so a day's selection is done well before publishing
+       * (daily at 02:07 and 02:45 UTC). Each run reserves its ceiling under the advisory lock, one
+       * after another, so runs side by side never pass the monthly cap.
+       */
+      concurrency: 4,
       /**
        * In apply mode, the publish gate's longest hold: it holds a selected story for its research
        * only this long after the story entered `selected` (`selectedAt`); after that the next publish
-       * run takes it single-source. Two of the job's hourly runs. It bounds the wait to this only
-       * where `publish_stories` runs more often than this.
+       * run takes it single-source. With both jobs daily, a story the 02:45 publish holds goes out at
+       * the next day's run, researched or not: a hold lasts one publish cycle at most.
        */
       maxWaitMinutes: 120,
     },

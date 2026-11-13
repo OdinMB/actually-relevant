@@ -16,6 +16,7 @@ const mockPrisma = vi.hoisted(() => ({
   story: { findUnique: vi.fn() },
   storyResearchRun: { updateMany: vi.fn(), aggregate: vi.fn(), findMany: vi.fn() },
   $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
   $disconnect: vi.fn(),
 }))
 const mockInput = vi.hoisted(() => ({ researchStoriesByIds: vi.fn() }))
@@ -75,6 +76,7 @@ beforeEach(() => {
   tx.storyResearchRun.aggregate.mockResolvedValue({ _sum: { costUsd: 1 } })
   tx.storyResearchRun.create.mockResolvedValue({ id: 'run-1' })
   mockPrisma.storyResearchRun.aggregate.mockResolvedValue({ _sum: { costUsd: 1.5 } })
+  mockPrisma.$queryRaw.mockResolvedValue([])
   mockApply.applyResearchRun.mockResolvedValue('applied')
   mockApply.revertResearch.mockResolvedValue(undefined)
   mockApply.applyRefusal.mockReturnValue(null)
@@ -179,8 +181,14 @@ describe('POST /api/admin/research/stories/:storyId/runs/:runId/apply and /rever
 })
 
 describe('GET /api/admin/research/usage', () => {
-  it('reports the month to date, the cap, the reservation and why no run can be applied now', async () => {
+  it("reports the month to date, the cap, the reservation, the month's fallbacks by category and why no run can be applied now", async () => {
     mockApply.applyRefusal.mockReturnValue('Applying research is off')
+    // As the database groups them; a category the code does not know counts as unrecorded
+    mockPrisma.$queryRaw.mockResolvedValue([
+      { category: 'not_confirmed', runs: 3 },
+      { category: null, runs: 1 },
+      { category: 'something-else', runs: 1 },
+    ])
     const res = await request(app).get('/api/admin/research/usage').set(authHeader())
     expect(res.body).toEqual({
       enabled: true,
@@ -189,6 +197,7 @@ describe('GET /api/admin/research/usage', () => {
       monthToDateUsd: 1.5,
       monthlyCapUsd: config.research.monthlyCapUsd,
       reservationUsd: config.research.maxRunUsd,
+      fallbacksThisMonth: { no_other_coverage: 0, not_confirmed: 3, draft_failed_check: 0, technical: 0, unrecorded: 2 },
     })
   })
 

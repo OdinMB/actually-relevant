@@ -134,25 +134,42 @@ export function supportFound(sentence: string, text: string): boolean {
   return needle !== '' && normalized(text).includes(needle)
 }
 
+/**
+ * Why a run fell back to today's format, recorded with it so the owner can count them (owner's
+ * request 2026-11-12); no verdict or write depends on it. `no_other_coverage`: no other report
+ * survived the opt-out checks and the source filter. `not_confirmed`: other reports survived it,
+ * but the extraction kept none as reporting the story (each unreadable, about another development,
+ * or an opinion piece or press release beside a news report). `draft_failed_check`: a key claim
+ * failed the checks after the rewrite, or a part of the draft was left empty. `technical`:
+ * anything else (a failed model call or search, the run's budget, an error).
+ */
+export const FALLBACK_CATEGORIES = ['no_other_coverage', 'not_confirmed', 'draft_failed_check', 'technical'] as const
+export type FallbackCategory = (typeof FALLBACK_CATEGORIES)[number]
+
 export type GateVerdict =
   | { kind: 'keep' }
   | { kind: 'research-rating'; rating: number }
   | { kind: 'stale'; firstHappened: string }
   | { kind: 'contradicted'; factIds: string[] }
-  | { kind: 'fallback'; reason: string }
+  | { kind: 'fallback'; reason: string; category: FallbackCategory }
 
 export type GateKind = GateVerdict['kind']
 export const GATE_KINDS: GateKind[] = ['keep', 'research-rating', 'stale', 'contradicted', 'fallback']
 
 /**
- * The design's gate, in its order: a rating below the publish bar, then old news, then a
- * contradicted main claim; a story whose research failed falls back to today's format.
+ * The gate: what research found comes first, old news, then a contradicted main claim; then a
+ * rating below the publish bar (`research-rating`), which is recorded for evaluation and rejects
+ * nothing (owner decision 2026-11-12: a re-evaluation that comes out lower is no reason). A story
+ * whose research failed falls back to today's format, with the reason and its category.
  */
-export function decideGate(outcome: { failed: string } | { draft: Pick<Draft, 'rating' | 'oldNews' | 'contradicted'> }, relevanceMin: number): GateVerdict {
-  if ('failed' in outcome) return { kind: 'fallback', reason: outcome.failed }
+export function decideGate(
+  outcome: { failed: string; category: FallbackCategory } | { draft: Pick<Draft, 'rating' | 'oldNews' | 'contradicted'> },
+  relevanceMin: number,
+): GateVerdict {
+  if ('failed' in outcome) return { kind: 'fallback', reason: outcome.failed, category: outcome.category }
   const { rating, oldNews, contradicted } = outcome.draft
-  if (rating < relevanceMin) return { kind: 'research-rating', rating }
   if (oldNews.isOld) return { kind: 'stale', firstHappened: oldNews.firstHappened }
   if (contradicted.isContradicted) return { kind: 'contradicted', factIds: contradicted.factIds }
+  if (rating < relevanceMin) return { kind: 'research-rating', rating }
   return { kind: 'keep' }
 }

@@ -51,9 +51,9 @@ const SINGLE_SOURCE = {
   relevanceReasons: '- **Reason:** single',
   relevanceSummary: 'Why it matters, from one source.',
   antifactors: '- **Limit:** single',
-  relevance: 6,
-  relevanceCalculation: '- **Scale:** 6',
 }
+/** The story's own rating; the drafts rate it 5, and research never writes it. */
+const RATING = { relevance: 6, relevanceCalculation: '- **Scale:** 6' }
 
 function source(id: string, origin: ResearchSource['origin'] = 'search'): ResearchSource {
   return {
@@ -119,7 +119,7 @@ async function story(status: 'analyzed' | 'selected' | 'published' | 'rejected' 
     slug: status === 'published' ? `story-${randomUUID()}` : null,
     datePublished: status === 'published' ? new Date() : null,
   })
-  await prisma.story.update({ where: { id: s.id }, data: SINGLE_SOURCE })
+  await prisma.story.update({ where: { id: s.id }, data: { ...SINGLE_SOURCE, ...RATING } })
   return s
 }
 
@@ -164,7 +164,7 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     feedId = (await createFeed((await createIssue()).id)).id
   })
 
-  it('writes the researched texts, the cited version and the snapshot; the relevance summary is null after it and kept in the snapshot', async () => {
+  it('writes the researched texts, the cited version and the snapshot; the relevance summary is null after it and kept in the snapshot; the rating stays the story’s', async () => {
     const s = await story()
     await setEmbedding(s.id, 1)
 
@@ -178,7 +178,7 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
       marketingBlurb: 'Researched blurb 1.',
       relevanceReasons: '- It matters.',
       relevanceSummary: null,
-      relevance: 5,
+      ...RATING,
     })
     expect(after.preResearch).toEqual(SINGLE_SOURCE)
     expect(after.research).toMatchObject({ paragraphs: [{ sentences: [{ text: 'Researched sentence 1.' }] }], quoteSourceId: 'S1' })
@@ -196,16 +196,18 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     expect(after.preResearch).toEqual(SINGLE_SOURCE)
   })
 
-  it('a revert restores every snapshot field, clears both versions, regenerates the embedding and forgets the related stories', async () => {
+  it('a revert restores every snapshot field, clears both versions, regenerates the embedding and forgets the related stories; an edited rating stays', async () => {
     const s = await story()
     await applyResearchRun(s.id, await run(s.id))
+    // The rating is no swapped field: an editor may change it on a researched story
+    await prisma.story.update({ where: { id: s.id }, data: { relevance: 7 } })
     mockGenerate.mockResolvedValue({ embedding: axisVector(3), hash: 'restored' })
     mockForget.mockClear()
 
     await revertResearch(s.id)
 
     const after = await stored(s.id)
-    expect(after).toMatchObject({ ...SINGLE_SOURCE, status: 'published', research: null, preResearch: null })
+    expect(after).toMatchObject({ ...SINGLE_SOURCE, relevance: 7, status: 'published', research: null, preResearch: null })
     expect(await embeddingHash(s.id)).toBe('restored')
     expect(mockForget).toHaveBeenCalledWith([s.id])
   })
@@ -333,8 +335,15 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     expect(after.preResearch).toEqual(SINGLE_SOURCE)
   })
 
+  it('the research step puts a below-the-bar run on its selected story like a kept one: it stays selected, at its own rating', async () => {
+    const s = await story('selected')
+
+    const verdict = { kind: 'research-rating', rating: 3 } as const
+    expect(await applyVerdict(s.id, 'run-1', await readBeforeRun(s.id), result(s.id, 1, { verdict }))).toBe('applied')
+    expect(await stored(s.id)).toMatchObject({ status: 'selected', rejectionReason: null, title: 'Researched headline 1', ...RATING })
+  })
+
   it.each([
-    [{ kind: 'research-rating', rating: 3 }, 'research_rating'],
     [{ kind: 'stale', firstHappened: '2026-09-01' }, 'stale'],
     [{ kind: 'contradicted', factIds: ['S1F1'] }, 'contradicted'],
   ] as const)('the research step rejects a selected story on a %o verdict with the reason %s, and writes no research', async (verdict, reason) => {
@@ -355,9 +364,8 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
 
   it('a fallback leaves the story single-source and selected', async () => {
     const s = await story('selected')
-    expect(await applyVerdict(s.id, 'run-1', await readBeforeRun(s.id), result(s.id, 1, { verdict: { kind: 'fallback', reason: 'budget' } }))).toBe(
-      'single-source',
-    )
+    const verdict = { kind: 'fallback', reason: 'budget', category: 'technical' } as const
+    expect(await applyVerdict(s.id, 'run-1', await readBeforeRun(s.id), result(s.id, 1, { verdict }))).toBe('single-source')
     expect(await stored(s.id)).toMatchObject({ ...SINGLE_SOURCE, status: 'selected', research: null, preResearch: null })
   })
 
@@ -398,7 +406,7 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
   it.each([
     [
       "a run that fell back to today's format",
-      async (id: string) => run(id, 1, { result: result(id, 1, { verdict: { kind: 'fallback', reason: 'budget' } }) }),
+      async (id: string) => run(id, 1, { result: result(id, 1, { verdict: { kind: 'fallback', reason: 'budget', category: 'technical' } }) }),
       /fell back/,
     ],
     ['a run of another story', async () => run((await story()).id), /another story/],

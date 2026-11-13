@@ -17,7 +17,7 @@ import { ConflictError, NotFoundError } from '../utils/errors.js'
 import { utcMonthStart } from './podcastGuards.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
 import { createRunMeter } from './researchCalls.js'
-import type { GateVerdict } from './researchChecks.js'
+import { FALLBACK_CATEGORIES, type FallbackCategory, type GateVerdict } from './researchChecks.js'
 import { hasPrice, summarizeRunCost, type RunCostSummary } from './researchCost.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds, type ResearchStory } from './researchInput.js'
 import { researchStory, STEP_TIERS, STEPS, type StepName, type StoryResearch } from './researchPipeline.js'
@@ -70,6 +70,12 @@ export interface ResearchUsageView {
   monthlyCapUsd: number
   /** What each run reserves when it starts. */
   reservationUsd: number
+  /**
+   * This UTC month's runs that fell back to today's format, editors' and the research step's, by
+   * the category stored with each (`FallbackCategory`); `unrecorded` for a run stored before
+   * categories were (2026-11-12). For the owner's count over the shadow period; nothing reads it.
+   */
+  fallbacksThisMonth: Record<FallbackCategory | 'unrecorded', number>
 }
 
 type Db = Prisma.TransactionClient | typeof prisma
@@ -331,8 +337,22 @@ export async function listResearchRuns(storyId: string, now: Date = new Date()):
   return runs.map(toView)
 }
 
+const isFallbackCategory = (value: string | null): value is FallbackCategory => (FALLBACK_CATEGORIES as readonly (string | null)[]).includes(value)
+
+/** This UTC month's fallbacks by stored category, read from the results' JSON in the database. */
+async function monthFallbacks(now: Date): Promise<ResearchUsageView['fallbacksThisMonth']> {
+  const rows = await prisma.$queryRaw<{ category: string | null; runs: number }[]>`
+    SELECT "result"->'verdict'->>'category' AS category, COUNT(*)::int AS runs
+    FROM "story_research_runs"
+    WHERE "verdict" = 'fallback' AND "started_at" >= ${utcMonthStart(now)}
+    GROUP BY 1`
+  const counts: ResearchUsageView['fallbacksThisMonth'] = { no_other_coverage: 0, not_confirmed: 0, draft_failed_check: 0, technical: 0, unrecorded: 0 }
+  for (const row of rows) counts[isFallbackCategory(row.category) ? row.category : 'unrecorded'] += row.runs
+  return counts
+}
+
 export async function researchUsage(now: Date = new Date()): Promise<ResearchUsageView> {
-  const monthToDateUsd = await monthSpendUsd(prisma, now)
+  const [monthToDateUsd, fallbacksThisMonth] = await Promise.all([monthSpendUsd(prisma, now), monthFallbacks(now)])
   const off = switchRefusal()
   const atCap = monthToDateUsd + config.research.maxRunUsd > config.research.monthlyCapUsd
   return {
@@ -341,5 +361,6 @@ export async function researchUsage(now: Date = new Date()): Promise<ResearchUsa
     monthToDateUsd,
     monthlyCapUsd: config.research.monthlyCapUsd,
     reservationUsd: config.research.maxRunUsd,
+    fallbacksThisMonth,
   }
 }
