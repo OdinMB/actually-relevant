@@ -151,8 +151,8 @@ export const publicStoryDetailSchema = publicStorySchema
   .extend({
     research: researchedStorySchema.nullable().openapi({
       description: aiField(
-        'The researched version: the story an AI model wrote from several sources, with a citation of its source after each sentence and bullet, ' +
-          'and the sources it cites. While it is set, the text fields above carry the researched text. ' +
+        'The researched version: the story an AI model wrote from several sources, with one citation group after each paragraph and bullet ' +
+          '(versions applied before 2026-11-13 cite after each sentence), and the sources it cites. While it is set, the text fields above carry the researched text. ' +
           'Null for a story that was not researched, or whose researched version could not be served.',
       ),
     }),

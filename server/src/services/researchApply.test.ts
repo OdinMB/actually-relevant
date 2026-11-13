@@ -76,7 +76,7 @@ function source(id: string, over: Partial<ResearchSource> = {}): ResearchSource 
 const draft = {
   titleLabel: 'Researched label',
   title: 'Researched headline',
-  story: [{ sentences: [{ text: 'Researched sentence.', factIds: ['S0F1', 'S1F1', 'E1F1'] }] }],
+  story: [{ text: 'Researched paragraph.', factIds: ['S0F1', 'S1F1', 'E1F1'] }],
   summary: 'Researched summary.',
   whyThisMatters: [{ text: 'It matters.', factIds: ['S1F1'] }],
   caveats: [{ text: 'A caveat.', factIds: [] }],
@@ -113,6 +113,8 @@ function result(over: Partial<StoredResearch> = {}): StoredResearch {
     draft,
     rewritten: false,
     problems: [],
+    checks: [{ problems: [], longestRuns: [], unjudged: [] }],
+    failedOn: null,
     support: { facts: 3, found: 3 },
     optOutChecked: true,
     verdict: { kind: 'keep' },
@@ -239,6 +241,15 @@ describe('applyResearchRun', () => {
       () => {
         const { marketingBlurb: _missing, ...older } = draft
         mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow({ result: { ...result(), draft: older } }))
+      },
+      ConflictError,
+      /older format/,
+    ],
+    [
+      'a draft written before 2026-11-13, cited per sentence and never checked for our own words',
+      () => {
+        const perSentence = { ...draft, story: [{ sentences: [{ text: 'Researched sentence.', factIds: ['S0F1'] }] }] }
+        mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow({ result: { ...result(), draft: perSentence } }))
       },
       ConflictError,
       /older format/,

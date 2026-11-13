@@ -2,15 +2,19 @@ import { describe, it, expect } from 'vitest'
 import {
   checkCitations,
   decideGate,
-  draftSentences,
+  draftItems,
   dropFailing,
   evidenceFor,
+  judgedProblems,
   publishedFact,
   supportFound,
+  unjudgedLabels,
   withoutInlineIds,
+  type CitationProblem,
   type PoolFact,
 } from './researchChecks.js'
-import type { Draft } from '../schemas/research.js'
+import { sourceLines, type WordingSource } from './researchCopying.js'
+import type { Draft, FactCheck } from '../schemas/research.js'
 
 const fact = (id: string, statement: string, supportingSentence = statement, measures = ''): PoolFact => ({ id, statement, supportingSentence, measures })
 const POOL = new Map(
@@ -26,29 +30,31 @@ const POOL = new Map(
   ].map(f => [f.id, f]),
 )
 
-type Parts = Pick<Draft, 'story' | 'whyThisMatters' | 'caveats'>
-const draft = (story: [string, string[]][], whyThisMatters: [string, string[]][] = [], caveats: [string, string[]][] = []): Parts => ({
-  story: [{ sentences: story.map(([text, factIds]) => ({ text, factIds })) }],
-  whyThisMatters: whyThisMatters.map(([text, factIds]) => ({ text, factIds })),
-  caveats: caveats.map(([text, factIds]) => ({ text, factIds })),
+type Parts = Pick<Draft, 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb'>
+type Cited = [string, string[]]
+const cited = (items: Cited[]) => items.map(([text, factIds]) => ({ text, factIds }))
+const draft = (story: Cited[], whyThisMatters: Cited[] = [], caveats: Cited[] = [], over: Partial<Parts> = {}): Parts => ({
+  title: 'Rooftop panels spread',
+  story: cited(story),
+  whyThisMatters: cited(whyThisMatters),
+  caveats: cited(caveats),
+  summary: 'Households add panels.',
+  marketingBlurb: 'Panels spread fast.',
+  ...over,
 })
 
 describe('checkCitations', () => {
-  it('passes sentences whose numbers appear in their cited facts', () => {
+  it('passes paragraphs whose numbers appear in their cited facts, a number of each cited source among them', () => {
     const d = draft(
-      [
-        ['Pakistan added 22 GW of rooftop solar in two years.', ['S0F1']],
-        ['Counting all solar, analysts put it at about 32 GW.', ['S1F1']],
-      ],
+      [['Pakistan added 22 GW of rooftop solar in two years. Counting all solar, analysts put it at about 32 GW.', ['S0F1', 'S1F1']]],
       [['Cheap panels let households cut their bills.', []]],
     )
     expect(checkCitations(d, POOL)).toEqual([])
   })
 
-  it('flags a fact id that is not in the pool', () => {
+  it('flags a fact id that is not in the pool, as a fact problem the code found', () => {
     const problems = checkCitations(draft([['Pakistan added rooftop solar quickly.', ['S0F1', 'S4F2']]]), POOL)
-    expect(problems).toHaveLength(1)
-    expect(problems[0]).toMatchObject({ label: 'Story paragraph 1, sentence 1', problem: expect.stringContaining('S4F2') })
+    expect(problems).toEqual([expect.objectContaining({ label: 'Story paragraph 1', kind: 'fact', by: 'code', problem: expect.stringContaining('S4F2') })])
   })
 
   it('flags a number none of the cited facts states', () => {
@@ -57,16 +63,20 @@ describe('checkCitations', () => {
     expect(problems[0]?.problem).toContain('"38"')
   })
 
-  it('needs a citation behind every story sentence, but lets a bullet that only judges go uncited', () => {
+  it('needs a citation behind every story paragraph, but lets a bullet that only judges go uncited', () => {
     const d = draft([['The shift happened without a national plan.', []]], [['This matters far beyond one country.', []]], [['Grid upgrades lag behind.', []]])
     const problems = checkCitations(d, POOL)
-    expect(problems.map(p => p.label)).toEqual(['Story paragraph 1, sentence 1'])
+    expect(problems.map(p => p.label)).toEqual(['Story paragraph 1'])
     expect(problems[0]?.problem).toMatch(/cites no fact/)
   })
 
-  it('flags an uncited bullet that states a number', () => {
+  it('flags an uncited bullet that states a number, and never checks the title, summary or blurb for citations', () => {
     const problems = checkCitations(
-      draft([['Pakistan added 22 GW of rooftop solar in two years.', ['S0F1']]], [['Some 40 million people now use solar power.', []]]),
+      draft([['Pakistan added 22 GW of rooftop solar in two years.', ['S0F1']]], [['Some 40 million people now use solar power.', []]], [], {
+        title: '40 million people use solar',
+        summary: '40 million people use solar.',
+        marketingBlurb: '40 million people use solar.',
+      }),
       POOL,
     )
     expect(problems.map(p => p.label)).toEqual(['Why This Matters 1'])
@@ -85,60 +95,188 @@ describe('evidenceFor', () => {
   })
 })
 
-describe('dropFailing', () => {
-  const d = (): Parts => ({
-    story: [
-      { sentences: [{ text: 'lead', factIds: ['S0F1'] }] },
-      {
-        sentences: [
-          { text: 'second', factIds: ['S0F1'] },
-          { text: 'third', factIds: ['S0F1'] },
-        ],
-      },
-      { sentences: [{ text: 'alone', factIds: ['S0F1'] }] },
-    ],
-    whyThisMatters: [
-      { text: 'why 1', factIds: [] },
-      { text: 'why 2', factIds: [] },
-    ],
-    caveats: [{ text: 'caveat', factIds: [] }],
+describe('draftItems', () => {
+  it('labels every written field the checks read, in the order the judge sees them', () => {
+    const d = draft(
+      [
+        ['a', ['S0F1']],
+        ['b', ['S1F1']],
+      ],
+      [['c', []]],
+      [['d', ['S0F1']]],
+    )
+    expect(draftItems(d).map(i => [i.label, i.cited])).toEqual([
+      ['Title', false],
+      ['Story paragraph 1', true],
+      ['Story paragraph 2', true],
+      ['Why This Matters 1', true],
+      ['Caveat 1', true],
+      ['Summary', false],
+      ['Blurb', false],
+    ])
   })
-  const problem = (label: string) => ({ label, text: '', problem: 'fails the fact check' })
+})
 
-  it('drops the failing sentences and bullets, and a paragraph left empty', () => {
-    const out = dropFailing(d(), [problem('Story paragraph 2, sentence 1'), problem('Story paragraph 3, sentence 1'), problem('Why This Matters 2')])
+const SENTENCE = 'Farmers in the northern provinces planted drought-tolerant wheat on more land this spring than in any year before.'
+const source = (id: string, over: Partial<WordingSource> = {}): WordingSource => ({
+  id,
+  title: 'Weizen-Rekord',
+  facts: [{ id: `${id}F1`, statement: 'The ministry reports a record wheat area.', supportingSentence: SENTENCE }],
+  voices: [],
+  ...over,
+})
+
+describe('judgedProblems', () => {
+  const d = draft([['Wheat area grows.', ['S1F1']]], [['It matters.', []]])
+  const items = draftItems(d).map(item => ({ item, evidence: item.cited && item.factIds.length > 0 ? [fact('S1F1', 'Wheat area grows.')] : [] }))
+  const lines = sourceLines([source('S1', { voices: [{ quote: 'Wir säen mehr.' }] })])
+  const verdict = (number: number, over: Partial<FactCheck['items'][number]> = {}) => ({
+    number,
+    supported: true,
+    problem: '',
+    key: false,
+    copiedSentence: '',
+    followsSource: '',
+    ...over,
+  })
+
+  it('maps each verdict back to its item by number, a support failure only where the item has evidence', () => {
+    const answer: FactCheck = {
+      items: [
+        verdict(1, { supported: false, problem: 'no title claim' }),
+        verdict(2, { supported: false, problem: 'the area is not stated', key: true }),
+        verdict(3, { supported: false, problem: 'a judging bullet' }),
+      ],
+    }
+    expect(judgedProblems(answer, items, lines)).toEqual([
+      { label: 'Story paragraph 1', text: 'Wheat area grows.', problem: 'fails the fact check: the area is not stated', kind: 'fact', by: 'judge', key: true },
+    ])
+  })
+
+  it('turns a close rendering and a followed source into copying problems, never key, and ignores ids the prompt did not give', () => {
+    const answer: FactCheck = {
+      items: [
+        verdict(1, { copiedSentence: 'S1T' }),
+        verdict(2, { copiedSentence: 'S1Q1', followsSource: 'S1' }),
+        verdict(3, { copiedSentence: 'S7F2', followsSource: 'none' }),
+        verdict(9, { copiedSentence: 'S1F1' }),
+      ],
+    }
+    expect(judgedProblems(answer, items, lines)).toEqual([
+      {
+        label: 'Title',
+        text: 'Rooftop panels spread',
+        problem: 'renders S1T ("Weizen-Rekord") closely',
+        kind: 'copying',
+        by: 'judge',
+        sourceId: 'S1',
+        copiedSentence: 'S1T',
+      },
+      {
+        label: 'Story paragraph 1',
+        text: 'Wheat area grows.',
+        problem: 'renders S1Q1 ("Wir säen mehr.") closely',
+        kind: 'copying',
+        by: 'judge',
+        sourceId: 'S1',
+        copiedSentence: 'S1Q1',
+      },
+      { label: 'Story paragraph 1', text: 'Wheat area grows.', problem: "follows S1's order and wording", kind: 'copying', by: 'judge', sourceId: 'S1' },
+    ])
+  })
+
+  it("quotes the source's own sentence for a fact id, never the fact's statement under the same id", () => {
+    const answer: FactCheck = { items: [verdict(2, { copiedSentence: 'S1F1.' })] }
+    expect(judgedProblems(answer, items, lines).map(p => p.problem)).toEqual([`renders S1F1 ("${SENTENCE}") closely`])
+  })
+})
+
+describe('unjudgedLabels', () => {
+  const items = draftItems(draft([['Wheat area grows.', ['S1F1']]], [['It matters.', []]])).map(item => ({ item }))
+  const verdict = (number: number) => ({ number, supported: true, problem: '', key: false, copiedSentence: '', followsSource: '' })
+
+  it('names the items the answer gives no verdict for, by their place in the prompt', () => {
+    expect(unjudgedLabels({ items: [verdict(1), verdict(3), verdict(5), verdict(9)] }, items)).toEqual(['Story paragraph 1', 'Summary'])
+    expect(unjudgedLabels({ items: [] }, items)).toEqual(['Title', 'Story paragraph 1', 'Why This Matters 1', 'Summary', 'Blurb'])
+  })
+
+  it('names none when every item has a verdict, even twice', () => {
+    expect(unjudgedLabels({ items: [1, 2, 3, 4, 5, 2].map(verdict) }, items)).toEqual([])
+  })
+})
+
+describe('dropFailing', () => {
+  const d = (): Parts =>
+    draft(
+      [
+        ['lead', ['S0F1']],
+        ['second', ['S0F1']],
+        ['third', ['S0F1']],
+      ],
+      [
+        ['why 1', []],
+        ['why 2', []],
+      ],
+      [['caveat', []]],
+    )
+  const problem = (label: string, over: Partial<CitationProblem> = {}): CitationProblem => ({
+    label,
+    text: '',
+    problem: 'fails the fact check',
+    kind: 'fact',
+    by: 'judge',
+    ...over,
+  })
+
+  it('drops the failing later paragraphs and bullets, counting an item with several problems once', () => {
+    const out = dropFailing(d(), [problem('Story paragraph 2'), problem('Story paragraph 2', { kind: 'copying', by: 'code' }), problem('Why This Matters 2')])
     expect(out).toEqual({
       draft: {
-        story: [{ sentences: [{ text: 'lead', factIds: ['S0F1'] }] }, { sentences: [{ text: 'third', factIds: ['S0F1'] }] }],
-        whyThisMatters: [{ text: 'why 1', factIds: [] }],
-        caveats: [{ text: 'caveat', factIds: [] }],
+        ...d(),
+        story: cited([
+          ['lead', ['S0F1']],
+          ['third', ['S0F1']],
+        ]),
+        whyThisMatters: cited([['why 1', []]]),
       },
     })
   })
 
-  it('counts a sentence with several problems once', () => {
-    const out = dropFailing(d(), [
-      problem('Why This Matters 2'),
-      problem('Why This Matters 2'),
-      problem('Story paragraph 2, sentence 2'),
-      problem('Story paragraph 2, sentence 1'),
-    ])
-    expect('draft' in out).toBe(true)
-  })
-
-  it('drops any number of non-key failures, the opening sentence included', () => {
-    const many = ['Story paragraph 1, sentence 1', 'Story paragraph 2, sentence 1', 'Story paragraph 2, sentence 2', 'Why This Matters 1'].map(problem)
-    const out = dropFailing(d(), many)
-    expect('draft' in out && out.draft.story).toEqual([{ sentences: [{ text: 'alone', factIds: ['S0F1'] }] }])
-  })
-
-  it('fails on an unsupported key claim, or when a part is left empty', () => {
-    expect(dropFailing(d(), [{ ...problem('Story paragraph 2, sentence 1'), key: true }])).toEqual({
-      failed: 'a key claim failed the check after one rewrite (Story paragraph 2, sentence 1)',
+  it('fails on an unsupported key claim, naming its item', () => {
+    expect(dropFailing(d(), [problem('Story paragraph 2', { key: true })])).toEqual({
+      failed: 'a key claim failed the check after one rewrite (Story paragraph 2)',
+      failedOn: 'Story paragraph 2',
     })
-    expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after one rewrite' })
-    const allStory = ['Story paragraph 1, sentence 1', 'Story paragraph 2, sentence 1', 'Story paragraph 2, sentence 2', 'Story paragraph 3, sentence 1']
-    expect(dropFailing(d(), allStory.map(problem))).toEqual({ failed: 'no story sentence passed the check after one rewrite' })
+  })
+
+  it.each(['Story paragraph 1', 'Title', 'Summary', 'Blurb'])('fails when %s still fails, since it cannot be dropped', label => {
+    expect(dropFailing(d(), [problem('Story paragraph 3'), problem(label, { kind: 'copying' })])).toEqual({
+      failed: `an item that cannot be dropped failed the check after one rewrite (${label})`,
+      failedOn: label,
+    })
+  })
+
+  it('fails when a part is left empty, naming its first failing item', () => {
+    expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after one rewrite', failedOn: 'Caveat 1' })
+    expect(dropFailing(d(), [problem('Why This Matters 2'), problem('Why This Matters 1')])).toEqual({
+      failed: 'no Why This Matters bullet passed the check after one rewrite',
+      failedOn: 'Why This Matters 1',
+    })
+  })
+
+  it.each([
+    ['story', 'Story', 'story paragraph'],
+    ['whyThisMatters', 'Why This Matters', 'Why This Matters bullet'],
+    ['caveats', 'Caveats', 'caveat'],
+  ] as const)('fails a draft with no %s at all under the part name, with problems elsewhere or none', (part, label, noun) => {
+    const without = { ...d(), [part]: [] }
+    const failed = { failed: `the draft has no ${noun}`, failedOn: label }
+    expect(dropFailing(without, [])).toEqual(failed)
+    expect(dropFailing(without, [problem('Story paragraph 3'), problem('Why This Matters 2')])).toEqual(failed)
+  })
+
+  it('keeps a draft without problems as it is', () => {
+    expect(dropFailing(d(), [])).toEqual({ draft: d() })
   })
 })
 
@@ -154,7 +292,7 @@ describe('withoutInlineIds', () => {
 })
 
 describe('publishedFact', () => {
-  it('gives a source date as fact F0 with weekday, month and day, so a dated sentence passes the number check', () => {
+  it('gives a source date as fact F0 with weekday, month and day, so a dated paragraph passes the number check', () => {
     const [f] = publishedFact('S1', 'qz.com', '2026-11-11T09:00:00Z')
     expect(f).toEqual({ id: 'S1F0', statement: 'qz.com published this on Wednesday, November 11, 2026.', supportingSentence: '', measures: '' })
     const pool = new Map([...POOL, ['S1F0', f!]])
@@ -164,31 +302,6 @@ describe('publishedFact', () => {
   it('gives nothing for a missing or unreadable date', () => {
     expect(publishedFact('S1', 'x', null)).toEqual([])
     expect(publishedFact('S1', 'x', 'unknown')).toEqual([])
-  })
-})
-
-describe('draftSentences', () => {
-  it('labels story sentences by paragraph and bullets by section', () => {
-    const d: Parts = {
-      story: [
-        { sentences: [{ text: 'a', factIds: [] }] },
-        {
-          sentences: [
-            { text: 'b', factIds: [] },
-            { text: 'c', factIds: [] },
-          ],
-        },
-      ],
-      whyThisMatters: [{ text: 'd', factIds: [] }],
-      caveats: [{ text: 'e', factIds: [] }],
-    }
-    expect(draftSentences(d).map(s => s.label)).toEqual([
-      'Story paragraph 1, sentence 1',
-      'Story paragraph 2, sentence 1',
-      'Story paragraph 2, sentence 2',
-      'Why This Matters 1',
-      'Caveat 1',
-    ])
   })
 })
 

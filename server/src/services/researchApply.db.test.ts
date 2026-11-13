@@ -86,7 +86,7 @@ function result(storyId: string, n: number, over: Partial<StoredResearch> = {}):
     draft: {
       titleLabel: `Researched label ${n}`,
       title: `Researched headline ${n}`,
-      story: [{ sentences: [{ text: `Researched sentence ${n}.`, factIds: ['S0F1', 'S1F1'] }] }],
+      story: [{ text: `Researched paragraph ${n}.`, factIds: ['S0F1', 'S1F1'] }],
       summary: `Researched summary ${n}.`,
       whyThisMatters: [{ text: 'It matters.', factIds: ['S1F1'] }],
       caveats: [{ text: 'A caveat.', factIds: [] }],
@@ -101,6 +101,8 @@ function result(storyId: string, n: number, over: Partial<StoredResearch> = {}):
     },
     rewritten: false,
     problems: [],
+    checks: [{ problems: [], longestRuns: [], unjudged: [] }],
+    failedOn: null,
     support: { facts: 2, found: 2 },
     optOutChecked: true,
     verdict: { kind: 'keep' },
@@ -181,7 +183,7 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
       ...RATING,
     })
     expect(after.preResearch).toEqual(SINGLE_SOURCE)
-    expect(after.research).toMatchObject({ paragraphs: [{ sentences: [{ text: 'Researched sentence 1.' }] }], quoteSourceId: 'S1' })
+    expect(after.research).toMatchObject({ paragraphs: [{ sentences: [{ text: 'Researched paragraph 1.' }] }], quoteSourceId: 'S1' })
     expect(await embeddingHash(s.id)).toBe('researched')
     expect(mockFavicons).toHaveBeenCalled()
   })

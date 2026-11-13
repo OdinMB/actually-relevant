@@ -49,11 +49,12 @@ function SourceCard({ source, sentence }: CitedSource) {
 }
 
 /**
- * One citation group, after a sentence or bullet: a 24 px button of the cited sources' overlapping
- * 16 px icons, named "Source: X" or "Sources: X, Y", that opens a card per source with its outlet,
- * country, kind, date, supporting sentence and a link to read it. The cards sit in one panel, a
- * dialog named "Source(s) for this sentence" that takes focus on its first link. Nothing for
- * citations whose sources the story does not list.
+ * One citation group, after a paragraph, a bullet or the quote (after each sentence in versions
+ * applied before 2026-11-13): a 24 px button of the cited sources' overlapping 16 px icons, named
+ * "Source: X" or "Sources: X, Y", that opens a card per source with its outlet, country, kind, date,
+ * supporting sentence and a link to read it. The cards sit in one panel, a dialog named "Source(s)
+ * for this passage" that takes focus on its first link. Nothing for citations whose sources the
+ * story does not list.
  */
 export function Citation({ citations, sources }: { citations: ResearchCitation[]; sources: SourcesById }) {
   const cited = citations.flatMap((c): CitedSource[] => {
@@ -76,7 +77,7 @@ export function Citation({ citations, sources }: { citations: ResearchCitation[]
       <PopoverPanel
         focus
         role="dialog"
-        aria-label={`${cited.length === 1 ? 'Source' : 'Sources'} for this sentence`}
+        aria-label={`${cited.length === 1 ? 'Source' : 'Sources'} for this passage`}
         anchor="bottom start"
         className="z-30 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-neutral-200 bg-white p-4 text-sm leading-normal shadow-lg [--anchor-gap:4px]"
       >

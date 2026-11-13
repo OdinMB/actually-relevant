@@ -97,13 +97,8 @@ export function researchedRow(row: Prisma.StoryCreateManyInput, seed: Researched
     ],
     draft: {
       story: [
-        {
-          sentences: [
-            { text: seed.gist, factIds: ['S0F1'] },
-            { text: `Local officials confirmed the figures, ${COVERAGE[0].outlet} reports.`, factIds: ['S1F1'] },
-          ],
-        },
-        { sentences: [{ text: `It follows an earlier development: ${seed.earlier.title}.`, factIds: ['E1F1'] }] },
+        { text: `${seed.gist} Local officials confirmed the figures, ${COVERAGE[0].outlet} reports.`, factIds: ['S0F1', 'S1F1'] },
+        { text: `It follows an earlier development: ${seed.earlier.title}.`, factIds: ['E1F1'] },
       ],
       whyThisMatters: [
         { text: seed.why, factIds: ['S2F1'] },

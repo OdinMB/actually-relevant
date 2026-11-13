@@ -2,7 +2,10 @@ import { Fragment } from 'react'
 import type { ResearchedCitedText } from '@shared/types'
 import { Citation, type SourcesById } from './Citation'
 
-/** Cited sentences in a row (a paragraph's, or one bullet's), each followed by its citation. */
+/**
+ * Cited passages in a row, each followed by its citation: one per paragraph or bullet in versions
+ * applied since 2026-11-13, a paragraph's sentences in versions applied before.
+ */
 export function CitedSentences({ items, sources }: { items: ResearchedCitedText[]; sources: SourcesById }) {
   return (
     <>

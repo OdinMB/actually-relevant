@@ -26,7 +26,10 @@ export const queriesSchema = z.object({
 const factSchema = z.object({
   statement: z
     .string()
-    .describe('One fact in one plain English sentence, true to the source: a figure keeps its unit, its scope and its period, and a claim keeps who makes it.'),
+    .describe(
+      'One fact in one plain English sentence, true to the source: a figure keeps its unit, its scope and its period, and a claim keeps who makes it. ' +
+        'A neutral restatement in your own order and phrasing, never a translation or a rewording of the supporting sentence.',
+    ),
   supportingSentence: z.string().describe('The sentence of the source text that states the fact, copied character for character in its original language.'),
   measures: z
     .string()
@@ -101,13 +104,13 @@ export const earlierSchema = z.object({
     .describe('One entry per candidate in <EARLIER_STORIES>.'),
 })
 
-const citedSentence = z.object({
-  text: z.string().describe('One sentence in plain text, no Markdown, no fact ids.'),
-  factIds: z.array(z.string()).describe('Ids of the facts in <FACTS> that state what the sentence says, e.g. ["S1F2", "S3F1"].'),
+const citedParagraph = z.object({
+  text: z.string().describe('One paragraph of 2-4 short sentences in plain text, no Markdown, no fact ids, no quotation marks.'),
+  factIds: z.array(z.string()).describe('Ids of every fact in <FACTS> the paragraph states, e.g. ["S1F2", "S3F1"].'),
 })
 
 const citedBullet = z.object({
-  text: z.string().describe('The bullet in plain text, 1-2 sentences, no Markdown, no leading dash, no fact ids.'),
+  text: z.string().describe('The bullet in plain text, 1-2 sentences, no Markdown, no leading dash, no fact ids, no quotation marks.'),
   factIds: z.array(z.string()).describe('Ids of the facts in <FACTS> the bullet states; empty for a bullet that only judges.'),
 })
 
@@ -126,11 +129,9 @@ export const writeSchema = z.object({
       'Standalone headline, max 10 words, sentence case (capitalize first word and proper nouns only). ' +
         'Write for a smart 16-year-old — no jargon or insider terms. ' +
         'Must make sense to someone with no background, and without the label: name the subject. ' +
-        "Be concrete: name the actor, action, or stakes. NEVER use the 'Label: headline' colon pattern.",
+        "Be concrete: name the actor, action, or stakes. NEVER use the 'Label: headline' colon pattern. No quotation marks.",
     ),
-  story: z
-    .array(z.object({ sentences: z.array(citedSentence).describe('The sentences of the paragraph, in order.') }))
-    .describe('The story: 2-4 paragraphs, 150-250 words in total.'),
+  story: z.array(citedParagraph).describe('The story: 2-4 paragraphs, 150-250 words in total, each citing the facts it states.'),
   summary: z.string().describe('Plain text summary of the development, 40-70 words, for cards and feeds. No fact ids.'),
   whyThisMatters: z.array(citedBullet).describe('Exactly 3 bullets on why the development matters.'),
   caveats: z.array(citedBullet).describe('1-3 bullets on what limits the development or makes it uncertain.'),
@@ -142,7 +143,7 @@ export const writeSchema = z.object({
   quoteAttribution: z
     .string()
     .describe("The quoted person's full name and role (e.g. 'Maria Helena Semedo, FAO Deputy Director'), or the organization or outlet quoted."),
-  quoteSourceId: z.string().describe('Id of the source the quote comes from, e.g. "S2".'),
+  quoteSourceId: z.string().describe('Id of the source the quote comes from, e.g. "S2", never a quote\'s id such as "S2Q1".'),
   marketingBlurb: z
     .string()
     .describe('Plain text, 25-30 words and never more than 230 characters including spaces. Opens with the development itself, never with an outlet.'),
@@ -166,14 +167,14 @@ export const writeSchema = z.object({
 })
 
 export const factCheckSchema = z.object({
-  sentences: z
+  items: z
     .array(
       z.object({
-        number: z.number().int().describe('The sentence number from <SENTENCES>.'),
+        number: z.number().int().describe('The item number from <ITEMS>.'),
         supported: z
           .boolean()
           .describe(
-            'True when every factual claim of the sentence (each number, name, date, place and event) is stated by its cited facts, with the same scope.',
+            'True when every factual claim of the item (each number, name, date, place and event) is stated by its cited facts, with the same scope. True for an item without cited facts.',
           ),
         problem: z.string().describe('When not supported: the claim its cited facts do not state, in one short sentence. Empty string otherwise.'),
         key: z
@@ -181,9 +182,17 @@ export const factCheckSchema = z.object({
           .describe(
             'When not supported: true when the unsupported claim is the main development itself (that it happened, who did it, or its central figure); false for a detail such as an exact date, a side figure, an attribution or a background point. False when supported.',
           ),
+        copiedSentence: z
+          .string()
+          .describe(
+            'The id in <SOURCE_WORDING> (e.g. "S2F3", "S2Q1", "S2T") of a source sentence, quote or title that any one sentence of the item renders closely, in nearly the same words or as a close translation, in any language. Empty string when none does.',
+          ),
+        followsSource: z
+          .string()
+          .describe('The id (e.g. "S2") of the one source whose points the item follows in that source\'s order and phrasing. Empty string when none.'),
       }),
     )
-    .describe('One entry per sentence in <SENTENCES>.'),
+    .describe('One entry per item in <ITEMS>.'),
 })
 
 export type Queries = z.infer<typeof queriesSchema>

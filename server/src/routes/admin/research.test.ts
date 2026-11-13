@@ -43,10 +43,25 @@ const { config } = await import('../../config.js')
 const STORY = 'story-1'
 const start = () => request(app).post(`/api/admin/research/stories/${STORY}/runs`).set(authHeader())
 
+const flagged = {
+  label: 'Story paragraph 2',
+  text: 'A paragraph.',
+  problem: 'renders S1F2 closely',
+  kind: 'copying',
+  by: 'judge',
+  sourceId: 'S1',
+  copiedSentence: 'S1F2',
+}
 const storedResult = {
   storyId: STORY,
   calls: [{ step: 'write', outcome: 'ok', usage: { input: 1000, cached: 0, output: 100, reasoning: 0 }, costUsd: 0.02, model: 'gpt-6-luna' }],
   credits: 2,
+  problems: [flagged],
+  checks: [
+    { problems: [flagged], longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }], unjudged: ['Blurb'] },
+    { problems: [flagged], longestRuns: [], unjudged: [] },
+  ],
+  failedOn: null,
   verdict: { kind: 'keep' },
   prices: { models: {}, cacheWriteFactor: 1.25, tavilyUsdPerCredit: 0.008 },
 }
@@ -137,6 +152,24 @@ describe('GET /api/admin/research/stories/:storyId/runs', () => {
     })
     expect(res.body[1]).toMatchObject({ status: 'failed', cost: null, result: null })
     expect(mockPrisma.storyResearchRun.updateMany).toHaveBeenCalled()
+  })
+
+  // The client's mirror (`ResearchResult` in shared/types) reads these: each check pass with its unjudged items, the item a fallback failed on, each problem's cause
+  it("serves the run's check passes, the item a fallback failed on and each problem's cause", async () => {
+    mockPrisma.storyResearchRun.findMany.mockResolvedValue([row()])
+    const res = await request(app).get(`/api/admin/research/stories/${STORY}/runs`).set(authHeader())
+    expect(res.body[0].result).toMatchObject({
+      problems: [{ label: 'Story paragraph 2', kind: 'copying', by: 'judge', sourceId: 'S1', copiedSentence: 'S1F2' }],
+      checks: [
+        {
+          problems: [{ kind: 'copying', by: 'judge' }],
+          longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }],
+          unjudged: ['Blurb'],
+        },
+        {},
+      ],
+      failedOn: null,
+    })
   })
 })
 

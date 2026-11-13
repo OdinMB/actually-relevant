@@ -535,19 +535,20 @@ describe('StoryPage researched format', () => {
   const researched = { ...story, summary: 'Researched short summary', relevanceReasons: '- Plain reason', research, researched: true }
   const sourcesSection = () => document.getElementById('sources')!
 
-  it('announces the researched label, as plain text after the header line', () => {
+  it('announces the researched label, its opening words linking the methodology section in place of "How it works"', () => {
     renderStory(researched)
-    const label = screen.getByText(
-      (_, el) => el?.tagName === 'SPAN' && el.textContent?.startsWith('Researched and written by') === true && !el.querySelector('a'),
-    )
-    expect(announcedText(label)).toBe('Researched and written by AI.')
+    const link = screen.getByRole('link', { name: 'Researched and written' })
+    expect(link).toHaveAttribute('href', '/methodology#researched-stories')
+    expect(announcedText(link.parentElement!)).toBe('Researched and written by AI.')
+    expect(screen.queryByRole('link', { name: 'How it works' })).toBeNull()
     expect(screen.queryByText(/^Summary and analysis by/)).toBeNull()
   })
 
-  it('opens the header with where the story was initially found and how many sources it has, linking the list', () => {
+  it('opens the header with where the story was found and how many sources it has, linking the list', () => {
     renderStory(researched)
     const row = screen.getByRole('heading', { level: 1 }).nextElementSibling!
-    expect(announcedText(row)).toContain('Initially found on Example Feed (opens in new tab), Nov 10, 2026')
+    expect(announcedText(row)).toContain('Found on Example Feed (opens in new tab), Nov 10, 2026')
+    expect(announcedText(row)).not.toContain('Initially')
     expect(row.querySelector('time')).toHaveAttribute('dateTime', '2026-11-10')
     expect(within(row as HTMLElement).getByRole('link', { name: 'Example Feed (opens in new tab)' })).toHaveAttribute('href', 'https://example.com/article')
     expect(within(row as HTMLElement).getByRole('link', { name: '3 sources' })).toHaveAttribute('href', '#sources')
@@ -633,7 +634,7 @@ describe('StoryPage researched format', () => {
   it('keeps the researched label over the plain layout when the researched version could not be served', () => {
     mockCluster.current = { sources: [{ feedTitle: 'Other Feed', sourceUrl: 'https://other.example/a' }] }
     renderStory({ ...researched, research: null })
-    expect(screen.getByText(/^Researched and written by/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Researched and written' })).toBeInTheDocument()
     expect(screen.getByText('Researched short summary')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Original article (opens in new tab)' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Sources' })).toBeNull()

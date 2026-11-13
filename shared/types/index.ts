@@ -149,7 +149,7 @@ export interface PublicStory extends Story {
 
 // --- Researched story (public; a hand-written mirror of server/src/services/researchedStory.ts) ---
 
-/** One cited source of a sentence or bullet, with the source's supporting sentence for the card. */
+/** One cited source of a paragraph or bullet (a sentence in versions applied before 2026-11-13), with the source's supporting sentence for the card. */
 export interface ResearchCitation {
   sourceId: string
   /** The source's own sentence, in its original language; null when only its date is cited. */
@@ -181,6 +181,7 @@ export interface ResearchedSource {
 
 /** The researched version readers see, served on the single story only. */
 export interface ResearchedStory {
+  /** One cited passage per paragraph since 2026-11-13; versions applied before cite each sentence. */
   paragraphs: { sentences: ResearchedCitedText[] }[]
   whyThisMatters: ResearchedCitedText[]
   caveats: ResearchedCitedText[]
@@ -974,7 +975,8 @@ export interface ResearchCitedText {
 export interface ResearchDraft {
   titleLabel: string
   title: string
-  story: { sentences: ResearchCitedText[] }[]
+  /** One cited text per paragraph; a run stored before 2026-11-13 has a list of cited sentences per paragraph. */
+  story: (ResearchCitedText | { sentences: ResearchCitedText[] })[]
   summary: string
   whyThisMatters: ResearchCitedText[]
   caveats: ResearchCitedText[]
@@ -997,6 +999,31 @@ export type ResearchVerdict =
   /** `category`: absent on a run stored before categories were (2026-11-12). */
   | { kind: 'fallback'; reason: string; category?: ResearchFallbackCategory }
 
+/** A problem a check found in a draft (server: `CitationProblem`); the cause fields are absent on runs stored before 2026-11-13. */
+export interface ResearchProblem {
+  /** `Title`, `Story paragraph 2`, `Caveat 1` …; `Story paragraph 1, sentence 2` on older runs. */
+  label: string
+  text: string
+  problem: string
+  key?: boolean
+  /** `fact`: a claim its cited facts don't state. `copying`: wording too close to a source's. */
+  kind?: 'fact' | 'copying'
+  /** `code`: the deterministic checks. `judge`: the fact-check model. */
+  by?: 'code' | 'judge'
+  sourceId?: string
+  /** The code's copying check: the run is shared with the source's own wording or with a fact's statement. */
+  against?: 'wording' | 'statement'
+  /** The judge's copying: the source sentence, quote or title the item renders closely. */
+  copiedSentence?: string
+}
+
+/** One pass of the checks: what it found, each item's longest run of words shared with each source, per kind, and the items the fact check gave no verdict for. */
+export interface ResearchCheckPass {
+  problems: ResearchProblem[]
+  longestRuns: { label: string; sourceId: string; against: 'wording' | 'statement'; words: number }[]
+  unjudged: string[]
+}
+
 /** A run's stored result: what the research found, the model of each step and the prices it ran at. */
 export interface ResearchResult {
   storyId: string
@@ -1010,7 +1037,12 @@ export interface ResearchResult {
   /** The last draft written, also when it failed the check. */
   draft: ResearchDraft | null
   rewritten: boolean
-  problems: { label: string; text: string; problem: string }[]
+  /** What the last check found: in a kept draft, the paragraphs and bullets dropped from it. */
+  problems: ResearchProblem[]
+  /** One per check pass (two after a rewrite); absent on runs stored before 2026-11-13. */
+  checks?: ResearchCheckPass[]
+  /** The item a `draft_failed_check` fallback failed on; absent on runs stored before 2026-11-13. */
+  failedOn?: string | null
   support: { facts: number; found: number }
   /** Whether publishers' AI opt-outs were checked. */
   optOutChecked: boolean

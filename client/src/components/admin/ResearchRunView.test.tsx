@@ -38,12 +38,8 @@ const result = (verdict: ResearchVerdict = { kind: 'keep' }): ResearchResult => 
     titleLabel: 'Solar',
     title: 'Pakistan adds rooftop solar',
     story: [
-      {
-        sentences: [
-          { text: 'Pakistan added solar.', factIds: ['S0F1', 'E1F1'] },
-          { text: 'An odd claim.', factIds: ['S1F1'] },
-        ],
-      },
+      { text: 'Pakistan added solar.', factIds: ['S0F1', 'E1F1'] },
+      { text: 'An odd claim.', factIds: ['S1F1'] },
     ],
     summary: 'A summary.',
     whyThisMatters: [{ text: 'It matters.', factIds: [] }],
@@ -118,6 +114,48 @@ describe('ResearchRunView', () => {
     render(<ResearchRunView run={run()} />)
     expect(screen.getAllByRole('link', { name: 'Source: Dawn' })[0]).toHaveAttribute('href', 'https://dawn.example/a')
     expect(screen.getByRole('link', { name: 'Source: Actually Relevant' })).toHaveAttribute('href', '/stories/old-story')
+  })
+
+  it('shows a draft cited per paragraph, and one stored before 2026-11-13 cited per sentence', () => {
+    const { unmount } = render(<ResearchRunView run={run()} />)
+    const first = screen.getByText('Pakistan added solar.').closest('p')
+    expect(first).toHaveTextContent(/^Pakistan added solar\. Source: Dawn.*Source: Actually Relevant$/)
+    expect(first).not.toHaveTextContent('An odd claim.')
+    unmount()
+
+    const older = {
+      ...result().draft!,
+      story: [
+        {
+          sentences: [
+            { text: 'An older sentence.', factIds: ['S0F1'] },
+            { text: 'And another.', factIds: [] },
+          ],
+        },
+      ],
+    }
+    render(<ResearchRunView run={run({ result: { ...result(), draft: older } })} />)
+    expect(screen.getByText('An older sentence.').closest('p')).toHaveTextContent(/^An older sentence\. Source: Dawn And another\.$/)
+  })
+
+  it('names the cause of each problem, and none for a problem stored before causes were', () => {
+    const problems: ResearchResult['problems'] = [
+      {
+        label: 'Story paragraph 2',
+        text: 'An odd claim.',
+        problem: 'renders S1F1 closely',
+        kind: 'copying',
+        by: 'judge',
+        sourceId: 'S1',
+        copiedSentence: 'S1F1',
+      },
+      { label: 'Caveat 1', text: 'A caveat.', problem: 'states "40", which none of its cited facts states', kind: 'fact', by: 'code' },
+      { label: 'Story paragraph 1, sentence 2', text: 'Old.', problem: 'cites no fact' },
+    ]
+    render(<ResearchRunView run={run({ result: { ...result(), rewritten: true, problems } })} />)
+    expect(screen.getByText(/^Story paragraph 2: renders S1F1 closely/)).toHaveTextContent(/\(copying, AI check\)$/)
+    expect(screen.getByText(/^Caveat 1: states/)).toHaveTextContent(/\(fact, code check\)$/)
+    expect(screen.getByText(/^Story paragraph 1, sentence 2/)).toHaveTextContent(/^Story paragraph 1, sentence 2: cites no fact$/)
   })
 
   it('links no URL that is not http(s), and loads favicons only from https without a referrer', () => {

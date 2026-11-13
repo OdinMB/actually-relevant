@@ -25,6 +25,8 @@ const result = (storyId: string, calls: StepCall[], credits: number): StoryResea
   draft: null,
   rewritten: false,
   problems: [],
+  checks: [],
+  failedOn: null,
   support: { facts: 0, found: 0 },
   optOutChecked: false,
   verdict: { kind: 'keep' },

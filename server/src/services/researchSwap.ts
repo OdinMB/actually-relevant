@@ -13,6 +13,8 @@ import { writeSchema } from '../schemas/research.js'
 /**
  * The parts of a run's draft an apply reads, checked when it is applied: a run's stored result is
  * not parsed again on read, and a draft stored by an older version of the write step may lack one.
+ * A draft from before 2026-11-13, its paragraphs lists of cited sentences, fails it too: it was
+ * neither written nor checked for our own words, so it is refused as the older format.
  */
 export const appliedDraftSchema = writeSchema.pick({
   titleLabel: true,

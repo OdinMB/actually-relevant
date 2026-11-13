@@ -1,11 +1,14 @@
 /**
- * Deterministic judgments on a research draft: the citation check (every fact id exists, every
- * story sentence cites one, every number a sentence states appears in its cited facts), whether a
- * fact's supporting sentence occurs in its source text (a fidelity number for the report), and
- * the gate that turns a checked draft into a verdict. Pure.
+ * Deterministic judgments on a research draft: its items, the citation check (every fact id
+ * exists, every story paragraph cites one, every number an item states appears in its cited
+ * facts), the fact check's answer read back as problems, what the rewrite leaves of a draft,
+ * whether a fact's supporting sentence occurs in its source text (a fidelity number for the
+ * report), and the gate that turns a checked draft into a verdict. The copying check is
+ * `researchCopying.ts`. Pure.
  */
 import { findUnsupportedNumbers } from '../lib/numbers.js'
-import type { Draft } from '../schemas/research.js'
+import type { Draft, FactCheck } from '../schemas/research.js'
+import { againstOf, type CopiedFrom, type SourceLine } from './researchCopying.js'
 
 export interface PoolFact {
   /** `S2F3`: source 2, fact 3; `E1F2` for our own earlier stories. */
@@ -15,13 +18,16 @@ export interface PoolFact {
   measures: string
 }
 
-export type DraftPart = 'story' | 'whyThisMatters' | 'caveats'
+export type DraftPart = 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb'
 
-export interface DraftSentence {
+/** One written field the checks read: a story paragraph, a bullet, the title, the summary or the blurb. */
+export interface DraftItem {
   part: DraftPart
-  /** Where it sits, for the rewrite prompt and the drafts file. */
+  /** Where it sits (`Story paragraph 2`, `Caveat 1`, `Title`): the problems, the rewrite prompt and the drops key on it. */
   label: string
   text: string
+  /** Whether it carries citations: story paragraphs and bullets do; the title, summary and blurb never do. */
+  cited: boolean
   factIds: string[]
 }
 
@@ -29,27 +35,53 @@ export interface CitationProblem {
   label: string
   text: string
   problem: string
+  /** `fact`: a claim its cited facts do not state. `copying`: wording too close to a source's. */
+  kind: 'fact' | 'copying'
+  /** Which check found it: the code checks, or the fact-check model. */
+  by: 'code' | 'judge'
   /** The fact check's judgment that the unsupported claim is the main development itself. */
   key?: boolean
+  /** Copying: the source the item is too close to; none for a quoted span. */
+  sourceId?: string
+  /** The code's copying check: what of the source the run is shared with. */
+  against?: CopiedFrom
+  /** The judge's copying: the id of the source sentence, quote or title the item renders closely. */
+  copiedSentence?: string
 }
 
-type DraftParts = Pick<Draft, 'story' | 'whyThisMatters' | 'caveats'>
+type DraftParts = Pick<Draft, 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb'>
 
-export function draftSentences(draft: DraftParts): DraftSentence[] {
+const LABELS = {
+  story: (i: number) => `Story paragraph ${i + 1}`,
+  whyThisMatters: (i: number) => `Why This Matters ${i + 1}`,
+  caveats: (i: number) => `Caveat ${i + 1}`,
+}
+
+/** The items in the order the fact check reads them: title, story paragraphs, bullets, summary, blurb. */
+export function draftItems(draft: DraftParts): DraftItem[] {
+  const uncited = (part: DraftPart, label: string, text: string): DraftItem => ({ part, label, text, cited: false, factIds: [] })
+  const cited = (part: keyof typeof LABELS) => (c: { text: string; factIds: string[] }, i: number) => ({
+    part,
+    label: LABELS[part](i),
+    text: c.text,
+    cited: true,
+    factIds: c.factIds,
+  })
   return [
-    ...draft.story.flatMap((p, pi) =>
-      p.sentences.map((s, si) => ({ part: 'story' as const, label: `Story paragraph ${pi + 1}, sentence ${si + 1}`, text: s.text, factIds: s.factIds })),
-    ),
-    ...draft.whyThisMatters.map((b, i) => ({ part: 'whyThisMatters' as const, label: `Why This Matters ${i + 1}`, text: b.text, factIds: b.factIds })),
-    ...draft.caveats.map((b, i) => ({ part: 'caveats' as const, label: `Caveat ${i + 1}`, text: b.text, factIds: b.factIds })),
+    uncited('title', 'Title', draft.title),
+    ...draft.story.map(cited('story')),
+    ...draft.whyThisMatters.map(cited('whyThisMatters')),
+    ...draft.caveats.map(cited('caveats')),
+    uncited('summary', 'Summary', draft.summary),
+    uncited('marketingBlurb', 'Blurb', draft.marketingBlurb),
   ]
 }
 
 const sourceOf = (factId: string) => factId.replace(/F\d+$/, '')
 
 /**
- * What a sentence may rest on: its cited facts first, then the other facts of the sources they
- * come from. Readers see one citation per source, so a sentence its cited sources support is
+ * What an item may rest on: its cited facts first, then the other facts of the sources they
+ * come from. Readers see one citation per source, so an item its cited sources support is
  * supported. Unknown ids add nothing.
  */
 export function evidenceFor(factIds: string[], facts: ReadonlyMap<string, PoolFact>): PoolFact[] {
@@ -59,24 +91,93 @@ export function evidenceFor(factIds: string[], facts: ReadonlyMap<string, PoolFa
   return [...cited, ...[...facts.values()].filter(f => sources.has(sourceOf(f.id)) && !citedIds.has(f.id))]
 }
 
-function sentenceProblems(s: DraftSentence, facts: ReadonlyMap<string, PoolFact>): string[] {
-  const unknown = s.factIds.filter(id => !facts.has(id))
-  const evidence = evidenceFor(s.factIds, facts).map(f => `${f.statement}\n${f.supportingSentence}\n${f.measures}`)
-  const numbers = findUnsupportedNumbers(s.text, evidence.join('\n')).unsupported
+function citationProblems(item: DraftItem, facts: ReadonlyMap<string, PoolFact>): string[] {
+  const unknown = item.factIds.filter(id => !facts.has(id))
+  const evidence = evidenceFor(item.factIds, facts).map(f => `${f.statement}\n${f.supportingSentence}\n${f.measures}`)
+  const numbers = findUnsupportedNumbers(item.text, evidence.join('\n')).unsupported
   return [
     ...unknown.map(id => `cites ${id}, which is not among the facts`),
-    ...(s.part === 'story' && s.factIds.length === 0 ? ['cites no fact'] : []),
+    ...(item.part === 'story' && item.factIds.length === 0 ? ['cites no fact'] : []),
     ...numbers.map(n => `states "${n}", which none of its cited facts states`),
   ]
 }
 
-/** Every story sentence cites a fact; bullets may judge without one, but no number goes uncited. */
+/** Every story paragraph cites a fact; bullets may judge without one, but no number goes uncited. The title, summary and blurb cite nothing and are not checked here. */
 export function checkCitations(draft: DraftParts, facts: ReadonlyMap<string, PoolFact>): CitationProblem[] {
-  return draftSentences(draft).flatMap(s => sentenceProblems(s, facts).map(problem => ({ label: s.label, text: s.text, problem })))
+  return draftItems(draft)
+    .filter(item => item.cited)
+    .flatMap(item =>
+      citationProblems(item, facts).map(problem => ({ label: item.label, text: item.text, problem, kind: 'fact' as const, by: 'code' as const })),
+    )
+}
+
+/** The first id-shaped token of a judge's answer (it may add punctuation), when it is one of `known`. */
+function knownId(value: string, pattern: RegExp, known: ReadonlySet<string>): string | null {
+  const id = pattern.exec(value)?.[0]
+  return id && known.has(id) ? id : null
 }
 
 /**
- * A source's publication date as a fact (id `S2F0`), so a sentence may date the development from
+ * The fact check's answer as problems, by item number (its place in `items`): an unsupported claim
+ * of an item that has evidence, with its key judgment (`fact`); and on any item, a source line it
+ * renders closely, quoted so the rewrite sees what it echoed, or a source whose order it follows
+ * (`copying`, never key). A support verdict on an item without evidence, and an id the prompt did
+ * not give, count for nothing.
+ */
+export function judgedProblems(answer: FactCheck, items: { item: DraftItem; evidence: PoolFact[] }[], lines: SourceLine[]): CitationProblem[] {
+  const wording = new Map(lines.filter(line => againstOf(line) === 'wording').map(line => [line.id, line]))
+  const sourceIds = new Set(lines.map(line => line.sourceId))
+  return answer.items.flatMap((v): CitationProblem[] => {
+    const at = items[v.number - 1]
+    if (!at) return []
+    const { label, text } = at.item
+    const copiedId = knownId(v.copiedSentence, /S\d+(?:F\d+|Q\d+|T)?/, new Set(wording.keys()))
+    const copied = copiedId ? wording.get(copiedId) : undefined
+    const follows = knownId(v.followsSource, /S\d+/, sourceIds)
+    return [
+      ...(!v.supported && at.evidence.length > 0
+        ? [
+            {
+              label,
+              text,
+              problem: `fails the fact check: ${v.problem || 'its cited facts do not state it'}`,
+              kind: 'fact' as const,
+              by: 'judge' as const,
+              key: v.key,
+            },
+          ]
+        : []),
+      ...(copied
+        ? [
+            {
+              label,
+              text,
+              problem: `renders ${copied.id} ("${copied.text}") closely`,
+              kind: 'copying' as const,
+              by: 'judge' as const,
+              sourceId: copied.sourceId,
+              copiedSentence: copied.id,
+            },
+          ]
+        : []),
+      ...(follows
+        ? [{ label, text, problem: `follows ${follows}'s order and wording`, kind: 'copying' as const, by: 'judge' as const, sourceId: follows }]
+        : []),
+    ]
+  })
+}
+
+/**
+ * The labels of the items the fact check's answer gives no verdict for (no entry with their
+ * number). They are recorded, never failed: the code checks still ran on them.
+ */
+export function unjudgedLabels(answer: FactCheck, items: { item: DraftItem }[]): string[] {
+  const judged = new Set(answer.items.map(v => v.number))
+  return items.filter((_, i) => !judged.has(i + 1)).map(({ item }) => item.label)
+}
+
+/**
+ * A source's publication date as a fact (id `S2F0`), so a paragraph may date the development from
  * it: the sources often say only "Wednesday", and the date is the one thing we know for sure.
  */
 export function publishedFact(sourceId: string, outlet: string, date: string | null): PoolFact[] {
@@ -86,24 +187,48 @@ export function publishedFact(sourceId: string, outlet: string, date: string | n
   return [{ id: `${sourceId}F0`, statement: `${outlet} published this on ${when}.`, supportingSentence: '', measures: '' }]
 }
 
+/** The items a draft cannot do without, so one still failing after the rewrite ends the run instead of being dropped. */
+const UNDROPPABLE = ['Title', LABELS.story(0), 'Summary', 'Blurb']
+
 /**
- * After the rewrite: the draft without its failing sentences, or why it cannot be saved: a key
- * claim (the main development itself, as the fact check judges it) is unsupported, or a part was
- * left empty. Any other failing sentence, the opening one included, is only dropped.
+ * The parts paragraphs and bullets are dropped from, each with the label `failedOn` gives it when
+ * the draft has nothing in it: a part's name, as an item's label names the item.
  */
-export function dropFailing<D extends DraftParts>(draft: D, problems: CitationProblem[]): { draft: D } | { failed: string } {
+const DROPPABLE_PARTS: { part: keyof typeof LABELS; label: string; noun: string }[] = [
+  { part: 'story', label: 'Story', noun: 'story paragraph' },
+  { part: 'whyThisMatters', label: 'Why This Matters', noun: 'Why This Matters bullet' },
+  { part: 'caveats', label: 'Caveats', noun: 'caveat' },
+]
+
+/**
+ * The last check's draft without its failing paragraphs and bullets, or why it cannot be saved,
+ * with the item it failed on: a key claim (the main development itself, as the fact check judges
+ * it) is unsupported, an item that cannot be dropped still fails (the opening paragraph, the title,
+ * the summary, the blurb), every item of a part failed (`failedOn` its first item), or the draft
+ * has nothing in a part at all (`failedOn` the part's name, `Story`, `Why This Matters` or
+ * `Caveats`), with or without problems: a researched story always has all three.
+ */
+export function dropFailing<D extends DraftParts>(draft: D, problems: CitationProblem[]): { draft: D } | { failed: string; failedOn: string } {
   const key = problems.find(p => p.key)
-  if (key) return { failed: `a key claim failed the check after one rewrite (${key.label})` }
+  if (key) return { failed: `a key claim failed the check after one rewrite (${key.label})`, failedOn: key.label }
   const failing = new Set(problems.map(p => p.label))
-  const story = draft.story
-    .map((p, pi) => ({ ...p, sentences: p.sentences.filter((_, si) => !failing.has(`Story paragraph ${pi + 1}, sentence ${si + 1}`)) }))
-    .filter(p => p.sentences.length > 0)
-  const whyThisMatters = draft.whyThisMatters.filter((_, i) => !failing.has(`Why This Matters ${i + 1}`))
-  const caveats = draft.caveats.filter((_, i) => !failing.has(`Caveat ${i + 1}`))
-  if (story.length === 0) return { failed: 'no story sentence passed the check after one rewrite' }
-  if (whyThisMatters.length === 0) return { failed: 'no Why This Matters bullet passed the check after one rewrite' }
-  if (caveats.length === 0) return { failed: 'no caveat passed the check after one rewrite' }
-  return { draft: { ...draft, story, whyThisMatters, caveats } }
+  const whole = UNDROPPABLE.find(label => failing.has(label))
+  if (whole) return { failed: `an item that cannot be dropped failed the check after one rewrite (${whole})`, failedOn: whole }
+  const items = draftItems(draft)
+  for (const { part, label, noun } of DROPPABLE_PARTS) {
+    const [first, ...rest] = items.filter(i => i.part === part)
+    if (!first) return { failed: `the draft has no ${noun}`, failedOn: label }
+    if ([first, ...rest].every(i => failing.has(i.label))) return { failed: `no ${noun} passed the check after one rewrite`, failedOn: first.label }
+  }
+  const keep = (part: keyof typeof LABELS) => (_: unknown, i: number) => !failing.has(LABELS[part](i))
+  return {
+    draft: {
+      ...draft,
+      story: draft.story.filter(keep('story')),
+      whyThisMatters: draft.whyThisMatters.filter(keep('whyThisMatters')),
+      caveats: draft.caveats.filter(keep('caveats')),
+    },
+  }
 }
 
 /** A bracketed or parenthesised list of fact ids a writer left in its text: " [S1F7, S0F1]". */
@@ -139,9 +264,10 @@ export function supportFound(sentence: string, text: string): boolean {
  * request 2026-11-12); no verdict or write depends on it. `no_other_coverage`: no other report
  * survived the opt-out checks and the source filter. `not_confirmed`: other reports survived it,
  * but the extraction kept none as reporting the story (each unreadable, about another development,
- * or an opinion piece or press release beside a news report). `draft_failed_check`: a key claim
- * failed the checks after the rewrite, or a part of the draft was left empty. `technical`:
- * anything else (a failed model call or search, the run's budget, an error).
+ * or an opinion piece or press release beside a news report). `draft_failed_check`: a key claim,
+ * or an item the draft cannot do without, failed the checks after the rewrite, or a part of the
+ * draft was left empty or had nothing in it. `technical`: anything else (a failed model call or search, the run's
+ * budget, an error).
  */
 export const FALLBACK_CATEGORIES = ['no_other_coverage', 'not_confirmed', 'draft_failed_check', 'technical'] as const
 export type FallbackCategory = (typeof FALLBACK_CATEGORIES)[number]
