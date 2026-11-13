@@ -44,3 +44,17 @@ export function SourceIcon({ source, className = '' }: { source: ResearchedSourc
     </span>
   )
 }
+
+/**
+ * Several sources' icons in a row, each overlapping the one before, as the citation button and the
+ * header's "N sources" link show them. Decorative like each icon: what holds them names the sources.
+ */
+export function SourceIcons({ sources }: { sources: ResearchedSource[] }) {
+  return (
+    <span className="inline-flex shrink-0 items-center">
+      {sources.map((source, i) => (
+        <SourceIcon key={source.id} source={source} className={i > 0 ? '-ml-1.5' : ''} />
+      ))}
+    </span>
+  )
+}
