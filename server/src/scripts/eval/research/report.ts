@@ -285,8 +285,8 @@ function draftLines(d: Draft, r: StoryResearch, storedRating: number): string[] 
     ...d.story.flatMap(p => [cited(p.text, p.factIds, r), '']),
     `**Summary:** ${d.summary}`,
     '',
-    `> ${d.quote}`,
-    `> — ${d.quoteAttribution} (${quoteSource})`,
+    // A key quote the fact check still failed after the rewrite was dropped
+    ...(d.quote ? [`> ${d.quote}`, `> — ${d.quoteAttribution} (${quoteSource})`] : ['_No key quote._']),
     '',
     '**Why This Matters**',
     ...d.whyThisMatters.map(b => `- ${cited(b.text, b.factIds, r)}`),

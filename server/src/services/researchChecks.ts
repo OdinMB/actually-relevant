@@ -18,9 +18,13 @@ export interface PoolFact {
   measures: string
 }
 
-export type DraftPart = 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb'
+export type DraftPart = 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb' | 'quote'
 
-/** One written field the checks read: a story paragraph, a bullet, the title, the summary or the blurb. */
+/**
+ * One written field the checks read: a story paragraph, a bullet, the title, the summary or the
+ * blurb (`draftItems`); or the key quote (`checkedQuote`, `researchQuote.ts`), which only the fact
+ * check reads.
+ */
 export interface DraftItem {
   part: DraftPart
   /** Where it sits (`Story paragraph 2`, `Caveat 1`, `Title`): the problems, the rewrite prompt and the drops key on it. */
@@ -91,6 +95,16 @@ export function evidenceFor(factIds: string[], facts: ReadonlyMap<string, PoolFa
   return [...cited, ...[...facts.values()].filter(f => sources.has(sourceOf(f.id)) && !citedIds.has(f.id))]
 }
 
+/** What the key quote claims, as the fact check judges it (`checkedQuote`). */
+export interface QuoteCheck {
+  /** The source it names (`quoteSourceId`), always one of the run's sources. */
+  sourceId: string
+  /** Who it says spoke (`quoteAttribution`). */
+  attribution: string
+  /** Whether code found its words in that source's quotes and sentences as they stand: a hint, never a finding. */
+  found: boolean
+}
+
 /** An item as the fact check reads it. */
 export interface CheckedDraftItem {
   item: DraftItem
@@ -103,6 +117,8 @@ export interface CheckedDraftItem {
    * fails nothing by itself. None for the title, summary and blurb.
    */
   numberHints: string[]
+  /** The key quote's claim; only on the key quote, judged for faithfulness to its source and never for copying. */
+  quote?: QuoteCheck
 }
 
 const evidenceText = (evidence: PoolFact[]) => evidence.map(f => `${f.statement}\n${f.supportingSentence}\n${f.measures}`).join('\n')
@@ -145,7 +161,8 @@ function knownId(value: string, pattern: RegExp, known: ReadonlySet<string>): st
  * of an item that has evidence or number hints, with its key judgment (`fact`); and on any item, a
  * source line it renders closely, quoted so the rewrite sees what it echoed, or a source whose
  * order it follows (`copying`, never key). A support verdict on an item with neither, and an id the
- * prompt did not give, count for nothing.
+ * prompt did not give, count for nothing. The key quote fails only as unfaithful to its source
+ * (`fact`, never key), never for copying.
  */
 export function judgedProblems(answer: FactCheck, items: CheckedDraftItem[], lines: SourceLine[]): CitationProblem[] {
   const wording = new Map(lines.filter(line => againstOf(line) === 'wording').map(line => [line.id, line]))
@@ -154,6 +171,10 @@ export function judgedProblems(answer: FactCheck, items: CheckedDraftItem[], lin
     const at = items[v.number - 1]
     if (!at) return []
     const { label, text } = at.item
+    if (at.quote)
+      return v.supported
+        ? []
+        : [{ label, text, problem: `fails the fact check: ${v.problem || 'its source does not say it'}`, kind: 'fact', by: 'judge', key: false }]
     const copiedId = knownId(v.copiedSentence, /S\d+(?:F\d+|Q\d+|T)?/, new Set(wording.keys()))
     const copied = copiedId ? wording.get(copiedId) : undefined
     const follows = knownId(v.followsSource, /S\d+/, sourceIds)

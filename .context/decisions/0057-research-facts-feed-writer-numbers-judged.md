@@ -84,3 +84,35 @@ tighten the fact check's rules instead.
   it still fails whatever it does not know.
 - **Drop the number check altogether:** loses the pointer that tells the fact check where to look,
   and the tally of how often code and fact check disagree.
+
+## Amendment 2026-11-13: key quote
+
+The draft's key quote (`quote`, `quoteAttribution`, `quoteSourceId`) was checked by nothing, code
+or fact check. The owner decided on 2026-11-13 that the existing fact-check call judges it, with no
+new call; the agent placed the rules marked below.
+
+- **The fact check judges the key quote for faithfulness**, as its last item (`Key quote`,
+  `checkedQuote` in `server/src/services/researchQuote.ts`), with its attribution and the source it
+  names, against that source's quotes and supporting sentences in `<SOURCE_WORDING>`. Faithful: the
+  same words or their English translation, the same meaning and the speaker the source gives them
+  to; context in square brackets, an ellipsis for words left out and differences of quote marks,
+  punctuation or case are faithful. So that the speaker can be checked, each quote in
+  `<SOURCE_WORDING>` now names its speaker (the agent's placement).
+- **Code never fails its words.** As for numbers, its only judgment is a hint
+  (`<QUOTE_NOT_FOUND/>`, `quoteFound`): the quote, split at brackets and ellipses, does not stand in
+  order in one of those lines. A translation never does, so the hint decides nothing.
+- **Neither copying check flags it**: it is the one place a source's exact words belong.
+- **A `quoteSourceId` that is not one of the run's sources fails it in code**, and the judge does
+  not see it. An earlier story of ours (`E…`) is not a source it may quote (the agent's placement:
+  its sentences are our own AI-written text, and `<SOURCE_WORDING>` holds none of them).
+- **A failure goes into the one rewrite. A key quote still failing after it is dropped, never the
+  run**: all three fields are emptied, so the story publishes without a key quote; its problem is
+  never key and is listed with the run's problems. An unjudged key quote fails nothing.
+
+Rule: the key quote is judged only for faithfulness to its source, by the fact check; code may
+hint about its words and check its source id, and nothing judges it for copying.
+
+Consequences: a misquote or a misattribution the fact check catches no longer reaches readers; a
+quote failing alone costs a rewrite, a medium-tier call; some researched stories publish without a
+key quote. Its problems count under `fact` in the tallies, told apart by the label `Key quote`
+(`.context/story-research.md`, "Own words").

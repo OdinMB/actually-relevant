@@ -176,7 +176,7 @@ describe('judgedProblems', () => {
     evidence: item.cited && item.factIds.length > 0 ? [fact('S1F1', 'Wheat area grows.')] : [],
     numberHints: [] as string[],
   }))
-  const lines = sourceLines([source('S1', { voices: [{ quote: 'Wir säen mehr.' }] })])
+  const lines = sourceLines([source('S1', { voices: [{ name: 'A farmer', role: '', quote: 'Wir säen mehr.' }] })])
   const verdict = (number: number, over: Partial<FactCheck['items'][number]> = {}) => ({
     number,
     supported: true,
@@ -245,6 +245,36 @@ describe('judgedProblems', () => {
   it("quotes the source's own sentence for a fact id, never the fact's statement under the same id", () => {
     const answer: FactCheck = { items: [verdict(2, { copiedSentence: 'S1F1.' })] }
     expect(judgedProblems(answer, items, lines).map(p => p.problem)).toEqual([`renders S1F1 ("${SENTENCE}") closely`])
+  })
+
+  describe('on the key quote', () => {
+    const quoted = {
+      item: { part: 'quote' as const, label: 'Key quote', text: 'We sow more.', cited: false, factIds: [] },
+      evidence: [],
+      numberHints: [],
+      quote: { sourceId: 'S1', attribution: 'A farmer', found: false },
+    }
+    const withQuote = [...items, quoted]
+    const quoteNumber = withQuote.length
+
+    it('turns an unfaithful verdict into a fact problem, though it cites nothing, and never a key one', () => {
+      const answer: FactCheck = { items: [verdict(quoteNumber, { supported: false, problem: 'S1 gives these words to the minister', key: true })] }
+      expect(judgedProblems(answer, withQuote, lines)).toEqual([
+        {
+          label: 'Key quote',
+          text: 'We sow more.',
+          problem: 'fails the fact check: S1 gives these words to the minister',
+          kind: 'fact',
+          by: 'judge',
+          key: false,
+        },
+      ])
+    })
+
+    it('never makes a copying problem of it: it is the one place for a source’s own words', () => {
+      const answer: FactCheck = { items: [verdict(quoteNumber, { copiedSentence: 'S1Q1', followsSource: 'S1' })] }
+      expect(judgedProblems(answer, withQuote, lines)).toEqual([])
+    })
   })
 })
 

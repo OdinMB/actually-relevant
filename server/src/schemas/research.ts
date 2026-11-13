@@ -143,7 +143,9 @@ export const writeSchema = z.object({
   quoteAttribution: z
     .string()
     .describe("The quoted person's full name and role (e.g. 'Maria Helena Semedo, FAO Deputy Director'), or the organization or outlet quoted."),
-  quoteSourceId: z.string().describe('Id of the source the quote comes from, e.g. "S2", never a quote\'s id such as "S2Q1".'),
+  quoteSourceId: z
+    .string()
+    .describe('Id of the source the quote comes from, e.g. "S2", never a quote\'s id such as "S2Q1" nor an earlier story\'s such as "E1".'),
   marketingBlurb: z
     .string()
     .describe('Plain text, 25-30 words and never more than 230 characters including spaces. Opens with the development itself, never with an outlet.'),
@@ -174,22 +176,28 @@ export const factCheckSchema = z.object({
         supported: z
           .boolean()
           .describe(
-            'True when every factual claim of the item (each number, name, date, place and event) is stated by its cited facts, with the same scope; a number also when they give it in other words, rounded or in another unit. True for an item without cited facts, unless it states one of its NUMBERS_NOT_FOUND as a fact.',
+            'True when every factual claim of the item (each number, name, date, place and event) is stated by its cited facts, with the same scope; a number also when they give it in other words, rounded or in another unit. True for an item without cited facts, unless it states one of its NUMBERS_NOT_FOUND as a fact. For the key quote: true when a quote or sentence of its QUOTED_SOURCE says it, with the speaker its ATTRIBUTION names.',
           ),
-        problem: z.string().describe('When not supported: the claim its cited facts do not state, in one short sentence. Empty string otherwise.'),
+        problem: z
+          .string()
+          .describe(
+            'When not supported: the claim its cited facts do not state, or for the key quote what its source does not say, in one short sentence. Empty string otherwise.',
+          ),
         key: z
           .boolean()
           .describe(
-            'When not supported: true when the unsupported claim is the main development itself (that it happened, who did it, or its central figure); false for a detail such as an exact date, a side figure, an attribution or a background point. False when supported.',
+            'When not supported: true when the unsupported claim is the main development itself (that it happened, who did it, or its central figure); false for a detail such as an exact date, a side figure, an attribution or a background point. False when supported, and always for the key quote.',
           ),
         copiedSentence: z
           .string()
           .describe(
-            'The id in <SOURCE_WORDING> (e.g. "S2F3", "S2Q1", "S2T") of a source sentence, quote or title that any one sentence of the item renders closely, in nearly the same words or as a close translation, in any language. Empty string when none does.',
+            'The id in <SOURCE_WORDING> (e.g. "S2F3", "S2Q1", "S2T") of a source sentence, quote or title that any one sentence of the item renders closely, in nearly the same words or as a close translation, in any language. Empty string when none does, and always for the key quote.',
           ),
         followsSource: z
           .string()
-          .describe('The id (e.g. "S2") of the one source whose points the item follows in that source\'s order and phrasing. Empty string when none.'),
+          .describe(
+            'The id (e.g. "S2") of the one source whose points the item follows in that source\'s order and phrasing. Empty string when none, and always for the key quote.',
+          ),
       }),
     )
     .describe('One entry per item in <ITEMS>.'),

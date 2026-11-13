@@ -150,12 +150,24 @@ describe('checkCopying', () => {
     const { problems } = copyingOf('Wheat area grows.', [source('S1')], { title: copied, summary: copied, marketingBlurb: copied })
     expect(problems.map(p => p.label)).toEqual(['Title', 'Summary', 'Blurb'])
   })
+
+  it("never reads the key quote, the one place for a source's own words, even with a quoted passage in it", () => {
+    const keyQuote = { part: 'quote' as const, label: 'Key quote', text: `${SENTENCE} 'More than we ever sowed before,' he added.`, cited: false, factIds: [] }
+    const { problems, longestRuns } = checkCopying([...draftItems(draft([['Wheat area grows.', ['S1F1']]])), keyQuote], [source('S1')], 12)
+    expect(problems).toEqual([])
+    expect(longestRuns.map(r => r.label)).not.toContain('Key quote')
+  })
 })
 
 describe('sourceLines', () => {
   it("gives each outside source's title, supporting sentences and quotes under their ids, then its statements; never our own stories", () => {
     const lines = sourceLines([
-      source('S2', { voices: [{ quote: '' }, { quote: 'Wir säen mehr.' }] }),
+      source('S2', {
+        voices: [
+          { name: 'A farmer', role: 'grower', quote: '' },
+          { name: 'A minister', role: 'minister', quote: 'Wir säen mehr.' },
+        ],
+      }),
       { ...source('E1'), facts: [{ id: 'E1F1', statement: 'Ours.', supportingSentence: 'Ours.' }] },
     ])
     expect(lines.map(l => [l.id, l.role])).toEqual([
@@ -163,6 +175,21 @@ describe('sourceLines', () => {
       ['S2F1', 'sentence'],
       ['S2Q2', 'quote'],
       ['S2F1', 'statement'],
+    ])
+  })
+
+  it('names who spoke each quote, with their role when the source gives one', () => {
+    const lines = sourceLines([
+      source('S2', {
+        voices: [
+          { name: 'Ayesha Khan', role: 'energy minister', quote: 'Coal has no future.' },
+          { name: 'Greenpeace', role: '', quote: 'Too late.' },
+        ],
+      }),
+    ])
+    expect(lines.filter(l => l.role === 'quote').map(l => [l.id, l.speaker])).toEqual([
+      ['S2Q1', 'Ayesha Khan, energy minister'],
+      ['S2Q2', 'Greenpeace'],
     ])
   })
 })
