@@ -11,7 +11,7 @@ const codeStatement = (label: string) => problem(label, { against: 'statement', 
 const judgeCopy = (label: string) => problem(label, { by: 'judge', copiedSentence: 'S1F2', sourceId: 'S1' })
 const judgeFact = (label: string) => problem(label, { kind: 'fact', by: 'judge' })
 const run = (label: string, against: LongestRun['against'], words: number, sourceId = 'S1'): LongestRun => ({ label, sourceId, against, words })
-const pass = (problems: CitationProblem[], over: Partial<CheckPass> = {}): CheckPass => ({ problems, longestRuns: [], unjudged: [], ...over })
+const pass = (problems: CitationProblem[], over: Partial<CheckPass> = {}): CheckPass => ({ problems, longestRuns: [], unjudged: [], numberHints: [], ...over })
 
 function result(over: Partial<StoryResearch>): StoryResearch {
   return {
@@ -117,6 +117,25 @@ describe('ownWords', () => {
       result({ checks: [pass([])] }),
     ])
     expect(w.unjudged).toEqual({ items: 4, runs: 2 })
+  })
+
+  it("counts the items given number hints over every pass, and the fact check's verdict on them: failed for support, or none", () => {
+    const hint = (label: string) => ({ label, numbers: ['40'] })
+    const w = ownWords([
+      result({
+        rewritten: true,
+        checks: [
+          // Caveat 2's only problem is copying, so its number passed the fact check
+          pass([judgeFact('Caveat 1'), codeWording('Caveat 2')], {
+            numberHints: [hint('Story paragraph 1'), hint('Caveat 1'), hint('Caveat 2'), hint('Caveat 3')],
+            unjudged: ['Caveat 3'],
+          }),
+          pass([judgeFact('Caveat 1')], { numberHints: [hint('Caveat 1')] }),
+        ],
+      }),
+      result({ checks: [pass([judgeFact('Caveat 1')])] }),
+    ])
+    expect(w.numberHints).toEqual({ items: 5, failed: 2, unjudged: 1 })
   })
 
   it("takes each first-draft item's longest run per kind over the sources, and counts those at 8 and 12 words", () => {

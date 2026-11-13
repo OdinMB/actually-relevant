@@ -174,7 +174,7 @@ export const factCheckSchema = z.object({
         supported: z
           .boolean()
           .describe(
-            'True when every factual claim of the item (each number, name, date, place and event) is stated by its cited facts, with the same scope. True for an item without cited facts.',
+            'True when every factual claim of the item (each number, name, date, place and event) is stated by its cited facts, with the same scope; a number also when they give it in other words, rounded or in another unit. True for an item without cited facts, unless it states one of its NUMBERS_NOT_FOUND as a fact.',
           ),
         problem: z.string().describe('When not supported: the claim its cited facts do not state, in one short sentence. Empty string otherwise.'),
         key: z

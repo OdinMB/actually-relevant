@@ -25,11 +25,10 @@ import { dedupConfirmationSchema } from '../schemas/llm.js'
 import { earlierSchema, extractionSchema, factCheckSchema, queriesSchema, writeSchema, type Draft, type Earlier, type Extraction } from '../schemas/research.js'
 import {
   checkCitations,
+  checkedItems,
   decideGate,
   describeProblem,
-  draftItems,
   dropFailing,
-  evidenceFor,
   judgedProblems,
   publishedFact,
   supportFound,
@@ -169,6 +168,8 @@ export interface CheckPass {
   longestRuns: LongestRun[]
   /** The items the fact check's answer left out: no support or copying verdict from it, the code checks only. */
   unjudged: string[]
+  /** The items whose numbers the code did not find in their evidence, each with those numbers: the hints the fact check judged (ADR-0057). */
+  numberHints: { label: string; numbers: string[] }[]
 }
 
 export interface StoryResearch {
@@ -440,12 +441,13 @@ async function buildPool(
 /**
  * Step 8's checks, all on every draft, so the rewrite hears of every problem and each failing item
  * after it carries the fact check's key judgment: the deterministic citation and copying checks,
- * and one fact-check call that judges every item for support (those with evidence) and for copying
- * against the outside sources' own words. A problem only code finds is never key. An item the
- * answer leaves out is recorded as unjudged, and fails nothing.
+ * and one fact-check call that judges every item for support (those with evidence or number hints)
+ * and for copying against the outside sources' own words. A number the code does not find in an
+ * item's evidence is a hint for that call, never a problem by itself. A problem only code finds is
+ * never key. An item the answer leaves out is recorded as unjudged, and fails nothing.
  */
 async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, sources: ResearchSource[], call: Call): Promise<CheckPass> {
-  const items = draftItems(draft).map(item => ({ item, evidence: item.cited ? evidenceFor(item.factIds, facts) : [] }))
+  const items = checkedItems(draft, facts)
   const lines = sourceLines(sources)
   const copying = checkCopying(
     items.map(({ item }) => item),
@@ -453,7 +455,7 @@ async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, sources
     config.research.copiedRunWords,
   )
   const prompt = buildFactCheckPrompt(
-    items.map(({ item, evidence }) => ({ label: item.label, text: item.text, facts: evidence })),
+    items.map(({ item, evidence, numberHints }) => ({ label: item.label, text: item.text, facts: evidence, numbersNotFound: numberHints })),
     lines,
   )
   const answer = required(await call('fact-check', factCheckSchema, prompt), 'fact-check')
@@ -461,6 +463,7 @@ async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, sources
     problems: [...checkCitations(draft, facts), ...copying.problems, ...judgedProblems(answer, items, lines)],
     longestRuns: copying.longestRuns,
     unjudged: unjudgedLabels(answer, items),
+    numberHints: items.filter(c => c.numberHints.length > 0).map(c => ({ label: c.item.label, numbers: c.numberHints })),
   }
 }
 

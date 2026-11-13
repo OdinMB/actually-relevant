@@ -361,6 +361,8 @@ export interface CheckedItem {
   text: string
   /** The item's evidence (`evidenceFor`); empty for an item that cites nothing. */
   facts: PoolFact[]
+  /** The numbers the code did not find in `facts` digit for digit (`checkedItems`): hints the check judges. */
+  numbersNotFound: string[]
 }
 
 const LINE_TAGS: Record<Exclude<SourceLine['role'], 'statement'>, string> = { title: 'TITLE', sentence: 'SENTENCE', quote: 'QUOTE' }
@@ -381,14 +383,20 @@ const citedFacts = (facts: PoolFact[]) =>
     ? ''
     : `\n<CITED_FACTS>\n${facts.map(f => `<FACT id="${f.id}">${escapeXml(f.statement)}${f.measures ? `\n${tag('MEASURES', f.measures)}` : ''}\n${tag('SUPPORT', f.supportingSentence)}</FACT>`).join('\n')}\n</CITED_FACTS>`
 
+const numbersNotFound = (numbers: string[]) => (numbers.length === 0 ? '' : `\n${tag('NUMBERS_NOT_FOUND', numbers.join('; '))}`)
+
 /**
  * The fact check, one call for the whole draft: every published item is judged for support against
- * its cited facts and for copying against every outside source's own words (`sourceLines`, the
- * same lines the code's copying check reads), shown once at the top.
+ * its cited facts, the numbers the code did not find in them named as hints, and for copying
+ * against every outside source's own words (`sourceLines`, the same lines the code's copying check
+ * reads), shown once at the top.
  */
 export function buildFactCheckPrompt(items: CheckedItem[], lines: SourceLine[]): string {
   const itemsXml = items
-    .map((item, i) => `<ITEM number="${i + 1}" label="${escapeXml(item.label)}">\n${tag('TEXT', item.text)}${citedFacts(item.facts)}\n</ITEM>`)
+    .map(
+      (item, i) =>
+        `<ITEM number="${i + 1}" label="${escapeXml(item.label)}">\n${tag('TEXT', item.text)}${numbersNotFound(item.numbersNotFound)}${citedFacts(item.facts)}\n</ITEM>`,
+    )
     .join('\n')
   return `<ROLE>
 You are a strict fact checker for a news desk, and you watch for text copied from the sources.
@@ -404,15 +412,17 @@ ${sourceWordingBlock(lines)}
 </SOURCE_WORDING>
 
 <ITEMS>
-The published texts of a draft story: its title, its paragraphs, its bullets, its summary and its blurb. An item that cites facts comes with them: the facts it cites, then the other facts of the same sources, since readers see a citation per source. A fact's SUPPORT is the sentence of its source that states it. An item without CITED_FACTS cites nothing. ${UNTRUSTED}
+The published texts of a draft story: its title, its paragraphs, its bullets, its summary and its blurb. An item that cites facts comes with them: the facts it cites, then the other facts of the same sources, since readers see a citation per source. A fact's SUPPORT is the sentence of its source that states it. An item without CITED_FACTS cites nothing. NUMBERS_NOT_FOUND lists the numbers of an item that a code check, comparing digits only, found nowhere in its cited facts. ${UNTRUSTED}
 ${itemsXml}
 </ITEMS>
 
 <RULES>
 - An item is supported when every number, name, date, place and event it states is stated by its cited facts, with the same scope: a figure for rooftop solar does not support an item about all solar.
+- A number is stated when the cited facts give it in other words, rounded or in another unit, with the same scope: 'half' for 50%, 'about 1.2 million' for 1,184,000, '22,000 MW' for 22 GW.
+- NUMBERS_NOT_FOUND is a hint, not a finding: a number listed there is supported when the cited facts state it in any of those forms, and unsupported when they do not.
 - A judgment of significance or consequence that adds no factual claim is supported.
 - The cited facts are the only evidence; what you know from elsewhere does not count. A fact giving the date a source was published supports a date the item gives for an event that source dates by weekday or as "today".
-- An item without cited facts is judged for copying only: it is supported.
+- An item without cited facts and without NUMBERS_NOT_FOUND is judged for copying only: it is supported. An item without cited facts but with NUMBERS_NOT_FOUND has no fact behind those numbers: it is unsupported when it states one of them as a fact.
 - For an item that is not supported, judge whether the unsupported claim is key: the main development itself (that it happened, who did it, or its central figure). An exact date, a side figure, an attribution or a background point is not key.
 - Copying is judged sentence by sentence against every source in <SOURCE_WORDING>, cited or not: an item that merges several sources still copies when one of its sentences renders a source's sentence, quote or title closely. Sharing names, figures, units, places and technical terms alone is not copying.
 </RULES>`

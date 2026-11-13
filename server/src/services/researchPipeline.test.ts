@@ -540,7 +540,29 @@ describe('researchStory', () => {
     expect(r.verdict).toEqual({ kind: 'keep' })
   })
 
-  it('drops a bullet that still fails after the rewrite and keeps the rest of the draft', async () => {
+  it('lets a reworded number pass the code check and hands it to the fact check as a hint for its item, recorded with the pass', async () => {
+    const prompts: string[] = []
+    // The fact says "in two years": the old number check failed this paragraph on 2024 and 2025
+    const reworded = (): Draft => ({ ...goodDraft(), story: [{ text: 'Pakistan added 22 GW of rooftop solar in 2024 and 2025.', factIds: ['S0F1'] }] })
+    const { deps: d, fake } = deps({
+      responders: baseResponders({
+        write: reworded,
+        'fact-check': p => {
+          prompts.push(p)
+          return allSupported(p)
+        },
+      }),
+    })
+    const r = await researchStory(story(), d)
+    const item = (label: string) => new RegExp(`<ITEM number="${itemNumber(prompts[0]!, label)}"[\\s\\S]*?</ITEM>`).exec(prompts[0]!)?.[0]
+    expect(item('Story paragraph 1')).toContain('<NUMBERS_NOT_FOUND>2024; 2025</NUMBERS_NOT_FOUND>')
+    expect(prompts[0]!.match(/<NUMBERS_NOT_FOUND>/g)).toHaveLength(1)
+    expect(fake.steps).not.toContain('rewrite')
+    expect(r.checks).toEqual([expect.objectContaining({ problems: [], numberHints: [{ label: 'Story paragraph 1', numbers: ['2024', '2025'] }] })])
+    expect(r.verdict).toEqual({ kind: 'keep' })
+  })
+
+  it("lets the fact check's verdict on a hinted number decide: an uncited bullet's number fails only when it judges so, and is then dropped", async () => {
     const withBullets = (): Draft => ({
       ...goodDraft(),
       whyThisMatters: [
@@ -548,11 +570,20 @@ describe('researchStory', () => {
         { text: 'About 40 households benefit.', factIds: [] },
       ],
     })
-    const { deps: d } = deps({ responders: baseResponders({ write: withBullets, rewrite: withBullets }) })
+    const { deps: passes, fake } = deps({ responders: baseResponders({ write: withBullets }) })
+    const kept = await researchStory(story(), passes)
+    expect(fake.steps).not.toContain('rewrite')
+    expect(kept.checks[0]?.numberHints).toEqual([{ label: 'Why This Matters 2', numbers: ['40'] }])
+    expect(kept.draft?.whyThisMatters).toHaveLength(2)
+
+    const fails = judging('Why This Matters 2', { supported: false, problem: 'no fact gives 40 households' })
+    const { deps: d } = deps({ responders: baseResponders({ write: withBullets, rewrite: withBullets, 'fact-check': fails }) })
     const r = await researchStory(story(), d)
     expect(r.rewritten).toBe(true)
     expect(r.verdict).toEqual({ kind: 'keep' })
-    expect(r.problems.map(p => p.label)).toEqual(['Why This Matters 2'])
+    expect(r.problems).toEqual([
+      expect.objectContaining({ label: 'Why This Matters 2', kind: 'fact', by: 'judge', problem: 'fails the fact check: no fact gives 40 households' }),
+    ])
     expect(r.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.'])
   })
 
