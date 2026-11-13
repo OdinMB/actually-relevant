@@ -198,7 +198,9 @@ describeDb('newsletter lifecycle', () => {
           token: `token-${edition}`,
           edition,
           plunkContactId,
-          confirmedAt: new Date(),
+          // A minute ago, so a footer switch in the same test is strictly newer: a tie in the same
+          // millisecond counts as Actually Uplifting (knownEditions.ts), which made the switch-back test flaky.
+          confirmedAt: new Date(Date.now() - 60_000),
           expiresAt: new Date(Date.now() + 86_400_000),
         },
       })

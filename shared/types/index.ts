@@ -1017,11 +1017,13 @@ export interface ResearchProblem {
   copiedSentence?: string
 }
 
-/** One pass of the checks: what it found, each item's longest run of words shared with each source, per kind, and the items the fact check gave no verdict for. */
+/** One pass of the checks: what it found, each item's longest run of words shared with each source, per kind, the items the fact check gave no verdict for, and the numbers the code did not find in an item's facts. */
 export interface ResearchCheckPass {
   problems: ResearchProblem[]
   longestRuns: { label: string; sourceId: string; against: 'wording' | 'statement'; words: number }[]
   unjudged: string[]
+  /** Hints the fact check judged, never problems by themselves (ADR-0057); absent on runs stored before them. */
+  numberHints?: { label: string; numbers: string[] }[]
 }
 
 /** A run's stored result: what the research found, the model of each step and the prices it ran at. */

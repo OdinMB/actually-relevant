@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   checkCitations,
+  checkedItems,
   decideGate,
   draftItems,
   dropFailing,
@@ -57,10 +58,13 @@ describe('checkCitations', () => {
     expect(problems).toEqual([expect.objectContaining({ label: 'Story paragraph 1', kind: 'fact', by: 'code', problem: expect.stringContaining('S4F2') })])
   })
 
-  it('flags a number none of the cited facts states', () => {
-    const problems = checkCitations(draft([['Pakistan added 38 GW of rooftop solar in two years.', ['S0F1']]]), POOL)
-    expect(problems).toHaveLength(1)
-    expect(problems[0]?.problem).toContain('"38"')
+  it('never fails an item on a number its cited facts do not state digit for digit: the fact check judges it', () => {
+    // A reworded period and a converted unit, both of which the old number check failed
+    const d = draft([
+      ['Pakistan added 22 GW of rooftop solar in 2024 and 2025.', ['S1F1']],
+      ['Analysts count about 32,000 MW of all solar.', ['S1F1']],
+    ])
+    expect(checkCitations(d, POOL)).toEqual([])
   })
 
   it('needs a citation behind every story paragraph, but lets a bullet that only judges go uncited', () => {
@@ -70,7 +74,7 @@ describe('checkCitations', () => {
     expect(problems[0]?.problem).toMatch(/cites no fact/)
   })
 
-  it('flags an uncited bullet that states a number, and never checks the title, summary or blurb for citations', () => {
+  it('fails no bullet for a number it states without a citation, and never checks the title, summary or blurb for citations', () => {
     const problems = checkCitations(
       draft([['Pakistan added 22 GW of rooftop solar in two years.', ['S0F1']]], [['Some 40 million people now use solar power.', []]], [], {
         title: '40 million people use solar',
@@ -79,7 +83,46 @@ describe('checkCitations', () => {
       }),
       POOL,
     )
-    expect(problems.map(p => p.label)).toEqual(['Why This Matters 1'])
+    expect(problems).toEqual([])
+  })
+})
+
+describe('checkedItems', () => {
+  const hintsOf = (d: Parts, pool: ReadonlyMap<string, PoolFact> = POOL) => checkedItems(d, pool).map(c => [c.item.label, c.numberHints])
+
+  it('hints each cited item with the numbers its evidence does not state digit for digit, reworded and converted ones included', () => {
+    const pool = new Map([...POOL, ['S2F1', fact('S2F1', 'Installations doubled in two years.')]])
+    const d = draft(
+      [
+        ['Installations doubled in 2024 and 2025.', ['S2F1']],
+        ['Pakistan added 22,000 MW of rooftop solar in two years.', ['S0F1']],
+        ['Pakistan added 22 GW of rooftop solar in two years.', ['S0F1']],
+      ],
+      [['Some 40 million people now use solar power.', []]],
+    )
+    expect(hintsOf(d, pool)).toEqual([
+      ['Title', []],
+      ['Story paragraph 1', ['2024', '2025']],
+      ['Story paragraph 2', ['22,000']],
+      ['Story paragraph 3', []],
+      // A bullet that cites nothing has no evidence, so every number it states is a hint
+      ['Why This Matters 1', ['40 million']],
+      ['Summary', []],
+      ['Blurb', []],
+    ])
+  })
+
+  it('gives each cited item its evidence, and the title, summary and blurb neither evidence nor hints', () => {
+    const items = checkedItems(
+      draft([['Pakistan added rooftop solar quickly.', ['S0F1']]], [], [], { title: '99 GW', summary: '99 GW.', marketingBlurb: '99 GW.' }),
+      POOL,
+    )
+    expect(items.map(c => [c.item.label, c.evidence.map(f => f.id), c.numberHints])).toEqual([
+      ['Title', [], []],
+      ['Story paragraph 1', ['S0F1'], []],
+      ['Summary', [], []],
+      ['Blurb', [], []],
+    ])
   })
 })
 
@@ -89,9 +132,9 @@ describe('evidenceFor', () => {
     expect(evidenceFor(['S0F2', 'E1F1', 'S9F1'], pool).map(f => f.id)).toEqual(['S0F2', 'E1F1', 'S0F1', 'E1F2'])
   })
 
-  it('lets the number check find a figure in another fact of a cited source', () => {
+  it('lets a figure in another fact of a cited source raise no number hint', () => {
     const pool = new Map([...POOL, ['S0F2', fact('S0F2', 'The boom cut grid demand.')]])
-    expect(checkCitations(draft([['Pakistan added 22 GW of rooftop solar in two years.', ['S0F2']]]), pool)).toEqual([])
+    expect(checkedItems(draft([['Pakistan added 22 GW of rooftop solar in two years.', ['S0F2']]]), pool)[1]?.numberHints).toEqual([])
   })
 })
 
@@ -128,8 +171,12 @@ const source = (id: string, over: Partial<WordingSource> = {}): WordingSource =>
 
 describe('judgedProblems', () => {
   const d = draft([['Wheat area grows.', ['S1F1']]], [['It matters.', []]])
-  const items = draftItems(d).map(item => ({ item, evidence: item.cited && item.factIds.length > 0 ? [fact('S1F1', 'Wheat area grows.')] : [] }))
-  const lines = sourceLines([source('S1', { voices: [{ quote: 'Wir säen mehr.' }] })])
+  const items = draftItems(d).map(item => ({
+    item,
+    evidence: item.cited && item.factIds.length > 0 ? [fact('S1F1', 'Wheat area grows.')] : [],
+    numberHints: [] as string[],
+  }))
+  const lines = sourceLines([source('S1', { voices: [{ name: 'A farmer', role: '', quote: 'Wir säen mehr.' }] })])
   const verdict = (number: number, over: Partial<FactCheck['items'][number]> = {}) => ({
     number,
     supported: true,
@@ -150,6 +197,16 @@ describe('judgedProblems', () => {
     }
     expect(judgedProblems(answer, items, lines)).toEqual([
       { label: 'Story paragraph 1', text: 'Wheat area grows.', problem: 'fails the fact check: the area is not stated', kind: 'fact', by: 'judge', key: true },
+    ])
+  })
+
+  it('counts a support failure on an item that cites nothing once it has number hints, since the fact check then judges its numbers', () => {
+    const hinted = items.map(c => (c.item.label === 'Why This Matters 1' ? { ...c, numberHints: ['40 million'] } : c))
+    const answer: FactCheck = {
+      items: [verdict(1, { supported: false, problem: 'no title claim' }), verdict(3, { supported: false, problem: 'no fact gives 40 million' })],
+    }
+    expect(judgedProblems(answer, hinted, lines)).toEqual([
+      { label: 'Why This Matters 1', text: 'It matters.', problem: 'fails the fact check: no fact gives 40 million', kind: 'fact', by: 'judge', key: false },
     ])
   })
 
@@ -188,6 +245,36 @@ describe('judgedProblems', () => {
   it("quotes the source's own sentence for a fact id, never the fact's statement under the same id", () => {
     const answer: FactCheck = { items: [verdict(2, { copiedSentence: 'S1F1.' })] }
     expect(judgedProblems(answer, items, lines).map(p => p.problem)).toEqual([`renders S1F1 ("${SENTENCE}") closely`])
+  })
+
+  describe('on the key quote', () => {
+    const quoted = {
+      item: { part: 'quote' as const, label: 'Key quote', text: 'We sow more.', cited: false, factIds: [] },
+      evidence: [],
+      numberHints: [],
+      quote: { sourceId: 'S1', attribution: 'A farmer', found: false },
+    }
+    const withQuote = [...items, quoted]
+    const quoteNumber = withQuote.length
+
+    it('turns an unfaithful verdict into a fact problem, though it cites nothing, and never a key one', () => {
+      const answer: FactCheck = { items: [verdict(quoteNumber, { supported: false, problem: 'S1 gives these words to the minister', key: true })] }
+      expect(judgedProblems(answer, withQuote, lines)).toEqual([
+        {
+          label: 'Key quote',
+          text: 'We sow more.',
+          problem: 'fails the fact check: S1 gives these words to the minister',
+          kind: 'fact',
+          by: 'judge',
+          key: false,
+        },
+      ])
+    })
+
+    it('never makes a copying problem of it: it is the one place for a source’s own words', () => {
+      const answer: FactCheck = { items: [verdict(quoteNumber, { copiedSentence: 'S1Q1', followsSource: 'S1' })] }
+      expect(judgedProblems(answer, withQuote, lines)).toEqual([])
+    })
   })
 })
 
@@ -292,11 +379,11 @@ describe('withoutInlineIds', () => {
 })
 
 describe('publishedFact', () => {
-  it('gives a source date as fact F0 with weekday, month and day, so a dated paragraph passes the number check', () => {
+  it('gives a source date as fact F0 with weekday, month and day, so a dated paragraph raises no number hint', () => {
     const [f] = publishedFact('S1', 'qz.com', '2026-11-11T09:00:00Z')
     expect(f).toEqual({ id: 'S1F0', statement: 'qz.com published this on Wednesday, November 11, 2026.', supportingSentence: '', measures: '' })
     const pool = new Map([...POOL, ['S1F0', f!]])
-    expect(checkCitations(draft([['On Wednesday, November 11, analysts counted about 32 GW of all solar.', ['S1F1']]]), pool)).toEqual([])
+    expect(checkedItems(draft([['On Wednesday, November 11, analysts counted about 32 GW of all solar.', ['S1F1']]]), pool)[1]?.numberHints).toEqual([])
   })
 
   it('gives nothing for a missing or unreadable date', () => {

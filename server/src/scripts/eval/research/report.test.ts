@@ -60,7 +60,7 @@ function result(storyId: string, over: Partial<StoryResearch> = {}): StoryResear
     draft: draft(4),
     rewritten: false,
     problems: [],
-    checks: [{ problems: [], longestRuns: [], unjudged: [] }],
+    checks: [{ problems: [], longestRuns: [], unjudged: [], numberHints: [] }],
     failedOn: null,
     support: { facts: 4, found: 3 },
     optOutChecked: false,

@@ -3,8 +3,9 @@
  * "Own words"): first-draft problems by cause, the rewrites they caused, the items dropped from
  * kept drafts, the `draft_failed_check` fallbacks by the causes of the item they failed on (and
  * those on a part the draft had nothing in), the items the fact check left without a verdict, the
- * longest runs of shared words per kind, and the fact check's input per call. The shadow week
- * counts the same things in SQL. Pure.
+ * items with number hints and the fact check's verdict on them, the longest runs of shared words
+ * per kind, and the fact check's input per call. The shadow week counts the same things in SQL.
+ * Pure.
  */
 import type { CitationProblem } from '../../../services/researchChecks.js'
 import type { CopiedFrom } from '../../../services/researchCopying.js'
@@ -53,6 +54,8 @@ export interface OwnWords {
   emptyPartFallbacks: number
   /** Items the fact check's answer left out, over every pass, and the runs with any. */
   unjudged: { items: number; runs: number }
+  /** Items with number hints, over every pass: those the fact check failed for support in the same pass, and those it gave no verdict. */
+  numberHints: { items: number; failed: number; unjudged: number }
   runLengths: Record<CopiedFrom, RunLengths>
   factCheckInput: { calls: number; mean: number; max: number }
 }
@@ -64,6 +67,18 @@ function causesByItem(problems: CitationProblem[]): Set<ProblemCause>[] {
   const byLabel = new Map<string, CitationProblem[]>()
   for (const p of problems) byLabel.set(p.label, [...(byLabel.get(p.label) ?? []), p])
   return [...byLabel.values()].map(causes)
+}
+
+function numberHints(results: StoryResearch[]): OwnWords['numberHints'] {
+  const hinted = results.flatMap(r =>
+    r.checks.flatMap(pass =>
+      pass.numberHints.map(({ label }) => ({
+        failed: pass.problems.some(p => p.label === label && p.kind === 'fact' && p.by === 'judge'),
+        unjudged: pass.unjudged.includes(label),
+      })),
+    ),
+  )
+  return { items: hinted.length, failed: hinted.filter(h => h.failed).length, unjudged: hinted.filter(h => h.unjudged).length }
 }
 
 function runLengths(results: StoryResearch[], against: CopiedFrom): RunLengths {
@@ -104,6 +119,7 @@ export function ownWords(results: StoryResearch[]): OwnWords {
     byCause,
     emptyPartFallbacks,
     unjudged: { items: unjudged.reduce((a, b) => a + b, 0), runs: unjudged.filter(n => n > 0).length },
+    numberHints: numberHints(results),
     runLengths: { wording: runLengths(results, 'wording'), statement: runLengths(results, 'statement') },
     factCheckInput: {
       calls: inputs.length,
@@ -131,6 +147,8 @@ export function ownWordsLines(results: StoryResearch[]): string[] {
     "`copying: code, statement` is a run shared with an extracted fact's English statement, `copying: code, wording` one shared with the source's own words. The write prompt has a figure keep its fact's exact scope, so statement flags well above wording flags point at that rule rather than at copying from the source.",
     '',
     `\`draft_failed_check\` fallbacks on a part the draft had nothing in (no problem names it): ${w.emptyPartFallbacks}. Items the fact check left without a verdict (code checks only): ${w.unjudged.items}, in ${w.unjudged.runs} runs.`,
+    '',
+    `Items stating a number the code did not find in their cited facts (a hint for the fact check, never a problem by itself), over every pass: ${w.numberHints.items}; the fact check failed ${share(w.numberHints.failed, w.numberHints.items)} of them for support and left ${w.numberHints.unjudged} without a verdict.`,
     '',
     "Each first-draft item's longest run of words shared with one outside source, per kind (the code flags 12 or more):",
     '',

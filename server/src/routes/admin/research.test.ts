@@ -58,8 +58,13 @@ const storedResult = {
   credits: 2,
   problems: [flagged],
   checks: [
-    { problems: [flagged], longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }], unjudged: ['Blurb'] },
-    { problems: [flagged], longestRuns: [], unjudged: [] },
+    {
+      problems: [flagged],
+      longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }],
+      unjudged: ['Blurb'],
+      numberHints: [{ label: 'Story paragraph 1', numbers: ['2024', '2025'] }],
+    },
+    { problems: [flagged], longestRuns: [], unjudged: [], numberHints: [] },
   ],
   failedOn: null,
   verdict: { kind: 'keep' },
@@ -154,7 +159,7 @@ describe('GET /api/admin/research/stories/:storyId/runs', () => {
     expect(mockPrisma.storyResearchRun.updateMany).toHaveBeenCalled()
   })
 
-  // The client's mirror (`ResearchResult` in shared/types) reads these: each check pass with its unjudged items, the item a fallback failed on, each problem's cause
+  // The client's mirror (`ResearchResult` in shared/types) reads these: each check pass with its unjudged items and number hints, the item a fallback failed on, each problem's cause
   it("serves the run's check passes, the item a fallback failed on and each problem's cause", async () => {
     mockPrisma.storyResearchRun.findMany.mockResolvedValue([row()])
     const res = await request(app).get(`/api/admin/research/stories/${STORY}/runs`).set(authHeader())
@@ -165,6 +170,7 @@ describe('GET /api/admin/research/stories/:storyId/runs', () => {
           problems: [{ kind: 'copying', by: 'judge' }],
           longestRuns: [{ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 7 }],
           unjudged: ['Blurb'],
+          numberHints: [{ label: 'Story paragraph 1', numbers: ['2024', '2025'] }],
         },
         {},
       ],

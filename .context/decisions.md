@@ -58,3 +58,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0054 · Trigger both Render deploys from CI's deploy job through deploy hooks pinned to the checked commit, with Render's own auto-deploy off](decisions/0054-ci-triggers-render-deploys.md)
 - [ADR-0055 · Keep each story research run in its own table, story_research_runs, every run kept, story_id SET NULL on delete, its cost reserved at start against a monthly cap](decisions/0055-story-research-runs-table.md)
 - [ADR-0056 · Check each article against its publisher's machine-readable reservations in the crawler, by URL, and use the extraction API only for technical failures, never to get past a publisher's no](decisions/0056-crawler-enforces-publisher-opt-outs.md)
+- [ADR-0057 · Researched stories: extracted facts, not source texts, feed the writer; numbers are judged by the fact check, not string-matched in code](decisions/0057-research-facts-feed-writer-numbers-judged.md)

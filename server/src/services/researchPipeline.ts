@@ -25,11 +25,10 @@ import { dedupConfirmationSchema } from '../schemas/llm.js'
 import { earlierSchema, extractionSchema, factCheckSchema, queriesSchema, writeSchema, type Draft, type Earlier, type Extraction } from '../schemas/research.js'
 import {
   checkCitations,
+  checkedItems,
   decideGate,
   describeProblem,
-  draftItems,
   dropFailing,
-  evidenceFor,
   judgedProblems,
   publishedFact,
   supportFound,
@@ -41,6 +40,7 @@ import {
   type PoolFact,
 } from './researchChecks.js'
 import { checkCopying, sourceLines, type LongestRun } from './researchCopying.js'
+import { checkedQuote, quoteProblems, withoutFailedQuote } from './researchQuote.js'
 import {
   anchorDate,
   domainOf,
@@ -169,6 +169,8 @@ export interface CheckPass {
   longestRuns: LongestRun[]
   /** The items the fact check's answer left out: no support or copying verdict from it, the code checks only. */
   unjudged: string[]
+  /** The items whose numbers the code did not find in their evidence, each with those numbers: the hints the fact check judged (ADR-0057). */
+  numberHints: { label: string; numbers: string[] }[]
 }
 
 export interface StoryResearch {
@@ -440,35 +442,41 @@ async function buildPool(
 /**
  * Step 8's checks, all on every draft, so the rewrite hears of every problem and each failing item
  * after it carries the fact check's key judgment: the deterministic citation and copying checks,
- * and one fact-check call that judges every item for support (those with evidence) and for copying
- * against the outside sources' own words. A problem only code finds is never key. An item the
- * answer leaves out is recorded as unjudged, and fails nothing.
+ * and one fact-check call that judges every item for support (those with evidence or number hints)
+ * and for copying against the outside sources' own words, and the key quote, its last item, for
+ * faithfulness to the source it names (never for copying; one naming no source of the run fails in
+ * code instead). A number the code does not find in an item's evidence, and a key quote whose words
+ * it does not find in its source, are hints for that call, never problems by themselves. A problem
+ * only code finds is never key. An item the answer leaves out is recorded as unjudged, and fails nothing.
  */
 async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, sources: ResearchSource[], call: Call): Promise<CheckPass> {
-  const items = draftItems(draft).map(item => ({ item, evidence: item.cited ? evidenceFor(item.factIds, facts) : [] }))
   const lines = sourceLines(sources)
+  const sourceIds = new Set(sources.map(s => s.id))
+  const quote = checkedQuote(draft, lines, sourceIds)
+  const items = [...checkedItems(draft, facts), ...(quote ? [quote] : [])]
   const copying = checkCopying(
     items.map(({ item }) => item),
     sources,
     config.research.copiedRunWords,
   )
   const prompt = buildFactCheckPrompt(
-    items.map(({ item, evidence }) => ({ label: item.label, text: item.text, facts: evidence })),
+    items.map(({ item, evidence, numberHints, quote }) => ({ label: item.label, text: item.text, facts: evidence, numbersNotFound: numberHints, quote })),
     lines,
   )
   const answer = required(await call('fact-check', factCheckSchema, prompt), 'fact-check')
   return {
-    problems: [...checkCitations(draft, facts), ...copying.problems, ...judgedProblems(answer, items, lines)],
+    problems: [...checkCitations(draft, facts), ...quoteProblems(draft, sourceIds), ...copying.problems, ...judgedProblems(answer, items, lines)],
     longestRuns: copying.longestRuns,
     unjudged: unjudgedLabels(answer, items),
+    numberHints: items.filter(c => c.numberHints.length > 0).map(c => ({ label: c.item.label, numbers: c.numberHints })),
   }
 }
 
 /**
  * Steps 7-8: write, check, and on a failure one rewrite with the problems and one more check.
  * Paragraphs and bullets that still fail are dropped (`r.problems` keeps them), unless `dropFailing`
- * refuses, as it does for a draft with nothing in a part even when it passed; each pass is kept in
- * `r.checks`.
+ * refuses, as it does for a draft with nothing in a part even when it passed; a key quote that
+ * still fails is dropped too, and never ends the run. Each pass is kept in `r.checks`.
  */
 async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFact>, call: Call, r: StoryResearch): Promise<Draft> {
   const checked = async (draft: Draft) => {
@@ -490,7 +498,7 @@ async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFa
     r.failedOn = kept.failedOn
     throw new Stop(kept.failed, 'draft_failed_check')
   }
-  r.draft = kept.draft
+  r.draft = withoutFailedQuote(kept.draft, r.problems)
   return r.draft
 }
 

@@ -13,7 +13,7 @@ export interface WordingSource {
   id: string
   title: string
   facts: Pick<PoolFact, 'id' | 'statement' | 'supportingSentence'>[]
-  voices: { quote: string }[]
+  voices: { name: string; role: string; quote: string }[]
 }
 
 export interface SourceLine {
@@ -22,6 +22,8 @@ export interface SourceLine {
   sourceId: string
   role: 'title' | 'sentence' | 'quote' | 'statement'
   text: string
+  /** A quote's speaker, with their role when the source gives one, so the fact check can hold the key quote's attribution to it. */
+  speaker?: string
 }
 
 /** Outside sources (`S…`); our earlier stories (`E…`) are our own text. */
@@ -43,7 +45,13 @@ export function sourceLines(sources: WordingSource[]): SourceLine[] {
     .flatMap((s): SourceLine[] => [
       { id: `${s.id}T`, sourceId: s.id, role: 'title', text: s.title },
       ...s.facts.map(f => ({ id: f.id, sourceId: s.id, role: 'sentence' as const, text: f.supportingSentence })),
-      ...s.voices.map((v, i) => ({ id: quoteId(s.id, i), sourceId: s.id, role: 'quote' as const, text: v.quote })),
+      ...s.voices.map((v, i) => ({
+        id: quoteId(s.id, i),
+        sourceId: s.id,
+        role: 'quote' as const,
+        text: v.quote,
+        speaker: [v.name, v.role].filter(part => part.trim() !== '').join(', '),
+      })),
       ...s.facts.map(f => ({ id: f.id, sourceId: s.id, role: 'statement' as const, text: f.statement })),
     ])
     .filter(line => line.text.trim() !== '')
@@ -131,7 +139,8 @@ export interface LongestRun {
  * of words the item shares with any one of that source's lines (each line compared on its own, so a
  * run never crosses from one into the next), per kind; a run of `minWords` or more is a problem. A
  * quoted span of four words or more in any item is one too, since a person's words go only in the
- * key quote.
+ * key quote. The key quote itself is never read: it is the one place a source's exact words belong
+ * (`researchQuote.ts`).
  */
 export function checkCopying(items: DraftItem[], sources: WordingSource[], minWords: number): { problems: CitationProblem[]; longestRuns: LongestRun[] } {
   const lines = sourceLines(sources).map(line => ({ ...line, tokens: wordTokens(line.text) }))
@@ -139,6 +148,7 @@ export function checkCopying(items: DraftItem[], sources: WordingSource[], minWo
   const problems: CitationProblem[] = []
   const longestRuns: LongestRun[] = []
   for (const item of items) {
+    if (item.part === 'quote') continue
     const tokens = wordTokens(item.text)
     const at = { label: item.label, text: item.text, kind: 'copying' as const, by: 'code' as const }
     for (const sourceId of outside) {

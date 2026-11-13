@@ -113,7 +113,7 @@ function result(over: Partial<StoredResearch> = {}): StoredResearch {
     draft,
     rewritten: false,
     problems: [],
-    checks: [{ problems: [], longestRuns: [], unjudged: [] }],
+    checks: [{ problems: [], longestRuns: [], unjudged: [], numberHints: [] }],
     failedOn: null,
     support: { facts: 3, found: 3 },
     optOutChecked: true,

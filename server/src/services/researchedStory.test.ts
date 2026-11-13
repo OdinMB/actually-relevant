@@ -104,6 +104,12 @@ describe('buildResearchedStory', () => {
     expect(buildResearchedStory(run({ quoteSourceId: 'E1' })).quoteSourceId).toBe('E1')
   })
 
+  it('gives no quote source, and lists none for it, when the run dropped its key quote', () => {
+    const story = buildResearchedStory(run({ quoteSourceId: '' }))
+    expect(story.quoteSourceId).toBeNull()
+    expect(story.sources.map(s => s.id)).toEqual(['S0'])
+  })
+
   it('names our earlier story as Actually Relevant, with its story id and slug and no outside link', () => {
     const story = buildResearchedStory(run({ story: [cited('Earlier.', ['E1F1'])] }))
     expect(story.sources.find(s => s.id === 'E1')).toMatchObject({

@@ -406,7 +406,7 @@ describe('researchStory', () => {
       }),
     })
     await researchStory(story(), d)
-    const ids = (prompt: string) => [...prompt.matchAll(/<QUOTE id="([^"]+)">Wir sind stolz\.<\/QUOTE>/g)].map(m => m[1])
+    const ids = (prompt: string) => [...prompt.matchAll(/<QUOTE id="([^"]+)"[^>]*>Wir sind stolz\.<\/QUOTE>/g)].map(m => m[1])
     expect(ids(writes[0]!)).toEqual(['S0Q2', 'S1Q2'])
     expect(ids(checks[0]!)).toEqual(['S0Q2', 'S1Q2'])
   })
@@ -458,10 +458,118 @@ describe('researchStory', () => {
       [5, 'Caveat 1', false],
       [6, 'Summary', false],
       [7, 'Blurb', false],
+      [8, 'Key quote', false],
     ])
     const wording = /<SOURCE_WORDING>([\s\S]*?)<\/SOURCE_WORDING>/.exec(prompts[0]!)?.[1] ?? ''
     expect([...wording.matchAll(/id="([^"]+)"/g)].map(m => m[1])).toEqual(['S0', 'S0T', 'S0F1', 'S0F2', 'S0Q1', 'S1', 'S1T', 'S1F1', 'S1F2', 'S1Q1'])
     expect(wording).toContain('Wir sind stolz.')
+  })
+
+  describe('the key quote', () => {
+    const quoteItem = (prompt: string) => /<ITEM number="(\d+)" label="Key quote">([\s\S]*?)<\/ITEM>/.exec(prompt)
+
+    it('goes to the judge as the last item, with its attribution and the source it names, and a hint when code does not find its words there', async () => {
+      const prompts: string[] = []
+      const voiced = () =>
+        extraction({ voices: [{ name: 'Shehbaz Sharif', role: 'prime minister', stance: 'Pleased.', quote: 'We have added 22GW of solar on our roofs.' }] })
+      const responders = (quote: string) =>
+        baseResponders({
+          extract: voiced,
+          write: () => ({ ...goodDraft(), quote }),
+          'fact-check': p => {
+            prompts.push(p)
+            return allSupported(p)
+          },
+        })
+      await researchStory(story(), deps({ responders: responders('We have added 22GW of solar [on rooftops]') }).deps)
+      await researchStory(story(), deps({ responders: responders('We have installed 22GW') }).deps)
+
+      const [found, notFound] = prompts.map(quoteItem)
+      expect(Number(found?.[1])).toBe(prompts[0]!.match(/<ITEM /g)?.length)
+      expect(found?.[2]).toContain('<ATTRIBUTION>Prime minister</ATTRIBUTION>')
+      expect(found?.[2]).toContain('<QUOTED_SOURCE>S0</QUOTED_SOURCE>')
+      expect(found?.[2]).not.toContain('QUOTE_NOT_FOUND')
+      expect(notFound?.[2]).toContain('<QUOTE_NOT_FOUND/>')
+      // The judge sees who spoke each quote, to check the attribution
+      expect(prompts[0]).toContain('<QUOTE id="S0Q1" speaker="Shehbaz Sharif, prime minister">')
+    })
+
+    it('is rewritten when the judge finds it unfaithful, and dropped, never the run, when the rewrite still fails it', async () => {
+      const rewrites: string[] = []
+      const { deps: d } = deps({
+        responders: baseResponders({
+          rewrite: p => {
+            rewrites.push(p)
+            return goodDraft()
+          },
+          'fact-check': judging('Key quote', { supported: false, problem: 'the prime minister did not say this', key: true }),
+        }),
+      })
+      const r = await researchStory(story(), d)
+      expect(rewrites[0]).toContain('- Key quote (&quot;We have added 22GW&quot;) fails the fact check: the prime minister did not say this')
+      expect(r.verdict).toEqual({ kind: 'keep' })
+      expect(r.failedOn).toBeNull()
+      expect(r.draft).toMatchObject({ quote: '', quoteAttribution: '', quoteSourceId: '' })
+      expect(r.problems).toEqual([expect.objectContaining({ label: 'Key quote', kind: 'fact', by: 'judge', key: false })])
+      expect(r.checks.map(c => c.problems.map(p => p.label))).toEqual([['Key quote'], ['Key quote']])
+    })
+
+    it('fails in code, without the judge, when it names no source of the run; the rewrite can fix it, else it is dropped', async () => {
+      const prompts: string[] = []
+      const run = async (rewritten: string) => {
+        const { deps: d } = deps({
+          responders: baseResponders({
+            write: () => ({ ...goodDraft(), quoteSourceId: 'E1' }),
+            rewrite: () => ({ ...goodDraft(), quoteSourceId: rewritten }),
+            'fact-check': p => {
+              prompts.push(p)
+              return allSupported(p)
+            },
+          }),
+        })
+        return researchStory(story(), d)
+      }
+      const fixed = await run('S0')
+      expect(quoteItem(prompts[0]!)).toBeNull()
+      expect(fixed.checks[0]?.problems).toEqual([
+        expect.objectContaining({ label: 'Key quote', kind: 'fact', by: 'code', problem: expect.stringContaining('E1') }),
+      ])
+      expect(quoteItem(prompts[1]!)).not.toBeNull()
+      expect(fixed.verdict).toEqual({ kind: 'keep' })
+      expect(fixed.draft).toMatchObject({ quote: 'We have added 22GW', quoteSourceId: 'S0' })
+
+      const dropped = await run('S9')
+      expect(dropped.verdict).toEqual({ kind: 'keep' })
+      expect(dropped.draft).toMatchObject({ quote: '', quoteAttribution: '', quoteSourceId: '' })
+    })
+
+    it("is never flagged for copying, in code or by the judge, though it repeats a source's words in quotation marks", async () => {
+      const said = 'Households across the country installed more panels this year than in any year before, the energy ministry said.'
+      const withSaying = () =>
+        extraction({ facts: [...extraction().facts, { statement: 'Households installed a record number of panels.', supportingSentence: said, measures: '' }] })
+      const quote = `“${said}”`
+      const { deps: d, fake } = deps({
+        responders: baseResponders({
+          extract: withSaying,
+          write: () => ({ ...goodDraft(), quote, quoteAttribution: 'Energy ministry', quoteSourceId: 'S1' }),
+          'fact-check': judging('Key quote', { copiedSentence: 'S1F3', followsSource: 'S1' }),
+        }),
+      })
+      const r = await researchStory(story(), d)
+      expect(fake.steps).not.toContain('rewrite')
+      expect(r.checks[0]?.problems).toEqual([])
+      expect(r.checks[0]?.longestRuns.map(l => l.label)).not.toContain('Key quote')
+      expect(r.draft?.quote).toBe(quote)
+    })
+
+    it('fails nothing when the judge leaves it out: it is recorded as unjudged and kept', async () => {
+      const leavesOut = (p: string): FactCheck => ({ items: allSupported(p).items.filter(i => i.number !== itemNumber(p, 'Key quote')) })
+      const { deps: d, fake } = deps({ responders: baseResponders({ 'fact-check': leavesOut }) })
+      const r = await researchStory(story(), d)
+      expect(r.checks.map(c => c.unjudged)).toEqual([['Key quote']])
+      expect(fake.steps).not.toContain('rewrite')
+      expect(r.draft?.quote).toBe('We have added 22GW')
+    })
   })
 
   it('rewrites a paragraph the judge finds copied, saying so, and drops it when the rewrite still copies', async () => {
@@ -540,7 +648,29 @@ describe('researchStory', () => {
     expect(r.verdict).toEqual({ kind: 'keep' })
   })
 
-  it('drops a bullet that still fails after the rewrite and keeps the rest of the draft', async () => {
+  it('lets a reworded number pass the code check and hands it to the fact check as a hint for its item, recorded with the pass', async () => {
+    const prompts: string[] = []
+    // The fact says "in two years": the old number check failed this paragraph on 2024 and 2025
+    const reworded = (): Draft => ({ ...goodDraft(), story: [{ text: 'Pakistan added 22 GW of rooftop solar in 2024 and 2025.', factIds: ['S0F1'] }] })
+    const { deps: d, fake } = deps({
+      responders: baseResponders({
+        write: reworded,
+        'fact-check': p => {
+          prompts.push(p)
+          return allSupported(p)
+        },
+      }),
+    })
+    const r = await researchStory(story(), d)
+    const item = (label: string) => new RegExp(`<ITEM number="${itemNumber(prompts[0]!, label)}"[\\s\\S]*?</ITEM>`).exec(prompts[0]!)?.[0]
+    expect(item('Story paragraph 1')).toContain('<NUMBERS_NOT_FOUND>2024; 2025</NUMBERS_NOT_FOUND>')
+    expect(prompts[0]!.match(/<NUMBERS_NOT_FOUND>/g)).toHaveLength(1)
+    expect(fake.steps).not.toContain('rewrite')
+    expect(r.checks).toEqual([expect.objectContaining({ problems: [], numberHints: [{ label: 'Story paragraph 1', numbers: ['2024', '2025'] }] })])
+    expect(r.verdict).toEqual({ kind: 'keep' })
+  })
+
+  it("lets the fact check's verdict on a hinted number decide: an uncited bullet's number fails only when it judges so, and is then dropped", async () => {
     const withBullets = (): Draft => ({
       ...goodDraft(),
       whyThisMatters: [
@@ -548,11 +678,20 @@ describe('researchStory', () => {
         { text: 'About 40 households benefit.', factIds: [] },
       ],
     })
-    const { deps: d } = deps({ responders: baseResponders({ write: withBullets, rewrite: withBullets }) })
+    const { deps: passes, fake } = deps({ responders: baseResponders({ write: withBullets }) })
+    const kept = await researchStory(story(), passes)
+    expect(fake.steps).not.toContain('rewrite')
+    expect(kept.checks[0]?.numberHints).toEqual([{ label: 'Why This Matters 2', numbers: ['40'] }])
+    expect(kept.draft?.whyThisMatters).toHaveLength(2)
+
+    const fails = judging('Why This Matters 2', { supported: false, problem: 'no fact gives 40 households' })
+    const { deps: d } = deps({ responders: baseResponders({ write: withBullets, rewrite: withBullets, 'fact-check': fails }) })
     const r = await researchStory(story(), d)
     expect(r.rewritten).toBe(true)
     expect(r.verdict).toEqual({ kind: 'keep' })
-    expect(r.problems.map(p => p.label)).toEqual(['Why This Matters 2'])
+    expect(r.problems).toEqual([
+      expect.objectContaining({ label: 'Why This Matters 2', kind: 'fact', by: 'judge', problem: 'fails the fact check: no fact gives 40 households' }),
+    ])
     expect(r.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.'])
   })
 
