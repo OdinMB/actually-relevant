@@ -68,7 +68,7 @@ function printPlan(fx: ResearchFixtures, stories: ResearchStory[], spentUsd: num
   const all = STEPS.reduce((sum, s) => sum + deskEstimateUsd(s), 0)
   const credits = stories.reduce((sum, s) => sum + expectedCredits(s.original.language), 0)
   console.log(
-    `estimate for ${stories.length} stories: model calls ${usd(design * stories.length)} (design rows) to ${usd(all * stories.length)} (a confirmation and a rewrite each); ` +
+    `estimate for ${stories.length} stories: model calls ${usd(design * stories.length)} (design rows) to ${usd(all * stories.length)} (a confirmation, one repair round and the derived fields each); ` +
       `Tavily about ${credits} credits (${usd(credits * TAVILY_USD_PER_CREDIT)} counted as paid)`,
   )
   console.log(`folder spend so far ${usd(spentUsd)}; budget ${usd(budgetUsd)} (a cap on the folder's model ledger plus its Tavily credits)`)

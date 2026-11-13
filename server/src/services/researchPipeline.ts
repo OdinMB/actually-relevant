@@ -2,8 +2,8 @@
  * The research steps for one story (design, "The pipeline", steps 1-8; `.context/story-research.md`):
  * own sources with the neighbours production's dedup prompt confirms, queries, Tavily, publishers'
  * opt-outs and the deterministic filter, one extraction per source, earlier coverage, the
- * re-assess-and-write call, then the citation and copying checks, the fact check, at most one
- * rewrite and the gate. No I/O of its own: model calls, searches, the budget and the opt-out policy are injected
+ * re-assess-and-write call, then the citation and copying checks, the fact check, the repair rounds
+ * on the failing items alone and the gate. No I/O of its own: model calls, searches, the budget and the opt-out policy are injected
  * (`services/researchCalls.ts` in production, the eval context in eval:research). It writes nothing.
  */
 import type { z } from 'zod'
@@ -13,21 +13,34 @@ import type { TavilyResult, TavilySearch } from '../lib/tavily.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
 import { buildDedupPrompt } from '../prompts/dedup.js'
 import {
+  buildDerivePrompt,
   buildEarlierPrompt,
   buildExtractionPrompt,
   buildFactCheckPrompt,
   buildQueriesPrompt,
+  buildRepairPrompt,
   buildWritePrompt,
   queryCount,
   type WriteInput,
 } from '../prompts/research.js'
 import { dedupConfirmationSchema } from '../schemas/llm.js'
-import { earlierSchema, extractionSchema, factCheckSchema, queriesSchema, writeSchema, type Draft, type Earlier, type Extraction } from '../schemas/research.js'
+import {
+  deriveSchema,
+  earlierSchema,
+  extractionSchema,
+  factCheckSchema,
+  queriesSchema,
+  repairSchema,
+  writeSchema,
+  type Draft,
+  type Earlier,
+  type Extraction,
+  type FactCheck,
+} from '../schemas/research.js'
 import {
   checkCitations,
   checkedItems,
   decideGate,
-  describeProblem,
   dropFailing,
   judgedProblems,
   publishedFact,
@@ -41,6 +54,7 @@ import {
 } from './researchChecks.js'
 import { checkCopying, sourceLines, type LongestRun } from './researchCopying.js'
 import { checkedQuote, quoteProblems, withoutFailedQuote } from './researchQuote.js'
+import { afterRecheck, derivableLabels, repairTargets, storyItems, withDerived, withRepairs } from './researchRepair.js'
 import {
   anchorDate,
   domainOf,
@@ -56,7 +70,11 @@ import {
 } from './researchFilter.js'
 import type { EarlierStory, ResearchStory, SourceText } from './researchInput.js'
 
-export const STEPS = ['confirm', 'queries', 'extract', 'earlier', 'write', 'fact-check', 'rewrite'] as const
+/**
+ * The steps, each recorded with its calls. `rewrite` is a repair round (since 2026-11-13; before,
+ * the one rewrite of the whole draft), `derive` a title, summary or blurb written again from the kept story.
+ */
+export const STEPS = ['confirm', 'queries', 'extract', 'earlier', 'write', 'fact-check', 'rewrite', 'derive'] as const
 export type StepName = (typeof STEPS)[number]
 
 /** The model tier each step runs on (production resolves it through `config.llm.models`). */
@@ -68,6 +86,7 @@ export const STEP_TIERS: Record<StepName, 'small' | 'medium'> = {
   write: 'medium',
   'fact-check': 'small',
   rewrite: 'medium',
+  derive: 'medium',
 }
 
 export type StepOutcome = LlmCallOutcome
@@ -171,6 +190,8 @@ export interface CheckPass {
   unjudged: string[]
   /** The items whose numbers the code did not find in their evidence, each with those numbers: the hints the fact check judged (ADR-0057). */
   numberHints: { label: string; numbers: string[] }[]
+  /** A repair round's or the derived fields' pass: the items it checked again, the rest kept from before. Absent on the first pass, which checks every item. */
+  rechecked?: string[]
 }
 
 export interface StoryResearch {
@@ -184,12 +205,13 @@ export interface StoryResearch {
   drops: Partial<Record<DropKind, number>>
   sources: ResearchSource[]
   earlier: ResearchEarlier[]
-  /** The last draft written, also when it failed the check. */
+  /** The last draft checked, also when it failed the check. */
   draft: Draft | null
+  /** Whether a repair round or the derived fields rewrote an item. */
   rewritten: boolean
-  /** What the last check found; empty for a draft that passed. */
+  /** What the checks found in each item as it stands, its last pass's problems; empty for a draft that passed. */
   problems: CitationProblem[]
-  /** One entry per check pass: the first draft's, then the rewrite's. */
+  /** One entry per check pass: the first draft's, then each repair round's and the derived fields', which recheck their items alone. */
   checks: CheckPass[]
   /** The item a `draft_failed_check` fallback failed on (`dropFailing`); null otherwise. */
   failedOn: string | null
@@ -439,61 +461,123 @@ async function buildPool(
   if (r.sources.length < 2) throw new Stop('no usable source', judged.length > 1 ? 'not_confirmed' : 'technical')
 }
 
-/**
- * Step 8's checks, all on every draft, so the rewrite hears of every problem and each failing item
- * after it carries the fact check's key judgment: the deterministic citation and copying checks,
- * and one fact-check call that judges every item for support (those with evidence or number hints)
- * and for copying against the outside sources' own words, and the key quote, its last item, for
- * faithfulness to the source it names (never for copying; one naming no source of the run fails in
- * code instead). A number the code does not find in an item's evidence, and a key quote whose words
- * it does not find in its source, are hints for that call, never problems by themselves. A problem
- * only code finds is never key. An item the answer leaves out is recorded as unjudged, and fails nothing.
- */
-async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, sources: ResearchSource[], call: Call): Promise<CheckPass> {
-  const lines = sourceLines(sources)
-  const sourceIds = new Set(sources.map(s => s.id))
-  const quote = checkedQuote(draft, lines, sourceIds)
-  const items = [...checkedItems(draft, facts), ...(quote ? [quote] : [])]
-  const copying = checkCopying(
-    items.map(({ item }) => item),
-    sources,
-    config.research.copiedRunWords,
-  )
-  const prompt = buildFactCheckPrompt(
-    items.map(({ item, evidence, numberHints, quote }) => ({ label: item.label, text: item.text, facts: evidence, numbersNotFound: numberHints, quote })),
-    lines,
-  )
-  const answer = required(await call('fact-check', factCheckSchema, prompt), 'fact-check')
-  return {
-    problems: [...checkCitations(draft, facts), ...quoteProblems(draft, sourceIds), ...copying.problems, ...judgedProblems(answer, items, lines)],
-    longestRuns: copying.longestRuns,
-    unjudged: unjudgedLabels(answer, items),
-    numberHints: items.filter(c => c.numberHints.length > 0).map(c => ({ label: c.item.label, numbers: c.numberHints })),
-  }
+/** What step 8's checks read besides the draft. */
+interface CheckContext {
+  facts: ReadonlyMap<string, PoolFact>
+  sources: ResearchSource[]
+  call: Call
 }
 
 /**
- * Steps 7-8: write, check, and on a failure one rewrite with the problems and one more check.
- * Paragraphs and bullets that still fail are dropped (`r.problems` keeps them), unless `dropFailing`
- * refuses, as it does for a draft with nothing in a part even when it passed; a key quote that
- * still fails is dropped too, and never ends the run. Each pass is kept in `r.checks`.
+ * Step 8's checks: on the first draft every item, on a repair round's draft the rewritten items
+ * alone (`labels`), so each failing item carries the fact check's key judgment. The deterministic
+ * citation and copying checks, and one fact-check call that judges each item for support (those with
+ * evidence or number hints) and for copying against the outside sources' own words, and the key
+ * quote, its last item, for faithfulness to the source it names (never for copying; one naming no
+ * source of the run fails in code instead, and no call is made when nothing is left to judge). A
+ * number the code does not find in an item's evidence, and a key quote whose words it does not find
+ * in its source, are hints for that call, never problems by themselves. A problem only code finds is
+ * never key. An item the answer leaves out is recorded as unjudged, and fails nothing. `skipped`
+ * when the budget skipped the fact check.
+ */
+async function check(draft: Draft, ctx: CheckContext, labels?: ReadonlySet<string>): Promise<CheckPass | 'skipped'> {
+  const lines = sourceLines(ctx.sources)
+  const sourceIds = new Set(ctx.sources.map(s => s.id))
+  const inScope = (label: string) => !labels || labels.has(label)
+  const quote = checkedQuote(draft, lines, sourceIds)
+  const items = [...checkedItems(draft, ctx.facts), ...(quote ? [quote] : [])].filter(c => inScope(c.item.label))
+  const copying = checkCopying(
+    items.map(({ item }) => item),
+    ctx.sources,
+    config.research.copiedRunWords,
+  )
+  const prompt = () =>
+    buildFactCheckPrompt(
+      items.map(({ item, evidence, numberHints, quote }) => ({ label: item.label, text: item.text, facts: evidence, numbersNotFound: numberHints, quote })),
+      lines,
+    )
+  const res: StepAnswer<FactCheck> = items.length === 0 ? { parsed: { items: [] }, outcome: 'ok' } : await ctx.call('fact-check', factCheckSchema, prompt())
+  if (res.outcome === 'skipped') return 'skipped'
+  const answer = required(res, 'fact-check')
+  const coded = [...checkCitations(draft, ctx.facts), ...quoteProblems(draft, sourceIds)].filter(p => inScope(p.label))
+  return {
+    problems: [...coded, ...copying.problems, ...judgedProblems(answer, items, lines)],
+    longestRuns: copying.longestRuns,
+    unjudged: unjudgedLabels(answer, items),
+    numberHints: items.filter(c => c.numberHints.length > 0).map(c => ({ label: c.item.label, numbers: c.numberHints })),
+    ...(labels ? { rechecked: [...labels] } : {}),
+  }
+}
+
+/** Keeps a rewritten draft once its `rewritten` items were checked again; false, keeping nothing, when the budget skipped that check. */
+async function recheck(draft: Draft, rewritten: string[], ctx: CheckContext, r: StoryResearch): Promise<boolean> {
+  r.rewritten = true
+  const pass = await check(draft, ctx, new Set(rewritten))
+  if (pass === 'skipped') return false
+  r.draft = draft
+  r.checks.push(pass)
+  r.problems = afterRecheck(r.problems, { problems: pass.problems, rechecked: rewritten })
+  return true
+}
+
+/**
+ * A title, summary or blurb still failing on copying alone after the rounds, written again from the
+ * kept story paragraphs alone, which hold no source's words, and checked once more; only when
+ * nothing else ends the run. The draft as last checked.
+ */
+async function deriveFields(draft: Draft, ctx: CheckContext, r: StoryResearch): Promise<Draft> {
+  const labels = derivableLabels(r.problems)
+  if (labels.length === 0) return draft
+  const rest = dropFailing(
+    draft,
+    r.problems.filter(p => !labels.includes(p.label)),
+  )
+  if ('failed' in rest) return draft
+  const res = await ctx.call('derive', deriveSchema, buildDerivePrompt({ titleLabel: draft.titleLabel, paragraphs: rest.draft.story.map(p => p.text) }))
+  if (res.outcome === 'skipped') return draft
+  const derived = withDerived(draft, withoutInlineIds(required(res, 'derive')), labels)
+  return derived.rewritten.length > 0 && (await recheck(derived.draft, derived.rewritten, ctx, r)) ? derived.draft : draft
+}
+
+/**
+ * Targeted repair (owner decision 2026-11-13, ADR-0058): up to `config.research.repairRounds`
+ * rounds, each rewriting only the items still failing, with their problems, and checking those
+ * alone; an item that passed is frozen. A round whose answer changes nothing ends the rounds; a
+ * call the budget skips ends the repair, and a repair it left unchecked is never kept. Then the
+ * derived fields (`deriveFields`). The draft as last checked.
+ */
+async function repair(draft: Draft, input: WriteInput, ctx: CheckContext, r: StoryResearch): Promise<Draft> {
+  let current = draft
+  for (let round = 0; round < config.research.repairRounds && r.problems.length > 0; round++) {
+    const targets = repairTargets(current, r.problems)
+    const prompt = buildRepairPrompt({ sources: input.sources, earlier: input.earlier, story: storyItems(current), repairs: targets })
+    const res = await ctx.call('rewrite', repairSchema, prompt)
+    if (res.outcome === 'skipped') return current
+    const repaired = withRepairs(current, withoutInlineIds(required(res, 'rewrite')), targets)
+    if (repaired.rewritten.length === 0) break
+    if (!(await recheck(repaired.draft, repaired.rewritten, ctx, r))) return current
+    current = repaired.draft
+  }
+  return deriveFields(current, ctx, r)
+}
+
+/**
+ * Steps 7-8: write and check every item, then repair the failing ones (`repair`). Paragraphs and
+ * bullets that still fail are dropped (`r.problems` keeps them), unless `dropFailing` refuses, as it
+ * does for a draft with nothing in a part even when it passed, for which no repair is asked; a key
+ * quote that still fails is dropped too, and never ends the run. Each pass is kept in `r.checks`.
  */
 async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFact>, call: Call, r: StoryResearch): Promise<Draft> {
-  const checked = async (draft: Draft) => {
-    const pass = await check(draft, facts, r.sources, call)
-    r.checks.push(pass)
-    r.problems = pass.problems
-  }
-  r.draft = withoutInlineIds(required(await call('write', writeSchema, buildWritePrompt(input)), 'write'))
-  await checked(r.draft)
-  if (r.problems.length > 0) {
-    r.rewritten = true
-    r.draft = withoutInlineIds(
-      required(await call('rewrite', writeSchema, buildWritePrompt({ ...input, problems: r.problems.map(describeProblem) })), 'rewrite'),
-    )
-    await checked(r.draft)
-  }
-  const kept = dropFailing(r.draft, r.problems)
+  const ctx: CheckContext = { facts, sources: r.sources, call }
+  const draft = withoutInlineIds(required(await call('write', writeSchema, buildWritePrompt(input)), 'write'))
+  r.draft = draft
+  const first = await check(draft, ctx)
+  if (first === 'skipped') throw new Stop('budget')
+  r.checks.push(first)
+  r.problems = first.problems
+  // No repair gives a draft the part it has nothing in, and the run ends on it anyway
+  const repaired = 'failed' in dropFailing(draft, []) ? draft : await repair(draft, input, ctx, r)
+  const kept = dropFailing(repaired, r.problems)
   if ('failed' in kept) {
     r.failedOn = kept.failedOn
     throw new Stop(kept.failed, 'draft_failed_check')

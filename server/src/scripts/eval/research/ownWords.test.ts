@@ -75,7 +75,7 @@ describe('ownWords', () => {
       checks: [pass([codeWording('Summary')]), pass([codeWording('Summary'), judgeFact('Caveat 2')])],
       problems: [codeWording('Summary'), judgeFact('Caveat 2')],
       failedOn: 'Summary',
-      verdict: failedCheck('an item that cannot be dropped failed the check after one rewrite (Summary)'),
+      verdict: failedCheck('an item that cannot be dropped failed the check after repair (Summary)'),
     }),
     // A clean first draft
     result({ checks: [pass([])] }),

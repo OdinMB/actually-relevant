@@ -341,7 +341,7 @@ describe('dropFailing', () => {
 
   it('fails on an unsupported key claim in an item the draft cannot do without, naming it', () => {
     expect(dropFailing(d(), [problem('Story paragraph 3'), problem('Story paragraph 1', { key: true })])).toEqual({
-      failed: 'a key claim failed the check after one rewrite (Story paragraph 1)',
+      failed: 'a key claim failed the check after repair (Story paragraph 1)',
       failedOn: 'Story paragraph 1',
     })
   })
@@ -361,15 +361,15 @@ describe('dropFailing', () => {
 
   it.each(['Story paragraph 1', 'Title', 'Summary', 'Blurb'])('fails when %s still fails, since it cannot be dropped', label => {
     expect(dropFailing(d(), [problem('Story paragraph 3'), problem(label, { kind: 'copying' })])).toEqual({
-      failed: `an item that cannot be dropped failed the check after one rewrite (${label})`,
+      failed: `an item that cannot be dropped failed the check after repair (${label})`,
       failedOn: label,
     })
   })
 
   it('fails when a part is left empty, naming its first failing item', () => {
-    expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after one rewrite', failedOn: 'Caveat 1' })
+    expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after repair', failedOn: 'Caveat 1' })
     expect(dropFailing(d(), [problem('Why This Matters 2'), problem('Why This Matters 1')])).toEqual({
-      failed: 'no Why This Matters bullet passed the check after one rewrite',
+      failed: 'no Why This Matters bullet passed the check after repair',
       failedOn: 'Why This Matters 1',
     })
   })

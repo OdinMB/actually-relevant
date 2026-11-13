@@ -203,8 +203,45 @@ export const factCheckSchema = z.object({
     .describe('One entry per item in <ITEMS>.'),
 })
 
+/** A repair round's answer: new texts for the failing items only (`.context/story-research.md`, "Repair"). */
+export const repairSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        label: z.string().describe('The label of an item in <REPAIRS>, exactly as given there, e.g. "Story paragraph 2".'),
+        text: z
+          .string()
+          .describe("The item's new text in plain text, about as long as the text it replaces: no Markdown, no leading dash, no fact ids, no quotation marks."),
+        factIds: z
+          .array(z.string())
+          .describe(
+            'Ids of every fact in <FACTS> the new text states, e.g. ["S1F2", "S3F1"]. Empty for the title, the summary, the blurb and a bullet that only judges.',
+          ),
+      }),
+    )
+    .describe('One entry per item in <REPAIRS> other than the key quote, in their order.'),
+  quote: z
+    .string()
+    .describe(
+      "When <REPAIRS> holds the key quote: the new key quote, translated to English if needed, with no speaker or outlet name and no surrounding quotation marks; single quotes (' ') for any nested quotation. Empty string otherwise.",
+    ),
+  quoteAttribution: z
+    .string()
+    .describe("With a new key quote: the quoted person's full name and role, or the organization or outlet quoted. Empty string otherwise."),
+  quoteSourceId: z
+    .string()
+    .describe(
+      'With a new key quote: id of the source it comes from, e.g. "S2", never a quote\'s id such as "S2Q1" nor an earlier story\'s such as "E1". Empty string otherwise.',
+    ),
+})
+
+/** The derived fields written again from the kept story alone (`.context/story-research.md`, "Repair"). */
+export const deriveSchema = writeSchema.pick({ title: true, summary: true, marketingBlurb: true })
+
 export type Queries = z.infer<typeof queriesSchema>
 export type Extraction = z.infer<typeof extractionSchema>
 export type Earlier = z.infer<typeof earlierSchema>
 export type Draft = z.infer<typeof writeSchema>
 export type FactCheck = z.infer<typeof factCheckSchema>
+export type Repair = z.infer<typeof repairSchema>
+export type Derived = z.infer<typeof deriveSchema>
