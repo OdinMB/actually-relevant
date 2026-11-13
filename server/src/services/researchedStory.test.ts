@@ -48,7 +48,7 @@ function run(over: Partial<ResearchRunForReaders['draft']> = {}, sources?: Resea
     sources: sources ?? [source('S0', { origin: 'original' }), source('S1'), source('S2'), source('S3')],
     earlier: earlierStories ?? [earlier('E1', 'story-e1'), earlier('E2', 'story-e2')],
     draft: {
-      story: [{ sentences: [cited('First sentence.', ['S0F1'])] }],
+      story: [cited('First paragraph.', ['S0F1'])],
       whyThisMatters: [cited('It matters.', [])],
       caveats: [cited('A caveat.', [])],
       quoteSourceId: 'S0',
@@ -60,31 +60,31 @@ function run(over: Partial<ResearchRunForReaders['draft']> = {}, sources?: Resea
 const citationsOf = (text: { citations: { sourceId: string }[] }) => text.citations.map(c => c.sourceId)
 
 describe('buildResearchedStory', () => {
-  it('collapses fact ids to one citation per source, in the order the sources are first cited', () => {
-    const story = buildResearchedStory(run({ story: [{ sentences: [cited('Two sources.', ['S2F1', 'S0F2', 'S2F2', 'S0F1'])] }] }))
-    expect(citationsOf(story.paragraphs[0]!.sentences[0]!)).toEqual(['S2', 'S0'])
+  it('gives each paragraph one cited text, with one citation per source in the order the sources are first cited', () => {
+    const story = buildResearchedStory(run({ story: [cited('Two sources.', ['S2F1', 'S0F2', 'S2F2', 'S0F1']), cited('One source.', ['S1F1'])] }))
+    expect(story.paragraphs.map(p => p.sentences.map(s => [s.text, citationsOf(s)]))).toEqual([[['Two sources.', ['S2', 'S0']]], [['One source.', ['S1']]]])
   })
 
   it("gives each citation its source's first supporting sentence, past a publication-date fact that has none", () => {
-    const story = buildResearchedStory(run({ story: [{ sentences: [cited('Dated.', ['S1F0', 'S1F2', 'S1F1'])] }] }))
+    const story = buildResearchedStory(run({ story: [cited('Dated.', ['S1F0', 'S1F2', 'S1F1'])] }))
     expect(story.paragraphs[0]!.sentences[0]!.citations).toEqual([{ sourceId: 'S1', sentence: 'Sentence 2 of S1.' }])
   })
 
   it('cites a source by its publication date alone, with no sentence for the card', () => {
-    const story = buildResearchedStory(run({ story: [{ sentences: [cited('On Monday.', ['S1F0'])] }] }))
+    const story = buildResearchedStory(run({ story: [cited('On Monday.', ['S1F0'])] }))
     expect(story.paragraphs[0]!.sentences[0]!.citations).toEqual([{ sourceId: 'S1', sentence: null }])
   })
 
   it("drops fact ids that are not in the pool, an undated source's date fact included", () => {
     const sources = [source('S0', { origin: 'original' }), source('S1', { date: null })]
-    const story = buildResearchedStory(run({ story: [{ sentences: [cited('Unknown.', ['S9F1', 'S1F7', 'S1F0', 'E7F1'])] }] }, sources))
+    const story = buildResearchedStory(run({ story: [cited('Unknown.', ['S9F1', 'S1F7', 'S1F0', 'E7F1'])] }, sources))
     expect(story.paragraphs[0]!.sentences[0]!.citations).toEqual([])
   })
 
   it('lists only the sources something cites, the original article always first and our earlier stories last', () => {
     const story = buildResearchedStory(
       run({
-        story: [{ sentences: [cited('Earlier and S3.', ['E2F1', 'S3F1'])] }],
+        story: [cited('Earlier and S3.', ['E2F1', 'S3F1'])],
         whyThisMatters: [cited('Matters.', ['S1F1'])],
         quoteSourceId: 'S3',
       }),
@@ -105,7 +105,7 @@ describe('buildResearchedStory', () => {
   })
 
   it('names our earlier story as Actually Relevant, with its story id and slug and no outside link', () => {
-    const story = buildResearchedStory(run({ story: [{ sentences: [cited('Earlier.', ['E1F1'])] }] }))
+    const story = buildResearchedStory(run({ story: [cited('Earlier.', ['E1F1'])] }))
     expect(story.sources.find(s => s.id === 'E1')).toMatchObject({
       outlet: 'Actually Relevant',
       storyId: 'story-e1',
@@ -117,7 +117,7 @@ describe('buildResearchedStory', () => {
 
   it("serves a source's host without www for its stored favicon, and no link or host for an address that is not http(s)", () => {
     const sources = [source('S0', { origin: 'original' }), source('S1', { url: 'javascript:alert(1)' })]
-    const story = buildResearchedStory(run({ story: [{ sentences: [cited('Both.', ['S0F1', 'S1F1'])] }] }, sources))
+    const story = buildResearchedStory(run({ story: [cited('Both.', ['S0F1', 'S1F1'])] }, sources))
     expect(story.sources.map(s => [s.host, s.url])).toEqual([
       ['outlet-s0.example', 'https://www.outlet-s0.example/article'],
       [null, null],
@@ -130,13 +130,27 @@ describe('buildResearchedStory', () => {
   })
 
   it('builds what its own schema accepts', () => {
-    const story = buildResearchedStory(run({ story: [{ sentences: [cited('All.', ['S0F1', 'E1F1'])] }] }))
+    const story = buildResearchedStory(run({ story: [cited('All.', ['S0F1', 'E1F1'])] }))
     expect(researchedStorySchema.safeParse(story).success).toBe(true)
   })
 })
 
+/** A version applied before 2026-11-13, cited after each sentence. */
+const perSentence = () => ({
+  ...buildResearchedStory(run()),
+  paragraphs: [
+    {
+      sentences: [
+        { text: 'One.', citations: [{ sourceId: 'S0', sentence: 'Sentence 1 of S0.' }] },
+        { text: 'Two.', citations: [] },
+      ],
+    },
+    { sentences: [{ text: 'Three.', citations: [] }] },
+  ],
+})
+
 describe('researchedStorySchema', () => {
-  const stored = buildResearchedStory(run({ story: [{ sentences: [cited('All.', ['S0F1', 'E1F1'])] }] }))
+  const stored = buildResearchedStory(run({ story: [cited('All.', ['S0F1', 'E1F1'])] }))
   const withUrl = (url: string | null) => ({ ...stored, sources: stored.sources.map(s => (s.id === 'S0' ? { ...s, url } : s)) })
 
   it.each(['https://outlet.example/a', 'http://outlet.example/a', 'HTTPS://outlet.example/a', null])('accepts a source address of %s', url => {
@@ -160,7 +174,7 @@ describe('researchedStorySchema', () => {
 describe('forReaders', () => {
   const built = buildResearchedStory(
     run({
-      story: [{ sentences: [cited('Both earlier.', ['E1F1', 'E2F1', 'S0F1'])] }],
+      story: [cited('Both earlier.', ['E1F1', 'E2F1', 'S0F1'])],
       caveats: [cited('Only E2.', ['E2F1'])],
       quoteSourceId: 'E2',
     }),
@@ -193,19 +207,21 @@ describe('forReaders', () => {
 })
 
 describe('researchedStoryText', () => {
-  it('joins the sentences of each paragraph and separates the paragraphs, without citations', () => {
-    const story = buildResearchedStory(
-      run({ story: [{ sentences: [cited('One.', ['S0F1']), cited('Two.', ['S1F1'])] }, { sentences: [cited('Three.', ['S2F1'])] }] }),
-    )
+  it('separates the paragraphs, without citations', () => {
+    const story = buildResearchedStory(run({ story: [cited('One. Two.', ['S0F1']), cited('Three.', ['S2F1'])] }))
     expect(researchedStoryText(story)).toBe('One. Two.\n\nThree.')
   })
 })
 
 describe('storedResearchText', () => {
-  const story = buildResearchedStory(run({ story: [{ sentences: [cited('One.', ['S0F1'])] }, { sentences: [cited('Two.', ['S1F1'])] }] }))
+  const story = buildResearchedStory(run({ story: [cited('One.', ['S0F1']), cited('Two.', ['S1F1'])] }))
 
   it("reads a stored version's text, as the database gives it back", () => {
     expect(storedResearchText(JSON.parse(JSON.stringify(story)))).toBe('One.\n\nTwo.')
+  })
+
+  it('reads a version applied before 2026-11-13, cited per sentence, joining each paragraph’s sentences as before', () => {
+    expect(storedResearchText(JSON.parse(JSON.stringify(perSentence())))).toBe('One. Two.\n\nThree.')
   })
 
   it('gives null for a story without one, or one that fails its schema, as the story page serves it', () => {

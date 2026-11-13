@@ -23,7 +23,7 @@ const src = (id: string, outlet: string, origin: ResearchSource['origin'] = 'sea
 const draft = (rating: number): Draft => ({
   titleLabel: 'Solar power',
   title: 'Pakistan adds 22 GW of rooftop solar',
-  story: [{ sentences: [{ text: 'Pakistan added 22 GW of rooftop solar in two years.', factIds: ['S1F1', 'S2F1', 'S1F1'] }] }],
+  story: [{ text: 'Pakistan added 22 GW of rooftop solar in two years.', factIds: ['S1F1', 'S2F1', 'S1F1'] }],
   summary: 'Summary',
   whyThisMatters: [{ text: 'Cheap power reaches millions.', factIds: [] }],
   caveats: [{ text: 'Imports came first.', factIds: ['E1F1'] }],
@@ -60,6 +60,8 @@ function result(storyId: string, over: Partial<StoryResearch> = {}): StoryResear
     draft: draft(4),
     rewritten: false,
     problems: [],
+    checks: [{ problems: [], longestRuns: [] }],
+    failedOn: null,
     support: { facts: 4, found: 3 },
     optOutChecked: false,
     verdict: { kind: 'research-rating', rating: 4 },
@@ -173,5 +175,6 @@ describe('renderers', () => {
     })
     expect(md).toContain('a published title')
     expect(md).toContain('budget: $0.0010 left')
+    expect(md).toContain('## Own words')
   })
 })

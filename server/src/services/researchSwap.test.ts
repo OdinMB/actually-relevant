@@ -6,7 +6,7 @@ function draft(over: Partial<Draft> = {}): Draft {
   return {
     titleLabel: 'Rooftop solar',
     title: 'Pakistan adds 22 GW of rooftop solar in two years',
-    story: [{ sentences: [{ text: 'Pakistan added 22 GW.', factIds: ['S0F1'] }] }],
+    story: [{ text: 'Pakistan added 22 GW.', factIds: ['S0F1'] }],
     summary: 'Pakistan added 22 GW of rooftop solar in two years.',
     whyThisMatters: [
       { text: 'Millions of homes now make their own power.', factIds: ['S1F1'] },

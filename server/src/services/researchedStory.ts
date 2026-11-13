@@ -23,7 +23,7 @@ const citationSchema = z.object({
 })
 
 const citedTextSchema = z.object({
-  text: z.string().describe('Plain text, no Markdown.'),
+  text: z.string().describe('Plain text, no Markdown: a whole paragraph or bullet; in versions applied before 2026-11-13, one sentence of a paragraph.'),
   citations: z.array(citationSchema).describe('One entry per cited source, in the order they are first cited; empty for text that only judges.'),
 })
 
@@ -63,9 +63,12 @@ const researchedSourceSchema = z.object({
 })
 
 export const researchedStorySchema = z.object({
+  // `sentences` holds one passage per paragraph since 2026-11-13: renaming it would break the public API
   paragraphs: z
     .array(z.object({ sentences: z.array(citedTextSchema) }))
-    .describe('The story, in place of the summary: its paragraphs, each a list of cited sentences.'),
+    .describe(
+      'The story, in place of the summary: its paragraphs, each a list of cited passages, so one citation group after each paragraph and bullet; versions applied before 2026-11-13 cite after each sentence.',
+    ),
   whyThisMatters: z.array(citedTextSchema).describe('The "Why This Matters" bullets, cited.'),
   caveats: z.array(citedTextSchema).describe('The "Caveats" bullets, cited.'),
   quoteSourceId: z.string().nullable().describe('Id of the source the key quote comes from.'),
@@ -157,13 +160,14 @@ const allCited = (story: Pick<ResearchedStory, 'paragraphs' | 'whyThisMatters' |
 ]
 
 /**
- * The reader's version of a run: its cited text, and only the sources something cites (the quote's
- * included). The original article is always listed first and our earlier stories last.
+ * The reader's version of a run: its cited text, one cited passage per paragraph and per bullet,
+ * and only the sources something cites (the quote's included). The original article is always
+ * listed first and our earlier stories last.
  */
 export function buildResearchedStory(run: ResearchRunForReaders): ResearchedStory {
   const pool = factPool(run)
   const text = {
-    paragraphs: run.draft.story.map(p => ({ sentences: p.sentences.map(s => cite(s, pool)) })),
+    paragraphs: run.draft.story.map(p => ({ sentences: [cite(p, pool)] })),
     whyThisMatters: run.draft.whyThisMatters.map(b => cite(b, pool)),
     caveats: run.draft.caveats.map(b => cite(b, pool)),
   }
@@ -197,7 +201,7 @@ export function forReaders(research: ResearchedStory, publishedSlugs: ReadonlyMa
   }
 }
 
-/** The story's text without citations: the sentences of each paragraph joined, paragraphs apart. */
+/** The story's text without citations: each paragraph's passages joined (one since 2026-11-13, a sentence each before), paragraphs apart. */
 export function researchedStoryText(research: Pick<ResearchedStory, 'paragraphs'>): string {
   return research.paragraphs.map(p => p.sentences.map(s => s.text).join(' ')).join('\n\n')
 }

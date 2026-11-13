@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
 import type {
   ResearchCitedText,
+  ResearchDraft,
   ResearchEarlier,
   ResearchFact,
   ResearchFallbackCategory,
+  ResearchProblem,
   ResearchResult,
   ResearchRun,
   ResearchSource,
@@ -140,6 +142,15 @@ function Cited({ item, targetOf }: { item: ResearchCitedText; targetOf: (factId:
   )
 }
 
+/** A paragraph's cited texts: the paragraph itself, or the cited sentences of a run stored before 2026-11-13. */
+const passagesOf = (p: ResearchDraft['story'][number]): ResearchCitedText[] => ('sentences' in p ? p.sentences : [p])
+
+/** What a problem was and which check found it; nothing for a problem stored before the checks recorded it. */
+function causeOf(p: ResearchProblem): string {
+  if (!p.kind || !p.by) return ''
+  return ` (${p.kind}, ${p.by === 'judge' ? 'AI check' : 'code check'})`
+}
+
 /** A rating-calculation line without its Markdown bullet and bold markers. */
 const plainLine = (line: string) => line.replace(/^\s*-\s*/, '').replace(/\*\*/g, '')
 
@@ -159,7 +170,7 @@ function Draft({ result }: { result: ResearchResult }) {
       </div>
       {draft.story.map((p, i) => (
         <p key={i}>
-          {p.sentences.map((s, j) => (
+          {passagesOf(p).map((s, j) => (
             <span key={j}>
               {j > 0 && ' '}
               <Cited item={s} targetOf={targetOf} />
@@ -217,13 +228,14 @@ function Draft({ result }: { result: ResearchResult }) {
         <div>
           <h5 className={H}>
             {result.verdict.kind === 'fallback'
-              ? `What the citation check found${result.rewritten ? ' after the rewrite' : ''}`
-              : 'Left out of the draft above: still failing the citation check after the rewrite'}
+              ? `What the checks found${result.rewritten ? ' after the rewrite' : ''}`
+              : 'Left out of the draft above: still failing the checks after the rewrite'}
           </h5>
           <ul className="list-disc pl-5">
             {result.problems.map((p, i) => (
               <li key={i}>
                 {p.label}: {p.problem}
+                {causeOf(p)}
               </li>
             ))}
           </ul>

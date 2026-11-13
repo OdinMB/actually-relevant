@@ -1,15 +1,17 @@
 /**
  * The two Markdown files of eval:research. `research-report.md`: cost per step and per story,
- * Tavily credits, the monthly projection beside the design's desk estimate, verdicts, sources per
- * story, filter drops by reason, raw-content use, fact fidelity and the rating change.
- * `research-drafts.md`: per story, what is published today, then the researched draft with its
- * citations as outlet names and its source list, our earlier stories last. Pure.
+ * the fact check's input per call, Tavily credits, the monthly projection beside the design's desk
+ * estimate, verdicts, what the own-words checks found (`ownWords.ts`), sources per story, filter
+ * drops by reason, raw-content use, fact fidelity and the rating change. `research-drafts.md`: per
+ * story, what is published today, then the researched draft with its citations as outlet names
+ * and its source list, our earlier stories last. Pure.
  */
 import type { Draft } from '../../../schemas/research.js'
 import { GATE_KINDS, describeProblem, type GateKind } from '../../../services/researchChecks.js'
 import { armKey } from '../models.js'
 import { deskEstimateUsd, expectedCredits, MONTHLY_STORIES, projectMonthly, summarizeCosts, type CostLine } from './costs.js'
 import type { ResearchFixtures, ResearchStory } from './fixtures.js'
+import { ownWords, ownWordsLines } from './ownWords.js'
 import { STEP_ARMS, STEP_ESTIMATES, STEPS, type DropKind, type ResearchEarlier, type ResearchSource, type StoryResearch } from './pipeline.js'
 import type { SkippedStory } from './storyQueue.js'
 import { TAVILY_USD_PER_CREDIT } from './tavily.js'
@@ -40,7 +42,7 @@ export function researchFileNames(limit?: number): { report: string; drafts: str
   return { report: `research-report${tag}.md`, drafts: `research-drafts${tag}.md` }
 }
 
-/** The outlets whose facts a sentence cites, each once, in citation order. */
+/** The outlets whose facts a paragraph or bullet cites, each once, in citation order. */
 export function citedOutlets(factIds: string[], r: Pick<StoryResearch, 'sources' | 'earlier'>): string[] {
   const names = factIds.map(id => {
     const sourceId = id.replace(/F\d+$/, '')
@@ -212,6 +214,7 @@ export function renderResearchReport(input: ReportInput): string {
   const rewrites = input.results.filter(r => r.rewritten).length
   const drafts = input.results.filter(r => r.draft).length
   const searches = input.results.flatMap(r => r.searches)
+  const factCheck = ownWords(input.results).factCheckInput
   return [
     '# Research measurement (eval:research)',
     '',
@@ -222,6 +225,8 @@ export function renderResearchReport(input: ReportInput): string {
     '## Cost per step',
     '',
     ...costTable(input),
+    '',
+    `Fact-check input per call (every item and the outside sources' own words): mean ${n(factCheck.mean)}, max ${n(factCheck.max)} tokens over ${factCheck.calls} calls.`,
     '',
     '## Tavily',
     '',
@@ -239,6 +244,10 @@ export function renderResearchReport(input: ReportInput): string {
     '',
     `Publish bar for \`research-rating\`: ${input.relevanceMin}. Rewrites: ${rewrites} of ${drafts} drafts.`,
     ...(v.fallbackReasons.length > 0 ? ['', 'Fallback reasons:', ...v.fallbackReasons.map(([reason, k]) => `- ${reason}: ${k}`)] : []),
+    '',
+    '## Own words',
+    '',
+    ...ownWordsLines(input.results),
     '',
     '## Sources',
     '',
@@ -273,7 +282,7 @@ function draftLines(d: Draft, r: StoryResearch, storedRating: number): string[] 
   return [
     `**${d.titleLabel}: ${d.title}** — rating ${d.rating} (stored ${storedRating})`,
     '',
-    ...d.story.flatMap(p => [p.sentences.map(s => cited(s.text, s.factIds, r)).join(' '), '']),
+    ...d.story.flatMap(p => [cited(p.text, p.factIds, r), '']),
     `**Summary:** ${d.summary}`,
     '',
     `> ${d.quote}`,
@@ -347,7 +356,7 @@ export function renderDrafts(input: { stories: ResearchStory[]; results: StoryRe
   return [
     '# Research drafts (eval:research)',
     '',
-    `For a first look at quality: per story, what is published today, then the researched draft. A citation names the outlets whose facts back the sentence; our own earlier stories show as "${OURS}". The source texts are untrusted pages from news sites.`,
+    `For a first look at quality: per story, what is published today, then the researched draft. A citation names the outlets whose facts back the paragraph or bullet; our own earlier stories show as "${OURS}". The source texts are untrusted pages from news sites.`,
     '',
     ...sections,
   ].join('\n')

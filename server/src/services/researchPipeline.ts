@@ -2,11 +2,12 @@
  * The research steps for one story (design, "The pipeline", steps 1-8; `.context/story-research.md`):
  * own sources with the neighbours production's dedup prompt confirms, queries, Tavily, publishers'
  * opt-outs and the deterministic filter, one extraction per source, earlier coverage, the
- * re-assess-and-write call, then the citation check, the fact check, at most one rewrite and the
- * gate. No I/O of its own: model calls, searches, the budget and the opt-out policy are injected
+ * re-assess-and-write call, then the citation and copying checks, the fact check, at most one
+ * rewrite and the gate. No I/O of its own: model calls, searches, the budget and the opt-out policy are injected
  * (`services/researchCalls.ts` in production, the eval context in eval:research). It writes nothing.
  */
 import type { z } from 'zod'
+import { config } from '../config.js'
 import type { LlmCallOutcome, LlmTokenUsage } from '../lib/llmUsage.js'
 import type { TavilyResult, TavilySearch } from '../lib/tavily.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
@@ -24,17 +25,21 @@ import { dedupConfirmationSchema } from '../schemas/llm.js'
 import { earlierSchema, extractionSchema, factCheckSchema, queriesSchema, writeSchema, type Draft, type Earlier, type Extraction } from '../schemas/research.js'
 import {
   checkCitations,
+  checkCopying,
   decideGate,
   describeProblem,
-  draftSentences,
+  draftItems,
   dropFailing,
   evidenceFor,
+  judgedProblems,
   publishedFact,
+  sourceLines,
   supportFound,
   withoutInlineIds,
   type CitationProblem,
   type FallbackCategory,
   type GateVerdict,
+  type LongestRun,
   type PoolFact,
 } from './researchChecks.js'
 import {
@@ -158,6 +163,13 @@ export interface ResearchEarlier {
 
 export type DropKind = DropReason | ExtractDropReason | 'extraction-failed'
 
+/** What one pass of the checks found, recorded for the shadow week's tally (`.context/story-research.md`, "Own words"). */
+export interface CheckPass {
+  problems: CitationProblem[]
+  /** Each item's longest run of words shared with each outside source, per kind, below the threshold too. */
+  longestRuns: LongestRun[]
+}
+
 export interface StoryResearch {
   storyId: string
   calls: StepCall[]
@@ -174,6 +186,10 @@ export interface StoryResearch {
   rewritten: boolean
   /** What the last check found; empty for a draft that passed. */
   problems: CitationProblem[]
+  /** One entry per check pass: the first draft's, then the rewrite's. */
+  checks: CheckPass[]
+  /** The item a `draft_failed_check` fallback failed on (`dropFailing`); null otherwise. */
+  failedOn: string | null
   /** Supporting sentences found in their source text, of all facts. */
   support: { facts: number; found: number }
   /** Whether publishers' AI opt-outs were checked (a `sourcePolicy` was given). */
@@ -421,41 +437,46 @@ async function buildPool(
 }
 
 /**
- * Step 8's checks: the deterministic citation check and the fact-check call, both on every draft,
- * so the rewrite hears of every problem and each failing sentence after it carries the fact
- * check's key judgment. A problem only the citation check finds is never key.
+ * Step 8's checks, all on every draft, so the rewrite hears of every problem and each failing item
+ * after it carries the fact check's key judgment: the deterministic citation and copying checks,
+ * and one fact-check call that judges every item for support (those with evidence) and for copying
+ * against the outside sources' own words. A problem only code finds is never key.
  */
-async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, call: Call): Promise<CitationProblem[]> {
-  const problems = checkCitations(draft, facts)
-  const cited = draftSentences(draft).filter(s => s.factIds.length > 0)
-  if (cited.length === 0) return problems
-  const prompt = buildFactCheckPrompt(cited.map(s => ({ text: s.text, facts: evidenceFor(s.factIds, facts) })))
-  const verdicts = required(await call('fact-check', factCheckSchema, prompt), 'fact-check')
-  return [
-    ...problems,
-    ...verdicts.sentences.flatMap(v => {
-      const s = cited[v.number - 1]
-      return !v.supported && s
-        ? [{ label: s.label, text: s.text, problem: `fails the fact check: ${v.problem || 'its cited facts do not state it'}`, key: v.key }]
-        : []
-    }),
-  ]
+async function check(draft: Draft, facts: ReadonlyMap<string, PoolFact>, sources: ResearchSource[], call: Call): Promise<CheckPass> {
+  const items = draftItems(draft).map(item => ({ item, evidence: item.cited ? evidenceFor(item.factIds, facts) : [] }))
+  const lines = sourceLines(sources)
+  const copying = checkCopying(draft, sources, config.research.copiedRunWords)
+  const prompt = buildFactCheckPrompt(
+    items.map(({ item, evidence }) => ({ label: item.label, text: item.text, facts: evidence })),
+    lines,
+  )
+  const answer = required(await call('fact-check', factCheckSchema, prompt), 'fact-check')
+  return { problems: [...checkCitations(draft, facts), ...copying.problems, ...judgedProblems(answer, items, lines)], longestRuns: copying.longestRuns }
 }
 
 /**
  * Steps 7-8: write, check, and on a failure one rewrite with the problems and one more check.
- * Sentences that still fail are dropped (`r.problems` keeps them), unless `dropFailing` refuses.
+ * Paragraphs and bullets that still fail are dropped (`r.problems` keeps them), unless `dropFailing`
+ * refuses; each pass is kept in `r.checks`.
  */
 async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFact>, call: Call, r: StoryResearch): Promise<Draft> {
+  const checked = async (draft: Draft) => {
+    const pass = await check(draft, facts, r.sources, call)
+    r.checks.push(pass)
+    r.problems = pass.problems
+  }
   r.draft = withoutInlineIds(required(await call('write', writeSchema, buildWritePrompt(input)), 'write'))
-  r.problems = await check(r.draft, facts, call)
+  await checked(r.draft)
   if (r.problems.length === 0) return r.draft
   r.rewritten = true
   r.draft = withoutInlineIds(required(await call('rewrite', writeSchema, buildWritePrompt({ ...input, problems: r.problems.map(describeProblem) })), 'rewrite'))
-  r.problems = await check(r.draft, facts, call)
+  await checked(r.draft)
   if (r.problems.length === 0) return r.draft
   const kept = dropFailing(r.draft, r.problems)
-  if ('failed' in kept) throw new Stop(kept.failed, 'draft_failed_check')
+  if ('failed' in kept) {
+    r.failedOn = kept.failedOn
+    throw new Stop(kept.failed, 'draft_failed_check')
+  }
   r.draft = kept.draft
   return r.draft
 }
@@ -509,6 +530,8 @@ export async function researchStory(story: ResearchStory, deps: ResearchDeps): P
     draft: null,
     rewritten: false,
     problems: [],
+    checks: [],
+    failedOn: null,
     support: { facts: 0, found: 0 },
     optOutChecked: deps.sourcePolicy !== undefined,
     verdict: { kind: 'fallback', reason: 'not run', category: 'technical' },

@@ -32,6 +32,8 @@ function research(storyId: string, over: Partial<StoryResearch> = {}): StoryRese
     draft: null,
     rewritten: false,
     problems: [],
+    checks: [],
+    failedOn: null,
     support: { facts: 0, found: 0 },
     optOutChecked: false,
     verdict: { kind: 'keep' },

@@ -321,7 +321,10 @@ describe('podcast prompts', () => {
   it('scripts a researched story from its story text and the others from their summary; a version that fails its schema falls back too', async () => {
     const research = buildResearchedStory({
       draft: {
-        story: [{ sentences: [{ text: 'Researched one.', factIds: [] }] }, { sentences: [{ text: 'Researched two.', factIds: [] }] }],
+        story: [
+          { text: 'Researched one.', factIds: [] },
+          { text: 'Researched two.', factIds: [] },
+        ],
         whyThisMatters: [],
         caveats: [],
         quoteSourceId: 'S0',

@@ -56,7 +56,7 @@ function researchedVersion(earlierPublishedId: string, earlierUnpublishedId: str
     sources: [source('S0', 'original'), source('S1', 'search')],
     earlier: [earlier('E1', earlierPublishedId), earlier('E2', earlierUnpublishedId)],
     draft: {
-      story: [{ sentences: [cited('It happened.', ['S0F1', 'S1F1']), cited('Before that.', ['E1F1', 'E2F1'])] }],
+      story: [cited('It happened.', ['S0F1', 'S1F1']), cited('Before that.', ['E1F1', 'E2F1'])],
       whyThisMatters: [cited('It matters.', ['S1F1'])],
       caveats: [cited('A caveat.', ['E2F1'])],
       quoteSourceId: 'S1',

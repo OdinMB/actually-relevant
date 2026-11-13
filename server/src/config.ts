@@ -300,6 +300,13 @@ export const config = {
     monthlyCapUsd: parseWholeNumber(process.env.RESEARCH_MONTHLY_CAP_USD, 30, 'RESEARCH_MONTHLY_CAP_USD'),
     /** A run's ceiling, reserved against the cap when it starts (about five times the expected cost). */
     maxRunUsd: 0.25,
+    /**
+     * The copying check flags a run of this many consecutive words or more that a draft's item shares
+     * with one outside source's wording or with one of its fact statements (`checkCopying`). Shorter
+     * runs collide with the scope rule, which has a figure repeated exactly as its fact states it; a
+     * lower bar is the legal reviewer's call, read against the runs' recorded `longestRuns`.
+     */
+    copiedRunWords: 12,
     /** Pay-as-you-go price per credit; Tavily's free credits are counted as paid. */
     tavilyUsdPerCredit: 0.008,
     /**

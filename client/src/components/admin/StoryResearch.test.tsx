@@ -53,7 +53,7 @@ function researchResult(verdict: ResearchVerdict): ResearchResult {
     draft: {
       titleLabel: 'Label',
       title: 'Researched headline',
-      story: [{ sentences: [{ text: 'A sentence.', factIds: [] }] }],
+      story: [{ text: 'A paragraph.', factIds: [] }],
       summary: 'Summary.',
       whyThisMatters: [],
       caveats: [],

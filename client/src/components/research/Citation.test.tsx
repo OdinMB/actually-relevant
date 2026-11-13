@@ -41,7 +41,7 @@ function renderCitation(citations: ResearchCitation[]) {
 async function openCard(name: string) {
   const button = screen.getByRole('button', { name })
   await userEvent.click(button)
-  return { button, card: await screen.findByRole('dialog', { name: /^Sources? for this sentence$/ }) }
+  return { button, card: await screen.findByRole('dialog', { name: /^Sources? for this passage$/ }) }
 }
 
 describe('Citation', () => {
@@ -51,7 +51,7 @@ describe('Citation', () => {
       { sourceId: 'E1', sentence: 'The earlier sentence.' },
     ])
     const { button, card } = await openCard('Sources: Coverage Outlet, Actually Relevant')
-    expect(card).toHaveAccessibleName('Sources for this sentence')
+    expect(card).toHaveAccessibleName('Sources for this passage')
     expect(card).toContainElement(document.activeElement as HTMLElement)
 
     await userEvent.keyboard('{Escape}')
@@ -62,7 +62,7 @@ describe('Citation', () => {
   it('names a one-source card in the singular', async () => {
     renderCitation([{ sourceId: 'S1', sentence: null }])
     const { card } = await openCard('Source: Coverage Outlet')
-    expect(card).toHaveAccessibleName('Source for this sentence')
+    expect(card).toHaveAccessibleName('Source for this passage')
   })
 
   it("marks our earlier story's sentence, which is our AI-written text, with the AI badge, and no outside source's", async () => {
