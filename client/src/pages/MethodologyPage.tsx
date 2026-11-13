@@ -216,20 +216,22 @@ export default function MethodologyPage() {
             feed. For those, we read the article from the feed and never fetch the page.
           </p>
 
-          {/* Researched Stories (owner-approved wording, 2026-11-12); the label it quotes comes from the label copy */}
+          {/* Researched Stories (owner-approved wording, 2026-11-12; the own-words sentences, proposed 2026-11-13, await the owner's approval: put its date here); the label it quotes comes from the label copy */}
           <h2 className="section-heading mt-10">Researched Stories</h2>
           <p>
             Before a selected story is published, AI researches it further. It searches the news for other reports of the same event, published from two weeks
             before to one week after the original article, and reads up to six sources, the original article included, plus our own earlier coverage. It skips
             any publisher that has opted out in a machine-readable way, by the same checks our crawler runs before it reads an article. From the facts these
-            sources report, AI writes the story and cites a source after every sentence. Tap a citation to see the outlet, its date and the sentence from it
-            that backs the claim, chosen by AI and possibly translated.
+            sources report, AI writes a short story in its own words, combining what the sources say rather than translating or following any one of them, and
+            cites the sources it draws on at the end of each paragraph. Tap a citation to see each outlet, its date and a sentence from it that backs the
+            paragraph, chosen by AI and possibly translated.
           </p>
           <p>
-            Every sentence is then checked against the sources it cites, first by code and then by a second AI check. A sentence that fails is rewritten once
-            and removed if it still fails. If the research shows that the story is old news or is contradicted by other reports, we don&apos;t publish it. If
-            the story&apos;s main development can&apos;t be confirmed, or the research fails or would exceed our monthly research budget, we publish the
-            single-source version instead. Researched stories carry the label &quot;
+            Each paragraph and point is then checked against the sources it cites, first by code and then by a second AI check. Both checks also look for text
+            that follows a source&apos;s wording too closely, in the headline and summary too, and the AI check catches close translations. A paragraph or point
+            that fails is rewritten once and removed if it still fails. If the research shows that the story is old news or is contradicted by other reports, we
+            don&apos;t publish it. If the story&apos;s main development can&apos;t be confirmed, or the research fails or would exceed our monthly research
+            budget, we publish the single-source version instead. Researched stories carry the label &quot;
             {AI_DISCLOSURE_COPY.researchedStoryLabel.lead} AI{AI_DISCLOSURE_COPY.researchedStoryLabel.tail}&quot; and list all their sources at the end,
             starting with the article where we first found the story.
           </p>
