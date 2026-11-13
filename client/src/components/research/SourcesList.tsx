@@ -23,9 +23,13 @@ export function SourcesList({ sources }: { sources: ResearchedSource[] }) {
         {sources.map(source => {
           const earlier = source.origin === 'earlier'
           return (
-            <li key={source.id} className="flex gap-3">
-              <SourceIcon source={source} className="mt-0.5" />
-              <div className="min-w-0 text-sm">
+            // The icon's box is one line tall at the text's size and leading (`p` is leading-relaxed
+            // site-wide), so the icon is centered on the outlet's line whatever the font size
+            <li key={source.id} className="flex gap-3 text-sm leading-relaxed">
+              <span className="flex h-[1lh] shrink-0 items-center">
+                <SourceIcon source={source} />
+              </span>
+              <div className="min-w-0">
                 <p className="text-neutral-500">
                   <span className={`font-semibold ${earlier ? 'text-brand-700' : 'text-neutral-900'}`}>{earlier ? EARLIER_LABEL : source.outlet}</span>
                   {sourceDetails(source).map(part => ` · ${part}`)}

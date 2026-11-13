@@ -3,6 +3,7 @@ import type { PublicStoryDetail, ResearchedStory } from '@shared/types'
 import FeedFavicon from '../FeedFavicon'
 import AiBadge from '../ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
+import { SourceIcons } from '../research/SourceIcon'
 import { sourceDate } from '../research/sourceText'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
 
@@ -68,7 +69,8 @@ function PlainItems({ story }: { story: PublicStoryDetail }) {
 
 /**
  * A researched story's items (owner, 2026-11-12, the mockup): where it was found and its source's
- * date, then "N sources", linking the list; our publish date is dropped.
+ * date, then the sources' icons and "N sources", one link to the list (its name the count, the icons
+ * being decorative); our publish date is dropped.
  */
 function ResearchedItems({ story, research }: { story: PublicStoryDetail; research: ResearchedStory }) {
   const original = research.sources.find(source => source.origin === 'original')
@@ -88,7 +90,8 @@ function ResearchedItems({ story, research }: { story: PublicStoryDetail; resear
         </span>
       </span>
       <MetaSeparator />
-      <a href="#sources" className={`${ROW_LINK} ${PHONE_SEPARATOR}`}>
+      <a href="#sources" className={`inline-flex min-h-6 items-center gap-1.5 ${ROW_LINK} ${PHONE_SEPARATOR}`}>
+        <SourceIcons sources={research.sources} />
         {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
       </a>
     </>

@@ -3,7 +3,7 @@ import type { ResearchCitation, ResearchedSource } from '@shared/types'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
 import AiBadge from '../ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
-import { SourceIcon } from './SourceIcon'
+import { SourceIcon, SourceIcons } from './SourceIcon'
 import { SourceLink, sourceHref } from './SourceLink'
 import { EARLIER_LABEL, sourceDetails } from './sourceText'
 
@@ -64,14 +64,13 @@ export function Citation({ citations, sources }: { citations: ResearchCitation[]
   const name = `${cited.length === 1 ? 'Source' : 'Sources'}: ${cited.map(c => c.source.outlet).join(', ')}`
 
   return (
-    <Popover as="span" className="relative inline-block align-middle">
-      <PopoverButton
-        aria-label={name}
-        className={`inline-flex h-6 min-w-6 items-center justify-center rounded px-1 align-middle hover:bg-neutral-100 ${FOCUS_RING}`}
-      >
-        {cited.map((c, i) => (
-          <SourceIcon key={c.source.id} source={c.source} className={i > 0 ? '-ml-1.5' : ''} />
-        ))}
+    // One line box tall and aligned to the line's top, so the button is centered on the text line it
+    // follows. `align-middle` centers on the lowercase letters, and nested in an inline-block it left
+    // the icons about 3 px below the line's middle in a story paragraph and made those lines taller.
+    // A button taller than a tight line (24 px in a 20 px one) overflows it evenly.
+    <Popover as="span" className="relative inline-flex h-[1lh] items-center align-top">
+      <PopoverButton aria-label={name} className={`inline-flex h-6 min-w-6 items-center justify-center rounded px-1 hover:bg-neutral-100 ${FOCUS_RING}`}>
+        <SourceIcons sources={cited.map(c => c.source)} />
       </PopoverButton>
       {/* Portaled to the end of the body, so it takes focus when it opens; Esc, or focus leaving it, closes it, Esc returning focus to the button */}
       <PopoverPanel

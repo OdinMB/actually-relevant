@@ -557,6 +557,21 @@ describe('StoryPage researched format', () => {
     expect(announcedText(row)).not.toContain('|')
   })
 
+  it("shows every source's icon in the header's sources link, whose name stays the count", () => {
+    renderStory(researched)
+    const row = screen.getByRole('heading', { level: 1 }).nextElementSibling as HTMLElement
+    const link = within(row).getByRole('link', { name: '3 sources' })
+    expect([...link.querySelectorAll('img')].map(img => img.getAttribute('src'))).toEqual([
+      '/api/source-favicons/example.com',
+      '/api/source-favicons/coverage.example.org',
+      '/favicon-32x32.png',
+    ])
+    // An icon that fails to load shows the outlet's initial, which stays out of the link's name
+    fireEvent.error(link.querySelector('img')!)
+    const fallback = within(row).getByRole('link', { name: '3 sources' })
+    expect(within(fallback).getByText('E')).toHaveAttribute('aria-hidden', 'true')
+  })
+
   it('tells the story in cited paragraphs, in place of the summary, and the analysis as cited bullets', () => {
     renderStory(researched)
     expect(screen.getByText('Researched first sentence.')).toBeInTheDocument()
