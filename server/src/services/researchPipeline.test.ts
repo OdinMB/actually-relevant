@@ -207,7 +207,7 @@ describe('researchStory', () => {
   it('ends the run as fallback with reason budget when a call is skipped for the budget', async () => {
     const { deps: d } = deps({ outcome: 'skipped' })
     const r = await researchStory(story(), d)
-    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'budget' })
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'budget', category: 'technical' })
     expect(r.draft).toBeNull()
   })
 
@@ -219,7 +219,7 @@ describe('researchStory', () => {
         },
       },
     })
-    expect((await researchStory(story(), d)).verdict).toEqual({ kind: 'fallback', reason: 'budget' })
+    expect((await researchStory(story(), d)).verdict).toEqual({ kind: 'fallback', reason: 'budget', category: 'technical' })
   })
 
   it('asks before the extraction batch, and makes none of its calls when the batch is refused', async () => {
@@ -231,7 +231,7 @@ describe('researchStory', () => {
       },
     })
     const r = await researchStory(story(), d)
-    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'budget' })
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'budget', category: 'technical' })
     expect(batches).toHaveLength(1)
     expect(batches[0]?.map(b => b.step)).toEqual(['extract', 'extract', 'earlier'])
     expect(batches[0]?.[0]?.prompt).toContain('Pakistan has added 22GW')
@@ -246,18 +246,47 @@ describe('researchStory', () => {
     expect(r.verdict).toEqual({ kind: 'keep' })
   })
 
-  it('falls back when no source but the original is left', async () => {
+  it('falls back when no source but the original is left: no other coverage when none survives the filter', async () => {
     const { deps: d, fake } = deps()
     const r = await researchStory(story({ clusterMembers: [] }), d)
-    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'no usable source' })
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'no usable source', category: 'no_other_coverage' })
     expect(fake.steps).not.toContain('extract')
 
-    const { deps: unusable } = deps({
-      responders: baseResponders({ extract: p => (p.includes('Dawn') ? extraction({ usable: false, facts: [] }) : extraction()) }),
+    // The only other report is refused by its publisher's opt-out
+    const { deps: optedOut } = deps({ sourcePolicy: { optedOut: async url => url.startsWith('https://dawn.com/') } })
+    expect((await researchStory(story(), optedOut)).verdict).toEqual({ kind: 'fallback', reason: 'no usable source', category: 'no_other_coverage' })
+  })
+
+  it.each([
+    ['unreadable', extraction({ usable: false, facts: [] }), 'unusable'],
+    ['about another development', extraction({ relation: 'off-topic', facts: [] }), 'off-topic'],
+    ['a press release beside a news report', extraction({ kind: 'press-release' }), 'press-release'],
+  ])('falls back as not confirmed when the other reports survive the filter but the extraction keeps none: %s', async (_name, other, drop) => {
+    const { deps: d } = deps({ responders: baseResponders({ extract: p => (p.includes('Dawn') ? other : extraction()) }) })
+    const r = await researchStory(story(), d)
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'no usable source', category: 'not_confirmed' })
+    expect(r.drops).toMatchObject({ [drop]: 1 })
+  })
+
+  it('falls back as technical when every other report’s extraction failed', async () => {
+    const { deps: d } = deps({ responders: baseResponders({ extract: p => (p.includes('Dawn') ? null : extraction()) }) })
+    const r = await researchStory(story(), d)
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'no usable source', category: 'technical' })
+    expect(r.drops).toMatchObject({ 'extraction-failed': 1 })
+  })
+
+  it('falls back as technical on a step the story cannot do without, and on an unexpected error', async () => {
+    const { deps: noQueries } = deps({ responders: baseResponders({ queries: () => null }) })
+    expect((await researchStory(story(), noQueries)).verdict).toEqual({ kind: 'fallback', reason: 'queries: parse_failure', category: 'technical' })
+
+    const { deps: broken } = deps({
+      responders: baseResponders({
+        write: () => {
+          throw new Error('boom')
+        },
+      }),
     })
-    const r2 = await researchStory(story(), unusable)
-    expect(r2.verdict).toEqual({ kind: 'fallback', reason: 'no usable source' })
-    expect(r2.drops).toMatchObject({ unusable: 1 })
+    expect((await researchStory(story(), broken)).verdict).toEqual({ kind: 'fallback', reason: 'error: boom', category: 'technical' })
   })
 
   it('falls back with the Tavily error', async () => {
@@ -268,7 +297,7 @@ describe('researchStory', () => {
         },
       },
     })
-    expect((await researchStory(story(), d)).verdict).toEqual({ kind: 'fallback', reason: 'tavily: Tavily search failed: HTTP 432' })
+    expect((await researchStory(story(), d)).verdict).toEqual({ kind: 'fallback', reason: 'tavily: Tavily search failed: HTTP 432', category: 'technical' })
   })
 
   it('drops the sources the opt-out policy refuses, and records whether it was checked', async () => {
@@ -291,7 +320,7 @@ describe('researchStory', () => {
     expect(fake.steps.filter(c => c === 'write')).toHaveLength(1)
     expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
     expect(r.rewritten).toBe(true)
-    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'no story sentence passed the check after one rewrite' })
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'no story sentence passed the check after one rewrite', category: 'draft_failed_check' })
     expect(r.problems[0]?.problem).toContain('S9F9')
     expect(r.draft).not.toBeNull()
   })
@@ -303,7 +332,11 @@ describe('researchStory', () => {
     const { deps: d, fake } = deps({ responders: baseResponders({ 'fact-check': failsKey, rewrite: () => goodDraft() }) })
     const r = await researchStory(story(), d)
     expect(fake.steps.filter(c => c === 'fact-check')).toHaveLength(2)
-    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'a key claim failed the check after one rewrite (Story paragraph 1, sentence 1)' })
+    expect(r.verdict).toEqual({
+      kind: 'fallback',
+      reason: 'a key claim failed the check after one rewrite (Story paragraph 1, sentence 1)',
+      category: 'draft_failed_check',
+    })
   })
 
   it('lets a source date support the date a sentence gives', async () => {
@@ -366,9 +399,13 @@ describe('researchStory', () => {
     expect(r.draft?.story[0]?.sentences[0]?.factIds).toEqual(['S0F1', 'S1F1'])
   })
 
-  it('gates the checked draft on its rating', async () => {
+  it('records a checked draft rated below the bar as research-rating, and old news before it', async () => {
     const { deps: d } = deps({ responders: baseResponders({ write: () => ({ ...goodDraft(), rating: 3 }) }) })
     expect((await researchStory(story(), d)).verdict).toEqual({ kind: 'research-rating', rating: 3 })
+
+    const old = () => ({ ...goodDraft(), rating: 3, oldNews: { isOld: true, firstHappened: '2025-01-01' } })
+    const { deps: stale } = deps({ responders: baseResponders({ write: old }) })
+    expect((await researchStory(story(), stale)).verdict).toEqual({ kind: 'stale', firstHappened: '2025-01-01' })
   })
 
   it('assigns fact ids per kept source in order, the original first and our earlier stories last', async () => {

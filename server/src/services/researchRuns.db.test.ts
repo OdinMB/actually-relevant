@@ -49,6 +49,16 @@ async function researchable(status: 'analyzed' | 'selected' | 'published' = 'ana
 const runOf = (id: string) => prisma.storyResearchRun.findUniqueOrThrow({ where: { id } })
 const settled = (id: string) => vi.waitFor(async () => expect((await runOf(id)).status).not.toBe('running'), { timeout: 5000, interval: 20 })
 
+/** Whether the story's pipeline run started (reserved, still researching) or was refused (a $0 failed run), once it has a row. */
+const startOutcome = (storyId: string) =>
+  vi.waitFor(
+    async () => {
+      const run = await prisma.storyResearchRun.findFirstOrThrow({ where: { storyId }, select: { status: true } })
+      return run.status === 'running' ? 'started' : 'refused'
+    },
+    { timeout: 5000, interval: 20 },
+  )
+
 async function pastRun(data: { storyId?: string | null; status: 'running' | 'completed' | 'failed'; costUsd: number; startedAt?: Date }) {
   return prisma.storyResearchRun.create({
     data: { storyId: data.storyId ?? null, status: data.status, costUsd: data.costUsd, startedAt: data.startedAt ?? new Date() },
@@ -94,13 +104,56 @@ describeDb('story research runs', () => {
     expect(taskRegistry.get(taskId)).toMatchObject({ status: 'completed', completed: 1, failed: 0 })
   })
 
-  it('counts a run that ends as fallback as completed', async () => {
-    mockPipeline.researchStory.mockImplementation(async (s: { id: string }) => research(s.id, { verdict: { kind: 'fallback', reason: 'no usable source' } }))
+  it('counts a run that ends as fallback as completed, and stores its category with its result', async () => {
+    const verdict = { kind: 'fallback', reason: 'no usable source', category: 'no_other_coverage' } as const
+    mockPipeline.researchStory.mockImplementation(async (s: { id: string }) => research(s.id, { verdict }))
     const story = await researchable('published')
     const { runId, taskId } = await startResearchRun(story.id)
     await settled(runId)
-    expect(await runOf(runId)).toMatchObject({ status: 'completed', verdict: 'fallback' })
+    expect(await runOf(runId)).toMatchObject({ status: 'completed', verdict: 'fallback', result: expect.objectContaining({ verdict }) })
     expect(taskRegistry.get(taskId)).toMatchObject({ completed: 1, failed: 0 })
+    expect((await listResearchRuns(story.id))[0]?.result?.verdict).toEqual(verdict)
+  })
+
+  it("counts this month's fallbacks by category, a run stored before categories as unrecorded, and nothing else", async () => {
+    const fallback = (category?: string) => ({ kind: 'fallback', reason: 'r', ...(category ? { category } : {}) })
+    const ran = (verdict: { kind: string }, startedAt = new Date()) =>
+      prisma.storyResearchRun.create({ data: { status: 'completed', costUsd: 0.05, verdict: verdict.kind, result: { verdict }, startedAt } })
+    await ran(fallback('no_other_coverage'))
+    await ran(fallback('no_other_coverage'))
+    await ran(fallback('not_confirmed'))
+    await ran(fallback('technical'))
+    await ran(fallback())
+    await ran({ kind: 'keep' })
+    await ran(fallback('draft_failed_check'), lastMonth())
+
+    expect((await researchUsage()).fallbacksThisMonth).toEqual({
+      no_other_coverage: 2,
+      not_confirmed: 1,
+      draft_failed_check: 0,
+      technical: 1,
+      unrecorded: 1,
+    })
+  })
+
+  it('keeps the cap under concurrent reservations of different stories: only those the room allows start, the rest are refused at $0', async () => {
+    mockPipeline.researchStory.mockImplementation(() => new Promise(() => {}))
+    // Room for two reservations, not three
+    await pastRun({ status: 'completed', costUsd: CAP - 2 * RESERVATION - 0.01 })
+    const stories = await Promise.all([1, 2, 3, 4].map(() => researchable('selected')))
+
+    // As the research step starts them, several at once; a started run researches until the test ends
+    const outcomes = await Promise.all(
+      stories.map(s => {
+        void runPipelineResearch(s.id, vi.fn())
+        return startOutcome(s.id)
+      }),
+    )
+
+    expect(outcomes.sort()).toEqual(['refused', 'refused', 'started', 'started'])
+    expect(await prisma.storyResearchRun.count({ where: { status: 'running' } })).toBe(2)
+    expect(await prisma.storyResearchRun.count({ where: { status: 'failed', costUsd: 0, error: 'skipped: monthly cap reached' } })).toBe(2)
+    expect((await researchUsage()).monthToDateUsd).toBeCloseTo(CAP - 0.01, 10)
   })
 
   it('marks a run that threw failed, keeping its reservation and a sanitized error', async () => {

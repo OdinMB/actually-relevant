@@ -95,13 +95,23 @@ const run = (over: Partial<ResearchRun> = {}): ResearchRun => ({
 describe('ResearchRunView', () => {
   it.each<[string, ResearchVerdict, RegExp]>([
     ['keep', { kind: 'keep' }, /^Keep: the research supports/],
-    ['research-rating', { kind: 'research-rating', rating: 3 }, /research rates the story 3/],
+    [
+      'research-rating',
+      { kind: 'research-rating', rating: 3 },
+      /research rates the story 3\. Recorded only: the story keeps its own rating and is not rejected/,
+    ],
     ['stale', { kind: 'stale', firstHappened: '2025-01-02' }, /first happened on 2025-01-02/],
     ['contradicted', { kind: 'contradicted', factIds: ['S1F1'] }, /Contradicted: S1F1 contradict/],
-    ['fallback', { kind: 'fallback', reason: 'no usable source' }, /Today's format: no usable source/],
+    ['fallback', { kind: 'fallback', reason: 'no usable source', category: 'not_confirmed' }, /^Today's format \(not confirmed\): no usable source\.$/],
+    ['fallback stored before categories', { kind: 'fallback', reason: 'budget' }, /^Today's format: budget\.$/],
   ])('shows the %s verdict with its reason or rating', (_kind, verdict, text) => {
     render(<ResearchRunView run={run({ result: result(verdict) })} />)
     expect(screen.getByText(text)).toBeInTheDocument()
+  })
+
+  it("labels the draft's rating as the research's own, which the story does not take", () => {
+    render(<ResearchRunView run={run()} />)
+    expect(screen.getByRole('heading', { name: "Research's rating: 6 (recorded; the story keeps its own)" })).toBeInTheDocument()
   })
 
   it('names each citation chip after its source, and our earlier stories as Actually Relevant', () => {

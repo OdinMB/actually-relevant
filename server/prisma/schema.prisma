@@ -30,7 +30,8 @@ enum RejectionReason {
   selection
   duplicate
   editor
-  /// The research step's verdicts (.context/story-research.md, "The pipeline step"), each only from `selected`
+  /// The research step's verdicts (.context/story-research.md, "The pipeline step"), each only from `selected`.
+  /// `research_rating` is no longer written (a rating below the bar rejects nothing); kept, since dropping an enum value is destructive
   research_rating
   stale
   contradicted

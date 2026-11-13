@@ -156,16 +156,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
           value={String(form.relevancePre)}
           onChange={e => set('relevancePre', e.target.value)}
         />
-        <Input
-          id="edit-rating"
-          label="Rating"
-          type="number"
-          min="1"
-          max="10"
-          value={String(form.relevance)}
-          onChange={e => set('relevance', e.target.value)}
-          {...lock}
-        />
+        <Input id="edit-rating" label="Rating" type="number" min="1" max="10" value={String(form.relevance)} onChange={e => set('relevance', e.target.value)} />
       </div>
       <Textarea id="edit-summary" label="Summary" rows={3} value={form.summary} onChange={e => set('summary', e.target.value)} {...lock} />
       <Input id="edit-quote" label="Quote" value={form.quote} onChange={e => set('quote', e.target.value)} {...lock} />
@@ -201,7 +192,6 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
         rows={3}
         value={form.relevanceCalculation}
         onChange={e => set('relevanceCalculation', e.target.value)}
-        {...lock}
       />
 
       {/* Source info (read-only) */}

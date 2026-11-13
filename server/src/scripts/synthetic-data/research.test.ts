@@ -15,6 +15,8 @@ describe('the synthetic researched stories', () => {
       expect(story.row.status).toBe('published')
       expect(researchedStorySchema.safeParse(story.row.research).success).toBe(true)
       expect(story.row.preResearch).toMatchObject({ summary: expect.any(String), relevanceSummary: expect.any(String) })
+      // The rating is never swapped, so the snapshot holds none
+      expect(story.row.preResearch).not.toHaveProperty('relevance')
       // The swap nulls the relevance summary, which research does not write
       expect(story.row.relevanceSummary).toBeNull()
     }

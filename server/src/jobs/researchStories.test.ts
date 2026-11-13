@@ -19,12 +19,15 @@ vi.mock('../services/researchApply.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../services/researchApply.js')>()),
   applyVerdict: mockApplyVerdict,
 }))
-// The research step's mode and the owner's gate are read at startup, so the tests set them through the config
-const switches = vi.hoisted(() => ({ mode: 'apply' as 'shadow' | 'apply', applyEnabled: true }))
+// The research step's mode, the owner's gate and how many stories run at once are read at startup,
+// so the tests set them through the config (concurrency: the config's own value unless a test sets one)
+const switches = vi.hoisted(() => ({ mode: 'apply' as 'shadow' | 'apply', applyEnabled: true, concurrency: undefined as number | undefined }))
 vi.mock('../config.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../config.js')>()
+  const { concurrency } = actual.config.research.pipeline
   Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => switches.applyEnabled })
   Object.defineProperty(actual.config.research.pipeline, 'mode', { get: () => switches.mode })
+  Object.defineProperty(actual.config.research.pipeline, 'concurrency', { get: () => switches.concurrency ?? concurrency })
   return actual
 })
 
@@ -49,6 +52,7 @@ beforeEach(() => {
   vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
   switches.mode = 'apply'
   switches.applyEnabled = true
+  switches.concurrency = undefined
   mockPrisma.jobRun.findUnique.mockResolvedValue(jobEnabled(true))
   mockQueue.owedStory.mockImplementation(async (id: string) => ({ updatedAt: readAt(id) }))
   mockQueue.nextToResearch.mockResolvedValue(['a', 'b', 'c'])
@@ -109,7 +113,8 @@ describe('runResearchStories', () => {
   })
 
   it('applies nothing for a story whose run outlasts the job being disabled, and stops before the next one', async () => {
-    // Enabled at the start and before the first story; disabled by the time its hook runs
+    // One at a time: enabled at the start and before the first story; disabled by the time its hook runs
+    switches.concurrency = 1
     mockPrisma.jobRun.findUnique.mockResolvedValueOnce(jobEnabled(true)).mockResolvedValueOnce(jobEnabled(true)).mockResolvedValue(jobEnabled(false))
     await runResearchStories()
     expect(researchedIds()).toEqual(['a'])
@@ -127,6 +132,7 @@ describe('runResearchStories', () => {
   })
 
   it('stops before the next story once research is switched off', async () => {
+    switches.concurrency = 1
     mockRuns.runPipelineResearch.mockImplementation(async (id: string, hook: Parameters<typeof researchedRun>[1]) => {
       vi.stubEnv('TAVILY_API_KEY', '')
       return researchedRun(id, hook)
@@ -134,6 +140,46 @@ describe('runResearchStories', () => {
     await runResearchStories()
     expect(researchedIds()).toEqual(['a'])
     expect(mockApplyVerdict).not.toHaveBeenCalled()
+  })
+
+  it('researches at most `concurrency` stories at once, in queue order, starting the next as one finishes', async () => {
+    switches.concurrency = 2
+    const ids = ['s1', 's2', 's3', 's4', 's5']
+    mockQueue.nextToResearch.mockResolvedValue(ids)
+    const finish = new Map<string, () => void>()
+    let inFlight = 0
+    let most = 0
+    mockRuns.runPipelineResearch.mockImplementation(async (id: string, hook: Parameters<typeof researchedRun>[1]) => {
+      most = Math.max(most, ++inFlight)
+      await new Promise<void>(resolve => finish.set(id, resolve))
+      inFlight--
+      return researchedRun(id, hook)
+    })
+
+    const job = runResearchStories()
+    await vi.waitFor(() => expect(researchedIds()).toEqual(['s1', 's2']))
+    finish.get('s2')!()
+    await vi.waitFor(() => expect(researchedIds()).toEqual(['s1', 's2', 's3']))
+    for (const id of ids) {
+      await vi.waitFor(() => expect(finish.has(id)).toBe(true))
+      finish.get(id)!()
+    }
+    await job
+
+    expect(most).toBe(2)
+    expect(researchedIds()).toEqual(ids)
+    expect(mockApplyVerdict).toHaveBeenCalledTimes(ids.length)
+  })
+
+  it('runs the stories in flight to the end once research is switched off, and starts no other', async () => {
+    switches.concurrency = 2
+    mockQueue.nextToResearch.mockResolvedValue(['a', 'b', 'c', 'd'])
+    mockRuns.runPipelineResearch.mockImplementation(async (id: string, hook: Parameters<typeof researchedRun>[1]) => {
+      if (id === 'a') vi.stubEnv('TAVILY_API_KEY', '')
+      return researchedRun(id, hook)
+    })
+    await runResearchStories()
+    expect(researchedIds()).toEqual(['a', 'b'])
   })
 
   it('skips a story an editor moved or researched since the queue was read', async () => {
@@ -144,6 +190,7 @@ describe('runResearchStories', () => {
   })
 
   it('goes on after a story refused at the cap, one busy with an editor’s run, or one whose run failed', async () => {
+    switches.concurrency = 1
     mockRuns.runPipelineResearch
       .mockResolvedValueOnce({ outcome: 'refused', runId: 'run-a', reason: 'monthly cap reached' })
       .mockResolvedValueOnce({ outcome: 'busy' })
@@ -154,6 +201,7 @@ describe('runResearchStories', () => {
   })
 
   it('records a $0 run for a story hit by an error outside its run, so it settles, and goes on with the next', async () => {
+    switches.concurrency = 1
     mockQueue.owedStory.mockRejectedValueOnce(new Error('connection reset, with a query'))
     mockRuns.runPipelineResearch.mockImplementation(async (id: string, hook: Parameters<typeof researchedRun>[1]) => {
       if (id === 'b') throw new Error('database down')
@@ -168,6 +216,7 @@ describe('runResearchStories', () => {
   })
 
   it('goes on when even the $0 run cannot be recorded', async () => {
+    switches.concurrency = 1
     mockQueue.owedStory.mockRejectedValueOnce(new Error('connection reset'))
     mockRuns.recordSkippedRun.mockRejectedValueOnce(new Error('still down'))
     await expect(runResearchStories()).resolves.toBeUndefined()

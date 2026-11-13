@@ -162,12 +162,19 @@ describe('updateStory on a researched story', () => {
 
   it.each([
     ['the headline', { title: 'Edited headline' }],
-    ['the rating', { relevance: 8 }],
     ['the relevance summary, which the researched version leaves empty', { relevanceSummary: 'A new one.' }],
     ['the blurb, by clearing it among unchanged fields', { ...stored, marketingBlurb: null }],
   ])('refuses an edit of %s: revert to single-source first', async (_name, edit) => {
     await expect(updateStory('story-1', edit)).rejects.toThrow(/Revert to single-source first/)
     expect(mockPrisma.story.update).not.toHaveBeenCalled()
+  })
+
+  it('saves an edit of the rating or its calculation, which research never writes', async () => {
+    await updateStory('story-1', { relevance: 8, relevanceCalculation: '- **Scale:** 8' })
+    expect(mockPrisma.story.update).toHaveBeenCalledWith({
+      where: { id: 'story-1' },
+      data: expect.objectContaining({ relevance: 8, relevanceCalculation: '- **Scale:** 8' }),
+    })
   })
 
   it('saves an edit that sends the researched fields unchanged, as the edit form does, with other fields changed', async () => {

@@ -21,7 +21,7 @@ export interface ResearchedSeed {
   earlier: { id: string; title: string; slug: string; date: string }
 }
 
-/** The single-source fields an applied run replaces (the plan's swap), as the snapshot keeps them. */
+/** The single-source fields an applied run replaces (`SWAPPED_FIELDS` in services/researchSwap.ts; never the rating), as the snapshot keeps them. */
 const SWAPPED_FIELDS = [
   'title',
   'titleLabel',
@@ -31,8 +31,6 @@ const SWAPPED_FIELDS = [
   'marketingBlurb',
   'relevanceReasons',
   'antifactors',
-  'relevance',
-  'relevanceCalculation',
   'relevanceSummary',
 ] as const
 

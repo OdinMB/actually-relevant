@@ -2,6 +2,10 @@
  * Which story columns a researched version replaces, and the values an apply writes there and a
  * revert restores (`.context/story-research.md`, "Applying a run"). Pure: `researchApply.ts` writes,
  * and the admin edit's lock (`storyWrites.ts`) reads the same list.
+ *
+ * The rating and its calculation are not among them: a story keeps its own rating whatever the
+ * research's re-evaluation gave (owner decision 2026-11-12), and the draft's rating stays in the run
+ * for evaluation.
  */
 import { z } from 'zod'
 import { writeSchema } from '../schemas/research.js'
@@ -21,8 +25,6 @@ export const appliedDraftSchema = writeSchema.pick({
   quoteAttribution: true,
   quoteSourceId: true,
   marketingBlurb: true,
-  relevanceCalculation: true,
-  rating: true,
 })
 export type AppliedDraft = z.infer<typeof appliedDraftSchema>
 
@@ -30,7 +32,9 @@ const text = z.string().nullable()
 
 /**
  * What `stories.pre_research` holds: every swapped column's value before the first apply. Its keys
- * are the swapped columns, `relevanceSummary` among them, which research writes none of.
+ * are the swapped columns, `relevanceSummary` among them, which research writes none of. A snapshot
+ * taken while applies still swapped the rating also holds `relevance` and `relevanceCalculation`;
+ * reading it drops them, so a revert leaves the rating alone.
  */
 const snapshotSchema = z.object({
   title: text,
@@ -42,8 +46,6 @@ const snapshotSchema = z.object({
   relevanceReasons: text,
   relevanceSummary: text,
   antifactors: text,
-  relevance: z.number().int().nullable(),
-  relevanceCalculation: text,
 })
 
 /** The values of the swapped columns, as an apply writes them or a snapshot holds them. */
@@ -73,8 +75,6 @@ export function researchedValues(draft: AppliedDraft): SwappedValues {
     relevanceReasons: bullets(draft.whyThisMatters),
     relevanceSummary: null,
     antifactors: bullets(draft.caveats),
-    relevance: draft.rating,
-    relevanceCalculation: orNull(draft.relevanceCalculation.join('\n')),
   }
 }
 

@@ -62,8 +62,9 @@ const PIPELINE_REJECTION_FROM: Partial<Record<RejectionReason, StoryStatus[]>> =
   select_threshold: [analyzed],
   selection: [analyzed],
   duplicate: DUPLICATE_FROM,
-  // The research step's verdicts, on the selected stories it researched (jobs/researchStories.ts)
-  research_rating: [selected],
+  // The research step's verdicts, on the selected stories it researched (jobs/researchStories.ts).
+  // `research_rating` has no pipeline move: a rating below the bar rejects nothing (owner decision
+  // 2026-11-12); the enum keeps the value, unused
   stale: [selected],
   contradicted: [selected],
 }

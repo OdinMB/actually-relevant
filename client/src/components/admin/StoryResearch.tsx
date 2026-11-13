@@ -1,14 +1,17 @@
 import { useState } from 'react'
-import type { ResearchRun, ResearchUsage, Story } from '@shared/types'
+import type { ResearchFallbackCategory, ResearchRun, ResearchUsage, Story } from '@shared/types'
 import { ReasonButton } from '../ui/ReasonButton'
 import { Select } from '../ui/Select'
 import { useResearchRuns, useResearchUsage, useStartResearch } from '../../hooks/useResearch'
 import { formatDateWithTime } from '../../lib/constants'
-import { ResearchRunView, verdictName } from './ResearchRunView'
+import { fallbackName, ResearchRunView, verdictLabel, verdictName } from './ResearchRunView'
 import { canUseVersion, RevertToSingleSource, UseRunVersion } from './ResearchVersion'
 
 /** The statuses a run may start from (server: `RESEARCHABLE_STATUSES` in services/researchInput.ts). */
 const RESEARCHABLE: readonly string[] = ['analyzed', 'selected', 'published']
+
+/** In the server's order (`FALLBACK_CATEGORIES` in services/researchChecks.ts). */
+const FALLBACK_CATEGORIES: readonly ResearchFallbackCategory[] = ['no_other_coverage', 'not_confirmed', 'draft_failed_check', 'technical']
 
 const money = (v: number) => `$${v.toFixed(2)}`
 
@@ -22,9 +25,15 @@ export function researchRefusal(story: Pick<Story, 'status'>, usage: ResearchUsa
 }
 
 function runLabel(run: ResearchRun): string {
-  const outcome = run.status === 'completed' && run.verdict ? verdictName(run.verdict) : run.status
+  const verdict = run.status === 'completed' && run.verdict ? (run.result ? verdictLabel(run.result.verdict) : verdictName(run.verdict)) : null
   const by = run.trigger === 'pipeline' ? 'pipeline' : 'editor'
-  return `${formatDateWithTime(run.startedAt)} · ${by} · ${outcome} · $${run.costUsd.toFixed(3)}`
+  return `${formatDateWithTime(run.startedAt)} · ${by} · ${verdict ?? run.status} · $${run.costUsd.toFixed(3)}`
+}
+
+/** This month's fallbacks by category, for the owner's count; the unrecorded ones (runs from before categories) only when there are any. */
+function fallbackCounts(counts: NonNullable<ResearchUsage['fallbacksThisMonth']>): string {
+  const named = FALLBACK_CATEGORIES.map(category => `${counts[category]} ${fallbackName(category)}`)
+  return [...named, ...(counts.unrecorded > 0 ? [`${counts.unrecorded} unrecorded`] : [])].join(', ')
 }
 
 /**
@@ -57,6 +66,9 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 
           {usage.data &&
             ` This month: ${money(usage.data.monthToDateUsd)} of ${money(usage.data.monthlyCapUsd)} spent; each run reserves ${money(usage.data.reservationUsd)} until it ends.`}
         </p>
+        {usage.data?.fallbacksThisMonth && (
+          <p className="text-sm text-neutral-600">Fallbacks to today&apos;s format this month: {fallbackCounts(usage.data.fallbacksThisMonth)}.</p>
+        )}
       </div>
       <RevertToSingleSource story={story} />
       <ReasonButton type="button" variant="secondary" reason={reason} onClick={start}>
