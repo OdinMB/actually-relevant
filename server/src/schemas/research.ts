@@ -186,7 +186,7 @@ export const factCheckSchema = z.object({
         key: z
           .boolean()
           .describe(
-            'When not supported: true when the unsupported claim is the main development itself (that it happened, who did it, or its central figure); false for a detail such as an exact date, a side figure, an attribution or a background point. False when supported, and always for the key quote.',
+            'Only for an item labeled "Title", "Story paragraph 1", "Summary" or "Blurb" that is not supported: true when the unsupported claim is the main development itself (that it happened, who did it, or its central figure); false for a detail such as an exact date, a side figure, an attribution or a background point. False when supported, and always for every other item: a later paragraph, a bullet, a caveat and the key quote.',
           ),
         copiedSentence: z
           .string()

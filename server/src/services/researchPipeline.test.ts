@@ -366,6 +366,25 @@ describe('researchStory', () => {
     expect(r.failedOn).toBe('Story paragraph 1')
   })
 
+  it('drops a bullet the fact check judges key after the rewrite and keeps the run, recording the judgment', async () => {
+    const threeBullets = (): Draft => ({
+      ...goodDraft(),
+      whyThisMatters: [
+        { text: 'Cheap power reaches millions.', factIds: [] },
+        { text: 'Factories pay less for power.', factIds: [] },
+        { text: 'Households now sell power back to the grid.', factIds: ['S0F1'] },
+      ],
+    })
+    const failsKey = judging('Why This Matters 3', { supported: false, problem: 'no source says households sell power', key: true })
+    const { deps: d } = deps({ responders: baseResponders({ write: threeBullets, rewrite: threeBullets, 'fact-check': failsKey }) })
+    const r = await researchStory(story(), d)
+    expect(r.rewritten).toBe(true)
+    expect(r.verdict).toEqual({ kind: 'keep' })
+    expect(r.failedOn).toBeNull()
+    expect(r.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.', 'Factories pay less for power.'])
+    expect(r.problems).toEqual([expect.objectContaining({ label: 'Why This Matters 3', kind: 'fact', by: 'judge', key: true })])
+  })
+
   it("never shows the writer the article's text, so every source wording it reads is in front of the checks", async () => {
     const prompts: string[] = []
     const { deps: d } = deps({

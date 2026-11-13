@@ -1005,6 +1005,7 @@ export interface ResearchProblem {
   label: string
   text: string
   problem: string
+  /** The fact check judged the claim the main development; it ends the run only on `Title`, `Story paragraph 1`, `Summary` or `Blurb`, and is recorded only on any other item. */
   key?: boolean
   /** `fact`: a claim its cited facts don't state. `copying`: wording too close to a source's. */
   kind?: 'fact' | 'copying'

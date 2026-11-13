@@ -329,10 +329,23 @@ describe('dropFailing', () => {
     })
   })
 
-  it('fails on an unsupported key claim, naming its item', () => {
-    expect(dropFailing(d(), [problem('Story paragraph 2', { key: true })])).toEqual({
-      failed: 'a key claim failed the check after one rewrite (Story paragraph 2)',
-      failedOn: 'Story paragraph 2',
+  it('fails on an unsupported key claim in an item the draft cannot do without, naming it', () => {
+    expect(dropFailing(d(), [problem('Story paragraph 3'), problem('Story paragraph 1', { key: true })])).toEqual({
+      failed: 'a key claim failed the check after one rewrite (Story paragraph 1)',
+      failedOn: 'Story paragraph 1',
+    })
+  })
+
+  it('drops a later paragraph or a bullet the fact check judged key as any failing item: only the main development can be key', () => {
+    expect(dropFailing(d(), [problem('Story paragraph 2', { key: true }), problem('Why This Matters 2', { key: true })])).toEqual({
+      draft: {
+        ...d(),
+        story: cited([
+          ['lead', ['S0F1']],
+          ['third', ['S0F1']],
+        ]),
+        whyThisMatters: cited([['why 1', []]]),
+      },
     })
   })
 
