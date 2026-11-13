@@ -90,6 +90,23 @@ describe('checkCopying', () => {
     expect(copyingOf('Reports say farmers in the northern provinces planted drought-tolerant wheat on more fields.', [source('S1')]).problems).toEqual([])
   })
 
+  it("passes a plain restatement of a source's fact, with its figures, period and scope in the source's order", () => {
+    // The fact check's false positive of 2026-11-13: facts are free to use, so neither check flags it
+    const who = source('S1', {
+      facts: [
+        {
+          id: 'S1F1',
+          statement: 'Domestic tuberculosis funding rose 14% to $5.6 billion over 2024-2025.',
+          supportingSentence:
+            'domestic funding for TB increased by 14% to US$ 5.6 billion between 2024 and 2025, in part offsetting a decline in international financing of a similar scale.',
+        },
+      ],
+    })
+    const ours =
+      'Countries raised domestic tuberculosis funding by 14% to $5.6 billion between 2024 and 2025, partly making up for falling international support.'
+    expect(copyingOf(ours, [who]).problems).toEqual([])
+  })
+
   it('ignores case, punctuation and quote marks', () => {
     const { problems } = copyingOf('FARMERS, in the Northern provinces — planted “drought-tolerant” wheat on more land.', [source('S1')])
     expect(problems.map(p => p.sourceId)).toEqual(['S1'])

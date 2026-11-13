@@ -211,6 +211,7 @@ describe('judgedProblems', () => {
   })
 
   it('turns a close rendering and a followed source into copying problems, never key, and ignores ids the prompt did not give', () => {
+    const twoSources = items.map(c => (c.item.label === 'Story paragraph 1' ? { ...c, item: { ...c.item, factIds: ['S1F1', 'S2F1'] } } : c))
     const answer: FactCheck = {
       items: [
         verdict(1, { copiedSentence: 'S1T' }),
@@ -219,7 +220,7 @@ describe('judgedProblems', () => {
         verdict(9, { copiedSentence: 'S1F1' }),
       ],
     }
-    expect(judgedProblems(answer, items, lines)).toEqual([
+    expect(judgedProblems(answer, twoSources, lines)).toEqual([
       {
         label: 'Title',
         text: 'Rooftop panels spread',
@@ -240,6 +241,15 @@ describe('judgedProblems', () => {
       },
       { label: 'Story paragraph 1', text: 'Wheat area grows.', problem: "follows S1's order and wording", kind: 'copying', by: 'judge', sourceId: 'S1' },
     ])
+  })
+
+  it('ignores a followed source on an item whose citations all come from that one source, whose order it follows by nature', () => {
+    const datedToo = items.map(c => (c.item.label === 'Story paragraph 1' ? { ...c, item: { ...c.item, factIds: ['S1F1', 'S1F0'] } } : c))
+    const answer: FactCheck = { items: [verdict(2, { followsSource: 'S1' }), verdict(4, { followsSource: 'S1' })] }
+    expect(judgedProblems(answer, items, lines)).toEqual([
+      { label: 'Summary', text: 'Households add panels.', problem: "follows S1's order and wording", kind: 'copying', by: 'judge', sourceId: 'S1' },
+    ])
+    expect(judgedProblems(answer, datedToo, lines).map(p => p.label)).toEqual(['Summary'])
   })
 
   it("quotes the source's own sentence for a fact id, never the fact's statement under the same id", () => {

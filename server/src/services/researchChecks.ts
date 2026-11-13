@@ -161,12 +161,18 @@ function knownId(value: string, pattern: RegExp, known: ReadonlySet<string>): st
 }
 
 /**
+ * Whether every fact an item cites comes from one source (its date fact `S2F0` included): the item
+ * then follows that source's order by nature, which is not copying (owner decision 2026-11-13).
+ */
+const citesOneSource = (item: DraftItem) => new Set(item.factIds.map(sourceOf)).size === 1
+
+/**
  * The fact check's answer as problems, by item number (its place in `items`): an unsupported claim
  * of an item that has evidence or number hints, with its key judgment (`fact`); and on any item, a
  * source line it renders closely, quoted so the rewrite sees what it echoed, or a source whose
- * order it follows (`copying`, never key). A support verdict on an item with neither, and an id the
- * prompt did not give, count for nothing. The key quote fails only as unfaithful to its source
- * (`fact`, never key), never for copying.
+ * order it follows, unless the item cites that one source alone (`copying`, never key). A support
+ * verdict on an item with neither, and an id the prompt did not give, count for nothing. The key
+ * quote fails only as unfaithful to its source (`fact`, never key), never for copying.
  */
 export function judgedProblems(answer: FactCheck, items: CheckedDraftItem[], lines: SourceLine[]): CitationProblem[] {
   const wording = new Map(lines.filter(line => againstOf(line) === 'wording').map(line => [line.id, line]))
@@ -181,7 +187,7 @@ export function judgedProblems(answer: FactCheck, items: CheckedDraftItem[], lin
         : [{ label, text, problem: `fails the fact check: ${v.problem || 'its source does not say it'}`, kind: 'fact', by: 'judge', key: false }]
     const copiedId = knownId(v.copiedSentence, /S\d+(?:F\d+|Q\d+|T)?/, new Set(wording.keys()))
     const copied = copiedId ? wording.get(copiedId) : undefined
-    const follows = knownId(v.followsSource, /S\d+/, sourceIds)
+    const follows = citesOneSource(at.item) ? null : knownId(v.followsSource, /S\d+/, sourceIds)
     return [
       ...(!v.supported && (at.evidence.length > 0 || at.numberHints.length > 0)
         ? [

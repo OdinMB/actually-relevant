@@ -191,12 +191,12 @@ export const factCheckSchema = z.object({
         copiedSentence: z
           .string()
           .describe(
-            'The id in <SOURCE_WORDING> (e.g. "S2F3", "S2Q1", "S2T") of a source sentence, quote or title that any one sentence of the item renders closely, in nearly the same words or as a close translation, in any language. Empty string when none does, and always for the key quote.',
+            'The id in <SOURCE_WORDING> (e.g. "S2F3", "S2Q1", "S2T") of a source sentence, quote or title whose expression any one sentence of the item reproduces (its distinctive phrasing or a sentence structure the facts do not dictate), in nearly the same words or as a close translation, in any language. Empty string when none does, when a sentence only plainly states a fact the source states, and always for the key quote.',
           ),
         followsSource: z
           .string()
           .describe(
-            'The id (e.g. "S2") of the one source whose points the item follows in that source\'s order and phrasing. Empty string when none, and always for the key quote.',
+            'The id (e.g. "S2") of the one source whose points several sentences of the item follow in that source\'s order and phrasing, while the item draws on other sources too. Empty string when none, when the item\'s cited facts all come from that one source, and always for the key quote.',
           ),
       }),
     )
