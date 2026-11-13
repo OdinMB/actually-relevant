@@ -43,7 +43,11 @@ export interface CitationProblem {
   kind: 'fact' | 'copying'
   /** Which check found it: the code checks, or the fact-check model. */
   by: 'code' | 'judge'
-  /** The fact check's judgment that the unsupported claim is the main development itself. */
+  /**
+   * The fact check's judgment that the unsupported claim is the main development itself. Recorded
+   * on any item, it ends the run only on one the draft cannot do without (`UNDROPPABLE`): only those
+   * carry the main development, so a later paragraph or a bullet judged key is dropped as any other.
+   */
   key?: boolean
   /** Copying: the source the item is too close to; none for a quoted span. */
   sourceId?: string
@@ -55,7 +59,8 @@ export interface CitationProblem {
 
 type DraftParts = Pick<Draft, 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb'>
 
-const LABELS = {
+/** The label of the cited item at index `i` of each part: the problems, repairs and drops key on it. */
+export const LABELS = {
   story: (i: number) => `Story paragraph ${i + 1}`,
   whyThisMatters: (i: number) => `Why This Matters ${i + 1}`,
   caveats: (i: number) => `Caveat ${i + 1}`,
@@ -157,12 +162,18 @@ function knownId(value: string, pattern: RegExp, known: ReadonlySet<string>): st
 }
 
 /**
+ * Whether every fact an item cites comes from one source (its date fact `S2F0` included): the item
+ * then follows that source's order by nature, which is not copying (owner decision 2026-11-13).
+ */
+const citesOneSource = (item: DraftItem) => new Set(item.factIds.map(sourceOf)).size === 1
+
+/**
  * The fact check's answer as problems, by item number (its place in `items`): an unsupported claim
  * of an item that has evidence or number hints, with its key judgment (`fact`); and on any item, a
  * source line it renders closely, quoted so the rewrite sees what it echoed, or a source whose
- * order it follows (`copying`, never key). A support verdict on an item with neither, and an id the
- * prompt did not give, count for nothing. The key quote fails only as unfaithful to its source
- * (`fact`, never key), never for copying.
+ * order it follows, unless the item cites that one source alone (`copying`, never key). A support
+ * verdict on an item with neither, and an id the prompt did not give, count for nothing. The key
+ * quote fails only as unfaithful to its source (`fact`, never key), never for copying.
  */
 export function judgedProblems(answer: FactCheck, items: CheckedDraftItem[], lines: SourceLine[]): CitationProblem[] {
   const wording = new Map(lines.filter(line => againstOf(line) === 'wording').map(line => [line.id, line]))
@@ -177,7 +188,7 @@ export function judgedProblems(answer: FactCheck, items: CheckedDraftItem[], lin
         : [{ label, text, problem: `fails the fact check: ${v.problem || 'its source does not say it'}`, kind: 'fact', by: 'judge', key: false }]
     const copiedId = knownId(v.copiedSentence, /S\d+(?:F\d+|Q\d+|T)?/, new Set(wording.keys()))
     const copied = copiedId ? wording.get(copiedId) : undefined
-    const follows = knownId(v.followsSource, /S\d+/, sourceIds)
+    const follows = citesOneSource(at.item) ? null : knownId(v.followsSource, /S\d+/, sourceIds)
     return [
       ...(!v.supported && (at.evidence.length > 0 || at.numberHints.length > 0)
         ? [
@@ -231,7 +242,11 @@ export function publishedFact(sourceId: string, outlet: string, date: string | n
   return [{ id: `${sourceId}F0`, statement: `${outlet} published this on ${when}.`, supportingSentence: '', measures: '' }]
 }
 
-/** The items a draft cannot do without, so one still failing after the rewrite ends the run instead of being dropped. */
+/**
+ * The items a draft cannot do without, so one still failing after repair ends the run instead
+ * of being dropped; the only items a key judgment counts on. The fact-check prompt's key rule and
+ * the `key` description in `factCheckSchema` name the same labels: keep them in step.
+ */
 const UNDROPPABLE = ['Title', LABELS.story(0), 'Summary', 'Blurb']
 
 /**
@@ -245,24 +260,25 @@ const DROPPABLE_PARTS: { part: keyof typeof LABELS; label: string; noun: string 
 ]
 
 /**
- * The last check's draft without its failing paragraphs and bullets, or why it cannot be saved,
+ * The repaired draft without its failing paragraphs and bullets, or why it cannot be saved,
  * with the item it failed on: a key claim (the main development itself, as the fact check judges
- * it) is unsupported, an item that cannot be dropped still fails (the opening paragraph, the title,
- * the summary, the blurb), every item of a part failed (`failedOn` its first item), or the draft
- * has nothing in a part at all (`failedOn` the part's name, `Story`, `Why This Matters` or
- * `Caveats`), with or without problems: a researched story always has all three.
+ * it) is unsupported in an item that cannot be dropped (the opening paragraph, the title, the
+ * summary, the blurb; a key judgment on any other item counts for nothing), such an item still
+ * fails, every item of a part failed (`failedOn` its first item), or the draft has nothing in a
+ * part at all (`failedOn` the part's name, `Story`, `Why This Matters` or `Caveats`), with or
+ * without problems: a researched story always has all three.
  */
 export function dropFailing<D extends DraftParts>(draft: D, problems: CitationProblem[]): { draft: D } | { failed: string; failedOn: string } {
-  const key = problems.find(p => p.key)
-  if (key) return { failed: `a key claim failed the check after one rewrite (${key.label})`, failedOn: key.label }
+  const key = problems.find(p => p.key && UNDROPPABLE.includes(p.label))
+  if (key) return { failed: `a key claim failed the check after repair (${key.label})`, failedOn: key.label }
   const failing = new Set(problems.map(p => p.label))
   const whole = UNDROPPABLE.find(label => failing.has(label))
-  if (whole) return { failed: `an item that cannot be dropped failed the check after one rewrite (${whole})`, failedOn: whole }
+  if (whole) return { failed: `an item that cannot be dropped failed the check after repair (${whole})`, failedOn: whole }
   const items = draftItems(draft)
   for (const { part, label, noun } of DROPPABLE_PARTS) {
     const [first, ...rest] = items.filter(i => i.part === part)
     if (!first) return { failed: `the draft has no ${noun}`, failedOn: label }
-    if ([first, ...rest].every(i => failing.has(i.label))) return { failed: `no ${noun} passed the check after one rewrite`, failedOn: first.label }
+    if ([first, ...rest].every(i => failing.has(i.label))) return { failed: `no ${noun} passed the check after repair`, failedOn: first.label }
   }
   const keep = (part: keyof typeof LABELS) => (_: unknown, i: number) => !failing.has(LABELS[part](i))
   return {
@@ -308,10 +324,10 @@ export function supportFound(sentence: string, text: string): boolean {
  * request 2026-11-12); no verdict or write depends on it. `no_other_coverage`: no other report
  * survived the opt-out checks and the source filter. `not_confirmed`: other reports survived it,
  * but the extraction kept none as reporting the story (each unreadable, about another development,
- * or an opinion piece or press release beside a news report). `draft_failed_check`: a key claim,
- * or an item the draft cannot do without, failed the checks after the rewrite, or a part of the
- * draft was left empty or had nothing in it. `technical`: anything else (a failed model call or search, the run's
- * budget, an error).
+ * or an opinion piece or press release beside a news report). `draft_failed_check`: an item the
+ * draft cannot do without failed the checks after repair (a key claim in it or any other
+ * problem), or a part of the draft was left empty or had nothing in it. `technical`: anything else
+ * (a failed model call or search, the run's budget, an error).
  */
 export const FALLBACK_CATEGORIES = ['no_other_coverage', 'not_confirmed', 'draft_failed_check', 'technical'] as const
 export type FallbackCategory = (typeof FALLBACK_CATEGORIES)[number]

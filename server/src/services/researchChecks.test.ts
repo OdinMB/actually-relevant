@@ -211,6 +211,7 @@ describe('judgedProblems', () => {
   })
 
   it('turns a close rendering and a followed source into copying problems, never key, and ignores ids the prompt did not give', () => {
+    const twoSources = items.map(c => (c.item.label === 'Story paragraph 1' ? { ...c, item: { ...c.item, factIds: ['S1F1', 'S2F1'] } } : c))
     const answer: FactCheck = {
       items: [
         verdict(1, { copiedSentence: 'S1T' }),
@@ -219,7 +220,7 @@ describe('judgedProblems', () => {
         verdict(9, { copiedSentence: 'S1F1' }),
       ],
     }
-    expect(judgedProblems(answer, items, lines)).toEqual([
+    expect(judgedProblems(answer, twoSources, lines)).toEqual([
       {
         label: 'Title',
         text: 'Rooftop panels spread',
@@ -240,6 +241,15 @@ describe('judgedProblems', () => {
       },
       { label: 'Story paragraph 1', text: 'Wheat area grows.', problem: "follows S1's order and wording", kind: 'copying', by: 'judge', sourceId: 'S1' },
     ])
+  })
+
+  it('ignores a followed source on an item whose citations all come from that one source, whose order it follows by nature', () => {
+    const datedToo = items.map(c => (c.item.label === 'Story paragraph 1' ? { ...c, item: { ...c.item, factIds: ['S1F1', 'S1F0'] } } : c))
+    const answer: FactCheck = { items: [verdict(2, { followsSource: 'S1' }), verdict(4, { followsSource: 'S1' })] }
+    expect(judgedProblems(answer, items, lines)).toEqual([
+      { label: 'Summary', text: 'Households add panels.', problem: "follows S1's order and wording", kind: 'copying', by: 'judge', sourceId: 'S1' },
+    ])
+    expect(judgedProblems(answer, datedToo, lines).map(p => p.label)).toEqual(['Summary'])
   })
 
   it("quotes the source's own sentence for a fact id, never the fact's statement under the same id", () => {
@@ -329,24 +339,37 @@ describe('dropFailing', () => {
     })
   })
 
-  it('fails on an unsupported key claim, naming its item', () => {
-    expect(dropFailing(d(), [problem('Story paragraph 2', { key: true })])).toEqual({
-      failed: 'a key claim failed the check after one rewrite (Story paragraph 2)',
-      failedOn: 'Story paragraph 2',
+  it('fails on an unsupported key claim in an item the draft cannot do without, naming it', () => {
+    expect(dropFailing(d(), [problem('Story paragraph 3'), problem('Story paragraph 1', { key: true })])).toEqual({
+      failed: 'a key claim failed the check after repair (Story paragraph 1)',
+      failedOn: 'Story paragraph 1',
+    })
+  })
+
+  it('drops a later paragraph or a bullet the fact check judged key as any failing item: only the main development can be key', () => {
+    expect(dropFailing(d(), [problem('Story paragraph 2', { key: true }), problem('Why This Matters 2', { key: true })])).toEqual({
+      draft: {
+        ...d(),
+        story: cited([
+          ['lead', ['S0F1']],
+          ['third', ['S0F1']],
+        ]),
+        whyThisMatters: cited([['why 1', []]]),
+      },
     })
   })
 
   it.each(['Story paragraph 1', 'Title', 'Summary', 'Blurb'])('fails when %s still fails, since it cannot be dropped', label => {
     expect(dropFailing(d(), [problem('Story paragraph 3'), problem(label, { kind: 'copying' })])).toEqual({
-      failed: `an item that cannot be dropped failed the check after one rewrite (${label})`,
+      failed: `an item that cannot be dropped failed the check after repair (${label})`,
       failedOn: label,
     })
   })
 
   it('fails when a part is left empty, naming its first failing item', () => {
-    expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after one rewrite', failedOn: 'Caveat 1' })
+    expect(dropFailing(d(), [problem('Caveat 1')])).toEqual({ failed: 'no caveat passed the check after repair', failedOn: 'Caveat 1' })
     expect(dropFailing(d(), [problem('Why This Matters 2'), problem('Why This Matters 1')])).toEqual({
-      failed: 'no Why This Matters bullet passed the check after one rewrite',
+      failed: 'no Why This Matters bullet passed the check after repair',
       failedOn: 'Why This Matters 1',
     })
   })

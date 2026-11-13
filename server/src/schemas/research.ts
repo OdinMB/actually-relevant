@@ -186,25 +186,62 @@ export const factCheckSchema = z.object({
         key: z
           .boolean()
           .describe(
-            'When not supported: true when the unsupported claim is the main development itself (that it happened, who did it, or its central figure); false for a detail such as an exact date, a side figure, an attribution or a background point. False when supported, and always for the key quote.',
+            'Only for an item labeled "Title", "Story paragraph 1", "Summary" or "Blurb" that is not supported: true when the unsupported claim is the main development itself (that it happened, who did it, or its central figure); false for a detail such as an exact date, a side figure, an attribution or a background point. False when supported, and always for every other item: a later paragraph, a bullet, a caveat and the key quote.',
           ),
         copiedSentence: z
           .string()
           .describe(
-            'The id in <SOURCE_WORDING> (e.g. "S2F3", "S2Q1", "S2T") of a source sentence, quote or title that any one sentence of the item renders closely, in nearly the same words or as a close translation, in any language. Empty string when none does, and always for the key quote.',
+            'The id in <SOURCE_WORDING> (e.g. "S2F3", "S2Q1", "S2T") of a source sentence, quote or title whose expression any one sentence of the item reproduces (its distinctive phrasing or a sentence structure the facts do not dictate), in nearly the same words or as a close translation, in any language. Empty string when none does, when a sentence only plainly states a fact the source states, and always for the key quote.',
           ),
         followsSource: z
           .string()
           .describe(
-            'The id (e.g. "S2") of the one source whose points the item follows in that source\'s order and phrasing. Empty string when none, and always for the key quote.',
+            'The id (e.g. "S2") of the one source whose points several sentences of the item follow in that source\'s order and phrasing, while the item draws on other sources too. Empty string when none, when the item\'s cited facts all come from that one source, and always for the key quote.',
           ),
       }),
     )
     .describe('One entry per item in <ITEMS>.'),
 })
 
+/** A repair round's answer: new texts for the failing items only (`.context/story-research.md`, "Repair"). */
+export const repairSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        label: z.string().describe('The label of an item in <REPAIRS>, exactly as given there, e.g. "Story paragraph 2".'),
+        text: z
+          .string()
+          .describe("The item's new text in plain text, about as long as the text it replaces: no Markdown, no leading dash, no fact ids, no quotation marks."),
+        factIds: z
+          .array(z.string())
+          .describe(
+            'Ids of every fact in <FACTS> the new text states, e.g. ["S1F2", "S3F1"]. Empty for the title, the summary, the blurb and a bullet that only judges.',
+          ),
+      }),
+    )
+    .describe('One entry per item in <REPAIRS> other than the key quote, in their order.'),
+  quote: z
+    .string()
+    .describe(
+      "When <REPAIRS> holds the key quote: the new key quote, translated to English if needed, with no speaker or outlet name and no surrounding quotation marks; single quotes (' ') for any nested quotation. Empty string otherwise.",
+    ),
+  quoteAttribution: z
+    .string()
+    .describe("With a new key quote: the quoted person's full name and role, or the organization or outlet quoted. Empty string otherwise."),
+  quoteSourceId: z
+    .string()
+    .describe(
+      'With a new key quote: id of the source it comes from, e.g. "S2", never a quote\'s id such as "S2Q1" nor an earlier story\'s such as "E1". Empty string otherwise.',
+    ),
+})
+
+/** The derived fields written again from the kept story alone (`.context/story-research.md`, "Repair"). */
+export const deriveSchema = writeSchema.pick({ title: true, summary: true, marketingBlurb: true })
+
 export type Queries = z.infer<typeof queriesSchema>
 export type Extraction = z.infer<typeof extractionSchema>
 export type Earlier = z.infer<typeof earlierSchema>
 export type Draft = z.infer<typeof writeSchema>
 export type FactCheck = z.infer<typeof factCheckSchema>
+export type Repair = z.infer<typeof repairSchema>
+export type Derived = z.infer<typeof deriveSchema>

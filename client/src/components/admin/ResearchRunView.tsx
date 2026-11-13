@@ -228,8 +228,8 @@ function Draft({ result }: { result: ResearchResult }) {
         <div>
           <h5 className={H}>
             {result.verdict.kind === 'fallback'
-              ? `What the checks found${result.rewritten ? ' after the rewrite' : ''}`
-              : 'Left out of the draft above: still failing the checks after the rewrite'}
+              ? `What the checks found${result.rewritten ? ' after repair' : ''}`
+              : 'Left out of the draft above: still failing the checks after repair'}
           </h5>
           <ul className="list-disc pl-5">
             {result.problems.map((p, i) => (

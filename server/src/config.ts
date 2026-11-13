@@ -307,6 +307,11 @@ export const config = {
      * lower bar is the legal reviewer's call, read against the runs' recorded `longestRuns`.
      */
     copiedRunWords: 12,
+    /**
+     * Repair rounds after the first check (owner decision 2026-11-13): each rewrites only the items
+     * still failing and checks them again; what still fails after the last is dropped, or ends the run.
+     */
+    repairRounds: 2,
     /** Pay-as-you-go price per credit; Tavily's free credits are counted as paid. */
     tavilyUsdPerCredit: 0.008,
     /**

@@ -6,7 +6,7 @@
  * desk estimate per step.
  */
 import { dedupConfirmationSchema } from '../../../schemas/llm.js'
-import { earlierSchema, extractionSchema, factCheckSchema, queriesSchema, writeSchema } from '../../../schemas/research.js'
+import { deriveSchema, earlierSchema, extractionSchema, factCheckSchema, queriesSchema, repairSchema, writeSchema } from '../../../schemas/research.js'
 import type { ResearchStory } from '../../../services/researchInput.js'
 import {
   researchStory,
@@ -41,8 +41,9 @@ export interface StepEstimate {
 }
 
 /**
- * The design's desk estimate per story, plus the two calls it has no row for: the neighbour
- * confirmation, and a rewrite (counted here with its second fact check).
+ * The design's desk estimate per story, plus the calls it has no row for: the neighbour
+ * confirmation, a repair round (`rewrite`, counted here with its fact check; sized for the old
+ * whole-draft rewrite, not yet measured) and the derived fields written again (`derive`, with its check).
  */
 export const STEP_ESTIMATES: Record<StepName, StepEstimate> = {
   confirm: { input: 1500, output: 500, inDesign: false },
@@ -52,6 +53,7 @@ export const STEP_ESTIMATES: Record<StepName, StepEstimate> = {
   write: { input: 12000, output: 4500, inDesign: true },
   'fact-check': { input: 5000, output: 1000, inDesign: true },
   rewrite: { input: 17000, output: 5500, inDesign: false },
+  derive: { input: 3000, output: 2000, inDesign: false },
 }
 
 const SCHEMA_NAMES = {
@@ -61,7 +63,8 @@ const SCHEMA_NAMES = {
   earlier: versionedSchemaName('research-earlier', earlierSchema),
   write: versionedSchemaName('research-write', writeSchema),
   'fact-check': versionedSchemaName('research-fact-check', factCheckSchema),
-  rewrite: versionedSchemaName('research-write', writeSchema),
+  rewrite: versionedSchemaName('research-repair', repairSchema),
+  derive: versionedSchemaName('research-derive', deriveSchema),
 } satisfies Record<StepName, string>
 
 export interface EvalResearchDeps {

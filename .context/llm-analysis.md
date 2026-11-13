@@ -9,7 +9,7 @@ Configuration is centralized in `server/src/config.ts`. Three model tiers are av
 | Tier | Default Model | Reasoning Effort | Used By |
 |------|--------------|-----------------|---------|
 | Small | `gpt-6-luna` | `low` | Dedup confirmation, related-stories re-rank, reclassification and emotion-only tagging, story research steps (neighbour confirmation, queries, extraction, earlier coverage, fact check; `.context/story-research.md`) |
-| Medium | `gpt-6-luna` | `medium` | Pre-assessment, full assessment, social story pick, social post text, story research write and rewrite |
+| Medium | `gpt-6-luna` | `medium` | Pre-assessment, full assessment, social story pick, social post text, story research write, repair rounds and derived fields |
 | Large | `gpt-6.1-sol` | `medium` | Editorial selection, newsletter selection, podcast story selection and two-speaker dialogue (`config.podcast.selectModelTier` / `scriptModelTier`; `.context/podcast.md`) |
 
 These are the owner's GPT-6 choices of 2026-09-24, from the model eval and blind ratings (`DOCS/2026-09-24_gpt6-eval/results.md`, gitignored). Until then the tiers ran gpt-5-nano, gpt-5-mini and gpt-5.2, all at `medium`; gpt-5-mini/nano's dated snapshots shut down on 2026-12-11. Small and medium are the same model now, so the effort is what tells them apart. The large tier ran gpt-6-sol from 2026-09-24 and was switched to gpt-6.1-sol (same price, same effort) on 2026-10-27, pending the owner's large-tier eval and a podcast listening check (`.context/model-eval.md`, "Large tier: gpt-6-sol vs gpt-6.1-sol"); its prompts were tuned on gpt-6-sol and are unchanged.

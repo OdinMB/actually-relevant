@@ -902,7 +902,8 @@ export interface ResearchUsage {
  */
 export type ResearchFallbackCategory = 'no_other_coverage' | 'not_confirmed' | 'draft_failed_check' | 'technical'
 
-export type ResearchStep = 'confirm' | 'queries' | 'extract' | 'earlier' | 'write' | 'fact-check' | 'rewrite'
+/** `rewrite`: a repair round since 2026-11-13 (before, the one rewrite of the whole draft). `derive`: a title, summary or blurb written again from the kept story. */
+export type ResearchStep = 'confirm' | 'queries' | 'extract' | 'earlier' | 'write' | 'fact-check' | 'rewrite' | 'derive'
 export type ResearchCallOutcome = 'ok' | 'parse_failure' | 'empty' | 'truncated' | 'error' | 'skipped'
 
 export interface ResearchTokenUsage {
@@ -1005,6 +1006,7 @@ export interface ResearchProblem {
   label: string
   text: string
   problem: string
+  /** The fact check judged the claim the main development; it ends the run only on `Title`, `Story paragraph 1`, `Summary` or `Blurb`, and is recorded only on any other item. */
   key?: boolean
   /** `fact`: a claim its cited facts don't state. `copying`: wording too close to a source's. */
   kind?: 'fact' | 'copying'
@@ -1024,6 +1026,8 @@ export interface ResearchCheckPass {
   unjudged: string[]
   /** Hints the fact check judged, never problems by themselves (ADR-0057); absent on runs stored before them. */
   numberHints?: { label: string; numbers: string[] }[]
+  /** A repair pass: the items it checked again. Absent on a first pass, which checks every item, and on runs stored before repair rounds. */
+  rechecked?: string[]
 }
 
 /** A run's stored result: what the research found, the model of each step and the prices it ran at. */
@@ -1038,10 +1042,11 @@ export interface ResearchResult {
   earlier: ResearchEarlier[]
   /** The last draft written, also when it failed the check. */
   draft: ResearchDraft | null
+  /** Whether a repair was asked for (a repair round's or the derived fields' call ran, whatever it answered); before ADR-0058, the whole-draft rewrite. */
   rewritten: boolean
-  /** What the last check found: in a kept draft, the paragraphs and bullets dropped from it. */
+  /** What the last check of each item found: in a kept draft, the paragraphs and bullets dropped from it. */
   problems: ResearchProblem[]
-  /** One per check pass (two after a rewrite); absent on runs stored before 2026-11-13. */
+  /** One per check pass: the first draft's, then each repair round's (two after the old whole-draft rewrite); absent on runs stored before 2026-11-13. */
   checks?: ResearchCheckPass[]
   /** The item a `draft_failed_check` fallback failed on; absent on runs stored before 2026-11-13. */
   failedOn?: string | null
@@ -1049,7 +1054,8 @@ export interface ResearchResult {
   /** Whether publishers' AI opt-outs were checked. */
   optOutChecked: boolean
   verdict: ResearchVerdict
-  models: Record<ResearchStep, string>
+  /** Each step's model; a run stored before a step existed has none for it (`derive`, 2026-11-13). */
+  models: Partial<Record<ResearchStep, string>>
   prices: {
     models: Record<string, { input: number; cached: number; output: number }>
     cacheWriteFactor: number

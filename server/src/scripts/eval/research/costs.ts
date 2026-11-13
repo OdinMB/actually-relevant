@@ -86,8 +86,9 @@ export function deskEstimateUsd(step: StepName): number {
 export const expectedCredits = (language: string): number => queryCount(language) * CREDITS_PER_SEARCH[TAVILY_DEPTH]
 
 /**
- * What one story may cost before the run starts it: every step's estimate (the confirmation and a
- * rewrite included, so the run stops before it would overrun) plus its expected credits.
+ * What one story may cost before the run starts it: every step's estimate (the confirmation, one
+ * repair round and the derived fields included, so the run stops before it would overrun; a second
+ * repair round is not counted) plus its expected credits.
  */
 export function storyBudgetUsd(language: string): number {
   return STEPS.reduce((sum, s) => sum + deskEstimateUsd(s), 0) + expectedCredits(language) * TAVILY_USD_PER_CREDIT

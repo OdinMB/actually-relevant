@@ -116,3 +116,42 @@ Consequences: a misquote or a misattribution the fact check catches no longer re
 quote failing alone costs a rewrite, a medium-tier call; some researched stories publish without a
 key quote. Its problems count under `fact` in the tallies, told apart by the label `Key quote`
 (`.context/story-research.md`, "Own words").
+
+## Amendment 2026-11-13: copying standard
+
+The fact check flagged plain restatements of a source's fact as copying, such as "Countries raised
+domestic tuberculosis funding by 14% to $5.6 billion between 2024 and 2025, partly making up for
+falling international support." against WHO's "domestic funding for TB increased by 14% to US$ 5.6
+billion between 2024 and 2025, in part offsetting a decline in international financing of a
+similar scale." A flag costs a rewrite and, if it stays, the item or the run. The owner decided on
+2026-11-13 that the judge's standard is expression, not facts; the agent placed the rules marked
+below.
+
+- **Copying is reproducing a source's expression**: its distinctive phrasing, its sentence
+  structure, or its sequence of points across several sentences, in nearly the same words or as a
+  close translation. A close translation of a source's sentence still counts. The prompt words the
+  structure as "a sentence structure the facts do not dictate" (the agent's wording), so that it
+  does not contradict the next rule.
+- **Facts are free to use**: plainly restating one fact with its names, figures, units, period and
+  scope is not copying, even in the source's order and close to its words, since there are few
+  ways to say it.
+- **Following the order of the only source an item cites is not copying.** `followsSource` is for
+  an item whose sentences follow one source's order and phrasing while it draws on other sources
+  too. Code ignores it on an item whose cited facts all come from one source (`citesOneSource` in
+  `judgedProblems`; the agent's placement: a source's date fact `S2F0` counts as that source, and
+  an item that cites nothing, the title, summary or blurb, can still follow one).
+- **The code check is unchanged and stays the hard limit**: a run of 12 words shared with one
+  source line, or a quoted span of 4, fails whatever the judge says.
+- The fact-check prompt carries a generic Not copying / Copying pair on the same pattern (the
+  agent's placement), not the tuberculosis case, which stays the anchor in
+  `.context/story-research.md` and a test of the code check.
+
+Rule: the judge flags a source's expression, never a plainly stated fact; the 12-word run stays the
+hard line.
+
+Consequences: fewer copying flags, rewrites and drops on sentences that state figures. A sentence
+that keeps a source's order while stating only facts now passes the judge, unless it reaches the
+code's 12-word run. The standard is the owner's reading of press publishers' right and copyright,
+not a legal opinion: **the legal reviewer should see examples of it before it is relied on** (the
+tuberculosis anchor, and from the shadow week a sample of kept items that restate a fact close to
+their source's words) and may set a stricter line (`.context/ai-transparency.md`, §11).

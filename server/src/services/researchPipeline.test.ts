@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { TavilySearch } from '../lib/tavily.js'
-import type { Draft, Earlier, Extraction, FactCheck, Queries } from '../schemas/research.js'
+import type { Draft, Earlier, Extraction, FactCheck, Queries, Repair } from '../schemas/research.js'
 import type { ResearchStory } from './researchInput.js'
 import {
   BudgetExhaustedError,
@@ -129,24 +129,45 @@ const MODEL_OF: Record<StepName, string> = {
   write: 'medium-model',
   'fact-check': 'small-model',
   rewrite: 'medium-model',
+  derive: 'medium-model',
 }
+
+/** A responder's answer for a call the budget skips. */
+const SKIPPED = Symbol('skipped')
 
 /** A step caller that answers each step from `responders` and records the steps called. */
 function fakeCall(responders: Responder, outcome: StepOutcome = 'ok'): { call: ResearchCall; steps: StepName[] } {
   const steps: StepName[] = []
   const call: ResearchCall = async <T>(step: StepName, _schema: unknown, prompt: string) => {
     steps.push(step)
-    const parsed = outcome === 'ok' ? ((responders[step]?.(prompt) ?? null) as T | null) : null
+    const answer = outcome === 'ok' ? responders[step]?.(prompt) : null
+    const skipped = outcome === 'skipped' || answer === SKIPPED
+    const parsed = skipped ? null : ((answer ?? null) as T | null)
     return {
       parsed,
-      outcome: outcome === 'ok' && parsed === null ? 'parse_failure' : outcome,
+      outcome: skipped ? 'skipped' : outcome === 'ok' && parsed === null ? 'parse_failure' : outcome,
       usage: { input: 100, cached: 10, output: 50, reasoning: 10 },
-      costUsd: outcome === 'skipped' ? 0 : step === 'write' ? 0.004 : 0.001,
+      costUsd: skipped ? 0 : step === 'write' ? 0.004 : 0.001,
       model: MODEL_OF[step],
     }
   }
   return { call, steps }
 }
+
+/** A repair round's answer: these new texts, by label, and a new key quote if given. */
+const repair = (items: Record<string, { text: string; factIds: string[] }>, quote: Partial<Repair> = {}): Repair => ({
+  items: Object.entries(items).map(([label, item]) => ({ label, ...item })),
+  quote: '',
+  quoteAttribution: '',
+  quoteSourceId: '',
+  ...quote,
+})
+
+/** The labels a repair prompt asks to rewrite. */
+const asked = (prompt: string) => [...(/\n<REPAIRS>\n([\s\S]*?)\n<\/REPAIRS>/.exec(prompt)?.[1] ?? '').matchAll(/<ITEM label="([^"]+)">/g)].map(m => m[1])
+
+/** The labels a fact-check prompt judges. */
+const judgedLabels = (prompt: string) => [...prompt.matchAll(/<ITEM number="\d+" label="([^"]+)">/g)].map(m => m[1])
 
 function fakeTavily(response: ResearchSearchAnswer) {
   const requests: TavilySearch[] = []
@@ -336,34 +357,237 @@ describe('researchStory', () => {
     expect((await researchStory(story(), unchecked)).optOutChecked).toBe(false)
   })
 
-  it('rewrites exactly once after a failed check, and falls back when the rewrite fails it too', async () => {
+  it('repairs a failing item in two rounds at most, and falls back when an item the draft cannot do without still fails after both', async () => {
     const tavily = fakeTavily(searchResponse(['https://reuters.com/a']))
-    const { deps: d, fake } = deps({ tavily, responders: baseResponders({ write: () => goodDraft(['S9F9']), rewrite: () => goodDraft(['S9F9']) }) })
+    let round = 0
+    const stillWrong = () => repair({ 'Story paragraph 1': { text: `Pakistan added rooftop solar, take ${++round}.`, factIds: ['S9F9'] } })
+    const { deps: d, fake } = deps({ tavily, responders: baseResponders({ write: () => goodDraft(['S9F9']), rewrite: stillWrong }) })
     const r = await researchStory(story(), d)
     expect(fake.steps.filter(c => c === 'write')).toHaveLength(1)
-    expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
+    expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(2)
+    expect(fake.steps.filter(c => c === 'fact-check')).toHaveLength(3)
     expect(r.rewritten).toBe(true)
     expect(r.verdict).toEqual({
       kind: 'fallback',
-      reason: 'an item that cannot be dropped failed the check after one rewrite (Story paragraph 1)',
+      reason: 'an item that cannot be dropped failed the check after repair (Story paragraph 1)',
       category: 'draft_failed_check',
     })
     expect(r.failedOn).toBe('Story paragraph 1')
+    expect(r.checks.map(c => c.rechecked)).toEqual([undefined, ['Story paragraph 1'], ['Story paragraph 1']])
     expect(r.problems[0]?.problem).toContain('S9F9')
-    expect(r.draft).not.toBeNull()
+    expect(r.draft?.story[0]?.text).toBe('Pakistan added rooftop solar, take 2.')
   })
 
-  it('falls back when the fact check judges an unsupported claim key after the rewrite, and runs it beside the citation check', async () => {
+  it('falls back when the fact check judges an unsupported claim key after repair, and ends the rounds when a repair changes nothing', async () => {
     const failsKey = judging('Story paragraph 1', { supported: false, problem: 'no source says it happened', key: true })
-    const { deps: d, fake } = deps({ responders: baseResponders({ 'fact-check': failsKey, rewrite: () => goodDraft() }) })
+    const same = () => repair({ 'Story paragraph 1': { text: 'Pakistan put 22 GW of solar on its roofs in two years.', factIds: ['S0F1'] } })
+    const { deps: d, fake } = deps({ responders: baseResponders({ 'fact-check': failsKey, rewrite: same }) })
     const r = await researchStory(story(), d)
+    // The second round's answer repeats the first's, so nothing is checked again
+    expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(2)
     expect(fake.steps.filter(c => c === 'fact-check')).toHaveLength(2)
     expect(r.verdict).toEqual({
       kind: 'fallback',
-      reason: 'a key claim failed the check after one rewrite (Story paragraph 1)',
+      reason: 'a key claim failed the check after repair (Story paragraph 1)',
       category: 'draft_failed_check',
     })
     expect(r.failedOn).toBe('Story paragraph 1')
+  })
+
+  it('repairs only the items that failed, checks only those again, and never changes an item that passed, whatever the repair answers', async () => {
+    const repairs: string[] = []
+    const checks: string[] = []
+    const { deps: d, fake } = deps({
+      responders: baseResponders({
+        write: twoParagraphs,
+        'fact-check': p => {
+          checks.push(p)
+          return checks.length === 1 ? judging('Story paragraph 2', { copiedSentence: 'S1F2' })(p) : allSupported(p)
+        },
+        rewrite: p => {
+          repairs.push(p)
+          return repair({
+            'Story paragraph 2': { text: 'Grid demand fell as homes went solar.', factIds: ['S1F2'] },
+            'Story paragraph 1': { text: 'A passing paragraph rewritten anyway.', factIds: ['S0F1'] },
+            Title: { text: 'A title nobody asked for', factIds: [] },
+          })
+        },
+      }),
+    })
+    const r = await researchStory(story(), d)
+    expect(r.verdict).toEqual({ kind: 'keep' })
+    expect(r.draft).toEqual({ ...twoParagraphs(), story: [twoParagraphs().story[0], { text: 'Grid demand fell as homes went solar.', factIds: ['S1F2'] }] })
+    expect(asked(repairs[0]!)).toEqual(['Story paragraph 2'])
+    expect(judgedLabels(checks[1]!)).toEqual(['Story paragraph 2'])
+    expect(r.checks.map(c => c.rechecked)).toEqual([undefined, ['Story paragraph 2']])
+    expect(r.problems).toEqual([])
+    expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
+  })
+
+  it('keeps a paragraph the second round fixed when the first repair still failed it', async () => {
+    let round = 0
+    const judge = (p: string) => (p.includes('take 2') ? allSupported(p) : judging('Story paragraph 2', { copiedSentence: 'S1F2' })(p))
+    const { deps: d, fake } = deps({
+      responders: baseResponders({
+        write: twoParagraphs,
+        'fact-check': judge,
+        rewrite: () => repair({ 'Story paragraph 2': { text: `Grid demand fell with the boom, take ${++round}.`, factIds: ['S1F2'] } }),
+      }),
+    })
+    const r = await researchStory(story(), d)
+    expect(r.verdict).toEqual({ kind: 'keep' })
+    expect(r.draft?.story.map(p => p.text)).toEqual(['Pakistan added 22 GW of rooftop solar in two years.', 'Grid demand fell with the boom, take 2.'])
+    expect(r.problems).toEqual([])
+    expect(r.checks.map(c => c.problems.length)).toEqual([1, 1, 0])
+    expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(2)
+  })
+
+  describe('a title, summary or blurb still copying after the rounds', () => {
+    let round = 0
+    const copiedBlurb = () => repair({ Blurb: { text: `The boom cut grid demand, take ${++round}.`, factIds: [] } })
+    const derived = { title: 'A title not asked for', summary: 'A summary not asked for', marketingBlurb: 'Homes on solar need less from the grid.' }
+
+    it('is written again from the kept story alone, checked once more, and kept when it passes', async () => {
+      const derives: string[] = []
+      const judge = (p: string) => (p.includes(derived.marketingBlurb) ? allSupported(p) : judging('Blurb', { copiedSentence: 'S1F2' })(p))
+      const { deps: d, fake } = deps({
+        responders: baseResponders({
+          write: twoParagraphs,
+          'fact-check': judge,
+          rewrite: copiedBlurb,
+          derive: p => {
+            derives.push(p)
+            return derived
+          },
+        }),
+      })
+      const r = await researchStory(story(), d)
+      expect(r.verdict).toEqual({ kind: 'keep' })
+      expect(r.draft).toMatchObject({ title: twoParagraphs().title, summary: twoParagraphs().summary, marketingBlurb: derived.marketingBlurb })
+      expect(fake.steps.filter(c => c === 'derive')).toHaveLength(1)
+      // The kept paragraphs, and nothing of the sources' words
+      expect(derives[0]).toContain('The boom cut grid demand, Dawn reports.')
+      expect(derives[0]).not.toContain('Pakistan has added 22GW')
+      expect(r.checks.map(c => c.rechecked)).toEqual([undefined, ['Blurb'], ['Blurb'], ['Blurb']])
+    })
+
+    it('ends the run when the field written again still fails', async () => {
+      const { deps: d, fake } = deps({
+        responders: baseResponders({
+          write: twoParagraphs,
+          'fact-check': judging('Blurb', { copiedSentence: 'S1F2' }),
+          rewrite: copiedBlurb,
+          derive: () => derived,
+        }),
+      })
+      const r = await researchStory(story(), d)
+      expect(fake.steps.filter(c => c === 'derive')).toHaveLength(1)
+      expect(r.verdict).toEqual({
+        kind: 'fallback',
+        reason: 'an item that cannot be dropped failed the check after repair (Blurb)',
+        category: 'draft_failed_check',
+      })
+    })
+
+    it('is not written again when the run falls back anyway', async () => {
+      const both = (p: string): FactCheck => ({
+        items: allSupported(p).items.map(v => {
+          const label = judgedLabels(p)[v.number - 1]
+          if (label === 'Story paragraph 1') return { ...v, supported: false, problem: 'no source says it happened' }
+          return label === 'Blurb' ? { ...v, copiedSentence: 'S1F2' } : v
+        }),
+      })
+      const { deps: d, fake } = deps({
+        responders: baseResponders({ write: twoParagraphs, 'fact-check': both, rewrite: () => repair({}), derive: () => derived }),
+      })
+      const r = await researchStory(story(), d)
+      expect(fake.steps).not.toContain('derive')
+      expect(r.failedOn).toBe('Story paragraph 1')
+    })
+  })
+
+  it('stops repairing when the budget skips a call, and drops or keeps on what the last check found', async () => {
+    const twoBullets = (): Draft => ({
+      ...goodDraft(),
+      whyThisMatters: [
+        { text: 'Cheap power reaches millions.', factIds: [] },
+        { text: 'About 40 households benefit.', factIds: [] },
+      ],
+    })
+    const fails = judging('Why This Matters 2', { supported: false, problem: 'no fact gives 40 households' })
+
+    const { deps: skipsRepair, fake } = deps({ responders: baseResponders({ write: twoBullets, 'fact-check': fails, rewrite: () => SKIPPED }) })
+    const r = await researchStory(story(), skipsRepair)
+    expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
+    expect(r.checks).toHaveLength(1)
+    expect(r.verdict).toEqual({ kind: 'keep' })
+    expect(r.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.'])
+
+    // A repair the budget left unchecked is never kept: the draft keeps what the last check saw
+    let checks = 0
+    let round = 0
+    const { deps: skipsRecheck, fake: fake2 } = deps({
+      responders: baseResponders({
+        write: twoBullets,
+        'fact-check': p => (++checks === 1 ? fails(p) : SKIPPED),
+        rewrite: () => repair({ 'Why This Matters 2': { text: `Many households benefit, take ${++round}.`, factIds: [] } }),
+      }),
+    })
+    const unchecked = await researchStory(story(), skipsRecheck)
+    expect(fake2.steps.filter(c => c === 'rewrite')).toHaveLength(1)
+    expect(unchecked.checks).toHaveLength(1)
+    expect(unchecked.verdict).toEqual({ kind: 'keep' })
+    expect(unchecked.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.'])
+  })
+
+  it('records a repair as asked for when its answer changes nothing, and drops the item still failing', async () => {
+    const twoBullets = (): Draft => ({
+      ...goodDraft(),
+      whyThisMatters: [
+        { text: 'Cheap power reaches millions.', factIds: [] },
+        { text: 'About 40 households benefit.', factIds: [] },
+      ],
+    })
+    const fails = judging('Why This Matters 2', { supported: false, problem: 'no fact gives 40 households' })
+    const empty = repair({ 'Why This Matters 2': { text: ' ', factIds: [] } })
+    const same = repair({ 'Why This Matters 2': { text: 'About 40 households benefit.', factIds: [] } })
+    for (const answer of [empty, same]) {
+      const { deps: d, fake } = deps({ responders: baseResponders({ write: twoBullets, 'fact-check': fails, rewrite: () => answer }) })
+      const r = await researchStory(story(), d)
+      expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
+      expect(r.rewritten).toBe(true)
+      expect(r.checks).toHaveLength(1)
+      expect(r.verdict).toEqual({ kind: 'keep' })
+      expect(r.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.'])
+    }
+  })
+
+  it('ends the run as technical when a repair answer fails to parse, recording the repair as asked for', async () => {
+    const copied = judging('Story paragraph 2', { copiedSentence: 'S1F2' })
+    const { deps: d } = deps({ responders: baseResponders({ write: twoParagraphs, 'fact-check': copied, rewrite: () => null }) })
+    const r = await researchStory(story(), d)
+    expect(r.rewritten).toBe(true)
+    expect(r.verdict).toEqual({ kind: 'fallback', reason: 'rewrite: parse_failure', category: 'technical' })
+  })
+
+  it('drops a bullet the fact check judges key after the rewrite and keeps the run, recording the judgment', async () => {
+    const threeBullets = (): Draft => ({
+      ...goodDraft(),
+      whyThisMatters: [
+        { text: 'Cheap power reaches millions.', factIds: [] },
+        { text: 'Factories pay less for power.', factIds: [] },
+        { text: 'Households now sell power back to the grid.', factIds: ['S0F1'] },
+      ],
+    })
+    const failsKey = judging('Why This Matters 3', { supported: false, problem: 'no source says households sell power', key: true })
+    const sells = () => repair({ 'Why This Matters 3': { text: 'Households now sell their spare power.', factIds: ['S0F1'] } })
+    const { deps: d } = deps({ responders: baseResponders({ write: threeBullets, rewrite: sells, 'fact-check': failsKey }) })
+    const r = await researchStory(story(), d)
+    expect(r.rewritten).toBe(true)
+    expect(r.verdict).toEqual({ kind: 'keep' })
+    expect(r.failedOn).toBeNull()
+    expect(r.draft?.whyThisMatters.map(b => b.text)).toEqual(['Cheap power reaches millions.', 'Factories pay less for power.'])
+    expect(r.problems).toEqual([expect.objectContaining({ label: 'Why This Matters 3', kind: 'fact', by: 'judge', key: true })])
   })
 
   it("never shows the writer the article's text, so every source wording it reads is in front of the checks", async () => {
@@ -422,12 +646,20 @@ describe('researchStory', () => {
     expect(r.verdict).toEqual({ kind: 'keep' })
   })
 
-  it('falls back on a draft with no caveat even when it passes its checks, naming the part', async () => {
+  it('falls back on a draft with no caveat even when it passes its checks, naming the part, and repairs nothing in it', async () => {
     const { deps: d, fake } = deps({ responders: baseResponders({ write: () => ({ ...goodDraft(), caveats: [] }) }) })
     const r = await researchStory(story(), d)
     expect(fake.steps).not.toContain('rewrite')
     expect(r.verdict).toEqual({ kind: 'fallback', reason: 'the draft has no caveat', category: 'draft_failed_check' })
     expect(r.failedOn).toBe('Caveats')
+
+    // No repair can give it the part it lacks, so none is asked for
+    const failing = judging('Story paragraph 2', { copiedSentence: 'S1F2' })
+    const { deps: withProblems, fake: fake2 } = deps({
+      responders: baseResponders({ write: () => ({ ...twoParagraphs(), caveats: [] }), 'fact-check': failing }),
+    })
+    expect((await researchStory(story(), withProblems)).failedOn).toBe('Caveats')
+    expect(fake2.steps).not.toContain('rewrite')
   })
 
   it("sends every item to the judge in order, the uncited without cited facts, beside each outside source's own words and none of ours", async () => {
@@ -494,19 +726,20 @@ describe('researchStory', () => {
       expect(prompts[0]).toContain('<QUOTE id="S0Q1" speaker="Shehbaz Sharif, prime minister">')
     })
 
-    it('is rewritten when the judge finds it unfaithful, and dropped, never the run, when the rewrite still fails it', async () => {
+    it('is repaired when the judge finds it unfaithful, and dropped, never the run, when the repairs still fail it', async () => {
       const rewrites: string[] = []
       const { deps: d } = deps({
         responders: baseResponders({
           rewrite: p => {
             rewrites.push(p)
-            return goodDraft()
+            return repair({}, { quote: 'We added 22GW', quoteAttribution: 'Prime minister', quoteSourceId: 'S0' })
           },
           'fact-check': judging('Key quote', { supported: false, problem: 'the prime minister did not say this', key: true }),
         }),
       })
       const r = await researchStory(story(), d)
-      expect(rewrites[0]).toContain('- Key quote (&quot;We have added 22GW&quot;) fails the fact check: the prime minister did not say this')
+      expect(asked(rewrites[0]!)).toEqual(['Key quote'])
+      expect(rewrites[0]).toContain('<PROBLEM>fails the fact check: the prime minister did not say this</PROBLEM>')
       expect(r.verdict).toEqual({ kind: 'keep' })
       expect(r.failedOn).toBeNull()
       expect(r.draft).toMatchObject({ quote: '', quoteAttribution: '', quoteSourceId: '' })
@@ -514,13 +747,13 @@ describe('researchStory', () => {
       expect(r.checks.map(c => c.problems.map(p => p.label))).toEqual([['Key quote'], ['Key quote']])
     })
 
-    it('fails in code, without the judge, when it names no source of the run; the rewrite can fix it, else it is dropped', async () => {
+    it('fails in code, without the judge, when it names no source of the run; a repair can fix it, else it is dropped', async () => {
       const prompts: string[] = []
       const run = async (rewritten: string) => {
         const { deps: d } = deps({
           responders: baseResponders({
             write: () => ({ ...goodDraft(), quoteSourceId: 'E1' }),
-            rewrite: () => ({ ...goodDraft(), quoteSourceId: rewritten }),
+            rewrite: () => repair({}, { quote: 'We have added 22GW', quoteAttribution: 'Prime minister', quoteSourceId: rewritten }),
             'fact-check': p => {
               prompts.push(p)
               return allSupported(p)
@@ -572,23 +805,22 @@ describe('researchStory', () => {
     })
   })
 
-  it('rewrites a paragraph the judge finds copied, saying so, and drops it when the rewrite still copies', async () => {
+  it('repairs a paragraph the judge finds copied, saying so, and drops it when the repairs still copy', async () => {
     const rewrites: string[] = []
     const { deps: d } = deps({
       responders: baseResponders({
         write: twoParagraphs,
         rewrite: p => {
           rewrites.push(p)
-          return twoParagraphs()
+          return repair({ 'Story paragraph 2': { text: 'Grid demand fell with the boom, Dawn reports.', factIds: ['S1F2'] } })
         },
         'fact-check': judging('Story paragraph 2', { copiedSentence: 'S1F2' }),
       }),
     })
     const r = await researchStory(story(), d)
-    // The line quotes the source sentence it echoed, so the rewrite can see it
-    expect(rewrites[0]).toContain(
-      '- Story paragraph 2 (&quot;The boom cut grid demand, Dawn reports.&quot;) renders S1F2 (&quot;The boom cut grid demand.&quot;) closely',
-    )
+    // The problem quotes the source sentence it echoed, so the repair can see it
+    expect(rewrites[0]).toContain('<TEXT>The boom cut grid demand, Dawn reports.</TEXT>')
+    expect(rewrites[0]).toContain('<PROBLEM>renders S1F2 (&quot;The boom cut grid demand.&quot;) closely</PROBLEM>')
     expect(r.verdict).toEqual({ kind: 'keep' })
     expect(r.draft?.story.map(p => p.text)).toEqual(['Pakistan added 22 GW of rooftop solar in two years.'])
     expect(r.checks.map(c => c.problems.map(p => [p.label, p.kind, p.by, p.sourceId]))).toEqual([
@@ -598,7 +830,7 @@ describe('researchStory', () => {
     expect(r.checks[0]?.longestRuns).toContainEqual({ label: 'Story paragraph 2', sourceId: 'S1', against: 'wording', words: 5 })
   })
 
-  it("rewrites a paragraph that repeats a run of a source's words, and drops it when the rewrite still does", async () => {
+  it("repairs a paragraph that repeats a run of a source's words, and drops it when the repairs still do", async () => {
     const said = 'Households across the country installed more panels this year than in any year before, the energy ministry said.'
     const withSaying = () =>
       extraction({ facts: [...extraction().facts, { statement: 'Households installed a record number of panels.', supportingSentence: said, measures: '' }] })
@@ -613,7 +845,12 @@ describe('researchStory', () => {
         write: copying,
         rewrite: p => {
           rewrites.push(p)
-          return copying()
+          return repair({
+            'Story paragraph 2': {
+              text: 'Households across the country installed more panels this year than in any year before, officials say.',
+              factIds: ['S1F3'],
+            },
+          })
         },
       }),
     })
@@ -629,7 +866,8 @@ describe('researchStory', () => {
       const unsupported = new Set(['Title', 'Why This Matters 1', 'Story paragraph 2'].map(label => itemNumber(p, label)))
       return { items: allSupported(p).items.map(i => (unsupported.has(i.number) ? { ...i, supported: false, problem: 'the grid is not mentioned' } : i)) }
     }
-    const { deps: d } = deps({ responders: baseResponders({ write: twoParagraphs, rewrite: twoParagraphs, 'fact-check': judged }) })
+    const gridAgain = () => repair({ 'Story paragraph 2': { text: 'The boom eased the strain on the grid.', factIds: ['S1F2'] } })
+    const { deps: d } = deps({ responders: baseResponders({ write: twoParagraphs, rewrite: gridAgain, 'fact-check': judged }) })
     const r = await researchStory(story(), d)
     expect(r.problems).toEqual([
       expect.objectContaining({ label: 'Story paragraph 2', kind: 'fact', by: 'judge', problem: 'fails the fact check: the grid is not mentioned' }),
@@ -685,7 +923,8 @@ describe('researchStory', () => {
     expect(kept.draft?.whyThisMatters).toHaveLength(2)
 
     const fails = judging('Why This Matters 2', { supported: false, problem: 'no fact gives 40 households' })
-    const { deps: d } = deps({ responders: baseResponders({ write: withBullets, rewrite: withBullets, 'fact-check': fails }) })
+    const fortyHomes = () => repair({ 'Why This Matters 2': { text: 'About 40 homes benefit.', factIds: [] } })
+    const { deps: d } = deps({ responders: baseResponders({ write: withBullets, rewrite: fortyHomes, 'fact-check': fails }) })
     const r = await researchStory(story(), d)
     expect(r.rewritten).toBe(true)
     expect(r.verdict).toEqual({ kind: 'keep' })
@@ -710,7 +949,7 @@ describe('researchStory', () => {
     expect(r.draft?.quote).toBe('"We have added 22GW"')
   })
 
-  it('keeps a draft the rewrite fixed, after a fact check that found an unsupported sentence', async () => {
+  it('keeps a draft a repair fixed by citing another fact, after a fact check that found an unsupported claim', async () => {
     let checks = 0
     const { deps: d, fake } = deps({
       responders: baseResponders({
@@ -718,7 +957,7 @@ describe('researchStory', () => {
           checks++
           return checks === 1 ? judging('Story paragraph 1', { supported: false, problem: 'two years is not stated' })(p) : allSupported(p)
         },
-        rewrite: () => goodDraft(['S0F1', 'S1F1']),
+        rewrite: () => repair({ 'Story paragraph 1': { text: 'Pakistan added 22 GW of rooftop solar in two years.', factIds: ['S0F1', 'S1F1'] } }),
       }),
     })
     const r = await researchStory(story(), d)

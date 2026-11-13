@@ -32,7 +32,9 @@ const STEP_OUTPUT_TOKENS: Record<StepName, number> = {
   earlier: 500,
   write: 4500,
   'fact-check': 1000,
+  // A repair round now; still sized for a whole draft, so it reserves more than one needs
   rewrite: 5500,
+  derive: 1500,
 }
 
 const HAN = /\p{Script=Han}/gu

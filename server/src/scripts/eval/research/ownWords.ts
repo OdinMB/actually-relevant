@@ -32,9 +32,9 @@ export function causeOf(p: CitationProblem): ProblemCause {
 export interface CauseCounts {
   /** Problems in the first draft. */
   firstDraftFlags: number
-  /** Runs rewritten with a first-draft problem of this cause. */
+  /** Runs repaired with a first-draft problem of this cause. */
   rewrites: number
-  /** Items still failing after the rewrite in a draft that was kept, so dropped from it. */
+  /** Items still failing after repair in a draft that was kept, so dropped from it. */
   dropped: number
   /** `draft_failed_check` fallbacks whose failing item had a problem of this cause. */
   fallbacks: number
@@ -135,7 +135,7 @@ const share = (part: number, whole: number) => (whole === 0 ? `${part}` : `${par
 export function ownWordsLines(results: StoryResearch[]): string[] {
   const w = ownWords(results)
   return [
-    'First-draft problems by cause, the rewrites they caused, the items still failing after the rewrite (dropped from a kept draft) and the `draft_failed_check` fallbacks whose failing item they caused. A run or an item with problems of several causes counts under each. `code` is the deterministic check, `judge` the fact-check model.',
+    'First-draft problems by cause, the repaired runs they caused, the items still failing after repair (dropped from a kept draft) and the `draft_failed_check` fallbacks whose failing item they caused. A run or an item with problems of several causes counts under each. `code` is the deterministic check, `judge` the fact-check model.',
     '',
     '| Cause | First-draft flags | Rewrites | Items dropped | Fallbacks |',
     '|---|---|---|---|---|',

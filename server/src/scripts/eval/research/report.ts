@@ -285,7 +285,7 @@ function draftLines(d: Draft, r: StoryResearch, storedRating: number): string[] 
     ...d.story.flatMap(p => [cited(p.text, p.factIds, r), '']),
     `**Summary:** ${d.summary}`,
     '',
-    // A key quote the fact check still failed after the rewrite was dropped
+    // A key quote the fact check still failed after repair was dropped
     ...(d.quote ? [`> ${d.quote}`, `> — ${d.quoteAttribution} (${quoteSource})`] : ['_No key quote._']),
     '',
     '**Why This Matters**',
@@ -327,7 +327,7 @@ export function renderDrafts(input: { stories: ResearchStory[]; results: StoryRe
     return [
       `## ${i + 1}. ${p?.title ?? r.storyId}`,
       '',
-      `${st?.datePublished.slice(0, 10) ?? ''} · [on the site](${input.siteUrl}/stories/${st?.slug ?? ''}) · verdict: **${verdict}**${r.rewritten ? ' (rewritten once)' : ''}`,
+      `${st?.datePublished.slice(0, 10) ?? ''} · [on the site](${input.siteUrl}/stories/${st?.slug ?? ''}) · verdict: **${verdict}**${r.rewritten ? ' (repaired)' : ''}`,
       '',
       '### Published today',
       '',
