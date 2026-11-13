@@ -334,7 +334,7 @@ export const config = {
       perRun: parseWholeNumber(process.env.RESEARCH_PIPELINE_PER_RUN, 20, 'RESEARCH_PIPELINE_PER_RUN'),
       /**
        * Stories one run researches at once, so a day's selection is done well before publishing
-       * (daily at 02:07 and 02:45 UTC). Each run reserves its ceiling under the advisory lock, one
+       * (daily at 02:20 and 02:45 UTC). Each run reserves its ceiling under the advisory lock, one
        * after another, so runs side by side never pass the monthly cap.
        */
       concurrency: 4,

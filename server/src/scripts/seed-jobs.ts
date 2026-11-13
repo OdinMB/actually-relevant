@@ -31,12 +31,12 @@ async function main() {
       update: {},
       create: { jobName: 'select_stories', cronExpression: '0 10 * * *', enabled: false },
     }),
-    // Daily, just after select_stories, so the day's selected stories are researched before
-    // publish_stories takes them (.context/story-research.md); production runs 02:05, 02:07, 02:45
+    // Daily, 15 minutes after select_stories, so the day's selected stories are researched before
+    // publish_stories takes them (.context/story-research.md); production runs 02:05, 02:20, 02:45
     prisma.jobRun.upsert({
       where: { jobName: 'research_stories' },
       update: {},
-      create: { jobName: 'research_stories', cronExpression: '2 10 * * *', enabled: false },
+      create: { jobName: 'research_stories', cronExpression: '15 10 * * *', enabled: false },
     }),
     prisma.jobRun.upsert({
       where: { jobName: 'publish_stories' },

@@ -62,11 +62,13 @@ describe('MethodologyPage', () => {
     expect(heading.nextElementSibling?.nextElementSibling?.textContent).toContain(`carry the label "${lead} AI${tail}" and list`)
   })
 
-  it('names only what research found as a reason not to publish, never a lower rating (owner decision 2026-11-12)', () => {
+  it('names only what research found as a reason not to publish, and no time limit among the single-source cases (owner decisions 2026-11-12)', () => {
     renderPage(<MethodologyPage />)
-    const checks = screen.getByRole('heading', { name: 'Researched Stories' }).nextElementSibling?.nextElementSibling?.textContent ?? ''
+    const checks = (screen.getByRole('heading', { name: 'Researched Stories' }).nextElementSibling?.nextElementSibling?.textContent ?? '').replace(/\s+/g, ' ')
     expect(checks).toContain("If the research shows that the story is old news or is contradicted by other reports, we don't publish it.")
     expect(checks).not.toMatch(/matters less/)
+    // A story still owed research at the daily publish usually goes out researched a day later
+    expect(checks).toContain('or the research fails or would exceed our monthly research budget, we publish the single-source version instead.')
   })
 })
 

@@ -86,7 +86,11 @@ function expandField(field: string, rule: FieldRule, kind?: 'month' | 'weekday')
 
 // Describing the values
 
-/** How a field's values read: every value, every nth from 0, one unbroken range, or a list. */
+/**
+ * How a field's values read: every value, every nth from 0, one unbroken range, or a list. A step
+ * reads as "every n" only where n divides the field's span: a 45-minute step runs at :00 and :45,
+ * then at :00 again 15 minutes later, so it reads as its list.
+ */
 type Shape = { kind: 'all' } | { kind: 'step'; n: number } | { kind: 'range'; from: number; to: number } | { kind: 'list'; values: number[] }
 
 function shapeOf(field: string, values: number[], [lo, hi]: [number, number]): Shape {
@@ -95,7 +99,9 @@ function shapeOf(field: string, values: number[], [lo, hi]: [number, number]): S
   if (values.length === hi - lo + 1) return { kind: 'all' }
   const n = values[1]! - values[0]!
   const multiples = span(lo, hi).filter(v => v % n === 0)
-  if (values.length > 1 && values[0] === 0 && multiples.length === values.length && multiples.every((v, i) => v === values[i])) return { kind: 'step', n }
+  const even = (hi - lo + 1) % n === 0
+  if (even && values.length > 1 && values[0] === 0 && multiples.length === values.length && multiples.every((v, i) => v === values[i]))
+    return { kind: 'step', n }
   const last = values[values.length - 1]!
   if (values.length > 1 && last - values[0]! === values.length - 1) return { kind: 'range', from: values[0]!, to: last }
   return { kind: 'list', values }
@@ -139,26 +145,36 @@ function minutesPhrase(shape: Shape): string | null {
 
 const hourRange = (from: number, to: number) => `${formatHourLabel(from)} \u2013 ${formatHourLabel(to)}`
 const inHours = (hours: number[]) => `in the ${hours.map(formatHourLabel).join(', ')} hour${hours.length === 1 ? '' : 's'}`
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-/** The time of day: clock times when there are few enough, else what runs within which hours. */
-function timeOfDay(minute: Shape, hour: Shape, second: number): { clock: string } | { phrase: string } {
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+/**
+ * The time of day, in lower case for the caller to place: clock times when there are few enough,
+ * else what runs within which hours. `minutes` and `hours` are the fields' values.
+ */
+function timeOfDay(minute: Shape, hour: Shape, minutes: number[], hours: number[], second: number): { clock: string } | { phrase: string } {
   if (minute.kind === 'list') {
     const mins = minute.values.map(minuteMark).join(', ')
     const onTheHour = minute.values.length === 1 && minute.values[0] === 0
     if (hour.kind === 'list' && minute.values.length * hour.values.length <= 12) {
       return { clock: hour.values.flatMap(h => minute.values.map(m => formatTime(h, m, second))).join(', ') }
     }
-    if (hour.kind === 'all') return { phrase: onTheHour ? 'Every hour' : `Hourly at ${mins}` }
-    if (hour.kind === 'step') return { phrase: `Every ${plural(hour.n, 'hour')}${onTheHour ? '' : ` at ${mins}`}` }
-    if (hour.kind === 'range') return { phrase: `${onTheHour ? 'Every hour' : `Hourly at ${mins}`}, ${hourRange(hour.from, hour.to)}` }
-    return { phrase: `Hourly at ${mins} ${inHours(hour.values)}` }
+    if (hour.kind === 'all') return { phrase: onTheHour ? 'every hour' : `hourly at ${mins}` }
+    if (hour.kind === 'step') return { phrase: `every ${plural(hour.n, 'hour')}${onTheHour ? '' : ` at ${mins}`}` }
+    if (hour.kind === 'range') return { phrase: `${onTheHour ? 'every hour' : `hourly at ${mins}`}, ${hourRange(hour.from, hour.to)}` }
+    return { phrase: `hourly at ${mins} ${inHours(hours)}` }
   }
-  const every = cap(minutesPhrase(minute)!)
+  // Minutes that repeat within the hour: one schedule, named by the hours it runs in
+  const every = minutesPhrase(minute)!
   if (hour.kind === 'all') return { phrase: every }
-  if (hour.kind === 'step') return { phrase: `${every}, every ${plural(hour.n, 'hour')}` }
-  if (hour.kind === 'range') return { phrase: `${every}, ${hourRange(hour.from, hour.to)}` }
-  return { phrase: `${every} ${inHours(hour.values)}` }
+  if (hour.kind === 'step') return { phrase: hour.n === 2 ? `${every} in even hours` : `${every} ${inHours(hours)}` }
+  if (hour.kind === 'range' && minute.kind === 'range') {
+    return { phrase: `${every} in the hours from ${formatHourLabel(hour.from)} to ${formatHourLabel(hour.to)}` }
+  }
+  // From the first run to the last, so the range never reads as ending on the hour
+  if (hour.kind === 'range') {
+    return { phrase: `${every} from ${formatTime(hour.from, minutes[0]!)} to ${formatTime(hour.to, minutes[minutes.length - 1]!)}` }
+  }
+  return { phrase: `${every} ${inHours(hours)}` }
 }
 
 /** The weekdays a schedule needs, or null for every day. */
@@ -199,25 +215,26 @@ export function cronToHuman(expr: string): string {
   const second = shapeOf(secondField, seconds, SECOND.all)
   // One second past the minute shows in the clock times; several, as their own phrase first
   const oneSecond = second.kind === 'list' && second.values.length === 1 && minute.kind === 'list' && hour.kind === 'list' ? second.values[0]! : 0
-  const time = timeOfDay(minute, hour, oneSecond)
+  const time = timeOfDay(minute, hour, minutes, hours, oneSecond)
   const weekday = weekdaysPhrase(weekdays)
   const day = days.length === 31 ? null : `on day${days.length === 1 ? '' : 's'} ${compress(days, String)} of the month`
   const month = months.length === 12 ? null : `in ${compress(months, m => MONTHS[m - 1]!)}`
 
+  // Built in lower case (a weekday's name keeps its capital), capitalized only where it leads
   let text: string
   if (!day && !month) {
-    if ('clock' in time) text = weekday ? `${weekday} at ${time.clock}` : `Daily at ${time.clock}`
-    else text = weekday ? `${weekday}, ${time.phrase.charAt(0).toLowerCase()}${time.phrase.slice(1)}` : time.phrase
+    if ('clock' in time) text = weekday ? `${weekday} at ${time.clock}` : `daily at ${time.clock}`
+    else text = weekday ? `${weekday}, ${time.phrase}` : time.phrase
   } else {
-    const base = 'clock' in time ? `${day ? 'At' : 'Daily at'} ${time.clock}` : time.phrase
+    const base = 'clock' in time ? `${day ? 'at' : 'daily at'} ${time.clock}` : time.phrase
     text = [base, day, month].filter(Boolean).join(' ') + (weekday ? `, ${weekday} only` : '')
   }
 
   // On the minute, or one second already in the clock times: nothing more to say
-  if (oneSecond || (seconds.length === 1 && seconds[0] === 0)) return text
+  if (oneSecond || (seconds.length === 1 && seconds[0] === 0)) return cap(text)
   // "Every 30 seconds" says it all; a list of seconds still needs "every minute" after it
   const everyMinute = minute.kind === 'all' && hour.kind === 'all' && !day && !month && !weekday && second.kind !== 'list'
-  return everyMinute ? secondsPhrase(second) : `${secondsPhrase(second)}, ${text.charAt(0).toLowerCase()}${text.slice(1)}`
+  return everyMinute ? secondsPhrase(second) : `${secondsPhrase(second)}, ${text}`
 }
 
 /** "Every second", "Every 30 seconds", "Every second from :00 to :10", "At seconds 0, 30". */
