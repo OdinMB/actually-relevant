@@ -126,7 +126,7 @@ function longestRun(a: string[], b: string[]): string[] {
 /** A quoted span this long or longer is a source's words outside the key quote. */
 const QUOTED_SPAN_WORDS = 4
 
-/** Each item's longest run of words shared with one source, per kind, recorded below the threshold too (the shadow week's distribution). */
+/** Each item's longest run of words shared with one source, per kind, recorded below the threshold too (the weekly tally's distribution). */
 export interface LongestRun {
   label: string
   sourceId: string

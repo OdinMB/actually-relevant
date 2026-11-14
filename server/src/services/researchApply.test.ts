@@ -22,17 +22,9 @@ const mockEmbed = vi.hoisted(() => vi.fn())
 vi.mock('./embedding.js', () => ({ generateEmbeddingForContent: mockEmbed }))
 const mockFavicons = vi.hoisted(() => vi.fn())
 vi.mock('./sourceFavicons.js', () => ({ fetchSourceFaviconsInBackground: mockFavicons }))
-// The owner's gate (RESEARCH_APPLY_ENABLED) and the research step's mode are read at startup; the key
-// stays a getter on the real config
-const applyGate = vi.hoisted(() => ({ enabled: true, mode: 'apply' as 'shadow' | 'apply' }))
-vi.mock('../config.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('../config.js')>()
-  Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => applyGate.enabled })
-  Object.defineProperty(actual.config.research.pipeline, 'mode', { get: () => applyGate.mode })
-  return actual
-})
 
-const { applyResearchRun, applyRefusal, applyVerdict, pipelineMode, revertResearch } = await import('./researchApply.js')
+// The real config: the key is its only research switch (owner decision 2026-11-14)
+const { applyResearchRun, applyRefusal, applyVerdict, revertResearch } = await import('./researchApply.js')
 const { buildResearchedStory } = await import('./researchedStory.js')
 
 const STORY = 'story-1'
@@ -145,8 +137,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllEnvs()
   vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
-  applyGate.enabled = true
-  applyGate.mode = 'apply'
   mockTransition.mockImplementation(async (ids: string[]) => ({ moved: ids, skipped: [] }))
   mockPrisma.story.findUnique.mockResolvedValue(storyRow())
   mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow())
@@ -225,7 +215,6 @@ describe('applyResearchRun', () => {
       ConflictError,
       /switched off/,
     ],
-    ['any run until the owner opens applying after the legal check', () => (applyGate.enabled = false), ConflictError, /RESEARCH_APPLY_ENABLED/],
     ['an unknown story', () => mockPrisma.story.findUnique.mockResolvedValue(null), NotFoundError, /Story not found/],
     ['an unknown run', () => mockPrisma.storyResearchRun.findUnique.mockResolvedValue(null), NotFoundError, /run not found/],
     ['a run of another story', () => mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow({ storyId: 'story-2' })), ConflictError, /another story/],
@@ -303,21 +292,6 @@ describe('applyResearchRun', () => {
   })
 })
 
-describe('pipelineMode', () => {
-  it('is apply only when the mode is apply and the owner has opened applying', () => {
-    expect(pipelineMode()).toEqual({ mode: 'apply' })
-    applyGate.mode = 'shadow'
-    expect(pipelineMode()).toMatchObject({ mode: 'shadow' })
-  })
-
-  it('holds apply mode to shadow while applying is closed, and names the setting that holds it', () => {
-    applyGate.enabled = false
-    expect(pipelineMode()).toEqual({ mode: 'shadow', heldBack: 'RESEARCH_APPLY_ENABLED is not "true"' })
-    vi.stubEnv('TAVILY_API_KEY', '')
-    expect(pipelineMode()).toEqual({ mode: 'shadow', heldBack: 'TAVILY_API_KEY is not set' })
-  })
-})
-
 describe('applyVerdict', () => {
   const selectedRow = (over: Record<string, unknown> = {}) => storyRow({ status: 'selected', ...over })
   /** The story as the job read it before the run started. */
@@ -329,7 +303,7 @@ describe('applyVerdict', () => {
     mockPrisma.story.findUnique.mockResolvedValue(selectedRow())
   })
 
-  it("in apply mode, puts a kept run's version on the story as the pipeline, against the status and last write read before the run", async () => {
+  it("puts a kept run's version on the story as the pipeline, against the status and last write read before the run", async () => {
     await expect(applyVerdict(STORY, RUN, READ, result())).resolves.toBe('applied')
 
     const { stage, actor, row, expected } = lastWrite()
@@ -359,7 +333,7 @@ describe('applyVerdict', () => {
     ['stale', stale, 'stale'],
     ['contradicted', { kind: 'contradicted', factIds: ['S1F1'] }, 'contradicted'],
   ] as const)(
-    'in apply mode, rejects a %s verdict with its reason through the pipeline move, fenced on the last write read before the run',
+    'rejects a %s verdict with its reason through the pipeline move, fenced on the last write read before the run',
     async (_name, verdict, reason) => {
       await expect(applyVerdict(STORY, RUN, READ, result({ verdict }))).resolves.toBe('rejected')
       expect(mockTransition).toHaveBeenCalledWith([STORY], { to: 'rejected', reason }, 'pipeline', { where: { updatedAt: READ_AT } })
@@ -405,19 +379,6 @@ describe('applyVerdict', () => {
     arrange()
     await expect(applyVerdict(STORY, RUN, READ, run)).resolves.toBe('skipped')
     expect(mockFavicons).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['shadow mode', () => (applyGate.mode = 'shadow')],
-    ['apply mode while the owner’s gate is closed', () => (applyGate.enabled = false)],
-  ])('as a backstop to its caller, applies no verdict in %s', async (_name, arrange) => {
-    arrange()
-    for (const verdict of [{ kind: 'keep' }, { kind: 'research-rating', rating: 3 }, { kind: 'fallback', reason: 'budget', category: 'technical' }] as const) {
-      await expect(applyVerdict(STORY, RUN, READ, result({ verdict }))).resolves.toBe('shadow')
-    }
-    expect(mockPrisma.story.findUnique).not.toHaveBeenCalled()
-    expect(mockRecord).not.toHaveBeenCalled()
-    expect(mockTransition).not.toHaveBeenCalled()
   })
 })
 
@@ -477,11 +438,8 @@ describe('revertResearch', () => {
     await expect(revertResearch(STORY)).rejects.toThrow(/changed while this was written/)
   })
 
-  it.each([
-    ['research is switched off', () => vi.stubEnv('TAVILY_API_KEY', '')],
-    ['applying is closed', () => (applyGate.enabled = false)],
-  ])('still reverts while %s, so a story can always be taken back', async (_name, close) => {
-    close()
+  it('still reverts while research is switched off, so a story can always be taken back', async () => {
+    vi.stubEnv('TAVILY_API_KEY', '')
     mockPrisma.story.findUnique.mockResolvedValue(researched())
     await expect(revertResearch(STORY)).resolves.toBeUndefined()
     expect(mockRecord).toHaveBeenCalledTimes(1)
@@ -489,14 +447,26 @@ describe('revertResearch', () => {
 })
 
 describe('applyRefusal', () => {
-  it('is null while research is on and the owner has opened applying', () => {
+  it('is null while research is switched on: applying has no gate of its own', () => {
     expect(applyRefusal()).toBeNull()
   })
 
-  it('names the missing key first, then the closed gate', () => {
-    applyGate.enabled = false
-    expect(applyRefusal()).toMatch(/RESEARCH_APPLY_ENABLED/)
+  it('refuses while research is switched off, naming the key', () => {
     vi.stubEnv('TAVILY_API_KEY', '')
     expect(applyRefusal()).toMatch(/TAVILY_API_KEY/)
+  })
+
+  it('takes no setting but the key: the retired gate and mode variables, at their old closed values, hold back neither apply', async () => {
+    // Production may still carry them (owner decision 2026-11-14: no variable for the intended default)
+    vi.stubEnv('RESEARCH_APPLY_ENABLED', 'false')
+    vi.stubEnv('RESEARCH_PIPELINE_MODE', 'shadow')
+    vi.resetModules()
+    const fresh = await import('./researchApply.js')
+
+    expect(fresh.applyRefusal()).toBeNull()
+    await expect(fresh.applyResearchRun(STORY, RUN)).resolves.toBe('applied')
+    mockPrisma.story.findUnique.mockResolvedValue(storyRow({ status: 'selected' }))
+    await expect(fresh.applyVerdict(STORY, RUN, { status: 'selected', updatedAt: READ_AT }, result())).resolves.toBe('applied')
+    expect(mockRecord).toHaveBeenCalledTimes(2)
   })
 })

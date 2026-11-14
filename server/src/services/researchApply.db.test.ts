@@ -11,15 +11,6 @@ import { axisVector, createFeed, createIssue, createStory, describeDb, embedding
 import type { StoredResearch } from './researchRuns.js'
 import type { ResearchSource } from './researchPipeline.js'
 
-// The owner's gate (RESEARCH_APPLY_ENABLED) and the research step's mode are read at startup, so the
-// tests set them through the config
-const applyGate = vi.hoisted(() => ({ enabled: true, mode: 'apply' as 'shadow' | 'apply' }))
-vi.mock('../config.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('../config.js')>()
-  Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => applyGate.enabled })
-  Object.defineProperty(actual.config.research.pipeline, 'mode', { get: () => applyGate.mode })
-  return actual
-})
 const mockGenerate = vi.hoisted(() => vi.fn())
 vi.mock('./embedding.js', () => ({
   generateEmbeddingForContent: mockGenerate,
@@ -158,10 +149,8 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
   useTestDatabase()
 
   beforeEach(async () => {
-    // Research and applying switched on: an apply refuses while either is off
+    // Research switched on, its only switch: an apply refuses while it is off
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
-    applyGate.enabled = true
-    applyGate.mode = 'apply'
     mockGenerate.mockReset().mockResolvedValue({ embedding: axisVector(7), hash: 'researched' })
     mockFavicons.mockReset().mockResolvedValue(undefined)
     mockForget.mockReset()
@@ -388,23 +377,6 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     const verdict = { kind: 'fallback', reason: 'budget', category: 'technical' } as const
     expect(await applyVerdict(s.id, 'run-1', await readBeforeRun(s.id), result(s.id, 1, { verdict }))).toBe('single-source')
     expect(await stored(s.id)).toMatchObject({ ...SINGLE_SOURCE, status: 'selected', research: null, preResearch: null })
-  })
-
-  it.each([
-    ['shadow mode', () => (applyGate.mode = 'shadow')],
-    ['apply mode while the owner’s gate is closed', () => (applyGate.enabled = false)],
-  ])('in %s the research step changes no story, whatever the verdict', async (_name, arrange) => {
-    arrange()
-    const kept = await story('selected')
-    const low = await story('selected')
-
-    expect(await applyVerdict(kept.id, 'run-1', await readBeforeRun(kept.id), result(kept.id, 1))).toBe('shadow')
-    expect(await applyVerdict(low.id, 'run-2', await readBeforeRun(low.id), result(low.id, 1, { verdict: { kind: 'research-rating', rating: 2 } }))).toBe(
-      'shadow',
-    )
-    for (const id of [kept.id, low.id]) {
-      expect(await stored(id)).toMatchObject({ ...SINGLE_SOURCE, status: 'selected', rejectionReason: null, research: null, preResearch: null })
-    }
   })
 
   it('an editor applies research to a rejected story, which stays rejected', async () => {

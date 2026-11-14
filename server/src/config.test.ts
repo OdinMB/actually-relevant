@@ -95,10 +95,6 @@ describe('config numeric overrides', () => {
     expect(config.auth.refreshReuseGraceMs).toBe(60_000)
     expect(config.mastodon.visibility).toBe('unlisted')
     expect(config.podcast.uplifting.enabled).toBe(false)
-    // The owner's gate on applying research stays closed until he sets it (.context/story-research.md)
-    expect(config.research.applyEnabled).toBe(false)
-    // The research step applies no verdict until the owner sets apply (.context/story-research.md)
-    expect(config.research.pipeline.mode).toBe('shadow')
   })
 })
 
@@ -114,16 +110,6 @@ describe('config one-of overrides', () => {
 
   it('finds the switches', () => {
     expect(oneOfVars).toContain('PODCAST_UPLIFTING_ENABLED')
-    expect(oneOfVars).toContain('RESEARCH_APPLY_ENABLED')
-    expect(oneOfVars).toContain('RESEARCH_PIPELINE_MODE')
-  })
-
-  it('opens applying research only on "true"', async () => {
-    vi.stubEnv('RESEARCH_APPLY_ENABLED', 'true')
-    expect((await import('./config.js')).config.research.applyEnabled).toBe(true)
-    vi.resetModules()
-    vi.stubEnv('RESEARCH_APPLY_ENABLED', 'false')
-    expect((await import('./config.js')).config.research.applyEnabled).toBe(false)
   })
 
   it.each(oneOfVars)('refuses to load with a typo in %s', async name => {

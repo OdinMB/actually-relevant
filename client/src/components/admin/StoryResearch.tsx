@@ -55,7 +55,7 @@ function fallbackCounts(counts: NonNullable<ResearchUsage['fallbacksThisMonth']>
  * button (visible with its reason when a run cannot start), the story's runs, the research step's
  * among them, and which version the story shows (`ResearchVersion.tsx`). Hidden against a backend
  * without research. An editor's run writes nothing to the story until an editor uses its version;
- * the research step applies its own verdicts in apply mode.
+ * the research step applies its own verdicts.
  */
 export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 'emotionTag' | 'preResearch'> }) {
   const usage = useResearchUsage()

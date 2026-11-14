@@ -7,17 +7,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-
-// The research step's mode and the owner's gate are read at startup, so the tests set them through the config
-const switches = vi.hoisted(() => ({ mode: 'apply' as 'shadow' | 'apply', applyEnabled: true }))
-vi.mock('../config.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('../config.js')>()
-  Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => switches.applyEnabled })
-  Object.defineProperty(actual.config.research.pipeline, 'mode', { get: () => switches.mode })
-  return actual
-})
-
-const { awaitingResearch, nextToResearch, owedStory, researchStepState } = await import('./researchQueue.js')
+import { awaitingResearch, nextToResearch, owedStory, researchStepState } from './researchQueue.js'
 
 const MINUTE_MS = 60_000
 const NOW = new Date()
@@ -45,8 +35,6 @@ describeDb('research step state, queue and publish gate (PostgreSQL)', () => {
 
   beforeEach(async () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
-    switches.mode = 'apply'
-    switches.applyEnabled = true
     await setJob(true)
     feedId = (await createFeed((await createIssue()).id)).id
   })
@@ -54,28 +42,21 @@ describeDb('research step state, queue and publish gate (PostgreSQL)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('researches while research is switched on, and applies only with the job enabled in effective apply mode', async () => {
-    expect(await researchStepState()).toEqual({ researches: true, enabled: true, applies: true })
+  it('researches while research is switched on, the job enabled or not, and reads the job row’s flag', async () => {
+    expect(await researchStepState()).toEqual({ researches: true, enabled: true })
 
-    switches.mode = 'shadow'
-    expect(await researchStepState()).toEqual({ researches: true, enabled: true, applies: false })
-    switches.mode = 'apply'
-    switches.applyEnabled = false
-    expect(await researchStepState()).toEqual({ researches: true, enabled: true, applies: false })
-    switches.applyEnabled = true
-
-    // A disabled job still researches when run by hand, in shadow
+    // A disabled job still researches when run by hand
     await setJob(false)
-    expect(await researchStepState()).toEqual({ researches: true, enabled: false, applies: false })
+    expect(await researchStepState()).toEqual({ researches: true, enabled: false })
     await prisma.jobRun.deleteMany({ where: { jobName: 'research_stories' } })
-    expect(await researchStepState()).toEqual({ researches: true, enabled: false, applies: false })
+    expect(await researchStepState()).toEqual({ researches: true, enabled: false })
 
     await setJob(true)
     vi.stubEnv('TAVILY_API_KEY', '')
-    expect(await researchStepState()).toEqual({ researches: false, enabled: true, applies: false })
+    expect(await researchStepState()).toEqual({ researches: false, enabled: true })
   })
 
-  it('in apply mode keeps waiting a selected story with no run, one whose pipeline run is running within the stale limit, and one researched only by an editor', async () => {
+  it('with the job enabled and the key set, and no other setting, keeps waiting a selected story with no run, one whose pipeline run is running within the stale limit, and one researched only by an editor', async () => {
     const none = await selected()
     const running = await selected()
     await runOf(running.id, { status: 'running', startedAt: ago(config.research.staleRunMinutes - 5) })
@@ -111,8 +92,6 @@ describeDb('research step state, queue and publish gate (PostgreSQL)', () => {
   })
 
   it.each([
-    ['in shadow mode (owner decision 2026-11-12)', () => (switches.mode = 'shadow')],
-    ['while apply mode is held back by the owner’s gate', () => (switches.applyEnabled = false)],
     ['while the job is disabled', () => setJob(false)],
     ['while research is switched off', () => vi.stubEnv('TAVILY_API_KEY', '')],
   ])('holds nothing %s', async (_name, arrange) => {

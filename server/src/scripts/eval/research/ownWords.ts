@@ -4,7 +4,7 @@
  * kept drafts, the `draft_failed_check` fallbacks by the causes of the item they failed on (and
  * those on a part the draft had nothing in), the items the fact check left without a verdict, the
  * items with number hints and the fact check's verdict on them, the longest runs of shared words
- * per kind, and the fact check's input per call. The shadow week counts the same things in SQL.
+ * per kind, and the fact check's input per call. The weekly tally counts the same things in SQL.
  * Pure.
  */
 import type { CitationProblem } from '../../../services/researchChecks.js'

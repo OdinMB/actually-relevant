@@ -286,16 +286,14 @@ export const config = {
   },
   /** Story research: the admin action and the pipeline step (.context/story-research.md). */
   research: {
-    /** Tavily's key, and the switch: research is off while it is empty. Read at call time. */
+    /**
+     * Tavily's key, and the switch: research is off while it is empty. Read at call time. It is the
+     * only switch: with it set, runs may be applied and the research step applies its verdicts
+     * (owner decision 2026-11-14: no apply gate and no shadow mode).
+     */
     get tavilyApiKey(): string {
       return process.env.TAVILY_API_KEY || ''
     },
-    /**
-     * The owner's gate on applying a run, "Use this version" (services/researchApply.ts): closed
-     * until he has had the press-publisher-right question checked. "true" opens; unset or "false"
-     * keeps it closed; reverting works either way. A Render restart picks up a change.
-     */
-    applyEnabled: parseOneOf(process.env.RESEARCH_APPLY_ENABLED, 'false', ['true', 'false'] as const, 'RESEARCH_APPLY_ENABLED') === 'true',
     /** USD all runs started in a UTC month may cost together (runs of deleted stories included). */
     monthlyCapUsd: parseWholeNumber(process.env.RESEARCH_MONTHLY_CAP_USD, 30, 'RESEARCH_MONTHLY_CAP_USD'),
     /** A run's ceiling, reserved against the cap when it starts (about five times the expected cost). */
@@ -342,13 +340,6 @@ export const config = {
     bulkMaxStories: 50,
     /** The research step, the `research_stories` job (jobs/researchStories.ts; .context/story-research.md, "The pipeline step"). */
     pipeline: {
-      /**
-       * `shadow` (default): runs are stored, no verdict is applied, and publishing does not wait for
-       * them (owner decision 2026-11-12). `apply`: verdicts are applied and the publish gate holds,
-       * only while the owner's gate (`applyEnabled`) is open too and the job is enabled; with the gate
-       * closed the step runs as shadow and says so. A Render restart picks up a change.
-       */
-      mode: parseOneOf(process.env.RESEARCH_PIPELINE_MODE, 'shadow', ['shadow', 'apply'] as const, 'RESEARCH_PIPELINE_MODE'),
       /** Selected stories one run of the job researches. */
       perRun: parseWholeNumber(process.env.RESEARCH_PIPELINE_PER_RUN, 20, 'RESEARCH_PIPELINE_PER_RUN'),
       /**
@@ -358,7 +349,7 @@ export const config = {
        */
       concurrency: 4,
       /**
-       * In apply mode, the publish gate's longest hold: it holds a selected story for its research
+       * While the job is enabled, the publish gate's longest hold: it holds a selected story for its research
        * only this long after the story entered `selected` (`selectedAt`); after that the next publish
        * run takes it single-source. With both jobs daily, a story the 02:45 publish holds goes out at
        * the next day's run, researched or not: a hold lasts one publish cycle at most.

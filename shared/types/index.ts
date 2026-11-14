@@ -880,8 +880,8 @@ export interface ResearchUsage {
   /** Why a run would be refused now (switched off, unpriced model, cap reached), or null. */
   refusal: string | null
   /**
-   * Why no run can be applied now (research switched off, or the owner's gate
-   * `RESEARCH_APPLY_ENABLED` closed), or null. Reverting is never refused for these.
+   * Why no run can be applied now (research switched off: `TAVILY_API_KEY` unset), or null.
+   * Reverting is never refused for it.
    */
   applyRefusal: string | null
   monthToDateUsd: number

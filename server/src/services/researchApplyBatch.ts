@@ -1,7 +1,7 @@
 /**
  * The stories list's bulk "Use researched versions" (`.context/story-research.md`, "Bulk apply"): for
  * each story an editor selected, the run its research section offers by default, put on the story
- * through the single "Use this version" (`applyResearchRun`, with every gate, refusal and fence it
+ * through the single "Use this version" (`applyResearchRun`, with every refusal and fence it
  * has), one story at a time in the order chosen. The section opens on the story's newest run
  * (`newestResearchRun`) and offers "Use this version" only for a completed run with a draft that did
  * not fall back (the client's `canUseVersion`); so does this, and it never reaches past the newest

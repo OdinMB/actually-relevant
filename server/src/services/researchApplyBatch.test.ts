@@ -96,9 +96,9 @@ describe('applyNewestRuns', () => {
   })
 
   it('refuses the whole batch while no run can be applied, reading and applying nothing', async () => {
-    mockApply.applyRefusal.mockReturnValue('Applying research is not open yet: RESEARCH_APPLY_ENABLED is not "true"')
+    mockApply.applyRefusal.mockReturnValue('Research is switched off: TAVILY_API_KEY is not set, so no run can be applied (reverting still works)')
 
-    await expect(applyNewestRuns(['s1'])).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/RESEARCH_APPLY_ENABLED/) })
+    await expect(applyNewestRuns(['s1'])).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/TAVILY_API_KEY/) })
     expect(mockPrisma.story.findUnique).not.toHaveBeenCalled()
     expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
   })

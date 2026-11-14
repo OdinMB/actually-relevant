@@ -1,31 +1,35 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const mockMode = vi.hoisted(() => vi.fn())
-vi.mock('../services/researchApply.js', () => ({ pipelineMode: mockMode }))
+const mockSwitchRefusal = vi.hoisted(() => vi.fn())
+vi.mock('../services/researchRuns.js', () => ({ switchRefusal: mockSwitchRefusal }))
 
 const { jobSetting } = await import('./jobSettings.js')
 const { config } = await import('../config.js')
 
 describe('jobSetting', () => {
   beforeEach(() => {
-    mockMode.mockReset()
+    mockSwitchRefusal.mockReset().mockReturnValue(null)
   })
 
   it('names the cleanup cutoff from config', () => {
     expect(jobSetting('cleanup_old_stories')).toBe(`Stories older than ${config.storyRetention.maxAgeMonths} months`)
   })
 
-  it('names the research step’s mode in effect, what it rejects, whether publishing waits, its limits, and why apply is held back', () => {
-    const { perRun: n, concurrency, maxWaitMinutes } = config.research.pipeline
-    const perRun = `up to ${n} stories a run, ${concurrency} at once`
-    mockMode.mockReturnValue({ mode: 'shadow' })
-    expect(jobSetting('research_stories')).toBe(`Shadow mode: runs are stored, no verdict is applied, publishing does not wait; ${perRun}`)
-    mockMode.mockReturnValue({ mode: 'apply' })
-    expect(jobSetting('research_stories')).toBe(
-      `Apply mode: verdicts are applied (only old news or a contradicted claim rejects; the rating stays), publishing holds stories selected under ${maxWaitMinutes} min ago; a run while disabled is a shadow trial; ${perRun}`,
-    )
-    mockMode.mockReturnValue({ mode: 'shadow', heldBack: 'RESEARCH_APPLY_ENABLED is not "true"' })
-    expect(jobSetting('research_stories')).toBe(`Shadow mode, apply held back (RESEARCH_APPLY_ENABLED is not "true"): publishing does not wait; ${perRun}`)
+  const { perRun: n, concurrency, maxWaitMinutes } = config.research.pipeline
+  const limits = `up to ${n} stories a run, ${concurrency} at once`
+
+  it('names the research step’s longest publish hold and its limits while research is switched on, with no other setting', () => {
+    const setting = jobSetting('research_stories')
+    expect(setting).toContain(`${maxWaitMinutes} min`)
+    expect(setting).toContain(limits)
+  })
+
+  it('leads with why the research step does nothing while research is switched off, and names no publish hold', () => {
+    mockSwitchRefusal.mockReturnValue('Research is switched off: TAVILY_API_KEY is not set')
+    const setting = jobSetting('research_stories')
+    expect(setting).toMatch(/^Research is switched off: TAVILY_API_KEY is not set/)
+    expect(setting).not.toContain(`${maxWaitMinutes} min`)
+    expect(setting).toContain(limits)
   })
 
   it('is null for a job without a setting to show', () => {

@@ -44,7 +44,7 @@ export function bulkResearchRefusal(count: number, usage: ResearchUsage | null |
   return actionRefusal(count, usage, usageFailed, 'research', u => u.refusal)
 }
 
-/** "Use researched versions": refused while no run can be applied (switched off, the owner's gate closed), whatever refuses a new run. */
+/** "Use researched versions": refused while no run can be applied (research switched off), whatever refuses a new run. */
 export function bulkApplyRefusal(count: number, usage: ResearchUsage | null | undefined, usageFailed: boolean): string | null | undefined {
   return actionRefusal(count, usage, usageFailed, 'apply', u => u.applyRefusal)
 }

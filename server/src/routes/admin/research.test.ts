@@ -240,12 +240,12 @@ describe('POST /api/admin/research/apply (the stories list bulk "Use researched 
   })
 
   it('answers 409 while no run can be applied, reading no story', async () => {
-    mockApply.applyRefusal.mockReturnValue('Applying research is not open yet: RESEARCH_APPLY_ENABLED is not "true"')
+    mockApply.applyRefusal.mockReturnValue('Research is switched off: TAVILY_API_KEY is not set, so no run can be applied (reverting still works)')
 
     const res = await applyBatch(IDS)
 
     expect(res.status).toBe(409)
-    expect(res.body.error).toMatch(/RESEARCH_APPLY_ENABLED/)
+    expect(res.body.error).toMatch(/TAVILY_API_KEY/)
     expect(mockPrisma.storyResearchRun.findFirst).not.toHaveBeenCalled()
     expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
   })
@@ -342,7 +342,7 @@ describe('POST /api/admin/research/stories/:storyId/runs/:runId/apply and /rever
 
 describe('GET /api/admin/research/usage', () => {
   it("reports the month to date, the cap, the reservation, the month's fallbacks by category and why no run can be applied now", async () => {
-    mockApply.applyRefusal.mockReturnValue('Applying research is off')
+    mockApply.applyRefusal.mockReturnValue('Research is switched off')
     // As the database groups them; a category the code does not know counts as unrecorded
     mockPrisma.$queryRaw.mockResolvedValue([
       { category: 'not_confirmed', runs: 3 },
@@ -353,7 +353,7 @@ describe('GET /api/admin/research/usage', () => {
     expect(res.body).toEqual({
       enabled: true,
       refusal: null,
-      applyRefusal: 'Applying research is off',
+      applyRefusal: 'Research is switched off',
       monthToDateUsd: 1.5,
       monthlyCapUsd: config.research.monthlyCapUsd,
       reservationUsd: config.research.maxRunUsd,

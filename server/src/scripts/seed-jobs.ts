@@ -1,6 +1,8 @@
 /**
  * `npm run db:seed:jobs --prefix server`: creates every job_runs row that does not exist yet, all
- * disabled, so a new database has a row for each job in JOB_HANDLERS (README, "Fresh Install").
+ * disabled but `research_stories`, so a new database has a row for each job in JOB_HANDLERS (README,
+ * "Fresh Install"). The research step is on by default (owner decision 2026-11-14) and does nothing
+ * without TAVILY_API_KEY.
  * An existing row is never changed (`update: {}`), so it is safe to rerun on any database. It has
  * no local-only guard: it writes to whatever DATABASE_URL names.
  */
@@ -32,11 +34,12 @@ async function main() {
       create: { jobName: 'select_stories', cronExpression: '0 10 * * *', enabled: false },
     }),
     // Daily, 15 minutes after select_stories, so the day's selected stories are researched before
-    // publish_stories takes them (.context/story-research.md); production runs 02:05, 02:20, 02:45
+    // publish_stories takes them (.context/story-research.md); production runs 02:05, 02:20, 02:45.
+    // Enabled: the research step is the norm, the Jobs page its off switch
     prisma.jobRun.upsert({
       where: { jobName: 'research_stories' },
       update: {},
-      create: { jobName: 'research_stories', cronExpression: '15 10 * * *', enabled: false },
+      create: { jobName: 'research_stories', cronExpression: '15 10 * * *', enabled: true },
     }),
     prisma.jobRun.upsert({
       where: { jobName: 'publish_stories' },
@@ -124,7 +127,7 @@ async function main() {
     }),
   ])
 
-  console.log(`Seeded ${jobs.length} job runs (all disabled)`)
+  console.log(`Seeded ${jobs.length} job runs (all disabled but research_stories)`)
 }
 
 main()
