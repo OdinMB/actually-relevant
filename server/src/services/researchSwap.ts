@@ -6,8 +6,11 @@
  * The rating and its calculation are not among them: a story keeps its own rating whatever the
  * research's re-evaluation gave (owner decision 2026-11-12), and the draft's rating stays in the run
  * for evaluation. The emotion tag is (owner decision 2026-11-14): the write step tags the text it
- * wrote, so the tag readers' mood filters see matches the researched story.
+ * wrote, so the tag readers' mood filters see matches the researched story. The single-source
+ * analyses that judge the original article (pre-assessment, reclassification, assessment) write a
+ * researched story's single-source side, the snapshot, and only while it is the one they read.
  */
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { EMOTION_TAGS } from '../schemas/llm.js'
 import { writeSchema } from '../schemas/research.js'
@@ -124,6 +127,28 @@ export function restoredValues(stored: unknown): SwappedValues | null {
 export function snapshotEmotionTag(stored: unknown): z.infer<typeof emotionTag> | undefined {
   const parsed = z.object({ emotionTag }).safeParse(stored)
   return parsed.success ? parsed.data.emotionTag : undefined
+}
+
+type EmotionTagValue = (typeof EMOTION_TAGS)[number]
+
+const isSnapshotObject = (stored: unknown): stored is Prisma.JsonObject => typeof stored === 'object' && stored !== null && !Array.isArray(stored)
+
+/**
+ * Where a tag judged from the original article goes, for the story's snapshot as read: on a
+ * single-source story into its column; on a researched story into the snapshot, the single-source
+ * analysis a revert restores, while the column keeps the tag research gave its text.
+ */
+export function classifiedTag(stored: unknown, tag: EmotionTagValue): { emotionTag: EmotionTagValue } | { preResearch: Prisma.InputJsonObject } {
+  return isSnapshotObject(stored) ? { preResearch: { ...stored, emotionTag: tag } } : { emotionTag: tag }
+}
+
+/**
+ * A write's condition that the story's snapshot is still the one read: none, or the same value. An
+ * apply or a revert made meanwhile (or a snapshot an apply completed) then skips the write, which
+ * was decided for the other side of the story.
+ */
+export function sameSnapshot(stored: unknown): Prisma.StoryWhereInput {
+  return { preResearch: { equals: stored == null ? Prisma.AnyNull : (stored as Prisma.InputJsonValue) } }
 }
 
 /** The swapped columns an edit changes: present in it with a value other than the current one. */

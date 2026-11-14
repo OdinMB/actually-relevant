@@ -161,7 +161,7 @@ Stories carry both crawled data and AI-generated analysis:
 
 **Pre-assessment fields** (set during batch LLM screening):
 - `relevancePre` — screening rating (1-10) on the generic impact scale; rewritten when an editor pre-assesses the story again
-- `emotionTag` — one of: uplifting, frustrating, scary, calm; on a researched story the one research gave its text (below)
+- `emotionTag` — one of: uplifting, frustrating, scary, calm; on a researched story the one research gave its text (below), so a re-screen, a reclassify or the emotion-only tagging writes its tag into `preResearch` instead (`llm-analysis.md`, "Reclassification")
 
 **Full assessment fields** (set during in-depth LLM analysis):
 - `title` — AI-generated headline (also listed under Platform data)
@@ -179,5 +179,5 @@ Stories carry both crawled data and AI-generated analysis:
 - The swapped fields (`title`, `titleLabel`, `summary`, `quote`, `quoteAttribution`, `marketingBlurb`, `relevanceReasons`, `antifactors`, `emotionTag`) then hold the run's researched text and the tag research gave it (a run stored before 2026-11-14 has none and leaves the tag as it was), and `relevanceSummary` is null, so its readers fall back to the researched summary or bullets. `relevance` and `relevanceCalculation` are never swapped: the story keeps the rating it was selected on.
 - `research` (jsonb) — the cited version the story page shows (`services/researchedStory.ts`).
 - `preResearch` (jsonb) — every swapped field's value before the first apply, `relevanceSummary` included; `researched` on the public detail is whether it is set.
-- Both are null on a single-source story. A revert writes `preResearch` back and clears both; a re-assess clears both and writes a fresh single-source analysis, with the emotion tag `preResearch` kept.
+- Both are null on a single-source story. A revert writes `preResearch` back and clears both; a re-assess clears both and writes a fresh single-source analysis, with the emotion tag `preResearch` kept, and only while `preResearch` is still the one it read before its model call (an apply or a revert meanwhile skips it).
 - While `preResearch` is set, `PUT /api/admin/stories/:id` refuses with 409 "Revert to single-source first" an edit that changes a swapped field (`SWAPPED_FIELDS`, `services/researchSwap.ts`); the edit form disables those fields and says why.

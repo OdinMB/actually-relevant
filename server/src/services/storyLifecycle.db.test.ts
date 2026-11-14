@@ -71,7 +71,7 @@ const {
 const { runPublishStories } = await import('../jobs/publishStories.js')
 const { runAssessStories } = await import('../jobs/assessStories.js')
 const { runSelectStories } = await import('../jobs/selectStories.js')
-const { selectStories, assessStory, preAssessStories } = await import('./analysis.js')
+const { selectStories, assessStory, preAssessStories, reclassifyStories } = await import('./analysis.js')
 const { transition, recordAnalysis, analysisFrom, ClusterChangedError, _retryOnClusterChange } = await import('./storyLifecycle.js')
 const { detectAndCluster } = await import('./dedup.js')
 const { dissolveCluster, removeFromCluster, mergeClusters, setClusterPrimary, createManualCluster, StoriesAlreadyClusteredError } = await import('./cluster.js')
@@ -310,6 +310,58 @@ describeDb('story lifecycle (PostgreSQL)', () => {
 
     const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
     expect(after).toMatchObject({ title: 'New title', research: null, preResearch: null })
+  })
+
+  it("a re-assess that a first apply overtakes during its model call is skipped: research's version, tag and snapshot stay", async () => {
+    const s = await story({ status: 'published', slug: 'applied-meanwhile', datePublished: new Date() })
+    await prisma.story.update({ where: { id: s.id }, data: { emotionTag: 'frustrating' } })
+    const snapshot = { title: 'single-source', emotionTag: 'frustrating' }
+    mockInvoke.mockImplementation(async () => {
+      await prisma.story.update({
+        where: { id: s.id },
+        data: { title: 'Researched', emotionTag: 'uplifting', research: { paragraphs: [] }, preResearch: snapshot },
+      })
+      return assessAnswer()
+    })
+
+    expect(await assessStory(s.id, 'editor')).toBe('skipped')
+
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+      title: 'Researched',
+      emotionTag: 'uplifting',
+      research: { paragraphs: [] },
+      preResearch: snapshot,
+    })
+  })
+
+  it("re-assessing a researched story gives it back the tag its snapshot keeps; a re-screen and a reclassify write theirs into the snapshot and leave research's", async () => {
+    const s = await story({ status: 'published', slug: 'researched-tag', datePublished: new Date() })
+    const snapshot = { title: 'single-source', emotionTag: 'frustrating' }
+    await prisma.story.update({ where: { id: s.id }, data: { emotionTag: 'uplifting', research: { paragraphs: [] }, preResearch: snapshot } })
+
+    mockInvoke.mockResolvedValueOnce({ articles: [{ articleId: s.id, issueSlug, rating: 6, emotionTag: 'scary' }] })
+    await preAssessStories([s.id], undefined, 'editor')
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+      relevancePre: 6,
+      emotionTag: 'uplifting',
+      preResearch: { ...snapshot, emotionTag: 'scary' },
+    })
+
+    mockInvoke.mockResolvedValueOnce({ articles: [{ articleId: s.id, issueSlug, emotionTag: 'calm' }] })
+    await reclassifyStories([s.id])
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+      emotionTag: 'uplifting',
+      preResearch: { ...snapshot, emotionTag: 'calm' },
+    })
+
+    mockInvoke.mockResolvedValueOnce(assessAnswer())
+    expect(await assessStory(s.id, 'editor')).toBe('refreshed')
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+      title: 'New title',
+      emotionTag: 'calm',
+      research: null,
+      preResearch: null,
+    })
   })
 
   it('re-screening a published story rewrites relevancePre and keeps it published', async () => {

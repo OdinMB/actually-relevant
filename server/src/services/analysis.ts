@@ -15,7 +15,7 @@ import { preAssessResultSchema, reclassifyResultSchema, assessResultSchema, sele
 import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
 import { assessPromptInput, selectCount, selectPromptStory } from './promptInputs.js'
-import { snapshotEmotionTag } from './researchSwap.js'
+import { classifiedTag, sameSnapshot, snapshotEmotionTag } from './researchSwap.js'
 import { NotFoundError } from '../utils/errors.js'
 import { analysisFrom, partition, recordAnalysis, transition, type Actor, type AnalysisOutcome, type AnalysisRow, type MoveResult } from './storyLifecycle.js'
 
@@ -33,10 +33,12 @@ interface BatchClassificationOptions<T extends { articleId: string; issueSlug: s
   llm: ChatOpenAI
   schema: z.ZodType<{ articles: T[] }>
   buildPrompt: (stories: StoryForPreassess[], issues: IssueForPreassess[]) => string
+  /** The fields one result writes beside its emotion tag, which the helper places itself (`classifiedTag`). */
   buildUpdate: (item: T, issueId: string | null) => Prisma.StoryUncheckedUpdateManyInput
   /**
-   * Write one batch's results. Default: plain field updates (reclassify, emotion tagging, which
-   * never change status). Pre-assessment passes the lifecycle module's recordAnalysis.
+   * Write one batch's results, each row conditional on its `where`. Default: plain field updates
+   * (reclassify, emotion tagging, which never change status). Pre-assessment passes the lifecycle
+   * module's recordAnalysis.
    */
   persist?: (rows: AnalysisRow[]) => Promise<unknown>
   /** Whether to assign feed issue to stories not returned by the LLM. Default true (pre-assess behavior). */
@@ -47,7 +49,12 @@ interface BatchClassificationOptions<T extends { articleId: string; issueSlug: s
   label: string
 }
 
-const updateFields = (rows: AnalysisRow[]) => prisma.$transaction(rows.map(r => prisma.story.update({ where: { id: r.id }, data: r.data })))
+async function updateFields(rows: AnalysisRow[]): Promise<void> {
+  // The row's own condition first, so it can never widen the id
+  const results = await prisma.$transaction(rows.map(r => prisma.story.updateMany({ where: { ...r.where, id: r.id }, data: r.data })))
+  const skipped = rows.filter((_, i) => results[i]?.count === 0).map(r => r.id)
+  if (skipped.length > 0) log.info({ skipped }, 'classification results skipped: the story was researched or reverted meanwhile, or is gone')
+}
 
 async function runBatchClassification<T extends { articleId: string; issueSlug: string; emotionTag: string }>(
   options: BatchClassificationOptions<T>,
@@ -97,6 +104,7 @@ async function runBatchClassification<T extends { articleId: string; issueSlug: 
             id: true,
             sourceTitle: true,
             sourceContent: true,
+            preResearch: true,
             feed: { select: { issueId: true } },
           },
         })
@@ -130,7 +138,13 @@ async function runBatchClassification<T extends { articleId: string; issueSlug: 
             issueId = story.feed.issueId
           }
 
-          rows.push({ id: story.id, data: buildUpdate(item, issueId) })
+          // The tag judges the original article: a researched story's goes into its snapshot, and
+          // only while that is the snapshot read, so an apply or a revert during the call skips it
+          rows.push({
+            id: story.id,
+            data: { ...buildUpdate(item, issueId), ...classifiedTag(story.preResearch, item.emotionTag as EmotionTag) },
+            where: sameSnapshot(story.preResearch),
+          })
 
           batchResults.push({
             storyId: story.id,
@@ -204,7 +218,6 @@ export async function preAssessStories(
     buildUpdate: (item, issueId) => ({
       issueId,
       relevancePre: item.rating,
-      emotionTag: item.emotionTag as EmotionTag,
     }),
     persist: rows => recordAnalysis('preassess', actor, rows, statuses),
     onProgress,
@@ -228,10 +241,7 @@ export async function reclassifyStories(storyIds: string[], onProgress?: Progres
     llm: getSmallLLM(),
     schema: reclassifyResultSchema,
     buildPrompt: buildReclassifyPrompt,
-    buildUpdate: (item, issueId) => ({
-      issueId,
-      emotionTag: item.emotionTag as EmotionTag,
-    }),
+    buildUpdate: (_item, issueId) => ({ issueId }),
     fallbackToFeedIssue: false,
     onProgress,
     batchSize: config.preassess.batchSize,
@@ -253,9 +263,7 @@ export async function tagEmotionOnly(storyIds: string[], onProgress?: ProgressCa
     llm: getSmallLLM(),
     schema: reclassifyResultSchema,
     buildPrompt: buildEmotionTagPrompt,
-    buildUpdate: item => ({
-      emotionTag: item.emotionTag as EmotionTag,
-    }),
+    buildUpdate: () => ({}),
     fallbackToFeedIssue: false,
     onProgress,
     batchSize: config.preassess.batchSize,
@@ -329,9 +337,15 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
     embeddingContentHash: null, // force generation
   })
 
-  // Save analysis + embedding atomically, unless the status changed during the call
-  // Written against the status read before the model call: a move made meanwhile wins
-  const outcomes = await recordAnalysis('assess', actor, [{ id: storyId, data: analysisData, embedding: embeddingData }], new Map([[storyId, story.status]]))
+  // Save analysis + embedding atomically, against the status and the research snapshot read before
+  // the model call: a move made meanwhile wins, and so does an apply or a revert, whose snapshot this
+  // write would otherwise clear without the single-source tag it holds
+  const outcomes = await recordAnalysis(
+    'assess',
+    actor,
+    [{ id: storyId, data: analysisData, where: sameSnapshot(story.preResearch), embedding: embeddingData }],
+    new Map([[storyId, story.status]]),
+  )
   const outcome = outcomes.get(storyId) ?? 'skipped'
   if (outcome === 'skipped') return outcome
 

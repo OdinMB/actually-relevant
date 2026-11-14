@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest'
+import { Prisma } from '@prisma/client'
 import type { Draft } from '../schemas/research.js'
 import {
   SWAPPED_FIELDS,
   appliedDraftSchema,
+  classifiedTag,
   researchedValues,
   restoredValues,
+  sameSnapshot,
   snapshotForApply,
   snapshotOf,
   swappedEdits,
@@ -125,6 +128,29 @@ describe('snapshotForApply', () => {
   it("gives a snapshot stored before the tag was swapped the story's tag, which an apply then never changed", () => {
     expect(snapshotForApply(untaggedSnapshot(), { ...researchedRow, emotionTag: 'frustrating' })).toEqual(singleSource)
     expect(snapshotForApply(untaggedSnapshot(), { ...researchedRow, emotionTag: null })).toEqual({ ...untaggedSnapshot(), emotionTag: null })
+  })
+})
+
+describe('classifiedTag', () => {
+  it("writes a single-source story's tag into its column", () => {
+    expect(classifiedTag(null, 'scary')).toEqual({ emotionTag: 'scary' })
+    expect(classifiedTag(undefined, 'scary')).toEqual({ emotionTag: 'scary' })
+  })
+
+  it("writes a researched story's tag into its snapshot, the single-source analysis, and leaves the column to research's tag", () => {
+    expect(classifiedTag(singleSource, 'scary')).toEqual({ preResearch: { ...singleSource, emotionTag: 'scary' } })
+    expect(classifiedTag(untaggedSnapshot(), 'calm')).toEqual({ preResearch: { ...untaggedSnapshot(), emotionTag: 'calm' } })
+  })
+})
+
+describe('sameSnapshot', () => {
+  it('fences a write on the story having no snapshot, as read, so a first apply meanwhile skips it', () => {
+    expect(sameSnapshot(null)).toEqual({ preResearch: { equals: Prisma.AnyNull } })
+    expect(sameSnapshot(undefined)).toEqual({ preResearch: { equals: Prisma.AnyNull } })
+  })
+
+  it('fences a write on the snapshot read, so a revert or a completed snapshot meanwhile skips it', () => {
+    expect(sameSnapshot(singleSource)).toEqual({ preResearch: { equals: singleSource } })
   })
 })
 

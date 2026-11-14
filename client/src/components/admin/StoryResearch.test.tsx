@@ -289,12 +289,18 @@ describe('StoryResearch', () => {
     })
 
     it('reverts a researched story once the editor confirms', async () => {
-      renderSection('published', { title: 'Single-source headline' })
+      renderSection('published', { title: 'Single-source headline', emotionTag: 'frustrating' })
       fireEvent.click(await screen.findByRole('button', { name: 'Revert to single-source' }))
       const dialog = await screen.findByRole('dialog')
       expect(dialog).toHaveTextContent(/gets back the headline, summary, analysis and emotion tag it had before research/)
       fireEvent.click(within(dialog).getByRole('button', { name: 'Revert' }))
       await waitFor(() => expect(mockResearch.revert).toHaveBeenCalledWith('story-1'))
+    })
+
+    it('names no emotion tag in the revert confirmation when the snapshot keeps none (applied before research tagged its text)', async () => {
+      renderSection('published', { title: 'Single-source headline' })
+      fireEvent.click(await screen.findByRole('button', { name: 'Revert to single-source' }))
+      expect(await screen.findByRole('dialog')).toHaveTextContent(/gets back the headline, summary and analysis it had before research/)
     })
   })
 

@@ -29,6 +29,10 @@ function statusRefusal(status: Story['status'], action: string): string | null {
 
 const readers = (status: Story['status']) => (status === 'published' ? 'Readers see it at once.' : 'Readers see it once the story is published.')
 
+/** What a revert restores: a snapshot an apply stored before research tagged its text (2026-11-14) keeps no emotion tag. */
+const restored = (story: StoryRef) =>
+  story.preResearch?.emotionTag !== undefined ? 'headline, summary, analysis and emotion tag' : 'headline, summary and analysis'
+
 /** What an apply swaps: a run stored before research tagged its text (2026-11-14) leaves the emotion tag. */
 const swapped = (run: ResearchRun) =>
   run.result?.draft?.emotionTag ? 'headline, label, summary, quote, blurb, analysis and emotion tag' : 'headline, label, summary, quote, blurb and analysis'
@@ -101,7 +105,7 @@ export function RevertToSingleSource({ story }: { story: StoryRef }) {
         onClose={() => setConfirming(false)}
         onConfirm={confirm}
         title="Revert to single-source?"
-        description={`The story gets back the headline, summary, analysis and emotion tag it had before research, and loses the researched version and its sources. ${readers(story.status)} The runs stay.`}
+        description={`The story gets back the ${restored(story)} it had before research, and loses the researched version and its sources. ${readers(story.status)} The runs stay.`}
         confirmLabel="Revert"
         variant="danger"
         loading={revert.isPending}
