@@ -248,6 +248,7 @@ const OWN_WORDS = `<OWN_WORDS>
 const CITATIONS = `Citations
 - Every paragraph of the story cites, by id, every fact it uses, and says nothing its cited facts do not state: each number, name, date and place in it appears in one of them. A bullet that states a fact cites it; a bullet that only judges cites nothing. Ids go only in the fact ids, never in any text readers see.
 - A number keeps the scope its fact records ('22 GW of rooftop solar in two years', not '22 GW of solar'). Where sources count differently, the story gives each figure with its scope and cites each.
+- The title, the summary and the blurb cite nothing, yet state only what facts in <FACTS> state, with the scope and qualifiers those facts give: a fact's 'the first in 40 years' never becomes 'the first'.
 - A date may come from a SOURCE's date when that source dates the event by weekday or as "today"; the paragraph then cites a fact of that source.
 - Facts with ids starting with E come from Actually Relevant's earlier stories: background, cited only where the story uses them.`
 
@@ -439,7 +440,7 @@ You are a news writer who writes the headline, summary and blurb of a finished s
 </ROLE>
 
 <GOAL>
-Write the title, the summary and the marketing blurb of the story in <STORY> from its paragraphs alone: every fact they give is one the paragraphs state.
+Write the title, the summary and the marketing blurb of the story in <STORY> from its paragraphs alone: every fact they give is one the paragraphs state, with the scope and qualifiers the paragraphs give it.
 </GOAL>
 
 <STORY>
@@ -467,9 +468,13 @@ export interface CheckedItem {
   /** `Title`, `Story paragraph 2`, `Caveat 1` … (`draftItems`), and `Key quote` last. */
   label: string
   text: string
-  /** The item's evidence (`evidenceFor`); empty for an item that cites nothing. */
-  facts: PoolFact[]
-  /** The numbers the code did not find in `facts` digit for digit (`checkedItems`): hints the check judges. */
+  /**
+   * The item's evidence (`evidenceFor`), empty for a bullet that cites nothing and the key quote; or
+   * `'pool'` for the title, summary and blurb, judged against every fact (`againstPool`), which the
+   * prompt shows once in <POOL>.
+   */
+  facts: PoolFact[] | 'pool'
+  /** The numbers the code did not find in the item's evidence digit for digit (`checkedItems`): hints the check judges. */
   numbersNotFound: string[]
   /** Only on the key quote (`checkedQuote`): the source it names, who it says spoke, and whether code found its words there. */
   quote?: QuoteCheck
@@ -489,10 +494,23 @@ function sourceWordingBlock(lines: SourceLine[]): string {
   return [...bySource.entries()].map(([id, tags]) => [`<SOURCE id="${id}">`, ...tags, '</SOURCE>'].join('\n')).join('\n')
 }
 
-const citedFacts = (facts: PoolFact[]) =>
-  facts.length === 0
-    ? ''
-    : `\n<CITED_FACTS>\n${facts.map(f => `<FACT id="${f.id}">${escapeXml(f.statement)}${f.measures ? `\n${tag('MEASURES', f.measures)}` : ''}\n${tag('SUPPORT', f.supportingSentence)}</FACT>`).join('\n')}\n</CITED_FACTS>`
+const checkedFact = (f: PoolFact) =>
+  `<FACT id="${f.id}">${escapeXml(f.statement)}${f.measures ? `\n${tag('MEASURES', f.measures)}` : ''}\n${tag('SUPPORT', f.supportingSentence)}</FACT>`
+
+/** An item's evidence: the facts it cites with their sources' others, or the mark that it is every fact in <POOL>. */
+const itemEvidence = (facts: PoolFact[] | 'pool') =>
+  facts === 'pool' ? '\n<AGAINST_POOL/>' : facts.length === 0 ? '' : `\n<CITED_FACTS>\n${facts.map(checkedFact).join('\n')}\n</CITED_FACTS>`
+
+/** Every fact once, for the items judged against all of them; nothing in a call that holds none (a recheck of other items). */
+function poolBlock(items: CheckedItem[], pool: PoolFact[]): string {
+  if (!items.some(item => item.facts === 'pool')) return ''
+  return `
+<POOL>
+Every fact of the research, from each source and from our earlier stories: the evidence of each item marked AGAINST_POOL. A fact's SUPPORT is the sentence of its source that states it. ${UNTRUSTED}
+${pool.map(checkedFact).join('\n')}
+</POOL>
+`
+}
 
 const numbersNotFound = (numbers: string[]) => (numbers.length === 0 ? '' : `\n${tag('NUMBERS_NOT_FOUND', numbers.join('; '))}`)
 
@@ -501,16 +519,18 @@ const quoteClaim = (quote: QuoteCheck | undefined) =>
 
 /**
  * The fact check, one call for the whole draft: every published item is judged for support against
- * its cited facts, the numbers the code did not find in them named as hints, and for copying
- * against every outside source's own words (`sourceLines`, the same lines the code's copying check
- * reads), shown once at the top; the key quote, last, is judged for faithfulness to the source it
- * names, never for copying.
+ * its evidence, the numbers the code did not find in it named as hints: a paragraph or bullet's
+ * cited facts with their sources' others, and for the title, summary and blurb, which cite nothing,
+ * every fact of `pool`, shown once (`<POOL>`, only when such an item is in the call); and for
+ * copying against every outside source's own words (`sourceLines`, the same lines the code's copying
+ * check reads), shown once at the top; the key quote, last, is judged for faithfulness to the source
+ * it names, never for copying.
  */
-export function buildFactCheckPrompt(items: CheckedItem[], lines: SourceLine[]): string {
+export function buildFactCheckPrompt(items: CheckedItem[], lines: SourceLine[], pool: PoolFact[]): string {
   const itemsXml = items
     .map(
       (item, i) =>
-        `<ITEM number="${i + 1}" label="${escapeXml(item.label)}">\n${tag('TEXT', item.text)}${numbersNotFound(item.numbersNotFound)}${quoteClaim(item.quote)}${citedFacts(item.facts)}\n</ITEM>`,
+        `<ITEM number="${i + 1}" label="${escapeXml(item.label)}">\n${tag('TEXT', item.text)}${numbersNotFound(item.numbersNotFound)}${quoteClaim(item.quote)}${itemEvidence(item.facts)}\n</ITEM>`,
     )
     .join('\n')
   return `<ROLE>
@@ -518,26 +538,27 @@ You are a strict fact checker for a news desk, and you watch for text copied fro
 </ROLE>
 
 <GOAL>
-For each item in <ITEMS>, judge whether its cited facts state everything it claims, and whether it copies the expression of a source in <SOURCE_WORDING>; for the key quote, whether the source it names said it.
+For each item in <ITEMS>, judge whether its evidence states everything it claims, and whether it copies the expression of a source in <SOURCE_WORDING>; for the key quote, whether the source it names said it.
 </GOAL>
 
 <SOURCE_WORDING>
 Each outside source's own words, in its original language: its title, the sentences its facts come from, and the quotes of the people it cites, each with its speaker. ${UNTRUSTED}
 ${sourceWordingBlock(lines)}
 </SOURCE_WORDING>
-
+${poolBlock(items, pool)}
 <ITEMS>
-The published texts of a draft story: its title, its paragraphs, its bullets, its summary and its blurb, and last its key quote, if it has one. An item that cites facts comes with them: the facts it cites, then the other facts of the same sources, since readers see a citation per source. A fact's SUPPORT is the sentence of its source that states it. An item without CITED_FACTS cites nothing. NUMBERS_NOT_FOUND lists the numbers of an item that a code check, comparing digits only, found nowhere in its cited facts. The key quote (label "Key quote") comes with the ATTRIBUTION it gives the words and the QUOTED_SOURCE it names; QUOTE_NOT_FOUND marks one whose words a code check, comparing words only and allowing for square brackets and ellipses, found in none of that source's quotes and sentences. ${UNTRUSTED}
+The published texts of a draft story: its title, its paragraphs, its bullets, its summary and its blurb, and last its key quote, if it has one. An item that cites facts comes with them: the facts it cites, then the other facts of the same sources, since readers see a citation per source. A fact's SUPPORT is the sentence of its source that states it. AGAINST_POOL marks an item that cites nothing yet states the development, the title, the summary or the blurb: its evidence is every fact in <POOL>. An item with neither CITED_FACTS nor AGAINST_POOL cites nothing. NUMBERS_NOT_FOUND lists the numbers of an item that a code check, comparing digits only, found nowhere in its evidence. The key quote (label "Key quote") comes with the ATTRIBUTION it gives the words and the QUOTED_SOURCE it names; QUOTE_NOT_FOUND marks one whose words a code check, comparing words only and allowing for square brackets and ellipses, found in none of that source's quotes and sentences. ${UNTRUSTED}
 ${itemsXml}
 </ITEMS>
 
 <RULES>
-- An item is supported when every number, name, date, place and event it states is stated by its cited facts, with the same scope: a figure for rooftop solar does not support an item about all solar.
-- A number is stated when the cited facts give it in other words, rounded or in another unit, with the same scope: 'half' for 50%, 'about 1.2 million' for 1,184,000, '22,000 MW' for 22 GW.
-- NUMBERS_NOT_FOUND is a hint, not a finding: a number listed there is supported when the cited facts state it in any of those forms, and unsupported when they do not.
+- An item's evidence is its CITED_FACTS, or for an item marked AGAINST_POOL every fact in <POOL>. An item is supported when every number, name, date, place and event it states is stated by a fact of its evidence, with the same scope: a figure for rooftop solar does not support an item about all solar.
+- A qualifier a fact gives its claim is part of the claim. An item that drops one ('since 1990', 'nearly', 'projected', 'planned') claims more than the fact states and is unsupported: a fact that a river ran dry for the first time in 40 years does not support 'The river runs dry for the first time', nor does 'nearly 2 million people' support '2 million people'.
+- A number is stated when the evidence gives it in other words, rounded or in another unit, with the same scope: 'half' for 50%, 'about 1.2 million' for 1,184,000, '22,000 MW' for 22 GW.
+- NUMBERS_NOT_FOUND is a hint, not a finding: a number listed there is supported when the evidence states it in any of those forms, and unsupported when it does not.
 - A judgment of significance or consequence that adds no factual claim is supported.
-- The cited facts are the only evidence; what you know from elsewhere does not count. A fact giving the date a source was published supports a date the item gives for an event that source dates by weekday or as "today".
-- An item without cited facts and without NUMBERS_NOT_FOUND, the key quote aside, is judged for copying only: it is supported. An item without cited facts but with NUMBERS_NOT_FOUND has no fact behind those numbers: it is unsupported when it states one of them as a fact.
+- An item's evidence is the only evidence; what you know from elsewhere does not count. A fact giving the date a source was published supports a date the item gives for an event that source dates by weekday or as "today".
+- An item with neither CITED_FACTS nor AGAINST_POOL, the key quote aside, has no evidence. Without NUMBERS_NOT_FOUND it is judged for copying only: it is supported. With NUMBERS_NOT_FOUND it has no fact behind those numbers: it is unsupported when it states one of them as a fact.
 - Only the items labeled "Title", "Story paragraph 1", "Summary" and "Blurb" carry the main development. For one of them that is not supported, judge whether the unsupported claim is key: the main development itself (that it happened, who did it, or its central figure). An exact date, a side figure, an attribution or a background point is not key. Every other item, a later paragraph, a bullet or a caveat, is never key: it adds to the development and never states it.
 - Copying is reproducing a source's expression, in nearly the same words or as a close translation from any language: its distinctive phrasing, a sentence structure the facts do not dictate, or its sequence of points across several sentences. It is judged sentence by sentence against every source in <SOURCE_WORDING>, cited or not: an item that merges several sources still copies when one of its sentences reproduces a source's sentence, quote or title.
 - Facts are free to use. A sentence that plainly states a fact with its names, figures, units, period and scope is not copying, even in the source's order and in words close to the source's: there are few ways to say it. Sharing names, figures, units, places and technical terms is not copying either.

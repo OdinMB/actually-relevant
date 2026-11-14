@@ -112,16 +112,23 @@ describe('checkedItems', () => {
     ])
   })
 
-  it('gives each cited item its evidence, and the title, summary and blurb neither evidence nor hints', () => {
+  it('judges the title, summary and blurb against every fact of the pool, hinting the numbers no fact states; a cited item against its evidence, a judging bullet against none', () => {
     const items = checkedItems(
-      draft([['Pakistan added rooftop solar quickly.', ['S0F1']]], [], [], { title: '99 GW', summary: '99 GW.', marketingBlurb: '99 GW.' }),
+      draft([['Pakistan added rooftop solar quickly.', ['S0F1']]], [['Some 40 million people now use solar power.', []]], [], {
+        // 22 GW is S0F1's, 32 GW S1F1's: neither is cited, and both are in the pool
+        title: 'Pakistan adds 22 GW of rooftop solar',
+        summary: 'Analysts count about 32 GW of all solar, and 99 GW is planned.',
+        marketingBlurb: 'Panels spread fast.',
+      }),
       POOL,
     )
-    expect(items.map(c => [c.item.label, c.evidence.map(f => f.id), c.numberHints])).toEqual([
-      ['Title', [], []],
-      ['Story paragraph 1', ['S0F1'], []],
-      ['Summary', [], []],
-      ['Blurb', [], []],
+    const pool = ['S0F1', 'S1F1', 'E1F1']
+    expect(items.map(c => [c.item.label, c.evidence.map(f => f.id), c.againstPool ?? false, c.numberHints])).toEqual([
+      ['Title', pool, true, []],
+      ['Story paragraph 1', ['S0F1'], false, []],
+      ['Why This Matters 1', [], false, ['40 million']],
+      ['Summary', pool, true, ['99']],
+      ['Blurb', pool, true, []],
     ])
   })
 })
@@ -207,6 +214,28 @@ describe('judgedProblems', () => {
     }
     expect(judgedProblems(answer, hinted, lines)).toEqual([
       { label: 'Why This Matters 1', text: 'It matters.', problem: 'fails the fact check: no fact gives 40 million', kind: 'fact', by: 'judge', key: false },
+    ])
+  })
+
+  it('counts a support failure on the title, summary or blurb, judged against every fact of the pool, keeping its key judgment', () => {
+    const pooled = checkedItems(d, POOL)
+    const answer: FactCheck = {
+      items: [
+        verdict(1, { supported: false, problem: 'the facts say the first since 1990, not the first', key: true }),
+        verdict(3, { supported: false, problem: 'a judging bullet' }),
+        verdict(4, { supported: false, problem: 'the facts give no date' }),
+      ],
+    }
+    expect(judgedProblems(answer, pooled, lines)).toEqual([
+      {
+        label: 'Title',
+        text: 'Rooftop panels spread',
+        problem: 'fails the fact check: the facts say the first since 1990, not the first',
+        kind: 'fact',
+        by: 'judge',
+        key: true,
+      },
+      { label: 'Summary', text: 'Households add panels.', problem: 'fails the fact check: the facts give no date', kind: 'fact', by: 'judge', key: false },
     ])
   })
 
