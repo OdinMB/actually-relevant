@@ -64,3 +64,14 @@ describe('contradicted narrows', () => {
     expect(rule).toContain('<LATEST_STATE>')
   })
 })
+
+describe('old news narrows', () => {
+  it('is old only with no new development since the cutoff, and a fresh development about an old event leads the story', () => {
+    const prompt = buildWritePrompt(write)
+    const rule = block(prompt, 'OLD_NEWS')
+    expect(rule).toContain(write.oldBefore)
+    expect(rule).toMatch(/no fact reports a new development/)
+    expect(rule).toMatch(/written around that development/)
+    expect(prompt).toMatch(/Every field is about one development: [^\n]*<OLD_NEWS>/)
+  })
+})

@@ -17,4 +17,10 @@ describe('writeSchema', () => {
     expect(described).toContain('<CONTRADICTED>')
     expect(described).toMatch(/no later report settles/)
   })
+
+  it("defines old news as the write prompt's block does: an old event with no new development since the cutoff", () => {
+    const described = writeSchema.shape.oldNews.shape.isOld.description
+    expect(described).toContain('<OLD_NEWS>')
+    expect(described).toMatch(/no fact reports a new development/)
+  })
 })

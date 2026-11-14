@@ -203,13 +203,14 @@ support failures on paragraphs too. The methodology page's "Each paragraph and p
 checked against the sources it cites" stays true, but does not say that the headline, summary and
 blurb are now checked against all facts; that wording is the owner's (`.context/ai-transparency.md`, §3).
 
-## Amendment 2026-11-14: newest information leads; contradicted narrowed
+## Amendment 2026-11-14: newest information leads; contradicted and old news narrowed
 
 A researched story was written around the original article's main claim even where a later report
 showed that the development had moved on: a plan dropped, a figure revised. Such a report could
-also make the story `contradicted`, which the research step rejects. The coordinating agent
-proposed on 2026-11-14 that the newest information leads and that `contradicted` narrow to match;
-the owner decided both on 2026-11-14. The agent placed the rules marked below.
+also make the story `contradicted`, and an article reporting a new step in an event more than 14
+days old could be `stale`; the research step rejects both. The coordinating agent proposed on
+2026-11-14 that the newest information leads and that both verdicts narrow to match; the owner
+decided all three on 2026-11-14. The agent placed the rules marked below.
 
 - **Newest information leads.** Where a source dated after the original article (`S0`), or a fact
   that dates its event after the article's date, shows that the development has since moved on, the
@@ -231,9 +232,18 @@ the owner decided both on 2026-11-14. The agent placed the rules marked below.
   `isContradicted` description in `server/src/schemas/research.ts`). A later report that reverses,
   updates or settles the claim is not a contradiction; the story gives that latest state. The
   verdict, its fact ids and the gate (`decideGate`) are unchanged.
+- **Old news narrows to an old event with nothing new since**: the main development first happened
+  before the cutoff (14 days before the article's date) and no fact reports a new development
+  about it on or after the cutoff (`<OLD_NEWS>`, the `isOld` description). Where one does, the
+  story is written around that development, with the earlier event as context, and it is not old
+  news; the write prompt's one-development rule names that development (the agent's placement).
+  No schema field was added (the agent's choice): `firstHappened` stays the old event's own date,
+  so a kept run whose `firstHappened` precedes the cutoff records the rule at work, and stored runs
+  parse unchanged. The verdict and the gate are unchanged.
 
 Rule: a researched story states the latest state its sources show; an earlier claim is context,
-never the headline, and a change over time is never a contradiction.
+never the headline; a change over time is never a contradiction, and an old event with a fresh
+development is not old news.
 
 Consequences: a story whose development moved on after the article reads differently from the
 article that first reported it, its headline possibly the reverse of the original's ("Pakistan
@@ -243,4 +253,9 @@ the article's date, never past the run time, and the research step runs on the d
 an editor's run of an older story finds the most. Fewer stories are rejected as contradicted: one
 whose claim a later report reversed is now published at its latest state, and only a dispute
 between reports of the same time still rejects it; runs stored before keep the verdicts they got.
-Not yet measured with `eval:research`.
+Fewer stories are rejected as stale too: an article about a fresh step in an older story is
+published, written around that step, which the model judges, as it judged the event's date
+before. Not yet measured with `eval:research`. The methodology page's "If the research shows that
+the story is old news or is contradicted by other reports, we don't publish it" now reads wider
+than both rules and says nothing of the latest state; that wording is the owner's
+(`.context/ai-transparency.md`, §3 and §11).

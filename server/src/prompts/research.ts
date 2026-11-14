@@ -321,7 +321,7 @@ ${CITATIONS}
 ${LATEST_STATE}
 
 One development
-- Every field is about one development: the main one in <ARTICLE>. Where the article covers several, as a roundup or newsletter does, the others stay out of every field, and so do facts that are only about them.
+- Every field is about one development: the main one in <ARTICLE>, or for an old event the new development about it that <OLD_NEWS> names. Where the article covers several, as a roundup or newsletter does, the others stay out of every field, and so do facts that are only about them.
 - Each point appears once across the story, Why This Matters and Caveats: a bullet adds what the story does not already say, and the room it saves goes to facts the story has not used yet.
 
 Story (2-4 paragraphs, 150-250 words in total)
@@ -361,7 +361,7 @@ Final rating
 - A single integer 1-10: the result of the relevance calculation, judged with everything in <FACTS> in view.
 
 <OLD_NEWS>
-The main development is old news when it first happened before ${input.oldBefore}, 14 days before the article's date: the article then reports it again rather than reporting news.
+The main development is old news when it first happened before ${input.oldBefore}, 14 days before the article's date, and no fact reports a new development about it on or after that date: the article then reports it again rather than reporting news. Where a fact reports such a development (a ruling, a new figure, a step taken or dropped), the story is written around that development, with the earlier event as context, and it is not old news.
 </OLD_NEWS>
 
 <CONTRADICTED>
