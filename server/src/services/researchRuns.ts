@@ -94,12 +94,22 @@ function currentPrices(models: string[]): ResearchPrices {
   }
 }
 
-/** Why no run can start now, whatever the story: switched off, or a step's model without a price. */
-export function switchRefusal(): string | null {
-  if (!config.research.tavilyApiKey) return 'Research is switched off: TAVILY_API_KEY is not set'
+/** Why research is off: no key, or step models without a price. */
+export type ResearchSwitchOff = { cause: 'no-key' } | { cause: 'unpriced'; models: string[] }
+
+/** Why no run can start now, whatever the story; null while research is on. `switchRefusal` words it for editors. */
+export function researchSwitchOff(): ResearchSwitchOff | null {
+  if (!config.research.tavilyApiKey) return { cause: 'no-key' }
   const unpriced = [...new Set(Object.values(stepModels()))].filter(m => !hasPrice(m))
-  if (unpriced.length > 0) return `Research is refused: ${unpriced.join(', ')} has no price in config.research.modelPrices, so its cost could not be counted`
-  return null
+  return unpriced.length > 0 ? { cause: 'unpriced', models: unpriced } : null
+}
+
+/** `researchSwitchOff` in the words editors see on a refused run, or null while research is on. */
+export function switchRefusal(): string | null {
+  const off = researchSwitchOff()
+  if (!off) return null
+  if (off.cause === 'no-key') return 'Research is switched off: TAVILY_API_KEY is not set'
+  return `Research is refused: ${off.models.join(', ')} has no price in config.research.modelPrices, so its cost could not be counted`
 }
 
 const usd = (v: number) => `$${v.toFixed(2)}`

@@ -793,8 +793,10 @@ export interface JobRun {
   cronExpression: string
   /** IANA zone the cron expression is read in; null for the server's own clock. */
   timeZone: string | null
-  /** The job's main setting in a few words (e.g. the cleanup's age cutoff); null when it has none to show. */
-  setting?: string | null
+  /** What the job does and its rules that are not obvious, shown behind its info icon; null for a job without one. */
+  note: string | null
+  /** A state the owner must notice now (e.g. research switched off), shown under the job's name; null when there is none. */
+  warning: string | null
   createdAt: string
   updatedAt: string
 }

@@ -13,6 +13,9 @@ interface TooltipProps {
 const PLACEMENT = { top: 'bottom-full pb-1', bottom: 'top-full pt-1' } as const
 const ALIGN = { start: 'left-0', end: 'right-0' } as const
 
+/** The bubble's look, shared with `InfoTip`; each sets its own maximum width. */
+export const TOOLTIP_BUBBLE = 'block w-max rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs font-normal leading-snug text-white shadow-lg'
+
 /**
  * A tooltip that opens on hover and on keyboard focus, stays open while the pointer is over it and
  * closes on Escape (WCAG 1.4.13). The text is always in the DOM, so `aria-describedby` reads it to a
@@ -41,11 +44,7 @@ export function Tooltip({ content, children, placement = 'bottom', align = 'star
     >
       {children({ 'aria-describedby': id })}
       <span className={`absolute z-30 ${PLACEMENT[placement]} ${ALIGN[align]} ${open ? '' : 'hidden'}`}>
-        <span
-          role="tooltip"
-          id={id}
-          className="block w-max max-w-xs rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs font-normal leading-snug text-white shadow-lg"
-        >
+        <span role="tooltip" id={id} className={`${TOOLTIP_BUBBLE} max-w-xs`}>
           {content}
         </span>
       </span>
