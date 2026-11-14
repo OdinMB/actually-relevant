@@ -111,5 +111,5 @@ The client sends up to 500 IDs in a single request. The server gates LLM calls t
 | `client/src/lib/admin-api.ts` | Client API methods |
 | `client/src/hooks/useBackgroundTasks.tsx` | Polling + processing ID tracking |
 | `client/src/components/admin/StoryTable.tsx` | Processing indicator UI |
-| `client/src/pages/admin/StoriesPage.tsx` | Wires bulk actions to polled tasks |
+| `client/src/components/admin/storyBulkActions.ts` | The stories list's bulk action handlers: the LLM actions' table (confirm, then one polled task), the bulk Research, social drafts, status changes |
 | `shared/types/index.ts` | `TaskState`, `BulkTaskType`, `BulkTaskStatus` types |

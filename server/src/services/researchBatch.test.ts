@@ -2,13 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The run path itself (checks, reservation under the lock, the run) is researchRuns'; here, how a
 // batch takes its stories through it: the pool, the skips with their reasons, the task's counts.
-const mockRuns = vi.hoisted(() => ({ switchRefusal: vi.fn(), reserveEditorRun: vi.fn(), runInTask: vi.fn() }))
+const mockRuns = vi.hoisted(() => ({ switchRefusal: vi.fn(), reserveEditorRun: vi.fn(), runInTask: vi.fn(), runPipelineResearch: vi.fn() }))
+const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), applyVerdict: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: {} }))
 vi.mock('./researchRuns.js', async importOriginal => ({
   ...(await importOriginal<typeof import('./researchRuns.js')>()),
   ...mockRuns,
 }))
+vi.mock('./researchApply.js', () => mockApply)
 
 const { startResearchBatch } = await import('./researchBatch.js')
 const { taskRegistry } = await import('../lib/taskRegistry.js')
@@ -104,6 +106,20 @@ describe('startResearchBatch', () => {
     const { taskId } = startResearchBatch(['s1', 's2'])
 
     expect(await finished(taskId)).toMatchObject({ completed: 1, failed: 1, errors: ['unexpected error (Error)'], skipped: [] })
+  })
+
+  // The guarantee the single-story action gives: a run records itself and applies nothing
+  it('runs each story with exactly its task, run and material, passing no hook to the run path, and never reaches an apply', async () => {
+    const { taskId } = startResearchBatch(['s1', 's2'])
+    await finished(taskId)
+
+    expect(mockRuns.runInTask.mock.calls).toEqual([
+      [taskId, 'run-s1', { id: 's1' }],
+      [taskId, 'run-s2', { id: 's2' }],
+    ])
+    expect(mockRuns.runPipelineResearch).not.toHaveBeenCalled()
+    expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
+    expect(mockApply.applyVerdict).not.toHaveBeenCalled()
   })
 
   it('takes a story chosen twice once', async () => {

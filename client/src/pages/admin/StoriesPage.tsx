@@ -18,8 +18,9 @@ import { Pagination } from '../../components/ui/Pagination'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { StoryFiltersBar } from '../../components/admin/StoryFiltersBar'
 import { StoryTable } from '../../components/admin/StoryTable'
-import { BulkActionsBar } from '../../components/admin/BulkActionsBar'
-import { bulkResearchConfirmation, bulkResearchRefusal } from '../../components/admin/bulkResearch'
+import { BulkActionsBar, type BulkAction } from '../../components/admin/BulkActionsBar'
+import { bulkResearchRefusal } from '../../components/admin/bulkResearch'
+import { storyBulkActions, type ConfirmAction } from '../../components/admin/storyBulkActions'
 import { StoryDetail } from '../../components/admin/StoryDetail'
 import { CrawlUrlForm } from '../../components/admin/CrawlUrlForm'
 import { CreateClusterDialog } from '../../components/admin/CreateClusterDialog'
@@ -75,7 +76,7 @@ export default function StoriesPage() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [crawlOpen, setCrawlOpen] = useState(false)
   const [clusterDialogOpen, setClusterDialogOpen] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; action: () => Promise<void> } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
   const [blueskyDraft, setBlueskyDraft] = useState<BlueskyDraft | null>(null)
   const [blueskyPanelOpen, setBlueskyPanelOpen] = useState(false)
   const [blueskyPublishing, setBlueskyPublishing] = useState(false)
@@ -122,157 +123,46 @@ export default function StoriesPage() {
     setSelectedIds(new Set())
   }
 
-  const handleBulkAction = (action: string) => {
+  const bulkActions = storyBulkActions({
+    confirm: setConfirmAction,
+    clearSelection: () => setSelectedIds(new Set()),
+    toast,
+    launchPolledTask,
+    onTaskComplete: invalidateStories,
+    researchUsage: researchUsage.data,
+    startResearch: startBulkResearch,
+    titleOf: id => {
+      const story = stories.find(s => s.id === id)
+      return story ? (story.title ?? story.sourceTitle) : id
+    },
+    drafts: {
+      bluesky: {
+        open: () => {
+          setBlueskyPanelOpen(true)
+          setBlueskyDraft(null)
+        },
+        show: draft => setBlueskyDraft(draft as BlueskyDraft),
+        close: () => setBlueskyPanelOpen(false),
+      },
+      mastodon: {
+        open: () => {
+          setMastodonPanelOpen(true)
+          setMastodonDraft(null)
+        },
+        show: draft => setMastodonDraft(draft as MastodonDraft),
+        close: () => setMastodonPanelOpen(false),
+      },
+    },
+    openClusterDialog: () => setClusterDialogOpen(true),
+    setStatus: async (ids, status) => {
+      await bulkUpdate.mutateAsync({ ids, status })
+    },
+  })
+
+  const handleBulkAction = (action: BulkAction) => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) return
-
-    if (action === 'preassess') {
-      setConfirmAction({
-        title: `Pre-assess ${ids.length} stories?`,
-        description: 'This will run AI pre-assessment on the selected stories.',
-        action: async () => {
-          setSelectedIds(new Set())
-          launchPolledTask({
-            id: `preassess-${Date.now()}`,
-            label: `Pre-assessing ${ids.length} stories`,
-            submitFn: () => adminApi.stories.bulkPreassess(ids),
-            onComplete: invalidateStories,
-            storyIds: ids,
-          })
-        },
-      })
-    } else if (action === 'reclassify') {
-      setConfirmAction({
-        title: `Reclassify ${ids.length} stories?`,
-        description: 'This will re-run issue and emotion classification without changing ratings or status.',
-        action: async () => {
-          setSelectedIds(new Set())
-          launchPolledTask({
-            id: `reclassify-${Date.now()}`,
-            label: `Reclassifying ${ids.length} stories`,
-            submitFn: () => adminApi.stories.bulkReclassify(ids),
-            onComplete: invalidateStories,
-            storyIds: ids,
-          })
-        },
-      })
-    } else if (action === 'assess') {
-      setConfirmAction({
-        title: `Assess ${ids.length} stories?`,
-        description: 'This will run full AI assessment on each selected story.',
-        action: async () => {
-          setSelectedIds(new Set())
-          launchPolledTask({
-            id: `assess-${Date.now()}`,
-            label: `Assessing ${ids.length} stories`,
-            submitFn: () => adminApi.stories.bulkAssess(ids),
-            onComplete: invalidateStories,
-            storyIds: ids,
-          })
-        },
-      })
-    } else if (action === 'research') {
-      const usage = researchUsage.data
-      if (!usage) return
-      // Named in the outcome by the title the list shows
-      const chosen = ids.map(id => {
-        const story = stories.find(s => s.id === id)
-        return { id, title: story ? (story.title ?? story.sourceTitle) : id }
-      })
-      setConfirmAction({
-        ...bulkResearchConfirmation(ids.length, usage),
-        action: async () => {
-          setSelectedIds(new Set())
-          startBulkResearch(chosen)
-        },
-      })
-    } else if (action === 'select') {
-      setConfirmAction({
-        title: `Select ${ids.length} stories for publication?`,
-        description: 'Selected stories will be marked for publishing.',
-        action: async () => {
-          setSelectedIds(new Set())
-          launchPolledTask({
-            id: `select-${Date.now()}`,
-            label: `Selecting ${ids.length} stories`,
-            submitFn: () => adminApi.stories.bulkSelect(ids),
-            onComplete: invalidateStories,
-            storyIds: ids,
-          })
-        },
-      })
-    } else if (action === 'bluesky-post') {
-      // Single story: generate draft and open panel
-      setBlueskyPanelOpen(true)
-      setBlueskyDraft(null)
-      adminApi.bluesky
-        .generateDraft(ids[0]!)
-        .then(draft => {
-          setBlueskyDraft(draft as BlueskyDraft)
-        })
-        .catch(err => {
-          toast('error', err instanceof Error ? err.message : 'Failed to generate draft')
-          setBlueskyPanelOpen(false)
-        })
-      return
-    } else if (action === 'bluesky-pick') {
-      // Multiple stories: pick best and generate draft
-      setBlueskyPanelOpen(true)
-      setBlueskyDraft(null)
-      adminApi.bluesky
-        .pickAndDraft(ids)
-        .then(result => {
-          setBlueskyDraft(result as BlueskyDraft)
-        })
-        .catch(err => {
-          toast('error', err instanceof Error ? err.message : 'Failed to pick and draft')
-          setBlueskyPanelOpen(false)
-        })
-      return
-    } else if (action === 'mastodon-post') {
-      // Single story: generate draft and open panel
-      setMastodonPanelOpen(true)
-      setMastodonDraft(null)
-      adminApi.mastodon
-        .generateDraft(ids[0]!)
-        .then(draft => {
-          setMastodonDraft(draft as MastodonDraft)
-        })
-        .catch(err => {
-          toast('error', err instanceof Error ? err.message : 'Failed to generate draft')
-          setMastodonPanelOpen(false)
-        })
-      return
-    } else if (action === 'mastodon-pick') {
-      // Multiple stories: pick best and generate draft
-      setMastodonPanelOpen(true)
-      setMastodonDraft(null)
-      adminApi.mastodon
-        .pickAndDraft(ids)
-        .then(result => {
-          setMastodonDraft(result as MastodonDraft)
-        })
-        .catch(err => {
-          toast('error', err instanceof Error ? err.message : 'Failed to pick and draft')
-          setMastodonPanelOpen(false)
-        })
-      return
-    } else if (action === 'create-cluster') {
-      setClusterDialogOpen(true)
-      return
-    } else {
-      // Status change — keep blocking (instant operation)
-      const status = action as StoryStatus
-      setConfirmAction({
-        title: `Set ${ids.length} stories to "${status}"?`,
-        description: `This will update the status of ${ids.length} stories.`,
-        action: async () => {
-          await bulkUpdate.mutateAsync({ ids, status })
-          toast('success', `Updated ${ids.length} stories`)
-          setSelectedIds(new Set())
-        },
-      })
-    }
+    bulkActions[action](ids)
   }
 
   const handleSingleStatusChange = (id: string, status: StoryStatus) => {

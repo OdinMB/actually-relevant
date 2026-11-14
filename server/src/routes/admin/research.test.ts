@@ -21,7 +21,7 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 const mockInput = vi.hoisted(() => ({ researchStoriesByIds: vi.fn() }))
 const mockPipeline = vi.hoisted(() => ({ researchStory: vi.fn() }))
-const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), revertResearch: vi.fn(), applyRefusal: vi.fn() }))
+const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), revertResearch: vi.fn(), applyRefusal: vi.fn(), applyVerdict: vi.fn() }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/crawler.js', () => ({ crawlFeed: vi.fn(), crawlAllDueFeeds: vi.fn(), crawlUrl: vi.fn() }))
@@ -173,8 +173,17 @@ describe('POST /api/admin/research/runs (the stories list bulk Research)', () =>
     })
     expect(tx.storyResearchRun.create).toHaveBeenCalledTimes(2)
     for (const [{ data }] of tx.storyResearchRun.create.mock.calls) expect(data).toMatchObject({ trigger: 'editor', costUsd: config.research.maxRunUsd })
-    // As the single-story action: a finished run changes nothing on its story until an editor uses its version
+    // As the single-story action: a finished run changes nothing on its story until an editor uses its version.
+    // Each run's row takes its stored result, then its finish, with no hook between them (where the research step applies)
     expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
+    expect(mockApply.applyVerdict).not.toHaveBeenCalled()
+    for (const runId of ['run-1', 'run-2']) {
+      const writes = mockPrisma.storyResearchRun.updateMany.mock.calls.map(([args]) => args).filter(args => args.where.id === runId)
+      expect(writes).toEqual([
+        { where: { id: runId, status: 'running' }, data: expect.objectContaining({ verdict: 'keep', result: expect.anything() }) },
+        { where: { id: runId, status: 'running' }, data: { status: 'completed', finishedAt: expect.any(Date) } },
+      ])
+    }
   })
 
   it('skips the stories the monthly cap leaves no room for, with the cap as the reason', async () => {

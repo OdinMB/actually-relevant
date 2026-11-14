@@ -2,22 +2,23 @@ import type { StoryStatus } from '@shared/types'
 import { Button } from '../ui/Button'
 import { ReasonButton } from '../ui/ReasonButton'
 
+/** What the bar asks for; `storyBulkActions.ts` handles each. */
+export type BulkAction =
+  | 'preassess'
+  | 'reclassify'
+  | 'assess'
+  | 'research'
+  | 'select'
+  | 'create-cluster'
+  | 'bluesky-post'
+  | 'bluesky-pick'
+  | 'mastodon-post'
+  | 'mastodon-pick'
+  | StoryStatus
+
 interface BulkActionsBarProps {
   count: number
-  onAction: (
-    action:
-      | 'preassess'
-      | 'reclassify'
-      | 'assess'
-      | 'research'
-      | 'select'
-      | 'create-cluster'
-      | 'bluesky-post'
-      | 'bluesky-pick'
-      | 'mastodon-post'
-      | 'mastodon-pick'
-      | StoryStatus,
-  ) => void
+  onAction: (action: BulkAction) => void
   loading?: boolean
   /** Why Research does nothing now, null when it may start; undefined leaves it out (`bulkResearchRefusal`). */
   researchRefusal?: string | null
