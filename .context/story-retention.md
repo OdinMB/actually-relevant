@@ -63,4 +63,4 @@ Deleted rows and cleared embeddings free space Postgres reuses for new rows (aut
 | `client/src/pages/admin/DashboardPage.tsx` | Lifetime totals line |
 | `server/src/services/feed.ts` | `getAllFeedQualityMetrics()`: lifetime per-feed totals |
 | `server/src/config.ts` | `storyRetention.maxAgeMonths`, `storyRetention.batchSize` |
-| `server/src/jobs/jobSettings.ts` | The cutoff line shown under the job's name on the Jobs page (`setting` in `GET /api/admin/jobs`) |
+| `server/src/jobs/jobNotes.ts` | The job's note on the Jobs page, which names the cutoff (`note` in `GET /api/admin/jobs`) |

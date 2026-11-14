@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { EllipsisVerticalIcon, PlayIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { ExclamationTriangleIcon } from '@heroicons/react/20/solid'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import type { JobRun } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
 import { Button } from '../ui/Button'
+import { InfoTip } from '../ui/InfoTip'
 import { jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
 import { useUpdateJob, useRunJob } from '../../hooks/useJobs'
@@ -152,16 +154,21 @@ export function JobsTable({ jobs }: JobsTableProps) {
             {sortedJobs.map(job => (
               <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : 'hover:bg-neutral-50'}`}>
                 <td className="px-3 py-2 font-medium text-neutral-900">
-                  <button
-                    onClick={() => setSelectedJob(job.jobName)}
-                    className="text-left hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-                  >
-                    {jobDisplayName(job.jobName)}
-                  </button>
-                  {job.setting && (
-                    <span className="block text-xs font-normal text-neutral-500" title="Set in server/src/config.ts">
-                      {job.setting}
-                    </span>
+                  <span className="inline-flex items-center gap-1">
+                    <button
+                      onClick={() => setSelectedJob(job.jobName)}
+                      className="text-left hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                    >
+                      {jobDisplayName(job.jobName)}
+                    </button>
+                    {job.note && <InfoTip label={`About ${jobDisplayName(job.jobName)}`}>{job.note}</InfoTip>}
+                  </span>
+                  {/* A state the owner must notice stays in view; the explanation is behind the icon */}
+                  {job.warning && (
+                    <p className="mt-0.5 flex max-w-xs items-start gap-1 text-xs font-normal text-amber-800">
+                      <ExclamationTriangleIcon className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {job.warning}
+                    </p>
                   )}
                 </td>
                 <td className="px-3 py-2 hidden lg:table-cell">

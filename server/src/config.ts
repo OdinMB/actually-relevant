@@ -674,8 +674,8 @@ export const config = {
   storyRetention: {
     // The cleanup_old_stories job (.context/story-retention.md): stories crawled longer ago than this
     // are deleted (unkept statuses only) or lose their embedding (every other unpublished story).
-    // Shown on the admin Jobs page (jobs/jobSettings.ts). Owner-set (ADR-0042), so deliberately no env
-    // override: what the site deletes is a reviewed decision, not a deploy setting.
+    // Named in the job's note on the admin Jobs page (jobs/jobNotes.ts). Owner-set (ADR-0042), so
+    // deliberately no env override: what the site deletes is a reviewed decision, not a deploy setting.
     maxAgeMonths: 6,
     // Rows per statement; each delete batch and its roll-up commit together.
     batchSize: 500,
