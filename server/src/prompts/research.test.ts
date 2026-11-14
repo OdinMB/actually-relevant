@@ -36,6 +36,9 @@ const repair: RepairInput = {
   repairs: [{ label: 'Title', text: 'Pakistan bans imports', factIds: null, problems: ['fails the fact check: no fact states it'] }],
 }
 
+/** The text of one XML block of a prompt: its tags on lines of their own, not a mention such as the GOAL's. */
+const block = (prompt: string, name: string) => new RegExp(`\\n<${name}>\\n([\\s\\S]*?)\\n</${name}>`).exec(prompt)?.[1] ?? ''
+
 /** The date each SOURCE of a prompt's <FACTS> carries, in order. */
 const sourceDates = (prompt: string) => [...prompt.matchAll(/<SOURCE id="S\d+"[^>]* date="([^"]*)"/g)].map(m => m[1])
 
@@ -50,5 +53,14 @@ describe('the newest information leads', () => {
     expect(buildRepairPrompt(repair)).toContain(LATEST_STATE)
     expect(LATEST_STATE).toMatch(/latest state/)
     expect(buildDerivePrompt({ titleLabel: 'Trade', paragraphs: ['The plan was dropped.'] })).toMatch(/latest state/)
+  })
+})
+
+describe('contradicted narrows', () => {
+  it('counts only sources that disagree at the same time with no later report settling it, and sends a later reversal to the latest state', () => {
+    const rule = block(buildWritePrompt(write), 'CONTRADICTED')
+    expect(rule).toMatch(/at the same time/)
+    expect(rule).toMatch(/no later report settles/)
+    expect(rule).toContain('<LATEST_STATE>')
   })
 })

@@ -11,4 +11,10 @@ describe('writeSchema', () => {
     expect(preAssessItemSchema.shape.emotionTag.description).toContain(EMOTION_TAG_DEFINITIONS)
     expect(writeSchema.safeParse({}).error?.issues.map(i => i.path[0])).toContain('emotionTag')
   })
+
+  it("defines contradicted as the write prompt's block does: a disagreement at the same time that no later report settles", () => {
+    const described = writeSchema.shape.contradicted.shape.isContradicted.description
+    expect(described).toContain('<CONTRADICTED>')
+    expect(described).toMatch(/no later report settles/)
+  })
 })

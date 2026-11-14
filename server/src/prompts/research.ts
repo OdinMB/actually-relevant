@@ -365,7 +365,7 @@ The main development is old news when it first happened before ${input.oldBefore
 </OLD_NEWS>
 
 <CONTRADICTED>
-The main claim is contradicted when a credible source in <FACTS> states the opposite of it. A figure with a different scope or period is not a contradiction.
+The main claim is contradicted when credible sources in <FACTS> disagree about it at the same time, one stating the opposite of what another states about the same moment, and no later report settles which is right. A figure with a different scope or period is not a contradiction, and neither is a later report that reverses, updates or settles the claim: the story then gives that latest state (<LATEST_STATE>).
 </CONTRADICTED>
 </REQUIREMENTS>
 

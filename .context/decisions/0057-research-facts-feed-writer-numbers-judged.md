@@ -203,12 +203,13 @@ support failures on paragraphs too. The methodology page's "Each paragraph and p
 checked against the sources it cites" stays true, but does not say that the headline, summary and
 blurb are now checked against all facts; that wording is the owner's (`.context/ai-transparency.md`, §3).
 
-## Amendment 2026-11-14: newest information leads
+## Amendment 2026-11-14: newest information leads; contradicted narrowed
 
 A researched story was written around the original article's main claim even where a later report
-showed that the development had moved on: a plan dropped, a figure revised. The coordinating agent
-proposed on 2026-11-14 that the newest information leads; the owner decided it on 2026-11-14. The
-agent placed the rules marked below.
+showed that the development had moved on: a plan dropped, a figure revised. Such a report could
+also make the story `contradicted`, which the research step rejects. The coordinating agent
+proposed on 2026-11-14 that the newest information leads and that `contradicted` narrow to match;
+the owner decided both on 2026-11-14. The agent placed the rules marked below.
 
 - **Newest information leads.** Where a source dated after the original article (`S0`), or a fact
   that dates its event after the article's date, shows that the development has since moved on, the
@@ -224,13 +225,22 @@ agent placed the rules marked below.
   prompt and in the fact check's evidence. A source dated as search gives it
   (`Thu, 12 Nov 2026 08:00:00 GMT`) had no date fact, since `publishedFact` read only an ISO date;
   it has one now (the agent's fix, found while checking what the writer sees).
+- **`contradicted` narrows to a disagreement no later report settles**: credible sources disagree
+  about the main claim at the same time, one stating the opposite of what another states about the
+  same moment, and no later report settles which is right (`<CONTRADICTED>`, and the
+  `isContradicted` description in `server/src/schemas/research.ts`). A later report that reverses,
+  updates or settles the claim is not a contradiction; the story gives that latest state. The
+  verdict, its fact ids and the gate (`decideGate`) are unchanged.
 
 Rule: a researched story states the latest state its sources show; an earlier claim is context,
-never the headline.
+never the headline, and a change over time is never a contradiction.
 
 Consequences: a story whose development moved on after the article reads differently from the
 article that first reported it, its headline possibly the reverse of the original's ("Pakistan
 narrows import ban" for "Pakistan bans all imports"); the Sources list still starts with that
 article. Later reports are few where the research runs at selection (the search reaches 7 days past
 the article's date, never past the run time, and the research step runs on the day's selection);
-an editor's run of an older story finds the most. Not yet measured with `eval:research`.
+an editor's run of an older story finds the most. Fewer stories are rejected as contradicted: one
+whose claim a later report reversed is now published at its latest state, and only a dispute
+between reports of the same time still rejects it; runs stored before keep the verdicts they got.
+Not yet measured with `eval:research`.
