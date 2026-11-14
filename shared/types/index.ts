@@ -902,6 +902,16 @@ export interface ResearchUsage {
  */
 export type ResearchFallbackCategory = 'no_other_coverage' | 'not_confirmed' | 'draft_failed_check' | 'technical'
 
+/**
+ * What became of one story of a bulk "Use researched versions" (server: `BulkApplyOutcome` in
+ * services/researchApplyBatch.ts): its newest run applied, with research's verdict on it (an editor
+ * may overrule `stale` and `contradicted`, as "Use this version" allows); skipped, with why; or
+ * failed on an unexpected error, named by the error's name only.
+ */
+export type ResearchBulkApplyOutcome =
+  | { storyId: string; outcome: 'applied'; runId: string; verdict: ResearchVerdict['kind'] }
+  | { storyId: string; outcome: 'skipped' | 'failed'; reason: string }
+
 /** `rewrite`: a repair round since 2026-11-13 (before, the one rewrite of the whole draft). `derive`: a title, summary or blurb written again from the kept story. */
 export type ResearchStep = 'confirm' | 'queries' | 'extract' | 'earlier' | 'write' | 'fact-check' | 'rewrite' | 'derive'
 export type ResearchCallOutcome = 'ok' | 'parse_failure' | 'empty' | 'truncated' | 'error' | 'skipped'

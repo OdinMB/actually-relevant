@@ -2,7 +2,8 @@ import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ResearchRun } from '@shared/types'
 import { adminApi, ApiError } from '../lib/admin-api'
-import { bulkResearchOutcome, type BulkResearchStory } from '../components/admin/bulkResearch'
+import { bulkApplyOutcome, bulkResearchOutcome, type BulkResearchStory } from '../components/admin/bulkResearch'
+import { useToast } from '../components/ui/Toast'
 import { useBackgroundTasks } from './useBackgroundTasks'
 import { invalidateStoryQueries } from './useStories'
 
@@ -104,6 +105,30 @@ export function useBulkResearch() {
       })
     },
     [launchPolledTask, queryClient],
+  )
+}
+
+/**
+ * The stories list's bulk "Use researched versions": each chosen story's newest run put on it in one
+ * request, followed by a toast that becomes the outcome (`bulkApplyOutcome`), each story not applied
+ * named with the reason. The applies rewrite the stories' text fields, so every story query is re-read.
+ */
+export function useBulkApplyResearch() {
+  const queryClient = useQueryClient()
+  const { addProgressToast, updateToast } = useToast()
+
+  return useCallback(
+    (chosen: BulkResearchStory[]) => {
+      const id = `research-apply-${Date.now()}`
+      const label = `Applying researched versions to ${chosen.length} ${chosen.length === 1 ? 'story' : 'stories'}`
+      addProgressToast(id, `${label}...`)
+      void adminApi.research
+        .applyBulk(chosen.map(s => s.id))
+        .then(({ outcomes }) => updateToast(id, bulkApplyOutcome(label, outcomes, chosen)))
+        .catch((err: unknown) => updateToast(id, { type: 'error', message: `${label}: ${err instanceof Error ? err.message : 'Failed'}` }))
+        .finally(() => invalidateStoryQueries(queryClient))
+    },
+    [addProgressToast, updateToast, queryClient],
   )
 }
 

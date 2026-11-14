@@ -7,7 +7,7 @@ import { useStories, useBulkUpdateStatus, useDeleteStory, useUpdateStoryStatus, 
 import { useFeeds } from '../../hooks/useFeeds'
 import { useIssues } from '../../hooks/useIssues'
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
-import { useBulkResearch, useResearchUsage } from '../../hooks/useResearch'
+import { useBulkApplyResearch, useBulkResearch, useResearchUsage } from '../../hooks/useResearch'
 import { adminApi } from '../../lib/admin-api'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Button } from '../../components/ui/Button'
@@ -19,7 +19,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { StoryFiltersBar } from '../../components/admin/StoryFiltersBar'
 import { StoryTable } from '../../components/admin/StoryTable'
 import { BulkActionsBar, type BulkAction } from '../../components/admin/BulkActionsBar'
-import { bulkResearchRefusal } from '../../components/admin/bulkResearch'
+import { bulkApplyRefusal, bulkResearchRefusal } from '../../components/admin/bulkResearch'
 import { storyBulkActions, type ConfirmAction } from '../../components/admin/storyBulkActions'
 import { StoryDetail } from '../../components/admin/StoryDetail'
 import { CrawlUrlForm } from '../../components/admin/CrawlUrlForm'
@@ -71,6 +71,7 @@ export default function StoriesPage() {
   const { launchTask, launchPolledTask, processingIds } = useBackgroundTasks()
   const researchUsage = useResearchUsage()
   const startBulkResearch = useBulkResearch()
+  const applyBulkResearch = useBulkApplyResearch()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -131,6 +132,7 @@ export default function StoriesPage() {
     onTaskComplete: invalidateStories,
     researchUsage: researchUsage.data,
     startResearch: startBulkResearch,
+    applyResearch: applyBulkResearch,
     titleOf: id => {
       const story = stories.find(s => s.id === id)
       return story ? (story.title ?? story.sourceTitle) : id
@@ -358,6 +360,7 @@ export default function StoriesPage() {
         onAction={handleBulkAction}
         loading={confirmLoading}
         researchRefusal={bulkResearchRefusal(selectedIds.size, researchUsage.data, researchUsage.isError)}
+        applyResearchRefusal={bulkApplyRefusal(selectedIds.size, researchUsage.data, researchUsage.isError)}
         allHaveRelevance={selectedIds.size > 0 && stories.filter(s => selectedIds.has(s.id)).every(s => s.relevance != null)}
         allPublished={selectedIds.size > 0 && stories.filter(s => selectedIds.has(s.id)).every(s => s.status === 'published')}
         singleHasBlueskyPost={selectedIds.size === 1 && stories.some(s => selectedIds.has(s.id) && (s._count?.blueskyPosts ?? 0) > 0)}

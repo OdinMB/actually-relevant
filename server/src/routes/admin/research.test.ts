@@ -14,7 +14,7 @@ const tx = vi.hoisted(() => ({
 }))
 const mockPrisma = vi.hoisted(() => ({
   story: { findUnique: vi.fn() },
-  storyResearchRun: { updateMany: vi.fn(), aggregate: vi.fn(), findMany: vi.fn() },
+  storyResearchRun: { updateMany: vi.fn(), aggregate: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
   $disconnect: vi.fn(),
@@ -214,6 +214,51 @@ describe('POST /api/admin/research/runs (the stories list bulk Research)', () =>
 
   it('needs a signed-in editor or admin', async () => {
     expect((await request(app).post('/api/admin/research/runs').send({ storyIds: IDS })).status).toBe(401)
+  })
+})
+
+// Which run each story takes and the skips are researchApplyBatch.test.ts's, the apply itself researchApply's; here, what the request answers
+describe('POST /api/admin/research/apply (the stories list bulk "Use researched versions")', () => {
+  const IDS = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222']
+  const applyBatch = (storyIds: unknown) => request(app).post('/api/admin/research/apply').set(authHeader()).send({ storyIds })
+
+  it("answers each story's outcome: its newest run put on it as an editor's apply, or skipped with the reason", async () => {
+    mockPrisma.storyResearchRun.findFirst.mockImplementation(async ({ where }: { where: { storyId: string } }) =>
+      where.storyId === IDS[1] ? null : row({ id: 'run-9', storyId: where.storyId, result: { ...storedResult, draft: { title: 'Researched' } } }),
+    )
+
+    const res = await applyBatch(IDS)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      outcomes: [
+        { storyId: IDS[0], outcome: 'applied', runId: 'run-9', verdict: 'keep' },
+        { storyId: IDS[1], outcome: 'skipped', reason: expect.stringMatching(/no research run/i) },
+      ],
+    })
+    expect(mockApply.applyResearchRun.mock.calls).toEqual([[IDS[0], 'run-9']])
+  })
+
+  it('answers 409 while no run can be applied, reading no story', async () => {
+    mockApply.applyRefusal.mockReturnValue('Applying research is not open yet: RESEARCH_APPLY_ENABLED is not "true"')
+
+    const res = await applyBatch(IDS)
+
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/RESEARCH_APPLY_ENABLED/)
+    expect(mockPrisma.storyResearchRun.findFirst).not.toHaveBeenCalled()
+    expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
+  })
+
+  it('answers 400 for more stories than one batch takes, for none and for an id that is not one', async () => {
+    const tooMany = Array.from({ length: config.research.bulkMaxStories + 1 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`)
+    for (const storyIds of [tooMany, [], ['story-1']]) expect((await applyBatch(storyIds)).status).toBe(400)
+    expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
+  })
+
+  it('needs a signed-in editor or admin', async () => {
+    expect((await request(app).post('/api/admin/research/apply').send({ storyIds: IDS })).status).toBe(401)
+    expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
   })
 })
 
