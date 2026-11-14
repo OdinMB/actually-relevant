@@ -45,12 +45,25 @@ async function openCard(name: string) {
 }
 
 describe('Citation', () => {
+  it("shows a chip per cited source, its icon and outlet name and our earlier story's as ours, all in one button named after them", () => {
+    renderCitation([
+      { sourceId: 'S1', sentence: 'The coverage sentence.' },
+      { sourceId: 'E1', sentence: 'The earlier sentence.' },
+    ])
+    const button = screen.getByRole('button', { name: 'Sources: Coverage Outlet, Earlier on Actually Relevant' })
+    expect(screen.getAllByRole('button', { name: /^Sources?:/ })).toHaveLength(1)
+    const chips = [...button.children] as HTMLElement[]
+    expect(chips.map(chip => chip.textContent)).toEqual(['Coverage Outlet', 'Earlier on Actually Relevant'])
+    expect(chips.map(chip => chip.querySelector('img')?.getAttribute('src'))).toEqual(['/api/source-favicons/coverage.example.org', '/favicon-32x32.png'])
+    for (const chip of chips) expect(chip).toHaveClass('rounded-full', 'bg-neutral-100', 'text-xs')
+  })
+
   it('moves focus into its card when it opens, and Esc closes the card and returns focus to the button', async () => {
     renderCitation([
       { sourceId: 'S1', sentence: 'The coverage sentence.' },
       { sourceId: 'E1', sentence: 'The earlier sentence.' },
     ])
-    const { button, card } = await openCard('Sources: Coverage Outlet, Actually Relevant')
+    const { button, card } = await openCard('Sources: Coverage Outlet, Earlier on Actually Relevant')
     expect(card).toHaveAccessibleName('Sources for this passage')
     expect(card).toContainElement(document.activeElement as HTMLElement)
 
@@ -70,7 +83,7 @@ describe('Citation', () => {
       { sourceId: 'S1', sentence: 'The coverage sentence.' },
       { sourceId: 'E1', sentence: 'The earlier sentence.' },
     ])
-    const { card } = await openCard('Sources: Coverage Outlet, Actually Relevant')
+    const { card } = await openCard('Sources: Coverage Outlet, Earlier on Actually Relevant')
     const [outside, earlier] = within(card).getAllByRole('listitem')
     expect(announcedText(outside!)).not.toContain('AI-generated')
     expect(announcedText(earlier!)).toContain('AI-generated “The earlier sentence.”')
@@ -81,7 +94,7 @@ describe('Citation', () => {
       { sourceId: 'S1', sentence: 'The coverage sentence.' },
       { sourceId: 'E1', sentence: 'The earlier sentence.' },
     ])
-    const { card } = await openCard('Sources: Coverage Outlet, Actually Relevant')
+    const { card } = await openCard('Sources: Coverage Outlet, Earlier on Actually Relevant')
     const [outside, earlier] = within(card).getAllByRole('listitem')
     expect(announcedText(outside!)).toContain('“The coverage sentence.” · chosen by AI, may be translated')
     expect(announcedText(earlier!)).not.toContain('chosen by AI')
@@ -100,7 +113,7 @@ describe('Citation', () => {
       { sourceId: 'S1', sentence: 'The coverage sentence.' },
       { sourceId: 'E1', sentence: 'The earlier sentence.' },
     ])
-    const { card } = await openCard('Sources: Coverage Outlet, Actually Relevant')
+    const { card } = await openCard('Sources: Coverage Outlet, Earlier on Actually Relevant')
     // The card is portaled to the end of the body, outside the render container
     expect(container).not.toContainElement(card)
     expect(await axe(container)).toHaveNoViolations()

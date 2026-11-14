@@ -544,32 +544,41 @@ describe('StoryPage researched format', () => {
     expect(screen.queryByText(/^Summary and analysis by/)).toBeNull()
   })
 
-  it('opens the header with where the story was found and how many sources it has, linking the list', () => {
+  it('opens the header with where the story was found and its sources, linking the list', () => {
     renderStory(researched)
     const row = screen.getByRole('heading', { level: 1 }).nextElementSibling!
     expect(announcedText(row)).toContain('Found on Example Feed (opens in new tab), Nov 10, 2026')
     expect(announcedText(row)).not.toContain('Initially')
     expect(row.querySelector('time')).toHaveAttribute('dateTime', '2026-11-10')
     expect(within(row as HTMLElement).getByRole('link', { name: 'Example Feed (opens in new tab)' })).toHaveAttribute('href', 'https://example.com/article')
-    expect(within(row as HTMLElement).getByRole('link', { name: '3 sources' })).toHaveAttribute('href', '#sources')
+    expect(within(row as HTMLElement).getByRole('link', { name: 'Sources: 3, see the list' })).toHaveAttribute('href', '#sources')
     expect(sourcesSection()).toContainElement(screen.getByRole('heading', { level: 2, name: 'Sources' }))
     // Our own publish date and the separate original-article link are gone; the separators stay hidden
     expect(within(row as HTMLElement).queryByRole('link', { name: /Original article/ })).toBeNull()
     expect(announcedText(row)).not.toContain('|')
   })
 
-  it("shows every source's icon in the header's sources link, whose name stays the count", () => {
+  it('shows "Sources:" and every source\'s icon side by side in the header\'s sources link, whose name gives the count', () => {
     renderStory(researched)
     const row = screen.getByRole('heading', { level: 1 }).nextElementSibling as HTMLElement
-    const link = within(row).getByRole('link', { name: '3 sources' })
-    expect([...link.querySelectorAll('img')].map(img => img.getAttribute('src'))).toEqual([
+    const link = within(row).getByRole('link', { name: 'Sources: 3, see the list' })
+    // The visible label is the name's start (WCAG 2.5.3); no count in the text
+    expect(link).toHaveTextContent(/^Sources:$/)
+    const icons = [...link.querySelectorAll('img')]
+    expect(icons.map(img => img.getAttribute('src'))).toEqual([
       '/api/source-favicons/example.com',
       '/api/source-favicons/coverage.example.org',
       '/favicon-32x32.png',
     ])
+    // Side by side, not overlapping; an outlet's favicon framed, our own icon in its brand ring
+    expect(icons[0]!.parentElement).toHaveClass('gap-1')
+    for (const img of icons) expect(img.className).not.toMatch(/-ml-/)
+    expect(icons[0]).toHaveClass('ring-1', 'ring-neutral-300')
+    expect(icons[2]).toHaveClass('ring-1', 'ring-brand-500')
+    expect(icons[2]).not.toHaveClass('ring-neutral-300')
     // An icon that fails to load shows the outlet's initial, which stays out of the link's name
     fireEvent.error(link.querySelector('img')!)
-    const fallback = within(row).getByRole('link', { name: '3 sources' })
+    const fallback = within(row).getByRole('link', { name: 'Sources: 3, see the list' })
     expect(within(fallback).getByText('E')).toHaveAttribute('aria-hidden', 'true')
   })
 
@@ -586,7 +595,8 @@ describe('StoryPage researched format', () => {
 
   it('names each citation after its sources and opens a card with the supporting sentence and a link to read the source', async () => {
     renderStory(researched)
-    const citation = screen.getByRole('button', { name: 'Sources: Coverage Outlet, Actually Relevant' })
+    const citation = screen.getByRole('button', { name: 'Sources: Coverage Outlet, Earlier on Actually Relevant' })
+    expect(citation).toHaveTextContent(/^Coverage OutletEarlier on Actually Relevant$/)
     expect(focusRingProblems(citation)).toEqual([])
     await userEvent.click(citation)
 

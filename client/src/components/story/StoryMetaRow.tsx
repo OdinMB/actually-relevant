@@ -4,7 +4,7 @@ import type { PublicStoryDetail, ResearchedStory } from '@shared/types'
 import FeedFavicon from '../FeedFavicon'
 import AiBadge from '../ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
-import { SourceIcons } from '../research/SourceIcon'
+import { SourceIcon } from '../research/SourceIcon'
 import { sourceDate } from '../research/sourceText'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
 
@@ -77,13 +77,15 @@ function PlainItems({ story }: { story: PublicStoryDetail }) {
 
 /**
  * A researched story's items (owner, 2026-11-12, the mockup): where it was found and its source's
- * date, then the sources' icons and "N sources", one link to the list (its name the count, the icons
- * being decorative); our publish date is dropped.
+ * date, then "Sources:" and every source's icon side by side, each framed, 4 px apart (owner,
+ * 2026-11-14, variant B), one link to the list. The icons are decorative, so the link's name gives
+ * the count: "Sources: 6, see the list". Our publish date is dropped.
  */
 function ResearchedItems({ story, research }: { story: PublicStoryDetail; research: ResearchedStory }) {
   const original = research.sources.find(source => source.origin === 'original')
   const originalDate = original ? sourceDate(original) : null
   const sourceCount = research.sources.length
+  const sourcesWord = sourceCount === 1 ? 'Source' : 'Sources'
   return (
     <>
       <span className="inline-flex flex-wrap items-center gap-x-1.5">
@@ -97,9 +99,17 @@ function ResearchedItems({ story, research }: { story: PublicStoryDetail; resear
         </OriginalSourceLink>
       </span>
       <MetaSeparator />
-      <a href="#sources" className={`inline-flex min-h-6 items-center gap-1.5 ${ROW_LINK} ${PHONE_SEPARATOR}`}>
-        <SourceIcons sources={research.sources} />
-        {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
+      <a
+        href="#sources"
+        aria-label={`${sourcesWord}: ${sourceCount}, see the list`}
+        className={`inline-flex min-h-6 items-center gap-1.5 ${ROW_LINK} ${PHONE_SEPARATOR}`}
+      >
+        {sourcesWord}:
+        <span className="inline-flex flex-wrap items-center gap-1">
+          {research.sources.map(source => (
+            <SourceIcon key={source.id} source={source} framed />
+          ))}
+        </span>
       </a>
     </>
   )

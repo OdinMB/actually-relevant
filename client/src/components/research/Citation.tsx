@@ -3,7 +3,7 @@ import type { ResearchCitation, ResearchedSource } from '@shared/types'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
 import AiBadge from '../ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
-import { SourceIcon, SourceIcons } from './SourceIcon'
+import { SourceIcon } from './SourceIcon'
 import { SourceLink, sourceHref } from './SourceLink'
 import { EARLIER_LABEL, sourceDetails } from './sourceText'
 
@@ -50,11 +50,12 @@ function SourceCard({ source, sentence }: CitedSource) {
 
 /**
  * One citation group, after a paragraph, a bullet or the quote (after each sentence in versions
- * applied before 2026-11-13): a 24 px button of the cited sources' overlapping 16 px icons, named
- * "Source: X" or "Sources: X, Y", that opens a card per source with its outlet, country, kind, date,
- * supporting sentence and a link to read it. The cards sit in one panel, a dialog named "Source(s)
- * for this passage" that takes focus on its first link. Nothing for citations whose sources the
- * story does not list.
+ * applied before 2026-11-13): a chip per cited source, its icon and outlet name ("Earlier on Actually
+ * Relevant" for our own stories; owner, 2026-11-14, variant D), all in one button named "Source: X"
+ * or "Sources: X, Y" after the names the chips show. It opens a card per source with its outlet,
+ * country, kind, date, supporting sentence and a link to read it. The cards sit in one panel, a
+ * dialog named "Source(s) for this passage" that takes focus on its first link. Nothing for citations
+ * whose sources the story does not list.
  */
 export function Citation({ citations, sources }: { citations: ResearchCitation[]; sources: SourcesById }) {
   const cited = citations.flatMap((c): CitedSource[] => {
@@ -62,16 +63,30 @@ export function Citation({ citations, sources }: { citations: ResearchCitation[]
     return source ? [{ source, sentence: c.sentence }] : []
   })
   if (cited.length === 0) return null
-  const name = `${cited.length === 1 ? 'Source' : 'Sources'}: ${cited.map(c => c.source.outlet).join(', ')}`
+  const name = `${cited.length === 1 ? 'Source' : 'Sources'}: ${cited.map(c => outletName(c.source)).join(', ')}`
 
   return (
-    // One line box tall and aligned to the line's top, so the button is centered on the text line it
-    // follows. `align-middle` centers on the lowercase letters, and nested in an inline-block it left
-    // the icons about 3 px below the line's middle in a story paragraph and made those lines taller.
-    // A button taller than a tight line (24 px in a 20 px one) overflows it evenly.
-    <Popover as="span" className="relative inline-flex h-[1lh] items-center align-top">
-      <PopoverButton aria-label={name} className={`inline-flex h-6 min-w-6 items-center justify-center rounded px-1 hover:bg-neutral-100 ${FOCUS_RING}`}>
-        <SourceIcons sources={cited.map(c => c.source)} />
+    // At least one line box tall and aligned to the line's top, so a row of chips is centered on the
+    // text line it follows. `align-middle` centers on the lowercase letters, and nested in an
+    // inline-block it left the icons about 3 px below the line's middle in a story paragraph and made
+    // those lines taller. The group moves to a line of its own when it doesn't fit the rest of one,
+    // and its chips wrap only when it is wider than the whole paragraph, the box growing with them.
+    // The button's 24 px target counts 20 px toward the line (`-my-0.5`), so in a tight line (the
+    // quote's 20 px attribution) it overflows evenly instead of making the line taller.
+    <Popover as="span" className="relative inline-flex min-h-[1lh] max-w-full items-center align-top">
+      <PopoverButton
+        aria-label={name}
+        className={`group -my-0.5 inline-flex min-h-6 max-w-full flex-wrap items-center gap-1 rounded-[0.75rem] py-0.5 text-left ${FOCUS_RING}`}
+      >
+        {cited.map(({ source }) => (
+          <span
+            key={source.id}
+            className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-neutral-100 py-0.5 pl-1 pr-2 text-xs leading-4 text-neutral-700 group-hover:bg-neutral-200"
+          >
+            <SourceIcon source={source} />
+            <span className="truncate">{outletName(source)}</span>
+          </span>
+        ))}
       </PopoverButton>
       {/* Portaled to the end of the body, so it takes focus when it opens; Esc, or focus leaving it, closes it, Esc returning focus to the button */}
       <PopoverPanel

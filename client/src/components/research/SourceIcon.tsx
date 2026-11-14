@@ -12,9 +12,11 @@ const BOX = 'inline-block h-4 w-4 shrink-0 align-middle'
  * A research source's 16 px icon: the outlet's favicon as we store it (`/api/source-favicons/:host`,
  * never loaded from the outlet, which would tell it about our visitors); the outlet's initial in a
  * neutral circle when none is stored or it fails to load; our icon in the brand ring for our earlier
- * stories. Decorative: the citation button and the sources list name the outlet in text.
+ * stories. `framed` draws a thin neutral frame around an outlet's favicon, for icons side by side
+ * (the header's sources link), where a white favicon would otherwise run into the next; the initial
+ * and our ringed icon look the same either way. Decorative: what holds the icon names the outlet.
  */
-export function SourceIcon({ source, className = '' }: { source: ResearchedSource; className?: string }) {
+export function SourceIcon({ source, framed = false, className = '' }: { source: ResearchedSource; framed?: boolean; className?: string }) {
   const [failedHost, setFailedHost] = useState<string | null>(null)
 
   if (source.origin === 'earlier') {
@@ -30,7 +32,7 @@ export function SourceIcon({ source, className = '' }: { source: ResearchedSourc
         height={16}
         loading="lazy"
         decoding="async"
-        className={`${BOX} rounded-sm bg-white ${className}`}
+        className={`${BOX} rounded-sm bg-white ${framed ? 'ring-1 ring-neutral-300' : ''} ${className}`}
         onError={() => setFailedHost(host)}
       />
     )
@@ -41,20 +43,6 @@ export function SourceIcon({ source, className = '' }: { source: ResearchedSourc
       className={`${BOX} inline-flex items-center justify-center rounded-full bg-neutral-200 text-[10px] font-semibold leading-none text-neutral-700 ${className}`}
     >
       {initialOf(source.outlet)}
-    </span>
-  )
-}
-
-/**
- * Several sources' icons in a row, each overlapping the one before, as the citation button and the
- * header's "N sources" link show them. Decorative like each icon: what holds them names the sources.
- */
-export function SourceIcons({ sources }: { sources: ResearchedSource[] }) {
-  return (
-    <span className="inline-flex shrink-0 items-center">
-      {sources.map((source, i) => (
-        <SourceIcon key={source.id} source={source} className={i > 0 ? '-ml-1.5' : ''} />
-      ))}
     </span>
   )
 }
