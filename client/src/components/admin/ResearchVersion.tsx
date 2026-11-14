@@ -41,8 +41,8 @@ type StoryRef = Pick<Story, 'id' | 'status' | 'preResearch'>
 
 /**
  * "Use this version" for one run that can give the story its researched version. `closed` is why
- * no run can be applied now (research switched off, or the owner's gate `RESEARCH_APPLY_ENABLED`
- * closed; the server refuses an apply then, though a revert still works), or null.
+ * no run can be applied now (research switched off; the server refuses an apply then, though a
+ * revert still works), or null.
  */
 export function UseRunVersion({ story, run, closed }: { story: StoryRef; run: ResearchRun; closed: string | null }) {
   const [confirming, setConfirming] = useState(false)

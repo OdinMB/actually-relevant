@@ -38,7 +38,7 @@ function result(over: Partial<StoryResearch>): StoryResearch {
 const failedCheck = (reason: string) => ({ kind: 'fallback' as const, reason, category: 'draft_failed_check' as const })
 
 describe('causeOf', () => {
-  it('names each cause the shadow week counts, a run shared with a fact statement apart from one shared with a source wording', () => {
+  it('names each cause the weekly tally counts, a run shared with a fact statement apart from one shared with a source wording', () => {
     expect(
       [
         problem('a', { kind: 'fact', by: 'code' }),

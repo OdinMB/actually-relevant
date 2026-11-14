@@ -116,7 +116,7 @@ describe('bulkApplyRefusal', () => {
   })
 
   it('gives the reason no run can be applied now, or none, whatever refuses a new run', () => {
-    expect(bulkApplyRefusal(3, usage({ applyRefusal: 'Applying research is not open yet' }), false)).toBe('Applying research is not open yet')
+    expect(bulkApplyRefusal(3, usage({ applyRefusal: 'Research is switched off' }), false)).toBe('Research is switched off')
     expect(bulkApplyRefusal(3, usage({ refusal: "This month's research cap is reached" }), false)).toBeNull()
   })
 

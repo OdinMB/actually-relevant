@@ -6,11 +6,11 @@
  * `research`. A revert writes the snapshot back and clears both. Each write goes through
  * `recordAnalysis('research', …)` with a fresh embedding, fenced on the status and on `updatedAt` as
  * read before the embedding call, so a status is never moved by a write here, and an editor's move or
- * edit made meanwhile wins. Applying waits behind the owner's gate (`applyRefusal`); reverting never
- * does. An editor applies a completed run (`applyResearchRun`); the research step applies its run's
- * verdict once the run's result is stored and before the run is finished (`applyVerdict`), fenced on
- * the story as read before the run started, rejecting through `transition`. An editor's refusals
- * are ServiceErrors; the research step's are outcomes.
+ * edit made meanwhile wins. Applying is refused only while research is switched off
+ * (`applyRefusal`); reverting never is. An editor applies a completed run (`applyResearchRun`); the
+ * research step applies its run's verdict once the run's result is stored and before the run is
+ * finished (`applyVerdict`), fenced on the story as read before the run started, rejecting through
+ * `transition`. An editor's refusals are ServiceErrors; the research step's are outcomes.
  */
 import { Prisma, type RejectionReason, type StoryStatus } from '@prisma/client'
 import { config } from '../config.js'
@@ -40,27 +40,12 @@ const STORY_CHANGED = 'The story changed while this was written; reload it and t
 
 /**
  * Why no run can be applied now, whatever the story, or null: research switched off (no
- * `TAVILY_API_KEY`), or the owner's gate closed (`RESEARCH_APPLY_ENABLED`, opened once the
- * press-publisher-right question is checked). A revert is never refused for either.
+ * `TAVILY_API_KEY`). Applying has no gate of its own (owner decision 2026-11-14). A revert is never
+ * refused for it.
  */
 export function applyRefusal(): string | null {
   if (!config.research.tavilyApiKey) return 'Research is switched off: TAVILY_API_KEY is not set, so no run can be applied (reverting still works)'
-  if (!config.research.applyEnabled)
-    return 'Applying research is not open yet: RESEARCH_APPLY_ENABLED is not "true". The owner opens it after the legal check (reverting still works)'
   return null
-}
-
-/**
- * The research step's mode in effect: `apply` only while `RESEARCH_PIPELINE_MODE` is `apply` and
- * `applyRefusal` gives no reason. Apply mode held to shadow carries the setting that holds it back
- * as `heldBack`, which the job logs and the Jobs page shows.
- */
-export type PipelineMode = { mode: 'apply' } | { mode: 'shadow'; heldBack?: string }
-
-export function pipelineMode(): PipelineMode {
-  if (config.research.pipeline.mode === 'shadow') return { mode: 'shadow' }
-  if (applyRefusal() === null) return { mode: 'apply' }
-  return { mode: 'shadow', heldBack: config.research.tavilyApiKey ? 'RESEARCH_APPLY_ENABLED is not "true"' : 'TAVILY_API_KEY is not set' }
 }
 
 const storyColumns = (storyId: string) =>
@@ -200,10 +185,9 @@ const rejects = (kind: GateKind): kind is keyof typeof REJECTED_FOR => kind in R
  * `rejected` (with the verdict's reason), `single-source` (a fallback, or a kept run without a
  * usable draft: the story publishes in today's format), `skipped` (the story moved, was written
  * (an editor's edit or apply) or went during the run, or its sources make no version readers can
- * be given; the editor's state is kept, and the completed run can still be applied by hand), or
- * `shadow` (nothing applied: the step does not apply now).
+ * be given; the editor's state is kept, and the completed run can still be applied by hand).
  */
-export type VerdictOutcome = 'applied' | 'rejected' | 'single-source' | 'skipped' | 'shadow'
+export type VerdictOutcome = 'applied' | 'rejected' | 'single-source' | 'skipped'
 
 /**
  * Apply the research step's verdict for its run, whose result is stored and which is still
@@ -211,12 +195,11 @@ export type VerdictOutcome = 'applied' | 'rejected' | 'single-source' | 'skipped
  * the story's status and `updatedAt` as read before the run started, so an editor's move, edit or
  * apply during the run always wins: `keep` and `research-rating` put the researched version on the
  * story, which keeps its own rating; `stale` and `contradicted` reject it through `transition`,
- * which takes only a selected story; `fallback` changes nothing. The caller applies only while
- * `researchStepState().applies`; as a backstop, nothing is applied outside effective apply mode
- * (`pipelineMode()`). Never throws a refusal; an embedding or database error throws.
+ * which takes only a selected story; `fallback` changes nothing. The caller leaves it uncalled once
+ * the step was switched off during the run (`jobs/researchStories.ts`). Never throws a refusal; an
+ * embedding or database error throws.
  */
 export async function applyVerdict(storyId: string, runId: string, read: ReadState, result: StoryResearch): Promise<VerdictOutcome> {
-  if (pipelineMode().mode !== 'apply') return 'shadow'
   const { verdict } = result
   if (verdict.kind === 'fallback') return 'single-source'
 

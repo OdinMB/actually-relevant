@@ -115,17 +115,9 @@ services:
         sync: false
       - key: PIPFEED_API_KEY
         sync: false
-      # Story research, the admin action (.context/story-research.md): the key is its switch;
-      # remove it to switch research off
+      # Story research, the admin action and the research step (.context/story-research.md): the
+      # key is its only switch; remove it to switch research off
       - key: TAVILY_API_KEY
-        sync: false
-      # The owner's gate on applying a research run ("Use this version"): closed unless "true".
-      # Left unset; he sets it on the service's Environment page after the press-publisher-right check
-      - key: RESEARCH_APPLY_ENABLED
-        sync: false
-      # The research step's mode: shadow (applies no verdict) unless "apply". Left unset; the owner
-      # sets "apply" on the Environment page after the shadow evaluation (.context/story-research.md)
-      - key: RESEARCH_PIPELINE_MODE
         sync: false
       # Crawl concurrency: production sets both (code defaults 2 feeds, 1 article)
       - key: CONCURRENCY_CRAWL_FEEDS

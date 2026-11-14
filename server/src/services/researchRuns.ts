@@ -75,7 +75,7 @@ export interface ResearchUsageView {
   /**
    * This UTC month's runs that fell back to today's format, editors' and the research step's, by
    * the category stored with each (`FallbackCategory`); `unrecorded` for a run stored before
-   * categories were (2026-11-12). For the owner's count over the shadow period; nothing reads it.
+   * categories were (2026-11-12). For the owner's count; nothing reads it.
    */
   fallbacksThisMonth: Record<FallbackCategory | 'unrecorded', number>
 }
