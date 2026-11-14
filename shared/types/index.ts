@@ -1102,9 +1102,15 @@ export interface ResearchRun {
 
 // --- Background task types ---
 
-/** `research`: one story's research run; its story counts as processing while it runs. */
+/** `research`: research runs, one story's or a bulk Research's; their stories count as processing while it runs. */
 export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research'
 export type BulkTaskStatus = 'running' | 'completed' | 'failed'
+
+/** A story the task left out, with why; neither completed nor failed (server: `TaskSkip` in lib/taskRegistry.ts). */
+export interface TaskSkip {
+  storyId: string
+  reason: string
+}
 
 export interface TaskState {
   id: string
@@ -1114,6 +1120,8 @@ export interface TaskState {
   completed: number
   failed: number
   errors: string[]
+  /** Only a bulk Research skips stories; absent from an older backend. */
+  skipped?: TaskSkip[]
   storyIds: string[]
   createdAt: string
   completedAt?: string

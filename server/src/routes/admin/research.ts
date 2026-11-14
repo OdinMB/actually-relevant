@@ -1,14 +1,18 @@
 /**
  * Story research, the admin action (`.context/story-research.md`): this month's spend and whether
- * a run may start, a story's latest runs, starting a run in the background, and putting a run's
- * researched version on the story or taking it back off. Refusals are the services' ServiceErrors
- * (404 unknown story or run, 409 switched off, ineligible, at the cap, in progress, a run that cannot
- * be applied, a status that takes no research write).
+ * a run may start, a story's latest runs, starting a run in the background (one story's, or the
+ * stories list's bulk Research), and putting a run's researched version on the story or taking it
+ * back off. Refusals are the services' ServiceErrors (404 unknown story or run, 409 switched off,
+ * ineligible, at the cap, in progress, a run that cannot be applied, a status that takes no research
+ * write); a bulk Research skips such a story instead, with the reason, in its task.
  */
 import { Router } from 'express'
+import { validateBody } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
+import { bulkResearchIdsSchema } from '../../schemas/story.js'
 import { applyRefusal, applyResearchRun, revertResearch } from '../../services/researchApply.js'
+import { startResearchBatch } from '../../services/researchBatch.js'
 import { listResearchRuns, researchUsage, startResearchRun } from '../../services/researchRuns.js'
 
 const router = Router()
@@ -24,6 +28,11 @@ router.get('/stories/:storyId/runs', failsWith('Failed to fetch research runs'),
 
 router.post('/stories/:storyId/runs', failsWith('Failed to start research'), expensiveOpLimiter, async (req, res) => {
   res.status(202).json(await startResearchRun(req.params.storyId!))
+})
+
+// The stories list's bulk Research: one task over the batch, polled at /stories/tasks/:taskId
+router.post('/runs', failsWith('Failed to start bulk research'), expensiveOpLimiter, validateBody(bulkResearchIdsSchema), (req, res) => {
+  res.status(202).json(startResearchBatch(req.body.storyIds))
 })
 
 // One embedding call each, no model call

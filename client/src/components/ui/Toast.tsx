@@ -143,7 +143,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" aria-live="polite">
         {toasts.map(t => (
-          <div key={t.id} className={`flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg text-sm font-medium ${TOAST_STYLES[t.type]}`}>
+          // A message's line breaks show (a bulk Research names each skipped story on its own line)
+          <div
+            key={t.id}
+            className={`flex items-center gap-3 max-w-xl whitespace-pre-line rounded-lg px-4 py-3 shadow-lg text-sm font-medium ${TOAST_STYLES[t.type]}`}
+          >
             <ToastIcon type={t.type} />
             {t.href ? (
               <Link

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { config } from '../config.js'
 import { parseFeedMix } from '../lib/feedMix.js'
 
 const storyStatusEnum = z.enum(['fetched', 'pre_analyzed', 'analyzed', 'selected', 'published', 'rejected', 'trashed'])
@@ -94,6 +95,14 @@ export const batchStoriesQuerySchema = z.object({
 
 export const bulkStoryIdsSchema = z.object({
   storyIds: z.array(z.string().uuid()).min(1, 'At least one story ID is required').max(500, 'Maximum 500 story IDs allowed'),
+})
+
+/** The stories list's bulk Research: at most `config.research.bulkMaxStories` stories at once. */
+export const bulkResearchIdsSchema = z.object({
+  storyIds: z
+    .array(z.string().uuid())
+    .min(1, 'At least one story ID is required')
+    .max(config.research.bulkMaxStories, `At most ${config.research.bulkMaxStories} stories can be researched at once`),
 })
 
 export const bulkSelectIdsSchema = z.object({

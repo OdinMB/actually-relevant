@@ -2,8 +2,9 @@
  * The story research run lifecycle (`.context/story-research.md`): the switch, price and
  * eligibility checks, the reservation against the monthly cap under an advisory lock, the run and
  * its finish write (`executeRun`), interrupted runs, the story's run list and the month's spend.
- * Two callers start runs: an editor's Research button, as a one-story `research` task, and the
- * research step (`runPipelineResearch`, for `jobs/researchStories.ts`). A run writes only its own
+ * Editors start runs (`reserveEditorRun`): the Research button, as a one-story `research` task, and
+ * the stories list's bulk Research, a batch in one task (`researchBatch.ts`); so does the research
+ * step (`runPipelineResearch`, for `jobs/researchStories.ts`). A run writes only its own
  * `story_research_runs` row: it never moves a status, writes a story field or applies its verdict;
  * the research step applies one through the hook it passes, which runs once the result is stored
  * and before the finish write. Refusals are ServiceErrors.
@@ -230,24 +231,24 @@ async function executeRun(runId: string, story: ResearchStory, beforeFinish?: Be
   }
 }
 
-/** An editor's run as a one-story task: any verdict completes it; a dropped or failed run fails it. */
-async function runAsTask(runId: string, taskId: string, story: ResearchStory): Promise<void> {
-  try {
-    const end = await executeRun(runId, story)
-    if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
-    else taskRegistry.increment(taskId, 'failed', end.ended === 'failed' ? end.error : 'The run was marked interrupted before it finished')
-  } finally {
-    taskRegistry.complete(taskId)
-  }
+/**
+ * An editor's reserved run, counted in its task: any verdict completes it there; a dropped or failed
+ * run fails it. Never throws (`executeRun`); the caller completes the task.
+ */
+export async function runInTask(taskId: string, runId: string, story: ResearchStory): Promise<void> {
+  const end = await executeRun(runId, story)
+  if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
+  else taskRegistry.increment(taskId, 'failed', end.ended === 'failed' ? end.error : 'The run was marked interrupted before it finished')
 }
 
 /**
- * Start a research run of one story in the background: 404 for an unknown story; 409 when research
- * is switched off or a model is unpriced, for a status other than analyzed, selected or published,
- * for a story without the analysis research needs (checked before any reservation is written), at
- * the cap, or while a run of the story is in progress.
+ * An editor's run of one story, checked and reserved: 404 for an unknown story; 409 when research is
+ * switched off or a model is unpriced, for a status other than analyzed, selected or published, for
+ * a story without the analysis research needs (checked before any reservation is written), at the
+ * cap, or while a run of the story is in progress. The one path both the Research button and the
+ * stories list's bulk Research (`researchBatch.ts`) take.
  */
-export async function startResearchRun(storyId: string, now: Date = new Date()): Promise<{ taskId: string; runId: string }> {
+export async function reserveEditorRun(storyId: string, now: Date = new Date()): Promise<{ runId: string; story: ResearchStory }> {
   const off = switchRefusal()
   if (off) throw new ConflictError(off)
   const row = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true } })
@@ -260,10 +261,16 @@ export async function startResearchRun(storyId: string, now: Date = new Date()):
   if ('refused' in reserved) {
     throw new ConflictError(reserved.refused === 'cap' ? capRefusal(reserved.spentUsd) : 'A research run of this story is already in progress')
   }
+  return { runId: reserved.runId, story }
+}
+
+/** Start a research run of one story in the background, as a one-story task; refusals as `reserveEditorRun`'s. */
+export async function startResearchRun(storyId: string, now: Date = new Date()): Promise<{ taskId: string; runId: string }> {
+  const { runId, story } = await reserveEditorRun(storyId, now)
   const taskId = taskRegistry.create('research', 1, [storyId])
-  log.info({ runId: reserved.runId, storyId, taskId }, 'research run started')
-  void runAsTask(reserved.runId, taskId, story)
-  return { taskId, runId: reserved.runId }
+  log.info({ runId, storyId, taskId }, 'research run started')
+  void runInTask(taskId, runId, story).finally(() => taskRegistry.complete(taskId))
+  return { taskId, runId }
 }
 
 /**

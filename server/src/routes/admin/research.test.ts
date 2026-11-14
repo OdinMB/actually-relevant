@@ -21,7 +21,7 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 const mockInput = vi.hoisted(() => ({ researchStoriesByIds: vi.fn() }))
 const mockPipeline = vi.hoisted(() => ({ researchStory: vi.fn() }))
-const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), revertResearch: vi.fn(), applyRefusal: vi.fn() }))
+const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), revertResearch: vi.fn(), applyRefusal: vi.fn(), applyVerdict: vi.fn() }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/crawler.js', () => ({ crawlFeed: vi.fn(), crawlAllDueFeeds: vi.fn(), crawlUrl: vi.fn() }))
@@ -138,6 +138,82 @@ describe('POST /api/admin/research/stories/:storyId/runs', () => {
     mockPrisma.story.findUnique.mockResolvedValue({ status: 'fetched' })
     await start()
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+})
+
+// The pool and the skips are researchBatch.test.ts's; here, a batch through the real run path, the database mocked
+describe('POST /api/admin/research/runs (the stories list bulk Research)', () => {
+  const IDS = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333']
+  const startBatch = (storyIds: unknown) => request(app).post('/api/admin/research/runs').set(authHeader()).send({ storyIds })
+  const finished = async (taskId: string) => {
+    await vi.waitFor(() => expect(taskRegistry.get(taskId)?.status).toBe('completed'))
+    return taskRegistry.get(taskId)!
+  }
+
+  beforeEach(() => {
+    mockPipeline.researchStory.mockResolvedValue(storedResult)
+    mockPrisma.storyResearchRun.updateMany.mockResolvedValue({ count: 1 })
+    let n = 0
+    tx.storyResearchRun.create.mockImplementation(async () => ({ id: `run-${++n}` }))
+  })
+
+  it("answers 202 with its task, researches each story as an editor's run, skips one that can't be researched with the reason, and applies nothing", async () => {
+    mockPrisma.story.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({ status: where.id === IDS[1] ? 'rejected' : 'published' }))
+
+    const res = await startBatch(IDS)
+
+    expect(res.status).toBe(202)
+    expect(res.body).toEqual({ taskId: expect.any(String) })
+    expect(await finished(res.body.taskId)).toMatchObject({
+      type: 'research',
+      total: 3,
+      completed: 2,
+      failed: 0,
+      skipped: [{ storyId: IDS[1], reason: expect.stringMatching(/analyzed, selected or published/) }],
+    })
+    expect(tx.storyResearchRun.create).toHaveBeenCalledTimes(2)
+    for (const [{ data }] of tx.storyResearchRun.create.mock.calls) expect(data).toMatchObject({ trigger: 'editor', costUsd: config.research.maxRunUsd })
+    // As the single-story action: a finished run changes nothing on its story until an editor uses its version.
+    // Each run's row takes its stored result, then its finish, with no hook between them (where the research step applies)
+    expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
+    expect(mockApply.applyVerdict).not.toHaveBeenCalled()
+    for (const runId of ['run-1', 'run-2']) {
+      const writes = mockPrisma.storyResearchRun.updateMany.mock.calls.map(([args]) => args).filter(args => args.where.id === runId)
+      expect(writes).toEqual([
+        { where: { id: runId, status: 'running' }, data: expect.objectContaining({ verdict: 'keep', result: expect.anything() }) },
+        { where: { id: runId, status: 'running' }, data: { status: 'completed', finishedAt: expect.any(Date) } },
+      ])
+    }
+  })
+
+  it('skips the stories the monthly cap leaves no room for, with the cap as the reason', async () => {
+    tx.storyResearchRun.aggregate.mockResolvedValueOnce({ _sum: { costUsd: 1 } }).mockResolvedValue({ _sum: { costUsd: config.research.monthlyCapUsd } })
+
+    const task = await finished((await startBatch(IDS)).body.taskId)
+
+    expect(task).toMatchObject({ completed: 1, failed: 0 })
+    expect(task.skipped.map(s => s.reason)).toEqual([expect.stringMatching(/cap is reached/), expect.stringMatching(/cap is reached/)])
+  })
+
+  it('answers 409 while research is switched off, starting nothing', async () => {
+    vi.stubEnv('TAVILY_API_KEY', '')
+
+    const res = await startBatch(IDS)
+
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/switched off/)
+    expect(taskRegistry.getProcessingStoryIds()).toEqual([])
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('answers 400 for more stories than one batch takes, for none and for an id that is not one', async () => {
+    const tooMany = Array.from({ length: config.research.bulkMaxStories + 1 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`)
+    for (const storyIds of [tooMany, [], ['story-1']]) expect((await startBatch(storyIds)).status).toBe(400)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('needs a signed-in editor or admin', async () => {
+    expect((await request(app).post('/api/admin/research/runs').send({ storyIds: IDS })).status).toBe(401)
   })
 })
 

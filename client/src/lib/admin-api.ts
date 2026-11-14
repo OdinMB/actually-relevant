@@ -362,6 +362,8 @@ export const adminApi = {
     runs: (storyId: string) => request<ResearchRun[]>(`/research/stories/${storyId}/runs`),
     /** 409 when switched off, at the cap, for an ineligible story or while a run of it is in progress. */
     start: (storyId: string) => request<{ taskId: string; runId: string }>(`/research/stories/${storyId}/runs`, { method: 'POST' }),
+    /** Research up to 50 stories as one task (poll `stories.taskStatus`); a story that can't be researched is skipped there with the reason. 409 when switched off. */
+    startBulk: (storyIds: string[]) => request<{ taskId: string }>('/research/runs', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     /** Put the run's researched version on the story (published at once on a published story); 409 for a run or status that cannot take it. */
     apply: (storyId: string, runId: string) => request<void>(`/research/stories/${storyId}/runs/${runId}/apply`, { method: 'POST' }),
     /** Give the story its single-source analysis back; 409 without a researched version or on a trashed story. */

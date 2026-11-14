@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
 import { ToastProvider } from '../components/ui/Toast'
 import { BackgroundTaskProvider, useBackgroundTasks } from './useBackgroundTasks'
+import type { TaskState } from '@shared/types'
 
 // Mock adminApi for polled task tests
 vi.mock('../lib/admin-api', () => ({
@@ -222,7 +223,9 @@ function TestOnComplete({
 
 // --- launchPolledTask tests ---
 
-function PolledTaskConsumer({ submitFn, onComplete, storyIds }: { submitFn: () => Promise<{ taskId: string }>; onComplete?: () => void; storyIds?: string[] }) {
+type PolledOptions = { onComplete?: () => void; storyIds?: string[]; outcome?: (task: TaskState) => { message: string; sticky: boolean } }
+
+function PolledTaskConsumer({ submitFn, onComplete, storyIds, outcome }: { submitFn: () => Promise<{ taskId: string }> } & PolledOptions) {
   const { launchPolledTask, tasks, processingIds } = useBackgroundTasks()
   return (
     <div>
@@ -234,6 +237,7 @@ function PolledTaskConsumer({ submitFn, onComplete, storyIds }: { submitFn: () =
             submitFn,
             onComplete,
             storyIds,
+            outcome,
           })
         }
       >
@@ -250,7 +254,7 @@ function PolledTaskConsumer({ submitFn, onComplete, storyIds }: { submitFn: () =
   )
 }
 
-function renderPolledTest(submitFn: () => Promise<{ taskId: string }>, opts: { onComplete?: () => void; storyIds?: string[] } = {}) {
+function renderPolledTest(submitFn: () => Promise<{ taskId: string }>, opts: PolledOptions = {}) {
   return render(
     <ToastProvider>
       <BackgroundTaskProvider>
@@ -344,6 +348,37 @@ describe('launchPolledTask', () => {
     expect(screen.getByText('Bulk assess: 3 completed')).toBeInTheDocument()
     expect(onComplete).toHaveBeenCalledOnce()
     expect(screen.getByTestId('processing-count').textContent).toBe('0')
+  })
+
+  it("counts skipped stories in the progress, and words the outcome as the caller's outcome says, kept until dismissed", async () => {
+    const submitFn = vi.fn().mockResolvedValue({ taskId: 'task-1' })
+    const { adminApi } = await import('../lib/admin-api')
+    const base = { id: 'task-1', type: 'research' as const, total: 3, failed: 0, errors: [], storyIds: ['s1', 's2'], createdAt: new Date().toISOString() }
+    vi.mocked(adminApi.stories.taskStatus)
+      .mockResolvedValueOnce({ ...base, status: 'running', completed: 1, skipped: [{ storyId: 's3', reason: 'Story not found' }] })
+      .mockResolvedValueOnce({ ...base, status: 'completed', completed: 2, skipped: [{ storyId: 's3', reason: 'Story not found' }] })
+    const outcome = vi.fn().mockReturnValue({ message: 'Two researched, one skipped', sticky: true })
+
+    renderPolledTest(submitFn, { outcome, storyIds: ['s1', 's2', 's3'] })
+    await act(async () => {
+      fireEvent.click(screen.getByText('launch-polled'))
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+    })
+    expect(screen.getByText('Bulk assess... 2/3')).toBeInTheDocument()
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+    })
+    expect(outcome).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed', completed: 2 }))
+    expect(screen.getByText('Two researched, one skipped')).toBeInTheDocument()
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000)
+    })
+    expect(screen.getByText('Two researched, one skipped')).toBeInTheDocument()
   })
 
   it('shows error when submit fails', async () => {

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ResearchRun } from '@shared/types'
 import { adminApi, ApiError } from '../lib/admin-api'
+import { bulkResearchOutcome, type BulkResearchStory } from '../components/admin/bulkResearch'
 import { useBackgroundTasks } from './useBackgroundTasks'
 import { invalidateStoryQueries } from './useStories'
 
@@ -69,6 +70,41 @@ export function useStartResearch(storyId: string) {
   }, [launchPolledTask, refresh, storyId])
 
   return { start, running: processingIds.has(storyId) }
+}
+
+/**
+ * The stories list's bulk Research: the chosen stories researched as one polled background task,
+ * counted as processing until it ends, whose outcome names each skipped story with its reason
+ * (`bulkResearchOutcome`). Every story's runs and the month's spend are re-read once it has started
+ * and again when it ends; a run writes nothing to its story, so the story queries stay.
+ */
+export function useBulkResearch() {
+  const { launchPolledTask } = useBackgroundTasks()
+  const queryClient = useQueryClient()
+
+  return useCallback(
+    (chosen: BulkResearchStory[]) => {
+      const storyIds = chosen.map(s => s.id)
+      const label = `Researching ${storyIds.length} ${storyIds.length === 1 ? 'story' : 'stories'}`
+      const refresh = () => {
+        void queryClient.invalidateQueries({ queryKey: ['research'] })
+        void queryClient.invalidateQueries({ queryKey: USAGE_KEY })
+      }
+      launchPolledTask({
+        id: `research-bulk-${Date.now()}`,
+        label,
+        storyIds,
+        submitFn: async () => {
+          const started = await adminApi.research.startBulk(storyIds)
+          refresh()
+          return started
+        },
+        outcome: task => bulkResearchOutcome(label, task, chosen),
+        onComplete: refresh,
+      })
+    },
+    [launchPolledTask, queryClient],
+  )
 }
 
 /** Put a run's researched version on the story. It rewrites the story's text fields, so every story query is re-read. */

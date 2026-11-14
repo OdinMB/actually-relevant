@@ -45,6 +45,7 @@ describe('TaskRegistry', () => {
       expect(task!.completed).toBe(0)
       expect(task!.failed).toBe(0)
       expect(task!.errors).toEqual([])
+      expect(task!.skipped).toEqual([])
       expect(task!.storyIds).toEqual(storyIds)
       expect(task!.createdAt).toBeTruthy()
       expect(task!.completedAt).toBeUndefined()
@@ -105,7 +106,32 @@ describe('TaskRegistry', () => {
     })
   })
 
+  describe('skip', () => {
+    it('records each skipped story with its reason, apart from the completed and failed counts', () => {
+      const taskId = taskRegistry.create('research', 3, ['s1', 's2'])
+
+      taskRegistry.skip(taskId, 's3', 'Story not found')
+      taskRegistry.increment(taskId, 'completed')
+
+      expect(taskRegistry.get(taskId)).toMatchObject({ completed: 1, failed: 0, errors: [], skipped: [{ storyId: 's3', reason: 'Story not found' }] })
+    })
+
+    it('does nothing for unknown task ID', () => {
+      taskRegistry.skip('nonexistent', 's1', 'Story not found')
+    })
+  })
+
   describe('complete', () => {
+    it('sets status to completed when the items that did not fail were skipped', () => {
+      const taskId = taskRegistry.create('research', 2, ['s1'])
+      taskRegistry.increment(taskId, 'failed', 'err')
+      taskRegistry.skip(taskId, 's2', 'A research run of this story is already in progress')
+
+      taskRegistry.complete(taskId)
+
+      expect(taskRegistry.get(taskId)!.status).toBe('completed')
+    })
+
     it('sets status to completed when some succeeded', () => {
       const taskId = taskRegistry.create('assess', 3, ['s1', 's2', 's3'])
       taskRegistry.increment(taskId, 'completed')
