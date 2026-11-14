@@ -69,7 +69,7 @@ The Zod schemas in `server/src/schemas/llm.ts` use `.describe()` to tell the LLM
 
 - **Markdown output**: `factors`, `limitingFactors`, `relevanceCalculation`, and `relevanceSummary` use Markdown with bold labels (e.g., `**Factor name:** explanation`)
 - **Plain text**: `summary`, `quote`, `relevanceTitle`, `marketingBlurb` remain plain text
-- **Emotion tags**: The five emotion definitions are embedded in the schema description
+- **Emotion tags**: The four emotion definitions (`EMOTION_TAG_DEFINITIONS`, `prompts/shared.ts`) are embedded in the schema description; research's write schema reuses them for the tag of the story it writes (`schemas/research.ts`)
 
 ## Shared Batch Classification
 
@@ -79,7 +79,7 @@ Both pre-assessment and reclassification use `runBatchClassification()` in `anal
 
 ### 0. Reclassification (Batch, Non-destructive)
 
-Re-runs issue classification and emotion tagging without changing ratings or status. Uses the small model. Triggered manually via the admin bulk "Reclassify" action. Does not overwrite any fields for stories the LLM omits from its response.
+Re-runs issue classification and emotion tagging without changing ratings or status. Uses the small model. Triggered manually via the admin bulk "Reclassify" action. Does not overwrite any fields for stories the LLM omits from its response. On a researched story it, like the emotion-only tagging, judges the original article and writes over the tag research gave the researched text; the snapshot keeps the single-source tag, which a revert restores.
 
 **Zod schema**: `reclassifyResultSchema` — array of `{ articleId, issueSlug, emotionTag }`
 
@@ -101,7 +101,7 @@ Detailed analysis of a single story. Produces structured fields covering relevan
 
 Every field except the key quote and its attribution is published as written, so the prompt forbids text about the input ("the article says…", "the supplied excerpt does not quantify…") and gives Bad/Good pairs. gpt-6-luna did this in 29 of 50 eval outputs on a bare "do not refer to the article" (relevance summary only); the general rule with examples brought it to 2 of 50 (2026-09-24, `eval:recalibrate` meta-commentary criterion).
 
-**Uplifting headlines.** The emotion tag comes from the pre-assessment, which reads only the source headline and the start of the text; the full assessment writes our headline afterwards. A story tagged `uplifting` gets a `<TONE>` block asking the title to lead with the progress and the marketing blurb to open with it, leaving obstacles to the summary and limiting factors, without overstating. Before it, the two steps could disagree: a story on polio's near-eradication went into Actually Uplifting as "Polio vaccines still cannot reach every child" (2026-11-07). Every other tag, and no tag, gets the prompt unchanged, so ratings for those stories cannot shift. The eval fixtures carry no tag, so `eval:models` and `eval:recalibrate` measure the untagged prompt. Stories already published keep their headline until they are re-assessed.
+**Uplifting headlines.** The emotion tag comes from the pre-assessment, which reads only the source headline and the start of the text; the full assessment writes our headline afterwards. A story tagged `uplifting` gets a `<TONE>` block asking the title to lead with the progress and the marketing blurb to open with it, leaving obstacles to the summary and limiting factors, without overstating. Before it, the two steps could disagree: a story on polio's near-eradication went into Actually Uplifting as "Polio vaccines still cannot reach every child" (2026-11-07). Every other tag, and no tag, gets the prompt unchanged, so ratings for those stories cannot shift. The eval fixtures carry no tag, so `eval:models` and `eval:recalibrate` measure the untagged prompt. Stories already published keep their headline until they are re-assessed. **A researched story's tag is research's own** (owner decision 2026-11-14; `.context/story-research.md`, "What a run does"): the write step tags the story it wrote, judged on that text, and an apply swaps it in with the text. A re-assess of a researched story writes the single-source analysis back, so it takes the tag the snapshot kept (`snapshotEmotionTag`) for its `<TONE>` block and writes that tag too.
 
 **Zod schema**: `assessResultSchema` — the largest schema, with detailed `.describe()` annotations guiding Markdown format for analytical fields.
 

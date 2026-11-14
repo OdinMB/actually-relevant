@@ -4,6 +4,8 @@
  * sends them under `versionedSchemaName`, so editing a description is never answered from its old cache.
  */
 import { z } from 'zod'
+import { EMOTION_TAG_DEFINITIONS } from '../prompts/shared.js'
+import { EMOTION_TAGS } from './llm.js'
 
 export const SOURCE_KINDS = ['news-report', 'analysis', 'opinion', 'press-release', 'official-body', 'other'] as const
 export type SourceKind = (typeof SOURCE_KINDS)[number]
@@ -149,6 +151,9 @@ export const writeSchema = z.object({
   marketingBlurb: z
     .string()
     .describe('Plain text, 25-30 words and never more than 230 characters including spaces. Opens with the development itself, never with an outlet.'),
+  emotionTag: z
+    .enum(EMOTION_TAGS)
+    .describe(`Emotion tag based on how the story you write affects readers, judged on that story rather than on <ARTICLE>. ${EMOTION_TAG_DEFINITIONS}`),
   relevanceCalculation: z
     .array(z.string())
     .describe(

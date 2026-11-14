@@ -1,8 +1,8 @@
 /**
  * Turning a research run into the story's state, and back (`.context/story-research.md`, "Applying a
- * run" and "The pipeline step"). An apply writes the run's researched texts into the story's own
- * columns (`researchSwap.ts`), keeps what they held in `pre_research`, written once so that a revert
- * always returns to the single-source analysis, and stores the cited version readers see in
+ * run" and "The pipeline step"). An apply writes the run's researched texts and emotion tag into the
+ * story's own columns (`researchSwap.ts`), keeps what they held in `pre_research`, written once so
+ * that a revert always returns to the single-source analysis, and stores the cited version readers see in
  * `research`. A revert writes the snapshot back and clears both. Each write goes through
  * `recordAnalysis('research', …)` with a fresh embedding, fenced on the status and on `updatedAt` as
  * read before the embedding call, so a status is never moved by a write here, and an editor's move or
@@ -22,7 +22,15 @@ import type { GateKind } from './researchChecks.js'
 import { buildResearchedStory, researchedStorySchema, type ResearchedStory, type ResearchRunForReaders } from './researchedStory.js'
 import type { ResearchSource, StoryResearch } from './researchPipeline.js'
 import type { StoredResearch } from './researchRuns.js'
-import { appliedDraftSchema, researchedValues, restoredValues, snapshotOf, SWAPPED_SELECT, type AppliedDraft, type SwappedValues } from './researchSwap.js'
+import {
+  appliedDraftSchema,
+  researchedValues,
+  restoredValues,
+  snapshotForApply,
+  SWAPPED_SELECT,
+  type AppliedDraft,
+  type SwappedValues,
+} from './researchSwap.js'
 import { fetchSourceFaviconsInBackground, type SourceIconHint } from './sourceFavicons.js'
 import { analysisFrom, recordAnalysis, transition, type Actor } from './storyLifecycle.js'
 
@@ -133,7 +141,7 @@ async function write(
   return outcomes.get(storyId) !== 'skipped'
 }
 
-const asJson = (value: Prisma.JsonValue | object) => value as unknown as Prisma.InputJsonValue
+const asJson = (value: unknown) => value as Prisma.InputJsonValue
 
 /**
  * The write both applies share: the cited version built from `run`, the single-source snapshot
@@ -147,7 +155,7 @@ async function putResearch(storyId: string, actor: Actor, story: StoryColumns, s
   const research = buildResearchedStory(run)
   if (!researchedStorySchema.safeParse(research).success) return { refused: "This run's sources do not make a version readers can be given" }
   // Written once: re-applying keeps the snapshot of the single-source analysis
-  const preResearch = story.preResearch ?? snapshotOf(story)
+  const preResearch = snapshotForApply(story.preResearch, story)
 
   const read = { status, updatedAt: story.updatedAt }
   if (!(await write(storyId, actor, read, researchedValues(run.draft), { research: asJson(research), preResearch: asJson(preResearch) }))) {

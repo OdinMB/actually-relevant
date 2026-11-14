@@ -29,15 +29,17 @@ export const EMOTION_TAGS_PROMPT_BLOCK = `<EMOTION TAGS>
 </EMOTION TAGS>`
 
 /**
- * Compact description for Zod schema .describe() calls.
- * Keeps structured output guidance consistent with prompt blocks.
+ * The four tags' compact definitions, for Zod schema .describe() calls: every schema that asks for
+ * an emotion tag shares them, so its guidance stays consistent with the prompt block.
  */
-export const EMOTION_TAG_SCHEMA_DESCRIPTION =
-  'Emotion tag based on how the article affects readers. ' +
+export const EMOTION_TAG_DEFINITIONS =
   'uplifting: clearly positive or inspiring — the positivity should be obvious and not dependent on a particular viewpoint. A story can be mildly positive and still be uplifting, as long as it is clearly good news. When in doubt, use calm. ' +
   'frustrating: negative, disappointing, or angering. ' +
   'scary: frightening (e.g. increased existential risks, wars, threats). ' +
   'calm: neutral, mixed, or ambiguously positive — use as the default when the emotional tone is debatable or depends on perspective.'
+
+/** The emotion tag of an article, as pre-assessment and reclassification ask for it. */
+export const EMOTION_TAG_SCHEMA_DESCRIPTION = 'Emotion tag based on how the article affects readers. ' + EMOTION_TAG_DEFINITIONS
 
 // ---------------------------------------------------------------------------
 // Shared prompt building blocks

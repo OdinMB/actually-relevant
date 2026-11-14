@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { ResearchResult, ResearchRun, ResearchUsage, ResearchVerdict } from '@shared/types'
+import type { EmotionTag, ResearchResult, ResearchRun, ResearchUsage, ResearchVerdict, Story } from '@shared/types'
 import { ToastProvider } from '../ui/Toast'
 import { BackgroundTaskProvider } from '../../hooks/useBackgroundTasks'
 
@@ -13,7 +13,7 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
 }))
 
 import { ApiError } from '../../lib/admin-api'
-import { StoryResearch } from './StoryResearch'
+import { singleSourceEmotion, StoryResearch } from './StoryResearch'
 
 const usage = (over: Partial<ResearchUsage> = {}): ResearchUsage => ({
   enabled: true,
@@ -31,7 +31,7 @@ function renderSection(status = 'analyzed', preResearch: Record<string, unknown>
     <QueryClientProvider client={client}>
       <ToastProvider>
         <BackgroundTaskProvider>
-          <StoryResearch story={{ id: 'story-1', status: status as 'analyzed', preResearch }} />
+          <StoryResearch story={{ id: 'story-1', status: status as 'analyzed', emotionTag: 'calm', preResearch }} />
         </BackgroundTaskProvider>
       </ToastProvider>
     </QueryClientProvider>,
@@ -61,6 +61,7 @@ function researchResult(verdict: ResearchVerdict): ResearchResult {
       quoteAttribution: '',
       quoteSourceId: 'S0',
       marketingBlurb: 'Blurb.',
+      emotionTag: 'uplifting',
       relevanceCalculation: [],
       rating: 5,
       oldNews: { isOld: false, firstHappened: 'unknown' },
@@ -236,10 +237,20 @@ describe('StoryResearch', () => {
       renderSection('published')
       fireEvent.click(await screen.findByRole('button', { name: 'Use this version' }))
       const dialog = await screen.findByRole('dialog')
+      expect(dialog).toHaveTextContent(/blurb, analysis and emotion tag become this run's researched version/)
       expect(dialog).toHaveTextContent(/The story keeps its own rating\./)
       expect(mockResearch.apply).not.toHaveBeenCalled()
       fireEvent.click(within(dialog).getByRole('button', { name: 'Use this version' }))
       await waitFor(() => expect(mockResearch.apply).toHaveBeenCalledWith('story-1', 'run-1'))
+    })
+
+    it('names no emotion tag in the confirmation for a run stored before research tagged its text', async () => {
+      const run = completed()
+      const { emotionTag: _none, ...untagged } = run.result!.draft!
+      mockResearch.runs.mockResolvedValue([{ ...run, result: { ...run.result!, draft: untagged } }])
+      renderSection('published')
+      fireEvent.click(await screen.findByRole('button', { name: 'Use this version' }))
+      expect(await screen.findByRole('dialog')).toHaveTextContent(/quote, blurb and analysis become this run's researched version/)
     })
 
     it('keeps "Use this version" visible but disabled, with its reason, on a trashed story', async () => {
@@ -281,7 +292,7 @@ describe('StoryResearch', () => {
       renderSection('published', { title: 'Single-source headline' })
       fireEvent.click(await screen.findByRole('button', { name: 'Revert to single-source' }))
       const dialog = await screen.findByRole('dialog')
-      expect(dialog).toHaveTextContent(/gets back the headline, summary and analysis it had before research/)
+      expect(dialog).toHaveTextContent(/gets back the headline, summary, analysis and emotion tag it had before research/)
       fireEvent.click(within(dialog).getByRole('button', { name: 'Revert' }))
       await waitFor(() => expect(mockResearch.revert).toHaveBeenCalledWith('story-1'))
     })
@@ -294,5 +305,20 @@ describe('StoryResearch', () => {
     expect(screen.queryByRole('heading', { name: 'Research' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Research this story' })).toBeNull()
     expect(mockResearch.runs).not.toHaveBeenCalled()
+  })
+})
+
+describe('singleSourceEmotion', () => {
+  it.each<[string, Pick<Story, 'emotionTag' | 'preResearch'>, EmotionTag | null]>([
+    ['its own on a single-source story', { emotionTag: 'calm', preResearch: null }, 'calm'],
+    [
+      'the one its snapshot keeps on a researched story',
+      { emotionTag: 'uplifting', preResearch: { title: 'Headline', emotionTag: 'frustrating' } },
+      'frustrating',
+    ],
+    ['none when the snapshot keeps none', { emotionTag: 'uplifting', preResearch: { title: 'Headline', emotionTag: null } }, null],
+    ['its own on a story researched before research tagged its text, which kept it', { emotionTag: 'scary', preResearch: { title: 'Headline' } }, 'scary'],
+  ])("is the story's tag: %s", (_name, story, tag) => {
+    expect(singleSourceEmotion(story)).toBe(tag)
   })
 })

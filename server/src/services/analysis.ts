@@ -15,6 +15,7 @@ import { preAssessResultSchema, reclassifyResultSchema, assessResultSchema, sele
 import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
 import { assessPromptInput, selectCount, selectPromptStory } from './promptInputs.js'
+import { snapshotEmotionTag } from './researchSwap.js'
 import { NotFoundError } from '../utils/errors.js'
 import { analysisFrom, partition, recordAnalysis, transition, type Actor, type AnalysisOutcome, type AnalysisRow, type MoveResult } from './storyLifecycle.js'
 
@@ -289,7 +290,10 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
 
   log.info({ storyId, title: story.sourceTitle?.slice(0, 80) }, 'assessing story')
 
-  const input = assessPromptInput(story)
+  // A researched story carries research's emotion tag; the single-source analysis written here takes
+  // back the tag its snapshot keeps, in its prompt's tone and in its write
+  const singleSourceTag = snapshotEmotionTag(story.preResearch)
+  const input = assessPromptInput(singleSourceTag === undefined ? story : { ...story, emotionTag: singleSourceTag })
   const prompt = buildAssessPrompt(input.title, input.content, input.publisher, input.url, input.guidelines, input.emotionTag)
 
   await rateLimitDelay()
@@ -312,6 +316,7 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
     relevanceCalculation: parsed.relevanceCalculation.join('\n'),
     relevance: parsed.conservativeRating,
     // A fresh single-source analysis replaces an applied research run, and its snapshot with it
+    ...(singleSourceTag !== undefined && { emotionTag: singleSourceTag }),
     research: Prisma.DbNull,
     preResearch: Prisma.DbNull,
   }

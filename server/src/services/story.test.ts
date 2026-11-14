@@ -149,6 +149,7 @@ describe('updateStory on a researched story', () => {
     relevanceReasons: '- It matters.',
     relevanceSummary: null,
     antifactors: '- A caveat.',
+    emotionTag: 'uplifting' as const,
     relevance: 5,
     relevanceCalculation: '- **Scale:** 5',
   }
@@ -164,6 +165,7 @@ describe('updateStory on a researched story', () => {
     ['the headline', { title: 'Edited headline' }],
     ['the relevance summary, which the researched version leaves empty', { relevanceSummary: 'A new one.' }],
     ['the blurb, by clearing it among unchanged fields', { ...stored, marketingBlurb: null }],
+    ['the emotion tag, which research tagged for the text it wrote', { emotionTag: 'scary' as const }],
   ])('refuses an edit of %s: revert to single-source first', async (_name, edit) => {
     await expect(updateStory('story-1', edit)).rejects.toThrow(/Revert to single-source first/)
     expect(mockPrisma.story.update).not.toHaveBeenCalled()
@@ -178,8 +180,8 @@ describe('updateStory on a researched story', () => {
   })
 
   it('saves an edit that sends the researched fields unchanged, as the edit form does, with other fields changed', async () => {
-    await updateStory('story-1', { ...stored, emotionTag: 'scary' })
-    expect(mockPrisma.story.update).toHaveBeenCalledWith({ where: { id: 'story-1' }, data: expect.objectContaining({ emotionTag: 'scary' }) })
+    await updateStory('story-1', { ...stored, relevancePre: 3 })
+    expect(mockPrisma.story.update).toHaveBeenCalledWith({ where: { id: 'story-1' }, data: expect.objectContaining({ relevancePre: 3 }) })
   })
 
   it('saves an edit of a story with no researched version', async () => {

@@ -294,6 +294,48 @@ describe('assessStory', () => {
     expect(recordedRows()[0].data).toMatchObject({ research: Prisma.DbNull, preResearch: Prisma.DbNull })
   })
 
+  describe("a researched story's emotion tag", () => {
+    const answer = {
+      publicationDate: '',
+      quote: '',
+      quoteAttribution: '',
+      summary: 'Summary',
+      factors: ['Factor'],
+      limitingFactors: [],
+      relevanceCalculation: ['calc'],
+      conservativeRating: 5,
+      relevanceSummary: 'Rel',
+      titleLabel: 'Topic',
+      relevanceTitle: 'Title',
+      marketingBlurb: 'Blurb',
+    }
+    const invoke = vi.fn()
+    const assessed = async (story: Record<string, unknown>) => {
+      mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1', status: 'published', ...story }))
+      mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1], hash: 'h1' })
+      invoke.mockResolvedValue(answer)
+      mockGetMediumLLM.mockReturnValue({ withStructuredOutput: () => ({ invoke }) })
+      await assessStory('story-1', 'editor')
+      const [[message]] = invoke.mock.calls.at(-1) as [[{ content: string }]]
+      return { data: recordedRows()[0]!.data, prompt: message.content }
+    }
+
+    it('gives the fresh single-source analysis the tag its snapshot keeps, in the prompt and in the write', async () => {
+      // Research tagged its text uplifting; the single-source analysis was frustrating
+      const { data, prompt } = await assessed({ emotionTag: 'uplifting', preResearch: { title: 'Single-source headline', emotionTag: 'frustrating' } })
+      expect(data).toMatchObject({ emotionTag: 'frustrating', preResearch: Prisma.DbNull })
+      expect(prompt).not.toContain('<TONE>')
+    })
+
+    it("keeps the story's own tag without a snapshot, or with one stored before the tag was swapped", async () => {
+      for (const preResearch of [null, { title: 'Single-source headline' }]) {
+        const { data, prompt } = await assessed({ emotionTag: 'uplifting', preResearch })
+        expect(data).not.toHaveProperty('emotionTag')
+        expect(prompt).toContain('<TONE>')
+      }
+    })
+  })
+
   it('throws when story not found', async () => {
     mockPrisma.story.findUnique.mockResolvedValue(null)
     await expect(assessStory('nonexistent')).rejects.toThrow('Story not found')

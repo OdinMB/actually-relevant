@@ -5,7 +5,7 @@
  * declarative, exact counts, format guidance in the schemas (`schemas/research.ts`).
  * Every fetched or stored text sits in escaped XML behind the line the podcast prompts use.
  */
-import { buildGuidelinesXml, escapeXml } from './shared.js'
+import { buildGuidelinesXml, EMOTION_TAGS_PROMPT_BLOCK, escapeXml } from './shared.js'
 import type { AssessPromptInput } from '../services/promptInputs.js'
 import type { PoolFact, QuoteCheck } from '../services/researchChecks.js'
 import { quoteId, type SourceLine } from '../services/researchCopying.js'
@@ -280,7 +280,7 @@ You are a relevance analyst and news writer. You judge a development's importanc
 </ROLE>
 
 <GOAL>
-Write the researched version of the story in <ARTICLE> from the facts in <FACTS>, in our own words: title label, title, a story of 150-250 words in 2-4 paragraphs, each citing the facts it uses, a short summary, Why This Matters, Caveats, key quote, marketing blurb, relevance calculation and final rating, and two checks on the development (<OLD_NEWS>, <CONTRADICTED>). Avoid jargon.
+Write the researched version of the story in <ARTICLE> from the facts in <FACTS>, in our own words: title label, title, a story of 150-250 words in 2-4 paragraphs, each citing the facts it uses, a short summary, Why This Matters, Caveats, key quote, marketing blurb, the story's emotion tag, relevance calculation and final rating, and two checks on the development (<OLD_NEWS>, <CONTRADICTED>). Avoid jargon.
 </GOAL>
 
 <ARTICLE>
@@ -331,6 +331,11 @@ ${KEY_QUOTE}
 
 Marketing blurb (25-30 words, never more than 230 characters)
 - Opens with the development itself, then says why it matters. It never opens with an outlet ('Reuters reports …').
+
+Emotion tag
+- The tag of the story you write, as <EMOTION TAGS> defines it, judged on how that story affects readers. Where the facts show the development in another light than <ARTICLE> does, its tag may differ from the one <ARTICLE> would get.
+
+${EMOTION_TAGS_PROMPT_BLOCK}
 
 Relevance calculation (3-5 bullet points)
 - Start with the key factor and assign the base rating (1-10) whose <CRITERIA> description it matches best. When it fits two adjacent levels, choose the better match rather than the lower one.

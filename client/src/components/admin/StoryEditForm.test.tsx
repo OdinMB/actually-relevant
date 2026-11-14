@@ -128,7 +128,18 @@ describe('StoryEditForm unsaved changes', () => {
 })
 
 describe('StoryEditForm on a researched story', () => {
-  const swapped = ['Title Label', 'Title', 'Summary', 'Quote', 'Quote Attribution', 'Marketing Blurb', 'Relevance Reasons', 'Relevance Summary', 'Antifactors']
+  const swapped = [
+    'Title Label',
+    'Title',
+    'Summary',
+    'Quote',
+    'Quote Attribution',
+    'Marketing Blurb',
+    'Relevance Reasons',
+    'Relevance Summary',
+    'Antifactors',
+    'Emotion',
+  ]
   const field = (label: string) => screen.getByLabelText(label, { exact: true })
 
   it('locks the fields its researched version wrote, says why, and leaves the others editable, the rating among them', () => {
@@ -149,9 +160,15 @@ describe('StoryEditForm on a researched story', () => {
   })
 
   describe('when a revert or an apply lands while other edits are unsaved', () => {
-    const singleSource = { ...story, title: 'Single-source headline', summary: 'Single-source summary.', preResearch: null } as Story
-    const researched = { ...story, title: 'Researched headline', summary: 'Researched summary.', preResearch: { title: 'Single-source headline' } } as Story
-    const editEmotion = () => fireEvent.change(field('Emotion'), { target: { value: 'uplifting' } })
+    const singleSource = { ...story, title: 'Single-source headline', summary: 'Single-source summary.', emotionTag: 'frustrating', preResearch: null } as Story
+    const researched = {
+      ...story,
+      title: 'Researched headline',
+      summary: 'Researched summary.',
+      emotionTag: 'uplifting',
+      preResearch: { title: 'Single-source headline', emotionTag: 'frustrating' },
+    } as Story
+    const editRating = () => fireEvent.change(field('Rating'), { target: { value: '9' } })
     const save = async () => {
       mockApi.update.mockResolvedValue(story)
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -159,26 +176,28 @@ describe('StoryEditForm on a researched story', () => {
       return mockApi.update.mock.calls[0]![1] as Partial<Story>
     }
 
-    it('after a revert, shows and saves the single-source fields, keeping the other edits', async () => {
+    it('after a revert, shows and saves the single-source fields and emotion tag, keeping the other edits', async () => {
       renderPage(researched, singleSource)
-      editEmotion()
+      editRating()
       fireEvent.click(screen.getByRole('button', { name: 'Refetch' }))
 
       expect(field('Title')).toHaveValue('Single-source headline')
       expect(field('Title')).toBeEnabled()
-      expect(field('Emotion')).toHaveValue('uplifting')
-      expect(await save()).toMatchObject({ title: 'Single-source headline', summary: 'Single-source summary.', emotionTag: 'uplifting' })
+      expect(field('Emotion')).toHaveValue('frustrating')
+      expect(field('Rating')).toHaveValue(9)
+      expect(await save()).toMatchObject({ title: 'Single-source headline', summary: 'Single-source summary.', emotionTag: 'frustrating', relevance: 9 })
     })
 
-    it('after an apply, shows and saves the researched fields, keeping the other edits', async () => {
+    it('after an apply, shows and saves the researched fields and emotion tag, keeping the other edits', async () => {
       renderPage(singleSource, researched)
-      editEmotion()
+      editRating()
       fireEvent.click(screen.getByRole('button', { name: 'Refetch' }))
 
       expect(field('Title')).toHaveValue('Researched headline')
       expect(field('Title')).toBeDisabled()
       expect(field('Emotion')).toHaveValue('uplifting')
-      expect(await save()).toMatchObject({ title: 'Researched headline', summary: 'Researched summary.', emotionTag: 'uplifting' })
+      expect(field('Rating')).toHaveValue(9)
+      expect(await save()).toMatchObject({ title: 'Researched headline', summary: 'Researched summary.', emotionTag: 'uplifting', relevance: 9 })
     })
   })
 })

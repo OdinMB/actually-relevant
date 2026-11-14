@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { TavilySearch } from '../lib/tavily.js'
+import { EMOTION_TAGS_PROMPT_BLOCK } from '../prompts/shared.js'
 import type { Draft, Earlier, Extraction, FactCheck, Queries, Repair } from '../schemas/research.js'
 import type { ResearchStory } from './researchInput.js'
 import {
@@ -113,6 +114,7 @@ const goodDraft = (factIds = ['S0F1']): Draft => ({
   quoteAttribution: 'Prime minister',
   quoteSourceId: 'S0',
   marketingBlurb: 'Pakistan added 22 GW of rooftop solar.',
+  emotionTag: 'uplifting',
   relevanceCalculation: ['- **Energy:** 6'],
   rating: 6,
   oldNews: { isOld: false, firstHappened: 'unknown' },
@@ -425,6 +427,27 @@ describe('researchStory', () => {
     expect(r.checks.map(c => c.rechecked)).toEqual([undefined, ['Story paragraph 2']])
     expect(r.problems).toEqual([])
     expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
+  })
+
+  it('has the write step tag the emotion of the story it writes, with the shared tag guidance, and keeps that tag through a repair round', async () => {
+    const writes: string[] = []
+    let checks = 0
+    const { deps: d } = deps({
+      responders: baseResponders({
+        write: p => {
+          writes.push(p)
+          return twoParagraphs()
+        },
+        'fact-check': p => (++checks === 1 ? judging('Story paragraph 2', { copiedSentence: 'S1F2' })(p) : allSupported(p)),
+        rewrite: () => repair({ 'Story paragraph 2': { text: 'Grid demand fell as homes went solar.', factIds: ['S1F2'] } }),
+      }),
+    })
+    // The story's single-source tag is calm; the write step tags its own text uplifting
+    const r = await researchStory(story(), d)
+    expect(writes[0]).toContain(EMOTION_TAGS_PROMPT_BLOCK)
+    expect(r.rewritten).toBe(true)
+    expect(r.verdict).toEqual({ kind: 'keep' })
+    expect(r.draft?.emotionTag).toBe('uplifting')
   })
 
   it('keeps a paragraph the second round fixed when the first repair still failed it', async () => {

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type {
+  EmotionTag,
   ResearchCitedText,
   ResearchDraft,
   ResearchEarlier,
@@ -157,7 +158,10 @@ const plainLine = (line: string) => line.replace(/^\s*-\s*/, '').replace(/\*\*/g
 const H = 'text-xs font-semibold text-neutral-500 uppercase tracking-wide'
 const SUMMARY = 'cursor-pointer text-sm font-medium text-neutral-800 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
 
-function Draft({ result }: { result: ResearchResult }) {
+/** The story's single-source tag beside the research's, when the view is given it. */
+const besideSingleSource = (tag: EmotionTag | null | undefined) => (tag === undefined ? '' : ` (single-source: ${tag ?? 'none'})`)
+
+function Draft({ result, singleSourceEmotion }: { result: ResearchResult; singleSourceEmotion?: EmotionTag | null }) {
   const draft = result.draft
   if (!draft) return <p className="text-sm text-neutral-600">No draft was written.</p>
   const targetOf = chipTargets(result)
@@ -216,6 +220,12 @@ function Draft({ result }: { result: ResearchResult }) {
         <h5 className={H}>Blurb</h5>
         <p>{draft.marketingBlurb}</p>
       </div>
+      {draft.emotionTag && (
+        <h5 className={H}>
+          Research&apos;s emotion: {draft.emotionTag}
+          {besideSingleSource(singleSourceEmotion)}
+        </h5>
+      )}
       <div>
         <h5 className={H}>Research&apos;s rating: {draft.rating} (recorded; the story keeps its own)</h5>
         <ul className="list-disc pl-5">
@@ -454,7 +464,8 @@ function RunStatus({ run }: { run: ResearchRun }) {
   return null
 }
 
-export function ResearchRunView({ run }: { run: ResearchRun }) {
+/** `singleSourceEmotion`: the story's single-source emotion tag, shown beside the one research gave its text. */
+export function ResearchRunView({ run, singleSourceEmotion }: { run: ResearchRun; singleSourceEmotion?: EmotionTag | null }) {
   const result = run.result
   return (
     <div className="space-y-3">
@@ -466,7 +477,7 @@ export function ResearchRunView({ run }: { run: ResearchRun }) {
           {!result.optOutChecked && (
             <p className="text-xs text-amber-700">AI opt-out not checked: publishers' AI opt-outs were not applied to these sources.</p>
           )}
-          <Draft result={result} />
+          <Draft result={result} singleSourceEmotion={singleSourceEmotion} />
           <details>
             <summary className={SUMMARY}>Sources ({result.sources.length})</summary>
             <ul className="mt-2 space-y-3 text-xs text-neutral-700">
