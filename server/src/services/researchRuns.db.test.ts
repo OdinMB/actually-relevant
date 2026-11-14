@@ -10,7 +10,7 @@ import type { StoryResearch } from './researchPipeline.js'
 const mockPipeline = vi.hoisted(() => ({ researchStory: vi.fn() }))
 vi.mock('./researchPipeline.js', async importOriginal => ({ ...(await importOriginal<typeof import('./researchPipeline.js')>()), ...mockPipeline }))
 
-const { listResearchRuns, recordSkippedRun, researchUsage, runPipelineResearch, startResearchRun } = await import('./researchRuns.js')
+const { listResearchRuns, newestResearchRun, recordSkippedRun, researchUsage, runPipelineResearch, startResearchRun } = await import('./researchRuns.js')
 
 const RESERVATION = config.research.maxRunUsd
 const CAP = config.research.monthlyCapUsd
@@ -274,6 +274,20 @@ describeDb('story research runs', () => {
     expect(runs[0]?.cost?.totalUsd).toBeCloseTo(MEASURED, 10)
     expect(runs[1]?.cost).toBeNull()
     expect(runs.map(r => Date.parse(r.startedAt))).toEqual([...runs.map(r => Date.parse(r.startedAt))].sort((a, b) => b - a))
+  })
+
+  // The run the story's research section opens on, and the bulk apply takes
+  it('gives as the newest run the one the list shows first, runs started at the same time included, and none for a story without runs', async () => {
+    const story = await researchable()
+    const at = new Date(Date.now() - MINUTE_MS)
+    await pastRun({ storyId: story.id, status: 'completed', costUsd: 0, startedAt: new Date(at.getTime() - MINUTE_MS) })
+    for (let i = 0; i < 3; i++) await pastRun({ storyId: story.id, status: 'failed', costUsd: 0, startedAt: at })
+
+    const newest = await newestResearchRun(story.id)
+
+    expect(newest?.id).toBeDefined()
+    expect(newest?.id).toBe((await listResearchRuns(story.id))[0]?.id)
+    expect(await newestResearchRun('00000000-0000-4000-8000-000000000000')).toBeNull()
   })
 
   it("marks an editor's run as the editor's", async () => {

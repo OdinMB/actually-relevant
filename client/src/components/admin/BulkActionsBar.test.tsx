@@ -102,6 +102,30 @@ describe('BulkActionsBar', () => {
     expect(onAction).not.toHaveBeenCalled()
   })
 
+  it('offers no researched versions to use against a backend without research', () => {
+    render(<BulkActionsBar count={3} onAction={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /researched version/i })).not.toBeInTheDocument()
+  })
+
+  it("uses the selection's researched versions when they can be applied", async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    render(<BulkActionsBar count={3} onAction={onAction} applyResearchRefusal={null} />)
+    await user.click(screen.getByRole('button', { name: /researched version/i }))
+    expect(onAction).toHaveBeenCalledWith('apply-research')
+  })
+
+  it('keeps the researched versions action visible but inert, with its reason, while applying is closed', async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    render(<BulkActionsBar count={3} onAction={onAction} applyResearchRefusal="Applying research is not open yet" />)
+    const button = screen.getByRole('button', { name: /researched version/i })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).toHaveAccessibleDescription('Applying research is not open yet')
+    await user.click(button)
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
   it('does not disable Bluesky pick button for multiple stories regardless of singleHasBlueskyPost', () => {
     render(<BulkActionsBar count={3} onAction={vi.fn()} allPublished singleHasBlueskyPost />)
     expect(screen.getByRole('button', { name: 'Pick Best for Bluesky' })).toBeEnabled()

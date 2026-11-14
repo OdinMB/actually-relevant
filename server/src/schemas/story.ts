@@ -97,13 +97,20 @@ export const bulkStoryIdsSchema = z.object({
   storyIds: z.array(z.string().uuid()).min(1, 'At least one story ID is required').max(500, 'Maximum 500 story IDs allowed'),
 })
 
-/** The stories list's bulk Research: at most `config.research.bulkMaxStories` stories at once. */
-export const bulkResearchIdsSchema = z.object({
-  storyIds: z
-    .array(z.string().uuid())
-    .min(1, 'At least one story ID is required')
-    .max(config.research.bulkMaxStories, `At most ${config.research.bulkMaxStories} stories can be researched at once`),
-})
+/** The stories list's bulk research actions: at most `config.research.bulkMaxStories` stories at once. */
+const researchStoryIds = (done: string) =>
+  z.object({
+    storyIds: z
+      .array(z.string().uuid())
+      .min(1, 'At least one story ID is required')
+      .max(config.research.bulkMaxStories, `At most ${config.research.bulkMaxStories} stories can be ${done} at once`),
+  })
+
+/** The bulk Research. */
+export const bulkResearchIdsSchema = researchStoryIds('researched')
+
+/** The bulk "Use researched versions". */
+export const bulkApplyResearchIdsSchema = researchStoryIds('given their researched version')
 
 export const bulkSelectIdsSchema = z.object({
   storyIds: z.array(z.string().uuid()).min(2, 'At least 2 story IDs are required for selection').max(500, 'Maximum 500 story IDs allowed'),

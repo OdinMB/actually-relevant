@@ -1,7 +1,8 @@
 /**
  * The story research run lifecycle (`.context/story-research.md`): the switch, price and
  * eligibility checks, the reservation against the monthly cap under an advisory lock, the run and
- * its finish write (`executeRun`), interrupted runs, the story's run list and the month's spend.
+ * its finish write (`executeRun`), interrupted runs, the story's run list (and its newest run) and
+ * the month's spend.
  * Editors start runs (`reserveEditorRun`): the Research button, as a one-story `research` task, and
  * the stories list's bulk Research, a batch in one task (`researchBatch.ts`); so does the research
  * step (`runPipelineResearch`, for `jobs/researchStories.ts`). A run writes only its own
@@ -333,15 +334,24 @@ function toView(run: StoryResearchRun): ResearchRunView {
   }
 }
 
+/** The order the admin lists a story's runs in: newest first, runs started at the same time by id. */
+const NEWEST_FIRST: Prisma.StoryResearchRunOrderByWithRelationInput[] = [{ startedAt: 'desc' }, { id: 'desc' }]
+
 /** The story's latest runs, newest first, after marking interrupted ones. */
 export async function listResearchRuns(storyId: string, now: Date = new Date()): Promise<ResearchRunView[]> {
   await markInterruptedRuns(prisma, now)
-  const runs = await prisma.storyResearchRun.findMany({
-    where: { storyId },
-    orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
-    take: config.research.runsListed,
-  })
+  const runs = await prisma.storyResearchRun.findMany({ where: { storyId }, orderBy: NEWEST_FIRST, take: config.research.runsListed })
   return runs.map(toView)
+}
+
+/**
+ * The story's newest run, the first `listResearchRuns` gives and the one its research section opens
+ * on, after marking interrupted ones; null for a story without runs.
+ */
+export async function newestResearchRun(storyId: string, now: Date = new Date()): Promise<ResearchRunView | null> {
+  await markInterruptedRuns(prisma, now)
+  const run = await prisma.storyResearchRun.findFirst({ where: { storyId }, orderBy: NEWEST_FIRST })
+  return run ? toView(run) : null
 }
 
 const isFallbackCategory = (value: string | null): value is FallbackCategory => (FALLBACK_CATEGORIES as readonly (string | null)[]).includes(value)

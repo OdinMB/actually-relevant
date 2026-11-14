@@ -35,6 +35,7 @@ import type {
   BlueskyFeedResponse,
   MastodonPost,
   MastodonFeedResponse,
+  ResearchBulkApplyOutcome,
   ResearchRun,
   ResearchUsage,
 } from '@shared/types'
@@ -366,6 +367,9 @@ export const adminApi = {
     startBulk: (storyIds: string[]) => request<{ taskId: string }>('/research/runs', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     /** Put the run's researched version on the story (published at once on a published story); 409 for a run or status that cannot take it. */
     apply: (storyId: string, runId: string) => request<void>(`/research/stories/${storyId}/runs/${runId}/apply`, { method: 'POST' }),
+    /** Put each of up to 50 stories' newest run on it, as `apply` does, one at a time; each story's outcome. 409 while no run can be applied. */
+    applyBulk: (storyIds: string[]) =>
+      request<{ outcomes: ResearchBulkApplyOutcome[] }>('/research/apply', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     /** Give the story its single-source analysis back; 409 without a researched version or on a trashed story. */
     revert: (storyId: string) => request<void>(`/research/stories/${storyId}/revert`, { method: 'POST' }),
   },

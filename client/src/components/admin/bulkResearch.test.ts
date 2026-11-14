@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import type { ResearchUsage, TaskState } from '@shared/types'
-import { bulkResearchConfirmation, bulkResearchOutcome, bulkResearchRefusal, RESEARCH_BULK_MAX } from './bulkResearch'
+import type { ResearchBulkApplyOutcome, ResearchUsage, TaskState } from '@shared/types'
+import {
+  bulkApplyConfirmation,
+  bulkApplyOutcome,
+  bulkApplyRefusal,
+  bulkResearchConfirmation,
+  bulkResearchOutcome,
+  bulkResearchRefusal,
+  RESEARCH_BULK_MAX,
+} from './bulkResearch'
 
 const usage = (over: Partial<ResearchUsage> = {}): ResearchUsage => ({
   enabled: true,
@@ -98,5 +106,78 @@ describe('bulkResearchOutcome', () => {
   it('reads a task from a backend that reports no skips as having none', () => {
     const { message } = bulkResearchOutcome('Researching 3 stories', task({ completed: 3, skipped: undefined }), chosen)
     expect(message).not.toMatch(/skipped/)
+  })
+})
+
+describe('bulkApplyRefusal', () => {
+  it('hides the action against a backend without research, and while its usage loads', () => {
+    expect(bulkApplyRefusal(3, null, false)).toBeUndefined()
+    expect(bulkApplyRefusal(3, undefined, false)).toBeUndefined()
+  })
+
+  it('gives the reason no run can be applied now, or none, whatever refuses a new run', () => {
+    expect(bulkApplyRefusal(3, usage({ applyRefusal: 'Applying research is not open yet' }), false)).toBe('Applying research is not open yet')
+    expect(bulkApplyRefusal(3, usage({ refusal: "This month's research cap is reached" }), false)).toBeNull()
+  })
+
+  it('refuses more stories than one bulk action takes, and an unknown usage, with a reason', () => {
+    expect(bulkApplyRefusal(RESEARCH_BULK_MAX, usage(), false)).toBeNull()
+    expect(bulkApplyRefusal(RESEARCH_BULK_MAX + 1, usage(), false)).toEqual(expect.any(String))
+    expect(bulkApplyRefusal(3, undefined, true)).toEqual(expect.any(String))
+  })
+})
+
+describe('bulkApplyConfirmation', () => {
+  it('names the count', () => {
+    expect(bulkApplyConfirmation(12).title).toContain('12')
+  })
+})
+
+describe('bulkApplyOutcome', () => {
+  const chosen = [
+    { id: 's1', title: 'Floods in Kerala' },
+    { id: 's2', title: 'Rail strike ends' },
+    { id: 's3', title: 'Vaccine rollout' },
+    { id: 's4', title: 'Heat records' },
+  ]
+  const applied = (storyId: string): ResearchBulkApplyOutcome => ({ storyId, outcome: 'applied', runId: `run-${storyId}` })
+
+  it('counts the stories applied, failed and skipped, names each not applied with its reason, and stays until dismissed', () => {
+    const { type, message, sticky } = bulkApplyOutcome(
+      'Applying 4',
+      [
+        applied('s1'),
+        { storyId: 's2', outcome: 'skipped', reason: "Its newest run fell back to today's format" },
+        { storyId: 's3', outcome: 'failed', reason: 'unexpected error (Error)' },
+        applied('s4'),
+      ],
+      chosen,
+    )
+    expect(message).toMatch(/2 applied.*1 failed.*1 skipped/)
+    expect(message).toMatch(/Rail strike ends.*fell back/)
+    expect(message).toMatch(/Vaccine rollout.*unexpected error/)
+    expect(message).not.toContain('Floods in Kerala')
+    expect(type).toBe('error')
+    expect(sticky).toBe(true)
+  })
+
+  it('fades like any outcome when every story took its version', () => {
+    const { type, message, sticky } = bulkApplyOutcome('Applying 2', [applied('s1'), applied('s2')], chosen)
+    expect(message).toMatch(/2 applied/)
+    expect(message).not.toMatch(/skipped|failed/)
+    expect(type).toBe('success')
+    expect(sticky).toBe(false)
+  })
+
+  it('names at most ten skipped stories and counts the rest', () => {
+    const many = Array.from({ length: 13 }, (_, i) => ({ id: `s${i}`, title: `Story number ${i}` }))
+    const { message } = bulkApplyOutcome(
+      'Applying 13',
+      many.map(s => ({ storyId: s.id, outcome: 'skipped' as const, reason: 'No research run yet' })),
+      many,
+    )
+    expect(message).toContain('Story number 9')
+    expect(message).not.toContain('Story number 10')
+    expect(message).toMatch(/\b3 more\b/)
   })
 })

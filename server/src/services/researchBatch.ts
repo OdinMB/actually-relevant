@@ -16,7 +16,8 @@ import { reserveEditorRun, runInTask, sanitizedError, switchRefusal } from './re
 
 const log = createLogger('research')
 
-const PROCESSING = 'Already being processed by another task'
+/** Why a bulk research action leaves out a story another task is processing, as every bulk action does. */
+export const PROCESSING = 'Already being processed by another task'
 
 /** Reserve the story's run and research it, or record why not; never throws. */
 async function researchOne(taskId: string, storyId: string): Promise<void> {

@@ -26,6 +26,7 @@ function fakeDeps(over: Partial<Pick<StoryBulkActionDeps, 'researchUsage'>> = {}
     onTaskComplete: vi.fn<() => void>(),
     researchUsage: usage as StoryBulkActionDeps['researchUsage'],
     startResearch: vi.fn<StoryBulkActionDeps['startResearch']>(),
+    applyResearch: vi.fn<StoryBulkActionDeps['applyResearch']>(),
     titleOf: (id: string) => `Title of ${id}`,
     drafts: { bluesky: panel(), mastodon: panel() },
     openClusterDialog: vi.fn<() => void>(),
@@ -70,6 +71,21 @@ describe('storyBulkActions', () => {
 
     expect(deps.clearSelection).toHaveBeenCalled()
     expect(deps.startResearch).toHaveBeenCalledWith([
+      { id: 's1', title: 'Title of s1' },
+      { id: 's2', title: 'Title of s2' },
+    ])
+  })
+
+  it("apply-research asks with its count, then applies the stories' researched versions by title", async () => {
+    const deps = fakeDeps()
+    storyBulkActions(deps)['apply-research'](IDS)
+    expect(deps.confirm.mock.calls[0]![0].title).toContain('2')
+    expect(deps.applyResearch).not.toHaveBeenCalled()
+
+    await confirmed(deps)
+
+    expect(deps.clearSelection).toHaveBeenCalled()
+    expect(deps.applyResearch).toHaveBeenCalledWith([
       { id: 's1', title: 'Title of s1' },
       { id: 's2', title: 'Title of s2' },
     ])
