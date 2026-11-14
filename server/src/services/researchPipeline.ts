@@ -617,7 +617,8 @@ async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r:
       url: o.url,
       title: o.title,
       outlet: o.outlet,
-      date: o.datePublished,
+      // The anchored date, so S0 shows the same day the window and the old-news cutoff use.
+      date: articleDate,
       favicon: null,
       usedRawContent: false,
       text: o.content,
