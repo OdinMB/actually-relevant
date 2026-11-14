@@ -66,7 +66,7 @@ function generatePodcastNote(): string {
   return (
     `Makes this week's episode on Fridays, from midnight to ${twoDigits(generateWindowEndHourUtc)}:00 UTC, and does nothing on other days. ` +
     'Each run continues where the last one stopped, and it leaves alone an episode a person is reviewing. ' +
-    `After ${count(maxAttemptsPerWeek, 'failed run')} in a week, the episode is blocked until it is resumed by hand. ` +
+    `After ${count(maxAttemptsPerWeek, 'failed run')} in a week, the episode is blocked until it is resumed by hand; some problems, such as reaching the voicing limit, block it at once. ` +
     `Voicing also stops at the monthly limit of ${count(monthlyTtsCharCap, 'character')}, shared by both shows. ` +
     'Disabling the job stops a running episode before its next audio part.'
   )
@@ -98,18 +98,18 @@ const NOTES: Readonly<Record<string, () => string>> = {
     `Updates the favorites, boosts and replies of our Mastodon posts from the last ${count(config.mastodon.metrics.maxAgeDays, 'day')}; older posts keep their last counts. ` +
     'It does nothing until the Mastodon account is connected.',
   generate_newsletter: () =>
-    `Builds this week's issue from the stories published in the last ${count(config.content.storyAssignmentDays, 'day')} and sends it to the test list only; subscribers get it from Publish Newsletter or a send by hand. ` +
+    `Builds this week's issue from the published stories crawled in the last ${count(config.content.storyAssignmentDays, 'day')} and sends it to the test list only; subscribers get it from Publish Newsletter or a send by hand. ` +
     'It builds one issue a week, and in a week with no new stories it builds none and leaves a notice.',
   publish_newsletter: publishNewsletterNote,
   generate_uplifting_newsletter: () =>
-    `Builds this week's Actually Uplifting issue from the uplifting stories published in the last ${count(config.content.storyAssignmentDays, 'day')} and sends it to the test list only. ` +
+    `Builds this week's Actually Uplifting issue from the published uplifting stories crawled in the last ${count(config.content.storyAssignmentDays, 'day')} that no earlier Actually Uplifting issue carries, and sends it to the test list only. ` +
     'A week without uplifting stories gets no issue. It can be enabled only once the newsletter editions are open.',
   publish_uplifting_newsletter: () =>
     "Sends this week's Actually Uplifting issue to its subscribers, but only once it is built and its test email has gone out. " +
     "If you move Generate Actually Uplifting Newsletter's schedule, move this one too. It can be enabled only once the newsletter editions are open.",
   generate_podcast: generatePodcastNote,
   publish_podcast: () =>
-    `Publishes this week's ready episode on Saturdays, ${zoneCity(config.podcast.publishTimeZone)} time, and does nothing on other days. ` +
+    `Publishes the newest ready episode of this week or last week on Saturdays, ${zoneCity(config.podcast.publishTimeZone)} time, and does nothing on other days. ` +
     `It takes only an episode that has been ready for at least ${count(config.podcast.autoPublishMinAgeHours, 'hour')}, so there is time to listen first. ` +
     'When none is ready, it leaves one warning notice for the week.',
   generate_uplifting_podcast: () =>
