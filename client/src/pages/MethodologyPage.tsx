@@ -232,10 +232,11 @@ export default function MethodologyPage() {
             Each paragraph and point is then checked against the sources it cites, and the headline, summary and blurb against everything the research found,
             first by code and then by a second AI check. Both checks also look for text that follows a source&apos;s wording too closely, in the headline and
             summary too, and the AI check catches close translations. A paragraph or point that fails is rewritten, up to twice, and removed if it still fails.
-            A headline, summary or blurb that stays too close to a source&apos;s wording is written again from the paragraphs that passed. If the research shows
-            that the story is old news or is contradicted by other reports, we don&apos;t publish it. If the story&apos;s main development can&apos;t be
-            confirmed, or the research fails or would exceed our monthly research budget, we publish the single-source version instead. Researched stories carry
-            the label &quot;
+            A headline, summary or blurb that stays too close to a source&apos;s wording is written again from the paragraphs that passed. When later reports
+            show that the story has moved on, for example that a plan was dropped or a figure revised, AI writes it around the latest news, with the earlier
+            report as context. If the research shows that the story is old news with nothing new since, or that reports from the same time contradict its main
+            claim and no later report settles it, we don&apos;t publish it. If the story&apos;s main development can&apos;t be confirmed, or the research fails
+            or would exceed our monthly research budget, we publish the single-source version instead. Researched stories carry the label &quot;
             {AI_DISCLOSURE_COPY.researchedStoryLabel.lead} AI{AI_DISCLOSURE_COPY.researchedStoryLabel.tail}&quot; and list all their sources at the end,
             starting with the article where we first found the story.
           </p>
