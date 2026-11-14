@@ -11,4 +11,16 @@ describe('writeSchema', () => {
     expect(preAssessItemSchema.shape.emotionTag.description).toContain(EMOTION_TAG_DEFINITIONS)
     expect(writeSchema.safeParse({}).error?.issues.map(i => i.path[0])).toContain('emotionTag')
   })
+
+  it("defines contradicted as the write prompt's block does: a disagreement at the same time that no later report settles", () => {
+    const described = writeSchema.shape.contradicted.shape.isContradicted.description
+    expect(described).toContain('<CONTRADICTED>')
+    expect(described).toMatch(/no later report settles/)
+  })
+
+  it("defines old news as the write prompt's block does: an old event with no new development since the cutoff", () => {
+    const described = writeSchema.shape.oldNews.shape.isOld.description
+    expect(described).toContain('<OLD_NEWS>')
+    expect(described).toMatch(/no fact reports a new development/)
+  })
 })

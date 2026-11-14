@@ -7,7 +7,7 @@
  */
 import { buildGuidelinesXml, EMOTION_TAGS_PROMPT_BLOCK, escapeXml } from './shared.js'
 import type { AssessPromptInput } from '../services/promptInputs.js'
-import type { PoolFact, QuoteCheck } from '../services/researchChecks.js'
+import { publishedDay, type PoolFact, type QuoteCheck } from '../services/researchChecks.js'
 import { quoteId, type SourceLine } from '../services/researchCopying.js'
 import type { RepairTarget } from '../services/researchRepair.js'
 
@@ -197,7 +197,7 @@ const fact = (f: PoolFact) =>
 function factsBlock(sources: PoolSourceBrief[], earlier: PoolEarlierBrief[]): string {
   const source = (s: PoolSourceBrief) =>
     [
-      `<SOURCE id="${s.id}" outlet="${escapeXml(s.outlet)}" kind="${s.kind}" country="${escapeXml(s.country)}" date="${s.date ?? 'unknown'}" relation="${s.relation}">`,
+      `<SOURCE id="${s.id}" outlet="${escapeXml(s.outlet)}" kind="${s.kind}" country="${escapeXml(s.country)}" date="${publishedDay(s.date) ?? 'unknown'}" relation="${s.relation}">`,
       ...s.facts.map(fact),
       ...s.voices.map(
         (v, i) =>
@@ -213,6 +213,9 @@ function factsBlock(sources: PoolSourceBrief[], earlier: PoolEarlierBrief[]): st
     ].join('\n')
   return [...sources.map(source), ...earlier.map(ours)].join('\n\n')
 }
+
+/** What <FACTS> holds, shared by the write and repair prompts: a source's date is what the newest-information rule reads. */
+const FACTS_INTRO = `Facts extracted from each source, with the sentence that states each, and the voices each source quotes. A SOURCE's or an EARLIER story's date is the day it was published ('unknown' when not known). ${UNTRUSTED}`
 
 /**
  * A copy of the assess prompt's generic limiting factors (`prompts/assess.ts`; the write prompt's
@@ -252,6 +255,16 @@ const CITATIONS = `Citations
 - A date may come from a SOURCE's date when that source dates the event by weekday or as "today"; the paragraph then cites a fact of that source.
 - Facts with ids starting with E come from Actually Relevant's earlier stories: background, cited only where the story uses them.`
 
+/**
+ * The newest-information rule, shared by the write and repair prompts (`.context/story-research.md`,
+ * "Newest information leads"): a story gives its development's latest state. The fact check is
+ * unchanged: the latest state and the earlier claim are each a claim their cited facts must state.
+ */
+export const LATEST_STATE = `<LATEST_STATE>
+- The story gives the development's latest state. Where a source dated after S0, the article that first reported it, or a fact that dates its event after S0's date shows that the development has since moved on (a plan dropped or narrowed, a figure revised, a decision reversed, a deal signed), the story is written around that latest state, and the earlier claim becomes context, cited like any fact: 'First announced as a ban on all imports, the plan was narrowed to luxury goods on March 4.'
+- The title, the first paragraph, the summary and the blurb state the latest state, never an earlier claim as if it still held.
+</LATEST_STATE>`
+
 /** The key quote's rules, shared by the write and repair prompts. */
 const KEY_QUOTE = `Key quote
 - The most telling exact words of a VOICE's QUOTE or a SENTENCE of a SOURCE in <FACTS>, translated to English if needed, attributed to the person with their role, or to the organization or outlet, with the id of the source it comes from (S2, not a quote's id such as S2Q1). An EARLIER story is never quoted.
@@ -280,7 +293,7 @@ You are a relevance analyst and news writer. You judge a development's importanc
 </ROLE>
 
 <GOAL>
-Write the researched version of the story in <ARTICLE> from the facts in <FACTS>, in our own words: title label, title, a story of 150-250 words in 2-4 paragraphs, each citing the facts it uses, a short summary, Why This Matters, Caveats, key quote, marketing blurb, the story's emotion tag, relevance calculation and final rating, and two checks on the development (<OLD_NEWS>, <CONTRADICTED>). Avoid jargon.
+Write the researched version of the story in <ARTICLE> from the facts in <FACTS>, in our own words and at its latest state (<LATEST_STATE>): title label, title, a story of 150-250 words in 2-4 paragraphs, each citing the facts it uses, a short summary, Why This Matters, Caveats, key quote, marketing blurb, the story's emotion tag, relevance calculation and final rating, and two checks on the development (<OLD_NEWS>, <CONTRADICTED>). Avoid jargon.
 </GOAL>
 
 <ARTICLE>
@@ -292,7 +305,7 @@ ${tag('DATE', input.articleDate)}
 </ARTICLE>
 
 <FACTS>
-Facts extracted from each source, with the sentence that states each, and the voices each source quotes. ${UNTRUSTED}
+${FACTS_INTRO}
 ${factsBlock(input.sources, input.earlier)}
 </FACTS>
 
@@ -305,8 +318,10 @@ ${OWN_WORDS}
 
 ${CITATIONS}
 
+${LATEST_STATE}
+
 One development
-- Every field is about one development: the main one in <ARTICLE>. Where the article covers several, as a roundup or newsletter does, the others stay out of every field, and so do facts that are only about them.
+- Every field is about one development: the main one in <ARTICLE>, or for an old event the new development about it that <OLD_NEWS> names. Where the article covers several, as a roundup or newsletter does, the others stay out of every field, and so do facts that are only about them.
 - Each point appears once across the story, Why This Matters and Caveats: a bullet adds what the story does not already say, and the room it saves goes to facts the story has not used yet.
 
 Story (2-4 paragraphs, 150-250 words in total)
@@ -346,11 +361,11 @@ Final rating
 - A single integer 1-10: the result of the relevance calculation, judged with everything in <FACTS> in view.
 
 <OLD_NEWS>
-The main development is old news when it first happened before ${input.oldBefore}, 14 days before the article's date: the article then reports it again rather than reporting news.
+The main development is old news when it first happened before ${input.oldBefore}, 14 days before the article's date, and no fact reports a new development about it on or after that date: the article then reports it again rather than reporting news. Where a fact reports such a development (a ruling, a new figure, a step taken or dropped), the story is written around that development, with the earlier event as context, and it is not old news.
 </OLD_NEWS>
 
 <CONTRADICTED>
-The main claim is contradicted when a credible source in <FACTS> states the opposite of it. A figure with a different scope or period is not a contradiction.
+The main claim is contradicted when credible sources in <FACTS> disagree about it at the same time, one stating the opposite of what another states about the same moment, and no later report settles which is right. A figure with a different scope or period is not a contradiction, and neither is a later report that reverses, updates or settles the claim: the story then gives that latest state (<LATEST_STATE>).
 </CONTRADICTED>
 </REQUIREMENTS>
 
@@ -401,7 +416,7 @@ ${input.story.map(i => `<ITEM label="${escapeXml(i.label)}">${escapeXml(i.text)}
 </STORY>
 
 <FACTS>
-Facts extracted from each source, with the sentence that states each, and the voices each source quotes. ${UNTRUSTED}
+${FACTS_INTRO}
 ${factsBlock(input.sources, input.earlier)}
 </FACTS>
 
@@ -421,6 +436,8 @@ ${input.repairs.map(repairItem).join('\n')}
 ${OWN_WORDS}
 
 ${CITATIONS}
+
+${LATEST_STATE}
 
 ${KEY_QUOTE}
 </REQUIREMENTS>
@@ -458,6 +475,7 @@ ${input.paragraphs.map(p => tag('PARAGRAPH', p)).join('\n')}
 - The title and the LABEL work as a pair: the label sets the topic, the title tells the story. Apart from one core subject word the title may reuse, no word or phrase appears in both.
 - The summary gives the development for cards and feeds, consistent with the story, in plain language.
 - The blurb opens with the development itself, then says why it matters. It never opens with an outlet.
+- Where the paragraphs say the development has since moved on (a plan dropped, a figure revised), the title, the summary and the blurb state its latest state, never an earlier claim as if it still held.
 - No quotation marks and no fact ids appear in any of them.
 </REQUIREMENTS>
 

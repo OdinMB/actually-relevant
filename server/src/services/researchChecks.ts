@@ -248,13 +248,26 @@ export function unjudgedLabels(answer: FactCheck, items: { item: DraftItem }[]):
 }
 
 /**
+ * The day a source was published, `YYYY-MM-DD`: an ISO date's own day, else the UTC day of any date
+ * `Date.parse` reads, as the source filter reads it (search gives `Thu, 12 Nov 2026 08:00:00 GMT`);
+ * null when unknown or unreadable. The write prompt shows it on each source, the newest-information
+ * rule's evidence of which report is later.
+ */
+export function publishedDay(date: string | null): string | null {
+  if (!date) return null
+  const iso = /^\d{4}-\d{2}-\d{2}/.exec(date)?.[0]
+  const time = Date.parse(iso ? `${iso}T00:00:00Z` : date)
+  return Number.isNaN(time) ? null : new Date(time).toISOString().slice(0, 10)
+}
+
+/**
  * A source's publication date as a fact (id `S2F0`), so a paragraph may date the development from
  * it: the sources often say only "Wednesday", and the date is the one thing we know for sure.
  */
 export function publishedFact(sourceId: string, outlet: string, date: string | null): PoolFact[] {
-  const day = date ? new Date(`${date.slice(0, 10)}T00:00:00Z`) : null
-  if (!day || Number.isNaN(day.getTime())) return []
-  const when = day.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+  const day = publishedDay(date)
+  if (!day) return []
+  const when = new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
   return [{ id: `${sourceId}F0`, statement: `${outlet} published this on ${when}.`, supportingSentence: '', measures: '' }]
 }
 

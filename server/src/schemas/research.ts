@@ -164,11 +164,23 @@ export const writeSchema = z.object({
     ),
   rating: z.number().int().min(1).max(10).describe('Final relevance rating 1-10: the result of the relevance calculation'),
   oldNews: z.object({
-    isOld: z.boolean().describe('True when the main development first happened before the date given in <OLD_NEWS>.'),
-    firstHappened: z.string().describe('The date the main development first happened, YYYY-MM-DD, or "unknown".'),
+    isOld: z
+      .boolean()
+      .describe(
+        'True when the main development first happened before the date given in <OLD_NEWS> and no fact reports a new development about it on or after that date, as <OLD_NEWS> defines it. False when one does: the story is written around that development.',
+      ),
+    firstHappened: z
+      .string()
+      .describe(
+        'The date the main development of <ARTICLE> first happened, YYYY-MM-DD, or "unknown"; for an old event with a new development, still the event\'s own date.',
+      ),
   }),
   contradicted: z.object({
-    isContradicted: z.boolean().describe('True when a credible source in <FACTS> directly contradicts the main claim of <ARTICLE>.'),
+    isContradicted: z
+      .boolean()
+      .describe(
+        'True when credible sources in <FACTS> disagree about the main claim of <ARTICLE> at the same time and no later report settles it, as <CONTRADICTED> defines it. False when a later report reverses, updates or settles the claim: the story gives that latest state instead.',
+      ),
     factIds: z.array(z.string()).describe('Ids of the contradicting facts; empty when not contradicted.'),
   }),
 })
