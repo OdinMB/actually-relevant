@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { TavilySearch } from '../lib/tavily.js'
+import { EMOTION_TAGS_PROMPT_BLOCK } from '../prompts/shared.js'
 import type { Draft, Earlier, Extraction, FactCheck, Queries, Repair } from '../schemas/research.js'
 import type { ResearchStory } from './researchInput.js'
 import {
@@ -113,6 +114,7 @@ const goodDraft = (factIds = ['S0F1']): Draft => ({
   quoteAttribution: 'Prime minister',
   quoteSourceId: 'S0',
   marketingBlurb: 'Pakistan added 22 GW of rooftop solar.',
+  emotionTag: 'uplifting',
   relevanceCalculation: ['- **Energy:** 6'],
   rating: 6,
   oldNews: { isOld: false, firstHappened: 'unknown' },
@@ -419,9 +421,33 @@ describe('researchStory', () => {
     expect(r.draft).toEqual({ ...twoParagraphs(), story: [twoParagraphs().story[0], { text: 'Grid demand fell as homes went solar.', factIds: ['S1F2'] }] })
     expect(asked(repairs[0]!)).toEqual(['Story paragraph 2'])
     expect(judgedLabels(checks[1]!)).toEqual(['Story paragraph 2'])
+    // No item of the recheck is judged against every fact, so the facts are not shown again
+    expect(checks[0]).toContain('</POOL>')
+    expect(checks[1]).not.toContain('</POOL>')
     expect(r.checks.map(c => c.rechecked)).toEqual([undefined, ['Story paragraph 2']])
     expect(r.problems).toEqual([])
     expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
+  })
+
+  it('has the write step tag the emotion of the story it writes, with the shared tag guidance, and keeps that tag through a repair round', async () => {
+    const writes: string[] = []
+    let checks = 0
+    const { deps: d } = deps({
+      responders: baseResponders({
+        write: p => {
+          writes.push(p)
+          return twoParagraphs()
+        },
+        'fact-check': p => (++checks === 1 ? judging('Story paragraph 2', { copiedSentence: 'S1F2' })(p) : allSupported(p)),
+        rewrite: () => repair({ 'Story paragraph 2': { text: 'Grid demand fell as homes went solar.', factIds: ['S1F2'] } }),
+      }),
+    })
+    // The story's single-source tag is calm; the write step tags its own text uplifting
+    const r = await researchStory(story(), d)
+    expect(writes[0]).toContain(EMOTION_TAGS_PROMPT_BLOCK)
+    expect(r.rewritten).toBe(true)
+    expect(r.verdict).toEqual({ kind: 'keep' })
+    expect(r.draft?.emotionTag).toBe('uplifting')
   })
 
   it('keeps a paragraph the second round fixed when the first repair still failed it', async () => {
@@ -440,6 +466,90 @@ describe('researchStory', () => {
     expect(r.problems).toEqual([])
     expect(r.checks.map(c => c.problems.length)).toEqual([1, 1, 0])
     expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(2)
+  })
+
+  describe('a title that states more than the facts', () => {
+    const qualified = () =>
+      extraction({
+        facts: [
+          {
+            statement: 'Voters made Scott Colom the first Black senator from Mississippi since Reconstruction.',
+            supportingSentence: 'Colom becomes the first Black senator to represent Mississippi since Reconstruction.',
+            measures: '',
+          },
+        ],
+      })
+    const overstated = (): Draft => ({
+      ...goodDraft(),
+      title: 'Scott Colom becomes Mississippi’s first Black senator',
+      story: [{ text: 'Mississippi elected Scott Colom, its first Black senator since Reconstruction.', factIds: ['S0F1'] }],
+      summary: 'Mississippi elected Scott Colom to the Senate.',
+      marketingBlurb: 'Mississippi elects its first Black senator since Reconstruction.',
+      quote: '',
+      quoteAttribution: '',
+      quoteSourceId: '',
+    })
+    const kept = 'Scott Colom becomes Mississippi’s first Black senator since Reconstruction'
+    /** The judge reads the title against every fact, and fails it until it keeps its fact's qualifier. */
+    const judge = (p: string) =>
+      /label="Title">\n<TEXT>[^<]*since Reconstruction/.test(p)
+        ? allSupported(p)
+        : judging('Title', { supported: false, problem: 'the facts say the first since Reconstruction', key: true })(p)
+
+    it('fails it as a fact problem on the judge’s word, and keeps the repair that restores the qualifier', async () => {
+      const checks: string[] = []
+      const repairs: string[] = []
+      const { deps: d, fake } = deps({
+        responders: baseResponders({
+          extract: qualified,
+          write: overstated,
+          'fact-check': p => {
+            checks.push(p)
+            return judge(p)
+          },
+          rewrite: p => {
+            repairs.push(p)
+            return repair({ Title: { text: kept, factIds: [] } })
+          },
+        }),
+      })
+      const r = await researchStory(story(), d)
+      expect(r.checks[0]?.problems).toEqual([
+        {
+          label: 'Title',
+          text: overstated().title,
+          problem: 'fails the fact check: the facts say the first since Reconstruction',
+          kind: 'fact',
+          by: 'judge',
+          key: true,
+        },
+      ])
+      expect(asked(repairs[0]!)).toEqual(['Title'])
+      // The recheck judges the title against every fact again
+      expect(judgedLabels(checks[1]!)).toEqual(['Title'])
+      expect(checks[1]).toContain('</POOL>')
+      expect(fake.steps).not.toContain('derive')
+      expect(r.verdict).toEqual({ kind: 'keep' })
+      expect(r.draft?.title).toBe(kept)
+    })
+
+    it('falls back when the repairs still drop it, without writing the title again from the story', async () => {
+      let round = 0
+      const { deps: d, fake } = deps({
+        responders: baseResponders({
+          extract: qualified,
+          write: overstated,
+          'fact-check': judge,
+          rewrite: () => repair({ Title: { text: `Scott Colom is Mississippi’s first Black senator, take ${++round}`, factIds: [] } }),
+          derive: () => ({ title: kept, summary: '', marketingBlurb: '' }),
+        }),
+      })
+      const r = await researchStory(story(), d)
+      expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(2)
+      expect(fake.steps).not.toContain('derive')
+      expect(r.verdict).toEqual({ kind: 'fallback', reason: 'a key claim failed the check after repair (Title)', category: 'draft_failed_check' })
+      expect(r.failedOn).toBe('Title')
+    })
   })
 
   describe('a title, summary or blurb still copying after the rounds', () => {
@@ -681,17 +791,23 @@ describe('researchStory', () => {
       Number(m[1]),
       m[2],
       m[3]!.includes('<CITED_FACTS>'),
+      m[3]!.includes('<AGAINST_POOL/>'),
     ])
+    // The title, summary and blurb cite nothing, and are judged against every fact of the research
     expect(items).toEqual([
-      [1, 'Title', false],
-      [2, 'Story paragraph 1', true],
-      [3, 'Story paragraph 2', true],
-      [4, 'Why This Matters 1', false],
-      [5, 'Caveat 1', false],
-      [6, 'Summary', false],
-      [7, 'Blurb', false],
-      [8, 'Key quote', false],
+      [1, 'Title', false, true],
+      [2, 'Story paragraph 1', true, false],
+      [3, 'Story paragraph 2', true, false],
+      [4, 'Why This Matters 1', false, false],
+      [5, 'Caveat 1', false, false],
+      [6, 'Summary', false, true],
+      [7, 'Blurb', false, true],
+      [8, 'Key quote', false, false],
     ])
+    // Every fact once, in one block: each source's, our earlier story's and each one's date
+    const pool = prompts[0]!.match(/<POOL>[\s\S]*?<\/POOL>/g) ?? []
+    expect(pool).toHaveLength(1)
+    expect([...pool[0]!.matchAll(/<FACT id="([^"]+)">/g)].map(m => m[1]).sort()).toEqual(['E1F0', 'E1F1', 'S0F0', 'S0F1', 'S0F2', 'S1F0', 'S1F1', 'S1F2'])
     const wording = /<SOURCE_WORDING>([\s\S]*?)<\/SOURCE_WORDING>/.exec(prompts[0]!)?.[1] ?? ''
     expect([...wording.matchAll(/id="([^"]+)"/g)].map(m => m[1])).toEqual(['S0', 'S0T', 'S0F1', 'S0F2', 'S0Q1', 'S1', 'S1T', 'S1F1', 'S1F2', 'S1Q1'])
     expect(wording).toContain('Wir sind stolz.')
@@ -861,9 +977,9 @@ describe('researchStory', () => {
     expect(r.draft?.story).toHaveLength(1)
   })
 
-  it("maps the judge's verdicts back to their items, and ignores a support verdict on an item that cites nothing", async () => {
+  it("maps the judge's verdicts back to their items, and ignores a support verdict on a bullet that only judges and states no number", async () => {
     const judged = (p: string): FactCheck => {
-      const unsupported = new Set(['Title', 'Why This Matters 1', 'Story paragraph 2'].map(label => itemNumber(p, label)))
+      const unsupported = new Set(['Why This Matters 1', 'Story paragraph 2'].map(label => itemNumber(p, label)))
       return { items: allSupported(p).items.map(i => (unsupported.has(i.number) ? { ...i, supported: false, problem: 'the grid is not mentioned' } : i)) }
     }
     const gridAgain = () => repair({ 'Story paragraph 2': { text: 'The boom eased the strain on the grid.', factIds: ['S1F2'] } })

@@ -155,3 +155,50 @@ code's 12-word run. The standard is the owner's reading of press publishers' rig
 not a legal opinion: **the legal reviewer should see examples of it before it is relied on** (the
 tuberculosis anchor, and from the shadow week a sample of kept items that restate a fact close to
 their source's words) and may set a stricter line (`.context/ai-transparency.md`, §11).
+
+## Amendment 2026-11-13: headline, summary and blurb checked against all facts
+
+The title, summary and blurb cite nothing, and the fact check judged an item with neither cited
+facts nor number hints for copying only. So the three lines readers see first were never checked
+for facts: in production a researched title, "Scott Colom becomes Mississippi's first Black
+senator", passed although every fact said "the first Black senator since Reconstruction" (Hiram
+Revels was the first). The change was set out on 2026-11-13 in the brief that asked for it, with
+the rules below; the agent placed those marked.
+
+- **The fact check judges the title, summary and blurb against every fact of the pool**, in the
+  same call, no new call (`checkedItems` in `server/src/services/researchChecks.ts` gives them the
+  whole pool as evidence, `againstPool`): a claim in them is supported only when some fact states
+  it with the same scope. The judge's support verdict on them now counts, as on a cited item.
+- **Overstatement is unsupported**: a claim that drops a qualifier its fact gives ("since
+  Reconstruction", "nearly", "projected") states more than the fact. The prompt states this rule
+  for every item, story paragraphs and bullets included (the agent's placement: scoped to these
+  three it would read as leave for the others, and "with the same scope" already meant it there).
+- **The pool is shown once**, in `<POOL>` (every fact with its statement, `MEASURES` and `SUPPORT`:
+  the sources', our earlier stories' and the date facts), and the three items carry the mark
+  `<AGAINST_POOL/>` instead of a copy each (the agent's placement); a recheck that holds none of
+  them leaves the block out.
+- **Their number hints are computed against the whole pool** (`<NUMBERS_NOT_FOUND>`), as a cited
+  item's are against its evidence.
+- **A failure is a fact problem on an item the draft cannot do without**: it goes through the
+  repair rounds as any failing item and, still failing after them, the run falls back
+  (`draft_failed_check`). It is never written again from the kept story, which only a copying
+  failure is (ADR-0058).
+- **A bullet that cites nothing keeps its rule**: it has no evidence and is judged for support only
+  once it carries a number hint. The key quote's handling is unchanged, and the title label, a topic
+  of 1-3 words that states no claim, stays outside the checks (the agent's reading).
+- The write and repair prompts' citation rules, and the derive prompt, ask for the title, summary
+  and blurb to state only what facts state, with their qualifiers (the agent's placement, so that the
+  writer aims at the standard the check applies).
+
+Rule: every published line of a researched story is checked against facts, a paragraph or bullet
+against the ones it cites, the title, summary and blurb against all of them; a dropped qualifier is
+an unsupported claim.
+
+Consequences: a title, summary or blurb that overstates a fact costs a repair round, and the run
+when the rounds cannot fix it, so some runs that were kept before now fall back to single-source.
+The first fact-check call grows by the pool, some 45 facts or about 4k input tokens (about $0.0005
+a call on the small tier), and so does a recheck that holds one of the three; not yet measured
+(`eval:research` reports the fact check's input per call). The qualifier rule may raise more
+support failures on paragraphs too. The methodology page's "Each paragraph and point is then
+checked against the sources it cites" stays true, but does not say that the headline, summary and
+blurb are now checked against all facts; that wording is the owner's (`.context/ai-transparency.md`, §3).

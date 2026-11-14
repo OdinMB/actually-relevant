@@ -8,7 +8,7 @@ import { EARLIER_LABEL, sourceDetails } from './sourceText'
 const HEADING_ID = 'sources-heading'
 
 /**
- * A researched story's sources, the `#sources` target of the header's "N sources": per source its
+ * A researched story's sources, the `#sources` target of the header's "Sources:" link: per source its
  * icon, outlet, country, kind and date, and its own headline linked. The original article says
  * "initially found here"; our earlier stories come last as "Earlier on Actually Relevant", their AI
  * headline behind the "AI" badge. It takes over from "Also covered by".

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
@@ -62,9 +63,13 @@ vi.mock('./storyLifecycle.js', async importOriginal => ({
   partition: async (ids: string[]) => ({ eligible: ids, skipped: [], statuses: new Map(ids.map(id => [id, 'fetched'])) }),
 }))
 /** The rows the last recordAnalysis call wrote. */
-const recordedRows = () => mockRecordAnalysis.mock.calls.at(-1)?.[2] as { id: string; data: Record<string, unknown>; embedding?: unknown }[]
+const recordedRows = () =>
+  mockRecordAnalysis.mock.calls.at(-1)?.[2] as { id: string; data: Record<string, unknown>; where?: Prisma.StoryWhereInput; embedding?: unknown }[]
 
-const { preAssessStories, reclassifyStories, assessStory, selectStories } = await import('./analysis.js')
+/** A row's fence while the story had no research snapshot when it was read. */
+const NO_SNAPSHOT = { preResearch: { equals: Prisma.AnyNull } }
+
+const { preAssessStories, reclassifyStories, tagEmotionOnly, assessStory, selectStories } = await import('./analysis.js')
 const { PUBLIC_STORY_SELECT } = await import('./story.js')
 
 function storyWithRelations(overrides: Record<string, any> = {}) {
@@ -114,11 +119,32 @@ describe('preAssessStories', () => {
       'preassess',
       'pipeline',
       [
-        { id: 'story-1', data: { issueId: issue.id, relevancePre: 4, emotionTag: 'calm' } },
-        { id: 'story-2', data: { issueId: issue.id, relevancePre: 2, emotionTag: 'calm' } },
+        { id: 'story-1', data: { issueId: issue.id, relevancePre: 4, emotionTag: 'calm' }, where: NO_SNAPSHOT },
+        { id: 'story-2', data: { issueId: issue.id, relevancePre: 2, emotionTag: 'calm' }, where: NO_SNAPSHOT },
       ],
       expect.any(Map),
     )
+  })
+
+  it("writes a researched story's tag into its snapshot and leaves research's tag in the column, while the snapshot is the one read", async () => {
+    const snapshot = { title: 'Single-source headline', emotionTag: 'frustrating' }
+    mockPrisma.issue.findMany.mockResolvedValue([sampleIssue()])
+    mockPrisma.story.findMany.mockResolvedValue([storyWithRelations({ id: 'story-1', emotionTag: 'uplifting', preResearch: snapshot })])
+    mockGetMediumLLM.mockReturnValue({
+      withStructuredOutput: () => ({
+        invoke: vi.fn().mockResolvedValue({ articles: [{ articleId: 'story-1', issueSlug: 'ai-technology', rating: 6, emotionTag: 'scary' }] }),
+      }),
+    })
+
+    await preAssessStories(['story-1'])
+
+    expect(recordedRows()).toEqual([
+      {
+        id: 'story-1',
+        data: { issueId: 'issue-1', relevancePre: 6, preResearch: { ...snapshot, emotionTag: 'scary' } },
+        where: { preResearch: { equals: snapshot } },
+      },
+    ])
   })
 
   it('falls back to feed issueId for invalid slugs', async () => {
@@ -142,7 +168,7 @@ describe('preAssessStories', () => {
 
     expect(results).toHaveLength(1)
     // Falls back to feed's issueId
-    expect(recordedRows()).toEqual([{ id: 'story-1', data: { issueId: story.feed.issue.id, relevancePre: 5, emotionTag: 'calm' } }])
+    expect(recordedRows()).toEqual([{ id: 'story-1', data: { issueId: story.feed.issue.id, relevancePre: 5, emotionTag: 'calm' }, where: NO_SNAPSHOT }])
   })
 })
 
@@ -155,7 +181,7 @@ describe('reclassifyStories', () => {
     const issue = sampleIssue()
     const story = storyWithRelations({ id: 'story-1', relevancePre: 7, status: 'analyzed' })
     mockPrisma.story.findMany.mockResolvedValue([story])
-    mockPrisma.story.update.mockResolvedValue({})
+    mockPrisma.story.updateMany.mockResolvedValue({ count: 1 })
     mockPrisma.issue.findMany.mockResolvedValue([issue])
 
     const mockStructuredLlm = {
@@ -174,8 +200,8 @@ describe('reclassifyStories', () => {
     expect(results[0]).toEqual({ storyId: 'story-1', emotionTag: 'uplifting' })
 
     // Should update issueId and emotionTag only — no relevancePre, no status
-    expect(mockPrisma.story.update).toHaveBeenCalledWith({
-      where: { id: 'story-1' },
+    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
+      where: { ...NO_SNAPSHOT, id: 'story-1' },
       data: { issueId: issue.id, emotionTag: 'uplifting' },
     })
   })
@@ -186,7 +212,7 @@ describe('reclassifyStories', () => {
 
     const story = storyWithRelations({ id: 'story-1' })
     mockPrisma.story.findMany.mockResolvedValue([story])
-    mockPrisma.story.update.mockResolvedValue({})
+    mockPrisma.story.updateMany.mockResolvedValue({ count: 1 })
 
     const mockStructuredLlm = {
       invoke: vi.fn().mockResolvedValue({
@@ -199,10 +225,49 @@ describe('reclassifyStories', () => {
 
     await reclassifyStories(['story-1'])
 
-    expect(mockPrisma.story.update).toHaveBeenCalledWith({
-      where: { id: 'story-1' },
+    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
+      where: { ...NO_SNAPSHOT, id: 'story-1' },
       data: { issueId: story.feed.issue.id, emotionTag: 'calm' },
     })
+  })
+})
+
+describe('reclassification and emotion-only tagging', () => {
+  const snapshot = { title: 'Single-source headline', emotionTag: 'frustrating' }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.issue.findMany.mockResolvedValue([sampleIssue()])
+    mockPrisma.story.updateMany.mockResolvedValue({ count: 1 })
+    mockGetSmallLLM.mockReturnValue({
+      withStructuredOutput: () => ({
+        invoke: vi.fn().mockResolvedValue({ articles: [{ articleId: 'story-1', issueSlug: 'ai-technology', emotionTag: 'scary' }] }),
+      }),
+    })
+  })
+
+  const runs = [
+    ['reclassification', () => reclassifyStories(['story-1']), { issueId: 'issue-1' }],
+    ['emotion-only tagging', () => tagEmotionOnly(['story-1']), {}],
+  ] as const
+
+  it.each(runs)("%s writes a researched story's tag into its snapshot and leaves research's tag in the column", async (_name, run, fields) => {
+    mockPrisma.story.findMany.mockResolvedValue([storyWithRelations({ id: 'story-1', emotionTag: 'uplifting', preResearch: snapshot })])
+
+    await run()
+
+    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({
+      where: { preResearch: { equals: snapshot }, id: 'story-1' },
+      data: { ...fields, preResearch: { ...snapshot, emotionTag: 'scary' } },
+    })
+  })
+
+  it.each(runs)("%s writes a single-source story's tag into its column, while it still has no snapshot", async (_name, run, fields) => {
+    mockPrisma.story.findMany.mockResolvedValue([storyWithRelations({ id: 'story-1', emotionTag: 'uplifting', preResearch: null })])
+
+    await run()
+
+    expect(mockPrisma.story.updateMany).toHaveBeenCalledWith({ where: { ...NO_SNAPSHOT, id: 'story-1' }, data: { ...fields, emotionTag: 'scary' } })
   })
 })
 
@@ -258,6 +323,8 @@ describe('assessStory', () => {
         {
           id: 'story-1',
           data: expect.objectContaining({ titleLabel: 'Test topic', summary: 'Test summary with key information.' }),
+          // Against the research snapshot read too: none here
+          where: NO_SNAPSHOT,
           embedding: { embedding: [0.1, 0.2], hash: 'abc123' },
         },
       ],
@@ -292,6 +359,87 @@ describe('assessStory', () => {
     await assessStory('story-1', 'editor')
 
     expect(recordedRows()[0].data).toMatchObject({ research: Prisma.DbNull, preResearch: Prisma.DbNull })
+  })
+
+  describe("a researched story's emotion tag", () => {
+    const answer = {
+      publicationDate: '',
+      quote: '',
+      quoteAttribution: '',
+      summary: 'Summary',
+      factors: ['Factor'],
+      limitingFactors: [],
+      relevanceCalculation: ['calc'],
+      conservativeRating: 5,
+      relevanceSummary: 'Rel',
+      titleLabel: 'Topic',
+      relevanceTitle: 'Title',
+      marketingBlurb: 'Blurb',
+    }
+    const invoke = vi.fn()
+    const assessed = async (story: Record<string, unknown>) => {
+      mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1', status: 'published', ...story }))
+      mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1], hash: 'h1' })
+      invoke.mockResolvedValue(answer)
+      mockGetMediumLLM.mockReturnValue({ withStructuredOutput: () => ({ invoke }) })
+      await assessStory('story-1', 'editor')
+      const [[message]] = invoke.mock.calls.at(-1) as [[{ content: string }]]
+      return { data: recordedRows()[0]!.data, prompt: message.content }
+    }
+
+    it('gives the fresh single-source analysis the tag its snapshot keeps, in the prompt and in the write', async () => {
+      // Research tagged its text uplifting; the single-source analysis was frustrating
+      const { data, prompt } = await assessed({ emotionTag: 'uplifting', preResearch: { title: 'Single-source headline', emotionTag: 'frustrating' } })
+      expect(data).toMatchObject({ emotionTag: 'frustrating', preResearch: Prisma.DbNull })
+      expect(prompt).not.toContain('<TONE>')
+    })
+
+    it("keeps the story's own tag without a snapshot, or with one stored before the tag was swapped", async () => {
+      for (const preResearch of [null, { title: 'Single-source headline' }]) {
+        const { data, prompt } = await assessed({ emotionTag: 'uplifting', preResearch })
+        expect(data).not.toHaveProperty('emotionTag')
+        expect(prompt).toContain('<TONE>')
+      }
+    })
+
+    describe('the write is fenced on the snapshot it read', () => {
+      // A fake of the lifecycle write's row condition over the one stored row: it writes only while
+      // the stored snapshot is still the one the row's `where` names
+      const stored = { preResearch: null as unknown }
+      const stillMatches = (where: Prisma.StoryWhereInput | undefined) => {
+        const fence = (where?.preResearch as { equals?: unknown } | undefined)?.equals
+        if (fence === undefined) return true
+        return fence === Prisma.AnyNull ? stored.preResearch == null : isDeepStrictEqual(fence, stored.preResearch)
+      }
+      beforeEach(() => {
+        mockRecordAnalysis.mockImplementation(
+          async (_stage: string, _actor: string, rows: { id: string; where?: Prisma.StoryWhereInput }[]) =>
+            new Map(rows.map(r => [r.id, stillMatches(r.where) ? 'refreshed' : 'skipped'])),
+        )
+      })
+
+      it("skips when a first apply lands during the model call, so research's version and tag stay", async () => {
+        stored.preResearch = null
+        mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1', status: 'published', emotionTag: 'frustrating', preResearch: null }))
+        mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1], hash: 'h1' })
+        invoke.mockImplementation(async () => {
+          stored.preResearch = { title: 'Single-source headline', emotionTag: 'frustrating' }
+          return answer
+        })
+        mockGetMediumLLM.mockReturnValue({ withStructuredOutput: () => ({ invoke }) })
+
+        expect(await assessStory('story-1', 'editor')).toBe('skipped')
+        expect(mockDetectAndCluster).not.toHaveBeenCalled()
+      })
+
+      it('writes over a researched version whose snapshot is unchanged, and over a single-source story still without one', async () => {
+        for (const preResearch of [{ title: 'Single-source headline', emotionTag: 'frustrating' }, null]) {
+          stored.preResearch = preResearch
+          await assessed({ emotionTag: 'uplifting', preResearch })
+          expect(await mockRecordAnalysis.mock.results.at(-1)!.value).toEqual(new Map([['story-1', 'refreshed']]))
+        }
+      })
+    })
   })
 
   it('throws when story not found', async () => {

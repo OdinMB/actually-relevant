@@ -21,7 +21,7 @@ export interface ResearchedSeed {
   earlier: { id: string; title: string; slug: string; date: string }
 }
 
-/** The single-source fields an applied run replaces (`SWAPPED_FIELDS` in services/researchSwap.ts; never the rating), as the snapshot keeps them. */
+/** The single-source fields an applied run replaces (`SWAPPED_FIELDS` in services/researchSwap.ts; never the rating), as the snapshot keeps them. The seeded row keeps its emotion tag, standing in for research's, so the snapshot holds the same one. */
 const SWAPPED_FIELDS = [
   'title',
   'titleLabel',
@@ -32,6 +32,7 @@ const SWAPPED_FIELDS = [
   'relevanceReasons',
   'antifactors',
   'relevanceSummary',
+  'emotionTag',
 ] as const
 
 const COVERAGE = [

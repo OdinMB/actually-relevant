@@ -4,6 +4,8 @@
  * sends them under `versionedSchemaName`, so editing a description is never answered from its old cache.
  */
 import { z } from 'zod'
+import { EMOTION_TAG_DEFINITIONS } from '../prompts/shared.js'
+import { EMOTION_TAGS } from './llm.js'
 
 export const SOURCE_KINDS = ['news-report', 'analysis', 'opinion', 'press-release', 'official-body', 'other'] as const
 export type SourceKind = (typeof SOURCE_KINDS)[number]
@@ -149,6 +151,9 @@ export const writeSchema = z.object({
   marketingBlurb: z
     .string()
     .describe('Plain text, 25-30 words and never more than 230 characters including spaces. Opens with the development itself, never with an outlet.'),
+  emotionTag: z
+    .enum(EMOTION_TAGS)
+    .describe(`Emotion tag based on how the story you write affects readers, judged on that story rather than on <ARTICLE>. ${EMOTION_TAG_DEFINITIONS}`),
   relevanceCalculation: z
     .array(z.string())
     .describe(
@@ -176,12 +181,12 @@ export const factCheckSchema = z.object({
         supported: z
           .boolean()
           .describe(
-            'True when every factual claim of the item (each number, name, date, place and event) is stated by its cited facts, with the same scope; a number also when they give it in other words, rounded or in another unit. True for an item without cited facts, unless it states one of its NUMBERS_NOT_FOUND as a fact. For the key quote: true when a quote or sentence of its QUOTED_SOURCE says it, with the speaker its ATTRIBUTION names.',
+            'True when every factual claim of the item (each number, name, date, place and event) is stated by a fact of its evidence (its cited facts, or every fact in <POOL> for an item marked AGAINST_POOL), with the same scope and the qualifiers that fact gives; a number also when it is given in other words, rounded or in another unit. True for an item with neither cited facts nor AGAINST_POOL, unless it states one of its NUMBERS_NOT_FOUND as a fact. For the key quote: true when a quote or sentence of its QUOTED_SOURCE says it, with the speaker its ATTRIBUTION names.',
           ),
         problem: z
           .string()
           .describe(
-            'When not supported: the claim its cited facts do not state, or for the key quote what its source does not say, in one short sentence. Empty string otherwise.',
+            'When not supported: the claim its evidence does not state, or for the key quote what its source does not say, in one short sentence. Empty string otherwise.',
           ),
         key: z
           .boolean()

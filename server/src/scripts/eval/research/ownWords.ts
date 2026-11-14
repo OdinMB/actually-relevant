@@ -148,7 +148,7 @@ export function ownWordsLines(results: StoryResearch[]): string[] {
     '',
     `\`draft_failed_check\` fallbacks on a part the draft had nothing in (no problem names it): ${w.emptyPartFallbacks}. Items the fact check left without a verdict (code checks only): ${w.unjudged.items}, in ${w.unjudged.runs} runs.`,
     '',
-    `Items stating a number the code did not find in their cited facts (a hint for the fact check, never a problem by itself), over every pass: ${w.numberHints.items}; the fact check failed ${share(w.numberHints.failed, w.numberHints.items)} of them for support and left ${w.numberHints.unjudged} without a verdict.`,
+    `Items stating a number the code did not find in their evidence (their cited facts' sources; every fact for the title, summary and blurb), a hint for the fact check, never a problem by itself, over every pass: ${w.numberHints.items}; the fact check failed ${share(w.numberHints.failed, w.numberHints.items)} of them for support and left ${w.numberHints.unjudged} without a verdict.`,
     '',
     "Each first-draft item's longest run of words shared with one outside source, per kind (the code flags 12 or more):",
     '',

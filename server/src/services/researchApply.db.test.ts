@@ -51,6 +51,7 @@ const SINGLE_SOURCE = {
   relevanceReasons: '- **Reason:** single',
   relevanceSummary: 'Why it matters, from one source.',
   antifactors: '- **Limit:** single',
+  emotionTag: 'frustrating' as const,
 }
 /** The story's own rating; the drafts rate it 5, and research never writes it. */
 const RATING = { relevance: 6, relevanceCalculation: '- **Scale:** 6' }
@@ -94,6 +95,7 @@ function result(storyId: string, n: number, over: Partial<StoredResearch> = {}):
       quoteAttribution: 'A minister',
       quoteSourceId: 'S1',
       marketingBlurb: `Researched blurb ${n}.`,
+      emotionTag: 'uplifting',
       relevanceCalculation: ['- **Scale:** 5'],
       rating: 5,
       oldNews: { isOld: false, firstHappened: 'unknown' },
@@ -166,7 +168,7 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     feedId = (await createFeed((await createIssue()).id)).id
   })
 
-  it('writes the researched texts, the cited version and the snapshot; the relevance summary is null after it and kept in the snapshot; the rating stays the story’s', async () => {
+  it('writes the researched texts and emotion tag, the cited version and the snapshot; the relevance summary is null after it and kept in the snapshot; the rating stays the story’s', async () => {
     const s = await story()
     await setEmbedding(s.id, 1)
 
@@ -180,6 +182,7 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
       marketingBlurb: 'Researched blurb 1.',
       relevanceReasons: '- It matters.',
       relevanceSummary: null,
+      emotionTag: 'uplifting',
       ...RATING,
     })
     expect(after.preResearch).toEqual(SINGLE_SOURCE)
@@ -316,7 +319,23 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     expect(mockGenerate).not.toHaveBeenCalled()
 
     expect(await applyResearchRun(s.id, runId)).toBe('applied')
-    expect(await stored(s.id)).toMatchObject({ status: 'selected', title: 'Researched headline 1', emotionTag: 'calm' })
+    const after = await stored(s.id)
+    expect(after).toMatchObject({ status: 'selected', title: 'Researched headline 1', emotionTag: 'uplifting' })
+    // The snapshot holds the edited version, which a revert brings back
+    expect(after.preResearch).toMatchObject({ summary: 'Edited during the run.', emotionTag: 'calm' })
+  })
+
+  it('a run stored before research tagged its text keeps the story’s emotion tag, and the snapshot holds it for the revert', async () => {
+    const s = await story()
+    const { emotionTag: _none, ...untagged } = result(s.id, 1).draft!
+    await applyResearchRun(s.id, await run(s.id, 1, { result: result(s.id, 1, { draft: untagged as StoredResearch['draft'] }) }))
+
+    const after = await stored(s.id)
+    expect(after).toMatchObject({ title: 'Researched headline 1', emotionTag: SINGLE_SOURCE.emotionTag })
+    expect(after.preResearch).toEqual(SINGLE_SOURCE)
+
+    await revertResearch(s.id)
+    expect(await stored(s.id)).toMatchObject({ ...SINGLE_SOURCE, preResearch: null })
   })
 
   it("a version an editor applied during the run is kept: the step's own run is not written over it", async () => {

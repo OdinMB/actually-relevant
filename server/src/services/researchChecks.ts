@@ -1,8 +1,8 @@
 /**
  * Deterministic judgments on a research draft: its items, the citation check (every fact id
- * exists, every story paragraph cites one), the numbers an item states that its cited facts do
- * not state digit for digit (hints for the fact check, never problems: ADR-0057), the fact check's
- * answer read back as problems, what the rewrite leaves of a draft, whether a fact's supporting
+ * exists, every story paragraph cites one), each item's evidence and the numbers it states that its
+ * evidence does not state digit for digit (hints for the fact check, never problems: ADR-0057), the
+ * fact check's answer read back as problems, what the rewrite leaves of a draft, whether a fact's supporting
  * sentence occurs in its source text (a fidelity number for the report), and the gate that turns a
  * checked draft into a verdict. The copying check is `researchCopying.ts`. Pure.
  */
@@ -113,13 +113,21 @@ export interface QuoteCheck {
 /** An item as the fact check reads it. */
 export interface CheckedDraftItem {
   item: DraftItem
-  /** `evidenceFor` its cited facts; none for an item that carries no citations. */
+  /**
+   * What it may rest on: `evidenceFor` its cited facts (none for a bullet that cites nothing); every
+   * fact of the pool for the title, summary and blurb (`againstPool`); none for the key quote.
+   */
   evidence: PoolFact[]
   /**
-   * The numbers a story paragraph or bullet states that its evidence does not state digit for
-   * digit (every number of a bullet that cites nothing, which has no evidence): a reworded, rounded
-   * or converted number lands here too, so it is a hint for the fact check, which judges it, and
-   * fails nothing by itself. None for the title, summary and blurb.
+   * The title, summary and blurb: they carry no citations yet state the development, so the fact
+   * check judges them against every fact of the pool (2026-11-13, ADR-0057's amendment "headline,
+   * summary and blurb"), which its prompt shows once (`<POOL>`), not per item.
+   */
+  againstPool?: boolean
+  /**
+   * The numbers the item states that its evidence does not state digit for digit (every number of
+   * a bullet that cites nothing, which has no evidence): a reworded, rounded or converted number
+   * lands here too, so it is a hint for the fact check, which judges it, and fails nothing by itself.
    */
   numberHints: string[]
   /** The key quote's claim; only on the key quote, judged for faithfulness to its source and never for copying. */
@@ -128,12 +136,19 @@ export interface CheckedDraftItem {
 
 const evidenceText = (evidence: PoolFact[]) => evidence.map(f => `${f.statement}\n${f.supportingSentence}\n${f.measures}`).join('\n')
 
-/** Every item of a draft, in `draftItems` order, with its evidence and its number hints. */
+const numberHints = (text: string, evidence: PoolFact[]) => findUnsupportedNumbers(text, evidenceText(evidence)).unsupported
+
+/**
+ * Every item of a draft, in `draftItems` order, with its evidence and its number hints: a story
+ * paragraph or bullet against its cited facts' sources (`evidenceFor`), the title, summary and blurb,
+ * which carry no citations, against every fact of the pool.
+ */
 export function checkedItems(draft: DraftParts, facts: ReadonlyMap<string, PoolFact>): CheckedDraftItem[] {
+  const pool = [...facts.values()]
   return draftItems(draft).map(item => {
-    if (!item.cited) return { item, evidence: [], numberHints: [] }
+    if (!item.cited) return { item, evidence: pool, againstPool: true, numberHints: numberHints(item.text, pool) }
     const evidence = evidenceFor(item.factIds, facts)
-    return { item, evidence, numberHints: findUnsupportedNumbers(item.text, evidenceText(evidence)).unsupported }
+    return { item, evidence, numberHints: numberHints(item.text, evidence) }
   })
 }
 
@@ -169,7 +184,8 @@ const citesOneSource = (item: DraftItem) => new Set(item.factIds.map(sourceOf)).
 
 /**
  * The fact check's answer as problems, by item number (its place in `items`): an unsupported claim
- * of an item that has evidence or number hints, with its key judgment (`fact`); and on any item, a
+ * of an item that has evidence (for the title, summary and blurb, every fact of the pool) or number
+ * hints, with its key judgment (`fact`); and on any item, a
  * source line it renders closely, quoted so the rewrite sees what it echoed, or a source whose
  * order it follows, unless the item cites that one source alone (`copying`, never key). A support
  * verdict on an item with neither, and an id the prompt did not give, count for nothing. The key
@@ -195,7 +211,7 @@ export function judgedProblems(answer: FactCheck, items: CheckedDraftItem[], lin
             {
               label,
               text,
-              problem: `fails the fact check: ${v.problem || 'its cited facts do not state it'}`,
+              problem: `fails the fact check: ${v.problem || (at.againstPool ? 'no fact states it' : 'its cited facts do not state it')}`,
               kind: 'fact' as const,
               by: 'judge' as const,
               key: v.key,

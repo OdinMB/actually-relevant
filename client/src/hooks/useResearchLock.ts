@@ -4,8 +4,8 @@ import { isResearched } from '../components/admin/ResearchVersion'
 
 /**
  * The edit form's fields a researched version writes: the title label, title, summary, quote and
- * its attribution, blurb and the analysis, never the rating or its calculation (server:
- * `SWAPPED_FIELDS` in services/researchSwap.ts, which refuses an edit to them with 409).
+ * its attribution, blurb, the analysis and the emotion tag, never the rating or its calculation
+ * (server: `SWAPPED_FIELDS` in services/researchSwap.ts, which refuses an edit to them with 409).
  */
 export const SWAPPED_FORM_FIELDS = [
   'titleLabel',
@@ -17,6 +17,7 @@ export const SWAPPED_FORM_FIELDS = [
   'relevanceReasons',
   'relevanceSummary',
   'antifactors',
+  'emotionTag',
 ] as const
 type SwappedFormField = (typeof SWAPPED_FORM_FIELDS)[number]
 

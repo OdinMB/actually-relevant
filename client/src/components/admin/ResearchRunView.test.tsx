@@ -48,6 +48,7 @@ const result = (verdict: ResearchVerdict = { kind: 'keep' }): ResearchResult => 
     quoteAttribution: 'A minister',
     quoteSourceId: 'S0',
     marketingBlurb: 'A blurb.',
+    emotionTag: 'uplifting',
     relevanceCalculation: ['- **Energy access:** 6'],
     rating: 6,
     oldNews: { isOld: false, firstHappened: '2026-11-01' },
@@ -108,6 +109,16 @@ describe('ResearchRunView', () => {
   it("labels the draft's rating as the research's own, which the story does not take", () => {
     render(<ResearchRunView run={run()} />)
     expect(screen.getByRole('heading', { name: "Research's rating: 6 (recorded; the story keeps its own)" })).toBeInTheDocument()
+  })
+
+  it("shows the emotion tag research gave its text beside the story's single-source one, and none for a run stored before research tagged it", () => {
+    const { unmount } = render(<ResearchRunView run={run()} singleSourceEmotion="frustrating" />)
+    expect(screen.getByRole('heading', { name: "Research's emotion: uplifting (single-source: frustrating)" })).toBeInTheDocument()
+    unmount()
+
+    const { emotionTag: _none, ...older } = result().draft!
+    render(<ResearchRunView run={run({ result: { ...result(), draft: older } })} singleSourceEmotion="frustrating" />)
+    expect(screen.queryByRole('heading', { name: /Research's emotion/ })).toBeNull()
   })
 
   it('names each citation chip after its source, and our earlier stories as Actually Relevant', () => {

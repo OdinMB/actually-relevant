@@ -985,6 +985,8 @@ export interface ResearchDraft {
   quoteAttribution: string
   quoteSourceId: string
   marketingBlurb: string
+  /** The tag the write step gave the text it wrote, which an apply gives the story; absent on runs stored before 2026-11-14. */
+  emotionTag?: EmotionTag
   relevanceCalculation: string[]
   rating: number
   oldNews: { isOld: boolean; firstHappened: string }

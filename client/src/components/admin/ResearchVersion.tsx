@@ -29,6 +29,14 @@ function statusRefusal(status: Story['status'], action: string): string | null {
 
 const readers = (status: Story['status']) => (status === 'published' ? 'Readers see it at once.' : 'Readers see it once the story is published.')
 
+/** What a revert restores: a snapshot an apply stored before research tagged its text (2026-11-14) keeps no emotion tag. */
+const restored = (story: StoryRef) =>
+  story.preResearch?.emotionTag !== undefined ? 'headline, summary, analysis and emotion tag' : 'headline, summary and analysis'
+
+/** What an apply swaps: a run stored before research tagged its text (2026-11-14) leaves the emotion tag. */
+const swapped = (run: ResearchRun) =>
+  run.result?.draft?.emotionTag ? 'headline, label, summary, quote, blurb, analysis and emotion tag' : 'headline, label, summary, quote, blurb and analysis'
+
 type StoryRef = Pick<Story, 'id' | 'status' | 'preResearch'>
 
 /**
@@ -63,7 +71,7 @@ export function UseRunVersion({ story, run, closed }: { story: StoryRef; run: Re
         onClose={() => setConfirming(false)}
         onConfirm={confirm}
         title="Use this version?"
-        description={`The story's headline, label, summary, quote, blurb and analysis become this run's researched version, with its sources and the researched label. The story keeps its own rating. ${readers(story.status)} "Revert to single-source" gives back the version from before any research.`}
+        description={`The story's ${swapped(run)} become this run's researched version, with its sources and the researched label. The story keeps its own rating. ${readers(story.status)} "Revert to single-source" gives back the version from before any research.`}
         confirmLabel="Use this version"
         loading={apply.isPending}
       />
@@ -97,7 +105,7 @@ export function RevertToSingleSource({ story }: { story: StoryRef }) {
         onClose={() => setConfirming(false)}
         onConfirm={confirm}
         title="Revert to single-source?"
-        description={`The story gets back the headline, summary and analysis it had before research, and loses the researched version and its sources. ${readers(story.status)} The runs stay.`}
+        description={`The story gets back the ${restored(story)} it had before research, and loses the researched version and its sources. ${readers(story.status)} The runs stay.`}
         confirmLabel="Revert"
         variant="danger"
         loading={revert.isPending}

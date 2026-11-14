@@ -2,7 +2,10 @@ import { z } from 'zod'
 import { config } from '../config.js'
 import { EMOTION_TAG_SCHEMA_DESCRIPTION } from '../prompts/shared.js'
 
-const EMOTION_TAG_SCHEMA = z.enum(['uplifting', 'frustrating', 'scary', 'calm']).describe(EMOTION_TAG_SCHEMA_DESCRIPTION)
+/** The emotion tags a model may assign (the `EmotionTag` enum); every schema that asks for one takes them from here. */
+export const EMOTION_TAGS = ['uplifting', 'frustrating', 'scary', 'calm'] as const
+
+const EMOTION_TAG_SCHEMA = z.enum(EMOTION_TAGS).describe(EMOTION_TAG_SCHEMA_DESCRIPTION)
 
 export const preAssessItemSchema = z.object({
   articleId: z.string().describe('The article ID exactly as provided in the input'),

@@ -136,6 +136,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
           value={form.emotionTag}
           onChange={e => set('emotionTag', e.target.value)}
           options={EMOTION_TAGS.map(e => ({ value: e, label: e.charAt(0).toUpperCase() + e.slice(1) }))}
+          {...lock}
         />
       </div>
       <Select

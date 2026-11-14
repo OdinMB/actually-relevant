@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { ResearchFallbackCategory, ResearchRun, ResearchUsage, Story } from '@shared/types'
+import type { EmotionTag, ResearchFallbackCategory, ResearchRun, ResearchUsage, Story } from '@shared/types'
+import { EMOTION_TAGS } from '@shared/constants'
 import { ReasonButton } from '../ui/ReasonButton'
 import { Select } from '../ui/Select'
 import { useResearchRuns, useResearchUsage, useStartResearch } from '../../hooks/useResearch'
@@ -30,6 +31,19 @@ function runLabel(run: ResearchRun): string {
   return `${formatDateWithTime(run.startedAt)} · ${by} · ${verdict ?? run.status} · $${run.costUsd.toFixed(3)}`
 }
 
+const isEmotionTag = (value: unknown): value is EmotionTag => EMOTION_TAGS.some(tag => tag === value)
+
+/**
+ * The story's single-source emotion tag: on a researched story the one its snapshot keeps, since an
+ * apply gives the story research's tag; else its own (a single-source story's, or that of one
+ * researched before research tagged its text, 2026-11-14, whose apply kept it).
+ */
+export function singleSourceEmotion(story: Pick<Story, 'emotionTag' | 'preResearch'>): EmotionTag | null {
+  const kept = story.preResearch?.emotionTag
+  if (kept === undefined) return story.emotionTag
+  return isEmotionTag(kept) ? kept : null
+}
+
 /** This month's fallbacks by category, for the owner's count; the unrecorded ones (runs from before categories) only when there are any. */
 function fallbackCounts(counts: NonNullable<ResearchUsage['fallbacksThisMonth']>): string {
   const named = FALLBACK_CATEGORIES.map(category => `${counts[category]} ${fallbackName(category)}`)
@@ -43,7 +57,7 @@ function fallbackCounts(counts: NonNullable<ResearchUsage['fallbacksThisMonth']>
  * without research. An editor's run writes nothing to the story until an editor uses its version;
  * the research step applies its own verdicts in apply mode.
  */
-export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 'preResearch'> }) {
+export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 'emotionTag' | 'preResearch'> }) {
   const usage = useResearchUsage()
   const runs = useResearchRuns(story.id, usage.data != null)
   const { start, running } = useStartResearch(story.id)
@@ -86,7 +100,7 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 
           />
           {/* An older backend sends no applyRefusal; it then answers an apply itself */}
           {canUseVersion(chosen) && <UseRunVersion story={story} run={chosen} closed={usage.data?.applyRefusal ?? null} />}
-          <ResearchRunView run={chosen} />
+          <ResearchRunView run={chosen} singleSourceEmotion={singleSourceEmotion(story)} />
         </>
       )}
       {runs.isSuccess && list.length === 0 && <p className="text-sm text-neutral-500">No research runs yet.</p>}

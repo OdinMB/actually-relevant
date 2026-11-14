@@ -50,7 +50,10 @@ const singleSource = {
   relevanceReasons: '- **Reason:** single',
   relevanceSummary: 'Why it matters, single-source.',
   antifactors: '- **Limit:** single',
+  emotionTag: 'frustrating',
 }
+/** A snapshot an apply stored before the emotion tag was swapped (2026-11-14). */
+const { emotionTag: _untagged, ...untaggedSnapshot } = singleSource
 /** The story's own rating, which research never writes: the draft's rating differs. */
 const rating = { relevance: 6, relevanceCalculation: '- **Scale:** 6' }
 
@@ -84,11 +87,14 @@ const draft = {
   quoteAttribution: 'A minister',
   quoteSourceId: 'S1',
   marketingBlurb: 'Researched blurb.',
+  emotionTag: 'uplifting' as const,
   relevanceCalculation: ['- **Scale:** 5'],
   rating: 5,
   oldNews: { isOld: false, firstHappened: 'unknown' },
   contradicted: { isContradicted: false, factIds: [] },
 }
+/** A draft an older write step stored, before it tagged the story's emotion (2026-11-14). */
+const { emotionTag: _none, ...untaggedDraft } = draft
 
 function result(over: Partial<StoredResearch> = {}): StoredResearch {
   return {
@@ -150,7 +156,7 @@ beforeEach(() => {
 })
 
 describe('applyResearchRun', () => {
-  it('writes the researched texts, the cited version and a snapshot of the single-source columns, with a fresh embedding, against the status and the last write read now; never the rating', async () => {
+  it('writes the researched texts and emotion tag, the cited version and a snapshot of the single-source columns, with a fresh embedding, against the status and the last write read now; never the rating', async () => {
     await expect(applyResearchRun(STORY, RUN)).resolves.toBe('applied')
 
     const { stage, actor, row, expected } = lastWrite()
@@ -168,6 +174,7 @@ describe('applyResearchRun', () => {
         relevanceReasons: '- It matters.',
         relevanceSummary: null,
         antifactors: '- A caveat.',
+        emotionTag: 'uplifting',
         research: buildResearchedStory(result()),
         preResearch: singleSource,
       },
@@ -186,6 +193,19 @@ describe('applyResearchRun', () => {
     mockPrisma.story.findUnique.mockResolvedValue(storyRow({ ...singleSource, title: 'An earlier run’s headline', preResearch: singleSource }))
     await applyResearchRun(STORY, RUN)
     expect(lastWrite().row.data.preResearch).toEqual(singleSource)
+  })
+
+  it("applies a run stored before the write step tagged the story's emotion, keeping the story's tag; the snapshot still keeps it", async () => {
+    mockPrisma.storyResearchRun.findUnique.mockResolvedValue(runRow({ result: { ...result(), draft: untaggedDraft } }))
+    await expect(applyResearchRun(STORY, RUN)).resolves.toBe('applied')
+    expect(lastWrite().row.data).not.toHaveProperty('emotionTag')
+    expect(lastWrite().row.data).toMatchObject({ title: 'Researched headline', preResearch: singleSource })
+  })
+
+  it("gives a snapshot stored before the tag was swapped the story's tag, the single-source one, so a revert restores it", async () => {
+    mockPrisma.story.findUnique.mockResolvedValue(storyRow({ title: 'An earlier run’s headline', preResearch: untaggedSnapshot }))
+    await applyResearchRun(STORY, RUN)
+    expect(lastWrite().row.data).toMatchObject({ emotionTag: 'uplifting', preResearch: singleSource })
   })
 
   it("fetches the cited outlets' favicons after the write, each with the icon address search gave; none for our earlier stories", async () => {
@@ -402,9 +422,9 @@ describe('applyVerdict', () => {
 })
 
 describe('revertResearch', () => {
-  const researched = () => storyRow({ title: 'Researched headline', relevanceSummary: null, preResearch: singleSource, research: {} })
+  const researched = () => storyRow({ title: 'Researched headline', relevanceSummary: null, emotionTag: 'uplifting', preResearch: singleSource, research: {} })
 
-  it('writes the snapshot back and clears both versions, with an embedding of the restored text, against the status and the last write read now', async () => {
+  it('writes the snapshot back, the single-source emotion tag included, and clears both versions, with an embedding of the restored text, against the status and the last write read now', async () => {
     mockPrisma.story.findUnique.mockResolvedValue(researched())
 
     await revertResearch(STORY)
@@ -424,6 +444,12 @@ describe('revertResearch', () => {
       summary: singleSource.summary,
       embeddingContentHash: null,
     })
+  })
+
+  it('leaves the emotion tag alone on a story whose snapshot was stored before the tag was swapped', async () => {
+    mockPrisma.story.findUnique.mockResolvedValue({ ...researched(), preResearch: untaggedSnapshot })
+    await revertResearch(STORY)
+    expect(lastWrite().row.data).toEqual({ ...untaggedSnapshot, research: Prisma.DbNull, preResearch: Prisma.DbNull })
   })
 
   it.each([

@@ -21,6 +21,7 @@ import {
   buildRepairPrompt,
   buildWritePrompt,
   queryCount,
+  type CheckedItem,
   type WriteInput,
 } from '../prompts/research.js'
 import { dedupConfirmationSchema } from '../schemas/llm.js'
@@ -472,7 +473,8 @@ interface CheckContext {
  * Step 8's checks: on the first draft every item, on a repair round's draft the rewritten items
  * alone (`labels`), so each failing item carries the fact check's key judgment. The deterministic
  * citation and copying checks, and one fact-check call that judges each item for support (those with
- * evidence or number hints) and for copying against the outside sources' own words, and the key
+ * evidence or number hints; the title, summary and blurb against every fact of the pool, which the
+ * prompt then holds once) and for copying against the outside sources' own words, and the key
  * quote, its last item, for faithfulness to the source it names (never for copying; one naming no
  * source of the run fails in code instead, and no call is made when nothing is left to judge). A
  * number the code does not find in an item's evidence, and a key quote whose words it does not find
@@ -493,8 +495,15 @@ async function check(draft: Draft, ctx: CheckContext, labels?: ReadonlySet<strin
   )
   const prompt = () =>
     buildFactCheckPrompt(
-      items.map(({ item, evidence, numberHints, quote }) => ({ label: item.label, text: item.text, facts: evidence, numbersNotFound: numberHints, quote })),
+      items.map(({ item, evidence, againstPool, numberHints, quote }): CheckedItem => ({
+        label: item.label,
+        text: item.text,
+        facts: againstPool ? 'pool' : evidence,
+        numbersNotFound: numberHints,
+        quote,
+      })),
       lines,
+      [...ctx.facts.values()],
     )
   const res: StepAnswer<FactCheck> = items.length === 0 ? { parsed: { items: [] }, outcome: 'ok' } : await ctx.call('fact-check', factCheckSchema, prompt())
   if (res.outcome === 'skipped') return 'skipped'
