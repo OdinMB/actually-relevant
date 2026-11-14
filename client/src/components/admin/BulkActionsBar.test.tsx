@@ -78,6 +78,30 @@ describe('BulkActionsBar', () => {
     expect(screen.getByRole('button', { name: 'Post to Bluesky' })).toBeDisabled()
   })
 
+  it('offers no Research against a backend without research', () => {
+    render(<BulkActionsBar count={3} onAction={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Research' })).not.toBeInTheDocument()
+  })
+
+  it('starts research of the selection when research may run', async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    render(<BulkActionsBar count={3} onAction={onAction} researchRefusal={null} />)
+    await user.click(screen.getByRole('button', { name: 'Research' }))
+    expect(onAction).toHaveBeenCalledWith('research')
+  })
+
+  it('keeps Research visible but inert, with its reason, when research cannot run', async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    render(<BulkActionsBar count={3} onAction={onAction} researchRefusal="This month's research cap is reached" />)
+    const button = screen.getByRole('button', { name: 'Research' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).toHaveAccessibleDescription("This month's research cap is reached")
+    await user.click(button)
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
   it('does not disable Bluesky pick button for multiple stories regardless of singleHasBlueskyPost', () => {
     render(<BulkActionsBar count={3} onAction={vi.fn()} allPublished singleHasBlueskyPost />)
     expect(screen.getByRole('button', { name: 'Pick Best for Bluesky' })).toBeEnabled()

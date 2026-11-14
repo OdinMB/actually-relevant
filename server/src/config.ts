@@ -333,6 +333,12 @@ export const config = {
     staleRunMinutes: 60,
     /** Runs the admin lists per story, newest first. */
     runsListed: 10,
+    /**
+     * Stories one bulk Research from the stories list takes (services/researchBatch.ts). It researches
+     * them `pipeline.concurrency` at a time, each reserved when its turn comes; 50 runs cost at most
+     * $12.50 at their ceiling.
+     */
+    bulkMaxStories: 50,
     /** The research step, the `research_stories` job (jobs/researchStories.ts; .context/story-research.md, "The pipeline step"). */
     pipeline: {
       /**

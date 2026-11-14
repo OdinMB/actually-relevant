@@ -3,9 +3,18 @@ import { createLogger } from './logger.js'
 
 const log = createLogger('taskRegistry')
 
-/** `research`: one story's research run (services/researchRuns.ts); its story counts as processing while it runs. */
+/**
+ * `research`: research runs, one story's (services/researchRuns.ts) or the stories list's bulk
+ * Research (services/researchBatch.ts); its stories count as processing while it runs.
+ */
 export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research'
 type BulkTaskStatus = 'running' | 'completed' | 'failed'
+
+/** A story the task left out, with why; neither completed nor failed. */
+export interface TaskSkip {
+  storyId: string
+  reason: string
+}
 
 export interface TaskStateResponse {
   id: string
@@ -15,6 +24,7 @@ export interface TaskStateResponse {
   completed: number
   failed: number
   errors: string[]
+  skipped: TaskSkip[]
   storyIds: string[]
   createdAt: string
   completedAt?: string
@@ -28,6 +38,7 @@ interface InternalTaskState {
   completed: number
   failed: number
   errors: string[]
+  skipped: TaskSkip[]
   storyIds: string[]
   createdAt: Date
   completedAt?: Date
@@ -55,6 +66,7 @@ class TaskRegistry {
       completed: 0,
       failed: 0,
       errors: [],
+      skipped: [],
       storyIds,
       createdAt: new Date(),
     })
@@ -73,6 +85,7 @@ class TaskRegistry {
       completed: task.completed,
       failed: task.failed,
       errors: task.errors,
+      skipped: task.skipped,
       storyIds: task.storyIds,
       createdAt: task.createdAt.toISOString(),
       completedAt: task.completedAt?.toISOString(),
@@ -88,10 +101,18 @@ class TaskRegistry {
     }
   }
 
+  /** Record a story the task left out, with why; a batch of at most `total` stories bounds the list. */
+  skip(taskId: string, storyId: string, reason: string): void {
+    const task = this.tasks.get(taskId)
+    if (!task) return
+    task.skipped.push({ storyId, reason })
+  }
+
   complete(taskId: string): void {
     const task = this.tasks.get(taskId)
     if (!task) return
-    task.status = task.failed > 0 && task.completed === 0 ? 'failed' : 'completed'
+    // Failed only when every item failed: a skipped one did not
+    task.status = task.failed > 0 && task.completed === 0 && task.skipped.length === 0 ? 'failed' : 'completed'
     task.completedAt = new Date()
     log.info({ taskId, status: task.status, completed: task.completed, failed: task.failed }, 'task finished')
   }

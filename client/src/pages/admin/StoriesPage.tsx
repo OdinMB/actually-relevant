@@ -7,6 +7,7 @@ import { useStories, useBulkUpdateStatus, useDeleteStory, useUpdateStoryStatus, 
 import { useFeeds } from '../../hooks/useFeeds'
 import { useIssues } from '../../hooks/useIssues'
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
+import { useBulkResearch, useResearchUsage } from '../../hooks/useResearch'
 import { adminApi } from '../../lib/admin-api'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Button } from '../../components/ui/Button'
@@ -18,6 +19,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { StoryFiltersBar } from '../../components/admin/StoryFiltersBar'
 import { StoryTable } from '../../components/admin/StoryTable'
 import { BulkActionsBar } from '../../components/admin/BulkActionsBar'
+import { bulkResearchConfirmation, bulkResearchRefusal } from '../../components/admin/bulkResearch'
 import { StoryDetail } from '../../components/admin/StoryDetail'
 import { CrawlUrlForm } from '../../components/admin/CrawlUrlForm'
 import { CreateClusterDialog } from '../../components/admin/CreateClusterDialog'
@@ -66,6 +68,8 @@ export default function StoriesPage() {
   const issuesQuery = useIssues()
   const { toast } = useToast()
   const { launchTask, launchPolledTask, processingIds } = useBackgroundTasks()
+  const researchUsage = useResearchUsage()
+  const startBulkResearch = useBulkResearch()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -165,6 +169,21 @@ export default function StoriesPage() {
             onComplete: invalidateStories,
             storyIds: ids,
           })
+        },
+      })
+    } else if (action === 'research') {
+      const usage = researchUsage.data
+      if (!usage) return
+      // Named in the outcome by the title the list shows
+      const chosen = ids.map(id => {
+        const story = stories.find(s => s.id === id)
+        return { id, title: story ? (story.title ?? story.sourceTitle) : id }
+      })
+      setConfirmAction({
+        ...bulkResearchConfirmation(ids.length, usage),
+        action: async () => {
+          setSelectedIds(new Set())
+          startBulkResearch(chosen)
         },
       })
     } else if (action === 'select') {
@@ -448,6 +467,7 @@ export default function StoriesPage() {
         count={selectedIds.size}
         onAction={handleBulkAction}
         loading={confirmLoading}
+        researchRefusal={bulkResearchRefusal(selectedIds.size, researchUsage.data, researchUsage.isError)}
         allHaveRelevance={selectedIds.size > 0 && stories.filter(s => selectedIds.has(s.id)).every(s => s.relevance != null)}
         allPublished={selectedIds.size > 0 && stories.filter(s => selectedIds.has(s.id)).every(s => s.status === 'published')}
         singleHasBlueskyPost={selectedIds.size === 1 && stories.some(s => selectedIds.has(s.id) && (s._count?.blueskyPosts ?? 0) > 0)}

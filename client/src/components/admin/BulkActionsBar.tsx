@@ -1,13 +1,26 @@
 import type { StoryStatus } from '@shared/types'
 import { Button } from '../ui/Button'
+import { ReasonButton } from '../ui/ReasonButton'
 
 interface BulkActionsBarProps {
   count: number
   onAction: (
     action:
-      'preassess' | 'reclassify' | 'assess' | 'select' | 'create-cluster' | 'bluesky-post' | 'bluesky-pick' | 'mastodon-post' | 'mastodon-pick' | StoryStatus,
+      | 'preassess'
+      | 'reclassify'
+      | 'assess'
+      | 'research'
+      | 'select'
+      | 'create-cluster'
+      | 'bluesky-post'
+      | 'bluesky-pick'
+      | 'mastodon-post'
+      | 'mastodon-pick'
+      | StoryStatus,
   ) => void
   loading?: boolean
+  /** Why Research does nothing now, null when it may start; undefined leaves it out (`bulkResearchRefusal`). */
+  researchRefusal?: string | null
   allHaveRelevance?: boolean
   allPublished?: boolean
   /** When exactly one story is selected, whether it already has a Bluesky post */
@@ -19,7 +32,16 @@ interface BulkActionsBarProps {
 const RELEVANCE_TOOLTIP = 'All stories must have a relevance rating'
 const SELECT_MIN_TOOLTIP = 'Select at least 2 stories to compare'
 
-export function BulkActionsBar({ count, onAction, loading, allHaveRelevance, allPublished, singleHasBlueskyPost, singleHasMastodonPost }: BulkActionsBarProps) {
+export function BulkActionsBar({
+  count,
+  onAction,
+  loading,
+  researchRefusal,
+  allHaveRelevance,
+  allPublished,
+  singleHasBlueskyPost,
+  singleHasMastodonPost,
+}: BulkActionsBarProps) {
   if (count === 0) return null
 
   const needsRelevance = !allHaveRelevance
@@ -40,6 +62,11 @@ export function BulkActionsBar({ count, onAction, loading, allHaveRelevance, all
         <Button variant="secondary" size="sm" onClick={() => onAction('assess')} disabled={loading}>
           Assess
         </Button>
+        {researchRefusal !== undefined && (
+          <ReasonButton variant="secondary" size="sm" reason={researchRefusal} onClick={() => onAction('research')}>
+            Research
+          </ReasonButton>
+        )}
         <span title={needsRelevance ? RELEVANCE_TOOLTIP : undefined}>
           <Button variant="secondary" size="sm" onClick={() => onAction('analyzed')} disabled={loading || needsRelevance}>
             Set to Analyzed

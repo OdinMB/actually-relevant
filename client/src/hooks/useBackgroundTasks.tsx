@@ -34,6 +34,8 @@ interface LaunchPolledTaskOptions {
   submitFn: () => Promise<{ taskId: string }>
   onComplete?: () => void
   storyIds?: string[]
+  /** Words the finished task in place of the counts; `sticky` keeps it until dismissed. */
+  outcome?: (task: TaskState) => { message: string; sticky: boolean }
 }
 
 interface BackgroundTaskContextValue {
@@ -129,7 +131,7 @@ export function BackgroundTaskProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const launchPolledTask = useCallback(
-    ({ id, label, submitFn, onComplete, storyIds = [] }: LaunchPolledTaskOptions) => {
+    ({ id, label, submitFn, onComplete, storyIds = [], outcome }: LaunchPolledTaskOptions) => {
       setTasks(prev => [...prev, { id, label, status: 'running', progress: null }])
       addProgressToast(id, `${label}...`)
       addProcessingIds(storyIds)
@@ -159,7 +161,8 @@ export function BackgroundTaskProvider({ children }: { children: ReactNode }) {
                 return
               }
 
-              const current = task.completed + task.failed
+              // A story the task skipped is done with too
+              const current = task.completed + task.failed + (task.skipped?.length ?? 0)
               setTasks(prev => prev.map(t => (t.id === id ? { ...t, progress: { current, total: task.total } } : t)))
               updateToast(id, { message: `${label}... ${current}/${task.total}` })
 
@@ -168,10 +171,13 @@ export function BackgroundTaskProvider({ children }: { children: ReactNode }) {
                 pollIntervalsRef.current.delete(id)
 
                 const finalStatus: TaskStatus = task.failed > 0 ? 'error' : 'success'
-                const finalMessage = task.failed > 0 ? `${label}: ${task.completed} succeeded, ${task.failed} failed` : `${label}: ${task.completed} completed`
+                const worded = outcome?.(task)
+                const finalMessage =
+                  worded?.message ??
+                  (task.failed > 0 ? `${label}: ${task.completed} succeeded, ${task.failed} failed` : `${label}: ${task.completed} completed`)
 
                 setTasks(prev => prev.map(t => (t.id === id ? { ...t, status: finalStatus } : t)))
-                updateToast(id, { type: finalStatus, message: finalMessage })
+                updateToast(id, { type: finalStatus, message: finalMessage, sticky: worded?.sticky })
                 finishProcessing()
                 onComplete?.()
 
