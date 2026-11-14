@@ -7,6 +7,7 @@ import {
   dropFailing,
   evidenceFor,
   judgedProblems,
+  publishedDay,
   publishedFact,
   supportFound,
   unjudgedLabels,
@@ -438,9 +439,29 @@ describe('publishedFact', () => {
     expect(checkedItems(draft([['On Wednesday, November 11, analysts counted about 32 GW of all solar.', ['S1F1']]]), pool)[1]?.numberHints).toEqual([])
   })
 
+  it('reads a date as search gives it, so a source found by search gets its date fact too', () => {
+    expect(publishedFact('S2', 'dawn.com', 'Thu, 12 Nov 2026 08:00:00 GMT')).toEqual([
+      { id: 'S2F0', statement: 'dawn.com published this on Thursday, November 12, 2026.', supportingSentence: '', measures: '' },
+    ])
+  })
+
   it('gives nothing for a missing or unreadable date', () => {
     expect(publishedFact('S1', 'x', null)).toEqual([])
     expect(publishedFact('S1', 'x', 'unknown')).toEqual([])
+  })
+})
+
+describe('publishedDay', () => {
+  it("gives an ISO date's own day, and the UTC day of a date as search gives it", () => {
+    expect(publishedDay('2026-11-12T23:30:00+02:00')).toBe('2026-11-12')
+    expect(publishedDay('2026-11-12')).toBe('2026-11-12')
+    expect(publishedDay('Thu, 12 Nov 2026 23:30:00 GMT')).toBe('2026-11-12')
+  })
+
+  it('gives null for a missing or unreadable date', () => {
+    expect(publishedDay(null)).toBeNull()
+    expect(publishedDay('unknown')).toBeNull()
+    expect(publishedDay('2026-13-45')).toBeNull()
   })
 })
 

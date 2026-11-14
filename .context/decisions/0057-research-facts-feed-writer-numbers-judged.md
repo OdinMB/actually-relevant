@@ -202,3 +202,35 @@ a call on the small tier), and so does a recheck that holds one of the three; no
 support failures on paragraphs too. The methodology page's "Each paragraph and point is then
 checked against the sources it cites" stays true, but does not say that the headline, summary and
 blurb are now checked against all facts; that wording is the owner's (`.context/ai-transparency.md`, §3).
+
+## Amendment 2026-11-14: newest information leads
+
+A researched story was written around the original article's main claim even where a later report
+showed that the development had moved on: a plan dropped, a figure revised. The coordinating agent
+proposed on 2026-11-14 that the newest information leads; the owner decided it on 2026-11-14. The
+agent placed the rules marked below.
+
+- **Newest information leads.** Where a source dated after the original article (`S0`), or a fact
+  that dates its event after the article's date, shows that the development has since moved on, the
+  story is written around that latest state and the earlier claim is context ("First announced as a
+  ban on all imports, the plan was narrowed to luxury goods on March 4."). The title, the first
+  paragraph, the summary and the blurb state the latest state, never the earlier claim as if it
+  still held. It is one block, `LATEST_STATE` in `server/src/prompts/research.ts`, in the write and
+  repair prompts; the derive prompt carries its headline part (the agent's placement, so that a
+  title, summary or blurb written again from the kept story keeps the latest state). The fact check
+  is unchanged: the latest state and the earlier claim are each a claim its cited facts must state.
+- **The writer sees each source's publication day** on its `<SOURCE>` (`publishedDay`, `YYYY-MM-DD`
+  or `unknown`), and the prompt says what the date is. The date facts (`S2F0`) stay out of the write
+  prompt and in the fact check's evidence. A source dated as search gives it
+  (`Thu, 12 Nov 2026 08:00:00 GMT`) had no date fact, since `publishedFact` read only an ISO date;
+  it has one now (the agent's fix, found while checking what the writer sees).
+
+Rule: a researched story states the latest state its sources show; an earlier claim is context,
+never the headline.
+
+Consequences: a story whose development moved on after the article reads differently from the
+article that first reported it, its headline possibly the reverse of the original's ("Pakistan
+narrows import ban" for "Pakistan bans all imports"); the Sources list still starts with that
+article. Later reports are few where the research runs at selection (the search reaches 7 days past
+the article's date, never past the run time, and the research step runs on the day's selection);
+an editor's run of an older story finds the most. Not yet measured with `eval:research`.
