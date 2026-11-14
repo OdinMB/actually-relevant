@@ -140,12 +140,7 @@ describe('bulkApplyOutcome', () => {
     { id: 's3', title: 'Vaccine rollout' },
     { id: 's4', title: 'Heat records' },
   ]
-  const applied = (storyId: string, verdict: 'keep' | 'stale' | 'contradicted' | 'research-rating' = 'keep'): ResearchBulkApplyOutcome => ({
-    storyId,
-    outcome: 'applied',
-    runId: `run-${storyId}`,
-    verdict,
-  })
+  const applied = (storyId: string): ResearchBulkApplyOutcome => ({ storyId, outcome: 'applied', runId: `run-${storyId}` })
 
   it('counts the stories applied, failed and skipped, names each not applied with its reason, and stays until dismissed', () => {
     const { type, message, sticky } = bulkApplyOutcome(
@@ -166,21 +161,7 @@ describe('bulkApplyOutcome', () => {
     expect(sticky).toBe(true)
   })
 
-  it('names a story applied over a stale or contradicted verdict, and stays until dismissed', () => {
-    const { type, message, sticky } = bulkApplyOutcome(
-      'Applying 3',
-      [applied('s1', 'contradicted'), applied('s2', 'stale'), applied('s3', 'research-rating')],
-      chosen,
-    )
-    expect(message).toMatch(/3 applied/)
-    expect(message).toContain('Floods in Kerala')
-    expect(message).toContain('Rail strike ends')
-    expect(message).not.toContain('Vaccine rollout')
-    expect(type).toBe('success')
-    expect(sticky).toBe(true)
-  })
-
-  it('fades like any outcome when every story took its version as research kept it', () => {
+  it('fades like any outcome when every story took its version', () => {
     const { type, message, sticky } = bulkApplyOutcome('Applying 2', [applied('s1'), applied('s2')], chosen)
     expect(message).toMatch(/2 applied/)
     expect(message).not.toMatch(/skipped|failed/)

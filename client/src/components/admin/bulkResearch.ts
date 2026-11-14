@@ -1,5 +1,4 @@
-import type { ResearchBulkApplyOutcome, ResearchUsage, ResearchVerdict, TaskSkip, TaskState } from '@shared/types'
-import { verdictName } from './ResearchRunView'
+import type { ResearchBulkApplyOutcome, ResearchUsage, TaskSkip, TaskState } from '@shared/types'
 
 /**
  * The stories list's two research actions in words (`.context/story-research.md`, "Bulk research"
@@ -76,8 +75,7 @@ export function bulkApplyConfirmation(count: number): { title: string; descripti
     description: [
       `Each story takes the version of its newest research run, as "Use this version" would: the researched headline, summary, analysis and emotion tag replace its own, with the run's sources and the researched label, and it keeps its own rating.`,
       `Published stories change for readers at once.`,
-      `A run research found to be old news or contradicted is applied too, and the story is not rejected.`,
-      `A story whose newest run can't be applied, or is already applied, is skipped with the reason.`,
+      `A story is skipped with the reason when its newest run can't be applied, is already applied, or found the story old news or contradicted by other reports: review such a run on the story's own page.`,
       `"Revert to single-source" on a story gives back its earlier version.`,
     ].join(' '),
   }
@@ -109,38 +107,23 @@ export function bulkResearchOutcome(label: string, task: TaskState, chosen: Bulk
   }
 }
 
-/** The verdicts research rejects a story for, which an editor's apply overrules. */
-const OVERRULED: readonly ResearchVerdict['kind'][] = ['stale', 'contradicted']
-
 /**
  * The bulk apply's answer in words: how many stories took their researched version, failed and were
- * skipped, then by title each story applied over research's stale or contradicted verdict, each that
- * failed and each skipped, with why. It stays until dismissed when any of those is named.
+ * skipped (a run research found old news or contradicted among them), then by title each that
+ * failed and each skipped, with why. It stays until dismissed when any was named.
  */
 export function bulkApplyOutcome(
   label: string,
   outcomes: ResearchBulkApplyOutcome[],
   chosen: BulkResearchStory[],
 ): { type: 'success' | 'error'; message: string; sticky: boolean } {
-  const applied = outcomes.flatMap(o => (o.outcome === 'applied' ? [o] : []))
+  const applied = outcomes.filter(o => o.outcome === 'applied').length
   const failed = outcomes.flatMap(o => (o.outcome === 'failed' ? [o] : []))
   const skipped = outcomes.flatMap(o => (o.outcome === 'skipped' ? [o] : []))
-  const overruled = applied.flatMap(o =>
-    OVERRULED.includes(o.verdict) ? [{ storyId: o.storyId, reason: `research's verdict was ${verdictName(o.verdict)}` }] : [],
-  )
-  const counts = [
-    `${applied.length} applied`,
-    ...(failed.length > 0 ? [`${failed.length} failed`] : []),
-    ...(skipped.length > 0 ? [`${skipped.length} skipped`] : []),
-  ]
+  const counts = [`${applied} applied`, ...(failed.length > 0 ? [`${failed.length} failed`] : []), ...(skipped.length > 0 ? [`${skipped.length} skipped`] : [])]
   return {
     type: failed.length > 0 ? 'error' : 'success',
-    message: [
-      `${label}: ${counts.join(', ')}.`,
-      ...namedStories('Applied', overruled, chosen),
-      ...namedStories('Failed', failed, chosen),
-      ...namedStories('Skipped', skipped, chosen),
-    ].join('\n'),
-    sticky: overruled.length + failed.length + skipped.length > 0,
+    message: [`${label}: ${counts.join(', ')}.`, ...namedStories('Failed', failed, chosen), ...namedStories('Skipped', skipped, chosen)].join('\n'),
+    sticky: failed.length + skipped.length > 0,
   }
 }

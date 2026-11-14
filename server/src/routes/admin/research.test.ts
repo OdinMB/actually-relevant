@@ -232,7 +232,7 @@ describe('POST /api/admin/research/apply (the stories list bulk "Use researched 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({
       outcomes: [
-        { storyId: IDS[0], outcome: 'applied', runId: 'run-9', verdict: 'keep' },
+        { storyId: IDS[0], outcome: 'applied', runId: 'run-9' },
         { storyId: IDS[1], outcome: 'skipped', reason: expect.stringMatching(/no research run/i) },
       ],
     })

@@ -85,8 +85,8 @@ describe('applyNewestRuns', () => {
 
     expect(await done).toEqual({
       outcomes: [
-        { storyId: 's1', outcome: 'applied', runId: 'run-s1', verdict: 'keep' },
-        { storyId: 's2', outcome: 'applied', runId: 'run-s2', verdict: 'keep' },
+        { storyId: 's1', outcome: 'applied', runId: 'run-s1' },
+        { storyId: 's2', outcome: 'applied', runId: 'run-s2' },
       ],
     })
     expect(mockApply.applyResearchRun.mock.calls).toEqual([
@@ -122,7 +122,7 @@ describe('applyNewestRuns', () => {
 
     expect(outcomes).toEqual([
       { storyId: 's1', outcome: 'skipped', reason: expect.stringMatching(reason) },
-      { storyId: 's2', outcome: 'applied', runId: 'run-s2', verdict: 'keep' },
+      { storyId: 's2', outcome: 'applied', runId: 'run-s2' },
     ])
     expect(mockApply.applyResearchRun).toHaveBeenCalledTimes(1)
     expect(mockApply.applyResearchRun).toHaveBeenCalledWith('s2', 'run-s2')
@@ -143,13 +143,13 @@ describe('applyNewestRuns', () => {
 
     const { outcomes } = await applyNewestRuns(['s1'])
 
-    expect(outcomes).toEqual([{ storyId: 's1', outcome: 'applied', runId: 'run-s1', verdict: 'keep' }])
+    expect(outcomes).toEqual([{ storyId: 's1', outcome: 'applied', runId: 'run-s1' }])
   })
 
   it("does not take a single-source story for one showing the run's version, even with the same texts", async () => {
     mockPrisma.story.findUnique.mockResolvedValue({ preResearch: null, ...singleSource, ...researchedValues(draft) })
 
-    expect((await applyNewestRuns(['s1'])).outcomes).toEqual([{ storyId: 's1', outcome: 'applied', runId: 'run-s1', verdict: 'keep' }])
+    expect((await applyNewestRuns(['s1'])).outcomes).toEqual([{ storyId: 's1', outcome: 'applied', runId: 'run-s1' }])
   })
 
   it("skips a story the apply refuses, with the apply's own reason: an older format, the status, a story that changed", async () => {
@@ -173,7 +173,7 @@ describe('applyNewestRuns', () => {
       { storyId: 's1', outcome: 'skipped', reason: 'This run is from an older format and cannot be applied; research the story again' },
       { storyId: 's2', outcome: 'skipped', reason: 'A trashed story cannot take a researched version: restore it first' },
       { storyId: 's3', outcome: 'skipped', reason: 'Story not found' },
-      { storyId: 's4', outcome: 'applied', runId: 'run-s4', verdict: 'keep' },
+      { storyId: 's4', outcome: 'applied', runId: 'run-s4' },
     ])
   })
 
@@ -184,11 +184,21 @@ describe('applyNewestRuns', () => {
     expect(mockRuns.newestResearchRun).not.toHaveBeenCalled()
   })
 
-  // As "Use this version": an editor may overrule research's verdict, and the story is not rejected
-  it.each(['stale', 'contradicted', 'research-rating'] as const)('puts a newest run research judged %s on the story, saying so', async kind => {
-    mockRuns.newestResearchRun.mockResolvedValue(run('run-1', {}, { verdict: { kind } }))
+  // Overruling research is a deliberate single-story action: in bulk the editor has not read the run
+  it.each([
+    ['stale', { kind: 'stale', firstHappened: '2026-03-01' }, /old news.*its own page/],
+    ['contradicted', { kind: 'contradicted', factIds: ['S2F1'] }, /contradicted by other reports.*its own page/],
+  ])('skips a story whose newest run research found %s, sending the editor to its own page', async (_name, verdict, reason) => {
+    mockRuns.newestResearchRun.mockResolvedValue(run('run-1', {}, { verdict }))
 
-    expect((await applyNewestRuns(['s1'])).outcomes).toEqual([{ storyId: 's1', outcome: 'applied', runId: 'run-1', verdict: kind }])
+    expect((await applyNewestRuns(['s1'])).outcomes).toEqual([{ storyId: 's1', outcome: 'skipped', reason: expect.stringMatching(reason) }])
+    expect(mockApply.applyResearchRun).not.toHaveBeenCalled()
+  })
+
+  it('puts a newest run research rated below the bar on the story, which keeps its own rating, as one research kept', async () => {
+    mockRuns.newestResearchRun.mockResolvedValue(run('run-1', {}, { verdict: { kind: 'research-rating', rating: 3 } }))
+
+    expect((await applyNewestRuns(['s1'])).outcomes).toEqual([{ storyId: 's1', outcome: 'applied', runId: 'run-1' }])
   })
 
   it('counts an unexpected error as that story failing, by its name only, and goes on', async () => {
@@ -201,7 +211,7 @@ describe('applyNewestRuns', () => {
 
     expect(outcomes).toEqual([
       { storyId: 's1', outcome: 'failed', reason: 'unexpected error (Error)' },
-      { storyId: 's2', outcome: 'applied', runId: 'run-s2', verdict: 'keep' },
+      { storyId: 's2', outcome: 'applied', runId: 'run-s2' },
     ])
   })
 
@@ -212,7 +222,7 @@ describe('applyNewestRuns', () => {
 
     expect(outcomes).toEqual([
       { storyId: 's1', outcome: 'skipped', reason: expect.stringMatching(/already being processed/i) },
-      { storyId: 's2', outcome: 'applied', runId: 'run-s2', verdict: 'keep' },
+      { storyId: 's2', outcome: 'applied', runId: 'run-s2' },
     ])
     expect(mockApply.applyResearchRun).toHaveBeenCalledTimes(1)
   })

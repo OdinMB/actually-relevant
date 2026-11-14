@@ -5,8 +5,10 @@
  * has), one story at a time in the order chosen. The section opens on the story's newest run
  * (`newestResearchRun`) and offers "Use this version" only for a completed run with a draft that did
  * not fall back (the client's `canUseVersion`); so does this, and it never reaches past the newest
- * run. A story is skipped with why: another task is processing it, its newest run is not one the
- * section offers, the story already shows that run's version, or the apply refuses it. The batch is
+ * run. Unlike the single action it never overrules research: a newest run research found `stale` or
+ * `contradicted` is left for the story's own page. A story is skipped with why: another task is
+ * processing it, its newest run is not one the section offers or one research rejected the story
+ * for, the story already shows that run's version, or the apply refuses it. The batch is
  * refused whole only while no run can be applied (`applyRefusal`). Each apply makes one embedding
  * call and no model call.
  */
@@ -22,24 +24,34 @@ import { appliedDraftSchema, researchedValues, SWAPPED_SELECT, swappedEdits, typ
 
 const log = createLogger('research-apply')
 
+/** What became of one chosen story: its newest run applied; skipped, with why; or failed on an unexpected error, named by the error's name only. */
+export type BulkApplyOutcome = { storyId: string; outcome: 'applied'; runId: string } | { storyId: string; outcome: 'skipped' | 'failed'; reason: string }
+
 /**
- * What became of one chosen story: its newest run applied, with research's verdict on it (an editor
- * may overrule `stale` and `contradicted`, as "Use this version" allows); skipped, with why; or
- * failed on an unexpected error, named by the error's name only.
+ * Why the bulk apply leaves a run research rejected the story for: "Use this version" lets an editor
+ * overrule `stale` and `contradicted`, but in bulk the editor has not read the run, so overruling
+ * research stays a deliberate action on the story's own page (owner decision 2026-11-14).
  */
-export type BulkApplyOutcome =
-  { storyId: string; outcome: 'applied'; runId: string; verdict: GateKind } | { storyId: string; outcome: 'skipped' | 'failed'; reason: string }
+const OVERRULE_ON_ITS_PAGE: Partial<Record<GateKind, string>> = {
+  stale: 'Its newest run found it old news: review it on its own page',
+  contradicted: 'Its newest run found it contradicted by other reports: review it on its own page',
+}
 
-type Offered = { runId: string; verdict: GateKind; draft: unknown }
+type Offered = { runId: string; draft: unknown }
 
-/** The newest run's version when the story's research section offers "Use this version" for it, else why not. */
+/**
+ * The newest run's version when the story's research section offers "Use this version" for it and
+ * research did not reject the story, else why not.
+ */
 function offeredVersion(run: ResearchRunView | null): Offered | { refused: string } {
   if (!run) return { refused: 'No research run yet' }
   if (run.status === 'running') return { refused: 'Its newest run is still running' }
   if (run.status !== 'completed') return { refused: run.error ? `Its newest run failed (${run.error})` : 'Its newest run failed' }
   if (run.result?.verdict.kind === 'fallback') return { refused: "Its newest run fell back to today's format: it has no researched version" }
   if (!run.result?.draft) return { refused: 'Its newest run wrote no draft to apply' }
-  return { runId: run.id, verdict: run.result.verdict.kind, draft: run.result.draft }
+  const rejected = OVERRULE_ON_ITS_PAGE[run.result.verdict.kind]
+  if (rejected) return { refused: rejected }
+  return { runId: run.id, draft: run.result.draft }
 }
 
 /** Whether the story already shows the draft's version: it is researched, and each column an apply of the draft writes holds that value. */
@@ -59,7 +71,7 @@ async function applyNewest(storyId: string): Promise<BulkApplyOutcome> {
     if ('refused' in offered) return skipped(offered.refused)
     if (showsVersion(story, offered.draft)) return skipped('Its newest run is already applied')
     await applyResearchRun(storyId, offered.runId)
-    return { storyId, outcome: 'applied', runId: offered.runId, verdict: offered.verdict }
+    return { storyId, outcome: 'applied', runId: offered.runId }
   } catch (err) {
     if (err instanceof ServiceError) return skipped(err.message)
     const reason = sanitizedError(err)
