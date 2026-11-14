@@ -562,8 +562,8 @@ describe('StoryPage researched format', () => {
     renderStory(researched)
     const row = screen.getByRole('heading', { level: 1 }).nextElementSibling as HTMLElement
     const link = within(row).getByRole('link', { name: 'Sources: 3, see the list' })
-    // The visible label is the name's start (WCAG 2.5.3); no count in the text
-    expect(link).toHaveTextContent(/^Sources:$/)
+    // The visible label is the name's start (WCAG 2.5.3); no count in the text, and the icons' hover names are hidden from screen readers
+    expect(announcedText(link)).toBe('Sources:')
     const icons = [...link.querySelectorAll('img')]
     expect(icons.map(img => img.getAttribute('src'))).toEqual([
       '/api/source-favicons/example.com',
@@ -571,7 +571,8 @@ describe('StoryPage researched format', () => {
       '/favicon-32x32.png',
     ])
     // Side by side, not overlapping; an outlet's favicon framed, our own icon in its brand ring
-    expect(icons[0]!.parentElement).toHaveClass('gap-1')
+    const iconRow = icons[0]!.closest('.gap-1')
+    for (const img of icons) expect(iconRow).toContainElement(img)
     for (const img of icons) expect(img.className).not.toMatch(/-ml-/)
     expect(icons[0]).toHaveClass('ring-1', 'ring-neutral-300')
     expect(icons[2]).toHaveClass('ring-1', 'ring-brand-500')
@@ -580,6 +581,26 @@ describe('StoryPage researched format', () => {
     fireEvent.error(link.querySelector('img')!)
     const fallback = within(row).getByRole('link', { name: 'Sources: 3, see the list' })
     expect(within(fallback).getByText('E')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('names each outlet in a tooltip while the pointer is over its icon, inside the one link, whose name stays the count', async () => {
+    renderStory(researched)
+    const row = screen.getByRole('heading', { level: 1 }).nextElementSibling as HTMLElement
+    const link = within(row).getByRole('link', { name: 'Sources: 3, see the list' })
+    const icons = [...link.querySelectorAll('img')]
+    const tipOf = (icon: Element) => icon.parentElement!.querySelector('[role="tooltip"]')!
+    // Our earlier stories go by the name the sources list gives them
+    expect(icons.map(icon => tipOf(icon).textContent)).toEqual(['Example Feed', 'Coverage Outlet', 'Earlier on Actually Relevant'])
+    for (const icon of icons) expect(tipOf(icon).parentElement).toHaveClass('hidden')
+    await userEvent.hover(icons[1]!)
+    expect(tipOf(icons[1]!).parentElement).not.toHaveClass('hidden')
+    expect(tipOf(icons[0]!).parentElement).toHaveClass('hidden')
+    await userEvent.unhover(icons[1]!)
+    expect(tipOf(icons[1]!).parentElement).toHaveClass('hidden')
+    // No icon is a stop of its own, and the names stay out of what a screen reader hears
+    expect(link.querySelectorAll('a, button, [tabindex]')).toHaveLength(0)
+    expect(announcedText(link)).toBe('Sources:')
+    expect(within(row).getByRole('link', { name: 'Sources: 3, see the list' })).toBe(link)
   })
 
   it('tells the story in cited paragraphs, in place of the summary, and the analysis as cited bullets', () => {

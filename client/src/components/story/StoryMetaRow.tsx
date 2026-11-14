@@ -5,7 +5,8 @@ import FeedFavicon from '../FeedFavicon'
 import AiBadge from '../ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
 import { SourceIcon } from '../research/SourceIcon'
-import { sourceDate } from '../research/sourceText'
+import { outletName, sourceDate } from '../research/sourceText'
+import { Tooltip } from '../ui/Tooltip'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
 
 /*
@@ -80,6 +81,12 @@ function PlainItems({ story }: { story: PublicStoryDetail }) {
  * date, then "Sources:" and every source's icon side by side, each framed, 4 px apart (owner,
  * 2026-11-14, variant B), one link to the list. The icons are decorative, so the link's name gives
  * the count: "Sources: 6, see the list". Our publish date is dropped.
+ *
+ * Hovering an icon names its outlet in a `Tooltip` (owner, 2026-11-14), "Earlier on Actually
+ * Relevant" for our earlier stories. The icons are no focus stops of their own and the row is
+ * hidden from screen readers, so the link stays one stop with its count as its name; the names are
+ * in the list it leads to. On a device that cannot hover the tooltips never show (a tap follows
+ * the link).
  */
 function ResearchedItems({ story, research }: { story: PublicStoryDetail; research: ResearchedStory }) {
   const original = research.sources.find(source => source.origin === 'original')
@@ -105,9 +112,11 @@ function ResearchedItems({ story, research }: { story: PublicStoryDetail; resear
         className={`inline-flex min-h-6 items-center gap-1.5 ${ROW_LINK} ${PHONE_SEPARATOR}`}
       >
         {sourcesWord}:
-        <span className="inline-flex flex-wrap items-center gap-1">
+        <span aria-hidden="true" className="inline-flex flex-wrap items-center gap-1 [@media(hover:none)]:[&_[role=tooltip]]:hidden">
           {research.sources.map(source => (
-            <SourceIcon key={source.id} source={source} framed />
+            <Tooltip key={source.id} content={outletName(source)}>
+              {() => <SourceIcon source={source} framed />}
+            </Tooltip>
           ))}
         </span>
       </a>
