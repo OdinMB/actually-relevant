@@ -37,16 +37,15 @@ export interface LatestNewsletterIssue extends PublicNewsletterIssueSummary {
 }
 
 /**
- * The newest published newsletter issue, for the ways in to its web edition (the home page card,
- * the line at the end of each story). It is the first entry of the archive's first page, the
- * request the Past issues list on /newsletter makes, so the two share one cache entry. With an
- * `edition`, that edition's newest issue (the home page inside Actually Uplifting). Null while
- * loading, when no issue is published and when the archive fails to load, so the way in quietly
- * stays away; and while the page is prerendered, so no static HTML keeps a dated issue.
+ * `edition`'s newest published newsletter issue, for the home page card: the first entry of that
+ * edition's archive page. Null while loading (also while the other edition's answer is still the one
+ * at hand, so the card never shows the edition the reader just left), when no issue is published and
+ * when the archive fails to load, so the way in quietly stays away; and while the page is
+ * prerendered, so no static HTML keeps a dated issue.
  */
-export function useLatestNewsletterIssue(edition?: NewsletterEdition): LatestNewsletterIssue | null {
-  const { data } = useNewsletterArchive(1, edition)
-  const latest = data?.data[0]
+export function useLatestNewsletterIssue(edition: NewsletterEdition): LatestNewsletterIssue | null {
+  const { data, isPlaceholderData } = useNewsletterArchive(1, edition)
+  const latest = isPlaceholderData ? undefined : data?.data[0]
   if (!latest) return null
   return { ...latest, thisWeek: new Date().getTime() - new Date(latest.publishedAt).getTime() < WEEK_MS }
 }

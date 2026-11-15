@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { SEO, CommonOgTags } from '../lib/seo'
@@ -17,8 +17,15 @@ import { usePageTurn } from '../hooks/usePageTurn'
 import { NEWSLETTER_FEED_URL, sectionOgImage } from '../lib/api'
 import { FOCUS_RING } from '../lib/control-classes'
 import { loadStateOf } from '../lib/loadState'
-import { ARCHIVE_FILTER_PARAM, archiveEdition, archiveFilterOf, withArchiveFilter, type ArchiveFilter } from '../lib/newsletterArchiveFilter'
-import { useUpliftingEdition } from '../contexts/PositivityContext'
+import {
+  ARCHIVE_FILTER_PARAM,
+  archiveEdition,
+  archiveFilterOf,
+  withArchiveFilter,
+  withoutArchiveFilter,
+  type ArchiveFilter,
+} from '../lib/newsletterArchiveFilter'
+import { MIX_PARAM, parseMixParam, UPLIFTING_MIX, useUpliftingEdition } from '../contexts/PositivityContext'
 import NewsletterEditionTag from '../components/NewsletterEditionTag'
 import { BRAND } from '../config'
 
@@ -143,7 +150,30 @@ export default function NewsletterPage() {
   const issuesRef = useRef<HTMLElement>(null)
   const issuesHeadingRef = useRef<HTMLHeadingElement>(null)
   const [searchParams, setSearchParams] = useSearchParams()
-  const filter = archiveFilterOf(searchParams.get(ARCHIVE_FILTER_PARAM), useUpliftingEdition())
+  const inUpliftingEdition = useUpliftingEdition()
+  // A filter in the address (picked here, or in the link the page opened with) holds only while the
+  // dial stays on the side of the edition line it was picked on: moving the dial into or out of the
+  // edition is the newer choice, and puts the list on that side's default at once.
+  const [pickedInEdition, setPickedInEdition] = useState(inUpliftingEdition)
+  const picked = pickedInEdition === inUpliftingEdition ? searchParams.get(ARCHIVE_FILTER_PARAM) : null
+  const filter = archiveFilterOf(picked, inUpliftingEdition)
+
+  // ...and the address drops the filter it no longer shows, so a copied link opens on what the reader
+  // sees. Only once the address carries the dial's new mix: the dial's own address change is still
+  // under way before that, and writing over it would put the dial back.
+  const mixInAddress = parseMixParam(searchParams.get(MIX_PARAM))
+  const addressCaughtUp = mixInAddress !== null && (mixInAddress === UPLIFTING_MIX) === inUpliftingEdition
+  const staleFilter = pickedInEdition !== inUpliftingEdition && searchParams.has(ARCHIVE_FILTER_PARAM)
+  useEffect(() => {
+    if (!staleFilter || !addressCaughtUp) return
+    setPickedInEdition(inUpliftingEdition)
+    setSearchParams(prev => withoutArchiveFilter(prev), { replace: true, preventScrollReset: true })
+  }, [staleFilter, addressCaughtUp, inUpliftingEdition, setSearchParams])
+
+  const pickFilter = (next: ArchiveFilter) => {
+    setPickedInEdition(inUpliftingEdition)
+    setSearchParams(prev => withArchiveFilter(prev, next), { replace: true, preventScrollReset: true })
+  }
 
   return (
     <>
@@ -185,10 +215,7 @@ export default function NewsletterPage() {
           <h2 ref={issuesHeadingRef} id="newsletter-issues-heading" className="section-heading mb-2 focus:outline-none">
             Past issues
           </h2>
-          <ArchiveFilterButtons
-            filter={filter}
-            onChange={next => setSearchParams(prev => withArchiveFilter(prev, next), { replace: true, preventScrollReset: true })}
-          />
+          <ArchiveFilterButtons filter={filter} onChange={pickFilter} />
           {/* Keyed by the filter, so another filter starts on its first page */}
           <IssueList key={filter} filter={filter} heading={issuesHeadingRef} onPageChange={() => issuesRef.current?.scrollIntoView?.({ block: 'start' })} />
         </section>

@@ -100,6 +100,13 @@ export default function SubscribeForm({ onSuccess, autoFocus = false, idPrefix =
   const [editionChoice, setEditionChoice] = useState(false)
   const inUpliftingEdition = useUpliftingEdition()
   const [edition, setEdition] = useState<NewsletterEdition>(inUpliftingEdition ? 'uplifting' : 'full')
+  // Moving the dial into or out of the edition moves the preselection with it (the form on /newsletter
+  // stays mounted while the dial moves)
+  const [preselectedFor, setPreselectedFor] = useState(inUpliftingEdition)
+  if (preselectedFor !== inUpliftingEdition) {
+    setPreselectedFor(inUpliftingEdition)
+    setEdition(inUpliftingEdition ? 'uplifting' : 'full')
+  }
   // The anti-bot form token, fetched on mount; its answer also says whether signups are open.
   // If both attempts fail, submit stays disabled (the API is unreachable anyway) and the
   // reader is told.

@@ -128,7 +128,7 @@ describe('HomePage newsletter card beside the load states', () => {
   })
 
   /** Waits until the newest issue is known, so its absence below is the page's doing. */
-  const issueKnown = (client: QueryClient) => waitFor(() => expect(client.getQueryState(['public-newsletter-archive', 1, 'all'])?.status).toBe('success'))
+  const issueKnown = (client: QueryClient) => waitFor(() => expect(client.getQueryState(['public-newsletter-archive', 1, 'full'])?.status).toBe('success'))
   const issueLink = () => screen.queryByRole('link', { name: /newsletter Week 43, 2026/ })
 
   it('comes with the stories', async () => {

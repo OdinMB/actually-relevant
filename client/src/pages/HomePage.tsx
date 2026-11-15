@@ -297,9 +297,10 @@ export function HomeStories({ headingLevel = 1 }: { headingLevel?: FeedHeadingLe
   const loadState = loadStateOf(homepageQuery)
   const isLoading = loadState === 'loading'
   const data = homepageQuery.data
-  // Asked for from the start, alongside the stories, so it is usually there when they are. Inside the
-  // Actually Uplifting edition, that edition's newest issue, so its home never points at a full issue
-  const latestIssue = useLatestNewsletterIssue(useUpliftingEdition() ? 'uplifting' : undefined)
+  // Asked for from the start, alongside the stories, so it is usually there when they are. The
+  // edition the dial is in: Actually Uplifting's newest issue at "Only uplifting", the full newsletter's
+  // anywhere else, switching as the dial moves
+  const latestIssue = useLatestNewsletterIssue(useUpliftingEdition() ? 'uplifting' : 'full')
 
   const issues = data?.issues ?? []
   const storiesByIssueBuckets = data?.storiesByIssue ?? {}
