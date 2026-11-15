@@ -7,7 +7,7 @@ import type { PaginatedResponse, PublicNewsletterIssueSummary } from '@shared/ty
 import HomePage from './HomePage'
 import { makeStory, announcedText } from '../test/stories'
 import { focusRingProblems } from '../test/classes'
-import { PositivityProvider } from '../contexts/PositivityContext'
+import { PositivityProvider, usePositivity } from '../contexts/PositivityContext'
 
 const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -85,12 +85,27 @@ afterEach(() => {
   localStorage.clear()
 })
 
-function renderHome(path = '/') {
+/** Stand-in for the slider: one button per dial position. */
+function DialButtons() {
+  const { setPositivity } = usePositivity()
+  return (
+    <>
+      {[75, 100].map(value => (
+        <button key={value} type="button" onClick={() => setPositivity(value)}>
+          Dial to {value}
+        </button>
+      ))}
+    </>
+  )
+}
+
+function renderHome(path = '/', withDial = false) {
   return render(
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={[path]}>
           <PositivityProvider>
+            {withDial && <DialButtons />}
             <HomePage />
           </PositivityProvider>
         </MemoryRouter>
@@ -101,7 +116,7 @@ function renderHome(path = '/') {
 
 /** Waits until the archive request has answered or failed. */
 async function archiveSettled() {
-  await waitFor(() => expect(['success', 'error']).toContain(queryClient.getQueryState(['public-newsletter-archive', 1, 'all'])?.status))
+  await waitFor(() => expect(['success', 'error']).toContain(queryClient.getQueryState(['public-newsletter-archive', 1, 'full'])?.status))
 }
 
 describe('HomePage newsletter card', () => {
@@ -129,16 +144,35 @@ describe('HomePage newsletter card', () => {
     expect(await screen.findByRole('link', { name: 'Latest newsletter Week 40, 2026 · 1 story' })).toHaveAttribute('href', '/newsletter/week-40-2026')
   })
 
-  it('asks for the newest issue of either edition on the main site, and for the newest Actually Uplifting issue inside that edition', async () => {
-    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'actually-uplifting-week-43-2026', title: 'Week 43, 2026', daysAgo: 1, storyCount: 4 }))
+  it('asks for the full newsletter’s newest issue on the main site, and for the newest Actually Uplifting issue inside that edition', async () => {
+    mockApi.newsletterArchive.mockResolvedValue(archive({ slug: 'week-43-2026', title: 'Week 43, 2026', daysAgo: 1, storyCount: 4 }))
     const { unmount } = renderHome()
     await screen.findByRole('link', { name: /^This week’s newsletter/ })
-    expect(mockApi.newsletterArchive).toHaveBeenLastCalledWith(1, undefined)
+    expect(mockApi.newsletterArchive).toHaveBeenLastCalledWith(1, 'full')
     unmount()
 
     // (This file's stories are all calm, so the edition shows no section to put the card above)
     renderHome('/?mix=uplifting')
     await waitFor(() => expect(mockApi.newsletterArchive).toHaveBeenLastCalledWith(1, 'uplifting'))
+  })
+
+  it('switches edition as the dial moves into Actually Uplifting and back out, without a reload', async () => {
+    mockApi.newsletterArchive.mockImplementation((_page: number, edition: string) =>
+      Promise.resolve(
+        edition === 'uplifting'
+          ? archive({ slug: 'actually-uplifting-week-43-2026', title: 'Uplifting week 43', daysAgo: 1, storyCount: 3 })
+          : archive({ slug: 'week-43-2026', title: 'Week 43, 2026', daysAgo: 1, storyCount: 10 }),
+      ),
+    )
+    renderHome('/', true)
+    expect(await screen.findByRole('link', { name: /^This week’s newsletter Week 43, 2026/ })).toHaveAttribute('href', '/newsletter/week-43-2026')
+
+    await act(async () => screen.getByRole('button', { name: 'Dial to 100' }).click())
+    await waitFor(() => expect(mockApi.newsletterArchive).toHaveBeenLastCalledWith(1, 'uplifting'))
+
+    await act(async () => screen.getByRole('button', { name: 'Dial to 75' }).click())
+    expect(await screen.findByRole('link', { name: /^This week’s newsletter Week 43, 2026/ })).toHaveAttribute('href', '/newsletter/week-43-2026')
+    expect(screen.queryByRole('link', { name: /Uplifting week 43/ })).toBeNull()
   })
 
   it.each([

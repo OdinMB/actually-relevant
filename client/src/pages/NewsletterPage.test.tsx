@@ -3,12 +3,12 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'vitest-axe'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { NEWSLETTER_PROMISE } from '../config'
 import { inPrerenderer } from '../test/prerenderer'
-import { PositivityProvider } from '../contexts/PositivityContext'
+import { PositivityProvider, usePositivity } from '../contexts/PositivityContext'
 
 const mockApi = vi.hoisted(() => ({ newsletterArchive: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -20,12 +20,28 @@ import NewsletterPage from './NewsletterPage'
 import { PublishHint } from '../components/admin/NewsletterDetail'
 import { ApiError } from '../lib/api'
 
-function renderPage(path = '/newsletter') {
+/** Stand-in for the slider (one button per dial position) and a readout of the address's query. */
+function DialButtons() {
+  const { setPositivity } = usePositivity()
+  return (
+    <>
+      {[75, 100].map(value => (
+        <button key={value} type="button" onClick={() => setPositivity(value)}>
+          Dial to {value}
+        </button>
+      ))}
+      <output data-testid="location">{useLocation().search}</output>
+    </>
+  )
+}
+
+function renderPage(path = '/newsletter', { withDial = false } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const result = render(
     <HelmetProvider>
       <MemoryRouter initialEntries={[path]}>
         <PositivityProvider>
+          {withDial && <DialButtons />}
           <QueryClientProvider client={client}>
             <NewsletterPage />
           </QueryClientProvider>
@@ -179,6 +195,72 @@ describe('NewsletterPage edition filter', () => {
     mockApi.newsletterArchive.mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
     renderPage('/newsletter?edition=uplifting')
     expect(await screen.findByText('No Actually Uplifting issues have been published yet.')).toBeInTheDocument()
+  })
+
+  describe('as the dial moves, without a reload', () => {
+    beforeEach(() =>
+      mockApi.newsletterArchive.mockImplementation((_page: number, edition?: string) => Promise.resolve(edition === 'uplifting' ? UPLIFTING_ARCHIVE : ARCHIVE)),
+    )
+    const dial = (value: number) => act(async () => screen.getByRole('button', { name: `Dial to ${value}` }).click())
+    const search = () => new URLSearchParams(screen.getByTestId('location').textContent ?? '')
+
+    it('opens Actually Uplifting when the dial reaches "Only uplifting", and all issues when it leaves', async () => {
+      renderPage('/newsletter', { withDial: true })
+      await screen.findByRole('link', { name: 'Week 41, 2026' })
+      expect(option('All issues')).toHaveAttribute('aria-pressed', 'true')
+
+      await dial(100)
+      expect(await screen.findByRole('link', { name: 'Week 42, 2026' })).toHaveAttribute('href', '/newsletter/actually-uplifting-week-42-2026')
+      expect(option('Actually Uplifting')).toHaveAttribute('aria-pressed', 'true')
+
+      await dial(75)
+      expect(await screen.findByRole('link', { name: 'Week 41, 2026' })).toBeInTheDocument()
+      expect(option('All issues')).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('lets the dial leaving the edition override a filter picked inside it, and drops it from the address', async () => {
+      renderPage('/newsletter?mix=uplifting', { withDial: true })
+      await screen.findByRole('link', { name: 'Week 42, 2026' })
+      await userEvent.click(option('All issues'))
+      await dial(75)
+      await dial(100)
+
+      await waitFor(() => expect(search().has('edition')).toBe(false))
+      expect(option('Actually Uplifting')).toHaveAttribute('aria-pressed', 'true')
+      expect(search().get('mix')).toBe('uplifting')
+    })
+
+    it('lets the dial entering the edition override a filter picked outside it, and drops it from the address', async () => {
+      renderPage('/newsletter?mix=balanced&edition=uplifting', { withDial: true })
+      await screen.findByRole('link', { name: 'Week 42, 2026' })
+      await dial(100)
+      await dial(75)
+
+      await waitFor(() => expect(search().has('edition')).toBe(false))
+      expect(option('All issues')).toHaveAttribute('aria-pressed', 'true')
+      expect(search().get('mix')).toBe('mostly-uplifting')
+    })
+
+    it('keeps a picked filter while the dial moves on the same side of the edition line', async () => {
+      renderPage('/newsletter?mix=balanced', { withDial: true })
+      await screen.findByRole('link', { name: 'Week 41, 2026' })
+      await userEvent.click(option('Actually Uplifting'))
+      await dial(75)
+      expect(option('Actually Uplifting')).toHaveAttribute('aria-pressed', 'true')
+      expect(search().get('edition')).toBe('uplifting')
+    })
+
+    it('preselects the signup form’s edition to follow the dial', async () => {
+      mockApi.getSubscribeToken.mockResolvedValue({ token: 't', editionChoice: true })
+      renderPage('/newsletter', { withDial: true })
+      const full = await screen.findByRole('radio', { name: /Actually Relevant/ })
+      expect(full).toBeChecked()
+
+      await dial(100)
+      expect(screen.getByRole('radio', { name: /Actually Uplifting/ })).toBeChecked()
+      await dial(75)
+      expect(screen.getByRole('radio', { name: /Actually Relevant/ })).toBeChecked()
+    })
   })
 })
 

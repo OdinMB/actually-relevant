@@ -23,13 +23,13 @@ function archive(...issues: PublicNewsletterIssueSummary[]) {
   return { data: issues, total: issues.length, page: 1, pageSize: 20, totalPages: issues.length > 0 ? 1 : 0 }
 }
 
-/** The cache entry of the archive's first page with both editions, which /newsletter's All view reads too. */
-const FIRST_PAGE_KEY = ['public-newsletter-archive', 1, 'all']
+/** The cache entry of the full newsletter's first archive page. */
+const FIRST_PAGE_KEY = ['public-newsletter-archive', 1, 'full']
 
-function renderLatest(edition?: NewsletterEdition) {
+function renderLatest(edition: NewsletterEdition = 'full') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  return { queryClient, ...renderHook(() => useLatestNewsletterIssue(edition), { wrapper }) }
+  return { queryClient, ...renderHook(({ edition }) => useLatestNewsletterIssue(edition), { wrapper, initialProps: { edition } }) }
 }
 
 beforeEach(() => {
@@ -43,21 +43,29 @@ afterEach(() => {
 })
 
 describe('useLatestNewsletterIssue', () => {
-  it("is the newest published issue, from the archive's first page", async () => {
+  it("is the edition's newest published issue, from the first page of that edition's archive", async () => {
     mockApi.newsletterArchive.mockResolvedValue(archive(issue('week-43-2026', 1), issue('week-42-2026', 8)))
-    const { result } = renderLatest()
-
-    await waitFor(() => expect(result.current).not.toBeNull())
-    expect(result.current).toMatchObject({ slug: 'week-43-2026', title: 'Title of week-43-2026', storyCount: 6 })
-    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1, undefined)
-  })
-
-  it('shares its request with the Past issues list on /newsletter', async () => {
-    mockApi.newsletterArchive.mockResolvedValue(archive(issue('week-43-2026', 1)))
     const { result, queryClient } = renderLatest()
 
     await waitFor(() => expect(result.current).not.toBeNull())
-    expect(queryClient.getQueryData(FIRST_PAGE_KEY)).toEqual(archive(issue('week-43-2026', 1)))
+    expect(result.current).toMatchObject({ slug: 'week-43-2026', title: 'Title of week-43-2026', storyCount: 6 })
+    expect(mockApi.newsletterArchive).toHaveBeenCalledWith(1, 'full')
+    expect(queryClient.getQueryData(FIRST_PAGE_KEY)).toEqual(archive(issue('week-43-2026', 1), issue('week-42-2026', 8)))
+  })
+
+  it("is null after a switch of edition until the new edition's answer arrives, never the old edition's issue", async () => {
+    let answerUplifting!: (value: ReturnType<typeof archive>) => void
+    mockApi.newsletterArchive.mockImplementation((_page: number, edition: NewsletterEdition) =>
+      edition === 'uplifting' ? new Promise(resolve => (answerUplifting = resolve)) : Promise.resolve(archive(issue('week-43-2026', 1))),
+    )
+    const { result, rerender } = renderLatest('full')
+    await waitFor(() => expect(result.current?.slug).toBe('week-43-2026'))
+
+    rerender({ edition: 'uplifting' })
+    expect(result.current).toBeNull()
+
+    answerUplifting(archive(issue('actually-uplifting-week-43-2026', 1, 'uplifting')))
+    await waitFor(() => expect(result.current?.slug).toBe('actually-uplifting-week-43-2026'))
   })
 
   it("is one edition's newest issue when asked, from that edition's own cache entry", async () => {
