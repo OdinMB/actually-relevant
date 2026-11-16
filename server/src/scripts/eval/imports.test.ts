@@ -74,6 +74,8 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/researchFilter.js': '*',
   'services/researchChecks.js': '*',
   'services/researchCopying.js': '*',
+  // The text readers see of an applied research version (pure): eval:overviews finds the answer keys' quotes in it.
+  'services/researchedStory.js': ['storedResearchText'],
 }
 
 /** The pure modules the eval may import whole: config and prompt types only. */
@@ -87,7 +89,18 @@ const WITH_RETRY_ALLOWED: string[] = []
 
 describe('eval harness has no write path', () => {
   it('finds the eval source files', () => {
-    expect(files.map(f => f.name)).toEqual(expect.arrayContaining(['fixtures.ts', 'readOnlyDb.ts', 'models.ts', 'run.ts', 'suites/preassess.ts']))
+    expect(files.map(f => f.name)).toEqual(
+      expect.arrayContaining([
+        'fixtures.ts',
+        'readOnlyDb.ts',
+        'models.ts',
+        'run.ts',
+        'suites/preassess.ts',
+        'overviews.ts',
+        'overviews/factCheck.ts',
+        'overviews/keyCheck.ts',
+      ]),
+    )
   })
 
   it('imports @prisma/client only from the two database modules, and never lib/prisma', () => {

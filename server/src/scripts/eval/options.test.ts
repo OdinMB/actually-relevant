@@ -1,17 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseOptions,
+  parseOverviewOptions,
   parseRecalibrationOptions,
   parseResearchOptions,
   DEFAULT_BUDGET_USD,
   DEFAULT_FLOOR,
   MAX_ASSESS_SIZE,
+  OVERVIEW_DEFAULT_ARMS,
+  OVERVIEW_MAX_SIZE,
+  OVERVIEW_STEPS,
   RESEARCH_DEFAULT_BUDGET_USD,
   RESEARCH_DEFAULT_SIZE,
   RESEARCH_MAX_SIZE,
   SUITE_NAMES,
 } from './options.js'
 import { MAX_REPEAT } from './repeats.js'
+import { STEP_ARMS } from './research/pipeline.js'
 
 describe('parseOptions', () => {
   it('requires --out', () => {
@@ -158,5 +163,65 @@ describe('parseResearchOptions', () => {
       concurrency: 2,
     })
     expect(() => parseResearchOptions(['--out', 'x', '--limit', '0'])).toThrow(/--limit/)
+  })
+})
+
+describe('parseOverviewOptions', () => {
+  it('requires --out', () => {
+    expect(() => parseOverviewOptions([])).toThrow(/--out/)
+  })
+
+  it('defaults to all three steps, one run of 300 facts on the research fact-check arm, and the $3 budget', () => {
+    expect(parseOverviewOptions(['--out', 'x'])).toEqual({
+      out: 'x',
+      steps: [...OVERVIEW_STEPS],
+      budget: 3,
+      dryRun: false,
+      concurrency: 4,
+      repeat: 1,
+      size: 300,
+      arms: [...OVERVIEW_DEFAULT_ARMS],
+      refreshFixtures: false,
+    })
+  })
+
+  it("defaults to production's research fact-check arm", () => {
+    expect(OVERVIEW_DEFAULT_ARMS).toEqual([STEP_ARMS['fact-check']])
+  })
+
+  it('takes steps in any order and rejects an unknown one', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'baseline,keys']).steps).toEqual(['keys', 'baseline'])
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'keys,replay'])).toThrow(/replay/)
+  })
+
+  it('takes arms as model@effort from the price table', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--arms', 'gpt-6-luna@medium, gpt-6.1-sol@high,gpt-6-luna@medium']).arms).toEqual([
+      { model: 'gpt-6-luna', effort: 'medium' },
+      { model: 'gpt-6.1-sol', effort: 'high' },
+    ])
+    expect(() => parseOverviewOptions(['--out', 'x', '--arms', 'gpt-7@low'])).toThrow(/--arms.*gpt-7/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--arms', 'gpt-6-luna'])).toThrow(/--arms/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--arms', 'gpt-6-luna@loud'])).toThrow(/--arms/)
+  })
+
+  it('caps the sample size, the repeats and the budget', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--size', String(OVERVIEW_MAX_SIZE), '--repeat', String(MAX_REPEAT), '--budget', '20'])).toMatchObject({
+      size: OVERVIEW_MAX_SIZE,
+      repeat: MAX_REPEAT,
+      budget: 20,
+    })
+    expect(() => parseOverviewOptions(['--out', 'x', '--size', String(OVERVIEW_MAX_SIZE + 1)])).toThrow(/--size/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--repeat', String(MAX_REPEAT + 1)])).toThrow(/--repeat/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--budget', '20.01'])).toThrow(/budget/)
+  })
+
+  it('parses a smoke run of the fact check', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'fact-check', '--limit', '10', '--dry-run', '--refresh-fixtures'])).toMatchObject({
+      steps: ['fact-check'],
+      limit: 10,
+      dryRun: true,
+      refreshFixtures: true,
+    })
+    expect(() => parseOverviewOptions(['--out', 'x', '--limit', '0'])).toThrow(/--limit/)
   })
 })
