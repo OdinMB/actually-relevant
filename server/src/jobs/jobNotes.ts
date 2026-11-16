@@ -88,8 +88,8 @@ const NOTES: Readonly<Record<string, () => string>> = {
     `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
     'A step whose run was cut off by a restart is not run again, so no issue goes out twice.',
   podcast_chain: () =>
-    `Each Friday slot builds or resumes this week's episode of each show, then the chain holds the two publish steps until Saturday 07:00 in Berlin, when they publish what is ready. ${CHAIN_RULES} ` +
-    'Each Friday slot starts from the first step again, so a slot that fails is retried by the next.',
+    `On Friday it builds this week's episode of each show, then holds the two publish steps until Saturday 07:00 in Berlin, when they publish what is ready. ${CHAIN_RULES} ` +
+    `It runs once: a build that fails is tried again in the same run every ${count(config.podcast.retryDelayMs / 60_000, 'minute')}, and after ${count(config.podcast.maxAttemptsPerWeek, 'failed run')} the episode waits for you to resume it on the Podcasts page.`,
   crawl_feeds: () =>
     'Reads each active feed whose own crawl interval has passed and saves its new articles as stories. ' +
     'Running this job more often never crawls a feed before its interval is up. ' +

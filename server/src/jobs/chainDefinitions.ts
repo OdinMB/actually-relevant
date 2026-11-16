@@ -12,7 +12,7 @@ export const CHAINS: Readonly<Record<string, readonly string[]>> = {
   daily_edition_chain: ['select_stories', 'research_stories', 'publish_stories'],
   // Saturday morning: each edition's issue is built (with its test email), then sent
   newsletter_chain: ['generate_newsletter', 'publish_newsletter', 'generate_uplifting_newsletter', 'publish_uplifting_newsletter'],
-  // Friday's slots build both shows' episodes (each slot resumes or retries the week's episode); both
+  // Friday's one run builds both shows' episodes (a failed build is retried within the run); both
   // publish steps are held until Saturday 07:00 in Berlin, so an episode is ready well before it goes out
   podcast_chain: ['generate_podcast', 'generate_uplifting_podcast', 'publish_podcast', 'publish_uplifting_podcast'],
 }

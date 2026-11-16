@@ -572,9 +572,13 @@ export const config = {
     // generate_podcast's window (UTC): Friday from 00:00 until this hour. Outside it the job does
     // nothing, so a boot catch-up on another day never starts an episode (ADR-0013).
     generateWindowEndHourUtc: 20,
-    // From this UTC hour on Friday (the last generation slot), an interactive episode still
-    // waiting for its person gets the one reminder.
-    reminderFromHourUtc: 18,
+    // The UTC hour of Friday's last scheduled generation run (the podcast chain's one run since
+    // 2026-11-16, 02:00): from it an interactive episode still waiting for its person gets the one
+    // reminder, a short Actually Uplifting week is noted, and the Podcasts page stops promising a run.
+    reminderFromHourUtc: 2,
+    // Friday's run tries a failed episode again after this pause, until it is ready or blocked at
+    // maxAttemptsPerWeek (jobs/generatePodcast.ts)
+    retryDelayMs: 10 * 60_000,
     // The second show, Actually Uplifting (services/podcastEdition.ts, .context/podcast.md). Built and
     // closed: it opens only when `enabled` is on, the owner has confirmed its show description
     // (PODCAST_UPLIFTING_COPY_CONFIRMED in lib/aiLabelCopy.ts) and `artworkUrl` is set.

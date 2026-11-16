@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { JobRun } from '@shared/types'
 import { Button } from '../ui/Button'
-import { jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
+import { jobDisplayName, byPipelineOrder } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
 import { EnabledToggle, FlexToggle, LastRun, NotBeforeField, ReviewToggle } from './jobControls'
 import { JobRow, JobTable } from './jobTable'
@@ -110,11 +110,7 @@ export function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => voi
 export function JobsTable({ jobs }: JobsTableProps) {
   const [selectedJob, setSelectedJob] = useState<string | null>(null)
 
-  const sortedJobs = [...jobs].sort((a, b) => {
-    const ai = JOB_PIPELINE_ORDER.indexOf(a.jobName)
-    const bi = JOB_PIPELINE_ORDER.indexOf(b.jobName)
-    return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi)
-  })
+  const sortedJobs = [...jobs].sort(byPipelineOrder)
 
   const panelJob = jobs.find(j => j.jobName === selectedJob)
 

@@ -115,8 +115,8 @@ describe('findOrCreateWeekEpisode', () => {
 })
 
 describe("runWeeklyEpisode for Actually Uplifting's short week", () => {
-  const FRIDAY_LAST_SLOT = new Date('2026-10-09T18:30:00Z')
-  const FRIDAY_EARLY_SLOT = new Date('2026-10-09T10:30:00Z')
+  const FRIDAY_LAST_SLOT = new Date('2026-10-09T02:30:00Z')
+  const FRIDAY_EARLY_SLOT = new Date('2026-10-09T01:30:00Z')
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -124,7 +124,7 @@ describe("runWeeklyEpisode for Actually Uplifting's short week", () => {
     mockPrisma.podcast.update.mockResolvedValue(row())
   })
 
-  it('creates no row and counts no attempt when the pool is short, and says so only at the last slot', async () => {
+  it('creates no row and counts no attempt when the pool is short, and says so only from the Friday run', async () => {
     mockPrisma.podcast.findUnique.mockResolvedValue(null)
     mockScript.episodePoolSize.mockResolvedValue(3)
 

@@ -19,6 +19,7 @@ vi.mock('../services/podcastEdition.js', async importOriginal => {
 // The window rule itself is tested in podcastWeekSlot.test.ts; the real one runs here.
 const { runGeneratePodcast, runGenerateUpliftingPodcast } = await import('./generatePodcast.js')
 const { editionClosedReason } = await import('../services/podcastEdition.js')
+const { config } = await import('../config.js')
 
 // 2026-10-16 is a Friday.
 const FRIDAY_0600 = new Date('2026-10-16T06:00:00Z')
@@ -58,8 +59,33 @@ describe('runGeneratePodcast', () => {
     await expect(runGeneratePodcast(FRIDAY_0600)).rejects.toThrow(/monthly TTS cap reached/)
   })
 
-  it('returns quietly when stopped, retrying later or skipping a blocked episode', async () => {
-    for (const outcome of ['stopped', 'retry-later', 'skipped']) {
+  it('tries a failed episode again in the same run, after a pause, until it is ready or blocked', async () => {
+    vi.useFakeTimers()
+    try {
+      mockWeekly.runWeeklyEpisode
+        .mockResolvedValueOnce({ outcome: 'retry-later', podcastId: 'pod-1', reason: 'timeout' })
+        .mockResolvedValueOnce({ outcome: 'retry-later', podcastId: 'pod-1', reason: 'timeout' })
+      const run = runGeneratePodcast(FRIDAY_0600)
+      await vi.advanceTimersByTimeAsync(config.podcast.retryDelayMs - 1)
+      expect(mockWeekly.runWeeklyEpisode).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(config.podcast.retryDelayMs * 2)
+      await expect(run).resolves.toBeUndefined()
+      expect(mockWeekly.runWeeklyEpisode).toHaveBeenCalledTimes(3)
+
+      mockWeekly.runWeeklyEpisode.mockClear()
+      mockWeekly.runWeeklyEpisode
+        .mockResolvedValueOnce({ outcome: 'retry-later', podcastId: 'pod-1', reason: 'timeout' })
+        .mockResolvedValueOnce({ outcome: 'blocked', podcastId: 'pod-1', reason: 'failed 3 times' })
+      const blocked = expect(runGeneratePodcast(FRIDAY_0600)).rejects.toThrow(/failed 3 times/)
+      await vi.advanceTimersByTimeAsync(config.podcast.retryDelayMs)
+      await blocked
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('returns quietly when stopped or skipping a blocked episode', async () => {
+    for (const outcome of ['stopped', 'skipped']) {
       mockWeekly.runWeeklyEpisode.mockResolvedValueOnce({ outcome, podcastId: 'pod-1', reason: 'blocked' })
       await expect(runGeneratePodcast(FRIDAY_1800)).resolves.toBeUndefined()
     }
@@ -72,8 +98,8 @@ describe('runGeneratePodcast', () => {
     expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
-  it('does not remind before Friday evening about an episode waiting for its person', async () => {
-    for (const now of [FRIDAY_0600, FRIDAY_1400, new Date('2026-10-16T17:59:00Z')]) {
+  it("does not remind before Friday's scheduled run about an episode waiting for its person", async () => {
+    for (const now of [new Date('2026-10-16T00:30:00Z'), new Date('2026-10-16T01:59:00Z')]) {
       mockWeekly.runWeeklyEpisode.mockResolvedValueOnce(waiting())
       await runGeneratePodcast(now)
     }
@@ -81,7 +107,7 @@ describe('runGeneratePodcast', () => {
     expect(mockNotify.notify).not.toHaveBeenCalled()
   })
 
-  it('reminds once at the Friday evening slot, naming the episode, its stage and the admin link', async () => {
+  it('reminds once from the Friday run on, naming the episode, its stage and the admin link', async () => {
     mockWeekly.runWeeklyEpisode.mockResolvedValueOnce(waiting())
     await runGeneratePodcast(FRIDAY_1800)
     expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1)
