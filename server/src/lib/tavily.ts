@@ -8,6 +8,8 @@
 import axios from 'axios'
 import { z } from 'zod'
 import { responseStatus, withRetry } from './retry.js'
+import { recordOtherCost } from './runUsage.js'
+import { config } from '../config.js'
 
 export const TAVILY_URL = 'https://api.tavily.com/search'
 export const TAVILY_DEPTH = 'advanced'
@@ -125,5 +127,8 @@ function parseResponse(data: unknown): TavilyAnswer {
 
 export async function searchTavily(request: TavilySearch, apiKey: string, options: TavilyOptions = {}): Promise<TavilyAnswer> {
   const body = tavilyRequestBody(request)
-  return parseResponse(await withRetry(() => post(body, apiKey), options.retry))
+  const answer = parseResponse(await withRetry(() => post(body, apiKey), options.retry))
+  // Counts toward the job run's cost on the Jobs page; nothing outside a run (lib/runUsage.ts)
+  recordOtherCost(answer.credits * config.research.tavilyUsdPerCredit)
+  return answer
 }

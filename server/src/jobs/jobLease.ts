@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
 import { config } from '../config.js'
+import type { RunUsage } from '../lib/runUsage.js'
 
 /**
  * The cross-instance job lease (ADR-0017): a run holds `locked_by`/`locked_until` on its job's
@@ -77,15 +78,16 @@ export async function withJobLeaseHeartbeat<T>(jobName: string, fn: () => Promis
 
 /**
  * Finish a run: always record `last_completed_at` (and `last_succeeded_at` on success, `last_error`
- * on failure), start the count of interrupted runs again, and release the lease only where this
- * process still holds it.
+ * on failure) and what the run spent (`usage`, null when it could not be read), start the count of
+ * interrupted runs again, and release the lease only where this process still holds it.
  */
-export async function finishJobRun(jobName: string, error: string | null): Promise<void> {
+export async function finishJobRun(jobName: string, error: string | null, usage: RunUsage | null = null): Promise<void> {
   await prisma.$executeRaw`
     UPDATE "job_runs"
     SET "last_completed_at" = (now() AT TIME ZONE 'UTC'),
         "last_succeeded_at" = CASE WHEN ${error === null} THEN (now() AT TIME ZONE 'UTC') ELSE "last_succeeded_at" END,
         "last_error" = ${error},
+        "last_run_usage" = ${usage === null ? null : JSON.stringify(usage)}::jsonb,
         "interrupted_runs" = 0,
         "locked_by" = CASE WHEN "locked_by" = ${LEASE_HOLDER} THEN NULL ELSE "locked_by" END,
         "locked_until" = CASE WHEN "locked_by" = ${LEASE_HOLDER} THEN NULL ELSE "locked_until" END,
@@ -95,12 +97,14 @@ export async function finishJobRun(jobName: string, error: string | null): Promi
 
 /**
  * What recording an interrupted run writes, whichever path found it: the reason as the run's error,
- * the finish on the database clock, one more consecutive interrupted run, and no lease.
+ * the finish on the database clock, one more consecutive interrupted run, no spending on record (the
+ * cut-off run's was never counted up) and no lease.
  */
 const interruptionWrites = (reason: Prisma.Sql) => Prisma.sql`
         "last_error" = ${reason},
         "last_completed_at" = (now() AT TIME ZONE 'UTC'),
         "interrupted_runs" = "interrupted_runs" + 1,
+        "last_run_usage" = NULL,
         "locked_by" = NULL,
         "locked_until" = NULL,
         "updated_at" = (now() AT TIME ZONE 'UTC')`

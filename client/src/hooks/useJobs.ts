@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { adminApi } from '../lib/admin-api'
+import { adminApi, ApiError } from '../lib/admin-api'
+import { useToast } from '../components/ui/Toast'
 import { invalidateStoryQueries } from './useStories'
 import type { JobRun } from '@shared/types'
 
@@ -23,6 +24,36 @@ export function useUpdateJob() {
     mutationFn: ({ jobName, data }: { jobName: string; data: Partial<JobRun> }) => adminApi.jobs.update(jobName, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
+    },
+  })
+}
+
+/** Save a change to a job, with a toast either way; a refusal's own words when the server gives them. */
+export function useJobChange(job: Pick<JobRun, 'jobName'>) {
+  const updateJob = useUpdateJob()
+  const { toast } = useToast()
+  return {
+    pending: updateJob.isPending,
+    save: (data: Partial<JobRun>, done: string) =>
+      updateJob.mutate(
+        { jobName: job.jobName, data },
+        {
+          onSuccess: () => toast('success', done),
+          // 422 when enabling a job whose configuration is incomplete, 400 for a refused setting: the answer says why
+          onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to update job'),
+        },
+      ),
+  }
+}
+
+/** Continue a chain waiting for review, or resume one stopped at a step. */
+export function useContinueChain() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (jobName: string) => adminApi.jobs.continueChain(jobName),
+    onSuccess: (_data, jobName) => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      pollJobCompletion(queryClient, jobName)
     },
   })
 }

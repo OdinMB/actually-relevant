@@ -1,8 +1,28 @@
 import { z } from 'zod'
 
+/** A chain's flex cut-off or deadline, or a step's "not before": "HH:MM" UTC, or null for none (jobs/chainDefinitions.ts). */
+const clockTime = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be a time of day as HH:MM (UTC)')
+  .nullable()
+
 export const updateJobSchema = z.object({
   cronExpression: z.string().min(1).optional(),
   enabled: z.boolean().optional(),
+  /** Model calls at OpenAI's flex price, falling back to standard. */
+  flex: z.boolean().optional(),
+  /** A chain's step: the chain waits for a person after it. */
+  pauseForReview: z.boolean().optional(),
+  /** A chain's step: the chain holds before it until this time ("HH:MM" or "Sat 07:00") comes round after the run's start. */
+  notBefore: z
+    .string()
+    .regex(/^(?:(Sun|Mon|Tue|Wed|Thu|Fri|Sat) )?([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:MM, or a weekday and HH:MM such as "Sat 07:00"')
+    .nullable()
+    .optional(),
+  /** A chain: calls go at standard price from this time on. */
+  flexUntil: clockTime.optional(),
+  /** A chain: a step working through items starts no new one from this time on. */
+  deadline: clockTime.optional(),
 })
 
 export const crawlUrlSchema = z.object({

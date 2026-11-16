@@ -9,6 +9,7 @@ vi.mock('express-rate-limit', () => ({
 const mockPrisma = vi.hoisted(() => ({
   jobRun: {
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     update: vi.fn(),
   },
   $disconnect: vi.fn(),
@@ -125,6 +126,34 @@ describe('Admin Jobs API', () => {
       expect(mockReloadJob).not.toHaveBeenCalled()
     })
 
+    it('saves a Flex switch, and a chain step review pause and chain clock times', async () => {
+      mockPrisma.jobRun.update.mockResolvedValue({})
+      await request(app).put('/api/admin/jobs/assess_stories').set(authHeader()).send({ flex: true, pauseForReview: true }).expect(200)
+      await request(app).put('/api/admin/jobs/daily_edition_chain').set(authHeader()).send({ flexUntil: '04:00', deadline: null }).expect(200)
+      await request(app).put('/api/admin/jobs/publish_podcast').set(authHeader()).send({ notBefore: 'Sat 08:00' }).expect(200)
+      expect(mockPrisma.jobRun.update).toHaveBeenCalledWith({ where: { jobName: 'publish_podcast' }, data: { notBefore: 'Sat 08:00' } })
+      expect(mockPrisma.jobRun.update).toHaveBeenCalledWith({ where: { jobName: 'assess_stories' }, data: { flex: true, pauseForReview: true } })
+      expect(mockPrisma.jobRun.update).toHaveBeenCalledWith({ where: { jobName: 'daily_edition_chain' }, data: { flexUntil: '04:00', deadline: null } })
+    })
+
+    it.each([
+      ['a schedule for a chain step', 'preassess_stories', { cronExpression: '0 1 * * *' }, 'no schedule of its own'],
+      ['a review pause outside a chain', 'cleanup_old_stories', { pauseForReview: true }, 'only a step of a chain'],
+      ['a hold time outside a chain', 'social_auto_post', { notBefore: '11:30' }, 'only a step of a chain'],
+      ['a deadline on a job that is not a chain', 'research_stories', { deadline: '05:00' }, 'only a chain'],
+    ])('refuses %s and saves nothing', async (_what, jobName, body, message) => {
+      const res = await request(app).put(`/api/admin/jobs/${jobName}`).set(authHeader()).send(body)
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain(message)
+      expect(mockPrisma.jobRun.update).not.toHaveBeenCalled()
+    })
+
+    it('refuses a chain clock time that is not HH:MM', async () => {
+      const res = await request(app).put('/api/admin/jobs/daily_edition_chain').set(authHeader()).send({ deadline: '5am' })
+      expect(res.status).toBe(400)
+      expect(mockPrisma.jobRun.update).not.toHaveBeenCalled()
+    })
+
     it('checks no precondition when a job is disabled or only rescheduled', async () => {
       mockPrisma.jobRun.update.mockResolvedValue({ jobName: 'generate_podcast', enabled: false })
       await request(app).put('/api/admin/jobs/generate_podcast').set(authHeader()).send({ enabled: false })
@@ -158,6 +187,40 @@ describe('Admin Jobs API', () => {
       const res = await request(app).post('/api/admin/jobs/nonexistent/run').set(authHeader())
 
       expect(res.status).toBe(404)
+    })
+  })
+
+  describe('POST /api/admin/jobs/:jobName/continue', () => {
+    const chainRow = (resumeStep: string | null, resumeReason: string | null) => ({
+      jobName: 'daily_edition_chain',
+      interruptedRuns: 0,
+      resumeStep,
+      resumeReason,
+    })
+
+    it('continues a chain waiting for review from the step after the pause', async () => {
+      mockPrisma.jobRun.findUnique.mockResolvedValue(chainRow('publish_stories', 'review'))
+      mockRunJob.mockResolvedValue({ result: 'succeeded' })
+
+      const res = await request(app).post('/api/admin/jobs/daily_edition_chain/continue').set(authHeader())
+
+      expect(res.status).toBe(200)
+      expect(res.body.message).toContain('publish_stories')
+      expect(mockRunJob).toHaveBeenCalledWith('daily_edition_chain', expect.any(Function))
+    })
+
+    it('answers 400 for a chain with nothing to continue', async () => {
+      mockPrisma.jobRun.findUnique.mockResolvedValue(chainRow(null, null))
+      const res = await request(app).post('/api/admin/jobs/daily_edition_chain/continue').set(authHeader())
+      expect(res.status).toBe(400)
+      expect(mockRunJob).not.toHaveBeenCalled()
+    })
+
+    it('answers 409 while the chain runs, and 404 for a job that is not a chain', async () => {
+      mockIsJobRunning.mockResolvedValueOnce(true)
+      expect((await request(app).post('/api/admin/jobs/daily_edition_chain/continue').set(authHeader())).status).toBe(409)
+      expect((await request(app).post('/api/admin/jobs/crawl_feeds/continue').set(authHeader())).status).toBe(404)
+      expect(mockRunJob).not.toHaveBeenCalled()
     })
   })
 })
