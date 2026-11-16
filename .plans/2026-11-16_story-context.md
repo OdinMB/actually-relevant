@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 type: feature
 complexity: complex
 ---
@@ -12,7 +12,7 @@ Naming: a **box** is the stored record and a **card** is how the page shows it.
 
 ## For Odin
 
-Items 1 to 3 were decided on 16 Nov; 4, 5 and the methodology text are still Odin's calls, because readers would notice them or they commit money. Everything else in this plan is decided. The plan builds each recommendation as written, and if Odin chooses differently, only the part named in the item changes.
+All items are decided (Odin, 16 Nov). Items 4, 5 and the methodology text follow the recommendations: Odin's "Alright. Let's build this in a branch and see how it goes" answered the decision note that offered them. The build goes on the branch; nothing reaches `main` without Odin's word.
 
 1. **How the context sits on the story page. Decided (Odin, 16 Nov).** Mockups on the live Indonesia story, in `mockups/`: `context-split-margin.png` (desktop), `context-split-phone.png` (phone, closed and tapped) and `context-split-phone-full.png`.
    - **The story stays complete without the cards.** No card changes the story's text, "Why This Matters" or "Caveats", and card sentences never restate them (write step, rule list).
@@ -41,18 +41,18 @@ Items 1 to 3 were decided on 16 Nov; 4, 5 and the methodology text are still Odi
      - The honest-gap card keeps "Our sources don't say" but drops "we'll add what's being done when a source covers it", because nothing refreshes a one-off story's context.
    - **Considered and set aside:** notes inside the text column on desktop (`context-split-inline.png`), one block without notes (`context-place-*.png`), and full cards on phones instead of one-line notes.
 2. **The AI disclosure. Decided (Odin, 16 Nov): no new visible label.** The story's existing "Researched and written by AI" line covers the cards, so `aiDisclosureCopy.ts` gains nothing. The machine-readable markers stay: `data-ai-generated="context"` on each note and the section, and the route's `aiGenerated` field.
-   - **Still open: the methodology text.** Recommended as a paragraph in the existing researched-stories section, which the "Researched and written" link already opens: "Many stories carry context cards: how big the development is compared with what came before, why it is happening now, who it reaches, what is being done and what comes next. An AI model reads the sources our research found and, where something a reader needs is missing, searches for up to three more. Every number on a card names its source, and when sources disagree we show both. A separate AI check compares each fact with the sentence it came from and drops what that sentence does not say. Each card gives the date its facts are from; we don't update cards later."
+   - **The methodology text (decided, as recommended):** a paragraph in the existing researched-stories section, which the "Researched and written" link already opens: "Many stories carry context cards: how big the development is compared with what came before, why it is happening now, who it reaches, what is being done and what comes next. An AI model reads the sources our research found and, where something a reader needs is missing, searches for up to three more. Every number on a card names its source, and when sources disagree we show both. A separate AI check compares each fact with the sentence it came from and drops what that sentence does not say. Each card gives the date its facts are from; we don't update cards later."
 3. **Spending: one overview of every job, with warning levels and no caps. Decided (Odin, 16 Nov).** Mockup: `mockups/admin-dashboard-spending.png`.
    - The Dashboard gets a "Spending" table: every job that spends money, grouped as on the Jobs page, with this month's AI and web search spend, the month at this pace, and the two months before. Research started by an editor has its own row. The earlier months fill in from the month this ships; there is no history to backfill.
    - A warning level can be set for each job and for the total, in the table. Passing it, or heading past it at this pace from the 8th of the month on, records one notice per job and month. Story context starts at $20; the other levels start empty.
    - Nothing stops on cost. OpenAI's project limits cover AI spend. They don't cover web search: research keeps its own monthly cap as it is, and story context's runs are bounded by their size (at most 20 stories at most $0.10 each, so at most about $2 a night; a usual night is about $0.30).
    - Expected spend for story context: about $6–10 a month at today's roughly 9 stories a day, about $12 in a busy month. That is about $0.03 a story, two thirds of it web search.
    - Not in the table: podcast voices, which the ElevenLabs plan covers and the podcast's character cap limits (the table shows the characters used as a line), and AI actions started from the admin, such as bulk re-assessing, which run outside any job and are not recorded today.
-4. **When the step fails a lot: a notice, no pause.** Recommended on 16 Nov, answering Odin's question of what a pause would give if the step retries the next night anyway.
+4. **When the step fails a lot: a notice, no pause. Decided (Odin, 16 Nov), as recommended in answer to his question of what a pause would give if the step retries the next night anyway.**
    - When more than 20% of the items a night's run checked fail their checks (with at least 20 checked), the Jobs page shows a warning line under the step and one notice is recorded. A repeat on a later night reopens that notice and counts it. The step runs the next night as usual, and you switch it off on the Jobs page if it keeps happening. Each story's admin section shows what was dropped and why (item 5).
    - **Why no pause:** a failed item is dropped by the checks, so readers never see it, and the step runs every night anyway. A pause would only save the rest of one night's run, about $0.30. What it would also buy: that night's remaining stories would wait for the next night instead of being settled with fewer cards, which is a handful of stories. A step that keeps failing costs at most about $0.30 a night until you act, and the $20 warning level catches anything bigger.
    - **Alternative:** the earlier design, a pause for the rest of the run and a hold after 3 bad nights in a row with "Lift pause" on the Jobs page. It adds three columns, a guard in the chain runner and a button for about $0.30 a night.
-5. **Managing a story's context in the admin.** Mockup: `mockups/admin-story-context.png`. A "Context" section on the story's edit form, after Research:
+5. **Managing a story's context in the admin. Decided (Odin, 16 Nov): all of it, as recommended.** Mockup: `mockups/admin-story-context.png`. A "Context" section on the story's edit form, after Research:
    - every card with its kicker, heading, phone line, sources and where it sits;
    - per card, "Hide" and "Show", and where it sits: beside another paragraph or point, or under More context. A moved card keeps its place whatever the placement mode, and the limits still apply;
    - "Hide all context", which asks first;
@@ -435,7 +435,7 @@ There are also two new ADRs: "Story context: facts and boxes as records, and the
 | `client/src/components/context/ContextCard.tsx` (new) | *Responsibility:* one card: kicker, heading, visual, cited sentences, source and as-of footer, the honest-gap look. *Exports:* `ContextCard` |
 | `client/src/components/context/FigureTiles.tsx`, `ContextChart.tsx` (new) | *Responsibility:* tiles with side-by-side values and their sources; bars and line as SVG with caption, source line and a hidden table. *Exports:* `FigureTiles`, `ContextChart` |
 | `client/src/components/context/contextText.ts` (new) | *Responsibility:* the slot kickers, the fixed honest-gap sentence, the as-of wording (pure). *Exports:* `slotKicker`, `GAP_TEXT`, `asOfLine` |
-| `client/src/pages/MethodologyPage.tsx` | The context-cards paragraph in the researched-stories section (For Odin 2), once approved |
+| `client/src/pages/MethodologyPage.tsx` | The context-cards paragraph in the researched-stories section (For Odin 2), word for word as approved |
 | `client/src/components/admin/StoryContextAdmin.tsx` (new), `StoryEditForm`, `client/src/hooks/useStoryContextAdmin.ts` (new), `client/src/lib/admin-api.ts` | *Responsibility:* the story's "Context" section after Research: summary line, cards grouped by place with the place select and "Hide"/"Show", "Hide all context" with a `ConfirmDialog`, and "What the run did". *Exports:* `StoryContextAdmin` |
 | `client/src/lib/constants.ts` | `JOB_DISPLAY_NAMES` and `JOB_PIPELINE_ORDER` |
 | `shared/types/index.ts` | `JobName` adds `build_story_context`. `StoryContextView`, `ContextBoxView` and the visual types |
