@@ -1,8 +1,8 @@
-import { useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'react-router-dom'
 import { STORY_STATUSES } from '@shared/constants'
-import type { LifetimeGroupRow, LifetimeStoryStats } from '@shared/types'
+import type { LifetimeGroupRow, LifetimeMonthRow, LifetimeStoryStats } from '@shared/types'
+import { SortableHeader, useSortableRows, type SortColumns } from '../../components/ui/SortableHeader'
 import { useLifetimeStoryStats } from '../../hooks/useStoryStats'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Card } from '../../components/ui/Card'
@@ -105,39 +105,57 @@ function StatusTable({ stats }: { stats: LifetimeStoryStats }) {
   )
 }
 
+const rate = (part: number, whole: number) => (whole > 0 ? part / whole : null)
+const nonZero = (n: number) => (n > 0 ? n : null)
+
+type MonthSortKey = 'month' | 'crawled' | 'screened' | 'assessed' | 'published' | 'rate' | 'archived'
+
+const MONTH_COLUMNS: SortColumns<LifetimeMonthRow, MonthSortKey> = {
+  month: { value: m => m.month, firstDirection: 'desc' },
+  crawled: { value: m => m.crawled },
+  screened: { value: m => m.screened },
+  assessed: { value: m => m.assessed },
+  published: { value: m => m.published },
+  rate: { value: m => rate(m.published, m.crawled) },
+  archived: { value: m => nonZero(m.archived) },
+}
+
 function MonthTable({ stats }: { stats: LifetimeStoryStats }) {
+  const { rows, sort, sortBy } = useSortableRows(stats.byMonth, MONTH_COLUMNS, { key: 'month', direction: 'desc' })
+  const header = { sort, onSort: sortBy, align: 'right' as const, className: TH }
+
   return (
     <Card title="By month crawled">
       <div className="overflow-x-auto -mx-4 -my-3 max-h-[28rem] overflow-y-auto">
         <table className="min-w-full text-sm">
-          <caption className="sr-only">Lifetime story counts by month crawled</caption>
+          <caption className="sr-only">Lifetime story counts by month crawled. Select a column header to sort.</caption>
           <thead className="sticky top-0 bg-white">
             <tr className="border-b border-neutral-200">
-              <th scope="col" className={`${TH} text-left`}>
+              <SortableHeader column="month" {...header} align="left">
                 Month
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </SortableHeader>
+              <SortableHeader column="crawled" {...header}>
                 Crawled
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </SortableHeader>
+              <SortableHeader column="screened" {...header}>
                 Screened
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </SortableHeader>
+              <SortableHeader column="assessed" {...header}>
                 Assessed
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </SortableHeader>
+              <SortableHeader column="published" {...header}>
                 Published
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </SortableHeader>
+              <SortableHeader column="rate" {...header}>
                 Pub %
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </SortableHeader>
+              <SortableHeader column="archived" {...header}>
                 Deleted
-              </th>
+              </SortableHeader>
             </tr>
           </thead>
           <tbody>
-            {stats.byMonth.map(m => (
+            {rows.map(m => (
               <tr key={m.month} className="border-b border-neutral-100 last:border-0">
                 <th scope="row" className="py-2 px-3 text-left font-medium text-neutral-900 whitespace-nowrap">
                   {m.month}
@@ -157,37 +175,22 @@ function MonthTable({ stats }: { stats: LifetimeStoryStats }) {
   )
 }
 
-type SortKey = 'name' | 'crawled' | 'published' | 'rate' | 'avgRelevancePre' | 'highPre' | 'archived'
+type GroupSortKey = 'name' | 'crawled' | 'published' | 'rate' | 'avgRelevancePre' | 'highPre' | 'archived'
 
-const sortValue = (row: LifetimeGroupRow, key: SortKey): number | string => {
-  if (key === 'name') return row.name.toLowerCase()
-  if (key === 'rate') return row.crawled > 0 ? row.published / row.crawled : -1
-  if (key === 'avgRelevancePre') return row.avgRelevancePre ?? -1
-  return row[key]
+const GROUP_COLUMNS: SortColumns<LifetimeGroupRow, GroupSortKey> = {
+  name: { value: r => r.name },
+  crawled: { value: r => r.crawled },
+  published: { value: r => r.published },
+  rate: { value: r => rate(r.published, r.crawled) },
+  avgRelevancePre: { value: r => r.avgRelevancePre },
+  highPre: { value: r => r.highPre },
+  archived: { value: r => nonZero(r.archived) },
 }
 
-/** Feeds or issues, sortable by any column (largest first, name A to Z). */
+/** Feeds or issues, sortable by any column (most crawled first to start). */
 function GroupTable({ title, label, rows, linkTo }: { title: string; label: string; rows: LifetimeGroupRow[]; linkTo?: (row: LifetimeGroupRow) => string }) {
-  const [sort, setSort] = useState<SortKey>('crawled')
-  const sorted = [...rows].sort((a, b) => {
-    const va = sortValue(a, sort)
-    const vb = sortValue(b, sort)
-    if (va === vb) return a.name.localeCompare(b.name)
-    if (sort === 'name') return va < vb ? -1 : 1
-    return va < vb ? 1 : -1
-  })
-
-  const header = (key: SortKey, text: string, align: 'left' | 'right' = 'right') => (
-    <th scope="col" className={`${TH} text-${align}`} aria-sort={sort === key ? (key === 'name' ? 'ascending' : 'descending') : 'none'}>
-      <button
-        type="button"
-        onClick={() => setSort(key)}
-        className={`hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded ${sort === key ? 'text-neutral-900' : ''}`}
-      >
-        {text}
-      </button>
-    </th>
-  )
+  const { rows: sorted, sort, sortBy } = useSortableRows(rows, GROUP_COLUMNS, { key: 'crawled', direction: 'desc' })
+  const header = { sort, onSort: sortBy, align: 'right' as const, className: TH }
 
   return (
     <Card title={title}>
@@ -196,13 +199,27 @@ function GroupTable({ title, label, rows, linkTo }: { title: string; label: stri
           <caption className="sr-only">{title}, lifetime. Select a column header to sort.</caption>
           <thead className="sticky top-0 bg-white">
             <tr className="border-b border-neutral-200">
-              {header('name', label, 'left')}
-              {header('crawled', 'Crawled')}
-              {header('published', 'Published')}
-              {header('rate', 'Pub %')}
-              {header('avgRelevancePre', 'Avg screening')}
-              {header('highPre', 'Screened 7+')}
-              {header('archived', 'Deleted')}
+              <SortableHeader column="name" {...header} align="left">
+                {label}
+              </SortableHeader>
+              <SortableHeader column="crawled" {...header}>
+                Crawled
+              </SortableHeader>
+              <SortableHeader column="published" {...header}>
+                Published
+              </SortableHeader>
+              <SortableHeader column="rate" {...header}>
+                Pub %
+              </SortableHeader>
+              <SortableHeader column="avgRelevancePre" {...header}>
+                Avg screening
+              </SortableHeader>
+              <SortableHeader column="highPre" {...header}>
+                Screened 7+
+              </SortableHeader>
+              <SortableHeader column="archived" {...header}>
+                Deleted
+              </SortableHeader>
             </tr>
           </thead>
           <tbody>

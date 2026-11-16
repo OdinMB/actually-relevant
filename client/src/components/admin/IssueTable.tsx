@@ -2,6 +2,7 @@ import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
 import { EllipsisVerticalIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type { Issue } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
+import { SortableHeader, useSortableRows, type SortColumns } from '../ui/SortableHeader'
 
 interface IssueTableProps {
   issues: Issue[]
@@ -9,9 +10,19 @@ interface IssueTableProps {
   onDelete: (id: string) => void
 }
 
-/** Sort issues so parents come first (alphabetical), children indented under their parent. */
-function buildHierarchicalList(issues: Issue[]): { issue: Issue; isChild: boolean }[] {
-  const parents = issues.filter(i => !i.parentId).sort((a, b) => a.name.localeCompare(b.name))
+type IssueSortKey = 'name' | 'slug' | 'published'
+
+const COLUMNS: SortColumns<Issue, IssueSortKey> = {
+  name: { value: i => i.name },
+  slug: { value: i => i.slug },
+  published: { value: i => i.publishedStoryCount ?? 0 },
+}
+
+const TH = 'px-3 py-2 font-medium text-neutral-500'
+
+/** Parents in sort order, each followed by its children (indented), also in sort order. */
+function buildHierarchicalList(issues: Issue[], compare: (a: Issue, b: Issue) => number): { issue: Issue; isChild: boolean }[] {
+  const parents = issues.filter(i => !i.parentId).sort(compare)
   const childrenByParent = new Map<string, Issue[]>()
   for (const issue of issues) {
     if (issue.parentId) {
@@ -25,7 +36,7 @@ function buildHierarchicalList(issues: Issue[]): { issue: Issue; isChild: boolea
   for (const parent of parents) {
     rows.push({ issue: parent, isChild: false })
     const children = childrenByParent.get(parent.id) || []
-    children.sort((a, b) => a.name.localeCompare(b.name))
+    children.sort(compare)
     for (const child of children) {
       rows.push({ issue: child, isChild: true })
     }
@@ -34,22 +45,24 @@ function buildHierarchicalList(issues: Issue[]): { issue: Issue; isChild: boolea
 }
 
 export function IssueTable({ issues, onEdit, onDelete }: IssueTableProps) {
-  const rows = buildHierarchicalList(issues)
+  const { sort, sortBy, compare } = useSortableRows(issues, COLUMNS, { key: 'name', direction: 'asc' })
+  const rows = buildHierarchicalList(issues, compare)
+  const header = { sort, onSort: sortBy }
 
   return (
     <div className="overflow-x-auto bg-white rounded-lg border border-neutral-200 shadow-sm">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            <SortableHeader column="name" {...header} className={TH}>
               Name
-            </th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="slug" {...header} className={`hidden md:table-cell ${TH}`}>
               Slug
-            </th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="published" {...header} className={`hidden md:table-cell ${TH}`}>
               Published
-            </th>
+            </SortableHeader>
             <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
               Actions
             </th>
