@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { describeDb, useTestDatabase } from '../test/db/harness.js'
+import { emptyUsage } from '../lib/runUsage.js'
 import {
   claimJobRun,
   clearInterruptedRuns,
@@ -110,6 +111,19 @@ describeDb('job lease (PostgreSQL)', () => {
       expect(job.lastError).toBeNull()
       expect(job.lockedBy).toBeNull()
       expect(job.lockedUntil).toBeNull()
+    })
+
+    it("stores what the run spent, and an interrupted run's record clears it", async () => {
+      await seedJob()
+      await claimJobRun(JOB)
+      const usage = { ...emptyUsage(), calls: 3, flexCalls: 2, costUsd: 0.125 }
+
+      await finishJobRun(JOB, null, usage)
+      expect((await row()).lastRunUsage).toEqual(usage)
+
+      await prisma.jobRun.update({ where: { jobName: JOB }, data: { lastStartedAt: new Date(Date.now() + 60_000) } })
+      await recordAbandonedRuns('Interrupted (started %s)')
+      expect((await row()).lastRunUsage).toBeNull()
     })
 
     it('records a failure without a success stamp', async () => {

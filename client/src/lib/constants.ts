@@ -20,6 +20,8 @@ export const EMOTION_VARIANTS: Record<EmotionTag, BadgeVariant> = {
 }
 
 export const JOB_DISPLAY_NAMES: Record<JobName, string> = {
+  intake_chain: 'Intake',
+  daily_edition_chain: 'Daily Edition',
   crawl_feeds: 'Crawl Feeds',
   preassess_stories: 'Pre-assess Stories',
   assess_stories: 'Assess Stories',
@@ -52,6 +54,8 @@ export function jobDisplayName(jobName: string): string {
 
 /** Pipeline execution order for sorting jobs in the UI. */
 export const JOB_PIPELINE_ORDER: JobName[] = [
+  'intake_chain',
+  'daily_edition_chain',
   'crawl_feeds',
   'preassess_stories',
   'assess_stories',

@@ -8,7 +8,8 @@ import { Button } from '../ui/Button'
 import { InfoTip } from '../ui/InfoTip'
 import { jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
-import { useUpdateJob, useRunJob } from '../../hooks/useJobs'
+import { useRunJob } from '../../hooks/useJobs'
+import { EnabledToggle, FlexToggle, LastRun, RunningSpinner } from './jobControls'
 import { useToast } from '../ui/Toast'
 import { ApiError } from '../../lib/admin-api'
 import { CronEditor } from './CronEditor'
@@ -19,16 +20,7 @@ interface JobsTableProps {
   jobs: JobRun[]
 }
 
-function RunningSpinner({ size = 'h-5 w-5' }: { size?: string }) {
-  return (
-    <svg className={`${size} animate-spin text-yellow-600`} viewBox="0 0 24 24" fill="none" aria-label="Running">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
-  )
-}
-
-function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => void }) {
+export function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => void }) {
   return (
     <EditPanel open onClose={onClose} title={jobDisplayName(job.jobName)}>
       <div className={PANEL_BODY}>
@@ -38,16 +30,35 @@ function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => void }) {
           <JobStatusBadge job={job} />
         </div>
 
-        {/* Enabled toggle */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-1">Enabled</label>
-          <EnabledToggle job={job} />
-        </div>
+        {/* Enabled toggle; a chain's step has its mode on its chain's card instead */}
+        {!job.chain && (
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Enabled</label>
+            <EnabledToggle job={job} />
+          </div>
+        )}
 
-        {/* Schedule — opens in edit mode directly */}
+        {job.usesModels && (
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Flex processing</label>
+            <FlexToggle job={job} />
+            <p className="mt-1 text-xs text-neutral-500">Half price for AI calls, but slower. When OpenAI is busy, calls go at standard price.</p>
+          </div>
+        )}
+
+        {/* Schedule (opens in edit mode directly); a chain's step runs when its chain reaches it */}
+        {!job.chain && (
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Schedule</label>
+            <CronEditor job={job} initialEditing />
+          </div>
+        )}
+
         <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-1">Schedule</label>
-          <CronEditor job={job} initialEditing />
+          <label className="block text-sm font-medium text-neutral-700 mb-1">Last Run</label>
+          <p className="text-sm text-neutral-600">
+            <LastRun job={job} />
+          </p>
         </div>
 
         {/* Last Started */}
@@ -131,7 +142,13 @@ export function JobsTable({ jobs }: JobsTableProps) {
                 Enabled
               </th>
               <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+                Flex
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
                 Status
+              </th>
+              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
+                Last Run
               </th>
               <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
                 Last Started
@@ -178,7 +195,13 @@ export function JobsTable({ jobs }: JobsTableProps) {
                   <EnabledToggle job={job} />
                 </td>
                 <td className="px-3 py-2">
+                  <FlexToggle job={job} />
+                </td>
+                <td className="px-3 py-2">
                   <JobStatusBadge job={job} />
+                </td>
+                <td className="px-3 py-2 text-neutral-500 hidden lg:table-cell">
+                  <LastRun job={job} />
                 </td>
                 <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell">
                   <TimeWithRelative dateStr={job.lastStartedAt} />
@@ -266,35 +289,5 @@ export function JobsTable({ jobs }: JobsTableProps) {
 
       {panelJob && <JobEditPanel job={panelJob} onClose={() => setSelectedJob(null)} />}
     </>
-  )
-}
-
-function EnabledToggle({ job }: { job: JobRun }) {
-  const updateJob = useUpdateJob()
-  const { toast } = useToast()
-
-  const handleToggle = () => {
-    updateJob.mutate(
-      { jobName: job.jobName, data: { enabled: !job.enabled } },
-      {
-        onSuccess: () => toast('success', `${jobDisplayName(job.jobName)} ${!job.enabled ? 'enabled' : 'disabled'}`),
-        // 422 when enabling a job whose configuration is incomplete: the answer names what is missing.
-        onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to update job'),
-      },
-    )
-  }
-
-  return (
-    <button
-      onClick={handleToggle}
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
-        job.enabled ? 'bg-brand-600' : 'bg-neutral-300'
-      }`}
-      role="switch"
-      aria-checked={job.enabled}
-      aria-label={`${job.enabled ? 'Disable' : 'Enable'} ${jobDisplayName(job.jobName)}`}
-    >
-      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${job.enabled ? 'translate-x-[18px]' : 'translate-x-1'}`} />
-    </button>
   )
 }

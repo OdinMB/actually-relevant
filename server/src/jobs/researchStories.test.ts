@@ -31,6 +31,7 @@ vi.mock('../config.js', async importOriginal => {
 
 const { runResearchStories } = await import('./researchStories.js')
 const { config } = await import('../config.js')
+const { createRunScope, runInScope } = await import('../lib/runUsage.js')
 
 const RESULT = { storyId: 'a', verdict: { kind: 'keep' } } as StoryResearch
 /** Each story's last write as read before its run. */
@@ -138,6 +139,23 @@ describe('runResearchStories', () => {
     await runResearchStories()
     expect(researchedIds()).toEqual(['a'])
     expect(mockApplyVerdict).not.toHaveBeenCalled()
+  })
+
+  it("starts no story past its chain's deadline; the one in flight finishes and is applied", async () => {
+    switches.concurrency = 1
+    const deadline = new Date(Date.now() + 60_000)
+    mockRuns.runPipelineResearch.mockImplementation(async (id: string, hook: Parameters<typeof researchedRun>[1]) => {
+      vi.setSystemTime(deadline)
+      return researchedRun(id, hook)
+    })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      await runInScope(createRunScope({ jobName: 'research_stories', flex: false, deadline }), () => runResearchStories())
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(researchedIds()).toEqual(['a'])
+    expect(mockApplyVerdict).toHaveBeenCalledTimes(1)
   })
 
   it('researches at most `concurrency` stories at once, in queue order, starting the next as one finishes', async () => {

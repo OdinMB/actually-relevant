@@ -7,13 +7,16 @@
  * keeps the story waiting until then and an editor's work during the run wins. A run by hand (the
  * Jobs page's "Run now") does the same as a scheduled one, the disabled job's included. Before
  * starting each story it re-reads the step's state and starts no other once the step is switched
- * off (`switchedOff`); the stories in flight finish, and their verdicts are not applied. A failure
+ * off (`switchedOff`); the stories in flight finish, and their verdicts are not applied. Run by its
+ * chain, it also starts no story once the chain's deadline has passed; those in flight finish and are
+ * applied, and the rest wait for the next run, as stories past `perRun` do. A failure
  * outside a story's run records a $0 run for it, so the gate stops waiting; the job never throws
  * for it.
  */
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
+import { runDeadlinePassed } from '../lib/runUsage.js'
 import { applyVerdict, type VerdictOutcome } from '../services/researchApply.js'
 import { nextToResearch, owedStory, researchStepState, type ResearchStepState } from '../services/researchQueue.js'
 import { markInterruptedRuns, recordSkippedRun, runPipelineResearch, sanitizedError } from '../services/researchRuns.js'
@@ -78,6 +81,13 @@ export async function runResearchStories(): Promise<void> {
   // Each worker takes the next story in queue order until the queue is done or the step is switched off
   const worker = async () => {
     while (!stopped && started < ids.length) {
+      // Past its chain's deadline the step starts no other story, so publishing is not held up
+      // (.context/scheduler.md, "Chains"); the stories in flight finish
+      if (runDeadlinePassed()) {
+        if (!stopped) log.info({ left: ids.length - started }, "past the chain's deadline; starting no other story")
+        stopped = true
+        return
+      }
       const storyId = ids[started++]!
       const state = await researchStepState()
       if (stopped || switchedOff(start, state)) {

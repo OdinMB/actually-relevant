@@ -72,7 +72,15 @@ function generatePodcastNote(): string {
   )
 }
 
+const CHAIN_RULES =
+  'Each step starts when the one before it has finished. A step set to Off is skipped; a step set to Review runs, then the chain waits until you continue it here. ' +
+  'If a step fails, the chain stops there and you can resume it from that step; its next scheduled run starts from the first step again.'
+
 const NOTES: Readonly<Record<string, () => string>> = {
+  intake_chain: () => `Crawls the feeds, then pre-assesses and assesses the new stories, in that order. ${CHAIN_RULES}`,
+  daily_edition_chain: () =>
+    `Selects the day's stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time. ${CHAIN_RULES} ` +
+    'From its flex cut-off on, every call goes at standard price; from its deadline on, research starts no other story, so publishing is never held up for long.',
   crawl_feeds: () =>
     'Reads each active feed whose own crawl interval has passed and saves its new articles as stories. ' +
     'Running this job more often never crawls a feed before its interval is up. ' +

@@ -100,14 +100,16 @@ Stories get a URL slug (e.g. `ai-breakthrough-in-protein-folding`) when they are
 
 ### Automated Jobs
 
+Since 2026-11-16 the six pipeline jobs run as steps of two chains (`scheduler.md`, "Chains"), each step starting when the one before it has finished: **Intake** (crawl, pre-assess, assess) at 03:00, 09:00, 15:00 and 21:00 UTC, and the **Daily edition** (select, research, publish) at 23:00 UTC, publishing as soon as research is done, by about 05:00 UTC at the latest. A step's own schedule is unused.
+
 | Job | Schedule | What It Does |
 |-----|----------|--------------|
-| `crawl_feeds` | Every 6 hours | Fetches RSS feeds, extracts content, creates stories as `fetched` (paywall-locked ones as `rejected`/`paywall`) |
-| `preassess_stories` | Configurable | Batch pre-screens all `fetched` stories |
-| `assess_stories` | Configurable | Full analysis on `pre_analyzed` stories with `relevancePre >= threshold` (per-issue `minPreRating`, else `fullAssessmentThreshold`, default 5); rejects the rest (`assess_threshold`) |
-| `select_stories` | Configurable | Selects top ~50% of `analyzed` stories with `relevance >= 5` (both configurable via `config.selection.*`), batched into groups of ≤20; rejects the rest (`select_threshold`, `selection`) |
-| `research_stories` | Daily at 02:20 UTC (after `select_stories` at 02:05, before `publish_stories` at 02:45), enabled by default since 2026-11-14 | Researches up to 20 `selected` stories it still owes, 4 at a time, and on each verdict applies the researched version (the story keeps its own rating) or rejects (`stale`, `contradicted`), run on its schedule or by hand ("Run now", the disabled job's too); nothing while `TAVILY_API_KEY` is unset (`story-research.md`, "The pipeline step") |
-| `publish_stories` | Configurable | Publishes the `selected` stories that are unclustered or their cluster's primary (in bounded chunks of `config.publish.chunkSize`); a selected non-primary is rejected as `duplicate` by the re-election. Only while the research step's job is enabled and research is switched on, it leaves out the stories the step still owes that entered `selected` within the last two hours (`awaitingResearch`, `services/researchQueue.ts`) and logs how many wait |
+| `crawl_feeds` | Intake, step 1 | Fetches RSS feeds, extracts content, creates stories as `fetched` (paywall-locked ones as `rejected`/`paywall`) |
+| `preassess_stories` | Intake, step 2 | Batch pre-screens all `fetched` stories |
+| `assess_stories` | Intake, step 3 | Full analysis on `pre_analyzed` stories with `relevancePre >= threshold` (per-issue `minPreRating`, else `fullAssessmentThreshold`, default 5); rejects the rest (`assess_threshold`) |
+| `select_stories` | Daily edition, step 1 | Selects top ~50% of `analyzed` stories with `relevance >= 5` (both configurable via `config.selection.*`), batched into groups of ≤20; rejects the rest (`select_threshold`, `selection`) |
+| `research_stories` | Step 2 of the daily edition chain (after `select_stories`, before `publish_stories`, from 23:00 UTC; `scheduler.md`, "Chains"), enabled by default since 2026-11-14 | Researches up to 20 `selected` stories it still owes, 4 at a time, and on each verdict applies the researched version (the story keeps its own rating) or rejects (`stale`, `contradicted`), run on its schedule or by hand ("Run now", the disabled job's too); nothing while `TAVILY_API_KEY` is unset (`story-research.md`, "The pipeline step") |
+| `publish_stories` | Daily edition, step 3 | Publishes the `selected` stories that are unclustered or their cluster's primary (in bounded chunks of `config.publish.chunkSize`); a selected non-primary is rejected as `duplicate` by the re-election. Only while the research step's job is enabled and research is switched on, it leaves out the stories the step still owes that entered `selected` within the last two hours (`awaitingResearch`, `services/researchQueue.ts`) and logs how many wait |
 
 Selection: candidates go through LLM selection (~`config.selection.ratio`, default 50%, rounded up); when there are more than `config.selection.maxGroupSize` (default 20), they are split into roughly equal groups (e.g. 25 stories → 13 + 12). Only unclustered stories and cluster primaries are eligible; before the LLM call `selectStories()` rejects any non-primary member in the pool as `duplicate` (`dedup.md`, "Selection Safety Net").
 

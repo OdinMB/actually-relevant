@@ -13,6 +13,19 @@ const prisma = new PrismaClient()
 
 async function main() {
   const jobs = await Promise.all([
+    // The chains (jobs/chains.ts): their steps below run when the chain reaches them, never on their
+    // own schedules. The daily edition goes at standard price from 03:30 UTC, and research starts no
+    // story after 05:00
+    prisma.jobRun.upsert({
+      where: { jobName: 'intake_chain' },
+      update: {},
+      create: { jobName: 'intake_chain', cronExpression: '0 3,9,15,21 * * *', enabled: false },
+    }),
+    prisma.jobRun.upsert({
+      where: { jobName: 'daily_edition_chain' },
+      update: {},
+      create: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *', enabled: false, flexUntil: '03:30', deadline: '05:00' },
+    }),
     prisma.jobRun.upsert({
       where: { jobName: 'crawl_feeds' },
       update: {},
