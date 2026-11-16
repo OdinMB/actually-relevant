@@ -107,6 +107,9 @@ function formatNumber(value: number, f: Format): string {
 
 const isYear = (n: PlantableNumber) => !n.token.marked && /^\d{4}$/.test(n.raw) && Number(n.raw) >= 1900 && Number(n.raw) <= 2099
 
+/** Unmarked, ungrouped and under 10,000: as often a year, a period's bound (1850-1900) or a name (Resolution 1701) as a count. */
+const mayNotCount = (n: PlantableNumber, f: Format) => !n.token.marked && f.group === null && f.value < 10_000
+
 const replaced = (text: string, span: { start: number; end: number }, insert: string) => text.slice(0, span.start) + insert + text.slice(span.end)
 
 const capitalized = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -149,11 +152,14 @@ function millionForm(text: string, n: PlantableNumber): Planted | null {
   return insert === null ? null : { text: replaced(text, n, insert), change: `${n.raw} → ${insert}` }
 }
 
-/** A number of at least 1,000 rounded to two significant figures with "about": 4,887 → about 4,900. */
+/**
+ * A number of at least 1,000 rounded to two significant figures with "about": 4,887 → about 4,900.
+ * Never a bare four-digit number (`mayNotCount`), where "about" would misstate a year or a name.
+ */
 function rounded(text: string, n: PlantableNumber): Planted | null {
   const p = partsOf(n.raw)
   const f = p && formatOf(p.digits)
-  if (!p || !f || f.value < 1000 || PERCENT.test(p.suffix) || isYear(n) || QUALIFIED.test(text.slice(0, n.start))) return null
+  if (!p || !f || f.value < 1000 || PERCENT.test(p.suffix) || mayNotCount(n, f) || QUALIFIED.test(text.slice(0, n.start))) return null
   const unit = 10 ** (Math.floor(Math.log10(f.value)) - 1)
   const value = Math.round(f.value / unit) * unit
   if (value === f.value) return null
@@ -194,9 +200,10 @@ export function wrongNumber(text: string): Planted | null {
 const DROPPABLE = /(^|[^\p{L}\p{N}])(more than|at least|up to|nearly|almost|about|around|over|some)\s+$/iu
 const NEGATED = /(^|[^\p{L}])(no|not)\s+$/iu
 
-/** "nearly", "almost", "about", "around", "more than", "over", "at least", "up to" or "some" removed before a number. */
+/** "nearly", "almost", "about", "around", "more than", "over", "at least", "up to" or "some" removed before a number, never before a year ("up 5% over 2024"). */
 export function droppedQualifier(text: string): Planted | null {
   for (const n of plantableNumbers(text)) {
+    if (isYear(n)) continue
     const before = text.slice(0, n.start)
     const m = DROPPABLE.exec(before)
     const qualifier = m?.[2]

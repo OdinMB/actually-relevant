@@ -1,22 +1,26 @@
 import { describe, it, expect } from 'vitest'
 import type { FactCheck } from '../../../schemas/research.js'
+import { publishedFact } from '../../../services/researchChecks.js'
 import { arm } from '../models.js'
-import type { Arm, CallRecord, SuiteContext } from '../types.js'
+import type { Arm, CallRecord, PlannedCall } from '../types.js'
 import type { FactFixture } from './factFixtures.js'
 import {
   batchesOf,
   batchPrompt,
   checkedItem,
+  estimateFactCheck,
   FACT_CHECK_SCHEMA_NAME,
   ITEMS_PER_CALL,
   judgeItems,
   LABEL_ARM,
   labelFacts,
-  plannedCalls,
+  plannedArmCalls,
+  plannedLabelCalls,
   readVerdicts,
   runArms,
   runFactCheck,
   variantItems,
+  type BudgetedContext,
   type CheckItem,
 } from './factCheck.js'
 
@@ -28,8 +32,9 @@ const fact = (n: number, statement = `Congo reported ${n},887 deaths.`, sentence
   outlet: 'Outlet',
   url: `https://example.org/${n}`,
   language: 'fr',
+  date: '2026-11-12T08:00:00Z',
   statement,
-  measures: 'deaths',
+  measures: 'deaths in North Kivu since August',
   sentence,
 })
 
@@ -41,11 +46,19 @@ interface FakeCall {
   prompt: string
 }
 
+interface FakeLedger {
+  /** Whether the cache answers a planned call; by default none. */
+  cached?: (call: PlannedCall) => boolean
+  spentUsd?: number
+}
+
 /** Answers each item of a prompt with `judge(text)`; `'fail'` makes the whole call a parse failure. */
-function fakeContext(judge: (text: string) => boolean | 'fail'): SuiteContext & { calls: FakeCall[] } {
+function fakeContext(judge: (text: string) => boolean | 'fail', ledger: FakeLedger = {}): BudgetedContext & { calls: FakeCall[] } {
   const calls: FakeCall[] = []
   return {
     calls,
+    isCached: ledger.cached ?? (() => false),
+    spentUsd: () => ledger.spentUsd ?? 0,
     async call<T>(a: Arm, schemaName: string, _schema: unknown, prompt: string): Promise<CallRecord<T>> {
       calls.push({ arm: a, schemaName, prompt })
       const texts = [...prompt.matchAll(/<ITEM number="(\d+)"[^>]*>\n<TEXT>([^<]*)<\/TEXT>/g)].map(m => ({ number: Number(m[1]), text: m[2] ?? '' }))
@@ -79,15 +92,26 @@ function fakeContext(judge: (text: string) => boolean | 'fail'): SuiteContext & 
 }
 
 describe('checkedItem', () => {
-  it("gives the judge the source's sentence as the item's one fact, never the extraction's statement, with production's number hints", () => {
+  it("gives the judge the source's sentence and what the fact measures, never the extraction's statement, then the source's date, with production's number hints", () => {
     const f = fact(4)
     expect(checkedItem(item(f, 'Congo reported 7,331 deaths.'), 3)).toEqual({
       label: 'Fact 3',
       text: 'Congo reported 7,331 deaths.',
-      facts: [{ id: 'S3F1', statement: f.sentence, supportingSentence: f.sentence, measures: '' }],
+      facts: [{ id: 'S3F1', statement: f.sentence, supportingSentence: f.sentence, measures: f.measures }, ...publishedFact('S3', f.outlet, f.date)],
       numbersNotFound: ['7,331'],
     })
     expect(checkedItem(item(f), 1).numbersNotFound).toEqual([])
+  })
+
+  it("reads a number the source's date states as found, as production does", () => {
+    const f = fact(4)
+    const text = 'Congo reported 4,887 deaths by November 12, 2026.'
+    expect(checkedItem(item(f, text), 1).numbersNotFound).toEqual([])
+    expect(checkedItem(item({ ...f, date: null }, text), 1).numbersNotFound).not.toEqual([])
+  })
+
+  it('gives an undated source no date fact', () => {
+    expect(checkedItem(item({ ...fact(4), date: null }), 2).facts.map(x => x.id)).toEqual(['S2F1'])
   })
 
   it("keeps the extraction's statement out of the prompt when the item is a variant of it", () => {
@@ -146,12 +170,12 @@ describe('judgeItems', () => {
 })
 
 describe('labelFacts', () => {
-  it('keeps the facts the strong judge accepts and reports the others as extraction errors or unlabeled', async () => {
+  it('keeps the facts the strong judge accepts and reports the others as unsupported by their evidence, or unlabeled', async () => {
     const facts = [fact(1), fact(2, 'Congo reported 9,999 deaths.'), fact(3)]
     const ctx = fakeContext(text => !text.includes('9,999'))
     const labels = await labelFacts(ctx, facts)
     expect(labels.accepted.map(f => f.key)).toEqual(['run1:S0F1', 'run3:S0F1'])
-    expect(labels.extractionErrors.map(v => [v.item.fact.key, v.problem])).toEqual([['run2:S0F1', 'not stated']])
+    expect(labels.unsupported.map(v => [v.item.fact.key, v.problem])).toEqual([['run2:S0F1', 'not stated']])
     expect(labels.unlabeled).toEqual([])
     expect(ctx.calls.map(c => [c.arm, c.schemaName])).toEqual([[LABEL_ARM, FACT_CHECK_SCHEMA_NAME]])
   })
@@ -177,24 +201,80 @@ describe('runArms', () => {
   })
 })
 
-describe('runFactCheck', () => {
-  it('labels every fact, builds variants from the accepted facts only, and runs every arm on them', async () => {
-    const facts = [fact(1), fact(2, 'Congo reported 9,999 deaths.')]
-    const ctx = fakeContext(text => !text.includes('9,999'))
-    const result = await runFactCheck(ctx, facts, [arm('gpt-6-luna', 'low')], 1)
-    expect(result.labels.accepted.map(f => f.key)).toEqual(['run1:S0F1'])
-    expect([...new Set(result.variants.map(v => v.fact.key))]).toEqual(['run1:S0F1'])
-    expect(result.runs.map(r => [r.arm, r.runs[0]?.map(v => v.item.id)])).toEqual([['gpt-6-luna@low', result.variants.map(v => v.id)]])
+describe('plannedLabelCalls and plannedArmCalls', () => {
+  it('plan exactly the calls the label pass and the arms make, so a cached re-run finds every one', async () => {
+    const facts = Array.from({ length: 11 }, (_, i) => fact(i + 1))
+    const arms = [arm('gpt-6-luna', 'low'), arm('gpt-6-luna', 'medium')]
+    const ctx = fakeContext(() => true)
+    await labelFacts(ctx, facts)
+    const variants = variantItems(facts)
+    await runArms(ctx, variants, arms, 2)
+    const key = (c: { arm: Arm; schemaName: string; prompt: string }) => `${c.arm.model}@${c.arm.effort}|${c.schemaName}|${c.prompt}`
+    const planned = [...plannedLabelCalls(facts), ...plannedArmCalls(variants, arms, 2)]
+    expect(new Set(planned.map(key))).toEqual(new Set(ctx.calls.map(key)))
+    expect(planned).toHaveLength(ctx.calls.length)
+    expect(plannedLabelCalls(facts)).toHaveLength(2)
+    expect(plannedArmCalls(variants, arms, 2)).toHaveLength(2 * 2 * Math.ceil(variants.length / ITEMS_PER_CALL))
   })
 })
 
-describe('plannedCalls', () => {
-  it('plans the label pass on every fact and each arm run on every variant, an upper bound before the labels', () => {
-    const facts = Array.from({ length: 11 }, (_, i) => fact(i + 1))
-    const planned = plannedCalls(facts, [arm('gpt-6-luna', 'low')], 3)
-    const variants = variantItems(facts).length
-    expect(planned.filter(c => c.arm === LABEL_ARM)).toHaveLength(2)
-    expect(planned.filter(c => c.arm !== LABEL_ARM)).toHaveLength(3 * Math.ceil(variants / ITEMS_PER_CALL))
-    expect(new Set(planned.filter(c => c.arm !== LABEL_ARM).map(c => c.schemaName)).size).toBe(3)
+describe('estimateFactCheck', () => {
+  const facts = [fact(1), fact(2, 'Congo reported 9,999 deaths.')]
+  const arms = [arm('gpt-6-luna', 'low')]
+  const judge = (text: string) => !text.includes('9,999')
+
+  it("plans the arms on the accepted facts' variants once the cache holds every label", async () => {
+    const ctx = fakeContext(judge, { cached: () => true })
+    const estimate = await estimateFactCheck(ctx, facts, arms, 1)
+    expect(estimate.armsUpperBound).toBe(false)
+    expect(estimate.arms.calls).toBe(plannedArmCalls(variantItems([fact(1)]), arms, 1).length)
+    expect(estimate.labels).toMatchObject({ calls: 1, uncached: 0, usd: 0 })
+  })
+
+  it("plans them on every fact's variants, an upper bound, while a label is uncached, and makes no call", async () => {
+    const ctx = fakeContext(judge)
+    const estimate = await estimateFactCheck(ctx, facts, arms, 1)
+    expect(estimate.armsUpperBound).toBe(true)
+    expect(estimate.arms.calls).toBe(plannedArmCalls(variantItems(facts), arms, 1).length)
+    expect(estimate.labels.uncached).toBe(1)
+    expect(ctx.calls).toEqual([])
+  })
+})
+
+describe('runFactCheck', () => {
+  const facts = [fact(1), fact(2, 'Congo reported 9,999 deaths.')]
+  const arms = [arm('gpt-6-luna', 'low')]
+  const judge = (text: string) => !text.includes('9,999')
+  const gate = { budgetUsd: 3, canCall: true }
+
+  it('labels every fact, builds variants from the accepted facts only, and runs every arm on them', async () => {
+    const ctx = fakeContext(judge)
+    const result = await runFactCheck(ctx, facts, arms, 1, gate)
+    expect(result.stopped).toBeNull()
+    expect(result.labels?.accepted.map(f => f.key)).toEqual(['run1:S0F1'])
+    expect([...new Set(result.variants.map(v => v.fact.key))]).toEqual(['run1:S0F1'])
+    expect(result.runs.map(r => [r.arm, r.runs[0]?.map(v => v.item.id)])).toEqual([['gpt-6-luna@low', result.variants.map(v => v.id)]])
+  })
+
+  it('runs a fully cached step with the budget spent and no API key', async () => {
+    const ctx = fakeContext(judge, { cached: () => true, spentUsd: 3 })
+    const result = await runFactCheck(ctx, facts, arms, 1, { budgetUsd: 3, canCall: false })
+    expect(result.stopped).toBeNull()
+    expect(result.runs).toHaveLength(1)
+  })
+
+  it('stops before the label pass when its own estimate does not fit, and makes no call', async () => {
+    const ctx = fakeContext(judge, { spentUsd: 3 })
+    const result = await runFactCheck(ctx, facts, arms, 1, gate)
+    expect(result).toMatchObject({ labels: null, runs: [], stopped: { pass: 'labels' } })
+    expect(ctx.calls).toEqual([])
+  })
+
+  it("checks the arms again once the labels are known, and stops before them when the accepted facts' calls do not fit", async () => {
+    const ctx = fakeContext(judge, { cached: c => c.arm === LABEL_ARM, spentUsd: 3 })
+    const result = await runFactCheck(ctx, facts, arms, 1, gate)
+    expect(result.labels?.accepted).toHaveLength(1)
+    expect(result).toMatchObject({ runs: [], stopped: { pass: 'arms' } })
+    expect(ctx.calls.every(c => c.arm === LABEL_ARM)).toBe(true)
   })
 })

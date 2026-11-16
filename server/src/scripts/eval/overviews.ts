@@ -14,13 +14,14 @@
 import 'dotenv/config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { createEvalContext, estimateCallUsd, type EvalContext } from './models.js'
+import { createEvalContext, type EvalContext } from './models.js'
 import { parseOverviewOptions, type OverviewOptions, type OverviewStep } from './options.js'
 import { classifyDb, openReadOnlyDb, readOnlyStatus, type ReadOnlyDb } from './readOnlyDb.js'
 import { loadBaselineRuns, summarizeBaseline, type Baseline } from './overviews/baseline.js'
-import { plannedCalls, runFactCheck } from './overviews/factCheck.js'
+import type { CallEstimate } from './overviews/callBudget.js'
+import { estimateFactCheck, runFactCheck } from './overviews/factCheck.js'
 import { scoreArm } from './overviews/factCheckScore.js'
-import { loadFactFixtures, type FactFixture, type FactFixtures } from './overviews/factFixtures.js'
+import { loadFactFixtures, reusableFixtures, type FactFixture, type FactFixtures } from './overviews/factFixtures.js'
 import { checkKeyFiles, loadKeyStories } from './overviews/keyCheck.js'
 import { readKeyFiles } from './overviews/keyFiles.js'
 import { overviewReportName, renderOverviewReport, type FactCheckReport, type OverviewReportInput } from './overviews/report.js'
@@ -52,25 +53,46 @@ type Session = ReturnType<typeof lazySession>
 async function getFactFixtures(opts: OverviewOptions, cacheDir: string, session: Session): Promise<FactFixtures> {
   const file = join(cacheDir, 'fact-fixtures.json')
   if (existsSync(file) && !opts.refreshFixtures) {
-    const fx = JSON.parse(readFileSync(file, 'utf8')) as FactFixtures
-    if (fx.size === opts.size) {
+    const fx = reusableFixtures(JSON.parse(readFileSync(file, 'utf8')), opts.size)
+    if (fx) {
       console.log(`fact fixtures: cached from ${fx.createdAt} (database ${fx.dbClass}); pass --refresh-fixtures to resample`)
       return fx
     }
-    console.log(`fact fixtures: the cached sample has ${fx.size} facts, not ${opts.size}; resampling`)
+    console.log(`fact fixtures: the cached sample is of another size or version; resampling`)
   }
   const fx = await loadFactFixtures(await session.get(), opts.size)
   writeFileSync(file, JSON.stringify(fx, null, 1))
   return fx
 }
 
-async function factCheckStep(opts: OverviewOptions, fx: FactFixtures, facts: FactFixture[], ctx: EvalContext): Promise<FactCheckReport> {
+const estimateText = (e: CallEstimate) => `${e.calls} calls (${e.uncached} uncached) ≈ ${usd(e.usd)}`
+
+/** The step, its passes each checked against the budget; null when the label pass could not run. */
+async function factCheckStep(
+  opts: OverviewOptions,
+  fx: FactFixtures,
+  facts: FactFixture[],
+  ctx: EvalContext,
+  skipped: { step: string; reason: string }[],
+): Promise<FactCheckReport | null> {
   console.log(`fact-check: labeling ${facts.length} facts, then ${opts.arms.length} arm(s) × ${opts.repeat} run(s) on the accepted facts' variants`)
-  const { labels, variants, runs } = await runFactCheck(ctx, facts, opts.arms, opts.repeat)
-  console.log(`fact-check: ${labels.accepted.length} accepted, ${labels.extractionErrors.length} extraction errors; ${variants.length} variants judged`)
-  const scores = runs.map(scoreArm)
+  const run = await runFactCheck(ctx, facts, opts.arms, opts.repeat, { budgetUsd: opts.budget, canCall: Boolean(process.env.OPENAI_API_KEY) })
+  if (run.stopped) skipped.push({ step: `fact-check (${run.stopped.pass})`, reason: run.stopped.reason })
+  if (!run.labels) return null
+  console.log(
+    `fact-check: ${run.labels.accepted.length} accepted, ${run.labels.unsupported.length} not supported by their evidence; ${run.variants.length} variants`,
+  )
+  const scores = run.runs.map(scoreArm)
   for (const s of scores) console.log(`  ${s.arm}: catch ${pct(s.catchRate)}, false rejection ${pct(s.falseRejection)}, unjudged ${s.unjudged}`)
-  return { fixtures: fx, labeled: facts.length, labels, variants, ...(opts.limit !== undefined ? { limit: opts.limit } : {}), scores }
+  return {
+    fixtures: fx,
+    labeled: facts.length,
+    labels: run.labels,
+    variants: run.variants,
+    ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+    scores,
+    ...(run.stopped?.pass === 'arms' ? { stoppedArms: run.stopped.reason } : {}),
+  }
 }
 
 async function main(): Promise<void> {
@@ -99,13 +121,11 @@ async function main(): Promise<void> {
 
     const fx = runs('fact-check') ? await getFactFixtures(opts, cacheDir, session) : null
     const facts = fx ? (opts.limit === undefined ? fx.facts : fx.facts.slice(0, opts.limit)) : []
-    let estimate = 0
     if (fx) {
-      const plan = plannedCalls(facts, opts.arms, opts.repeat)
-      const uncached = plan.filter(c => !ctx.isCached(c))
-      estimate = uncached.reduce((sum, c) => sum + estimateCallUsd(c), 0)
+      const e = await estimateFactCheck(ctx, facts, opts.arms, opts.repeat)
+      console.log(`fact-check: ${facts.length} facts (newest run ${fx.anchor ?? 'none'}); labels ${estimateText(e.labels)}`)
       console.log(
-        `fact-check: ${facts.length} facts (newest run ${fx.anchor ?? 'none'}); at most ${plan.length} calls (${uncached.length} uncached) ≈ ${usd(estimate)}, an upper bound until the labels are known`,
+        `fact-check: arms ${estimateText(e.arms)}${e.armsUpperBound ? ', an upper bound until the labels are known (as if every fact were accepted); checked again once they are' : " on the accepted facts' variants"}`,
       )
     }
     console.log(`folder spend so far ${usd(ctx.spentUsd())}; budget ${usd(opts.budget)} (a cap on the folder's ledger total)`)
@@ -131,15 +151,11 @@ async function main(): Promise<void> {
       }
     }
     if (fx) {
-      const remaining = opts.budget - ctx.spentUsd()
-      if (!process.env.OPENAI_API_KEY) skipped.push({ step: 'fact-check', reason: 'OPENAI_API_KEY is missing' })
-      else if (estimate > remaining) skipped.push({ step: 'fact-check', reason: `estimate ${usd(estimate)} exceeds the remaining budget ${usd(remaining)}` })
-      else {
-        try {
-          report.factCheck = await factCheckStep(opts, fx, facts, ctx)
-        } catch (err) {
-          failed('fact-check', err)
-        }
+      try {
+        const factCheck = await factCheckStep(opts, fx, facts, ctx, skipped)
+        if (factCheck) report.factCheck = factCheck
+      } catch (err) {
+        failed('fact-check', err)
       }
     }
     if (runs('baseline')) {

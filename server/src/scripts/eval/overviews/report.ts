@@ -12,7 +12,7 @@ import { TAVILY_USD_PER_CREDIT } from '../research/tavily.js'
 import { WINDOW_DAYS, type Baseline, type CostStats } from './baseline.js'
 import { LABEL_ARM, type CheckItem, type Labels } from './factCheck.js'
 import type { FactFixtures } from './factFixtures.js'
-import { CATCH_BAR, FALSE_REJECTION_BAR, type ArmScore, type Listed } from './factCheckScore.js'
+import { CATCH_BAR, FALSE_REJECTION_BAR, MAX_LISTED, type ArmScore, type Listed } from './factCheckScore.js'
 import type { KeyResult } from './keyCheck.js'
 import { expectedSupported, VARIANT_KINDS } from './plant.js'
 
@@ -37,10 +37,12 @@ export interface FactCheckReport {
   /** Facts the strong judge labeled: the sample, or its first `--limit` on a smoke run. */
   labeled: number
   labels: Labels
-  /** The variants the arms judged, built from the accepted facts. */
+  /** The variants built from the accepted facts, for the arms to judge. */
   variants: CheckItem[]
   limit?: number
   scores: ArmScore[]
+  /** Why the arms did not run once the labels were known (the budget, or the API key); absent when they ran. */
+  stoppedArms?: string
 }
 
 export interface OverviewReportInput {
@@ -135,25 +137,32 @@ function factCheckLines(r: FactCheckReport): string[] {
   const languages = counted(fx.facts.map(f => f.language ?? 'unknown'))
   const outlets = new Set(fx.facts.map(f => f.outlet)).size
   const stories = new Set(fx.facts.map(f => f.storyId ?? f.runId)).size
-  const errors = r.labels.extractionErrors
+  const unsupported = r.labels.unsupported
+  const undated = fx.facts.filter(f => f.date === null).length
   const variantCounts = VARIANT_KINDS.map(kind => [kind, r.variants.filter(v => v.kind === kind).length] as const)
   return [
-    `**Sample:** ${fx.facts.length} facts (of ${fx.size} asked for) from ${stories} stories and ${outlets} outlets, ${fx.runsRead} runs read back from the newest (${fx.anchor ?? 'none'}), ${fx.olderShape} of them skipped as stored in an older shape. Languages: ${languages.map(([l, n]) => `${l} ${n}`).join(', ') || 'none'}.`,
+    `**Sample:** ${fx.facts.length} facts (of ${fx.size} asked for) from ${stories} stories and ${outlets} outlets, ${fx.runsRead} runs read back from the newest (${fx.anchor ?? 'none'}), ${fx.olderShape} of them skipped as stored in an older shape; ${undated} facts from sources without a date. Languages: ${languages.map(([l, n]) => `${l} ${n}`).join(', ') || 'none'}.`,
     ...fx.shortfalls.map(s => `- Shortfall: ${s}`),
     '',
-    `**Labels:** ${armKey(LABEL_ARM)} judged ${r.labeled} facts${r.limit !== undefined ? ` (the first ${r.limit} of the sample, --limit: a smoke run, not evidence)` : ''} as extracted against their sentences: ${r.labels.accepted.length} accepted, ${errors.length} found unsupported (extraction errors, ${pct(r.labeled === 0 ? null : errors.length / r.labeled)}), ${r.labels.unlabeled.length} without a verdict. Variants are built from the accepted facts only.`,
+    `**Labels:** ${armKey(LABEL_ARM)} judged ${r.labeled} facts${r.limit !== undefined ? ` (the first ${r.limit} of the sample, --limit: a smoke run, not evidence)` : ''} as extracted against their evidence (the source's sentence, what the fact measures, the source's date): ${r.labels.accepted.length} accepted, ${unsupported.length} statements their evidence does not support (${pct(r.labeled === 0 ? null : unsupported.length / r.labeled)}), ${r.labels.unlabeled.length} without a verdict. Variants are built from the accepted facts only.`,
     '',
     '| Kind | Expected | Variants |',
     '|---|---|---|',
     ...variantCounts.map(([kind, n]) => `| ${kind} | ${expectedSupported(kind) ? 'supported' : 'unsupported'} | ${n} |`),
     '',
+    ...(r.stoppedArms ? [`No arm ran: ${cell(r.stoppedArms)}.`, ''] : []),
     ...r.scores.flatMap(armLines),
-    `### Extraction errors the strong judge found (${Math.min(errors.length, 30)} of ${errors.length})`,
+    `### Statements their evidence does not support (sentence, what it measures, source date): ${Math.min(unsupported.length, MAX_LISTED)} of ${unsupported.length}`,
     '',
-    ...(errors.length > 0
-      ? errors
-          .slice(0, 30)
-          .map(v => `- ${quoted(v.item.text)}; sentence ${quoted(v.item.fact.sentence)} (${cell(v.item.fact.outlet)}): ${cell(v.problem) || 'no reason given'}`)
+    "Not an extraction-fidelity measure: the judge never sees the source's full text, so a statement that rightly carries scope or period from elsewhere in the article lands here too.",
+    '',
+    ...(unsupported.length > 0
+      ? unsupported
+          .slice(0, MAX_LISTED)
+          .map(
+            v =>
+              `- ${quoted(v.item.text)}; sentence ${quoted(v.item.fact.sentence)}${v.item.fact.measures ? `; measures ${quoted(v.item.fact.measures)}` : ''} (${cell(v.item.fact.outlet)}): ${cell(v.problem) || 'no reason given'}`,
+          )
       : ['None.']),
   ]
 }

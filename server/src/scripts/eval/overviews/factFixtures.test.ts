@@ -1,10 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import type { SelectDb } from '../readOnlyDb.js'
-import { factsOfRun, pickFacts, sampleFacts, statesNumber, type RunRow } from './factFixtures.js'
+import { FACT_FIXTURES_VERSION, factsOfRun, pickFacts, reusableFixtures, sampleFacts, statesNumber, type FactFixtures, type RunRow } from './factFixtures.js'
 
 const fact = (id: string, statement: string, found = true) => ({ id, statement, supportingSentence: `Sentence of ${id}.`, measures: '', found })
 
-const source = (id: string, facts: ReturnType<typeof fact>[]) => ({ id, outlet: `Outlet ${id}`, url: `https://example.org/${id}`, facts })
+const source = (id: string, facts: ReturnType<typeof fact>[]) => ({
+  id,
+  outlet: `Outlet ${id}`,
+  url: `https://example.org/${id}`,
+  date: '2026-11-12T08:00:00Z',
+  facts,
+})
 
 /** `n` facts of source `id` that each state a number. */
 const numbered = (id: string, n: number) => Array.from({ length: n }, (_, i) => fact(`${id}F${i + 1}`, `Cases rose to ${(i + 1) * 100}.`))
@@ -45,10 +51,21 @@ describe('factsOfRun', () => {
       outlet: 'Outlet S0',
       url: 'https://example.org/S0',
       language: null,
+      date: '2026-11-12T08:00:00Z',
       statement: 'Cases rose to 100.',
       measures: '',
       sentence: 'Sentence of S0F1.',
     })
+  })
+
+  it("keeps a source's date when it has one, and reads a source stored without one as undated", () => {
+    const facts = factsOfRun(
+      run('r1', 's1', [
+        { ...source('S0', numbered('S0', 1)), date: null },
+        { id: 'S1', outlet: 'Outlet S1', url: 'https://example.org/S1', facts: numbered('S1', 1) },
+      ]),
+    )
+    expect(facts?.map(f => f.date)).toEqual([null, null])
   })
 
   it('skips a fact whose sentence was not found in its source, or that states no number', () => {
@@ -81,6 +98,28 @@ describe('pickFacts', () => {
 
   it('leaves out stories an earlier page already gave facts', () => {
     expect(pickFacts([run('r9', 's1', [source('S0', numbered('S0', 1))])], 5, new Set(['s1'])).facts).toEqual([])
+  })
+})
+
+describe('reusableFixtures', () => {
+  const cached = (extra: Partial<FactFixtures> | Record<string, unknown>) => ({
+    version: FACT_FIXTURES_VERSION,
+    createdAt: '',
+    anchor: null,
+    size: 300,
+    dbClass: 'local',
+    readOnlyMode: 'session',
+    facts: [],
+    runsRead: 0,
+    olderShape: 0,
+    shortfalls: [],
+    ...extra,
+  })
+
+  it('reuses a cached sample of the size asked for, and resamples one of another size or an older version', () => {
+    expect(reusableFixtures(cached({}), 300)?.size).toBe(300)
+    expect(reusableFixtures(cached({}), 100)).toBeNull()
+    expect(reusableFixtures(cached({ version: 1 }), 300)).toBeNull()
   })
 })
 

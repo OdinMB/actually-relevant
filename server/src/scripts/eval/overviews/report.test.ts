@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { OVERVIEW_DEFAULT_ARMS, OVERVIEW_DEFAULT_SIZE, OVERVIEW_STEPS, type OverviewOptions } from '../options.js'
 import { summarizeBaseline } from './baseline.js'
 import { variantItems, type CheckItem, type Verdict } from './factCheck.js'
-import type { FactFixture, FactFixtures } from './factFixtures.js'
+import { FACT_FIXTURES_VERSION, type FactFixture, type FactFixtures } from './factFixtures.js'
 import { scoreArm } from './factCheckScore.js'
 import { overviewReportName, renderOverviewReport, type OverviewReportInput } from './report.js'
 
@@ -22,7 +22,7 @@ describe('overviewReportName', () => {
 })
 
 const fixtures: FactFixtures = {
-  version: 1,
+  version: FACT_FIXTURES_VERSION,
   createdAt: '2026-11-17T08:00:00.000Z',
   anchor: '2026-11-16T02:20:00.000Z',
   size: 300,
@@ -66,7 +66,7 @@ describe('renderOverviewReport', () => {
         factCheck: {
           fixtures,
           labeled: 0,
-          labels: { accepted: [], extractionErrors: [], unlabeled: [] },
+          labels: { accepted: [], unsupported: [], unlabeled: [] },
           variants: [],
           scores: [scoreArm({ arm: 'gpt-6-luna@low', runs: [[]] })],
         },
@@ -76,7 +76,24 @@ describe('renderOverviewReport', () => {
     expect(md).toContain('### gpt-6-luna@low')
   })
 
-  it("lists a key's counts and errors, an arm's misses across runs, the extraction errors, and the baseline's costs", () => {
+  it('says why no arm ran when the budget stopped them after the labels', () => {
+    const md = renderOverviewReport(
+      input({
+        steps: ['fact-check'],
+        factCheck: {
+          fixtures,
+          labeled: 0,
+          labels: { accepted: [], unsupported: [], unlabeled: [] },
+          variants: [],
+          scores: [],
+          stoppedArms: 'estimate $4.00 for 30 uncached calls exceeds the remaining budget $3.00',
+        },
+      }),
+    )
+    expect(md).toContain('No arm ran: estimate $4.00')
+  })
+
+  it("lists a key's counts and errors, an arm's misses across runs, the statements their evidence does not support with the judge's reason, and the baseline's costs", () => {
     const fact: FactFixture = {
       key: 'r1:S0F1',
       runId: 'r1',
@@ -85,6 +102,7 @@ describe('renderOverviewReport', () => {
       outlet: 'Outlet | One',
       url: 'https://example.org/1',
       language: 'fr',
+      date: null,
       statement: 'Congo reported 4,887 deaths.',
       measures: 'deaths',
       sentence: 'Le Congo a signalé 4 887 décès.',
@@ -103,7 +121,7 @@ describe('renderOverviewReport', () => {
         factCheck: {
           fixtures: { ...fixtures, facts: [fact], runsRead: 1, shortfalls: ['1 of 300 facts: the database holds no more qualifying facts'] },
           labeled: 1,
-          labels: { accepted: [fact], extractionErrors: [verdict(faithful!, false)], unlabeled: [] },
+          labels: { accepted: [fact], unsupported: [verdict(faithful!, false)], unlabeled: [] },
           variants: [faithful!, wrong!],
           limit: 1,
           scores: [
@@ -140,7 +158,8 @@ describe('renderOverviewReport', () => {
     expect(md).toContain('#### False rejections (1 of 1)')
     expect(md).toContain('**Flips:** the verdict differs between runs for 2 of 2 items')
     expect(md).toContain('Outlet / One')
-    expect(md).toContain('### Extraction errors the strong judge found (1 of 1)')
+    expect(md).toContain('### Statements their evidence does not support (sentence, what it measures, source date): 1 of 1')
+    expect(md).toContain('; measures "deaths" (Outlet / One): not stated')
     expect(md).toContain('| Cost (`cost_usd`) | 1 | $0.0500 |')
     expect(md).toContain('Fact fixtures sampled 2026-11-17T08:00:00.000Z from the local database copy')
   })

@@ -34,13 +34,21 @@ describe('reworded', () => {
 
   it('rounds a number of at least 1,000 to two significant figures with "about"', () => {
     expect(reworded('Congo reported 4,887 deaths.')?.text).toBe('Congo reported about 4,900 deaths.')
-    expect(reworded('Congo reported 4887 deaths.')?.text).toBe('Congo reported about 4900 deaths.')
+    expect(reworded('Congo reported 14887 deaths.')?.text).toBe('Congo reported about 15000 deaths.')
+    expect(reworded('The clinic spent $4887 on fuel.')?.text).toBe('The clinic spent about $4900 on fuel.')
   })
 
   it('leaves a number already rounded, already qualified, or a year', () => {
     expect(reworded('Congo reported 4,900 deaths.')).toBeNull()
     expect(reworded('Congo reported more than 4,887 deaths.')).toBeNull()
     expect(reworded('In 2024, 15 people died.')).toBeNull()
+  })
+
+  it('leaves a bare four-digit number, as often a year, a period or a name as a count', () => {
+    expect(reworded('Congo reported 4887 deaths.')).toBeNull()
+    expect(reworded('Warming is measured against the 1850-1900 average.')).toBeNull()
+    expect(reworded('It is the hottest year since 1880.')).toBeNull()
+    expect(reworded('Resolution 1701 ended the war.')).toBeNull()
   })
 
   it('makes one change only', () => {
@@ -99,6 +107,11 @@ describe('droppedQualifier', () => {
 
   it('leaves a negated limit, which dropping would garble', () => {
     expect(droppedQualifier('No more than 5 people may gather.')).toBeNull()
+  })
+
+  it('leaves a qualifier before a year, which is no limit on a number', () => {
+    expect(droppedQualifier('Exports were up 5% over 2024.')).toBeNull()
+    expect(droppedQualifier('Exports were up 5% over 2024, at about 300 tonnes.')?.text).toBe('Exports were up 5% over 2024, at 300 tonnes.')
   })
 })
 

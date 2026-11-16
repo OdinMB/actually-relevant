@@ -14,6 +14,8 @@ import type { ReadOnlyDb, SelectDb } from '../readOnlyDb.js'
 
 export const MAX_FACTS_PER_RUN = 10
 export const MAX_FACTS_PER_SOURCE = 3
+/** 2: each fact carries its source's date. A cached sample of another version is resampled. */
+export const FACT_FIXTURES_VERSION = 2
 
 /** One extracted fact, with where it came from. */
 export interface FactFixture {
@@ -26,15 +28,18 @@ export interface FactFixture {
   url: string
   /** The language of the feed the source was crawled from, when it is one of ours; null for a search result. */
   language: string | null
+  /** The source's publication date as research stored it (ISO, or as search gave it); null when unknown. */
+  date: string | null
   /** The extraction's statement, in English. */
   statement: string
+  /** What the fact's figure counts, where and when, as the extraction recorded it. */
   measures: string
   /** The source's sentence, verbatim, in its own language. */
   sentence: string
 }
 
 export interface FactFixtures {
-  version: 1
+  version: typeof FACT_FIXTURES_VERSION
   createdAt: string
   /** The newest finished run's start: the sample is taken from there back. */
   anchor: string | null
@@ -57,16 +62,17 @@ export interface RunRow {
   sources: unknown
 }
 
-type StoredSource = Pick<ResearchSource, 'id' | 'outlet' | 'url'> & {
+type StoredSource = Pick<ResearchSource, 'id' | 'outlet' | 'url' | 'date'> & {
   facts: Pick<ResearchFact, 'id' | 'statement' | 'supportingSentence' | 'measures' | 'found'>[]
 }
 
-/** The part of `StoryResearch.sources` the sampler reads; a run that fails it is in an older shape. */
-const storedSourcesSchema: z.ZodType<StoredSource[]> = z.array(
+/** The part of `StoryResearch.sources` the sampler reads; a run that fails it is in an older shape. A source stored without a date is undated. */
+const storedSourcesSchema: z.ZodType<StoredSource[], z.ZodTypeDef, unknown> = z.array(
   z.object({
     id: z.string(),
     outlet: z.string(),
     url: z.string(),
+    date: z.string().nullable().default(null),
     facts: z.array(z.object({ id: z.string(), statement: z.string(), supportingSentence: z.string(), measures: z.string(), found: z.boolean() })),
   }),
 )
@@ -97,6 +103,7 @@ export function factsOfRun(row: RunRow): FactFixture[] | null {
         outlet: next.s.outlet,
         url: next.s.url,
         language: null,
+        date: next.s.date,
         statement: next.f.statement,
         measures: next.f.measures,
         sentence: next.f.supportingSentence,
@@ -179,5 +186,11 @@ export async function sampleFacts(
 
 export async function loadFactFixtures(db: ReadOnlyDb, size: number): Promise<FactFixtures> {
   const sample = await db.read(q => sampleFacts(q, size))
-  return { version: 1, createdAt: new Date().toISOString(), size, dbClass: db.dbClass, readOnlyMode: db.mode, ...sample }
+  return { version: FACT_FIXTURES_VERSION, createdAt: new Date().toISOString(), size, dbClass: db.dbClass, readOnlyMode: db.mode, ...sample }
+}
+
+/** A cached sample (`.cache/fact-fixtures.json`, as parsed) when it is of this version and the size asked for; null to resample. */
+export function reusableFixtures(cached: unknown, size: number): FactFixtures | null {
+  const fx = cached as Partial<FactFixtures> | null
+  return fx?.version === FACT_FIXTURES_VERSION && fx.size === size ? (fx as FactFixtures) : null
 }
