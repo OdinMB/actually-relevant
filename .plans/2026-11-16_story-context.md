@@ -12,21 +12,20 @@ Naming: a **box** is the stored record and a **card** is how the page shows it.
 
 ## For Odin
 
-These five calls are yours, because readers would notice them or they commit money. Everything else in this plan is decided. The plan builds each recommendation as written, and if you choose differently, only the part named in the item changes.
+Items 1 and 2 were decided on 16 Nov; 3 to 5 and the methodology text are still Odin's calls, because readers would notice them or they commit money. Everything else in this plan is decided. The plan builds each recommendation as written, and if Odin chooses differently, only the part named in the item changes.
 
-1. **How the context sits on the story page.** Mockups on the live Indonesia story, in `mockups/`: `context-split-margin.png` and `context-split-inline.png` (desktop), `context-split-phone.png` (phone, closed and tapped) and `context-split-phone-full.png`. The earlier one-block versions are `context-place-*.png`.
+1. **How the context sits on the story page. Decided (Odin, 16 Nov).** Mockups on the live Indonesia story, in `mockups/`: `context-split-margin.png` (desktop), `context-split-phone.png` (phone, closed and tapped) and `context-split-phone-full.png`.
    - **The story stays complete without the cards.** No card changes the story's text, "Why This Matters" or "Caveats", and card sentences never restate them (write step, rule list).
-   - **Recommended: split the cards.**
+   - **The cards are split.**
      - **Notes beside the text:** up to 2 beside story paragraphs and up to 2 beside "Why This Matters" points, at most one per paragraph or point. A note is the full card.
-     - **The rest in a section** after Caveats, before Sources, under the page's own ruled heading, "More context", with the line "3 more cards · every number cited" and the AI label. The "In numbers" card always goes here.
-     - **Desktop: notes in the right margin**, level with their paragraph, so the text column runs on uninterrupted. When a story has notes, the column moves left to make room. Below about 1,100 pixels of width the notes sit inside the column, after their paragraph. Section cards sit three a row.
-     - **Phones: one-line notes** under their paragraph or point: an icon, the kicker and a teaser such as "The rainy season, 20–30 days late". A tap opens the full card in a sheet that slides up over the page, and the page stays where it was. The section uses the same one-line notes, so it takes a few lines.
-     - Every note and card carries the AI badge in its kicker, as related-story cards do.
+     - **The rest in a section** after Caveats, before Sources, under the page's own ruled heading, "More context", with nothing under the heading but the cards ("show, don't tell"). The "In numbers" card always goes here.
+     - **Desktop: side notes in the right margin**, level with their paragraph, so the text column runs on uninterrupted. When a story has notes, the column moves left to make room. Below about 1,100 pixels of width the notes sit inside the column, after their paragraph. Section cards sit three a row.
+     - **Phones: one-line notes** under their paragraph or point: an icon, the kicker and a teaser such as "The rainy season, 20–30 days late". A tap brings the full card up from the bottom over the page, and the page stays where it was. The section uses the same one-line notes, so it takes a few lines.
+     - **No AI badge or label on notes, cards or the section.** The story's own "Researched and written by AI" line at the top covers the page.
    - **How a card finds its place** (`STORY_CONTEXT_PLACEMENT`, a server setting read when a page is served, so a change applies to every story at once):
      - `model`, the default: the write call names each card's place (a paragraph, a point, or the section) in the same call, at no extra cost, and it is stored with the card. Code applies the limits, and notes over them go to the section in card order. The eval judges whether each note adds to the paragraph or point beside it; if that falls short of its bar, the step goes live with `section` until it doesn't.
      - `random`: cards are placed at random among the paragraphs and points that cite at least one of the card's sources, under the same limits. The draw is seeded by the story, so a page never reshuffles. A card with no such spot goes to the section, and so cards from the second search always do in this mode.
      - `section`: every card in the section, nothing beside the text.
-   - **Section heading:** "More context", in the same ruled style as "Why This Matters" and "Caveats". Alternatives: "Background", "Around this story".
    - **The cards follow the mockup:**
      - a kicker naming the slot (Compared with what, Why now, The long build-up, Who it reaches, What's being done, What comes next, Key term, In numbers);
      - a short heading;
@@ -39,13 +38,9 @@ These five calls are yours, because readers would notice them or they commit mon
      - The key quote stays where it is today and is not repeated as a card.
      - The ×3/×5 pictograms and the split bar in "Why this year" become big-number tiles until a later module adds those chart types.
      - The honest-gap card keeps "Our sources don't say" but drops "we'll add what's being done when a source covers it", because nothing refreshes a one-off story's context.
-   - **Alternatives:**
-     - Notes inside the text column on desktop too. Works at every width with no layout change, but breaks the text into pieces.
-     - One block and no notes: after the key quote with a swipe row on phones, after Caveats, or above the story (`context-place-compare-desktop.png`, `-phone.png`). Simpler to build, but every card sits away from the text it explains, and above the story it pushes the story down by 2 to 4 screens on a phone.
-     - Full cards on phones instead of one-line notes. No tap needed, but each card is about a screen long.
-2. **The AI label and the methodology text.** Owner-approved label wording lives only in `aiDisclosureCopy.ts`.
-   - **Recommended label under the section heading and at the foot of the phone sheet:** "Context gathered and written by [AI] from the sources cited." Its first words link to `/methodology#story-context`. A note away from the section carries the AI badge in its kicker, linking to the same place.
-   - **Recommended methodology section ("Story context"):** "Many stories carry context cards: how big the development is compared with what came before, why it is happening now, who it reaches, what is being done and what comes next. An AI model reads the sources our research found and, where something a reader needs is missing, searches for up to three more. Every number on a card names its source, and when sources disagree we show both. A separate AI check compares each fact with the sentence it came from and drops what that sentence does not say. Each card gives the date its facts are from; we don't update cards later."
+   - **Considered and set aside:** notes inside the text column on desktop (`context-split-inline.png`), one block without notes (`context-place-*.png`), and full cards on phones instead of one-line notes.
+2. **The AI disclosure. Decided (Odin, 16 Nov): no new visible label.** The story's existing "Researched and written by AI" line covers the cards, so `aiDisclosureCopy.ts` gains nothing. The machine-readable markers stay: `data-ai-generated="context"` on each note and the section, and the route's `aiGenerated` field.
+   - **Still open: the methodology text.** Recommended as a paragraph in the existing researched-stories section, which the "Researched and written" link already opens: "Many stories carry context cards: how big the development is compared with what came before, why it is happening now, who it reaches, what is being done and what comes next. An AI model reads the sources our research found and, where something a reader needs is missing, searches for up to three more. Every number on a card names its source, and when sources disagree we show both. A separate AI check compares each fact with the sentence it came from and drops what that sentence does not say. Each card gives the date its facts are from; we don't update cards later."
 3. **The default monthly cap: $20.**
    - Expected spend is about $6–10 a month at today's roughly 9 stories a day. That is about $0.03 a story, two thirds of it web search. A busy month reaches about $12.
    - At the cap the step stops for the rest of the month, and new stories go out without context until the 1st. One notice is recorded when that happens.
@@ -183,10 +178,10 @@ A site route, `GET /api/stories/:slug/context`, serves the context (`services/st
 **The page.**
 - `StoryPage` asks for the context alongside the story and keeps the skeleton until both requests settle. A failed context request renders the page without context and shows no error. This way cards never shift the text below them.
 - `StoryBody` takes the notes per paragraph and per Why This Matters point, and a `context` slot after Caveats, before Sources (For Odin 1).
-- A card has a kicker with the AI badge, a heading, its visual, sentences with citation chips, and a footer with the sources and "As of Nov 14, 2026". Every note and the section carry `data-ai-generated="context"`.
+- A card has a kicker, a heading, its visual, sentences with citation chips, and a footer with the sources and "As of Nov 14, 2026". Every note and the section carry `data-ai-generated="context"`.
 - **Notes, desktop (`lg` and up):** the full card in the right margin, level with its paragraph or point; a later note moves down when the one above would overlap it. When the story has notes, the text column shifts left to make room. Between `md` and `lg` the card sits inside the column after its paragraph.
-- **Notes, phones (below `md`):** a one-line button (icon, kicker with the AI badge, teaser, chevron) under its paragraph or point. A tap opens the full card in a bottom sheet over the page, with the AI label at its foot. The sheet is a Headless UI `Dialog`: focus moves into it, Escape and the close button shut it, and focus returns to the button. The page doesn't scroll.
-- **The section:** the ruled heading "More context", the count line ("3 more cards · every number cited") and the AI label (For Odin 2). On desktop the cards sit three a row, wider than the text column. On phones they are the same one-line buttons as the notes.
+- **Notes, phones (below `md`):** a one-line button (icon, kicker, teaser, chevron) under its paragraph or point. A tap opens the full card in a bottom sheet over the page. The sheet is a Headless UI `Dialog`: focus moves into it, Escape and the close button shut it, and focus returns to the button. The page doesn't scroll.
+- **The section:** the ruled heading "More context" and then the cards, with no line between them (For Odin 1). No AI badge or label anywhere in the context: the story's "Researched and written by AI" line covers it (For Odin 2). On desktop the cards sit three a row, wider than the text column. On phones they are the same one-line buttons as the notes.
 - The honest-gap card reads "Our sources don't say what is being done about this." with dashed edges, as in the mockup. It always goes to the section.
 - A story without boxes renders exactly as today.
 
@@ -425,13 +420,12 @@ There is also one new ADR: "Story context: facts and boxes as records, the step 
 | `client/src/hooks/usePublicStories.ts` | `useStoryContext(slug)` |
 | `client/src/pages/StoryPage.tsx` | Asks for the context alongside the story, keeps the skeleton until it settles, and passes it to `StoryBody` |
 | `client/src/components/story/StoryBody.tsx` | Notes after their paragraph or Why This Matters point, and a `context` slot after Caveats |
-| `client/src/components/context/StoryContext.tsx` (new) | *Responsibility:* the section: ruled heading, count line, AI label, the wide grid on desktop and the one-line buttons on phones. *Exports:* `StoryContext` |
+| `client/src/components/context/StoryContext.tsx` (new) | *Responsibility:* the section: ruled heading, the wide grid on desktop and the one-line buttons on phones. *Exports:* `StoryContext` |
 | `client/src/components/context/ContextNote.tsx`, `ContextSheet.tsx` (new) | *Responsibility:* a note beside the text (margin card on wide screens, in-column card in between, one-line button on phones) and the bottom sheet a button opens. *Exports:* `ContextNote`, `ContextSheet` |
 | `client/src/components/context/ContextCard.tsx` (new) | *Responsibility:* one card: kicker, heading, visual, cited sentences, source and as-of footer, the honest-gap look. *Exports:* `ContextCard` |
 | `client/src/components/context/FigureTiles.tsx`, `ContextChart.tsx` (new) | *Responsibility:* tiles with side-by-side values and their sources; bars and line as SVG with caption, source line and a hidden table. *Exports:* `FigureTiles`, `ContextChart` |
-| `client/src/components/context/contextText.ts` (new) | *Responsibility:* the slot kickers, the fixed honest-gap sentence, the as-of and count wording (pure). *Exports:* `slotKicker`, `GAP_TEXT`, `asOfLine`, `countLine` |
-| `client/src/components/ai/aiDisclosureCopy.ts` | `storyContextLabel` (wording per For Odin 2) |
-| `client/src/pages/MethodologyPage.tsx` | The "Story context" section, `#story-context` |
+| `client/src/components/context/contextText.ts` (new) | *Responsibility:* the slot kickers, the fixed honest-gap sentence, the as-of wording (pure). *Exports:* `slotKicker`, `GAP_TEXT`, `asOfLine` |
+| `client/src/pages/MethodologyPage.tsx` | The context-cards paragraph in the researched-stories section (For Odin 2), once approved |
 | `client/src/components/admin/StoryContextAdmin.tsx` (new), `StoryEditForm` | *Responsibility:* "Hide context" and "Show context" with a `ConfirmDialog`. *Exports:* `StoryContextAdmin` |
 | `client/src/lib/constants.ts` | `JOB_DISPLAY_NAMES` and `JOB_PIPELINE_ORDER` |
 | `shared/types/index.ts` | `JobName` adds `build_story_context`. `StoryContextView`, `ContextBoxView` and the visual types |
@@ -459,7 +453,7 @@ There is also one new ADR: "Story context: facts and boxes as records, the step 
 | `.context/scheduler.md` | The step in the chain table; "Chains" gets the cap, the auto-pause, `job_month_spend` and the Jobs page's fields |
 | `.context/story-research.md` | Module 1 reads research's runs; the publish gate and a capped or paused research step |
 | `.context/public-website.md` | "Story context" on the story page (placement, cards, the route, markers) |
-| `.context/ai-transparency.md` | The feature in the inventory (model ids, written fields, the label, `data-ai-generated="context"`, the response marker, no human review per D3, the hide action); open item: label wording until approved |
+| `.context/ai-transparency.md` | The feature in the inventory (model ids, written fields, `data-ai-generated="context"`, the response marker, no human review per D3, the hide action). Owner decision of 16 Nov: no visible label of its own, since the story's "Researched and written by AI" line covers the cards on the same page |
 | `.context/llm-analysis.md` | The tier table lists the context steps |
 | `.context/model-eval.md` | "Overview evals" gets the gap key (format, drafting, checking), `context`, `--facts context`, the bars and the halves |
 | `.context/decisions.md`, `.context/decisions/` | The ADRs under "ADRs to write" |
