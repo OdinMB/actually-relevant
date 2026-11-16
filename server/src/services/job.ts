@@ -30,7 +30,7 @@ export const MODEL_JOBS: ReadonlySet<string> = new Set([
  */
 export async function getJobs() {
   const [jobs, leased] = await Promise.all([prisma.jobRun.findMany({ orderBy: { jobName: 'asc' } }), jobsWithLiveLease()])
-  return jobs.map(({ lockedBy: _lockedBy, lockedUntil: _lockedUntil, interruptedRuns, lastRunUsage, ...job }) => ({
+  return jobs.map(({ lockedBy: _lockedBy, lockedUntil: _lockedUntil, chainStartedAt: _chainStartedAt, interruptedRuns, lastRunUsage, ...job }) => ({
     ...job,
     lastRunUsage: (lastRunUsage ?? null) as RunUsage | null,
     running: runningJobs.has(job.jobName) || leased.has(job.jobName),
@@ -43,7 +43,7 @@ export async function getJobs() {
   }))
 }
 
-/** The step a chain's Continue goes on from (after a review pause, or where it stopped), or null. */
+/** The step a chain's Continue goes on from (after a review pause, a held step, or where it stopped), or null. */
 export async function chainContinueStep(chainName: string): Promise<string | null> {
   const row = await prisma.jobRun.findUnique({ where: { jobName: chainName } })
   return row && canContinue(chainName, row) ? row.resumeStep : null
@@ -51,7 +51,15 @@ export async function chainContinueStep(chainName: string): Promise<string | nul
 
 export async function updateJob(
   jobName: string,
-  data: { cronExpression?: string; enabled?: boolean; flex?: boolean; pauseForReview?: boolean; flexUntil?: string | null; deadline?: string | null },
+  data: {
+    cronExpression?: string
+    enabled?: boolean
+    flex?: boolean
+    pauseForReview?: boolean
+    notBefore?: string | null
+    flexUntil?: string | null
+    deadline?: string | null
+  },
 ) {
   return prisma.jobRun.update({ where: { jobName }, data })
 }

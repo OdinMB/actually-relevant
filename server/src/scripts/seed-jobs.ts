@@ -13,23 +13,19 @@ const prisma = new PrismaClient()
 
 async function main() {
   const jobs = await Promise.all([
-    // The chains (jobs/chains.ts): their steps below run when the chain reaches them, never on their
-    // own schedules. The daily edition goes at standard price from 03:30 UTC, and research starts no
-    // story after 05:00
-    prisma.jobRun.upsert({
-      where: { jobName: 'intake_chain' },
-      update: {},
-      create: { jobName: 'intake_chain', cronExpression: '0 3,9,15,21 * * *', enabled: false },
-    }),
+    // The daily edition (jobs/chains.ts): its steps below, pre-assess to social post, run when the
+    // chain reaches them, never on their own schedules. It goes at standard price from 03:30 UTC,
+    // research starts no story after 05:00, and the social post waits for 11:30
     prisma.jobRun.upsert({
       where: { jobName: 'daily_edition_chain' },
       update: {},
       create: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *', enabled: false, flexUntil: '03:30', deadline: '05:00' },
     }),
+    // On its own, several times a day, the last an hour before the daily edition
     prisma.jobRun.upsert({
       where: { jobName: 'crawl_feeds' },
       update: {},
-      create: { jobName: 'crawl_feeds', cronExpression: '0 */6 * * *', enabled: false },
+      create: { jobName: 'crawl_feeds', cronExpression: '0 4,10,16,22 * * *', enabled: false },
     }),
     prisma.jobRun.upsert({
       where: { jobName: 'preassess_stories' },
@@ -46,9 +42,7 @@ async function main() {
       update: {},
       create: { jobName: 'select_stories', cronExpression: '0 10 * * *', enabled: false },
     }),
-    // Daily, 15 minutes after select_stories, so the day's selected stories are researched before
-    // publish_stories takes them (.context/story-research.md); production runs 02:05, 02:20, 02:45.
-    // Enabled: the research step is the norm, the Jobs page its off switch
+    // Enabled: the research step is the norm, the Jobs page its off switch (.context/story-research.md)
     prisma.jobRun.upsert({
       where: { jobName: 'research_stories' },
       update: {},
@@ -62,7 +56,7 @@ async function main() {
     prisma.jobRun.upsert({
       where: { jobName: 'social_auto_post' },
       update: {},
-      create: { jobName: 'social_auto_post', cronExpression: '30 11 * * *', enabled: false },
+      create: { jobName: 'social_auto_post', cronExpression: '30 11 * * *', enabled: false, notBefore: '11:30' },
     }),
     prisma.jobRun.upsert({
       where: { jobName: 'bluesky_update_metrics' },

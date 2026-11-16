@@ -18,7 +18,6 @@ import { runChain } from './chains.js'
 
 export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   // Chains run their steps in order (chains.ts); the steps below them have no schedule of their own
-  intake_chain: () => runChain('intake_chain'),
   daily_edition_chain: () => runChain('daily_edition_chain'),
   crawl_feeds: runCrawlFeeds,
   preassess_stories: runPreassessStories,
@@ -53,9 +52,8 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
  * admin's JOB_PIPELINE_ORDER (client/src/lib/constants.ts); the server does not import shared/.
  */
 export const JOB_PIPELINE_ORDER: readonly string[] = [
-  'intake_chain',
-  'daily_edition_chain',
   'crawl_feeds',
+  'daily_edition_chain',
   'preassess_stories',
   'assess_stories',
   'select_stories',

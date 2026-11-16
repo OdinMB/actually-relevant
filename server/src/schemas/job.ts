@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/** A chain's flex cut-off or deadline: "HH:MM" UTC, or null for none (jobs/chainDefinitions.ts). */
+/** A chain's flex cut-off or deadline, or a step's "not before": "HH:MM" UTC, or null for none (jobs/chainDefinitions.ts). */
 const clockTime = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be a time of day as HH:MM (UTC)')
@@ -13,6 +13,8 @@ export const updateJobSchema = z.object({
   flex: z.boolean().optional(),
   /** A chain's step: the chain waits for a person after it. */
   pauseForReview: z.boolean().optional(),
+  /** A chain's step: the chain holds before it until this time comes round after the run's start. */
+  notBefore: clockTime.optional(),
   /** A chain: calls go at standard price from this time on. */
   flexUntil: clockTime.optional(),
   /** A chain: a step working through items starts no new one from this time on. */

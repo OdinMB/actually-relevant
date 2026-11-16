@@ -82,6 +82,13 @@ describe('ChainCard', () => {
     expect(screen.getByRole('button', { name: 'Resume from Research Stories' })).toBeInTheDocument()
   })
 
+  it('shows a chain held for a step’s time, with a way to run that step now', async () => {
+    renderCard(chain({ canContinue: true, resumeStep: 'publish_stories', resumeReason: 'waiting', resumeAt: '2026-11-17T11:30:00.000Z' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Publish Stories runs at 11:30 UTC.')
+    await userEvent.click(screen.getByRole('button', { name: 'Run Publish Stories now' }))
+    await waitFor(() => expect(mockApi.continueChain).toHaveBeenCalledWith('daily_edition_chain'))
+  })
+
   it('has no detectable accessibility violations', async () => {
     const { container } = renderCard(chain({ canContinue: true, resumeStep: 'publish_stories', resumeReason: 'review' }))
     expect(await axe(container)).toHaveNoViolations()

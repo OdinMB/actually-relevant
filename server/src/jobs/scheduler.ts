@@ -10,6 +10,7 @@ import { isResumable, sweepInterruptedRuns } from './interruptedRuns.js'
 import { memorySnapshot } from '../lib/memoryMonitor.js'
 import { createRunScope, runInScope, settleRun, type RunScope, type RunUsage } from '../lib/runUsage.js'
 import { chainOf, nextClockTime } from './chainDefinitions.js'
+import { clearHeldChains, resumeHeldChains } from './chains.js'
 
 const log = createLogger('scheduler')
 
@@ -64,6 +65,9 @@ export async function initScheduler(): Promise<void> {
   }
 
   log.info({ jobCount: tasksByName.size }, 'ready')
+
+  // A chain held for a step's time (chains.ts) goes on at that time, or now if it has passed
+  resumeHeldChains().catch(err => log.error({ err }, 'could not set the held chains going again'))
 
   if (overdue.length > 0) log.info({ jobs: inPipelineOrder(overdue) }, 'overdue at boot')
   const generation = catchUpGeneration
@@ -497,6 +501,8 @@ export function stopScheduler(): void {
     clearTimeout(interruptedRecheckTimer)
     interruptedRecheckTimer = null
   }
+  // A held chain stays held in its row; the next start sets its timer again
+  clearHeldChains()
   for (const task of tasksByName.values()) {
     task.stop()
   }

@@ -50,7 +50,6 @@ export interface User {
 }
 
 export type JobName =
-  | 'intake_chain'
   | 'daily_edition_chain'
   | 'crawl_feeds'
   | 'preassess_stories'
@@ -805,14 +804,20 @@ export interface JobRun {
   usesModels: boolean
   /** A chain's step: the chain waits for a person after it (mode Review). */
   pauseForReview: boolean
+  /** A chain's step: the chain holds before it until this time of day, "HH:MM" UTC; null for no hold. */
+  notBefore: string | null
   /** A chain: calls go at standard price from this time of day on, "HH:MM" UTC; null for no cut-off. */
   flexUntil: string | null
   /** A chain: a step working through items starts no new one from this time of day on, "HH:MM" UTC; null for none. */
   deadline: string | null
-  /** A chain: the step it is in ('running'), goes on from after a review ('review'), or stopped at ('failed'). */
+  /**
+   * A chain: the step it is in ('running'), goes on from after a review ('review'), is held at until
+   * `resumeAt` ('waiting'), or stopped at ('failed').
+   */
   resumeStep: JobName | null
-  resumeReason: 'running' | 'review' | 'failed' | null
-  /** A chain waiting for review or stopped at a step can be continued from the Jobs page. */
+  resumeReason: 'running' | 'review' | 'waiting' | 'failed' | null
+  resumeAt: string | null
+  /** A chain waiting for review, held at a step or stopped at a step can be continued from the Jobs page. */
   canContinue: boolean
   /** The chain this job is a step of; null for a job that runs on its own schedule. */
   chain: JobName | null

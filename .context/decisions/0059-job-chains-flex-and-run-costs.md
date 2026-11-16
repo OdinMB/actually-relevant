@@ -24,8 +24,13 @@ page (design: pm project files, `story-directions/2026-11-16_pipeline-chains-and
 
 - **A chain is a job whose run is its steps in order** (`jobs/chains.ts`): it reuses the job row,
   lease, overdue catch-up, failure notice and interrupted-run resume; its steps are ordinary jobs
-  that never run on their own schedule. Two chains: Intake (crawl, pre-assess, assess) four times a
-  day, and the Daily edition (select, research, publish) at 23:00 UTC.
+  that never run on their own schedule. One chain, the Daily edition, from 23:00 UTC: pre-assess,
+  assess, select, research, publish, social post. Crawling stays its own job four times a day, since a
+  feed lists only its newest articles and a once-a-day crawl would lose a busy feed's articles;
+  assessing several times a day bought nothing while selection runs once a day (owner, 2026-11-16).
+- **A step can be held until a time of day** (`not_before`): the chain ends its run there and a timer
+  goes on at that time, set again from the row at startup. The social post waits for 11:30 UTC, when
+  readers are awake, instead of posting at night (owner decision 2026-11-16).
 - **Each step is On, Off or Review**, stored as the step's own `enabled` plus `pause_for_review`, so
   every reader of a step's flag (enable checks, research's switch, the publish gate) keeps working.
   Review pauses the chain until a person continues it. A failed step stops the chain; the next
@@ -42,10 +47,12 @@ page (design: pm project files, `story-directions/2026-11-16_pipeline-chains-and
 
 ## Consequences
 
-- Stories publish when the daily edition's research is done, between about 23:30 and 05:00 UTC,
-  instead of at 02:45.
+- Stories publish when the daily edition's research is done, by 05:00 UTC at the latest, instead of
+  at 02:45; the social post goes out at 11:30 as before.
 - Flex starts on for pre-assess and assess only (a week's measurement); the other jobs are one switch
-  away.
+  away. The day's assessment is one batch at night instead of four smaller ones.
+- Another installation can put Review on any step, assess and select included, for a full flow with
+  several review points.
 - The recorded cost is an estimate from list prices, not the invoice; research's own cap keeps
   pricing calls at standard, an upper bound.
 - Not built from the design: per-step monthly budget caps, an item-failure threshold that stops a
@@ -56,6 +63,10 @@ page (design: pm project files, `story-directions/2026-11-16_pipeline-chains-and
 
 - **Only add flex to today's jobs and widen the gaps.** Simpler, but timing stays guessed, and
   review points would need building separately later.
+- **A separate Intake chain (crawl, pre-assess, assess) four times a day.** Built first, then dropped
+  on review: assessing before a once-a-day selection gains nothing, and two chains are harder to read.
+- **Holding the chain's lease while it waits for the social post's time.** Rejected: hours of a
+  running chain on the Jobs page, and a restart would cut the wait short or lengthen it.
 - **A separate chains table.** Rejected: a chain needs everything a job row already has (schedule,
   lease, catch-up, resume, notices).
 - **Wrapping every model call site for flex and fallback.** Rejected: a dozen call sites, and

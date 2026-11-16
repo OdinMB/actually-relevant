@@ -3,7 +3,7 @@ import type { JobRun } from '@shared/types'
 import { Button } from '../ui/Button'
 import { jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
-import { EnabledToggle, FlexToggle, LastRun } from './jobControls'
+import { ClockTimeField, EnabledToggle, FlexToggle, LastRun } from './jobControls'
 import { JobRow, JobTable } from './jobTable'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
@@ -39,8 +39,15 @@ export function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => voi
           </div>
         )}
 
-        {/* Schedule (opens in edit mode directly); a chain's step runs when its chain reaches it */}
-        {!job.chain && (
+        {/* Schedule (opens in edit mode directly); a chain's step runs when its chain reaches it, held until its time if it has one */}
+        {job.chain ? (
+          <ClockTimeField
+            job={job}
+            field="notBefore"
+            label="Not before"
+            help="The chain waits here until this time after it starts. Empty to run straight on."
+          />
+        ) : (
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">Schedule</label>
             <CronEditor job={job} initialEditing />

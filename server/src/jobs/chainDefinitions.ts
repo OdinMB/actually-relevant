@@ -6,8 +6,9 @@
 
 /** Every chain and its steps, in the order they run. A job is a step of one chain at most. */
 export const CHAINS: Readonly<Record<string, readonly string[]>> = {
-  intake_chain: ['crawl_feeds', 'preassess_stories', 'assess_stories'],
-  daily_edition_chain: ['select_stories', 'research_stories', 'publish_stories'],
+  // Crawling stays a job of its own, several times a day: a feed lists only its newest articles, so a
+  // once-a-day crawl would lose a busy feed's articles before they are read
+  daily_edition_chain: ['preassess_stories', 'assess_stories', 'select_stories', 'research_stories', 'publish_stories', 'social_auto_post'],
 }
 
 export const isChain = (jobName: string): boolean => CHAINS[jobName] !== undefined

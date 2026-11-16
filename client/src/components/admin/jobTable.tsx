@@ -125,7 +125,14 @@ export function JobRow({ job, step, onOpen }: { job: JobRun; step?: number; onOp
         )}
       </td>
       <td className={`px-3 py-2 ${WIDE}`}>
-        {step === undefined ? <CronEditor job={job} /> : <span className="text-neutral-500">Step {step} of the chain</span>}
+        {step === undefined ? (
+          <CronEditor job={job} />
+        ) : (
+          <span className="text-neutral-500">
+            Step {step} of the chain
+            {job.notBefore && <span className="block text-xs">not before {job.notBefore} UTC</span>}
+          </span>
+        )}
       </td>
       <td className="px-3 py-2">{step === undefined ? <EnabledToggle job={job} /> : <StepModeSelect step={job} />}</td>
       <td className="px-3 py-2">

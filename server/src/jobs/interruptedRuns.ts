@@ -28,7 +28,6 @@ export const RESUMABLE_JOBS: ReadonlySet<string> = new Set([
   'research_stories',
   'publish_stories',
   // A chain resumes from the step it was cut off in (chains.ts), and each of its steps is resumable
-  'intake_chain',
   'daily_edition_chain',
 ])
 

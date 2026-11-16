@@ -4,6 +4,37 @@ import { formatDuration, formatUsd, lastRunDurationMs, usageDetails } from '../.
 import { useJobChange } from '../../hooks/useJobs'
 import { Tooltip } from '../ui/Tooltip'
 
+/**
+ * A time of day in UTC, or empty for none, saved when it changes: a chain's flex cut-off or deadline,
+ * or a step's "not before" time.
+ */
+export function ClockTimeField({ job, field, label, help }: { job: JobRun; field: 'flexUntil' | 'deadline' | 'notBefore'; label: string; help: string }) {
+  const change = useJobChange(job)
+  const id = `${job.jobName}-${field}`
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium text-neutral-600">
+        {label} <span className="font-normal text-neutral-400">(UTC)</span>
+      </label>
+      <input
+        id={id}
+        type="time"
+        defaultValue={job[field] ?? ''}
+        key={job[field] ?? ''}
+        aria-describedby={`${id}-help`}
+        onBlur={e => {
+          const value = e.target.value || null
+          if (value !== job[field]) change.save({ [field]: value }, `${jobDisplayName(job.jobName)}: ${label.toLowerCase()} ${value ?? 'removed'}`)
+        }}
+        className="mt-0.5 rounded-md border border-neutral-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+      />
+      <p id={`${id}-help`} className="mt-0.5 max-w-[14rem] text-xs text-neutral-500">
+        {help}
+      </p>
+    </div>
+  )
+}
+
 export function RunningSpinner({ size = 'h-5 w-5' }: { size?: string }) {
   return (
     <svg className={`${size} animate-spin text-yellow-600`} viewBox="0 0 24 24" fill="none" aria-label="Running">

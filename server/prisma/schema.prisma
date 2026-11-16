@@ -494,14 +494,21 @@ model JobRun {
   flex            Boolean   @default(false)
   // A chain's step: the chain waits for a person after this step (jobs/chains.ts)
   pauseForReview  Boolean   @default(false) @map("pause_for_review")
+  // A chain's step, "HH:MM" UTC: the chain holds before this step until this time comes round after
+  // the run's start (a daytime social post after a night-time chain). Null for no hold
+  notBefore       String?   @map("not_before")
   // A chain's settings, "HH:MM" UTC: calls go at standard price after flexUntil; a step working
   // through items starts no new one after deadline. Null on other jobs, and for no limit
   flexUntil       String?   @map("flex_until")
   deadline        String?
   // A chain's place to go on from: the step running now ('running'), the step after a review pause
-  // ('review'), or the step it stopped at ('failed'); null when its last run ended normally
+  // ('review'), the step held for its time ('waiting', going on at resumeAt), or the step it stopped
+  // at ('failed'); null when its last run ended normally
   resumeStep      String?   @map("resume_step")
   resumeReason    String?   @map("resume_reason")
+  resumeAt        DateTime? @map("resume_at")
+  // A chain's current run: when it started from its first step; a step's hold counts from it
+  chainStartedAt  DateTime? @map("chain_started_at")
   // What the last finished run spent (lib/runUsage.ts RunUsage): calls, tokens, USD
   lastRunUsage    Json?     @map("last_run_usage")
   createdAt       DateTime  @default(now()) @map("created_at")

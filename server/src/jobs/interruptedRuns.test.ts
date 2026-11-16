@@ -40,26 +40,26 @@ describe('interrupted runs', () => {
 
   describe('sweepInterruptedRuns', () => {
     it('resumes a pipeline job the shutdown recorded as interrupted, without a notice', async () => {
-      mockLease.interruptedJobRuns.mockResolvedValue([interrupted('intake_chain')])
+      mockLease.interruptedJobRuns.mockResolvedValue([interrupted('crawl_feeds')])
 
-      expect(await sweepInterruptedRuns(everyJobScheduled)).toEqual(['intake_chain'])
+      expect(await sweepInterruptedRuns(everyJobScheduled)).toEqual(['crawl_feeds'])
 
       expect(mockNotify).not.toHaveBeenCalled()
       expect(mockLease.clearInterruptedRuns).not.toHaveBeenCalled()
     })
 
     it('records the runs whose process died first, and alerts each with its reason, resumed or not', async () => {
-      mockLease.recordAbandonedRuns.mockResolvedValue(['intake_chain', 'publish_newsletter'])
+      mockLease.recordAbandonedRuns.mockResolvedValue(['crawl_feeds', 'publish_newsletter'])
       mockLease.interruptedJobRuns.mockResolvedValue([
-        interrupted('intake_chain', 1, 'Interrupted: crawl died'),
+        interrupted('crawl_feeds', 1, 'Interrupted: crawl died'),
         interrupted('publish_newsletter', 1, 'Interrupted: send died'),
       ])
 
-      expect(await sweepInterruptedRuns(everyJobScheduled)).toEqual(['intake_chain'])
+      expect(await sweepInterruptedRuns(everyJobScheduled)).toEqual(['crawl_feeds'])
 
       expect(mockLease.recordAbandonedRuns.mock.invocationCallOrder[0]).toBeLessThan(mockLease.interruptedJobRuns.mock.invocationCallOrder[0]!)
       expect(mockNotify).toHaveBeenCalledTimes(2)
-      expect(mockNotify).toHaveBeenCalledWith(noticeFor('intake_chain', expect.stringContaining('Interrupted: crawl died')))
+      expect(mockNotify).toHaveBeenCalledWith(noticeFor('crawl_feeds', expect.stringContaining('Interrupted: crawl died')))
       expect(mockNotify).toHaveBeenCalledWith(noticeFor('publish_newsletter', expect.stringContaining('Interrupted: send died')))
       expect(mockLease.clearInterruptedRuns).toHaveBeenCalledWith('publish_newsletter')
       expect(mockLease.clearInterruptedRuns).toHaveBeenCalledTimes(1)
@@ -67,7 +67,7 @@ describe('interrupted runs', () => {
 
     it('hands the statements format() templates with exactly one placeholder', async () => {
       await sweepInterruptedRuns(everyJobScheduled)
-      await recordShutdownInterruptions(['intake_chain'])
+      await recordShutdownInterruptions(['crawl_feeds'])
 
       for (const template of [mockLease.recordAbandonedRuns.mock.calls[0]![0], mockLease.recordInterruptedHere.mock.calls[0]![1]] as string[]) {
         expect(template.match(/%/g)).toEqual(['%'])
@@ -77,9 +77,9 @@ describe('interrupted runs', () => {
 
     it('stops resuming once a job was interrupted more than maxResumes times in a row: one notice, and its count starts again', async () => {
       const { maxResumes } = config.scheduler
-      mockLease.interruptedJobRuns.mockResolvedValue([interrupted('intake_chain', maxResumes), interrupted('daily_edition_chain', maxResumes + 1)])
+      mockLease.interruptedJobRuns.mockResolvedValue([interrupted('crawl_feeds', maxResumes), interrupted('daily_edition_chain', maxResumes + 1)])
 
-      expect(await sweepInterruptedRuns(everyJobScheduled)).toEqual(['intake_chain'])
+      expect(await sweepInterruptedRuns(everyJobScheduled)).toEqual(['crawl_feeds'])
 
       expect(mockLease.clearInterruptedRuns).toHaveBeenCalledWith('daily_edition_chain')
       expect(mockLease.clearInterruptedRuns).toHaveBeenCalledTimes(1)
@@ -131,12 +131,12 @@ describe('interrupted runs', () => {
     })
 
     it('does not resume a job this process does not schedule (disabled meanwhile)', async () => {
-      mockLease.interruptedJobRuns.mockResolvedValue([interrupted('intake_chain'), interrupted('daily_edition_chain')])
+      mockLease.interruptedJobRuns.mockResolvedValue([interrupted('crawl_feeds'), interrupted('daily_edition_chain')])
 
-      expect(await sweepInterruptedRuns(jobName => jobName !== 'intake_chain')).toEqual(['daily_edition_chain'])
+      expect(await sweepInterruptedRuns(jobName => jobName !== 'crawl_feeds')).toEqual(['daily_edition_chain'])
 
-      expect(mockLease.clearInterruptedRuns).toHaveBeenCalledWith('intake_chain')
-      expect(mockNotify).toHaveBeenCalledWith(noticeFor('intake_chain', expect.any(String)))
+      expect(mockLease.clearInterruptedRuns).toHaveBeenCalledWith('crawl_feeds')
+      expect(mockNotify).toHaveBeenCalledWith(noticeFor('crawl_feeds', expect.any(String)))
     })
 
     it('never throws: a failed statement is logged and nothing is resumed', async () => {
@@ -151,20 +151,20 @@ describe('interrupted runs', () => {
   describe('isResumable', () => {
     it('is true for a resumable job interrupted between once and maxResumes times', () => {
       const { maxResumes } = config.scheduler
-      expect(isResumable({ jobName: 'intake_chain', interruptedRuns: 0 })).toBe(false)
-      expect(isResumable({ jobName: 'intake_chain', interruptedRuns: 1 })).toBe(true)
-      expect(isResumable({ jobName: 'intake_chain', interruptedRuns: maxResumes })).toBe(true)
-      expect(isResumable({ jobName: 'intake_chain', interruptedRuns: maxResumes + 1 })).toBe(false)
+      expect(isResumable({ jobName: 'crawl_feeds', interruptedRuns: 0 })).toBe(false)
+      expect(isResumable({ jobName: 'crawl_feeds', interruptedRuns: 1 })).toBe(true)
+      expect(isResumable({ jobName: 'crawl_feeds', interruptedRuns: maxResumes })).toBe(true)
+      expect(isResumable({ jobName: 'crawl_feeds', interruptedRuns: maxResumes + 1 })).toBe(false)
     })
   })
 
   describe('recordShutdownInterruptions', () => {
     it('records the jobs still running at the drain deadline as interrupted by the shutdown', async () => {
-      mockLease.recordInterruptedHere.mockResolvedValue(['intake_chain'])
+      mockLease.recordInterruptedHere.mockResolvedValue(['crawl_feeds'])
 
-      await recordShutdownInterruptions(['intake_chain'])
+      await recordShutdownInterruptions(['crawl_feeds'])
 
-      expect(mockLease.recordInterruptedHere).toHaveBeenCalledWith(['intake_chain'], expect.any(String))
+      expect(mockLease.recordInterruptedHere).toHaveBeenCalledWith(['crawl_feeds'], expect.any(String))
       expect(mockLog.warn).toHaveBeenCalled()
     })
 
@@ -176,7 +176,7 @@ describe('interrupted runs', () => {
     it('logs a failed write and never throws, so the shutdown carries on', async () => {
       mockLease.recordInterruptedHere.mockRejectedValue(new Error('db gone'))
 
-      await expect(recordShutdownInterruptions(['intake_chain'])).resolves.toBeUndefined()
+      await expect(recordShutdownInterruptions(['crawl_feeds'])).resolves.toBeUndefined()
 
       expect(mockLog.error).toHaveBeenCalled()
     })
