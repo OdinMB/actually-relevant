@@ -20,6 +20,10 @@ export const EMOTION_VARIANTS: Record<EmotionTag, BadgeVariant> = {
 }
 
 export const JOB_DISPLAY_NAMES: Record<JobName, string> = {
+  intake_chain: 'Intake',
+  daily_edition_chain: 'Daily Edition',
+  newsletter_chain: 'Weekly Newsletter',
+  podcast_chain: 'Weekly Podcast',
   crawl_feeds: 'Crawl Feeds',
   preassess_stories: 'Pre-assess Stories',
   assess_stories: 'Assess Stories',
@@ -52,22 +56,26 @@ export function jobDisplayName(jobName: string): string {
 
 /** Pipeline execution order for sorting jobs in the UI. */
 export const JOB_PIPELINE_ORDER: JobName[] = [
+  'intake_chain',
   'crawl_feeds',
   'preassess_stories',
   'assess_stories',
+  'daily_edition_chain',
   'select_stories',
   'research_stories',
   'publish_stories',
   'social_auto_post',
   'bluesky_update_metrics',
   'mastodon_update_metrics',
+  'newsletter_chain',
   'generate_newsletter',
   'publish_newsletter',
   'generate_uplifting_newsletter',
   'publish_uplifting_newsletter',
+  'podcast_chain',
   'generate_podcast',
-  'publish_podcast',
   'generate_uplifting_podcast',
+  'publish_podcast',
   'publish_uplifting_podcast',
   'poll_plunk_activity',
   'send_queued_confirmations',

@@ -72,7 +72,24 @@ function generatePodcastNote(): string {
   )
 }
 
+const CHAIN_RULES =
+  'Each step starts when the one before it has finished. A step set to Off is skipped; a step set to Review runs, then the chain waits until you continue it here. ' +
+  'If a step fails, the chain stops there and you can resume it from that step; its next scheduled run starts from the first step again.'
+
 const NOTES: Readonly<Record<string, () => string>> = {
+  intake_chain: () =>
+    'Crawls the feeds, gives each new story its first rating, then fully analyzes the ones that qualify, in that order, so every run ends with assessed stories ready to review. ' +
+    `It runs several times a day because a feed lists only its newest articles and a busy one drops them within hours. ${CHAIN_RULES}`,
+  daily_edition_chain: () =>
+    'Selects the best of the assessed stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time. ' +
+    `${CHAIN_RULES} ` +
+    'From its flex cut-off on, every call goes at standard price; from its deadline on, research starts no other story, so publishing is never held up for long.',
+  newsletter_chain: () =>
+    `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
+    'A step whose run was cut off by a restart is not run again, so no issue goes out twice.',
+  podcast_chain: () =>
+    `Each Friday slot builds or resumes this week's episode of each show, then the chain holds the two publish steps until Saturday 07:00 in Berlin, when they publish what is ready. ${CHAIN_RULES} ` +
+    'Each Friday slot starts from the first step again, so a slot that fails is retried by the next.',
   crawl_feeds: () =>
     'Reads each active feed whose own crawl interval has passed and saves its new articles as stories. ' +
     'Running this job more often never crawls a feed before its interval is up. ' +

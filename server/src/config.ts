@@ -261,6 +261,30 @@ export const config = {
       },
     },
     delayMs: parseWholeNumber(process.env.LLM_DELAY_MS, 500, 'LLM_DELAY_MS', 0),
+    /**
+     * USD per 1M tokens at standard pricing, from the eval's verified table (scripts/eval/models.ts).
+     * A job's cost on the Jobs page (lib/runUsage.ts) and story research's cost both read it; a model
+     * without a row is counted as an unpriced call. Check the live pricing page before budgeting.
+     */
+    modelPrices: {
+      'gpt-6-luna': { input: 0.1, cached: 0.01, output: 0.5 },
+      'gpt-6-sol': { input: 2.0, cached: 0.2, output: 10.0 },
+      'gpt-6.1-sol': { input: 2.0, cached: 0.2, output: 10.0 },
+      'text-embedding-3-small': { input: 0.02, cached: 0.02, output: 0 },
+    } as Record<string, { input: number; cached: number; output: number } | undefined>,
+    /**
+     * OpenAI flex processing (.context/llm-analysis.md, "Flex processing"), used by a job whose Flex
+     * switch is on: half the token price, slower answers, and calls OpenAI may refuse with 429 when
+     * busy (not charged). A refused call is tried at flex `attempts` times in all, waiting
+     * `retryDelaysMs` between tries, then sent at standard price. Every model call waits up to
+     * `timeoutMs` for its answer, the 15 minutes OpenAI's flex guide uses.
+     */
+    flex: {
+      priceFactor: 0.5,
+      attempts: 3,
+      retryDelaysMs: [5_000, 30_000],
+      timeoutMs: 15 * 60_000,
+    },
   },
   preassess: {
     batchSize: 10,
@@ -313,22 +337,21 @@ export const config = {
     /** Pay-as-you-go price per credit; Tavily's free credits are counted as paid. */
     tavilyUsdPerCredit: 0.008,
     /**
-     * USD per 1M tokens, copied from the eval's verified table (scripts/eval/models.ts). A step whose
-     * model has no row here is refused before the run starts, so a tier override never runs uncounted.
+     * USD per 1M tokens: `config.llm.modelPrices`, at standard pricing even for a call made at flex, so
+     * the research cost stays an upper bound. A step whose model has no row is refused before the run
+     * starts, so a tier override never runs uncounted.
      */
-    modelPrices: {
-      'gpt-6-luna': { input: 0.1, cached: 0.01, output: 0.5 },
-      'gpt-6-sol': { input: 2.0, cached: 0.2, output: 10.0 },
-      'gpt-6.1-sol': { input: 2.0, cached: 0.2, output: 10.0 },
-    } as Record<string, { input: number; cached: number; output: number } | undefined>,
+    get modelPrices(): Record<string, { input: number; cached: number; output: number } | undefined> {
+      return config.llm.modelPrices
+    },
     /** Uncached input is billed at this factor: Chat Completions reports no cache writes, so it is an upper bound. */
     cacheWriteFactor: 1.25,
     /**
      * A `running` run older than this was cut off by a restart, and is marked failed. Above a live run's
-     * worst case (model calls with the SDK's default timeout and retries, Tavily with its retries), so a
-     * slow run is never marked interrupted while it still works.
+     * worst case (model calls at flex, which may wait up to `config.llm.flex.timeoutMs` each and are
+     * retried, Tavily with its retries), so a slow run is never marked interrupted while it still works.
      */
-    staleRunMinutes: 60,
+    staleRunMinutes: 120,
     /** Runs the admin lists per story, newest first. */
     runsListed: 10,
     /**
@@ -606,6 +629,13 @@ export const config = {
     // The second interrupted-run sweep comes this long after a lease live at the scheduler's start
     // would have run out (leaseSeconds), so a holder that died has stopped renewing by then.
     interruptedRecheckSlackMs: 30_000,
+  },
+  /** Chains: jobs run as ordered steps from one start time (jobs/chains.ts, .context/scheduler.md, "Chains"). */
+  chains: {
+    // A step already running when its chain reaches it (a run by hand) is waited for this long,
+    // checking every stepWaitPollMs, before the chain stops at that step.
+    stepWaitMinutes: 120,
+    stepWaitPollMs: 15_000,
   },
   feed: {
     size: parseWholeNumber(process.env.RSS_FEED_SIZE, 50, 'RSS_FEED_SIZE'),

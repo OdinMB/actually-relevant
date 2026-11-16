@@ -144,6 +144,10 @@ Located in `server/assets/`:
 - `images/logo-text-horizontal.jpg` for the section preview images and the story card (`services/previewImageParts.ts`).
 - The header images and logo named above are not in the repository, and no code loads them.
 
+### The weekly newsletter chain
+
+Since 2026-11-16 the four jobs below run as the steps of one chain, `newsletter_chain`, on Saturdays at 04:00 UTC (`.context/scheduler.md`, "Chains"): build the full issue (with its test email), send it, build the Actually Uplifting issue, send it, each as soon as the one before has finished. Their own schedules below are from before and unused. Each keeps its Enabled switch and enable checks; a step that is off is skipped. A failed step stops the chain: a full build whose test email fails no longer leads to a "Newsletter not sent" notice from the send step, it stops there with the job-failure notice, and the Actually Uplifting issue waits for a person to resume the chain from the Jobs page (or for next Saturday). A step cut off by a restart is not run again; the chain goes on after it.
+
 ### Automated generation (`generate_newsletter` cron job)
 
 The `generate_newsletter` job (default: Saturday 4am, `0 4 * * 6`) chains the full pipeline automatically:

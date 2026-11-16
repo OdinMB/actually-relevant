@@ -8,6 +8,9 @@ import { jobTimeZone } from './jobTimeZones.js'
 import { claimJobRun, finishJobRun, jobsWithLiveLease, withJobLeaseHeartbeat } from './jobLease.js'
 import { isResumable, sweepInterruptedRuns } from './interruptedRuns.js'
 import { memorySnapshot } from '../lib/memoryMonitor.js'
+import { createRunScope, runInScope, settleRun, type RunScope, type RunUsage } from '../lib/runUsage.js'
+import { chainOf, nextClockTime } from './chainDefinitions.js'
+import { clearHeldChains, resumeHeldChains } from './chains.js'
 
 const log = createLogger('scheduler')
 
@@ -30,6 +33,13 @@ export async function initScheduler(): Promise<void> {
   const overdue: string[] = []
 
   for (const job of jobs) {
+    // A chain's step runs when its chain reaches it (chains.ts), never on a schedule of its own
+    const chain = chainOf(job.jobName)
+    if (chain) {
+      log.info({ jobName: job.jobName, chain }, 'step of a chain, not scheduled on its own')
+      continue
+    }
+
     if (!job.enabled) {
       log.info({ jobName: job.jobName }, 'disabled, skipping')
       continue
@@ -55,6 +65,9 @@ export async function initScheduler(): Promise<void> {
   }
 
   log.info({ jobCount: tasksByName.size }, 'ready')
+
+  // A chain held for a step's time (chains.ts) goes on at that time, or now if it has passed
+  resumeHeldChains().catch(err => log.error({ err }, 'could not set the held chains going again'))
 
   if (overdue.length > 0) log.info({ jobs: inPipelineOrder(overdue) }, 'overdue at boot')
   const generation = catchUpGeneration
@@ -246,10 +259,16 @@ function countDaysInDowExpr(expr: string): number | null {
  * and alerted, and the running mark is always removed. While another process
  * holds the lease the run is skipped quietly: nothing recorded, nothing alerted.
  */
-async function runJob(jobName: string, handler: () => Promise<void>): Promise<void> {
+/**
+ * What became of a run: it ran and succeeded or failed (the failure recorded and alerted), or it was
+ * skipped because it is already running here or another process holds its lease.
+ */
+export type RunOutcome = { result: 'succeeded' } | { result: 'failed'; error: string } | { result: 'skipped' }
+
+async function runJob(jobName: string, handler: () => Promise<void>): Promise<RunOutcome> {
   if (runningJobs.has(jobName)) {
     log.warn({ jobName }, 'already running, skipping')
-    return
+    return { result: 'skipped' }
   }
 
   runningJobs.add(jobName)
@@ -257,22 +276,45 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<vo
     runningJobs.delete(jobName)
     runningJobRuns.delete(jobName)
   })
-  runningJobRuns.set(jobName, run)
+  runningJobRuns.set(
+    jobName,
+    run.then(() => undefined),
+  )
   return run
 }
 
-/** The body of runJob: claim, run under the heartbeat, record. Never rejects. */
-async function executeJob(jobName: string, handler: () => Promise<void>): Promise<void> {
+/**
+ * The run's scope for flex and spending (lib/runUsage.ts): the job's Flex switch, and its flex
+ * cut-off and deadline as the next such time of day after the start (a chain's settings).
+ */
+async function openRunScope(jobName: string): Promise<RunScope> {
+  const settings = await prisma.jobRun.findUnique({ where: { jobName }, select: { flex: true, flexUntil: true, deadline: true } })
+  const now = new Date()
+  return createRunScope({
+    jobName,
+    flex: settings?.flex === true,
+    flexUntil: nextClockTime(settings?.flexUntil ?? null, now),
+    deadline: nextClockTime(settings?.deadline ?? null, now),
+  })
+}
+
+/** The body of runJob: claim, run under the heartbeat in its run scope, record. Never rejects. */
+async function executeJob(jobName: string, handler: () => Promise<void>): Promise<RunOutcome> {
+  let scope: RunScope | null = null
   try {
     if ((await claimJobRun(jobName)) === 'held') {
       log.info({ jobName }, 'held by another process, skipping')
-      return
+      return { result: 'skipped' }
     }
+    const runScope = await openRunScope(jobName)
+    scope = runScope
     // RSS on both lines ties a memory jump to the job that caused it (lib/memoryMonitor.ts)
-    log.info({ jobName, rssMb: memorySnapshot().rssMb }, 'started')
-    await withJobLeaseHeartbeat(jobName, handler)
-    await finishJobRun(jobName, null)
-    log.info({ jobName, rssMb: memorySnapshot().rssMb }, 'completed')
+    log.info({ jobName, rssMb: memorySnapshot().rssMb, flex: runScope.flex }, 'started')
+    await runInScope(runScope, () => withJobLeaseHeartbeat(jobName, handler))
+    const usage = await settleRun(runScope)
+    await finishJobRun(jobName, null, usage)
+    log.info({ jobName, rssMb: memorySnapshot().rssMb, ...usageLog(usage) }, 'completed')
+    return { result: 'succeeded' }
   } catch (err) {
     let errorMsg = err instanceof Error ? err.message : String(err)
     // Prisma errors include additional details in meta (e.g. raw query DB error code/message)
@@ -281,9 +323,15 @@ async function executeJob(jobName: string, handler: () => Promise<void>): Promis
       if (pe.meta) errorMsg += ` | Prisma ${pe.code}: ${JSON.stringify(pe.meta)}`
     }
     log.error({ jobName, err }, 'job failed')
-    await recordFailure(jobName, errorMsg)
+    await recordFailure(jobName, errorMsg, scope)
     notify(jobFailureNotice(jobName, errorMsg)).catch(() => {})
+    return { result: 'failed', error: errorMsg }
   }
+}
+
+/** The spending fields of a run's finish log line. */
+function usageLog(usage: RunUsage) {
+  return { calls: usage.calls, flexCalls: usage.flexCalls, flexFallbacks: usage.flexFallbacks, costUsd: Number(usage.costUsd.toFixed(4)) }
 }
 
 /**
@@ -303,10 +351,13 @@ export async function waitForRunningJobs(timeoutMs: number): Promise<string[]> {
   return [...runningJobRuns.keys()]
 }
 
-/** Write the failure to the job row and release the lease; a failed write is logged, never thrown. */
-async function recordFailure(jobName: string, errorMsg: string): Promise<void> {
+/**
+ * Write the failure to the job row, with what the run spent up to it when it got that far, and
+ * release the lease; a failed write is logged, never thrown.
+ */
+async function recordFailure(jobName: string, errorMsg: string, scope: RunScope | null): Promise<void> {
   try {
-    await finishJobRun(jobName, errorMsg)
+    await finishJobRun(jobName, errorMsg, scope ? await settleRun(scope) : null)
   } catch (err) {
     log.error({ jobName, err }, 'failed to record job failure')
   }
@@ -346,6 +397,11 @@ export async function reloadJob(jobName: string): Promise<void> {
 
   if (!config.scheduler.enabled) {
     log.info({ jobName }, 'scheduler disabled (SCHEDULER_ENABLED): saved, not scheduled in this process')
+    return
+  }
+
+  if (chainOf(jobName)) {
+    log.info({ jobName }, 'step of a chain, not scheduled on its own')
     return
   }
 
@@ -445,6 +501,8 @@ export function stopScheduler(): void {
     clearTimeout(interruptedRecheckTimer)
     interruptedRecheckTimer = null
   }
+  // A held chain stays held in its row; the next start sets its timer again
+  clearHeldChains()
   for (const task of tasksByName.values()) {
     task.stop()
   }

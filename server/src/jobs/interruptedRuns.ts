@@ -1,6 +1,7 @@
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { jobFailureNotice, notify } from '../lib/notify.js'
+import { chainOf } from './chainDefinitions.js'
 import { clearInterruptedRuns, interruptedJobRuns, recordAbandonedRuns, recordInterruptedHere, type InterruptedJobRun } from './jobLease.js'
 
 /**
@@ -26,6 +27,12 @@ export const RESUMABLE_JOBS: ReadonlySet<string> = new Set([
   'select_stories',
   'research_stories',
   'publish_stories',
+  // A chain resumes from the step it was cut off in when that step is resumable, else after it, so a
+  // cut-off send, post or publish is never repeated (chains.ts startStep)
+  'intake_chain',
+  'daily_edition_chain',
+  'newsletter_chain',
+  'podcast_chain',
 ])
 
 // PostgreSQL format() templates (jobLease.ts): the one %s is filled from the row
@@ -80,6 +87,14 @@ export function isResumable(job: Pick<InterruptedJobRun, 'jobName' | 'interrupte
  */
 async function settle(job: InterruptedJobRun, scheduled: boolean, diedNow: boolean): Promise<boolean> {
   const { jobName, interruptedRuns } = job
+  // A chain's step was cut off with its chain, whose own row is interrupted too: the chain resumes
+  // from this step and its notice speaks for both, so the step is neither rerun alone nor alerted
+  const chain = chainOf(jobName)
+  if (chain) {
+    log.info({ jobName, chain, interruptedRuns }, 'interrupted step of a chain; the chain resumes it')
+    await clearInterruptedRuns(jobName)
+    return false
+  }
   const refusal = resumeRefusal(job, scheduled)
   if (refusal === null) {
     log.info({ jobName, interruptedRuns }, 'interrupted, resuming')

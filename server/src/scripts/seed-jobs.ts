@@ -13,10 +13,24 @@ const prisma = new PrismaClient()
 
 async function main() {
   const jobs = await Promise.all([
+    // Intake (jobs/chains.ts): crawl, pre-assess and assess, several times a day, the last an hour
+    // before the daily edition. A chain's steps run when it reaches them, never on their own schedules
+    prisma.jobRun.upsert({
+      where: { jobName: 'intake_chain' },
+      update: {},
+      create: { jobName: 'intake_chain', cronExpression: '0 4,10,16,22 * * *', enabled: false },
+    }),
+    // The daily edition: select, research, publish. It goes at standard price from 03:30 UTC, and
+    // research starts no story after 05:00
+    prisma.jobRun.upsert({
+      where: { jobName: 'daily_edition_chain' },
+      update: {},
+      create: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *', enabled: false, flexUntil: '03:30', deadline: '05:00' },
+    }),
     prisma.jobRun.upsert({
       where: { jobName: 'crawl_feeds' },
       update: {},
-      create: { jobName: 'crawl_feeds', cronExpression: '0 */6 * * *', enabled: false },
+      create: { jobName: 'crawl_feeds', cronExpression: '0 4,10,16,22 * * *', enabled: false },
     }),
     prisma.jobRun.upsert({
       where: { jobName: 'preassess_stories' },
@@ -33,9 +47,7 @@ async function main() {
       update: {},
       create: { jobName: 'select_stories', cronExpression: '0 10 * * *', enabled: false },
     }),
-    // Daily, 15 minutes after select_stories, so the day's selected stories are researched before
-    // publish_stories takes them (.context/story-research.md); production runs 02:05, 02:20, 02:45.
-    // Enabled: the research step is the norm, the Jobs page its off switch
+    // Enabled: the research step is the norm, the Jobs page its off switch (.context/story-research.md)
     prisma.jobRun.upsert({
       where: { jobName: 'research_stories' },
       update: {},
@@ -61,18 +73,29 @@ async function main() {
       update: {},
       create: { jobName: 'mastodon_update_metrics', cronExpression: '0 4 * * *', enabled: false },
     }),
+    // Saturday 04:00 UTC: each edition's issue is built, then sent (its steps below have no schedule of their own)
+    prisma.jobRun.upsert({
+      where: { jobName: 'newsletter_chain' },
+      update: {},
+      create: { jobName: 'newsletter_chain', cronExpression: '0 4 * * 6', enabled: false },
+    }),
+    // Friday's slots build both shows' episodes, whose publish steps wait for Saturday 07:00 in Berlin
+    prisma.jobRun.upsert({
+      where: { jobName: 'podcast_chain' },
+      update: {},
+      create: { jobName: 'podcast_chain', cronExpression: '0 2,6,10,14,18 * * 5', enabled: false },
+    }),
     prisma.jobRun.upsert({
       where: { jobName: 'generate_newsletter' },
       update: {},
       create: { jobName: 'generate_newsletter', cronExpression: '0 4 * * 6', enabled: false },
     }),
-    // 30 minutes after generate_newsletter: sends this week's issue to all subscribers
     prisma.jobRun.upsert({
       where: { jobName: 'publish_newsletter' },
       update: {},
       create: { jobName: 'publish_newsletter', cronExpression: '30 4 * * 6', enabled: false },
     }),
-    // Actually Uplifting's weekly issue, 10 minutes after each of the full edition's jobs
+    // Actually Uplifting's weekly issue
     prisma.jobRun.upsert({
       where: { jobName: 'generate_uplifting_newsletter' },
       update: {},
@@ -83,20 +106,19 @@ async function main() {
       update: {},
       create: { jobName: 'publish_uplifting_newsletter', cronExpression: '40 4 * * 6', enabled: false },
     }),
-    // Friday slots (UTC on Render); the handler does nothing outside its Friday window
+    // The handler does nothing outside its Friday window
     prisma.jobRun.upsert({
       where: { jobName: 'generate_podcast' },
       update: {},
       create: { jobName: 'generate_podcast', cronExpression: '0 2,6,10,14,18 * * 5', enabled: false },
     }),
-    // Saturday 07:00 on Berlin's clock (jobs/jobTimeZones.ts), summer and winter time alike
+    // Held until Saturday 07:00 on Berlin's clock (jobs/jobTimeZones.ts), summer and winter time alike
     prisma.jobRun.upsert({
       where: { jobName: 'publish_podcast' },
       update: {},
-      create: { jobName: 'publish_podcast', cronExpression: '0 7 * * 6', enabled: false },
+      create: { jobName: 'publish_podcast', cronExpression: '0 7 * * 6', enabled: false, notBefore: 'Sat 07:00' },
     }),
-    // The Actually Uplifting podcast: 30 minutes after each of the main show's Friday slots, and the
-    // same Saturday publish; enabling either is refused while the show is closed
+    // The Actually Uplifting podcast; enabling either is refused while the show is closed
     prisma.jobRun.upsert({
       where: { jobName: 'generate_uplifting_podcast' },
       update: {},
@@ -105,7 +127,7 @@ async function main() {
     prisma.jobRun.upsert({
       where: { jobName: 'publish_uplifting_podcast' },
       update: {},
-      create: { jobName: 'publish_uplifting_podcast', cronExpression: '0 7 * * 6', enabled: false },
+      create: { jobName: 'publish_uplifting_podcast', cronExpression: '0 7 * * 6', enabled: false, notBefore: 'Sat 07:00' },
     }),
     // Hourly read of Plunk spam complaints and bounces (ADR-0029)
     prisma.jobRun.upsert({

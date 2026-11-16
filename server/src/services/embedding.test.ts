@@ -54,12 +54,13 @@ const {
 
 // Access the mock through the module
 const openaiModule = await import('openai')
+const { openAiFetch } = await import('./openaiFetch.js')
 const mockCreate = (openaiModule as any).__mockCreate as ReturnType<typeof vi.fn>
 const openaiConstructorOptions = (openaiModule as any).__constructorOptions as unknown[]
 
 describe('OpenAI embeddings client retries', () => {
   it("lets the SDK retry, with the chat models' 3 retries", () => {
-    expect(openaiConstructorOptions).toEqual([{ maxRetries: 3 }])
+    expect(openaiConstructorOptions).toEqual([{ maxRetries: 3, fetch: openAiFetch }])
   })
 
   it('does not retry on top of the SDK: a failed request is made once', async () => {

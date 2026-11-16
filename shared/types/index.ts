@@ -50,6 +50,10 @@ export interface User {
 }
 
 export type JobName =
+  | 'intake_chain'
+  | 'daily_edition_chain'
+  | 'newsletter_chain'
+  | 'podcast_chain'
   | 'crawl_feeds'
   | 'preassess_stories'
   | 'assess_stories'
@@ -797,8 +801,56 @@ export interface JobRun {
   note: string | null
   /** A state the owner must notice now (e.g. research switched off), shown under the job's name; null when there is none. */
   warning: string | null
+  /** Model calls go at OpenAI's flex price (half), falling back to standard when OpenAI is busy. */
+  flex: boolean
+  /** The job makes model calls, so its Flex switch matters. */
+  usesModels: boolean
+  /** A chain's step: the chain waits for a person after it (mode Review). */
+  pauseForReview: boolean
+  /** A chain's step: the chain holds before it until this time of day, "HH:MM" UTC; null for no hold. */
+  notBefore: string | null
+  /** A chain: calls go at standard price from this time of day on, "HH:MM" UTC; null for no cut-off. */
+  flexUntil: string | null
+  /** A chain: a step working through items starts no new one from this time of day on, "HH:MM" UTC; null for none. */
+  deadline: string | null
+  /**
+   * A chain: the step it is in ('running'), goes on from after a review ('review'), is held at until
+   * `resumeAt` ('waiting'), or stopped at ('failed').
+   */
+  resumeStep: JobName | null
+  resumeReason: 'running' | 'review' | 'waiting' | 'failed' | null
+  resumeAt: string | null
+  /** A chain waiting for review, held at a step or stopped at a step can be continued from the Jobs page. */
+  canContinue: boolean
+  /** The chain this job is a step of; null for a job that runs on its own schedule. */
+  chain: JobName | null
+  /** A chain's steps in the order they run; null for every other job. */
+  steps: JobName[] | null
+  /** What the last finished run spent; null before the first such run, or after an interrupted one. */
+  lastRunUsage: JobRunUsage | null
   createdAt: string
   updatedAt: string
+}
+
+/** What one job run spent on paid services (a chain's run includes its steps'). */
+export interface JobRunUsage {
+  /** Model and embedding calls answered. */
+  calls: number
+  /** Calls answered at flex price. */
+  flexCalls: number
+  /** Calls asked at flex that OpenAI refused as busy until they were sent at standard price. */
+  flexFallbacks: number
+  inputTokens: number
+  cachedTokens: number
+  outputTokens: number
+  /** USD at the price each call was billed at, plus other paid services. */
+  costUsd: number
+  /** USD the same calls would have cost at standard price, plus other paid services. */
+  standardCostUsd: number
+  /** Calls to a model without a price on record, left out of the sums. */
+  unpricedCalls: number
+  /** Other paid services (research's web searches), part of both sums. */
+  otherUsd: number
 }
 
 // --- Query/filter types ---

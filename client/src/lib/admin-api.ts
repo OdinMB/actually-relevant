@@ -379,6 +379,7 @@ export const adminApi = {
     list: () => request<JobRun[]>('/jobs'),
     update: (jobName: string, data: Partial<JobRun>) => request<JobRun>(`/jobs/${jobName}`, { method: 'PUT', body: JSON.stringify(data) }),
     run: (jobName: string) => request<{ message: string }>(`/jobs/${jobName}/run`, { method: 'POST' }),
+    continueChain: (jobName: string) => request<{ message: string }>(`/jobs/${jobName}/continue`, { method: 'POST' }),
     serverTime: () => request<{ time: string; timezone: string }>('/jobs/server-time'),
   },
 

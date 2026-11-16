@@ -1,29 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { JobName, JobRun } from '@shared/types'
+import type { JobRun } from '@shared/types'
 import { ToastProvider } from '../ui/Toast'
 import { JobsTable } from './JobsTable'
-
-function job(jobName: JobName, overrides: Partial<JobRun> = {}): JobRun {
-  return {
-    id: jobName,
-    jobName,
-    lastStartedAt: null,
-    lastCompletedAt: null,
-    lastSucceededAt: null,
-    lastError: null,
-    enabled: true,
-    running: false,
-    cronExpression: '0 1 * * *',
-    timeZone: null,
-    note: null,
-    warning: null,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  }
-}
+import { makeJobRun as job, makeRunUsage } from '../../test/jobs'
 
 function renderTable(jobs: JobRun[]) {
   render(
@@ -48,5 +29,23 @@ describe('JobsTable', () => {
   it('keeps a warning visible under the job name', () => {
     renderTable([job('research_stories', { note: 'Researches each selected story.', warning: 'Research is off.' })])
     expect(screen.getByText('Research is off.')).toBeVisible()
+  })
+
+  it('offers a Flex switch only for a job that makes AI calls', () => {
+    renderTable([job('generate_newsletter', { usesModels: true, flex: true }), job('poll_plunk_activity')])
+    expect(screen.getByRole('switch', { name: 'Stop using flex processing for Generate Newsletter' })).toBeChecked()
+    expect(screen.queryByRole('switch', { name: /flex processing for Plunk Complaints/ })).not.toBeInTheDocument()
+  })
+
+  it("shows the last run's length and cost, the cost explained", () => {
+    renderTable([
+      job('generate_newsletter', {
+        lastStartedAt: '2026-11-16T04:00:00Z',
+        lastCompletedAt: '2026-11-16T04:12:00Z',
+        lastRunUsage: makeRunUsage({ calls: 3, flexCalls: 3, costUsd: 0.21, standardCostUsd: 0.42 }),
+      }),
+    ])
+    expect(screen.getByText('12 min')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '$0.21' })).toHaveAccessibleDescription('3 AI calls, 3 at flex price, $0.42 at standard price')
   })
 })
