@@ -74,7 +74,7 @@ A source is admissible unless its publisher has made a reservation that applies 
 
 ## When a Feed Is Due
 
-The crawl job (`crawlAllDueFeeds()`) takes the feeds that `getDueFeeds()` returns. A feed is due when it is active and either `lastCrawledAt` is null or `lastCrawledAt + crawlIntervalHours < now()`. The filter runs in SQL against each feed's own interval. Inactive feeds are never crawled on schedule.
+The crawl job (`crawlAllDueFeeds()`) takes the feeds that `getDueFeeds()` returns. A feed is due when it is active and either `lastCrawledAt` is null or `lastCrawledAt + crawlIntervalHours < now() + config.crawl.dueGraceMinutes` (30). The grace (2026-11-16) keeps a feed on the same intake run: a crawl ends seconds after its run started, so without it a 24-hour feed missed the next day's run by those seconds and was crawled at the run after, about every 30 hours, drifting through the day. The filter runs in SQL against each feed's own interval. Inactive feeds are never crawled on schedule.
 
 ## Crawl Status and Health Counters
 

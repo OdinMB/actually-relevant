@@ -189,11 +189,20 @@ export function FlexToggle({ job }: { job: JobRun }) {
   )
 }
 
-/** The last finished run's length and cost, the cost explained on hover and keyboard focus. */
+/** The last finished run's length, cost (explained on hover and keyboard focus) and what it did. */
 export function LastRun({ job }: { job: JobRun }) {
   const duration = lastRunDurationMs(job)
   const usage = job.lastRunUsage
   if (duration === null && !usage) return <span className="text-neutral-400">—</span>
+  return (
+    <span className="inline-flex flex-col gap-0.5">
+      <LastRunCost duration={duration} usage={usage} />
+      {job.lastRunSummary && <span className="text-xs text-neutral-500">{job.lastRunSummary}</span>}
+    </span>
+  )
+}
+
+function LastRunCost({ duration, usage }: { duration: number | null; usage: JobRun['lastRunUsage'] }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       {duration !== null && <span>{formatDuration(duration)}</span>}

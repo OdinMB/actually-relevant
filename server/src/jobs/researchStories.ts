@@ -16,7 +16,7 @@
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
-import { runDeadlinePassed } from '../lib/runUsage.js'
+import { countOf, reportRunResult, runDeadlinePassed } from '../lib/runUsage.js'
 import { applyVerdict, type VerdictOutcome } from '../services/researchApply.js'
 import { nextToResearch, owedStory, researchStepState, type ResearchStepState } from '../services/researchQueue.js'
 import { markInterruptedRuns, recordSkippedRun, runPipelineResearch, sanitizedError } from '../services/researchRuns.js'
@@ -68,6 +68,7 @@ export async function runResearchStories(): Promise<void> {
   const start = await researchStepState()
   if (!start.researches) {
     log.info('research is switched off (TAVILY_API_KEY unset, or a model without a price); nothing researched')
+    reportRunResult('Research is off, nothing researched')
     return
   }
 
@@ -108,4 +109,8 @@ export async function runResearchStories(): Promise<void> {
 
   const total = Object.values(tally).reduce((sum, n) => sum + n, 0)
   log.info({ jobEnabled: start.enabled, ...tally, total }, 'research step finished')
+  const left = ids.length - started
+  reportRunResult(
+    ids.length === 0 ? 'Nothing to research' : `Researched ${countOf(total, 'story', 'stories')}${left > 0 ? `, ${left} left for the next run` : ''}`,
+  )
 }

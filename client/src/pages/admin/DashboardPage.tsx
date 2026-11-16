@@ -153,7 +153,10 @@ export default function DashboardPage() {
                     .sort(byPipelineOrder)
                     .map(job => (
                       <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : ''}`}>
-                        <td className="py-2 px-4 font-medium text-neutral-900">{jobDisplayName(job.jobName)}</td>
+                        <td className="py-2 px-4">
+                          <span className="font-medium text-neutral-900">{jobDisplayName(job.jobName)}</span>
+                          {job.lastRunSummary && <span className="block text-xs text-neutral-500">{job.lastRunSummary}</span>}
+                        </td>
                         <td className="py-2 px-4">
                           <JobStatusBadge job={job} variant="dot" />
                         </td>

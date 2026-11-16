@@ -2,6 +2,7 @@ import { getStoryIdsByStatus } from '../services/story.js'
 import { transition } from '../services/storyLifecycle.js'
 import { awaitingResearch } from '../services/researchQueue.js'
 import { createLogger } from '../lib/logger.js'
+import { countOf, reportRunResult } from '../lib/runUsage.js'
 
 const log = createLogger('publish_stories')
 
@@ -11,6 +12,7 @@ export async function runPublishStories(): Promise<void> {
   const selected = await getStoryIdsByStatus('selected')
   if (selected.length === 0) {
     log.info('no selected stories to publish')
+    reportRunResult('Nothing to publish')
     return
   }
 
@@ -20,8 +22,10 @@ export async function runPublishStories(): Promise<void> {
   const waiting = await awaitingResearch(selected)
   const ids = selected.filter(id => !waiting.has(id))
   if (waiting.size > 0) log.info({ waiting: waiting.size }, 'stories left for a later run: awaiting research')
+  const waitingNote = waiting.size > 0 ? `, ${waiting.size} waiting for research` : ''
   if (ids.length === 0) {
     log.info('no selected stories to publish yet')
+    reportRunResult(`Nothing to publish yet${waitingNote}`)
     return
   }
 
@@ -33,4 +37,5 @@ export async function runPublishStories(): Promise<void> {
   const { moved, skipped } = await transition(ids, { to: 'published' }, 'pipeline')
 
   log.info({ published: moved.length, skipped: skipped.length, waiting: waiting.size }, 'publish job finished')
+  reportRunResult(`Published ${countOf(moved.length, 'story', 'stories')}${waitingNote}`)
 }

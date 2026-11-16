@@ -512,6 +512,7 @@ model JobRun {
   chainStartedAt  DateTime? @map("chain_started_at")
   // What the last finished run spent (lib/runUsage.ts RunUsage): calls, tokens, USD
   lastRunUsage    Json?     @map("last_run_usage")
+  lastRunSummary  String?   @map("last_run_summary")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 

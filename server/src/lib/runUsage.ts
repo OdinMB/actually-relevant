@@ -40,6 +40,8 @@ export interface RunScope {
   /** A chain's "done by" time: a step that works through items starts no new one after it. */
   deadline: Date | null
   usage: RunUsage
+  /** What the run did, in a few words ("12 new stories", "nothing to do"); set by the job through `reportRunResult`. */
+  summary: string | null
   parent: RunScope | null
   /** Usage records still being read from responses; `settleRun` waits for them. */
   pending: Set<Promise<void>>
@@ -77,6 +79,7 @@ export function createRunScope(options: { jobName: string; flex: boolean; flexUn
     flexUntil: options.flexUntil ?? parent?.flexUntil ?? null,
     deadline: options.deadline ?? parent?.deadline ?? null,
     usage: emptyUsage(),
+    summary: null,
     parent,
     pending: new Set(),
   }
@@ -85,6 +88,19 @@ export function createRunScope(options: { jobName: string; flex: boolean; flexUn
 export function runInScope<T>(scope: RunScope, fn: () => Promise<T>): Promise<T> {
   return storage.run(scope, fn)
 }
+
+/**
+ * Say what the current run did, shown with its last run on the Jobs page and the dashboard, so a run
+ * with nothing to do reads as that rather than as a broken one. The last report wins; a no-op outside
+ * a job run (a person's click in the admin, a script).
+ */
+export function reportRunResult(summary: string): void {
+  const scope = currentRun()
+  if (scope) scope.summary = summary
+}
+
+/** "1 story", "12 stories". */
+export const countOf = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
 
 /** Whether a model call made now in `scope` goes at flex. */
 export function flexNow(scope: RunScope, now = Date.now()): boolean {

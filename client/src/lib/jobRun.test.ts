@@ -54,6 +54,18 @@ describe('job run display', () => {
     expect(dashboardRows(jobs)[0]).toMatchObject({ lastCompletedAt: '2026-11-16T04:02:00Z', lastError: 'Stopped at Pre-assess Stories' })
   })
 
+  it("says on a chain's dashboard row what each step of its latest run did", () => {
+    const chain = { chain: 'intake_chain' as const }
+    const jobs = [
+      makeJobRun('intake_chain', { steps: ['crawl_feeds', 'preassess_stories', 'assess_stories'], lastStartedAt: '2026-11-16T16:00:00Z' }),
+      makeJobRun('crawl_feeds', { ...chain, lastStartedAt: '2026-11-16T16:00:01Z', lastRunSummary: 'No feed was due' }),
+      makeJobRun('preassess_stories', { ...chain, lastStartedAt: '2026-11-16T16:00:20Z', lastRunSummary: 'Nothing to rate' }),
+      // Last ran before this chain run (a run by hand): left out
+      makeJobRun('assess_stories', { ...chain, lastStartedAt: '2026-11-16T09:00:00Z', lastRunSummary: 'Analyzed 4 stories' }),
+    ]
+    expect(dashboardRows(jobs)[0]!.lastRunSummary).toBe('Crawl Feeds: No feed was due · Pre-assess Stories: Nothing to rate')
+  })
+
   it('explains a cost: calls, flex use and fallbacks, the standard price, searches and unpriced calls', () => {
     expect(usageDetails(usage({ calls: 1 }))).toBe('1 AI call')
     expect(usageDetails(usage({ calls: 40, flexCalls: 38, flexFallbacks: 2, costUsd: 0.6, standardCostUsd: 1.1, otherUsd: 0.1, unpricedCalls: 1 }))).toBe(

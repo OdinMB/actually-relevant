@@ -828,6 +828,8 @@ export interface JobRun {
   steps: JobName[] | null
   /** What the last finished run spent; null before the first such run, or after an interrupted one. */
   lastRunUsage: JobRunUsage | null
+  /** What the last finished run did, in a few words ("12 new stories", "nothing to do"); null when it did not say. */
+  lastRunSummary: string | null
   createdAt: string
   updatedAt: string
 }

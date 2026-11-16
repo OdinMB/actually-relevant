@@ -92,7 +92,7 @@ const NOTES: Readonly<Record<string, () => string>> = {
     `It runs once: a build that fails is tried again in the same run every ${count(config.podcast.retryDelayMs / 60_000, 'minute')}, and after ${count(config.podcast.maxAttemptsPerWeek, 'failed run')} the episode waits for you to resume it on the Podcasts page.`,
   crawl_feeds: () =>
     'Reads each active feed whose own crawl interval has passed and saves its new articles as stories. ' +
-    'Running this job more often never crawls a feed before its interval is up. ' +
+    `Running this job more often never crawls a feed more than ${count(config.crawl.dueGraceMinutes, 'minute')} before its interval is up, which keeps each feed on the same run every day. ` +
     'Articles whose publisher opts out of AI use are skipped, and articles locked behind a paywall are saved as rejected.',
   preassess_stories: () =>
     `Gives each newly crawled story a first rating from 1 to 10, an issue and an emotion tag, ${config.preassess.batchSize} stories per AI call. ` +

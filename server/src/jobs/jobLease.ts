@@ -78,16 +78,18 @@ export async function withJobLeaseHeartbeat<T>(jobName: string, fn: () => Promis
 
 /**
  * Finish a run: always record `last_completed_at` (and `last_succeeded_at` on success, `last_error`
- * on failure) and what the run spent (`usage`, null when it could not be read), start the count of
- * interrupted runs again, and release the lease only where this process still holds it.
+ * on failure), what the run spent (`usage`, null when it could not be read) and what it did
+ * (`summary`, null when it did not say), start the count of interrupted runs again, and release the
+ * lease only where this process still holds it.
  */
-export async function finishJobRun(jobName: string, error: string | null, usage: RunUsage | null = null): Promise<void> {
+export async function finishJobRun(jobName: string, error: string | null, usage: RunUsage | null = null, summary: string | null = null): Promise<void> {
   await prisma.$executeRaw`
     UPDATE "job_runs"
     SET "last_completed_at" = (now() AT TIME ZONE 'UTC'),
         "last_succeeded_at" = CASE WHEN ${error === null} THEN (now() AT TIME ZONE 'UTC') ELSE "last_succeeded_at" END,
         "last_error" = ${error},
         "last_run_usage" = ${usage === null ? null : JSON.stringify(usage)}::jsonb,
+        "last_run_summary" = ${summary},
         "interrupted_runs" = 0,
         "locked_by" = CASE WHEN "locked_by" = ${LEASE_HOLDER} THEN NULL ELSE "locked_by" END,
         "locked_until" = CASE WHEN "locked_by" = ${LEASE_HOLDER} THEN NULL ELSE "locked_until" END,
@@ -105,6 +107,7 @@ const interruptionWrites = (reason: Prisma.Sql) => Prisma.sql`
         "last_completed_at" = (now() AT TIME ZONE 'UTC'),
         "interrupted_runs" = "interrupted_runs" + 1,
         "last_run_usage" = NULL,
+        "last_run_summary" = NULL,
         "locked_by" = NULL,
         "locked_until" = NULL,
         "updated_at" = (now() AT TIME ZONE 'UTC')`
