@@ -1,0 +1,848 @@
+{
+  "schemaVersion": 1,
+  "id": "lebanon-war-2026",
+  "title": "War in Lebanon between Israel and Hezbollah, 2026",
+  "charter": {
+    "in": "The fighting in and over Lebanon between Israel and Hezbollah that began on 2 March 2026, after the US-Israeli strikes on Iran: Israeli air strikes, evacuation orders, demolitions and ground operations in Lebanon, Hezbollah fire into Israel, the Lebanese state's response, deaths and displacement in Lebanon, and talks or truces that cover the Lebanon front. Stories belong when Lebanon is their main subject, or (as optional) when a wider-war story gives the Lebanon front a major share.",
+    "out": [
+      "The wider US/Israel-Iran war: strikes in Iran, Iranian missile fire on Israel and the Gulf states",
+      "Strait of Hormuz closure, shipping and Gulf energy",
+      "US-Iran talks, ceasefires and the June 2026 memorandum, except where they set terms for the Lebanon front",
+      "Gaza war and its October 2025 truce",
+      "West Bank settlements and annexation",
+      "Houthi attacks and the Yemen war",
+      "Syria",
+      "Journalist killings across conflicts",
+      "WHO emergency funding and World Health Assembly votes",
+      "UN peacekeeping budget cuts"
+    ],
+    "endEvent": "A ceasefire on the Lebanon front that holds: Israeli strikes and ground operations in Lebanon and Hezbollah fire into Israel stop, with or without an Israeli withdrawal from the south. A truce or deal that our later stories show being broken by renewed strikes in Lebanon does not count."
+  },
+  "closed": null,
+  "figures": [
+    {
+      "key": "deaths",
+      "name": "People killed in Lebanon",
+      "unit": "people",
+      "definition": "People killed in Lebanon since the fighting began on 2 March 2026, cumulative, as counted by Lebanese authorities (health ministry) or the UN. The counts do not separate civilians from fighters. Excludes deaths in Israel, Iran or elsewhere in the regional war, and tolls for a single day or strike.",
+      "cumulative": true,
+      "variants": [
+        "deaths in a single day or a single strike (e.g. 41 in 24 hours, 11 on Easter Sunday)",
+        "whole-war tolls across Iran, Lebanon and the Gulf (e.g. more than 7,000 dead)",
+        "subgroups such as children or medical workers killed"
+      ]
+    },
+    {
+      "key": "displaced",
+      "name": "People displaced in Lebanon",
+      "unit": "people",
+      "definition": "People forced from their homes inside Lebanon by the fighting since 2 March 2026, as counted by Lebanese authorities or the UN. A stock of displaced people, so it can fall as people return; our stories only ever report it rising or holding at about 1.2 million.",
+      "cumulative": false,
+      "variants": [
+        "residents covered by an evacuation order (e.g. roughly 400,000 in Beirut's southern suburbs)",
+        "people sheltering in collective sites only (e.g. over 130,000)",
+        "regional totals of refugees, internally displaced people and returnees (e.g. nearly 25 million)"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "slug": "government-bans-hezbollah-military-activity-after-israeli-strikes",
+      "date": "2026-03-04",
+      "title": "Government bans Hezbollah military activity after Israeli strikes",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Lebanese government",
+          "status": "declares a total ban on Hezbollah military and security activity",
+          "asOf": "2026-03-04"
+        },
+        {
+          "subject": "Hezbollah",
+          "status": "rejects the government ban",
+          "asOf": "2026-03-04"
+        }
+      ],
+      "why": "First story of the war in Lebanon: Israeli strikes on more than 70 Hezbollah sites across half the country and the Lebanese state's historic ban on Hezbollah's military activity."
+    },
+    {
+      "slug": "israel-orders-400-000-from-southern-beirut-amid-threats",
+      "date": "2026-03-07",
+      "title": "Israel orders 400,000 from southern Beirut amid threats",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 100,
+          "approx": "at_least",
+          "asOf": "2026-03-07",
+          "matches": true,
+          "countedAs": null,
+          "quote": "Reported Lebanese deaths exceed 100"
+        },
+        {
+          "figure": "displaced",
+          "value": 400000,
+          "approx": "about",
+          "asOf": "2026-03-07",
+          "matches": false,
+          "countedAs": "residents of southern Beirut neighbourhoods under an Israeli evacuation order, not people already displaced",
+          "quote": "neighbourhoods home to roughly 400,000 people"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Beirut southern suburbs",
+          "status": "under an Israeli order to evacuate immediately",
+          "asOf": "2026-03-07"
+        },
+        {
+          "subject": "Beirut airport",
+          "status": "flights suspended",
+          "asOf": "2026-03-07"
+        }
+      ],
+      "why": "Israel orders the evacuation of Beirut's southern suburbs and a minister threatens to make them 'like Khan Younis': the war reaches the capital."
+    },
+    {
+      "slug": "millions-displaced-as-lebanon-empties-and-shipping-halts",
+      "date": "2026-03-07",
+      "title": "Millions displaced as Lebanon empties and shipping halts",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "displaced",
+          "value": 25000000,
+          "approx": "about",
+          "asOf": "2026-03-07",
+          "matches": false,
+          "countedAs": "refugees, internally displaced people and recent returnees across the broader region, not people displaced in Lebanon by this war",
+          "quote": "Nearly 25 million people in the broader affected area are already refugees, IDPs, or recent returnees"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Southern Lebanon",
+          "status": "Israeli ground incursions and blanket displacement orders for Beirut's southern suburbs, the Bekaa and the whole area south of the Litani",
+          "asOf": "2026-03-07"
+        }
+      ],
+      "why": "UN day-seven roundup that leads with Lebanon's mass displacement (full shelters, emptied suburbs, OHCHR quote on ground incursions) but gives equal weight to the Hormuz shipping halt."
+    },
+    {
+      "slug": "israel-warns-lebanon-will-pay-very-heavy-price-after-deadly-raid",
+      "date": "2026-03-09",
+      "title": "Israel warns Lebanon will pay 'very heavy price' after deadly raid",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 200,
+          "approx": "at_least",
+          "asOf": "2026-03-09",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 200 killed across Lebanon"
+        },
+        {
+          "figure": "deaths",
+          "value": 41,
+          "approx": "exact",
+          "asOf": "2026-03-09",
+          "matches": false,
+          "countedAs": "deaths in a single 24-hour period",
+          "quote": "41 killed in a single 24-hour period"
+        },
+        {
+          "figure": "displaced",
+          "value": 300000,
+          "approx": "about",
+          "asOf": "2026-03-09",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killing dozens and displacing about 300,000 people"
+        }
+      ],
+      "statuses": [],
+      "why": "Israeli strikes on Beirut, a rare helicopter raid in eastern Lebanon and Katz's threat against the Lebanese state, with Lebanon-wide death and displacement counts."
+    },
+    {
+      "slug": "israel-hits-central-beirut-killing-hundreds-and-uprooting-800-000",
+      "date": "2026-03-13",
+      "title": "Israel hits central Beirut, killing hundreds and uprooting 800,000",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 687,
+          "approx": "at_least",
+          "asOf": "2026-03-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "has killed at least 687 people"
+        },
+        {
+          "figure": "displaced",
+          "value": 800000,
+          "approx": "at_least",
+          "asOf": "2026-03-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "forced more than 800,000 people from their homes"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Central Beirut",
+          "status": "hit by Israeli strikes, beyond the southern suburbs",
+          "asOf": "2026-03-13"
+        }
+      ],
+      "why": "Strikes on central Beirut widen the campaign to the capital's centre; displacement jumps to more than 800,000."
+    },
+    {
+      "slug": "israel-strikes-beirut-after-hezbollah-rocket-barrage",
+      "date": "2026-03-13",
+      "title": "Israel strikes Beirut after Hezbollah rocket barrage",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 600,
+          "approx": "at_least",
+          "asOf": "2026-03-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 600 people have died"
+        },
+        {
+          "figure": "deaths",
+          "value": 634,
+          "approx": "at_least",
+          "asOf": "2026-03-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "have killed at least 634 people"
+        },
+        {
+          "figure": "displaced",
+          "value": 800000,
+          "approx": "about",
+          "asOf": "2026-03-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "about 800,000 have been displaced"
+        }
+      ],
+      "statuses": [],
+      "why": "Same-day report of the Israel-Hezbollah exchange over Beirut, with Lebanese death and displacement counts."
+    },
+    {
+      "slug": "israel-and-us-expand-attacks-after-cross-border-rocket-fire",
+      "date": "2026-03-15",
+      "title": "Israel and US expand attacks after cross-border rocket fire",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Photo roundup of the regional war whose lead item and quote are Israel's air and ground assault in Lebanon after Hezbollah fire; the rest covers US bombers, Kurdish fighters and oil."
+    },
+    {
+      "slug": "hezbollah-rebuilt-its-military-and-launched-coordinated-strikes",
+      "date": "2026-03-22",
+      "title": "Hezbollah rebuilt its military and launched coordinated strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1000,
+          "approx": "at_least",
+          "asOf": "2026-03-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "already killed 1,000+ in Lebanon"
+        }
+      ],
+      "statuses": [],
+      "why": "Background on how Iran's Revolutionary Guards rebuilt Hezbollah, enabling its re-entry into this war and the fighting in Lebanon."
+    },
+    {
+      "slug": "iran-facility-struck-amid-mass-civilian-casualties-in-lebanon",
+      "date": "2026-03-22",
+      "title": "Iran facility struck amid mass civilian casualties in Lebanon",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "milestone",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1000,
+          "approx": "at_least",
+          "asOf": "2026-03-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "over 1,000 killed"
+        },
+        {
+          "figure": "displaced",
+          "value": 1200000,
+          "approx": "at_least",
+          "asOf": "2026-03-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 1.2 million displaced since 2 March"
+        }
+      ],
+      "statuses": [],
+      "why": "UN flash update on Lebanon: deaths pass 1,000 and displacement jumps to more than 1.2 million; the Iranian nuclear-site strike is a side item."
+    },
+    {
+      "slug": "israel-bombs-key-bridges-and-prepares-ground-operations",
+      "date": "2026-03-23",
+      "title": "Israel bombs key bridges and prepares ground operations",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1000,
+          "approx": "at_least",
+          "asOf": "2026-03-23",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 1,000 people have been killed"
+        },
+        {
+          "figure": "deaths",
+          "value": 1029,
+          "approx": "exact",
+          "asOf": "2026-03-23",
+          "matches": true,
+          "countedAs": null,
+          "quote": "Lebanon reports 1,029 dead"
+        },
+        {
+          "figure": "displaced",
+          "value": 1000000,
+          "approx": "at_least",
+          "asOf": "2026-03-23",
+          "matches": true,
+          "countedAs": null,
+          "quote": "over one million displaced"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Litani River crossings",
+          "status": "Qasmiyeh Bridge and other crossings struck; Israel orders border crossings and nearby homes destroyed",
+          "asOf": "2026-03-23"
+        },
+        {
+          "subject": "Israeli ground operation in southern Lebanon",
+          "status": "being prepared; army chief says it 'has only begun'",
+          "asOf": "2026-03-23"
+        }
+      ],
+      "why": "Israel cuts the Litani bridges and prepares a ground invasion of southern Lebanon."
+    },
+    {
+      "slug": "israel-orders-accelerated-home-demolitions-bars-residents-returning",
+      "date": "2026-03-24",
+      "title": "Israel orders accelerated home demolitions, bars residents returning",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1029,
+          "approx": "at_least",
+          "asOf": "2026-03-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "at least 1,029 people have died"
+        },
+        {
+          "figure": "displaced",
+          "value": 1000000,
+          "approx": "at_least",
+          "asOf": "2026-03-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "over one million have been displaced"
+        }
+      ],
+      "statuses": [],
+      "why": "Human Rights Watch on Israel's orders to speed up demolitions in southern Lebanon and bar returns, which the previous day's story already reported in part."
+    },
+    {
+      "slug": "israeli-minister-urges-litani-as-new-border-amid-attacks",
+      "date": "2026-03-24",
+      "title": "Israeli minister urges Litani as new border amid attacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1000,
+          "approx": "at_least",
+          "asOf": "2026-03-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed over 1,000 in Lebanon"
+        },
+        {
+          "figure": "displaced",
+          "value": 1200000,
+          "approx": "at_least",
+          "asOf": "2026-03-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "displacing more than 1.2 million people"
+        },
+        {
+          "figure": "displaced",
+          "value": 130000,
+          "approx": "at_least",
+          "asOf": "2026-03-24",
+          "matches": false,
+          "countedAs": "people sheltering in collective sites only",
+          "quote": "over 130,000 people are sheltering in crowded collective sites"
+        }
+      ],
+      "statuses": [],
+      "why": "Smotrich's call to annex southern Lebanon up to the Litani amid intensified strikes; one minister's demand, not policy, so routine."
+    },
+    {
+      "slug": "israel-expands-southern-operations-displaces-over-1-2-million",
+      "date": "2026-03-28",
+      "title": "Israel expands southern operations, displaces over 1.2 million",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1100,
+          "approx": "at_least",
+          "asOf": "2026-03-28",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed more than 1,100"
+        },
+        {
+          "figure": "deaths",
+          "value": 1116,
+          "approx": "at_least",
+          "asOf": "2026-03-28",
+          "matches": true,
+          "countedAs": null,
+          "quote": "at least 1,116 killed"
+        },
+        {
+          "figure": "displaced",
+          "value": 1200000,
+          "approx": "at_least",
+          "asOf": "2026-03-28",
+          "matches": true,
+          "countedAs": null,
+          "quote": "driven over 1.2 million people from their homes"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Israeli ground operation in southern Lebanon",
+          "status": "expanded with additional army divisions to widen a buffer zone",
+          "asOf": "2026-03-28"
+        }
+      ],
+      "why": "Israel sends more divisions into southern Lebanon: the ground invasion widens."
+    },
+    {
+      "slug": "millions-flee-after-strikes-disrupt-aid-routes",
+      "date": "2026-03-28",
+      "title": "Millions flee after strikes disrupt aid routes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "displaced",
+          "value": 1000000,
+          "approx": "at_least",
+          "asOf": "2026-03-28",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than one million people have fled homes in a few weeks"
+        }
+      ],
+      "statuses": [],
+      "why": "UN regional update mainly on attacks on health care in Iran and aid logistics, with a dedicated paragraph on mass displacement in Lebanon."
+    },
+    {
+      "slug": "israel-vows-to-occupy-south-lebanon",
+      "date": "2026-04-01",
+      "title": "Israel vows to occupy south Lebanon",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1200,
+          "approx": "at_least",
+          "asOf": "2026-04-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "over 1,200 dead"
+        },
+        {
+          "figure": "displaced",
+          "value": 1000000,
+          "approx": "at_least",
+          "asOf": "2026-04-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than one million displaced"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Israel's aim in south Lebanon",
+          "status": "defence minister vows continued occupation after the war, demolition of border villages and no return of residents",
+          "asOf": "2026-04-01"
+        },
+        {
+          "subject": "UNIFIL",
+          "status": "peacekeepers killed; UN Security Council meets",
+          "asOf": "2026-04-01"
+        }
+      ],
+      "why": "Israel's defence minister states an aim to occupy southern Lebanon after the war, changing what the war is about."
+    },
+    {
+      "slug": "israeli-airstrikes-kill-at-least-11-on-easter-sunday",
+      "date": "2026-04-06",
+      "title": "Israeli airstrikes kill at least 11 on Easter Sunday",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1461,
+          "approx": "about",
+          "asOf": "2026-04-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "pushed Lebanon's wartime death toll to about 1,461"
+        },
+        {
+          "figure": "deaths",
+          "value": 11,
+          "approx": "at_least",
+          "asOf": "2026-04-06",
+          "matches": false,
+          "countedAs": "deaths in the Easter Sunday strikes only",
+          "quote": "killed at least 11 people in Lebanon"
+        },
+        {
+          "figure": "displaced",
+          "value": 1000000,
+          "approx": "at_least",
+          "asOf": "2026-04-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "driven over one million people from their homes"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Israeli security zone",
+          "status": "planned up to 30 km inside Lebanon; evacuation orders cover about 15% of Lebanese territory",
+          "asOf": "2026-04-06"
+        }
+      ],
+      "why": "Easter strikes and an updated Lebanese toll, with Israel's plan for a deep security zone."
+    },
+    {
+      "slug": "washington-talks-not-negotiations-while-1-2-million-flee",
+      "date": "2026-04-14",
+      "title": "Washington talks 'not negotiations' while 1.2 million flee",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 2055,
+          "approx": "about",
+          "asOf": "2026-04-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "has killed about 2,055 people"
+        },
+        {
+          "figure": "displaced",
+          "value": 1200000,
+          "approx": "about",
+          "asOf": "2026-04-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "displaces about 1.2 million"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Lebanon-Israel talks",
+          "status": "preliminary ambassador-level meeting set in Washington; Lebanon seeks at least a 15-day pause",
+          "asOf": "2026-04-14"
+        }
+      ],
+      "why": "First diplomatic track for the Lebanon front: preparatory Lebanon-Israel talks in Washington aimed at a pause, under US-Israeli pressure to disarm Hezbollah."
+    },
+    {
+      "slug": "trump-announces-two-week-ceasefire-as-israel-bombs-lebanon",
+      "date": "2026-04-14",
+      "title": "Trump announces two-week ceasefire as Israel bombs Lebanon",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Lebanon front",
+          "status": "Israeli strikes continue despite the 7 April US-Iran ceasefire",
+          "asOf": "2026-04-14"
+        }
+      ],
+      "why": "Commentary on the US-Iran ceasefire whose title and summary turn on Israel continuing heavy strikes in Lebanon."
+    },
+    {
+      "slug": "un-says-strikes-killed-entire-families-in-southern-lebanon",
+      "date": "2026-04-25",
+      "title": "UN says strikes killed entire families in southern Lebanon",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 2400,
+          "approx": "at_least",
+          "asOf": "2026-04-25",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than 2,400 people have been killed in Lebanon since the offensive began"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Truce on the Lebanon front",
+          "status": "fragile temporary truce in place, extended for three weeks",
+          "asOf": "2026-04-25"
+        }
+      ],
+      "why": "UN rights office finds strikes in southern Lebanon likely breached humanitarian law; first story to report a truce in place, extended for three weeks."
+    },
+    {
+      "slug": "trump-s-ceasefires-haven-t-stopped-cross-border-strikes",
+      "date": "2026-06-06",
+      "title": "Trump's ceasefires haven't stopped cross-border strikes",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 3500,
+          "approx": "at_least",
+          "asOf": "2026-06-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 3,500 in Lebanon since March"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Truce on the Lebanon front",
+          "status": "US-brokered truce in southern Lebanon has cut major battles but strikes and deaths continue",
+          "asOf": "2026-06-06"
+        }
+      ],
+      "why": "Review of three US-brokered truces (Gaza, southern Lebanon, Iran); for Lebanon it shows the truce not stopping strikes, with the toll up from 2,400 to 3,500."
+    },
+    {
+      "slug": "us-and-iran-agree-to-end-war-and-reopen-hormuz",
+      "date": "2026-06-18",
+      "title": "US and Iran agree to end war and reopen Hormuz",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "US-Iran deal",
+          "status": "declares immediate and permanent termination of military operations on all fronts, including in Lebanon",
+          "asOf": "2026-06-18"
+        }
+      ],
+      "why": "US-Iran deal story whose terms explicitly cover Lebanon and a halt to Israeli-Hezbollah fighting; mostly about Hormuz and nuclear talks."
+    },
+    {
+      "slug": "us-iran-reach-provisional-deal-to-reopen-strait-of-hormuz",
+      "date": "2026-06-18",
+      "title": "US, Iran reach provisional deal to reopen Strait of Hormuz",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 7000,
+          "approx": "at_least",
+          "asOf": "2026-06-18",
+          "matches": false,
+          "countedAs": "deaths in the whole US/Israel-Iran war across all fronts, not Lebanon alone",
+          "quote": "The conflict left more than 7,000 dead"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "US-Iran deal",
+          "status": "declares immediate and permanent termination of military operations on all fronts, including in Lebanon",
+          "asOf": "2026-06-18"
+        }
+      ],
+      "why": "Same US-Iran deal; its pull quote is the clause ending military operations 'including in Lebanon'."
+    },
+    {
+      "slug": "mass-rally-risks-regional-war-as-strikes-continue",
+      "date": "2026-07-06",
+      "title": "Mass rally risks regional war as strikes continue",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Southern Lebanon",
+          "status": "Israeli air strikes continue, including on Nabatieh, despite the recent US-brokered agreement",
+          "asOf": "2026-07-06"
+        }
+      ],
+      "why": "Liveblog led by Khamenei's funeral whose second strand is Israeli strikes in southern Lebanon despite the June agreement: the deal did not end the fighting in Lebanon."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "israel-and-us-strike-iran-as-region-teeters-toward-war",
+      "date": "2026-03-04",
+      "title": "Israel and US strike Iran as region teeters toward war",
+      "why": "Says strikes hit Tehran and Beirut and killed 'over 600', but it is an Iran-war liveblog (Hormuz closure, Trump's four-week campaign) and the toll is not a Lebanon count."
+    },
+    {
+      "slug": "trump-says-iran-campaign-very-soon-as-oil-tops-100",
+      "date": "2026-03-10",
+      "title": "Trump says Iran campaign 'very soon' as oil tops $100",
+      "why": "Cites nearly 700,000 displaced in Lebanon in one bullet, but the story is about Trump's Iran war aims and oil prices."
+    },
+    {
+      "slug": "millions-flee-as-regional-war-widens",
+      "date": "2026-03-16",
+      "title": "Millions flee as regional war widens",
+      "why": "Egeland interview on displacement across Iran, Lebanon, Gaza and Sudan; Lebanon is one name in a regional list."
+    },
+    {
+      "slug": "israel-warns-of-thousands-more-targets-in-iran",
+      "date": "2026-03-17",
+      "title": "Israel warns of thousands more targets in Iran",
+      "why": "Regional roundup that mentions Hezbollah and 'Lebanon reports 850 dead', but its subject is the Israel-Iran exchange and Hormuz."
+    },
+    {
+      "slug": "iran-strikes-tel-aviv-with-cluster-missiles",
+      "date": "2026-03-20",
+      "title": "Iran strikes Tel Aviv with cluster missiles",
+      "why": "Gives Lebanon figures (more than 900 dead, 800,000 displaced) as context, but the story is Iran's cluster-missile strike on Israel and Bushehr risk."
+    },
+    {
+      "slug": "us-and-iran-meet-as-oil-disruption-roils-markets",
+      "date": "2026-04-11",
+      "title": "US and Iran meet as oil disruption roils markets",
+      "why": "Notes Israeli attacks in Lebanon straining the US-Iran truce, but it is about the Hormuz blockade, record oil prices and the Islamabad talks."
+    },
+    {
+      "slug": "mediators-pursue-ceasefire-while-iran-nuclear-dispute-persists",
+      "date": "2026-04-17",
+      "title": "Mediators pursue ceasefire while Iran nuclear dispute persists",
+      "why": "Mentions continued fighting in Lebanon and Israel-Lebanon leader contacts in passing; the story is the US-Iran ceasefire and nuclear terms."
+    },
+    {
+      "slug": "reporters-killed-covering-israel-gaza-war-go-unnoticed",
+      "date": "2026-05-06",
+      "title": "Reporters killed covering Israel-Gaza war go unnoticed",
+      "why": "Uses the killing of Lebanese reporter Amal Khalil as an example, but it is an essay on journalist killings since October 2023."
+    },
+    {
+      "slug": "member-states-split-over-lebanon-and-iran-healthcare-votes",
+      "date": "2026-05-23",
+      "title": "Member states split over Lebanon and Iran healthcare votes",
+      "why": "Title names Lebanon, but the story is WHO's Eastern Mediterranean funding gap; Lebanon appears only as a World Health Assembly vote."
+    },
+    {
+      "slug": "us-says-missiles-intercepted-as-talks-stall",
+      "date": "2026-06-06",
+      "title": "US says missiles intercepted as talks stall",
+      "why": "Cites 1.2 million Lebanese displaced and Israeli incursions in one bullet; the story is Iranian missile attacks on the Gulf and stalled US-Iran talks."
+    },
+    {
+      "slug": "ceasefire-ends-strikes-and-reopens-key-shipping-lane",
+      "date": "2026-06-18",
+      "title": "Ceasefire ends strikes and reopens key shipping lane",
+      "why": "UN welcome of the US-Iran deal; Lebanon appears only as Israeli strikes on Beirut in a caveat. Its 'permanent ceasefire' is not the Lebanon end event."
+    },
+    {
+      "slug": "iran-says-strategic-waterway-closed-global-shipping-and-oil-hit",
+      "date": "2026-06-22",
+      "title": "Iran says strategic waterway closed; global shipping and oil hit",
+      "why": "Iran re-closed Hormuz 'after Israeli attacks on Lebanon', which shows the June deal breaking, but the story is the Hormuz closure and its economic shock."
+    },
+    {
+      "slug": "u-s-and-iran-agree-60-day-roadmap-open-shipping-lane",
+      "date": "2026-06-23",
+      "title": "U.S. and Iran agree 60-day roadmap, open shipping lane",
+      "why": "Mentions agreed 'mechanisms to try to end fighting in Lebanon' in one clause; the story is the US-Iran roadmap and Hormuz."
+    },
+    {
+      "slug": "thousands-flee-as-yemen-fighting-spreads",
+      "date": "2026-10-04",
+      "title": "Thousands flee as Yemen fighting spreads",
+      "why": "Iran-war liveblog about Yemen and Iran's currency that notes Israeli attacks 'continued in Gaza and Lebanon' in passing."
+    },
+    {
+      "slug": "washington-used-pause-to-secure-oil-shipping-lanes",
+      "date": "2026-11-02",
+      "title": "Washington used pause to secure oil shipping lanes",
+      "why": "Analysis of the US-Iran memorandum and Hormuz shipping with one bullet on Lebanon (Hezbollah disarmament arrangement, Israel's continued occupation)."
+    }
+  ],
+  "notes": "Start: our stories date the war from 2 March 2026 ('Since March 2'); the first story is 4 March. Not closed on 16 November 2026, and two events must not be read as the end. (1) The April truce: the 25 April story is the first to report it ('a fragile three‑week ceasefire', 'A temporary truce extended for three weeks'), without naming its parties; on 6 June the truces had 'cut major battles but not stopped strikes and deaths' and the Lebanon toll had risen from more than 2,400 to more than 3,500. (2) The 18 June US-Iran deal declared 'immediate and permanent termination of military operations on all fronts, including in Lebanon', but the same day's UN story notes Israeli strikes on Beirut despite a ceasefire, Iran re-closed Hormuz on 22 June 'after Israeli attacks on Lebanon', strikes hit Nabatieh on 6 July, Israeli attacks 'continued in Gaza and Lebanon' on 4 October, the 2 November analysis describes 'Israel’s continued occupation and destruction of villages', and the 10 November story ('Trump says Iran fighting is over but keeps forces ready', not listed) names 'renewed conflict involving ... Israel in Lebanon'. After 25 April no story is mainly about Lebanon, so the later state comes only from optional entries and near misses. Counts: deaths are Lebanese health ministry or UN totals and do not separate civilians from fighters (6 June antifactor). Several stories restate a count loosely ('more than 1,000' after '1,029'; 'over one million' displaced after '1.2 million'); these are not falls. The 9 March 300,000 is given as displaced but the same story also says 'About 300,000 people were ordered to evacuate', so it may count only those under evacuation orders. The 7 March 400,000 is the population of the area under an evacuation order, not a displacement count. Near misses carry Lebanon numbers too (nearly 700,000 displaced on 10 March, 850 dead on 17 March, more than 900 dead and 800,000 displaced on 20 March, 1.2 million displaced on 6 June); a system that rightly leaves those stories out records none of them. Boundary rule used: optional when a wider-war story names Lebanon in its title or gives the Lebanon front a strand of its own with Lebanon-specific facts; near miss when Lebanon is a clause or one bullet in a list of fronts."
+}

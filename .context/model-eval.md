@@ -132,6 +132,61 @@ npm run eval:research --prefix server -- --out ../DOCS/2026-11-12_research-eval 
 - **The own-words run (2026-11-13, before that change merges):** a new folder on the same sample. Copy `.cache/research-fixtures.json`, `.cache/tavily.jsonl` and `.cache/calls.jsonl` from `DOCS/2026-11-12_research-eval` into `DOCS/2026-11-13_research-own-words-eval/.cache/`, and that folder's `research-report.md` alongside as `research-report-baseline-2026-11-12.md`; never write to the 2026-11-12 folder. The steps whose prompt or schema changed (extraction, write, fact check, rewrite) miss the call cache and run again; the unchanged ones (confirmation, queries, earlier coverage) answer from the copied `calls.jsonl`, so the queries, and with them the searches, match the cached Tavily answers at no Tavily cost. Without `calls.jsonl` the queries are written again, may differ and then cost credits. The copied ledgers count toward `--budget` (the run prints "folder spend so far" first), so the run is `npm run eval:research --prefix server -- --out ../DOCS/2026-11-13_research-own-words-eval --budget 3`. Compare with the baseline: kept drafts and fallbacks by category and cause, the rewrite rate and items dropped, first-draft flags by cause, the longest-run distribution per kind, fact-check input tokens and cost per story, the research-rating drift. Then read 10 drafts beside their sources, non-English sources first, for close copying the judge missed, and the new fact statements against their supporting sentences for fidelity. `eval:recalibrate` does not apply: no production rating, dedup, social or selection prompt changed, and research's rating is recorded only.
 - **Shared with production:** the eval runs production's research modules (`prompts/research.ts`, `schemas/research.ts`, `services/researchFilter.ts`, `researchChecks.ts`, `researchCopying.ts`, `researchPipeline.ts`, `researchInput.ts`) through the adapter `scripts/eval/research/pipeline.ts`, which maps each step's tier to a constant arm (gpt-6-luna@low or @medium) and keeps the versioned schema names. Eval-only: the call cache and ledger, the Tavily response cache, sampling the newest published stories (then `researchStoriesByIds`), the per-story budget, the cost projection and the report. The write prompt still copies the assess prompt's generic limiting factors.
 
+## Overview evals (`eval:overviews`)
+
+The first evals for story overviews (`.plans/2026-11-16_story-overviews.md`, decision D8: every model step of that feature has an eval, and a replay of past developments gates each launch). This increment runs three steps that need no production change: the answer keys against the database, production's research fact check under planted errors, and research's real cost per run. It is its own CLI, not an `eval:models` suite, for the reasons `eval:research` gave: its steps are not arm comparisons on fixed prompts, and its fixtures are its own. The replay runner and the per-step suites (linking, founding, roles, figures, closure, reviews) come with the module plans that create those steps.
+
+```bash
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run                    # sample facts, print the estimate; no API calls
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline        # no API calls
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps fact-check --limit 5 # smoke run
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps fact-check --repeat 3 --budget 3
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--steps` | Comma list of `keys`, `fact-check`, `baseline` (default: all three) |
+| `--budget` | USD cap on the folder's ledger (default 3; the $20 cap applies) |
+| `--repeat N` | Fact check only, 1 to 10, with `repeats.ts`'s per-run cache keys |
+| `--size N` | Facts to sample (default 300, at most 600) |
+| `--limit N` | Label and judge only the first N sampled facts: a smoke run, marked "not evidence" in the report |
+| `--arms` | Comma list of `model@effort` from `MODELS` (default production's research fact-check arm, gpt-6-luna@low) |
+| `--dry-run`, `--concurrency`, `--refresh-fixtures` | As in eval:research |
+
+### `keys`: answer keys
+
+- **What they are:** for each past development we covered, what a perfect overview system would have done with our published stories: the charter (what's in, what's out, the end event) and whether it closed; the figures worth tracking with their definitions; every story that belongs (`join: must`, or `optional` where careful editors could disagree, which scoring ignores) with its role (`turning_point` with a `kind`, or `routine`), the figure values it states (with `approx`, `asOf`, whether the value `matches` the figure's definition and else what it `countedAs`, and the exact words of our story), and the statuses it changes; the tempting `nearMisses` that must not join; and `notes` on our stories' own contradictions.
+- **Where they live:** one file per development, `server/src/scripts/eval/overviews/keys/<id>.json`, committed (a file is named after its `id`). The first nine (2026-11-16): Ebola in eastern DR Congo, Hormuz shipping, the 2026–27 El Niño, the 2026 war in Lebanon, the investigations into the RSF's El Fasher atrocities, the WHO pandemic agreement's PABS annex talks, the Colorado River post-2026 rules, the UN talks on autonomous weapons, H5N1 in Australia's wildlife: 382 stories, 200 clear joins, 82 borderline, 114 near misses. They were drafted from the published stories with the whole history in view (for an answer key, hindsight is the point) and checked against those stories; every quote was found in its story's published text. Edit a key when a published story is corrected or a label proves wrong, never to make a step pass.
+- **Format:** `keySchema.ts` (Zod, the field rules in its `.describe()`s). `validateKey` adds: entries in date order and unique; a turning point has a `kind`, a routine entry none; every value names one of the key's figures; `countedAs` set exactly when `matches` is false; every figure has at least 3 values (a development with no such number has `figures: []`); no slug both an entry and a near miss; `closed.slug`, when set, is an entry.
+- **Tests:** `keys.test.ts` runs the schema and `validateKey` on every committed key, with no database, so a key can't rot in CI. Prettier formats the JSON: run `npm run format` after editing one.
+- **The database check** (the step): every slug is a published story; each entry's `date` is its UTC publication day; every quote occurs in the story's published text (title, summary, relevance reasons, antifactors, and the applied research's paragraphs, the text readers see through `storedResearchText`), after evening out whitespace, quote marks and dashes. A miss is an error in the key, to fix there; it passes or fails nothing in production. The report gives counts per development, including how many entry stories have a stored research run (what module 1's replay will need).
+
+### `fact-check`: planted errors
+
+Decision D4 of the overview plan makes the fact-check call the only defense against a wrong number (ADR-0057's rule, extended), so this measures its leniency on production's own prompt.
+
+- **Sample** (`factFixtures.ts`): facts from finished `story_research_runs` results, newest first, one run per story (its newest): each source's facts whose supporting sentence code found in the source text and whose statement states a significant number (`readNumbers`, `significant`), at most 10 a run and 3 a source. Cached in `.cache/fact-fixtures.json`; runs stored in an older shape are skipped and counted. A fact's language is known only when its source is one of our crawled stories.
+- **Variants** (`plant.ts`, pure), each labeled by construction, each changing one number that production's number reader finds, never one inside a word, an id or a URL-like string:
+  - `faithful`: the statement as extracted (expected supported).
+  - `reworded` (expected supported): "half", "a quarter" or "three quarters" for 50%, 25% or 75%, only before "of" or after "by" ("a 50% rise" would turn ungrammatical); a whole million in the other form; a number of at least 1,000 as "about" at two significant figures. A fact no rule fits gets none.
+  - `wrong-number`: ×1.5 at the same precision, else ×2; never a year.
+  - `dropped-qualifier`: "nearly", "almost", "about", "around", "more than", "over", "at least", "up to" or "some" removed before a number, never from a negated one ("no more than").
+  - `wrong-year`: a year from 1900 to 2099 moved back one.
+  - `wrong-scale`: thousand, million and billion swapped once.
+- **Labels first:** an extracted statement may itself misstate its sentence, which would make a correct rejection look false. So gpt-6.1-sol@high judges each sampled fact once with the same prompt; facts it rejects are reported as extraction errors (a fidelity number for extraction on its own) and leave the sample, and variants are built only from facts it accepts.
+- **The call:** production's `buildFactCheckPrompt(items, [], [])` and `factCheckSchema` (versioned name), 10 items a call, shuffled with a fixed seed so variants of one fact rarely share a call. Each item's one fact is the source sentence alone, as both statement and supporting sentence, so the judge sees only the source's words, as the overview fact check will; the number hints come from `findUnsupportedNumbers`, as in production. Only `supported` is scored.
+- **Scores** (`factCheckScore.ts`): per kind, the share judged unsupported. The catch rate is the share of planted errors caught; false rejection is the share of faithful and reworded items rejected. Both are held against the design's first bars (catch at least 90%, false rejection at most 5%), shown as met or not, never a gate. With `--repeat`, the spread across runs and the share of items whose verdict flips. Up to 30 misses and 30 false rejections are listed beside their sentences, for a read.
+
+### `baseline`: research's real cost
+
+The runs of the 30 days up to the newest run: counts by trigger and by verdict; `cost_usd` mean, median and 90th percentile over runs with a stored result (the report says how many were left out); Tavily credits as USD at $0.008; model cost as the cost less the credits. It replaces the desk estimates in the overview design's cost table.
+
+### Outputs and safety
+
+- `overview-eval.md` in `--out`: a section per step that ran, what was skipped, the spend and the fixtures' anchor. Every departure from the default run tags the name (`-steps-…`, `-arms-…`, `-size-N`, `-repeat-N`, `-limit-N`), so a trial never overwrites the report of record. Caches: `.cache/calls.jsonl`, `.cache/fact-fixtures.json`.
+- The read-only session, SELECT only (`SelectDb` in `readOnlyDb.ts`), opened only when a step needs it; OpenAI is the only HTTP, for the fact check only; no `withRetry` (`imports.test.ts`); `OPENAI_API_KEY` printed only as present or missing, the database only as local or remote; the fact check is skipped when its upper-bound estimate exceeds what is left of the budget.
+- **First run on a database:** `--dry-run`, then `--steps fact-check --limit 5`. The SQL was written against `prisma/schema.prisma` without a database at hand.
+
 ## Adding a suite or arm
 
 1. Add `suites/<name>.ts` exporting a `Suite` (`name`, `arms`, `describe`, `plan`, `run`) and a pure `decide*` function with a test; reuse `runArms`/`metricRow` from `suites/shared.ts` and `pickLowestPassing`/`effectiveBar` from `decide.ts`.
@@ -161,6 +216,8 @@ npm run eval:research --prefix server -- --out ../DOCS/2026-11-12_research-eval 
 | `server/src/scripts/eval/recalibrate.ts` | `eval:recalibrate` CLI orchestration |
 | `server/src/scripts/eval/research.ts` | `eval:research` CLI orchestration |
 | `server/src/scripts/eval/research/` | The research measurement's eval-only parts: sampling (`fixtures`, loading through production's `researchStoriesByIds`), the Tavily response cache around production's client (`tavily`), the adapter to production's pipeline with the constant arms (`pipeline`), estimates and totals (`costs`), the budget-gated story queue (`storyQueue`), the two reports (`report`). The prompts, schemas, filter, checks and step sequence are production's (`.context/story-research.md`, "Key files") |
+| `server/src/scripts/eval/overviews.ts` | `eval:overviews` CLI orchestration |
+| `server/src/scripts/eval/overviews/` | The overview evals: the answer-key format and checks (`keySchema`, `keyFiles`, `keyCheck`, the committed `keys/`), the fact sample (`factFixtures`), the variant rules (`plant`), the fact-check calls and their scores (`factCheck`, `factCheckScore`), research's cost baseline (`baseline`) and the report (`report`) |
 | `server/src/scripts/eval/recalibration.ts` | Owner's acceptance rules, phase-1 reference numbers, the calibration/holdout sample |
 | `server/src/scripts/eval/recalibrationChecks.ts` | The recalibration steps (pre-assess, assess, dedup, rating set) |
 | `server/src/scripts/eval/recalibrationReport.ts` | `recalibration-<half>[-tags].md` and its name |

@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "id": "pandemic-agreement-pabs",
+  "title": "WHO pandemic agreement: PABS annex negotiations",
+  "charter": {
+    "in": "WHO member states' negotiations on the Pathogen Access and Benefit-Sharing (PABS) annex to the WHO Pandemic Agreement adopted in 2025: the rules for sharing pathogen samples and sequence data and the vaccines, tests and treatments that result. The agreement cannot open for signature until the annex is finished. Stories on the talks' progress, deadlines, extensions, divisions and appeals to finish them belong; covered from January 2026.",
+    "out": [
+      "The UN General Assembly political declaration on pandemic prevention, preparedness and response (September-October 2026)",
+      "The 2025 adoption of the Pandemic Agreement itself and the International Health Regulations amendments, except as the starting point of these talks",
+      "US bilateral health deals that demand pathogen samples or data from African countries",
+      "WHO preparedness and surveillance initiatives (24-hour detection target, Pandemic Fund, BioHub)",
+      "The US withdrawal from WHO",
+      "Outbreaks themselves (Ebola/Bundibugyo, hantavirus) and general warnings about outbreak risk",
+      "Wildlife trade and pathogen spillover research",
+      "US biosecurity policy and AI-enabled pathogen design"
+    ],
+    "endEvent": "The World Health Assembly adopts the PABS annex, so the Pandemic Agreement can open for signature (or the talks are formally abandoned). Our stories put the target first at the May 2026 Assembly, then at May 2027."
+  },
+  "closed": null,
+  "figures": [],
+  "entries": [
+    {
+      "slug": "pandemic-preparedness-rules-who-states-advance-talks-on-pathogen-access-and",
+      "date": "2026-01-31",
+      "title": "WHO members advance draft to secure fair vaccine access",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "PABS annex",
+          "status": "draft advanced in negotiations; decision expected at the May 2026 World Health Assembly",
+          "asOf": "2026-01-31"
+        }
+      ],
+      "why": "Reports a negotiating round on the PABS system, the core annex of the 2025 Pandemic Agreement, ahead of a May 2026 Assembly decision."
+    },
+    {
+      "slug": "countries-miss-deadline-blocking-who-deal-on-vaccines-and-tests",
+      "date": "2026-05-07",
+      "title": "Countries miss deadline, blocking WHO deal on vaccines and tests",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "PABS annex",
+          "status": "deadline missed without agreement; rich and poor countries split over mandatory terms for drug companies",
+          "asOf": "2026-05-07"
+        }
+      ],
+      "why": "Negotiators missed the deadline to finish the PABS rules, leaving the treaty unable to open for signature."
+    },
+    {
+      "slug": "who-extends-pandemic-rules-talks-amid-rich-poor-split",
+      "date": "2026-05-21",
+      "title": "WHO extends pandemic rules talks amid rich-poor split",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "PABS annex negotiations",
+          "status": "extended past the May 2026 deadline",
+          "asOf": "2026-05-21"
+        }
+      ],
+      "why": "Member states decided to extend the PABS annex negotiations; no new rules this year."
+    },
+    {
+      "slug": "who-urges-leaders-to-finish-pathogen-sharing-rules",
+      "date": "2026-06-18",
+      "title": "WHO urges leaders to finish pathogen sharing rules",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "WHO open letter to G7, G20, BRICS and all nations to finalize the PABS annex ahead of July talks; an appeal, not a change in state."
+    },
+    {
+      "slug": "eu-says-ideological-split-is-stalling-who-pandemic-agreement",
+      "date": "2026-09-12",
+      "title": "EU says ideological split is stalling WHO pandemic agreement",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "PABS annex negotiations",
+          "status": "new round under way, stalled by an EU-Africa split over the access model and binding benefit contracts",
+          "asOf": "2026-09-12"
+        }
+      ],
+      "why": "Covers an active round of PABS talks and the EU negotiator's account of the deadlock; the split itself was already known from May."
+    },
+    {
+      "slug": "leaders-renew-global-pledge-to-prevent-future-outbreaks",
+      "date": "2026-09-26",
+      "title": "Leaders renew global pledge to prevent future outbreaks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "PABS annex",
+          "status": "still under negotiation; adoption targeted for May 2027",
+          "asOf": "2026-09-26"
+        }
+      ],
+      "why": "Borderline: a story about UN leaders' outbreak pledges, but it is the only one of ours that gives the annex's new target (May 2027)."
+    },
+    {
+      "slug": "who-urges-countries-to-complete-global-health-pact",
+      "date": "2026-09-28",
+      "title": "WHO urges countries to complete global health pact",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: Tedros's speech at the UN high-level meeting is mostly about WHO's 10 initiatives, but its headline call to complete the pact means finishing the pathogen-sharing system."
+    },
+    {
+      "slug": "124-countries-back-new-global-health-rules",
+      "date": "2026-11-02",
+      "title": "124 countries back new global health rules",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: reports the World Health Assembly adopting the Pandemic Agreement itself (the parent treaty, dated 2025 in our other stories) and says the pathogen-sharing system still has to be negotiated. It is not the end of the PABS talks."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "global-health-governance-us-notification-to-withdraw-from-who-could-weaken",
+      "date": "2026-01-31",
+      "title": "US withdraws from WHO; WHO says world is less safe",
+      "why": "Same day, same agency and talk of sample sharing, but it is about the US leaving WHO, not the PABS talks."
+    },
+    {
+      "slug": "who-cites-new-treaty-and-1-2b-grants-warns-gaps-persist",
+      "date": "2026-02-08",
+      "title": "WHO cites new treaty and $1.2B grants, warns gaps persist",
+      "why": "A six-years-after-COVID progress review that mentions the PABS annex in one caveat line only."
+    },
+    {
+      "slug": "african-countries-push-back-against-us-demands-for-pathogen-data",
+      "date": "2026-02-28",
+      "title": "African countries push back against US demands for pathogen data",
+      "why": "Pathogen data and fair access to vaccines are at stake, but in US bilateral health-funding deals, not the WHO annex."
+    },
+    {
+      "slug": "mammal-sales-linked-to-50-higher-pathogen-sharing-with-humans",
+      "date": "2026-05-05",
+      "title": "Mammal sales linked to 50% higher pathogen sharing with humans",
+      "why": "Same words ('pathogen sharing'), but it is a study on wildlife trade and spillover between animals and people."
+    },
+    {
+      "slug": "who-warns-outbreaks-are-growing-more-damaging",
+      "date": "2026-05-19",
+      "title": "WHO warns outbreaks are growing more damaging",
+      "why": "Global Preparedness Monitoring Board warning on outbreak frequency and vaccine access, published two days before the extension, with no report on the PABS talks."
+    },
+    {
+      "slug": "member-states-split-over-lebanon-and-iran-healthcare-votes",
+      "date": "2026-05-23",
+      "title": "Member states split over Lebanon and Iran healthcare votes",
+      "why": "From the World Health Assembly two days after the extension, with the word 'split' in the title, but it covers emergency funding gaps and votes on attacks on health care."
+    },
+    {
+      "slug": "u-s-demands-broad-access-to-african-medical-records-report-says",
+      "date": "2026-06-10",
+      "title": "U.S. demands broad access to African medical records, report says",
+      "why": "Says US aid terms could undermine fair pathogen-sharing efforts, but the subject is US bilateral aid conditions in Liberia."
+    },
+    {
+      "slug": "us-blocks-un-pledge-on-future-outbreak-response",
+      "date": "2026-09-29",
+      "title": "US blocks UN pledge on future outbreak response",
+      "why": "Disputes over sharing benefits and fair vaccine access, but in the nonbinding UN political declaration, a separate instrument."
+    },
+    {
+      "slug": "un-members-renew-pledges-to-stop-future-outbreaks",
+      "date": "2026-10-13",
+      "title": "UN members renew pledges to stop future outbreaks",
+      "why": "Tedros urges countries to finish the PABS annex, but the event is the General Assembly adopting its own declaration, which the story calls separate from the WHO Pandemic Agreement."
+    },
+    {
+      "slug": "who-sets-24-hour-target-for-spotting-outbreaks",
+      "date": "2026-10-30",
+      "title": "WHO sets 24-hour target for spotting outbreaks",
+      "why": "WHO pandemic-readiness strategy for surveillance by 2030; pathogen tracking but no PABS negotiations."
+    },
+    {
+      "slug": "us-ends-federal-funding-for-some-risky-germ-studies",
+      "date": "2026-11-02",
+      "title": "US ends federal funding for some risky germ studies",
+      "why": "Same day as the 124-countries story and about dangerous pathogens, but it is US research-funding policy."
+    }
+  ],
+  "notes": "Not closed: no story reports the annex adopted, and the 26 Sep story gives May 2027 as the new target. The hardest call is '124 countries back new global health rules' (2 Nov). Its text reports the World Health Assembly adopting the Pandemic Agreement itself (124 in favor and none against in the committee vote, more WHO funding, the US absent from the final talks). Its source is CIDRAP's article 'World Health Assembly adopts Pandemic Agreement', and our 31 Jan and 8 Feb stories date that adoption to 2025. The story itself says countries 'still need to negotiate a system for sharing pathogens and benefits before the agreement can open for signature'. So it is neither the PABS end event nor the International Health Regulations amendments. It is a late re-report of the parent treaty's founding vote, and it must not close this development; its 124 is the vote on the main agreement, not on the annex. It is optional, not a near miss, because it is the same agreement and states the annex's status, but it adds no news about the talks, and putting it on a 2 Nov timeline as 'adopted' would mislead. The UN high-level-meeting stories split two ways. 26 Sep and 28 Sep are optional (26 Sep carries the May 2027 target; 28 Sep is a WHO call to 'complete' the pact). 29 Sep and 13 Oct are near misses about the UN political declaration. Figures are []: no number about the talks appears in 3 entries. The 10% donation and 10% WHO reserve appear only on 12 Sep and 124 only on 2 Nov; COVID's toll ('up to twenty million lives', 'more than 20 million excess deaths') is context, not a tracked figure."
+}
