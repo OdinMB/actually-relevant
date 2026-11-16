@@ -129,6 +129,10 @@ Routes in `routes/admin/storyContext.ts` (mounted under `/api/admin/stories`, ad
 
 Hiding and moving are the one way a person changes what the step built (ADR-0062). Who hid a card, and when, is not recorded.
 
+## Checking it locally
+
+The synthetic data set (`npm run db:seed:synthetic --prefix server`, `.context/database-migrations.md`) gives one researched story context: `/stories/varrowen-province-makes-free-school-lunches-permanent-for-600-000-pupils` has the figures tiles, a bar chart beside `P1`, a line chart beside `W1`, a card of sentences and the honest gap in the section (`scripts/synthetic-data/context.ts`). Its rows are written by hand: no model wrote them.
+
 ## Before switching on
 
 The plan gates the step on `eval:overviews` (roadmap D8): planted errors on context facts, structured fields, the gap list and searches, what's being done (ADR-0065), boxes, placement (below its bar the step goes live with `STORY_CONTEXT_PLACEMENT=section`) and cost, on the judged half of a gap key of 30 stories (`.context/model-eval.md`, "Overview evals", once built). The owner switches the step on.
@@ -155,4 +159,5 @@ The plan gates the step on `eval:overviews` (roadmap D8): planted errors on cont
 | `server/src/services/storyContextView.ts` | The public route's answer |
 | `server/src/services/storyContextAdmin.ts`, `server/src/routes/admin/storyContext.ts` | The admin's view and edits |
 | `server/src/prompts/storyContext.ts`, `server/src/schemas/storyContext.ts` | Prompts; output, stored and request schemas |
+| `server/src/scripts/synthetic-data/context.ts` | The synthetic story's context |
 | `server/src/test/db/storyContext.ts` | DB test fixtures |

@@ -1,6 +1,7 @@
 /**
  * Fill a local database with the synthetic data set: made-up issues, feeds, stories in every
- * pipeline status, a dedup cluster, newsletter issues, podcast episodes and an admin login, with no
+ * pipeline status, a dedup cluster, researched stories and one story's context cards, newsletter
+ * issues, podcast episodes and an admin login, with no
  * OpenAI or other paid call (`.context/database-migrations.md`, "Run Locally with Synthetic Data").
  *
  *   SYNTHETIC_DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevant_synthetic \

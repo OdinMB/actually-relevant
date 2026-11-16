@@ -58,9 +58,9 @@ function source(
   }
 }
 
-/** The fields to merge into a published synthetic story's row so it reads as researched. */
-export function researchedRow(row: Prisma.StoryCreateManyInput, seed: ResearchedSeed, origin: string): Partial<Prisma.StoryCreateManyInput> {
-  const sources = [
+/** The run's sources: the original article (`S0`) and the two invented outlets (`S1`, `S2`), one fact each (`S0F1`…). */
+export function researchSources(seed: ResearchedSeed, origin: string): ResearchSource[] {
+  return [
     source(
       'S0',
       'original',
@@ -83,8 +83,12 @@ export function researchedRow(row: Prisma.StoryCreateManyInput, seed: Researched
       ),
     ),
   ]
+}
+
+/** The fields to merge into a published synthetic story's row so it reads as researched. */
+export function researchedRow(row: Prisma.StoryCreateManyInput, seed: ResearchedSeed, origin: string): Partial<Prisma.StoryCreateManyInput> {
   const research = buildResearchedStory({
-    sources,
+    sources: researchSources(seed, origin),
     earlier: [
       {
         id: 'E1',
