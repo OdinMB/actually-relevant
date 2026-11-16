@@ -14,8 +14,19 @@ Naming: a **box** is the stored record and a **card** is how the page shows it.
 
 These five calls are yours, because readers would notice them or they commit money. Everything else in this plan is decided. The plan builds each recommendation as written, and if you choose differently, only the part named in the item changes.
 
-1. **Where the context sits on the story page, and how it differs from the mockup.**
-   - **Recommended placement:** right after the story's text and key quote, before "Why This Matters". On desktop it is a tinted band wider than the text column, with three cards a row. On phones the cards sit in a sideways swipe row (about one screen, against 3.5 stacked), with dots and "swipe for more". It carries the mockup's heading, "What you need to read this story", with its count line. Placement mockups on the live Indonesia story: `mockups/context-place-compare-desktop.png` and `-phone.png`, with each version at full size beside them.
+1. **How the context sits on the story page.** Mockups on the live Indonesia story, in `mockups/`: `context-split-margin.png` and `context-split-inline.png` (desktop), `context-split-phone.png` (phone, closed and tapped) and `context-split-phone-full.png`. The earlier one-block versions are `context-place-*.png`.
+   - **The story stays complete without the cards.** No card changes the story's text, "Why This Matters" or "Caveats", and card sentences never restate them (write step, rule list).
+   - **Recommended: split the cards.**
+     - **Notes beside the text:** up to 2 beside story paragraphs and up to 2 beside "Why This Matters" points, at most one per paragraph or point. A note is the full card.
+     - **The rest in a section** after Caveats, before Sources, under the page's own ruled heading, "More context", with the line "3 more cards · every number cited" and the AI label. The "In numbers" card always goes here.
+     - **Desktop: notes in the right margin**, level with their paragraph, so the text column runs on uninterrupted. When a story has notes, the column moves left to make room. Below about 1,100 pixels of width the notes sit inside the column, after their paragraph. Section cards sit three a row.
+     - **Phones: one-line notes** under their paragraph or point: an icon, the kicker and a teaser such as "The rainy season, 20–30 days late". A tap opens the full card in a sheet that slides up over the page, and the page stays where it was. The section uses the same one-line notes, so it takes a few lines.
+     - Every note and card carries the AI badge in its kicker, as related-story cards do.
+   - **How a card finds its place** (`STORY_CONTEXT_PLACEMENT`, a server setting read when a page is served, so a change applies to every story at once):
+     - `model`, the default: the write call names each card's place (a paragraph, a point, or the section) in the same call, at no extra cost, and it is stored with the card. Code applies the limits, and notes over them go to the section in card order. The eval judges whether each note adds to the paragraph or point beside it; if that falls short of its bar, the step goes live with `section` until it doesn't.
+     - `random`: cards are placed at random among the paragraphs and points that cite at least one of the card's sources, under the same limits. The draw is seeded by the story, so a page never reshuffles. A card with no such spot goes to the section, and so cards from the second search always do in this mode.
+     - `section`: every card in the section, nothing beside the text.
+   - **Section heading:** "More context", in the same ruled style as "Why This Matters" and "Caveats". Alternatives: "Background", "Around this story".
    - **The cards follow the mockup:**
      - a kicker naming the slot (Compared with what, Why now, The long build-up, Who it reaches, What's being done, What comes next, Key term, In numbers);
      - a short heading;
@@ -29,11 +40,11 @@ These five calls are yours, because readers would notice them or they commit mon
      - The ×3/×5 pictograms and the split bar in "Why this year" become big-number tiles until a later module adds those chart types.
      - The honest-gap card keeps "Our sources don't say" but drops "we'll add what's being done when a source covers it", because nothing refreshes a one-off story's context.
    - **Alternatives:**
-     - After Caveats, just before Sources. This changes today's page least, but on a phone the cards start on screen 4.
-     - Above the story text, as the mockup draws it. On desktop the story starts on screen 3; on a phone, on screen 5 with stacked cards or screen 2 with the swipe row.
-     - Stacked cards on phones instead of the swipe row: every card visible without a gesture, at 3.5 screens of scrolling.
+     - Notes inside the text column on desktop too. Works at every width with no layout change, but breaks the text into pieces.
+     - One block and no notes: after the key quote with a swipe row on phones, after Caveats, or above the story (`context-place-compare-desktop.png`, `-phone.png`). Simpler to build, but every card sits away from the text it explains, and above the story it pushes the story down by 2 to 4 screens on a phone.
+     - Full cards on phones instead of one-line notes. No tap needed, but each card is about a screen long.
 2. **The AI label and the methodology text.** Owner-approved label wording lives only in `aiDisclosureCopy.ts`.
-   - **Recommended label under the heading:** "Context gathered and written by [AI] from the sources cited." Its first words link to `/methodology#story-context`.
+   - **Recommended label under the section heading and at the foot of the phone sheet:** "Context gathered and written by [AI] from the sources cited." Its first words link to `/methodology#story-context`. A note away from the section carries the AI badge in its kicker, linking to the same place.
    - **Recommended methodology section ("Story context"):** "Many stories carry context cards: how big the development is compared with what came before, why it is happening now, who it reaches, what is being done and what comes next. An AI model reads the sources our research found and, where something a reader needs is missing, searches for up to three more. Every number on a card names its source, and when sources disagree we show both. A separate AI check compares each fact with the sentence it came from and drops what that sentence does not say. Each card gives the date its facts are from; we don't update cards later."
 3. **The default monthly cap: $20.**
    - Expected spend is about $6–10 a month at today's roughly 9 stories a day. That is about $0.03 a story, two thirds of it web search. A busy month reaches about $12.
@@ -94,8 +105,8 @@ The step keeps its own Flex switch (`MODEL_JOBS`). Since it usually runs before 
 | 6 | Extract (pass 2) | small | One call per kept source, in parallel. It extracts at most 5 facts that answer the wanted items, each with a statement in its own words, the supporting sentence copied verbatim, the structured fields and the slot it answers. It also returns `usable`, the source's kind and its outlet. | Every string is XML-unescaped, as research does. |
 | 7 | Fact code checks | — | A fact must name a source we fetched; otherwise it is a structural failure and is dropped. Hints: numbers in the rendered fact that the sentence lacks (`findUnsupportedNumbers`, ADR-0057). Code also records `supportFound` (the sentence found word for word in the fetched text, `supportFound` in `researchChecks.ts`). | Nothing but structure fails here. |
 | 8 | Fact check | small | Research's own `buildFactCheckPrompt` and `factCheckSchema`, unchanged, in calls of at most 25 items. Each item's text is the fact rendered by `renderFact`: value with its qualifier, unit, what is counted, place, "as of", "according to", and "estimate" where it applies. Its evidence is the supporting sentence (for a pass-2 fact, the passage: the sentence with one sentence either side) plus the source's date fact (`publishedFact`). Number hints go in as research gives them. Lines are empty, since copying doesn't apply to facts. | A rejected fact is stored with verdict `rejected` and its problem, and is never offered or shown. A fact the answer leaves out is `unjudged`, treated the same way, and counts as failed for the pause. |
-| 9 | Write | medium | One call writes the boxes from the supported facts. The figures box (`figures`, tiles only) comes first. After it come at most 6 context boxes, each with a slot, a heading of at most 8 words, 0–3 sentences each citing fact ids, and at most one visual: `tiles` (1–4, each a label and fact ids), `bars` or `line` (a measure, a unit, and points, each a label and a fact id), plus `apart` points for a different measure shown beside a comparison, never in it. | The rules are in the prompt, with Bad/Good pairs: a box only where facts support it, nothing from general knowledge, no sentence that restates what the story's text, Why This Matters or Caveats already says (tiles and charts may show the story's own numbers; the writer sees those three texts for this), our own words, American English, no talk about the input, at most one em dash a box, and an expired fact stated only as a past value with its date. |
-| 10 | Box code checks | — | A cited id must be a supported fact; otherwise that sentence, tile or point is dropped (structural). A tile's facts must be current. `validChart` applies the chart rules (below). The copying check (`checkCopying`, a 12-word run) runs on box sentences against the sources' lines (`sourceLines`). Numbers a sentence states that its cited facts don't are passed on as hints. | A chart that breaks a rule is not drawn. Its box keeps its sentences, and this does not count as a failure. |
+| 9 | Write | medium | One call writes the boxes from the supported facts. The figures box (`figures`, tiles only) comes first. After it come at most 6 context boxes, each with a slot, a heading of at most 8 words, 0–3 sentences each citing fact ids, and at most one visual: `tiles` (1–4, each a label and fact ids), `bars` or `line` (a measure, a unit, and points, each a label and a fact id), plus `apart` points for a different measure shown beside a comparison, never in it. Each box also names its `place`: the story paragraph (`P1`…) or Why This Matters point (`W1`…) it adds most to, or `section`, and a `teaser` of at most 8 words for the phone's one-line note. The prompt numbers the paragraphs and points for this. The figures box's place is always `section`. | The rules are in the prompt, with Bad/Good pairs: a box only where facts support it, nothing from general knowledge, no sentence that restates what the story's text, Why This Matters or Caveats already says (tiles and charts may show the story's own numbers; the writer sees those three texts for this), our own words, American English, no talk about the input, at most one em dash a box, and an expired fact stated only as a past value with its date. |
+| 10 | Box code checks | — | A cited id must be a supported fact; otherwise that sentence, tile or point is dropped (structural). A tile's facts must be current. `validChart` applies the chart rules (below). The copying check (`checkCopying`, a 12-word run) runs on box sentences against the sources' lines (`sourceLines`). Numbers a sentence states that its cited facts don't are passed on as hints. A `place` naming a paragraph or point that doesn't exist becomes `section`; the limits are applied when the page is served (below). | A chart that breaks a rule is not drawn. Its box keeps its sentences, and this does not count as a failure. |
 | 11 | Box check | small | Research's fact-check prompt once more, now with the sources' lines, so it judges copying as well as support. Items are each sentence, each tile ("12.5 million people under hazardous smoke across Southeast Asia") and each chart ("area burned in Indonesia, hectares: 2015, 2.6 million; 2026, 2.88 million (estimate)"), each against its cited facts. A chart's facts must all measure what the chart says. That is how "one definition" is judged: by the check, not matched in code. | A failing item is dropped. A box left with nothing in it is dropped. There are **no repair rounds**. |
 | 12 | Honest gap (code) | — | When the gap list judged `response` needed, pass 2 searched for it, and no supported fact answers it, code adds a `response` box with `gap: true` and no sentences. The page gives it fixed wording. | — |
 | 13 | Store (I/O) | — | One transaction writes every fact with its verdict, the kept boxes, and the run's result and costs. | — |
@@ -134,7 +145,7 @@ There are four new tables plus the generic spend table under "Cap and pause". St
   - `model`, `prompt_version`, `created_at`.
 
   The full page text is **not** stored, only the sentence and the short passage. Research keeps no page text either, and copies of whole articles are a press-publisher-right question. The roadmap's evidence list says "its text". Module 2's reviews will read passages, not pages.
-- **`context_boxes`** (Context box). Columns: `story_id` (cascade), `run_id`, `position`, `type` (the seven slots plus `figures`), `heading`, `sentences` (jsonb `[{ text, factIds }]`), `visual` (jsonb: a validated tiles, bars or line spec, or null), `gap` (bool), `as_of` (the newest as-of of its cited facts), `status`, `model`, `prompt_version`, `written_at`. Citations stay in jsonb. A join table for "recompute what a demoted fact touched" is module 2's call.
+- **`context_boxes`** (Context box). Columns: `story_id` (cascade), `run_id`, `position`, `type` (the seven slots plus `figures`), `heading`, `sentences` (jsonb `[{ text, factIds }]`), `visual` (jsonb: a validated tiles, bars or line spec, or null), `gap` (bool), `as_of` (the newest as-of of its cited facts), `place` (`P<n>`, `W<n>` or null for the section, as the write call chose it), `teaser`, `status`, `model`, `prompt_version`, `written_at`. Citations stay in jsonb. A join table for "recompute what a demoted fact touched" is module 2's call.
 - **`story_context_runs`**, one per story attempt. Columns: `story_id` (set null), `research_run_id`, `status` (`running`, `completed`, `skipped`, `failed`), `outcome` (`built`, `none-kept`, `no-research`, `technical`), `boxes`, `cost_usd`, `model_usd`, `tavily_credits`, `result` (jsonb: the gap list, searches with cache hits, credits and kept results, filter drops, verdict tallies, box drops by cause, number hints, item tally, calls with tokens and cost), `error` (sanitized), `started_at`, `finished_at`. Model cost and Tavily credits are kept apart per story.
 - **`context_search_cache`**: `key` (sha256 of the normalized query, depth, topic and the recent flag), `query`, `results` (jsonb: URL, title, date and the chosen text of each result that passed the opt-out check), `credits`, `created_at`. Rows older than 7 days are deleted at each run's start. This is a short-lived processing copy under the text-and-data-mining terms research already works under.
 
@@ -147,6 +158,12 @@ A site route, `GET /api/stories/:slug/context`, serves the context (`services/st
 - Numbers come formatted from the server (`formatFigure`): "12.5m", "400,000+", "about 2.9m", "estimate".
 - The response is cached as the story detail is (`public, max-age=60`).
 - It carries an `aiGenerated` marker naming the box fields.
+- Each box comes with its resolved `place` (`P<n>`, `W<n>` or `section`), worked out at serve time by `placeBoxes` (pure, in `storyContextPlacement.ts`) from `STORY_CONTEXT_PLACEMENT`:
+  - `model`: the stored place;
+  - `random`: a draw among the paragraphs and points that cite one of the box's sources (matched by URL against the story's research sources), seeded by the story id;
+  - `section`: none beside the text.
+
+  Then the limits, in box order: at most `notesInText` (2) beside paragraphs, at most `notesByPoints` (2) beside Why This Matters points, at most one per paragraph or point, and the figures box always in the section. A place whose paragraph or point no longer exists (the story was edited) becomes the section.
 
 **Tile rule** (`tileDisplay`, pure; D5 and design rule 4):
 - Only the tile's facts that are current count.
@@ -165,14 +182,12 @@ A site route, `GET /api/stories/:slug/context`, serves the context (`services/st
 
 **The page.**
 - `StoryPage` asks for the context alongside the story and keeps the skeleton until both requests settle. A failed context request renders the page without context and shows no error. This way cards never shift the text below them.
-- `StoryBody` takes a `context` slot after the key quote (For Odin 1).
-- The section has:
-  - the heading and count line ("6 cards · 4 sources · every number cited");
-  - the AI label (For Odin 2);
-  - `data-ai-generated="context"`;
-  - the cards: kicker, heading, visual, sentences with citation chips, and a footer with the sources and "As of Nov 14, 2026";
-  - on desktop a grid of three a row; below the `md` breakpoint a sideways scroll-snap row, each card about 84% of the width so the next one peeks in, with position dots and "swipe for more". The row is a list (`role="list"`), each card stays in the tab order through its citation buttons, and nothing scrolls by itself.
-- The honest-gap card reads "Our sources don't say what is being done about this." with dashed edges, as in the mockup.
+- `StoryBody` takes the notes per paragraph and per Why This Matters point, and a `context` slot after Caveats, before Sources (For Odin 1).
+- A card has a kicker with the AI badge, a heading, its visual, sentences with citation chips, and a footer with the sources and "As of Nov 14, 2026". Every note and the section carry `data-ai-generated="context"`.
+- **Notes, desktop (`lg` and up):** the full card in the right margin, level with its paragraph or point; a later note moves down when the one above would overlap it. When the story has notes, the text column shifts left to make room. Between `md` and `lg` the card sits inside the column after its paragraph.
+- **Notes, phones (below `md`):** a one-line button (icon, kicker with the AI badge, teaser, chevron) under its paragraph or point. A tap opens the full card in a bottom sheet over the page, with the AI label at its foot. The sheet is a Headless UI `Dialog`: focus moves into it, Escape and the close button shut it, and focus returns to the button. The page doesn't scroll.
+- **The section:** the ruled heading "More context", the count line ("3 more cards · every number cited") and the AI label (For Odin 2). On desktop the cards sit three a row, wider than the text column. On phones they are the same one-line buttons as the notes.
+- The honest-gap card reads "Our sources don't say what is being done about this." with dashed edges, as in the mockup. It always goes to the section.
 - A story without boxes renders exactly as today.
 
 **Admin.** "Hide context" and "Show context" on the edit form set the story's boxes to `demoted` or back to `unreviewed`, through `PUT /api/admin/stories/:id/context { hidden }` (For Odin 5).
@@ -232,6 +247,7 @@ Module 1 is switched on only when all of the bars below hold on the **judged hal
 | Structured fields (`context`, strong-judge labels on up to 300 figure facts) | At least 95% fully right (value, unit, counted, place, as-of, credited); no invented number passed by the fact check |
 | Gap list and searches (`context`, against the gap key) | Finds at least 60% of the `must` needs the story doesn't already state; at most 1 wasted search per story on average |
 | Boxes (`context`, strong judge) | No sentence, tile or chart left that its cited facts don't support (each one found is listed for a read) |
+| Placement (`context`, strong judge) | At least 85% of the notes `model` places beside a paragraph or point add to it without restating it; reported for `random` on the same stories for comparison. Below the bar, the step goes live with `STORY_CONTEXT_PLACEMENT=section` |
 | Cost | Mean at most $0.05 a story (model at flex-equivalent, plus credits) |
 
 **What the existing eval doesn't cover, and this plan adds.**
@@ -339,6 +355,7 @@ Module 1 is switched on only when all of the bars below hold on the **judged hal
    - Vega-Lite: hard to enforce "every mark has a source".
 8. **The generic cap and pause** as described under "Cap and pause".
 9. **One model tier per step to start**: small, except the write at medium, as research's write. The eval moves a step up.
+10. **The write call picks each card's place; the limits and the mode apply when the page is served.** No extra call, and a change of mode or limits reaches every story at once with no rewrite. Rejected alternatives: a separate placement call per story (one more call for a choice the writer is already making), and placing by shared sources alone (free, but the second search's cards could never sit beside the text). `random` stays available as a mode, so the eval can compare it with `model`.
 
 ### ADRs to write (when the code lands)
 
@@ -390,7 +407,8 @@ There is also one new ADR: "Story context: facts and boxes as records, the step 
 | `server/src/services/storyContextRuns.ts` (new) | *Responsibility:* one story's run in production: the run row, production deps (structured calls on the tier models after `rateLimitDelay()`, never in `withRetry`), the pipeline, the transactional write, stale runs. *Exports:* `runStoryContext`, `markInterruptedContextRuns` |
 | `server/src/services/storyContextView.ts` (new) | *Responsibility:* what readers get of a story's context (published only, not demoted, tiles and charts resolved, sources numbered) and the admin's hide and show. *Exports:* `getStoryContext`, `setStoryContextHidden` |
 | `server/src/jobs/buildStoryContext.ts` (new) | *Responsibility:* the step: stale runs, prune, queue, workers with the budget check before each story, item tally into the scope, per-story errors recorded as failed runs (the job does not throw for them). *Exports:* `runBuildStoryContext` |
-| `server/src/config.ts` | `storyContext: { lookbackDays: 3, perRun: 20, concurrency: 3, maxSearches: 3, searchDepth: 'basic', resultsPerSearch: 5, maxNewSources: 5, searchReuseDays: 7, fastValidDays: 14, slowValidDays: 365, storyCeilingUsd: 0.1, staleRunMinutes: 120 }`. No env overrides, so no `render.yaml`, `env.example` or blueprint test change |
+| `server/src/config.ts` | `storyContext: { lookbackDays: 3, perRun: 20, concurrency: 3, maxSearches: 3, searchDepth: 'basic', resultsPerSearch: 5, maxNewSources: 5, searchReuseDays: 7, fastValidDays: 14, slowValidDays: 365, storyCeilingUsd: 0.1, staleRunMinutes: 120, placement, notesInText: 2, notesByPoints: 2 }`. `placement` reads `STORY_CONTEXT_PLACEMENT` through `parseOneOf` (`model`, `random`, `section`; default `model`), so `render.yaml` and `env.example` gain it, as the blueprint test requires. The rest have no env overrides |
+| `server/src/services/storyContextPlacement.ts` (new) | *Responsibility:* where each box goes on the page: the mode, the seeded draw, the limits, the fallbacks (pure). *Exports:* `placeBoxes` |
 | `server/src/jobs/chainDefinitions.ts`, `handlers.ts`, `interruptedRuns.ts` | The step after `publish_stories`; the handler; `JOB_PIPELINE_ORDER`; `RESUMABLE_JOBS` |
 | `server/src/services/job.ts` | `MODEL_JOBS` adds the step |
 | `server/src/jobs/jobNotes.ts`, `jobEnableChecks.ts` | The note (what it does, after publishing, the cap and the pause, and that "Run now" writes live cards). The enable check refuses without the Tavily key |
@@ -406,8 +424,9 @@ There is also one new ADR: "Story context: facts and boxes as records, the step 
 |------|--------|
 | `client/src/hooks/usePublicStories.ts` | `useStoryContext(slug)` |
 | `client/src/pages/StoryPage.tsx` | Asks for the context alongside the story, keeps the skeleton until it settles, and passes it to `StoryBody` |
-| `client/src/components/story/StoryBody.tsx` | A `context` slot rendered after the key quote |
-| `client/src/components/context/StoryContext.tsx` (new) | *Responsibility:* the section: heading, count line, AI label, wide band, grid in order. *Exports:* `StoryContext` |
+| `client/src/components/story/StoryBody.tsx` | Notes after their paragraph or Why This Matters point, and a `context` slot after Caveats |
+| `client/src/components/context/StoryContext.tsx` (new) | *Responsibility:* the section: ruled heading, count line, AI label, the wide grid on desktop and the one-line buttons on phones. *Exports:* `StoryContext` |
+| `client/src/components/context/ContextNote.tsx`, `ContextSheet.tsx` (new) | *Responsibility:* a note beside the text (margin card on wide screens, in-column card in between, one-line button on phones) and the bottom sheet a button opens. *Exports:* `ContextNote`, `ContextSheet` |
 | `client/src/components/context/ContextCard.tsx` (new) | *Responsibility:* one card: kicker, heading, visual, cited sentences, source and as-of footer, the honest-gap look. *Exports:* `ContextCard` |
 | `client/src/components/context/FigureTiles.tsx`, `ContextChart.tsx` (new) | *Responsibility:* tiles with side-by-side values and their sources; bars and line as SVG with caption, source line and a hidden table. *Exports:* `FigureTiles`, `ContextChart` |
 | `client/src/components/context/contextText.ts` (new) | *Responsibility:* the slot kickers, the fixed honest-gap sentence, the as-of and count wording (pure). *Exports:* `slotKicker`, `GAP_TEXT`, `asOfLine`, `countLine` |
@@ -500,13 +519,18 @@ These follow the project's patterns: `vi.hoisted()` mocks, `supertest` with `aut
   - Sources are numbered in first-cited order.
   - Resolved tiles and charts, the marker, and the cache header.
   - Empty boxes for a story without context.
+- **`storyContextPlacement.test.ts`**
+  - `model` keeps stored places within the limits; the extras go to the section in box order; one note per paragraph or point.
+  - `random` only picks spots that cite one of the box's sources, gives the same answer for the same story, and sends a second-search box to the section.
+  - `section` places nothing beside the text; the figures box and the honest gap always go to the section; a place past the story's last paragraph falls back.
 - **Admin stories route:** hide sets the boxes to demoted, show restores them, 404 for an unknown story.
 - **`jobEnableChecks` test:** enabling is refused without the Tavily key.
 - **Client**
   - `StoryContext.test.tsx`: nothing renders without boxes; cards render in order with kicker, heading, citations and the as-of footer; the honest gap's fixed text; the `data-ai-generated` marker.
+  - `ContextNote.test.tsx`: a note renders after its paragraph or point; on a phone width the button opens the sheet, Escape closes it and focus returns to the button.
   - `FigureTiles.test.tsx`: a range names both sources.
   - `ContextChart.test.tsx`: the hidden table holds every value and source; a provisional mark is hatched.
-  - `StoryPage.test.tsx`: the skeleton stays until the context settles; a failed context request renders the page without it; placement after the quote; no images from outside our site and API.
+  - `StoryPage.test.tsx`: the skeleton stays until the context settles; a failed context request renders the page without it; the section after Caveats; no images from outside our site and API.
   - Jobs page tests: the cap saves; the pause line and "Lift pause".
 - **Eval**
   - `gapKeys.test.ts`: every committed key passes, and each rule fails on an inline key.
