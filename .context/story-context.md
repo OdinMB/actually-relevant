@@ -1,0 +1,158 @@
+# Story context (context cards, the `build_story_context` step)
+
+Story context gives a published, researched story **context cards**: how big the development is compared with what came before, why now, the build-up, who it reaches, what is being done, what comes next, a key term, and the figures. A **box** is the stored record and a **card** is how the page shows it. The `build_story_context` step builds a story's boxes once, after it is published, from its research run's facts and from up to 3 searches of its own; every fact and every card is checked against its source, and what fails is dropped. **The step writes only its own tables** (`story_context_runs`, `context_facts`, `context_boxes`, `context_search_cache`): it never moves a status, never writes a story field or rating, and never holds up publishing. **It is switched off**: seeded disabled, and enabling it needs the Tavily key and, by the plan, the eval gate (below). Overviews module 1 of `.plans/2026-11-16_story-overviews.md`; plan `.plans/2026-11-16_story-context.md`. Decisions: ADR-0061 (records, after publishing, reuse), ADR-0062 (no person in the loop), ADR-0057's amendment of 2026-11-16 (numbers judged by the fact check), ADR-0063 (one named source, the tile rule), ADR-0064 (no images; charts from fixed rules), ADR-0065 (always a constructive element).
+
+## The step
+
+- **Fourth step of `daily_edition_chain`**, after `publish_stories` (`jobs/chainDefinitions.ts`): select, research, publish, context. A failed step stops its chain, so placed last it can never delay or stop publishing (ADR-0061). The cost: a story is live for a few minutes, at about 01:00 UTC, before its cards appear. The step does not read the chain's deadline.
+- **Which stories** (`nextForContext`, `services/storyContextInput.ts`): published within the last `lookbackDays` (3), with a completed research run whose sources hold facts, and no context run yet; oldest published first, at most `perRun` (20) a run, `concurrency` (3) at once. Single-source stories count once research ran on them; a story without a research run gets nothing. **A story is settled by its first context run, whatever its outcome**: a failed, skipped or interrupted run is never retried, and stories published while the step was off are filled in while still within the lookback.
+- **The switch is the job's flag** on the Jobs page; the job is seeded disabled (migration `20261116225456_story_context`, `scripts/seed-jobs.ts`). Enabling is refused while `TAVILY_API_KEY` is unset (`jobEnableChecks.ts`: "story context needs web search"). A run without the key builds nothing and says so ("Web search is off, no context built"). Switching the step off keeps the cards already built, as research's switch does; hiding them is the admin's (below).
+- **"Run now"** does what a scheduled run does, the disabled job's included, so a trial run writes cards that readers see. The job's note says so.
+- **Flex:** the step is in `MODEL_JOBS` (`jobs/modelJobs.ts`) with its own Flex switch; it usually runs before the chain's 03:30 flex cut-off.
+- **Interrupted runs:** a `running` run older than `staleRunMinutes` (120) is marked `failed`/`technical` ("interrupted: the server restarted during the run") at the next run's start (`markInterruptedContextRuns`), and settles its story. The store is conditional on the run still being `running`, so a run marked meanwhile writes nothing. `build_story_context` is in `RESUMABLE_JOBS` (`jobs/interruptedRuns.ts`).
+- **Errors:** a step's failure inside one story's run (a parse failure of a required call, a Tavily error) ends that run as `failed`/`technical` with what it spent and nothing else stored; an error outside the run records a failed run for the story (`recordFailedRun`), and the next story goes on. The job never throws for a story.
+- **The failure share** (`jobs/buildStoryContext.ts`): the run's item tally (below) goes into its usage (`recordItems`). When more than `jobs.failureShare.share` (20%) of at least `minItems` (20) checked items failed, the step records one warning notice, title "Story context: 14 of 45 checked items failed in the last run", linking to `/admin/jobs`, deduped as `step-failing:build_story_context` (a repeat on a later night reopens it), and the Jobs page shows the same line under the step from the last run's usage (`failureShareWarning`). **Nothing pauses**: the step runs the next night as usual (owner decision 2026-11-16).
+- **The summary line:** "Built the context of 9 stories: 31 cards kept, 4 of 120 checked items failed", or "No story owed its context".
+
+## What one story goes through
+
+`runStoryContext(storyId)` (`services/storyContextRuns.ts`) writes the run row (`running`), loads the input (`loadContextInput`; none: the run is `skipped`, outcome `no-research`), runs the pipeline with production's deps and stores the result in one transaction. `buildStoryContext(input, deps)` (`services/storyContextPipeline.ts`) does no I/O of its own: its deps are the model call, the search and the opt-out policy, so the eval runs the same code. Production's call (`productionCall`) is one structured-output call on the step's tier after `rateLimitDelay()`, never in `withRetry` (the SDK retries). Tiers (`CONTEXT_STEP_TIERS`): every step small, the write medium.
+
+| # | Step | Where | What it does |
+|---|---|---|---|
+| 1 | Load | `storyContextInput.ts` | The story (title, summary, its places: `storyContextLayout.ts`), the newest completed research run with facts (its sources `S0`… with facts, outlet, title, date, kind and voices), and the **reusable facts**: the supported, non-demoted context facts of the earlier stories research linked in `run.earlier`, kept only while current on this story's day, newest first, at most `maxReusedFacts` (30). Our own earlier stories' facts (`E…`) are never loaded: they are our text. |
+| 2 | Structure (pass 1) | `buildStructurePrompt` | One call returns the structured fields of every research fact by id (value, value high, unit, approx, provisional, what is counted, place, as-of, credited body and kind, validity). Answers count only for the ids asked; a fact left out is not checked and counts as failed. |
+| 3 | Gap list | `buildGapListPrompt`, `planSearches` | One call: per slot (`compared`, `why_now`, `build_up`, `who_affected`, `response`, `next`, `key_term`) whether a reader needs it and whether the current facts cover it (yes, partly, no), up to 3 searches, and the story's own sentence reporting the response, if any. Code: `response` is always needed (ADR-0065) unless the story reports it (the quote must stand in our text, `supportFound`; else it is ignored); its search goes first, and with none listed code adds one from the title's first 9 words and "response" (`responseFallback`). Searches for slots not needed or covered are dropped; at most `maxSearches` (3). None left: no search. |
+| 4 | Search (pass 2) | `storyContextSearch.ts`, `storyContextSources.ts` | Tavily, basic depth, topic `general`, 5 results with raw text, ending on the story's day, starting 30 days before only when recent data is wanted. A query asked within `searchReuseDays` (7) is answered from `context_search_cache` at no credit cost (the key: normalized query, depth, topic and the recent flag, not the end date). |
+| 5 | Filter | `dropOptedOut`, `pickNewSources` | Publishers' opt-outs (`researchSourcePolicy`, ADR-0056), checked before a result is cached and again on every answer; research's `BLOCKED_DOMAINS`; a URL or domain already among the story's sources (or a reused fact's URL); a result without text; at most `perQuerySources` (2) a search and `maxNewSources` (5) in all. Drops are recorded with their reason. The text is chosen as research chooses it (`selectedText`). |
+| 6 | Extract (pass 2) | `buildContextExtractionPrompt` | One call per kept source, in parallel: `usable`, the source's kind and outlet, and at most 5 facts answering the wanted items, each with a statement, the supporting sentence verbatim, the structured fields and its slot. Sources get ids after research's and the reused ones' (`S3`…), facts `S3F1`…. One failed or unusable extraction skips that source only. |
+| 7 | Fact code checks | — | A pass-2 fact without a statement or sentence fails its structure (counted as left out). `supportFound` is recorded; the passage (the sentence with one either side, at most 600 characters) is kept. |
+| 8 | Fact check | `factCheckItems`, research's `buildFactCheckPrompt` | Research's prompt and schema, unchanged, at most `checkBatchSize` (25) items a call. Each item is the fact as `renderFact` renders it ("Area burned in Indonesia: about 2.88 million hectares, as of 2026, according to KLHK (estimate)"), its evidence the sentence (pass 2: the passage) plus the source's date fact (`publishedFact`), its number hints as research gives them. A rejected or unjudged fact is stored with its verdict and never offered or shown. |
+| 9 | Write | `buildBoxesPrompt` | One call (medium) writes from the supported facts and the reused ones: the figures box (tiles only) and at most 6 boxes, each with a slot, a heading (at most 8 words), a teaser (at most 8 words, the phone's one-line note), its place (`P<n>`, `W<n>` or `section`), 0–3 sentences citing fact ids and at most one visual (tiles, bars or line, with `apart` points for a different measure beside bars). |
+| 10 | Box code checks | `structuralBoxes`, `resolveVisuals` | A cited id that is not a supported fact drops its sentence, tile or point (structural failure); a place the story lacks becomes the section; a tile with no current fact is dropped; a chart that breaks the chart rules is not drawn, and its box keeps its sentences (no failure). The copying check (`checkCopying`, a 12-word run against the sources' lines) runs on box sentences. |
+| 11 | Box check | `boxCheckItems`, `applyBoxVerdicts` | Research's fact-check prompt again, with the sources' lines, so it judges copying as well as support: every sentence, tile ("people under smoke: about 12.5 million people") and chart ("area burned in Indonesia, hectares: 2015, 2.6 million; 2026, 2.88 million (estimate)") against its cited facts, numbers spelled as the facts render them (`spelledFigure`). A failing or unjudged item is dropped, and a box left with nothing in it. **No repair rounds** (ADR-0061). |
+| 12 | Honest gap | — | When pass 2 searched for `response`, no supported fact answers it, no kept box is a `response` box and the story does not report the response, code adds a `response` box with `gap: true`, no sentences and no model; the page gives it fixed wording. |
+| 13 | Store | `storeContextResult` | One transaction: the run's status, outcome (`built`, `none-kept`), box count, costs and record; every fact with its verdict, and the reused facts a kept box cites, copied into the run with `reused_from_id`; the kept boxes in order, each with the newest as-of of its facts, the writer's model and prompt version. |
+
+**The item tally** (`itemTally`): checked = facts supported, rejected, unjudged and left out, plus box items dropped as structural and box items judged; failed = facts rejected, unjudged and left out, plus box items dropped as structural or by the check. Charts not drawn under the rules and technical failures do not count; a run that failed counts nothing.
+
+**Prompt versions** (`CONTEXT_PROMPT_VERSIONS`): the first 8 hex characters of a sha256 over the step's prompt built from a fixed canonical input, plus its JSON schema, computed at load. Each model-written fact and box stores its model id and its step's version.
+
+**Untrusted input:** fetched text reaches only the extraction prompt, escaped and marked untrusted as research's is (`UNTRUSTED`, `tag` from `prompts/research.ts`); every parsed answer is XML-unescaped (`unescapeXmlDeep`).
+
+## Validity
+
+A fact's `validity` (`isCurrent`, `services/storyContextVisuals.ts`): `fixed` is always current; `slow` for `slowValidDays` (365) and `fast` for `fastValidDays` (14) from the start of its as-of period (`2026-11` counts from Nov 1), else from its source's date; without either it is not current. **Current is judged on the story's own day, never today**: a one-off story's cards describe the time of the story, and the footer's as-of date says so. Expiry decides which reused facts are offered, what the gap list may count as covering a slot, which facts a tile may show, and that the writer may state an expired fact only as a past value with its date.
+
+## Tiles and charts
+
+**The tile rule** (`tileDisplay`; ADR-0063): of a tile's facts, only shown (supported, not demoted), current ones with a figure count. The headline is the newest from the most authoritative kind present: official, research, news, other (the credited body's kind, else the source's: `official-body` is official, `news-report`, `analysis` and `opinion` news, `press-release` other). Every other such fact dated on or after it with a different value is shown beside it, each naming its source; a value the headline gives is not repeated. A tile with none is not shown.
+
+**The chart rules** (`validChart`; ADR-0064): every point a shown fact with a single value (a range is no point; such points are removed before counting), one unit across the points, no negative value (the axis starts at zero); bars need 2 points, a line 3 at different as-of dates, drawn in date order. An `apart` group (a different measure shown beside a comparison, never in it) is kept beside bars only, when it holds points of one unit. A provisional point is drawn hatched; a point within 30 days of the story's day is `recent` (the area's color). A chart not drawn leaves its box's sentences.
+
+**Numbers come formatted** (`formatFigure`): "12.5m", "2.6bn", "400,000", "400,000+", "about 2.9m", "under 5,000", "5,000–5,400", a symbol unit kept ("$52m", "63%", "1.5°C"), with `estimate` for a provisional figure.
+
+## Places
+
+A story's places (`storyLayout`, `services/storyContextLayout.ts`): a researched story's paragraphs `P1`… and Why This Matters points `W1`… from `stories.research`, each with the URLs of the sources it cites; a single-source story's summary as `P1` and its relevance reasons split as the page splits them (`parsePoints`, mirroring the client's) as `W1`…, each citing the story's own article.
+
+**Where a box sits is worked out when the page is served** (`placeBoxes`, `services/storyContextPlacement.ts`, pure), so a change of mode or limits reaches every story at once:
+
+- An editor's place (`place_by_editor`) is kept in every mode, under the same limits; editor-placed boxes are placed first.
+- Otherwise `STORY_CONTEXT_PLACEMENT` decides (`config.storyContext.placement`, default `model`): `model`, the place the write call chose; `random`, a draw among the paragraphs and points that cite one of the box's sources (by normalized URL), seeded by the story id and the box's index, so a page never reshuffles (a second-search box has no such spot and goes to the section); `section`, none beside the text.
+- Then the limits, in box order: at most `notesInText` (2) beside paragraphs, `notesByPoints` (2) beside points, one per paragraph or point; the rest go to the section. The figures box and the honest gap always sit in the section. A place the story no longer has (it was edited) becomes the section.
+
+## Records
+
+- **`story_context_runs`**, one per attempt: `story_id` (SET NULL on delete, so its cost stays counted), `research_run_id` (the run it read, SET NULL), `status` (`running`, `completed`, `skipped`, `failed`), `outcome` (`built`, `none-kept`, `no-research`, `technical`), `boxes`, `cost_usd` (model plus credits at `research.tavilyUsdPerCredit`; model calls at standard price, so an upper bound), `model_usd`, `tavily_credits`, `result` (`ContextRunRecord`: the gap list's slots, `responseInStory`, `responseFallback`, the searches with cache hits, credits, result counts and kept URLs, source and extraction drops, fact counts, each dropped fact with its problem, box drops by cause, number hints, `honestGap`, the item tally, every call with its tokens, cost and model, `optOutChecked`), `error` (sanitized: our own step messages and Tavily's, never fetched text), `started_at`, `finished_at`.
+- **`context_facts`**, every fact a run structured or extracted, with its verdict: `ref` (unique per run), `origin` (`research`, `search`), `reused_from_id`; evidence `source_url`, `source_outlet`, `source_title`, `source_date`, `source_kind`, `supporting_sentence` (verbatim), `passage` (pass 2 only), `support_found`; the structured fields (`statement`, `value`, `value_high`, `unit`, `approx`, `provisional`, `counted`, `place`, `as_of` with `as_of_precision`, `credited`, `credited_kind`, `validity`); `verdict` (`supported`, `rejected`, `unjudged`) with `verdict_problem`; `status` (`unreviewed`, `reviewed`, `demoted`); `model`, `prompt_version`. **No page text is stored**, only the sentence and the short passage.
+- **`context_boxes`**: `position`, `type` (the seven slots plus `figures`), `heading`, `teaser`, `sentences` (`[{ text, factIds }]`), `visual` (a stored tiles, bars or line spec citing refs, `storedVisualSchema`), `gap`, `as_of` with its precision, `place` (`P<n>`, `W<n>`, or null for the section), `place_by_editor`, `status` (`demoted` is hidden), `model`, `prompt_version` (both null for the honest gap), `written_at`. Boxes cite their own run's facts by ref; facts and boxes cascade with their story and run.
+- **`context_search_cache`**: `key`, `query`, `results` (URL, title, date and chosen text of each result that passed the opt-out check), `credits`, `created_at`. Rows past `searchReuseDays` are deleted at each run's start (`pruneSearchCache`): a short-lived processing copy.
+
+## Reuse
+
+Two kinds (ADR-0061): the exact-query cache above, and the earlier linked stories' current, supported facts (step 1), offered under new source ids and stored with the run only when a kept box cites them. The run records cache hits (`searches[].cached`) and reused facts (`facts.reused`). If the cache's hit rate stays near zero for a month, the cache goes (follow-up). A cached answer is reused for a story up to 7 days apart, so its results may end a few days after an older story's day.
+
+## Cost
+
+No budget stops the step (owner decision 2026-11-16, ADR-0060). A story's calls are fixed in number: at most 3 searches (1 credit each at basic depth), 5 extractions and about 7 model calls, about $0.03 a story, at most about $0.10 with no cache hit; with at most `perRun` stories a run costs at most about $2. The step's spend is in the Spending overview (`.context/scheduler.md`, "Spending"), with a warning level of $20 seeded with the job. A run's model cost and credits are kept apart on its row; `job_month_spend` gets them through the run's usage.
+
+## What readers get
+
+`GET /api/stories/:slug/context` (`routes/public/stories.ts`, `services/storyContextView.ts`), `Cache-Control: public, max-age=60`. **Not in the OpenAPI contract**, like `/appearances`, so modules 2 and 3 can still change the shape. Only a published story's boxes of its newest run that wrote any, not demoted, in order; a sentence citing a fact no longer shown (rejected or demoted) is dropped with it, and a box left with no sentence and no visual (the honest gap apart) is left out before places are worked out. A story without context, unknown or not published gets `boxes: []`.
+
+```ts
+{
+  boxes: {
+    id: string
+    type: 'compared' | 'why_now' | 'build_up' | 'who_affected' | 'response' | 'next' | 'key_term' | 'figures'
+    heading: string            // '' for the honest gap
+    teaser: string             // the phone's one-line note; '' for the honest gap
+    gap: boolean               // the honest gap: no sentences, the page's fixed wording
+    place: string              // 'P<n>' | 'W<n>' | 'section'
+    sentences: { text: string; citations: { sourceId: string; sentence: string | null }[] }[]   // research's CitedText
+    visual:
+      | { kind: 'tiles'; tiles: { label: string; values: { text: string; estimate: boolean; sourceId: string }[] }[] }
+      | { kind: 'bars' | 'line'; caption: string; unit: string
+          points: { label: string; value: number; text: string; provisional: boolean; recent: boolean; asOf: string | null; sourceId: string }[]
+          apart: { caption: string; unit: string; points: /* as points */ [] } | null }
+      | null
+    asOf: string | null        // 'YYYY-MM-DD' | 'YYYY-MM' | 'YYYY': the newest date its facts describe
+    sourceIds: string[]        // the box's sources, first-cited order, for its footer
+  }[]
+  sources: {                   // research's ResearchedSource shape; ids C1… in first-cited order, one per normalized URL
+    id: string; origin: 'original' | 'source'; outlet: string; host: string | null; url: string | null
+    title: string; date: string | null; country: null; kind: string; storyId: null; slug: null
+  }[]
+  asOf: string | null          // the newest asOf of the boxes
+  aiGenerated: { fields: ('heading' | 'teaser' | 'sentences' | 'visual')[]; model: string; digitalSourceType: string }
+}
+```
+
+`aiGenerated.fields` is empty without boxes; `model` is the model recorded with the boxes (`contextAiMarker`, `lib/aiProvenance.ts`). The page carries `data-ai-generated="context"` on each note and on the section, and no visible label of its own: the story's "Researched and written by AI" line covers the cards (owner decision 2026-11-16; `.context/ai-transparency.md`). How the page lays the cards out is the client's (`.context/public-website.md`).
+
+## Admin
+
+Routes in `routes/admin/storyContext.ts` (mounted under `/api/admin/stories`, admin auth), service `services/storyContextAdmin.ts`. 404 for an unknown story or a box of another story.
+
+- `GET /api/admin/stories/:id/context` →
+  ```ts
+  {
+    run: { id; status; outcome; startedAt; finishedAt; costUsd; modelUsd; searchUsd; tavilyCredits; boxes; error; result /* ContextRunRecord */ } | null,  // the newest run
+    boxes: { id; type; heading; teaser; gap; status; hidden; place /* where it sits now */; storedPlace /* P<n>, W<n> or null */; placeByEditor; sources: { outlet; url }[]; asOf; position }[],  // the newest run that wrote boxes, hidden ones included
+    places: { place /* P<n>, W<n>, section */; label /* 'Paragraph 1', 'Why This Matters 1', 'More context' */; text /* its start, 80 characters */ }[],
+    placement: 'model' | 'random' | 'section'
+  }
+  ```
+- `PUT /api/admin/stories/:id/context { hidden: boolean }` → 204: hides every box (`demoted`) or shows the hidden ones again (`unreviewed`). Nothing is deleted.
+- `PATCH /api/admin/stories/:id/context/boxes/:boxId { hidden?: boolean, place?: 'P<n>' | 'W<n>' | 'section' }` (at least one) → 204: hides or shows one box, and moves it, setting `place_by_editor`. 400 for a place the story does not have, and for moving the figures box or the honest gap out of the section.
+
+Hiding and moving are the one way a person changes what the step built (ADR-0062). Who hid a card, and when, is not recorded.
+
+## Before switching on
+
+The plan gates the step on `eval:overviews` (roadmap D8): planted errors on context facts, structured fields, the gap list and searches, what's being done (ADR-0065), boxes, placement (below its bar the step goes live with `STORY_CONTEXT_PLACEMENT=section`) and cost, on the judged half of a gap key of 30 stories (`.context/model-eval.md`, "Overview evals", once built). The owner switches the step on.
+
+## Modifying
+
+- **A prompt** (`prompts/storyContext.ts`): read `.context/prompting.md`; the version changes by itself. Research's fact-check prompt is shared: a change there changes both checks here, and needs research's eval too.
+- **A visual kind or rule:** `schemas/storyContext.ts` (`boxesSchema`, the stored schemas), `storyContextVisuals.ts`, the box items in `storyContextChecks.ts`, the view and the client.
+- **The route's shape:** the client reads it; it is not a public contract, but a cached page may hold the old shape for 60 seconds.
+- **A new place kind:** `storyContextLayout.ts` (and the client's `parsePoints` mirror), the admin's place regex (`contextBoxUpdateSchema`).
+
+## Key files
+
+| File | What |
+|---|---|
+| `server/src/jobs/buildStoryContext.ts` | The step: stale runs, prune, queue, workers, item tally, failure-share notice |
+| `server/src/services/storyContextRuns.ts` | One story's run: row, production deps, transactional store, interrupted runs |
+| `server/src/services/storyContextPipeline.ts` | Steps 2–12 with injected deps; tiers; prompt versions; `planSearches` |
+| `server/src/services/storyContextInput.ts` | The queue and one story's input (SELECT only) |
+| `server/src/services/storyContextChecks.ts` | `renderFact`, fact and box check items, verdicts, structural checks, the tally |
+| `server/src/services/storyContextVisuals.ts` | Validity, number formatting, the tile and chart rules |
+| `server/src/services/storyContextSources.ts`, `storyContextSearch.ts` | Pass 2's request, source filter, cache key and passage; the cache and Tavily |
+| `server/src/services/storyContextLayout.ts`, `storyContextPlacement.ts` | A story's places; where each box sits |
+| `server/src/services/storyContextView.ts` | The public route's answer |
+| `server/src/services/storyContextAdmin.ts`, `server/src/routes/admin/storyContext.ts` | The admin's view and edits |
+| `server/src/prompts/storyContext.ts`, `server/src/schemas/storyContext.ts` | Prompts; output, stored and request schemas |
+| `server/src/test/db/storyContext.ts` | DB test fixtures |

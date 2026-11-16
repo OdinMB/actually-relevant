@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as storyService from '../../services/story.js'
 import { getStoryAppearances } from '../../services/storyAppearances.js'
+import { getStoryContext } from '../../services/storyContextView.js'
 import { validateQuery } from '../../middleware/validate.js'
 import { searchLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
@@ -59,6 +60,14 @@ router.get('/:slug/appearances', failsWith('Failed to fetch story appearances'),
   const appearances = await getStoryAppearances(req.params.slug!)
   res.set('Cache-Control', 'public, max-age=300')
   res.json(appearances)
+})
+
+// The story's context cards (.context/story-context.md); not in the OpenAPI contract while modules 2
+// and 3 may still change the shape. Cached as the story itself is
+router.get('/:slug/context', failsWith('Failed to fetch story context'), async (req, res) => {
+  const context = await getStoryContext(req.params.slug!)
+  res.set('Cache-Control', 'public, max-age=60')
+  res.json(context)
 })
 
 router.get('/:slug', failsWith('Failed to fetch story'), async (req, res) => {

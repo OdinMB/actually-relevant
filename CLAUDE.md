@@ -169,6 +169,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |
 | `ai-transparency.md` | EU AI Act Art. 50 record: AI inventory, labels, machine-readable markers, text-watermark gap, open owner decisions |
 | `story-research.md` | Story research, the admin action: what a run does and never does (writes only its own `story_research_runs` row), eligibility, the `TAVILY_API_KEY` switch, the monthly cap and $0.25 reservation under its advisory lock, interrupted runs, cost recording (an upper bound), untrusted input, the AI opt-out seam, endpoints |
+| `story-context.md` | Story context cards, the `build_story_context` step after publishing (switched off): writes only its own tables, never a story field or status; which stories, the steps (pass 1 from research's facts, up to 3 searches with a 7-day cache, research's fact check on facts and cards, no repair, `response` always looked for and the honest gap), validity on the story's day, the tile and chart rules, placement modes and limits, records, the failure-share notice (no pause), cost bounds, the public and admin route shapes |
 | `client/.context/skeletons.md` | Skeleton components for loading states (prevents CLS) |
 
 ## Memory

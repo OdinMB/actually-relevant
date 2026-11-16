@@ -9,7 +9,8 @@ export const CHAINS: Readonly<Record<string, readonly string[]>> = {
   // Several times a day: a feed lists only its newest articles, so a once-a-day crawl would lose a busy
   // feed's articles. Crawled stories are assessed in the same run: a person's part starts with assessed stories
   intake_chain: ['crawl_feeds', 'preassess_stories', 'assess_stories'],
-  daily_edition_chain: ['select_stories', 'research_stories', 'publish_stories'],
+  // Story context comes after publishing, so it can never hold up or stop the edition (.context/story-context.md)
+  daily_edition_chain: ['select_stories', 'research_stories', 'publish_stories', 'build_story_context'],
   // Saturday morning: each edition's issue is built (with its test email), then sent
   newsletter_chain: ['generate_newsletter', 'publish_newsletter', 'generate_uplifting_newsletter', 'publish_uplifting_newsletter'],
   // Friday's one run builds both shows' episodes (a failed build is retried within the run); both

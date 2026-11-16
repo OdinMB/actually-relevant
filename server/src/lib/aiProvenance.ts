@@ -70,6 +70,25 @@ export function withAiGeneratedDetailMarker<T extends AiStoryText & { research: 
 }
 
 /**
+ * Fields of a story context box (`GET /api/stories/:slug/context`, services/storyContextView.ts)
+ * that an AI model wrote: the heading, the phone's teaser, the cited sentences and the visual (its
+ * tile labels and chart captions; the values are the sources'). The honest gap's fixed wording is the page's.
+ */
+export const AI_GENERATED_CONTEXT_FIELDS = ['heading', 'teaser', 'sentences', 'visual'] as const
+
+export interface AiGeneratedContextMarker {
+  /** Every box field above while any box is served; none for a story without context. */
+  fields: (typeof AI_GENERATED_CONTEXT_FIELDS)[number][]
+  /** The model that wrote the boxes, as recorded with them. */
+  model: string
+  digitalSourceType: typeof IPTC_TRAINED_ALGORITHMIC_MEDIA
+}
+
+export function contextAiMarker(hasBoxes: boolean, model: string): AiGeneratedContextMarker {
+  return { fields: hasBoxes ? [...AI_GENERATED_CONTEXT_FIELDS] : [], model, digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA }
+}
+
+/**
  * Fields of a public podcast episode (`GET /api/podcast`) whose content an AI model generated: the
  * written title and summary, and the voiced audio and its transcript. Every episode carries all of
  * them, so the marker lists them all; openapi.test.ts checks each is described as AI-generated.

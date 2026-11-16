@@ -28,8 +28,9 @@ export default defineConfig({
       // margin, a few untested functions anywhere would fail it). Raised 2026-11-05 with the
       // interrupted-run sweep: measured 77.27, 73.97, 73.20, 78.45 (functions kept at 72, as above).
       // Raised 2026-11-16 with the spending overview (risen since without a raise): measured 82.18,
-      // 78.89, 79.67, 82.91 (functions kept at 78, as above)
-      thresholds: { statements: 82, branches: 78, functions: 78, lines: 82 },
+      // 78.89, 79.67, 82.91 (functions kept at 78, as above). Raised 2026-11-16 with story context:
+      // measured 83.09, 79.47, 80.93, 83.73 (functions kept at 79, as above)
+      thresholds: { statements: 83, branches: 79, functions: 79, lines: 83 },
     },
     projects: [
       {

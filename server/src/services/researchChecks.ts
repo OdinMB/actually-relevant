@@ -136,7 +136,8 @@ export interface CheckedDraftItem {
 
 const evidenceText = (evidence: PoolFact[]) => evidence.map(f => `${f.statement}\n${f.supportingSentence}\n${f.measures}`).join('\n')
 
-const numberHints = (text: string, evidence: PoolFact[]) => findUnsupportedNumbers(text, evidenceText(evidence)).unsupported
+/** The numbers of `text` its evidence does not state digit for digit; exported for story context's checks, which give the same hints. */
+export const numberHints = (text: string, evidence: PoolFact[]) => findUnsupportedNumbers(text, evidenceText(evidence)).unsupported
 
 /**
  * Every item of a draft, in `draftItems` order, with its evidence and its number hints: a story

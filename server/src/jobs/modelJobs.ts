@@ -9,6 +9,7 @@ export const MODEL_JOBS: ReadonlySet<string> = new Set([
   'assess_stories',
   'select_stories',
   'research_stories',
+  'build_story_context',
   'social_auto_post',
   'generate_newsletter',
   'generate_uplifting_newsletter',

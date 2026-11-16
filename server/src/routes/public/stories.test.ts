@@ -14,6 +14,8 @@ const mockPrisma = vi.hoisted(() => ({
   },
   newsletter: { findFirst: vi.fn() },
   podcast: { findFirst: vi.fn() },
+  contextBox: { findFirst: vi.fn(), findMany: vi.fn() },
+  contextFact: { findMany: vi.fn() },
   $queryRaw: vi.fn(),
   $disconnect: vi.fn(),
 }))
@@ -33,7 +35,7 @@ vi.mock('../../services/crawler.js', () => ({
 process.env.PUBLIC_API_KEY = TEST_API_KEY
 
 const { default: app } = await import('../../app.js')
-const { aiGeneratedMarker, AI_GENERATED_PODCAST_FIELDS } = await import('../../lib/aiProvenance.js')
+const { aiGeneratedMarker, AI_GENERATED_PODCAST_FIELDS, IPTC_TRAINED_ALGORITHMIC_MEDIA } = await import('../../lib/aiProvenance.js')
 const { podcastEpisodeAiLine } = await import('../../lib/aiLabelCopy.js')
 
 /** The marker as JSON serializes it: the route must attach exactly this. */
@@ -305,6 +307,123 @@ describe('Public Stories API', () => {
       expect(res.body).toEqual({ newsletterIssue: null, podcastEpisode: null })
       expect(mockPrisma.newsletter.findFirst).not.toHaveBeenCalled()
       expect(mockPrisma.podcast.findFirst).not.toHaveBeenCalled()
+    })
+  })
+
+  // What a story's context holds is storyContextView.db.test.ts's; here, what the route answers
+  describe('GET /api/stories/:slug/context', () => {
+    const fact = {
+      id: 'f1',
+      ref: 'S2F1',
+      origin: 'search',
+      reusedFromId: null,
+      sourceUrl: 'https://s2.example/a',
+      sourceOutlet: 'Two',
+      sourceTitle: 'T',
+      sourceDate: new Date('2026-11-12T00:00:00Z'),
+      sourceKind: 'official-body',
+      supportingSentence: 'Sentence.',
+      passage: null,
+      supportFound: true,
+      statement: 'Statement.',
+      value: 2_600_000,
+      valueHigh: null,
+      unit: 'hectares',
+      approx: 'exact',
+      provisional: false,
+      counted: 'area burned',
+      place: '',
+      asOf: new Date('2015-01-01T00:00:00Z'),
+      asOfPrecision: 'year',
+      credited: '',
+      creditedKind: null,
+      validity: 'fixed',
+      verdict: 'supported',
+      verdictProblem: null,
+      status: 'unreviewed',
+      model: 'm',
+      promptVersion: 'v',
+    }
+    const box = {
+      id: 'b1',
+      runId: 'r1',
+      position: 0,
+      type: 'compared',
+      heading: 'Bigger than 2015',
+      teaser: 'Past the 2015 record',
+      sentences: [{ text: 'The 2015 fires burned 2.6 million hectares.', factIds: ['S2F1'] }],
+      visual: null,
+      gap: false,
+      asOf: new Date('2015-01-01T00:00:00Z'),
+      asOfPrecision: 'year',
+      place: null,
+      placeByEditor: false,
+      status: 'unreviewed',
+      model: 'gpt-test',
+      promptVersion: 'v',
+    }
+
+    it("serves the published story's cards with their sources and the AI marker, cached as the story is", async () => {
+      mockPrisma.story.findFirst.mockResolvedValue({
+        id: 'story-1',
+        sourceUrl: 'https://example.com/article',
+        summary: 'S.',
+        relevanceReasons: null,
+        antifactors: null,
+        research: null,
+        datePublished: new Date('2026-11-14'),
+      })
+      mockPrisma.contextBox.findFirst.mockResolvedValue({ runId: 'r1' })
+      mockPrisma.contextBox.findMany.mockResolvedValue([box])
+      mockPrisma.contextFact.findMany.mockResolvedValue([fact])
+
+      const res = await request(app).get('/api/stories/published-article/context')
+      expect(res.status).toBe(200)
+      expect(res.headers['cache-control']).toBe('public, max-age=60')
+      expect(mockPrisma.story.findFirst.mock.calls[0]![0].where).toEqual({ slug: 'published-article', status: 'published' })
+      expect(res.body.boxes).toEqual([
+        {
+          id: 'b1',
+          type: 'compared',
+          heading: 'Bigger than 2015',
+          teaser: 'Past the 2015 record',
+          gap: false,
+          place: 'section',
+          sentences: [{ text: 'The 2015 fires burned 2.6 million hectares.', citations: [{ sourceId: 'C1', sentence: 'Sentence.' }] }],
+          visual: null,
+          asOf: '2015',
+          sourceIds: ['C1'],
+        },
+      ])
+      expect(res.body.sources).toEqual([
+        {
+          id: 'C1',
+          origin: 'source',
+          outlet: 'Two',
+          host: 's2.example',
+          url: 'https://s2.example/a',
+          title: 'T',
+          date: '2026-11-12',
+          country: null,
+          kind: 'official-body',
+          storyId: null,
+          slug: null,
+        },
+      ])
+      expect(res.body.asOf).toBe('2015')
+      expect(res.body.aiGenerated).toEqual({
+        fields: ['heading', 'teaser', 'sentences', 'visual'],
+        model: 'gpt-test',
+        digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA,
+      })
+    })
+
+    it('serves no cards for a slug with no published story, and looks no further', async () => {
+      mockPrisma.story.findFirst.mockResolvedValue(null)
+      const res = await request(app).get('/api/stories/not-published/context')
+      expect(res.status).toBe(200)
+      expect(res.body).toMatchObject({ boxes: [], sources: [], asOf: null, aiGenerated: { fields: [] } })
+      expect(mockPrisma.contextBox.findFirst).not.toHaveBeenCalled()
     })
   })
 

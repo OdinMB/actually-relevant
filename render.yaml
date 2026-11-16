@@ -119,6 +119,10 @@ services:
       # key is its only switch; remove it to switch research off
       - key: TAVILY_API_KEY
         sync: false
+      # Story context (.context/story-context.md): where cards sit, model | random | section;
+      # unset, model. Read when a page is served, so a change reaches every story at once
+      - key: STORY_CONTEXT_PLACEMENT
+        sync: false
       # Crawl concurrency: production sets both (code defaults 2 feeds, 1 article)
       - key: CONCURRENCY_CRAWL_FEEDS
         sync: false

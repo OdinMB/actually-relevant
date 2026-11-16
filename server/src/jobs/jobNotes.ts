@@ -90,7 +90,7 @@ const NOTES: Readonly<Record<string, () => string>> = {
     'Crawls the feeds, gives each new story its first rating, then fully analyzes the ones that qualify, in that order, so every run ends with assessed stories ready to review. ' +
     `It runs several times a day because a feed lists only its newest articles and a busy one drops them within hours. ${CHAIN_RULES}`,
   daily_edition_chain: () =>
-    'Selects the best of the assessed stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time. ' +
+    "Selects the best of the assessed stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time; then it builds the published stories' context cards. " +
     `${CHAIN_RULES} ` +
     'From its flex cut-off on, every call goes at standard price; from its deadline on, research starts no other story, so publishing is never held up for long.',
   newsletter_chain: () =>
@@ -114,6 +114,17 @@ const NOTES: Readonly<Record<string, () => string>> = {
   publish_stories: () =>
     'Publishes the selected stories. Of several stories about the same event, only the one chosen to lead the group is published, and the others are rejected as duplicates. ' +
     `While Research Stories is enabled and research is on, a story selected less than ${count(config.research.pipeline.maxWaitMinutes, 'minute')} ago waits for its research and goes out at a later run.`,
+  build_story_context: () => {
+    const c = config.storyContext
+    const { share, minItems } = config.jobs.failureShare
+    return (
+      `Builds the context cards of the stories published in the last ${count(c.lookbackDays, 'day')} that were researched and have none yet, up to ${c.perRun} a run: ` +
+      `it reads their research, searches the web for up to ${count(c.maxSearches, 'missing piece')}, checks every fact and card against its source, and keeps what passes. ` +
+      'It runs after Publish Stories, so it never holds up publishing, and builds each story once. ' +
+      `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; nothing pauses. ` +
+      '"Run now" builds cards that readers see, even while the step is off. It can be enabled only once web search is set up.'
+    )
+  },
   social_auto_post: () =>
     `Picks the best story published in the last ${count(config.socialAutoPost.lookbackHours, 'hour')} that a channel has not posted yet, writes a post for it and posts it, one story per run. ` +
     'It posts only to Bluesky and Mastodon where auto-posting is switched on and the account is connected, and does nothing while neither is.',
@@ -161,12 +172,21 @@ const NOTES: Readonly<Record<string, () => string>> = {
  * `recordItems`); null otherwise, and for a job that counts none. It holds until a run stays under.
  */
 export function failureShareWarning(lastRunUsage: RunUsage | null): string | null {
-  const { share, minItems } = config.jobs.failureShare
   const checked = lastRunUsage?.itemsChecked ?? 0
   const failed = lastRunUsage?.itemsFailed ?? 0
-  if (checked < minItems || failed / checked <= share) return null
-  return `${failed.toLocaleString('en-US')} of ${count(checked, 'checked item')} failed in the last run.`
+  if (!failureShareExceeded(checked, failed)) return null
+  return failureShareLine(checked, failed)
 }
+
+/** Whether a run's tally passes the failure share: more than `share` failed of at least `minItems` checked. */
+export function failureShareExceeded(checked: number, failed: number): boolean {
+  const { share, minItems } = config.jobs.failureShare
+  return checked >= minItems && failed / checked > share
+}
+
+/** "14 of 45 checked items failed in the last run.": the Jobs page's warning, and a step's notice title. */
+export const failureShareLine = (checked: number, failed: number) =>
+  `${failed.toLocaleString('en-US')} of ${count(checked, 'checked item')} failed in the last run.`
 
 /** The warnings of one job; every job also gets the failure share's (`failureShareWarning`). */
 const WARNINGS: Readonly<Record<string, (row: JobRowState) => string | null>> = {

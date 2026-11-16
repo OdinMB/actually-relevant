@@ -16,6 +16,7 @@ import noticeRouter from './notices.js'
 import cacheRouter from './cache.js'
 import researchRouter from './research.js'
 import spendingRouter from './spending.js'
+import storyContextRouter from './storyContext.js'
 
 const router = Router()
 
@@ -25,6 +26,8 @@ router.use(requireAuth, requireRole('admin', 'editor'))
 router.use('/issues', issueRouter)
 router.use('/feeds', feedRouter)
 router.use('/stories', storyRouter)
+// A story's context cards: /stories/:id/context (.context/story-context.md, "Admin")
+router.use('/stories', storyContextRouter)
 router.use('/jobs', jobRouter)
 router.use('/newsletters', newsletterRouter)
 router.use('/subscribers', subscriberRouter)
