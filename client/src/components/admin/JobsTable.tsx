@@ -1,17 +1,10 @@
 import { useState } from 'react'
-import { EllipsisVerticalIcon, PlayIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
-import { ExclamationTriangleIcon } from '@heroicons/react/20/solid'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import type { JobRun } from '@shared/types'
-import { ActionIconButton } from '../ui/ActionIconButton'
 import { Button } from '../ui/Button'
-import { InfoTip } from '../ui/InfoTip'
 import { jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
-import { useRunJob } from '../../hooks/useJobs'
-import { EnabledToggle, FlexToggle, LastRun, RunningSpinner } from './jobControls'
-import { useToast } from '../ui/Toast'
-import { ApiError } from '../../lib/admin-api'
+import { EnabledToggle, FlexToggle, LastRun } from './jobControls'
+import { JobRow, JobTable } from './jobTable'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { EditPanel, PANEL_BODY, PANEL_FOOTER } from './EditPanel'
@@ -105,9 +98,8 @@ export function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => voi
   )
 }
 
+/** The jobs that run on their own schedules, in pipeline order, in the Jobs page's shared table layout. */
 export function JobsTable({ jobs }: JobsTableProps) {
-  const runJob = useRunJob()
-  const { toast } = useToast()
   const [selectedJob, setSelectedJob] = useState<string | null>(null)
 
   const sortedJobs = [...jobs].sort((a, b) => {
@@ -118,173 +110,14 @@ export function JobsTable({ jobs }: JobsTableProps) {
 
   const panelJob = jobs.find(j => j.jobName === selectedJob)
 
-  const handleRun = (jobName: string) => {
-    runJob.mutate(jobName, {
-      onSuccess: () => toast('success', `${jobDisplayName(jobName)} triggered`),
-      // 409 when a run is already under way: the server's answer says so.
-      onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
-    })
-  }
-
   return (
     <>
-      <div className="overflow-x-auto bg-white rounded-lg border border-neutral-200 shadow-sm">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b border-neutral-200 bg-neutral-50">
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
-                Job
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
-                Cron
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
-                Enabled
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
-                Flex
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
-                Status
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
-                Last Run
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
-                Last Started
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
-                Last Finished
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
-                Last Success
-              </th>
-              <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500 hidden lg:table-cell">
-                Error
-              </th>
-              <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedJobs.map(job => (
-              <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : 'hover:bg-neutral-50'}`}>
-                <td className="px-3 py-2 font-medium text-neutral-900">
-                  <span className="inline-flex items-center gap-1">
-                    <button
-                      onClick={() => setSelectedJob(job.jobName)}
-                      className="text-left hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-                    >
-                      {jobDisplayName(job.jobName)}
-                    </button>
-                    {job.note && <InfoTip label={`About ${jobDisplayName(job.jobName)}`}>{job.note}</InfoTip>}
-                  </span>
-                  {/* A state the owner must notice stays in view; the explanation is behind the icon */}
-                  {job.warning && (
-                    <p className="mt-0.5 flex max-w-xs items-start gap-1 text-xs font-normal text-amber-800">
-                      <ExclamationTriangleIcon className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                      {job.warning}
-                    </p>
-                  )}
-                </td>
-                <td className="px-3 py-2 hidden lg:table-cell">
-                  <CronEditor job={job} />
-                </td>
-                <td className="px-3 py-2">
-                  <EnabledToggle job={job} />
-                </td>
-                <td className="px-3 py-2">
-                  <FlexToggle job={job} />
-                </td>
-                <td className="px-3 py-2">
-                  <JobStatusBadge job={job} />
-                </td>
-                <td className="px-3 py-2 text-neutral-500 hidden lg:table-cell">
-                  <LastRun job={job} />
-                </td>
-                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell">
-                  <TimeWithRelative dateStr={job.lastStartedAt} />
-                </td>
-                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell">
-                  <TimeWithRelative dateStr={job.lastCompletedAt} />
-                </td>
-                <td className="px-3 py-2 text-neutral-500 whitespace-nowrap hidden lg:table-cell">
-                  <TimeWithRelative dateStr={job.lastSucceededAt} />
-                </td>
-                <td className="px-3 py-2 max-w-[200px] hidden lg:table-cell">
-                  {job.lastError ? (
-                    <button
-                      onClick={() => setSelectedJob(job.jobName)}
-                      className="text-left text-red-600 text-xs hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-                      title="Click to view full error"
-                    >
-                      {job.lastError.slice(0, 60)}
-                      {job.lastError.length > 60 ? '...' : ''}
-                    </button>
-                  ) : (
-                    <span className="text-neutral-400">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  {/* Desktop actions */}
-                  <div className="hidden lg:flex items-center justify-end gap-0.5">
-                    {job.running ? (
-                      <span className="inline-block p-1">
-                        <RunningSpinner />
-                      </span>
-                    ) : (
-                      <ActionIconButton
-                        icon={PlayIcon}
-                        label={`Run ${jobDisplayName(job.jobName)}`}
-                        onClick={() => handleRun(job.jobName)}
-                        disabled={runJob.isPending && runJob.variables === job.jobName}
-                      />
-                    )}
-                    <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => setSelectedJob(job.jobName)} />
-                  </div>
-
-                  {/* Mobile overflow menu */}
-                  <div className="lg:hidden flex justify-end">
-                    <Menu as="div" className="relative">
-                      <MenuButton className="rounded p-1 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
-                        <EllipsisVerticalIcon className="h-5 w-5 text-neutral-400" />
-                      </MenuButton>
-                      <MenuItems className="absolute right-0 z-10 mt-1 w-40 rounded-md bg-white shadow-lg border border-neutral-200 py-1 focus:outline-none">
-                        <MenuItem>
-                          {job.running ? (
-                            <div className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-yellow-700">
-                              <RunningSpinner size="h-4 w-4" />
-                              Running...
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleRun(job.jobName)}
-                              disabled={runJob.isPending && runJob.variables === job.jobName}
-                              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-neutral-700 data-[focus]:bg-neutral-100 disabled:opacity-50"
-                            >
-                              <PlayIcon className="h-4 w-4 shrink-0" />
-                              Run
-                            </button>
-                          )}
-                        </MenuItem>
-                        <MenuItem>
-                          <button
-                            onClick={() => setSelectedJob(job.jobName)}
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-neutral-700 data-[focus]:bg-neutral-100"
-                          >
-                            <PencilSquareIcon className="h-4 w-4 shrink-0" />
-                            Edit
-                          </button>
-                        </MenuItem>
-                      </MenuItems>
-                    </Menu>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+        <JobTable>
+          {sortedJobs.map(job => (
+            <JobRow key={job.jobName} job={job} onOpen={setSelectedJob} />
+          ))}
+        </JobTable>
       </div>
 
       {panelJob && <JobEditPanel job={panelJob} onClose={() => setSelectedJob(null)} />}

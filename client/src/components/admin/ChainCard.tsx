@@ -3,7 +3,6 @@ import { ExclamationTriangleIcon, PauseCircleIcon } from '@heroicons/react/20/so
 import { PlayIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
 import type { JobRun } from '@shared/types'
 import { jobDisplayName } from '../../lib/constants'
-import { stepMode, stepModeUpdate, type StepMode } from '../../lib/jobRun'
 import { useContinueChain, useJobChange, useRunJob } from '../../hooks/useJobs'
 import { ApiError } from '../../lib/admin-api'
 import { ActionIconButton } from '../ui/ActionIconButton'
@@ -13,37 +12,9 @@ import { useToast } from '../ui/Toast'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { TimeWithRelative } from './TimeWithRelative'
-import { EnabledToggle, FlexToggle, LastRun, RunningSpinner } from './jobControls'
+import { EnabledToggle, LastRun, RunningSpinner } from './jobControls'
 import { JobEditPanel } from './JobsTable'
-
-const STEP_MODES: { value: StepMode; label: string }[] = [
-  { value: 'on', label: 'On' },
-  { value: 'review', label: 'Review' },
-  { value: 'off', label: 'Off' },
-]
-
-function StepModeSelect({ step }: { step: JobRun }) {
-  const change = useJobChange(step)
-  const name = jobDisplayName(step.jobName)
-  return (
-    <select
-      value={stepMode(step)}
-      aria-label={`Mode of ${name}`}
-      disabled={change.pending}
-      onChange={e => {
-        const mode = e.target.value as StepMode
-        change.save(stepModeUpdate(mode), `${name}: ${STEP_MODES.find(m => m.value === mode)!.label}`)
-      }}
-      className="rounded-md border border-neutral-300 bg-white py-1 pl-2 pr-7 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-    >
-      {STEP_MODES.map(mode => (
-        <option key={mode.value} value={mode.value}>
-          {mode.label}
-        </option>
-      ))}
-    </select>
-  )
-}
+import { JobRow, JobTable } from './jobTable'
 
 /** A chain's flex cut-off or deadline: a time of day in UTC, or empty for none. Saved when it changes. */
 function ClockTimeField({ chain, field, label, help }: { chain: JobRun; field: 'flexUntil' | 'deadline'; label: string; help: string }) {
@@ -136,7 +107,7 @@ function RunButton({ job }: { job: JobRun }) {
 
 /**
  * A chain on the Jobs page: its schedule, switch, flex cut-off and deadline and its last run, then its
- * steps in order, each with its mode (On, Review, Off), its Flex switch and its own last run.
+ * steps in order in the Jobs page's shared table layout, each with its mode (On, Review, Off).
  */
 export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) {
   const [selected, setSelected] = useState<string | null>(null)
@@ -186,84 +157,11 @@ export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) 
 
       <ChainState chain={chain} />
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b border-neutral-200">
-              <th scope="col" className="px-3 py-2 text-left font-medium text-neutral-500">
-                Step
-              </th>
-              <th scope="col" className="px-3 py-2 text-left font-medium text-neutral-500">
-                Mode
-              </th>
-              <th scope="col" className="px-3 py-2 text-left font-medium text-neutral-500">
-                Flex
-              </th>
-              <th scope="col" className="px-3 py-2 text-left font-medium text-neutral-500">
-                Status
-              </th>
-              <th scope="col" className="hidden px-3 py-2 text-left font-medium text-neutral-500 lg:table-cell">
-                Last Finished
-              </th>
-              <th scope="col" className="hidden px-3 py-2 text-left font-medium text-neutral-500 lg:table-cell">
-                Last Run
-              </th>
-              <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {steps.map((step, i) => {
-              const stepName = jobDisplayName(step.jobName)
-              return (
-                <tr key={step.jobName} className={`border-b border-neutral-100 last:border-0 ${step.running ? 'bg-yellow-50' : 'hover:bg-neutral-50'}`}>
-                  <td className="px-3 py-2 font-medium text-neutral-900">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-4 text-xs font-normal text-neutral-400">{i + 1}</span>
-                      <button
-                        onClick={() => setSelected(step.jobName)}
-                        className="rounded text-left hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                      >
-                        {stepName}
-                      </button>
-                      {step.note && <InfoTip label={`About ${stepName}`}>{step.note}</InfoTip>}
-                    </span>
-                    {step.warning && (
-                      <p className="ml-5 mt-0.5 flex max-w-xs items-start gap-1 text-xs font-normal text-amber-800">
-                        <ExclamationTriangleIcon className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                        {step.warning}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <StepModeSelect step={step} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <FlexToggle job={step} />
-                  </td>
-                  <td className="px-3 py-2">
-                    {/* A step that is off shows Disabled, the badge's word for a job that does not run */}
-                    <JobStatusBadge job={step} />
-                  </td>
-                  <td className="hidden whitespace-nowrap px-3 py-2 text-neutral-500 lg:table-cell">
-                    <TimeWithRelative dateStr={step.lastCompletedAt} />
-                  </td>
-                  <td className="hidden px-3 py-2 text-neutral-500 lg:table-cell">
-                    <LastRun job={step} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center justify-end gap-0.5">
-                      <RunButton job={step} />
-                      <ActionIconButton icon={PencilSquareIcon} label={`Details of ${stepName}`} onClick={() => setSelected(step.jobName)} />
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <JobTable>
+        {steps.map((step, i) => (
+          <JobRow key={step.jobName} job={step} step={i + 1} onOpen={setSelected} />
+        ))}
+      </JobTable>
 
       {panelJob && <JobEditPanel job={panelJob} onClose={() => setSelected(null)} />}
     </section>
