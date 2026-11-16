@@ -33,6 +33,7 @@ Items 1 to 3 were decided on 16 Nov; 4, 5 and the methodology text are still Odi
      - up to three cited sentences;
      - a footer that names each source and gives the date the facts are from.
    - **Which stories get it:** every published story that has a research run, single-source ones included. A story without a research run shows nothing new.
+   - **Always a constructive element (Odin, 16 Nov; roadmap D10).** Every story's context looks for what is being done about the problem: responses under way, solutions tried, or what has worked against the same problem elsewhere. When research's facts don't cover it, its search goes first. A story that itself reports the response (a new policy, a breakthrough) counts, and gets no extra card. When nothing sourced turns up, the honest-gap card says so; nothing is written to sound hopeful without a source.
    - **Where this differs from the mockup:**
      - The map in the header is not part of this module.
      - The key quote stays where it is today and is not repeated as a card.
@@ -98,7 +99,7 @@ The step keeps its own Flex switch (`MODEL_JOBS`). Since it usually runs before 
 |---|---|---|---|---|
 | 1 | Load (I/O, before the pipeline) | — | Loads the story (title, summary, the researched paragraphs where applied, Why This Matters, Caveats, publication day, issue) and its newest completed research run's sources: `S0` and the sources found by search, with their facts, outlet, title, date and kind. It also loads the **reusable facts**: the supported, non-demoted context facts of the earlier stories that research linked in `run.earlier`, kept only if still current on this story's date (see Validity below). | Our own earlier stories' facts (`E…`) are never loaded as facts: they are our text, and a judgment never becomes evidence. |
 | 2 | Structure (pass 1) | small | One call reads every research fact (statement, supporting sentence, `measures`, and its source's outlet, date and kind) and returns the structured fields of each fact by its id (see `structuredFactFields` under "Records"). | Code takes answers only for the ids it asked for. A fact left out is not checked, and counts as failed in the failure share. |
-| 3 | Gap list | small | One call sees the story, the fixed checklist (`compared`, `why_now`, `build_up`, `who_affected`, `response`, `next`, `key_term`, each with its definition) and every available fact, marked current or expired. It returns, per slot, whether a reader needs it and whether the facts cover it (yes, partly, no). It also returns up to 3 searches in priority order, each with its slot, what is wanted (one line), a query of 4–10 words, and whether it needs data from the last 30 days. | Code runs at most `maxSearches` (3) searches. With nothing needed and uncovered, there is no search: the story's context is still valid, and pass 2 is skipped. |
+| 3 | Gap list | small | One call sees the story, the fixed checklist (`compared`, `why_now`, `build_up`, `who_affected`, `response`, `next`, `key_term`, each with its definition) and every available fact, marked current or expired. It returns, per slot, whether a reader needs it and whether the facts cover it (yes, partly, no). It also returns up to 3 searches in priority order, each with its slot, what is wanted (one line), a query of 4–10 words, and whether it needs data from the last 30 days. `response` is defined as what is being done about the problem: responses under way, solutions tried, or what has worked against the same problem elsewhere. It is always needed (D10); the call may instead answer that the story itself reports the response, quoting our text. | Code runs at most `maxSearches` (3) searches. Code treats `response` as needed whatever the answer says, and puts a `response` search first while it is uncovered and the story doesn't report it. If the answer lists none, code adds one from the story's title and "response", and the run records the fallback. Otherwise, with nothing needed and uncovered, there is no search: the story's context is still valid, and pass 2 is skipped. |
 | 4 | Search (pass 2) | — | Each query goes to Tavily at **basic** depth, topic `general`, 5 results with raw text. The end date is the story's publication day, and the start date is 30 days before it only when recent data is wanted. A query already asked within `searchReuseDays` (7) is answered from `context_search_cache` at no credit cost. | Same query means the normalized text, depth, topic and the recent flag. |
 | 5 | Filter (code) | — | Publishers' opt-outs (`dropOptedOut` with `researchSourcePolicy`, ADR-0056), research's `BLOCKED_DOMAINS`, any URL or domain already among the story's sources, at most 2 sources per query and `maxNewSources` (5) in all. The text for extraction is chosen as research chooses it: the passages, or the raw text when the passages are short, cut to 4,000 characters. | — |
 | 6 | Extract (pass 2) | small | One call per kept source, in parallel. It extracts at most 5 facts that answer the wanted items, each with a statement in its own words, the supporting sentence copied verbatim, the structured fields and the slot it answers. It also returns `usable`, the source's kind and its outlet. | Every string is XML-unescaped, as research does. |
@@ -107,7 +108,7 @@ The step keeps its own Flex switch (`MODEL_JOBS`). Since it usually runs before 
 | 9 | Write | medium | One call writes the boxes from the supported facts. The figures box (`figures`, tiles only) comes first. After it come at most 6 context boxes, each with a slot, a heading of at most 8 words, 0–3 sentences each citing fact ids, and at most one visual: `tiles` (1–4, each a label and fact ids), `bars` or `line` (a measure, a unit, and points, each a label and a fact id), plus `apart` points for a different measure shown beside a comparison, never in it. Each box also names its `place`: the story paragraph (`P1`…) or Why This Matters point (`W1`…) it adds most to, or `section`, and a `teaser` of at most 8 words for the phone's one-line note. The prompt numbers the paragraphs and points for this. The figures box's place is always `section`. | The rules are in the prompt, with Bad/Good pairs: a box only where facts support it, nothing from general knowledge, no sentence that restates what the story's text, Why This Matters or Caveats already says (tiles and charts may show the story's own numbers; the writer sees those three texts for this), our own words, American English, no talk about the input, at most one em dash a box, and an expired fact stated only as a past value with its date. |
 | 10 | Box code checks | — | A cited id must be a supported fact; otherwise that sentence, tile or point is dropped (structural). A tile's facts must be current. `validChart` applies the chart rules (below). The copying check (`checkCopying`, a 12-word run) runs on box sentences against the sources' lines (`sourceLines`). Numbers a sentence states that its cited facts don't are passed on as hints. A `place` naming a paragraph or point that doesn't exist becomes `section`; the limits are applied when the page is served (below). | A chart that breaks a rule is not drawn. Its box keeps its sentences, and this does not count as a failure. |
 | 11 | Box check | small | Research's fact-check prompt once more, now with the sources' lines, so it judges copying as well as support. Items are each sentence, each tile ("12.5 million people under hazardous smoke across Southeast Asia") and each chart ("area burned in Indonesia, hectares: 2015, 2.6 million; 2026, 2.88 million (estimate)"), each against its cited facts. A chart's facts must all measure what the chart says. That is how "one definition" is judged: by the check, not matched in code. | A failing item is dropped. A box left with nothing in it is dropped. There are **no repair rounds**. |
-| 12 | Honest gap (code) | — | When the gap list judged `response` needed, pass 2 searched for it, and no supported fact answers it, code adds a `response` box with `gap: true` and no sentences. The page gives it fixed wording. | — |
+| 12 | Honest gap (code) | — | When pass 2 searched for `response`, no supported fact answers it, and the story doesn't report the response itself, code adds a `response` box with `gap: true` and no sentences. The page gives it fixed wording. | — |
 | 13 | Store (I/O) | — | One transaction writes every fact with its verdict, the kept boxes, and the run's result and costs. | — |
 
 **Failure share.** The step records, per story, its checked items (every fact judged, every box item judged) and its failed items (facts rejected, unjudged or left out, box items dropped by a check). Charts not drawn under the rules don't count. Technical failures of a story (a parse failure, a Tavily error) end that story's run as `failed` with what it spent. They are in the run's tally and the logs, not in the share. The run's tally goes into its usage (`recordItems`). When more than `jobs.failureShare.share` (0.2) of at least `jobs.failureShare.minItems` (20) checked items failed, the step records a warning notice with key `step-failing:build_story_context` ("Story context: 14 of 45 checked items failed last night (usually 5 to 10%)"), linking to the Jobs page, and the Jobs page shows the same line under the step until a run stays under the share (For Odin 4). Nothing pauses.
@@ -232,7 +233,7 @@ These are estimated per story at flex, from the design's prices. The first week'
 | Searches | about $0.024 for 3 basic searches, about $0.016 after skips and reuse |
 | **Per story** | **about $0.026–0.034** |
 
-At about 270 stories a month that is **about $7–9 a month, with a range of $6–10 and about $12 in a busy month**. Web search is about two thirds of it, which is why pass 2 starts at basic depth and 3 searches.
+At about 270 stories a month that is **about $7–9 a month, with a range of $6–10 and about $12 in a busy month**. Web search is about two thirds of it, which is why pass 2 starts at basic depth and 3 searches. Always looking for `response` (D10) adds a search only to stories that would otherwise have none: at most about $2 a month, less where research already covers it.
 
 ### Eval gate before switching on (D8)
 
@@ -247,6 +248,7 @@ Module 1 is switched on only when all of the bars below hold on the **judged hal
 | Planted errors on module-1 facts (`fact-check --facts context`) | Catches at least 90%; wrongly rejects at most 5% of faithful and reworded facts |
 | Structured fields (`context`, strong-judge labels on up to 300 figure facts) | At least 95% fully right (value, unit, counted, place, as-of, credited); no invented number passed by the fact check |
 | Gap list and searches (`context`, against the gap key) | Finds at least 60% of the `must` needs the story doesn't already state; at most 1 wasted search per story on average |
+| What's being done (`context`, against the gap key; D10) | A supported `response` card on at least 70% of the stories whose key has a findable `response` need the story doesn't already state; the honest gap only where the key has none |
 | Boxes (`context`, strong judge) | No sentence, tile or chart left that its cited facts don't support (each one found is listed for a read) |
 | Placement (`context`, strong judge) | At least 85% of the notes `model` places beside a paragraph or point add to it without restating it; reported for `random` on the same stories for comparison. Below the bar, the step goes live with `STORY_CONTEXT_PLACEMENT=section` |
 | Cost | Mean at most $0.05 a story (model at flex-equivalent, plus credits) |
@@ -303,7 +305,8 @@ Module 1 is switched on only when all of the bars below hold on the **judged hal
 - there are 2–8 needs with unique ids, at least one of them `must`;
 - `kind` is `figure`, `fact` or `term`;
 - `inStory`, when set, is a non-empty quote of our published text;
-- every checklist slot appears either in `needs` (once or more) or in `notNeeded` (once), never in both.
+- every checklist slot appears either in `needs` (once or more) or in `notNeeded` (once), never in both;
+- `response` is always in `needs` with importance `must` (D10). When the story itself reports the response, that need has `inStory` set; when the drafter found no source for one, its `accepts` says so and `example` is null.
 
 `gapKeys.test.ts` runs the schema and `validateGapKey` on every committed file, with no database.
 
@@ -366,6 +369,7 @@ These follow the format of the existing files in `.context/decisions/` (the late
 - **D5**, one named source is enough, with the tile rule.
 - **D8**, the eval gates each launch.
 - **D9**, no images per story; charts from fixed rules.
+- **D10**, always a constructive element, with `response` always needed and the honest gap when nothing sourced is found.
 
 There are also two new ADRs: "Story context: facts and boxes as records, and the step after publishing", with decisions 1, 2, 3 and 5 above, and "Spending: monthly spend per job with warning levels and notices instead of caps", with decision 8.
 
@@ -502,7 +506,8 @@ These follow the project's patterns: `vi.hoisted()` mocks, `supertest` with `aut
   - Opted-out and blocklisted results are dropped.
   - One extraction's parse failure leaves the others.
   - Rejected facts never reach the write prompt.
-  - The honest-gap box appears only when `response` was needed, searched for and not answered.
+  - An uncovered `response` is searched first, whatever the gap list's order; with no `response` search listed, the title fallback is added and recorded.
+  - The honest-gap box appears when `response` was searched for and not answered, and never when the story itself reports the response.
   - Model cost and credits are totaled apart.
 - **`storyContextSearch.test.ts`:** key normalization; a hit within 7 days and a miss after; prune; at most 2 per query, at most 5 in all, and no URL or domain already among the story's sources.
 - **`storyContextInput.db.test.ts`**
@@ -531,7 +536,7 @@ These follow the project's patterns: `vi.hoisted()` mocks, `supertest` with `aut
   - `SpendingCard.test.tsx`: rows grouped as on the Jobs page; the pace pill; a level saves on blur and an empty field clears it; the voices line.
   - `StoryContextAdmin.test.tsx`: hidden while there is no run; hiding one card and moving one; "Hide all context" asks first; the run's dropped facts with their reasons.
 - **Eval**
-  - `gapKeys.test.ts`: every committed key passes, and each rule fails on an inline key.
+  - `gapKeys.test.ts`: every committed key passes, and each rule fails on an inline key, including a key without a `must` `response` need.
   - `contextScore.test.ts`: recall over `must` needs not in the story; wasted searches; the deterministic halves; the spread.
   - `plant.test.ts`: each new field-level kind, and what it must leave alone.
   - The option parser.
