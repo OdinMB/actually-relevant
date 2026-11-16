@@ -519,6 +519,31 @@ model JobRun {
   @@map("job_runs")
 }
 
+/// What each job spent in each UTC month, added to by every finished run that recorded its usage (jobs/jobLease.ts finishJobRun; .context/scheduler.md, "Spending"). A chain's own runs add nothing: its steps' runs carry its spend. An interrupted run's spend is lost
+model JobMonthSpend {
+  jobName         String   @map("job_name")
+  /// The first day of the UTC month, on the database clock
+  month           DateTime @db.Date
+  /// USD as billed (flex calls at flex price), web searches included
+  costUsd         Float    @default(0) @map("cost_usd")
+  standardCostUsd Float    @default(0) @map("standard_cost_usd")
+  /// The part of cost_usd spent on web searches; AI spend is cost_usd minus search_usd
+  searchUsd       Float    @default(0) @map("search_usd")
+  searchCredits   Int      @default(0) @map("search_credits")
+  runs            Int      @default(0)
+
+  @@id([jobName, month])
+  @@map("job_month_spend")
+}
+
+/// A monthly warning level in whole USD (services/spending.ts): per job, for research started by an editor (`editor_research`) or for the total (`all`). Passing it, or heading past it at the month's pace, records one notice per scope and month; nothing stops on it
+model SpendWarning {
+  scope    String @id
+  levelUsd Int    @map("level_usd")
+
+  @@map("spend_warnings")
+}
+
 // --- Story retention (.context/story-retention.md) ---
 
 // Counts of stories the cleanup_old_stories job deleted, so lifetime totals survive the deletion.

@@ -129,6 +129,6 @@ export async function searchTavily(request: TavilySearch, apiKey: string, option
   const body = tavilyRequestBody(request)
   const answer = parseResponse(await withRetry(() => post(body, apiKey), options.retry))
   // Counts toward the job run's cost on the Jobs page; nothing outside a run (lib/runUsage.ts)
-  recordOtherCost(answer.credits * config.research.tavilyUsdPerCredit)
+  recordOtherCost(answer.credits * config.research.tavilyUsdPerCredit, answer.credits)
   return answer
 }

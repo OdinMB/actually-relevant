@@ -61,3 +61,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0057 · Researched stories: extracted facts, not source texts, feed the writer; numbers are judged by the fact check, not string-matched in code](decisions/0057-research-facts-feed-writer-numbers-judged.md)
 - [ADR-0058 · Researched stories: repair only the items that failed their checks, in up to two rechecked rounds, and write a still-copying title, summary or blurb again from the kept story, instead of rewriting the whole draft once](decisions/0058-research-targeted-repair.md)
 - [ADR-0059 · Run the story pipeline as chains of steps from one start time, with per-job OpenAI flex processing that falls back to standard, and record each run's cost](decisions/0059-job-chains-flex-and-run-costs.md)
+- [ADR-0060 · Spending: monthly spend per job with warning levels and notices instead of caps](decisions/0060-spending-overview-warning-levels-no-caps.md)

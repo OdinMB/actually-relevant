@@ -851,8 +851,59 @@ export interface JobRunUsage {
   standardCostUsd: number
   /** Calls to a model without a price on record, left out of the sums. */
   unpricedCalls: number
-  /** Other paid services (research's web searches), part of both sums. */
+  /** Other paid services (web searches), part of both sums. */
   otherUsd: number
+  /** Web search credits behind `otherUsd`. */
+  searchCredits: number
+  /** Items the run's own checks judged, and how many failed: the step's own, not added to its chain's. */
+  itemsChecked: number
+  itemsFailed: number
+}
+
+// --- Spending (the admin Dashboard's overview; server/src/services/spending.ts) ---
+
+/** Whose spend a row shows: a job, research started by an editor (which runs outside any job), or the total. */
+export type SpendScope = JobName | 'editor_research' | 'all'
+
+export interface SpendTotals {
+  /** Model calls: the total less the web searches. */
+  aiUsd: number
+  searchUsd: number
+  totalUsd: number
+}
+
+export interface SpendingRow {
+  scope: SpendScope
+  thisMonth: SpendTotals
+  /** This month's total at the pace so far: spend × days in the month ÷ days so far. */
+  paceUsd: number
+  /** The totals of the month before and of the one before that. */
+  previousUsd: [number, number]
+  /** The monthly warning level in whole USD; null for none. */
+  levelUsd: number | null
+  /** The level is passed, or the month is heading past it at this pace (from the 8th on); null otherwise. */
+  warning: 'passed' | 'on_pace' | null
+}
+
+/** A chain's steps in its order, or (`chain` null) the jobs on their own schedules and research started by an editor. */
+export interface SpendingGroup {
+  chain: JobName | null
+  rows: SpendingRow[]
+}
+
+/** GET /api/admin/spending: this UTC month so far and the two before it. */
+export interface SpendingOverview {
+  /** `YYYY-MM`. */
+  month: string
+  /** The month before and the one before that, `YYYY-MM`. */
+  previousMonths: [string, string]
+  /** Today's day of the UTC month, and its number of days. */
+  day: number
+  daysInMonth: number
+  groups: SpendingGroup[]
+  total: SpendingRow
+  /** The podcast's voices, on the ElevenLabs plan rather than billed per use: characters used this month and the monthly cap. */
+  voices: { usedChars: number; capChars: number }
 }
 
 // --- Query/filter types ---

@@ -645,6 +645,18 @@ export const config = {
     stepWaitMinutes: 120,
     stepWaitPollMs: 15_000,
   },
+  /** A job run's own checks (lib/runUsage.ts `recordItems`, .context/scheduler.md, "Spending"). */
+  jobs: {
+    // The Jobs page warns under a job whose last run checked at least minItems items and saw more
+    // than this share of them fail (jobs/jobNotes.ts failureShareWarning). Nothing pauses on it.
+    failureShare: { share: 0.2, minItems: 20 },
+  },
+  /** The Dashboard's monthly spending overview and its warning levels (services/spending.ts). */
+  spending: {
+    // From this day of the UTC month on, a month heading past a warning level at its pace records
+    // its notice; before it, only a level already passed does (a few days' pace says little).
+    paceFromDay: 8,
+  },
   feed: {
     size: parseWholeNumber(process.env.RSS_FEED_SIZE, 50, 'RSS_FEED_SIZE'),
     cacheMaxAge: parseWholeNumber(process.env.RSS_CACHE_MAX_AGE, 900, 'RSS_CACHE_MAX_AGE', 0),

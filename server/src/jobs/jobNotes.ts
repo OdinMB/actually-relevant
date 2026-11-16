@@ -6,6 +6,7 @@
  * it at each call. The text names no setting, code or file: the people who run the site read it.
  */
 import { config } from '../config.js'
+import type { RunUsage } from '../lib/runUsage.js'
 import { researchSwitchOff } from '../services/researchRuns.js'
 
 export interface JobNotes {
@@ -14,6 +15,14 @@ export interface JobNotes {
   /** A state the owner must notice now, such as a job that can do nothing; null when there is none. */
   warning: string | null
 }
+
+/** What the notes read of the job's row. */
+export interface JobRowState {
+  /** What the last finished run spent and counted; null before one, or after an interrupted one. */
+  lastRunUsage: RunUsage | null
+}
+
+const NO_ROW: JobRowState = { lastRunUsage: null }
 
 /** "1 day", "30 days", "44,000 characters". */
 const count = (n: number, unit: string, units = `${unit}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? unit : units}`
@@ -146,10 +155,25 @@ const NOTES: Readonly<Record<string, () => string>> = {
     'Every unpublished story older than that loses its search data until it is published or assessed again. Each run leaves a notice with what it did.',
 }
 
-const WARNINGS: Readonly<Record<string, () => string | null>> = {
+/**
+ * Any job's warning when more than `config.jobs.failureShare.share` of at least `minItems` items its
+ * last run's checks judged failed (a step that checks what a model wrote counts them with
+ * `recordItems`); null otherwise, and for a job that counts none. It holds until a run stays under.
+ */
+export function failureShareWarning(lastRunUsage: RunUsage | null): string | null {
+  const { share, minItems } = config.jobs.failureShare
+  const checked = lastRunUsage?.itemsChecked ?? 0
+  const failed = lastRunUsage?.itemsFailed ?? 0
+  if (checked < minItems || failed / checked <= share) return null
+  return `${failed.toLocaleString('en-US')} of ${count(checked, 'checked item')} failed in the last run.`
+}
+
+/** The warnings of one job; every job also gets the failure share's (`failureShareWarning`). */
+const WARNINGS: Readonly<Record<string, (row: JobRowState) => string | null>> = {
   research_stories: researchWarning,
 }
 
-export function jobNotes(jobName: string): JobNotes {
-  return { note: NOTES[jobName]?.() ?? null, warning: WARNINGS[jobName]?.() ?? null }
+export function jobNotes(jobName: string, row: JobRowState = NO_ROW): JobNotes {
+  const warnings = [WARNINGS[jobName]?.(row) ?? null, failureShareWarning(row.lastRunUsage)].filter((w): w is string => w !== null)
+  return { note: NOTES[jobName]?.() ?? null, warning: warnings.length > 0 ? warnings.join(' ') : null }
 }

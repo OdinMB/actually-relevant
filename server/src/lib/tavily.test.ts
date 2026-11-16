@@ -4,6 +4,8 @@ const { post } = vi.hoisted(() => ({ post: vi.fn() }))
 vi.mock('axios', () => ({ default: { post } }))
 
 import { searchTavily, tavilyRequestBody, TAVILY_URL, type TavilySearch } from './tavily.js'
+import { createRunScope, runInScope } from './runUsage.js'
+import { config } from '../config.js'
 
 const KEY = 'tvly-test-secret-123'
 const search: TavilySearch = { query: 'Pakistan rooftop solar 22 GW', startDate: '2026-10-29', endDate: '2026-11-19' }
@@ -60,6 +62,13 @@ describe('searchTavily', () => {
     post.mockResolvedValueOnce(okResponse({ credits: 3 })).mockResolvedValueOnce(okResponse())
     expect((await searchTavily(search, KEY)).credits).toBe(3)
     expect((await searchTavily(search, KEY)).credits).toBe(2)
+  })
+
+  it("counts the search's credits and their cost in the job run it is made in", async () => {
+    post.mockResolvedValue(okResponse({ credits: 3 }))
+    const scope = createRunScope({ jobName: 'research_stories', flex: false })
+    await runInScope(scope, () => searchTavily(search, KEY))
+    expect(scope.usage).toMatchObject({ searchCredits: 3, otherUsd: expect.closeTo(3 * config.research.tavilyUsdPerCredit, 10) })
   })
 
   it('maps the results, filling what Tavily left out', async () => {

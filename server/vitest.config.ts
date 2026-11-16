@@ -26,8 +26,10 @@ export default defineConfig({
       // prompt-input builders: measured 75.28, 72.23, 70.46, 76.59. Raised 2026-10-27 with the public
       // API contract checks: measured 76.21, 73.31, 72.15, 77.39 (functions kept at 71: 72 would leave no
       // margin, a few untested functions anywhere would fail it). Raised 2026-11-05 with the
-      // interrupted-run sweep: measured 77.27, 73.97, 73.20, 78.45 (functions kept at 72, as above)
-      thresholds: { statements: 77, branches: 73, functions: 72, lines: 78 },
+      // interrupted-run sweep: measured 77.27, 73.97, 73.20, 78.45 (functions kept at 72, as above).
+      // Raised 2026-11-16 with the spending overview (risen since without a raise): measured 82.18,
+      // 78.89, 79.67, 82.91 (functions kept at 78, as above)
+      thresholds: { statements: 82, branches: 78, functions: 78, lines: 82 },
     },
     projects: [
       {
