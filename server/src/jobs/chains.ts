@@ -10,7 +10,8 @@
  * - **Review** (`enabled` and `pause_for_review`): runs, then the chain waits for a person, who
  *   continues it from the Jobs page. The next scheduled run starts from the first step again.
  *
- * A step can also have a "not before" time (`not_before`, "HH:MM" UTC): a chain that reaches it earlier
+ * A step can also have a "not before" time (`not_before`, "HH:MM" or "Sat 07:00", on the step's own
+ * clock: `jobTimeZone`, else UTC): a chain that reaches it earlier
  * holds there, its lease let go, and goes on by itself when that time comes round after the run's start
  * (the daily edition's social post waits for the morning). A person can go on sooner from the Jobs page.
  *
@@ -23,7 +24,8 @@ import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { JOB_HANDLERS } from './handlers.js'
 import { runJob } from './scheduler.js'
-import { CHAINS, nextClockTime } from './chainDefinitions.js'
+import { CHAINS, nextStepTime } from './chainDefinitions.js'
+import { jobTimeZone } from './jobTimeZones.js'
 import { RESUMABLE_JOBS } from './interruptedRuns.js'
 
 const log = createLogger('chains')
@@ -63,11 +65,12 @@ async function setResume(chainName: string, step: string | null, reason: ResumeR
 }
 
 /**
- * When a step with a "not before" time may run: the first time that clock time comes round after the
- * chain's run started. A step reached after it runs at once, so a late run never waits a whole day.
+ * When a step with a "not before" time may run: the first time that time comes round after the chain's
+ * run started, on the step's own clock (`jobTimeZone`, else UTC). A step reached after it runs at once,
+ * so a late run never waits for the next one.
  */
-export function holdUntil(notBefore: string | null, chainStartedAt: Date | null, now: Date): Date | null {
-  const at = nextClockTime(notBefore, chainStartedAt ?? now)
+export function holdUntil(notBefore: string | null, chainStartedAt: Date | null, now: Date, timeZone = 'UTC'): Date | null {
+  const at = nextStepTime(notBefore, chainStartedAt ?? now, timeZone)
   return at && at.getTime() > now.getTime() ? at : null
 }
 
@@ -162,7 +165,7 @@ export async function runChain(chainName: string, mode: 'start' | 'continue' = '
 
     // Continuing by hand at a held step runs it now: the person chose not to wait
     const handContinued = i === first && mode === 'continue'
-    const until = handContinued ? null : holdUntil(stepRow.notBefore, chainStartedAt, new Date())
+    const until = handContinued ? null : holdUntil(stepRow.notBefore, chainStartedAt, new Date(), jobTimeZone(step) ?? 'UTC')
     if (until) {
       await setResume(chainName, step, 'waiting', until)
       log.info({ chainName, step, until }, 'holding until the step’s time')

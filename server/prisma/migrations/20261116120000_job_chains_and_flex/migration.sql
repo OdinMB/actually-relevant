@@ -11,12 +11,15 @@
 -- never-completed row is not overdue at boot, so the chain waits for its first cron tick.
 -- Crawling stays a job of its own, several times a day, so a busy feed's articles are read before they
 -- drop off it; it moves to 04, 10, 16 and 22 UTC so the last crawl lands an hour before the chain.
--- Flex starts on the two assessment steps only, a week's measurement (design 2026-11-16, "Measure
--- first"); every other job starts at standard price.
+-- The newsletter chain (Saturday 04:00 UTC: build and send the full edition, then Actually Uplifting)
+-- and the podcast chain (Friday's slots build both shows' episodes; both publish steps are held until
+-- Saturday 07:00 on the podcast's Berlin clock) take over those eight jobs' schedules. Seeded ENABLED:
+-- each step keeps its own On/Off, so what was off stays off.
+-- Flex is on for every job by default (owner, 2026-11-16); a job without AI calls ignores it.
 -- Written by hand (no index on story_embeddings is touched, so no `story_embeddings_embedding_idx` drop to remove).
 
 ALTER TABLE "job_runs"
-  ADD COLUMN "flex" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "flex" BOOLEAN NOT NULL DEFAULT true,
   ADD COLUMN "pause_for_review" BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN "not_before" TEXT,
   ADD COLUMN "flex_until" TEXT,
@@ -31,11 +34,17 @@ INSERT INTO "job_runs" ("id", "job_name", "enabled", "cron_expression", "flex_un
 VALUES (gen_random_uuid(), 'daily_edition_chain', true, '0 23 * * *', '03:30', '05:00', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
+INSERT INTO "job_runs" ("id", "job_name", "enabled", "cron_expression", "created_at", "updated_at")
+VALUES
+  (gen_random_uuid(), 'newsletter_chain', true, '0 4 * * 6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid(), 'podcast_chain', true, '0 2,6,10,14,18 * * 5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT DO NOTHING;
+
 UPDATE "job_runs" SET "not_before" = '11:30', "updated_at" = CURRENT_TIMESTAMP
 WHERE "job_name" = 'social_auto_post';
 
+UPDATE "job_runs" SET "not_before" = 'Sat 07:00', "updated_at" = CURRENT_TIMESTAMP
+WHERE "job_name" IN ('publish_podcast', 'publish_uplifting_podcast');
+
 UPDATE "job_runs" SET "cron_expression" = '0 4,10,16,22 * * *', "updated_at" = CURRENT_TIMESTAMP
 WHERE "job_name" = 'crawl_feeds';
-
-UPDATE "job_runs" SET "flex" = true, "updated_at" = CURRENT_TIMESTAMP
-WHERE "job_name" IN ('preassess_stories', 'assess_stories');

@@ -6,13 +6,12 @@ import { ActionIconButton } from '../ui/ActionIconButton'
 import { InfoTip } from '../ui/InfoTip'
 import { useToast } from '../ui/Toast'
 import { jobDisplayName } from '../../lib/constants'
-import { stepMode, stepModeUpdate, type StepMode } from '../../lib/jobRun'
-import { useJobChange, useRunJob } from '../../hooks/useJobs'
+import { useRunJob } from '../../hooks/useJobs'
 import { ApiError } from '../../lib/admin-api'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { TimeWithRelative } from './TimeWithRelative'
-import { EnabledToggle, FlexToggle, LastRun, RunningSpinner } from './jobControls'
+import { clockName, EnabledToggle, FlexToggle, LastRun, ReviewToggle, RunningSpinner } from './jobControls'
 
 /**
  * The one column layout of every jobs table on the Jobs page: the chains' step tables and the table of
@@ -21,9 +20,10 @@ import { EnabledToggle, FlexToggle, LastRun, RunningSpinner } from './jobControl
 // Start time, last success and the full error are in the details panel: the table keeps what fits a laptop.
 const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean }[] = [
   { label: 'Job', width: 'w-[24%]' },
-  { label: 'Schedule', width: 'w-[17%]', wide: true },
-  { label: 'Enabled', width: 'w-[11%]' },
-  { label: 'Flex', width: 'w-[7%]' },
+  { label: 'Schedule', width: 'w-[16%]', wide: true },
+  { label: 'Enabled', width: 'w-[7%]' },
+  { label: 'Review', width: 'w-[7%]' },
+  { label: 'Flex', width: 'w-[6%]' },
   { label: 'Status', width: 'w-[10%]' },
   { label: 'Last Run', width: 'w-[12%]', wide: true },
   { label: 'Last Finished', width: 'w-[12%]', wide: true },
@@ -60,38 +60,9 @@ export function JobTable({ children }: { children: React.ReactNode }) {
   )
 }
 
-const STEP_MODES: { value: StepMode; label: string }[] = [
-  { value: 'on', label: 'On' },
-  { value: 'review', label: 'Review' },
-  { value: 'off', label: 'Off' },
-]
-
-function StepModeSelect({ step }: { step: JobRun }) {
-  const change = useJobChange(step)
-  const name = jobDisplayName(step.jobName)
-  return (
-    <select
-      value={stepMode(step)}
-      aria-label={`Mode of ${name}`}
-      disabled={change.pending}
-      onChange={e => {
-        const mode = e.target.value as StepMode
-        change.save(stepModeUpdate(mode), `${name}: ${STEP_MODES.find(m => m.value === mode)!.label}`)
-      }}
-      className="rounded-md border border-neutral-300 bg-white py-1 pl-2 pr-7 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-    >
-      {STEP_MODES.map(mode => (
-        <option key={mode.value} value={mode.value}>
-          {mode.label}
-        </option>
-      ))}
-    </select>
-  )
-}
-
 /**
  * One job in a jobs table. A chain's step (given its place in the chain) shows that place instead of a
- * schedule, and its mode (On, Review, Off) instead of the Enabled switch.
+ * schedule; a step that is not enabled is skipped, and Review makes the chain wait for a person after it.
  */
 export function JobRow({ job, step, onOpen }: { job: JobRun; step?: number; onOpen: (jobName: string) => void }) {
   const runJob = useRunJob()
@@ -130,11 +101,20 @@ export function JobRow({ job, step, onOpen }: { job: JobRun; step?: number; onOp
         ) : (
           <span className="text-neutral-500">
             Step {step} of the chain
-            {job.notBefore && <span className="block text-xs">not before {job.notBefore} UTC</span>}
+            {job.notBefore && (
+              <span className="block text-xs">
+                not before {job.notBefore} {clockName(job)}
+              </span>
+            )}
           </span>
         )}
       </td>
-      <td className="px-3 py-2">{step === undefined ? <EnabledToggle job={job} /> : <StepModeSelect step={job} />}</td>
+      <td className="px-3 py-2">
+        <EnabledToggle job={job} />
+      </td>
+      <td className="px-3 py-2">
+        <ReviewToggle job={job} />
+      </td>
       <td className="px-3 py-2">
         <FlexToggle job={job} />
       </td>

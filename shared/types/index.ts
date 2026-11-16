@@ -51,6 +51,8 @@ export interface User {
 
 export type JobName =
   | 'daily_edition_chain'
+  | 'newsletter_chain'
+  | 'podcast_chain'
   | 'crawl_feeds'
   | 'preassess_stories'
   | 'assess_stories'

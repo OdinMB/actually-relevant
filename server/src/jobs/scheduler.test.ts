@@ -28,6 +28,8 @@ vi.mock('node-cron', () => ({
 const mockNotify = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const mockRunCrawlFeeds = vi.hoisted(() => vi.fn())
 const mockResumeHeldChains = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const mockJobTimeZone = vi.hoisted(() => vi.fn((_jobName: string): string | null => null))
+vi.mock('./jobTimeZones.js', () => ({ jobTimeZone: mockJobTimeZone }))
 const mockRunDailyEdition = vi.hoisted(() => vi.fn())
 const mockSweepInterruptedRuns = vi.hoisted(() => vi.fn())
 
@@ -113,6 +115,7 @@ describe('scheduler', () => {
     mockRunCrawlFeeds.mockReset().mockResolvedValue(undefined)
     mockRunDailyEdition.mockReset().mockResolvedValue(undefined)
     mockSweepInterruptedRuns.mockReset().mockResolvedValue([])
+    mockJobTimeZone.mockReset().mockReturnValue(null)
     config.scheduler.enabled = true
     stopScheduler()
     runningJobs.clear()
@@ -476,17 +479,14 @@ describe('scheduler', () => {
     })
 
     it("schedules a job with a fixed time zone in that zone, and every other job in the server's own", async () => {
-      mockPrisma.jobRun.findMany.mockResolvedValue([
-        enabledCrawlJob,
-        { ...enabledCrawlJob, jobName: 'publish_podcast', cronExpression: '0 7 * * 6' },
-        { ...enabledCrawlJob, jobName: 'publish_uplifting_podcast', cronExpression: '5 7 * * 6' },
-      ])
+      // The podcast's publish jobs, the zoned ones, are chain steps now; any job with a zone is scheduled in it
+      mockJobTimeZone.mockImplementation((jobName: string) => (jobName === 'cleanup_old_stories' ? 'Europe/Berlin' : null))
+      mockPrisma.jobRun.findMany.mockResolvedValue([enabledCrawlJob, { ...enabledCrawlJob, jobName: 'cleanup_old_stories', cronExpression: '0 3 1 * *' }])
 
       await initScheduler()
 
       expect(mockSchedule).toHaveBeenCalledWith('0 */6 * * *', expect.any(Function))
-      expect(mockSchedule).toHaveBeenCalledWith('0 7 * * 6', expect.any(Function), { timezone: 'Europe/Berlin' })
-      expect(mockSchedule).toHaveBeenCalledWith('5 7 * * 6', expect.any(Function), { timezone: 'Europe/Berlin' })
+      expect(mockSchedule).toHaveBeenCalledWith('0 3 1 * *', expect.any(Function), { timezone: 'Europe/Berlin' })
     })
 
     it('skips disabled jobs', async () => {

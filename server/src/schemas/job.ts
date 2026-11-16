@@ -13,8 +13,12 @@ export const updateJobSchema = z.object({
   flex: z.boolean().optional(),
   /** A chain's step: the chain waits for a person after it. */
   pauseForReview: z.boolean().optional(),
-  /** A chain's step: the chain holds before it until this time comes round after the run's start. */
-  notBefore: clockTime.optional(),
+  /** A chain's step: the chain holds before it until this time ("HH:MM" or "Sat 07:00") comes round after the run's start. */
+  notBefore: z
+    .string()
+    .regex(/^(?:(Sun|Mon|Tue|Wed|Thu|Fri|Sat) )?([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:MM, or a weekday and HH:MM such as "Sat 07:00"')
+    .nullable()
+    .optional(),
   /** A chain: calls go at standard price from this time on. */
   flexUntil: clockTime.optional(),
   /** A chain: a step working through items starts no new one from this time on. */

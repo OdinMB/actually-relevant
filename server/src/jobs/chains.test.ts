@@ -40,7 +40,7 @@ vi.mock('./handlers.js', () => ({
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 
 const { runChain, startStep, canContinue, holdUntil, resumeHeldChains, clearHeldChains } = await import('./chains.js')
-const { nextClockTime, chainOf, CHAINS } = await vi.importActual<typeof import('./chainDefinitions.js')>('./chainDefinitions.js')
+const { nextClockTime, nextStepTime, chainOf, CHAINS } = await vi.importActual<typeof import('./chainDefinitions.js')>('./chainDefinitions.js')
 const { config } = await import('../config.js')
 
 const STEPS = ['select_stories', 'research_stories', 'publish_stories']
@@ -216,6 +216,17 @@ describe('chains', () => {
       expect(mockRunJob).not.toHaveBeenCalled()
     })
 
+    it('holds until a weekday and time on the step’s own clock, summer and winter time alike', () => {
+      const at = (iso: string) => new Date(iso)
+      // Friday 02:00 UTC start; Saturday 07:00 in Berlin is 06:00 UTC in winter, 05:00 UTC in summer
+      expect(holdUntil('Sat 07:00', at('2026-11-20T02:00:00Z'), at('2026-11-20T02:30:00Z'), 'Europe/Berlin')).toEqual(at('2026-11-21T06:00:00Z'))
+      expect(holdUntil('Sat 07:00', at('2026-07-03T02:00:00Z'), at('2026-07-03T02:30:00Z'), 'Europe/Berlin')).toEqual(at('2026-07-04T05:00:00Z'))
+      // Reached on the Saturday after the time: runs at once
+      expect(holdUntil('Sat 07:00', at('2026-11-20T02:00:00Z'), at('2026-11-21T08:00:00Z'), 'Europe/Berlin')).toBeNull()
+      expect(nextStepTime('Mon 09:15', at('2026-11-16T09:15:00Z'), 'UTC')).toEqual(at('2026-11-23T09:15:00Z'))
+      expect(nextStepTime('Sat 7:00', at('2026-11-16T09:15:00Z'), 'UTC')).toBeNull()
+    })
+
     it('counts the hold from the run’s start, so a late step never waits a whole day', () => {
       const at = (iso: string) => new Date(iso)
       expect(holdUntil('11:30', at('2026-11-16T23:00:00Z'), at('2026-11-17T02:00:00Z'))).toEqual(at('2026-11-17T11:30:00Z'))
@@ -251,7 +262,9 @@ describe('chains', () => {
       expect(chainOf('social_auto_post')).toBe('daily_edition_chain')
       // Crawling runs on its own, several times a day
       expect(chainOf('crawl_feeds')).toBeNull()
-      expect(chainOf('generate_newsletter')).toBeNull()
+      expect(chainOf('publish_uplifting_newsletter')).toBe('newsletter_chain')
+      expect(chainOf('publish_podcast')).toBe('podcast_chain')
+      expect(chainOf('cleanup_old_stories')).toBeNull()
     })
 
     it('finds the next moment at a time of day, UTC, after the start', () => {

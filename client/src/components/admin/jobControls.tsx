@@ -5,10 +5,9 @@ import { useJobChange } from '../../hooks/useJobs'
 import { Tooltip } from '../ui/Tooltip'
 
 /**
- * A time of day in UTC, or empty for none, saved when it changes: a chain's flex cut-off or deadline,
- * or a step's "not before" time.
+ * A time of day in UTC, or empty for none, saved when it changes: a chain's flex cut-off or deadline.
  */
-export function ClockTimeField({ job, field, label, help }: { job: JobRun; field: 'flexUntil' | 'deadline' | 'notBefore'; label: string; help: string }) {
+export function ClockTimeField({ job, field, label, help }: { job: JobRun; field: 'flexUntil' | 'deadline'; label: string; help: string }) {
   const change = useJobChange(job)
   const id = `${job.jobName}-${field}`
   return (
@@ -30,6 +29,63 @@ export function ClockTimeField({ job, field, label, help }: { job: JobRun; field
       />
       <p id={`${id}-help`} className="mt-0.5 max-w-[14rem] text-xs text-neutral-500">
         {help}
+      </p>
+    </div>
+  )
+}
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
+
+/** The clock a step's times are read on: its own zone's city, or UTC. */
+export const clockName = (job: Pick<JobRun, 'timeZone'>) => (job.timeZone ? (job.timeZone.split('/').pop() ?? job.timeZone).replace(/_/g, ' ') : 'UTC')
+
+/**
+ * A chain step's "not before" time: a weekday (or any day) and a time of day on the step's own clock,
+ * or none. The chain holds before the step until then. Saved when either part changes.
+ */
+export function NotBeforeField({ job }: { job: JobRun }) {
+  const change = useJobChange(job)
+  const name = jobDisplayName(job.jobName)
+  const match = /^(?:(\w{3}) )?(\d\d:\d\d)$/.exec(job.notBefore ?? '')
+  const day = match?.[1] ?? ''
+  const time = match?.[2] ?? ''
+  const save = (nextDay: string, nextTime: string) => {
+    const value = nextTime ? `${nextDay ? `${nextDay} ` : ''}${nextTime}` : null
+    if (value !== job.notBefore) change.save({ notBefore: value }, `${name}: ${value ? `not before ${value}` : 'no hold'}`)
+  }
+  const id = `${job.jobName}-notBefore`
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-neutral-700 mb-1">
+        Not before <span className="font-normal text-neutral-400">({clockName(job)})</span>
+      </label>
+      <div className="flex gap-2">
+        <select
+          aria-label={`Day for ${name}`}
+          value={day}
+          disabled={!time}
+          onChange={e => save(e.target.value, time)}
+          className="rounded-md border border-neutral-300 bg-white py-1 pl-2 pr-7 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        >
+          <option value="">Any day</option>
+          {WEEKDAYS.map(d => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <input
+          id={id}
+          type="time"
+          defaultValue={time}
+          key={time}
+          aria-describedby={`${id}-help`}
+          onBlur={e => save(day, e.target.value)}
+          className="rounded-md border border-neutral-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        />
+      </div>
+      <p id={`${id}-help`} className="mt-1 text-xs text-neutral-500">
+        The chain waits before this step until this time comes round after the chain starts. Empty to run straight on.
       </p>
     </div>
   )
@@ -69,6 +125,22 @@ export function EnabledToggle({ job }: { job: JobRun }) {
       on={job.enabled}
       label={`${job.enabled ? 'Disable' : 'Enable'} ${name}`}
       onToggle={() => change.save({ enabled: !job.enabled }, `${name} ${!job.enabled ? 'enabled' : 'disabled'}`)}
+    />
+  )
+}
+
+/** A chain step's Review switch: after the step, the chain waits for a person; a dash for other jobs. */
+export function ReviewToggle({ job }: { job: JobRun }) {
+  const change = useJobChange(job)
+  const name = jobDisplayName(job.jobName)
+  if (!job.chain) return <span className="text-neutral-400">—</span>
+  return (
+    <Switch
+      on={job.pauseForReview}
+      label={`${job.pauseForReview ? 'Stop waiting for review after' : 'Wait for review after'} ${name}`}
+      onToggle={() =>
+        change.save({ pauseForReview: !job.pauseForReview }, `${name}: ${!job.pauseForReview ? 'the chain waits for review after it' : 'no review'}`)
+      }
     />
   )
 }

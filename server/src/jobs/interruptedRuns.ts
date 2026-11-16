@@ -27,8 +27,11 @@ export const RESUMABLE_JOBS: ReadonlySet<string> = new Set([
   'select_stories',
   'research_stories',
   'publish_stories',
-  // A chain resumes from the step it was cut off in (chains.ts), and each of its steps is resumable
+  // A chain resumes from the step it was cut off in when that step is resumable, else after it, so a
+  // cut-off send, post or publish is never repeated (chains.ts startStep)
   'daily_edition_chain',
+  'newsletter_chain',
+  'podcast_chain',
 ])
 
 // PostgreSQL format() templates (jobLease.ts): the one %s is filled from the row

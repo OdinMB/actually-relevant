@@ -46,19 +46,24 @@ describe('ChainCard', () => {
     mockApi.list.mockResolvedValue([])
   })
 
-  it('lists the steps in order, each with its mode, and Flex only where a step makes AI calls', () => {
+  it('lists the steps in order, each with its Enabled and Review switches, and Flex only where a step makes AI calls', () => {
     renderCard()
-    expect(screen.getAllByRole('combobox', { name: /^Mode of / }).map(select => (select as HTMLSelectElement).value)).toEqual(['on', 'review', 'off'])
+    const checked = (pattern: RegExp) => screen.getAllByRole('switch', { name: pattern }).map(s => s.getAttribute('aria-checked'))
+    // The chain's own switch, then its three steps
+    expect(checked(/^(Enable|Disable) /)).toEqual(['true', 'true', 'true', 'false'])
+    expect(checked(/review after/)).toEqual(['false', 'true', 'false'])
     expect(screen.getByRole('switch', { name: 'Use flex processing for Select Stories' })).toBeInTheDocument()
     expect(screen.queryByRole('switch', { name: /flex processing for Publish Stories/ })).not.toBeInTheDocument()
     expect(screen.getByLabelText(/Flex until/)).toHaveValue('03:30')
     expect(screen.getByLabelText(/Done by/)).toHaveValue('05:00')
   })
 
-  it("saves a step's mode as its two switches", async () => {
+  it("saves a step's Review and Enabled switches", async () => {
     renderCard()
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Mode of Publish Stories' }), 'review')
-    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('publish_stories', { enabled: true, pauseForReview: true }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Wait for review after Publish Stories' }))
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('publish_stories', { pauseForReview: true }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Enable Publish Stories' }))
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('publish_stories', { enabled: true }))
   })
 
   it('saves a changed clock time, and an emptied one as none', async () => {

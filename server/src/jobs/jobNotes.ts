@@ -81,6 +81,12 @@ const NOTES: Readonly<Record<string, () => string>> = {
     "Assesses the day's crawled stories, selects, researches and publishes the best of them, then posts one to social media, in that order, so stories go out as soon as research is done instead of at a fixed time. " +
     `${CHAIN_RULES} A step with a "not before" time holds the chain until then (the social post waits for the morning), and you can run it sooner from here.` +
     'From its flex cut-off on, every call goes at standard price; from its deadline on, research starts no other story, so publishing is never held up for long.',
+  newsletter_chain: () =>
+    `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
+    'A step whose run was cut off by a restart is not run again, so no issue goes out twice.',
+  podcast_chain: () =>
+    `Each Friday slot builds or resumes this week's episode of each show, then the chain holds the two publish steps until Saturday 07:00 in Berlin, when they publish what is ready. ${CHAIN_RULES} ` +
+    'Each Friday slot starts from the first step again, so a slot that fails is retried by the next.',
   crawl_feeds: () =>
     'Reads each active feed whose own crawl interval has passed and saves its new articles as stories. ' +
     'Running this job more often never crawls a feed before its interval is up. ' +

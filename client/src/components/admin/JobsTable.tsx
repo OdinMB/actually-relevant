@@ -3,7 +3,7 @@ import type { JobRun } from '@shared/types'
 import { Button } from '../ui/Button'
 import { jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
-import { ClockTimeField, EnabledToggle, FlexToggle, LastRun } from './jobControls'
+import { EnabledToggle, FlexToggle, LastRun, NotBeforeField, ReviewToggle } from './jobControls'
 import { JobRow, JobTable } from './jobTable'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
@@ -23,11 +23,17 @@ export function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => voi
           <JobStatusBadge job={job} />
         </div>
 
-        {/* Enabled toggle; a chain's step has its mode on its chain's card instead */}
-        {!job.chain && (
+        {/* Enabled; a chain's step that is not enabled is skipped */}
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 mb-1">Enabled</label>
+          <EnabledToggle job={job} />
+        </div>
+
+        {job.chain && (
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">Enabled</label>
-            <EnabledToggle job={job} />
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Review</label>
+            <ReviewToggle job={job} />
+            <p className="mt-1 text-xs text-neutral-500">After this step, the chain waits until someone continues it on this page.</p>
           </div>
         )}
 
@@ -41,12 +47,7 @@ export function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => voi
 
         {/* Schedule (opens in edit mode directly); a chain's step runs when its chain reaches it, held until its time if it has one */}
         {job.chain ? (
-          <ClockTimeField
-            job={job}
-            field="notBefore"
-            label="Not before"
-            help="The chain waits here until this time after it starts. Empty to run straight on."
-          />
+          <NotBeforeField job={job} />
         ) : (
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">Schedule</label>

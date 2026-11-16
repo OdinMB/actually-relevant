@@ -35,15 +35,3 @@ export function usageDetails(usage: JobRunUsage): string {
   if (usage.unpricedCalls > 0) parts.push(`${usage.unpricedCalls.toLocaleString('en-US')} without a known price, not counted`)
   return parts.join(', ')
 }
-
-/** A chain step's mode, as the Jobs page offers it: Off, On, or Review (runs, then the chain waits). */
-export type StepMode = 'on' | 'off' | 'review'
-
-export function stepMode(job: Pick<JobRun, 'enabled' | 'pauseForReview'>): StepMode {
-  if (!job.enabled) return 'off'
-  return job.pauseForReview ? 'review' : 'on'
-}
-
-export function stepModeUpdate(mode: StepMode): Pick<JobRun, 'enabled' | 'pauseForReview'> {
-  return { enabled: mode !== 'off', pauseForReview: mode === 'review' }
-}

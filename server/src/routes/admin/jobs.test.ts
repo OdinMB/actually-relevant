@@ -138,7 +138,7 @@ describe('Admin Jobs API', () => {
 
     it.each([
       ['a schedule for a chain step', 'preassess_stories', { cronExpression: '0 1 * * *' }, 'no schedule of its own'],
-      ['a review pause outside a chain', 'generate_newsletter', { pauseForReview: true }, 'only a step of a chain'],
+      ['a review pause outside a chain', 'cleanup_old_stories', { pauseForReview: true }, 'only a step of a chain'],
       ['a hold time outside a chain', 'crawl_feeds', { notBefore: '11:30' }, 'only a step of a chain'],
       ['a deadline on a job that is not a chain', 'research_stories', { deadline: '05:00' }, 'only a chain'],
     ])('refuses %s and saves nothing', async (_what, jobName, body, message) => {

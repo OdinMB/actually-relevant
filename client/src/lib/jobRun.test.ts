@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { JobRunUsage } from '@shared/types'
-import { formatDuration, formatUsd, lastRunDurationMs, stepMode, stepModeUpdate, usageDetails } from './jobRun'
+import { formatDuration, formatUsd, lastRunDurationMs, usageDetails } from './jobRun'
 
 const usage = (overrides: Partial<JobRunUsage> = {}): JobRunUsage => ({
   calls: 0,
@@ -38,10 +38,5 @@ describe('job run display', () => {
     expect(usageDetails(usage({ calls: 40, flexCalls: 38, flexFallbacks: 2, costUsd: 0.6, standardCostUsd: 1.1, otherUsd: 0.1, unpricedCalls: 1 }))).toBe(
       '40 AI calls, 38 at flex price, 2 sent at standard price because flex was busy, $1.10 at standard price, $0.10 of it for web searches, 1 without a known price, not counted',
     )
-  })
-
-  it('maps a step mode to its switches and back', () => {
-    for (const mode of ['on', 'off', 'review'] as const) expect(stepMode(stepModeUpdate(mode))).toBe(mode)
-    expect(stepMode({ enabled: false, pauseForReview: true })).toBe('off')
   })
 })

@@ -49,10 +49,10 @@ describe('interrupted runs', () => {
     })
 
     it('records the runs whose process died first, and alerts each with its reason, resumed or not', async () => {
-      mockLease.recordAbandonedRuns.mockResolvedValue(['crawl_feeds', 'publish_newsletter'])
+      mockLease.recordAbandonedRuns.mockResolvedValue(['crawl_feeds', 'send_queued_confirmations'])
       mockLease.interruptedJobRuns.mockResolvedValue([
         interrupted('crawl_feeds', 1, 'Interrupted: crawl died'),
-        interrupted('publish_newsletter', 1, 'Interrupted: send died'),
+        interrupted('send_queued_confirmations', 1, 'Interrupted: send died'),
       ])
 
       expect(await sweepInterruptedRuns(everyJobScheduled)).toEqual(['crawl_feeds'])
@@ -60,8 +60,8 @@ describe('interrupted runs', () => {
       expect(mockLease.recordAbandonedRuns.mock.invocationCallOrder[0]).toBeLessThan(mockLease.interruptedJobRuns.mock.invocationCallOrder[0]!)
       expect(mockNotify).toHaveBeenCalledTimes(2)
       expect(mockNotify).toHaveBeenCalledWith(noticeFor('crawl_feeds', expect.stringContaining('Interrupted: crawl died')))
-      expect(mockNotify).toHaveBeenCalledWith(noticeFor('publish_newsletter', expect.stringContaining('Interrupted: send died')))
-      expect(mockLease.clearInterruptedRuns).toHaveBeenCalledWith('publish_newsletter')
+      expect(mockNotify).toHaveBeenCalledWith(noticeFor('send_queued_confirmations', expect.stringContaining('Interrupted: send died')))
+      expect(mockLease.clearInterruptedRuns).toHaveBeenCalledWith('send_queued_confirmations')
       expect(mockLease.clearInterruptedRuns).toHaveBeenCalledTimes(1)
     })
 
