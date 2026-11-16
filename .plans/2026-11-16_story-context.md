@@ -12,7 +12,7 @@ Naming: a **box** is the stored record and a **card** is how the page shows it.
 
 ## For Odin
 
-Items 1 and 2 were decided on 16 Nov; 3 to 5 and the methodology text are still Odin's calls, because readers would notice them or they commit money. Everything else in this plan is decided. The plan builds each recommendation as written, and if Odin chooses differently, only the part named in the item changes.
+Items 1 to 3 were decided on 16 Nov; 4, 5 and the methodology text are still Odin's calls, because readers would notice them or they commit money. Everything else in this plan is decided. The plan builds each recommendation as written, and if Odin chooses differently, only the part named in the item changes.
 
 1. **How the context sits on the story page. Decided (Odin, 16 Nov).** Mockups on the live Indonesia story, in `mockups/`: `context-split-margin.png` (desktop), `context-split-phone.png` (phone, closed and tapped) and `context-split-phone-full.png`.
    - **The story stays complete without the cards.** No card changes the story's text, "Why This Matters" or "Caveats", and card sentences never restate them (write step, rule list).
@@ -20,7 +20,7 @@ Items 1 and 2 were decided on 16 Nov; 3 to 5 and the methodology text are still 
      - **Notes beside the text:** up to 2 beside story paragraphs and up to 2 beside "Why This Matters" points, at most one per paragraph or point. A note is the full card.
      - **The rest in a section** after Caveats, before Sources, under the page's own ruled heading, "More context", with nothing under the heading but the cards ("show, don't tell"). The "In numbers" card always goes here.
      - **Desktop: side notes in the right margin**, level with their paragraph, so the text column runs on uninterrupted. When a story has notes, the column moves left to make room. Below about 1,100 pixels of width the notes sit inside the column, after their paragraph. Section cards sit three a row.
-     - **Phones: one-line notes** under their paragraph or point: an icon, the kicker and a teaser such as "The rainy season, 20–30 days late". A tap brings the full card up from the bottom over the page, and the page stays where it was. The section uses the same one-line notes, so it takes a few lines.
+     - **Phones: one-line notes** under their paragraph or point: an icon, the kicker and a teaser such as "The rainy season, 20–30 days late". A note under a "Why This Matters" point is indented to line up with the point's text, not its number (Odin, 16 Nov). A tap brings the full card up from the bottom over the page, and the page stays where it was. The section uses the same one-line notes, so it takes a few lines.
      - **No AI badge or label on notes, cards or the section.** The story's own "Researched and written by AI" line at the top covers the page.
    - **How a card finds its place** (`STORY_CONTEXT_PLACEMENT`, a server setting read when a page is served, so a change applies to every story at once):
      - `model`, the default: the write call names each card's place (a paragraph, a point, or the section) in the same call, at no extra cost, and it is stored with the card. Code applies the limits, and notes over them go to the section in card order. The eval judges whether each note adds to the paragraph or point beside it; if that falls short of its bar, the step goes live with `section` until it doesn't.
@@ -41,21 +41,28 @@ Items 1 and 2 were decided on 16 Nov; 3 to 5 and the methodology text are still 
    - **Considered and set aside:** notes inside the text column on desktop (`context-split-inline.png`), one block without notes (`context-place-*.png`), and full cards on phones instead of one-line notes.
 2. **The AI disclosure. Decided (Odin, 16 Nov): no new visible label.** The story's existing "Researched and written by AI" line covers the cards, so `aiDisclosureCopy.ts` gains nothing. The machine-readable markers stay: `data-ai-generated="context"` on each note and the section, and the route's `aiGenerated` field.
    - **Still open: the methodology text.** Recommended as a paragraph in the existing researched-stories section, which the "Researched and written" link already opens: "Many stories carry context cards: how big the development is compared with what came before, why it is happening now, who it reaches, what is being done and what comes next. An AI model reads the sources our research found and, where something a reader needs is missing, searches for up to three more. Every number on a card names its source, and when sources disagree we show both. A separate AI check compares each fact with the sentence it came from and drops what that sentence does not say. Each card gives the date its facts are from; we don't update cards later."
-3. **The default monthly cap: $20.**
-   - Expected spend is about $6–10 a month at today's roughly 9 stories a day. That is about $0.03 a story, two thirds of it web search. A busy month reaches about $12.
-   - At the cap the step stops for the rest of the month, and new stories go out without context until the 1st. One notice is recorded when that happens.
-   - You can change the cap on the Jobs page.
-4. **What happens when the step fails a lot.**
-   - **Recommended** (coordinating session, following your wish for the fully automated version): when more than 20% of the items a run checked fail their checks, the step pauses for the rest of that run and records a notice, and tries again by itself at the next night's run. After 3 paused runs in a row it stays off until you lift the pause on the Jobs page, with a notice saying so. A broken prompt or model then costs at most three nights of one run each (well under $2), and a one-night problem fixes itself.
-   - **Alternative:** every pause waits for you to lift it. Safer against a slow, silent drift in spend, but the module then depends on you after any bad night, which goes against running with no person in the loop.
-5. **Taking a wrong card down.**
-   - Today there is no way to do it. D3 lets a person only switch a step off or set it to review. Switching the step off keeps the cards already shown, as research's switch does.
-   - **Recommended:** one admin action on the story's edit form, "Hide context" (with "Show context"). It hides that story's cards without deleting them.
-   - Without it, a wrong number a reader reports stays on the page until someone edits the database.
+3. **Spending: one overview of every job, with warning levels and no caps. Decided (Odin, 16 Nov).** Mockup: `mockups/admin-dashboard-spending.png`.
+   - The Dashboard gets a "Spending" table: every job that spends money, grouped as on the Jobs page, with this month's AI and web search spend, the month at this pace, and the two months before. Research started by an editor has its own row. The earlier months fill in from the month this ships; there is no history to backfill.
+   - A warning level can be set for each job and for the total, in the table. Passing it, or heading past it at this pace from the 8th of the month on, records one notice per job and month. Story context starts at $20; the other levels start empty.
+   - Nothing stops on cost. OpenAI's project limits cover AI spend. They don't cover web search: research keeps its own monthly cap as it is, and story context's runs are bounded by their size (at most 20 stories at most $0.10 each, so at most about $2 a night; a usual night is about $0.30).
+   - Expected spend for story context: about $6–10 a month at today's roughly 9 stories a day, about $12 in a busy month. That is about $0.03 a story, two thirds of it web search.
+   - Not in the table: podcast voices, which the ElevenLabs plan covers and the podcast's character cap limits (the table shows the characters used as a line), and AI actions started from the admin, such as bulk re-assessing, which run outside any job and are not recorded today.
+4. **When the step fails a lot: a notice, no pause.** Recommended on 16 Nov, answering Odin's question of what a pause would give if the step retries the next night anyway.
+   - When more than 20% of the items a night's run checked fail their checks (with at least 20 checked), the Jobs page shows a warning line under the step and one notice is recorded. A repeat on a later night reopens that notice and counts it. The step runs the next night as usual, and you switch it off on the Jobs page if it keeps happening. Each story's admin section shows what was dropped and why (item 5).
+   - **Why no pause:** a failed item is dropped by the checks, so readers never see it, and the step runs every night anyway. A pause would only save the rest of one night's run, about $0.30. What it would also buy: that night's remaining stories would wait for the next night instead of being settled with fewer cards, which is a handful of stories. A step that keeps failing costs at most about $0.30 a night until you act, and the $20 warning level catches anything bigger.
+   - **Alternative:** the earlier design, a pause for the rest of the run and a hold after 3 bad nights in a row with "Lift pause" on the Jobs page. It adds three columns, a guard in the chain runner and a button for about $0.30 a night.
+5. **Managing a story's context in the admin.** Mockup: `mockups/admin-story-context.png`. A "Context" section on the story's edit form, after Research:
+   - every card with its kicker, heading, phone line, sources and where it sits;
+   - per card, "Hide" and "Show", and where it sits: beside another paragraph or point, or under More context. A moved card keeps its place whatever the placement mode, and the limits still apply;
+   - "Hide all context", which asks first;
+   - "What the run did": per slot whether it was found, searched for or not needed, the searches with cache hits, each dropped fact with the check's reason, and the cost.
+   - **Recommended:** all of it. The run view is where the failure notice of item 4 leads, and it needs no new records: the run rows already hold it. Nothing is ever deleted; hiding sets a card's status.
+   - **Alternative:** only "Hide all context", the earlier recommendation. Less work, but one wrong number takes down all of a story's context, and checking a bad night means reading the database.
+   - Without either, a wrong number a reader reports stays on the page until someone edits the database. D3 lets a person only switch a step off or set it to review, and switching the step off keeps the cards already shown, as research's switch does.
 
 ## Problem
 
-Research already gathers the facts that would let a reader size a story: the record to compare with, the causes, who is affected. They sit in prose or in the run's stored facts, and nothing looks for the context research did not find. Readers get no comparisons, no figures with their sources and no charts. The fix has to keep the relevance bar where it is, run with no person in the loop, never hold up publishing, and stop itself on cost or on a bad day. The chain runner cannot do the last part yet: it has no per-step monthly cap and no pause on a high failure share.
+Research already gathers the facts that would let a reader size a story: the record to compare with, the causes, who is affected. They sit in prose or in the run's stored facts, and nothing looks for the context research did not find. Readers get no comparisons, no figures with their sources and no charts. The fix has to keep the relevance bar where it is, run with no person in the loop, never hold up publishing, and make its cost and its bad nights visible. Nothing does the last part yet: no page shows a job's spend over a month, nothing warns when spend climbs, and no notice says that a step's checks failed far more than usual.
 
 ## Approach
 
@@ -63,7 +70,7 @@ Research already gathers the facts that would let a reader size a story: the rec
 
 There is a new job, `build_story_context` ("Story context"). It is the **fourth step of `daily_edition_chain`, after `publish_stories`**: select, research, publish, context.
 
-- It is seeded **disabled**, with a monthly cap of $20 (For Odin 3).
+- It is seeded **disabled**, with a spending warning level of $20 (For Odin 3).
 - Each run takes the published stories it still owes, oldest published first:
   - published within the last `lookbackDays` (3);
   - with a completed research run whose sources hold facts;
@@ -71,14 +78,11 @@ There is a new job, `build_story_context` ("Story context"). It is the **fourth 
 - It takes at most `perRun` (20) stories, `concurrency` (3) at a time.
 - A story is settled by its first context run, whatever that run's outcome. A run cut off by a restart is marked failed after `staleRunMinutes` (120) and settles its story, as research's runs do.
 
-**Why after publishing.** The roadmap says "right after research", and the chain's deadline then would have to decide between publishing late and publishing without context. Placed after publish, the context step can never delay publishing and can never stop it. That matters because a failed step stops its chain, so a new module that throws before publish would hold the day's edition. The cost is that a story is live for a few minutes, at about 01:00 UTC, before its cards appear. Stories the run doesn't reach are filled in at the next run while they are still within the lookback:
-- stories past the per-run limit;
-- stories left when the month's budget runs out;
-- stories missed while the step was paused.
+**Why after publishing.** The roadmap says "right after research", and the chain's deadline then would have to decide between publishing late and publishing without context. Placed after publish, the context step can never delay publishing and can never stop it. That matters because a failed step stops its chain, so a new module that throws before publish would hold the day's edition. The cost is that a story is live for a few minutes, at about 01:00 UTC, before its cards appear. Stories past the per-run limit, and stories published while the step was off, are filled in at the next run while they are still within the lookback.
 
 **Alternatives rejected:**
 - Between research and publish, stopping at the deadline. This holds publishing by up to one story's run and makes a top-level failure stop the edition.
-- A separate schedule outside the chain. This breaks the roadmap's rule that each module is a step with its own switch, cap and cost line.
+- A separate schedule outside the chain. This breaks the roadmap's rule that each module is a step with its own switch and its own cost line.
 
 The step keeps its own Flex switch (`MODEL_JOBS`). Since it usually runs before the chain's 03:30 flex cut-off, it runs at flex price.
 
@@ -93,22 +97,22 @@ The step keeps its own Flex switch (`MODEL_JOBS`). Since it usually runs before 
 | # | Step | Tier | What it does | Checks |
 |---|---|---|---|---|
 | 1 | Load (I/O, before the pipeline) | — | Loads the story (title, summary, the researched paragraphs where applied, Why This Matters, Caveats, publication day, issue) and its newest completed research run's sources: `S0` and the sources found by search, with their facts, outlet, title, date and kind. It also loads the **reusable facts**: the supported, non-demoted context facts of the earlier stories that research linked in `run.earlier`, kept only if still current on this story's date (see Validity below). | Our own earlier stories' facts (`E…`) are never loaded as facts: they are our text, and a judgment never becomes evidence. |
-| 2 | Structure (pass 1) | small | One call reads every research fact (statement, supporting sentence, `measures`, and its source's outlet, date and kind) and returns the structured fields of each fact by its id (see `structuredFactFields` under "Records"). | Code takes answers only for the ids it asked for. A fact left out is not checked, and counts as failed for the pause. |
+| 2 | Structure (pass 1) | small | One call reads every research fact (statement, supporting sentence, `measures`, and its source's outlet, date and kind) and returns the structured fields of each fact by its id (see `structuredFactFields` under "Records"). | Code takes answers only for the ids it asked for. A fact left out is not checked, and counts as failed in the failure share. |
 | 3 | Gap list | small | One call sees the story, the fixed checklist (`compared`, `why_now`, `build_up`, `who_affected`, `response`, `next`, `key_term`, each with its definition) and every available fact, marked current or expired. It returns, per slot, whether a reader needs it and whether the facts cover it (yes, partly, no). It also returns up to 3 searches in priority order, each with its slot, what is wanted (one line), a query of 4–10 words, and whether it needs data from the last 30 days. | Code runs at most `maxSearches` (3) searches. With nothing needed and uncovered, there is no search: the story's context is still valid, and pass 2 is skipped. |
 | 4 | Search (pass 2) | — | Each query goes to Tavily at **basic** depth, topic `general`, 5 results with raw text. The end date is the story's publication day, and the start date is 30 days before it only when recent data is wanted. A query already asked within `searchReuseDays` (7) is answered from `context_search_cache` at no credit cost. | Same query means the normalized text, depth, topic and the recent flag. |
 | 5 | Filter (code) | — | Publishers' opt-outs (`dropOptedOut` with `researchSourcePolicy`, ADR-0056), research's `BLOCKED_DOMAINS`, any URL or domain already among the story's sources, at most 2 sources per query and `maxNewSources` (5) in all. The text for extraction is chosen as research chooses it: the passages, or the raw text when the passages are short, cut to 4,000 characters. | — |
 | 6 | Extract (pass 2) | small | One call per kept source, in parallel. It extracts at most 5 facts that answer the wanted items, each with a statement in its own words, the supporting sentence copied verbatim, the structured fields and the slot it answers. It also returns `usable`, the source's kind and its outlet. | Every string is XML-unescaped, as research does. |
 | 7 | Fact code checks | — | A fact must name a source we fetched; otherwise it is a structural failure and is dropped. Hints: numbers in the rendered fact that the sentence lacks (`findUnsupportedNumbers`, ADR-0057). Code also records `supportFound` (the sentence found word for word in the fetched text, `supportFound` in `researchChecks.ts`). | Nothing but structure fails here. |
-| 8 | Fact check | small | Research's own `buildFactCheckPrompt` and `factCheckSchema`, unchanged, in calls of at most 25 items. Each item's text is the fact rendered by `renderFact`: value with its qualifier, unit, what is counted, place, "as of", "according to", and "estimate" where it applies. Its evidence is the supporting sentence (for a pass-2 fact, the passage: the sentence with one sentence either side) plus the source's date fact (`publishedFact`). Number hints go in as research gives them. Lines are empty, since copying doesn't apply to facts. | A rejected fact is stored with verdict `rejected` and its problem, and is never offered or shown. A fact the answer leaves out is `unjudged`, treated the same way, and counts as failed for the pause. |
+| 8 | Fact check | small | Research's own `buildFactCheckPrompt` and `factCheckSchema`, unchanged, in calls of at most 25 items. Each item's text is the fact rendered by `renderFact`: value with its qualifier, unit, what is counted, place, "as of", "according to", and "estimate" where it applies. Its evidence is the supporting sentence (for a pass-2 fact, the passage: the sentence with one sentence either side) plus the source's date fact (`publishedFact`). Number hints go in as research gives them. Lines are empty, since copying doesn't apply to facts. | A rejected fact is stored with verdict `rejected` and its problem, and is never offered or shown. A fact the answer leaves out is `unjudged`, treated the same way, and counts as failed in the failure share. |
 | 9 | Write | medium | One call writes the boxes from the supported facts. The figures box (`figures`, tiles only) comes first. After it come at most 6 context boxes, each with a slot, a heading of at most 8 words, 0–3 sentences each citing fact ids, and at most one visual: `tiles` (1–4, each a label and fact ids), `bars` or `line` (a measure, a unit, and points, each a label and a fact id), plus `apart` points for a different measure shown beside a comparison, never in it. Each box also names its `place`: the story paragraph (`P1`…) or Why This Matters point (`W1`…) it adds most to, or `section`, and a `teaser` of at most 8 words for the phone's one-line note. The prompt numbers the paragraphs and points for this. The figures box's place is always `section`. | The rules are in the prompt, with Bad/Good pairs: a box only where facts support it, nothing from general knowledge, no sentence that restates what the story's text, Why This Matters or Caveats already says (tiles and charts may show the story's own numbers; the writer sees those three texts for this), our own words, American English, no talk about the input, at most one em dash a box, and an expired fact stated only as a past value with its date. |
 | 10 | Box code checks | — | A cited id must be a supported fact; otherwise that sentence, tile or point is dropped (structural). A tile's facts must be current. `validChart` applies the chart rules (below). The copying check (`checkCopying`, a 12-word run) runs on box sentences against the sources' lines (`sourceLines`). Numbers a sentence states that its cited facts don't are passed on as hints. A `place` naming a paragraph or point that doesn't exist becomes `section`; the limits are applied when the page is served (below). | A chart that breaks a rule is not drawn. Its box keeps its sentences, and this does not count as a failure. |
 | 11 | Box check | small | Research's fact-check prompt once more, now with the sources' lines, so it judges copying as well as support. Items are each sentence, each tile ("12.5 million people under hazardous smoke across Southeast Asia") and each chart ("area burned in Indonesia, hectares: 2015, 2.6 million; 2026, 2.88 million (estimate)"), each against its cited facts. A chart's facts must all measure what the chart says. That is how "one definition" is judged: by the check, not matched in code. | A failing item is dropped. A box left with nothing in it is dropped. There are **no repair rounds**. |
 | 12 | Honest gap (code) | — | When the gap list judged `response` needed, pass 2 searched for it, and no supported fact answers it, code adds a `response` box with `gap: true` and no sentences. The page gives it fixed wording. | — |
 | 13 | Store (I/O) | — | One transaction writes every fact with its verdict, the kept boxes, and the run's result and costs. | — |
 
-**Failure share for the pause.** The step records, per story, its checked items (every fact judged, every box item judged) and its failed items (facts rejected, unjudged or left out, box items dropped by a check). Charts not drawn under the rules don't count. Technical failures of a story (a parse failure, a Tavily error) end that story's run as `failed` with what it spent. They are in the run's tally and the logs, not in the share.
+**Failure share.** The step records, per story, its checked items (every fact judged, every box item judged) and its failed items (facts rejected, unjudged or left out, box items dropped by a check). Charts not drawn under the rules don't count. Technical failures of a story (a parse failure, a Tavily error) end that story's run as `failed` with what it spent. They are in the run's tally and the logs, not in the share. The run's tally goes into its usage (`recordItems`). When more than `jobs.failureShare.share` (0.2) of at least `jobs.failureShare.minItems` (20) checked items failed, the step records a warning notice with key `step-failing:build_story_context` ("Story context: 14 of 45 checked items failed last night (usually 5 to 10%)"), linking to the Jobs page, and the Jobs page shows the same line under the step until a run stays under the share (For Odin 4). Nothing pauses.
 
-**Budget.** Before starting each story the step checks `runBudgetLeft()` (below) against `storyCeilingUsd` ($0.10). Without room it starts no other story, and the rest wait for the next run. A story's calls are fixed in number (at most 3 searches, 5 extractions and about 7 model calls), so a run can go over its room by at most what the stories already in flight spend.
+**Cost bounds.** No monthly budget stops the step (For Odin 3). A story's calls are fixed in number (at most 3 searches, 5 extractions and about 7 model calls): about $0.03 a story, and at most about $0.10 when no search comes from the cache. With at most `perRun` (20) stories, one run costs at most about $2.
 
 **Prompt version.** Each model-written record stores its model id and a prompt version. The version is the first 8 hex characters of a sha256 over the step's prompt, built from a fixed canonical input, plus its JSON schema. It is computed once at load, so a change to a template or a `.describe()` changes the version without a hand-kept number.
 
@@ -129,7 +133,7 @@ A fact without an as-of date takes its source's date. "Current" is judged on the
 
 ### Records
 
-There are four new tables plus the generic spend table under "Cap and pause". Statuses follow the roadmap's judgment record. Model confidence is not stored: self-reported confidence is uninformative, and the fact check's verdict is the signal.
+There are four new tables plus the two generic ones under "Spending overview and warnings". Statuses follow the roadmap's judgment record. Model confidence is not stored: self-reported confidence is uninformative, and the fact check's verdict is the signal.
 
 - **`context_facts`** (Fact). Columns:
   - `story_id` (cascade) and `run_id`;
@@ -140,7 +144,7 @@ There are four new tables plus the generic spend table under "Cap and pause". St
   - `model`, `prompt_version`, `created_at`.
 
   The full page text is **not** stored, only the sentence and the short passage. Research keeps no page text either, and copies of whole articles are a press-publisher-right question. The roadmap's evidence list says "its text". Module 2's reviews will read passages, not pages.
-- **`context_boxes`** (Context box). Columns: `story_id` (cascade), `run_id`, `position`, `type` (the seven slots plus `figures`), `heading`, `sentences` (jsonb `[{ text, factIds }]`), `visual` (jsonb: a validated tiles, bars or line spec, or null), `gap` (bool), `as_of` (the newest as-of of its cited facts), `place` (`P<n>`, `W<n>` or null for the section, as the write call chose it), `teaser`, `status`, `model`, `prompt_version`, `written_at`. Citations stay in jsonb. A join table for "recompute what a demoted fact touched" is module 2's call.
+- **`context_boxes`** (Context box). Columns: `story_id` (cascade), `run_id`, `position`, `type` (the seven slots plus `figures`), `heading`, `sentences` (jsonb `[{ text, factIds }]`), `visual` (jsonb: a validated tiles, bars or line spec, or null), `gap` (bool), `as_of` (the newest as-of of its cited facts), `place` (`P<n>`, `W<n>` or null for the section, as the write call chose it or an editor moved it), `place_by_editor` (bool), `teaser`, `status`, `model`, `prompt_version`, `written_at`. Citations stay in jsonb. A join table for "recompute what a demoted fact touched" is module 2's call.
 - **`story_context_runs`**, one per story attempt. Columns: `story_id` (set null), `research_run_id`, `status` (`running`, `completed`, `skipped`, `failed`), `outcome` (`built`, `none-kept`, `no-research`, `technical`), `boxes`, `cost_usd`, `model_usd`, `tavily_credits`, `result` (jsonb: the gap list, searches with cache hits, credits and kept results, filter drops, verdict tallies, box drops by cause, number hints, item tally, calls with tokens and cost), `error` (sanitized), `started_at`, `finished_at`. Model cost and Tavily credits are kept apart per story.
 - **`context_search_cache`**: `key` (sha256 of the normalized query, depth, topic and the recent flag), `query`, `results` (jsonb: URL, title, date and the chosen text of each result that passed the opt-out check), `credits`, `created_at`. Rows older than 7 days are deleted at each run's start. This is a short-lived processing copy under the text-and-data-mining terms research already works under.
 
@@ -153,7 +157,7 @@ A site route, `GET /api/stories/:slug/context`, serves the context (`services/st
 - Numbers come formatted from the server (`formatFigure`): "12.5m", "400,000+", "about 2.9m", "estimate".
 - The response is cached as the story detail is (`public, max-age=60`).
 - It carries an `aiGenerated` marker naming the box fields.
-- Each box comes with its resolved `place` (`P<n>`, `W<n>` or `section`), worked out at serve time by `placeBoxes` (pure, in `storyContextPlacement.ts`) from `STORY_CONTEXT_PLACEMENT`:
+- Each box comes with its resolved `place` (`P<n>`, `W<n>` or `section`), worked out at serve time by `placeBoxes` (pure, in `storyContextPlacement.ts`). A place an editor chose is kept in every mode; otherwise the mode from `STORY_CONTEXT_PLACEMENT` decides:
   - `model`: the stored place;
   - `random`: a draw among the paragraphs and points that cite one of the box's sources (matched by URL against the story's research sources), seeded by the story id;
   - `section`: none beside the text.
@@ -180,35 +184,37 @@ A site route, `GET /api/stories/:slug/context`, serves the context (`services/st
 - `StoryBody` takes the notes per paragraph and per Why This Matters point, and a `context` slot after Caveats, before Sources (For Odin 1).
 - A card has a kicker, a heading, its visual, sentences with citation chips, and a footer with the sources and "As of Nov 14, 2026". Every note and the section carry `data-ai-generated="context"`.
 - **Notes, desktop (`lg` and up):** the full card in the right margin, level with its paragraph or point; a later note moves down when the one above would overlap it. When the story has notes, the text column shifts left to make room. Between `md` and `lg` the card sits inside the column after its paragraph.
-- **Notes, phones (below `md`):** a one-line button (icon, kicker, teaser, chevron) under its paragraph or point. A tap opens the full card in a bottom sheet over the page. The sheet is a Headless UI `Dialog`: focus moves into it, Escape and the close button shut it, and focus returns to the button. The page doesn't scroll.
+- **Notes, phones (below `md`):** a one-line button (icon, kicker, teaser, chevron) under its paragraph or point; under a point it is indented to the point's text column, past the number. The in-column card between `md` and `lg` is indented the same way. A tap opens the full card in a bottom sheet over the page. The sheet is a Headless UI `Dialog`: focus moves into it, Escape and the close button shut it, and focus returns to the button. The page doesn't scroll.
 - **The section:** the ruled heading "More context" and then the cards, with no line between them (For Odin 1). No AI badge or label anywhere in the context: the story's "Researched and written by AI" line covers it (For Odin 2). On desktop the cards sit three a row, wider than the text column. On phones they are the same one-line buttons as the notes.
 - The honest-gap card reads "Our sources don't say what is being done about this." with dashed edges, as in the mockup. It always goes to the section.
 - A story without boxes renders exactly as today.
 
-**Admin.** "Hide context" and "Show context" on the edit form set the story's boxes to `demoted` or back to `unreviewed`, through `PUT /api/admin/stories/:id/context { hidden }` (For Odin 5).
+**Admin** (For Odin 5; mockup `admin-story-context.png`). A "Context" section on the story's edit form, after Research, read from `GET /api/admin/stories/:id/context`:
+- the summary line: when the newest run built it, how many cards sit where, how many are hidden;
+- the cards grouped by where they sit, each with kicker, heading, teaser, sources and as-of date, a place select (the story's existing paragraphs and points, and More context) and "Hide" or "Show". `PATCH /api/admin/stories/:id/context/boxes/:boxId { hidden?, place? }`: hiding sets the box to `demoted`, showing sets it back to `unreviewed`, and a place sets `place` with `place_by_editor`. A place that names no existing paragraph or point is refused (400);
+- "Hide all context" and "Show all context", with a `ConfirmDialog`: `PUT /api/admin/stories/:id/context { hidden }`;
+- "What the run did", from the newest run's `result`: per slot found, searched for or not needed, the searches with cache hits and kept sources, each dropped fact with its check's problem, and the cost split into AI and web search.
 
-### Cap and pause, generic in the chain runner
+The section is hidden while a story has no context run.
+
+### Spending overview and warnings, for every job
+
+Decided by Odin on 16 Nov in place of per-step caps (For Odin 3). This is generic and lands first, on its own.
 
 - **Monthly spend per job.** A new table, `job_month_spend` (`job_name`, `month` as the first day of the UTC month, `cost_usd` as billed, `standard_cost_usd`, `search_usd`, `search_credits`, `runs`), is upserted by `finishJobRun` from the run's usage, on success and on failure alike.
+  - AI spend is `cost_usd` minus `search_usd`. `otherUsd` in run usage is web search today (`lib/tavily.ts` is its only caller), so it is stored as `search_usd`; a later non-AI cost gets a field of its own.
   - An interrupted run's spend is lost, as its `last_run_usage` already is. That gap is bounded by one run.
-  - The cap counts billed USD, what the Jobs page shows. Research's own cap counts the standard-price upper bound and stays as it is.
-- **The cap.** `job_runs.monthly_cap_usd` (whole USD, null for none) can be set on a chain's step from the Jobs page, and the PUT refuses it on any other job.
-  - Before each step the chain runner asks `stepBlock(step)`, which answers `off`, `paused`, `capped` or nothing. Any answer skips the step as Off does today and logs the reason.
-  - `capped` records one warning notice a month: key `step-cap:<step>:<YYYY-MM>`, "Story context reached its $20 monthly cap; it is skipped until the 1st".
-  - The run scope gets `budgetUsd`, the cap minus this month's spend, read in `openRunScope`. A step that works through items calls `runBudgetLeft()` before each one, as it calls `runDeadlinePassed()`. A run by hand is bounded the same way.
-- **The pause.** A step records its item tally in its own scope (`recordItems(checked, failed)`, which does not roll up into the chain's scope). `runJob`'s success outcome now carries the run's usage.
-  - After a step succeeds, `pauseIfFailing` pauses it when `failed / checked > autoPause.failShare` (0.2) with at least `autoPause.minItems` (20) items checked.
-  - A pause sets `auto_paused_at` and `auto_pause_reason` ("41 of 180 checked items failed checks on 2026-11-20") and records a warning notice with key `step-paused:<step>`, linking to the Jobs page.
-  - A pause lasts until the step's next scheduled run, which tries again (For Odin 4). The job keeps a count of consecutive paused runs, reset by a run that stays under the share; at `autoPause.maxConsecutive` (3) the pause holds until a person lifts it, with a notice keyed `step-held:<step>`. `PUT { autoPaused: false }` clears the pause and the count, and setting `true` is refused.
-  - The pause doesn't stop the chain: later steps run.
-- **Research's publish gate.** `awaitingResearch` holds nothing while the research step is capped or paused, just as while it is off. Otherwise a cap set on research would hold stories until the next day's publish. Research's own per-story switch-off check stays on `enabled`, so verdicts already in flight are still applied.
-- **The Jobs page** shows each step's month spend against its cap, a cap field, the pause with its reason and "Lift pause", and the run's items checked and failed and its search credits in the usage hover.
-- **Usage gains:** `searchCredits` (from `lib/tavily.ts`), `itemsChecked`, `itemsFailed`.
+  - Research started by an editor runs outside any job and keeps its cost on its own rows: the overview sums `story_research_runs.cost_usd` of editor runs by month. Pipeline runs are already in the research job's spend. Research's cost is its standard-price upper bound, and its own monthly cap stays as it is.
+- **The overview.** `GET /api/admin/spending` returns, for this UTC month and the two before, each job's AI, search and total spend grouped as the Jobs page groups them, the editor-research row, the total, the month at this pace (spend × days in the month ÷ days so far), each warning level, and the podcast's TTS characters this month against `monthlyTtsCharCap`. Every job that uses models is listed, with a dash where it spent nothing. The Dashboard shows it as the "Spending" card after Unseen notices, anchored `#spending`.
+- **Warning levels.** A new table, `spend_warnings` (`scope`: a job name, `editor_research` or `all`; `level_usd`, whole USD), edited in the card's "Warn at" column through `PUT /api/admin/spending/warnings/:scope { levelUsd }` (a whole number of at least 1, or null to clear). Story context's $20 is inserted with its job row.
+  - After each `finishJobRun`, `checkSpendWarnings(jobName)` compares the job's month and the total with their levels. Passing a level, or a pace past it from day `spending.paceFromDay` (8) of the month, records one warning notice per scope and month: key `spend-warn:<scope>:<YYYY-MM>`, `reopen: false`, linking to `/admin#spending`. The same check runs when an editor's research run finishes, for its row and the total.
+  - The check runs after the finish is written; a failure is logged and never fails the run.
+- **The failure share.** Run usage gains `itemsChecked` and `itemsFailed` (`recordItems`, current scope only, so a step's tally does not roll up into its chain) and `searchCredits`. `jobNotes` gives a job's warning line its row's last usage, and the generic `failureShareWarning` shows "41 of 180 checked items failed last night" when the share passes `jobs.failureShare`. Story context is the first step to report items; later modules reuse it.
 
 **Alternatives rejected:**
-- Monthly spend in two columns on `job_runs`, reset when the month changes. This is simpler but keeps no history, and the roadmap wants each module's cost visible from its first run.
-- A per-module cap inside the context code, as research's is. That would not be generic, and every later module would build it again.
-- A pause on a rolling window across runs. A per-run share is enough at about 200 items a night and is easy to read.
+- A per-step monthly cap with an automatic pause, the earlier design. Odin sets project limits in OpenAI, so a second cap per step guards little and stops features mid-month. Web search, which OpenAI's limits don't cover, keeps research's own cap and story context's per-run bound.
+- Monthly spend in two columns on `job_runs`, reset when the month changes. Simpler, but it keeps no history, and the card shows the two months before.
+- Spend read from OpenAI's usage API. It would include runs outside the app, but it knows nothing of jobs or of Tavily.
 
 ### Cost
 
@@ -234,7 +240,7 @@ Module 1 is switched on only when all of the bars below hold on the **judged hal
 - the read-only database session;
 - production's prompts, schemas and pipeline, imported read-only;
 - call and Tavily caches;
-- `--budget`, with the $20 cap.
+- `--budget`, under the eval harness's own $20 ceiling (unrelated to the step's spending warning).
 
 | Measure | Bar (the design's first proposal; the first run measures baseline and noise) |
 |---|---|
@@ -348,48 +354,47 @@ Module 1 is switched on only when all of the bars below hold on the **judged hal
 7. **Only three visual kinds** (tiles, bars, line), drawn on the client. Rejected alternatives:
    - The thinking document's eight types: YAGNI until stories need them.
    - Vega-Lite: hard to enforce "every mark has a source".
-8. **The generic cap and pause** as described under "Cap and pause".
+8. **One spending overview with warning levels for every job, and no caps** (Odin, 16 Nov), as described under "Spending overview and warnings". A high failure share records a notice and pauses nothing (For Odin 4).
 9. **One model tier per step to start**: small, except the write at medium, as research's write. The eval moves a step up.
 10. **The write call picks each card's place; the limits and the mode apply when the page is served.** No extra call, and a change of mode or limits reaches every story at once with no rewrite. Rejected alternatives: a separate placement call per story (one more call for a choice the writer is already making), and placing by shared sources alone (free, but the second search's cards could never sit beside the text). `random` stays available as a mode, so the eval can compare it with `model`.
 
 ### ADRs to write (when the code lands)
 
 These follow the format of the existing files in `.context/decisions/` (the latest is ADR-0059). The roadmap's stubs this module is the first code for become ADRs:
-- **D3**, no person in the loop. It names the "Hide context" exception if Odin approves it.
+- **D3**, no person in the loop. It names the admin's hiding and moving of cards as the exception, if Odin approves them (For Odin 5).
 - **D4**, as an amendment to ADR-0057: its rule extended to every new step, and its hint list.
 - **D5**, one named source is enough, with the tile rule.
 - **D8**, the eval gates each launch.
 - **D9**, no images per story; charts from fixed rules.
 
-There is also one new ADR: "Story context: facts and boxes as records, the step after publishing, and a per-step monthly cap and auto-pause in the chain runner", with decisions 1, 2, 3, 5 and 8 above.
+There are also two new ADRs: "Story context: facts and boxes as records, and the step after publishing", with decisions 1, 2, 3 and 5 above, and "Spending: monthly spend per job with warning levels and notices instead of caps", with decision 8.
 
 ## Changes
 
-**Generic: step cap and pause**
+**Generic: spending overview and warnings**
 
 | File | Change |
 |------|--------|
-| `server/prisma/schema.prisma` | `JobRun`: `monthlyCapUsd Int?`, `autoPausedAt DateTime?`, `autoPauseReason String?`. New `JobMonthSpend` (`job_month_spend`, primary key `jobName` + `month`) |
-| `server/prisma/migrations/<ts>_step_cap_and_pause/` | Authored with `db:migrate:create`: the columns and the table. Delete any proposed `DROP INDEX "story_embeddings_embedding_idx"`. Nothing destructive |
-| `server/src/lib/runUsage.ts` | `RunUsage` gets `searchCredits`, `itemsChecked`, `itemsFailed`. `RunScope` gets `budgetUsd`. New `recordItems(checked, failed)` (current scope only) and `runBudgetLeft()` (Infinity without a cap). `recordOtherCost(usd, credits = 0)` also adds credits |
+| `server/prisma/schema.prisma` | New `JobMonthSpend` (`job_month_spend`, primary key `jobName` + `month`) and `SpendWarning` (`spend_warnings`, primary key `scope`) |
+| `server/prisma/migrations/<ts>_job_spending/` | Authored with `db:migrate:create`: the two tables. Delete any proposed `DROP INDEX "story_embeddings_embedding_idx"`. Nothing destructive |
+| `server/src/lib/runUsage.ts` | `RunUsage` gets `searchCredits`, `itemsChecked`, `itemsFailed`. New `recordItems(checked, failed)` (current scope only). `recordOtherCost(usd, credits = 0)` also adds credits |
 | `server/src/lib/tavily.ts` | `TavilySearch` gets optional `depth`, `topic`, `maxResults`, and `startDate` becomes optional. The defaults keep research's request body byte for byte. Credits are passed to `recordOtherCost` |
-| `server/src/jobs/jobLease.ts` | `finishJobRun`: upserts `job_month_spend` from a non-null usage, in the same statement batch |
-| `server/src/jobs/scheduler.ts` | `openRunScope` reads the cap and the month's spend into `budgetUsd`. `RunOutcome`'s success carries `usage` |
-| `server/src/jobs/stepGuards.ts` (new) | *Responsibility:* whether a chain's step may run now (off, auto-paused, over its monthly cap) and whether a finished run pauses it, with the two notices. *Exports:* `stepBlock`, `monthSpendUsd`, `autoPauseDue`, `pauseIfFailing` |
-| `server/src/jobs/chains.ts` | `runChain`: the `!stepRow.enabled` branch becomes `stepBlock`, and after a succeeded step, `pauseIfFailing(step, outcome.usage)`. `runStep` passes the usage through |
-| `server/src/config.ts` | `chains.autoPause: { failShare: 0.2, minItems: 20 }` (no env override) |
-| `server/src/services/job.ts` | `getJobs` adds `monthSpendUsd` (one query for the current UTC month). `updateJob` accepts `monthlyCapUsd` and the lift (clears both pause columns) |
-| `server/src/schemas/job.ts`, `server/src/routes/admin/jobs.ts` | `monthlyCapUsd` (whole number at least 0, or null) and `autoPaused: false`, both only on a chain's step (400 otherwise). `autoPaused: true` is refused |
-| `server/src/services/researchQueue.ts` | `awaitingResearch` holds nothing while `stepBlock('research_stories')` answers `capped` or `paused` |
-| `shared/types/index.ts` | `JobRun`: `monthlyCapUsd`, `monthSpendUsd`, `autoPausedAt`, `autoPauseReason`. `JobRunUsage`: the three new fields |
-| `client/src/components/admin/jobControls.tsx`, `ChainCard.tsx`, `jobTable.tsx`, `client/src/hooks/useJobs.ts` | A step's cap field and month spend, the pause line with "Lift pause", and the items and credits in the usage hover |
+| `server/src/jobs/jobLease.ts` | `finishJobRun`: upserts `job_month_spend` from a non-null usage, in the same statement batch, then calls `checkSpendWarnings` outside it (a failure is logged, never thrown) |
+| `server/src/services/spending.ts` (new) | *Responsibility:* the month's spend per job, editor research and in total, the pace, the warning levels and their once-a-month notices. `paceUsd` and `warningsDue` are pure. *Exports:* `getSpendingOverview`, `setSpendWarning`, `checkSpendWarnings`, `paceUsd`, `warningsDue` |
+| `server/src/services/researchRuns.ts` | The editor's run (trigger `editor`) calls `checkSpendWarnings('editor_research')` once it has finished |
+| `server/src/schemas/spending.ts` (new), `server/src/routes/admin/spending.ts` (new), `server/src/routes/admin/index.ts` | `GET /api/admin/spending`; `PUT /api/admin/spending/warnings/:scope { levelUsd }` (a whole number at least 1 or null; 400 for an unknown scope). Routes name their 500 texts with `failsWith()` |
+| `server/src/jobs/jobNotes.ts` | Warning functions get the job's row; the generic `failureShareWarning(lastRunUsage)` |
+| `server/src/config.ts` | `spending: { paceFromDay: 8 }` and `jobs.failureShare: { share: 0.2, minItems: 20 }` (no env overrides) |
+| `shared/types/index.ts` | `SpendingOverview`, `SpendingRow`, `SpendScope`. `JobRunUsage`: the three new fields |
+| `client/src/components/admin/SpendingCard.tsx` (new), `client/src/hooks/useSpending.ts` (new), `client/src/pages/admin/DashboardPage.tsx` | *Responsibility:* the Dashboard's "Spending" card: grouped rows, pace with its pill, the two months before, the voices line, the "Warn at" fields saved on blur. *Exports:* `SpendingCard` |
+| `client/src/lib/admin-api.ts` | The two endpoints |
 
 **Story context: server**
 
 | File | Change |
 |------|--------|
 | `server/prisma/schema.prisma` | Enums `ContextValidity`, `ContextVerdict`, `JudgmentStatus`, `ContextBoxType`, `ContextRunStatus`. Models `ContextFact`, `ContextBox`, `StoryContextRun`, `ContextSearchCache`, with relations on `Story` |
-| `server/prisma/migrations/<ts>_story_context/` | The tables and indexes (`story_id` on facts, boxes and runs; `started_at` on runs). The `build_story_context` row, disabled, `monthly_cap_usd = 20`, inserted `ON CONFLICT DO NOTHING` |
+| `server/prisma/migrations/<ts>_story_context/` | The tables and indexes (`story_id` on facts, boxes and runs; `started_at` on runs). The `build_story_context` row, disabled, and its `spend_warnings` level of 20, both inserted `ON CONFLICT DO NOTHING` |
 | `server/src/schemas/storyContext.ts` (new) | *Responsibility:* the structured outputs of the context prompts and the stored box shape. *Exports:* `structuredFactFields`, `structureSchema`, `gapListSchema`, `contextExtractionSchema`, `boxesSchema`, plus `CONTEXT_SLOTS` and the stored-visual schema |
 | `server/src/prompts/storyContext.ts` (new) | *Responsibility:* the structure, gap-list, extraction and write prompts (Role, Goal, XML constraints; fetched text escaped as untrusted). *Exports:* `buildStructurePrompt`, `buildGapListPrompt`, `buildContextExtractionPrompt`, `buildBoxesPrompt` |
 | `server/src/prompts/research.ts` | Export the private `tag` and `UNTRUSTED` for reuse. No prompt text changes |
@@ -400,17 +405,18 @@ There is also one new ADR: "Story context: facts and boxes as records, the step 
 | `server/src/services/storyContextInput.ts` (new) | *Responsibility:* which stories the step owes and loading one story's input (tagged `$queryRaw`, SELECT only, so the eval can call it through the read-only session). *Exports:* `nextForContext`, `loadContextInput` |
 | `server/src/services/storyContextSearch.ts` (new) | *Responsibility:* pass 2's search: the 7-day cache (read, write, prune), Tavily through `lib/tavily.ts`, the opt-out and source filter. *Exports:* `contextSearch`, `pruneSearchCache`, `searchKey` |
 | `server/src/services/storyContextRuns.ts` (new) | *Responsibility:* one story's run in production: the run row, production deps (structured calls on the tier models after `rateLimitDelay()`, never in `withRetry`), the pipeline, the transactional write, stale runs. *Exports:* `runStoryContext`, `markInterruptedContextRuns` |
-| `server/src/services/storyContextView.ts` (new) | *Responsibility:* what readers get of a story's context (published only, not demoted, tiles and charts resolved, sources numbered) and the admin's hide and show. *Exports:* `getStoryContext`, `setStoryContextHidden` |
-| `server/src/jobs/buildStoryContext.ts` (new) | *Responsibility:* the step: stale runs, prune, queue, workers with the budget check before each story, item tally into the scope, per-story errors recorded as failed runs (the job does not throw for them). *Exports:* `runBuildStoryContext` |
-| `server/src/config.ts` | `storyContext: { lookbackDays: 3, perRun: 20, concurrency: 3, maxSearches: 3, searchDepth: 'basic', resultsPerSearch: 5, maxNewSources: 5, searchReuseDays: 7, fastValidDays: 14, slowValidDays: 365, storyCeilingUsd: 0.1, staleRunMinutes: 120, placement, notesInText: 2, notesByPoints: 2 }`. `placement` reads `STORY_CONTEXT_PLACEMENT` through `parseOneOf` (`model`, `random`, `section`; default `model`), so `render.yaml` and `env.example` gain it, as the blueprint test requires. The rest have no env overrides |
+| `server/src/services/storyContextView.ts` (new) | *Responsibility:* what readers get of a story's context (published only, not demoted, tiles and charts resolved, sources numbered). *Exports:* `getStoryContext` |
+| `server/src/services/storyContextAdmin.ts` (new) | *Responsibility:* the admin's view and edits: boxes with status and place, the newest run's summary for "What the run did", hiding and showing one box or all, moving a box to an existing paragraph or point. *Exports:* `getContextAdmin`, `setContextHidden`, `updateContextBox` |
+| `server/src/jobs/buildStoryContext.ts` (new) | *Responsibility:* the step: stale runs, prune, queue, workers, item tally into the scope, the failure-share notice after the run, per-story errors recorded as failed runs (the job does not throw for them). *Exports:* `runBuildStoryContext` |
+| `server/src/config.ts` | `storyContext: { lookbackDays: 3, perRun: 20, concurrency: 3, maxSearches: 3, searchDepth: 'basic', resultsPerSearch: 5, maxNewSources: 5, searchReuseDays: 7, fastValidDays: 14, slowValidDays: 365, staleRunMinutes: 120, placement, notesInText: 2, notesByPoints: 2 }`. `placement` reads `STORY_CONTEXT_PLACEMENT` through `parseOneOf` (`model`, `random`, `section`; default `model`), so `render.yaml` and `env.example` gain it, as the blueprint test requires. The rest have no env overrides |
 | `server/src/services/storyContextPlacement.ts` (new) | *Responsibility:* where each box goes on the page: the mode, the seeded draw, the limits, the fallbacks (pure). *Exports:* `placeBoxes` |
 | `server/src/jobs/chainDefinitions.ts`, `handlers.ts`, `interruptedRuns.ts` | The step after `publish_stories`; the handler; `JOB_PIPELINE_ORDER`; `RESUMABLE_JOBS` |
 | `server/src/services/job.ts` | `MODEL_JOBS` adds the step |
-| `server/src/jobs/jobNotes.ts`, `jobEnableChecks.ts` | The note (what it does, after publishing, the cap and the pause, and that "Run now" writes live cards). The enable check refuses without the Tavily key |
-| `server/src/scripts/seed-jobs.ts` | The row, disabled, cap 20 |
+| `server/src/jobs/jobNotes.ts`, `jobEnableChecks.ts` | The note (what it does, that it runs after publishing, that a high failure share records a notice and pauses nothing, and that "Run now" writes live cards) and `failureShareWarning` as its warning. The enable check refuses without the Tavily key |
+| `server/src/scripts/seed-jobs.ts` | The row, disabled, and its $20 warning level |
 | `server/src/routes/public/stories.ts` | `GET /:slug/context`, `Cache-Control: public, max-age=60` |
 | `server/src/lib/aiProvenance.ts` | `AI_GENERATED_CONTEXT_FIELDS` and the marker for the context response |
-| `server/src/routes/admin/stories.ts` | `PUT /:id/context { hidden }` → `setStoryContextHidden` (204; 404 for an unknown story) |
+| `server/src/routes/admin/stories.ts` | `GET /:id/context` → `getContextAdmin`; `PUT /:id/context { hidden }` → `setContextHidden` (204); `PATCH /:id/context/boxes/:boxId { hidden?, place? }` → `updateContextBox` (204; 400 for a place that doesn't exist). 404 for an unknown story or box |
 | `server/src/scripts/synthetic-data/` | Facts and boxes, one of each visual and one honest gap, on one of the two researched synthetic stories, for local checks |
 
 **Story context: client**
@@ -426,7 +432,7 @@ There is also one new ADR: "Story context: facts and boxes as records, the step 
 | `client/src/components/context/FigureTiles.tsx`, `ContextChart.tsx` (new) | *Responsibility:* tiles with side-by-side values and their sources; bars and line as SVG with caption, source line and a hidden table. *Exports:* `FigureTiles`, `ContextChart` |
 | `client/src/components/context/contextText.ts` (new) | *Responsibility:* the slot kickers, the fixed honest-gap sentence, the as-of wording (pure). *Exports:* `slotKicker`, `GAP_TEXT`, `asOfLine` |
 | `client/src/pages/MethodologyPage.tsx` | The context-cards paragraph in the researched-stories section (For Odin 2), once approved |
-| `client/src/components/admin/StoryContextAdmin.tsx` (new), `StoryEditForm` | *Responsibility:* "Hide context" and "Show context" with a `ConfirmDialog`. *Exports:* `StoryContextAdmin` |
+| `client/src/components/admin/StoryContextAdmin.tsx` (new), `StoryEditForm`, `client/src/hooks/useStoryContextAdmin.ts` (new), `client/src/lib/admin-api.ts` | *Responsibility:* the story's "Context" section after Research: summary line, cards grouped by place with the place select and "Hide"/"Show", "Hide all context" with a `ConfirmDialog`, and "What the run did". *Exports:* `StoryContextAdmin` |
 | `client/src/lib/constants.ts` | `JOB_DISPLAY_NAMES` and `JOB_PIPELINE_ORDER` |
 | `shared/types/index.ts` | `JobName` adds `build_story_context`. `StoryContextView`, `ContextBoxView` and the visual types |
 
@@ -448,12 +454,14 @@ There is also one new ADR: "Story context: facts and boxes as records, the step 
 
 | File | Change |
 |------|--------|
-| `.context/story-context.md` (new) | The subsystem: rules and guarantees (no status or rating writes, after publishing, validity, the tile and chart rules, D4's checks), the steps, records, cap, pause, reuse, costs, the route, the admin hide, the eval gate, key files |
-| `CLAUDE.md` | A row for `story-context.md` in the context table |
-| `.context/scheduler.md` | The step in the chain table; "Chains" gets the cap, the auto-pause, `job_month_spend` and the Jobs page's fields |
-| `.context/story-research.md` | Module 1 reads research's runs; the publish gate and a capped or paused research step |
+| `.context/story-context.md` (new) | The subsystem: rules and guarantees (no status or rating writes, after publishing, validity, the tile and chart rules, D4's checks), the steps, records, the cost bounds, the failure share and its notice, reuse, costs, the route, the admin section, the eval gate, key files |
+| `CLAUDE.md` | A row for `story-context.md` in the context table; `scheduler.md`'s row names the spending overview |
+| `.context/scheduler.md` | The step in the chain table; a "Spending" section: `job_month_spend` written at every finish, editor research from its own rows, `spend_warnings`, the pace rule, the notices, no caps (Odin, 16 Nov); run usage's item tally, search credits and `failureShareWarning` |
+| `.context/admin-dashboard.md` | The Spending card |
+| `.context/admin-notices.md` | The `spend-warn:<scope>:<YYYY-MM>` and `step-failing:<step>` keys |
+| `.context/story-research.md` | Module 1 reads research's runs; editor research in the spending overview; its own cap unchanged |
 | `.context/public-website.md` | "Story context" on the story page (placement, cards, the route, markers) |
-| `.context/ai-transparency.md` | The feature in the inventory (model ids, written fields, `data-ai-generated="context"`, the response marker, no human review per D3, the hide action). Owner decision of 16 Nov: no visible label of its own, since the story's "Researched and written by AI" line covers the cards on the same page |
+| `.context/ai-transparency.md` | The feature in the inventory (model ids, written fields, `data-ai-generated="context"`, the response marker, no human review per D3, the admin's hide and move). Owner decision of 16 Nov: no visible label of its own, since the story's "Researched and written by AI" line covers the cards on the same page |
 | `.context/llm-analysis.md` | The tier table lists the context steps |
 | `.context/model-eval.md` | "Overview evals" gets the gap key (format, drafting, checking), `context`, `--facts context`, the bars and the halves |
 | `.context/decisions.md`, `.context/decisions/` | The ADRs under "ADRs to write" |
@@ -462,23 +470,17 @@ There is also one new ADR: "Story context: facts and boxes as records, the step 
 
 These follow the project's patterns: `vi.hoisted()` mocks, `supertest` with `authHeader()`, `*.db.test.ts` against PostgreSQL, RTL with the providers. Each pure unit is tested first.
 
-- **`stepGuards.test.ts`**
-  - `stepBlock`: off, paused, capped at and over the cap, no cap, last month's spend not counted.
-  - `autoPauseDue`: just over 20% pauses, exactly 20% doesn't, under `minItems` doesn't.
-  - Notice keys: one cap notice a month.
-- **`chains.test.ts`**
-  - A capped or paused step is skipped and the next step runs.
-  - A step whose usage passes the share is paused with a notice, and the chain goes on.
-  - A failed step still stops the chain.
-- **`runUsage.test.ts`**
-  - `runBudgetLeft` falls as calls and searches are recorded, children included, and is Infinity without a cap.
-  - `recordItems` does not reach the parent.
-  - Credits roll up.
-- **`jobLease.db.test.ts`:** `finishJobRun` inserts and then adds to the month row, starts a new row in a new month, and does nothing on null usage.
-- **`routes/admin/jobs.test.ts`**
-  - The cap and the lift are accepted only on a step (400 elsewhere), and `autoPaused: true` is refused.
-  - `GET` returns `monthSpendUsd`.
-- **`researchQueue` test:** the gate holds nothing while the research step is capped or paused.
+- **`spending.test.ts`** (pure)
+  - `paceUsd`: day 16 of 30, the 1st, the last day, a 28-day February.
+  - `warningsDue`: passed; on pace from the 8th and not before; no level; the total and a job at once.
+- **`spending.db.test.ts`**
+  - The overview sums `job_month_spend` by month, AI as cost minus search, the two months before, and editor research runs only (pipeline runs are in the job's spend).
+  - `checkSpendWarnings` records one notice per scope and month, and a second pass in the same month records nothing.
+  - Setting and clearing a level.
+- **`runUsage.test.ts`:** `recordItems` does not reach the parent; credits roll up.
+- **`jobLease.db.test.ts`:** `finishJobRun` inserts and then adds to the month row, starts a new row in a new month, and does nothing on null usage; a warning check that throws doesn't fail the finish.
+- **`routes/admin/spending.test.ts`:** `GET` shape; `PUT` sets and clears a level; 400 for an unknown scope, zero or a fraction.
+- **`jobNotes.test.ts`:** `failureShareWarning` shows above 20% with at least 20 items, and not at exactly 20% or under 20 items.
 - **`tavily.test.ts`:** research's default request body is unchanged; the context options set depth, topic, results and an open start; credits reach the scope.
 - **`storyContextVisuals.test.ts`**
   - `isCurrent` for each class, a missing as-of date and the source-date fallback.
@@ -507,7 +509,7 @@ These follow the project's patterns: `vi.hoisted()` mocks, `supertest` with `aut
   - The queue: published within the lookback, with a research run with facts and no context run; oldest first; the limit.
   - Reusable facts: earlier stories' supported, non-demoted, current facts only.
 - **`storyContextRuns.db.test.ts`:** facts (with verdicts), boxes and the run in one transaction; a stale `running` row is marked failed; a skipped run is recorded.
-- **`buildStoryContext.test.ts`:** no new story starts once the budget left is under the ceiling; the item tally reaches the scope; an error outside a run records a failed run and the next story goes on.
+- **`buildStoryContext.test.ts`:** the item tally reaches the scope; above the share one notice is recorded, at or under it none; an error outside a run records a failed run and the next story goes on.
 - **`storyContextView.test.ts` and the route test**
   - Only published stories get context; demoted boxes are left out.
   - Sources are numbered in first-cited order.
@@ -517,15 +519,17 @@ These follow the project's patterns: `vi.hoisted()` mocks, `supertest` with `aut
   - `model` keeps stored places within the limits; the extras go to the section in box order; one note per paragraph or point.
   - `random` only picks spots that cite one of the box's sources, gives the same answer for the same story, and sends a second-search box to the section.
   - `section` places nothing beside the text; the figures box and the honest gap always go to the section; a place past the story's last paragraph falls back.
-- **Admin stories route:** hide sets the boxes to demoted, show restores them, 404 for an unknown story.
+  - An editor's place is kept in every mode, under the same limits.
+- **`storyContextAdmin.db.test.ts` and the admin stories route:** `GET` returns boxes with status and place and the newest run's summary; hide all sets every box to demoted and show restores them; one box hides, shows and moves; a place that doesn't exist is a 400; 404 for an unknown story or box.
 - **`jobEnableChecks` test:** enabling is refused without the Tavily key.
 - **Client**
   - `StoryContext.test.tsx`: nothing renders without boxes; cards render in order with kicker, heading, citations and the as-of footer; the honest gap's fixed text; the `data-ai-generated` marker.
-  - `ContextNote.test.tsx`: a note renders after its paragraph or point; on a phone width the button opens the sheet, Escape closes it and focus returns to the button.
+  - `ContextNote.test.tsx`: a note renders after its paragraph or point, and a point's note sits in the point's text column; on a phone width the button opens the sheet, Escape closes it and focus returns to the button.
   - `FigureTiles.test.tsx`: a range names both sources.
   - `ContextChart.test.tsx`: the hidden table holds every value and source; a provisional mark is hatched.
   - `StoryPage.test.tsx`: the skeleton stays until the context settles; a failed context request renders the page without it; the section after Caveats; no images from outside our site and API.
-  - Jobs page tests: the cap saves; the pause line and "Lift pause".
+  - `SpendingCard.test.tsx`: rows grouped as on the Jobs page; the pace pill; a level saves on blur and an empty field clears it; the voices line.
+  - `StoryContextAdmin.test.tsx`: hidden while there is no run; hiding one card and moving one; "Hide all context" asks first; the run's dropped facts with their reasons.
 - **Eval**
   - `gapKeys.test.ts`: every committed key passes, and each rule fails on an inline key.
   - `contextScore.test.ts`: recall over `must` needs not in the story; wasted searches; the deterministic halves; the spread.
@@ -538,15 +542,15 @@ These follow the project's patterns: `vi.hoisted()` mocks, `supertest` with `aut
 - Refreshing or expiring the cards of older stories, and re-research on expiry. Module 1 builds a story's context once. Overviews (module 2) refresh.
 - Model reviews, automatic demotion and recomputing what a demoted fact touched (module 2, D6, D7).
 - Context in the public OpenAPI contract, the newsletter, the podcast, social posts, feeds or preview images.
-- An admin view of a story's context runs: gap list, searches, drops. The run rows hold them, and SQL reads them for now.
 - Any change to research's prompts, schemas or apply. A fact-check hint channel waits for the eval's verdict on not-found sentences.
-- Per-step thresholds for the auto-pause, and caps on standalone (non-chain) jobs.
-- Backfilling the archive beyond the 3-day lookback.
+- Caps of any kind on a job's spend, and pausing a step on failures (Odin, 16 Nov). Research's own monthly cap and the podcast's character cap stay as they are.
+- Counting AI actions started from the admin (bulk re-assessing and the like), which run outside any job. The card says they are not counted.
+- Backfilling spend from before the overview ships, and backfilling the archive's context beyond the 3-day lookback.
 
 ## Order of work
 
-- **First, the generic cap and pause** (its own commit). Nothing changes while no step has a cap or reports items.
-- **Then, all switched off:** records, pipeline and job; the story page and the admin hide, checked locally on the synthetic story with Playwright; the eval steps.
+- **First, the spending overview and warnings** (its own commit). It changes no job's behavior and shows each job's spend from its first run after deploy.
+- **Then, all switched off:** records, pipeline and job; the story page and the admin Context section, checked locally on the synthetic story with Playwright; the eval steps.
 - **Before the commit:** in both packages, `npm run lint`, `npm run format`, `npm run typecheck`, `npm run test:coverage` (raise floors that rose, never lower them) and `npm run build`. Also `npm run check:migrations --prefix server`, and `npm run test:db --prefix server`, which needs a local test database. If the container has none, say so in the report.
 - **After merge:**
   - Draft and check the gap keys.

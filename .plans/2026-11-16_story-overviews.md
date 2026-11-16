@@ -12,7 +12,7 @@ Design (read it before planning a module): `/mnt/project-files/story-directions/
 
 ## Problem
 
-Our stories stand alone. A reader who follows the Ebola outbreak in Congo sees some 40 near-identical "deaths top X" stories with no shared timeline, no tracked numbers and no sense of where things stand, and a one-off story carries none of the context that research already gathers. The fix must keep the relevance bar exactly where it is, run with no person in the loop, and stay modular: each part has a switch and a monthly cap, and the site works with any subset switched on.
+Our stories stand alone. A reader who follows the Ebola outbreak in Congo sees some 40 near-identical "deaths top X" stories with no shared timeline, no tracked numbers and no sense of where things stand, and a one-off story carries none of the context that research already gathers. The fix must keep the relevance bar exactly where it is, run with no person in the loop, and stay modular: each part has a switch and its own line in the monthly spending overview, and the site works with any subset switched on.
 
 ## What gets built: seven modules
 
@@ -29,7 +29,7 @@ Our stories stand alone. A reader who follows the Ebola outbreak in Congo sees s
 ## Order and gates
 
 - **Now, alongside the job-groups change (PR #86):** the evals and answer keys (`.plans/2026-11-16_overview-evals.md`), which touch no production code path.
-- **After job groups merges (done 2026-11-16, PR #86):** module 1 as a step of the daily edition chain, after publishing, so it can never hold the edition (`.plans/2026-11-16_story-context.md`, "Where it runs"). A step is a job in its chain's step list (`server/src/jobs/chainDefinitions.ts`, per the job-groups thread). Job groups gives per-step on/off (a step that's off is skipped, the chain carries on) and per-step cost with model tokens and Tavily credits apart. Module 1's plan adds the two things it lacks, as checks in the chain runner around each step: a monthly dollar cap per step (a capped step behaves as off) and a pause when more than about 20% of a step's items fail checks (with an admin notice).
+- **After job groups merges (done 2026-11-16, PR #86):** module 1 as a step of the daily edition chain, after publishing, so it can never hold the edition (`.plans/2026-11-16_story-context.md`, "Where it runs"). A step is a job in its chain's step list (`server/src/jobs/chainDefinitions.ts`, per the job-groups thread). Job groups gives per-step on/off (a step that's off is skipped, the chain carries on) and per-step cost with model tokens and Tavily credits apart. Module 1's plan adds what it lacks, for every job and not only steps: a monthly spending overview on the Dashboard with warning levels that record notices, and a notice when more than about 20% of a step's items fail checks. There are no per-step caps and no pause (Odin, 16 Nov: OpenAI's project limits cover AI spend, and a step retries every night anyway).
 - **Then:** the database records for overviews, modules 2 and 5, then 3 and 4, then 6 and 7 once real costs and error rates are known.
 - **Every module ships switched off** and is switched on only after its evals and the replay meet their bars. Its cost and error rate show in the job overview from its first run.
 
