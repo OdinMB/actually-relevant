@@ -6,9 +6,10 @@
 
 /** Every chain and its steps, in the order they run. A job is a step of one chain at most. */
 export const CHAINS: Readonly<Record<string, readonly string[]>> = {
-  // Crawling stays a job of its own, several times a day: a feed lists only its newest articles, so a
-  // once-a-day crawl would lose a busy feed's articles before they are read
-  daily_edition_chain: ['preassess_stories', 'assess_stories', 'select_stories', 'research_stories', 'publish_stories', 'social_auto_post'],
+  // Several times a day: a feed lists only its newest articles, so a once-a-day crawl would lose a busy
+  // feed's articles. Crawled stories are assessed in the same run: a person's part starts with assessed stories
+  intake_chain: ['crawl_feeds', 'preassess_stories', 'assess_stories'],
+  daily_edition_chain: ['select_stories', 'research_stories', 'publish_stories'],
   // Saturday morning: each edition's issue is built (with its test email), then sent
   newsletter_chain: ['generate_newsletter', 'publish_newsletter', 'generate_uplifting_newsletter', 'publish_uplifting_newsletter'],
   // Friday's slots build both shows' episodes (each slot resumes or retries the week's episode); both

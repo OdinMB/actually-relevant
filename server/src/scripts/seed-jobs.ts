@@ -13,15 +13,20 @@ const prisma = new PrismaClient()
 
 async function main() {
   const jobs = await Promise.all([
-    // The daily edition (jobs/chains.ts): its steps below, pre-assess to social post, run when the
-    // chain reaches them, never on their own schedules. It goes at standard price from 03:30 UTC,
-    // research starts no story after 05:00, and the social post waits for 11:30
+    // Intake (jobs/chains.ts): crawl, pre-assess and assess, several times a day, the last an hour
+    // before the daily edition. A chain's steps run when it reaches them, never on their own schedules
+    prisma.jobRun.upsert({
+      where: { jobName: 'intake_chain' },
+      update: {},
+      create: { jobName: 'intake_chain', cronExpression: '0 4,10,16,22 * * *', enabled: false },
+    }),
+    // The daily edition: select, research, publish. It goes at standard price from 03:30 UTC, and
+    // research starts no story after 05:00
     prisma.jobRun.upsert({
       where: { jobName: 'daily_edition_chain' },
       update: {},
       create: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *', enabled: false, flexUntil: '03:30', deadline: '05:00' },
     }),
-    // On its own, several times a day, the last an hour before the daily edition
     prisma.jobRun.upsert({
       where: { jobName: 'crawl_feeds' },
       update: {},
@@ -56,7 +61,7 @@ async function main() {
     prisma.jobRun.upsert({
       where: { jobName: 'social_auto_post' },
       update: {},
-      create: { jobName: 'social_auto_post', cronExpression: '30 11 * * *', enabled: false, notBefore: '11:30' },
+      create: { jobName: 'social_auto_post', cronExpression: '30 11 * * *', enabled: false },
     }),
     prisma.jobRun.upsert({
       where: { jobName: 'bluesky_update_metrics' },

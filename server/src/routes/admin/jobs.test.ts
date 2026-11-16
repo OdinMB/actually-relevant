@@ -130,8 +130,8 @@ describe('Admin Jobs API', () => {
       mockPrisma.jobRun.update.mockResolvedValue({})
       await request(app).put('/api/admin/jobs/assess_stories').set(authHeader()).send({ flex: true, pauseForReview: true }).expect(200)
       await request(app).put('/api/admin/jobs/daily_edition_chain').set(authHeader()).send({ flexUntil: '04:00', deadline: null }).expect(200)
-      await request(app).put('/api/admin/jobs/social_auto_post').set(authHeader()).send({ notBefore: '12:00' }).expect(200)
-      expect(mockPrisma.jobRun.update).toHaveBeenCalledWith({ where: { jobName: 'social_auto_post' }, data: { notBefore: '12:00' } })
+      await request(app).put('/api/admin/jobs/publish_podcast').set(authHeader()).send({ notBefore: 'Sat 08:00' }).expect(200)
+      expect(mockPrisma.jobRun.update).toHaveBeenCalledWith({ where: { jobName: 'publish_podcast' }, data: { notBefore: 'Sat 08:00' } })
       expect(mockPrisma.jobRun.update).toHaveBeenCalledWith({ where: { jobName: 'assess_stories' }, data: { flex: true, pauseForReview: true } })
       expect(mockPrisma.jobRun.update).toHaveBeenCalledWith({ where: { jobName: 'daily_edition_chain' }, data: { flexUntil: '04:00', deadline: null } })
     })
@@ -139,7 +139,7 @@ describe('Admin Jobs API', () => {
     it.each([
       ['a schedule for a chain step', 'preassess_stories', { cronExpression: '0 1 * * *' }, 'no schedule of its own'],
       ['a review pause outside a chain', 'cleanup_old_stories', { pauseForReview: true }, 'only a step of a chain'],
-      ['a hold time outside a chain', 'crawl_feeds', { notBefore: '11:30' }, 'only a step of a chain'],
+      ['a hold time outside a chain', 'social_auto_post', { notBefore: '11:30' }, 'only a step of a chain'],
       ['a deadline on a job that is not a chain', 'research_stories', { deadline: '05:00' }, 'only a chain'],
     ])('refuses %s and saves nothing', async (_what, jobName, body, message) => {
       const res = await request(app).put(`/api/admin/jobs/${jobName}`).set(authHeader()).send(body)

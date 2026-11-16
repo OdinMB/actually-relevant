@@ -245,9 +245,9 @@ describe('chains', () => {
       expect(startStep(STEPS, row('research_stories', 'failed'), 'continue')).toBe(1)
       expect(startStep(STEPS, row('publish_stories', 'waiting'), 'continue')).toBe(2)
       expect(startStep(STEPS, row('publish_stories', 'waiting'), 'start')).toBe(0)
-      // A cut-off social post is not posted again: the chain goes on after it (here, to its end)
-      const withPost = [...STEPS, 'social_auto_post']
-      expect(startStep(withPost, row('social_auto_post', 'running', 1), 'start')).toBe(4)
+      // A cut-off send is not sent again: the chain goes on after it (here, to its end)
+      const withSend = [...STEPS, 'publish_newsletter']
+      expect(startStep(withSend, row('publish_newsletter', 'running', 1), 'start')).toBe(4)
       expect(startStep(STEPS, row('research_stories', 'running'), 'continue')).toBeNull()
       expect(startStep(STEPS, row('no_such_step', 'failed'), 'continue')).toBeNull()
     })
@@ -259,9 +259,10 @@ describe('chains', () => {
       expect(new Set(steps).size).toBe(steps.length)
       for (const name of Object.keys(CHAINS)) expect(chainOf(name)).toBeNull()
       expect(chainOf('research_stories')).toBe('daily_edition_chain')
-      expect(chainOf('social_auto_post')).toBe('daily_edition_chain')
-      // Crawling runs on its own, several times a day
-      expect(chainOf('crawl_feeds')).toBeNull()
+      expect(chainOf('crawl_feeds')).toBe('intake_chain')
+      expect(chainOf('assess_stories')).toBe('intake_chain')
+      // The social post keeps its own timing
+      expect(chainOf('social_auto_post')).toBeNull()
       expect(chainOf('publish_uplifting_newsletter')).toBe('newsletter_chain')
       expect(chainOf('publish_podcast')).toBe('podcast_chain')
       expect(chainOf('cleanup_old_stories')).toBeNull()

@@ -11,9 +11,9 @@
  *   continues it from the Jobs page. The next scheduled run starts from the first step again.
  *
  * A step can also have a "not before" time (`not_before`, "HH:MM" or "Sat 07:00", on the step's own
- * clock: `jobTimeZone`, else UTC): a chain that reaches it earlier
- * holds there, its lease let go, and goes on by itself when that time comes round after the run's start
- * (the daily edition's social post waits for the morning). A person can go on sooner from the Jobs page.
+ * clock: `jobTimeZone`, else UTC): a chain that reaches it earlier holds there, its lease let go, and
+ * goes on by itself when that time comes round after the run's start (the podcast's publish steps wait
+ * for Saturday morning). A person can go on sooner from the Jobs page.
  *
  * A step that fails stops the chain there, and the chain's run fails with the step's error; the
  * Jobs page can resume it from that step. A run cut off by a restart resumes from the step it was in.

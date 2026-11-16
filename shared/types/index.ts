@@ -50,6 +50,7 @@ export interface User {
 }
 
 export type JobName =
+  | 'intake_chain'
   | 'daily_edition_chain'
   | 'newsletter_chain'
   | 'podcast_chain'

@@ -29,6 +29,7 @@ export const RESUMABLE_JOBS: ReadonlySet<string> = new Set([
   'publish_stories',
   // A chain resumes from the step it was cut off in when that step is resumable, else after it, so a
   // cut-off send, post or publish is never repeated (chains.ts startStep)
+  'intake_chain',
   'daily_edition_chain',
   'newsletter_chain',
   'podcast_chain',

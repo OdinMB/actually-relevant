@@ -77,9 +77,12 @@ const CHAIN_RULES =
   'If a step fails, the chain stops there and you can resume it from that step; its next scheduled run starts from the first step again.'
 
 const NOTES: Readonly<Record<string, () => string>> = {
+  intake_chain: () =>
+    'Crawls the feeds, gives each new story its first rating, then fully analyzes the ones that qualify, in that order, so every run ends with assessed stories ready to review. ' +
+    `It runs several times a day because a feed lists only its newest articles and a busy one drops them within hours. ${CHAIN_RULES}`,
   daily_edition_chain: () =>
-    "Assesses the day's crawled stories, selects, researches and publishes the best of them, then posts one to social media, in that order, so stories go out as soon as research is done instead of at a fixed time. " +
-    `${CHAIN_RULES} A step with a "not before" time holds the chain until then (the social post waits for the morning), and you can run it sooner from here.` +
+    'Selects the best of the assessed stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time. ' +
+    `${CHAIN_RULES} ` +
     'From its flex cut-off on, every call goes at standard price; from its deadline on, research starts no other story, so publishing is never held up for long.',
   newsletter_chain: () =>
     `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
@@ -90,7 +93,6 @@ const NOTES: Readonly<Record<string, () => string>> = {
   crawl_feeds: () =>
     'Reads each active feed whose own crawl interval has passed and saves its new articles as stories. ' +
     'Running this job more often never crawls a feed before its interval is up. ' +
-    'It runs several times a day on its own, outside the Daily Edition, because a feed lists only its newest articles and a busy one drops them within hours. ' +
     'Articles whose publisher opts out of AI use are skipped, and articles locked behind a paywall are saved as rejected.',
   preassess_stories: () =>
     `Gives each newly crawled story a first rating from 1 to 10, an issue and an emotion tag, ${config.preassess.batchSize} stories per AI call. ` +
