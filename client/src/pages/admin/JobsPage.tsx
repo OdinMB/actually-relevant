@@ -1,6 +1,7 @@
 import { Helmet } from 'react-helmet-async'
 import type { JobRun } from '@shared/types'
 import { useJobs } from '../../hooks/useJobs'
+import { byPipelineOrder } from '../../lib/constants'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ErrorState } from '../../components/ui/ErrorState'
@@ -11,7 +12,10 @@ import { ChainCard } from '../../components/admin/ChainCard'
 /** The chains with their step rows in chain order, and the jobs that run on their own schedules. */
 function groupJobs(jobs: JobRun[]) {
   const byName = new Map(jobs.map(job => [job.jobName, job]))
-  const chains = jobs.filter(job => job.steps).map(chain => ({ chain, steps: (chain.steps ?? []).flatMap(name => byName.get(name) ?? []) }))
+  const chains = jobs
+    .filter(job => job.steps)
+    .sort(byPipelineOrder)
+    .map(chain => ({ chain, steps: (chain.steps ?? []).flatMap(name => byName.get(name) ?? []) }))
   const standalone = jobs.filter(job => !job.steps && !job.chain)
   return { chains, standalone }
 }

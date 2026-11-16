@@ -1,10 +1,10 @@
 /**
- * The generate_podcast cron entry (ADR-0013). It fires at several Friday slots; inside the UTC
+ * The generate_podcast step (ADR-0013), run once on Friday by the podcast chain. Inside the UTC
  * Friday window (`fridayWindow` in podcastWeekSlot.ts, which the admin slot notice reads too) it
- * runs this week's episode automated (podcastWeekly.ts holds the retry, attempt
- * cap and block policy, and sends the ready notice). A block throws, so the scheduler records one
- * job-failure notice; later slots skip the blocked episode quietly, and the notice stays unseen
- * until the owner opens it. An episode a person runs interactively is left alone, and on Friday
+ * runs this week's episode automated (podcastWeekly.ts holds the attempt cap and block policy, and
+ * sends the ready notice), trying a failed episode again in the same run until it is ready or
+ * blocked. A block throws, so the scheduler records one job-failure notice; a later run skips the
+ * blocked episode quietly, and the notice stays unseen until the owner opens it. An episode a person runs interactively is left alone, and on Friday
  * evening the owner gets one reminder that it is waiting for him. generate_uplifting_podcast runs
  * the same for Actually Uplifting, and is a logged no-op while that show is closed (closing it is
  * deliberate, so no failure notice every week).
@@ -62,7 +62,14 @@ export async function runGeneratePodcast(now: Date = new Date(), edition: Podcas
     log.info({ edition }, 'outside the Friday window, nothing to do')
     return
   }
-  const result = await runWeeklyEpisode({ trigger: 'cron', now, edition })
+  // A failure that may pass (a timeout, a busy service) is tried again in the same run after a pause,
+  // until it succeeds or the attempt cap blocks the episode (podcastWeekly.ts counts the attempts)
+  let result = await runWeeklyEpisode({ trigger: 'cron', now, edition })
+  while (result.outcome === 'retry-later') {
+    log.warn({ edition, podcastId: result.podcastId, reason: result.reason }, 'episode run failed; trying again in this run')
+    await new Promise(resolve => setTimeout(resolve, config.podcast.retryDelayMs))
+    result = await runWeeklyEpisode({ trigger: 'cron', now, edition })
+  }
   if (result.outcome === 'blocked') throw new Error(`podcast episode ${result.podcastId} blocked: ${result.reason ?? 'unknown reason'}`)
   if (result.waitingForPerson && result.podcastId && now.getUTCHours() >= config.podcast.reminderFromHourUtc) {
     await remindWaitingEpisode(result.podcastId, now)

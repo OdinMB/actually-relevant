@@ -82,6 +82,15 @@ export const JOB_PIPELINE_ORDER: JobName[] = [
   'cleanup_old_stories',
 ]
 
+/** Sorts jobs into pipeline order (Intake before Daily Edition, and so on); a job missing from it goes last. */
+export function byPipelineOrder(a: { jobName: string }, b: { jobName: string }): number {
+  const rank = (name: string) => {
+    const i = (JOB_PIPELINE_ORDER as string[]).indexOf(name)
+    return i === -1 ? Infinity : i
+  }
+  return rank(a.jobName) - rank(b.jobName)
+}
+
 const STATUS_LABELS: Partial<Record<string, string>> = {
   pre_analyzed: 'Pre',
 }

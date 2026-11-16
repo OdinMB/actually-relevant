@@ -79,11 +79,11 @@ async function main() {
       update: {},
       create: { jobName: 'newsletter_chain', cronExpression: '0 4 * * 6', enabled: false },
     }),
-    // Friday's slots build both shows' episodes, whose publish steps wait for Saturday 07:00 in Berlin
+    // Friday 02:00 UTC builds both shows' episodes, whose publish steps wait for Saturday 07:00 in Berlin
     prisma.jobRun.upsert({
       where: { jobName: 'podcast_chain' },
       update: {},
-      create: { jobName: 'podcast_chain', cronExpression: '0 2,6,10,14,18 * * 5', enabled: false },
+      create: { jobName: 'podcast_chain', cronExpression: '0 2 * * 5', enabled: false },
     }),
     prisma.jobRun.upsert({
       where: { jobName: 'generate_newsletter' },

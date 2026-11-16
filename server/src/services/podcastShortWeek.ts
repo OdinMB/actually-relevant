@@ -2,7 +2,7 @@
  * Actually Uplifting's short week (`.context/podcast.md`, "Actually Uplifting show"): a week whose
  * pool holds fewer uplifting stories than an episode needs has no episode, and no earlier week's
  * stories fill it. Skipping is the designed behavior, so it is one `info` notice per week, recorded
- * by whichever of the Friday run's last slot or the Saturday publish job sees the short week first;
+ * by whichever of the Friday run or the Saturday publish job sees the short week first;
  * never a warning, a counted attempt or the missed-week alert. The main show has no short week here:
  * too few stories fail its selection, as they always have.
  */
