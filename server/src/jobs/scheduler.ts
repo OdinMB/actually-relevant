@@ -312,7 +312,7 @@ async function executeJob(jobName: string, handler: () => Promise<void>): Promis
     log.info({ jobName, rssMb: memorySnapshot().rssMb, flex: runScope.flex }, 'started')
     await runInScope(runScope, () => withJobLeaseHeartbeat(jobName, handler))
     const usage = await settleRun(runScope)
-    await finishJobRun(jobName, null, usage)
+    await finishJobRun(jobName, null, usage, runScope.summary)
     log.info({ jobName, rssMb: memorySnapshot().rssMb, ...usageLog(usage) }, 'completed')
     return { result: 'succeeded' }
   } catch (err) {
@@ -357,7 +357,7 @@ export async function waitForRunningJobs(timeoutMs: number): Promise<string[]> {
  */
 async function recordFailure(jobName: string, errorMsg: string, scope: RunScope | null): Promise<void> {
   try {
-    await finishJobRun(jobName, errorMsg, scope ? await settleRun(scope) : null)
+    await finishJobRun(jobName, errorMsg, scope ? await settleRun(scope) : null, scope?.summary ?? null)
   } catch (err) {
     log.error({ jobName, err }, 'failed to record job failure')
   }

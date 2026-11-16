@@ -13,6 +13,7 @@ import type { PodcastEdition } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
+import { reportRunResult } from '../lib/runUsage.js'
 import { notify } from '../lib/notify.js'
 import { editionClosedReason, episodeNoticeTitle } from '../services/podcastEdition.js'
 import { runWeeklyEpisode } from '../services/podcastWeekly.js'
@@ -56,10 +57,12 @@ export async function runGeneratePodcast(now: Date = new Date(), edition: Podcas
   const closed = editionClosedReason(edition)
   if (closed) {
     log.info({ edition, reason: closed }, 'the show is closed, nothing to do')
+    reportRunResult('The show is switched off')
     return
   }
   if (fridayWindow(now) !== 'open') {
     log.info({ edition }, 'outside the Friday window, nothing to do')
+    reportRunResult('Not Friday, nothing to do')
     return
   }
   // A failure that may pass (a timeout, a busy service) is tried again in the same run after a pause,
@@ -71,6 +74,15 @@ export async function runGeneratePodcast(now: Date = new Date(), edition: Podcas
     result = await runWeeklyEpisode({ trigger: 'cron', now, edition })
   }
   if (result.outcome === 'blocked') throw new Error(`podcast episode ${result.podcastId} blocked: ${result.reason ?? 'unknown reason'}`)
+  reportRunResult(
+    result.outcome === 'done'
+      ? 'Episode ready'
+      : result.outcome === 'stopped'
+        ? 'Stopped: the job was switched off'
+        : result.waitingForPerson
+          ? 'Left to you: the episode is in review'
+          : `Skipped${result.reason ? `: ${result.reason}` : ''}`,
+  )
   if (result.waitingForPerson && result.podcastId && now.getUTCHours() >= config.podcast.reminderFromHourUtc) {
     await remindWaitingEpisode(result.podcastId, now)
   }

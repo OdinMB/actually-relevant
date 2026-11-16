@@ -403,6 +403,10 @@ export const config = {
     // page can OOM the crawl regardless of concurrency. The HTTP fetch is separately
     // capped at 5 MB; this bounds what we hand to the parser. Default 2 MB.
     maxParseBytes: parseWholeNumber(process.env.MAX_PARSE_BYTES, 2 * 1024 * 1024, 'MAX_PARSE_BYTES'),
+    // A feed counts as due this long before its interval is up: a crawl ends a few seconds after the
+    // run started, so without it a daily feed would miss the next day's run by those seconds, wait
+    // for the run after, and drift through the day (crawled every ~30 hours instead of 24)
+    dueGraceMinutes: 30,
     staleAfterEmptyCrawls: parseWholeNumber(process.env.STALE_AFTER_EMPTY_CRAWLS, 5, 'STALE_AFTER_EMPTY_CRAWLS'),
     extractionApi: parseOneOf(process.env.EXTRACTION_API, 'diffbot', ['diffbot', 'pipfeed'] as const, 'EXTRACTION_API'),
     diffbotTimeoutMs: parseWholeNumber(process.env.DIFFBOT_TIMEOUT_MS, 15_000, 'DIFFBOT_TIMEOUT_MS'),
