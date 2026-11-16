@@ -64,3 +64,17 @@ passes a level he sets or is heading past it.
   keeps no history, and the card shows the two months before.
 - **Spend read from OpenAI's usage API.** It would include runs outside the app, but it knows
   nothing of jobs or of Tavily.
+
+## Amendment 2026-11-16: one notice key per kind
+
+One key per scope and month, insert-only, meant that a pace notice early in the month kept the
+passed notice out: once "on pace to pass $25" was recorded, the month never said "passed $25". The
+owner asked on 2026-11-16 for the two kinds to be told apart. Each kind now has its own key,
+`spend-warn:<scope>:<YYYY-MM>:pace` and `spend-warn:<scope>:<YYYY-MM>:passed`, each insert-only, so
+a month records at most one of each per scope; once a level is passed, no pace notice follows
+(`checkSpendWarnings` in `server/src/services/spending.ts`).
+
+Rule: a scope's month can bring one pace notice and one passed notice, never more of either.
+
+Consequences: a month that heads past a level and then passes it records two notices. Notices
+recorded before carry the old key and stay as they are.

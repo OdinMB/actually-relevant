@@ -536,7 +536,7 @@ model JobMonthSpend {
   @@map("job_month_spend")
 }
 
-/// A monthly warning level in whole USD (services/spending.ts): per job, for research started by an editor (`editor_research`) or for the total (`all`). Passing it, or heading past it at the month's pace, records one notice per scope and month; nothing stops on it
+/// A monthly warning level in whole USD (services/spending.ts): per job, for research started by an editor (`editor_research`) or for the total (`all`). Passing it, or heading past it at the month's pace, records a notice, at most one of each kind per scope and month; nothing stops on it
 model SpendWarning {
   scope    String @id
   levelUsd Int    @map("level_usd")

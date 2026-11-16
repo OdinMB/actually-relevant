@@ -136,8 +136,8 @@ describeDb('spending (PostgreSQL)', () => {
 
       const recorded = await notices()
       expect(recorded.map(n => [n.dedupeKey, n.count])).toEqual([
-        ['spend-warn:all:2026-11', 1],
-        ['spend-warn:research_stories:2026-11', 1],
+        ['spend-warn:all:2026-11:passed', 1],
+        ['spend-warn:research_stories:2026-11:passed', 1],
       ])
       expect(recorded[1]).toMatchObject({ source: 'jobs', severity: 'warning', link: '/admin#spending', title: 'Research Stories passed $25 this month' })
       expect(recorded[1]!.message).toMatch(/\$26\.00 since Nov 1 \(AI \$17\.00, web search \$9\.00\)/)
@@ -153,8 +153,23 @@ describeDb('spending (PostgreSQL)', () => {
       await checkSpendWarnings('research_stories', new Date('2026-12-20T12:00:00Z'))
 
       const recorded = await notices()
-      expect(recorded.map(n => n.dedupeKey)).toEqual(['spend-warn:research_stories:2026-11', 'spend-warn:research_stories:2026-12'])
+      expect(recorded.map(n => n.dedupeKey)).toEqual(['spend-warn:research_stories:2026-11:pace', 'spend-warn:research_stories:2026-12:pace'])
       expect(recorded[0]!.title).toBe('Research Stories is on pace to pass $25 this month')
+    })
+
+    it('records the passed notice after the pace notice in the same month, each once', async () => {
+      await setSpendWarning('research_stories', 25)
+      await spent('research_stories', '2026-11', 14.2)
+      await checkSpendWarnings('research_stories', NOW)
+
+      await prisma.jobMonthSpend.update({ where: { jobName_month: { jobName: 'research_stories', month: monthStart('2026-11') } }, data: { costUsd: 26.2 } })
+      await checkSpendWarnings('research_stories', NOW)
+      await checkSpendWarnings('research_stories', NOW)
+
+      expect((await notices()).map(n => [n.dedupeKey, n.count, n.title])).toEqual([
+        ['spend-warn:research_stories:2026-11:pace', 1, 'Research Stories is on pace to pass $25 this month'],
+        ['spend-warn:research_stories:2026-11:passed', 1, 'Research Stories passed $25 this month'],
+      ])
     })
 
     it("checks research an editor started against its own level and the total's", async () => {
@@ -164,7 +179,7 @@ describeDb('spending (PostgreSQL)', () => {
       await checkSpendWarnings('editor_research', NOW)
 
       expect((await notices()).map(n => [n.dedupeKey, n.title])).toEqual([
-        ['spend-warn:editor_research:2026-11', 'Research started by an editor passed $1 this month'],
+        ['spend-warn:editor_research:2026-11:passed', 'Research started by an editor passed $1 this month'],
       ])
     })
 

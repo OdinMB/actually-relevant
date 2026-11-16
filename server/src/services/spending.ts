@@ -242,15 +242,16 @@ function spendNotice(due: DueWarning, totals: SpendTotals, now: Date) {
       `${who} spent ${usd(totals.totalUsd)} since ${since} (AI ${usd(totals.aiUsd)}, web search ${usd(totals.searchUsd)}). ` +
       `At this pace the month ends near $${Math.round(due.paceUsd)}. Nothing stops on cost; this notice comes once a month.`,
     link: '/admin#spending',
-    dedupeKey: `spend-warn:${due.scope}:${monthKey(utcMonthStart(now))}`,
+    // One key per kind, so a pace notice early in the month never keeps the passed notice out
+    dedupeKey: `spend-warn:${due.scope}:${monthKey(utcMonthStart(now))}:${due.kind === 'passed' ? 'passed' : 'pace'}`,
   }
 }
 
 /**
  * After a job's run (`finishJobRun`) or an editor's research run (`editor_research`): compare the
- * scope's month and the total with their levels, and record one warning notice per scope and month
- * for a level passed or heading past at this pace (insert-only, so a later pass in the month records
- * nothing). Callers log a failure; it never fails the run.
+ * scope's month and the total with their levels, and record a warning notice for a level passed or
+ * heading past at this pace: at most one of each kind per scope and month (insert-only, so a later
+ * pass of the same kind in the month records nothing). Callers log a failure; it never fails the run.
  */
 export async function checkSpendWarnings(scope: string, now: Date = new Date()): Promise<void> {
   const scopes = [...new Set([scope, ALL_SPEND])]

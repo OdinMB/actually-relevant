@@ -117,7 +117,7 @@ describeDb('story research runs', () => {
     const notices = await prisma.adminNotice.findMany()
     expect(notices).toEqual([
       expect.objectContaining({
-        dedupeKey: expect.stringMatching(/^spend-warn:editor_research:\d{4}-\d{2}$/),
+        dedupeKey: expect.stringMatching(/^spend-warn:editor_research:\d{4}-\d{2}:passed$/),
         title: 'Research started by an editor passed $1 this month',
       }),
     ])
