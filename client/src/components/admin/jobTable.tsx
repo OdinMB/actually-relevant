@@ -4,14 +4,11 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import type { JobRun } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
 import { InfoTip } from '../ui/InfoTip'
-import { useToast } from '../ui/Toast'
 import { jobDisplayName } from '../../lib/constants'
-import { useRunJob } from '../../hooks/useJobs'
-import { ApiError } from '../../lib/admin-api'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { TimeWithRelative } from './TimeWithRelative'
-import { clockName, EnabledToggle, FlexToggle, LastRun, ReviewToggle, RunningSpinner } from './jobControls'
+import { clockName, EnabledToggle, FlexToggle, LastRun, ReviewToggle, RunButton, RunningSpinner, useRunJobNow } from './jobControls'
 
 /**
  * The one column layout of every jobs table on the Jobs page: the chains' step tables and the table of
@@ -65,15 +62,8 @@ export function JobTable({ children }: { children: React.ReactNode }) {
  * schedule; a step that is not enabled is skipped, and Review makes the chain wait for a person after it.
  */
 export function JobRow({ job, step, onOpen }: { job: JobRun; step?: number; onOpen: (jobName: string) => void }) {
-  const runJob = useRunJob()
-  const { toast } = useToast()
+  const { run, pending } = useRunJobNow(job)
   const name = jobDisplayName(job.jobName)
-  const run = () =>
-    runJob.mutate(job.jobName, {
-      onSuccess: () => toast('success', `${name} triggered`),
-      // 409 when a run is already under way: the server's answer says so.
-      onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
-    })
 
   return (
     <tr className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : 'hover:bg-neutral-50'}`}>
@@ -139,13 +129,7 @@ export function JobRow({ job, step, onOpen }: { job: JobRun; step?: number; onOp
       <td className="px-3 py-2">
         {/* Desktop actions */}
         <div className="hidden items-center justify-end gap-0.5 lg:flex">
-          {job.running ? (
-            <span className="inline-block p-1">
-              <RunningSpinner />
-            </span>
-          ) : (
-            <ActionIconButton icon={PlayIcon} label={`Run ${name}`} onClick={run} disabled={runJob.isPending} />
-          )}
+          <RunButton job={job} />
           <ActionIconButton icon={PencilSquareIcon} label={`Details of ${name}`} onClick={() => onOpen(job.jobName)} />
         </div>
 
@@ -168,7 +152,7 @@ export function JobRow({ job, step, onOpen }: { job: JobRun; step?: number; onOp
                 ) : (
                   <button
                     onClick={run}
-                    disabled={runJob.isPending}
+                    disabled={pending}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-neutral-700 data-[focus]:bg-neutral-100 disabled:opacity-50"
                   >
                     <PlayIcon className="h-4 w-4 shrink-0" />

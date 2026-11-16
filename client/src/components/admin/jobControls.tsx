@@ -1,8 +1,12 @@
 import type { JobRun } from '@shared/types'
 import { jobDisplayName } from '../../lib/constants'
 import { formatDuration, formatUsd, lastRunDurationMs, usageDetails } from '../../lib/jobRun'
-import { useJobChange } from '../../hooks/useJobs'
+import { PlayIcon } from '@heroicons/react/24/outline'
+import { useJobChange, useRunJob } from '../../hooks/useJobs'
+import { ApiError } from '../../lib/admin-api'
+import { ActionIconButton } from '../ui/ActionIconButton'
 import { Tooltip } from '../ui/Tooltip'
+import { useToast } from '../ui/Toast'
 
 /**
  * A time of day in UTC, or empty for none, saved when it changes: a chain's flex cut-off or deadline.
@@ -98,6 +102,32 @@ export function RunningSpinner({ size = 'h-5 w-5' }: { size?: string }) {
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
   )
+}
+
+/** Run a job now, with a toast for the outcome; 409 when a run is already under way, which the server's answer says. */
+export function useRunJobNow(job: JobRun) {
+  const runJob = useRunJob()
+  const { toast } = useToast()
+  const name = jobDisplayName(job.jobName)
+  const run = () =>
+    runJob.mutate(job.jobName, {
+      onSuccess: () => toast('success', `${name} triggered`),
+      onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
+    })
+  return { run, pending: runJob.isPending }
+}
+
+/** The Run button, or a spinner while the job runs. */
+export function RunButton({ job }: { job: JobRun }) {
+  const { run, pending } = useRunJobNow(job)
+  if (job.running) {
+    return (
+      <span className="inline-block p-1">
+        <RunningSpinner />
+      </span>
+    )
+  }
+  return <ActionIconButton icon={PlayIcon} label={`Run ${jobDisplayName(job.jobName)}`} onClick={run} disabled={pending} />
 }
 
 function Switch({ on, label, onToggle, disabled }: { on: boolean; label: string; onToggle: () => void; disabled?: boolean }) {

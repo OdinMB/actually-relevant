@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { ClockIcon, ExclamationTriangleIcon, PauseCircleIcon } from '@heroicons/react/20/solid'
-import { PlayIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { PencilSquareIcon } from '@heroicons/react/24/outline'
 import type { JobRun } from '@shared/types'
 import { jobDisplayName } from '../../lib/constants'
-import { useContinueChain, useRunJob } from '../../hooks/useJobs'
+import { useContinueChain } from '../../hooks/useJobs'
 import { ApiError } from '../../lib/admin-api'
 import { ActionIconButton } from '../ui/ActionIconButton'
 import { Button } from '../ui/Button'
@@ -12,7 +12,7 @@ import { useToast } from '../ui/Toast'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { TimeWithRelative } from './TimeWithRelative'
-import { ClockTimeField, EnabledToggle, LastRun, RunningSpinner } from './jobControls'
+import { ClockTimeField, EnabledToggle, LastRun, RunButton } from './jobControls'
 import { JobEditPanel } from './JobsTable'
 import { JobRow, JobTable } from './jobTable'
 
@@ -61,32 +61,6 @@ function ChainState({ chain }: { chain: JobRun }) {
         {action}
       </Button>
     </div>
-  )
-}
-
-function RunButton({ job }: { job: JobRun }) {
-  const runJob = useRunJob()
-  const { toast } = useToast()
-  if (job.running) {
-    return (
-      <span className="inline-block p-1">
-        <RunningSpinner />
-      </span>
-    )
-  }
-  return (
-    <ActionIconButton
-      icon={PlayIcon}
-      label={`Run ${jobDisplayName(job.jobName)}`}
-      disabled={runJob.isPending}
-      onClick={() =>
-        runJob.mutate(job.jobName, {
-          onSuccess: () => toast('success', `${jobDisplayName(job.jobName)} triggered`),
-          // 409 when a run is already under way: the server's answer says so.
-          onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
-        })
-      }
-    />
   )
 }
 

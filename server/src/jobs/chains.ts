@@ -50,7 +50,7 @@ export function startStep(steps: readonly string[], row: ChainRow, mode: 'start'
   const at = row.resumeStep ? steps.indexOf(row.resumeStep) : -1
   if (mode === 'continue') return at >= 0 && CONTINUABLE.includes(row.resumeReason) ? at : null
   if (at < 0 || row.resumeReason !== 'running' || row.interruptedRuns === 0) return 0
-  // A step whose rerun could repeat a side effect (the social post) is not run again: the chain goes on after it
+  // A step whose rerun could repeat a side effect (a newsletter send) is not run again: the chain goes on after it
   return RESUMABLE_JOBS.has(steps[at]!) ? at : at + 1
 }
 
