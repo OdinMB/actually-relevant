@@ -448,8 +448,8 @@ export type PodcastFridayRun = 'create' | 'finished' | 'waiting-for-person' | 'b
 
 /**
  * This ISO week's weekly-episode slot (UTC), read without creating a row. `fridayWindow`: `ahead`
- * before Friday, `open` while Friday's automatic slots still run, `passed` once the last slot has
- * gone by (Friday 19:00 UTC) through Sunday.
+ * before Friday, `open` while Friday's automatic run may still be going, `passed` once its hour has
+ * gone by (Friday 03:00 UTC) through Sunday.
  * `automaticRunEnabled`: whether the show's generate job (generate_podcast, generate_uplifting_podcast) is switched on.
  * `showProblem`: why the show's week episode cannot be opened or run now (Actually Uplifting while it
  * is switched off, naming what it waits for); null when it can.
@@ -828,6 +828,8 @@ export interface JobRun {
   steps: JobName[] | null
   /** What the last finished run spent; null before the first such run, or after an interrupted one. */
   lastRunUsage: JobRunUsage | null
+  /** What the last finished run did, in a few words ("12 new stories", "nothing to do"); null when it did not say. */
+  lastRunSummary: string | null
   createdAt: string
   updatedAt: string
 }

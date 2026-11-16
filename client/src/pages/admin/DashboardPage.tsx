@@ -13,8 +13,9 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { JobStatusBadge } from '../../components/admin/JobStatusBadge'
 import { ActionIconButton } from '../../components/ui/ActionIconButton'
-import { formatStatus, STATUS_VARIANTS, jobDisplayName, JOB_PIPELINE_ORDER } from '../../lib/constants'
+import { formatStatus, STATUS_VARIANTS, jobDisplayName, byPipelineOrder } from '../../lib/constants'
 import { TimeWithRelative } from '../../components/admin/TimeWithRelative'
+import { dashboardRows } from '../../lib/jobRun'
 import { UnseenNoticesCard } from '../../components/admin/UnseenNoticesCard'
 import { useToast } from '../../components/ui/Toast'
 import { adminApi, ApiError } from '../../lib/admin-api'
@@ -148,15 +149,14 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...jobsQuery.data]
-                    .sort((a, b) => {
-                      const ai = JOB_PIPELINE_ORDER.indexOf(a.jobName)
-                      const bi = JOB_PIPELINE_ORDER.indexOf(b.jobName)
-                      return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi)
-                    })
+                  {dashboardRows(jobsQuery.data)
+                    .sort(byPipelineOrder)
                     .map(job => (
                       <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : ''}`}>
-                        <td className="py-2 px-4 font-medium text-neutral-900">{jobDisplayName(job.jobName)}</td>
+                        <td className="py-2 px-4">
+                          <span className="font-medium text-neutral-900">{jobDisplayName(job.jobName)}</span>
+                          {job.lastRunSummary && <span className="block text-xs text-neutral-500">{job.lastRunSummary}</span>}
+                        </td>
                         <td className="py-2 px-4">
                           <JobStatusBadge job={job} variant="dot" />
                         </td>

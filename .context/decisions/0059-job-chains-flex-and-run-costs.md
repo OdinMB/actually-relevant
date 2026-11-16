@@ -30,8 +30,9 @@ page (design: pm project files, `story-directions/2026-11-16_pipeline-chains-and
   **Daily edition** (select, research, publish) from 23:00 UTC. The social post stays a job of its
   own, since its timing is independent of the pipeline (owner, 2026-11-16).
 - **Two weekly chains** (owner, 2026-11-16): the Weekly Newsletter (Saturday 04:00 UTC: build and
-  send the full edition, then Actually Uplifting) and the Weekly Podcast (Friday's slots build both
-  shows' episodes, then publish both on Saturday 07:00 Berlin).
+  send the full edition, then Actually Uplifting) and the Weekly Podcast (one Friday run at 02:00 UTC builds
+  both shows' episodes, retrying a failure within the run, then publishes both on Saturday 07:00
+  Berlin; it started at five Friday slots until the owner cut them to one the same day).
 - **A step can be held until a time** (`not_before`, "HH:MM" or "Sat 07:00", on the step's own clock):
   the chain ends its run there and a timer goes on at that time, set again from the row at startup.
   The podcast's publish steps wait for Saturday morning in Berlin.

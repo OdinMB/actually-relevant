@@ -1,5 +1,6 @@
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
+import { reportRunResult } from '../lib/runUsage.js'
 import { isBlueskyConfigured } from '../lib/bluesky.js'
 import { isMastodonConfigured } from '../lib/mastodon.js'
 import { findAutoPostCandidates, pickBestStoryForSocial } from '../services/socialMedia.js'
@@ -60,6 +61,7 @@ export async function runSocialAutoPost(): Promise<void> {
   const channels = getEnabledChannels()
   if (channels.length === 0) {
     log.info('no social media channels enabled for auto-posting')
+    reportRunResult('No channel has auto-posting on')
     return
   }
 
@@ -74,6 +76,7 @@ export async function runSocialAutoPost(): Promise<void> {
 
   if (candidates.length === 0) {
     log.info('no candidate stories found for social posting')
+    reportRunResult('No story left to post')
     return
   }
 
@@ -88,10 +91,12 @@ export async function runSocialAutoPost(): Promise<void> {
   // tried failed. A channel that already has the story is not an attempt.
   let attempts = 0
   const failures: string[] = []
+  const posted: string[] = []
   for (const channel of channels) {
     try {
       if ((await postToChannel(channel, storyId)) === 'skipped') continue
       attempts++
+      posted.push(channel.name === 'bluesky' ? 'Bluesky' : 'Mastodon')
     } catch (err) {
       attempts++
       failures.push(`${channel.name}: ${err instanceof Error ? err.message : String(err)}`)
@@ -103,6 +108,11 @@ export async function runSocialAutoPost(): Promise<void> {
     throw new Error(`social auto-post failed on every channel it tried (story ${storyId}): ${failures.join('; ')}`)
   }
   log.info('social auto-post job complete')
+  reportRunResult(
+    posted.length > 0
+      ? `Posted a story to ${posted.join(' and ')}${failures.length > 0 ? `, ${failures.length} channel failed` : ''}`
+      : 'Every channel already had the story',
+  )
 }
 
 /** Pause after a publish, to be polite to the next channel's API. */

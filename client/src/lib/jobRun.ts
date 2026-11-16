@@ -1,4 +1,36 @@
 import type { JobRun, JobRunUsage } from '@shared/types'
+import { jobDisplayName } from './constants'
+
+/**
+ * The dashboard's rows: one per job with its own schedule, a chain standing for its steps. A chain's
+ * row shows the most recent run among the chain and its steps that are switched on (so a chain that
+ * has not run yet still shows its steps' last work), runs while any of them runs, carries the
+ * chain's error, or else the first step's, named, and says what each step of its latest run did.
+ */
+export function dashboardRows(jobs: JobRun[]): JobRun[] {
+  const byName = new Map(jobs.map(job => [job.jobName as string, job]))
+  return jobs
+    .filter(job => !job.chain)
+    .map(job => {
+      if (!job.steps) return job
+      const steps = job.steps.map(name => byName.get(name)).filter((s): s is JobRun => s !== undefined && s.enabled)
+      const started = (j: JobRun) => (j.lastStartedAt ? Date.parse(j.lastStartedAt) : -Infinity)
+      const latest = [job, ...steps].reduce((a, b) => (started(b) > started(a) ? b : a))
+      const failedStep = steps.find(s => s.lastError)
+      // What the steps of the chain's latest run did (every step's last run, before the chain's first)
+      const sinceChain = started(job)
+      const reported = steps.filter(s => s.lastRunSummary && started(s) >= sinceChain)
+      const lastRunSummary = reported.length > 0 ? reported.map(s => `${jobDisplayName(s.jobName)}: ${s.lastRunSummary}`).join(' · ') : job.lastRunSummary
+      return {
+        ...job,
+        lastStartedAt: latest.lastStartedAt,
+        lastCompletedAt: latest.lastCompletedAt,
+        running: job.running || steps.some(s => s.running),
+        lastError: job.lastError ?? (failedStep ? `${jobDisplayName(failedStep.jobName)}: ${failedStep.lastError}` : null),
+        lastRunSummary,
+      }
+    })
+}
 
 /** How long the last finished run took, or null when there is none to measure (never run, or running now). */
 export function lastRunDurationMs(job: Pick<JobRun, 'lastStartedAt' | 'lastCompletedAt'>): number | null {

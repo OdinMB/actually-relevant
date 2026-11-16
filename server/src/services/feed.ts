@@ -93,13 +93,14 @@ export async function updateFeed(id: string, data: FeedChanges, db: Db = prisma)
 }
 
 export async function getDueFeeds() {
-  // Use raw SQL to filter by each feed's own crawl_interval_hours, avoiding
-  // the old coarse 1-hour filter that fetched too many rows
+  // Raw SQL filters by each feed's own crawl_interval_hours. A feed due within the grace counts as due
+  // now, so a daily feed stays on the same run each day (config.crawl.dueGraceMinutes)
   const dueIds = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id FROM feeds
     WHERE active = true
     AND (last_crawled_at IS NULL
-      OR last_crawled_at + (crawl_interval_hours || ' hours')::interval < NOW())
+      OR last_crawled_at + (crawl_interval_hours || ' hours')::interval
+        < NOW() + make_interval(mins => ${config.crawl.dueGraceMinutes}::int))
   `
   if (dueIds.length === 0) return []
   return prisma.feed.findMany({

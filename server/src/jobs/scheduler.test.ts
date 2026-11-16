@@ -57,7 +57,7 @@ vi.mock('./chains.js', () => ({
 const { initScheduler, startScheduler, stopScheduler, reloadJob, runJob, runningJobs, isJobRunning, estimateCronIntervalMs, waitForRunningJobs } =
   await import('./scheduler.js')
 const { config } = await import('../config.js')
-const { currentRun, emptyUsage, recordCall } = await import('../lib/runUsage.js')
+const { currentRun, emptyUsage, recordCall, reportRunResult } = await import('../lib/runUsage.js')
 
 const HOUR = 60 * 60 * 1000
 
@@ -129,7 +129,7 @@ describe('scheduler', () => {
       expect(mockLease.claimJobRun).toHaveBeenCalledWith('intake_chain')
       expect(mockLease.withJobLeaseHeartbeat).toHaveBeenCalledWith('intake_chain', handler)
       expect(handler).toHaveBeenCalledTimes(1)
-      expect(mockLease.finishJobRun).toHaveBeenCalledWith('intake_chain', null, emptyUsage())
+      expect(mockLease.finishJobRun).toHaveBeenCalledWith('intake_chain', null, emptyUsage(), null)
       expect(mockNotify).not.toHaveBeenCalled()
       expect(runningJobs.has('intake_chain')).toBe(false)
     })
@@ -165,7 +165,20 @@ describe('scheduler', () => {
         recordCall(currentRun()!, { model: 'gpt-6-luna', tier: 'flex', input: 1_000_000, cached: 0, output: 0, fellBack: false })
         throw new Error('boom')
       })
-      expect(mockLease.finishJobRun).toHaveBeenCalledWith('intake_chain', 'boom', expect.objectContaining({ calls: 1, flexCalls: 1, costUsd: 0.05 }))
+      expect(mockLease.finishJobRun).toHaveBeenCalledWith('intake_chain', 'boom', expect.objectContaining({ calls: 1, flexCalls: 1, costUsd: 0.05 }), null)
+    })
+
+    it('records what the run said it did, its last report winning, on a failure too', async () => {
+      await runJob('intake_chain', async () => {
+        reportRunResult('first')
+        reportRunResult('12 new stories from 3 feeds')
+      })
+      expect(mockLease.finishJobRun).toHaveBeenLastCalledWith('intake_chain', null, emptyUsage(), '12 new stories from 3 feeds')
+      await runJob('intake_chain', async () => {
+        reportRunResult('Rated 2 of 5 stories')
+        throw new Error('boom')
+      })
+      expect(mockLease.finishJobRun).toHaveBeenLastCalledWith('intake_chain', 'boom', emptyUsage(), 'Rated 2 of 5 stories')
     })
 
     it('records the error, not a success, when the handler fails, and alerts', async () => {
@@ -174,7 +187,7 @@ describe('scheduler', () => {
       await runJob('intake_chain', handler)
 
       expect(mockLease.finishJobRun).toHaveBeenCalledTimes(1)
-      expect(mockLease.finishJobRun).toHaveBeenCalledWith('intake_chain', 'handler boom', emptyUsage())
+      expect(mockLease.finishJobRun).toHaveBeenCalledWith('intake_chain', 'handler boom', emptyUsage(), null)
       expect(mockNotify).toHaveBeenCalledWith(failureOf('intake_chain', 'handler boom'))
     })
 
@@ -227,7 +240,7 @@ describe('scheduler', () => {
       finish()
 
       expect(await waiting).toEqual([])
-      expect(mockLease.finishJobRun).toHaveBeenCalledWith('intake_chain', null, emptyUsage())
+      expect(mockLease.finishJobRun).toHaveBeenCalledWith('intake_chain', null, emptyUsage(), null)
     })
 
     it('gives up at the deadline and names the jobs still running', async () => {
@@ -279,7 +292,7 @@ describe('scheduler', () => {
 
       expect(handler).toHaveBeenCalledTimes(1)
       expect(runningJobs.has('intake_chain')).toBe(false)
-      expect(mockLease.finishJobRun).toHaveBeenLastCalledWith('intake_chain', 'completion write failed', emptyUsage())
+      expect(mockLease.finishJobRun).toHaveBeenLastCalledWith('intake_chain', 'completion write failed', emptyUsage(), null)
       expect(mockNotify).toHaveBeenCalledWith(failureOf('intake_chain', 'completion write failed'))
     })
 

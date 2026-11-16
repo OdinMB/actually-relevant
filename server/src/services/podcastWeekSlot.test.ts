@@ -41,7 +41,7 @@ describe('fridayWindow', () => {
     ['2026-10-12T00:00:00Z', 'ahead'], // Monday
     ['2026-10-15T23:59:00Z', 'ahead'], // Thursday
     ['2026-10-16T00:00:00Z', 'open'],
-    ['2026-10-16T18:00:00Z', 'open'], // the last slot
+    ['2026-10-16T18:00:00Z', 'open'],
     ['2026-10-16T19:59:00Z', 'open'],
     ['2026-10-16T20:00:00Z', 'passed'],
     ['2026-10-17T06:00:00Z', 'passed'], // Saturday
@@ -55,8 +55,8 @@ describe('fridayWindow', () => {
 describe('slotWindow', () => {
   it.each([
     ['2026-10-15T23:59:00Z', 'ahead'],
-    ['2026-10-16T18:30:00Z', 'open'], // the last slot's hour, its run may still be going
-    ['2026-10-16T19:00:00Z', 'passed'], // gate still open, but no slot fires again this week
+    ['2026-10-16T02:30:00Z', 'open'], // the Friday run's hour, it may still be going
+    ['2026-10-16T03:00:00Z', 'passed'], // gate still open, but the run does not fire again this week
     ['2026-10-16T20:00:00Z', 'passed'],
     ['2026-10-17T06:00:00Z', 'passed'],
   ] as const)('%s is %s', (iso, expected) => {
