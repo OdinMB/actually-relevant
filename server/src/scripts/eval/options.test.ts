@@ -16,6 +16,8 @@ import {
   RESEARCH_MAX_SIZE,
   SUITE_NAMES,
 } from './options.js'
+import { config } from '../../config.js'
+import { STEP_TIERS } from '../../services/researchPipeline.js'
 import { MAX_REPEAT } from './repeats.js'
 import { STEP_ARMS } from './research/pipeline.js'
 
@@ -210,8 +212,10 @@ describe('parseOverviewOptions', () => {
     expect(() => parseOverviewOptions(['--out', 'x', '--half', 'holdout'])).toThrow(/--half must be one of tune, judge, all/)
   })
 
-  it("defaults to production's research fact-check arm", () => {
+  it("defaults to production's research fact-check arm, production's small tier as configured by default", () => {
     expect(OVERVIEW_DEFAULT_ARMS).toEqual([STEP_ARMS['fact-check']])
+    expect(STEP_TIERS['fact-check']).toBe('small')
+    expect(OVERVIEW_DEFAULT_ARMS).toEqual([{ model: config.llm.models.small.name, effort: config.llm.models.small.reasoningEffort }])
   })
 
   it('takes steps in any order and rejects an unknown one', () => {

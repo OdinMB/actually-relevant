@@ -114,6 +114,13 @@ function fakeTavily(dates: (string | null)[] = ['2026-11-10', null, '2026-11-20'
 }
 
 describe('contextCall', () => {
+  it("holds each step's constant arm at production's default model and effort for the step's tier", () => {
+    for (const [step, tier] of Object.entries(CONTEXT_STEP_TIERS)) {
+      const production = config.llm.models[tier]
+      expect(CONTEXT_STEP_ARMS[step as keyof typeof CONTEXT_STEP_TIERS], step).toEqual({ model: production.name, effort: production.reasoningEffort })
+    }
+  })
+
   it("calls each step on its tier's constant arm, under a versioned name that run 2 tags", async () => {
     const ctx = fakeEvalContext(() => ({ facts: [] }))
     expect(CONTEXT_STEP_ARMS.write).toEqual({ model: 'gpt-6-luna', effort: 'medium' })
