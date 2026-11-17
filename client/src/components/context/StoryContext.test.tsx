@@ -41,9 +41,15 @@ describe('StoryContext', () => {
     expect(cards[1]).toHaveTextContent('Budget Office · Plains Ledger · As of October 2026')
   })
 
-  it('opens every card from a one-line button on phones', () => {
-    renderSection([contextBox('a', { type: 'next' })])
-    expect(screen.getByRole('button', { name: noteButtonName(slotKicker('next'), 'Teaser a') })).toHaveAttribute('aria-haspopup', 'dialog')
+  it('opens a card from a one-line button on phones, and shows a short one in full with the heading the cards have', () => {
+    const long = { sentences: ['One sentence.', 'Another sentence.'].map(text => ({ text, citations: [] })) }
+    renderSection([contextBox('a', { type: 'next', ...long }), contextBox('b', { type: 'key_term' })])
+    const [noted, shown] = within(screen.getByRole('list', { name: 'Context notes' })).getAllByRole('listitem')
+    expect(within(noted!).getByRole('button', { name: noteButtonName(slotKicker('next'), 'Teaser a') })).toHaveAttribute('aria-haspopup', 'dialog')
+    expect(within(shown!).queryByRole('button', { name: noteButtonName(slotKicker('key_term'), 'Teaser b') })).toBeNull()
+    expect(within(shown!).getByRole('heading', { level: 3, name: 'Heading b' })).toBeInTheDocument()
+    expect(shown).toHaveTextContent('Sentence of b.')
+    expect(shown).toHaveTextContent('Budget Office · As of Nov 12, 2026')
   })
 
   it('marks the section as AI-generated context, with no AI badge of its own, and passes axe', async () => {

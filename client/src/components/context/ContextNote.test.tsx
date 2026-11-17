@@ -24,6 +24,14 @@ const research = {
 
 const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
 
+/** Two sentences: more than a phone shows in full, so the card keeps its one-line note (`isShortCard`). */
+const long = { sentences: ['Sentence of p.', 'Another sentence.'].map(text => ({ text, citations: [] })) }
+const singleFigure = {
+  type: 'who_affected' as const,
+  sentences: [],
+  visual: { kind: 'tiles' as const, tiles: [{ label: '', values: [{ text: '600,000', estimate: false, sourceId: 'C1' }] }] },
+}
+
 describe('ContextNote', () => {
   it('sits after the paragraph it belongs to, and in the text column of the point it belongs to, past its number', () => {
     const story = makeStory({ quote: null })
@@ -51,7 +59,7 @@ describe('ContextNote', () => {
 
   it('opens the full card in a sheet from its one-line button; Escape closes it and focus returns to the button', async () => {
     const user = userEvent.setup()
-    render(<ContextNote box={contextBox('p', { place: 'P1' })} sources={sources} colors={colors} />)
+    render(<ContextNote box={contextBox('p', { place: 'P1', ...long })} sources={sources} colors={colors} />)
     const button = screen.getByRole('button', { name: noteButtonName(slotKicker('compared'), 'Teaser p') })
 
     await user.click(button)
@@ -66,9 +74,26 @@ describe('ContextNote', () => {
 
   it('closes the sheet with its close button', async () => {
     const user = userEvent.setup()
-    render(<ContextNote box={contextBox('p', { place: 'P1' })} sources={sources} colors={colors} />)
+    render(<ContextNote box={contextBox('p', { place: 'P1', ...long })} sources={sources} colors={colors} />)
     await user.click(screen.getByRole('button', { name: noteButtonName(slotKicker('compared'), 'Teaser p') }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Close' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('shows a short card in full on phones too: one note, nothing to open and no heading, beside its text', () => {
+    render(<ContextNote box={contextBox('n', { place: 'P2', ...singleFigure })} sources={sources} colors={colors} />)
+    const notes = screen.getAllByRole('note')
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toHaveAccessibleName(`${slotKicker('who_affected')}: Heading n`)
+    // Below md a card's note is hidden for the one-line button; a short card's is not
+    expect(notes[0]).not.toHaveClass('hidden')
+    expect(notes[0]).toHaveTextContent(/Heading n600,000Budget Office · As of Nov 12, 2026$/)
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('heading')).toBeNull()
+  })
+
+  it('keeps the full card hidden below md while the one-line button stands for it', () => {
+    render(<ContextNote box={contextBox('p', { place: 'P1', ...long })} sources={sources} colors={colors} />)
+    expect(screen.getByRole('note')).toHaveClass('hidden')
   })
 })

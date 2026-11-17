@@ -11,13 +11,15 @@ import { FigureTiles } from './FigureTiles'
  * Where a card is shown, which sets its look:
  * - `note`: beside a paragraph or point. In the column between `md` and `lg` (tinted, its visual left
  *   of its text when it has both), in the right margin from `lg` up (white, one column, narrower type).
+ *   A short card (`isShortCard`) has this look on phones too, beside the text and under More context.
  * - `section`: under More context, in the wide grid.
  * - `sheet`: in the phone's bottom sheet, which draws the frame.
  */
 export type CardLayout = 'note' | 'section' | 'sheet'
 
 const FRAME: Record<CardLayout, string> = {
-  note: 'rounded-[10px] border border-l-[3px] border-stone-200 bg-stone-50 px-[18px] pb-3.5 pt-4 lg:border-neutral-200 lg:bg-white lg:px-4 lg:pb-3 lg:pt-3.5 lg:shadow-sm',
+  // A short card on a phone sits a little tighter than in the column from md
+  note: 'rounded-[10px] border border-l-[3px] border-stone-200 bg-stone-50 px-4 pb-3 pt-3 md:px-[18px] md:pb-3.5 md:pt-4 lg:border-neutral-200 lg:bg-white lg:px-4 lg:pb-3 lg:pt-3.5 lg:shadow-sm',
   section: 'flex h-full w-full flex-col rounded-xl border border-neutral-200 bg-white px-5 pb-4 pt-5',
   sheet: 'pt-1',
 }

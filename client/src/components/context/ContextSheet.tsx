@@ -78,7 +78,8 @@ function NoteIcon({ box }: { box: ContextBoxView }) {
 
 /**
  * A card as the phone shows it: a one-line button (icon, kicker, teaser, chevron) that opens the full
- * card in the sheet. Named by its visible kicker and teaser.
+ * card in the sheet. Named by its visible kicker and teaser. A short card (`isShortCard`) shows in
+ * full instead.
  */
 export function SheetNote({ box, sources, colors, className = '' }: CardProps & { className?: string }) {
   const [open, setOpen] = useState(false)

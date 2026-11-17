@@ -3,6 +3,7 @@ import type { CategoryColor } from '../../lib/category-colors'
 import type { SourcesById } from '../research/Citation'
 import { ContextCard } from './ContextCard'
 import { SheetNote } from './ContextSheet'
+import { isShortCard } from './shortCard'
 
 const HEADING_ID = 'more-context-heading'
 
@@ -11,8 +12,9 @@ const HEADING_ID = 'more-context-heading'
  * context"): the page's ruled heading and then the cards, nothing between them. From `md` up the cards
  * sit in a grid, two a row in the column; from `lg` three a row, wider than the column (from its left
  * edge across the notes' margin when the story has notes, `wide`; centered on it otherwise); phones get
- * the same one-line notes as beside the text. Marked as AI-generated context, with no label of its
- * own: the story's label covers the page. It starts below the last margin note (`data-clear-notes`).
+ * the same one-line notes as beside the text, and a short card in full as it shows there (its heading
+ * an `h3`, as in the grid). Marked as AI-generated context, with no label of its own: the story's
+ * label covers the page. It starts below the last margin note (`data-clear-notes`).
  */
 export function StoryContext({ boxes, sources, colors, wide }: { boxes: ContextBoxView[]; sources: SourcesById; colors: CategoryColor; wide: boolean }) {
   if (boxes.length === 0) return null
@@ -29,7 +31,11 @@ export function StoryContext({ boxes, sources, colors, wide }: { boxes: ContextB
       <ul aria-label="Context notes" className="space-y-2.5 md:hidden">
         {boxes.map(box => (
           <li key={box.id}>
-            <SheetNote box={box} sources={sources} colors={colors} />
+            {isShortCard(box) ? (
+              <ContextCard box={box} sources={sources} colors={colors} layout="note" title="h3" />
+            ) : (
+              <SheetNote box={box} sources={sources} colors={colors} />
+            )}
           </li>
         ))}
       </ul>
