@@ -188,7 +188,7 @@ describe('StoryContextAdmin', () => {
   it('says what the step built and where each card sits, grouped by place', async () => {
     renderSection()
     const region = await section()
-    expect(region).toHaveTextContent(/Built .+, after the story was published\./)
+    expect(region).toHaveTextContent(/The newest context run built these cards on .+\./)
     expect(region).toHaveTextContent('3 cards show on the site: 1 beside the text, 1 beside Why This Matters, 1 under More context. 1 hidden.')
 
     const groups = within(region)

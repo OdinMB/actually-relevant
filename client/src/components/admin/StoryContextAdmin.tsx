@@ -41,7 +41,9 @@ function runLine(run: ContextAdminRun, hasBoxes: boolean): string {
     case 'failed':
       return `The newest context run failed on ${when}: ${(run.error ?? 'no reason recorded').replace(/\.$/, '')}. It does not try again on its own.${earlier}`
     case 'completed':
-      return run.outcome === 'none-kept' ? `The newest context run, on ${when}, kept no card.${earlier}` : `Built ${when}, after the story was published.`
+      return run.outcome === 'none-kept'
+        ? `The newest context run, on ${when}, kept no card.${earlier}`
+        : `The newest context run built these cards on ${when}.`
   }
 }
 
