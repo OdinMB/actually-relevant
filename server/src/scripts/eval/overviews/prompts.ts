@@ -13,7 +13,17 @@ import { tag, UNTRUSTED } from '../../../prompts/research.js'
 import { escapeXml } from '../../../prompts/shared.js'
 import { SLOT_DEFINITIONS, type StoryText } from '../../../prompts/storyContext.js'
 import { CONTEXT_SLOTS } from '../../../schemas/storyContext.js'
+import type { ContextInput } from '../../../services/storyContextPipeline.js'
 import { GAP_NEED_KINDS } from './gapKeySchema.js'
+
+/** A story's input as the prompts show it: its title, day, paragraphs, Why This Matters points and caveats. */
+export const storyTextOf = (input: Pick<ContextInput, 'title' | 'storyDay' | 'layout'>): StoryText => ({
+  title: input.title,
+  date: input.storyDay,
+  paragraphs: input.layout.paragraphs,
+  points: input.layout.points,
+  caveats: input.layout.caveats,
+})
 
 const storyBlock = (story: StoryText) => `<STORY>
 Our published story, written by us from its sources.

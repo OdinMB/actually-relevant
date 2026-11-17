@@ -11,7 +11,6 @@
 import type { z } from 'zod'
 import { config } from '../../../config.js'
 import { buildFactCheckPrompt } from '../../../prompts/research.js'
-import type { StoryText } from '../../../prompts/storyContext.js'
 import { factCheckSchema, type FactCheck } from '../../../schemas/research.js'
 import { boxCheckItems, promptItems, renderFact, type BoxItem, type ContextFactData } from '../../../services/storyContextChecks.js'
 import type { ContextInput, StoryContextResult } from '../../../services/storyContextPipeline.js'
@@ -28,6 +27,7 @@ import {
   fieldsJudgeSchema,
   needsJudgeSchema,
   placementJudgeSchema,
+  storyTextOf,
   type FieldsJudgeAnswer,
   type NeedsJudgeAnswer,
   type PlacementJudgeAnswer,
@@ -65,14 +65,6 @@ interface JudgeCall<T> {
 
 const windows = () => ({ fastDays: config.storyContext.fastValidDays, slowDays: config.storyContext.slowValidDays })
 
-const storyText = (input: ContextInput): StoryText => ({
-  title: input.title,
-  date: input.storyDay,
-  paragraphs: input.layout.paragraphs,
-  points: input.layout.points,
-  caveats: input.layout.caveats,
-})
-
 const supportedFacts = (result: StoryContextResult) => new Map(result.facts.filter(f => f.verdict === 'supported').map(f => [f.ref, f]))
 
 /** Production's box-check items of the kept cards (the honest gap has none). */
@@ -89,7 +81,7 @@ function needsCall(r: JudgedRun, items: BoxItem[]): JudgeCall<NeedsJudgeAnswer> 
   const facts = supportedFacts(r.result)
   const cited = [...new Set(items.flatMap(i => i.checked.item.factIds))].flatMap(id => facts.get(id) ?? [])
   const prompt = buildNeedsJudgePrompt({
-    story: storyText(r.input),
+    story: storyTextOf(r.input),
     needs: openNeeds(r.key).map(n => ({ id: n.id, slot: n.slot, kind: n.kind, need: n.need, accepts: n.accepts })),
     items: items.map(i => ({ label: i.checked.item.label, slot: r.result.boxes[i.box]!.type, text: i.checked.item.text, factIds: i.checked.item.factIds })),
     facts: cited.map(f => ({ id: f.ref, text: renderFact(f), outlet: f.source.outlet, date: f.source.date })),
@@ -182,7 +174,7 @@ function placementCall(r: JudgedRun, notes: NoteToJudge[], items: BoxItem[]): Ju
   if (notes.length === 0) return null
   const spots = new Map([...r.input.layout.paragraphs, ...r.input.layout.points].map(s => [s.id, s.text]))
   const prompt = buildPlacementJudgePrompt({
-    story: storyText(r.input),
+    story: storyTextOf(r.input),
     notes: notes.map(n => {
       const box = r.result.boxes[n.box]!
       return {
