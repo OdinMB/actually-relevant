@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 type: feature
 complexity: complex
 ---
@@ -70,7 +70,7 @@ The daily edition's, `publish_stories`' and `build_story_context`'s notes say th
 |---|---|
 | `server/src/jobs/chainDefinitions.ts` | New order; `GOES_ON_PAST_FAILURE` |
 | `server/src/jobs/chains.ts` | A failed step in `GOES_ON_PAST_FAILURE` does not stop its chain |
-| `server/src/services/storyContextQueue.ts` (new) | `nextForContext` (moved, selected first, no limit), `awaitingContext`, `contextStepState` |
+| `server/src/services/storyContextQueue.ts` (new) | `nextForContext` (moved, selected first, no limit), `awaitingContext` and the step's state it reads, `STORY_CONTEXT_JOB` (moved from the job, so services no longer import it from `jobs/`) |
 | `server/src/services/storyContextInput.ts` | `RUN_WITH_FACTS_SQL` exported; `loadContextInput` takes a selected story, its day the run's |
 | `server/src/jobs/buildStoryContext.ts` | No `perRun`; the chain's deadline; "left at the deadline" in the summary |
 | `server/src/jobs/publishStories.ts` | `awaitingContext` beside `awaitingResearch` |
