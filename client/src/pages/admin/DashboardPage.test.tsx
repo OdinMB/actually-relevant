@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, within } from '@testing-library/react'
-import type { SpendingRow, SpendScope } from '@shared/types'
+import { screen, fireEvent, waitFor, within } from '@testing-library/react'
+import type { JobRun, SpendingRow, SpendScope } from '@shared/types'
+import { makeJobRun } from '../../test/jobs'
 import { renderAdminRoutes } from '../../test/admin'
 import { adminApi } from '../../lib/admin-api'
 import DashboardPage from './DashboardPage'
@@ -26,6 +27,7 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
       list: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 5, unseenCount: 0 }),
     },
     feedback: { list: vi.fn() },
+    jobs: { list: vi.fn(), continueChain: vi.fn() },
     cache: {
       clear: vi.fn().mockResolvedValue({ caches: [{ name: 'homepage', entries: 3 }], entries: 3 }),
     },
@@ -61,6 +63,33 @@ describe('DashboardPage', () => {
       voices: { usedChars: 0, capChars: 44_000 },
     })
     api.feedback.list.mockResolvedValue({ items: [], total: 0, page: 1, limit: 5, unreadCount: 0 })
+    api.jobs.list.mockResolvedValue([])
+    api.jobs.continueChain.mockResolvedValue({ message: 'ok' })
+  })
+
+  it('lists the chains waiting for review or stopped at a step, and continues one; a chain held for its time is not listed', async () => {
+    const chainJob = (jobName: Parameters<typeof makeJobRun>[0], over: Partial<JobRun>) =>
+      makeJobRun(jobName, { steps: ['crawl_feeds'], canContinue: true, ...over })
+    api.jobs.list.mockResolvedValue([
+      chainJob('newsletter_chain', { resumeStep: 'publish_newsletter', resumeReason: 'review' }),
+      chainJob('daily_edition_chain', { resumeStep: 'research_stories', resumeReason: 'failed' }),
+      chainJob('podcast_chain', { resumeStep: 'publish_podcast', resumeReason: 'waiting', resumeAt: '2026-11-21T06:00:00Z' }),
+      chainJob('intake_chain', { canContinue: false }),
+    ])
+    renderDashboard()
+    const card = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!
+    expect(within(card).getByText(/waiting for your review\. Publish Newsletter runs next\./)).toBeInTheDocument()
+    expect(within(card).getByRole('link', { name: 'Open newsletters' })).toHaveAttribute('href', '/admin/newsletters')
+    expect(within(card).getByText(/stopped at Research Stories/)).toBeInTheDocument()
+    expect(within(card).getAllByRole('listitem')).toHaveLength(2)
+    fireEvent.click(within(card).getByRole('button', { name: 'Continue with Publish Newsletter' }))
+    await waitFor(() => expect(api.jobs.continueChain).toHaveBeenCalledWith('newsletter_chain'))
+  })
+
+  it('shows no Waiting on you card when no chain waits', async () => {
+    renderDashboard()
+    await screen.findByText('$47.00')
+    expect(screen.queryByRole('heading', { name: 'Waiting on you' })).not.toBeInTheDocument()
   })
 
   it('shows stories crawled, screened, assessed and published in the last 7 and 30 days, linking to the stats page', async () => {

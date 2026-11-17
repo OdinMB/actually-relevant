@@ -8,6 +8,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { UnseenNoticesCard } from '../../components/admin/UnseenNoticesCard'
+import { WaitingOnYouCard } from '../../components/admin/WaitingOnYouCard'
 import { UnreadFeedbackCard } from '../../components/admin/UnreadFeedbackCard'
 import { SpendingSummaryCard } from '../../components/admin/SpendingSummaryCard'
 import { useToast } from '../../components/ui/Toast'
@@ -82,6 +83,8 @@ export default function DashboardPage() {
           </Button>
         }
       />
+
+      <WaitingOnYouCard />
 
       <UnseenNoticesCard />
 
