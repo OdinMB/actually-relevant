@@ -1,22 +1,18 @@
 /**
  * One story's context run in production (`.context/story-context.md`, "Runs"): the run row, the
- * production deps (one structured-output call per step on its tier's model after the shared
- * rate-limit delay, never wrapped in `withRetry`, its cost at standard price, so the recorded cost
+ * production deps (one structured-output call per step on its tier's model, `structuredCall`, after
+ * the shared rate-limit delay, never wrapped in `withRetry`, its cost at standard price, so the recorded cost
  * is an upper bound; the search with its cache and the publishers' opt-out check), the pipeline, and
  * one transaction that writes the facts, the boxes and the run's result, while the run is still
  * `running`. A run cut off by a restart is marked failed after `staleRunMinutes`, and settles its story.
  */
-import { HumanMessage, type AIMessage } from '@langchain/core/messages'
 import type { Prisma } from '@prisma/client'
 import type { z } from 'zod'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
-import { classifyOutcome, contentText, finishReasonOf, usageFrom, ZERO_USAGE } from '../lib/llmUsage.js'
 import prisma from '../lib/prisma.js'
 import { isRetryableError } from '../lib/retry.js'
-import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
-import { callCostUsd } from './researchCost.js'
 import { sanitizedError } from './researchRuns.js'
 import { loadContextInput } from './storyContextInput.js'
 import {
@@ -29,12 +25,11 @@ import {
 } from './storyContextPipeline.js'
 import { boxRow, factRow } from './storyContextRecords.js'
 import { contextSearch } from './storyContextSearch.js'
+import { structuredCall } from './structuredCall.js'
 
 const log = createLogger('story_context')
 
 const INTERRUPTED = 'interrupted: the server restarted during the run'
-
-const modelOf = (step: keyof typeof CONTEXT_STEP_TIERS) => config.llm.models[CONTEXT_STEP_TIERS[step]].name
 
 /**
  * A failure that may pass on a later attempt, once the SDK's and `withRetry`'s own retries are spent
@@ -48,23 +43,10 @@ export function transientFailure(err: unknown): boolean {
   return err.name === 'TimeoutError' || ['APIConnectionError', 'APIConnectionTimeoutError'].includes(err.constructor.name)
 }
 
-/** Production's step caller: the tier's model after the rate-limit delay, never in `withRetry` (the SDK retries). */
+/** Production's step caller: the step's tier (`structuredCall`), a thrown error judged for a second attempt. */
 const productionCall: ContextCall = async <T>(step: keyof typeof CONTEXT_STEP_TIERS, schema: z.ZodType<T>, prompt: string) => {
-  const model = modelOf(step)
-  await rateLimitDelay()
-  try {
-    const result = await getLLMByTier(CONTEXT_STEP_TIERS[step])
-      .withStructuredOutput(schema, { includeRaw: true })
-      .invoke([new HumanMessage(prompt)])
-    const raw = result.raw as AIMessage
-    // The schema parsed it: the structured-output runnable types its result loosely
-    const parsed = (result.parsed ?? null) as T | null
-    const usage = usageFrom(raw)
-    const outcome = classifyOutcome({ parsed, content: contentText(raw), finishReason: finishReasonOf(raw) })
-    return { parsed: outcome === 'ok' ? parsed : null, outcome, usage, costUsd: callCostUsd(model, usage), model }
-  } catch (err) {
-    return { parsed: null, outcome: classifyOutcome({ error: err }), usage: ZERO_USAGE, costUsd: 0, model, transient: transientFailure(err) }
-  }
+  const { error, ...result } = await structuredCall(CONTEXT_STEP_TIERS[step], schema, prompt)
+  return result.outcome === 'error' ? { ...result, transient: transientFailure(error) } : result
 }
 
 export function productionDeps(): ContextDeps {

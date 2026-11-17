@@ -18,7 +18,7 @@ Story context gives a published, researched story **context cards**: how big the
 
 ## What one story goes through
 
-`runStoryContext(storyId)` (`services/storyContextRuns.ts`) writes the run row (`running`), loads the input (`loadContextInput`; none: the run is `skipped`, outcome `no-research`), runs the pipeline with production's deps and stores the result in one transaction. `buildStoryContext(input, deps)` (`services/storyContextPipeline.ts`) does no I/O of its own: its deps are the model call, the search and the opt-out policy, so the eval runs the same code. Production's call (`productionCall`) is one structured-output call on the step's tier after `rateLimitDelay()`, never in `withRetry` (the SDK retries). Tiers (`CONTEXT_STEP_TIERS`): every step small, the write medium.
+`runStoryContext(storyId)` (`services/storyContextRuns.ts`) writes the run row (`running`), loads the input (`loadContextInput`; none: the run is `skipped`, outcome `no-research`), runs the pipeline with production's deps and stores the result in one transaction. `buildStoryContext(input, deps)` (`services/storyContextPipeline.ts`) does no I/O of its own: its deps are the model call, the search and the opt-out policy, so the eval runs the same code. Production's call (`productionCall`) is one structured-output call on the step's tier after `rateLimitDelay()`, never in `withRetry` (the SDK retries), made by `structuredCall` (`services/structuredCall.ts`), which research's meter uses too. Tiers (`CONTEXT_STEP_TIERS`): every step small, the write medium.
 
 | # | Step | Where | What it does |
 |---|---|---|---|

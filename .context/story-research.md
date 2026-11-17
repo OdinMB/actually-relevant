@@ -278,6 +278,7 @@ The stories list's bulk bar researches a selection ("Bulk research") and puts ea
 | `server/src/jobs/researchStories.ts` | The `research_stories` job: sweep, queue, the worker pool, per-story re-checks and read, the apply decision (`switchedOff`), $0 runs for errors, tallies |
 | `server/src/services/researchPipeline.ts` | The step sequence and gate (no I/O) |
 | `server/src/services/researchCalls.ts` | Production's metered step caller and Tavily wrapper |
+| `server/src/services/structuredCall.ts` | One structured-output call on a tier's model (rate-limit delay, no `withRetry`, cost at research's prices, outcome), shared with story context |
 | `server/src/services/researchCost.ts` | USD per call, per step and per run |
 | `server/src/services/researchInput.ts` | The story loader (tagged `$queryRaw`, SELECT only) |
 | `server/src/services/researchFilter.ts`, `researchChecks.ts`, `researchCopying.ts`, `researchQuote.ts` | Source filter and opt-out drop; the draft's items with their evidence and number hints (`checkedItems`), citation check, the fact check's answer as problems (and its unjudged items), drops, gate; the copying engine (source lines, tokens, quoted spans, the run check); the key quote's item, its words hint, its source-id check and its drop |
