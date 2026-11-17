@@ -1,7 +1,9 @@
 /**
  * One story's context, steps 2-12 (`.context/story-context.md`, "What one story goes through"):
  * structure research's facts, the gap list, the searches with the opt-out and source filter, one
- * extraction per new source, the fact check, the write, the box checks and the response check. No I/O
+ * extraction per new source, the fact check, the write, the box checks and the response check. On a
+ * story with earlier runs (`ContextInput.earlier`) it builds on them: their facts carried over, their
+ * judged research facts, queries, response angles and read pages not repeated. No I/O
  * of its own, as `researchStory` has none: model calls, search and the opt-out policy are injected
  * (`storyContextRuns.ts` in production, the eval's deps in eval:overviews). It writes nothing.
  */
@@ -45,8 +47,8 @@ import {
   type FactSource,
 } from './storyContextChecks.js'
 import { layoutSpots, type StoryLayout } from './storyContextLayout.js'
-import { boxRefs } from './storyContextRecords.js'
-import { passageAround, pickNewSources, type ContextSearchAnswer, type ContextSearchRequest, type SourceDrop } from './storyContextSources.js'
+import { boxRefs, factKey } from './storyContextRecords.js'
+import { normalizedQuery, passageAround, pickNewSources, type ContextSearchAnswer, type ContextSearchRequest, type SourceDrop } from './storyContextSources.js'
 import { isCurrent, normalizeAsOf, type ValidityWindows } from './storyContextVisuals.js'
 
 export const CONTEXT_STEPS = ['structure', 'gap-list', 'extract', 'fact-check', 'write', 'box-check'] as const
@@ -97,8 +99,31 @@ export interface ContextResearchSource {
   voices: { name: string; role: string; quote: string }[]
 }
 
-/** An earlier story's supported, current context fact, offered again (step 1). */
+/** An earlier story's supported, current context fact, offered again (step 1); or, in `EarlierWork`, a fact of this story's own earlier run. */
 export type ReusableFact = ContextFactData & { id: string }
+
+/** One of the two angles of the `response` searches (ADR-0065's amendment). */
+export type ResponseAngle = keyof GapList['responseSearches']
+
+/**
+ * What the story's earlier completed context runs did, for a run that builds on them
+ * (`.context/story-context.md`, "On demand"; `loadEarlierWork`). Production's runs load it; the eval
+ * does not, so it measures a first run.
+ */
+export interface EarlierWork {
+  /** Their supported facts no one demoted, as found (copies of reused facts left out), newest first, each once (`factKey`). */
+  facts: ReusableFact[]
+  /** `factKey` of every research fact they judged (supported or rejected): not structured or checked again. */
+  judged: string[]
+  /** Every query they made (`normalizedQuery`). */
+  queries: string[]
+  /** The `response` angles they searched. */
+  angles: ResponseAngle[]
+  /** Every URL they picked to read, or a fact of theirs cites. */
+  read: string[]
+}
+
+const NO_EARLIER_WORK: EarlierWork = { facts: [], judged: [], queries: [], angles: [], read: [] }
 
 export interface ContextInput {
   storyId: string
@@ -110,6 +135,8 @@ export interface ContextInput {
   researchRunId: string
   sources: ContextResearchSource[]
   reusable: ReusableFact[]
+  /** The story's earlier runs, for a run that builds on them; none for a first run. */
+  earlier?: EarlierWork
 }
 
 export interface ContextCallRecord {
@@ -124,6 +151,8 @@ export interface SearchRecord {
   slot: ContextSlot
   wanted: string
   query: string
+  /** A `response` search's angle; absent on the other slots' and on records stored before 2026-11-17. */
+  angle?: ResponseAngle
   recent: boolean
   cached: boolean
   credits: number
@@ -139,10 +168,13 @@ export interface ContextRunRecord {
   /** The `response` search was added from the title, the gap list having listed none. */
   responseFallback: boolean
   searches: SearchRecord[]
+  /** Searches not made because an earlier run of the story made them (the query, or for `response` its angle). */
+  skippedSearches: { slot: ContextSlot; query: string }[]
   sourceDrops: SourceDrop[]
   /** Search sources whose extraction failed or found them unusable. */
   extractionDrops: { url: string; reason: 'unusable' | LlmCallOutcome }[]
-  facts: { research: number; leftOut: number; search: number; reused: number; supported: number; rejected: number; unjudged: number }
+  /** `research`: research facts structured this run; `carried`: facts taken over from the story's earlier runs, not checked again. */
+  facts: { research: number; leftOut: number; search: number; reused: number; carried: number; supported: number; rejected: number; unjudged: number }
   /** Each fact the check rejected or left unjudged, with its problem. */
   droppedFacts: { ref: string; text: string; verdict: 'rejected' | 'unjudged'; problem: string | null }[]
   boxDrops: BoxDrop[]
@@ -301,6 +333,7 @@ export interface PlannedSearch {
   slot: ContextSlot
   wanted: string
   query: string
+  angle?: ResponseAngle
   recent: boolean
 }
 
@@ -309,7 +342,7 @@ export interface PlannedSearch {
  * done about this problem, and what has worked against it elsewhere. Each falls back to a query from
  * the story's title when the gap list gives none.
  */
-const RESPONSE_ANGLES: { angle: keyof GapList['responseSearches']; wanted: string; fallback: (title: string[]) => string[] }[] = [
+export const RESPONSE_ANGLES: { angle: ResponseAngle; wanted: string; fallback: (title: string[]) => string[] }[] = [
   {
     angle: 'action',
     wanted: 'Who is responding to the problem and what is being done about it: responses under way and solutions being tried.',
@@ -325,19 +358,27 @@ const RESPONSE_ANGLES: { angle: keyof GapList['responseSearches']; wanted: strin
 /**
  * The searches to make (step 3's code checks), in order, at most `maxSearches`: while the story
  * neither reports the response nor has facts covering it, the two `response` searches first, then
- * the gap list's searches for the other needed, uncovered slots. A repeated query runs once.
+ * the gap list's searches for the other needed, uncovered slots. A repeated query runs once. On a
+ * story with earlier runs (`made`), a query they made and a `response` angle they searched are
+ * skipped and listed, and take no place among the `maxSearches`.
  */
-export function planSearches(gap: GapList, story: { title: string; text: string }) {
+export function planSearches(gap: GapList, story: { title: string; text: string }, made: Pick<EarlierWork, 'queries' | 'angles'> = NO_EARLIER_WORK) {
   const slot = new Map(gap.slots.map(s => [s.slot, s]))
   const covered = (s: ContextSlot) => slot.get(s)?.covered ?? 'no'
   const quote = gap.responseInStory.trim()
   const storyReports = quote !== '' && supportFound(quote, story.text)
   const responseOpen = !storyReports && covered('response') !== 'yes'
+  const madeQueries = new Set(made.queries.map(normalizedQuery))
   const seen = new Set<string>()
-  const fresh = (query: string) => {
-    const key = query.trim().toLowerCase()
+  const skipped: { slot: ContextSlot; query: string }[] = []
+  const fresh = (s: PlannedSearch) => {
+    const key = normalizedQuery(s.query)
     if (!key || seen.has(key)) return false
     seen.add(key)
+    if (madeQueries.has(key) || (s.angle !== undefined && made.angles.includes(s.angle))) {
+      skipped.push({ slot: s.slot, query: s.query })
+      return false
+    }
     return true
   }
   const title = story.title.split(/\s+/).filter(Boolean)
@@ -346,15 +387,18 @@ export function planSearches(gap: GapList, story: { title: string; text: string 
     const given = gap.responseSearches[a.angle].trim()
     const query = given || a.fallback(title).join(' ')
     if (!given) fallbacks.add(query)
-    return { slot: 'response', wanted: a.wanted, query, recent: false }
+    return { slot: 'response', wanted: a.wanted, query, angle: a.angle, recent: false }
   })
   const others = gap.searches.filter(s => (slot.get(s.slot)?.needed ?? false) && covered(s.slot) !== 'yes')
-  const searches = [...response, ...others].filter(s => fresh(s.query)).slice(0, config.storyContext.maxSearches)
+  const searches = [...response, ...others].filter(fresh).slice(0, config.storyContext.maxSearches)
   return {
     searches,
+    skipped,
     storyReports: storyReports ? quote : null,
     fallback: searches.some(s => fallbacks.has(s.query)),
     responseSearched: searches.some(s => s.slot === 'response'),
+    /** Searched for this run, or skipped as an earlier run searched it. */
+    responseLookedFor: searches.some(s => s.slot === 'response') || skipped.some(s => s.slot === 'response'),
   }
 }
 
@@ -379,9 +423,10 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
     responseInStory: null,
     responseFallback: false,
     searches: [],
+    skippedSearches: [],
     sourceDrops: [],
     extractionDrops: [],
-    facts: { research: 0, leftOut: 0, search: 0, reused: 0, supported: 0, rejected: 0, unjudged: 0 },
+    facts: { research: 0, leftOut: 0, search: 0, reused: 0, carried: 0, supported: 0, rejected: 0, unjudged: 0 },
     droppedFacts: [],
     boxDrops: [],
     numberHints: [],
@@ -411,16 +456,25 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
   }
   const storyText = [input.title, ...input.layout.paragraphs.map(p => p.text), ...input.layout.points.map(p => p.text), ...input.layout.caveats].join('\n')
 
+  const earlier = input.earlier ?? NO_EARLIER_WORK
+  // A research fact an earlier run of the story judged is neither structured nor checked again
+  const judged = new Set(earlier.judged)
+  const toStructure = research.filter(({ s, f }) => !judged.has(factKey({ url: s.url, ...f })))
+
   try {
-    // Step 2: structure research's facts; answers only for the ids asked
-    const structure = await call(
-      'structure',
-      structureSchema,
-      buildStructurePrompt({ facts: research.map(({ s, f }) => ({ ...f, source: { outlet: s.outlet, date: publishedDay(s.date), kind: s.kind } })) }),
-    )
+    // Step 2: structure research's facts; answers only for the ids asked. None left: no call
     const answers = new Map<string, StructuredFact>()
-    for (const a of required(structure, 'structure').facts) if (!answers.has(a.id)) answers.set(a.id, a)
-    const pass1 = research.flatMap(({ s, f }): ContextFactData[] => {
+    let structureModel = ''
+    if (toStructure.length > 0) {
+      const structure = await call(
+        'structure',
+        structureSchema,
+        buildStructurePrompt({ facts: toStructure.map(({ s, f }) => ({ ...f, source: { outlet: s.outlet, date: publishedDay(s.date), kind: s.kind } })) }),
+      )
+      for (const a of required(structure, 'structure').facts) if (!answers.has(a.id)) answers.set(a.id, a)
+      structureModel = structure.model
+    }
+    const pass1 = toStructure.flatMap(({ s, f }): ContextFactData[] => {
       const a = answers.get(f.id)
       if (!a) return []
       return [
@@ -436,28 +490,32 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
           statement: f.statement,
           ...structured(a),
           ...unverified,
-          model: structure.model,
+          model: structureModel,
           promptVersion: CONTEXT_PROMPT_VERSIONS.structure,
         },
       ]
     })
-    record.facts.research = research.length
-    record.facts.leftOut = research.length - pass1.length
+    record.facts.research = toStructure.length
+    record.facts.leftOut = toStructure.length - pass1.length
 
-    // Step 1's reusable facts, each earlier source under a new id after research's
+    // The facts this story's earlier runs found, then step 1's reusable facts: each page under a new
+    // id after research's, neither checked again; stored with the run only when a kept box cites them
     let next = Math.max(...input.sources.map(s => sourceNumber(s.id)), 0) + 1
-    const reusedIds = new Map<string, string>()
-    const reusedCount = new Map<string, number>()
-    const reused = input.reusable.map((f): ContextFactData => {
+    const offeredIds = new Map<string, string>()
+    const offeredCount = new Map<string, number>()
+    const offered = (f: ReusableFact): ContextFactData => {
       const key = f.source.url
-      if (!reusedIds.has(key)) reusedIds.set(key, `S${next++}`)
-      const id = reusedIds.get(key)!
-      const n = (reusedCount.get(id) ?? 0) + 1
-      reusedCount.set(id, n)
+      if (!offeredIds.has(key)) offeredIds.set(key, `S${next++}`)
+      const id = offeredIds.get(key)!
+      const n = (offeredCount.get(id) ?? 0) + 1
+      offeredCount.set(id, n)
       const { id: earlierId, ...rest } = f
       return { ...rest, ref: `${id}F${n}`, reusedFromId: f.reusedFromId ?? earlierId, source: { ...f.source, id }, verdict: 'supported', verdictProblem: null }
-    })
-    record.facts.reused = reused.length
+    }
+    const carried = earlier.facts.map(offered)
+    const reused = [...carried, ...input.reusable.map(offered)]
+    record.facts.carried = carried.length
+    record.facts.reused = reused.length - carried.length
 
     // Step 3: the gap list, and the searches it leaves
     const gapFacts = [...pass1, ...reused].map(f => ({
@@ -467,9 +525,10 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
     }))
     const gap = required(await call('gap-list', gapListSchema, buildGapListPrompt({ story, facts: gapFacts })), 'gap-list')
     record.slots = gap.slots
-    const plan = planSearches(gap, { title: input.title, text: storyText })
+    const plan = planSearches(gap, { title: input.title, text: storyText }, earlier)
     record.responseInStory = plan.storyReports
     record.responseFallback = plan.fallback
+    record.skippedSearches = plan.skipped
 
     // Steps 4-6: search, filter, extract
     const pass2: ContextFactData[] = []
@@ -499,7 +558,7 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
         }),
       )
       const known = [...input.sources.map(s => s.url), ...reused.map(f => f.source.url)]
-      const { picked, drops } = pickNewSources(allowed, { urls: known, domains: input.sources.map(s => domainOf(s.url)) })
+      const { picked, drops } = pickNewSources(allowed, { urls: known, domains: input.sources.map(s => domainOf(s.url)), read: earlier.read })
       record.sourceDrops.push(...drops)
       const kept = (i: number) => picked.filter(p => p.search === i).map(p => p.result.url)
       record.searches = completed.map(({ i, answer }) => searchRecord(i, answer, kept(i)))
@@ -633,10 +692,10 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
       boxFailed = verdicts.failed
     }
 
-    // Step 12: the response searched for and nothing sourced answers it. The run records it; no card
-    // says so (owner decision 2026-11-17, ADR-0065)
+    // Step 12: the response searched for (this run, or an earlier one) and nothing sourced answers
+    // it. The run records it; no card says so (owner decision 2026-11-17, ADR-0065)
     const answered = facts.some(f => f.slot === 'response' && f.verdict === 'supported') || boxes.some(b => b.type === 'response')
-    record.responseNotFound = plan.responseSearched && plan.storyReports === null && !answered
+    record.responseNotFound = plan.responseLookedFor && plan.storyReports === null && !answered
 
     // The reused facts a kept box cites are stored with this run, so its boxes resolve within it
     const cited = new Set(boxes.flatMap(boxRefs))

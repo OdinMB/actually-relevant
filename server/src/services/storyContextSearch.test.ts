@@ -8,7 +8,7 @@ vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../lib/tavily.js', () => ({ searchTavily }))
 
 import { contextSearch, pruneSearchCache } from './storyContextSearch.js'
-import { passageAround, pickNewSources, searchKey, searchResultFrom, tavilyRequestFor } from './storyContextSources.js'
+import { normalizedQuery, passageAround, pickNewSources, searchKey, searchResultFrom, tavilyRequestFor } from './storyContextSources.js'
 
 const NOW = new Date('2026-11-16T01:00:00Z')
 const DAY = 24 * 60 * 60 * 1000
@@ -115,6 +115,23 @@ describe('pickNewSources', () => {
     })
     expect(picked).toEqual([])
     expect(drops.map(d => d.reason)).toEqual(['blocklist', 'known'])
+  })
+
+  it('drops a URL an earlier run of the story read, but not another page on its domain', () => {
+    const { picked, drops } = pickNewSources([{ results: [r('https://read.example/page/'), r('https://read.example/other')] }], {
+      urls: [],
+      domains: [],
+      read: ['https://www.read.example/page'],
+    })
+    expect(picked.map(p => p.result.url)).toEqual(['https://read.example/other'])
+    expect(drops.map(d => [d.url, d.reason])).toEqual([['https://read.example/page/', 'read']])
+  })
+})
+
+describe('normalizedQuery', () => {
+  it('reads a query as the cache key does: case, spacing and Unicode forms aside', () => {
+    expect(normalizedQuery('  Peat  Restoration\tINDONESIA ')).toBe(normalizedQuery('peat restoration indonesia'))
+    expect(normalizedQuery('ﬁre')).toBe('fire')
   })
 })
 

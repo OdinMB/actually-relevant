@@ -65,7 +65,8 @@ export function searchResultFrom(r: TavilyResult): ContextSearchResult {
   return { url: r.url, title: r.title, date: r.publishedDate, text }
 }
 
-const normalizedQuery = (query: string) => query.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()
+/** A query as the cache key and a rerun's "already made" check read it: NFKC, lower case, single spaces. */
+export const normalizedQuery = (query: string) => query.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()
 
 /** The cache key: the normalized query, the depth, the topic and the recent flag. The end date is left out, so a query asked for stories a few days apart is answered once. */
 export function searchKey(request: Pick<ContextSearchRequest, 'query' | 'recent'>): string {
@@ -75,7 +76,8 @@ export function searchKey(request: Pick<ContextSearchRequest, 'query' | 'recent'
     .digest('hex')
 }
 
-export type SourceDropReason = 'opt-out' | 'blocklist' | 'known' | 'empty' | 'per-query' | 'cap'
+/** `read`: an earlier run of the story picked the URL to read (`.context/story-context.md`, "On demand"). */
+export type SourceDropReason = 'opt-out' | 'blocklist' | 'known' | 'read' | 'empty' | 'per-query' | 'cap'
 
 export interface SourceDrop {
   url: string
@@ -93,16 +95,18 @@ const isBlocked = (domain: string) => BLOCKED_DOMAINS.some(b => domain === b || 
 
 /**
  * The sources pass 2 extracts from, in search order: never a blocklisted domain, a URL or domain
- * already among the story's sources (`known`), a URL another search already gave, or a result
- * without text; at most `perQuerySources` a search and `maxNewSources` in all.
+ * already among the story's sources (`known`), a URL an earlier run of the story read (`read`; its
+ * domain stays open), a URL another search already gave, or a result without text; at most
+ * `perQuerySources` a search and `maxNewSources` in all.
  */
 export function pickNewSources(
   answers: { results: ContextSearchResult[] }[],
-  known: { urls: string[]; domains: string[] },
+  known: { urls: string[]; domains: string[]; read?: string[] },
 ): { picked: PickedSource[]; drops: SourceDrop[] } {
   const { perQuerySources, maxNewSources } = config.storyContext
   const urls = new Set(known.urls.map(normalizedUrl))
   const domains = new Set(known.domains)
+  const read = new Set((known.read ?? []).map(normalizedUrl))
   const picked: PickedSource[] = []
   const drops: SourceDrop[] = []
   answers.forEach((answer, search) => {
@@ -112,6 +116,7 @@ export function pickNewSources(
       const drop = (reason: SourceDropReason) => drops.push({ url: result.url, search, reason })
       if (isBlocked(domain)) drop('blocklist')
       else if (urls.has(normalizedUrl(result.url)) || domains.has(domain)) drop('known')
+      else if (read.has(normalizedUrl(result.url))) drop('read')
       else if (result.text.trim() === '') drop('empty')
       else if (fromThis >= perQuerySources) drop('per-query')
       else if (picked.length >= maxNewSources) drop('cap')
