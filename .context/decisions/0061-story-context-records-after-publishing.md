@@ -223,3 +223,14 @@ the deadline passed, is built by the second part minutes after it goes live, so 
 story change. On a night with a second part, the step's last run on the Jobs page (length, cost,
 summary, failure-share warning) is that part's. Research's own gate is unchanged: in the chain it still
 holds a story research did not reach for its two hours, which is research's documented rule.
+
+## Amendment 2026-11-17: no chain deadline
+
+The owner removed the chains' "done within" deadline the same day (its column is dropped; research
+has no time limit either). The context step's deadline checks went with it: both parts now work
+through every story they owe, second attempts included. The amendments above that name "the chain's
+deadline" no longer hold on that point. What bounds the edition's delay is now the night's number of
+stories (about 4 to 11), three at a time, each run bounded by its calls' own timeouts and retries; a
+slow night delays publishing by the first part's whole length. Everything else stands: the step is
+off until switched on, a failed step never stops the edition, and the publish gate holds nothing in
+the daily edition.
