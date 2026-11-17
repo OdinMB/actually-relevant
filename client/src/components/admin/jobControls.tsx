@@ -31,7 +31,7 @@ export function ClockTimeField({ job, field, label, help }: { job: JobRun; field
         }}
         className="mt-0.5 rounded-md border border-neutral-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
       />
-      <p id={`${id}-help`} className="mt-0.5 max-w-[14rem] text-xs text-neutral-500">
+      <p id={`${id}-help`} className="mt-0.5 text-xs text-neutral-500">
         {help}
       </p>
     </div>

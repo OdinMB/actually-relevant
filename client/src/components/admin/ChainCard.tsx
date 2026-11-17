@@ -90,7 +90,7 @@ export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) 
             <div className="flex gap-1">
               <dt className="text-neutral-500">Last started</dt>
               <dd>
-                <TimeWithRelative dateStr={chain.lastStartedAt} />
+                <TimeWithRelative dateStr={chain.lastStartedAt} inline />
               </dd>
             </div>
             <div className="flex gap-1">
