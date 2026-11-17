@@ -110,6 +110,10 @@ describe('eval harness has no write path', () => {
         'overviews.ts',
         'overviews/factCheck.ts',
         'overviews/keyCheck.ts',
+        'overviews/gapKeyCheck.ts',
+        'overviews/gapDraft.ts',
+        'overviews/contextInputs.ts',
+        'overviews/context.ts',
       ]),
     )
   })

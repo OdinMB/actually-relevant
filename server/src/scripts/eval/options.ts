@@ -246,8 +246,19 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
 // eval:overviews
 // ---------------------------------------------------------------------------
 
-export const OVERVIEW_STEPS = ['keys', 'fact-check', 'baseline'] as const
+/** Every step, in the order a run takes them: `context` before `fact-check`, which `--facts context` samples from it. */
+export const OVERVIEW_STEPS = ['keys', 'gap-keys', 'gap-draft', 'context', 'fact-check', 'baseline'] as const
 export type OverviewStep = (typeof OVERVIEW_STEPS)[number]
+/**
+ * A run without `--steps`. Story context's steps run only when named: `gap-draft` writes drafts for
+ * the check, and `context` searches with Tavily and calls the strong judge.
+ */
+export const OVERVIEW_DEFAULT_STEPS: readonly OverviewStep[] = ['keys', 'fact-check', 'baseline']
+/** Which facts the fact check plants errors in: research's extracted statements, or module 1's rendered facts. */
+export const OVERVIEW_FACT_SOURCES = ['research', 'context'] as const
+export type OverviewFactSource = (typeof OVERVIEW_FACT_SOURCES)[number]
+const OVERVIEW_HALVES = ['tune', 'judge', 'all'] as const
+export type OverviewHalf = (typeof OVERVIEW_HALVES)[number]
 export const OVERVIEW_DEFAULT_BUDGET_USD = 3
 /** Facts sampled for the fact check. */
 export const OVERVIEW_DEFAULT_SIZE = 300
@@ -271,6 +282,10 @@ export interface OverviewOptions {
   /** The fact-check arms scored. */
   arms: Arm[]
   refreshFixtures: boolean
+  /** `context`: the fact check samples the facts the `context` step's run 1 kept, so both steps run. */
+  facts: OverviewFactSource
+  /** The gap keys the `context` step runs on: prompts are tuned on `tune`, the gate is read on `judge`. */
+  half: OverviewHalf
 }
 
 /** `model@effort,…`, each model one with a price in `MODELS`; duplicates once. */
@@ -301,6 +316,8 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
       limit: { type: 'string' },
       arms: { type: 'string' },
       'refresh-fixtures': { type: 'boolean', default: false },
+      facts: { type: 'string' },
+      half: { type: 'string' },
     },
   })
   if (!values.out) throw new Error('--out is required')
@@ -309,9 +326,19 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
   const repeat = positiveInt('--repeat', values.repeat, 1) ?? 1
   if (repeat > MAX_REPEAT) throw new Error(`--repeat must be at most ${MAX_REPEAT}`)
   const limit = positiveInt('--limit', values.limit)
+  const steps = listOf('--steps', values.steps, OVERVIEW_STEPS, OVERVIEW_DEFAULT_STEPS)
+  const facts = OVERVIEW_FACT_SOURCES.find(f => f === (values.facts ?? 'research'))
+  if (!facts) throw new Error(`--facts must be one of ${OVERVIEW_FACT_SOURCES.join(', ')}`)
+  if (facts === 'context' && !(steps.includes('context') && steps.includes('fact-check'))) {
+    throw new Error(
+      "--facts context samples the facts the context step keeps: name both context and fact-check in --steps (the context step's calls and searches are cached, so a repeated run costs nothing more)",
+    )
+  }
+  const half = OVERVIEW_HALVES.find(h => h === (values.half ?? 'all'))
+  if (!half) throw new Error(`--half must be one of ${OVERVIEW_HALVES.join(', ')}`)
   return {
     out: values.out,
-    steps: listOf('--steps', values.steps, OVERVIEW_STEPS, OVERVIEW_STEPS),
+    steps,
     budget: budgetOf(values.budget, OVERVIEW_DEFAULT_BUDGET_USD),
     dryRun: values['dry-run'] ?? false,
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
@@ -320,5 +347,7 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
     ...(limit !== undefined ? { limit } : {}),
     arms: armsOf(values.arms),
     refreshFixtures: values['refresh-fixtures'] ?? false,
+    facts,
+    half,
   }
 }

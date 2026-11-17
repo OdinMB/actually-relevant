@@ -8,6 +8,7 @@ import {
   DEFAULT_FLOOR,
   MAX_ASSESS_SIZE,
   OVERVIEW_DEFAULT_ARMS,
+  OVERVIEW_DEFAULT_STEPS,
   OVERVIEW_MAX_SIZE,
   OVERVIEW_STEPS,
   RESEARCH_DEFAULT_BUDGET_USD,
@@ -171,10 +172,10 @@ describe('parseOverviewOptions', () => {
     expect(() => parseOverviewOptions([])).toThrow(/--out/)
   })
 
-  it('defaults to all three steps, one run of 300 facts on the research fact-check arm, and the $3 budget', () => {
+  it("defaults to the keys, research's fact check and the baseline: one run of 300 research facts on the research fact-check arm, every gap key, and the $3 budget", () => {
     expect(parseOverviewOptions(['--out', 'x'])).toEqual({
       out: 'x',
-      steps: [...OVERVIEW_STEPS],
+      steps: ['keys', 'fact-check', 'baseline'],
       budget: 3,
       dryRun: false,
       concurrency: 4,
@@ -182,7 +183,31 @@ describe('parseOverviewOptions', () => {
       size: 300,
       arms: [...OVERVIEW_DEFAULT_ARMS],
       refreshFixtures: false,
+      facts: 'research',
+      half: 'all',
     })
+    expect(OVERVIEW_DEFAULT_STEPS).toEqual(OVERVIEW_STEPS.filter(s => OVERVIEW_DEFAULT_STEPS.includes(s)))
+  })
+
+  it("runs story context's steps only when named, in the order the run takes them", () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'fact-check,context,gap-keys,gap-draft']).steps).toEqual([
+      'gap-keys',
+      'gap-draft',
+      'context',
+      'fact-check',
+    ])
+  })
+
+  it('takes --facts context only with the context and fact-check steps, and a --half of the gap keys', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'context,fact-check', '--facts', 'context', '--half', 'judge'])).toMatchObject({
+      facts: 'context',
+      half: 'judge',
+    })
+    expect(parseOverviewOptions(['--out', 'x', '--half', 'tune']).half).toBe('tune')
+    expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'context'])).toThrow(/name both context and fact-check/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'context', '--facts', 'context'])).toThrow(/--facts context/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'news'])).toThrow(/--facts must be one of research, context/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--half', 'holdout'])).toThrow(/--half must be one of tune, judge, all/)
   })
 
   it("defaults to production's research fact-check arm", () => {

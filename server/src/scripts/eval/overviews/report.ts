@@ -1,29 +1,39 @@
 /**
- * `overview-eval.md` for `eval:overviews`: a section per step that ran (the answer keys, the fact
- * check under planted errors, research's cost baseline), what was skipped and why, then the spend
- * and the fixtures' anchor. The name carries a tag for every departure from the default run, so a
- * trial never overwrites the report of record. Pure.
+ * `overview-eval.md` for `eval:overviews`: a section per step that ran (the answer keys, the gap keys
+ * and their drafts, story context against its bars, the fact check under planted errors, research's
+ * cost baseline), what was skipped and why, then the spend and the fixtures' anchor. The name
+ * carries a tag for every departure from the default run, so a trial never overwrites the report of
+ * record. Pure.
  */
 import { num, pct } from '../checks.js'
 import { armKey } from '../models.js'
-import { OVERVIEW_DEFAULT_ARMS, OVERVIEW_DEFAULT_SIZE, OVERVIEW_STEPS, type OverviewOptions, type OverviewStep } from '../options.js'
-import type { Spread } from '../repeats.js'
+import { OVERVIEW_DEFAULT_ARMS, OVERVIEW_DEFAULT_SIZE, OVERVIEW_DEFAULT_STEPS, type OverviewOptions, type OverviewStep } from '../options.js'
 import { TAVILY_USD_PER_CREDIT } from '../research/tavily.js'
 import { WINDOW_DAYS, type Baseline, type CostStats } from './baseline.js'
+import type { ContextStepReport } from './context.js'
+import type { ContextFacts } from './contextFacts.js'
+import { contextLines, gapDraftLines, gapKeyLines } from './contextReport.js'
 import { LABEL_ARM, type CheckItem, type Labels } from './factCheck.js'
 import type { FactFixtures } from './factFixtures.js'
 import { CATCH_BAR, FALSE_REJECTION_BAR, MAX_LISTED, type ArmScore, type Listed } from './factCheckScore.js'
+import type { GapDraftReport } from './gapDraft.js'
+import type { GapKeyResult } from './gapKeyCheck.js'
 import type { KeyResult } from './keyCheck.js'
-import { expectedSupported, VARIANT_KINDS } from './plant.js'
+import { expectedSupported, FIELD_KINDS, VARIANT_KINDS, type VariantKind } from './plant.js'
+import { cell, metText, quoted, spreadText, usd } from './reportText.js'
 
-export type ReportNameInput = Pick<OverviewOptions, 'steps' | 'arms' | 'size' | 'repeat' | 'limit'>
+export type ReportNameInput = Pick<OverviewOptions, 'steps' | 'arms' | 'size' | 'repeat' | 'limit' | 'facts' | 'half'>
 
 const sameArms = (arms: ReportNameInput['arms']) =>
   arms.length === OVERVIEW_DEFAULT_ARMS.length && arms.every((a, i) => armKey(a) === armKey(OVERVIEW_DEFAULT_ARMS[i]!))
 
-export function overviewReportName({ steps, arms, size, repeat, limit }: ReportNameInput): string {
+const defaultSteps = (steps: OverviewStep[]) => steps.length === OVERVIEW_DEFAULT_STEPS.length && steps.every((s, i) => s === OVERVIEW_DEFAULT_STEPS[i])
+
+export function overviewReportName({ steps, arms, size, repeat, limit, facts, half }: ReportNameInput): string {
   const tags = [
-    ...(steps.length === OVERVIEW_STEPS.length ? [] : [`steps-${steps.join('-')}`]),
+    ...(defaultSteps(steps) ? [] : [`steps-${steps.join('-')}`]),
+    ...(facts === 'research' ? [] : [`facts-${facts}`]),
+    ...(half === 'all' ? [] : [`half-${half}`]),
     ...(sameArms(arms) ? [] : [`arms-${arms.map(armKey).join('+')}`]),
     ...(size === OVERVIEW_DEFAULT_SIZE ? [] : [`size-${size}`]),
     ...(repeat > 1 ? [`repeat-${repeat}`] : []),
@@ -32,8 +42,11 @@ export function overviewReportName({ steps, arms, size, repeat, limit }: ReportN
   return `overview-eval${tags.map(t => `-${t}`).join('')}.md`
 }
 
+/** The facts the fact check planted errors in: research's sample from the database, or the `context` step's run 1. */
+export type FactSample = { source: 'research'; fixtures: FactFixtures } | { source: 'context'; facts: ContextFacts; half: ReportNameInput['half'] }
+
 export interface FactCheckReport {
-  fixtures: FactFixtures
+  sample: FactSample
   /** Facts the strong judge labeled: the sample, or its first `--limit` on a smoke run. */
   labeled: number
   labels: Labels
@@ -49,6 +62,9 @@ export interface OverviewReportInput {
   generatedAt: string
   steps: OverviewStep[]
   keys?: KeyResult[]
+  gapKeys?: GapKeyResult[]
+  gapDraft?: GapDraftReport
+  context?: ContextStepReport
   factCheck?: FactCheckReport
   baseline?: Baseline
   skipped: { step: string; reason: string }[]
@@ -56,10 +72,6 @@ export interface OverviewReportInput {
   folderUsd: number
   budgetUsd: number
 }
-
-const usd = (v: number | null) => (v === null ? 'n/a' : `$${v.toFixed(v < 1 ? 4 : 2)}`)
-const cell = (s: string) => s.replace(/\|/g, '/').replace(/\s+/g, ' ')
-const quoted = (s: string) => `"${cell(s)}"`
 
 // ---------------------------------------------------------------------------
 // Answer keys
@@ -93,15 +105,10 @@ const counted = (values: string[]) => {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])
 }
 
-const spreadText = (s: Spread | null) =>
-  s ? `mean ${pct(s.mean)} (${pct(s.min)} to ${pct(s.max)}, SD ${s.sd === null ? 'n/a' : `${(s.sd * 100).toFixed(1)} points`})` : 'n/a'
-
-const metText = (met: boolean | null) => (met === null ? 'no verdicts' : met ? 'met' : 'not met')
-
 const listedLine = (l: Listed) =>
   `- ${l.kind}: ${quoted(l.text)}${l.change ? ` (${cell(l.change)})` : ''}; sentence ${quoted(l.sentence)} (${cell(l.outlet)})${l.runs > 1 ? `; in ${l.times} of ${l.runs} runs` : ''}`
 
-function armLines(s: ArmScore): string[] {
+function armLines(s: ArmScore, kinds: readonly VariantKind[]): string[] {
   return [
     `### ${s.arm}`,
     '',
@@ -109,7 +116,7 @@ function armLines(s: ArmScore): string[] {
     '',
     '| Kind | Expected | Items | Verdicts | Judged unsupported | Share |',
     '|---|---|---|---|---|---|',
-    ...s.perKind.map(k => `| ${k.kind} | ${k.expected} | ${k.items} | ${k.judged} | ${k.unsupported} | ${pct(k.rate)} |`),
+    ...s.perKind.filter(k => kinds.includes(k.kind)).map(k => `| ${k.kind} | ${k.expected} | ${k.items} | ${k.judged} | ${k.unsupported} | ${pct(k.rate)} |`),
     '',
     `- **Catch rate** (planted errors judged unsupported): ${pct(s.catchRate)}; bar at least ${pct(CATCH_BAR)}: ${metText(s.catchMet)}.`,
     `- **False rejection** (faithful and reworded judged unsupported): ${pct(s.falseRejection)}; bar at most ${pct(FALSE_REJECTION_BAR)}: ${metText(s.falseRejectionMet)}.`,
@@ -132,26 +139,45 @@ function armLines(s: ArmScore): string[] {
   ]
 }
 
-function factCheckLines(r: FactCheckReport): string[] {
-  const fx = r.fixtures
-  const languages = counted(fx.facts.map(f => f.language ?? 'unknown'))
-  const outlets = new Set(fx.facts.map(f => f.outlet)).size
-  const stories = new Set(fx.facts.map(f => f.storyId ?? f.runId)).size
-  const unsupported = r.labels.unsupported
-  const undated = fx.facts.filter(f => f.date === null).length
-  const variantCounts = VARIANT_KINDS.map(kind => [kind, r.variants.filter(v => v.kind === kind).length] as const)
+function sampleLines(sample: FactSample): string[] {
+  const facts = sample.source === 'research' ? sample.fixtures.facts : sample.facts.facts
+  const outlets = new Set(facts.map(f => f.outlet)).size
+  const stories = new Set(facts.map(f => f.storyId ?? f.runId)).size
+  const undated = facts.filter(f => f.date === null).length
+  if (sample.source === 'context') {
+    const c = sample.facts
+    return [
+      `**Sample (module-1 facts, \`--facts context\`):** ${facts.length} facts (of ${c.size} asked for) that production's check supported in the context step's run 1, none reused, from ${stories} stories (half ${sample.half}) and ${outlets} outlets; ${undated} facts from sources without a date. Each is checked as production's \`renderFact\` renders it; the field kinds change one structured field before it is rendered again.`,
+      ...c.shortfalls.map(s => `- Shortfall: ${s}`),
+    ]
+  }
+  const fx = sample.fixtures
+  const languages = counted(facts.map(f => f.language ?? 'unknown'))
   return [
-    `**Sample:** ${fx.facts.length} facts (of ${fx.size} asked for) from ${stories} stories and ${outlets} outlets, ${fx.runsRead} runs read back from the newest (${fx.anchor ?? 'none'}), ${fx.olderShape} of them skipped as stored in an older shape; ${undated} facts from sources without a date. Languages: ${languages.map(([l, n]) => `${l} ${n}`).join(', ') || 'none'}.`,
+    `**Sample:** ${facts.length} facts (of ${fx.size} asked for) from ${stories} stories and ${outlets} outlets, ${fx.runsRead} runs read back from the newest (${fx.anchor ?? 'none'}), ${fx.olderShape} of them skipped as stored in an older shape; ${undated} facts from sources without a date. Languages: ${languages.map(([l, n]) => `${l} ${n}`).join(', ') || 'none'}.`,
     ...fx.shortfalls.map(s => `- Shortfall: ${s}`),
+  ]
+}
+
+function factCheckLines(r: FactCheckReport): string[] {
+  const unsupported = r.labels.unsupported
+  const context = r.sample.source === 'context'
+  /** Research's statements carry no structured fields to change. */
+  const kinds = context ? VARIANT_KINDS : VARIANT_KINDS.filter(k => !(FIELD_KINDS as readonly string[]).includes(k))
+  const shape = context
+    ? "as rendered against their evidence (the source's sentence or passage, the source's date)"
+    : "as extracted against their evidence (the source's sentence, what the fact measures, the source's date)"
+  return [
+    ...sampleLines(r.sample),
     '',
-    `**Labels:** ${armKey(LABEL_ARM)} judged ${r.labeled} facts${r.limit !== undefined ? ` (the first ${r.limit} of the sample, --limit: a smoke run, not evidence)` : ''} as extracted against their evidence (the source's sentence, what the fact measures, the source's date): ${r.labels.accepted.length} accepted, ${unsupported.length} statements their evidence does not support (${pct(r.labeled === 0 ? null : unsupported.length / r.labeled)}), ${r.labels.unlabeled.length} without a verdict. Variants are built from the accepted facts only.`,
+    `**Labels:** ${armKey(LABEL_ARM)} judged ${r.labeled} facts${r.limit !== undefined ? ` (the first ${r.limit} of the sample, --limit: a smoke run, not evidence)` : ''} ${shape}: ${r.labels.accepted.length} accepted, ${unsupported.length} statements their evidence does not support (${pct(r.labeled === 0 ? null : unsupported.length / r.labeled)}), ${r.labels.unlabeled.length} without a verdict. Variants are built from the accepted facts only.`,
     '',
     '| Kind | Expected | Variants |',
     '|---|---|---|',
-    ...variantCounts.map(([kind, n]) => `| ${kind} | ${expectedSupported(kind) ? 'supported' : 'unsupported'} | ${n} |`),
+    ...kinds.map(kind => `| ${kind} | ${expectedSupported(kind) ? 'supported' : 'unsupported'} | ${r.variants.filter(v => v.kind === kind).length} |`),
     '',
     ...(r.stoppedArms ? [`No arm ran: ${cell(r.stoppedArms)}.`, ''] : []),
-    ...r.scores.flatMap(armLines),
+    ...r.scores.flatMap(s => armLines(s, kinds)),
     `### Statements their evidence does not support (sentence, what it measures, source date): ${Math.min(unsupported.length, MAX_LISTED)} of ${unsupported.length}`,
     '',
     "Not an extraction-fidelity measure: the judge never sees the source's full text, so a statement that rightly carries scope or period from elsewhere in the article lands here too.",
@@ -195,19 +221,23 @@ function baselineLines(b: Baseline): string[] {
 // ---------------------------------------------------------------------------
 
 export function renderOverviewReport(input: OverviewReportInput): string {
-  const fx = input.factCheck?.fixtures
+  const sample = input.factCheck?.sample
+  const fx = sample?.source === 'research' ? sample.fixtures : null
   return [
     '# Overview evals (eval:overviews)',
     '',
     `Generated ${input.generatedAt}. Steps: ${input.steps.join(', ')}.`,
     '',
     ...(input.keys ? ['## Answer keys', '', ...keyLines(input.keys), ''] : []),
+    ...(input.gapKeys ? ['## Gap keys', '', ...gapKeyLines(input.gapKeys), ''] : []),
+    ...(input.gapDraft ? ['## Gap-key drafts', '', ...gapDraftLines(input.gapDraft), ''] : []),
+    ...(input.context ? ['## Story context against the bars', '', ...contextLines(input.context), ''] : []),
     ...(input.factCheck ? ['## Fact check under planted errors', '', ...factCheckLines(input.factCheck), ''] : []),
     ...(input.baseline ? ["## Research's cost baseline", '', ...baselineLines(input.baseline), ''] : []),
     ...(input.skipped.length > 0 ? ['## Skipped', '', ...input.skipped.map(s => `- ${s.step}: ${s.reason}`), ''] : []),
     '## Spend',
     '',
-    `This run ${usd(input.thisRunUsd)}; the folder's ledger ${usd(input.folderUsd)} of the ${usd(input.budgetUsd)} budget.${fx ? ` Fact fixtures sampled ${fx.createdAt} from the ${fx.dbClass} database copy, anchored on its newest finished run (${fx.anchor ?? 'none'}).` : ''}`,
+    `This run ${usd(input.thisRunUsd)}; the folder's ledger ${usd(input.folderUsd)} of the ${usd(input.budgetUsd)} budget (model calls plus Tavily credits, cached ones counted at what they cost when made).${fx ? ` Fact fixtures sampled ${fx.createdAt} from the ${fx.dbClass} database copy, anchored on its newest finished run (${fx.anchor ?? 'none'}).` : ''}`,
     '',
   ].join('\n')
 }

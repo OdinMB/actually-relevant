@@ -1,13 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import { OVERVIEW_DEFAULT_ARMS, OVERVIEW_DEFAULT_SIZE, OVERVIEW_STEPS, type OverviewOptions } from '../options.js'
+import { contextFact, contextResult } from '../../../test/contextFixtures.js'
+import { OVERVIEW_DEFAULT_ARMS, OVERVIEW_DEFAULT_SIZE, OVERVIEW_DEFAULT_STEPS, OVERVIEW_STEPS } from '../options.js'
 import { summarizeBaseline } from './baseline.js'
+import { contextFactFixtures } from './contextFacts.js'
+import { resultDates, scoreContext, scoreFields } from './contextScore.js'
 import { variantItems, type CheckItem, type Verdict } from './factCheck.js'
 import { FACT_FIXTURES_VERSION, type FactFixture, type FactFixtures } from './factFixtures.js'
 import { scoreArm } from './factCheckScore.js'
-import { overviewReportName, renderOverviewReport, type OverviewReportInput } from './report.js'
+import { overviewReportName, renderOverviewReport, type OverviewReportInput, type ReportNameInput } from './report.js'
 
-const name = (o: Partial<Pick<OverviewOptions, 'steps' | 'arms' | 'size' | 'repeat' | 'limit'>> = {}) =>
-  overviewReportName({ steps: [...OVERVIEW_STEPS], arms: [...OVERVIEW_DEFAULT_ARMS], size: OVERVIEW_DEFAULT_SIZE, repeat: 1, ...o })
+const name = (o: Partial<ReportNameInput> = {}) =>
+  overviewReportName({
+    steps: [...OVERVIEW_DEFAULT_STEPS],
+    arms: [...OVERVIEW_DEFAULT_ARMS],
+    size: OVERVIEW_DEFAULT_SIZE,
+    repeat: 1,
+    facts: 'research',
+    half: 'all',
+    ...o,
+  })
 
 describe('overviewReportName', () => {
   it('names the default run the report of record', () => {
@@ -18,6 +29,13 @@ describe('overviewReportName', () => {
     expect(name({ steps: ['keys', 'baseline'] })).toBe('overview-eval-steps-keys-baseline.md')
     expect(name({ steps: ['fact-check'], repeat: 3 })).toBe('overview-eval-steps-fact-check-repeat-3.md')
     expect(name({ arms: [{ model: 'gpt-6-luna', effort: 'medium' }], size: 100, limit: 5 })).toBe('overview-eval-arms-gpt-6-luna@medium-size-100-limit-5.md')
+    expect(name({ steps: [...OVERVIEW_STEPS] })).toBe(`overview-eval-steps-${OVERVIEW_STEPS.join('-')}.md`)
+  })
+
+  it('names the gate run apart from the tuning runs', () => {
+    expect(name({ steps: ['context', 'fact-check'], facts: 'context', half: 'judge', repeat: 3 })).toBe(
+      'overview-eval-steps-context-fact-check-facts-context-half-judge-repeat-3.md',
+    )
   })
 })
 
@@ -36,7 +54,7 @@ const fixtures: FactFixtures = {
 
 const input = (extra: Partial<OverviewReportInput>): OverviewReportInput => ({
   generatedAt: '2026-11-17T09:00:00.000Z',
-  steps: [...OVERVIEW_STEPS],
+  steps: [...OVERVIEW_DEFAULT_STEPS],
   skipped: [],
   thisRunUsd: 0,
   folderUsd: 0,
@@ -64,7 +82,7 @@ describe('renderOverviewReport', () => {
       input({
         steps: ['fact-check'],
         factCheck: {
-          fixtures,
+          sample: { source: 'research', fixtures },
           labeled: 0,
           labels: { accepted: [], unsupported: [], unlabeled: [] },
           variants: [],
@@ -74,6 +92,55 @@ describe('renderOverviewReport', () => {
     )
     expect(headings(md)).toEqual(['## Fact check under planted errors', '## Spend'])
     expect(md).toContain('### gpt-6-luna@low')
+    expect(md).toContain('| wrong-scale | unsupported | 0 |')
+    expect(md).not.toContain('wrong-place')
+  })
+
+  it("shows module-1 facts' sample with the field-level kinds", () => {
+    const result = contextResult({ facts: [contextFact('S1F1', { origin: 'search' }), contextFact('S2F1', { verdict: 'rejected' })] })
+    const facts = contextFactFixtures([{ slug: 'story-a', result }], 300)
+    const md = renderOverviewReport(
+      input({
+        steps: ['context', 'fact-check'],
+        factCheck: {
+          sample: { source: 'context', facts, half: 'judge' },
+          labeled: 1,
+          labels: { accepted: facts.facts, unsupported: [], unlabeled: [] },
+          variants: [],
+          scores: [scoreArm({ arm: 'gpt-6-luna@low', runs: [[]] })],
+        },
+      }),
+    )
+    expect(md).toContain("**Sample (module-1 facts, `--facts context`):** 1 facts (of 300 asked for) that production's check supported")
+    expect(md).toContain('from 1 stories (half judge)')
+    expect(md).toContain('- Shortfall: 1 of 300 facts')
+    expect(md).toContain('| wrong-place | unsupported | 0 |')
+    expect(md).toContain('as rendered against their evidence')
+    expect(md).not.toContain('Fact fixtures sampled')
+  })
+
+  it('places the story-context sections between the answer keys and the fact check', () => {
+    const md = renderOverviewReport(
+      input({
+        keys: [],
+        gapKeys: [],
+        context: {
+          half: 'all',
+          repeat: 1,
+          keys: 0,
+          left: [],
+          stories: 0,
+          deskUsd: null,
+          skipped: [],
+          judge: null,
+          score: scoreContext([]),
+          fields: scoreFields([]),
+          dates: resultDates([]),
+        },
+        baseline: summarizeBaseline([]),
+      }),
+    )
+    expect(headings(md)).toEqual(['## Answer keys', '## Gap keys', '## Story context against the bars', "## Research's cost baseline", '## Spend'])
   })
 
   it('says why no arm ran when the budget stopped them after the labels', () => {
@@ -81,7 +148,7 @@ describe('renderOverviewReport', () => {
       input({
         steps: ['fact-check'],
         factCheck: {
-          fixtures,
+          sample: { source: 'research', fixtures },
           labeled: 0,
           labels: { accepted: [], unsupported: [], unlabeled: [] },
           variants: [],
@@ -119,7 +186,10 @@ describe('renderOverviewReport', () => {
           },
         ],
         factCheck: {
-          fixtures: { ...fixtures, facts: [fact], runsRead: 1, shortfalls: ['1 of 300 facts: the database holds no more qualifying facts'] },
+          sample: {
+            source: 'research',
+            fixtures: { ...fixtures, facts: [fact], runsRead: 1, shortfalls: ['1 of 300 facts: the database holds no more qualifying facts'] },
+          },
           labeled: 1,
           labels: { accepted: [fact], unsupported: [verdict(faithful!, false)], unlabeled: [] },
           variants: [faithful!, wrong!],
