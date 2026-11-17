@@ -51,33 +51,12 @@ afterEach(() => {
 })
 
 describe('runBuildStoryContext', () => {
-  it("adds every story's item tally to the run's usage, and records no notice at or under the share", async () => {
-    mocks.nextForContext.mockResolvedValue(['a', 'b'])
-    mocks.runStoryContext.mockResolvedValueOnce(run(10, 1)).mockResolvedValueOnce(run(15, 4))
-    const scope = await inScope()
-    expect(scope.usage).toMatchObject({ itemsChecked: 25, itemsFailed: 5 })
-    expect(scope.summary).toBe('Built the context of 2 stories: 4 cards kept, 5 of 25 checked items failed')
-    expect(mocks.notify).not.toHaveBeenCalled()
-  })
-
-  it('records one warning notice when the failure share passes', async () => {
+  it("adds every story's item tally to the run's usage, for the finish's failure-share notice, and records none itself", async () => {
     mocks.nextForContext.mockResolvedValue(['a', 'b'])
     mocks.runStoryContext.mockResolvedValueOnce(run(20, 5)).mockResolvedValueOnce(run(25, 9))
-    await inScope()
-    expect(mocks.notify).toHaveBeenCalledTimes(1)
-    expect(mocks.notify.mock.calls[0]![0]).toMatchObject({
-      source: 'jobs',
-      severity: 'warning',
-      title: 'Story context: 14 of 45 checked items failed in the last run',
-      link: '/admin/jobs',
-      dedupeKey: 'step-failing:build_story_context',
-    })
-  })
-
-  it('records no notice under the minimum count of items, however many failed', async () => {
-    mocks.nextForContext.mockResolvedValue(['a'])
-    mocks.runStoryContext.mockResolvedValue(run(19, 19))
-    await inScope()
+    const scope = await inScope()
+    expect(scope.usage).toMatchObject({ itemsChecked: 45, itemsFailed: 14 })
+    expect(scope.summary).toBe('Built the context of 2 stories: 4 cards kept, 14 of 45 checked items failed')
     expect(mocks.notify).not.toHaveBeenCalled()
   })
 

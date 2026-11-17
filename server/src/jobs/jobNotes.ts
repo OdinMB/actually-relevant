@@ -8,6 +8,7 @@
 import { config } from '../config.js'
 import type { RunUsage } from '../lib/runUsage.js'
 import { researchSwitchOff } from '../services/researchRuns.js'
+import { failureShareExceeded, failureShareLine } from './failureShare.js'
 
 export interface JobNotes {
   /** What the job does and its rules that are not obvious; null for a job without one. */
@@ -177,16 +178,6 @@ export function failureShareWarning(lastRunUsage: RunUsage | null): string | nul
   if (!failureShareExceeded(checked, failed)) return null
   return failureShareLine(checked, failed)
 }
-
-/** Whether a run's tally passes the failure share: more than `share` failed of at least `minItems` checked. */
-export function failureShareExceeded(checked: number, failed: number): boolean {
-  const { share, minItems } = config.jobs.failureShare
-  return checked >= minItems && failed / checked > share
-}
-
-/** "14 of 45 checked items failed in the last run.": the Jobs page's warning, and a step's notice title. */
-export const failureShareLine = (checked: number, failed: number) =>
-  `${failed.toLocaleString('en-US')} of ${count(checked, 'checked item')} failed in the last run.`
 
 /** The warnings of one job; every job also gets the failure share's (`failureShareWarning`). */
 export const WARNINGS: Readonly<Record<string, (row: JobRowState) => string | null>> = {

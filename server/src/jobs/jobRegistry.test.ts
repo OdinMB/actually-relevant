@@ -12,6 +12,7 @@ const { MODEL_JOBS } = await import('./modelJobs.js')
 const { RESUMABLE_JOBS } = await import('./interruptedRuns.js')
 const { ENABLE_CHECKS } = await import('./jobEnableChecks.js')
 const { NOTES, WARNINGS } = await import('./jobNotes.js')
+const { FAILURE_SHARE_MESSAGES } = await import('./failureShare.js')
 
 const JOBS = Object.keys(JOB_HANDLERS)
 
@@ -45,5 +46,9 @@ describe('the job lists', () => {
     ['the warnings', Object.keys(WARNINGS)],
   ])('name only jobs that exist: %s', (_list, names) => {
     for (const name of names) expect(JOBS, name).toContain(name)
+  })
+
+  it("word the failure-share notice only for jobs that check a model's output", () => {
+    for (const name of Object.keys(FAILURE_SHARE_MESSAGES)) expect(MODEL_JOBS.has(name), name).toBe(true)
   })
 })

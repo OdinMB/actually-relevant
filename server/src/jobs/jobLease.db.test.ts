@@ -240,6 +240,30 @@ describeDb('job lease (PostgreSQL)', () => {
       })
     })
 
+    // The notice's wording and threshold are failureShare.test.ts's; here, that the finish records it once per job
+    describe('the failure share of the items the run checked', () => {
+      const checked = (itemsChecked: number, itemsFailed: number) => ({ ...emptyUsage(), itemsChecked, itemsFailed })
+      const notices = () => prisma.adminNotice.findMany({ select: { title: true, dedupeKey: true, severity: true, count: true } })
+
+      it('records one warning notice for the job when more than the share failed, a repeat reopening it, and none at or under it', async () => {
+        await seedJob()
+        await finishJobRun(JOB, null, checked(45, 9))
+        expect(await notices()).toEqual([])
+
+        await finishJobRun(JOB, null, checked(45, 14))
+        await finishJobRun(JOB, 'boom', checked(40, 20))
+        expect(await notices()).toEqual([
+          { title: 'Crawl Feeds: 20 of 40 checked items failed in the last run', dedupeKey: `step-failing:${JOB}`, severity: 'warning', count: 2 },
+        ])
+      })
+
+      it("records none for a chain's run, whose steps' runs carry their items", async () => {
+        await prisma.jobRun.create({ data: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *' } })
+        await finishJobRun('daily_edition_chain', null, checked(45, 14))
+        expect(await notices()).toEqual([])
+      })
+    })
+
     it('starts the count of interrupted runs again, on success and on failure', async () => {
       for (const error of [null, 'boom']) {
         await prisma.jobRun.deleteMany()

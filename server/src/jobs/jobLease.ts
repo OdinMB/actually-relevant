@@ -3,10 +3,12 @@ import { randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
+import { notify } from '../lib/notify.js'
 import { config } from '../config.js'
 import type { RunUsage } from '../lib/runUsage.js'
 import { checkSpendWarnings } from '../services/spending.js'
 import { isChain } from './chainDefinitions.js'
+import { failureShareNotice } from './failureShare.js'
 
 /**
  * The cross-instance job lease (ADR-0017): a run holds `locked_by`/`locked_until` on its job's
@@ -100,8 +102,9 @@ const addMonthSpend = (jobName: string, usage: RunUsage) => prisma.$executeRaw`
  * on failure), what the run spent (`usage`, null when it could not be read) and what it did
  * (`summary`, null when it did not say), start the count of interrupted runs again, and release the
  * lease only where this process still holds it. With the same statements, a run's usage is added to
- * its job's month (not a chain's: its steps' runs carry its spend). A run that spent anything then
- * has its spending warning levels checked; a failure of that check is logged, never thrown.
+ * its job's month (not a chain's: its steps' runs carry its spend and its items). A run whose checks
+ * failed more than the failure share of its items then records its notice (`failureShareNotice`),
+ * and a run that spent anything has its spending warning levels checked; neither throws.
  */
 export async function finishJobRun(jobName: string, error: string | null, usage: RunUsage | null = null, summary: string | null = null): Promise<void> {
   const finish = prisma.$executeRaw`
@@ -119,7 +122,10 @@ export async function finishJobRun(jobName: string, error: string | null, usage:
   const counted = usage !== null && !isChain(jobName)
   const writes: Prisma.PrismaPromise<number>[] = counted ? [finish, addMonthSpend(jobName, usage)] : [finish]
   await prisma.$transaction(writes)
-  if (!counted || usage.costUsd <= 0) return
+  if (!counted) return
+  const failing = failureShareNotice(jobName, usage)
+  if (failing) await notify(failing)
+  if (usage.costUsd <= 0) return
   await checkSpendWarnings(jobName).catch((err: unknown) => log.error({ jobName, err }, 'could not check the spending warning levels'))
 }
 

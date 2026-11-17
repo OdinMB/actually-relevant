@@ -10,6 +10,7 @@ import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { notify } from '../lib/notify.js'
 import { CHAINS, isChain } from '../jobs/chainDefinitions.js'
+import { jobDisplayName } from '../jobs/jobDisplayName.js'
 import { MODEL_JOBS } from '../jobs/modelJobs.js'
 import { BadRequestError } from '../utils/errors.js'
 import { monthToDateChars, utcMonthStart } from './podcastGuards.js'
@@ -217,16 +218,7 @@ export async function setSpendWarning(scope: string, levelUsd: number | null): P
   else await prisma.spendWarning.upsert({ where: { scope }, create: { scope, levelUsd }, update: { levelUsd } })
 }
 
-/** "Research Stories" for `research_stories`: the server keeps no display names of its own. */
-const scopeName = (scope: string) =>
-  scope === ALL_SPEND
-    ? 'Spending'
-    : scope === EDITOR_RESEARCH
-      ? 'Research started by an editor'
-      : scope
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ')
+const scopeName = (scope: string) => (scope === ALL_SPEND ? 'Spending' : scope === EDITOR_RESEARCH ? 'Research started by an editor' : jobDisplayName(scope))
 
 const usd = (value: number) => `$${value.toFixed(2)}`
 
