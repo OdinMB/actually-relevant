@@ -41,12 +41,13 @@ const mockNotify = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./scheduler.js', () => ({ runJob: mockRunJob }))
 vi.mock('./handlers.js', () => ({
-  JOB_HANDLERS: { select_stories: vi.fn(), research_stories: vi.fn(), publish_stories: vi.fn() },
+  JOB_HANDLERS: { select_stories: vi.fn(), research_stories: vi.fn(), build_story_context: vi.fn(), publish_stories: vi.fn() },
 }))
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 
 const { runChain, startStep, canContinue, holdUntil, resumeHeldChains, clearHeldChains } = await import('./chains.js')
-const { nextClockTime, nextStepTime, chainOf, CHAINS } = await vi.importActual<typeof import('./chainDefinitions.js')>('./chainDefinitions.js')
+const { nextClockTime, nextStepTime, chainOf, CHAINS, GOES_ON_PAST_FAILURE } =
+  await vi.importActual<typeof import('./chainDefinitions.js')>('./chainDefinitions.js')
 const { config } = await import('../config.js')
 
 const STEPS = ['select_stories', 'research_stories', 'publish_stories']
@@ -125,24 +126,67 @@ describe('chains', () => {
     expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('publish_stories runs next') }))
   })
 
-  it('the real daily edition: a Review on publish_stories waits only while a step after it is on', async () => {
-    const daily = CHAINS.daily_edition_chain!
-    const later = daily.slice(daily.indexOf('publish_stories') + 1)
-    rows.set('daily_edition_chain', step())
-    for (const name of daily) rows.set(name, step({ enabled: !later.includes(name) }))
-    rows.get('publish_stories')!.pauseForReview = true
+  describe('the real daily edition', () => {
+    const daily = () => CHAINS.daily_edition_chain!
+    const edition = () => rows.get('daily_edition_chain')!
+    beforeEach(() => {
+      rows.set('daily_edition_chain', step())
+      for (const name of daily()) rows.set(name, step())
+    })
 
-    // Every step after publishing is off (story context is, by default): nothing to wait for
-    await runChain('daily_edition_chain')
-    expect(ranSteps()).toEqual(daily.slice(0, daily.indexOf('publish_stories') + 1))
-    expect(rows.get('daily_edition_chain')).toMatchObject({ resumeStep: null, resumeReason: null })
-    expect(mockNotify).not.toHaveBeenCalled()
+    it('builds the context cards after research and before publishing', () => {
+      expect(daily()).toEqual(['select_stories', 'research_stories', 'build_story_context', 'publish_stories'])
+    })
 
-    // Once a later step is switched on, the chain waits for it
-    const next = later[0]!
-    rows.get(next)!.enabled = true
-    await runChain('daily_edition_chain')
-    expect(rows.get('daily_edition_chain')).toMatchObject({ resumeStep: next, resumeReason: 'review' })
+    it('a Review on research_stories waits for the context step while it is on, else for publishing', async () => {
+      rows.get('research_stories')!.pauseForReview = true
+      await runChain('daily_edition_chain')
+      expect(edition()).toMatchObject({ resumeStep: 'build_story_context', resumeReason: 'review' })
+
+      // Off by default: then the review waits for publishing, and Continue goes straight to it
+      rows.get('build_story_context')!.enabled = false
+      mockRunJob.mockClear()
+      await runChain('daily_edition_chain')
+      expect(edition()).toMatchObject({ resumeStep: 'publish_stories', resumeReason: 'review' })
+      mockRunJob.mockClear()
+      await runChain('daily_edition_chain', 'continue')
+      expect(ranSteps()).toEqual(['publish_stories'])
+    })
+
+    it('a Review on publish_stories, the last step, has nothing to wait for', async () => {
+      rows.get('publish_stories')!.pauseForReview = true
+      await runChain('daily_edition_chain')
+      expect(ranSteps()).toEqual(daily())
+      expect(edition()).toMatchObject({ resumeStep: null, resumeReason: null })
+      expect(mockNotify).not.toHaveBeenCalled()
+    })
+
+    it('publishes when the context step fails: its failure stands on its own row, and the chain goes on', async () => {
+      mockRunJob.mockImplementation(async (name: string) =>
+        name === 'build_story_context' ? { result: 'failed', error: 'database gone' } : { result: 'succeeded' },
+      )
+      await runChain('daily_edition_chain')
+      expect(ranSteps()).toEqual(daily())
+      expect(edition()).toMatchObject({ resumeStep: null, resumeReason: null })
+    })
+
+    it('a failed context step set to Review still pauses before publishing', async () => {
+      mockRunJob.mockImplementation(async (name: string) =>
+        name === 'build_story_context' ? { result: 'failed', error: 'database gone' } : { result: 'succeeded' },
+      )
+      rows.get('build_story_context')!.pauseForReview = true
+      await runChain('daily_edition_chain')
+      expect(ranSteps()).toEqual(['select_stories', 'research_stories', 'build_story_context'])
+      expect(edition()).toMatchObject({ resumeStep: 'publish_stories', resumeReason: 'review' })
+    })
+
+    it('still stops at any other failed step', async () => {
+      for (const failing of daily().filter(s => !GOES_ON_PAST_FAILURE.has(s) && s !== 'publish_stories')) {
+        mockRunJob.mockReset().mockImplementation(async (name: string) => (name === failing ? { result: 'failed', error: 'down' } : { result: 'succeeded' }))
+        await expect(runChain('daily_edition_chain')).rejects.toThrow(new RegExp(`Stopped at ${failing}`))
+        expect(ranSteps()).not.toContain('publish_stories')
+      }
+    })
   })
 
   it('a scheduled run after a pause starts from the first step again', async () => {

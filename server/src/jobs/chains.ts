@@ -17,7 +17,9 @@
  * for Saturday morning). A person can go on sooner from the Jobs page.
  *
  * A step that fails stops the chain there, and the chain's run fails with the step's error; the
- * Jobs page can resume it from that step. A run cut off by a restart resumes from the step it was in.
+ * Jobs page can resume it from that step. A step in `GOES_ON_PAST_FAILURE` (story context, before
+ * publishing) is the exception: its failure stands on its own row, and the chain goes on. A run cut
+ * off by a restart resumes from the step it was in.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
@@ -25,7 +27,7 @@ import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { JOB_HANDLERS } from './handlers.js'
 import { runJob } from './scheduler.js'
-import { CHAINS, nextStepTime } from './chainDefinitions.js'
+import { CHAINS, GOES_ON_PAST_FAILURE, nextStepTime } from './chainDefinitions.js'
 import { jobTimeZone } from './jobTimeZones.js'
 import { RESUMABLE_JOBS } from './interruptedRuns.js'
 
@@ -190,8 +192,12 @@ export async function runChain(chainName: string, mode: 'start' | 'continue' = '
 
     const outcome = await runStep(step)
     if (outcome.result === 'failed') {
-      await setResume(chainName, step, 'failed')
-      throw new Error(`Stopped at ${step}, so the steps after it did not run: ${outcome.error}`)
+      // A step whose failure must not hold what comes after it (story context before publishing)
+      if (GOES_ON_PAST_FAILURE.has(step)) log.warn({ chainName, step, error: outcome.error }, 'step failed; the chain goes on without it')
+      else {
+        await setResume(chainName, step, 'failed')
+        throw new Error(`Stopped at ${step}, so the steps after it did not run: ${outcome.error}`)
+      }
     }
 
     const next = stepRow.pauseForReview ? await nextStepOn(steps, i) : null
