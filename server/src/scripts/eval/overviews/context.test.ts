@@ -1,21 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { z } from 'zod'
-import { config } from '../../../config.js'
-import { CONTEXT_STEP_TIERS } from '../../../services/storyContextPipeline.js'
-import { contextInput, gapKey } from '../../../test/contextFixtures.js'
+import type { PassResult } from '../../../services/researchPass.js'
+import { gapKey } from '../../../test/contextFixtures.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
+import { passInput, researchStory } from '../../../test/passFixtures.js'
 import type { TavilyResponse, TavilySearch } from '../research/tavily.js'
-import {
-  chooseKeys,
-  CONTEXT_STEP_ARMS,
-  CONTEXT_STORY_RESERVE_USD,
-  contextCall,
-  evalSearch,
-  JUDGE_DESK_USD_PER_RUN,
-  runContextStep,
-  runPipeline,
-  type ContextStepOptions,
-} from './context.js'
+import { cardsResult, chooseKeys, FIRST_PASS_RESERVE_USD, JUDGE_DESK_USD_PER_RUN, runContextStep, runPipeline, type ContextStepOptions } from './context.js'
 import { halfOf } from './contextScore.js'
 import type { GapKeyFile } from './keyFiles.js'
 
@@ -34,10 +23,40 @@ const FIELDS = {
   validity: 'fixed',
 }
 
-/** Answers production's context steps by schema name: the two response searches, one fact from each source, a response card citing one, every check supported. */
+const supportedItems = (prompt: string) => ({
+  items: [...prompt.matchAll(/<ITEM number="(\d+)"/g)].map(m => ({
+    number: Number(m[1]),
+    supported: true,
+    problem: '',
+    key: false,
+    copiedSentence: '',
+    followsSource: '',
+  })),
+})
+
+/**
+ * Answers a first pass by schema name: research finds the original's fact and an unusable cluster
+ * member (so it falls back, with no article), then the card steps: the two response searches, one
+ * fact from each source, a response card citing one, every check supported.
+ */
 function pipelineAnswers(schemaName: string, prompt: string): unknown {
+  const research = /^research-([a-z-]+)#/.exec(schemaName)?.[1]
+  if (research === 'queries') return { queries: [{ query: 'Sumatra peat fires', language: 'en' }] }
+  if (research === 'extract') {
+    const member = prompt.includes('member.example')
+    return {
+      usable: !member,
+      relation: 'same-development',
+      kind: 'news-report',
+      outlet: '',
+      country: 'Indonesia',
+      facts: member
+        ? []
+        : [{ statement: 'Fires burned 2.88 million hectares.', supportingSentence: 'Fires burned 2.88 million hectares.', measures: 'area burned' }],
+      voices: [],
+    }
+  }
   const step = /^overview-context-([a-z-]+)#/.exec(schemaName)?.[1]
-  const numbers = (tag: string) => [...prompt.matchAll(new RegExp(`<${tag} number="(\\d+)"`, 'g'))].map(m => Number(m[1]))
   switch (step) {
     case 'structure':
       return { facts: [...prompt.matchAll(/<FACT id="([^"]+)"/g)].map(m => ({ id: m[1], ...FIELDS })) }
@@ -59,7 +78,7 @@ function pipelineAnswers(schemaName: string, prompt: string): unknown {
       }
     case 'fact-check':
     case 'box-check':
-      return { items: numbers('ITEM').map(number => ({ number, supported: true, problem: '', key: false, copiedSentence: '', followsSource: '' })) }
+      return supportedItems(prompt)
     case 'write':
       return {
         boxes: [
@@ -83,18 +102,19 @@ function judgeAnswers(schemaName: string, prompt: string): unknown {
   const numbers = (tag: string) => [...prompt.matchAll(new RegExp(`<${tag} number="(\\d+)"`, 'g'))].map(m => Number(m[1]))
   if (schemaName.startsWith('overview-context-needs'))
     return { needs: [...prompt.matchAll(/<NEED id="([^"]+)"/g)].map(m => ({ id: m[1], met: true, factIds: ['S1F1'], why: 'the card says it' })) }
-  if (schemaName.startsWith('overview-box-support'))
-    return { items: numbers('ITEM').map(number => ({ number, supported: true, problem: '', key: false, copiedSentence: '', followsSource: '' })) }
+  if (schemaName.startsWith('overview-box-support')) return supportedItems(prompt)
   if (schemaName.startsWith('overview-context-placement')) return { notes: numbers('NOTE').map(number => ({ number, adds: true, why: 'adds' })) }
   return null
 }
 
+/** Research's coverage searches find nothing; each gap search finds three reports. */
 function fakeTavily(dates: (string | null)[] = ['2026-11-10', null, '2026-11-20']) {
   const requests: TavilySearch[] = []
   return {
     requests,
     async search(request: TavilySearch): Promise<TavilyResponse> {
       requests.push(request)
+      if (request.topic !== 'general') return { results: [], credits: 2, cached: false }
       return {
         results: dates.map((d, i) => ({
           url: `https://agency-${requests.length}-${i}.example/report`,
@@ -112,70 +132,17 @@ function fakeTavily(dates: (string | null)[] = ['2026-11-10', null, '2026-11-20'
   }
 }
 
-describe('contextCall', () => {
-  it("holds each step's constant arm at production's default model and effort for the step's tier", () => {
-    for (const [step, tier] of Object.entries(CONTEXT_STEP_TIERS)) {
-      const production = config.llm.models[tier]
-      expect(CONTEXT_STEP_ARMS[step as keyof typeof CONTEXT_STEP_TIERS], step).toEqual({ model: production.name, effort: production.reasoningEffort })
-    }
-  })
-
-  it("calls each step on its tier's constant arm, under a versioned name that run 2 tags", async () => {
-    const ctx = fakeEvalContext(() => ({ facts: [] }))
-    expect(CONTEXT_STEP_ARMS.write).toEqual({ model: 'gpt-6-luna', effort: 'medium' })
-    expect(
-      Object.entries(CONTEXT_STEP_TIERS)
-        .filter(([, t]) => t === 'small')
-        .every(([s]) => CONTEXT_STEP_ARMS[s as 'structure'].effort === 'low'),
-    ).toBe(true)
-    const schema = z.object({ facts: z.array(z.string()) })
-    const first = await contextCall(ctx, 1)('structure', schema, 'prompt')
-    await contextCall(ctx, 2)('structure', schema, 'prompt')
-    expect(first).toMatchObject({ parsed: { facts: [] }, outcome: 'ok', model: 'gpt-6-luna' })
-    expect(ctx.calls.map(c => c.schemaName)).toEqual([expect.stringMatching(/^overview-context-structure#[0-9a-f]{8}$/), expect.stringMatching(/~run2$/)])
-  })
-
-  it('hands a failed call on as a parse failure with no answer', async () => {
-    const res = await contextCall(
-      fakeEvalContext(() => null),
-      1,
-    )('gap-list', z.object({}), 'prompt')
-    expect(res).toMatchObject({ parsed: null, outcome: 'parse_failure' })
-  })
-})
-
-describe('evalSearch', () => {
-  it("sends production's request, shapes the results as production does, and logs their dates", async () => {
-    const tavily = fakeTavily()
-    const logged: unknown[] = []
-    const answer = await evalSearch(tavily, e => logged.push(e))({ query: 'peat fire moratorium', recent: true, endDate: '2026-11-14' })
-    expect(tavily.requests[0]).toMatchObject({
-      query: 'peat fire moratorium',
-      endDate: '2026-11-14',
-      startDate: '2026-10-15',
-      topic: 'general',
-      depth: config.storyContext.searchDepth,
-    })
-    expect(answer.cached).toBe(false)
-    expect(answer.credits).toBe(1)
-    expect(answer.results[0]).toEqual({
-      url: 'https://agency-1-0.example/report',
-      title: 'Report',
-      date: '2026-11-10',
-      text: expect.stringContaining('moratorium'),
-    })
-    expect(logged).toEqual([{ endDate: '2026-11-14', dates: ['2026-11-10', null, '2026-11-20'] }])
-  })
-})
+const story = (slug: string) => ({ slug, key: gapKey({ slug }), input: passInput(researchStory({ id: slug })) })
 
 describe('runPipeline', () => {
-  it("runs production's pipeline on every story, each repeat after the last, logging each search", async () => {
+  it("runs production's first pass on every story, each repeat after the last, logging each gap search", async () => {
     const ctx = fakeEvalContext(pipelineAnswers, { costUsd: 0.001 })
+    const tavily = fakeTavily()
     const done: string[] = []
-    const story = (slug: string) => ({ slug, key: gapKey({ slug }), input: contextInput({ storyId: slug }) })
     const out = await runPipeline([story('a'), story('b')], {
       ctx,
-      tavily: fakeTavily(),
+      tavily,
+      relevanceMin: 5,
       repeat: 2,
       concurrency: 2,
       budgetUsd: 5,
@@ -188,27 +155,61 @@ describe('runPipeline', () => {
     expect(first!.result).toMatchObject({ status: 'completed', outcome: 'built' })
     expect(first!.result.record.optOutChecked).toBe(false)
     expect(first!.result.boxes.map(b => b.type)).toEqual(['response'])
+    // The cards' facts as context reads them: the original's and the gap searches'
+    expect(first!.result.facts.map(f => f.ref)).toContain('S0F1')
+    expect(first!.result.facts.find(f => f.ref === 'S1F1')).toMatchObject({ origin: 'search', verdict: 'supported', slot: 'response' })
+    // The whole pass's cost: research's calls and the card steps'
+    expect(first!.result.modelUsd).toBeGreaterThan(first!.result.record.calls.reduce((sum, c) => sum + c.costUsd, 0))
+    // No article kept, so the cards were placed on the story's own text
+    expect(first!.input).toMatchObject({ storyId: 'a', title: 'Peat fires return to Sumatra', storyDay: '2026-11-14' })
     expect(out.searches.map(s => [s.slug, s.run, s.endDate])).toEqual(
       expect.arrayContaining([
         ['a', 1, '2026-11-14'],
         ['b', 2, '2026-11-14'],
       ]),
     )
-    expect(ctx.calls.some(c => c.schemaName.endsWith('~run2'))).toBe(true)
+    // Research's coverage window ends on the story's day, as the gap searches do
+    expect(tavily.requests.filter(r => r.topic !== 'general').every(r => r.endDate === '2026-11-14')).toBe(true)
+    expect(ctx.calls.some(c => c.schemaName.startsWith('research-queries#') && c.schemaName.endsWith('~run2'))).toBe(true)
     expect(out.skipped).toEqual([])
   })
 
   it('starts no story the budget cannot cover', async () => {
-    const out = await runPipeline([{ slug: 'a', key: gapKey(), input: contextInput() }], {
+    const out = await runPipeline([story('a')], {
       ctx: fakeEvalContext(pipelineAnswers),
       tavily: fakeTavily(),
+      relevanceMin: 5,
       repeat: 1,
       concurrency: 1,
-      budgetUsd: CONTEXT_STORY_RESERVE_USD / 2,
+      budgetUsd: FIRST_PASS_RESERVE_USD / 2,
       spentUsd: () => 0,
     })
     expect(out.runs).toEqual([])
     expect(out.skipped.map(s => s.storyId)).toEqual(['a#1'])
+  })
+})
+
+describe('cardsResult', () => {
+  const pass = (over: Partial<PassResult> & { cards?: PassResult['record']['cards'] }): PassResult =>
+    ({
+      status: 'completed',
+      outcome: 'written',
+      pool: { sources: [], facts: [], searches: [], dropped: [] },
+      boxes: [],
+      writer: null,
+      credits: 3,
+      modelUsd: 0.05,
+      error: null,
+      transient: false,
+      ...over,
+      record: { context: { calls: [] }, cards: over.cards ?? 'none', cardsError: 'cards: write failed' },
+    }) as unknown as PassResult
+
+  it('reads a card failure as a failed run, a budget stop as a skipped one, and no card kept as none kept', () => {
+    expect(cardsResult(pass({ cards: 'failed' }))).toMatchObject({ status: 'failed', outcome: 'technical', error: 'cards: write failed' })
+    expect(cardsResult(pass({ outcome: 'budget' }))).toMatchObject({ status: 'skipped', outcome: 'technical' })
+    expect(cardsResult(pass({ status: 'failed', outcome: 'technical', error: 'facts-check: x' }))).toMatchObject({ status: 'failed', error: 'facts-check: x' })
+    expect(cardsResult(pass({}))).toMatchObject({ status: 'completed', outcome: 'none-kept', credits: 3, modelUsd: 0.05 })
   })
 })
 
@@ -232,6 +233,7 @@ describe('runContextStep', () => {
   const options = (extra: Partial<ContextStepOptions> = {}): ContextStepOptions => ({
     ctx: fakeEvalContext(pipelineAnswers),
     tavily: fakeTavily(),
+    relevanceMin: 5,
     files: [
       { file: 'story-a.json', key: gapKey({ slug: 'story-a' }), errors: [] },
       { file: 'gone.json', key: gapKey({ slug: 'gone' }), errors: [] },
@@ -240,7 +242,7 @@ describe('runContextStep', () => {
     repeat: 1,
     concurrency: 2,
     budgetUsd: 5,
-    inputs: async slugs => new Map(slugs.map(s => [s, s === 'gone' ? null : contextInput({ storyId: s })])),
+    inputs: async slugs => new Map(slugs.map(s => [s, s === 'gone' ? null : passInput(researchStory({ id: s }))])),
     canCall: true,
     dryRun: false,
     ...extra,
@@ -271,7 +273,7 @@ describe('runContextStep', () => {
       throw new Error('no call on a dry run')
     })
     const dry = await runContextStep(options({ ctx, dryRun: true, repeat: 3 }))
-    expect(dry.report.deskUsd).toBeCloseTo(3 * (CONTEXT_STORY_RESERVE_USD + JUDGE_DESK_USD_PER_RUN))
+    expect(dry.report.deskUsd).toBeCloseTo(3 * (FIRST_PASS_RESERVE_USD + JUDGE_DESK_USD_PER_RUN))
     expect(dry.runs).toEqual([])
     const none = await runContextStep(options({ files: [], inputs: () => Promise.reject(new Error('no database')) }))
     expect(none.report.stories).toBe(0)

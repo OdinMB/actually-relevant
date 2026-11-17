@@ -46,13 +46,16 @@ const BOX_SUPPORT_SCHEMA = versionedSchemaName('overview-box-support', factCheck
 const PLACEMENT_SCHEMA = versionedSchemaName('overview-context-placement', placementJudgeSchema)
 const FIELDS_SCHEMA = versionedSchemaName('overview-context-fields', fieldsJudgeSchema)
 
-/** One story's run of production's pipeline, as the judges read it. */
+/** The story the cards were written for: its id, title, day and places. */
+export type JudgedInput = Pick<ContextInput, 'storyId' | 'title' | 'storyDay' | 'layout'>
+
+/** One story's run of production's pipeline, its cards read as a context run's (`cardsResult`), as the judges read it. */
 export interface JudgedRun {
   slug: string
   /** 1-based. */
   run: number
   key: GapKey
-  input: ContextInput
+  input: JudgedInput
   result: StoryContextResult
 }
 

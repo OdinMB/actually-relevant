@@ -104,7 +104,11 @@ const BAR_TEXT: Record<BarName, { measure: string; bar: string; show: (v: number
   response: { measure: "A response card, where the key's response need is findable", bar: `at least ${pct(RESPONSE_BAR)}`, show: pct },
   boxes: { measure: 'Box items the strong judge finds their cited facts do not support', bar: 'none', show: v => num(v, 1) },
   placement: { measure: 'Notes `model` places beside a paragraph or point that add to it', bar: `at least ${pct(PLACEMENT_BAR)}`, show: pct },
-  cost: { measure: 'Cost per story (model calls at the flex price, plus search credits)', bar: `at most ${usd(COST_BAR_USD)}`, show: v => usd(v) },
+  cost: {
+    measure: 'Cost per story, the whole first pass (model calls at the flex price, plus search credits)',
+    bar: `at most ${usd(COST_BAR_USD)}`,
+    show: v => usd(v),
+  },
 }
 
 const range = (s: Spread | null, show: (v: number) => string) =>

@@ -1,38 +1,25 @@
 /**
  * The `context` step of `eval:overviews` (plan `.plans/2026-11-16_story-context.md`, "Eval gate
- * before switching on"): production's `buildStoryContext` on each gap key's story, `--repeat` times,
- * then the strong judge on what it kept (`contextJudge.ts`) and the scores against the bars
- * (`contextScore.ts`).
+ * before switching on"; `.plans/2026-11-17_research-passes.md`, "Evals and the gate"): production's
+ * first research pass (`runResearchPass`) on each gap key's story, `--repeat` times, then the strong
+ * judge on the cards it kept (`contextJudge.ts`) and the scores against the bars (`contextScore.ts`).
  *
- * The eval deps: each step's tier on a constant arm (research's `SMALL` and `MEDIUM`, production's
- * tier defaults as constants), calls through the eval context (cache, ledger, budget) under
- * versioned schema names, run k ≥ 2 under its own cache key (`repeats.ts`); search through the
- * eval's cached Tavily client, the request built by production's `tavilyRequestFor` (so it ends on
- * the story's publication day) and each result shaped by `searchResultFrom`; no opt-out policy
- * (recorded as `optOutChecked: false`, as eval:research). A search answered from the eval's cache
- * counts the credits it cost when made, so a story's cost is what production would pay without its
- * own 7-day cache. Each search's result dates are logged for the replay's hindsight check. Stories
- * start only while the budget covers one more (`runStories`); the judge runs only when its planned
- * calls fit what is left (`callBudget.ts`).
+ * The eval deps are research/pipeline.ts's: each step on its tier's constant arm, calls through the
+ * eval context under versioned schema names, run k ≥ 2 under its own cache key; the gap searches
+ * through the eval's cached Tavily client as production builds them, each answer's result dates
+ * logged for the replay's hindsight check; research's coverage window ends on the story's day, as
+ * the gap searches do. The input is a first pass's (`loadFirstPassInput`), whatever the story's
+ * history. Stories start only while the budget covers one more first pass (`runStories`); the judge
+ * runs only when its planned calls fit what is left (`callBudget.ts`).
  */
-import type { z } from 'zod'
-import {
-  buildStoryContext,
-  CONTEXT_STEP_TIERS,
-  type ContextCall,
-  type ContextDeps,
-  type ContextInput,
-  type ContextStep,
-} from '../../../services/storyContextPipeline.js'
-import { searchResultFrom, tavilyRequestFor } from '../../../services/storyContextSources.js'
-import { versionedSchemaName } from '../models.js'
-import { runNumbers, runSchemaName } from '../repeats.js'
-import { MEDIUM, SMALL } from '../research/pipeline.js'
+import { cardFacts, cardsLayout, type PassInput, type PassResult } from '../../../services/researchPass.js'
+import type { StoryContextResult } from '../../../services/storyContextPipeline.js'
+import { runNumbers } from '../repeats.js'
+import { passInEval, type SearchClient } from '../research/pipeline.js'
 import { runStories, type SkippedStory } from '../research/storyQueue.js'
-import type { TavilyResponse, TavilySearch } from '../research/tavily.js'
-import type { Arm, SuiteContext } from '../types.js'
+import type { SuiteContext } from '../types.js'
 import { estimateCalls, refusal, type CallEstimate, type CallGate, type Ledger } from './callBudget.js'
-import { judgeContext, plannedJudgeCalls, type JudgedRun } from './contextJudge.js'
+import { judgeContext, plannedJudgeCalls, type JudgedInput, type JudgedRun } from './contextJudge.js'
 import {
   inHalf,
   resultDates,
@@ -48,66 +35,56 @@ import {
 import type { GapKey } from './gapKeySchema.js'
 import type { GapKeyFile } from './keyFiles.js'
 
-/** Production's tier defaults today, as constants (the arms eval:research runs research's steps on). */
-export const CONTEXT_STEP_ARMS: Record<ContextStep, Arm> = Object.fromEntries(
-  (Object.keys(CONTEXT_STEP_TIERS) as ContextStep[]).map(step => [step, CONTEXT_STEP_TIERS[step] === 'medium' ? MEDIUM : SMALL]),
-) as Record<ContextStep, Arm>
-
-/** What one story's run may cost, reserved while it runs: the step's own bound (3 searches, 5 extractions, about 7 calls). */
-export const CONTEXT_STORY_RESERVE_USD = 0.1
+/** What one story's run may cost, reserved while it runs: a first pass's ceiling (production's `research.pass.firstPassUsd`, as a constant). */
+export const FIRST_PASS_RESERVE_USD = 0.4
 /** A desk estimate of the strong judge per story and run, for the dry run only: the real gate prices its planned calls. */
 export const JUDGE_DESK_USD_PER_RUN = 0.1
 
-const names = new Map<string, string>()
-
-/** `overview-context-<step>#<schema fingerprint>`, computed once per step. */
-function schemaNameOf(step: ContextStep, schema: z.ZodType): string {
-  let name = names.get(step)
-  if (name === undefined) {
-    name = versionedSchemaName(`overview-context-${step}`, schema)
-    names.set(step, name)
-  }
-  return name
-}
-
-/** Production's step caller for the eval: the step's constant arm, the eval context, run k's cache key. */
-export function contextCall(ctx: SuiteContext, run: number): ContextCall {
-  return async (step, schema, prompt) => {
-    const a = CONTEXT_STEP_ARMS[step]
-    const rec = await ctx.call(a, runSchemaName(schemaNameOf(step, schema), run), schema, prompt)
-    return { parsed: rec.outcome === 'ok' ? rec.parsed : null, outcome: rec.outcome, usage: rec.usage, costUsd: rec.costUsd, model: a.model }
-  }
-}
-
-export interface SearchClient {
-  search(request: TavilySearch): Promise<TavilyResponse>
-}
-
-/** Production's search request on the eval's cached client; each answer's result dates go to `log`. */
-export function evalSearch(tavily: SearchClient, log: (entry: Pick<SearchLogEntry, 'endDate' | 'dates'>) => void): ContextDeps['search'] {
-  return async request => {
-    const answer = await tavily.search(tavilyRequestFor(request))
-    log({ endDate: request.endDate, dates: answer.results.map(r => r.publishedDate) })
-    return { results: answer.results.map(searchResultFrom), credits: answer.credits, cached: false }
-  }
-}
-
-/** One gap key's story with its input, as the step runs it. */
+/** One gap key's story with its first pass's input, as the step runs it. */
 export interface ContextStory {
   slug: string
   key: GapKey
-  input: ContextInput
+  input: PassInput
 }
 
 export interface PipelineOptions {
   ctx: SuiteContext
   tavily: SearchClient
+  /** Publish bar for research's gate (`config.selection.relevanceMin`). */
+  relevanceMin: number
   repeat: number
   concurrency: number
   budgetUsd: number
   /** The folder's spend so far: model ledger plus Tavily credits. */
   spentUsd: () => number
   onDone?: (run: JudgedRun) => void
+}
+
+/**
+ * A pass as the judges and scores read a context run: its kept cards, the pool's facts as context
+ * reads them, the card steps' record, and the whole pass's cost (the cost bar is the first pass's).
+ * A card failure is a failed run, a budget stop a skipped one.
+ */
+export function cardsResult(pass: PassResult): StoryContextResult {
+  const failed = pass.status === 'failed' || pass.record.cards === 'failed'
+  const stopped = pass.outcome === 'budget' || pass.record.cards === 'budget'
+  return {
+    status: failed ? 'failed' : stopped ? 'skipped' : 'completed',
+    outcome: failed || stopped ? 'technical' : pass.boxes.length > 0 ? 'built' : 'none-kept',
+    facts: cardFacts(pass.pool),
+    boxes: pass.boxes,
+    writer: pass.writer,
+    credits: pass.credits,
+    modelUsd: pass.modelUsd,
+    record: pass.record.context,
+    error: pass.error ?? pass.record.cardsError,
+    transient: pass.transient,
+  }
+}
+
+/** The story the cards were written for: version 1's title and places when the pass kept a draft, else the story's own. */
+export function judgedInput(input: PassInput, pass: PassResult): JudgedInput {
+  return { storyId: input.story.id, title: pass.version?.title ?? input.current.title, storyDay: input.storyDay, layout: cardsLayout(input, pass.version) }
 }
 
 export interface PipelineRuns {
@@ -118,7 +95,7 @@ export interface PipelineRuns {
   searches: SearchLogEntry[]
 }
 
-/** Production's pipeline on every story, run 1 for all of them before run 2. */
+/** Production's first pass on every story, run 1 for all of them before run 2. */
 export async function runPipeline(stories: ContextStory[], o: PipelineOptions): Promise<PipelineRuns> {
   const out: PipelineRuns = { runs: [], skipped: [], searches: [] }
   for (const run of runNumbers(o.repeat)) {
@@ -128,13 +105,17 @@ export async function runPipeline(stories: ContextStory[], o: PipelineOptions): 
         concurrency: o.concurrency,
         budgetUsd: o.budgetUsd,
         spentUsd: o.spentUsd,
-        storyUsd: () => CONTEXT_STORY_RESERVE_USD,
+        storyUsd: () => FIRST_PASS_RESERVE_USD,
         run: async ({ story }): Promise<JudgedRun> => {
-          const deps: ContextDeps = {
-            call: contextCall(o.ctx, run),
-            search: evalSearch(o.tavily, e => out.searches.push({ slug: story.slug, run, ...e })),
-          }
-          return { slug: story.slug, run, key: story.key, input: story.input, result: await buildStoryContext(story.input, deps) }
+          const pass = await passInEval(story.input, {
+            ctx: o.ctx,
+            tavily: o.tavily,
+            relevanceMin: o.relevanceMin,
+            latestDate: story.input.storyDay,
+            run,
+            log: e => out.searches.push({ slug: story.slug, run, ...e }),
+          })
+          return { slug: story.slug, run, key: story.key, input: judgedInput(story.input, pass), result: cardsResult(pass) }
         },
         onDone: (_item, r) => o.onDone?.(r),
       },
@@ -165,8 +146,8 @@ export interface ContextStepOptions extends Omit<PipelineOptions, 'ctx' | 'spent
   files: GapKeyFile[]
   half: Half | 'all'
   limit?: number
-  /** The stories' inputs by slug (`contextInputsFor`). */
-  inputs(slugs: string[]): Promise<Map<string, ContextInput | null>>
+  /** The stories' first-pass inputs by slug (`loadPassInputsBySlug`, cached). */
+  inputs(slugs: string[]): Promise<Map<string, PassInput | null>>
   /** Whether uncached model calls can reach the API (the judge's gate). */
   canCall: boolean
   dryRun: boolean
@@ -202,17 +183,17 @@ const unjudged = (r: JudgedRun): StoryRun => ({ slug: r.slug, run: r.run, key: r
 /** The step: the keys' stories, production's pipeline on each, then the judge when its calls fit. */
 export async function runContextStep(o: ContextStepOptions): Promise<ContextStepRun> {
   const chosen = chooseKeys(o.files, o.half, o.limit)
-  const inputs = chosen.keys.length === 0 ? new Map<string, ContextInput | null>() : await o.inputs(chosen.keys.map(k => k.slug))
+  const inputs = chosen.keys.length === 0 ? new Map<string, PassInput | null>() : await o.inputs(chosen.keys.map(k => k.slug))
   const left = [...chosen.left]
   const stories: ContextStory[] = []
   for (const key of chosen.keys) {
     const input = inputs.get(key.slug) ?? null
     if (input) stories.push({ slug: key.slug, key, input })
-    else left.push({ file: `${key.slug}.json`, reason: 'no input: the story is not published or has no research run whose sources hold facts' })
+    else left.push({ file: `${key.slug}.json`, reason: 'no input: research cannot run on the story (not found, or not an assessed story)' })
   }
   const base = { half: o.half, repeat: o.repeat, ...(o.limit !== undefined ? { limit: o.limit } : {}), keys: chosen.keys.length, left, stories: stories.length }
   if (o.dryRun) {
-    const deskUsd = stories.length * o.repeat * (CONTEXT_STORY_RESERVE_USD + JUDGE_DESK_USD_PER_RUN)
+    const deskUsd = stories.length * o.repeat * (FIRST_PASS_RESERVE_USD + JUDGE_DESK_USD_PER_RUN)
     return { report: { ...base, deskUsd, skipped: [], judge: null, score: scoreContext([]), fields: scoreFields([]), dates: resultDates([]) }, runs: [] }
   }
 

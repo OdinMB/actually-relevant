@@ -4,11 +4,14 @@
  * reusable facts of the earlier stories research may link, and whether an editor's pass may start.
  * SELECT only, through the client it is given, so the eval can pass its read-only session. The
  * legacy import is the claim's (`legacyPool.ts`, in the pass's transaction), never this module's.
+ * The earlier stories' facts are context's (`context_facts`) until passes store them: reading
+ * their pool facts too comes with the wiring.
  */
 import { utcDay } from '../lib/days.js'
 import { currentVersion, loadPool } from './passRecords.js'
 import type { OfferedFact, PassInput } from './researchPass.js'
 import { researchStoriesByIds, type ResearchDb } from './researchInput.js'
+import { EMPTY_POOL, type ArticleVersionData, type Pool } from './researchPool.js'
 import { storyLayout } from './storyContextLayout.js'
 import { reusableFacts } from './storyContextInput.js'
 
@@ -25,15 +28,31 @@ interface StoryRow {
  * uncapped: the pass offers those of the stories it links, at most `maxReusedFacts`.
  */
 export async function loadPassInput(db: ResearchDb, storyId: string, passId: string, now: Date = new Date()): Promise<PassInput | null> {
+  const [pool, version] = await Promise.all([loadPool(db, storyId), currentVersion(db, storyId)])
+  return storyInput(db, storyId, passId, now, pool, version)
+}
+
+/**
+ * A first pass's input: `loadPassInput`'s without reading the pass tables, so with an empty pool, no
+ * version and the story's own columns. The eval's replay of a first pass on a story of any history.
+ */
+export async function loadFirstPassInput(db: ResearchDb, storyId: string, passId: string, now: Date = new Date()): Promise<PassInput | null> {
+  return storyInput(db, storyId, passId, now, EMPTY_POOL, null)
+}
+
+async function storyInput(
+  db: ResearchDb,
+  storyId: string,
+  passId: string,
+  now: Date,
+  pool: Pool,
+  version: ArticleVersionData | null,
+): Promise<PassInput | null> {
   const [story] = await researchStoriesByIds(db, [storyId])
   if (!story) return null
-  const [[row], pool, version] = await Promise.all([
-    db.$queryRaw<StoryRow[]>`
-      SELECT s.research, CASE WHEN s.status = 'published' THEN s.date_published END AS date_published
-      FROM stories s WHERE s.id = ${storyId}`,
-    loadPool(db, storyId),
-    currentVersion(db, storyId),
-  ])
+  const [row] = await db.$queryRaw<StoryRow[]>`
+    SELECT s.research, CASE WHEN s.status = 'published' THEN s.date_published END AS date_published
+    FROM stories s WHERE s.id = ${storyId}`
   if (!row) return null
   const storyDay = utcDay(row.date_published ?? now)
   const earlierIds = story.earlier.map(e => e.id)

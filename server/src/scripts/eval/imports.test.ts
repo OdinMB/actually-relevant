@@ -74,6 +74,10 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/researchFilter.js': '*',
   'services/researchChecks.js': '*',
   'services/researchCopying.js': '*',
+  // Production's research pass and its pool's shapes, so eval:research and the `context` step run
+  // what the step runs; held below to doing no I/O of its own.
+  'services/researchPass.js': '*',
+  'services/researchPool.js': '*',
   // The text readers see of an applied research version (pure): eval:overviews finds the answer keys' quotes in it.
   'services/researchedStory.js': ['storedResearchText'],
   // Production's story context steps, so the `context` step of eval:overviews runs what the job
@@ -84,8 +88,11 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/storyContextPlacement.js': '*',
   'services/storyContextRecords.js': '*',
   'services/storyContextServed.js': '*',
+  'services/storyContextLayout.js': '*',
   // One story's input, loaded with SELECTs through the client it is given (held below): the eval's read-only session.
   'services/storyContextInput.js': ['loadContextInput'],
+  // A first pass's input, the same way; it reads no pass table (held below).
+  'services/researchPassInput.js': ['loadFirstPassInput'],
 }
 
 /** The story context modules the eval imports whole: no database client, model client, HTTP or retry of their own (hashing is fine). */
@@ -96,13 +103,26 @@ const CONTEXT_SERVICE_MODULES = [
   'storyContextPlacement.ts',
   'storyContextRecords.ts',
   'storyContextServed.ts',
+  'storyContextLayout.ts',
 ]
 
 /** The pure modules the eval may import whole: config and prompt types only. */
 const PURE_SERVICE_MODULES = ['promptInputs.ts']
 
 /** The research modules the eval imports whole: no database client, model client, HTTP or retry of their own. */
-const RESEARCH_SERVICE_MODULES = ['researchPipeline.ts', 'researchInput.ts', 'researchFilter.ts', 'researchChecks.ts', 'researchCopying.ts']
+const RESEARCH_SERVICE_MODULES = [
+  'researchPipeline.ts',
+  'researchInput.ts',
+  'researchFilter.ts',
+  'researchChecks.ts',
+  'researchCopying.ts',
+  'researchPass.ts',
+  'researchPool.ts',
+]
+
+/** Constants a research module may take from the Tavily module, which makes the HTTP request: never its request function. */
+const TAVILY_CONSTANTS = ['TAVILY_DEPTH', 'CREDITS_PER_SEARCH']
+const tavilyConstantsOnly = (i: ImportStatement) => /lib\/tavily\.js$/.test(i.specifier) && i.names !== null && i.names.every(n => TAVILY_CONSTANTS.includes(n))
 
 /** Model calls are never retried (parse failures are what the eval measures), and the eval has no other HTTP of its own. */
 const WITH_RETRY_ALLOWED: string[] = []
@@ -172,7 +192,7 @@ describe('eval harness has no write path', () => {
       const text = stripComments(readFileSync(join(ROOT, '../../services', name), 'utf8'))
       return [
         ...importsOf(text)
-          .filter(i => !i.typeOnly && ioModule.test(i.specifier))
+          .filter(i => !i.typeOnly && ioModule.test(i.specifier) && !tavilyConstantsOnly(i))
           .map(i => `${name}: ${i.specifier}`),
         ...(io.test(text) ? [`${name}: ${io.exec(text)?.[0]}`] : []),
       ]
@@ -208,6 +228,19 @@ describe('eval harness has no write path', () => {
     const queries = [...text.matchAll(/\$queryRaw<[^`]*`([^`]*)`/g)].map(m => m[1]!.trim())
     expect(queries.length).toBeGreaterThan(0)
     expect(queries.filter(q => !/^SELECT\b/.test(q))).toEqual([])
+  })
+
+  it("loads a first pass's input with SELECTs only, through the client it is given, and without the pass tables", () => {
+    const text = stripComments(readFileSync(join(ROOT, '../../services/researchPassInput.ts'), 'utf8'))
+    expect(importsOf(text).filter(i => /lib\/prisma(\.js)?$|\.\/llm\.js$|lib\/tavily\.js$|^@prisma\/client$/.test(i.specifier) && !i.typeOnly)).toEqual([])
+    expect(/\bprisma\.|\$executeRaw|\$queryRawUnsafe/.test(text)).toBe(false)
+    const queries = [...text.matchAll(/\$queryRaw<[^`]*`([^`]*)`/g)].map(m => m[1]!.trim())
+    expect(queries.length).toBeGreaterThan(0)
+    expect(queries.filter(q => !/^SELECT\b/.test(q))).toEqual([])
+    // The first pass's loader passes the empty pool and no version: it never calls the pass tables' readers
+    const first = /async function loadFirstPassInput[\s\S]*?\n}/.exec(text)?.[0] ?? ''
+    expect(first).toContain('EMPTY_POOL')
+    expect(/loadPool|currentVersion/.test(first)).toBe(false)
   })
 
   it('never calls the rate limiter, withRetry, or a Prisma write', () => {

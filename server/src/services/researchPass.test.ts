@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import type { Draft, Extraction, FactCheck } from '../schemas/research.js'
 import type { GapList } from '../schemas/storyContext.js'
-import { runResearchPass, type PassDeps, type PassInput, type PassStep } from './researchPass.js'
+import { cardFacts, passCalls, runResearchPass, type PassDeps, type PassInput, type PassStep } from './researchPass.js'
 import type { ResearchStory } from './researchInput.js'
 import type { ResearchSearchAnswer } from './researchPipeline.js'
 import { EMPTY_POOL, type Pool, type PoolFact, type PoolSource } from './researchPool.js'
@@ -218,6 +218,15 @@ describe('runResearchPass, a first pass', () => {
     expect(result.record.cards).toBe('written')
     expect(result.boxes.map(b => b.type)).toEqual(['compared'])
     expect(result.pool.searches.map(s => [s.kind, s.query, s.passId])).toEqual([['coverage', 'Pakistan rooftop solar 22 GW', 'pass-1']])
+    // Every call under its pass step's name, research's first; the cards' facts as context reads them
+    expect(new Set(passCalls(result.record).map(c => c.step))).toEqual(new Set(fake.stepsCalled()))
+    expect(passCalls(result.record)[0]?.step).toBe('queries')
+    expect(cardFacts(result.pool).map(f => [f.ref, f.verdict, f.source.id])).toEqual([
+      ['S0F1', 'supported', 'S0'],
+      ['S0F2', 'supported', 'S0'],
+      ['S1F1', 'rejected', 'S1'],
+      ['S1F2', 'supported', 'S1'],
+    ])
   })
 
   it('never checks a fact again that an earlier run judged, nor searches a query made before, nor reads a page the pool holds', async () => {
@@ -307,6 +316,7 @@ describe('runResearchPass, a first pass', () => {
     const fake = fakeDeps({ 'facts-check': () => SKIP })
     const result = await runResearchPass(input(), fake.deps)
     expect(result).toMatchObject({ outcome: 'budget', verdict: { kind: 'fallback', reason: 'budget' }, version: null, boxes: [] })
+    expect(result.record.research.verdict).toEqual(result.verdict)
     expect(fake.stepsCalled()).not.toContain('write')
     expect(fake.stepsCalled()).not.toContain('cards-write')
   })
@@ -322,6 +332,13 @@ describe('runResearchPass, a first pass', () => {
     expect(result).toMatchObject({ outcome: 'fallback', version: null, record: { cards: 'written' } })
     expect(result.boxes).toHaveLength(1)
     expect(fake.stepsCalled()).not.toContain('write')
+  })
+
+  it('writes no cards for a story research found no fact in, as context does', async () => {
+    const fake = fakeDeps({ queries: () => null })
+    const result = await runResearchPass(input(), fake.deps)
+    expect(result).toMatchObject({ status: 'completed', outcome: 'technical', record: { cards: 'none' }, boxes: [] })
+    expect(fake.stepsCalled()).toEqual(['queries'])
   })
 
   it("offers the cards the facts of the earlier stories it links, never another's, and a cited one joins the pool", async () => {

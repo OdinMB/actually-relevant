@@ -1,5 +1,5 @@
 /**
- * What the research costs: per-step and per-story sums of the call records, the projection to a
+ * What a first pass costs: per-step and per-story sums of the call records (the card steps' too), the projection to a
  * month of 250 researched stories (credits inside and above Tavily's free 1,000), and the
  * design's desk estimate priced with the eval's price table (`costOf`). Pure.
  */
@@ -82,13 +82,16 @@ export function deskEstimateUsd(step: StepName): number {
   return costOf(STEP_ARMS[step].model, { input: e.input, cached: 0, output: e.output, reasoning: 0 })
 }
 
-/** Credits a story's searches are expected to cost: one search per query at the configured depth. */
-export const expectedCredits = (language: string): number => queryCount(language) * CREDITS_PER_SEARCH[TAVILY_DEPTH]
+/** Gap searches a first pass makes at most, at context's basic depth (production's `research.pass.maxGapSearches`, as a constant). */
+export const GAP_SEARCHES = 3
+
+/** Credits a story's searches are expected to cost: one coverage search per query at research's depth, and every gap search. */
+export const expectedCredits = (language: string): number => queryCount(language) * CREDITS_PER_SEARCH[TAVILY_DEPTH] + GAP_SEARCHES * CREDITS_PER_SEARCH.basic
 
 /**
  * What one story may cost before the run starts it: every step's estimate (the confirmation, one
- * repair round and the derived fields included, so the run stops before it would overrun; a second
- * repair round is not counted) plus its expected credits.
+ * repair round, the derived fields and the card steps included, so the run stops before it would
+ * overrun; a second repair round is not counted) plus its expected credits.
  */
 export function storyBudgetUsd(language: string): number {
   return STEPS.reduce((sum, s) => sum + deskEstimateUsd(s), 0) + expectedCredits(language) * TAVILY_USD_PER_CREDIT

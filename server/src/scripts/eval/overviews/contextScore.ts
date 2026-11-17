@@ -37,7 +37,8 @@ export const WASTED_SEARCH_BAR = 1
 export const RESPONSE_BAR = 0.7
 export const PLACEMENT_BAR = 0.85
 export const FIELDS_BAR = 0.95
-export const COST_BAR_USD = 0.05
+/** A whole first research pass's, its article and its cards (`.plans/2026-11-17_research-passes.md`, "Evals and the gate"). */
+export const COST_BAR_USD = 0.2
 /** Flex bills about half the standard price; the eval keeps its own constant beside `config.llm.flex.priceFactor`. */
 export const FLEX_PRICE_FACTOR = 0.5
 const MAX_LISTED = 30

@@ -1,7 +1,8 @@
 /**
- * Research measurement for multi-source stories (design rollout step 1, "Measure"): runs the
- * design's research steps on the newest published stories of the local database copy and reports
- * what each step costs, beside the researched drafts for a first look at quality.
+ * Research measurement for multi-source stories (design rollout step 1, "Measure"): runs
+ * production's first research pass (`services/researchPass.ts`: research's steps, then the card
+ * steps) on the newest published stories of the local database copy and reports what each step
+ * costs, beside the researched drafts for a first look at quality.
  *
  *   npm run eval:research --prefix server -- --out ../DOCS/2026-11-12_research-eval --dry-run
  *   npm run eval:research --prefix server -- --out ../DOCS/2026-11-12_research-eval --limit 1
@@ -68,7 +69,7 @@ function printPlan(fx: ResearchFixtures, stories: ResearchStory[], spentUsd: num
   const all = STEPS.reduce((sum, s) => sum + deskEstimateUsd(s), 0)
   const credits = stories.reduce((sum, s) => sum + expectedCredits(s.original.language), 0)
   console.log(
-    `estimate for ${stories.length} stories: model calls ${usd(design * stories.length)} (design rows) to ${usd(all * stories.length)} (a confirmation, one repair round and the derived fields each); ` +
+    `estimate for ${stories.length} stories: model calls ${usd(design * stories.length)} (design rows) to ${usd(all * stories.length)} (a confirmation, one repair round, the derived fields and the card steps each); ` +
       `Tavily about ${credits} credits (${usd(credits * TAVILY_USD_PER_CREDIT)} counted as paid)`,
   )
   console.log(`folder spend so far ${usd(spentUsd)}; budget ${usd(budgetUsd)} (a cap on the folder's model ledger plus its Tavily credits)`)

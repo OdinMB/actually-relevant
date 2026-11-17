@@ -95,7 +95,9 @@ describe('desk estimates', () => {
   it("budgets a story at every step's estimate plus its searches' credits", () => {
     const steps = Object.keys(STEP_ESTIMATES) as StepName[]
     const models = steps.reduce((sum, s) => sum + deskEstimateUsd(s), 0)
-    expect(storyBudgetUsd('en')).toBeCloseTo(models + 2 * TAVILY_USD_PER_CREDIT)
-    expect(storyBudgetUsd('de')).toBeCloseTo(models + 4 * TAVILY_USD_PER_CREDIT)
+    // One advanced coverage search per query (two for a non-English story), and the three basic gap searches
+    expect(storyBudgetUsd('en')).toBeCloseTo(models + (2 + 3) * TAVILY_USD_PER_CREDIT)
+    expect(storyBudgetUsd('de')).toBeCloseTo(models + (4 + 3) * TAVILY_USD_PER_CREDIT)
+    expect(steps).toContain('cards-write')
   })
 })

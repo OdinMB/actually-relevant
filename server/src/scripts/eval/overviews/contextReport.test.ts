@@ -147,7 +147,7 @@ describe('contextLines', () => {
     expect(md).toContain('| Wasted searches per story, the response searches apart | at most 1 | 1.00 | 1.00 to 1.00, SD 0.00 | met |')
     expect(md).toContain('| Box items the strong judge finds their cited facts do not support | none | 0.5 | 0.0 to 1.0, SD 0.7 | not met |')
     expect(md).toContain('| Notes `model` places beside a paragraph or point that add to it | at least 85.0% | 100.0% |')
-    expect(md).toContain('| Cost per story (model calls at the flex price, plus search credits) | at most $0.0500 | $0.0260 |')
+    expect(md).toContain('| Cost per story, the whole first pass (model calls at the flex price, plus search credits) | at most $0.2000 | $0.0260 |')
     expect(md).toContain('| at least 95.0%; none | 50.0%; 0 | 0.0% to 100.0%, SD 70.7% | not met |')
   })
 

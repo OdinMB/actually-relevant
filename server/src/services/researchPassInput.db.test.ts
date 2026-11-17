@@ -4,7 +4,7 @@ import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, setEmbedding, useTestDatabase } from '../test/db/harness.js'
 import { createContextFact, createContextRun } from '../test/db/storyContext.js'
 import { insertVersion } from './passRecords.js'
-import { loadPassInput, passEligibility } from './researchPassInput.js'
+import { loadFirstPassInput, loadPassInput, passEligibility } from './researchPassInput.js'
 
 // The loader's guarantees live in its SQL and in the reads it composes, so they are tested against
 // PostgreSQL: the story as research loads it, the pool, the current version and its places, and the
@@ -87,6 +87,11 @@ describeDb('loadPassInput', () => {
       summary: 'Version summary.',
       layout: { paragraphs: [{ id: 'P1', text: 'Floods displaced 4,000.' }] },
     })
+
+    // The eval's replay of a first pass reads no pass table: no version, the story's own columns
+    const first = await loadFirstPassInput(prisma, story.id, 'eval')
+    expect(first).toMatchObject({ version: null, pool: { sources: [], facts: [] }, current: { title: 'Assessed title', summary: 'Assessed summary.' } })
+    expect(first?.current.layout.paragraphs.map(p => p.text)).toEqual(['Floods displaced 4,000.'])
   })
 
   it('dates a selected story about to be published at the time given', async () => {

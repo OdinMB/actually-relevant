@@ -2,7 +2,8 @@
  * Overview evals (`.plans/2026-11-16_overview-evals.md`, `.plans/2026-11-16_story-context.md`): the
  * answer keys against the database, production's research fact check under planted errors, and
  * research's real cost; and story context's gate: the gap keys drafted and checked, production's
- * pipeline replayed on their stories against the bars, and the fact check on its facts.
+ * first research pass replayed on their stories against the bars (its cards judged), and the fact
+ * check on its facts.
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
@@ -18,6 +19,7 @@
 import 'dotenv/config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { config } from '../../config.js'
 import { createEvalContext, type EvalContext } from './models.js'
 import { parseOverviewOptions, type OverviewOptions, type OverviewStep } from './options.js'
 import { classifyDb, openReadOnlyDb, readOnlyStatus, type ReadOnlyDb } from './readOnlyDb.js'
@@ -26,7 +28,7 @@ import { loadBaselineRuns, summarizeBaseline, type Baseline } from './overviews/
 import type { CallEstimate } from './overviews/callBudget.js'
 import { runContextStep, type ContextStepOptions, type ContextStepRun } from './overviews/context.js'
 import { contextFactFixtures } from './overviews/contextFacts.js'
-import { contextInputsFor, loadInputsBySlug } from './overviews/contextInputs.js'
+import { contextInputsFor, loadInputsBySlug, loadPassInputsBySlug, PASS_INPUTS_VERSION } from './overviews/contextInputs.js'
 import { estimateFactCheck, runFactCheck } from './overviews/factCheck.js'
 import { scoreArm } from './overviews/factCheckScore.js'
 import { loadFactFixtures, reusableFixtures, type FactFixture, type FactFixtures } from './overviews/factFixtures.js'
@@ -144,6 +146,17 @@ async function main(): Promise<void> {
     console.log(`context inputs: ${r.loaded} of ${slugs.length} loaded from the database, the rest cached`)
     return r.inputs
   }
+  /** A first pass's input per story slug, cached in `.cache/pass-inputs.json`: the `context` step replays the pass. */
+  const passInputs = async (slugs: string[]) => {
+    const r = await contextInputsFor(slugs, {
+      file: join(cacheDir, 'pass-inputs.json'),
+      version: PASS_INPUTS_VERSION,
+      refresh: opts.refreshFixtures,
+      load: async s => (await session.get()).read(q => loadPassInputsBySlug(q, s)),
+    })
+    console.log(`pass inputs: ${r.loaded} of ${slugs.length} loaded from the database, the rest cached`)
+    return r.inputs
+  }
   try {
     const keyFiles = runs('keys') || runs('gap-draft') ? readKeyFiles() : []
     if (runs('keys')) for (const k of keyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
@@ -170,7 +183,8 @@ async function main(): Promise<void> {
       files: gapKeyFiles,
       half: opts.half,
       ...limit,
-      inputs,
+      inputs: passInputs,
+      relevanceMin: config.selection.relevanceMin,
       canCall,
       dryRun,
       repeat: opts.repeat,

@@ -150,7 +150,7 @@ function projectionLines(input: ReportInput): string[] {
     '| Per story | Measured | Desk estimate |',
     '|---|---|---|',
     `| Model calls | ${usd(perStory)} | ${usd(designUsd)} |`,
-    `| Tavily credits | ${creditsPerStory.toFixed(2)} | ${deskCredits.toFixed(2)} (one advanced search per query) |`,
+    `| Tavily credits | ${creditsPerStory.toFixed(2)} | ${deskCredits.toFixed(2)} (one advanced search per query, and three basic gap searches) |`,
     '',
     `**${MONTHLY_STORIES} stories a month:** model calls ${usd(p.modelUsd)}; ${n(p.credits)} credits, ${n(p.freeCredits)} inside the free 1,000 and ${n(p.paidCredits)} above it (${usd(p.tavilyUsd)} at ${usd(TAVILY_USD_PER_CREDIT)} each); **total ${usd(p.totalUsd)}**. The design's desk estimate: about $0.012 per story, ~$3 a month, with Tavily mostly free.`,
   ]

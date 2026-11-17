@@ -487,7 +487,10 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
     }) as ContextCall,
     context.calls,
   )
-  const budgetStop = (): PassResult => finish({ verdict: decideGate({ failed: 'budget', category: 'technical' }, deps.relevanceMin) })
+  const budgetStop = (): PassResult => {
+    r.verdict = decideGate({ failed: 'budget', category: 'technical' }, deps.relevanceMin)
+    return finish({})
+  }
   const isBudget = (err: unknown) => budget || err instanceof BudgetExhaustedError
 
   // Steps 1-3: own sources, coverage queries (those made before skipped), search, filter, extraction
@@ -509,92 +512,19 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   addCoverage(pool, r, r.calls.find(c => c.step === 'extract')?.model ?? 'unknown')
   if (stop?.failed === 'budget') return budgetStop()
 
-  // Steps 4-6: the structure call, the gap list and its searches. A technical failure leaves the
-  // article its coverage and fails only the cards
-  let gap: GapStageResult | null
+  // Steps 4-6: the structure call, the gap list and its searches. A story with no research facts
+  // gets no cards, as context's rule has it; a technical failure leaves the article its coverage
+  // and fails only the cards
+  let gap: GapStageResult | null = null
   const pages = () => pool.sources.filter(s => s.origin !== 'earlier')
-  try {
-    const toStructure = pages().flatMap(s => pool.factsOf(s, f => f.structured === null).map(f => ({ s, f })))
-    const structure = await structureFacts(
-      toStructure.map(({ s, f }) => ({
-        id: f.ref,
-        statement: f.statement,
-        supportingSentence: f.supportingSentence,
-        measures: f.measures,
-        source: { outlet: s.outlet, date: s.date, kind: s.kind },
-      })),
-      cardCall,
-    )
-    for (const [ref, answer] of structure.answers)
-      pool.update(ref, { structured: { ...answer, by: { model: structure.model, promptVersion: CONTEXT_PROMPT_VERSIONS.structure } } })
-    context.facts.research = toStructure.length
-    context.facts.leftOut = toStructure.length - structure.answers.size
-
-    const before = storyText(input.current.title, input.storyDay, input.current.layout)
-    const known = readPages({ sources: pool.sources, dropped: input.pool.dropped })
-    gap = await gapStage(
-      {
-        story: before.story,
-        storyText: before.text,
-        title: input.current.title,
-        summary: input.current.summary,
-        storyDay: input.storyDay,
-        facts: [
-          ...pages().flatMap(s => pool.factsOf(s, f => f.structured !== null && f.verdict !== 'rejected').map(f => contextFact(f, s))),
-          ...offered(input, pool),
-        ],
-        known,
-        plan: (g, text) => gapSearches(g, text, input.pool),
-        firstSource: Number(
-          nextSourceRef(
-            pool.sources.map(s => s.ref),
-            false,
-          ).slice(1),
-        ),
-      },
-      deps,
-      cardCall,
-      context,
-      spent,
-    )
-    for (const f of gap.facts) {
-      const source = pool.source(
-        {
-          origin: 'search',
-          earlierStoryId: null,
-          url: f.source.url,
-          outlet: f.source.outlet,
-          title: f.source.title,
-          date: f.source.date,
-          kind: f.source.kind,
-          country: '',
-          relation: 'background',
-          favicon: null,
-          usedRawContent: false,
-          voices: [],
-          optOutChecked,
-        },
-        f.source.id,
-      )
-      pool.add(source, {
-        reusedFromId: null,
-        supportingSentence: f.supportingSentence,
-        passage: f.passage,
-        supportFound: f.supportFound,
-        statement: f.statement,
-        measures: f.counted,
-        slot: f.slot,
-        structured: { ...pickStructured(f), by: { model: f.model, promptVersion: f.promptVersion } },
-        extractedBy: { model: f.model, promptVersion: f.promptVersion },
-        verdict: 'unjudged',
-        verdictProblem: null,
-      })
+  if (pages().some(s => pool.factsOf(s).length > 0)) {
+    try {
+      gap = await gapStep({ input, pool, deps, call: cardCall, context, spent, optOutChecked })
+    } catch (err) {
+      if (isBudget(err)) return budgetStop()
+      record.cards = 'failed'
+      record.cardsError = contextFailure(err, deps.transient).error
     }
-  } catch (err) {
-    if (isBudget(err)) return budgetStop()
-    record.cards = 'failed'
-    record.cardsError = contextFailure(err, deps.transient).error
-    gap = null
   }
 
   // Step 7: one fact check of each fact no pass or run judged: our earlier stories' are our own text
@@ -642,6 +572,97 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   return finish({ version, boxes: cards.boxes, boxFacts: cards.facts, writer: cards.writer })
 }
 
+interface GapStepInput {
+  input: PassInput
+  pool: WorkingPool
+  deps: PassDeps
+  call: ReturnType<typeof stepCaller>
+  context: ContextRunRecord
+  spent: { credits: number }
+  optOutChecked: boolean
+}
+
+/** Steps 4-6: the structure call on the pages' facts without fields, the gap list over the pool, its searches and extraction; the new facts join the pool. Throws on a failure. */
+async function gapStep({ input, pool, deps, call, context, spent, optOutChecked }: GapStepInput): Promise<GapStageResult> {
+  const pages = () => pool.sources.filter(s => s.origin !== 'earlier')
+  const toStructure = pages().flatMap(s => pool.factsOf(s, f => f.structured === null).map(f => ({ s, f })))
+  const structure = await structureFacts(
+    toStructure.map(({ s, f }) => ({
+      id: f.ref,
+      statement: f.statement,
+      supportingSentence: f.supportingSentence,
+      measures: f.measures,
+      source: { outlet: s.outlet, date: s.date, kind: s.kind },
+    })),
+    call,
+  )
+  for (const [ref, answer] of structure.answers)
+    pool.update(ref, { structured: { ...answer, by: { model: structure.model, promptVersion: CONTEXT_PROMPT_VERSIONS.structure } } })
+  context.facts.research = toStructure.length
+  context.facts.leftOut = toStructure.length - structure.answers.size
+
+  const before = storyText(input.current.title, input.storyDay, input.current.layout)
+  const gap = await gapStage(
+    {
+      story: before.story,
+      storyText: before.text,
+      title: input.current.title,
+      summary: input.current.summary,
+      storyDay: input.storyDay,
+      facts: [
+        ...pages().flatMap(s => pool.factsOf(s, f => f.structured !== null && f.verdict !== 'rejected').map(f => contextFact(f, s))),
+        ...offered(input, pool),
+      ],
+      known: readPages({ sources: pool.sources, dropped: input.pool.dropped }),
+      plan: (g, text) => gapSearches(g, text, input.pool),
+      firstSource: Number(
+        nextSourceRef(
+          pool.sources.map(s => s.ref),
+          false,
+        ).slice(1),
+      ),
+    },
+    deps,
+    call,
+    context,
+    spent,
+  )
+  for (const f of gap.facts) {
+    const source = pool.source(
+      {
+        origin: 'search',
+        earlierStoryId: null,
+        url: f.source.url,
+        outlet: f.source.outlet,
+        title: f.source.title,
+        date: f.source.date,
+        kind: f.source.kind,
+        country: '',
+        relation: 'background',
+        favicon: null,
+        usedRawContent: false,
+        voices: [],
+        optOutChecked,
+      },
+      f.source.id,
+    )
+    pool.add(source, {
+      reusedFromId: null,
+      supportingSentence: f.supportingSentence,
+      passage: f.passage,
+      supportFound: f.supportFound,
+      statement: f.statement,
+      measures: f.counted,
+      slot: f.slot,
+      structured: { ...pickStructured(f), by: { model: f.model, promptVersion: f.promptVersion } },
+      extractedBy: { model: f.model, promptVersion: f.promptVersion },
+      verdict: 'unjudged',
+      verdictProblem: null,
+    })
+  }
+  return gap
+}
+
 const pickStructured = (f: ContextFactData) => ({
   value: f.value,
   valueHigh: f.valueHigh,
@@ -681,6 +702,30 @@ function offered(input: PassInput, pool: WorkingPool): ContextFactData[] {
     })
 }
 
+/** The places the cards are written for: the new version's when the pass made one, else the story's as readers see it. */
+export function cardsLayout(input: Pick<PassInput, 'story' | 'current'>, version: ArticleVersionData | null): StoryLayout {
+  if (!version) return input.current.layout
+  return storyLayout({
+    url: input.story.original.url,
+    summary: version.summary,
+    relevanceReasons: version.relevanceReasons,
+    antifactors: version.antifactors,
+    research: version.research,
+  })
+}
+
+/** The pool's page facts with structured fields, as context's checks and cards read them (cited earlier stories' facts among them): a context run's facts. */
+export function cardFacts(pool: Pool): ContextFactData[] {
+  return pool.sources
+    .filter(s => s.origin !== 'earlier')
+    .flatMap(s => pool.facts.filter(f => f.sourceRef === s.ref && f.structured !== null).map(f => contextFact(f, s)))
+}
+
+/** Every call the pass made, research's steps first, each under its pass step's name. */
+export function passCalls(record: PassRecord): (Omit<StoryResearch['calls'][number], 'step'> & { step: PassStep })[] {
+  return [...record.research.calls, ...record.context.calls.map(c => ({ ...c, step: CARD_STEP_OF[c.step] }))]
+}
+
 type CardsResult =
   | { kind: 'written'; boxes: DraftBox[]; facts: Map<string, ContextFactData>; writer: { model: string; promptVersion: string } | null }
   | { kind: 'skipped' }
@@ -699,15 +744,7 @@ async function writeCards(
   const pages = pool.sources.filter(s => s.origin !== 'earlier')
   const supported = pages.flatMap(s => pool.factsOf(s, f => usable(f) && f.structured !== null).map(f => contextFact(f, s)))
   const reused = offered(input, pool)
-  const layout = version
-    ? storyLayout({
-        url: input.story.original.url,
-        summary: version.summary,
-        relevanceReasons: version.relevanceReasons,
-        antifactors: version.antifactors,
-        research: version.research,
-      })
-    : input.current.layout
+  const layout = cardsLayout(input, version)
   const { story } = storyText(version?.title ?? input.current.title, input.storyDay, layout)
   try {
     const written = await writeBoxes(
