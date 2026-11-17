@@ -35,6 +35,9 @@ export interface PlacementOptions {
 
 export const SECTION = 'section'
 
+/** Whether a box of this type may sit beside the text: every one but the In numbers card, which stays under More context. */
+export const placeable = (type: string): boolean => type !== 'figures'
+
 /** A stable number in [0, 1) for the story and the box's order. */
 function draw(storyId: string, index: number): number {
   return createHash('sha256').update(`${storyId}:${index}`).digest().readUInt32BE(0) / 2 ** 32
@@ -66,7 +69,7 @@ export function placeBoxes(boxes: PlacementBox[], layout: Pick<StoryLayout, 'par
   const placed = new Map<string, string>()
   const order = [...boxes.map((box, index) => ({ box, index }))].sort((a, b) => Number(b.box.placeByEditor) - Number(a.box.placeByEditor) || a.index - b.index)
   for (const { box, index } of order) {
-    if (box.type === 'figures') {
+    if (!placeable(box.type)) {
       placed.set(box.id, SECTION)
       continue
     }

@@ -31,12 +31,6 @@ describe('placeContext', () => {
     expect(ids(placed.section)).toEqual(['past', 'second', 'odd'])
     expect(ids(placed.pointNotes)).toEqual(['first'])
   })
-
-  it('keeps the In numbers card under More context whatever its place says', () => {
-    const placed = placeContext([box('figures', 'P1', { type: 'figures' })], { paragraphs: 1, points: 1 })
-    expect(ids(placed.section)).toEqual(['figures'])
-    expect(hasNotes(placed)).toBe(false)
-  })
 })
 
 describe('placeCounts', () => {

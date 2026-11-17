@@ -56,11 +56,11 @@ A fact's `validity` (`isCurrent`, `services/storyContextVisuals.ts`): `fixed` is
 
 A story's places (`storyLayout`, `services/storyContextLayout.ts`): a researched story's paragraphs `P1`… and Why This Matters points `W1`… from `stories.research`, each with the URLs of the sources it cites; a single-source story's summary as `P1` and its relevance reasons split as the page splits them (`parsePoints`, mirroring the client's) as `W1`…, each citing the story's own article.
 
-**Where a box sits is worked out when the page is served** (`placeBoxes`, `services/storyContextPlacement.ts`, pure), so a change of mode or limits reaches every story at once:
+**Where a box sits is worked out when the page is served** (`placeBoxes`, `services/storyContextPlacement.ts`, pure), so a change of mode or limits reaches every story at once. One entry point decides it for the public view, the admin and the eval alike (`servedBoxes` and `placeServed`, `services/storyContextServed.ts`, pure): only the boxes the page serves compete (not hidden, something still shown; "What readers get"), each by the sources of every fact it cites, a chart's `apart` points included (`boxRefs`).
 
 - An editor's place (`place_by_editor`) is kept in every mode, under the same limits; editor-placed boxes are placed first.
 - Otherwise `STORY_CONTEXT_PLACEMENT` decides (`config.storyContext.placement`, default `model`): `model`, the place the write call chose; `random`, a draw among the paragraphs and points that cite one of the box's sources (by normalized URL), seeded by the story id and the box's index, so a page never reshuffles (a second-search box has no such spot and goes to the section); `section`, none beside the text.
-- Then the limits, in box order: at most `notesInText` (2) beside paragraphs, `notesByPoints` (2) beside points, one per paragraph or point; the rest go to the section. The figures box always sits in the section. A place the story no longer has (it was edited) becomes the section.
+- Then the limits, in box order: at most `notesInText` (2) beside paragraphs, `notesByPoints` (2) beside points, one per paragraph or point; the rest go to the section. The figures box always sits in the section (`placeable`; the admin gets it as `movable`, so the client holds no copy of the rule). A place the story no longer has (it was edited) becomes the section.
 
 ## Records
 
@@ -118,7 +118,7 @@ Routes in `routes/admin/storyContext.ts` (mounted under `/api/admin/stories`, ad
   ```ts
   {
     run: { id; status; outcome; startedAt; finishedAt; costUsd; modelUsd; searchUsd; tavilyCredits; boxes; error; result /* ContextRunRecord */ } | null,  // the newest run
-    boxes: { id; type; heading; teaser; status; hidden; place /* where it sits now */; storedPlace /* P<n>, W<n> or null */; placeByEditor; sources: { outlet; url }[]; asOf; position }[],  // the newest run that wrote boxes, hidden ones included
+    boxes: { id; type; heading; teaser; status; hidden; place /* where the page shows it now; its stored place, or section, when the page does not serve it */; storedPlace /* P<n>, W<n> or null */; placeByEditor; movable /* false for the figures box */; sources: { outlet; url }[]; asOf; position }[],  // the newest run that wrote boxes, hidden ones included; placed as the page places them, on the story's day (today for a story not published)
     places: { place /* P<n>, W<n>, section */; label /* 'Paragraph 1', 'Why This Matters 1', 'More context' */; text /* its start, 80 characters */ }[],
     placement: 'model' | 'random' | 'section'
   }
@@ -163,6 +163,7 @@ That change also sets `.context/ai-transparency.md` (the story-context row) and 
 | `server/src/services/storyContextVisuals.ts` | Validity, number formatting, the tile and chart rules |
 | `server/src/services/storyContextSources.ts`, `storyContextSearch.ts` | Pass 2's request, source filter, cache key and passage; the cache and Tavily |
 | `server/src/services/storyContextLayout.ts`, `storyContextPlacement.ts` | A story's places; where each box sits |
+| `server/src/services/storyContextServed.ts` | Which boxes the page serves and what each shows, placed: the one entry point of the view, the admin and the eval |
 | `server/src/services/storyContextView.ts` | The public route's answer |
 | `server/src/services/storyContextAdmin.ts`, `server/src/routes/admin/storyContext.ts` | The admin's view and edits |
 | `server/src/prompts/storyContext.ts`, `server/src/schemas/storyContext.ts` | Prompts; output, stored and request schemas |

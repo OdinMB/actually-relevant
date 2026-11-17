@@ -1330,11 +1330,16 @@ export interface ContextAdminBox {
   status: 'unreviewed' | 'reviewed' | 'demoted'
   /** Demoted: readers don't see it. */
   hidden: boolean
-  /** Where it sits now: `P<n>`, `W<n>` or `section`; a hidden box's stored place, or `section`. */
+  /**
+   * Where the page shows it now: `P<n>`, `W<n>` or `section`. A box the page does not serve (hidden,
+   * or nothing in it still shown) has its stored place, or `section`.
+   */
   place: string
   /** As stored: the write call's choice or the editor's, null for the section. */
   storedPlace: string | null
   placeByEditor: boolean
+  /** An editor may move it beside the text: every box but the In numbers card (the server's rule). */
+  movable: boolean
   sources: { outlet: string; url: string }[]
   asOf: string | null
   position: number

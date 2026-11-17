@@ -14,7 +14,8 @@ import { buildFactCheckPrompt } from '../../../prompts/research.js'
 import { factCheckSchema, type FactCheck } from '../../../schemas/research.js'
 import { boxCheckItems, promptItems, renderFact, type BoxItem, type ContextFactData } from '../../../services/storyContextChecks.js'
 import type { ContextInput, StoryContextResult } from '../../../services/storyContextPipeline.js'
-import { placeBoxes, SECTION, type PlacementBox } from '../../../services/storyContextPlacement.js'
+import { SECTION } from '../../../services/storyContextPlacement.js'
+import { placeServed, servedBoxes } from '../../../services/storyContextServed.js'
 import { versionedSchemaName } from '../models.js'
 import type { PlannedCall, SuiteContext } from '../types.js'
 import type { FieldLabel, ItemVerdict, JudgedMode, NeedVerdict, NoteVerdict, StoryRun } from './contextScore.js'
@@ -133,34 +134,15 @@ export interface NoteToJudge {
   place: string
 }
 
-/** Each box at each place a mode puts it beside the text, once, in mode then box order; production's limits apply. */
+/** Each box at each place a mode puts it beside the text, once, in mode then box order: the boxes the page would serve, placed as it places them. */
 export function notesToJudge(r: JudgedRun): NoteToJudge[] {
-  const facts = new Map(r.result.facts.map(f => [f.ref, f]))
-  const boxes: PlacementBox[] = r.result.boxes.map((b, i) => ({
-    id: String(i),
-    type: b.type,
-    place: b.place,
-    placeByEditor: false,
-    sourceUrls: [
-      ...new Set(
-        [
-          ...b.sentences.flatMap(s => s.factIds),
-          ...(b.visual?.kind === 'tiles' ? b.visual.tiles.flatMap(t => t.factIds) : (b.visual?.points.map(p => p.factId) ?? [])),
-        ].flatMap(id => facts.get(id)?.source.url ?? []),
-      ),
-    ],
-  }))
+  const boxes = r.result.boxes.map((b, i) => ({ id: String(i), type: b.type, hidden: false, place: b.place, placeByEditor: false, content: b }))
+  const served = servedBoxes(boxes, new Map(r.result.facts.map(f => [f.ref, f])), r.input.storyDay)
   const notes: NoteToJudge[] = []
   for (const mode of JUDGED_MODES) {
-    const placed = placeBoxes(boxes, r.input.layout, {
-      mode,
-      storyId: r.input.storyId,
-      notesInText: config.storyContext.notesInText,
-      notesByPoints: config.storyContext.notesByPoints,
-    })
-    for (const [id, place] of placed) {
+    for (const { box: placed, place } of placeServed(served, { storyId: r.input.storyId, layout: r.input.layout, mode })) {
       if (place === SECTION) continue
-      const box = Number(id)
+      const box = Number(placed.id)
       const same = notes.find(n => n.box === box && n.place === place)
       if (same) same.modes.push(mode)
       else notes.push({ modes: [mode], box, place })

@@ -2,10 +2,11 @@ import type { ContextBoxView, PublicStoryDetail, ResearchedStory } from '@shared
 import { parsePoints } from '../../lib/parse-points'
 
 /**
- * Where each context card goes on the page. The server works out each box's place (`placeBoxes`,
- * `.context/story-context.md`, "Places"); the page puts a note after the paragraph or point it names
- * and every other card under More context. A place the page doesn't show (the story's text changed
- * since, or a second box names the same spot) falls back to More context, so no card is lost.
+ * Where each context card goes on the page. The server works out each box's place (`placeServed`,
+ * `.context/story-context.md`, "Places"; In numbers always under More context); the page puts a note
+ * after the paragraph or point it names and every other card under More context. A place the page
+ * doesn't show (the story's text changed since, or a second box names the same spot) falls back to
+ * More context, so no card is lost.
  */
 
 export interface PlaceCounts {
@@ -35,7 +36,7 @@ const SPOT = /^([PW])([1-9]\d*)$/
 export function placeContext(boxes: ContextBoxView[], counts: PlaceCounts): PlacedContext {
   const placed: PlacedContext = { paragraphNotes: [], pointNotes: [], section: [] }
   for (const box of boxes) {
-    const spot = box.type === 'figures' ? null : SPOT.exec(box.place)
+    const spot = SPOT.exec(box.place)
     const notes = spot?.[1] === 'P' ? placed.paragraphNotes : placed.pointNotes
     const index = spot ? Number(spot[2]) - 1 : -1
     const count = spot?.[1] === 'P' ? counts.paragraphs : counts.points

@@ -61,6 +61,28 @@ describe('notesToJudge', () => {
     expect(notes.map(n => [n.modes, n.box, n.place])).toEqual([[['model', 'random'], 0, 'P1']])
   })
 
+  it("places a chart in random mode by its apart group's sources too, as the page does", () => {
+    const r = run()
+    r.result.facts.push(contextFact('S4F1'), contextFact('S4F2', { value: 120 }), contextFact('S0F2', { unit: 'hectares' }))
+    r.result.boxes = [
+      sentenceBox('compared', [], {
+        sentences: [],
+        visual: {
+          kind: 'bars',
+          measure: 'people evacuated',
+          unit: 'people',
+          points: [
+            { label: '2025', factId: 'S4F1' },
+            { label: '2026', factId: 'S4F2' },
+          ],
+          apart: { measure: 'area burned', unit: 'hectares', points: [{ label: 'Now', factId: 'S0F2' }] },
+        },
+      }),
+    ]
+    r.input.layout.points[0]!.sourceUrls = []
+    expect(notesToJudge(r).map(n => [n.modes, n.place])).toEqual([[['random'], 'P1']])
+  })
+
   it('judges a box placed apart by the two modes once per place', () => {
     const r = run()
     r.result.boxes[0]!.place = 'W1'

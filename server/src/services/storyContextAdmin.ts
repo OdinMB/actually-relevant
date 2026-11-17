@@ -7,12 +7,13 @@
  */
 import type { StoryContextRun } from '@prisma/client'
 import { config } from '../config.js'
+import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
-import { layoutSpots, storyLayout, type LayoutStory } from './storyContextLayout.js'
-import { SECTION } from './storyContextPlacement.js'
+import { layoutSpots, storyLayout, type LayoutStory, type StoryLayout } from './storyContextLayout.js'
+import { placeable, SECTION } from './storyContextPlacement.js'
 import { boxContent, boxRefs, contextRecords } from './storyContextRecords.js'
-import { placementsFor } from './storyContextView.js'
+import { placeServed, servableRow, servedBoxes } from './storyContextServed.js'
 import { asOfFromColumns } from './storyContextVisuals.js'
 
 export interface ContextAdminBox {
@@ -22,11 +23,16 @@ export interface ContextAdminBox {
   teaser: string
   status: string
   hidden: boolean
-  /** Where it sits now: `P<n>`, `W<n>` or `section`; a hidden box's stored place, or `section`. */
+  /**
+   * Where the page shows it now: `P<n>`, `W<n>` or `section`. A box the page does not serve (hidden,
+   * or nothing in it still shown) has its stored place, or `section`.
+   */
   place: string
   /** As stored: the write call's choice or the editor's, null for the section. */
   storedPlace: string | null
   placeByEditor: boolean
+  /** An editor may move it beside the text: every box but the In numbers card. */
+  movable: boolean
   sources: { outlet: string; url: string }[]
   asOf: string | null
   position: number
@@ -66,17 +72,16 @@ export interface ContextAdmin {
 
 const PLACE_TEXT_CHARS = 80
 
-async function storyFor(storyId: string): Promise<LayoutStory & { id: string }> {
+async function storyFor(storyId: string): Promise<LayoutStory & { id: string; datePublished: Date | null }> {
   const story = await prisma.story.findUnique({
     where: { id: storyId },
-    select: { id: true, sourceUrl: true, summary: true, relevanceReasons: true, antifactors: true, research: true },
+    select: { id: true, sourceUrl: true, summary: true, relevanceReasons: true, antifactors: true, research: true, datePublished: true },
   })
   if (!story) throw new NotFoundError('Story not found')
   return { ...story, url: story.sourceUrl }
 }
 
-function placesOf(story: LayoutStory): ContextAdminPlace[] {
-  const layout = storyLayout(story)
+function placesOf(layout: StoryLayout): ContextAdminPlace[] {
   const cut = (text: string) => (text.length > PLACE_TEXT_CHARS ? `${text.slice(0, PLACE_TEXT_CHARS - 1).trimEnd()}…` : text)
   return [
     ...layout.paragraphs.map((p, i) => ({ place: p.id, label: `Paragraph ${i + 1}`, text: cut(p.text) })),
@@ -91,8 +96,10 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
     prisma.storyContextRun.findFirst({ where: { storyId }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }] }),
     contextRecords(prisma, storyId),
   ])
-  const shown = boxes.filter(b => b.status !== 'demoted')
-  const placed = placementsFor(story, shown, facts)
+  const layout = storyLayout(story)
+  // Placed as the page places them: only the boxes it serves compete, on the story's day (today for one not published)
+  const served = servedBoxes(boxes.map(servableRow), facts, utcDay(story.datePublished ?? new Date()))
+  const placed = new Map(placeServed(served, { storyId, layout }).map(p => [p.box.id, p.place]))
   return {
     run: run && {
       id: run.id,
@@ -114,23 +121,23 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
         const f = facts.get(ref)
         if (f && !sources.has(f.source.url)) sources.set(f.source.url, f.source.outlet)
       }
-      const hidden = b.status === 'demoted'
       return {
         id: b.id,
         type: b.type,
         heading: b.heading,
         teaser: b.teaser,
         status: b.status,
-        hidden,
-        place: hidden ? (b.place ?? SECTION) : (placed.get(b.id) ?? SECTION),
+        hidden: b.status === 'demoted',
+        place: placed.get(b.id) ?? b.place ?? SECTION,
         storedPlace: b.place,
         placeByEditor: b.placeByEditor,
+        movable: placeable(b.type),
         sources: [...sources].map(([url, outlet]) => ({ outlet, url })),
         asOf: asOfFromColumns(b.asOf, b.asOfPrecision),
         position: b.position,
       }
     }),
-    places: placesOf(story),
+    places: placesOf(layout),
     placement: config.storyContext.placement,
   }
 }
@@ -155,7 +162,7 @@ export async function updateContextBox(storyId: string, boxId: string, change: {
   if (!box) throw new NotFoundError('Context box not found')
   let place: { place: string | null; placeByEditor: true } | null = null
   if (change.place !== undefined) {
-    if (box.type === 'figures' && change.place !== SECTION) throw new BadRequestError('The In numbers card always sits under More context')
+    if (!placeable(box.type) && change.place !== SECTION) throw new BadRequestError('The In numbers card always sits under More context')
     if (change.place !== SECTION && !layoutSpots(storyLayout(story)).has(change.place))
       throw new BadRequestError(`The story has no ${change.place}: choose one of its paragraphs or points, or section`)
     place = { place: change.place === SECTION ? null : change.place, placeByEditor: true }

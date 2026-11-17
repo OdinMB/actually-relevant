@@ -26,6 +26,7 @@ const box = (id: string, over: Partial<ContextAdminBox> = {}): ContextAdminBox =
   place: 'P1',
   storedPlace: 'P1',
   placeByEditor: false,
+  movable: true,
   sources: [{ outlet: 'Budget Office', url: 'https://budget.example.org/a' }],
   asOf: '2026-11',
   position: 0,
@@ -91,7 +92,7 @@ const run = (over: Partial<ContextAdminRun> = {}): ContextAdminRun => ({
 const BOXES = [
   box('a'),
   box('w', { type: 'next', place: 'W2', storedPlace: 'W2', position: 1 }),
-  box('f', { type: 'figures', heading: 'In numbers', teaser: '', place: 'section', storedPlace: null, position: 2 }),
+  box('f', { type: 'figures', heading: 'In numbers', teaser: '', place: 'section', storedPlace: null, movable: false, position: 2 }),
   box('h', { type: 'build_up', hidden: true, status: 'demoted', place: 'section', storedPlace: null, position: 3 }),
 ]
 
@@ -186,7 +187,7 @@ describe('StoryContextAdmin', () => {
     await waitFor(() => expect(mockContext.updateBox).toHaveBeenCalledWith('story-1', 'h', { hidden: false }))
   })
 
-  it('keeps In numbers and a hidden card where they are', async () => {
+  it('keeps a card the server marks as not movable (In numbers) and a hidden card where they are', async () => {
     renderSection()
     await section()
     expect(screen.getByRole('combobox', { name: 'Where In numbers sits' })).toBeDisabled()

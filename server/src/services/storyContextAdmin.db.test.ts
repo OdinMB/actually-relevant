@@ -63,10 +63,10 @@ describeDb('story context admin', () => {
       result: { responseNotFound: true },
     })
     expect(admin.run!.searchUsd).toBeCloseTo(0.024, 10)
-    expect(admin.boxes.map(b => [b.type, b.status, b.hidden, b.place, b.storedPlace])).toEqual([
-      ['figures', 'unreviewed', false, 'section', null],
-      ['compared', 'unreviewed', false, 'W2', 'W2'],
-      ['why_now', 'demoted', true, 'P1', 'P1'],
+    expect(admin.boxes.map(b => [b.type, b.status, b.hidden, b.place, b.storedPlace, b.movable])).toEqual([
+      ['figures', 'unreviewed', false, 'section', null, false],
+      ['compared', 'unreviewed', false, 'W2', 'W2', true],
+      ['why_now', 'demoted', true, 'P1', 'P1', true],
     ])
     expect(admin.boxes[1]).toMatchObject({ id: note.id, sources: [{ outlet: 'Two', url: 'https://s2.example/a' }], asOf: '2026-11' })
     expect(admin.boxes[2]!.id).toBe(hidden.id)
@@ -77,6 +77,20 @@ describeDb('story context admin', () => {
       { place: 'section', label: 'More context', text: '' },
     ])
     expect(admin.placement).toBe('model')
+  })
+
+  it('places only the boxes the page serves, so one with nothing left to show takes no spot', async () => {
+    const { story, run, note } = await setup()
+    // An honest gap stored before 2026-11-17, its place an editor's (placed first): readers see nothing of it
+    const gap = await createContextBox(story.id, run.id, {
+      position: 3,
+      type: 'response',
+      place: 'W2',
+      placeByEditor: true,
+      sentences: [{ text: 'Nothing sourced was found.', factIds: [] }],
+    })
+    const places = new Map((await getContextAdmin(story.id)).boxes.map(b => [b.id, b.place]))
+    expect([places.get(note.id), places.get(gap.id)]).toEqual(['W2', 'W2'])
   })
 
   it('has no run and no boxes for a story without context, and refuses an unknown story', async () => {

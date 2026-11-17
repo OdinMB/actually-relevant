@@ -69,8 +69,7 @@ function CardRow({ box, places, storyId }: { box: ContextAdminBox; places: Conte
   const update = useUpdateContextBox(storyId)
   const { toast } = useToast()
   const title = box.heading
-  // In numbers always sits under More context; a hidden card is moved once shown again
-  const fixed = box.type === 'figures'
+  // The server says which cards may move (In numbers stays under More context); a hidden card is moved once shown again
   const options = places.map(p => ({ value: p.place, label: placeLabel(p) }))
   if (!options.some(o => o.value === box.place)) options.push({ value: box.place, label: box.place })
 
@@ -116,7 +115,7 @@ function CardRow({ box, places, storyId }: { box: ContextAdminBox; places: Conte
           <Select
             aria-label={`Where ${title} sits`}
             value={box.place}
-            disabled={fixed || box.hidden || update.isPending}
+            disabled={!box.movable || box.hidden || update.isPending}
             onChange={e => move(e.target.value)}
             options={options}
             className="!py-1 !text-xs disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
