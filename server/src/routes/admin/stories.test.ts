@@ -207,17 +207,24 @@ describe('Admin Stories API', () => {
     })
   })
 
-  describe('GET /api/admin/stories/stats', () => {
-    it('returns story counts by status', async () => {
-      mockPrisma.story.groupBy.mockResolvedValue([
-        { status: 'fetched', _count: { status: 10 } },
-        { status: 'published', _count: { status: 5 } },
-      ])
+  describe('GET /api/admin/stories/recent-stats', () => {
+    it('returns crawled, screened, assessed and published counts for the last 7 and 30 days', async () => {
+      mockPrisma.story.count.mockResolvedValue(4)
 
-      const res = await request(app).get('/api/admin/stories/stats').set(authHeader())
+      const res = await request(app).get('/api/admin/stories/recent-stats').set(authHeader())
       expect(res.status).toBe(200)
-      expect(res.body.fetched).toBe(10)
-      expect(res.body.published).toBe(5)
+      expect(res.body).toEqual([
+        { days: 7, crawled: 4, screened: 4, assessed: 4, published: 4 },
+        { days: 30, crawled: 4, screened: 4, assessed: 4, published: 4 },
+      ])
+      const wheres = mockPrisma.story.count.mock.calls.map(([arg]: any) => arg.where)
+      expect(wheres).toContainEqual({ status: 'published', datePublished: { gte: expect.any(Date) } })
+      expect(wheres).toContainEqual({ dateCrawled: { gte: expect.any(Date) }, relevance: { not: null } })
+    })
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app).get('/api/admin/stories/recent-stats')
+      expect(res.status).toBe(401)
     })
   })
 

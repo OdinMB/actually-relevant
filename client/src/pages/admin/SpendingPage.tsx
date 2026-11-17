@@ -1,27 +1,25 @@
-import { useEffect, useRef, type FocusEvent, type KeyboardEvent } from 'react'
-import { useLocation } from 'react-router-dom'
+import { type FocusEvent, type KeyboardEvent } from 'react'
+import { Helmet } from 'react-helmet-async'
 import type { SpendingGroup, SpendingOverview, SpendingRow } from '@shared/types'
 import { useSetSpendLevel, useSpending } from '../../hooks/useSpending'
 import { jobDisplayName } from '../../lib/constants'
-import { formatUsd } from '../../lib/jobRun'
+import { formatUsd, spendMonthName as monthName } from '../../lib/jobRun'
 import { FIELD_FOCUS } from '../../lib/control-classes'
 import { ApiError } from '../../lib/admin-api'
-import { useToast } from '../ui/Toast'
-import { Badge } from '../ui/Badge'
-import { LoadingSpinner } from '../ui/LoadingSpinner'
-import { ErrorState } from '../ui/ErrorState'
+import { useToast } from '../../components/ui/Toast'
+import { Badge } from '../../components/ui/Badge'
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { ErrorState } from '../../components/ui/ErrorState'
+import { PageHeader } from '../../components/ui/PageHeader'
 
 /**
- * The Dashboard's "Spending" card (`.context/admin-dashboard.md`): every job that spends money, grouped
+ * The Spending page (`.context/admin-dashboard.md`): every job that spends money, grouped
  * as on the Jobs page, with this month's AI and web search spend, the month at this pace, the two
  * months before and each warning level, which saves when its field loses focus. The server decides
  * the rows, their order and whether a level is passed or heading past at this pace.
  */
 
 const COLUMNS = 8
-
-/** "November" for "2026-11". */
-const monthName = (yyyyMm: string) => new Date(`${yyyyMm}-01T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' })
 
 const rowLabel = (scope: SpendingRow['scope']) =>
   scope === 'all' ? 'All jobs' : scope === 'editor_research' ? 'Research started by an editor' : jobDisplayName(scope)
@@ -188,29 +186,19 @@ function SpendingTable({ data }: { data: SpendingOverview }) {
   )
 }
 
-export function SpendingCard() {
+export default function SpendingPage() {
   const query = useSpending()
-  const { hash } = useLocation()
-  const section = useRef<HTMLElement>(null)
   const data = query.data
 
-  // A spending notice links here (`/admin#spending`); a link inside the app does not scroll by itself
-  useEffect(() => {
-    if (hash === '#spending' && data) section.current?.scrollIntoView({ block: 'start' })
-  }, [hash, data])
-
   return (
-    <section id="spending" ref={section} aria-labelledby="spending-title" className="mb-8 scroll-mt-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="spending-title" className="text-lg font-semibold text-neutral-900">
-          Spending
-        </h2>
-        {data && (
-          <span className="text-sm text-neutral-500">
-            {monthName(data.month)} so far ({data.day} of {data.daysInMonth} days)
-          </span>
-        )}
-      </div>
+    <>
+      <Helmet>
+        <title>Spending — Admin — Actually Relevant</title>
+      </Helmet>
+      <PageHeader
+        title="Spending"
+        description={data ? `${monthName(data.month)} so far (${data.day} of ${data.daysInMonth} days)` : 'This month per job, with the two months before'}
+      />
       {query.isLoading && (
         <div className="flex justify-center py-8">
           <LoadingSpinner />
@@ -218,6 +206,6 @@ export function SpendingCard() {
       )}
       {query.error && <ErrorState message="Failed to load spending" onRetry={() => query.refetch()} />}
       {data && <SpendingTable data={data} />}
-    </section>
+    </>
   )
 }

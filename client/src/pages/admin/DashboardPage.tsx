@@ -1,68 +1,56 @@
+import { useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { PlayIcon } from '@heroicons/react/24/outline'
-import { STORY_STATUSES } from '@shared/constants'
-import type { LifetimeStoryStats } from '@shared/types'
-import { useStoryStats, useLifetimeStoryStats } from '../../hooks/useStoryStats'
-import { useJobs, useRunJob } from '../../hooks/useJobs'
+import type { RecentStoryWindow } from '@shared/types'
+import { useRecentStoryStats } from '../../hooks/useStoryStats'
 import { PageHeader } from '../../components/ui/PageHeader'
-import { Card } from '../../components/ui/Card'
-import { Badge } from '../../components/ui/Badge'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { JobStatusBadge } from '../../components/admin/JobStatusBadge'
-import { ActionIconButton } from '../../components/ui/ActionIconButton'
-import { formatStatus, STATUS_VARIANTS, jobDisplayName, byPipelineOrder } from '../../lib/constants'
-import { TimeWithRelative } from '../../components/admin/TimeWithRelative'
-import { dashboardRows } from '../../lib/jobRun'
 import { UnseenNoticesCard } from '../../components/admin/UnseenNoticesCard'
-import { SpendingCard } from '../../components/admin/SpendingCard'
+import { UnreadFeedbackCard } from '../../components/admin/UnreadFeedbackCard'
+import { SpendingSummaryCard } from '../../components/admin/SpendingSummaryCard'
 import { useToast } from '../../components/ui/Toast'
 import { adminApi, ApiError } from '../../lib/admin-api'
 import { Button } from '../../components/ui/Button'
 
-function StatsGrid({ stats }: { stats: Record<string, number> }) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-      {STORY_STATUSES.map(status => (
-        <div key={status} className="bg-white rounded-lg border border-neutral-200 shadow-sm p-4">
-          <div className="flex items-center justify-between mb-1">
-            <Badge variant={STATUS_VARIANTS[status]}>{formatStatus(status)}</Badge>
-          </div>
-          <p className="text-2xl font-bold text-neutral-900">{stats[status] || 0}</p>
-        </div>
-      ))}
-      <div className="bg-white rounded-lg border border-neutral-200 shadow-sm p-4">
-        <p className="text-xs font-medium text-neutral-500 mb-1">Total</p>
-        <p className="text-2xl font-bold text-neutral-900">{Object.values(stats).reduce((sum, n) => sum + n, 0)}</p>
-      </div>
-    </div>
-  )
-}
+const fmt = (n: number) => n.toLocaleString('en-US')
+const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '--')
 
-function LifetimeSummary({ stats }: { stats: LifetimeStoryStats }) {
-  const published = stats.byStatus.published ?? 0
+function StoryWindow({ window: w }: { window: RecentStoryWindow }) {
+  const figures = [
+    { label: 'Crawled', value: fmt(w.crawled) },
+    { label: 'Screened', value: fmt(w.screened), note: `${pct(w.screened, w.crawled)} of crawled` },
+    { label: 'Fully assessed', value: fmt(w.assessed), note: `${pct(w.assessed, w.crawled)} of crawled` },
+    { label: 'Published', value: fmt(w.published) },
+  ]
   return (
-    <div className="bg-white rounded-lg border border-neutral-200 shadow-sm p-4 flex flex-wrap items-baseline justify-between gap-2">
-      <p className="text-sm text-neutral-700">
-        <span className="text-2xl font-bold text-neutral-900 mr-2">{stats.total.toLocaleString('en-US')}</span>
-        stories crawled, {published.toLocaleString('en-US')} published, {stats.archived.toLocaleString('en-US')} deleted by the monthly cleanup
-      </p>
-      <Link to="/admin/stats" className="text-sm text-brand-600 hover:text-brand-700 hover:underline">
-        See all stats
-      </Link>
+    <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+      <h3 className="mb-3 text-sm font-semibold text-neutral-700">Last {w.days} days</h3>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+        {figures.map(f => (
+          <div key={f.label}>
+            <dt className="text-xs font-medium text-neutral-500">{f.label}</dt>
+            <dd className="text-2xl font-bold tabular-nums text-neutral-900">{f.value}</dd>
+            {f.note && <dd className="text-xs text-neutral-500">{f.note}</dd>}
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }
 
 export default function DashboardPage() {
-  const statsQuery = useStoryStats()
-  const lifetimeQuery = useLifetimeStoryStats()
-  const jobsQuery = useJobs()
-  const runJob = useRunJob()
+  const recentQuery = useRecentStoryStats()
   const clearCache = useMutation({ mutationFn: () => adminApi.cache.clear() })
   const { toast } = useToast()
+  const { hash } = useLocation()
+  const navigate = useNavigate()
+
+  // Spending notices recorded before the Spending page existed link to `/admin#spending`
+  useEffect(() => {
+    if (hash === '#spending') navigate('/admin/spending', { replace: true })
+  }, [hash, navigate])
 
   return (
     <>
@@ -72,7 +60,7 @@ export default function DashboardPage() {
 
       <PageHeader
         title="Dashboard"
-        description="Overview of stories and jobs"
+        description="What needs you, what it costs, and how many stories came through"
         actions={
           <Button
             variant="secondary"
@@ -97,114 +85,32 @@ export default function DashboardPage() {
 
       <UnseenNoticesCard />
 
-      <SpendingCard />
+      <UnreadFeedbackCard />
 
-      {/* Story Stats */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold text-neutral-900 mb-3">Stories by Status</h2>
-        {statsQuery.isLoading && (
+      <SpendingSummaryCard />
+
+      <section aria-labelledby="stories-title">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 id="stories-title" className="text-lg font-semibold text-neutral-900">
+            Stories
+          </h2>
+          <Link to="/admin/stats" className="text-sm text-brand-600 hover:text-brand-700 hover:underline">
+            See all stats
+          </Link>
+        </div>
+        {recentQuery.isLoading && (
           <div className="flex justify-center py-8">
             <LoadingSpinner />
           </div>
         )}
-        {statsQuery.error && <ErrorState message="Failed to load stats" onRetry={() => statsQuery.refetch()} />}
-        {statsQuery.data && <StatsGrid stats={statsQuery.data} />}
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold text-neutral-900 mb-3">Lifetime Totals</h2>
-        {lifetimeQuery.isLoading && (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner />
+        {recentQuery.error && <ErrorState message="Failed to load story numbers" onRetry={() => recentQuery.refetch()} />}
+        {recentQuery.data && (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {recentQuery.data.map(w => (
+              <StoryWindow key={w.days} window={w} />
+            ))}
           </div>
         )}
-        {lifetimeQuery.error && <ErrorState message="Failed to load lifetime totals" onRetry={() => lifetimeQuery.refetch()} />}
-        {lifetimeQuery.data && <LifetimeSummary stats={lifetimeQuery.data} />}
-      </section>
-
-      {/* Jobs */}
-      <section>
-        <Card title="Jobs">
-          {jobsQuery.isLoading && (
-            <div className="flex justify-center py-4">
-              <LoadingSpinner />
-            </div>
-          )}
-          {jobsQuery.error && <ErrorState message="Failed to load jobs" onRetry={() => jobsQuery.refetch()} />}
-          {jobsQuery.data && (
-            <div className="overflow-x-auto -mx-4 -my-3">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-neutral-200">
-                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">
-                      Job
-                    </th>
-                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">
-                      Status
-                    </th>
-                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500">
-                      Last Run
-                    </th>
-                    <th scope="col" className="text-left py-2 px-4 font-medium text-neutral-500 hidden sm:table-cell">
-                      Error
-                    </th>
-                    <th scope="col" className="py-2 px-4"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboardRows(jobsQuery.data)
-                    .sort(byPipelineOrder)
-                    .map(job => (
-                      <tr key={job.jobName} className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : ''}`}>
-                        <td className="py-2 px-4">
-                          <span className="font-medium text-neutral-900">{jobDisplayName(job.jobName)}</span>
-                          {job.lastRunSummary && <span className="block text-xs text-neutral-500">{job.lastRunSummary}</span>}
-                        </td>
-                        <td className="py-2 px-4">
-                          <JobStatusBadge job={job} variant="dot" />
-                        </td>
-                        <td className="py-2 px-4 text-neutral-500 whitespace-nowrap">
-                          <TimeWithRelative dateStr={job.lastCompletedAt} />
-                        </td>
-                        <td className="py-2 px-4 text-neutral-500 max-w-xs truncate hidden sm:table-cell">
-                          {job.lastError ? (
-                            <a href="/admin/jobs" className="text-red-600 hover:text-red-800" title={job.lastError}>
-                              {job.lastError.slice(0, 80)}
-                              {job.lastError.length > 80 ? '...' : ''}
-                            </a>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td className="py-2 px-4 text-right">
-                          {job.running ? (
-                            <span className="inline-block p-1">
-                              <svg className="h-5 w-5 animate-spin text-yellow-600" viewBox="0 0 24 24" fill="none" aria-label="Running">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
-                            </span>
-                          ) : (
-                            <ActionIconButton
-                              icon={PlayIcon}
-                              label={`Run ${jobDisplayName(job.jobName)}`}
-                              onClick={() =>
-                                runJob.mutate(job.jobName, {
-                                  // 409 when a run is already under way: the server's answer says so.
-                                  onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to trigger job'),
-                                })
-                              }
-                              disabled={runJob.isPending && runJob.variables === job.jobName}
-                            />
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
       </section>
     </>
   )

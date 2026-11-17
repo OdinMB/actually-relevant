@@ -22,9 +22,9 @@ function jsonResponse(data: unknown, status = 200) {
 describe('adminApi', () => {
   it('sends Authorization header from localStorage', async () => {
     mockFetch.mockReturnValueOnce(jsonResponse({ fetched: 5 }))
-    await adminApi.stories.stats()
+    await adminApi.stories.recentStats()
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/admin/stories/stats'),
+      expect.stringContaining('/api/admin/stories/recent-stats'),
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer test-key',
@@ -43,7 +43,7 @@ describe('adminApi', () => {
       }),
     )
     try {
-      await adminApi.stories.stats()
+      await adminApi.stories.recentStats()
       expect.unreachable('should have thrown')
     } catch (err) {
       expect(err).toBeInstanceOf(ApiError)
@@ -89,10 +89,10 @@ describe('adminApi on an expired access token', () => {
       .mockReturnValueOnce(jsonResponse({ accessToken: 'fresh' }))
       .mockReturnValueOnce(jsonResponse({ fetched: 5 }))
 
-    await adminApi.stories.stats()
+    await adminApi.stories.recentStats()
 
     expect(mockFetch).toHaveBeenLastCalledWith(
-      expect.stringContaining('/api/admin/stories/stats'),
+      expect.stringContaining('/api/admin/stories/recent-stats'),
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer fresh' }),
       }),
@@ -104,7 +104,7 @@ describe('adminApi on an expired access token', () => {
     const unsubscribe = onSessionExpired(expired)
     mockFetch.mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401)).mockReturnValueOnce(jsonResponse({ error: 'Refresh token reuse detected' }, 401))
 
-    await expect(adminApi.stories.stats()).rejects.toBeInstanceOf(ApiError)
+    await expect(adminApi.stories.recentStats()).rejects.toBeInstanceOf(ApiError)
     expect(expired).toHaveBeenCalledTimes(1)
     unsubscribe()
   })
@@ -114,7 +114,7 @@ describe('adminApi on an expired access token', () => {
     const unsubscribe = onSessionExpired(expired)
     mockFetch.mockReturnValueOnce(jsonResponse({ error: 'expired' }, 401)).mockReturnValue(jsonResponse({ error: 'Too many refresh attempts' }, 429))
 
-    await expect(adminApi.stories.stats()).rejects.toBeInstanceOf(ApiError)
+    await expect(adminApi.stories.recentStats()).rejects.toBeInstanceOf(ApiError)
     expect(expired).not.toHaveBeenCalled()
     unsubscribe()
   })

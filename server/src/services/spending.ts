@@ -233,7 +233,7 @@ function spendNotice(due: DueWarning, totals: SpendTotals, now: Date) {
     message:
       `${who} spent ${usd(totals.totalUsd)} since ${since} (AI ${usd(totals.aiUsd)}, web search ${usd(totals.searchUsd)}). ` +
       `At this pace the month ends near $${Math.round(due.paceUsd)}. Nothing stops on cost; this notice comes once a month.`,
-    link: '/admin#spending',
+    link: '/admin/spending',
     // One key per kind, so a pace notice early in the month never keeps the passed notice out
     dedupeKey: `spend-warn:${due.scope}:${monthKey(utcMonthStart(now))}:${due.kind === 'passed' ? 'passed' : 'pace'}`,
   }

@@ -22,6 +22,7 @@ import {
   GlobeAltIcon,
   BellAlertIcon,
   ChartBarIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../lib/auth'
 import { adminApi } from '../lib/admin-api'
@@ -40,7 +41,6 @@ const navigation = [
   { name: 'Stories', href: '/admin/stories', icon: DocumentTextIcon },
   { name: 'Clusters', href: '/admin/clusters', icon: Square3Stack3DIcon },
   { name: 'Feeds', href: '/admin/feeds', icon: RssIcon },
-  { name: 'Stats', href: '/admin/stats', icon: ChartBarIcon },
   { name: 'Issues', href: '/admin/issues', icon: TagIcon },
   { name: 'Newsletters', href: '/admin/newsletters', icon: EnvelopeIcon },
   { name: 'Subscribers', href: '/admin/subscribers', icon: UserGroupIcon },
@@ -51,6 +51,8 @@ const navigation = [
   { name: 'Notices', href: '/admin/notices', icon: BellAlertIcon, badge: 'notices' as const },
   { name: 'Jobs', href: '/admin/jobs', icon: ClockIcon },
   { name: 'Users', href: '/admin/users', icon: UsersIcon },
+  { name: 'Spending', href: '/admin/spending', icon: BanknotesIcon },
+  { name: 'Stats', href: '/admin/stats', icon: ChartBarIcon },
 ]
 
 export function NavItems({ onClick, badgeCounts }: { onClick?: () => void; badgeCounts: Partial<Record<BadgeKey, NavBadge>> }) {

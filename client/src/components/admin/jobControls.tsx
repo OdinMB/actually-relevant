@@ -5,6 +5,7 @@ import { PlayIcon } from '@heroicons/react/24/outline'
 import { useJobChange, useRunJob } from '../../hooks/useJobs'
 import { ApiError } from '../../lib/admin-api'
 import { ActionIconButton } from '../ui/ActionIconButton'
+import { InfoTip } from '../ui/InfoTip'
 import { Tooltip } from '../ui/Tooltip'
 import { useToast } from '../ui/Toast'
 
@@ -16,24 +17,23 @@ export function ClockTimeField({ job, field, label, help }: { job: JobRun; field
   const id = `${job.jobName}-${field}`
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium text-neutral-600">
-        {label} <span className="font-normal text-neutral-400">(UTC)</span>
-      </label>
+      <div className="flex items-center gap-0.5">
+        <label htmlFor={id} className="text-xs font-medium text-neutral-600">
+          {label} <span className="font-normal text-neutral-400">(UTC)</span>
+        </label>
+        <InfoTip label={`About ${label}`}>{help}</InfoTip>
+      </div>
       <input
         id={id}
         type="time"
         defaultValue={job[field] ?? ''}
         key={job[field] ?? ''}
-        aria-describedby={`${id}-help`}
         onBlur={e => {
           const value = e.target.value || null
           if (value !== job[field]) change.save({ [field]: value }, `${jobDisplayName(job.jobName)}: ${label.toLowerCase()} ${value ?? 'removed'}`)
         }}
         className="mt-0.5 rounded-md border border-neutral-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
       />
-      <p id={`${id}-help`} className="mt-0.5 text-xs text-neutral-500">
-        {help}
-      </p>
     </div>
   )
 }

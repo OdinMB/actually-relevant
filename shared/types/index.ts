@@ -1019,6 +1019,17 @@ export interface LifetimeGroupRow {
 }
 
 /** GET /api/admin/stories/lifetime-stats: live stories plus those the monthly cleanup deleted. */
+/** One window of GET /api/admin/stories/recent-stats: stories crawled in the last `days` days, and stories published in them. */
+export interface RecentStoryWindow {
+  days: number
+  crawled: number
+  /** Of `crawled`, screened (a pre-rating) and fully assessed (a rating) */
+  screened: number
+  assessed: number
+  /** Published in the window, whenever crawled */
+  published: number
+}
+
 export interface LifetimeStoryStats {
   total: number
   archived: number

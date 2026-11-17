@@ -81,25 +81,28 @@ export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) 
             {name}
             {chain.note && <InfoTip label={`About ${name}`}>{chain.note}</InfoTip>}
           </h2>
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-neutral-600">
-            <JobStatusBadge job={chain} />
-            <EnabledToggle job={chain} />
-            <CronEditor job={chain} />
+          {/* Status, switch and schedule, then the last run on the same row while it fits */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-600">
+              <JobStatusBadge job={chain} />
+              <EnabledToggle job={chain} />
+              <CronEditor job={chain} />
+            </div>
+            <dl className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-neutral-600">
+              <div className="flex gap-1">
+                <dt className="text-neutral-500">Last started</dt>
+                <dd>
+                  <TimeWithRelative dateStr={chain.lastStartedAt} inline />
+                </dd>
+              </div>
+              <div className="flex gap-1">
+                <dt className="text-neutral-500">Last run</dt>
+                <dd>
+                  <LastRun job={chain} />
+                </dd>
+              </div>
+            </dl>
           </div>
-          <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-neutral-600">
-            <div className="flex gap-1">
-              <dt className="text-neutral-500">Last started</dt>
-              <dd>
-                <TimeWithRelative dateStr={chain.lastStartedAt} inline />
-              </dd>
-            </div>
-            <div className="flex gap-1">
-              <dt className="text-neutral-500">Last run</dt>
-              <dd>
-                <LastRun job={chain} />
-              </dd>
-            </div>
-          </dl>
         </div>
         <div className="flex flex-wrap items-start gap-4">
           <ClockTimeField job={chain} field="flexUntil" label="Flex until" help="From this time on, AI calls go at standard price." />

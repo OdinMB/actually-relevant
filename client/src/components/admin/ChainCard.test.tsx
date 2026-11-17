@@ -54,8 +54,16 @@ describe('ChainCard', () => {
     expect(checked(/review after/)).toEqual(['false', 'true', 'false'])
     expect(screen.getByRole('switch', { name: 'Use flex processing for Select Stories' })).toBeInTheDocument()
     expect(screen.queryByRole('switch', { name: /flex processing for Publish Stories/ })).not.toBeInTheDocument()
-    expect(screen.getByLabelText(/Flex until/)).toHaveValue('03:30')
-    expect(screen.getByLabelText(/Done by/)).toHaveValue('05:00')
+    expect(screen.getByLabelText(/^Flex until/)).toHaveValue('03:30')
+    expect(screen.getByLabelText(/^Done by/)).toHaveValue('05:00')
+  })
+
+  it('explains the clock times behind info buttons', () => {
+    renderCard()
+    expect(screen.getByRole('button', { name: 'About Flex until' })).toHaveAccessibleDescription('From this time on, AI calls go at standard price.')
+    expect(screen.getByRole('button', { name: 'About Done by' })).toHaveAccessibleDescription('From this time on, research starts no other story.')
+    expect(screen.getByRole('button', { name: 'About Review' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'About Flex' })).toBeInTheDocument()
   })
 
   it("saves a step's Review and Enabled switches", async () => {
@@ -68,7 +76,7 @@ describe('ChainCard', () => {
 
   it('saves a changed clock time, and an emptied one as none', async () => {
     renderCard()
-    const deadline = screen.getByLabelText(/Done by/)
+    const deadline = screen.getByLabelText(/^Done by/)
     await userEvent.clear(deadline)
     await userEvent.tab()
     await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { deadline: null }))

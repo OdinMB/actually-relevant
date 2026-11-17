@@ -15,12 +15,20 @@ import { clockName, EnabledToggle, FlexToggle, LastRun, ReviewToggle, RunButton,
  * other jobs share it, with fixed widths, so their columns line up down the page.
  */
 // Start time, last success and the full error are in the details panel: the table keeps what fits a laptop.
-const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean }[] = [
+const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean; note?: string }[] = [
   { label: 'Job', width: 'w-[24%]' },
   { label: 'Schedule', width: 'w-[16%]', wide: true },
   { label: 'Enabled', width: 'w-[7%]' },
-  { label: 'Review', width: 'w-[7%]' },
-  { label: 'Flex', width: 'w-[6%]' },
+  {
+    label: 'Review',
+    width: 'w-[7%]',
+    note: 'For a step of a chain: after this step, the chain waits until a person continues it from the chain’s header.',
+  },
+  {
+    label: 'Flex',
+    width: 'w-[6%]',
+    note: 'AI calls at half price through OpenAI’s flex processing: slower, and at standard price when OpenAI is busy or after the chain’s Flex until time.',
+  },
   { label: 'Status', width: 'w-[10%]' },
   { label: 'Last Run', width: 'w-[12%]', wide: true },
   { label: 'Last Finished', width: 'w-[12%]', wide: true },
@@ -46,7 +54,17 @@ export function JobTable({ children }: { children: React.ReactNode }) {
                 scope="col"
                 className={`px-3 py-2 font-medium text-neutral-500 ${col.right ? 'text-right' : 'text-left'} ${col.wide ? WIDE : ''}`}
               >
-                {col.label}
+                {col.note ? (
+                  <span className="inline-flex items-center gap-0.5">
+                    {col.label}
+                    {/* Below lg the narrow column has no room for it; the switches still name what they do */}
+                    <span className="hidden lg:inline-flex">
+                      <InfoTip label={`About ${col.label}`}>{col.note}</InfoTip>
+                    </span>
+                  </span>
+                ) : (
+                  col.label
+                )}
               </th>
             ))}
           </tr>
