@@ -81,6 +81,20 @@ describeDb('story context input', () => {
     expect(input!.reusable[0]).toMatchObject({ verdict: 'supported', source: { id: 'S2', outlet: 'Outlet S2F2', date: '2026-11-12' } })
   })
 
+  it('offers a fact once when an earlier story already carried it as a reused fact', async () => {
+    const { published } = await setup()
+    const first = await published(10)
+    const second = await published(5)
+    const story = await published(1)
+    await createResearchRun(story.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }], { earlier: [first.id, second.id] })
+    const original = await createContextFact(first.id, (await createContextRun(first.id)).id, { ref: 'S2F1', validity: 'fixed' })
+    const copy = await createContextFact(second.id, (await createContextRun(second.id)).id, { ref: 'S3F1', validity: 'fixed', reusedFromId: original.id })
+    const other = await createContextFact(second.id, copy.runId, { ref: 'S3F2', validity: 'fixed' })
+
+    const input = await loadContextInput(prisma, story.id)
+    expect(input!.reusable.map(f => f.id).sort()).toEqual([copy.id, other.id].sort())
+  })
+
   it('loads nothing for a story that is not published or has no research facts', async () => {
     const { feed, published } = await setup()
     const draft = await createStory({ feedId: feed.id, status: 'selected' })

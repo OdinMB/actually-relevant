@@ -179,9 +179,17 @@ export async function loadContextInput(db: ResearchDb, storyId: string): Promise
           WHERE f.story_id = ANY(${earlierIds}) AND f.verdict = 'supported' AND f.status <> 'demoted'
           ORDER BY f.as_of DESC NULLS LAST, f.created_at DESC, f.id`
   const windows = { fastDays: config.storyContext.fastValidDays, slowDays: config.storyContext.slowValidDays }
+  // An earlier story's copy of a fact it reused stands for the same fact: offered once, the newest
+  const offered = new Set<string>()
   const reusable = rows
     .map(reusableFact)
     .filter(f => isCurrent({ ...f, sourceDate: f.source.date }, storyDay, windows))
+    .filter(f => {
+      const original = f.reusedFromId ?? f.id
+      if (offered.has(original)) return false
+      offered.add(original)
+      return true
+    })
     .slice(0, config.storyContext.maxReusedFacts)
 
   const sources: ContextResearchSource[] = parsed.data.sources.map(s => ({ ...s }))
