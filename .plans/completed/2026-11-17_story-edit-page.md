@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: implemented
 type: feature
 complexity: complex
 ---
@@ -70,3 +70,7 @@ Opening a story on the admin stories list slides in a 512px side panel (`StoryDe
 - Links from the clusters page's members to their story pages.
 - Deleting a story from its page (the panel had no delete).
 - Previous and next story buttons on the page.
+
+## Outcome
+
+Implemented as planned, with these additions: the source, cluster and social sections moved out of `StoryEditForm` into `StoryEditorSections.tsx` and the card classes into `storyEditorClasses.ts`, so the form keeps one responsibility; the sticky bar classes moved from `PodcastActionBar` to `stickyActionBar.ts`, shared by both bars; `useSocialDrafts`' types replace `storyBulkActions`' copies. Found while verifying in the browser: a rating typed back to its saved value still counted as an unsaved edit (the form compared a number with the field's text), fixed by keeping the ratings as text in the form. Tests for the stories list, the editor's sections and every field's save raised client coverage to 84.27, 82.72, 74.46, 84.98, and the floor with it (84, 82, 74, 84).
