@@ -139,7 +139,7 @@ describeDb('spending (PostgreSQL)', () => {
         ['spend-warn:all:2026-11:passed', 1],
         ['spend-warn:research_stories:2026-11:passed', 1],
       ])
-      expect(recorded[1]).toMatchObject({ source: 'jobs', severity: 'warning', link: '/admin#spending', title: 'Research Stories passed $25 this month' })
+      expect(recorded[1]).toMatchObject({ source: 'jobs', severity: 'warning', link: '/admin/spending', title: 'Research Stories passed $25 this month' })
       expect(recorded[1]!.message).toMatch(/\$26\.00 since Nov 1 \(AI \$17\.00, web search \$9\.00\)/)
       expect(recorded[0]!.title).toBe('Spending passed $10 this month')
     })

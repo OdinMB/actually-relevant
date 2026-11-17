@@ -29,8 +29,9 @@ import { crawlUrlSchema } from '../../schemas/job.js'
 const router = Router()
 const storyNotFound = { notFound: 'Story not found' }
 
-router.get('/stats', failsWith('Failed to fetch story stats'), async (_req, res) => {
-  res.json(await storyService.getStoryStats())
+// The dashboard's last 7 and 30 days: crawled, screened, assessed, published
+router.get('/recent-stats', failsWith('Failed to fetch recent story stats'), async (_req, res) => {
+  res.json(await storyService.getRecentStoryStats())
 })
 
 // Lifetime totals: live stories plus those the monthly cleanup deleted (.context/story-retention.md)

@@ -1,6 +1,7 @@
 /**
  * Which jobs are chains and which are their steps (chains.ts runs them; `.context/scheduler.md`,
- * "Chains"), and the clock times a chain's and a step's settings hold. No imports, so the scheduler,
+ * "Chains"), which of their steps do not stop them on a failure, and the clock times a step's "not
+ * before" setting holds (a chain's flex cut-off is in hours from its start). No imports, so the scheduler,
  * the job list and the chain runner can all read it.
  */
 
@@ -32,16 +33,6 @@ export const isChain = (jobName: string): boolean => CHAINS[jobName] !== undefin
 export function chainOf(jobName: string): string | null {
   for (const [chain, steps] of Object.entries(CHAINS)) if (steps.includes(jobName)) return chain
   return null
-}
-
-const CLOCK_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/
-
-/** Whether `value` is a time of day as the chain settings hold it, "HH:MM" on the 24-hour clock. */
-export const isClockTime = (value: string): boolean => CLOCK_TIME.test(value)
-
-/** The first moment at `hhmm` UTC after `from`; null without a value or for one that is not "HH:MM". */
-export function nextClockTime(hhmm: string | null, from: Date): Date | null {
-  return hhmm && isClockTime(hhmm) ? nextStepTime(hhmm, from, 'UTC') : null
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const

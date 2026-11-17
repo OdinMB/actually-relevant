@@ -175,23 +175,6 @@ describe('runBuildStoryContext', () => {
     expect(mocks.runStoryContext.mock.calls.map(([id]) => id as string).sort()).toEqual([...many].sort())
   })
 
-  it("starts no other story, and no second attempt, once its chain's deadline has passed, and says how many it left", async () => {
-    const scope = createRunScope({ jobName: 'build_story_context', flex: false, deadline: new Date(Date.now() + 60_000) })
-    mocks.nextForContext.mockResolvedValue(['a', 'b', 'c', 'd', 'e'])
-    // Three start at once; the deadline passes while they run
-    mocks.runStoryContext
-      .mockResolvedValueOnce(failed('run-a', true))
-      .mockResolvedValueOnce(run(5, 0))
-      .mockImplementationOnce(async () => {
-        scope.deadline = new Date(Date.now() - 1)
-        return run(5, 0)
-      })
-      .mockResolvedValue(run(5, 0))
-    await inScope(scope)
-    expect(mocks.runStoryContext.mock.calls.map(([id]) => id as string)).toEqual(['a', 'b', 'c'])
-    expect(scope.summary).toBe('Built the context of 3 stories: 4 cards kept, 0 of 10 checked items failed, 1 story failed, 2 left at the deadline')
-  })
-
   describe('its parts', () => {
     it('builds the published stories it still owes in the part after publishing, and says so', async () => {
       mocks.nextForContext.mockResolvedValue(['p'])
@@ -234,12 +217,5 @@ describe('runBuildStoryContext', () => {
       delete process.env.TAVILY_API_KEY
       expect(await owesPublishedStories()).toBe(false)
     })
-  })
-
-  it("starts nothing when its chain's deadline has passed before it began", async () => {
-    mocks.nextForContext.mockResolvedValue(['a', 'b'])
-    const scope = await inScope(createRunScope({ jobName: 'build_story_context', flex: false, deadline: new Date(Date.now() - 1) }))
-    expect(mocks.runStoryContext).not.toHaveBeenCalled()
-    expect(scope.summary).toBe('Built the context of 0 stories: 0 cards kept, 0 of 0 checked items failed, 0 stories failed, 2 left at the deadline')
   })
 })

@@ -95,7 +95,7 @@ export const NOTES: Readonly<Record<string, () => string>> = {
     `${CHAIN_RULES} ` +
     'One exception: if Build Story Context fails, the chain still goes on to publish, and those stories go out without cards. ' +
     'Once publishing is done, Build Story Context also builds the cards of published stories that still lack them, so publishing never waits for those. ' +
-    'From its flex cut-off on, every call goes at standard price; from its deadline on, research and context cards start no other story, so publishing is never held up for long.',
+    'Once its flex hours (the Flex column of its Whole chain row) have passed since the run started, every call goes at standard price, so a slow flex queue cannot hold up publishing for long.',
   newsletter_chain: () =>
     `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
     'A step whose run was cut off by a restart is not run again, so no issue goes out twice.',
@@ -128,8 +128,7 @@ export const NOTES: Readonly<Record<string, () => string>> = {
       `it reads their research, searches the web for up to ${count(c.maxSearches, 'missing piece')}, checks every fact and card against its source, and keeps what passes. ` +
       'In the daily edition it builds the cards of the stories about to be published before Publish Stories, so they go out with them, ' +
       'and those of the published stories once publishing is done, so publishing never waits for them; on a night with such stories, its last run shown here is that second part. ' +
-      'It takes every story it owes. ' +
-      "From the daily edition's deadline on it starts no other story, and if it fails, publishing goes ahead without cards. " +
+      'It takes every story it owes, and if it fails, publishing goes ahead without cards. ' +
       'It builds each story once: a build stopped by a problem that may pass, such as the AI service not answering, is tried a second time later in the same run, never on a later night. ' +
       `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
       `so is a notice when more than ${Math.round(share * 100)}% of at least ${c.failedStoriesMin} stories fail. Nothing pauses. ` +

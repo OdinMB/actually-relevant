@@ -4,18 +4,17 @@
  * still owes (`nextForContext`), `config.storyContext.concurrency` at once, with no limit a run. Its
  * work comes in two parts (`ContextPart`): in the daily edition, the stories about to be published at
  * the step's place, between research and publishing, and the published ones of the lookback once the
- * chain's last step has run (`SPLIT_STEPS`, `handlers.ts`), so publishing never waits for those. Run
- * by its chain, it starts no story once the chain's deadline has passed; the stories in flight finish,
- * and a selected story it did not reach publishes without cards. A run by hand (the Jobs page's "Run
- * now") does both parts in one run, the disabled job's included, so it writes cards readers see.
+ * chain's last step has run (`SPLIT_STEPS`, `handlers.ts`), so publishing never waits for those. It
+ * has no time limit (the chain's deadline went on 2026-11-17, as research's did): the night's stories
+ * bound a run. A run by hand (the Jobs page's "Run now") does both parts in one run, the disabled
+ * job's included, so it writes cards readers see.
  * Without a Tavily key it builds nothing. The run's item tally goes into its usage (`recordItems`), so
  * the run's finish records the failure-share notice when it passes `config.jobs.failureShare`
  * (`jobs/failureShare.ts`, in this step's words); nothing pauses. A failure of the whole step does not
  * stop its chain (`GOES_ON_PAST_FAILURE`).
  *
  * A story whose run failed on a problem that may pass (`transientFailure`) is tried once more after
- * the others of its queue, on the same run row, unless the deadline has passed meanwhile (ADR-0061,
- * amended 2026-11-17); a second failure settles it, as does any other failure, and no later night
+ * the others of its queue, on the same run row (ADR-0061, amended 2026-11-17); a second failure settles it, as does any other failure, and no later night
  * tries it again. When more than the failure share of at least `failedStoriesMin` stories failed, the
  * step records the failed-stories notice. A failure outside a story's run records a failed run for
  * it, so the story is settled; the job never throws for it.
@@ -23,7 +22,7 @@
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
-import { countOf, recordItems, reportRunResult, runDeadlinePassed } from '../lib/runUsage.js'
+import { countOf, recordItems, reportRunResult } from '../lib/runUsage.js'
 import { sanitizedError } from '../services/researchRuns.js'
 import { nextForContext, STORY_CONTEXT_JOB, type ContextQueue } from '../services/storyContextQueue.js'
 import { markInterruptedContextRuns, recordFailedRun, runStoryContext, type ContextRunOutcome } from '../services/storyContextRuns.js'
@@ -120,38 +119,32 @@ export async function runBuildStoryContext(part: ContextPart = 'all'): Promise<v
       attempts.set(storyId, await recordError(storyId, err))
     }
   }
-  /**
-   * Each story's attempt in turn, at most `concurrency` at once; past the chain's deadline no worker
-   * starts another (.context/scheduler.md, "Chains"). How many were started.
-   */
-  const inTurn = async (stories: { storyId: string; again: { runId: string } | null }[]): Promise<number> => {
+  /** Each story's attempt in turn, at most `concurrency` at once. */
+  const inTurn = async (stories: { storyId: string; again: { runId: string } | null }[]): Promise<void> => {
     let next = 0
     const worker = async () => {
-      while (next < stories.length && !runDeadlinePassed()) {
+      while (next < stories.length) {
         const { storyId, again } = stories[next++]!
         await attempt(storyId, again)
       }
     }
     await Promise.all(Array.from({ length: Math.min(Math.max(concurrency, 1), stories.length) }, worker))
-    return next
   }
 
   let owed = 0
-  let started = 0
   let triedTwice = 0
   for (const queue of QUEUES[part]) {
     const ids = await nextForContext(queue)
     owed += ids.length
-    started += await inTurn(ids.map(storyId => ({ storyId, again: null })))
+    await inTurn(ids.map(storyId => ({ storyId, again: null })))
     // A failure that may pass is tried once more, after the others of its queue: only its last attempt is stored
     const retried = ids.flatMap(storyId => {
       const a = attempts.get(storyId)
       return a?.transient && a.runId !== null ? [{ storyId, again: { runId: a.runId } }] : []
     })
-    triedTwice += await inTurn(retried)
+    await inTurn(retried)
+    triedTwice += retried.length
   }
-  const left = owed - started
-  if (left > 0) log.info({ left }, "past the chain's deadline; started no other story")
 
   const outcomes: Partial<Record<StoryOutcome, number>> = {}
   for (const { outcome } of attempts.values()) outcomes[outcome] = (outcomes[outcome] ?? 0) + 1
@@ -159,15 +152,14 @@ export async function runBuildStoryContext(part: ContextPart = 'all'): Promise<v
 
   // The failure share's notice is the run's finish's (`failureShareNotice`), from these items
   recordItems(tally.checked, tally.failed)
-  log.info({ part, ...outcomes, ...tally, retried: triedTwice, left }, 'story context step finished')
-  if (storiesFailing(started, failedStories)) await notifyFailedStories(started, failedStories)
+  log.info({ part, ...outcomes, ...tally, retried: triedTwice }, 'story context step finished')
+  if (storiesFailing(owed, failedStories)) await notifyFailedStories(owed, failedStories)
   const words = WORDS[part]
   reportRunResult(
     owed === 0
       ? words.none
-      : `Built the context of ${countOf(started, words.one, words.many)}: ${countOf(tally.boxes, 'card')} kept, ` +
+      : `Built the context of ${countOf(owed, words.one, words.many)}: ${countOf(tally.boxes, 'card')} kept, ` +
           `${tally.failed.toLocaleString('en-US')} of ${countOf(tally.checked, 'checked item')} failed, ${countOf(failedStories, 'story', 'stories')} failed` +
-          (triedTwice > 0 ? ` (${triedTwice.toLocaleString('en-US')} tried twice)` : '') +
-          (left > 0 ? `, ${left.toLocaleString('en-US')} left at the deadline` : ''),
+          (triedTwice > 0 ? ` (${triedTwice.toLocaleString('en-US')} tried twice)` : ''),
   )
 }

@@ -3,9 +3,11 @@ import { useServerTimezone } from '../../hooks/useJobs'
 
 interface TimeWithRelativeProps {
   dateStr: string | null
+  /** Relative time on the same line ("Nov 17, 10:00 AM · 4h ago") instead of below; for one-line summaries. */
+  inline?: boolean
 }
 
-export function TimeWithRelative({ dateStr }: TimeWithRelativeProps) {
+export function TimeWithRelative({ dateStr, inline = false }: TimeWithRelativeProps) {
   const timeZone = useServerTimezone()
 
   if (!dateStr) return <span>—</span>
@@ -13,7 +15,10 @@ export function TimeWithRelative({ dateStr }: TimeWithRelativeProps) {
   return (
     <span>
       {formatDateWithTime(dateStr, timeZone)}
-      <span className="block text-xs text-neutral-500">{formatRelativeTime(dateStr, timeZone)}</span>
+      <span className={inline ? 'text-neutral-500' : 'block text-xs text-neutral-500'}>
+        {inline && ' · '}
+        {formatRelativeTime(dateStr, timeZone)}
+      </span>
     </span>
   )
 }

@@ -243,17 +243,32 @@ export async function getExistingUrls(urls: string[]): Promise<Set<string>> {
   return new Set(existing.map(s => s.sourceUrl))
 }
 
-export async function getStoryStats() {
-  const stats = await prisma.story.groupBy({
-    by: ['status'],
-    _count: { status: true },
-  })
-  return stats.reduce(
-    (acc, row) => {
-      acc[row.status] = row._count.status
-      return acc
-    },
-    {} as Record<string, number>,
+/** One window of the admin dashboard's story numbers (the client's `RecentStoryWindow`). */
+export interface RecentStoryWindow {
+  days: number
+  crawled: number
+  screened: number
+  assessed: number
+  published: number
+}
+
+/** The admin dashboard's windows, in days. */
+export const RECENT_STAT_WINDOWS = [7, 30] as const
+
+/** Per window: stories crawled in it (and how many of those were screened and assessed), and stories published in it. */
+export async function getRecentStoryStats(now = new Date()): Promise<RecentStoryWindow[]> {
+  return Promise.all(
+    RECENT_STAT_WINDOWS.map(async days => {
+      const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+      const crawledIn = { dateCrawled: { gte: since } }
+      const [crawled, screened, assessed, published] = await Promise.all([
+        prisma.story.count({ where: crawledIn }),
+        prisma.story.count({ where: { ...crawledIn, relevancePre: { not: null } } }),
+        prisma.story.count({ where: { ...crawledIn, relevance: { not: null } } }),
+        prisma.story.count({ where: { status: 'published', datePublished: { gte: since } } }),
+      ])
+      return { days, crawled, screened, assessed, published }
+    }),
   )
 }
 

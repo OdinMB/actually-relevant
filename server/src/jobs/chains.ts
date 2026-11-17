@@ -2,8 +2,8 @@
  * Chains (`.context/scheduler.md`, "Chains"): jobs run as ordered steps from one start time, each step
  * starting when the one before it has finished, instead of separate schedules with guessed gaps
  * between them. A chain is itself a job (its `job_runs` row holds its schedule, its on/off, its lease
- * and its flex cut-off and deadline), and its steps are ordinary jobs that no longer run on their own
- * schedules. Each step has a mode, set on its own row:
+ * and its flex cut-off, in hours from each run's start), and its steps are ordinary jobs that no
+ * longer run on their own schedules. Each step has a mode, set on its own row:
  *
  * - **On** (`enabled`): runs.
  * - **Off** (not `enabled`): skipped; the next step runs on what there is.

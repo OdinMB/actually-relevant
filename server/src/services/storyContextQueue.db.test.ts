@@ -141,7 +141,7 @@ describeDb('story context queue and publish gate (PostgreSQL)', () => {
     const owed = await researched(selected())
     const publishIn = (chain: string | null) => {
       const publish = () => runInScope(createRunScope({ jobName: 'publish_stories', flex: false }), () => awaitingContext([owed.id], NOW))
-      return chain === null ? publish() : runInScope(createRunScope({ jobName: chain, flex: false, deadline: new Date(NOW.getTime() + DAY) }), publish)
+      return chain === null ? publish() : runInScope(createRunScope({ jobName: chain, flex: false }), publish)
     }
     expect(await publishIn('daily_edition_chain')).toEqual(new Set())
     // A run on its own (Run now on the Jobs page) waits, as one inside another job's run would

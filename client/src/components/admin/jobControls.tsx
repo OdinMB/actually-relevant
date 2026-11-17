@@ -8,33 +8,57 @@ import { ActionIconButton } from '../ui/ActionIconButton'
 import { Tooltip } from '../ui/Tooltip'
 import { useToast } from '../ui/Toast'
 
+/** What an hours field holds: hours in quarter hours from 0.25 to 48, null when empty, undefined for anything else. */
+export function parseHours(text: string): number | null | undefined {
+  const trimmed = text.trim().replace(',', '.')
+  if (trimmed === '') return null
+  const hours = Number(trimmed)
+  return Number.isFinite(hours) && hours > 0 && hours <= 48 && Number.isInteger(hours * 4) ? hours : undefined
+}
+
 /**
- * A time of day in UTC, or empty for none, saved when it changes: a chain's flex cut-off or deadline.
+ * A chain's flex cut-off in its Whole chain row: hours from the start of each run, or empty for flex
+ * the whole run, saved when the field loses focus. Counting from each run's start, it means the same
+ * for a chain that runs once a day or several times. The Flex column's header explains it.
  */
-export function ClockTimeField({ job, field, label, help }: { job: JobRun; field: 'flexUntil' | 'deadline'; label: string; help: string }) {
+export function FlexHoursField({ job }: { job: JobRun }) {
   const change = useJobChange(job)
-  const id = `${job.jobName}-${field}`
+  const { toast } = useToast()
+  const id = `${job.jobName}-flexHours`
+  const shown = job.flexHours === null ? '' : String(job.flexHours)
   return (
-    <div>
-      <label htmlFor={id} className="block text-xs font-medium text-neutral-600">
-        {label} <span className="font-normal text-neutral-400">(UTC)</span>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap align-middle">
+      <label htmlFor={id} className="sr-only">
+        Flex for (hours from the start of each run; empty for the whole run)
       </label>
       <input
         id={id}
-        type="time"
-        defaultValue={job[field] ?? ''}
-        key={job[field] ?? ''}
-        aria-describedby={`${id}-help`}
-        onBlur={e => {
-          const value = e.target.value || null
-          if (value !== job[field]) change.save({ [field]: value }, `${jobDisplayName(job.jobName)}: ${label.toLowerCase()} ${value ?? 'removed'}`)
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder="—"
+        defaultValue={shown}
+        key={shown}
+        onKeyDown={e => {
+          if (e.key === 'Enter') e.currentTarget.blur()
         }}
-        className="mt-0.5 rounded-md border border-neutral-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        onBlur={e => {
+          const field = e.currentTarget
+          const hours = parseHours(field.value)
+          if (hours === undefined) {
+            field.value = shown
+            toast('error', 'Enter hours from 0.25 to 48, in quarter hours such as 4.5. Leave the field empty for flex the whole run.')
+            return
+          }
+          if (hours !== job.flexHours)
+            change.save({ flexHours: hours }, `${jobDisplayName(job.jobName)}: ${hours === null ? 'flex the whole run' : `flex for ${hours} h`}`)
+        }}
+        className="w-14 rounded-md border border-neutral-300 px-1.5 py-1 text-sm tabular-nums placeholder:text-neutral-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
       />
-      <p id={`${id}-help`} className="mt-0.5 max-w-[14rem] text-xs text-neutral-500">
-        {help}
-      </p>
-    </div>
+      <span className="text-xs text-neutral-500" aria-hidden="true">
+        h
+      </span>
+    </span>
   )
 }
 
@@ -135,7 +159,8 @@ function Switch({ on, label, onToggle, disabled }: { on: boolean; label: string;
     <button
       onClick={onToggle}
       disabled={disabled}
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50 ${
+      // align-middle: on the text baseline, an inline switch sits a few pixels above the row's other content
+      className={`relative inline-flex h-5 w-9 items-center rounded-full align-middle transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50 ${
         on ? 'bg-brand-600' : 'bg-neutral-300'
       }`}
       role="switch"
@@ -190,14 +215,14 @@ export function FlexToggle({ job }: { job: JobRun }) {
 }
 
 /** The last finished run's length, cost (explained on hover and keyboard focus) and what it did. */
-export function LastRun({ job }: { job: JobRun }) {
+export function LastRun({ job, summary = true }: { job: JobRun; summary?: boolean }) {
   const duration = lastRunDurationMs(job)
   const usage = job.lastRunUsage
   if (duration === null && !usage) return <span className="text-neutral-400">—</span>
   return (
     <span className="inline-flex flex-col gap-0.5">
       <LastRunCost duration={duration} usage={usage} />
-      {job.lastRunSummary && <span className="text-xs text-neutral-500">{job.lastRunSummary}</span>}
+      {summary && job.lastRunSummary && <span className="text-xs text-neutral-500">{job.lastRunSummary}</span>}
     </span>
   )
 }

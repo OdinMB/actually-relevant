@@ -9,7 +9,7 @@ import { claimJobRun, finishJobRun, jobsWithLiveLease, withJobLeaseHeartbeat } f
 import { isResumable, sweepInterruptedRuns } from './interruptedRuns.js'
 import { memorySnapshot } from '../lib/memoryMonitor.js'
 import { createRunScope, runInScope, settleRun, type RunScope, type RunUsage } from '../lib/runUsage.js'
-import { chainOf, nextClockTime } from './chainDefinitions.js'
+import { chainOf } from './chainDefinitions.js'
 import { clearHeldChains, resumeHeldChains } from './chains.js'
 
 const log = createLogger('scheduler')
@@ -285,16 +285,15 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<Ru
 
 /**
  * The run's scope for flex and spending (lib/runUsage.ts): the job's Flex switch, and its flex
- * cut-off and deadline as the next such time of day after the start (a chain's settings).
+ * cut-off that many hours after the start (a chain's setting, so a chain run several times a day
+ * gets it on every run).
  */
 async function openRunScope(jobName: string): Promise<RunScope> {
-  const settings = await prisma.jobRun.findUnique({ where: { jobName }, select: { flex: true, flexUntil: true, deadline: true } })
-  const now = new Date()
+  const settings = await prisma.jobRun.findUnique({ where: { jobName }, select: { flex: true, flexHours: true } })
   return createRunScope({
     jobName,
     flex: settings?.flex === true,
-    flexUntil: nextClockTime(settings?.flexUntil ?? null, now),
-    deadline: nextClockTime(settings?.deadline ?? null, now),
+    flexUntil: settings?.flexHours ? new Date(Date.now() + settings.flexHours * 60 * 60 * 1000) : null,
   })
 }
 

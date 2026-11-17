@@ -28,6 +28,7 @@ import type {
   StoryFilters,
   PaginatedResponse,
   LifetimeStoryStats,
+  RecentStoryWindow,
   StoryStatus,
   CrawlResult,
   TaskState,
@@ -246,7 +247,7 @@ export const authApi = {
 export const adminApi = {
   // Stories
   stories: {
-    stats: () => request<Record<string, number>>('/stories/stats'),
+    recentStats: () => request<RecentStoryWindow[]>('/stories/recent-stats'),
     lifetimeStats: () => request<LifetimeStoryStats>('/stories/lifetime-stats'),
     list: (filters: StoryFilters = {}) => request<PaginatedResponse<Story>>(`/stories${toQueryString(filters as Record<string, unknown>)}`),
     get: (id: string) => request<Story>(`/stories/${id}`),

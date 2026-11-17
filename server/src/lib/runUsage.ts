@@ -3,7 +3,7 @@
  * "Cost and flex"). The scheduler opens a run scope around each job's handler (`runInScope`); every
  * OpenAI request made inside it, however deep in the job's code, finds it through AsyncLocalStorage
  * (`services/openaiFetch.ts`), asks it whether to go at flex and records its tokens in it. A step of a
- * chain is a scope inside its chain's scope: it takes the chain's flex cut-off and deadline, and what
+ * chain is a scope inside its chain's scope: it takes the chain's flex cut-off, and what
  * it records counts for the chain too. Outside any scope (a person's click in the admin, a script)
  * nothing is recorded and every call goes at standard price.
  */
@@ -46,8 +46,6 @@ export interface RunScope {
   flex: boolean
   /** After this time calls go at standard price, flex or not (a chain's flex cut-off). */
   flexUntil: Date | null
-  /** A chain's "done by" time: a step that works through items starts no new one after it. */
-  deadline: Date | null
   usage: RunUsage
   /** What the run did, in a few words ("12 new stories", "nothing to do"); set by the job through `reportRunResult`. */
   summary: string | null
@@ -86,15 +84,14 @@ export function enclosingRunJob(): string | null {
 
 /**
  * A scope for a run of `jobName`, inside the current scope when there is one (a chain's step). The
- * cut-off and deadline not given are the enclosing scope's.
+ * cut-off, when not given, is the enclosing scope's.
  */
-export function createRunScope(options: { jobName: string; flex: boolean; flexUntil?: Date | null; deadline?: Date | null }): RunScope {
+export function createRunScope(options: { jobName: string; flex: boolean; flexUntil?: Date | null }): RunScope {
   const parent = currentRun() ?? null
   return {
     jobName: options.jobName,
     flex: options.flex,
     flexUntil: options.flexUntil ?? parent?.flexUntil ?? null,
-    deadline: options.deadline ?? parent?.deadline ?? null,
     usage: emptyUsage(),
     summary: null,
     parent,
@@ -122,12 +119,6 @@ export const countOf = (n: number, one: string, many = `${one}s`): string => `${
 /** Whether a model call made now in `scope` goes at flex. */
 export function flexNow(scope: RunScope, now = Date.now()): boolean {
   return scope.flex && (scope.flexUntil === null || now < scope.flexUntil.getTime())
-}
-
-/** Whether the current run's deadline has passed; false outside a run or without one. */
-export function runDeadlinePassed(now = Date.now()): boolean {
-  const deadline = currentRun()?.deadline
-  return deadline != null && now >= deadline.getTime()
 }
 
 export interface CallRecord {

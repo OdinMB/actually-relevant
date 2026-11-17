@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { axe } from 'vitest-axe'
 import type { JobRun } from '@shared/types'
 import { ToastProvider } from '../ui/Toast'
-import { ChainCard } from './ChainCard'
+import { ChainRows } from './ChainRows'
+import { JobTable } from './jobTable'
 import { makeJobRun } from '../../test/jobs'
 
 const mockApi = vi.hoisted(() => ({ update: vi.fn(), continueChain: vi.fn(), list: vi.fn(), run: vi.fn(), serverTime: vi.fn() }))
@@ -17,8 +18,7 @@ vi.mock('../../lib/admin-api', async importOriginal => {
 const chain = (overrides: Partial<JobRun> = {}) =>
   makeJobRun('daily_edition_chain', {
     cronExpression: '0 23 * * *',
-    flexUntil: '03:30',
-    deadline: '05:00',
+    flexHours: 4.5,
     steps: ['select_stories', 'research_stories', 'publish_stories'],
     ...overrides,
   })
@@ -32,13 +32,15 @@ function renderCard(c: JobRun = chain()) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <ToastProvider>
-        <ChainCard chain={c} steps={steps()} />
+        <JobTable>
+          <ChainRows chain={c} steps={steps()} onOpen={() => {}} />
+        </JobTable>
       </ToastProvider>
     </QueryClientProvider>,
   )
 }
 
-describe('ChainCard', () => {
+describe('ChainRows', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.update.mockResolvedValue({})
@@ -49,13 +51,36 @@ describe('ChainCard', () => {
   it('lists the steps in order, each with its Enabled and Review switches, and Flex only where a step makes AI calls', () => {
     renderCard()
     const checked = (pattern: RegExp) => screen.getAllByRole('switch', { name: pattern }).map(s => s.getAttribute('aria-checked'))
-    // The chain's own switch, then its three steps
+    // The chain's own switch in its row, then the three steps under it
     expect(checked(/^(Enable|Disable) /)).toEqual(['true', 'true', 'true', 'false'])
+    expect(screen.getByRole('switch', { name: 'Disable Daily Edition' })).toBeInTheDocument()
     expect(checked(/review after/)).toEqual(['false', 'true', 'false'])
     expect(screen.getByRole('switch', { name: 'Use flex processing for Select Stories' })).toBeInTheDocument()
     expect(screen.queryByRole('switch', { name: /flex processing for Publish Stories/ })).not.toBeInTheDocument()
-    expect(screen.getByLabelText(/Flex until/)).toHaveValue('03:30')
-    expect(screen.getByLabelText(/Done by/)).toHaveValue('05:00')
+    expect(screen.getByLabelText(/^Flex for/)).toHaveValue('4.5')
+  })
+
+  it("explains the Flex column's switch and the chain row's hours, counted from the start of each run", () => {
+    renderCard()
+    expect(screen.getByRole('button', { name: 'About Flex' })).toHaveAccessibleDescription(
+      /half price.*chain’s own row.*hours.*since the run started.*standard price/,
+    )
+    expect(screen.getByRole('button', { name: 'About Review' })).toBeInTheDocument()
+  })
+
+  it("heads its rows with the chain's own row: its name, schedule, switch, flex hours, status and actions, the steps under it", () => {
+    renderCard(chain({ lastStartedAt: '2026-11-16T23:00:00Z', lastCompletedAt: '2026-11-16T23:06:00Z', lastRunSummary: 'Published 4 stories' }))
+    const total = screen.getByRole('rowheader', { name: /^Daily Edition/ }).closest('tr')!
+    expect(total.parentElement!.firstElementChild).toBe(total)
+    expect(screen.getByRole('rowgroup', { name: /^Daily Edition/ })).toBe(total.parentElement)
+    expect(within(total).getAllByRole('button', { name: /Daily at 11:00 PM/ }).length).toBeGreaterThan(0)
+    expect(within(total).getByRole('switch', { name: 'Disable Daily Edition' })).toBeInTheDocument()
+    expect(within(total).getByLabelText(/^Flex for/)).toHaveValue('4.5')
+    expect(within(total).getByText('6 min')).toBeInTheDocument()
+    // What each step did is in its own row, not repeated here
+    expect(within(total).queryByText('Published 4 stories')).not.toBeInTheDocument()
+    expect(within(total).getByRole('button', { name: 'Run Daily Edition' })).toBeInTheDocument()
+    expect(within(total).getByRole('button', { name: 'Details of Daily Edition' })).toBeInTheDocument()
   })
 
   it("saves a step's Review and Enabled switches", async () => {
@@ -66,12 +91,33 @@ describe('ChainCard', () => {
     await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('publish_stories', { enabled: true }))
   })
 
-  it('saves a changed clock time, and an emptied one as none', async () => {
+  it('saves changed flex hours, an emptied field as flex the whole run', async () => {
     renderCard()
-    const deadline = screen.getByLabelText(/Done by/)
-    await userEvent.clear(deadline)
+    const flex = screen.getByLabelText(/^Flex for/)
+    await userEvent.clear(flex)
+    await userEvent.type(flex, '2,25')
     await userEvent.tab()
-    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { deadline: null }))
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { flexHours: 2.25 }))
+  })
+
+  it('saves an emptied flex field as no cut-off', async () => {
+    renderCard()
+    await userEvent.clear(screen.getByLabelText(/^Flex for/))
+    await userEvent.tab()
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { flexHours: null }))
+  })
+
+  it('saves nothing for hours that are not quarter hours from 0.25 to 48, puts the value back and says why', async () => {
+    renderCard()
+    const flex = screen.getByLabelText(/^Flex for/)
+    for (const value of ['0', '4.1', '49', 'five', '05:00']) {
+      await userEvent.clear(flex)
+      await userEvent.type(flex, value)
+      await userEvent.tab()
+    }
+    expect(mockApi.update).not.toHaveBeenCalled()
+    expect(flex).toHaveValue('4.5')
+    expect(await screen.findAllByText(/quarter hours/)).not.toHaveLength(0)
   })
 
   it('shows a chain waiting for review and continues it', async () => {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor, within, fireEvent } from '@testing-library/react'
 import type { SpendingOverview, SpendingRow, SpendScope } from '@shared/types'
 import { renderAdminRoutes } from '../../test/admin'
-import { SpendingCard } from './SpendingCard'
+import SpendingPage from './SpendingPage'
 
 const mockApi = vi.hoisted(() => ({
   spending: { overview: vi.fn(), setLevel: vi.fn() },
@@ -49,7 +49,7 @@ const overview = (over: Partial<SpendingOverview> = {}): SpendingOverview => ({
 })
 
 function renderCard() {
-  return renderAdminRoutes([{ path: '/admin', element: <SpendingCard /> }], { history: ['/admin'] })
+  return renderAdminRoutes([{ path: '/admin/spending', element: <SpendingPage /> }], { history: ['/admin/spending'] })
 }
 
 /** The table's row groups, each with its heading and the names of its rows. */
@@ -63,7 +63,7 @@ const groupsShown = () =>
         .map(cell => cell.textContent),
     )
 
-describe('SpendingCard', () => {
+describe('SpendingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.spending.overview.mockResolvedValue(overview())
