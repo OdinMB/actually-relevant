@@ -36,7 +36,7 @@ export const RUN_WITH_FACTS_SQL = Prisma.raw(`
   )`)
 
 /** A context fact's columns (`f`), each under its row field's name, so the rows read back as the view's do (`factFromRow`). */
-const FACT_COLUMNS_SQL = Prisma.raw(`
+export const FACT_COLUMNS_SQL = Prisma.raw(`
   f.id, f.ref, f.origin, f.reused_from_id AS "reusedFromId", f.source_url AS "sourceUrl", f.source_outlet AS "sourceOutlet",
   f.source_title AS "sourceTitle", f.source_date AS "sourceDate", f.source_kind AS "sourceKind",
   f.supporting_sentence AS "supportingSentence", f.passage, f.support_found AS "supportFound", f.statement, f.value,

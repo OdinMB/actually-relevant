@@ -12,6 +12,7 @@ import {
 import { podcastConfigProblem } from './podcastBootCheck.js'
 import { STORY_CONTEXT_JOB } from '../services/storyContextQueue.js'
 import { GENERATE_UPLIFTING_NEWSLETTER_JOB } from './generateNewsletter.js'
+import { PASS_NOT_WIRED, RESEARCH_PASS_JOB } from './researchPass.js'
 import { PUBLISH_NEWSLETTER_JOB, PUBLISH_UPLIFTING_NEWSLETTER_JOB, newsletterSendProblem, upliftingEditionProblem } from './publishNewsletter.js'
 import { config } from '../config.js'
 
@@ -32,6 +33,8 @@ export const ENABLE_CHECKS: Readonly<Record<string, () => string | null>> = {
   [GENERATE_UPLIFTING_PODCAST_JOB]: upliftingPodcastProblem,
   [PUBLISH_UPLIFTING_PODCAST_JOB]: upliftingPodcastProblem,
   [STORY_CONTEXT_JOB]: storyContextProblem,
+  // Until its lifecycle is wired, whatever the settings: nothing may switch on the placeholder
+  [RESEARCH_PASS_JOB]: () => PASS_NOT_WIRED,
 }
 
 /** Why the job may not be enabled now, or null when nothing stands in the way. */

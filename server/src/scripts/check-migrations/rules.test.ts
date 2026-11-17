@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { destructiveStatements, findProblems, isReviewedDestructive } from './rules.js'
+import { destructiveStatements, findProblems, isReviewedDestructive, UNMODELED_INDEXES } from './rules.js'
 
 describe('destructiveStatements', () => {
   it.each([
@@ -64,5 +64,16 @@ describe('findProblems', () => {
   it('does not let the marker excuse the embedding index drop', () => {
     const marked = { name: '5_marked', sql: `-- reviewed-destructive: reasons\n${dropIndex.sql}` }
     expect(findProblems([marked], new Set(['5_marked']))).toHaveLength(1)
+  })
+
+  it('flags a drop of every index Prisma cannot model, unless the migration creates it again', () => {
+    for (const index of UNMODELED_INDEXES) {
+      const drop = `DROP INDEX "${index.name}";`
+      expect(findProblems([{ name: '6_drop', sql: drop }], new Set()), index.name).toEqual([expect.stringContaining(index.name)])
+      const using = index.using ? ` USING ${index.using} ("x")` : '("x")'
+      const again = `${drop}\nCREATE UNIQUE INDEX "${index.name}" ON "${index.table}"${using};`
+      expect(findProblems([{ name: '7_again', sql: again }], new Set()), index.name).toEqual([])
+    }
+    expect(UNMODELED_INDEXES.map(i => i.name)).toContain('article_versions_one_current')
   })
 })

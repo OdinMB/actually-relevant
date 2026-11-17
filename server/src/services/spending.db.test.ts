@@ -57,7 +57,8 @@ describeDb('spending (PostgreSQL)', () => {
       const daily = overview.groups.find(g => g.chain === 'daily_edition_chain')
       expect(daily?.rows.map(r => r.scope)).toEqual(['select_stories', 'research_stories', 'build_story_context', 'publish_stories'])
       expect(overview.groups.map(g => g.chain)).toEqual(['intake_chain', 'daily_edition_chain', 'newsletter_chain', 'podcast_chain', null])
-      expect(overview.groups.at(-1)?.rows.map(r => r.scope)).toEqual(['editor_research', 'social_auto_post'])
+      // research_pass joins the daily edition once it is wired (.context/research-passes.md); until then it is listed with the rest
+      expect(overview.groups.at(-1)?.rows.map(r => r.scope)).toEqual(['editor_research', 'research_pass', 'social_auto_post'])
       // A job that uses models is listed though it spent nothing; one that does not, only once it has spent
       expect(rowOf(overview, 'preassess_stories')).toMatchObject({ thisMonth: { totalUsd: 0 }, previousUsd: [0, 0], levelUsd: null, warning: null })
       expect(rows(overview).some(r => r.scope === 'crawl_feeds' || r.scope === 'bluesky_update_metrics')).toBe(false)

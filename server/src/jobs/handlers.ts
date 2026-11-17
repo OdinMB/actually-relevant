@@ -5,6 +5,7 @@ import { runSelectStories } from './selectStories.js'
 import { runResearchStories } from './researchStories.js'
 import { runPublishStories } from './publishStories.js'
 import { owesPublishedStories, runBuildStoryContext } from './buildStoryContext.js'
+import { runResearchPassJob } from './researchPass.js'
 import { runBlueskyUpdateMetrics } from './blueskyUpdateMetrics.js'
 import { runGenerateNewsletter, runGenerateUpliftingNewsletter } from './generateNewsletter.js'
 import { runPublishNewsletter, runPublishUpliftingNewsletter } from './publishNewsletter.js'
@@ -31,6 +32,8 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   publish_stories: runPublishStories,
   // Run on its own, both of its parts in one run (SPLIT_STEPS below)
   build_story_context: () => runBuildStoryContext('all'),
+  // Seeded disabled, its enabling refused until its passes are wired (jobs/researchPass.ts)
+  research_pass: runResearchPassJob,
   social_auto_post: runSocialAutoPost,
   bluesky_update_metrics: runBlueskyUpdateMetrics,
   generate_newsletter: runGenerateNewsletter,
@@ -91,6 +94,7 @@ export const JOB_PIPELINE_ORDER: readonly string[] = [
   'research_stories',
   'publish_stories',
   'build_story_context',
+  'research_pass',
   'social_auto_post',
   'bluesky_update_metrics',
   'mastodon_update_metrics',

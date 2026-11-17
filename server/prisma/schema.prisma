@@ -119,6 +119,12 @@ model Story {
   contextRuns            StoryContextRun[]
   contextFacts           ContextFact[]
   contextBoxes           ContextBox[]
+  researchPasses         ResearchPass[]
+  evidenceSearches       EvidenceSearch[]
+  evidenceSources        EvidenceSource[]
+  poolFacts              PoolFact[]
+  articleVersions        ArticleVersion[]
+  passBoxes              PassBox[]
   createdAt              DateTime     @default(now()) @map("created_at")
   updatedAt              DateTime     @updatedAt @map("updated_at")
 
@@ -635,6 +641,269 @@ model ContextSearchCache {
 
   @@index([createdAt])
   @@map("context_search_cache")
+}
+
+// --- Research passes (.context/research-passes.md, ADR-0067) ---
+// One repeatable step over one evidence pool per story. Every row carries the pass that wrote it, its
+// provenance. Evidence (what was fetched) is kept word for word, never a page's text; every model
+// answer carries its model and prompt version. The research and context run tables stay read-only
+// history once the `research_pass` job is on.
+
+enum PassKind {
+  first
+  later
+}
+
+enum PassStatus {
+  running
+  completed
+  skipped
+  failed
+}
+
+enum VersionKind {
+  first
+  update
+  legacy
+}
+
+/// At most one `current` version per story: the partial unique index `article_versions_one_current`, raw SQL in the 20261117230407_research_passes migration, which Prisma cannot model, so a generated migration proposes dropping it: delete that line (check:migrations fails on it)
+enum VersionStatus {
+  current
+  superseded
+  reverted
+}
+
+enum FactDropReason {
+  contradicted
+  editor
+}
+
+/// One research pass on one story (`research_pass` job, or an editor's). A deleted story's passes keep a null story_id, so the month's spend still counts them. `cost_usd` holds the reservation while it runs, then the measured cost (ADR-0055)
+model ResearchPass {
+  id            String             @id @default(uuid())
+  storyId       String?            @map("story_id")
+  story         Story?             @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  /// 1… per story
+  number        Int
+  trigger       ResearchRunTrigger
+  kind          PassKind
+  status        PassStatus         @default(running)
+  /// written, updated, unchanged, stale, contradicted, fallback, update_failed, budget or technical; null while running
+  outcome       String?
+  /// Research's gate verdict kind on a first pass; null otherwise
+  verdict       String?
+  costUsd       Float              @map("cost_usd")
+  modelUsd      Float              @default(0) @map("model_usd")
+  tavilyCredits Int                @default(0) @map("tavily_credits")
+  /// Everything else the pass did: research's and context's run records, and a later pass's judgments
+  record        Json?
+  /// Why a pass failed, sanitized: never fetched text
+  error         String?
+  startedAt     DateTime           @default(now()) @map("started_at")
+  finishedAt    DateTime?          @map("finished_at")
+  /// The article version the pass produced, or null
+  versionId     String?            @unique @map("version_id")
+  version       ArticleVersion?    @relation("PassVersion", fields: [versionId], references: [id], onDelete: SetNull)
+  searches      EvidenceSearch[]
+  sourcesFound  EvidenceSource[]   @relation("SourceFirstPass")
+  sourcesOut    EvidenceSource[]   @relation("SourceDropPass")
+  factsFound    PoolFact[]         @relation("FactFirstPass")
+  factsChecked  PoolFact[]         @relation("FactCheckedPass")
+  factsDropped  PoolFact[]         @relation("FactDroppedPass")
+  versions      ArticleVersion[]   @relation("VersionPass")
+  boxes         PassBox[]
+
+  @@unique([storyId, number])
+  @@index([startedAt])
+  @@map("research_passes")
+}
+
+/// One web search a pass made, or a legacy run made (null pass_id): the skip list, so a normalized query and a `response` angle are searched once per story
+model EvidenceSearch {
+  id              String        @id @default(uuid())
+  storyId         String        @map("story_id")
+  story           Story         @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  passId          String?       @map("pass_id")
+  pass            ResearchPass? @relation(fields: [passId], references: [id], onDelete: SetNull)
+  /// coverage (what other outlets reported) or gap (a card slot's search)
+  kind            String
+  /// A gap search's slot; null for coverage
+  slot            String?
+  /// A `response` search's angle (action, elsewhere)
+  angle           String?
+  query           String
+  normalizedQuery String        @map("normalized_query")
+  windowStart     DateTime?     @map("window_start") @db.Date
+  windowEnd       DateTime?     @map("window_end") @db.Date
+  /// basic or advanced
+  depth           String?
+  credits         Int           @default(0)
+  results         Int           @default(0)
+  cached          Boolean       @default(false)
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([storyId])
+  @@map("evidence_searches")
+}
+
+/// One source per story (Evidence): the pages a pass read, our earlier stories it drew on, and the pages it read and left out (`drop_reason`), so no later pass reads them again. No page text is stored
+model EvidenceSource {
+  id             String        @id @default(uuid())
+  storyId        String        @map("story_id")
+  story          Story         @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  /// S0 (the original), S1… or E1… (our earlier stories), stable within the story; null for a source left out
+  ref            String?
+  /// original, cluster, neighbour, search or earlier
+  origin         String
+  /// The earlier story an `earlier` source stands for (no foreign key: that story may be deleted)
+  earlierStoryId String?       @map("earlier_story_id")
+  url            String
+  /// The story's key for the source: `normalizedUrl`, or `story:<id>` for an earlier story
+  normalizedUrl  String        @map("normalized_url")
+  outlet         String        @default("")
+  title          String        @default("")
+  publishedDate  DateTime?     @map("published_date") @db.Date
+  kind           String        @default("other")
+  country        String        @default("")
+  relation       String        @default("")
+  favicon        String?
+  usedRawContent Boolean       @default(false) @map("used_raw_content")
+  /// [{ name, role, quote }], each quote word for word
+  voices         Json          @default("[]")
+  firstPassId    String?       @map("first_pass_id")
+  firstPass      ResearchPass? @relation("SourceFirstPass", fields: [firstPassId], references: [id], onDelete: SetNull)
+  optOutChecked  Boolean       @default(false) @map("opt_out_checked")
+  /// Why a read source was left out (unusable, off-topic, opt-out …); null for a source in use
+  dropReason     String?       @map("drop_reason")
+  dropPassId     String?       @map("drop_pass_id")
+  dropPass       ResearchPass? @relation("SourceDropPass", fields: [dropPassId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  facts          PoolFact[]
+
+  @@unique([storyId, normalizedUrl])
+  @@unique([storyId, ref])
+  @@map("evidence_sources")
+}
+
+/// One fact per story in the pool (`fact_key`: its page, supporting sentence and statement, normalized), checked once. Evidence columns, the extraction's and structure's judgment, the check's judgment, and its status: a demotion is a status change with its pass and reason
+model PoolFact {
+  id                     String          @id @default(uuid())
+  storyId                String          @map("story_id")
+  story                  Story           @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourceId               String          @map("source_id")
+  source                 EvidenceSource  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// S2F3: its source's ref and a number within it, stable within the story, as citations and cards cite it
+  ref                    String
+  factKey                String          @map("fact_key")
+  /// A fact offered from a linked earlier story: that story's pool fact (no foreign key)
+  reusedFromId           String?         @map("reused_from_id")
+  /// Copied verbatim from the source
+  supportingSentence     String          @map("supporting_sentence")
+  /// The sentence with one sentence either side, at most 600 characters; null when not kept
+  passage                String?
+  supportFound           Boolean         @default(false) @map("support_found")
+  statement              String
+  measures               String          @default("")
+  value                  Float?
+  valueHigh              Float?          @map("value_high")
+  unit                   String          @default("")
+  approx                 String          @default("exact")
+  provisional            Boolean         @default(false)
+  counted                String          @default("")
+  place                  String          @default("")
+  asOf                   DateTime?       @map("as_of") @db.Date
+  asOfPrecision          String?         @map("as_of_precision")
+  credited               String          @default("")
+  creditedKind           String?         @map("credited_kind")
+  validity               ContextValidity @default(fixed)
+  /// The card slot a gap search's fact was extracted for
+  slot                   String?
+  extractModel           String          @map("extract_model")
+  extractPromptVersion   String          @map("extract_prompt_version")
+  /// The call that gave the structured fields; null until a pass structured the fact
+  structureModel         String?         @map("structure_model")
+  structurePromptVersion String?         @map("structure_prompt_version")
+  firstPassId            String?         @map("first_pass_id")
+  firstPass              ResearchPass?   @relation("FactFirstPass", fields: [firstPassId], references: [id], onDelete: SetNull)
+  verdict                ContextVerdict  @default(unjudged)
+  verdictProblem         String?         @map("verdict_problem")
+  checkModel             String?         @map("check_model")
+  checkPromptVersion     String?         @map("check_prompt_version")
+  checkedPassId          String?         @map("checked_pass_id")
+  checkedPass            ResearchPass?   @relation("FactCheckedPass", fields: [checkedPassId], references: [id], onDelete: SetNull)
+  status                 JudgmentStatus  @default(unreviewed)
+  droppedPassId          String?         @map("dropped_pass_id")
+  droppedPass            ResearchPass?   @relation("FactDroppedPass", fields: [droppedPassId], references: [id], onDelete: SetNull)
+  dropReason             FactDropReason? @map("drop_reason")
+  /// The refs of the newer facts that contradict a demoted one
+  contradictedBy         String[]        @default([]) @map("contradicted_by")
+  createdAt              DateTime        @default(now()) @map("created_at")
+
+  @@unique([storyId, factKey])
+  @@unique([storyId, ref])
+  @@index([sourceId])
+  @@map("pool_facts")
+}
+
+/// One researched version of the article. The story's own columns stay the live copy readers read; versions are the history and the source of Updates
+model ArticleVersion {
+  id               String        @id @default(uuid())
+  storyId          String        @map("story_id")
+  story            Story         @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  number           Int
+  passId           String?       @map("pass_id")
+  pass             ResearchPass? @relation("VersionPass", fields: [passId], references: [id], onDelete: SetNull)
+  producedBy       ResearchPass? @relation("PassVersion")
+  kind             VersionKind
+  status           VersionStatus @default(current)
+  title            String?
+  titleLabel       String?       @map("title_label")
+  summary          String?
+  marketingBlurb   String?       @map("marketing_blurb")
+  quote            String?
+  quoteAttribution String?       @map("quote_attribution")
+  relevanceReasons String?       @map("relevance_reasons")
+  antifactors      String?
+  emotionTag       EmotionTag?   @map("emotion_tag")
+  /// The reader projection (researchedStorySchema)
+  research         Json
+  /// [{ section, before: CitedText | null, after: CitedText | null }]
+  changes          Json          @default("[]")
+  /// The Update readers see, with its citations; null for a first or legacy version
+  note             Json?
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  @@unique([storyId, number])
+  @@map("article_versions")
+}
+
+/// The cards a pass wrote: context_boxes' columns, citing pool facts by their story-level ref. The newest pass that wrote boxes is the one served
+model PassBox {
+  id            String         @id @default(uuid())
+  storyId       String         @map("story_id")
+  story         Story          @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  passId        String         @map("pass_id")
+  pass          ResearchPass   @relation(fields: [passId], references: [id], onDelete: Cascade)
+  position      Int
+  type          ContextBoxType
+  heading       String
+  teaser        String         @default("")
+  /// [{ text, factIds }], each fact id a pool fact's ref
+  sentences     Json
+  visual        Json?
+  asOf          DateTime?      @map("as_of") @db.Date
+  asOfPrecision String?        @map("as_of_precision")
+  place         String?
+  placeByEditor Boolean        @default(false) @map("place_by_editor")
+  status        JudgmentStatus @default(unreviewed)
+  model         String?
+  promptVersion String?        @map("prompt_version")
+  writtenAt     DateTime       @default(now()) @map("written_at")
+
+  @@index([storyId])
+  @@index([passId])
+  @@map("pass_boxes")
 }
 
 /// One row per show and ISO week whose Saturday publish slot found no weekly episode to publish: the claim that makes the missed-week alert go out once

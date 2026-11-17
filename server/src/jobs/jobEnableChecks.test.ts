@@ -112,6 +112,17 @@ describe('jobEnableRefusal', () => {
     }
   })
 
+  it('refuses research passes until they are wired, with the Tavily key set too', () => {
+    const saved = process.env.TAVILY_API_KEY
+    try {
+      process.env.TAVILY_API_KEY = 'tvly-test'
+      expect(jobEnableRefusal('research_pass')).toMatch(/not wired/)
+    } finally {
+      if (saved === undefined) delete process.env.TAVILY_API_KEY
+      else process.env.TAVILY_API_KEY = saved
+    }
+  })
+
   it('lets an unexpected error through rather than reading it as a missing setting', () => {
     mockGuards.assertPodcastRunnable.mockImplementation(() => {
       throw new Error('boom')

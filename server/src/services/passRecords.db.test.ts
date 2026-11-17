@@ -1,0 +1,258 @@
+import { expect, it } from 'vitest'
+import prisma from '../lib/prisma.js'
+import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
+import { currentVersion, loadPool, newestPassBoxes, storePassResult, type PassWrite } from './passRecords.js'
+import type { ArticleVersionData, Pool, PoolFact, PoolSource } from './researchPool.js'
+import type { DraftBox } from './storyContextChecks.js'
+
+async function story() {
+  const issue = await createIssue()
+  const feed = await createFeed(issue.id)
+  return createStory({ feedId: feed.id, status: 'selected' })
+}
+
+const createPass = (storyId: string, number: number) =>
+  prisma.researchPass.create({ data: { storyId, number, trigger: 'pipeline', kind: number === 1 ? 'first' : 'later', costUsd: 0.4 }, select: { id: true } })
+
+const source = (ref: string, extra: Partial<PoolSource> = {}): PoolSource => ({
+  id: null,
+  ref,
+  origin: ref === 'S0' ? 'original' : 'search',
+  earlierStoryId: null,
+  url: `https://${ref.toLowerCase()}.example/story`,
+  outlet: `Outlet ${ref}`,
+  title: `Title ${ref}`,
+  date: '2026-11-12',
+  kind: 'news-report',
+  country: 'Kenya',
+  relation: 'same-development',
+  favicon: null,
+  usedRawContent: false,
+  voices: [{ name: 'A. Person', role: 'minister', quote: 'We will act.' }],
+  optOutChecked: true,
+  firstPassId: null,
+  ...extra,
+})
+
+const fact = (ref: string, extra: Partial<PoolFact> = {}): PoolFact => ({
+  id: null,
+  ref,
+  sourceRef: ref.replace(/F\d+$/, ''),
+  reusedFromId: null,
+  supportingSentence: `Sentence of ${ref}.`,
+  passage: null,
+  supportFound: true,
+  statement: `Statement of ${ref}.`,
+  measures: '',
+  slot: null,
+  structured: null,
+  extractedBy: { model: 'test-small', promptVersion: 'ext00001' },
+  verdict: 'unjudged',
+  verdictProblem: null,
+  checkedBy: null,
+  status: 'unreviewed',
+  firstPassId: null,
+  drop: null,
+  ...extra,
+})
+
+const structured = {
+  value: 212,
+  valueHigh: null,
+  unit: 'people',
+  approx: 'exact' as const,
+  provisional: false,
+  counted: 'deaths',
+  place: 'Kenya',
+  asOf: '2026-11-10',
+  credited: 'WHO',
+  creditedKind: 'official' as const,
+  validity: 'slow' as const,
+  by: { model: 'test-small', promptVersion: 'str00001' },
+}
+
+const version = (number: number, passId: string | null): ArticleVersionData => ({
+  id: null,
+  number,
+  kind: number === 1 ? 'first' : 'update',
+  status: 'current',
+  passId,
+  title: `Title v${number}`,
+  titleLabel: 'Label',
+  summary: 'Summary.',
+  marketingBlurb: 'Blurb.',
+  quote: null,
+  quoteAttribution: null,
+  relevanceReasons: '- Point.',
+  antifactors: '- Caveat.',
+  emotionTag: 'calm',
+  research: {
+    paragraphs: [{ sentences: [{ text: 'P.', citations: [{ sourceId: 'S1', sentence: 'Sentence of S1F1.' }] }] }],
+    whyThisMatters: [],
+    caveats: [],
+    quoteSourceId: null,
+    sources: [],
+  },
+  changes: [],
+  note: null,
+})
+
+const box: DraftBox = {
+  type: 'compared',
+  heading: 'Compared',
+  teaser: '',
+  place: 'P1',
+  sentences: [{ text: 'Deaths rose to 212.', factIds: ['S1F1'] }],
+  visual: null,
+}
+
+function write(storyId: string, passId: string, pool: Pool, extra: Partial<PassWrite> = {}): PassWrite {
+  return {
+    storyId,
+    passId,
+    pool,
+    changed: [],
+    version: null,
+    boxes: [],
+    boxFacts: new Map(),
+    writer: null,
+    pass: { status: 'completed', outcome: 'written', verdict: 'keep', modelUsd: 0.1, credits: 4, costUsd: 0.132, record: { steps: 1 }, error: null },
+    now: new Date('2026-11-17T02:00:00Z'),
+    ...extra,
+  }
+}
+
+const strip = (pool: Pool) => ({
+  sources: pool.sources.map(({ id: _id, ...s }) => s),
+  facts: pool.facts.map(({ id: _id, ...f }) => f),
+  searches: pool.searches,
+  dropped: pool.dropped,
+})
+
+describeDb('passRecords', () => {
+  useTestDatabase()
+
+  it('round-trips a pass: its sources, facts with their judgments, searches, dropped pages, version and cards', async () => {
+    const s = await story()
+    const pass = await createPass(s.id, 1)
+    const pool: Pool = {
+      sources: [source('S0', { firstPassId: pass.id }), source('S1', { firstPassId: pass.id, voices: [] })],
+      facts: [
+        fact('S0F1', { firstPassId: pass.id }),
+        fact('S1F1', {
+          firstPassId: pass.id,
+          passage: 'Before. Sentence of S1F1. After.',
+          slot: 'compared',
+          structured,
+          verdict: 'supported',
+          checkedBy: { model: 'test-small', promptVersion: 'chk00001', passId: pass.id },
+        }),
+        fact('S1F2', {
+          firstPassId: pass.id,
+          verdict: 'rejected',
+          verdictProblem: 'Not in the sentence.',
+          checkedBy: { model: 'm', promptVersion: 'v', passId: pass.id },
+        }),
+      ],
+      searches: [
+        {
+          kind: 'coverage',
+          slot: null,
+          angle: null,
+          query: 'Kenya floods',
+          normalizedQuery: 'kenya floods',
+          windowStart: '2026-11-01',
+          windowEnd: '2026-11-17',
+          depth: 'advanced',
+          credits: 2,
+          results: 5,
+          cached: false,
+          passId: pass.id,
+        },
+        {
+          kind: 'gap',
+          slot: 'response',
+          angle: 'action',
+          query: 'q',
+          normalizedQuery: 'q',
+          windowStart: null,
+          windowEnd: null,
+          depth: 'basic',
+          credits: 1,
+          results: 3,
+          cached: true,
+          passId: pass.id,
+        },
+      ],
+      dropped: [{ url: 'https://paywall.example/x', reason: 'unusable', passId: pass.id }],
+    }
+
+    expect(await prisma.$transaction(tx => storePassResult(tx, write(s.id, pass.id, pool, { version: version(1, pass.id), boxes: [box] })))).toBe(true)
+
+    expect(strip(await loadPool(prisma, s.id))).toEqual(strip(pool))
+    expect(await currentVersion(prisma, s.id)).toMatchObject({ ...version(1, pass.id), id: expect.any(String) })
+    const row = await prisma.researchPass.findUniqueOrThrow({ where: { id: pass.id } })
+    expect(row).toMatchObject({ status: 'completed', outcome: 'written', verdict: 'keep', costUsd: 0.132, tavilyCredits: 4, versionId: expect.any(String) })
+    const boxes = await newestPassBoxes(prisma, s.id)
+    expect(boxes.map(b => [b.type, b.place, b.passId])).toEqual([['compared', 'P1', pass.id]])
+  })
+
+  it('stores nothing for a pass a restart already marked as cut off', async () => {
+    const s = await story()
+    const pass = await createPass(s.id, 1)
+    await prisma.researchPass.update({ where: { id: pass.id }, data: { status: 'failed' } })
+    expect(await prisma.$transaction(tx => storePassResult(tx, write(s.id, pass.id, { ...emptyWith(source('S0')) })))).toBe(false)
+    expect(await prisma.evidenceSource.count()).toBe(0)
+  })
+
+  it('keeps a fact once by its key, and records a later pass’s verdict, structure and demotion on the stored row', async () => {
+    const s = await story()
+    const first = await createPass(s.id, 1)
+    const pool: Pool = { ...emptyWith(source('S0'), source('S1')), facts: [fact('S1F1'), fact('S1F2')] }
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, first.id, pool)))
+
+    const second = await createPass(s.id, 2)
+    const loaded = await loadPool(prisma, s.id)
+    const [f1, f2] = loaded.facts
+    const after: Pool = {
+      ...loaded,
+      facts: [
+        { ...f1!, verdict: 'supported', checkedBy: { model: 'm', promptVersion: 'v', passId: second.id }, structured },
+        { ...f2!, verdict: 'supported', status: 'demoted', drop: { passId: second.id, reason: 'contradicted', contradictedBy: ['S1F3'] } },
+        // The same fact found again under a new ref: the pool keeps the first
+        fact('S1F9', { supportingSentence: f1!.supportingSentence, statement: f1!.statement }),
+        fact('S1F3', { firstPassId: second.id }),
+      ],
+    }
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, second.id, after, { changed: ['S1F1', 'S1F2'] })))
+
+    const facts = (await loadPool(prisma, s.id)).facts
+    expect(facts.map(f => f.ref)).toEqual(['S1F1', 'S1F2', 'S1F3'])
+    expect(facts[0]).toMatchObject({ verdict: 'supported', checkedBy: { passId: second.id }, structured: { value: 212, by: structured.by } })
+    expect(facts[1]).toMatchObject({ status: 'demoted', drop: { passId: second.id, reason: 'contradicted', contradictedBy: ['S1F3'] } })
+  })
+
+  it("supersedes the story's current version with a pass's new one", async () => {
+    const s = await story()
+    const first = await createPass(s.id, 1)
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, first.id, emptyWith(source('S0')), { version: version(1, first.id) })))
+    const second = await createPass(s.id, 2)
+    const pool = await loadPool(prisma, s.id)
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, second.id, pool, { version: version(2, second.id) })))
+
+    expect(await currentVersion(prisma, s.id)).toMatchObject({ number: 2, passId: second.id })
+    const statuses = await prisma.articleVersion.findMany({ where: { storyId: s.id }, orderBy: { number: 'asc' }, select: { status: true } })
+    expect(statuses.map(v => v.status)).toEqual(['superseded', 'current'])
+  })
+
+  it('never holds two current versions of a story', async () => {
+    const s = await story()
+    const data = { storyId: s.id, kind: 'legacy' as const, status: 'current' as const, research: {} }
+    await prisma.articleVersion.create({ data: { ...data, number: 1 } })
+    await expect(prisma.articleVersion.create({ data: { ...data, number: 2 } })).rejects.toThrow()
+  })
+})
+
+function emptyWith(...sources: PoolSource[]): Pool {
+  return { sources, facts: [], searches: [], dropped: [] }
+}

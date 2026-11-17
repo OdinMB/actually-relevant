@@ -61,6 +61,7 @@ export type JobName =
   | 'research_stories'
   | 'publish_stories'
   | 'build_story_context'
+  | 'research_pass'
   | 'social_auto_post'
   | 'bluesky_update_metrics'
   | 'mastodon_update_metrics'
