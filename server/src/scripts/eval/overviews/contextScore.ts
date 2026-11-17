@@ -5,9 +5,11 @@
  * strong judge found unsupported, the notes beside the text that add to them, and the cost; then
  * each measure per run, its mean over the runs with the spread, held against the design's first
  * bars (shown as met or not; the owner reads the gate off them). Also the structured-field labels'
- * score and the fixed halves. Pure.
+ * score, the fixed halves and the replay's hindsight (search results undated or dated after the
+ * story). Pure.
  */
 import { createHash } from 'node:crypto'
+import { publishedDay } from '../../../services/researchChecks.js'
 import type { FactVerdict } from '../../../services/storyContextChecks.js'
 import { citedRefs, type StoryContextResult } from '../../../services/storyContextPipeline.js'
 import { spread, type Spread } from '../repeats.js'
@@ -306,5 +308,38 @@ export function scoreFields(labels: FieldLabel[]): FieldScore {
     spread: runs.length > 1 ? spread(perRun) : null,
     met: share === null ? null : share >= FIELDS_BAR && inventedPassed === 0,
     listed: labels.filter(l => !fullyRight(l) || l.invented).slice(0, MAX_LISTED),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Replay hindsight: what the search's end date lets through
+// ---------------------------------------------------------------------------
+
+/** One search the replay made: the story's day it ended on, and each result's date as Tavily gave it. */
+export interface SearchLogEntry {
+  slug: string
+  run: number
+  /** `YYYY-MM-DD`. */
+  endDate: string
+  dates: (string | null)[]
+}
+
+export interface ResultDates {
+  searches: number
+  results: number
+  /** Results with no date Tavily could give: the end date filters nothing on them. */
+  undated: number
+  /** Results dated after the story's day: pages the end date let through. */
+  afterStory: number
+}
+
+/** How much the end date filters: `general` results are often undated, and pages updated later still leak. */
+export function resultDates(log: SearchLogEntry[]): ResultDates {
+  const all = log.flatMap(s => s.dates.map(d => ({ day: publishedDay(d), end: s.endDate })))
+  return {
+    searches: log.length,
+    results: all.length,
+    undated: all.filter(r => r.day === null).length,
+    afterStory: all.filter(r => r.day !== null && r.day > r.end).length,
   }
 }

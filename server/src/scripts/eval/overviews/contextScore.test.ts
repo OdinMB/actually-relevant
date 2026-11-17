@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createHash } from 'node:crypto'
 import { contextFact, contextResult, gapKey, sentenceBox } from '../../../test/contextFixtures.js'
-import { halfOf, inHalf, scoreContext, scoreFields, storyScore, wastedSearches, type FieldLabel, type StoryRun } from './contextScore.js'
+import { halfOf, inHalf, resultDates, scoreContext, scoreFields, storyScore, wastedSearches, type FieldLabel, type StoryRun } from './contextScore.js'
 
 const search = (slot: 'compared' | 'response' | 'key_term', kept: string[]) => ({
   slot,
@@ -167,6 +167,18 @@ describe('scoreContext', () => {
     expect(score.listed.unsupported).toEqual([{ slug: 'story-a', run: 1, label: 'Box 1 sentence 1', text: 'Wrong.', problem: 'not stated' }])
     expect(score.listed.unmet.map(u => u.need)).toEqual(['record', 'response'])
     expect(score.listed.wasted).toEqual([{ slug: 'story-a', run: 1, slot: 'compared', query: 'q compared' }])
+  })
+})
+
+describe('resultDates', () => {
+  it('counts the results without a date and those dated after the story, by its own end date', () => {
+    expect(
+      resultDates([
+        { slug: 'a', run: 1, endDate: '2026-11-14', dates: ['2026-11-14T09:00:00Z', 'Fri, 20 Nov 2026 10:00:00 GMT', null, 'not a date'] },
+        { slug: 'b', run: 1, endDate: '2026-11-21', dates: ['2026-11-20'] },
+      ]),
+    ).toEqual({ searches: 2, results: 5, undated: 2, afterStory: 1 })
+    expect(resultDates([])).toEqual({ searches: 0, results: 0, undated: 0, afterStory: 0 })
   })
 })
 
