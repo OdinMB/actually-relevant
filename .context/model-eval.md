@@ -195,7 +195,7 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context
   | Measure | Bar |
   |---|---|
   | Must needs the story doesn't state, met by the kept cards | at least 60% |
-  | Wasted searches (none of whose sources gave a supported fact a kept card cites) | at most 1 a story |
+  | Wasted searches (none of whose sources gave a supported fact a kept card cites), the `response` searches apart | at most 1 a story |
   | A response card, on stories whose key has a findable response need not in the story | at least 70% |
   | Box items the judge finds unsupported (each listed for a read) | none |
   | Notes `model` places beside the text that add to it (`random` beside it for comparison) | at least 85%; below it, launch with `STORY_CONTEXT_PLACEMENT=section` |
@@ -203,7 +203,7 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context
   | Figure facts with every structured field right; invented numbers the fact check passed | at least 95%; none |
   | Planted errors on the step's facts (`--facts context`, below) | catch at least 90%, false rejection at most 5% |
 
-  Searches for a slot the key marks not needed are counted per run. The gate is the judged half, means over 3 runs (ADR-0066); the owner reads it and switches the step on.
+  Searches for a slot the key marks not needed are counted per run. The `response` searches are never counted as wasted: the step makes them on every story (D10, ADR-0065), so they are no choice the step could save. The report gives them a column of their own per run, the share that found a fact a kept card cites (the same rule as a wasted search, turned around). The gate is the judged half, means over 3 runs (ADR-0066); the owner reads it and switches the step on.
 - **Replay hindsight:** the end date filters only dated results, and a page updated after the story can keep its first date. Each search's result dates are logged, and the report counts the undated ones and those dated after the story's day: the share by which the replay can flatter production. The smoke run (`--limit 3`) is where to read them first.
 - **Cost:** about $1–2 to draft the keys; a full gate run (3 repeats on the judged half, with the fact check on its facts) about $3–6, mostly the strong judge; Tavily is paid once per query and then cached. `--budget` is a cap on the folder, not a spend.
 

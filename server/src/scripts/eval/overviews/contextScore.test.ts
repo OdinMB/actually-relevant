@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { createHash } from 'node:crypto'
 import { contextFact, contextResult, gapKey, sentenceBox } from '../../../test/contextFixtures.js'
-import { halfOf, inHalf, resultDates, scoreContext, scoreFields, storyScore, wastedSearches, type FieldLabel, type StoryRun } from './contextScore.js'
+import {
+  halfOf,
+  inHalf,
+  responseSearches,
+  resultDates,
+  scoreContext,
+  scoreFields,
+  storyScore,
+  wastedSearches,
+  type FieldLabel,
+  type StoryRun,
+} from './contextScore.js'
 
 const search = (slot: 'compared' | 'response' | 'key_term', kept: string[]) => ({
   slot,
@@ -29,20 +40,27 @@ describe('halfOf', () => {
   })
 })
 
-describe('wastedSearches', () => {
-  it('counts a search none of whose sources gave a supported fact a kept box cites', () => {
+describe('wastedSearches and responseSearches', () => {
+  const at = (ref: string, url: string, extra: Parameters<typeof contextFact>[1] = {}) =>
+    contextFact(ref, { origin: 'search', source: { ...contextFact(ref).source, url }, ...extra })
+
+  it('counts a search none of whose sources gave a supported fact a kept box cites, never a response search, which the step always makes', () => {
     const result = contextResult(
       {
-        facts: [
-          contextFact('S3F1', { origin: 'search', source: { ...contextFact('S3F1').source, url: 'https://a.org/1' } }),
-          contextFact('S4F1', { origin: 'search', source: { ...contextFact('S4F1').source, url: 'https://b.org/1' }, verdict: 'rejected' }),
-          contextFact('S5F1', { origin: 'search', source: { ...contextFact('S5F1').source, url: 'https://c.org/1' } }),
-        ],
+        facts: [at('S3F1', 'https://a.org/1'), at('S4F1', 'https://b.org/1', { verdict: 'rejected' }), at('S5F1', 'https://c.org/1')],
         boxes: [sentenceBox('compared', ['S3F1']), sentenceBox('response', ['S4F1'])],
       },
       { searches: [search('compared', ['https://a.org/1']), search('response', ['https://b.org/1']), search('key_term', ['https://c.org/1'])] },
     )
-    expect(wastedSearches(result).map(s => s.slot)).toEqual(['response', 'key_term'])
+    expect(wastedSearches(result).map(s => s.slot)).toEqual(['key_term'])
+  })
+
+  it('counts the response searches apart, and those that found a fact a kept box cites', () => {
+    const result = contextResult(
+      { facts: [at('S3F1', 'https://a.org/1'), at('S4F1', 'https://b.org/1')], boxes: [sentenceBox('response', ['S3F1'])] },
+      { searches: [search('response', ['https://a.org/1']), search('response', ['https://b.org/1']), search('compared', [])] },
+    )
+    expect(responseSearches(result)).toEqual({ total: 2, hit: 1 })
   })
 })
 
@@ -80,7 +98,7 @@ describe('storyScore', () => {
     }
     const s = storyScore(run)
     expect(s.needs).toEqual({ must: 2, met: 1, unmet: ['response'] })
-    expect(s.searches).toEqual({ total: 2, wasted: 2, notNeeded: 0 })
+    expect(s.searches).toEqual({ total: 2, wasted: 1, notNeeded: 0, response: { total: 1, hit: 0 } })
     expect(s.response).toEqual({ findable: true, card: true })
     expect(s.boxes).toEqual({ judged: 2, unsupported: 1, unjudged: 0 })
     expect(s.placement.model).toEqual({ notes: 1, adds: 1, unjudged: 0 })
@@ -152,6 +170,14 @@ describe('scoreContext', () => {
     expect(bar('placement').value).toBeCloseTo(0.5)
     expect(bar('cost').value).toBeCloseTo((0.02 + 0.04) / 2)
     expect(bar('cost').met).toBe(true)
+  })
+
+  it("adds up each run's response searches and their hit rate, outside the wasted bar", () => {
+    const r = run(1, true, 1, 0.02)
+    r.result.record.searches.push(search('response', []), search('response', []))
+    const [only] = scoreContext([r]).runs
+    expect(only!.searches).toMatchObject({ total: 3, wasted: 1, perStory: 1, response: { total: 2, hit: 0, share: 0 } })
+    expect(scoreContext([run(1, true, 0, 0.02)]).runs[0]!.searches.response).toEqual({ total: 0, hit: 0, share: null })
   })
 
   it('gives no verdict on a measure with nothing to measure', () => {

@@ -1,7 +1,8 @@
 /**
  * The `context` step's scores (`.context/model-eval.md`, "Overview evals"; plan
  * `.plans/2026-11-16_story-context.md`, "Eval gate before switching on"): per story and run, what
- * the kept output meets of the gap key, the wasted searches, the response card, the box items the
+ * the kept output meets of the gap key, the wasted searches (the response searches apart, with their
+ * own hit rate), the response card, the box items the
  * strong judge found unsupported, the notes beside the text that add to them, and the cost; then
  * each measure per run, its mean over the runs with the spread, held against the design's first
  * bars (shown as met or not; the owner reads the gate off them). Also the structured-field labels'
@@ -92,11 +93,29 @@ export const openMustNeeds = (key: GapKey) => key.needs.filter(n => n.importance
 export const findableResponse = (key: GapKey): boolean =>
   key.needs.some(n => n.slot === 'response' && n.importance === 'must' && n.inStory === null && n.example !== null)
 
-/** The searches none of whose kept sources gave a supported fact that a kept box cites. */
-export function wastedSearches(result: StoryContextResult): StoryContextResult['record']['searches'] {
+type Search = StoryContextResult['record']['searches'][number]
+
+/** Whether a search found something: one of its kept sources gave a supported fact that a kept box cites. */
+function hitOf(result: StoryContextResult): (s: Search) => boolean {
   const cited = new Set(result.boxes.flatMap(boxRefs))
   const useful = new Set(result.facts.filter(f => f.origin === 'search' && f.verdict === 'supported' && cited.has(f.ref)).map(f => f.source.url))
-  return result.record.searches.filter(s => !s.kept.some(url => useful.has(url)))
+  return s => s.kept.some(url => useful.has(url))
+}
+
+/**
+ * The searches that found nothing a kept box cites, the `response` searches apart: the step always
+ * makes those (ADR-0065), so they are no choice to waste. `responseSearches` counts them instead.
+ */
+export function wastedSearches(result: StoryContextResult): Search[] {
+  const hit = hitOf(result)
+  return result.record.searches.filter(s => s.slot !== 'response' && !hit(s))
+}
+
+/** The `response` searches, and those that found a fact a kept box cites. */
+export function responseSearches(result: StoryContextResult): { total: number; hit: number } {
+  const hit = hitOf(result)
+  const response = result.record.searches.filter(s => s.slot === 'response')
+  return { total: response.length, hit: response.filter(hit).length }
 }
 
 const counts = <T>(list: T[] | null, isYes: (t: T) => boolean | null) => ({
@@ -107,7 +126,7 @@ const counts = <T>(list: T[] | null, isYes: (t: T) => boolean | null) => ({
 
 export interface StoryScore {
   needs: { must: number; met: number; unmet: string[] }
-  searches: { total: number; wasted: number; notNeeded: number }
+  searches: { total: number; wasted: number; notNeeded: number; response: { total: number; hit: number } }
   response: { findable: boolean; card: boolean }
   boxes: { judged: number; unsupported: number; unjudged: number }
   placement: Record<JudgedMode, { notes: number; adds: number; unjudged: number }>
@@ -133,6 +152,7 @@ export function storyScore(r: StoryRun): StoryScore {
       total: r.result.record.searches.length,
       wasted: wastedSearches(r.result).length,
       notNeeded: r.result.record.searches.filter(s => notNeeded.has(s.slot)).length,
+      response: responseSearches(r.result),
     },
     response: { findable: findableResponse(r.key), card: r.result.boxes.some(b => b.type === 'response') },
     boxes: { judged: items.yes + items.no, unsupported: items.no, unjudged: items.none },
@@ -151,7 +171,8 @@ export interface RunScore {
   /** Runs that ended as a technical failure: they count, with nothing kept. */
   failed: number
   needs: { must: number; met: number; recall: number | null }
-  searches: { total: number; wasted: number; perStory: number | null; notNeeded: number }
+  /** `wasted` leaves the `response` searches out; `response` is how many of them found a fact a kept box cites. */
+  searches: { total: number; wasted: number; perStory: number | null; notNeeded: number; response: { total: number; hit: number; share: number | null } }
   response: { findable: number; withCard: number; share: number | null }
   /** `unsupported` is null when the box judge ran on none of the run's stories. */
   boxes: { judged: number; unsupported: number | null; unjudged: number }
@@ -168,6 +189,8 @@ function runScore(run: number, stories: StoryRun[]): RunScore {
   const must = sum(s.map(x => x.needs.must))
   const met = sum(s.map(x => x.needs.met))
   const wasted = sum(s.map(x => x.searches.wasted))
+  const responseTotal = sum(s.map(x => x.searches.response.total))
+  const responseHit = sum(s.map(x => x.searches.response.hit))
   const place = (mode: JudgedMode) => {
     const notes = sum(s.map(x => x.placement[mode].notes - x.placement[mode].unjudged))
     const adds = sum(s.map(x => x.placement[mode].adds))
@@ -178,7 +201,13 @@ function runScore(run: number, stories: StoryRun[]): RunScore {
     stories: stories.length,
     failed: stories.filter(r => r.result.status === 'failed').length,
     needs: { must, met, recall: ratio(met, must) },
-    searches: { total: sum(s.map(x => x.searches.total)), wasted, perStory: ratio(wasted, stories.length), notNeeded: sum(s.map(x => x.searches.notNeeded)) },
+    searches: {
+      total: sum(s.map(x => x.searches.total)),
+      wasted,
+      perStory: ratio(wasted, stories.length),
+      notNeeded: sum(s.map(x => x.searches.notNeeded)),
+      response: { total: responseTotal, hit: responseHit, share: ratio(responseHit, responseTotal) },
+    },
     response: {
       findable: findable.length,
       withCard: findable.filter(x => x.response.card).length,

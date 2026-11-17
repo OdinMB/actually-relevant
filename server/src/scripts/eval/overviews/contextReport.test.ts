@@ -144,7 +144,7 @@ describe('contextLines', () => {
     expect(md).toContain('- Not run: late#2: budget')
     expect(md).toContain('**Strong judge:** 8 calls (8 uncached) ≈ $0.4000.')
     expect(md).toContain("| Must needs the story doesn't state, met by the kept cards | at least 60.0% | 75.0% | 50.0% to 100.0%, SD 35.4% | met |")
-    expect(md).toContain('| Wasted searches per story | at most 1 | 1.00 | 1.00 to 1.00, SD 0.00 | met |')
+    expect(md).toContain('| Wasted searches per story, the response searches apart | at most 1 | 1.00 | 1.00 to 1.00, SD 0.00 | met |')
     expect(md).toContain('| Box items the strong judge finds their cited facts do not support | none | 0.5 | 0.0 to 1.0, SD 0.7 | not met |')
     expect(md).toContain('| Notes `model` places beside a paragraph or point that add to it | at least 85.0% | 100.0% |')
     expect(md).toContain('| Cost per story (model calls at the flex price, plus search credits) | at most $0.0500 | $0.0260 |')
@@ -153,7 +153,8 @@ describe('contextLines', () => {
 
   it('shows each run, the fields, the hindsight and the items for a read', () => {
     const md = contextLines(report()).join('\n')
-    expect(md).toContain('| 2 | 1 | 0 | 1 of 2 | 2 (1; 1) | 1 of 1 | 1 (1; 0) | 100.0% of 1 / 0.0% of 1 | $0.0260 |')
+    expect(md).toContain('| Run | Stories | Failed | Must needs met | Searches (wasted; not needed) | Response searches that found a cited fact |')
+    expect(md).toContain('| 2 | 1 | 0 | 1 of 2 | 2 (1; 1) | 1 of 1 (100.0%) | 1 of 1 | 1 (1; 0) | 100.0% of 1 / 0.0% of 1 | $0.0260 |')
     expect(md).toContain('Wrong by field: value 0, unit 0, counted 0, place 1, asOf 0, credited 0.')
     expect(md).toContain('4 results, 1 of them undated (25.0%) and 1 dated after the story')
     expect(md).toContain('#### Box items found unsupported (1)')
@@ -177,6 +178,6 @@ describe('contextLines', () => {
     expect(md).toContain('the first 1: a smoke run, not evidence), each run 1 time ')
     expect(md).toContain('**The strong judge did not run:** 4 uncached calls and OPENAI_API_KEY is missing')
     expect(md).toContain('| none | n/a | n/a | no verdicts |')
-    expect(md).toContain('| Wasted searches per story | at most 1 | 1.00 | one run | met |')
+    expect(md).toContain('| Wasted searches per story, the response searches apart | at most 1 | 1.00 | one run | met |')
   })
 })
