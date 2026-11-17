@@ -59,6 +59,7 @@ export function contextResult(extra: Partial<StoryContextResult> = {}, record: P
     credits: 0,
     modelUsd: 0,
     error: null,
+    transient: false,
     ...extra,
     record: {
       slots: [],

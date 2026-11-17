@@ -53,8 +53,11 @@ describe('jobNotes', () => {
     ['publish_stories', () => override(config.research.pipeline, { maxWaitMinutes: 47 }), ['47']],
     [
       'build_story_context',
-      () => (override(config.storyContext, { lookbackDays: 4, perRun: 27, maxSearches: 5 }), override(config.jobs.failureShare, { share: 0.3, minItems: 31 })),
-      ['4', '27', '5', '30%', '31'],
+      () => (
+        override(config.storyContext, { lookbackDays: 4, perRun: 27, maxSearches: 5, failedStoriesMin: 7 }),
+        override(config.jobs.failureShare, { share: 0.3, minItems: 31 })
+      ),
+      ['4', '27', '5', '30%', '31', '7'],
     ],
     ['preassess_stories', () => override(config.preassess, { batchSize: 17 }), ['17']],
     ['assess_stories', () => (override(config.assess, { fullAssessmentThreshold: 9 }), override(config.dedup, { timeWindowDays: 23 })), ['9', '23']],

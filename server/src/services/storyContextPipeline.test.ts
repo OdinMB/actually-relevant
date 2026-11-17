@@ -372,6 +372,24 @@ describe('buildStoryContext', () => {
     expect(out.modelUsd).toBeCloseTo(0.002, 10)
   })
 
+  it('marks a technical failure transient as its deps judge it: a search error by `transient`, a required call by its result', async () => {
+    const { deps } = fakeDeps({ gap: responseGap(), searchError: new TavilyError('Tavily search failed: HTTP 502', 502) })
+    expect((await buildStoryContext(input(), deps)).transient).toBe(false)
+    expect((await buildStoryContext(input(), { ...deps, transient: err => err instanceof TavilyError && err.status === 502 })).transient).toBe(true)
+
+    const failing = (transient: boolean | undefined): ContextDeps => ({
+      ...fakeDeps().deps,
+      call: async () => ({ parsed: null, outcome: 'error', usage: ZERO_USAGE, costUsd: 0, model: 'm', ...(transient === undefined ? {} : { transient }) }),
+    })
+    expect(await buildStoryContext(input(), failing(true))).toMatchObject({ status: 'failed', error: 'structure: error', transient: true })
+    expect((await buildStoryContext(input(), failing(false))).transient).toBe(false)
+    expect((await buildStoryContext(input(), failing(undefined))).transient).toBe(false)
+  })
+
+  it('is never transient when it completes or skips', async () => {
+    expect((await buildStoryContext(input(), fakeDeps().deps)).transient).toBe(false)
+  })
+
   it('keeps the credits and records of the searches that completed when another fails', async () => {
     const { deps } = fakeDeps({ gap: responseGap('first', 'fails', [search('compared', 'third')]) })
     const fake = deps.search

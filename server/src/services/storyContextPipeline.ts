@@ -68,6 +68,8 @@ export interface ContextCallResult<T> {
   usage: LlmTokenUsage
   costUsd: number
   model: string
+  /** An `error` that may pass on a later attempt (a timeout, a lost connection, a rate limit, a server error), as the caller judged it. */
+  transient?: boolean
 }
 
 export type ContextCall = <T>(step: ContextStep, schema: z.ZodType<T>, prompt: string) => Promise<ContextCallResult<T>>
@@ -77,6 +79,8 @@ export interface ContextDeps {
   search(request: ContextSearchRequest): Promise<ContextSearchAnswer>
   /** Publishers' AI opt-outs, checked on every search result, cached ones included. Unset: not checked (recorded). */
   sourcePolicy?: SourcePolicy
+  /** Whether an error a dep threw (a search's) may pass on a later attempt. Unset: none may. */
+  transient?(err: unknown): boolean
 }
 
 /** One of research's sources with its facts, as the step loads it (`loadContextInput`). */
@@ -166,6 +170,8 @@ export interface StoryContextResult {
   record: ContextRunRecord
   /** Why the run failed, safe to store: our own step messages and Tavily's sanitized ones only. */
   error: string | null
+  /** A technical failure that may pass on a later attempt (`ContextDeps.transient`, `ContextCallResult.transient`); false otherwise. */
+  transient: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +242,14 @@ export const CONTEXT_PROMPT_VERSIONS: Record<ContextStep, string> = {
 // ---------------------------------------------------------------------------
 
 /** Ends a story's run as a technical failure; its message is safe to store. */
-class Stop extends Error {}
+class Stop extends Error {
+  constructor(
+    message: string,
+    readonly transient = false,
+  ) {
+    super(message)
+  }
+}
 
 /** A failure safe to store: our own step messages and Tavily's sanitized ones, else the error's name. */
 function errorText(err: unknown): string {
@@ -247,8 +260,8 @@ function errorText(err: unknown): string {
   return `unexpected error (${err.name}${typeof code === 'string' ? ` ${code}` : ''})`
 }
 
-function required<T>(res: { parsed: T | null; outcome: LlmCallOutcome }, step: ContextStep): T {
-  if (res.parsed === null) throw new Stop(`${step}: ${res.outcome}`)
+function required<T>(res: { parsed: T | null; outcome: LlmCallOutcome; transient?: boolean }, step: ContextStep): T {
+  if (res.parsed === null) throw new Stop(`${step}: ${res.outcome}`, res.transient === true)
   return res.parsed
 }
 
@@ -382,11 +395,12 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
   const call = async <T>(step: ContextStep, schema: z.ZodType<T>, prompt: string) => {
     const res = await deps.call(step, schema, prompt)
     calls.push({ step, outcome: res.outcome, usage: res.usage, costUsd: res.costUsd, model: res.model })
-    return { parsed: res.parsed === null ? null : unescapeXmlDeep(res.parsed), outcome: res.outcome, model: res.model }
+    return { parsed: res.parsed === null ? null : unescapeXmlDeep(res.parsed), outcome: res.outcome, model: res.model, transient: res.transient }
   }
 
   const research = input.sources.flatMap(s => s.facts.map(f => ({ s, f })))
-  if (research.length === 0) return { status: 'skipped', outcome: 'no-research', facts: [], boxes: [], writer: null, error: null, ...totals() }
+  if (research.length === 0)
+    return { status: 'skipped', outcome: 'no-research', facts: [], boxes: [], writer: null, error: null, transient: false, ...totals() }
 
   const story: StoryText = {
     title: input.title,
@@ -636,8 +650,9 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
       boxJudged,
       boxFailed,
     })
-    return { status: 'completed', outcome: boxes.length > 0 ? 'built' : 'none-kept', facts: stored, boxes, writer, error: null, ...totals() }
+    return { status: 'completed', outcome: boxes.length > 0 ? 'built' : 'none-kept', facts: stored, boxes, writer, error: null, transient: false, ...totals() }
   } catch (err) {
-    return { status: 'failed', outcome: 'technical', facts: [], boxes: [], writer: null, error: errorText(err), ...totals() }
+    const transient = err instanceof Stop ? err.transient : (deps.transient?.(err) ?? false)
+    return { status: 'failed', outcome: 'technical', facts: [], boxes: [], writer: null, error: errorText(err), transient, ...totals() }
   }
 }

@@ -81,3 +81,29 @@ its facts come from, which check judges them, and what it reuses while overviews
 - **Reuse keyed on the overview:** needs module 2.
 - **A `context` field on the public story** instead of the site route `GET /api/stories/:slug/context`:
   saves a request, but freezes an unproven shape as public contract.
+
+## Amendment 2026-11-17: one second attempt within the same run
+
+The owner decided on 2026-11-17 that retrying temporary problems belongs to a run: "If it fails,
+leave it and notify." This narrows the Decision's second bullet: a story is settled by its first
+night's context run, and within that run a technical failure that may pass gets one more attempt.
+
+A failure may pass when a required model call or a search fails on a rate limit, a server error, a
+timeout or a lost connection, once the SDK's and `withRetry`'s own retries are spent
+(`transientFailure`). Such a story is tried again after every other story of the run, on its own
+run row: only the second attempt's outcome, record, facts and boxes are stored, and the row's costs
+add both attempts'. A second failure settles the story, as does any other failure (a parse failure,
+a refused request, an error of ours, an error outside the run). No later night tries it again.
+
+Every summary line says how many stories failed, and when more than the failure share (20%) of at
+least 5 stories failed, the step records one warning notice (`stories-failing:build_story_context`).
+Nothing pauses.
+
+Rule: a story gets at most two attempts, both in the run that first took it; whatever the second
+ends with stands.
+
+Consequences: a night with a short outage of the model or search service loses fewer stories, at
+the cost of at most one more story's calls for each story it hit; the cost bound per story doubles
+for those stories only. `story_context_runs` holds one row per story and night, not one per attempt:
+the first attempt's record is replaced by the second's, so the admin's "What the run did" shows the
+second attempt while the row's cost covers both.

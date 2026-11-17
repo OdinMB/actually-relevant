@@ -21,7 +21,7 @@ const fields = {
 }
 
 /** Answers every step: research's facts structured (S0F1 with a figure), nothing missing, all supported, one box and the figures. */
-function deps(options: { failWrite?: boolean } = {}): ContextDeps {
+function deps(options: { failWrite?: boolean; writeError?: 'transient' | 'lasting' } = {}): ContextDeps {
   return {
     async call(step, _schema, prompt) {
       let parsed: unknown
@@ -67,6 +67,8 @@ function deps(options: { failWrite?: boolean } = {}): ContextDeps {
             followsSource: '',
           })),
         }
+      if (step === 'write' && options.writeError)
+        return { parsed: null, outcome: 'error', usage: ZERO_USAGE, costUsd: 0, model: 'model-write', transient: options.writeError === 'transient' }
       return { parsed: parsed as never, outcome: parsed === null ? 'parse_failure' : 'ok', usage: ZERO_USAGE, costUsd: 0.002, model: `model-${step}` }
     },
     search: async () => ({ results: [], credits: 0, cached: false }),
@@ -128,6 +130,40 @@ describeDb('story context runs', () => {
     expect(run.costUsd).toBeGreaterThan(0)
     expect(await prisma.contextFact.count()).toBe(0)
     expect(await prisma.contextBox.count()).toBe(0)
+  })
+
+  it('says whether a technical failure may pass on a later attempt', async () => {
+    const { story } = await publishedStory()
+    expect(await runStoryContext(story.id, deps({ writeError: 'transient' }))).toMatchObject({ status: 'failed', outcome: 'technical', transient: true })
+    expect(await runStoryContext(story.id, deps({ writeError: 'lasting' }))).toMatchObject({ status: 'failed', transient: false })
+    expect(await runStoryContext(story.id, deps())).toMatchObject({ status: 'completed', transient: false })
+  })
+
+  it("tries a failed run again on its own row: only the second attempt's outcome is stored, the two attempts' costs added up", async () => {
+    const { story } = await publishedStory()
+    const first = await runStoryContext(story.id, deps({ writeError: 'transient' }))
+    const firstRow = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: first.runId } })
+    expect(firstRow.costUsd).toBeCloseTo(0.006, 10)
+
+    const second = await runStoryContext(story.id, deps(), { runId: first.runId })
+    expect(second).toMatchObject({ runId: first.runId, status: 'completed', outcome: 'built', boxes: 2, written: true })
+    const row = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: first.runId } })
+    expect(row).toMatchObject({ status: 'completed', outcome: 'built', error: null, boxes: 2, startedAt: firstRow.startedAt })
+    // The record is the second attempt's; the costs are both attempts'
+    const secondCalls = (row.result as { calls: { costUsd: number }[] }).calls
+    expect(secondCalls.map(c => c.step)).toContain('write')
+    expect(row.costUsd).toBeCloseTo(firstRow.costUsd + secondCalls.reduce((sum, c) => sum + c.costUsd, 0), 10)
+    expect(row.modelUsd).toBeCloseTo(row.costUsd, 10)
+    expect(await prisma.storyContextRun.count({ where: { storyId: story.id } })).toBe(1)
+    expect(await prisma.contextBox.count({ where: { runId: first.runId } })).toBe(2)
+  })
+
+  it('leaves a run alone that is no longer a technical failure, and builds nothing for it', async () => {
+    const { story } = await publishedStory()
+    const done = await runStoryContext(story.id, deps())
+    const again = await runStoryContext(story.id, deps(), { runId: done.runId })
+    expect(again).toMatchObject({ runId: done.runId, written: false, transient: false })
+    expect(await prisma.contextBox.count({ where: { runId: done.runId } })).toBe(2)
   })
 
   it('records a skipped run for a story without research facts', async () => {

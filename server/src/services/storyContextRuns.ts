@@ -13,6 +13,7 @@ import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { classifyOutcome, contentText, finishReasonOf, usageFrom, ZERO_USAGE } from '../lib/llmUsage.js'
 import prisma from '../lib/prisma.js'
+import { isRetryableError } from '../lib/retry.js'
 import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
 import { callCostUsd } from './researchCost.js'
@@ -35,6 +36,18 @@ const INTERRUPTED = 'interrupted: the server restarted during the run'
 
 const modelOf = (step: keyof typeof CONTEXT_STEP_TIERS) => config.llm.models[CONTEXT_STEP_TIERS[step]].name
 
+/**
+ * A failure that may pass on a later attempt, once the SDK's and `withRetry`'s own retries are spent
+ * (`.context/story-context.md`, "Failures"): a rate limit, a server error, a timeout or a lost
+ * connection. A refused request, a missing key, an answer of the wrong shape and an error of ours do not.
+ */
+export function transientFailure(err: unknown): boolean {
+  if (isRetryableError(err)) return true
+  if (!(err instanceof Error)) return false
+  // LangChain rethrows the SDK's timeout under this name; the SDK's connection errors carry no status
+  return err.name === 'TimeoutError' || ['APIConnectionError', 'APIConnectionTimeoutError'].includes(err.constructor.name)
+}
+
 /** Production's step caller: the tier's model after the rate-limit delay, never in `withRetry` (the SDK retries). */
 const productionCall: ContextCall = async <T>(step: keyof typeof CONTEXT_STEP_TIERS, schema: z.ZodType<T>, prompt: string) => {
   const model = modelOf(step)
@@ -50,12 +63,17 @@ const productionCall: ContextCall = async <T>(step: keyof typeof CONTEXT_STEP_TI
     const outcome = classifyOutcome({ parsed, content: contentText(raw), finishReason: finishReasonOf(raw) })
     return { parsed: outcome === 'ok' ? parsed : null, outcome, usage, costUsd: callCostUsd(model, usage), model }
   } catch (err) {
-    return { parsed: null, outcome: classifyOutcome({ error: err }), usage: ZERO_USAGE, costUsd: 0, model }
+    return { parsed: null, outcome: classifyOutcome({ error: err }), usage: ZERO_USAGE, costUsd: 0, model, transient: transientFailure(err) }
   }
 }
 
 export function productionDeps(): ContextDeps {
-  return { call: productionCall, search: request => contextSearch(request, researchSourcePolicy), sourcePolicy: researchSourcePolicy }
+  return {
+    call: productionCall,
+    search: request => contextSearch(request, researchSourcePolicy),
+    sourcePolicy: researchSourcePolicy,
+    transient: transientFailure,
+  }
 }
 
 /** Mark the `running` runs older than `staleRunMinutes` failed: the server restarted during them. Each settles its story. */
@@ -83,13 +101,16 @@ export interface ContextRunOutcome {
   boxes: number
   /** The item tally of a completed run; zero for any other. */
   tally: { checked: number; failed: number }
-  /** False when the run was marked interrupted before it finished: nothing was written. */
+  /** False when the run was marked interrupted before it finished, or was no failure to try again: nothing was written. */
   written: boolean
+  /** A technical failure that may pass on a later attempt (`transientFailure`): the step tries it once more in the same run. */
+  transient: boolean
 }
 
 /**
- * Store the result while the run is still `running`, in one transaction: the run's status, outcome,
- * costs and record, every fact with its verdict, and the kept boxes in order.
+ * Store the result while the run is still `running`, in one transaction: the run's status, outcome
+ * and record, every fact with its verdict, and the kept boxes in order. Its costs are added to the
+ * row's, so a second attempt on the same row counts both.
  */
 export async function storeContextResult(runId: string, storyId: string, result: StoryContextResult, now: Date = new Date()): Promise<boolean> {
   const tavilyCredits = result.credits
@@ -102,9 +123,9 @@ export async function storeContextResult(runId: string, storyId: string, result:
         status: result.status,
         outcome: result.outcome,
         boxes: result.boxes.length,
-        costUsd,
-        modelUsd: result.modelUsd,
-        tavilyCredits,
+        costUsd: { increment: costUsd },
+        modelUsd: { increment: result.modelUsd },
+        tavilyCredits: { increment: tavilyCredits },
         result: result.record as unknown as Prisma.InputJsonObject,
         error: result.error,
         finishedAt: now,
@@ -119,15 +140,35 @@ export async function storeContextResult(runId: string, storyId: string, result:
 }
 
 /**
+ * Open a technical failure's row again for a second attempt in the same run of the step: `running`,
+ * its error cleared, its start and costs kept. False when the row is no such failure any more.
+ */
+async function reopenFailedRun(runId: string): Promise<boolean> {
+  const { count } = await prisma.storyContextRun.updateMany({
+    where: { id: runId, status: 'failed', outcome: 'technical' },
+    data: { status: 'running', outcome: null, error: null, finishedAt: null },
+  })
+  return count > 0
+}
+
+/**
  * Build one story's context: the run row, its input, the pipeline with production's deps, the
  * store. A story that is not published or has no research facts is recorded as skipped. A failure
  * outside the pipeline fails the run with a sanitized error; only a database error before the run
- * exists throws.
+ * exists throws. `again` names a technical failure's run to try once more on its own row, so only
+ * the last attempt's outcome is stored and its costs are added to the first's (`.context/story-context.md`,
+ * "Failures"); a run that is no such failure any more is left as it is.
  */
-export async function runStoryContext(storyId: string, deps: ContextDeps = productionDeps()): Promise<ContextRunOutcome> {
-  const started = new Date()
-  const run = await prisma.storyContextRun.create({ data: { storyId, status: 'running', startedAt: started }, select: { id: true } })
-  const none = { boxes: 0, tally: { checked: 0, failed: 0 } }
+export async function runStoryContext(
+  storyId: string,
+  deps: ContextDeps = productionDeps(),
+  again: { runId: string } | null = null,
+): Promise<ContextRunOutcome> {
+  const none = { boxes: 0, tally: { checked: 0, failed: 0 }, transient: false }
+  if (again && !(await reopenFailedRun(again.runId))) return { runId: again.runId, status: 'failed', outcome: 'technical', written: false, ...none }
+  const run = again
+    ? { id: again.runId }
+    : await prisma.storyContextRun.create({ data: { storyId, status: 'running', startedAt: new Date() }, select: { id: true } })
   try {
     const input = await loadContextInput(prisma, storyId)
     if (!input) {
@@ -141,7 +182,16 @@ export async function runStoryContext(storyId: string, deps: ContextDeps = produ
     const result = await buildStoryContext(input, deps)
     const written = await storeContextResult(run.id, storyId, result)
     log.info(
-      { runId: run.id, storyId, status: result.status, outcome: result.outcome, boxes: result.boxes.length, ...result.record.tally },
+      {
+        runId: run.id,
+        storyId,
+        attempt: again ? 2 : 1,
+        status: result.status,
+        outcome: result.outcome,
+        transient: result.transient,
+        boxes: result.boxes.length,
+        ...result.record.tally,
+      },
       'story context run finished',
     )
     return {
@@ -151,6 +201,7 @@ export async function runStoryContext(storyId: string, deps: ContextDeps = produ
       boxes: result.boxes.length,
       tally: result.status === 'completed' ? result.record.tally : none.tally,
       written,
+      transient: written && result.status === 'failed' && result.transient,
     }
   } catch (err) {
     const error = sanitizedError(err)

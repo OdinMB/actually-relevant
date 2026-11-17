@@ -407,6 +407,11 @@ export const config = {
     slowValidDays: 365,
     /** A `running` run older than this was cut off by a restart, and is marked failed, as research's are. */
     staleRunMinutes: 120,
+    /**
+     * The step records the failed-stories notice when more than `jobs.failureShare.share` of the
+     * stories a run took failed technically, from this many stories on (`jobs/buildStoryContext.ts`).
+     */
+    failedStoriesMin: 5,
     /** Fact-check items per call. */
     checkBatchSize: 25,
     /**
@@ -696,7 +701,8 @@ export const config = {
   /** A job run's own checks (lib/runUsage.ts `recordItems`, .context/scheduler.md, "Spending"). */
   jobs: {
     // The Jobs page warns under a job whose last run checked at least minItems items and saw more
-    // than this share of them fail (jobs/jobNotes.ts failureShareWarning). Nothing pauses on it.
+    // than this share of them fail, and the run's finish records a notice (jobs/failureShare.ts).
+    // Story context's failed-stories notice uses the same share. Nothing pauses on either.
     failureShare: { share: 0.2, minItems: 20 },
   },
   /** The Dashboard's monthly spending overview and its warning levels (services/spending.ts). */
