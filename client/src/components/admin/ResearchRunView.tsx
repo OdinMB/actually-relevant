@@ -170,7 +170,7 @@ function Draft({ result, singleSourceEmotion }: { result: ResearchResult; single
     <div className="space-y-3 text-sm text-neutral-800">
       <div>
         <p className="text-xs font-medium text-brand-700">{draft.titleLabel}</p>
-        <h4 className="text-base font-semibold text-neutral-900">{draft.title}</h4>
+        <h3 className="text-base font-semibold text-neutral-900">{draft.title}</h3>
       </div>
       {draft.story.map((p, i) => (
         <p key={i}>
@@ -183,11 +183,11 @@ function Draft({ result, singleSourceEmotion }: { result: ResearchResult; single
         </p>
       ))}
       <div>
-        <h5 className={H}>Summary</h5>
+        <h4 className={H}>Summary</h4>
         <p>{draft.summary}</p>
       </div>
       <div>
-        <h5 className={H}>Why This Matters</h5>
+        <h4 className={H}>Why This Matters</h4>
         <ul className="list-disc pl-5 space-y-1">
           {draft.whyThisMatters.map((b, i) => (
             <li key={i}>
@@ -197,7 +197,7 @@ function Draft({ result, singleSourceEmotion }: { result: ResearchResult; single
         </ul>
       </div>
       <div>
-        <h5 className={H}>Caveats</h5>
+        <h4 className={H}>Caveats</h4>
         <ul className="list-disc pl-5 space-y-1">
           {draft.caveats.map((b, i) => (
             <li key={i}>
@@ -208,7 +208,7 @@ function Draft({ result, singleSourceEmotion }: { result: ResearchResult; single
       </div>
       {draft.quote && (
         <figure>
-          <h5 className={H}>Quote</h5>
+          <h4 className={H}>Quote</h4>
           <blockquote className="border-l-2 border-neutral-300 pl-3 italic">{draft.quote}</blockquote>
           <figcaption className="text-xs text-neutral-600">
             {draft.quoteAttribution}
@@ -217,17 +217,17 @@ function Draft({ result, singleSourceEmotion }: { result: ResearchResult; single
         </figure>
       )}
       <div>
-        <h5 className={H}>Blurb</h5>
+        <h4 className={H}>Blurb</h4>
         <p>{draft.marketingBlurb}</p>
       </div>
       {draft.emotionTag && (
-        <h5 className={H}>
+        <h4 className={H}>
           Research&apos;s emotion: {draft.emotionTag}
           {besideSingleSource(singleSourceEmotion)}
-        </h5>
+        </h4>
       )}
       <div>
-        <h5 className={H}>Research&apos;s rating: {draft.rating} (recorded; the story keeps its own)</h5>
+        <h4 className={H}>Research&apos;s rating: {draft.rating} (recorded; the story keeps its own)</h4>
         <ul className="list-disc pl-5">
           {draft.relevanceCalculation.map((line, i) => (
             <li key={i}>{plainLine(line)}</li>
@@ -236,11 +236,11 @@ function Draft({ result, singleSourceEmotion }: { result: ResearchResult; single
       </div>
       {result.problems.length > 0 && (
         <div>
-          <h5 className={H}>
+          <h4 className={H}>
             {result.verdict.kind === 'fallback'
               ? `What the checks found${result.rewritten ? ' after repair' : ''}`
               : 'Left out of the draft above: still failing the checks after repair'}
-          </h5>
+          </h4>
           <ul className="list-disc pl-5">
             {result.problems.map((p, i) => (
               <li key={i}>
@@ -394,7 +394,7 @@ function CostTable({ run }: { run: ResearchRun }) {
         Uncached input is counted at {result.prices.cacheWriteFactor} times the input price, an upper bound: the API reports no cache writes.
       </p>
       <div>
-        <h5 className={H}>Searches</h5>
+        <h4 className={H}>Searches</h4>
         {result.searches.length === 0 ? (
           <p className="text-neutral-500">None.</p>
         ) : (
@@ -408,7 +408,7 @@ function CostTable({ run }: { run: ResearchRun }) {
         )}
       </div>
       <div>
-        <h5 className={H}>Filter</h5>
+        <h4 className={H}>Filter</h4>
         <p>
           {result.candidates} candidates
           {drops.length > 0 ? `; dropped: ${drops.map(([reason, n]) => `${reason} ${n}`).join(', ')}` : '; none dropped'}

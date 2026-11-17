@@ -9,6 +9,7 @@ import { ReasonButton } from '../ui/ReasonButton'
 import { Select } from '../ui/Select'
 import { useToast } from '../ui/Toast'
 import { ContextRunView } from './ContextRunView'
+import { EDITOR_HEADING, EDITOR_SECTION } from './storyEditorClasses'
 
 /**
  * A story's Context section in the edit form, after Research (`.context/admin-dashboard.md`, "Story
@@ -207,21 +208,23 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
 
   if (query.isError)
     return (
-      <div className="border-t border-neutral-200 pt-4">
-        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Context</h3>
+      <section aria-labelledby={`context-${story.id}`} className={EDITOR_SECTION}>
+        <h2 id={`context-${story.id}`} className={`${EDITOR_HEADING} mb-1`}>
+          Context
+        </h2>
         <p className="text-sm text-red-700">The story&apos;s context could not be loaded.</p>
-      </div>
+      </section>
     )
   if (!data || (!data.run && !data.gather?.eligible)) return null
 
   const published = story.status === 'published'
   const counts = countsLine(data.boxes, published)
   return (
-    <section aria-labelledby={`context-${story.id}`} className="space-y-3 border-t border-neutral-200 pt-4">
+    <section aria-labelledby={`context-${story.id}`} className={`${EDITOR_SECTION} space-y-3`}>
       <div>
-        <h3 id={`context-${story.id}`} className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 id={`context-${story.id}`} className={`${EDITOR_HEADING} mb-1`}>
           Context
-        </h3>
+        </h2>
         <p className="text-sm text-neutral-600">
           {data.run ? runLine(data.run, data.boxes.length > 0) : 'This story has no context cards yet.'}
           {counts && ` ${counts}`}
@@ -251,9 +254,9 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
             if (boxes.length === 0) return null
             return (
               <div key={group.name} className="border-b border-neutral-100 last:border-b-0">
-                <h4 className="border-b border-neutral-100 bg-neutral-50 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                <h3 className="border-b border-neutral-100 bg-neutral-50 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
                   {group.name}
-                </h4>
+                </h3>
                 <ul className="divide-y divide-neutral-100">
                   {boxes.map(box => (
                     <CardRow key={box.id} box={box} places={data.places} storyId={story.id} />

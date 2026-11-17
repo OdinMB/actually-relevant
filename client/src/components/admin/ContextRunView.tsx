@@ -85,10 +85,10 @@ function Searches({ record }: { record: RunRecord }) {
   const unusable = record.extractionDrops?.length ?? 0
   return (
     <>
-      <h4 className={H}>
+      <h3 className={H}>
         Searches: {searches.length === 0 ? 'none' : plural(searches.length, 'web search', 'web searches')}
         {cached > 0 && `, ${cached} of them answered from the cache`}
-      </h4>
+      </h3>
       {searches.length > 0 && (
         <ul>
           {searches.map((s, i) => (
@@ -126,7 +126,7 @@ function EarlierWork({ record }: { record: RunRecord }) {
   ].filter(Boolean)
   return (
     <>
-      <h4 className={H}>Built on earlier runs: {parts.join(', ')}</h4>
+      <h3 className={H}>Built on earlier runs: {parts.join(', ')}</h3>
       {skipped.length > 0 && (
         <ul>
           {skipped.map((s, i) => (
@@ -147,9 +147,9 @@ function Checks({ record }: { record: RunRecord }) {
   const cards = record.boxDrops ?? []
   return (
     <>
-      <h4 className={H}>
+      <h3 className={H}>
         Checks: {plural(tally.checked, 'fact and card line', 'facts and card lines')} checked, {tally.checked - tally.failed} kept, {tally.failed} dropped
-      </h4>
+      </h3>
       {(facts.length > 0 || cards.length > 0) && (
         <ul>
           {facts.map(f => (
@@ -180,7 +180,7 @@ function Cost({ run }: { run: ContextAdminRun }) {
   const calls = run.result?.calls?.length ?? 0
   return (
     <>
-      <h4 className={H}>Cost</h4>
+      <h3 className={H}>Cost</h3>
       <ul>
         <li className={ROW}>
           {/* A record without its calls (one written by hand) gives no count rather than "0 calls" */}
@@ -208,7 +208,7 @@ export function ContextRunView({ run, boxes }: { run: ContextAdminRun; boxes: Co
       <div className="mt-1 text-xs text-neutral-700">
         {record ? (
           <>
-            <h4 className={H}>What it looked for</h4>
+            <h3 className={H}>What it looked for</h3>
             <ul>
               {slotOutcomes(record, boxes).map(({ outcome, slots }) => (
                 <li key={outcome} className={ROW}>

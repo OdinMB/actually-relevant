@@ -7,6 +7,7 @@ import { useResearchRuns, useResearchUsage, useStartResearch } from '../../hooks
 import { formatDateWithTime } from '../../lib/constants'
 import { fallbackName, ResearchRunView, verdictLabel, verdictName } from './ResearchRunView'
 import { canUseVersion, RevertToSingleSource, UseRunVersion } from './ResearchVersion'
+import { EDITOR_HEADING, EDITOR_SECTION } from './storyEditorClasses'
 
 /** The statuses a run may start from (server: `RESEARCHABLE_STATUSES` in services/researchInput.ts). */
 const RESEARCHABLE: readonly string[] = ['analyzed', 'selected', 'published']
@@ -72,9 +73,11 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 
   const selectId = `research-run-${story.id}`
 
   return (
-    <div className="border-t border-neutral-200 pt-4 space-y-3">
+    <section aria-labelledby={`research-${story.id}`} className={`${EDITOR_SECTION} space-y-3`}>
       <div>
-        <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Research</h3>
+        <h2 id={`research-${story.id}`} className={`${EDITOR_HEADING} mb-1`}>
+          Research
+        </h2>
         <p className="text-sm text-neutral-600">
           Admin only: a run you start changes nothing on the story until you use its version.
           {usage.data &&
@@ -104,6 +107,6 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 
         </>
       )}
       {runs.isSuccess && list.length === 0 && <p className="text-sm text-neutral-500">No research runs yet.</p>}
-    </div>
+    </section>
   )
 }

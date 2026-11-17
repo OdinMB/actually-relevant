@@ -10,6 +10,7 @@ import { PodcastPublishControls } from './PodcastPublishControls'
 import { PodcastRunButton } from './PodcastRunButton'
 import { nextAction } from './podcastRun'
 import { wasPublished } from './podcastPublished'
+import { STICKY_ACTION_BAR } from './stickyActionBar'
 
 /** Why the episode cannot be deleted now, or null (the server refuses the same: 409). A published legacy row stays deletable. */
 export function deleteBlockedReason(podcast: Podcast): string | null {
@@ -51,13 +52,7 @@ export function PodcastActionBar({ podcast, pendingEdits }: PodcastActionBarProp
     })
 
   return (
-    <div
-      role="region"
-      aria-label="Episode actions"
-      // <main> scrolls and has padding, so a sticky bottom-0 would stop at its padding edge and
-      // let content scroll through the strip below; the negative offset pins it to the viewport.
-      className="sticky -bottom-4 z-10 -mx-4 -mb-4 mt-8 border-t border-neutral-200 bg-white/95 px-4 py-2 backdrop-blur lg:-bottom-6 lg:-mx-6 lg:-mb-6 lg:px-6"
-    >
+    <div role="region" aria-label="Episode actions" className={STICKY_ACTION_BAR}>
       <div className="flex min-h-[2.5rem] flex-wrap items-center gap-x-3 gap-y-2">
         {action === 'resume' && (
           <PodcastRunButton

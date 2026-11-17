@@ -192,7 +192,7 @@ describe('StoryContextAdmin', () => {
     expect(region).toHaveTextContent('3 cards show on the site: 1 beside the text, 1 beside Why This Matters, 1 under More context. 1 hidden.')
 
     const groups = within(region)
-      .getAllByRole('heading', { level: 4 })
+      .getAllByRole('heading', { level: 3 })
       .map(h => h.textContent)
     expect(groups.slice(0, 3)).toEqual(['Beside the text', 'Beside Why This Matters', 'More context'])
     expect(within(region).getByText('Heading a').closest('li')).toHaveTextContent('Phone line: Teaser a · Budget Office · as of November 2026')
