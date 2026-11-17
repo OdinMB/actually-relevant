@@ -1,4 +1,4 @@
-import { useState, Suspense } from 'react'
+import { useRef, useState, Suspense } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Dialog, DialogPanel } from '@headlessui/react'
 import { useQuery } from '@tanstack/react-query'
@@ -27,6 +27,7 @@ import { useAuth } from '../lib/auth'
 import { adminApi } from '../lib/admin-api'
 import { useServerTime } from '../hooks/useJobs'
 import { useNoticeCount } from '../hooks/useNotices'
+import { useAdminScroll } from '../hooks/useAdminScroll'
 import { feedbackBadge, noticeBadge, type BadgeKey, type NavBadge } from './navBadges'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { ToastProvider } from '../components/ui/Toast'
@@ -165,6 +166,9 @@ export default function AdminLayout() {
 
 function AdminShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  // <main> is the admin's scroll box: each page starts at the top, Back finds a page where it was
+  const mainRef = useRef<HTMLElement>(null)
+  useAdminScroll(mainRef)
 
   return (
     <ToastProvider>
@@ -214,7 +218,7 @@ function AdminShell() {
               {/* `relative` makes this scroll box the containing block for visually hidden (absolutely positioned)
                   text such as table captions; without it that text escapes to the document and makes the
                   window scroll past the one-screen shell into blank space */}
-              <main className="relative flex-1 overflow-y-auto p-4 lg:p-6">
+              <main ref={mainRef} className="relative flex-1 overflow-y-auto p-4 lg:p-6">
                 <Suspense
                   fallback={
                     <div className="flex justify-center py-12">
