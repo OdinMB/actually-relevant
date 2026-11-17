@@ -135,7 +135,7 @@ The synthetic data set (`npm run db:seed:synthetic --prefix server`, `.context/d
 
 ## Before switching on
 
-The plan gates the step on `eval:overviews` (roadmap D8): planted errors on context facts, structured fields, the gap list and searches, what's being done (ADR-0065), boxes, placement (below its bar the step goes live with `STORY_CONTEXT_PLACEMENT=section`) and cost, on the judged half of a gap key of 30 stories (`.context/model-eval.md`, "Overview evals", once built). The owner switches the step on.
+The step is gated on `eval:overviews` (roadmap D8, ADR-0066): planted errors on context facts, structured fields, the gap list and searches, what's being done (ADR-0065), boxes, placement (below its bar the step goes live with `STORY_CONTEXT_PLACEMENT=section`) and cost, as means over 3 runs on the judged half of the gap keys of 30 one-off stories (`.context/model-eval.md`, "Overview evals": the `gap-draft`, `gap-keys` and `context` steps and `--facts context`). The keys are drafted and checked after merge; until they are committed, the `context` step has nothing to run on. The owner switches the step on. A change to a prompt, schema or model tier of the step reruns the gate before it ships.
 
 ## Modifying
 

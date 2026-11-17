@@ -67,3 +67,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0063 · Story context: one named source is enough for a figure, and disagreeing current sources are shown side by side by a fixed tile rule](decisions/0063-story-context-one-named-source-tile-rule.md)
 - [ADR-0064 · Story context: no images and no direction badges; tiles, bars and lines only, drawn when fixed chart rules hold](decisions/0064-story-context-no-images-fixed-chart-rules.md)
 - [ADR-0065 · Story context always looks for what is being done about the problem, searching for it first, and says so plainly when nothing sourced answers it](decisions/0065-story-context-always-a-constructive-element.md)
+- [ADR-0066 · Every overview model step has an eval, and a replay of past stories gates each launch: story context goes live only when its bars hold on the judged half of its gap keys](decisions/0066-every-model-step-has-an-eval-replay-gates-launch.md)
