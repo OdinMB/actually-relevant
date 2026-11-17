@@ -21,7 +21,8 @@ import { markInterruptedContextRuns, recordFailedRun, runStoryContext, type Cont
 import { pruneSearchCache } from '../services/storyContextSearch.js'
 import { failureShareExceeded, failureShareLine } from './jobNotes.js'
 
-const JOB = 'build_story_context'
+export const STORY_CONTEXT_JOB = 'build_story_context'
+const JOB = STORY_CONTEXT_JOB
 const log = createLogger(JOB)
 
 /** The failure-share notice's dedupe key: one notice for the step, reopened by each repeat. */

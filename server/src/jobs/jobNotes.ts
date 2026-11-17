@@ -85,7 +85,7 @@ const CHAIN_RULES =
   'Each step starts when the one before it has finished. A step set to Off is skipped; a step set to Review runs, then the chain waits until you continue it here. ' +
   'If a step fails, the chain stops there and you can resume it from that step; its next scheduled run starts from the first step again.'
 
-const NOTES: Readonly<Record<string, () => string>> = {
+export const NOTES: Readonly<Record<string, () => string>> = {
   intake_chain: () =>
     'Crawls the feeds, gives each new story its first rating, then fully analyzes the ones that qualify, in that order, so every run ends with assessed stories ready to review. ' +
     `It runs several times a day because a feed lists only its newest articles and a busy one drops them within hours. ${CHAIN_RULES}`,
@@ -189,7 +189,7 @@ export const failureShareLine = (checked: number, failed: number) =>
   `${failed.toLocaleString('en-US')} of ${count(checked, 'checked item')} failed in the last run.`
 
 /** The warnings of one job; every job also gets the failure share's (`failureShareWarning`). */
-const WARNINGS: Readonly<Record<string, (row: JobRowState) => string | null>> = {
+export const WARNINGS: Readonly<Record<string, (row: JobRowState) => string | null>> = {
   research_stories: researchWarning,
 }
 

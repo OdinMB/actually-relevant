@@ -135,6 +135,8 @@ To make an existing job a chain's step, add it to `CHAINS` (`jobs/chainDefinitio
 4. Add the name to `JobName` (`shared/types`) and the admin's `JOB_DISPLAY_NAMES` and `JOB_PIPELINE_ORDER` (`client/src/lib/constants.ts`)
 5. Give it a note in `jobs/jobNotes.ts` when its rules are not obvious from its name (what it skips or waits on, its limits, a switch it needs), with any config value read from `config`
 
+`jobs/jobRegistry.test.ts` holds the server's lists together: it fails until a handler is in `JOB_PIPELINE_ORDER` and `seed-jobs.ts`, a chain has a handler and a place in `RESUMABLE_JOBS`, every chain step has a handler, and every name in `MODEL_JOBS`, `RESUMABLE_JOBS`, the enable checks, the notes and the warnings is a job with a handler.
+
 ## Admin API
 
 | Endpoint | Description |
