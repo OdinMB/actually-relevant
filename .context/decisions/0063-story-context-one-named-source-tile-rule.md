@@ -47,3 +47,43 @@ different values for the same thing on different days.
 - **Requiring two agreeing sources:** most context figures have one source, so most tiles would go.
 - **Resolving disagreement in code or by a model:** hides from readers that sources disagree, and
   makes a model's judgment look like a fact.
+
+## Amendment 2026-11-17: no In numbers box; each figure in its slot's card; a card says nothing twice
+
+The owner, on 2026-11-17, after seeing the cards: "Redundancy in info strings and sources,
+unnecessary indentation when there's only one thing in the context box. Case in numbers is weird,
+too, as quite different things are presented there in one card. The thing that supposedly holds it
+together is that it's numbers. But that's not useful." He asked for the three changes below; the
+agent set the details named as its own. The tile rule above is unchanged: which values a tile shows,
+and that disagreeing sources stand side by side, each named.
+
+- **No In numbers box.** The write call no longer returns a `figures` box. A figure is a tile of the
+  box whose slot it answers (a count of people in `who_affected`, a cost in `response`, a past value
+  in `compared`), a box may hold its tiles alone, and a figure that answers no needed slot is not
+  shown. A story has at most 6 cards (7 with the In numbers box before).
+- **Stored In numbers boxes stay stored and are never read back** (the agent's choice, no destructive
+  migration): the `ContextBoxType` enum keeps `figures`, and every read of the boxes asks for the
+  seven slots only, so such a box is not served, not listed in the admin and not editable (404), and
+  a run that wrote only one does not count as the newest run with boxes. The admin's `movable` flag
+  and the placement rule that kept the box in More context are gone: every shown card may move.
+- **A card says nothing twice.** The footer names the card's sources and the date its facts are
+  from, so:
+  - a tile's label says what the heading does not: the prompt asks for it, and code (`tileLabel`,
+    applied when the page is served, so stored cards get it too) drops a trailing year that is the
+    card's as-of year, and on a one-tile card a label whose content words all appear in the heading
+    (the agent's word rule: function words and a plural "s" aside). The box check reads an empty
+    label as the heading.
+  - a value's source chip shows when the tile gives several values (disagreeing sources keep a chip
+    each) or the card cites more than one source; on a card citing one source, the footer alone
+    names it. The agent extended this to a chart's visible source line, which a sole-source card no
+    longer shows; the hidden table still names every value's source.
+  - a single tile sits flush, without the rail and indent that set several tiles apart.
+
+Rule: every figure on a card answers the card's question and names its source once on the card,
+beside the value where sources disagree or the card has several, in the footer otherwise.
+
+Consequences: the write's prompt and schema changed, so its prompt version changed and the eval
+gate's `context` step runs again before the step is switched on. A number that answers no needed
+slot is no longer shown anywhere, so a story may show fewer figures than before. Cards written
+before the change lose their In numbers box at once; their other boxes keep their figures, now with
+the label and chip rules above.
