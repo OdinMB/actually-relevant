@@ -135,7 +135,8 @@ function Switch({ on, label, onToggle, disabled }: { on: boolean; label: string;
     <button
       onClick={onToggle}
       disabled={disabled}
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50 ${
+      // align-middle: on the text baseline, an inline switch sits a few pixels above the row's other content
+      className={`relative inline-flex h-5 w-9 items-center rounded-full align-middle transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50 ${
         on ? 'bg-brand-600' : 'bg-neutral-300'
       }`}
       role="switch"
