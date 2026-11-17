@@ -2,6 +2,7 @@ import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
 import { EllipsisVerticalIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type { StoryCluster } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
+import { SortableHeader, useSortableRows, type SortColumns } from '../ui/SortableHeader'
 import { TimeWithRelative } from './TimeWithRelative'
 
 interface ClusterTableProps {
@@ -10,29 +11,43 @@ interface ClusterTableProps {
   onDissolve: (id: string) => void
 }
 
+type ClusterSortKey = 'primary' | 'members' | 'created'
+
+const primaryTitle = (cluster: StoryCluster) => cluster.primaryStory?.title || cluster.primaryStory?.sourceTitle || 'No primary'
+
+const COLUMNS: SortColumns<StoryCluster, ClusterSortKey> = {
+  primary: { value: primaryTitle },
+  members: { value: c => c._count.stories },
+  created: { value: c => c.createdAt, firstDirection: 'desc' },
+}
+
+const TH = 'px-3 py-2 font-medium text-neutral-500'
+
 export function ClusterTable({ clusters, onEdit, onDissolve }: ClusterTableProps) {
+  const { rows, sort, sortBy } = useSortableRows(clusters, COLUMNS, null)
+  const header = { sort, onSort: sortBy }
+
   return (
     <div className="overflow-x-auto bg-white rounded-lg border border-neutral-200 shadow-sm">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            <SortableHeader column="primary" {...header} className={TH}>
               Primary Story
-            </th>
-            <th scope="col" className="hidden md:table-cell text-center px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="members" {...header} align="center" className={`hidden md:table-cell ${TH}`}>
               Members
-            </th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="created" {...header} className={`hidden md:table-cell ${TH}`}>
               Created
-            </th>
+            </SortableHeader>
             <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
               Actions
             </th>
           </tr>
         </thead>
         <tbody>
-          {clusters.map(cluster => {
-            const primaryTitle = cluster.primaryStory?.title || cluster.primaryStory?.sourceTitle || 'No primary'
+          {rows.map(cluster => {
             return (
               <tr key={cluster.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
                 <td className="px-3 py-2">
@@ -40,7 +55,7 @@ export function ClusterTable({ clusters, onEdit, onDissolve }: ClusterTableProps
                     onClick={() => onEdit(cluster.id)}
                     className="text-left font-medium text-neutral-900 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                   >
-                    {primaryTitle}
+                    {primaryTitle(cluster)}
                   </button>
                   {/* Mobile metadata */}
                   <div className="flex flex-wrap items-center gap-1.5 mt-1 md:hidden">

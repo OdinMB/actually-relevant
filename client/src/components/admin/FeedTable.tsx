@@ -4,6 +4,7 @@ import type { Feed, Issue } from '@shared/types'
 import type { FeedQualityMetrics } from '../../lib/admin-api'
 import { FeedFaviconPreview } from '../FeedFavicon'
 import { ActionIconButton } from '../ui/ActionIconButton'
+import { SortableHeader, useSortableRows, type SortColumns } from '../ui/SortableHeader'
 import { formatDateWithTime } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
 import { dominantMethod } from './feedQuality'
@@ -17,52 +18,74 @@ interface FeedTableProps {
   onDelete: (id: string) => void
 }
 
+type FeedSortKey = 'title' | 'issue' | 'language' | 'interval' | 'crawled' | 'publishRate' | 'avgRelevance' | 'method' | 'lastCrawled'
+
+const TH = 'px-3 py-2 font-medium text-neutral-500 whitespace-nowrap'
+
 export function FeedTable({ feeds, issues, qualityMetrics, onEdit, onCrawl, onDelete }: FeedTableProps) {
   const issueMap = new Map(issues.map(i => [i.id, i.name]))
+  const metrics = (feed: Feed) => qualityMetrics?.[feed.id]
+
+  const columns: SortColumns<Feed, FeedSortKey> = {
+    title: { value: f => f.title },
+    issue: { value: f => issueMap.get(f.issueId) },
+    language: { value: f => f.language },
+    interval: { value: f => f.crawlIntervalHours, firstDirection: 'asc' },
+    crawled: { value: f => metrics(f)?.totalCrawled },
+    publishRate: { value: f => metrics(f)?.publishRate },
+    avgRelevance: { value: f => metrics(f)?.avgRelevance },
+    method: { value: f => dominantMethod(metrics(f)?.extractionMethods) },
+    lastCrawled: { value: f => f.lastCrawledAt, firstDirection: 'desc' },
+  }
+  // The server lists feeds A to Z by title; start there so the arrow shows it
+  const { rows, sort, sortBy } = useSortableRows(feeds, columns, { key: 'title', direction: 'asc' })
+  const header = { sort, onSort: sortBy }
 
   return (
     <div className="overflow-x-auto bg-white rounded-lg border border-neutral-200 shadow-sm">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            <SortableHeader column="title" {...header} className={TH}>
               Title
-            </th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="issue" {...header} className={`hidden md:table-cell ${TH}`}>
               Issue
-            </th>
-            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="language" {...header} className={`hidden lg:table-cell ${TH}`}>
               Lang
-            </th>
-            <th scope="col" className="hidden lg:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="interval" {...header} className={`hidden lg:table-cell ${TH}`}>
               Interval
-            </th>
-            <th
-              scope="col"
-              className="hidden xl:table-cell text-right px-3 py-2 font-medium text-neutral-500"
+            </SortableHeader>
+            <SortableHeader
+              column="crawled"
+              {...header}
+              align="right"
+              className={`hidden xl:table-cell ${TH}`}
               title="Every story ever crawled, including those the monthly cleanup deleted"
             >
               Crawled
-            </th>
-            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="publishRate" {...header} align="center" className={`hidden xl:table-cell ${TH}`}>
               Pub %
-            </th>
-            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="avgRelevance" {...header} align="center" className={`hidden xl:table-cell ${TH}`}>
               Avg Rel.
-            </th>
-            <th scope="col" className="hidden xl:table-cell text-center px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="method" {...header} align="center" className={`hidden xl:table-cell ${TH}`}>
               Method
-            </th>
-            <th scope="col" className="hidden md:table-cell text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="lastCrawled" {...header} className={`hidden md:table-cell ${TH}`}>
               Last Crawled
-            </th>
+            </SortableHeader>
             <th scope="col" className="px-3 py-2 text-right font-medium text-neutral-500">
               Actions
             </th>
           </tr>
         </thead>
         <tbody>
-          {feeds.map(feed => (
+          {rows.map(feed => (
             <tr key={feed.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
               <td className="px-3 py-2">
                 <div className="flex items-center gap-1.5">

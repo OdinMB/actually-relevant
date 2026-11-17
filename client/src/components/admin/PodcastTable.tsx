@@ -1,6 +1,7 @@
 import type { PodcastListItem } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { SortableHeader, useSortableRows, type SortColumns } from '../ui/SortableHeader'
 import { BRAND } from '../../config'
 import { formatDate } from '../../lib/constants'
 import { PodcastStageBadge } from './PodcastStageBadge'
@@ -12,37 +13,52 @@ interface PodcastTableProps {
   onDelete: (id: string) => void
 }
 
+type PodcastSortKey = 'title' | 'week' | 'stories' | 'created'
+
+const COLUMNS: SortColumns<PodcastListItem, PodcastSortKey> = {
+  title: { value: p => p.title },
+  week: { value: p => (p.kind === 'standalone' ? null : p.weekKey), firstDirection: 'desc' },
+  stories: { value: p => p.storyIds.length },
+  created: { value: p => p.createdAt, firstDirection: 'desc' },
+}
+
+const TH = 'text-left px-3 py-2 font-medium text-neutral-500'
+
 export function PodcastTable({ podcasts, onView, onDelete }: PodcastTableProps) {
+  const { rows, sort, sortBy } = useSortableRows(podcasts, COLUMNS, null)
+  const header = { sort, onSort: sortBy }
+
   return (
     <div className="overflow-x-auto bg-white rounded-lg border border-neutral-200 shadow-sm">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            <SortableHeader column="title" {...header} className={TH}>
               Title
-            </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="week" {...header} className={TH}>
               Week
-            </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            {/* Stage and status are derived badges with no natural order, so they don't sort */}
+            <th scope="col" className={TH}>
               Stage
             </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            <th scope="col" className={TH}>
               Status
             </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            <SortableHeader column="stories" {...header} className={TH}>
               Stories
-            </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="created" {...header} className={TH}>
               Created
-            </th>
+            </SortableHeader>
             <th scope="col" className="text-right px-3 py-2 font-medium text-neutral-500">
               Actions
             </th>
           </tr>
         </thead>
         <tbody>
-          {podcasts.map(pod => (
+          {rows.map(pod => (
             <tr key={pod.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
               <td className="px-3 py-2">
                 <button

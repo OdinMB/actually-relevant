@@ -1,6 +1,7 @@
 import type { Newsletter } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { SortableHeader, useSortableRows, type SortColumns } from '../ui/SortableHeader'
 import { TimeWithRelative } from './TimeWithRelative'
 import { BRAND } from '../../config'
 
@@ -10,31 +11,45 @@ interface NewsletterTableProps {
   onDelete: (id: string) => void
 }
 
+type NewsletterSortKey = 'title' | 'status' | 'stories' | 'created'
+
+const COLUMNS: SortColumns<Newsletter, NewsletterSortKey> = {
+  title: { value: n => n.title },
+  status: { value: n => n.status },
+  stories: { value: n => n.storyIds.length },
+  created: { value: n => n.createdAt, firstDirection: 'desc' },
+}
+
+const TH = 'px-3 py-2 font-medium text-neutral-500'
+
 export function NewsletterTable({ newsletters, onView, onDelete }: NewsletterTableProps) {
+  const { rows, sort, sortBy } = useSortableRows(newsletters, COLUMNS, null)
+  const header = { sort, onSort: sortBy }
+
   return (
     <div className="overflow-x-auto bg-white rounded-lg border border-neutral-200 shadow-sm">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50">
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            <SortableHeader column="title" {...header} className={TH}>
               Title
-            </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="status" {...header} className={TH}>
               Status
-            </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="stories" {...header} className={TH}>
               Stories
-            </th>
-            <th scope="col" className="text-left px-3 py-2 font-medium text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="created" {...header} className={TH}>
               Created
-            </th>
+            </SortableHeader>
             <th scope="col" className="text-right px-3 py-2 font-medium text-neutral-500">
               Actions
             </th>
           </tr>
         </thead>
         <tbody>
-          {newsletters.map(nl => (
+          {rows.map(nl => (
             <tr key={nl.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
               <td className="px-3 py-2">
                 <button

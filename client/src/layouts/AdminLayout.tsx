@@ -211,7 +211,10 @@ function AdminShell() {
 
               <NewVersionBanner />
 
-              <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+              {/* `relative` makes this scroll box the containing block for visually hidden (absolutely positioned)
+                  text such as table captions; without it that text escapes to the document and makes the
+                  window scroll past the one-screen shell into blank space */}
+              <main className="relative flex-1 overflow-y-auto p-4 lg:p-6">
                 <Suspense
                   fallback={
                     <div className="flex justify-center py-12">
