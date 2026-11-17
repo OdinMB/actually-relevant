@@ -60,6 +60,7 @@ import {
   anchorDate,
   domainOf,
   dropOptedOut,
+  normalizedUrl,
   filterCandidates,
   keepExtracted,
   searchWindow,
@@ -180,7 +181,8 @@ export interface ResearchEarlier {
   facts: ResearchFact[]
 }
 
-export type DropKind = DropReason | ExtractDropReason | 'extraction-failed'
+/** `known`: a page a research pass's pool already holds or left out, not read again. */
+export type DropKind = DropReason | ExtractDropReason | 'extraction-failed' | 'known'
 
 /** What one pass of the checks found, recorded for the weekly tally (`.context/story-research.md`, "Own words"). */
 export interface CheckPass {
@@ -305,6 +307,7 @@ async function searchCoverage(
   call: Call,
   deps: ResearchDeps,
   r: StoryResearch,
+  pickQueries: CoverageOptions['pickQueries'] = q => q,
 ): Promise<CandidateSource[]> {
   const o = story.original
   const prompt = buildQueriesPrompt({
@@ -321,7 +324,7 @@ async function searchCoverage(
   if (queries.length === 0) throw new Stop('queries: none written')
 
   const found: CandidateSource[] = []
-  for (const q of queries) {
+  for (const q of pickQueries(queries)) {
     let res: ResearchSearchAnswer
     try {
       res = await deps.tavily.search({ query: q.query, startDate: window.start, endDate: window.end })
@@ -597,14 +600,44 @@ async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFa
   return r.draft
 }
 
-async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r: StoryResearch): Promise<Draft> {
+/** What a research pass tells the coverage steps (`extractCoverage`); research's own run tells them nothing. */
+export interface CoverageOptions {
+  /** Pages not read again (`normalizedUrl`): those the story's pool holds or left out. */
+  known?: ReadonlySet<string>
+  /** The queries to search of those written, in order (a pass skips those made before). */
+  pickQueries?: (queries: { query: string; language: string }[]) => { query: string; language: string }[]
+}
+
+/** What the coverage steps settled, which the write reads. */
+export interface Coverage {
+  articleDate: string
+  window: SearchWindow
+}
+
+/**
+ * Steps 1-6: own sources, queries, search, opt-outs and filter, one extraction per source and
+ * earlier coverage, into `r.sources` and `r.earlier`. Throws research's stop on a fallback
+ * (`fallbackOf` reads it): the facts already extracted stay in `r`.
+ */
+export async function extractCoverage(
+  story: ResearchStory,
+  deps: ResearchDeps,
+  call: Call,
+  r: StoryResearch,
+  options: CoverageOptions = {},
+): Promise<Coverage> {
   const o = story.original
   const articleDate = anchorDate(o.datePublished, o.dateCrawled).slice(0, 10)
   const window = searchWindow(articleDate, deps.latestDate)
   const own = await ownSources(story, call)
-  const found = await searchCoverage(story, articleDate, window, call, deps, r)
+  const found = await searchCoverage(story, articleDate, window, call, deps, r, options.pickQueries)
 
-  const allowed = await dropOptedOut({ own, search: found }, deps.sourcePolicy)
+  const known = options.known ?? new Set<string>()
+  const isKnown = (c: CandidateSource) => known.has(normalizedUrl(c.url))
+  const fresh = { own: own.filter(c => !isKnown(c)), search: found.filter(c => !isKnown(c)) }
+  const knownCount = own.length + found.length - fresh.own.length - fresh.search.length
+  if (knownCount > 0) r.drops.known = knownCount
+  const allowed = await dropOptedOut(fresh, deps.sourcePolicy)
   const filtered = filterCandidates({ original: { url: o.url, text: o.content }, own: allowed.own, search: allowed.search, window })
   r.candidates = own.length + found.length
   for (const d of [...allowed.dropped, ...filtered.dropped]) r.drops[d.reason] = (r.drops[d.reason] ?? 0) + 1
@@ -627,16 +660,70 @@ async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r:
   ]
   const used = new Set([story.id, ...filtered.selected.flatMap(s => (s.storyId ? [s.storyId] : []))])
   await buildPool(story, inputs, used, call, deps, r)
+  return { articleDate, window }
+}
 
-  const dated = [...r.sources.flatMap(s => publishedFact(s.id, s.outlet, s.date)), ...r.earlier.flatMap(e => publishedFact(e.id, 'Actually Relevant', e.date))]
-  const facts = new Map([...r.sources.flatMap(s => s.facts), ...r.earlier.flatMap(e => e.facts), ...dated].map(f => [f.id, f]))
+/** Every fact the writer may cite, by id: the sources' and earlier stories' facts, and each one's publication date (`S2F0`). */
+export function citableFacts(sources: ResearchSource[], earlier: ResearchEarlier[]): Map<string, PoolFact> {
+  const dated = [...sources.flatMap(s => publishedFact(s.id, s.outlet, s.date)), ...earlier.flatMap(e => publishedFact(e.id, 'Actually Relevant', e.date))]
+  return new Map([...sources.flatMap(s => s.facts), ...earlier.flatMap(e => e.facts), ...dated].map(f => [f.id, f]))
+}
+
+/** What a pass's article step writes from: the facts it may cite, apart from the sources the checks read (`r.sources`). */
+export interface ArticleInput {
+  story: ResearchStory
+  coverage: Coverage
+  sources: ResearchSource[]
+  earlier: ResearchEarlier[]
+}
+
+/**
+ * Steps 7-8 and the gate on evidence gathered before (a research pass's pool): the write from
+ * `input`'s facts, the checks against every source in `r.sources`, the repair rounds, the derived
+ * fields and the gate, into `r.verdict`. Never throws.
+ */
+export async function runPassArticle(input: ArticleInput, relevanceMin: number, call: Call, r: StoryResearch): Promise<void> {
+  const write = {
+    article: input.story.assess,
+    articleDate: input.coverage.articleDate,
+    oldBefore: input.coverage.window.start,
+    sources: input.sources,
+    earlier: input.earlier,
+  }
+  try {
+    r.verdict = decideGate({ draft: await writeChecked(write, citableFacts(input.sources, input.earlier), call, r) }, relevanceMin)
+  } catch (err) {
+    r.verdict = decideGate(fallbackOf(err), relevanceMin)
+  }
+}
+
+async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r: StoryResearch): Promise<Draft> {
+  const { articleDate, window } = await extractCoverage(story, deps, call, r)
+  const facts = citableFacts(r.sources, r.earlier)
   return writeChecked({ article: story.assess, articleDate, oldBefore: window.start, sources: r.sources, earlier: r.earlier }, facts, call, r)
 }
 
-/** Runs steps 1-8 for one story. Never throws: a failed research is the `fallback` verdict with its reason and category. */
-export async function researchStory(story: ResearchStory, deps: ResearchDeps): Promise<StoryResearch> {
-  const r: StoryResearch = {
-    storyId: story.id,
+/** A stop's fallback reason and category; any other error is a technical fallback. */
+export function fallbackOf(err: unknown): { failed: string; category: FallbackCategory } {
+  return err instanceof Stop ? { failed: err.message, category: err.category } : { failed: `error: ${messageOf(err)}`, category: 'technical' }
+}
+
+/** A step call as the steps make it: recorded in `r.calls`, its answer unescaped. */
+export type StepCaller = Call
+
+export function recordingCall(call: ResearchCall, r: StoryResearch): StepCaller {
+  return async (step, schema, prompt) => {
+    const rec = await call(step, schema, prompt)
+    r.calls.push({ step, outcome: rec.outcome, usage: rec.usage, costUsd: rec.costUsd, model: rec.model })
+    // The prompts escape every fetched text, and the model copies the escapes into its answer
+    return { parsed: rec.outcome === 'ok' ? unescapeXmlDeep(rec.parsed) : null, outcome: rec.outcome }
+  }
+}
+
+/** A story's research before its first step. */
+export function emptyResearch(storyId: string, optOutChecked: boolean): StoryResearch {
+  return {
+    storyId,
     calls: [],
     credits: 0,
     searches: [],
@@ -650,21 +737,19 @@ export async function researchStory(story: ResearchStory, deps: ResearchDeps): P
     checks: [],
     failedOn: null,
     support: { facts: 0, found: 0 },
-    optOutChecked: deps.sourcePolicy !== undefined,
+    optOutChecked,
     verdict: { kind: 'fallback', reason: 'not run', category: 'technical' },
   }
-  const call: Call = async (step, schema, prompt) => {
-    const rec = await deps.call(step, schema, prompt)
-    r.calls.push({ step, outcome: rec.outcome, usage: rec.usage, costUsd: rec.costUsd, model: rec.model })
-    // The prompts escape every fetched text, and the model copies the escapes into its answer
-    return { parsed: rec.outcome === 'ok' ? unescapeXmlDeep(rec.parsed) : null, outcome: rec.outcome }
-  }
+}
+
+/** Runs steps 1-8 for one story. Never throws: a failed research is the `fallback` verdict with its reason and category. */
+export async function researchStory(story: ResearchStory, deps: ResearchDeps): Promise<StoryResearch> {
+  const r = emptyResearch(story.id, deps.sourcePolicy !== undefined)
+  const call = recordingCall(deps.call, r)
   try {
     r.verdict = decideGate({ draft: await research(story, deps, call, r) }, deps.relevanceMin)
   } catch (err) {
-    const failed =
-      err instanceof Stop ? { failed: err.message, category: err.category } : { failed: `error: ${messageOf(err)}`, category: 'technical' as const }
-    r.verdict = decideGate(failed, deps.relevanceMin)
+    r.verdict = decideGate(fallbackOf(err), deps.relevanceMin)
   }
   return r
 }

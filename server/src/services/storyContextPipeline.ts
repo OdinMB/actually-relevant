@@ -26,7 +26,7 @@ import {
   type StructuredFact,
 } from '../schemas/storyContext.js'
 import { publishedDay, supportFound } from './researchChecks.js'
-import { sourceLines } from './researchCopying.js'
+import { sourceLines, type WordingSource } from './researchCopying.js'
 import { domainOf, dropOptedOut, type CandidateSource, type SourcePolicy } from './researchFilter.js'
 import {
   applyBoxVerdicts,
@@ -305,7 +305,7 @@ const sourceNumber = (id: string) => Number(/^S(\d+)$/.exec(id)?.[1] ?? -1)
  * The structured fields as stored: an as-of read only when valid, nobody credited as null, and a
  * range whose ends are equal as a single value (a chart draws no range).
  */
-function structured(
+export function structured(
   a: StructuredFact,
 ): Pick<ContextFactData, 'value' | 'valueHigh' | 'unit' | 'approx' | 'provisional' | 'counted' | 'place' | 'asOf' | 'credited' | 'creditedKind' | 'validity'> {
   return {
@@ -362,7 +362,12 @@ export const RESPONSE_ANGLES: { angle: ResponseAngle; wanted: string; fallback: 
  * story with earlier runs (`made`), a query they made and a `response` angle they searched are
  * skipped and listed, and take no place among the `maxSearches`.
  */
-export function planSearches(gap: GapList, story: { title: string; text: string }, made: Pick<EarlierWork, 'queries' | 'angles'> = NO_EARLIER_WORK) {
+export function planSearches(
+  gap: GapList,
+  story: { title: string; text: string },
+  made: Pick<EarlierWork, 'queries' | 'angles'> = NO_EARLIER_WORK,
+  maxSearches: number = config.storyContext.maxSearches,
+) {
   const slot = new Map(gap.slots.map(s => [s.slot, s]))
   const covered = (s: ContextSlot) => slot.get(s)?.covered ?? 'no'
   const quote = gap.responseInStory.trim()
@@ -390,7 +395,7 @@ export function planSearches(gap: GapList, story: { title: string; text: string 
     return { slot: 'response', wanted: a.wanted, query, angle: a.angle, recent: false }
   })
   const others = gap.searches.filter(s => (slot.get(s.slot)?.needed ?? false) && covered(s.slot) !== 'yes')
-  const searches = [...response, ...others].filter(fresh).slice(0, config.storyContext.maxSearches)
+  const searches = [...response, ...others].filter(fresh).slice(0, maxSearches)
   return {
     searches,
     skipped,
@@ -415,10 +420,25 @@ const asCandidate = (r: ContextSearchAnswer['results'][number]): CandidateSource
 
 const chunks = <T>(list: T[], size: number): T[][] => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size))
 
-export async function buildStoryContext(input: ContextInput, deps: ContextDeps): Promise<StoryContextResult> {
-  const windows = WINDOWS()
-  const calls: ContextCallRecord[] = []
-  const record: ContextRunRecord = {
+/** A step call as the stages make it, recorded and its answer unescaped (`stepCaller`). */
+export type ContextStepCall = <T>(
+  step: ContextStep,
+  schema: z.ZodType<T>,
+  prompt: string,
+) => Promise<{ parsed: T | null; outcome: LlmCallOutcome; model: string; transient?: boolean }>
+
+/** The stages' caller: each call recorded in `calls`, its answer unescaped (the prompts escape every fetched text, and the model copies the escapes). */
+export function stepCaller(call: ContextCall, calls: ContextCallRecord[]): ContextStepCall {
+  return async (step, schema, prompt) => {
+    const res = await call(step, schema, prompt)
+    calls.push({ step, outcome: res.outcome, usage: res.usage, costUsd: res.costUsd, model: res.model })
+    return { parsed: res.parsed === null ? null : unescapeXmlDeep(res.parsed), outcome: res.outcome, model: res.model, transient: res.transient }
+  }
+}
+
+/** A run's record before its first step. */
+export function emptyContextRecord(optOutChecked: boolean): ContextRunRecord {
+  return {
     slots: [],
     responseInStory: null,
     responseFallback: false,
@@ -432,16 +452,273 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
     numberHints: [],
     responseNotFound: false,
     tally: { checked: 0, failed: 0 },
-    calls,
-    optOutChecked: deps.sourcePolicy !== undefined,
+    calls: [],
+    optOutChecked,
   }
-  let credits = 0
-  const totals = () => ({ credits, modelUsd: calls.reduce((sum, c) => sum + c.costUsd, 0), record })
-  const call = async <T>(step: ContextStep, schema: z.ZodType<T>, prompt: string) => {
-    const res = await deps.call(step, schema, prompt)
-    calls.push({ step, outcome: res.outcome, usage: res.usage, costUsd: res.costUsd, model: res.model })
-    return { parsed: res.parsed === null ? null : unescapeXmlDeep(res.parsed), outcome: res.outcome, model: res.model, transient: res.transient }
+}
+
+/** What a failed stage leaves to store: our own step messages and Tavily's sanitized ones, and whether a later attempt may pass. */
+export function contextFailure(err: unknown, transient?: (err: unknown) => boolean): { error: string; transient: boolean } {
+  return { error: errorText(err), transient: err instanceof Stop ? err.transient : (transient?.(err) ?? false) }
+}
+
+/** A fact to structure (step 2): research's statement and sentence, and its source as the prompt shows it. */
+export interface FactToStructure {
+  id: string
+  statement: string
+  supportingSentence: string
+  measures: string
+  source: { outlet: string; date: string | null; kind: string }
+}
+
+/** Step 2: each fact's structured fields, by its id, answers for ids not asked ignored; no call for none. A failed call throws. */
+export async function structureFacts(
+  facts: FactToStructure[],
+  call: ContextStepCall,
+): Promise<{ answers: Map<string, ReturnType<typeof structured>>; model: string }> {
+  const answers = new Map<string, ReturnType<typeof structured>>()
+  if (facts.length === 0) return { answers, model: '' }
+  const asked = new Set(facts.map(f => f.id))
+  const res = await call('structure', structureSchema, buildStructurePrompt({ facts }))
+  for (const a of required(res, 'structure').facts) if (asked.has(a.id) && !answers.has(a.id)) answers.set(a.id, structured(a))
+  return { answers, model: res.model }
+}
+
+export interface GapStageInput {
+  story: StoryText
+  /** The story's text the response check looks in. */
+  storyText: string
+  title: string
+  summary: string
+  storyDay: string
+  /** The facts the gap list reads. */
+  facts: ContextFactData[]
+  /** Pages not picked again: those known, their domains, and those read before. */
+  known: { urls: string[]; domains: string[]; read: string[] }
+  /** Queries and `response` angles searched before, skipped. */
+  made: Pick<EarlierWork, 'queries' | 'angles'>
+  /** The number the first new source takes (`S<n>`). */
+  firstSource: number
+  maxSearches?: number
+}
+
+export interface GapStageResult {
+  gap: GapList
+  plan: ReturnType<typeof planSearches>
+  /** The search facts extracted, unchecked. */
+  facts: ContextFactData[]
+}
+
+/**
+ * Steps 3-7: the gap list, the searches it leaves, the opt-out and source filter, one extraction per
+ * new source. Every search is waited for: one that failed after its retries throws, but those that
+ * completed were billed, so their credits are added to `spent` and their records kept first.
+ */
+export async function gapStage(
+  input: GapStageInput,
+  deps: Pick<ContextDeps, 'search' | 'sourcePolicy'>,
+  call: ContextStepCall,
+  record: ContextRunRecord,
+  spent: { credits: number },
+): Promise<GapStageResult> {
+  const windows = WINDOWS()
+  const gapFacts = input.facts.map(f => ({ id: f.ref, text: renderFact(f), current: isCurrent({ ...f, sourceDate: f.source.date }, input.storyDay, windows) }))
+  const gap = required(await call('gap-list', gapListSchema, buildGapListPrompt({ story: input.story, facts: gapFacts })), 'gap-list')
+  record.slots = gap.slots
+  const plan = planSearches(gap, { title: input.title, text: input.storyText }, input.made, input.maxSearches)
+  record.responseInStory = plan.storyReports
+  record.responseFallback = plan.fallback
+  record.skippedSearches = plan.skipped
+
+  const facts: ContextFactData[] = []
+  if (plan.searches.length === 0) return { gap, plan, facts }
+  const settled = await Promise.allSettled(plan.searches.map(s => deps.search({ query: s.query, recent: s.recent, endDate: input.storyDay })))
+  const completed = settled.flatMap((r, i) => (r.status === 'fulfilled' ? [{ i, answer: r.value }] : []))
+  const searchRecord = (i: number, answer: ContextSearchAnswer, kept: string[]): SearchRecord => ({
+    ...plan.searches[i]!,
+    cached: answer.cached,
+    credits: answer.credits,
+    results: answer.results.length,
+    kept,
+  })
+  spent.credits += completed.reduce((sum, { answer }) => sum + answer.credits, 0)
+  record.searches = completed.map(({ i, answer }) => searchRecord(i, answer, []))
+  const failure = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+  if (failure) throw failure.reason
+  const found = completed.map(({ answer }) => answer)
+  const allowed = await Promise.all(
+    found.map(async (a, i) => {
+      const { search, dropped } = await dropOptedOut({ own: [], search: a.results.map(asCandidate) }, deps.sourcePolicy)
+      record.sourceDrops.push(...dropped.map(d => ({ url: d.url, search: i, reason: 'opt-out' as const })))
+      const urls = new Set(search.map(c => c.url))
+      return { results: a.results.filter(r => urls.has(r.url)) }
+    }),
+  )
+  const { picked, drops } = pickNewSources(allowed, input.known)
+  record.sourceDrops.push(...drops)
+  const kept = (i: number) => picked.filter(p => p.search === i).map(p => p.result.url)
+  record.searches = completed.map(({ i, answer }) => searchRecord(i, answer, kept(i)))
+
+  const wanted = plan.searches.map(s => ({ slot: s.slot, wanted: s.wanted }))
+  const extracted = await Promise.all(
+    picked.map(async (p, k) => {
+      const id = `S${input.firstSource + k}`
+      const res = await call(
+        'extract',
+        contextExtractionSchema,
+        buildContextExtractionPrompt({
+          story: { title: input.title, summary: input.summary },
+          wanted,
+          source: { outlet: domainOf(p.result.url), url: p.result.url, date: publishedDay(p.result.date), title: p.result.title, text: p.result.text },
+        }),
+      )
+      return { id, p, res }
+    }),
+  )
+  for (const { id, p, res } of extracted) {
+    if (res.parsed === null) {
+      record.extractionDrops.push({ url: p.result.url, reason: res.outcome })
+      continue
+    }
+    if (!res.parsed.usable) {
+      record.extractionDrops.push({ url: p.result.url, reason: 'unusable' })
+      continue
+    }
+    const source: FactSource = {
+      id,
+      url: p.result.url,
+      outlet: res.parsed.outlet.trim() || domainOf(p.result.url),
+      title: p.result.title,
+      date: publishedDay(p.result.date),
+      kind: res.parsed.kind,
+    }
+    res.parsed.facts.slice(0, 5).forEach((f, j) => {
+      // Step 7: a fact without a statement or a sentence fails its structure
+      if (!f.statement.trim() || !f.supportingSentence.trim()) {
+        record.facts.leftOut++
+        return
+      }
+      facts.push({
+        ref: `${id}F${j + 1}`,
+        origin: 'search',
+        reusedFromId: null,
+        slot: f.slot,
+        source,
+        supportingSentence: f.supportingSentence,
+        passage: passageAround(p.result.text, f.supportingSentence),
+        supportFound: supportFound(f.supportingSentence, p.result.text),
+        statement: f.statement,
+        ...structured(f),
+        ...unverified,
+        model: res.model,
+        promptVersion: CONTEXT_PROMPT_VERSIONS.extract,
+      })
+    })
   }
+  record.facts.search = facts.length
+  return { gap, plan, facts }
+}
+
+/** Step 8: the fact check, research's prompt, at most `checkBatchSize` items a call; each fact with its verdict, counted and its drops recorded. */
+export async function checkFacts(toCheck: ContextFactData[], call: ContextStepCall, record: ContextRunRecord): Promise<ContextFactData[]> {
+  const verdictOf = new Map<string, { verdict: ContextFactData['verdict']; problem: string | null }>()
+  const checkedTexts = new Map<string, string>()
+  for (const batch of chunks(toCheck, config.storyContext.checkBatchSize)) {
+    const items = factCheckItems(batch)
+    for (const it of items) {
+      checkedTexts.set(it.item.factIds[0]!, it.item.text)
+      if (it.numberHints.length > 0) record.numberHints.push({ label: it.item.label, numbers: it.numberHints })
+    }
+    const answer: FactCheck = required(await call('fact-check', factCheckSchema, buildFactCheckPrompt(promptItems(items), [], [])), 'fact-check')
+    for (const [ref, v] of factVerdicts(answer, items)) verdictOf.set(ref, v)
+  }
+  const facts: ContextFactData[] = toCheck.map(f => {
+    const v = verdictOf.get(f.ref) ?? { verdict: 'unjudged' as const, problem: null }
+    return { ...f, verdict: v.verdict, verdictProblem: v.problem }
+  })
+  for (const f of facts) {
+    record.facts[f.verdict]++
+    if (f.verdict !== 'supported')
+      record.droppedFacts.push({ ref: f.ref, text: checkedTexts.get(f.ref) ?? renderFact(f), verdict: f.verdict, problem: f.verdictProblem })
+  }
+  return facts
+}
+
+export interface BoxStageInput {
+  story: StoryText
+  layout: StoryLayout
+  storyDay: string
+  /** The facts the cards may cite: supported, current or not. */
+  supported: ContextFactData[]
+  slots: GapList['slots']
+  responseInStory: boolean
+  /** Each source's voices, by source id, for the copying check. */
+  voices: ReadonlyMap<string, WordingSource['voices']>
+}
+
+export interface BoxStageResult {
+  boxes: DraftBox[]
+  writer: { model: string; promptVersion: string } | null
+  structural: number
+  judged: number
+  failed: number
+}
+
+/** Steps 9-11: the write, the box code checks and the box check, no repair (ADR-0061). No facts, no write. */
+export async function writeBoxes(input: BoxStageInput, call: ContextStepCall, record: ContextRunRecord): Promise<BoxStageResult> {
+  if (input.supported.length === 0) return { boxes: [], writer: null, structural: 0, judged: 0, failed: 0 }
+  const windows = WINDOWS()
+  const factMap = new Map(input.supported.map(f => [f.ref, f]))
+  const write = await call(
+    'write',
+    boxesSchema,
+    buildBoxesPrompt({
+      story: input.story,
+      facts: input.supported.map(f => ({
+        id: f.ref,
+        text: renderFact(f),
+        outlet: f.source.outlet,
+        date: f.source.date,
+        current: isCurrent({ ...f, sourceDate: f.source.date }, input.storyDay, windows),
+      })),
+      needed: input.slots.filter(s => s.needed || s.slot === 'response').map(s => ({ slot: s.slot, covered: s.covered })),
+      responseInStory: input.responseInStory,
+    }),
+  )
+  const writer = { model: write.model, promptVersion: CONTEXT_PROMPT_VERSIONS.write }
+  const structural = structuralBoxes(required(write, 'write'), new Set(factMap.keys()), layoutSpots(input.layout))
+  const resolved = resolveVisuals(structural.boxes, factMap, input.storyDay, windows)
+  record.boxDrops.push(...structural.drops, ...resolved.drops)
+  const items = boxCheckItems(resolved.boxes, factMap, input.storyDay, windows)
+  for (const it of items) if (it.checked.numberHints.length > 0) record.numberHints.push({ label: it.checked.item.label, numbers: it.checked.numberHints })
+  const wording = wordingSources(input.supported, input.voices)
+  const lines = sourceLines(wording)
+  const answers: { answer: FactCheck; items: BoxItem[] }[] = []
+  for (const batch of chunks(items, config.storyContext.checkBatchSize)) {
+    const answer = required(await call('box-check', factCheckSchema, buildFactCheckPrompt(promptItems(batch.map(b => b.checked)), lines, [])), 'box-check')
+    answers.push({ answer, items: batch })
+  }
+  const verdicts = applyBoxVerdicts(resolved.boxes, items, answers, lines, boxCopying(resolved.boxes, wording, config.research.copiedRunWords))
+  record.boxDrops.push(...verdicts.drops)
+  return { boxes: verdicts.boxes, writer, structural: structural.structural, judged: verdicts.judged, failed: verdicts.failed }
+}
+
+/** Step 12: `response` looked for and the story does not report it, and nothing sourced answers it. The run records it; no card says so (owner decision 2026-11-17, ADR-0065). */
+export const responseNotFound = (
+  plan: Pick<ReturnType<typeof planSearches>, 'responseLookedFor' | 'storyReports'>,
+  facts: ContextFactData[],
+  boxes: DraftBox[],
+): boolean =>
+  plan.responseLookedFor &&
+  plan.storyReports === null &&
+  !(facts.some(f => f.slot === 'response' && f.verdict === 'supported') || boxes.some(b => b.type === 'response'))
+
+export async function buildStoryContext(input: ContextInput, deps: ContextDeps): Promise<StoryContextResult> {
+  const record = emptyContextRecord(deps.sourcePolicy !== undefined)
+  const calls = record.calls
+  const spent = { credits: 0 }
+  const totals = () => ({ credits: spent.credits, modelUsd: calls.reduce((sum, c) => sum + c.costUsd, 0), record })
+  const call = stepCaller(deps.call, calls)
 
   const research = input.sources.flatMap(s => s.facts.map(f => ({ s, f })))
   if (research.length === 0)
@@ -463,17 +740,10 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
 
   try {
     // Step 2: structure research's facts; answers only for the ids asked. None left: no call
-    const answers = new Map<string, StructuredFact>()
-    let structureModel = ''
-    if (toStructure.length > 0) {
-      const structure = await call(
-        'structure',
-        structureSchema,
-        buildStructurePrompt({ facts: toStructure.map(({ s, f }) => ({ ...f, source: { outlet: s.outlet, date: publishedDay(s.date), kind: s.kind } })) }),
-      )
-      for (const a of required(structure, 'structure').facts) if (!answers.has(a.id)) answers.set(a.id, a)
-      structureModel = structure.model
-    }
+    const { answers, model: structureModel } = await structureFacts(
+      toStructure.map(({ s, f }) => ({ ...f, source: { outlet: s.outlet, date: publishedDay(s.date), kind: s.kind } })),
+      call,
+    )
     const pass1 = toStructure.flatMap(({ s, f }): ContextFactData[] => {
       const a = answers.get(f.id)
       if (!a) return []
@@ -488,7 +758,7 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
           passage: null,
           supportFound: f.found,
           statement: f.statement,
-          ...structured(a),
+          ...a,
           ...unverified,
           model: structureModel,
           promptVersion: CONTEXT_PROMPT_VERSIONS.structure,
@@ -517,185 +787,60 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
     record.facts.carried = carried.length
     record.facts.reused = reused.length - carried.length
 
-    // Step 3: the gap list, and the searches it leaves
-    const gapFacts = [...pass1, ...reused].map(f => ({
-      id: f.ref,
-      text: renderFact(f),
-      current: isCurrent({ ...f, sourceDate: f.source.date }, input.storyDay, windows),
-    }))
-    const gap = required(await call('gap-list', gapListSchema, buildGapListPrompt({ story, facts: gapFacts })), 'gap-list')
-    record.slots = gap.slots
-    const plan = planSearches(gap, { title: input.title, text: storyText }, earlier)
-    record.responseInStory = plan.storyReports
-    record.responseFallback = plan.fallback
-    record.skippedSearches = plan.skipped
+    // Steps 3-7: the gap list, the searches it leaves, filter, extract
+    const {
+      gap,
+      plan,
+      facts: pass2,
+    } = await gapStage(
+      {
+        story,
+        storyText,
+        title: input.title,
+        summary: input.summary,
+        storyDay: input.storyDay,
+        facts: [...pass1, ...reused],
+        known: {
+          urls: [...input.sources.map(s => s.url), ...reused.map(f => f.source.url)],
+          domains: input.sources.map(s => domainOf(s.url)),
+          read: earlier.read,
+        },
+        made: earlier,
+        firstSource: next,
+      },
+      deps,
+      call,
+      record,
+      spent,
+    )
 
-    // Steps 4-6: search, filter, extract
-    const pass2: ContextFactData[] = []
-    if (plan.searches.length > 0) {
-      // Every search is waited for: one that failed after its retries fails the run, but those that
-      // completed were billed, so the run keeps their credits and records
-      const settled = await Promise.allSettled(plan.searches.map(s => deps.search({ query: s.query, recent: s.recent, endDate: input.storyDay })))
-      const completed = settled.flatMap((r, i) => (r.status === 'fulfilled' ? [{ i, answer: r.value }] : []))
-      const searchRecord = (i: number, answer: ContextSearchAnswer, kept: string[]): SearchRecord => ({
-        ...plan.searches[i]!,
-        cached: answer.cached,
-        credits: answer.credits,
-        results: answer.results.length,
-        kept,
-      })
-      credits += completed.reduce((sum, { answer }) => sum + answer.credits, 0)
-      record.searches = completed.map(({ i, answer }) => searchRecord(i, answer, []))
-      const failure = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected')
-      if (failure) throw failure.reason
-      const found = completed.map(({ answer }) => answer)
-      const allowed = await Promise.all(
-        found.map(async (a, i) => {
-          const { search, dropped } = await dropOptedOut({ own: [], search: a.results.map(asCandidate) }, deps.sourcePolicy)
-          record.sourceDrops.push(...dropped.map(d => ({ url: d.url, search: i, reason: 'opt-out' as const })))
-          const urls = new Set(search.map(c => c.url))
-          return { results: a.results.filter(r => urls.has(r.url)) }
-        }),
-      )
-      const known = [...input.sources.map(s => s.url), ...reused.map(f => f.source.url)]
-      const { picked, drops } = pickNewSources(allowed, { urls: known, domains: input.sources.map(s => domainOf(s.url)), read: earlier.read })
-      record.sourceDrops.push(...drops)
-      const kept = (i: number) => picked.filter(p => p.search === i).map(p => p.result.url)
-      record.searches = completed.map(({ i, answer }) => searchRecord(i, answer, kept(i)))
-
-      const extracted = await Promise.all(
-        picked.map(async (p, k) => {
-          const id = `S${next + k}`
-          const wantedHere = plan.searches.map(s => ({ slot: s.slot, wanted: s.wanted }))
-          const res = await call(
-            'extract',
-            contextExtractionSchema,
-            buildContextExtractionPrompt({
-              story: { title: input.title, summary: input.summary },
-              wanted: wantedHere,
-              source: { outlet: domainOf(p.result.url), url: p.result.url, date: publishedDay(p.result.date), title: p.result.title, text: p.result.text },
-            }),
-          )
-          return { id, p, res }
-        }),
-      )
-      next += picked.length
-      for (const { id, p, res } of extracted) {
-        if (res.parsed === null) {
-          record.extractionDrops.push({ url: p.result.url, reason: res.outcome })
-          continue
-        }
-        if (!res.parsed.usable) {
-          record.extractionDrops.push({ url: p.result.url, reason: 'unusable' })
-          continue
-        }
-        const source: FactSource = {
-          id,
-          url: p.result.url,
-          outlet: res.parsed.outlet.trim() || domainOf(p.result.url),
-          title: p.result.title,
-          date: publishedDay(p.result.date),
-          kind: res.parsed.kind,
-        }
-        res.parsed.facts.slice(0, 5).forEach((f, j) => {
-          // Step 7: a fact without a statement or a sentence fails its structure
-          if (!f.statement.trim() || !f.supportingSentence.trim()) {
-            record.facts.leftOut++
-            return
-          }
-          pass2.push({
-            ref: `${id}F${j + 1}`,
-            origin: 'search',
-            reusedFromId: null,
-            slot: f.slot,
-            source,
-            supportingSentence: f.supportingSentence,
-            passage: passageAround(p.result.text, f.supportingSentence),
-            supportFound: supportFound(f.supportingSentence, p.result.text),
-            statement: f.statement,
-            ...structured(f),
-            ...unverified,
-            model: res.model,
-            promptVersion: CONTEXT_PROMPT_VERSIONS.extract,
-          })
-        })
-      }
-    }
-    record.facts.search = pass2.length
-
-    // Step 8: the fact check, research's prompt, at most `checkBatchSize` items a call
-    const toCheck = [...pass1, ...pass2]
-    const verdictOf = new Map<string, { verdict: ContextFactData['verdict']; problem: string | null }>()
-    const checkedTexts = new Map<string, string>()
-    for (const batch of chunks(toCheck, config.storyContext.checkBatchSize)) {
-      const items = factCheckItems(batch)
-      for (const it of items) {
-        checkedTexts.set(it.item.factIds[0]!, it.item.text)
-        if (it.numberHints.length > 0) record.numberHints.push({ label: it.item.label, numbers: it.numberHints })
-      }
-      const answer: FactCheck = required(await call('fact-check', factCheckSchema, buildFactCheckPrompt(promptItems(items), [], [])), 'fact-check')
-      for (const [ref, v] of factVerdicts(answer, items)) verdictOf.set(ref, v)
-    }
-    const facts: ContextFactData[] = toCheck.map(f => {
-      const v = verdictOf.get(f.ref) ?? { verdict: 'unjudged' as const, problem: null }
-      return { ...f, verdict: v.verdict, verdictProblem: v.problem }
-    })
-    for (const f of facts) {
-      record.facts[f.verdict]++
-      if (f.verdict !== 'supported')
-        record.droppedFacts.push({ ref: f.ref, text: checkedTexts.get(f.ref) ?? renderFact(f), verdict: f.verdict, problem: f.verdictProblem })
-    }
+    // Step 8: the fact check
+    const facts = await checkFacts([...pass1, ...pass2], call, record)
 
     // Steps 9-11: the write, the box code checks and the box check
     const supported = [...facts.filter(f => f.verdict === 'supported'), ...reused]
-    const factMap = new Map(supported.map(f => [f.ref, f]))
-    let boxes: DraftBox[] = []
-    let writer: StoryContextResult['writer'] = null
-    let boxStructural = 0
-    let boxJudged = 0
-    let boxFailed = 0
-    if (supported.length > 0) {
-      const write = await call(
-        'write',
-        boxesSchema,
-        buildBoxesPrompt({
-          story,
-          facts: supported.map(f => ({
-            id: f.ref,
-            text: renderFact(f),
-            outlet: f.source.outlet,
-            date: f.source.date,
-            current: isCurrent({ ...f, sourceDate: f.source.date }, input.storyDay, windows),
-          })),
-          needed: gap.slots.filter(s => s.needed || s.slot === 'response').map(s => ({ slot: s.slot, covered: s.covered })),
-          responseInStory: plan.storyReports !== null,
-        }),
-      )
-      writer = { model: write.model, promptVersion: CONTEXT_PROMPT_VERSIONS.write }
-      const structural = structuralBoxes(required(write, 'write'), new Set(factMap.keys()), layoutSpots(input.layout))
-      boxStructural = structural.structural
-      const resolved = resolveVisuals(structural.boxes, factMap, input.storyDay, windows)
-      record.boxDrops.push(...structural.drops, ...resolved.drops)
-      const items = boxCheckItems(resolved.boxes, factMap, input.storyDay, windows)
-      for (const it of items) if (it.checked.numberHints.length > 0) record.numberHints.push({ label: it.checked.item.label, numbers: it.checked.numberHints })
-      const wording = wordingSources(supported, new Map(input.sources.map(s => [s.id, s.voices])))
-      const lines = sourceLines(wording)
-      const answers: { answer: FactCheck; items: BoxItem[] }[] = []
-      for (const batch of chunks(items, config.storyContext.checkBatchSize)) {
-        const answer = required(await call('box-check', factCheckSchema, buildFactCheckPrompt(promptItems(batch.map(b => b.checked)), lines, [])), 'box-check')
-        answers.push({ answer, items: batch })
-      }
-      const verdicts = applyBoxVerdicts(resolved.boxes, items, answers, lines, boxCopying(resolved.boxes, wording, config.research.copiedRunWords))
-      record.boxDrops.push(...verdicts.drops)
-      boxes = verdicts.boxes
-      boxJudged = verdicts.judged
-      boxFailed = verdicts.failed
-    }
+    const {
+      boxes,
+      writer,
+      structural: boxStructural,
+      judged: boxJudged,
+      failed: boxFailed,
+    } = await writeBoxes(
+      {
+        story,
+        layout: input.layout,
+        storyDay: input.storyDay,
+        supported,
+        slots: gap.slots,
+        responseInStory: plan.storyReports !== null,
+        voices: new Map(input.sources.map(s => [s.id, s.voices])),
+      },
+      call,
+      record,
+    )
 
-    // Step 12: the response searched for (this run, or an earlier one) and nothing sourced answers
-    // it. The run records it; no card says so (owner decision 2026-11-17, ADR-0065)
-    const answered = facts.some(f => f.slot === 'response' && f.verdict === 'supported') || boxes.some(b => b.type === 'response')
-    record.responseNotFound = plan.responseLookedFor && plan.storyReports === null && !answered
+    // Step 12: the response searched for (this run, or an earlier one) and nothing sourced answers it
+    record.responseNotFound = responseNotFound(plan, facts, boxes)
 
     // The reused facts a kept box cites are stored with this run, so its boxes resolve within it
     const cited = new Set(boxes.flatMap(boxRefs))
@@ -711,7 +856,6 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
     })
     return { status: 'completed', outcome: boxes.length > 0 ? 'built' : 'none-kept', facts: stored, boxes, writer, error: null, transient: false, ...totals() }
   } catch (err) {
-    const transient = err instanceof Stop ? err.transient : (deps.transient?.(err) ?? false)
-    return { status: 'failed', outcome: 'technical', facts: [], boxes: [], writer: null, error: errorText(err), transient, ...totals() }
+    return { status: 'failed', outcome: 'technical', facts: [], boxes: [], writer: null, ...contextFailure(err, deps.transient), ...totals() }
   }
 }
