@@ -13,7 +13,7 @@ const run = (extra: Partial<JudgedRun> = {}): JudgedRun => ({
       contextFact('S0F1', { source: { ...contextFact('S0F1').source, url: 'https://example.com/S0' } }),
       contextFact('S3F1', { origin: 'search', value: null }),
     ],
-    boxes: [sentenceBox('compared', ['S0F1'], { place: 'P1' }), sentenceBox('response', [], { sentences: [], gap: true })],
+    boxes: [sentenceBox('compared', ['S0F1'], { place: 'P1' })],
   }),
   ...extra,
 })
@@ -46,7 +46,7 @@ function answers(schemaName: string, prompt: string): unknown {
 }
 
 describe('keptItems', () => {
-  it("is production's box check items of the kept cards, the honest gap having none", () => {
+  it("is production's box check items of the kept cards", () => {
     expect(keptItems(run()).map(i => [i.checked.item.label, i.checked.item.text, i.checked.item.factIds])).toEqual([
       ['Box 1 sentence 1', 'A sentence.', ['S0F1']],
     ])

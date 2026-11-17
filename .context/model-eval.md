@@ -197,7 +197,6 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context
   | Must needs the story doesn't state, met by the kept cards | at least 60% |
   | Wasted searches (none of whose sources gave a supported fact a kept card cites) | at most 1 a story |
   | A response card, on stories whose key has a findable response need not in the story | at least 70% |
-  | The honest gap where the key has a findable response | none |
   | Box items the judge finds unsupported (each listed for a read) | none |
   | Notes `model` places beside the text that add to it (`random` beside it for comparison) | at least 85%; below it, launch with `STORY_CONTEXT_PLACEMENT=section` |
   | Cost per story: model calls at the flex price (half the ledger's) plus credits at $0.008 | at most $0.05 |

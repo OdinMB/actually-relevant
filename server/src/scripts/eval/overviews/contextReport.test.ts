@@ -153,7 +153,7 @@ describe('contextLines', () => {
 
   it('shows each run, the fields, the hindsight and the items for a read', () => {
     const md = contextLines(report()).join('\n')
-    expect(md).toContain('| 2 | 1 | 0 | 1 of 2 | 2 (1; 1) | 1 of 1 | 0 (0) | 1 (1; 0) | 100.0% of 1 / 0.0% of 1 | $0.0260 |')
+    expect(md).toContain('| 2 | 1 | 0 | 1 of 2 | 2 (1; 1) | 1 of 1 | 1 (1; 0) | 100.0% of 1 / 0.0% of 1 | $0.0260 |')
     expect(md).toContain('Wrong by field: value 0, unit 0, counted 0, place 1, asOf 0, credited 0.')
     expect(md).toContain('4 results, 1 of them undated (25.0%) and 1 dated after the story')
     expect(md).toContain('#### Box items found unsupported (1)')

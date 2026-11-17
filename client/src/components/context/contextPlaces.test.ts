@@ -7,7 +7,6 @@ const box = (id: string, place: string, extra: Partial<ContextBoxView> = {}): Co
   type: 'compared',
   heading: id,
   teaser: '',
-  gap: false,
   place,
   sentences: [],
   visual: null,
@@ -33,9 +32,9 @@ describe('placeContext', () => {
     expect(ids(placed.pointNotes)).toEqual(['first'])
   })
 
-  it('keeps the In numbers card and the honest gap under More context whatever their place says', () => {
-    const placed = placeContext([box('figures', 'P1', { type: 'figures' }), box('gap', 'W1', { type: 'response', gap: true })], { paragraphs: 1, points: 1 })
-    expect(ids(placed.section)).toEqual(['figures', 'gap'])
+  it('keeps the In numbers card under More context whatever its place says', () => {
+    const placed = placeContext([box('figures', 'P1', { type: 'figures' })], { paragraphs: 1, points: 1 })
+    expect(ids(placed.section)).toEqual(['figures'])
     expect(hasNotes(placed)).toBe(false)
   })
 })

@@ -242,12 +242,9 @@ export interface ContextChartView {
 export interface ContextBoxView {
   id: string
   type: ContextBoxType
-  /** Empty for the honest gap. */
   heading: string
-  /** The phone's one-line note; empty for the honest gap. */
+  /** The phone's one-line note. */
   teaser: string
-  /** The honest gap: no sentences, the page's fixed wording. */
-  gap: boolean
   /** `P<n>` (a story paragraph), `W<n>` (a Why This Matters point) or `section` (More context). */
   place: string
   /** Cited as research's passages are, against `StoryContextView.sources`. */
@@ -1302,7 +1299,8 @@ export interface ContextRunRecord {
   droppedFacts: { ref: string; text: string; verdict: 'rejected' | 'unjudged'; problem: string | null }[]
   boxDrops: { label: string; cause: 'structure' | 'expired' | 'undrawn' | 'check' | 'unjudged' | 'copying' | 'empty'; problem?: string }[]
   numberHints: { label: string; numbers: string[] }[]
-  honestGap: boolean
+  /** `response` was searched for, the story does not report it, and nothing supported answers it: no card says so. */
+  responseNotFound: boolean
   tally: { checked: number; failed: number }
   calls: { step: string; outcome: string; costUsd: number; model: string }[]
   optOutChecked: boolean
@@ -1329,7 +1327,6 @@ export interface ContextAdminBox {
   type: ContextBoxType
   heading: string
   teaser: string
-  gap: boolean
   status: 'unreviewed' | 'reviewed' | 'demoted'
   /** Demoted: readers don't see it. */
   hidden: boolean

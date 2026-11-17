@@ -107,7 +107,7 @@ const counts = <T>(list: T[] | null, isYes: (t: T) => boolean | null) => ({
 export interface StoryScore {
   needs: { must: number; met: number; unmet: string[] }
   searches: { total: number; wasted: number; notNeeded: number }
-  response: { findable: boolean; card: boolean; gap: boolean }
+  response: { findable: boolean; card: boolean }
   boxes: { judged: number; unsupported: number; unjudged: number }
   placement: Record<JudgedMode, { notes: number; adds: number; unjudged: number }>
   /** Model calls at the flex price, plus credits. */
@@ -133,7 +133,7 @@ export function storyScore(r: StoryRun): StoryScore {
       wasted: wastedSearches(r.result).length,
       notNeeded: r.result.record.searches.filter(s => notNeeded.has(s.slot)).length,
     },
-    response: { findable: findableResponse(r.key), card: r.result.boxes.some(b => b.type === 'response' && !b.gap), gap: r.result.record.honestGap },
+    response: { findable: findableResponse(r.key), card: r.result.boxes.some(b => b.type === 'response') },
     boxes: { judged: items.yes + items.no, unsupported: items.no, unjudged: items.none },
     placement: { model: placement('model'), random: placement('random') },
     costUsd: r.result.modelUsd * FLEX_PRICE_FACTOR + r.result.credits * TAVILY_USD_PER_CREDIT,
@@ -151,7 +151,7 @@ export interface RunScore {
   failed: number
   needs: { must: number; met: number; recall: number | null }
   searches: { total: number; wasted: number; perStory: number | null; notNeeded: number }
-  response: { findable: number; withCard: number; share: number | null; gapWhereFindable: number; gaps: number }
+  response: { findable: number; withCard: number; share: number | null }
   /** `unsupported` is null when the box judge ran on none of the run's stories. */
   boxes: { judged: number; unsupported: number | null; unjudged: number }
   placement: Record<JudgedMode, { notes: number; adds: number; share: number | null }>
@@ -182,8 +182,6 @@ function runScore(run: number, stories: StoryRun[]): RunScore {
       findable: findable.length,
       withCard: findable.filter(x => x.response.card).length,
       share: ratio(findable.filter(x => x.response.card).length, findable.length),
-      gapWhereFindable: findable.filter(x => x.response.gap).length,
-      gaps: s.filter(x => x.response.gap).length,
     },
     boxes: {
       judged: sum(s.map(x => x.boxes.judged)),
@@ -195,7 +193,7 @@ function runScore(run: number, stories: StoryRun[]): RunScore {
   }
 }
 
-export type BarName = 'needs' | 'wasted' | 'response' | 'honest-gap' | 'boxes' | 'placement' | 'cost'
+export type BarName = 'needs' | 'wasted' | 'response' | 'boxes' | 'placement' | 'cost'
 
 export interface Bar {
   name: BarName
@@ -209,7 +207,6 @@ const BAR_RULES: { name: BarName; of: (r: RunScore) => number | null; ok: (v: nu
   { name: 'needs', of: r => r.needs.recall, ok: v => v >= NEEDS_BAR },
   { name: 'wasted', of: r => r.searches.perStory, ok: v => v <= WASTED_SEARCH_BAR },
   { name: 'response', of: r => r.response.share, ok: v => v >= RESPONSE_BAR },
-  { name: 'honest-gap', of: r => (r.stories === 0 ? null : r.response.gapWhereFindable), ok: v => v === 0 },
   { name: 'boxes', of: r => r.boxes.unsupported, ok: v => v === 0 },
   { name: 'placement', of: r => r.placement.model.share, ok: v => v >= PLACEMENT_BAR },
   { name: 'cost', of: r => r.costUsd, ok: v => v <= COST_BAR_USD },

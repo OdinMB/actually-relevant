@@ -102,7 +102,6 @@ const BAR_TEXT: Record<BarName, { measure: string; bar: string; show: (v: number
   needs: { measure: "Must needs the story doesn't state, met by the kept cards", bar: `at least ${pct(NEEDS_BAR)}`, show: pct },
   wasted: { measure: 'Wasted searches per story', bar: `at most ${WASTED_SEARCH_BAR}`, show: v => num(v) },
   response: { measure: "A response card, where the key's response need is findable", bar: `at least ${pct(RESPONSE_BAR)}`, show: pct },
-  'honest-gap': { measure: 'Honest gaps on stories whose key has a findable response', bar: 'none', show: v => num(v, 1) },
   boxes: { measure: 'Box items the strong judge finds their cited facts do not support', bar: 'none', show: v => num(v, 1) },
   placement: { measure: 'Notes `model` places beside a paragraph or point that add to it', bar: `at least ${pct(PLACEMENT_BAR)}`, show: pct },
   cost: { measure: 'Cost per story (model calls at the flex price, plus search credits)', bar: `at most ${usd(COST_BAR_USD)}`, show: v => usd(v) },
@@ -120,7 +119,7 @@ const fieldsRow = (f: FieldScore) =>
   `| Figure facts whose structured fields are all right; invented numbers the fact check passed | at least ${pct(FIELDS_BAR)}; none | ${pct(f.share)}; ${f.inventedPassed} | ${range(f.spread, pct)} | ${metText(f.met)} |`
 
 const runRow = (r: RunScore) =>
-  `| ${r.run} | ${r.stories} | ${r.failed} | ${r.needs.met} of ${r.needs.must} | ${r.searches.total} (${r.searches.wasted}; ${r.searches.notNeeded}) | ${r.response.withCard} of ${r.response.findable} | ${r.response.gaps} (${r.response.gapWhereFindable}) | ${r.boxes.judged} (${r.boxes.unsupported ?? 'n/a'}; ${r.boxes.unjudged}) | ${pct(r.placement.model.share)} of ${r.placement.model.notes} / ${pct(r.placement.random.share)} of ${r.placement.random.notes} | ${usd(r.costUsd)} |`
+  `| ${r.run} | ${r.stories} | ${r.failed} | ${r.needs.met} of ${r.needs.must} | ${r.searches.total} (${r.searches.wasted}; ${r.searches.notNeeded}) | ${r.response.withCard} of ${r.response.findable} | ${r.boxes.judged} (${r.boxes.unsupported ?? 'n/a'}; ${r.boxes.unjudged}) | ${pct(r.placement.model.share)} of ${r.placement.model.notes} / ${pct(r.placement.random.share)} of ${r.placement.random.notes} | ${usd(r.costUsd)} |`
 
 function hindsightLines(d: ResultDates): string[] {
   const share = (n: number) => pct(d.results === 0 ? null : n / d.results)
@@ -188,10 +187,10 @@ export function contextLines(r: ContextStepReport): string[] {
     '',
     '### Per run',
     '',
-    'Searches show the wasted ones and those for a slot the key marks not needed; honest gaps, those on stories whose response need is findable; box items, the unsupported and those without a verdict. Placement is `model` against `random` on the same stories.',
+    'Searches show the wasted ones and those for a slot the key marks not needed; box items, the unsupported and those without a verdict. Placement is `model` against `random` on the same stories.',
     '',
-    '| Run | Stories | Failed | Must needs met | Searches (wasted; not needed) | Response cards where findable | Honest gaps (where findable) | Box items (unsupported; unjudged) | Placement model / random | Cost per story |',
-    '|---|---|---|---|---|---|---|---|---|---|',
+    '| Run | Stories | Failed | Must needs met | Searches (wasted; not needed) | Response cards where findable | Box items (unsupported; unjudged) | Placement model / random | Cost per story |',
+    '|---|---|---|---|---|---|---|---|---|',
     ...r.score.runs.map(runRow),
     '',
     ...fieldLines(r.fields),

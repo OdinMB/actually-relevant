@@ -260,7 +260,6 @@ describe('applyBoxVerdicts', () => {
       place: null,
       sentences: [{ text: 'Officials said the fires burned across the dry peat of the southern provinces for many weeks.', factIds: ['S1F2'] }],
       visual: null,
-      gap: false,
     }
     const long = contextFact({
       ref: 'S1F2',

@@ -3,9 +3,10 @@
  * context cards and the admin's context panel can be checked locally: a finished run, its facts
  * (research's three, structured, and six from two invented sources a second search found) and one
  * box of each kind the page draws: the figures tiles, a bar chart after a paragraph, a line chart
- * after a Why This Matters point, a card of sentences in the More context section and the honest
- * gap. Written in the shape a run stores, by hand: no model wrote them, and the set shows every card
- * rather than a run that would have written them all.
+ * after a Why This Matters point and a card of sentences in the More context section; its record
+ * says the response was searched for and not found, which no card shows. Written in the shape a run
+ * stores, by hand: no model wrote them, and the set shows every card rather than a run that would
+ * have written them all.
  */
 import type { Prisma } from '@prisma/client'
 import type { ResearchSource } from '../../services/researchPipeline.js'
@@ -266,8 +267,6 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
       teaser: 'What the province publishes next',
       sentences: [{ text: "The province's budget office will publish the program's first full-year cost next spring.", factIds: ['S4F2'] }],
     }),
-    // The honest gap: code adds it, with the page's fixed wording
-    box(4, { type: 'response', heading: '', teaser: '', sentences: [], gap: true, model: null, promptVersion: null }),
   ]
 
   const modelUsd = 0.031
@@ -322,7 +321,7 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
     droppedFacts: [],
     boxDrops: [],
     numberHints: [],
-    honestGap: true,
+    responseNotFound: true,
     tally: { checked: research.length + search.length + 6, failed: 0 },
     calls: [],
     optOutChecked: true,

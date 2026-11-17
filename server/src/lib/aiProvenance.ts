@@ -72,7 +72,7 @@ export function withAiGeneratedDetailMarker<T extends AiStoryText & { research: 
 /**
  * Fields of a story context box (`GET /api/stories/:slug/context`, services/storyContextView.ts)
  * that an AI model wrote: the heading, the phone's teaser, the cited sentences and the visual (its
- * tile labels and chart captions; the values are the sources'). The honest gap's fixed wording is the page's.
+ * tile labels and chart captions; the values are the sources').
  */
 export const AI_GENERATED_CONTEXT_FIELDS = ['heading', 'teaser', 'sentences', 'visual'] as const
 

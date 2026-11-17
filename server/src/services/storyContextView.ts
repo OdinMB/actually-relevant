@@ -62,8 +62,6 @@ export interface ContextBoxView {
   type: BoxType
   heading: string
   teaser: string
-  /** The honest gap: no sentences, the page's fixed wording. */
-  gap: boolean
   /** `P<n>`, `W<n>` or `section`. */
   place: string
   sentences: CitedText[]
@@ -145,7 +143,7 @@ export function boxRefs(content: { sentences: StoredSentence[]; visual: StoredVi
 /** The story's places now, and where each box sits: the editor's place kept, else the mode's (`config.storyContext.placement`). */
 export function placementsFor(
   story: LayoutStory & { id: string },
-  boxes: Pick<ContextBox, 'id' | 'type' | 'gap' | 'place' | 'placeByEditor' | 'sentences' | 'visual'>[],
+  boxes: Pick<ContextBox, 'id' | 'type' | 'place' | 'placeByEditor' | 'sentences' | 'visual'>[],
   facts: ReadonlyMap<string, StoredContextFact>,
 ): Map<string, string> {
   const layout = storyLayout(story)
@@ -154,7 +152,6 @@ export function placementsFor(
     boxes.map(b => ({
       id: b.id,
       type: b.type,
-      gap: b.gap,
       place: b.place,
       placeByEditor: b.placeByEditor,
       sourceUrls: [...new Set(boxRefs(boxContent(b)).flatMap(ref => facts.get(ref)?.source.url ?? []))],
@@ -275,7 +272,8 @@ export async function getStoryContext(slug: string): Promise<StoryContextView> {
           apart: chart.apart ? { caption: chart.apart.measure, unit: chart.apart.unit, points: chart.apart.points.map(p => pointView(p, idOf)) } : null,
         }
     }
-    if (!row.gap && cited.length === 0 && visual === null) return []
+    // A box with nothing left to show is left out (so is a stored honest gap from before 2026-11-17)
+    if (cited.length === 0 && visual === null) return []
     const sourceIds = [
       ...new Set([
         ...cited.flatMap(s => s.citations.map(c => c.sourceId)),
@@ -291,7 +289,6 @@ export async function getStoryContext(slug: string): Promise<StoryContextView> {
           type: row.type,
           heading: row.heading,
           teaser: row.teaser,
-          gap: row.gap,
           sentences: cited,
           visual,
           asOf: asOfFromColumns(row.asOf, row.asOfPrecision),

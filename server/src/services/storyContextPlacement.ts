@@ -7,7 +7,7 @@
  * sources, seeded by the story so a page never reshuffles; `section`, none beside the text. Then the
  * limits, in box order with the editor's boxes first: at most `notesInText` beside paragraphs, at
  * most `notesByPoints` beside Why This Matters points, one per paragraph or point. The figures box
- * and the honest gap always go to the section, and so does a place the story no longer has.
+ * always goes to the section, and so does a place the story no longer has.
  */
 import { createHash } from 'node:crypto'
 import { normalizedUrl } from './researchFilter.js'
@@ -18,7 +18,6 @@ export type PlacementMode = 'model' | 'random' | 'section'
 export interface PlacementBox {
   id: string
   type: string
-  gap: boolean
   /** The stored place: `P<n>`, `W<n>`, or null for the section. */
   place: string | null
   placeByEditor: boolean
@@ -67,7 +66,7 @@ export function placeBoxes(boxes: PlacementBox[], layout: Pick<StoryLayout, 'par
   const placed = new Map<string, string>()
   const order = [...boxes.map((box, index) => ({ box, index }))].sort((a, b) => Number(b.box.placeByEditor) - Number(a.box.placeByEditor) || a.index - b.index)
   for (const { box, index } of order) {
-    if (box.type === 'figures' || box.gap) {
+    if (box.type === 'figures') {
       placed.set(box.id, SECTION)
       continue
     }

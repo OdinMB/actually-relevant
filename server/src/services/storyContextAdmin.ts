@@ -19,7 +19,6 @@ export interface ContextAdminBox {
   type: string
   heading: string
   teaser: string
-  gap: boolean
   status: string
   hidden: boolean
   /** Where it sits now: `P<n>`, `W<n>` or `section`; a hidden box's stored place, or `section`. */
@@ -120,7 +119,6 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
         type: b.type,
         heading: b.heading,
         teaser: b.teaser,
-        gap: b.gap,
         status: b.status,
         hidden,
         place: hidden ? (b.place ?? SECTION) : (placed.get(b.id) ?? SECTION),
@@ -152,12 +150,11 @@ export async function setContextHidden(storyId: string, hidden: boolean): Promis
  */
 export async function updateContextBox(storyId: string, boxId: string, change: { hidden?: boolean; place?: string }): Promise<void> {
   const story = await storyFor(storyId)
-  const box = await prisma.contextBox.findFirst({ where: { id: boxId, storyId }, select: { id: true, type: true, gap: true } })
+  const box = await prisma.contextBox.findFirst({ where: { id: boxId, storyId }, select: { id: true, type: true } })
   if (!box) throw new NotFoundError('Context box not found')
   let place: { place: string | null; placeByEditor: true } | null = null
   if (change.place !== undefined) {
-    if ((box.type === 'figures' || box.gap) && change.place !== SECTION)
-      throw new BadRequestError('The In numbers card and the honest gap always sit under More context')
+    if (box.type === 'figures' && change.place !== SECTION) throw new BadRequestError('The In numbers card always sits under More context')
     if (change.place !== SECTION && !layoutSpots(storyLayout(story)).has(change.place))
       throw new BadRequestError(`The story has no ${change.place}: choose one of its paragraphs or points, or section`)
     place = { place: change.place === SECTION ? null : change.place, placeByEditor: true }

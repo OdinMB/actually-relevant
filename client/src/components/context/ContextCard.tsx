@@ -4,7 +4,7 @@ import type { CategoryColor } from '../../lib/category-colors'
 import { Citation, type SourcesById } from '../research/Citation'
 import { outletName } from '../research/sourceText'
 import { ContextChart } from './ContextChart'
-import { asOfLine, GAP_TEXT, slotKicker } from './contextText'
+import { asOfLine, slotKicker } from './contextText'
 import { FigureTiles } from './FigureTiles'
 
 /**
@@ -51,19 +51,6 @@ function Kicker({ box, colors }: { box: ContextBoxView; colors: CategoryColor })
 }
 
 /**
- * The honest gap: dashed edges, the kicker and the fixed sentence, nothing else. It always sits
- * under More context; `compact` is the phone's line, which opens nothing.
- */
-export function GapCard({ box, colors, compact = false }: { box: ContextBoxView; colors: CategoryColor; compact?: boolean }) {
-  return (
-    <div className={`flex w-full flex-col rounded-xl border-2 border-dashed border-stone-300 bg-white ${compact ? 'px-3 py-2' : 'h-full p-5'}`}>
-      <Kicker box={box} colors={colors} />
-      <div className={`mt-1 text-neutral-700 ${compact ? 'text-sm leading-[19px]' : 'text-[15px] leading-relaxed'}`}>{GAP_TEXT}</div>
-    </div>
-  )
-}
-
-/**
  * One context card (`.context/public-website.md`, "Story context"): kicker, heading, at most one
  * visual, the cited sentences, and a footer naming each source and the date the facts are from. No
  * AI badge: the story's own label covers the page. Text goes in `div`s, never `p`s or links, so a
@@ -84,8 +71,6 @@ export function ContextCard({
   layout: CardLayout
   title?: ElementType
 }) {
-  if (box.gap) return <GapCard box={box} colors={colors} />
-
   const visual = box.visual
   const footer = [...box.sourceIds.flatMap(id => (sources.has(id) ? [outletName(sources.get(id)!)] : [])), asOfLine(box.asOf)].filter(Boolean).join(' · ')
   // Between md and lg a note with both a visual and sentences sets the visual left of its text (the mockup's in-column card)

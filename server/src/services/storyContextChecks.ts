@@ -88,7 +88,6 @@ export interface DraftBox {
   place: string | null
   sentences: StoredSentence[]
   visual: StoredVisual | null
-  gap: boolean
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -265,7 +264,7 @@ export function structuralBoxes(answer: BoxesAnswer, supported: ReadonlySet<stri
         apart: kind === 'bars' && v.apart ? { ...v.apart, points: points(v.apart.points, 'apart') } : null,
       }
     }
-    return { type: w.type, heading: w.heading.trim(), teaser: w.teaser.trim(), place: w.type === 'figures' ? null : w.place, sentences, visual, gap: false }
+    return { type: w.type, heading: w.heading.trim(), teaser: w.teaser.trim(), place: w.type === 'figures' ? null : w.place, sentences, visual }
   })
   return { boxes, drops, structural: drops.length }
 }

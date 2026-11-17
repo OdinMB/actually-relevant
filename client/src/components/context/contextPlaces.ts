@@ -35,7 +35,7 @@ const SPOT = /^([PW])([1-9]\d*)$/
 export function placeContext(boxes: ContextBoxView[], counts: PlaceCounts): PlacedContext {
   const placed: PlacedContext = { paragraphNotes: [], pointNotes: [], section: [] }
   for (const box of boxes) {
-    const spot = box.type === 'figures' || box.gap ? null : SPOT.exec(box.place)
+    const spot = box.type === 'figures' ? null : SPOT.exec(box.place)
     const notes = spot?.[1] === 'P' ? placed.paragraphNotes : placed.pointNotes
     const index = spot ? Number(spot[2]) - 1 : -1
     const count = spot?.[1] === 'P' ? counts.paragraphs : counts.points

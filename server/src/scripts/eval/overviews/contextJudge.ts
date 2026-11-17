@@ -67,7 +67,7 @@ const windows = () => ({ fastDays: config.storyContext.fastValidDays, slowDays: 
 
 const supportedFacts = (result: StoryContextResult) => new Map(result.facts.filter(f => f.verdict === 'supported').map(f => [f.ref, f]))
 
-/** Production's box-check items of the kept cards (the honest gap has none). */
+/** Production's box-check items of the kept cards. */
 export const keptItems = (r: JudgedRun): BoxItem[] => boxCheckItems(r.result.boxes, supportedFacts(r.result), r.input.storyDay, windows())
 
 const openNeeds = (key: GapKey) => key.needs.filter(n => n.inStory === null)
@@ -139,7 +139,6 @@ export function notesToJudge(r: JudgedRun): NoteToJudge[] {
   const boxes: PlacementBox[] = r.result.boxes.map((b, i) => ({
     id: String(i),
     type: b.type,
-    gap: b.gap,
     place: b.place,
     placeByEditor: false,
     sourceUrls: [

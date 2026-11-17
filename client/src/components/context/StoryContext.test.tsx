@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import { getCategoryColor } from '../../lib/category-colors'
 import { contextBox, contextSourcesById, noteButtonName } from '../../test/context'
-import { GAP_TEXT, slotKicker } from './contextText'
+import { slotKicker } from './contextText'
 import { StoryContext } from './StoryContext'
 
 const colors = getCategoryColor('planet-climate')
@@ -41,22 +41,13 @@ describe('StoryContext', () => {
     expect(cards[1]).toHaveTextContent('Budget Office · Plains Ledger · As of October 2026')
   })
 
-  it('gives the honest gap its fixed wording and no sentences, and no button to open it on phones', () => {
-    renderSection([contextBox('gap', { type: 'response', gap: true, heading: '', teaser: '', sentences: [], sourceIds: [], asOf: null })])
-    expect(within(cardList()).getByRole('listitem')).toHaveTextContent(GAP_TEXT)
-    expect(screen.queryByRole('button')).toBeNull()
-  })
-
-  it('opens every other card from a one-line button on phones', () => {
+  it('opens every card from a one-line button on phones', () => {
     renderSection([contextBox('a', { type: 'next' })])
     expect(screen.getByRole('button', { name: noteButtonName(slotKicker('next'), 'Teaser a') })).toHaveAttribute('aria-haspopup', 'dialog')
   })
 
   it('marks the section as AI-generated context, with no AI badge of its own, and passes axe', async () => {
-    const { container } = renderSection([
-      contextBox('a'),
-      contextBox('gap', { type: 'response', gap: true, heading: '', teaser: '', sentences: [], sourceIds: [] }),
-    ])
+    const { container } = renderSection([contextBox('a'), contextBox('b', { type: 'response' })])
     const section = screen.getByRole('region', { name: 'More context' })
     expect(section).toHaveAttribute('data-ai-generated', 'context')
     expect(within(section).queryByText('AI')).toBeNull()

@@ -2,7 +2,7 @@ import type { ContextBoxType, ContextChartView } from '@shared/types'
 
 /**
  * The fixed words of story context on the page (`.context/public-website.md`, "Story context"): the
- * kicker naming each card's slot, the honest gap's sentence, the as-of date and a chart's caption.
+ * kicker naming each card's slot, the as-of date and a chart's caption.
  * None of it is AI-written: the cards' own headings, teasers and sentences are.
  */
 
@@ -19,9 +19,6 @@ const KICKERS: Record<ContextBoxType, string> = {
 
 /** The kicker over a card, naming its slot. */
 export const slotKicker = (type: ContextBoxType): string => KICKERS[type]
-
-/** The honest gap's whole text: the step searched for what is being done and found nothing sourced. */
-export const GAP_TEXT = 'Our sources don’t say what is being done about this.'
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/
 const MONTH = /^(\d{4})-(\d{2})$/

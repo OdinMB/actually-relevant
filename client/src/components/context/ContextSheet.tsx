@@ -4,7 +4,7 @@ import type { ContextBoxView } from '@shared/types'
 import { shiftHex, type CategoryColor } from '../../lib/category-colors'
 import { FOCUS_RING } from '../../lib/control-classes'
 import type { SourcesById } from '../research/Citation'
-import { ContextCard, GapCard } from './ContextCard'
+import { ContextCard } from './ContextCard'
 import { slotKicker } from './contextText'
 
 interface CardProps {
@@ -78,17 +78,10 @@ function NoteIcon({ box }: { box: ContextBoxView }) {
 
 /**
  * A card as the phone shows it: a one-line button (icon, kicker, teaser, chevron) that opens the full
- * card in the sheet. Named by its visible kicker and teaser. The honest gap has nothing more to open, so it is
- * its dashed line instead.
+ * card in the sheet. Named by its visible kicker and teaser.
  */
 export function SheetNote({ box, sources, colors, className = '' }: CardProps & { className?: string }) {
   const [open, setOpen] = useState(false)
-  if (box.gap)
-    return (
-      <div className={className}>
-        <GapCard box={box} colors={colors} compact />
-      </div>
-    )
   const edge = shiftHex(colors.hex, 0.55)
   const teaser = box.teaser || box.heading
   return (

@@ -605,7 +605,7 @@ model ContextBox {
   sentences     Json
   /// A validated tiles, bars or line spec citing fact refs, or null
   visual        Json?
-  /// The honest gap: a `response` box with no sentences, the page's fixed wording
+  /// Unused since 2026-11-17: no honest-gap card is written or served (ADR-0065); kept, as dropping it would be a destructive migration
   gap           Boolean         @default(false)
   /// The newest as-of date of its cited facts
   asOf          DateTime?       @map("as_of") @db.Date

@@ -94,7 +94,7 @@ describeDb('story context runs', () => {
     expect(run).toMatchObject({ storyId: story.id, researchRunId: research.id, status: 'completed', outcome: 'built', boxes: 2, tavilyCredits: 0, error: null })
     expect(run.modelUsd).toBeCloseTo(run.costUsd, 10)
     expect(run.finishedAt).not.toBeNull()
-    expect(run.result).toMatchObject({ facts: { research: 2, supported: 2 }, honestGap: false })
+    expect(run.result).toMatchObject({ facts: { research: 2, supported: 2 }, responseNotFound: false })
 
     const facts = await prisma.contextFact.findMany({ where: { runId: run.id }, orderBy: { ref: 'asc' } })
     expect(facts.map(f => [f.ref, f.origin, f.verdict, f.status, f.model])).toEqual([
@@ -105,9 +105,9 @@ describeDb('story context runs', () => {
     expect(facts[0]!.asOf?.toISOString().slice(0, 10)).toBe('2026-11-01')
 
     const boxes = await prisma.contextBox.findMany({ where: { runId: run.id }, orderBy: { position: 'asc' } })
-    expect(boxes.map(b => [b.position, b.type, b.place, b.model, b.gap])).toEqual([
-      [0, 'figures', null, 'model-write', false],
-      [1, 'compared', 'P1', 'model-write', false],
+    expect(boxes.map(b => [b.position, b.type, b.place, b.model])).toEqual([
+      [0, 'figures', null, 'model-write'],
+      [1, 'compared', 'P1', 'model-write'],
     ])
     expect(boxes[0]!.visual).toEqual({ kind: 'tiles', tiles: [{ label: 'hectares burned', factIds: ['S0F1'] }] })
     expect(boxes[0]).toMatchObject({ asOfPrecision: 'month' })

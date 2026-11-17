@@ -203,12 +203,12 @@ describe('buildStoryContext', () => {
     expect(out.record.searches.map(s => s.slot)).toEqual(['response', 'compared'])
   })
 
-  it('searches no response the story itself reports, and adds no honest gap for it', async () => {
+  it('searches no response the story itself reports, and does not record it as not found', async () => {
     const { deps, requests } = fakeDeps({ gap: gap('no', [search('response', 'peat restoration')], 'Smoke reaches millions of people.') })
     const out = await buildStoryContext(input(), deps)
     expect(requests).toEqual([])
     expect(out.record.responseInStory).toBe('Smoke reaches millions of people.')
-    expect(out.boxes.some(b => b.gap)).toBe(false)
+    expect(out.record.responseNotFound).toBe(false)
   })
 
   it('ignores a claimed response quote the story does not hold', () => {
@@ -216,15 +216,15 @@ describe('buildStoryContext', () => {
     expect(plan).toMatchObject({ storyReports: null, fallback: true, responseSearched: true })
   })
 
-  it('adds the honest gap when the response was searched for and nothing supported answers it', async () => {
+  it('adds no card when the response was searched for and nothing supported answers it, and records it as not found', async () => {
     const { deps } = fakeDeps({ gap: gap('no', [search('response', 'peat restoration')]), reject: ['Fact S1F1'] })
     const out = await buildStoryContext(input(), deps)
-    expect(out.boxes.at(-1)).toEqual({ type: 'response', heading: '', teaser: '', place: null, sentences: [], visual: null, gap: true })
-    expect(out.record.honestGap).toBe(true)
-    expect(out.outcome).toBe('built')
+    expect(out.boxes).toEqual([])
+    expect(out.record.responseNotFound).toBe(true)
+    expect(out.outcome).toBe('none-kept')
   })
 
-  it('writes a response box from a supported search fact, and then no honest gap', async () => {
+  it('writes a response box from a supported search fact, and then records nothing as not found', async () => {
     const { deps, prompts } = fakeDeps({ gap: gap('no', [search('response', 'peat restoration')]), boxes: { figures: null, boxes: [responseBox(['S1F1'])] } })
     const out = await buildStoryContext(input(), deps)
     expect(out.boxes).toEqual([
@@ -235,9 +235,9 @@ describe('buildStoryContext', () => {
         place: 'W1',
         sentences: [{ text: 'A drainage moratorium has halved fires since 2016.', factIds: ['S1F1'] }],
         visual: null,
-        gap: false,
       },
     ])
+    expect(out.record.responseNotFound).toBe(false)
     const s1 = out.facts.find(f => f.ref === 'S1F1')!
     expect(s1).toMatchObject({
       origin: 'search',

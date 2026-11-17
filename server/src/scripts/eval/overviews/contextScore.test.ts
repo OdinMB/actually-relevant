@@ -81,7 +81,7 @@ describe('storyScore', () => {
     const s = storyScore(run)
     expect(s.needs).toEqual({ must: 2, met: 1, unmet: ['response'] })
     expect(s.searches).toEqual({ total: 2, wasted: 2, notNeeded: 0 })
-    expect(s.response).toEqual({ findable: true, card: true, gap: false })
+    expect(s.response).toEqual({ findable: true, card: true })
     expect(s.boxes).toEqual({ judged: 2, unsupported: 1, unjudged: 0 })
     expect(s.placement.model).toEqual({ notes: 1, adds: 1, unjudged: 0 })
     expect(s.placement.random).toEqual({ notes: 1, adds: 0, unjudged: 0 })
@@ -98,13 +98,13 @@ describe('storyScore', () => {
       slug: 'story-a',
       run: 1,
       key: k,
-      result: contextResult({}, { honestGap: true, searches: [search('key_term', [])] }),
+      result: contextResult({}, { responseNotFound: true, searches: [search('key_term', [])] }),
       needs: null,
       items: null,
       notes: null,
     })
     expect(s.searches.notNeeded).toBe(1)
-    expect(s.response).toEqual({ findable: false, card: false, gap: true })
+    expect(s.response).toEqual({ findable: false, card: false })
     expect(s.needs).toEqual({ must: 2, met: 0, unmet: ['record', 'response'] })
     expect(s.boxes).toEqual({ judged: 0, unsupported: 0, unjudged: 0 })
   })
@@ -152,7 +152,6 @@ describe('scoreContext', () => {
     expect(bar('placement').value).toBeCloseTo(0.5)
     expect(bar('cost').value).toBeCloseTo((0.02 + 0.04) / 2)
     expect(bar('cost').met).toBe(true)
-    expect(bar('honest-gap').met).toBe(true)
   })
 
   it('gives no verdict on a measure with nothing to measure', () => {

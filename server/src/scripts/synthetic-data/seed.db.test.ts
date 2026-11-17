@@ -131,12 +131,11 @@ describeDb('synthetic data set (PostgreSQL)', () => {
       // One researched story's context: a card of each kind, each in its place, every one resolving
       const contextStory = await prisma.story.findUniqueOrThrow({ where: { id: syntheticId('story:varrowen-lunches') } })
       const context = await getStoryContext(contextStory.slug!)
-      expect(context.boxes.map(b => [b.type, b.place, b.visual?.kind ?? null, b.gap])).toEqual([
-        ['figures', 'section', 'tiles', false],
-        ['build_up', 'P1', 'bars', false],
-        ['compared', 'W1', 'line', false],
-        ['next', 'section', null, false],
-        ['response', 'section', null, true],
+      expect(context.boxes.map(b => [b.type, b.place, b.visual?.kind ?? null])).toEqual([
+        ['figures', 'section', 'tiles'],
+        ['build_up', 'P1', 'bars'],
+        ['compared', 'W1', 'line'],
+        ['next', 'section', null],
       ])
       expect(context.boxes[0]!.visual).toEqual({
         kind: 'tiles',
@@ -147,8 +146,8 @@ describeDb('synthetic data set (PostgreSQL)', () => {
       })
       expect(context.sources.map(s => s.outlet)).toEqual(['Varrowen Education Office', 'Plains Budget Watch'])
       expect(context.sources.every(s => s.url?.startsWith('https://synthetic.example.org/'))).toBe(true)
-      expect((await getContextAdmin(contextStory.id)).run).toMatchObject({ status: 'completed', outcome: 'built', boxes: 5, tavilyCredits: 3 })
-      expect(summary.context).toEqual({ slug: contextStory.slug, boxes: 5 })
+      expect((await getContextAdmin(contextStory.id)).run).toMatchObject({ status: 'completed', outcome: 'built', boxes: 4, tavilyCredits: 3 })
+      expect(summary.context).toEqual({ slug: contextStory.slug, boxes: 4 })
 
       // Two published newsletter issues with their stories; this week's issue is a draft
       const archive = await listPublishedIssues(1, 20)

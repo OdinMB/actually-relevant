@@ -46,7 +46,6 @@ export const sentenceBox = (type: DraftBox['type'], factIds: string[], extra: Pa
   place: null,
   sentences: [{ text: 'A sentence.', factIds }],
   visual: null,
-  gap: false,
   ...extra,
 })
 
@@ -72,7 +71,7 @@ export function contextResult(extra: Partial<StoryContextResult> = {}, record: P
       droppedFacts: [],
       boxDrops: [],
       numberHints: [],
-      honestGap: false,
+      responseNotFound: false,
       tally: { checked: 0, failed: 0 },
       calls: [],
       optOutChecked: false,

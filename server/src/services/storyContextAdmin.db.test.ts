@@ -24,7 +24,7 @@ describeDb('story context admin', () => {
       modelUsd: 0.01,
       tavilyCredits: 3,
       boxes: 3,
-      result: { honestGap: true },
+      result: { responseNotFound: true },
     })
     await createContextFact(story.id, run.id, {
       ref: 'S2F1',
@@ -53,7 +53,15 @@ describeDb('story context admin', () => {
   it("returns the boxes with status and place, the story's places and the newest run's summary", async () => {
     const { story, run, note, hidden } = await setup()
     const admin = await getContextAdmin(story.id)
-    expect(admin.run).toMatchObject({ id: run.id, outcome: 'built', costUsd: 0.034, modelUsd: 0.01, tavilyCredits: 3, boxes: 3, result: { honestGap: true } })
+    expect(admin.run).toMatchObject({
+      id: run.id,
+      outcome: 'built',
+      costUsd: 0.034,
+      modelUsd: 0.01,
+      tavilyCredits: 3,
+      boxes: 3,
+      result: { responseNotFound: true },
+    })
     expect(admin.run!.searchUsd).toBeCloseTo(0.024, 10)
     expect(admin.boxes.map(b => [b.type, b.status, b.hidden, b.place, b.storedPlace])).toEqual([
       ['figures', 'unreviewed', false, 'section', null],

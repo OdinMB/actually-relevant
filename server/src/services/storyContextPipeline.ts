@@ -1,7 +1,7 @@
 /**
  * One story's context, steps 2-12 (`.context/story-context.md`, "What one story goes through"):
  * structure research's facts, the gap list, the searches with the opt-out and source filter, one
- * extraction per new source, the fact check, the write, the box checks and the honest gap. No I/O
+ * extraction per new source, the fact check, the write, the box checks and the response check. No I/O
  * of its own, as `researchStory` has none: model calls, search and the opt-out policy are injected
  * (`storyContextRuns.ts` in production, the eval's deps in eval:overviews). It writes nothing.
  */
@@ -142,7 +142,8 @@ export interface ContextRunRecord {
   droppedFacts: { ref: string; text: string; verdict: 'rejected' | 'unjudged'; problem: string | null }[]
   boxDrops: BoxDrop[]
   numberHints: { label: string; numbers: string[] }[]
-  honestGap: boolean
+  /** `response` was searched for, the story does not report it, and nothing supported answers it: no card says so. */
+  responseNotFound: boolean
   tally: { checked: number; failed: number }
   calls: ContextCallRecord[]
   optOutChecked: boolean
@@ -155,7 +156,7 @@ export interface StoryContextResult {
   outcome: ContextOutcome
   /** Every fact to store, with its verdict: research's and the search's, and the reused facts a kept box cites. */
   facts: ContextFactData[]
-  /** The kept boxes in order, the honest gap last. */
+  /** The kept boxes in order. */
   boxes: DraftBox[]
   /** The model and prompt version the boxes were written with; null without a write. */
   writer: { model: string; promptVersion: string } | null
@@ -350,7 +351,7 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
     droppedFacts: [],
     boxDrops: [],
     numberHints: [],
-    honestGap: false,
+    responseNotFound: false,
     tally: { checked: 0, failed: 0 },
     calls,
     optOutChecked: deps.sourcePolicy !== undefined,
@@ -597,12 +598,10 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
       boxFailed = verdicts.failed
     }
 
-    // Step 12: the honest gap, when the response was searched for and nothing sourced answers it
+    // Step 12: the response searched for and nothing sourced answers it. The run records it; no card
+    // says so (owner decision 2026-11-17, ADR-0065)
     const answered = facts.some(f => f.slot === 'response' && f.verdict === 'supported') || boxes.some(b => b.type === 'response')
-    if (plan.responseSearched && plan.storyReports === null && !answered) {
-      boxes.push({ type: 'response', heading: '', teaser: '', place: null, sentences: [], visual: null, gap: true })
-      record.honestGap = true
-    }
+    record.responseNotFound = plan.responseSearched && plan.storyReports === null && !answered
 
     // The reused facts a kept box cites are stored with this run, so its boxes resolve within it
     const cited = new Set(boxes.flatMap(citedRefs))

@@ -47,3 +47,21 @@ fact. Story context, module 1, is the first code it governs.
   complete, and the constructive element would depend on the model's mood.
 - **Writing a hopeful line from general knowledge when nothing is found:** unsourced, and against
   every other rule of the cards.
+
+## Amendment 2026-11-17: no card when nothing sourced is found
+
+The owner decided on 2026-11-17 that the honest-gap card must never appear. The Decision's third
+bullet no longer holds: when the `response` search ran, no supported fact answers it, no kept card
+is a `response` card and the story does not report the response, code adds **no box**. The run
+records it instead (`responseNotFound` in `story_context_runs.result`), and the admin's "What the
+run did" says "searched, nothing sourced, so no card". The client renders no gap card, the public
+route no longer has a `gap` field, and `context_boxes.gap` stays as an unused column (always false)
+rather than being dropped by a destructive migration. A stored gap box from before has no sentence
+and no visual, so the route leaves it out.
+
+Rule: a story's context shows only sourced cards; a response that was looked for and not found is
+recorded on the run and shown nowhere on the page.
+
+Consequences: a story whose response was not found shows no "What's being done" card; nothing tells
+readers it was looked for. The eval drops its honest-gap bar (this ADR's Consequences, ADR-0066's
+list); the response card bar stays.

@@ -127,13 +127,13 @@ describeDb('getStoryContext', () => {
       asOfPrecision: 'month',
     })
     await createContextBox(story.id, run.id, { position: 2, type: 'why_now', status: 'demoted', sentences: [{ text: 'Hidden.', factIds: ['S2F1'] }] })
+    // An honest gap stored before 2026-11-17 (no sentences, no visual) is never served
     await createContextBox(story.id, run.id, { position: 3, type: 'response', gap: true, model: null, promptVersion: null })
 
     const view = await getStoryContext('story-published')
-    expect(view.boxes.map(b => [b.type, b.place, b.gap])).toEqual([
-      ['figures', 'section', false],
-      ['compared', 'P2', false],
-      ['response', 'section', true],
+    expect(view.boxes.map(b => [b.type, b.place])).toEqual([
+      ['figures', 'section'],
+      ['compared', 'P2'],
     ])
     expect(view.boxes[0]!.visual).toEqual({
       kind: 'tiles',

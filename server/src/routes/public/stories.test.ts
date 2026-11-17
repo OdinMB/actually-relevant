@@ -387,7 +387,6 @@ describe('Public Stories API', () => {
           type: 'compared',
           heading: 'Bigger than 2015',
           teaser: 'Past the 2015 record',
-          gap: false,
           place: 'section',
           sentences: [{ text: 'The 2015 fires burned 2.6 million hectares.', citations: [{ sourceId: 'C1', sentence: 'Sentence.' }] }],
           visual: null,

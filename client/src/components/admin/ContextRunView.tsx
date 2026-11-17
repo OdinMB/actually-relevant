@@ -23,7 +23,7 @@ const OUTCOMES = [
   'found',
   'found with a search of its own',
   'the story itself reports it',
-  'searched, nothing found: the page says so',
+  'searched, nothing sourced, so no card',
   'searched, nothing the sources support',
   'nothing the sources support, so no card',
   'not needed',
@@ -31,13 +31,13 @@ const OUTCOMES = [
 type Outcome = (typeof OUTCOMES)[number]
 
 /**
- * How each slot came out, grouped as the run left it: found (with or without a search of its own), the
- * honest gap, reported by the story itself, not needed, or needed with nothing kept. In numbers counts
- * as found when the run kept it; hidden cards count too, since the run found them.
+ * How each slot came out, grouped as the run left it: found (with or without a search of its own),
+ * reported by the story itself, searched for with nothing sourced (`response`, which no card then
+ * shows), not needed, or needed with nothing kept. In numbers counts as found when the run kept it;
+ * hidden cards count too, since the run found them.
  */
 export function slotOutcomes(record: RunRecord, boxes: ContextAdminBox[]): { outcome: string; slots: string[] }[] {
-  const kept = new Set(boxes.filter(b => !b.gap).map(b => b.type))
-  const gap = boxes.some(b => b.gap)
+  const kept = new Set(boxes.map(b => b.type))
   const searched = new Set((record.searches ?? []).map(s => s.slot))
   const groups = new Map<string, string[]>(OUTCOMES.map(outcome => [outcome, []]))
   const add = (outcome: Outcome, slot: string) => groups.get(outcome)!.push(slot)
@@ -46,7 +46,7 @@ export function slotOutcomes(record: RunRecord, boxes: ContextAdminBox[]): { out
   for (const { slot, needed } of record.slots ?? []) {
     const name = slotKicker(slot)
     if (kept.has(slot)) add(searched.has(slot) ? 'found with a search of its own' : 'found', name)
-    else if (slot === 'response' && gap) add('searched, nothing found: the page says so', name)
+    else if (slot === 'response' && record.responseNotFound) add('searched, nothing sourced, so no card', name)
     else if (slot === 'response' && record.responseInStory) add('the story itself reports it', name)
     else if (!needed) add('not needed', name)
     else if (searched.has(slot)) add('searched, nothing the sources support', name)

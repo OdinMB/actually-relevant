@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ContextAdminBox, ContextAdminRun, ContextRunRecord, StoryContextAdmin as ContextView } from '@shared/types'
 import { ToastProvider } from '../ui/Toast'
-import { GAP_TEXT, slotKicker } from '../context/contextText'
+import { slotKicker } from '../context/contextText'
 
 const mockContext = vi.hoisted(() => ({ get: vi.fn(), setHidden: vi.fn(), updateBox: vi.fn() }))
 vi.mock('../../lib/admin-api', async importOriginal => ({
@@ -21,7 +21,6 @@ const box = (id: string, over: Partial<ContextAdminBox> = {}): ContextAdminBox =
   type: 'compared',
   heading: `Heading ${id}`,
   teaser: `Teaser ${id}`,
-  gap: false,
   status: 'unreviewed',
   hidden: false,
   place: 'P1',
@@ -64,7 +63,7 @@ const record: ContextRunRecord = {
   ],
   boxDrops: [{ label: 'Who it reaches, sentence 1', cause: 'copying', problem: 'Twelve words as the source has them.' }],
   numberHints: [],
-  honestGap: true,
+  responseNotFound: true,
   tally: { checked: 23, failed: 3 },
   calls: [
     { step: 'structure', outcome: 'ok', costUsd: 0.004, model: 'test-model' },
@@ -93,8 +92,7 @@ const BOXES = [
   box('a'),
   box('w', { type: 'next', place: 'W2', storedPlace: 'W2', position: 1 }),
   box('f', { type: 'figures', heading: 'In numbers', teaser: '', place: 'section', storedPlace: null, position: 2 }),
-  box('g', { type: 'response', heading: '', teaser: '', gap: true, place: 'section', storedPlace: null, sources: [], asOf: null, position: 3 }),
-  box('h', { type: 'build_up', hidden: true, status: 'demoted', place: 'section', storedPlace: null, position: 4 }),
+  box('h', { type: 'build_up', hidden: true, status: 'demoted', place: 'section', storedPlace: null, position: 3 }),
 ]
 
 const view = (over: Partial<ContextView> = {}): ContextView => ({
@@ -160,14 +158,13 @@ describe('StoryContextAdmin', () => {
     renderSection()
     const region = await section()
     expect(region).toHaveTextContent(/Built .+ by the context step, after the story was published\./)
-    expect(region).toHaveTextContent('4 cards show on the site: 1 beside the text, 1 beside Why This Matters, 2 under More context. 1 hidden.')
+    expect(region).toHaveTextContent('3 cards show on the site: 1 beside the text, 1 beside Why This Matters, 1 under More context. 1 hidden.')
 
     const groups = within(region)
       .getAllByRole('heading', { level: 4 })
       .map(h => h.textContent)
     expect(groups.slice(0, 3)).toEqual(['Beside the text', 'Beside Why This Matters', 'More context'])
     expect(within(region).getByText('Heading a').closest('li')).toHaveTextContent('Phone line: Teaser a · Budget Office · as of November 2026')
-    expect(within(region).getByText(GAP_TEXT)).toBeInTheDocument()
     expect(within(region).getByText('Heading h').closest('li')).toHaveTextContent('Readers no longer see it; nothing was deleted.')
     expect(within(region).getByRole('link', { name: /See it on the story page/ })).toHaveAttribute('href', '/stories/the-story')
   })
@@ -189,11 +186,10 @@ describe('StoryContextAdmin', () => {
     await waitFor(() => expect(mockContext.updateBox).toHaveBeenCalledWith('story-1', 'h', { hidden: false }))
   })
 
-  it('keeps In numbers, the honest gap and a hidden card where they are', async () => {
+  it('keeps In numbers and a hidden card where they are', async () => {
     renderSection()
     await section()
     expect(screen.getByRole('combobox', { name: 'Where In numbers sits' })).toBeDisabled()
-    expect(screen.getByRole('combobox', { name: `Where ${GAP_TEXT} sits` })).toBeDisabled()
     expect(screen.getByRole('combobox', { name: 'Where Heading h sits' })).toBeDisabled()
     expect(screen.getByRole('combobox', { name: 'Where Heading a sits' })).toBeEnabled()
   })
@@ -229,7 +225,7 @@ describe('StoryContextAdmin', () => {
     mockContext.get.mockResolvedValue(view({ boxes: BOXES.map(b => ({ ...b, hidden: true, status: 'demoted' })) }))
     renderSection('analyzed')
     const region = await section()
-    expect(region).toHaveTextContent('No card shows on the site. 5 hidden.')
+    expect(region).toHaveTextContent('No card shows on the site. 4 hidden.')
     expect(within(region).queryByRole('link', { name: /See it on the story page/ })).toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'Show all context' }))
@@ -253,7 +249,7 @@ describe('StoryContextAdmin', () => {
     expect(row(slotKicker('compared'))).toHaveTextContent('found with a search of its own')
     expect(row(slotKicker('key_term'))).toHaveTextContent('not needed')
     expect(row(slotKicker('who_affected'))).toHaveTextContent('nothing the sources support, so no card')
-    expect(row('searched, nothing found: the page says so')).toHaveTextContent(slotKicker('response'))
+    expect(row('searched, nothing sourced, so no card')).toHaveTextContent(slotKicker('response'))
 
     expect(details).toHaveTextContent('Searches: 2 web searches, 1 of them answered from the cache')
     expect(row('“varrowen lunches response”')).toHaveTextContent('from the cache')

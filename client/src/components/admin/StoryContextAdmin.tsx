@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { ContextAdminBox, ContextAdminPlace, ContextAdminRun, Story } from '@shared/types'
 import { useSetContextHidden, useStoryContextAdmin, useUpdateContextBox } from '../../hooks/useStoryContextAdmin'
 import { formatDateWithTime } from '../../lib/constants'
-import { asOfText, GAP_TEXT, slotKicker } from '../context/contextText'
+import { asOfText, slotKicker } from '../context/contextText'
 import { Button } from '../ui/Button'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { Select } from '../ui/Select'
@@ -26,8 +26,6 @@ const GROUPS: { name: string; has: (place: string) => boolean }[] = [
   { name: 'Beside Why This Matters', has: place => place.startsWith('W') },
   { name: 'More context', has: place => !/^[PW]\d/.test(place) },
 ]
-
-const cardTitle = (box: ContextAdminBox) => (box.gap ? GAP_TEXT : box.heading)
 
 /** What the newest run did, in one sentence. */
 function runLine(run: ContextAdminRun): string {
@@ -70,9 +68,9 @@ function placeLabel(place: ContextAdminPlace): string {
 function CardRow({ box, places, storyId }: { box: ContextAdminBox; places: ContextAdminPlace[]; storyId: string }) {
   const update = useUpdateContextBox(storyId)
   const { toast } = useToast()
-  const title = cardTitle(box)
-  // In numbers and the honest gap always sit under More context; a hidden card is moved once shown again
-  const fixed = box.type === 'figures' || box.gap
+  const title = box.heading
+  // In numbers always sits under More context; a hidden card is moved once shown again
+  const fixed = box.type === 'figures'
   const options = places.map(p => ({ value: p.place, label: placeLabel(p) }))
   if (!options.some(o => o.value === box.place)) options.push({ value: box.place, label: box.place })
 

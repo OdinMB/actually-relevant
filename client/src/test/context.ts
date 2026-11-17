@@ -25,7 +25,6 @@ export const contextBox = (id: string, extra: Partial<ContextBoxView> = {}): Con
   type: 'compared',
   heading: `Heading ${id}`,
   teaser: `Teaser ${id}`,
-  gap: false,
   place: 'section',
   sentences: [{ text: `Sentence of ${id}.`, citations: [{ sourceId: 'C1', sentence: 'The source says so.' }] }],
   visual: null,
