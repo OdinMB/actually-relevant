@@ -137,6 +137,12 @@ The synthetic data set (`npm run db:seed:synthetic --prefix server`, `.context/d
 
 The step is gated on `eval:overviews` (roadmap D8, ADR-0066): planted errors on context facts, structured fields, the gap list and searches, what's being done (ADR-0065), boxes, placement (below its bar the step goes live with `STORY_CONTEXT_PLACEMENT=section`) and cost, as means over 3 runs on the judged half of the gap keys of 30 one-off stories (`.context/model-eval.md`, "Overview evals": the `gap-draft`, `gap-keys` and `context` steps and `--facts context`). The keys are drafted and checked after merge; until they are committed, the `context` step has nothing to run on. The owner switches the step on. A change to a prompt, schema or model tier of the step reruns the gate before it ships.
 
+**The methodology paragraph waits for the switch.** While the step is off, the methodology page says nothing about context cards, since "Many stories carry context cards" would be untrue on the live site. The owner-approved paragraph (2026-11-16; plan, "For Odin" 2) goes back into the "Researched Stories" section of `client/src/pages/MethodologyPage.tsx`, after the paragraph ending "…starting with the article where we first found the story." (a comment marks the spot), **in the same change that commits the eval's gap keys**, which lands right before the owner switches the step on. Word for word (on the page, "don't" is written `don&apos;t`):
+
+> Many stories carry context cards: how big the development is compared with what came before, why it is happening now, who it reaches, what is being done and what comes next. An AI model reads the sources our research found and, where something a reader needs is missing, searches for up to three more. Every number on a card names its source, and when sources disagree we show both. A separate AI check compares each fact with the sentence it came from and drops what that sentence does not say. Each card gives the date its facts are from; we don't update cards later.
+
+That change also sets `.context/ai-transparency.md` (the story-context row) and `.context/public-website.md` ("Story context") back to saying the paragraph is on the page.
+
 ## Modifying
 
 - **A prompt** (`prompts/storyContext.ts`): read `.context/prompting.md`; the version changes by itself. Research's fact-check prompt is shared: a change there changes both checks here, and needs research's eval too.

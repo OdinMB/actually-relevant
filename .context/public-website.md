@@ -52,7 +52,7 @@ A story the `build_story_context` step gave cards (`.context/story-context.md`) 
 - **Tiles** (`FigureTiles.tsx`): figure, label and a citation per value; several values for one label each show with their source, the label ending ", depending on whose count"; a provisional value says "estimate".
 - **Charts** (`ContextChart.tsx`): SVG drawn on the client from the route's points (the server has applied the chart rules), bars or a line from zero. A visible caption names the drawing (`role="img"`), a source line follows it, and a visually hidden table gives every value with its date and source. Points within 30 days of the story's day take the area's color, the others gray; provisional points are hatched; `apart` points are lighter, under "A different measure: shown, not compared". No mark is a focus stop. Text draws at its size: the drawing is 240px wide in a margin note and 300px elsewhere, and never scales up.
 - **AI marking:** no visible label and no AI badge on notes, cards or the section; the story's own label covers them (owner 2026-11-16). Each note and the section carry `data-ai-generated="context"` (`.context/ai-transparency.md`).
-- **Methodology:** a paragraph in "Researched Stories" describes the cards (owner-approved wording, 2026-11-16).
+- **Methodology:** nothing yet. The owner-approved paragraph on the cards (2026-11-16) is held until the step is switched on, and goes into "Researched Stories" with the eval's gap keys (`.context/story-context.md`, "Before switching on").
 
 ### Cross-links
 
