@@ -2,7 +2,9 @@ import { it, expect } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createContextFact, createContextRun, createResearchRun } from '../test/db/storyContext.js'
-import { loadContextInput, nextForContext } from './storyContextInput.js'
+import { contextEligibility, loadContextInput, loadEarlierWork, nextForContext } from './storyContextInput.js'
+import { RESPONSE_ANGLES } from './storyContextPipeline.js'
+import { factKey } from './storyContextRecords.js'
 
 const NOW = new Date('2026-11-16T01:00:00Z')
 const DAY = 24 * 60 * 60 * 1000
@@ -103,5 +105,66 @@ describeDb('story context input', () => {
     await createResearchRun(bare.id, [{ id: 'S0', facts: [] }])
     expect(await loadContextInput(prisma, draft.id)).toBeNull()
     expect(await loadContextInput(prisma, bare.id)).toBeNull()
+  })
+
+  it('says whether a story can have context gathered: its status, and whether a research run of it holds facts', async () => {
+    const { feed, published } = await setup()
+    const researched = await published(30)
+    await createResearchRun(researched.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
+    const bare = await published(1)
+    await createResearchRun(bare.id, [{ id: 'S0', facts: [] }])
+    const draft = await createStory({ feedId: feed.id, status: 'selected' })
+    await createResearchRun(draft.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
+
+    expect(await contextEligibility(prisma, researched.id)).toEqual({ status: 'published', researched: true })
+    expect(await contextEligibility(prisma, bare.id)).toEqual({ status: 'published', researched: false })
+    expect(await contextEligibility(prisma, draft.id)).toEqual({ status: 'selected', researched: true })
+    expect(await contextEligibility(prisma, '00000000-0000-0000-0000-000000000000')).toBeNull()
+  })
+
+  it("loads what the story's earlier completed runs did (a failed or running one counts for nothing), copies and demoted facts left out of the carried ones", async () => {
+    const { published } = await setup()
+    const story = await published(1)
+    const other = await published(1)
+    const record = (searches: { slot: string; query: string; wanted?: string; angle?: string; kept?: string[] }[]) => ({
+      searches: searches.map(s => ({ wanted: '', recent: false, cached: false, credits: 1, results: 1, kept: [], ...s })),
+    })
+    const first = await createContextRun(story.id, {
+      startedAt: ago(3),
+      result: record([
+        // A record from before angles were stored: read by its `wanted` text
+        { slot: 'response', query: 'Fires Response', wanted: RESPONSE_ANGLES[0]!.wanted, kept: ['https://read.example/one'] },
+        { slot: 'compared', query: 'fires record', kept: [] },
+      ]),
+    })
+    const second = await createContextRun(story.id, {
+      startedAt: ago(2),
+      result: record([{ slot: 'response', query: 'what worked elsewhere', angle: 'elsewhere', kept: ['https://read.example/two'] }]),
+    })
+    const failed = await createContextRun(story.id, { status: 'failed', outcome: 'technical', result: record([{ slot: 'why_now', query: 'failed query' }]) })
+    const current = await createContextRun(story.id, { status: 'running', result: record([{ slot: 'next', query: 'own first attempt' }]) })
+    await createContextRun(other.id, { result: record([{ slot: 'next', query: 'another story' }]) })
+
+    const research = await createContextFact(story.id, first.id, { ref: 'S0F1', origin: 'research', sourceUrl: 'https://orig.example/a' })
+    const rejected = await createContextFact(story.id, first.id, { ref: 'S0F2', origin: 'research', sourceUrl: 'https://orig.example/a', verdict: 'rejected' })
+    await createContextFact(story.id, first.id, { ref: 'S0F3', origin: 'research', sourceUrl: 'https://orig.example/a', verdict: 'unjudged' })
+    const demoted = await createContextFact(story.id, first.id, { ref: 'S0F4', origin: 'research', sourceUrl: 'https://orig.example/a', status: 'demoted' })
+    const found = await createContextFact(story.id, second.id, { ref: 'S3F1', sourceUrl: 'https://read.example/two' })
+    // The second run's copy of the first's fact, and a copy of another story's: neither is carried
+    await createContextFact(story.id, second.id, { ref: 'S4F1', origin: 'research', sourceUrl: 'https://orig.example/a', reusedFromId: research.id })
+    await createContextFact(story.id, second.id, { ref: 'S5F1', sourceUrl: 'https://another.example/x', reusedFromId: 'elsewhere' })
+    await createContextFact(story.id, failed.id, { ref: 'S3F1', sourceUrl: 'https://failed.example/x' })
+    await createContextFact(story.id, current.id, { ref: 'S3F1', sourceUrl: 'https://current.example/x' })
+
+    const work = await loadEarlierWork(prisma, story.id)
+    expect(work.facts.map(f => f.id)).toEqual([found.id, research.id])
+    expect(work.facts[0]).toMatchObject({ ref: 'S3F1', origin: 'search', verdict: 'supported', source: { url: 'https://read.example/two' } })
+    const key = (f: { sourceUrl: string; supportingSentence: string; statement: string }) => factKey({ url: f.sourceUrl, ...f })
+    expect(work.judged.sort()).toEqual([research, rejected, demoted].map(key).sort())
+    expect(work.queries.sort()).toEqual(['fires record', 'fires response', 'what worked elsewhere'])
+    expect(work.angles.sort()).toEqual(['action', 'elsewhere'])
+    expect(work.read.sort()).toEqual(['https://read.example/one', 'https://read.example/two'])
+
+    expect(await loadEarlierWork(prisma, other.id)).toMatchObject({ facts: [], judged: [], queries: ['another story'] })
   })
 })

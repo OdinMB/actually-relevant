@@ -75,6 +75,38 @@ function deps(options: { failWrite?: boolean; writeError?: 'transient' | 'lastin
   }
 }
 
+/**
+ * As `deps()`, but the write cites the facts its prompt offers, whatever their ids: the figure for
+ * the tile, the other fact for the compared box. `steps` collects the steps called.
+ */
+function citingDeps(steps: string[] = []): ContextDeps {
+  const base = deps()
+  return {
+    ...base,
+    async call(step, schema, prompt) {
+      steps.push(step)
+      if (step !== 'write') return base.call(step, schema, prompt)
+      const facts = [...prompt.matchAll(/<FACT id="([^"]+)"[^>]*>([^<]*)<\/FACT>/g)].map(m => ({ id: m[1]!, text: m[2]! }))
+      const figure = facts.find(f => f.text.includes('hectares'))!.id
+      const other = facts.find(f => f.id !== figure)!.id
+      const parsed = {
+        figures: { heading: 'In numbers', teaser: 'The figures', tiles: [{ label: 'hectares burned', factIds: [figure] }] },
+        boxes: [
+          {
+            slot: 'compared',
+            heading: 'Twice the usual',
+            teaser: 'Twice the usual area',
+            place: 'P1',
+            sentences: [{ text: 'It is twice the usual.', factIds: [other] }],
+            visual: { kind: 'none', tiles: [], measure: '', unit: '', points: [], apart: null },
+          },
+        ],
+      }
+      return { parsed: parsed as never, outcome: 'ok', usage: ZERO_USAGE, costUsd: 0.002, model: 'model-write' }
+    },
+  }
+}
+
 describeDb('story context runs', () => {
   useTestDatabase()
 
@@ -94,7 +126,7 @@ describeDb('story context runs', () => {
 
   it("writes the run, every fact with its verdict and the kept boxes in one go, the run's costs apart", async () => {
     const { story, research } = await publishedStory()
-    const out = await runStoryContext(story.id, deps())
+    const out = (await runStoryContext(story.id, deps()))!
     expect(out).toMatchObject({ status: 'completed', outcome: 'built', boxes: 2, written: true })
     expect(out.tally.checked).toBeGreaterThan(0)
 
@@ -123,7 +155,7 @@ describeDb('story context runs', () => {
 
   it('records a failed run with what it spent and stores nothing else when a required step fails', async () => {
     const { story } = await publishedStory()
-    const out = await runStoryContext(story.id, deps({ failWrite: true }))
+    const out = (await runStoryContext(story.id, deps({ failWrite: true })))!
     expect(out).toMatchObject({ status: 'failed', outcome: 'technical', tally: { checked: 0, failed: 0 } })
     const run = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: out.runId } })
     expect(run).toMatchObject({ status: 'failed', error: 'write: parse_failure' })
@@ -141,7 +173,7 @@ describeDb('story context runs', () => {
 
   it("tries a failed run again on its own row: only the second attempt's outcome is stored, the two attempts' costs added up", async () => {
     const { story } = await publishedStory()
-    const first = await runStoryContext(story.id, deps({ writeError: 'transient' }))
+    const first = (await runStoryContext(story.id, deps({ writeError: 'transient' })))!
     const firstRow = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: first.runId } })
     expect(firstRow.costUsd).toBeCloseTo(0.006, 10)
 
@@ -160,7 +192,7 @@ describeDb('story context runs', () => {
 
   it('leaves a run alone that is no longer a technical failure, and builds nothing for it', async () => {
     const { story } = await publishedStory()
-    const done = await runStoryContext(story.id, deps())
+    const done = (await runStoryContext(story.id, deps()))!
     const again = await runStoryContext(story.id, deps(), { runId: done.runId })
     expect(again).toMatchObject({ runId: done.runId, written: false, transient: false })
     expect(await prisma.contextBox.count({ where: { runId: done.runId } })).toBe(2)
@@ -170,7 +202,7 @@ describeDb('story context runs', () => {
     const issue = await createIssue()
     const feed = await createFeed(issue.id)
     const story = await createStory({ feedId: feed.id, status: 'published', datePublished: new Date() })
-    const out = await runStoryContext(story.id, deps())
+    const out = (await runStoryContext(story.id, deps()))!
     expect(out).toMatchObject({ status: 'skipped', outcome: 'no-research' })
     expect(await prisma.storyContextRun.findUniqueOrThrow({ where: { id: out.runId } })).toMatchObject({ status: 'skipped', outcome: 'no-research' })
   })
@@ -191,6 +223,53 @@ describeDb('story context runs', () => {
     const result = { status: 'completed', outcome: 'none-kept', facts: [], boxes: [], writer: null, credits: 0, modelUsd: 0, record: {}, error: null } as never
     expect(await storeContextResult(stale.id, story.id, result)).toBe(false)
     expect((await prisma.storyContextRun.findUniqueOrThrow({ where: { id: stale.id } })).status).toBe('failed')
+  })
+
+  it('starts no run of a story while another of it is running, and tries a failed one again only then', async () => {
+    const { story } = await publishedStory()
+    const failed = await prisma.storyContextRun.create({ data: { storyId: story.id, status: 'failed', outcome: 'technical', finishedAt: new Date() } })
+    const running = await prisma.storyContextRun.create({ data: { storyId: story.id, startedAt: new Date() } })
+
+    expect(await runStoryContext(story.id, deps())).toBeNull()
+    expect(await runStoryContext(story.id, deps(), { runId: failed.id })).toMatchObject({ runId: failed.id, written: false })
+    expect(await prisma.storyContextRun.findUniqueOrThrow({ where: { id: failed.id } })).toMatchObject({ status: 'failed' })
+    expect(await prisma.storyContextRun.count({ where: { storyId: story.id } })).toBe(2)
+
+    // Once the other run is over, both go ahead
+    await prisma.storyContextRun.update({ where: { id: running.id }, data: { status: 'completed', outcome: 'built', finishedAt: new Date() } })
+    expect(await runStoryContext(story.id, deps(), { runId: failed.id })).toMatchObject({ runId: failed.id, status: 'completed', written: true })
+    expect(await runStoryContext(story.id, deps())).toMatchObject({ status: 'completed', written: true })
+  })
+
+  it("builds on the story's earlier run: its facts carried over, its research facts not structured again, the editor's choices kept by type", async () => {
+    const { story } = await publishedStory()
+    const first = (await runStoryContext(story.id, citingDeps()))!
+    const [figures, compared] = await prisma.contextBox.findMany({ where: { runId: first.runId }, orderBy: { position: 'asc' } })
+    await prisma.contextBox.update({ where: { id: figures!.id }, data: { status: 'demoted' } })
+    await prisma.contextBox.update({ where: { id: compared!.id }, data: { place: null, placeByEditor: true } })
+
+    const steps: string[] = []
+    const second = (await runStoryContext(story.id, citingDeps(steps)))!
+    expect(second).toMatchObject({ status: 'completed', outcome: 'built', boxes: 2, written: true })
+    expect(second.runId).not.toBe(first.runId)
+    expect(steps).not.toContain('structure')
+    expect(steps).not.toContain('fact-check')
+
+    const run = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: second.runId } })
+    expect(run.result).toMatchObject({ facts: { research: 0, carried: 2 } })
+    // The carried facts the boxes cite are stored with the new run, pointing at the first run's rows
+    const firstFacts = new Set((await prisma.contextFact.findMany({ where: { runId: first.runId } })).map(f => f.id))
+    const copies = await prisma.contextFact.findMany({ where: { runId: second.runId } })
+    expect(copies).toHaveLength(2)
+    expect(copies.every(f => f.reusedFromId !== null && firstFacts.has(f.reusedFromId))).toBe(true)
+
+    const boxes = await prisma.contextBox.findMany({ where: { runId: second.runId }, orderBy: { position: 'asc' } })
+    expect(boxes.map(b => [b.type, b.status, b.place, b.placeByEditor])).toEqual([
+      ['figures', 'demoted', null, false],
+      ['compared', 'unreviewed', null, true],
+    ])
+    // Nothing of the first run is deleted
+    expect(await prisma.contextBox.count({ where: { runId: first.runId } })).toBe(2)
   })
 
   it('records a failed run for an error outside a run, which settles the story', async () => {

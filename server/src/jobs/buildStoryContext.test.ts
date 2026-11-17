@@ -88,6 +88,16 @@ describe('runBuildStoryContext', () => {
     expect(scope.summary).toBe('Built the context of 2 stories: 3 cards kept, 1 of 15 checked items failed, 0 stories failed (1 tried twice)')
   })
 
+  it("leaves a story to an editor's run that holds it: no failed run recorded, nothing tried again", async () => {
+    mocks.nextForContext.mockResolvedValue(['a', 'b'])
+    mocks.runStoryContext.mockResolvedValueOnce(null).mockResolvedValueOnce(run(10, 1))
+    const scope = await inScope()
+    expect(mocks.runStoryContext).toHaveBeenCalledTimes(2)
+    expect(mocks.recordFailedRun).not.toHaveBeenCalled()
+    expect(scope.usage).toMatchObject({ itemsChecked: 10, itemsFailed: 1 })
+    expect(scope.summary).toMatch(/, 0 stories failed$/)
+  })
+
   it('settles a story that fails its second attempt too, and counts it failed', async () => {
     mocks.nextForContext.mockResolvedValue(['a'])
     mocks.runStoryContext.mockResolvedValueOnce(failed('run-a', true)).mockResolvedValueOnce(failed('run-a', true))

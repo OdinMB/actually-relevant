@@ -81,6 +81,11 @@ export async function runBuildStoryContext(): Promise<void> {
   const attempt = async (storyId: string, again: { runId: string } | null): Promise<void> => {
     try {
       const run = await runStoryContext(storyId, undefined, again)
+      // An editor's run of the story holds it: that run settles the story
+      if (!run) {
+        log.info({ storyId }, 'another context run of the story is running; skipped')
+        return
+      }
       tally.checked += run.tally.checked
       tally.failed += run.tally.failed
       tally.boxes += run.boxes
