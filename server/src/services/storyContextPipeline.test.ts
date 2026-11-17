@@ -333,6 +333,24 @@ describe('buildStoryContext', () => {
     expect(out.modelUsd).toBeCloseTo(0.002, 10)
   })
 
+  it('keeps the credits and records of the searches that completed when another fails', async () => {
+    const { deps } = fakeDeps({ gap: gap('no', [search('response', 'first'), search('compared', 'fails'), search('why_now', 'third')]) })
+    const fake = deps.search
+    // The failing search answers first; the others complete after it, and were billed all the same
+    deps.search = async request => {
+      if (request.query === 'fails') throw new TavilyError('Tavily search failed: HTTP 502', 502)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      return fake(request)
+    }
+    const out = await buildStoryContext(input(), deps)
+    expect(out).toMatchObject({ status: 'failed', outcome: 'technical', error: 'Tavily search failed: HTTP 502', facts: [], boxes: [] })
+    expect(out.credits).toBe(2)
+    expect(out.record.searches.map(s => [s.query, s.credits, s.results, s.kept])).toEqual([
+      ['first', 1, 1, []],
+      ['third', 1, 1, []],
+    ])
+  })
+
   it('counts facts the structure step left out as checked and failed', async () => {
     const { deps } = fakeDeps({ reject: [] })
     const original = deps.call

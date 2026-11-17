@@ -438,8 +438,22 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
     // Steps 4-6: search, filter, extract
     const pass2: ContextFactData[] = []
     if (plan.searches.length > 0) {
-      const found = await Promise.all(plan.searches.map(s => deps.search({ query: s.query, recent: s.recent, endDate: input.storyDay })))
-      credits += found.reduce((sum, a) => sum + a.credits, 0)
+      // Every search is waited for: one that failed after its retries fails the run, but those that
+      // completed were billed, so the run keeps their credits and records
+      const settled = await Promise.allSettled(plan.searches.map(s => deps.search({ query: s.query, recent: s.recent, endDate: input.storyDay })))
+      const completed = settled.flatMap((r, i) => (r.status === 'fulfilled' ? [{ i, answer: r.value }] : []))
+      const searchRecord = (i: number, answer: ContextSearchAnswer, kept: string[]): SearchRecord => ({
+        ...plan.searches[i]!,
+        cached: answer.cached,
+        credits: answer.credits,
+        results: answer.results.length,
+        kept,
+      })
+      credits += completed.reduce((sum, { answer }) => sum + answer.credits, 0)
+      record.searches = completed.map(({ i, answer }) => searchRecord(i, answer, []))
+      const failure = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+      if (failure) throw failure.reason
+      const found = completed.map(({ answer }) => answer)
       const allowed = await Promise.all(
         found.map(async (a, i) => {
           const { search, dropped } = await dropOptedOut({ own: [], search: a.results.map(asCandidate) }, deps.sourcePolicy)
@@ -451,13 +465,8 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
       const known = [...input.sources.map(s => s.url), ...reused.map(f => f.source.url)]
       const { picked, drops } = pickNewSources(allowed, { urls: known, domains: input.sources.map(s => domainOf(s.url)) })
       record.sourceDrops.push(...drops)
-      record.searches = plan.searches.map((s, i) => ({
-        ...s,
-        cached: found[i]!.cached,
-        credits: found[i]!.credits,
-        results: found[i]!.results.length,
-        kept: picked.filter(p => p.search === i).map(p => p.result.url),
-      }))
+      const kept = (i: number) => picked.filter(p => p.search === i).map(p => p.result.url)
+      record.searches = completed.map(({ i, answer }) => searchRecord(i, answer, kept(i)))
 
       const extracted = await Promise.all(
         picked.map(async (p, k) => {
