@@ -336,7 +336,7 @@ describe('StoryContextAdmin', () => {
       renderSection()
       const region = await section()
       await user.click(within(region).getByRole('button', { name: 'Gather more context' }))
-      expect(await screen.findByText('Context gathered: the cards below are the new run’s.', undefined, { timeout: 4000 })).toBeInTheDocument()
+      expect(await screen.findByText('Context gathered: the Context section shows what the run kept.', undefined, { timeout: 4000 })).toBeInTheDocument()
       // Once on the start, once at the end, after the first read
       await waitFor(() => expect(mockContext.get).toHaveBeenCalledTimes(3))
     })
@@ -396,7 +396,7 @@ describe('StoryContextAdmin', () => {
 describe('gatherOutcome', () => {
   it("words a finished run, and keeps a failed one's reason until dismissed", () => {
     expect(gatherOutcome(task({ status: 'completed', completed: 1 }))).toEqual({
-      message: 'Context gathered: the cards below are the new run’s.',
+      message: 'Context gathered: the Context section shows what the run kept.',
       sticky: false,
     })
     expect(

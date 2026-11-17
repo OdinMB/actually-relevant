@@ -59,7 +59,7 @@ export function useUpdateContextBox(storyId: string) {
 /** The finished task in the editor's words: the server's reason when the run failed, kept until dismissed. */
 export function gatherOutcome(task: TaskState): { message: string; sticky: boolean } {
   if (task.failed > 0) return { message: `Gathering context: ${task.errors[0] ?? 'the run failed'}`, sticky: true }
-  return { message: 'Context gathered: the cards below are the new run’s.', sticky: false }
+  return { message: 'Context gathered: the Context section shows what the run kept.', sticky: false }
 }
 
 /**
