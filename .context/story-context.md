@@ -108,7 +108,7 @@ No budget stops the step (owner decision 2026-11-16, ADR-0060). A story's calls 
 }
 ```
 
-`aiGenerated.fields` is empty without boxes; `model` is the model recorded with the boxes (`contextAiMarker`, `lib/aiProvenance.ts`). The page carries `data-ai-generated="context"` on each note and on the section, and no visible label of its own: the story's "Researched and written by AI" line covers the cards (owner decision 2026-11-16; `.context/ai-transparency.md`). How the page lays the cards out is the client's (`.context/public-website.md`).
+`aiGenerated.fields` is empty without boxes; `model` is the model recorded with the boxes (`contextAiMarker`, `lib/aiProvenance.ts`). The page carries `data-ai-generated="context"` on each note and on the section, and no visible label of its own: the story's "Researched and written by AI" line covers the cards (owner decision 2026-11-16), and on a story whose research run was never applied its "Summary and analysis by AI." line does (owner decision 2026-11-17; `.context/ai-transparency.md`). How the page lays the cards out is the client's (`.context/public-website.md`).
 
 ## Admin
 
