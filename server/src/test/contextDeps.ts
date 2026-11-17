@@ -21,10 +21,21 @@ const fields = {
 
 const noVisual = { kind: 'none', tiles: [], measure: '', unit: '', points: [], apart: null }
 
+/** A "who it reaches" box whose one tile is the figure. */
+const figureBox = (factId: string) => ({
+  slot: 'who_affected',
+  heading: 'Land the fires reach',
+  teaser: 'Hectares burned',
+  place: 'section',
+  sentences: [],
+  visual: { ...noVisual, kind: 'tiles', tiles: [{ label: 'hectares burned', factIds: [factId] }] },
+})
+
 /**
  * Answers every step: research's facts structured (S0F1 with a figure), nothing missing, all
- * supported, one box and the figures. `failWrite` answers the write with nothing; `writeError` fails
- * it as a problem that may pass (`transient`) or one that would not (`lasting`).
+ * supported, a box with the figure as its tile and a box of sentences. `failWrite` answers the write
+ * with nothing; `writeError` fails it as a problem that may pass (`transient`) or one that would not
+ * (`lasting`).
  */
 export function fakeContextDeps(options: { failWrite?: boolean; writeError?: 'transient' | 'lasting' } = {}): ContextDeps {
   return {
@@ -49,8 +60,8 @@ export function fakeContextDeps(options: { failWrite?: boolean; writeError?: 'tr
         parsed = options.failWrite
           ? null
           : {
-              figures: { heading: 'In numbers', teaser: 'The figures', tiles: [{ label: 'hectares burned', factIds: ['S0F1'] }] },
               boxes: [
+                figureBox('S0F1'),
                 {
                   slot: 'compared',
                   heading: 'Twice the usual',
@@ -95,8 +106,8 @@ export function citingContextDeps(steps: string[] = []): ContextDeps {
       const figure = facts.find(f => f.text.includes('hectares'))!.id
       const other = facts.find(f => f.id !== figure)!.id
       const parsed = {
-        figures: { heading: 'In numbers', teaser: 'The figures', tiles: [{ label: 'hectares burned', factIds: [figure] }] },
         boxes: [
+          figureBox(figure),
           {
             slot: 'compared',
             heading: 'Twice the usual',

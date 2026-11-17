@@ -11,12 +11,10 @@ import type { FactCheck } from '../schemas/research.js'
 import type {
   Approx,
   BoxesAnswer,
-  BoxType,
   ContextSlot,
   CreditedKind,
   StoredChart,
   StoredSentence,
-  StoredTile,
   StoredVisual,
   Validity,
   WrittenBox,
@@ -80,9 +78,9 @@ export interface ContextFactData {
   promptVersion: string
 }
 
-/** A box as the run writes it, citing its facts by ref. */
+/** A box as the run writes it, citing its facts by ref: one per slot. */
 export interface DraftBox {
-  type: BoxType
+  type: ContextSlot
   heading: string
   teaser: string
   /** `P<n>`, `W<n>`, or null for the section. */
@@ -211,7 +209,7 @@ const boxLabel = (b: number) => `Box ${b + 1}`
 /** A place the story has (`P<n>`, `W<n>`), else null for the section. */
 const knownPlace = (place: string, spots: ReadonlySet<string>) => (spots.has(place.trim()) ? place.trim() : null)
 
-/** What the write may return (`config.storyContext`): boxes beside the figures box, sentences and tiles a box. */
+/** What the write may return (`config.storyContext`): boxes, sentences a box and tiles a box. */
 export interface BoxCaps {
   boxes: number
   sentences: number
@@ -236,10 +234,10 @@ function cappedBoxes(written: WrittenBox[], cap: number, drops: BoxDrop[]): Writ
 
 /**
  * The write's answer as boxes, the structural checks applied (step 10): the caps first (the first
- * box of each slot, at most `caps.boxes` beside the figures box, at most `caps.sentences` sentences
- * and `caps.tiles` tiles a box, in the order written); then a sentence or tile citing nothing, or
- * anything but a supported fact, is dropped, as is a chart point; a place the story doesn't have
- * becomes the section, and the figures box always sits there. Every drop counts as structural.
+ * box of each slot, at most `caps.boxes` boxes, at most `caps.sentences` sentences and `caps.tiles`
+ * tiles a box, in the order written); then a sentence or tile citing nothing, or anything but a
+ * supported fact, is dropped, as is a chart point; a place the story doesn't have becomes the
+ * section. Every drop counts as structural.
  */
 export function structuralBoxes(
   answer: BoxesAnswer,
@@ -257,28 +255,14 @@ export function structuralBoxes(
       drops.push({ label: `${boxLabel(b)} ${what} ${j + 1}`, cause: 'structure', problem })
       return false
     })
-  const written: { type: BoxType; heading: string; teaser: string; place: string | null; box: WrittenBox | null; tiles: StoredTile[] }[] = [
-    ...(answer.figures
-      ? [{ type: 'figures' as const, heading: answer.figures.heading, teaser: answer.figures.teaser, place: null, box: null, tiles: answer.figures.tiles }]
-      : []),
-    ...cappedBoxes(answer.boxes, caps.boxes, drops).map(box => ({
-      type: box.slot,
-      heading: box.heading,
-      teaser: box.teaser,
-      place: knownPlace(box.place, spots),
-      box,
-      tiles: box.visual.tiles,
-    })),
-  ]
-  const boxes = written.map((w, b): DraftBox => {
-    const sentences = keep(b, 'sentence', w.box?.sentences ?? [], caps.sentences, s => s.factIds)
+  const boxes = cappedBoxes(answer.boxes, caps.boxes, drops).map((box, b): DraftBox => {
+    const sentences = keep(b, 'sentence', box.sentences, caps.sentences, s => s.factIds)
+    const v = box.visual
     let visual: StoredVisual | null = null
-    const kind = w.box ? w.box.visual.kind : 'tiles'
-    if (kind === 'tiles') {
-      const tiles = keep(b, 'tile', w.tiles, caps.tiles, t => t.factIds)
+    if (v.kind === 'tiles') {
+      const tiles = keep(b, 'tile', v.tiles, caps.tiles, t => t.factIds)
       visual = tiles.length > 0 ? { kind: 'tiles', tiles } : null
-    } else if (kind === 'bars' || kind === 'line') {
-      const v = w.box!.visual
+    } else if (v.kind === 'bars' || v.kind === 'line') {
       const points = (list: StoredChart['points'], what: string) =>
         list.filter((p, j) => {
           if (supported.has(p.factId)) return true
@@ -286,14 +270,14 @@ export function structuralBoxes(
           return false
         })
       visual = {
-        kind,
+        kind: v.kind,
         measure: v.measure,
         unit: v.unit,
         points: points(v.points, 'chart'),
-        apart: kind === 'bars' && v.apart ? { ...v.apart, points: points(v.apart.points, 'apart') } : null,
+        apart: v.kind === 'bars' && v.apart ? { ...v.apart, points: points(v.apart.points, 'apart') } : null,
       }
     }
-    return { type: w.type, heading: w.heading.trim(), teaser: w.teaser.trim(), place: w.type === 'figures' ? null : w.place, sentences, visual }
+    return { type: box.slot, heading: box.heading.trim(), teaser: box.teaser.trim(), place: knownPlace(box.place, spots), sentences, visual }
   })
   return { boxes, drops, structural: drops.length }
 }
@@ -370,7 +354,7 @@ const chartText = (measure: string, unit: string, points: StoredChart['points'],
 /**
  * Every sentence, tile and chart of the boxes as an item of research's fact check, against its cited
  * facts (rendered, with their sources' words and dates): a tile as it is shown ("people under
- * hazardous smoke, Southeast Asia: 12.5 million"), a chart with each point ("area burned in Indonesia,
+ * hazardous smoke, Southeast Asia: 12.5 million", its heading for a label left empty), a chart with each point ("area burned in Indonesia,
  * hectares: 2015, 2.6 million; 2026, 2.88 million (estimate)"), so the check judges that every
  * point measures what the chart says. Boxes and their visuals must have been resolved first.
  */
@@ -395,13 +379,14 @@ export function boxCheckItems(boxes: DraftBox[], facts: ReadonlyMap<string, Cont
           const f = facts.get(s.ref)!
           return `${spelledFigure(f)}${f.provisional ? ' (estimate)' : ''}`
         })
+        // A tile without a label is read under its heading, which then says what the number counts
         items.push(
           item(
             b,
             'tile',
             j,
             `${boxLabel(b)} tile ${j + 1}`,
-            `${t.label}: ${values.join('; ')}`,
+            `${t.label.trim() || box.heading}: ${values.join('; ')}`,
             shown.map(s => s.ref),
           ),
         )

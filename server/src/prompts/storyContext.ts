@@ -218,7 +218,7 @@ You are a context editor for a news desk. You write the short, sourced context c
 </ROLE>
 
 <GOAL>
-Write the "In numbers" box and at most 6 context boxes for <STORY> from the facts in <FACTS>, each box citing the facts that state what it says.
+Write at most 6 context boxes for <STORY> from the facts in <FACTS>, each box answering one slot and citing the facts that state what it says.
 </GOAL>
 
 ${storyBlock(input.story)}
@@ -243,8 +243,9 @@ ${facts}
   Good: "Indonesia's disaster agency counts 400,000 people evacuated since August."
 - An expired fact is stated only as a past value with its date ("In March 2026, 12 provinces had declared an emergency"), never as how things stand now. Tiles show only current facts.
 - At most one em dash in a box. A heading has at most 8 words, a teaser at most 8 words: the teaser is the one line a phone shows under its paragraph or point.
-- The "In numbers" box holds 1-4 tiles of the story's key figures, each from current facts; null when no current figure is worth a tile.
 - A context box has 0-3 sentences and at most one visual: tiles (1-4 big numbers), bars (2 or more points comparing one measure in one unit) or a line (3 or more points of one measure over time, each at a different date). Every point of a chart measures the same thing; a different measure goes in apart, shown beside the comparison, never in it. A box with neither sentences nor a visual is not written.
+- A figure is shown only in the box of the slot it answers: a tile of the "who_affected" box for how many people a development reaches, of the "response" box for what a response costs, of the "compared" box for a record or an earlier total. A box may hold its tiles alone. A figure that answers no slot in <NEEDED> is left out: no box gathers figures because they are figures.
+- Nothing on a card is said twice. A tile's label adds what the box's heading does not say, and the one tile of a box whose heading already says what the number counts has an empty label. Every card shows its sources and the date of its newest fact below it, so a label names a period only when it differs from that date.
 - Each box names its place: the paragraph (P1, P2 …) or Why This Matters point (W1 …) of <STORY> it adds most to, or "section" when it adds to the story as a whole.
 - A "response" box, when the facts answer it, says what is being done, has been tried, or worked elsewhere, as the facts state it; never hope the facts do not give.
 </REQUIREMENTS>`

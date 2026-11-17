@@ -9,7 +9,18 @@
  */
 import type { ContextBox, ContextFact, Prisma, PrismaClient } from '@prisma/client'
 import { dayStart, utcDay } from '../lib/days.js'
-import { APPROX, CREDITED_KINDS, VALIDITY, storedSentencesSchema, storedVisualSchema, type StoredSentence, type StoredVisual } from '../schemas/storyContext.js'
+import {
+  APPROX,
+  CONTEXT_SLOTS,
+  CREDITED_KINDS,
+  VALIDITY,
+  isContextSlot,
+  storedSentencesSchema,
+  storedVisualSchema,
+  type ContextSlot,
+  type StoredSentence,
+  type StoredVisual,
+} from '../schemas/storyContext.js'
 import { normalizedUrl } from './researchFilter.js'
 import type { ContextFactData, DraftBox } from './storyContextChecks.js'
 import { asOfColumns, asOfFromColumns, factDate, periodStart } from './storyContextVisuals.js'
@@ -243,13 +254,25 @@ export function boxContent(box: Pick<ContextBox, 'sentences' | 'visual'>): BoxCo
 /** What `contextRecords` reads through: the app's client. */
 export type RecordsDb = Pick<PrismaClient, 'contextBox' | 'contextFact'>
 
-/** The boxes and facts of the story's newest run that wrote boxes, boxes in order, facts by ref. */
-export async function contextRecords(db: RecordsDb, storyId: string): Promise<{ boxes: ContextBox[]; facts: Map<string, StoredContextFact> }> {
-  const newest = await db.contextBox.findFirst({ where: { storyId }, orderBy: [{ writtenAt: 'desc' }, { id: 'desc' }], select: { runId: true } })
+/** A stored box of one of the slots: every box but an In numbers box (`figures`) stored before 2026-11-17. */
+export type SlotBox = ContextBox & { type: ContextSlot }
+
+const isSlotBox = (box: ContextBox): box is SlotBox => isContextSlot(box.type)
+
+/** The filter that reads back only the slots' boxes: an In numbers box stored before 2026-11-17 is neither served, listed nor edited, and stays stored. */
+export const SLOT_TYPES = { in: [...CONTEXT_SLOTS] }
+
+/** The boxes and facts of the story's newest run that wrote boxes of the slots, boxes in order, facts by ref. */
+export async function contextRecords(db: RecordsDb, storyId: string): Promise<{ boxes: SlotBox[]; facts: Map<string, StoredContextFact> }> {
+  const newest = await db.contextBox.findFirst({
+    where: { storyId, type: SLOT_TYPES },
+    orderBy: [{ writtenAt: 'desc' }, { id: 'desc' }],
+    select: { runId: true },
+  })
   if (!newest) return { boxes: [], facts: new Map() }
   const [boxes, facts] = await Promise.all([
-    db.contextBox.findMany({ where: { storyId, runId: newest.runId }, orderBy: { position: 'asc' } }),
+    db.contextBox.findMany({ where: { storyId, runId: newest.runId, type: SLOT_TYPES }, orderBy: { position: 'asc' } }),
     db.contextFact.findMany({ where: { storyId, runId: newest.runId } }),
   ])
-  return { boxes, facts: new Map(facts.map(f => [f.ref, storedFact(f)])) }
+  return { boxes: boxes.filter(isSlotBox), facts: new Map(facts.map(f => [f.ref, storedFact(f)])) }
 }

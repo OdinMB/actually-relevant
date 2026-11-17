@@ -34,6 +34,7 @@ describeDb('story context admin', () => {
       asOfPrecision: 'month',
     })
     const sentence = [{ text: 'x', factIds: ['S2F1'] }]
+    // An In numbers box stored before 2026-11-17: never listed
     const figures = await createContextBox(story.id, run.id, {
       position: 0,
       type: 'figures',
@@ -63,13 +64,12 @@ describeDb('story context admin', () => {
       result: { responseNotFound: true },
     })
     expect(admin.run!.searchUsd).toBeCloseTo(0.024, 10)
-    expect(admin.boxes.map(b => [b.type, b.status, b.hidden, b.place, b.storedPlace, b.movable])).toEqual([
-      ['figures', 'unreviewed', false, 'section', null, false],
-      ['compared', 'unreviewed', false, 'W2', 'W2', true],
-      ['why_now', 'demoted', true, 'P1', 'P1', true],
+    expect(admin.boxes.map(b => [b.type, b.status, b.hidden, b.place, b.storedPlace])).toEqual([
+      ['compared', 'unreviewed', false, 'W2', 'W2'],
+      ['why_now', 'demoted', true, 'P1', 'P1'],
     ])
-    expect(admin.boxes[1]).toMatchObject({ id: note.id, sources: [{ outlet: 'Two', url: 'https://s2.example/a' }], asOf: '2026-11' })
-    expect(admin.boxes[2]!.id).toBe(hidden.id)
+    expect(admin.boxes[0]).toMatchObject({ id: note.id, sources: [{ outlet: 'Two', url: 'https://s2.example/a' }], asOf: '2026-11' })
+    expect(admin.boxes[1]!.id).toBe(hidden.id)
     expect(admin.places).toEqual([
       { place: 'P1', label: 'Paragraph 1', text: 'The summary paragraph.' },
       { place: 'W1', label: 'Why This Matters 1', text: 'First reason' },
@@ -145,10 +145,10 @@ describeDb('story context admin', () => {
     expect((await getContextAdmin(story.id)).boxes.find(b => b.id === hidden.id)!.place).toBe('section')
   })
 
-  it('refuses a place the story does not have, moving the figures box, and a box of another story', async () => {
+  it('refuses a place the story does not have, an In numbers box stored before 2026-11-17, and a box of another story', async () => {
     const { story, note, figures } = await setup()
     await expect(updateContextBox(story.id, note.id, { place: 'P4' })).rejects.toMatchObject({ status: 400 })
-    await expect(updateContextBox(story.id, figures.id, { place: 'P1' })).rejects.toMatchObject({ status: 400 })
+    await expect(updateContextBox(story.id, figures.id, { place: 'P1' })).rejects.toMatchObject({ status: 404 })
     await expect(updateContextBox(story.id, '00000000-0000-0000-0000-000000000000', { hidden: true })).rejects.toMatchObject({ status: 404 })
   })
 })

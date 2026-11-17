@@ -3,7 +3,8 @@
  * "What readers see"): the boxes a published story's page serves, in order, each with its place on
  * the page (`servedBoxes` and `placeServed`, worked out now from the story as it stands), its sentences cited in
  * research's shape (`citedTextSchema`, sources numbered `C1…` in first-cited order), its tiles and
- * chart resolved under the tile and chart rules with formatted numbers, and its as-of date; plus the
+ * chart resolved under the tile and chart rules with formatted numbers, each tile's label without
+ * what the card already says (`tileLabel`), and its as-of date; plus the
  * `aiGenerated` marker. Not in the OpenAPI contract, so the shape can still change. A story without
  * context, or one not published, gets no boxes.
  */
@@ -12,9 +13,10 @@ import { contextAiMarker, type AiGeneratedContextMarker } from '../lib/aiProvena
 import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
 import { SOURCE_KINDS } from '../schemas/research.js'
-import type { BoxType } from '../schemas/storyContext.js'
+import type { ContextSlot } from '../schemas/storyContext.js'
 import { hostOf, type CitedText, type ResearchedSource } from './researchedStory.js'
 import { normalizedUrl } from './researchFilter.js'
+import { tileLabel } from './storyContextLabels.js'
 import { storyLayout } from './storyContextLayout.js'
 import { CONTEXT_STEP_TIERS } from './storyContextPipeline.js'
 import { contextRecords, oneOf, type StoredContextFact } from './storyContextRecords.js'
@@ -50,7 +52,7 @@ export interface ContextChartView {
 
 export interface ContextBoxView {
   id: string
-  type: BoxType
+  type: ContextSlot
   heading: string
   teaser: string
   /** `P<n>`, `W<n>` or `section`. */
@@ -132,6 +134,7 @@ export async function getStoryContext(slug: string): Promise<StoryContextView> {
   const book = sourceBook(story.sourceUrl)
   const idOf = (ref: string) => book.idOf(facts.get(ref)!)
   const boxes = placed.map(({ box, sentences, visual: shown, place }): ContextBoxView => {
+    const asOf = asOfFromColumns(box.asOf, box.asOfPrecision)
     const cited = sentences.map((s): CitedText => {
       const bySource = new Map<string, { sourceId: string; sentence: string | null }>()
       for (const ref of s.factIds) {
@@ -146,7 +149,10 @@ export async function getStoryContext(slug: string): Promise<StoryContextView> {
         : shown.kind === 'tiles'
           ? {
               kind: 'tiles',
-              tiles: shown.tiles.map(t => ({ label: t.label, values: t.values.map(s => ({ text: s.text, estimate: s.estimate, sourceId: idOf(s.ref) })) })),
+              tiles: shown.tiles.map(t => ({
+                label: tileLabel(t.label, { heading: box.heading, asOf, tiles: shown.tiles.length }),
+                values: t.values.map(s => ({ text: s.text, estimate: s.estimate, sourceId: idOf(s.ref) })),
+              })),
             }
           : {
               kind: shown.kind,
@@ -170,7 +176,7 @@ export async function getStoryContext(slug: string): Promise<StoryContextView> {
       place,
       sentences: cited,
       visual,
-      asOf: asOfFromColumns(box.asOf, box.asOfPrecision),
+      asOf,
       sourceIds,
     }
   })

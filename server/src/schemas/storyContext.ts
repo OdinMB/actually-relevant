@@ -18,9 +18,11 @@ export const SEARCH_SLOTS = ['compared', 'why_now', 'build_up', 'who_affected', 
   'response'
 >[]
 
-/** A stored box's type: a slot, or the figures box. */
-export const BOX_TYPES = [...CONTEXT_SLOTS, 'figures'] as const
-export type BoxType = (typeof BOX_TYPES)[number]
+/**
+ * Whether a stored box's type is a slot. The database's `ContextBoxType` still holds `figures`, the
+ * In numbers box written until 2026-11-17, for its stored rows; those are never read back.
+ */
+export const isContextSlot = (type: string): type is ContextSlot => (CONTEXT_SLOTS as readonly string[]).includes(type)
 
 export const APPROX = ['exact', 'about', 'at_least', 'under'] as const
 export type Approx = (typeof APPROX)[number]
@@ -173,7 +175,11 @@ const citedSentence = z.object({
 })
 
 const tileSpec = z.object({
-  label: z.string().describe('What the number counts, with its place and period, in at most 8 words ("people under hazardous smoke, Southeast Asia").'),
+  label: z
+    .string()
+    .describe(
+      'What the number counts that the box\'s heading does not say, with its place, in at most 8 words ("people under hazardous smoke, Southeast Asia"). A period only when it differs from the date of the box\'s newest fact, which the card shows. Empty string for the one tile of a box whose heading already says what it counts.',
+    ),
   factIds: z.array(z.string()).describe('The facts that give this number: one, or several when sources give it for the same thing.'),
 })
 
@@ -183,14 +189,6 @@ const pointSpec = z.object({
 })
 
 export const boxesSchema = z.object({
-  figures: z
-    .object({
-      heading: z.string().describe('At most 8 words.'),
-      teaser: z.string().describe("The phone's one-line note: at most 8 words."),
-      tiles: z.array(tileSpec).describe('1-4 big-number tiles, each from current facts.'),
-    })
-    .nullable()
-    .describe('The "In numbers" box: the story\'s key figures as tiles. Null when fewer than one current figure is worth a tile.'),
   boxes: z
     .array(
       z.object({
@@ -201,7 +199,7 @@ export const boxesSchema = z.object({
         sentences: z.array(citedSentence).describe('0-3 sentences.'),
         visual: z.object({
           kind: z.enum(['none', 'tiles', 'bars', 'line']),
-          tiles: z.array(tileSpec).describe('For tiles: 1-4 tiles. Empty otherwise.'),
+          tiles: z.array(tileSpec).describe("For tiles: 1-4 tiles, each a current figure that answers the box's slot. Empty otherwise."),
           measure: z.string().describe('For bars and line: what every point measures, with its scope ("area burned in Indonesia"). Empty string otherwise.'),
           unit: z.string().describe('For bars and line: the one unit of every point ("hectares"). Empty string otherwise.'),
           points: z.array(pointSpec).describe('For bars: 2 or more points. For a line: 3 or more points, each at a different date. Empty otherwise.'),

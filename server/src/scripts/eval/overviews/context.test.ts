@@ -62,7 +62,6 @@ function pipelineAnswers(schemaName: string, prompt: string): unknown {
       return { items: numbers('ITEM').map(number => ({ number, supported: true, problem: '', key: false, copiedSentence: '', followsSource: '' })) }
     case 'write':
       return {
-        figures: null,
         boxes: [
           {
             slot: 'response',

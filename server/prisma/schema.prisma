@@ -489,7 +489,7 @@ enum JudgmentStatus {
   demoted
 }
 
-/// A context box's slot, or the figures box
+/// A context box's slot. `figures` is the In numbers box written until 2026-11-17: kept for its stored rows, never read back
 enum ContextBoxType {
   compared
   why_now

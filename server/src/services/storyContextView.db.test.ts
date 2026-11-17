@@ -100,8 +100,10 @@ describeDb('getStoryContext', () => {
     const { story, run } = await setup()
     await createContextBox(story.id, run.id, {
       position: 0,
-      type: 'figures',
-      visual: { kind: 'tiles', tiles: [{ label: 'people under smoke', factIds: ['S5F2', 'S5F3'] }] },
+      type: 'who_affected',
+      heading: 'People under hazardous smoke',
+      place: 'W1',
+      visual: { kind: 'tiles', tiles: [{ label: 'people under smoke, 2026', factIds: ['S5F2', 'S5F3'] }] },
       asOf: new Date('2026-11-10'),
       asOfPrecision: 'day',
     })
@@ -127,17 +129,19 @@ describeDb('getStoryContext', () => {
       asOfPrecision: 'month',
     })
     await createContextBox(story.id, run.id, { position: 2, type: 'why_now', status: 'demoted', sentences: [{ text: 'Hidden.', factIds: ['S2F1'] }] })
-    // An honest gap stored before 2026-11-17 (no sentences, no visual) is never served
+    // An honest gap stored before 2026-11-17 (no sentences, no visual) is never served, nor is an In numbers box
     await createContextBox(story.id, run.id, { position: 3, type: 'response', gap: true, model: null, promptVersion: null })
+    await createContextBox(story.id, run.id, { position: 4, type: 'figures', visual: { kind: 'tiles', tiles: [{ label: 'area', factIds: ['S5F1'] }] } })
 
     const view = await getStoryContext('story-published')
     expect(view.boxes.map(b => [b.type, b.place])).toEqual([
-      ['figures', 'section'],
+      ['who_affected', 'W1'],
       ['compared', 'P2'],
     ])
+    // The one tile's label only repeated the heading and the as-of year the footer gives
     expect(view.boxes[0]!.visual).toEqual({
       kind: 'tiles',
-      tiles: [{ label: 'people under smoke', values: [{ text: 'about 12.5m', estimate: false, sourceId: 'C1' }] }],
+      tiles: [{ label: '', values: [{ text: 'about 12.5m', estimate: false, sourceId: 'C1' }] }],
     })
     const compared = view.boxes[1]!
     expect(compared.sentences).toEqual([

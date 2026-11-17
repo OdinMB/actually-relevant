@@ -6,8 +6,8 @@
  * write call chose; `random`, a draw among the paragraphs and points that cite one of the box's
  * sources, seeded by the story so a page never reshuffles; `section`, none beside the text. Then the
  * limits, in box order with the editor's boxes first: at most `notesInText` beside paragraphs, at
- * most `notesByPoints` beside Why This Matters points, one per paragraph or point. The figures box
- * always goes to the section, and so does a place the story no longer has.
+ * most `notesByPoints` beside Why This Matters points, one per paragraph or point. A place the story
+ * no longer has goes to the section.
  */
 import { createHash } from 'node:crypto'
 import { normalizedUrl } from './researchFilter.js'
@@ -17,7 +17,6 @@ export type PlacementMode = 'model' | 'random' | 'section'
 
 export interface PlacementBox {
   id: string
-  type: string
   /** The stored place: `P<n>`, `W<n>`, or null for the section. */
   place: string | null
   placeByEditor: boolean
@@ -34,9 +33,6 @@ export interface PlacementOptions {
 }
 
 export const SECTION = 'section'
-
-/** Whether a box of this type may sit beside the text: every one but the In numbers card, which stays under More context. */
-export const placeable = (type: string): boolean => type !== 'figures'
 
 /** A stable number in [0, 1) for the story and the box's order. */
 function draw(storyId: string, index: number): number {
@@ -69,10 +65,6 @@ export function placeBoxes(boxes: PlacementBox[], layout: Pick<StoryLayout, 'par
   const placed = new Map<string, string>()
   const order = [...boxes.map((box, index) => ({ box, index }))].sort((a, b) => Number(b.box.placeByEditor) - Number(a.box.placeByEditor) || a.index - b.index)
   for (const { box, index } of order) {
-    if (!placeable(box.type)) {
-      placed.set(box.id, SECTION)
-      continue
-    }
     const spot = wanted(box, index)
     placed.set(box.id, spot !== null && free(spot) ? take(spot) : SECTION)
   }

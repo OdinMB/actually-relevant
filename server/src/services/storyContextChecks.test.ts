@@ -155,8 +155,15 @@ const facts = new Map(
 )
 
 const answer = (over: Partial<BoxesAnswer> = {}): BoxesAnswer => ({
-  figures: { heading: 'In numbers', teaser: 'Key figures', tiles: [{ label: 'people under smoke', factIds: ['S1F1'] }] },
   boxes: [
+    {
+      slot: 'who_affected',
+      heading: 'Who the smoke reaches',
+      teaser: 'Millions under the haze',
+      place: 'section',
+      sentences: [],
+      visual: { kind: 'tiles', tiles: [{ label: 'people under smoke', factIds: ['S1F1'] }], measure: '', unit: '', points: [], apart: null },
+    },
     {
       slot: 'compared',
       heading: 'Bigger than 2015',
@@ -186,14 +193,15 @@ const answer = (over: Partial<BoxesAnswer> = {}): BoxesAnswer => ({
 describe('structuralBoxes', () => {
   it('drops a sentence, tile or point citing anything but a supported fact, and a place the story lacks', () => {
     const written = answer()
-    written.boxes[0]!.visual.points.push({ label: '2030', factId: 'S8F1' })
+    written.boxes[1]!.visual.points.push({ label: '2030', factId: 'S8F1' })
+    written.boxes[0]!.visual.tiles.push({ label: 'unknown', factIds: ['S9F9'] })
     const { boxes, drops, structural } = structuralBoxes(written, new Set(facts.keys()), new Set(['P1', 'W1']))
     expect(boxes.map(b => [b.type, b.place, b.sentences.length])).toEqual([
-      ['figures', null, 0],
+      ['who_affected', null, 0],
       ['compared', null, 1],
     ])
-    expect(drops.map(d => d.label)).toEqual(['Box 2 sentence 2', 'Box 2 sentence 3', 'Box 2 chart point 3'])
-    expect(structural).toBe(3)
+    expect(drops.map(d => d.label)).toEqual(['Box 1 tile 2', 'Box 2 sentence 2', 'Box 2 sentence 3', 'Box 2 chart point 3'])
+    expect(structural).toBe(4)
   })
 
   it('keeps an existing place', () => {
@@ -211,12 +219,12 @@ describe('structuralBoxes', () => {
   })
   const caps = { boxes: 3, sentences: 2, tiles: 2 }
 
-  it('keeps the first box of each slot and at most the cap of boxes beside the figures, counting each one dropped as structural', () => {
+  it('keeps the first box of each slot and at most the cap of boxes, counting each one dropped as structural', () => {
     const written = answer({
       boxes: [box('compared', 'First compared'), box('compared', 'Second compared'), box('why_now', 'Why now'), box('next', 'Next'), box('key_term', 'Term')],
     })
     const { boxes, drops, structural } = structuralBoxes(written, new Set(facts.keys()), new Set(), caps)
-    expect(boxes.map(b => b.heading)).toEqual(['In numbers', 'First compared', 'Why now', 'Next'])
+    expect(boxes.map(b => b.heading)).toEqual(['First compared', 'Why now', 'Next'])
     expect(drops).toEqual([
       { label: 'Box "Second compared"', cause: 'structure', problem: 'a second box for its slot' },
       { label: 'Box "Term"', cause: 'structure', problem: 'over the 3 boxes' },
@@ -227,9 +235,9 @@ describe('structuralBoxes', () => {
   it('keeps at most the cap of sentences and of tiles, in the order written', () => {
     const sentences = ['One', 'Two', 'Three'].map(text => ({ text, factIds: ['S1F2'] }))
     const tiles = ['a', 'b', 'c'].map(label => ({ label, factIds: ['S1F1'] }))
+    const visual = { kind: 'tiles' as const, tiles, measure: '', unit: '', points: [], apart: null }
     const written = answer({
-      figures: { heading: 'In numbers', teaser: 't', tiles },
-      boxes: [box('compared', 'Compared', { sentences, visual: { kind: 'tiles', tiles, measure: '', unit: '', points: [], apart: null } })],
+      boxes: [box('who_affected', 'Who', { sentences: [], visual }), box('compared', 'Compared', { sentences, visual })],
     })
     const { boxes, drops } = structuralBoxes(written, new Set(facts.keys()), new Set(), caps)
     expect(boxes.map(b => [b.sentences.map(s => s.text), b.visual?.kind === 'tiles' ? b.visual.tiles.map(t => t.label) : null])).toEqual([
@@ -261,9 +269,18 @@ describe('resolveVisuals and boxCheckItems', () => {
     expect(items[2]!.checked.evidence.map(e => e.id)).toEqual(['S1F2', 'S2F1', 'S1F0', 'S2F0'])
   })
 
+  it('judges a tile without a label by its heading, which then says what the number counts', () => {
+    const written = answer()
+    written.boxes[0]!.heading = 'People under hazardous smoke'
+    written.boxes[0]!.visual.tiles[0]!.label = ' '
+    const { boxes: resolved } = resolveVisuals(structuralBoxes(written, new Set(facts.keys()), new Set()).boxes, facts, DAY, WINDOWS)
+    expect(boxCheckItems(resolved, facts, DAY, WINDOWS)[0]!.checked.item.text).toBe('People under hazardous smoke: 12.5 million people')
+  })
+
   it('drops an expired tile and an undrawable chart without counting them', () => {
-    const written = answer({ figures: { heading: 'h', teaser: 't', tiles: [{ label: 'evacuated', factIds: ['S2F2'] }] } })
-    written.boxes[0]!.visual.points.pop()
+    const written = answer()
+    written.boxes[0]!.visual.tiles = [{ label: 'evacuated', factIds: ['S2F2'] }]
+    written.boxes[1]!.visual.points.pop()
     const resolved = resolveVisuals(structuralBoxes(written, new Set(facts.keys()), new Set()).boxes, facts, DAY, WINDOWS)
     expect(resolved.drops).toEqual([
       { label: 'Box 1 tile 1', cause: 'expired' },

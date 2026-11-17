@@ -37,9 +37,9 @@ describe('editorChoices', () => {
   })
 
   it("leaves the write call's choice alone where the editor made none, and for a type the earlier run lacked", () => {
-    const choice = editorChoices([box('compared', { place: 'P2' }), box('figures', { status: 'reviewed' })])
+    const choice = editorChoices([box('compared', { place: 'P2' }), box('key_term', { status: 'reviewed' })])
     expect(choice('compared')).toEqual({})
-    expect(choice('figures')).toEqual({})
+    expect(choice('key_term')).toEqual({})
     expect(choice('why_now')).toEqual({})
     expect(editorChoices([])('compared')).toEqual({})
   })

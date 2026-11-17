@@ -136,7 +136,7 @@ function fakeDeps(f: Fakes = {}) {
                 },
               ],
             }
-      else if (step === 'write') parsed = f.boxes ?? { figures: null, boxes: [] }
+      else if (step === 'write') parsed = f.boxes ?? { boxes: [] }
       else {
         const labels = [...prompt.matchAll(/<ITEM number="\d+" label="([^"]+)"/g)].map(m => m[1]!)
         parsed = {
@@ -275,7 +275,7 @@ describe('buildStoryContext', () => {
   })
 
   it('writes a response box from a supported search fact, and then records nothing as not found', async () => {
-    const { deps, prompts } = fakeDeps({ gap: responseGap(), boxes: { figures: null, boxes: [responseBox(['S1F1'])] } })
+    const { deps, prompts } = fakeDeps({ gap: responseGap(), boxes: { boxes: [responseBox(['S1F1'])] } })
     const out = await buildStoryContext(input(), deps)
     expect(out.boxes).toEqual([
       {
@@ -488,7 +488,7 @@ describe('buildStoryContext', () => {
       model: 'old',
       promptVersion: 'old',
     }
-    const { deps, prompts } = fakeDeps({ boxes: { figures: null, boxes: [responseBox(['S1F1'])] } })
+    const { deps, prompts } = fakeDeps({ boxes: { boxes: [responseBox(['S1F1'])] } })
     const out = await buildStoryContext(input({ reusable: [reused] }), deps)
     expect(prompts['gap-list']![0]).toContain('id="S1F1"')
     expect(out.facts.find(f => f.ref === 'S1F1')).toMatchObject({ reusedFromId: 'earlier-fact-1', verdict: 'supported', model: 'old', source: { id: 'S1' } })
@@ -514,7 +514,7 @@ describe('buildStoryContext on a story with earlier runs', () => {
       earlierFact('row-1', 'S0F1', orig.url, orig.facts[0]!.statement),
       earlierFact('row-2', 'S4F1', 'https://agency.example/plan', 'The agency plans to restore 2 million hectares.'),
     ]
-    const { deps, prompts, requests } = fakeDeps({ gap: allCovered, boxes: { figures: null, boxes: [responseBox(['S2F1'])] } })
+    const { deps, prompts, requests } = fakeDeps({ gap: allCovered, boxes: { boxes: [responseBox(['S2F1'])] } })
     const out = await buildStoryContext(input({ earlier: earlier({ facts, judged: [judgedKey(0), judgedKey(1)] }) }), deps)
 
     expect(prompts.structure).toBeUndefined()

@@ -55,7 +55,7 @@ describeDb('story context runs', () => {
 
     const boxes = await prisma.contextBox.findMany({ where: { runId: run.id }, orderBy: { position: 'asc' } })
     expect(boxes.map(b => [b.position, b.type, b.place, b.model])).toEqual([
-      [0, 'figures', null, 'model-write'],
+      [0, 'who_affected', null, 'model-write'],
       [1, 'compared', 'P1', 'model-write'],
     ])
     expect(boxes[0]!.visual).toEqual({ kind: 'tiles', tiles: [{ label: 'hectares burned', factIds: ['S0F1'] }] })
@@ -187,8 +187,8 @@ describeDb('story context runs', () => {
   it("builds on the story's earlier run: its facts carried over, its research facts not structured again, the editor's choices kept by type", async () => {
     const { story } = await publishedStory()
     const first = (await runStoryContext(story.id, citingDeps()))!
-    const [figures, compared] = await prisma.contextBox.findMany({ where: { runId: first.runId }, orderBy: { position: 'asc' } })
-    await prisma.contextBox.update({ where: { id: figures!.id }, data: { status: 'demoted' } })
+    const [reach, compared] = await prisma.contextBox.findMany({ where: { runId: first.runId }, orderBy: { position: 'asc' } })
+    await prisma.contextBox.update({ where: { id: reach!.id }, data: { status: 'demoted' } })
     await prisma.contextBox.update({ where: { id: compared!.id }, data: { place: null, placeByEditor: true } })
 
     // A second run is an editor's: the claim, then the run
@@ -209,7 +209,7 @@ describeDb('story context runs', () => {
 
     const boxes = await prisma.contextBox.findMany({ where: { runId: second.runId }, orderBy: { position: 'asc' } })
     expect(boxes.map(b => [b.type, b.status, b.place, b.placeByEditor])).toEqual([
-      ['figures', 'demoted', null, false],
+      ['who_affected', 'demoted', null, false],
       ['compared', 'unreviewed', null, true],
     ])
     // Nothing of the first run is deleted

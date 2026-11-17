@@ -18,7 +18,6 @@ const layout = {
 
 const box = (id: string, over: Partial<PlacementBox> = {}): PlacementBox => ({
   id,
-  type: 'compared',
   place: null,
   placeByEditor: false,
   sourceUrls: ['https://a.example/1'],
@@ -44,9 +43,8 @@ describe('placeBoxes', () => {
     expect(placesOf(boxes, 'model')).toEqual({ a: 'P1', b: 'section', c: 'P2', d: 'section', e: 'W1', f: 'W2', g: 'section', h: 'section' })
   })
 
-  it('always puts the figures box in the section, and a place the story no longer has', () => {
-    const boxes = [box('fig', { type: 'figures', place: 'P1' }), box('gone', { place: 'P9' })]
-    expect(placesOf(boxes, 'model')).toEqual({ fig: 'section', gone: 'section' })
+  it('puts a box whose place the story no longer has in the section', () => {
+    expect(placesOf([box('gone', { place: 'P9' }), box('kept', { place: 'P1' })], 'model')).toEqual({ gone: 'section', kept: 'P1' })
   })
 
   it('section: places nothing beside the text', () => {

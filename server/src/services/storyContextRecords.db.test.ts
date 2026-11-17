@@ -1,7 +1,7 @@
 import { it, expect } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import { createContextFact, createContextRun, createResearchRun } from '../test/db/storyContext.js'
+import { createContextBox, createContextFact, createContextRun, createResearchRun } from '../test/db/storyContext.js'
 import type { ContextFactData, DraftBox } from './storyContextChecks.js'
 import { loadContextInput } from './storyContextInput.js'
 import { boxContent, boxRow, contextRecords, factRow } from './storyContextRecords.js'
@@ -113,5 +113,19 @@ describeDb('story context records', () => {
     await createResearchRun(story.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }], { earlier: [earlier.id] })
     const input = await loadContextInput(prisma, story.id)
     expect(input!.reusable).toEqual([{ ...reused, slot: null, id: records.facts.get('S2F1')!.id }])
+  })
+
+  it('never reads back an In numbers box stored before 2026-11-17, nor counts a run that wrote only one as a run with boxes', async () => {
+    const issue = await createIssue()
+    const feed = await createFeed(issue.id)
+    const story = await createStory({ feedId: feed.id, status: 'published', datePublished: new Date('2026-11-14T09:00:00Z'), summary: 'Fires.' })
+    const older = await createContextRun(story.id, { startedAt: new Date('2026-11-14T03:00:00Z') })
+    const newer = await createContextRun(story.id, { startedAt: new Date('2026-11-15T03:00:00Z') })
+    await createContextBox(story.id, older.id, { position: 0, type: 'figures', writtenAt: new Date('2026-11-14T03:05:00Z') })
+    await createContextBox(story.id, older.id, { position: 1, type: 'who_affected', writtenAt: new Date('2026-11-14T03:05:00Z') })
+    await createContextBox(story.id, newer.id, { position: 0, type: 'figures', writtenAt: new Date('2026-11-15T03:05:00Z') })
+
+    const records = await contextRecords(prisma, story.id)
+    expect(records.boxes.map(b => [b.runId, b.type])).toEqual([[older.id, 'who_affected']])
   })
 })

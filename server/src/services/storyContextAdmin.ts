@@ -13,8 +13,8 @@ import prisma from '../lib/prisma.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 import { layoutSpots, storyLayout, type LayoutStory, type StoryLayout } from './storyContextLayout.js'
 import { gatherState } from './storyContextOnDemand.js'
-import { placeable, SECTION } from './storyContextPlacement.js'
-import { boxContent, boxRefs, contextRecords } from './storyContextRecords.js'
+import { SECTION } from './storyContextPlacement.js'
+import { boxContent, boxRefs, contextRecords, SLOT_TYPES } from './storyContextRecords.js'
 import { markInterruptedContextRuns } from './storyContextRuns.js'
 import { placeServed, servableRow, servedBoxes } from './storyContextServed.js'
 import { asOfFromColumns } from './storyContextVisuals.js'
@@ -34,8 +34,6 @@ export interface ContextAdminBox {
   /** As stored: the write call's choice or the editor's, null for the section. */
   storedPlace: string | null
   placeByEditor: boolean
-  /** An editor may move it beside the text: every box but the In numbers card. */
-  movable: boolean
   sources: { outlet: string; url: string }[]
   asOf: string | null
   position: number
@@ -139,7 +137,6 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
         place: placed.get(b.id) ?? b.place ?? SECTION,
         storedPlace: b.place,
         placeByEditor: b.placeByEditor,
-        movable: placeable(b.type),
         sources: [...sources].map(([url, outlet]) => ({ outlet, url })),
         asOf: asOfFromColumns(b.asOf, b.asOfPrecision),
         position: b.position,
@@ -163,15 +160,15 @@ export async function setContextHidden(storyId: string, hidden: boolean): Promis
 /**
  * Hide or show one box, or move it: to a paragraph or point the story has now, or to `section`. An
  * editor's place is kept in every placement mode, under the same limits. 400 for a place the story
- * does not have; 404 for an unknown story or a box of another story.
+ * does not have; 404 for an unknown story, a box of another story, or an In numbers box stored
+ * before 2026-11-17 (never listed, as `contextRecords` reads it).
  */
 export async function updateContextBox(storyId: string, boxId: string, change: { hidden?: boolean; place?: string }): Promise<void> {
   const story = await storyFor(storyId)
-  const box = await prisma.contextBox.findFirst({ where: { id: boxId, storyId }, select: { id: true, type: true } })
+  const box = await prisma.contextBox.findFirst({ where: { id: boxId, storyId, type: SLOT_TYPES }, select: { id: true } })
   if (!box) throw new NotFoundError('Context box not found')
   let place: { place: string | null; placeByEditor: true } | null = null
   if (change.place !== undefined) {
-    if (!placeable(box.type) && change.place !== SECTION) throw new BadRequestError('The In numbers card always sits under More context')
     if (change.place !== SECTION && !layoutSpots(storyLayout(story)).has(change.place))
       throw new BadRequestError(`The story has no ${change.place}: choose one of its paragraphs or points, or section`)
     place = { place: change.place === SECTION ? null : change.place, placeByEditor: true }

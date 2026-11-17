@@ -420,8 +420,8 @@ export const config = {
     /** Fact-check items per call. */
     checkBatchSize: 25,
     /**
-     * What the write may return, held in code as its prompt states it (`structuralBoxes`): boxes
-     * beside the figures box, one per slot; sentences a box; tiles a box, the figures box's included.
+     * What the write may return, held in code as its prompt states it (`structuralBoxes`): boxes,
+     * one per slot; sentences a box; tiles a box.
      */
     maxBoxes: 6,
     maxSentences: 3,

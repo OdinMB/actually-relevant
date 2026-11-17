@@ -99,7 +99,7 @@ export interface PlaceOptions {
 export function placeServed<B extends ServableBox>(served: ServedBox<B>[], options: PlaceOptions): PlacedBox<B>[] {
   const c = config.storyContext
   const places = placeBoxes(
-    served.map(({ box, sourceUrls }) => ({ id: box.id, type: box.type, place: box.place, placeByEditor: box.placeByEditor, sourceUrls })),
+    served.map(({ box, sourceUrls }) => ({ id: box.id, place: box.place, placeByEditor: box.placeByEditor, sourceUrls })),
     options.layout,
     { mode: options.mode ?? c.placement, storyId: options.storyId, notesInText: c.notesInText, notesByPoints: c.notesByPoints },
   )
