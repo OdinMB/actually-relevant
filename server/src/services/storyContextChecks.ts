@@ -5,6 +5,7 @@
  * structural box checks, failed items and empty boxes dropped, and the item tally. It reuses
  * research's `checkCopying`, `sourceLines`, `judgedProblems`, `publishedFact` and `numberHints`.
  */
+import { config } from '../config.js'
 import type { CheckedItem } from '../prompts/research.js'
 import type { FactCheck } from '../schemas/research.js'
 import type {
@@ -210,25 +211,57 @@ const boxLabel = (b: number) => `Box ${b + 1}`
 /** A place the story has (`P<n>`, `W<n>`), else null for the section. */
 const knownPlace = (place: string, spots: ReadonlySet<string>) => (spots.has(place.trim()) ? place.trim() : null)
 
+/** What the write may return (`config.storyContext`): boxes beside the figures box, sentences and tiles a box. */
+export interface BoxCaps {
+  boxes: number
+  sentences: number
+  tiles: number
+}
+
+const configCaps = (): BoxCaps => ({ boxes: config.storyContext.maxBoxes, sentences: config.storyContext.maxSentences, tiles: config.storyContext.maxTiles })
+
+/** The written boxes the caps keep, in order: the first of each slot, at most `cap` of them; the others as drops. */
+function cappedBoxes(written: WrittenBox[], cap: number, drops: BoxDrop[]): WrittenBox[] {
+  const slots = new Set<string>()
+  return written.filter(box => {
+    const problem = slots.has(box.slot) ? 'a second box for its slot' : slots.size >= cap ? `over the ${cap} boxes` : null
+    if (problem === null) {
+      slots.add(box.slot)
+      return true
+    }
+    drops.push({ label: `Box "${box.heading.trim()}"`, cause: 'structure', problem })
+    return false
+  })
+}
+
 /**
- * The write's answer as boxes, the structural checks applied (step 10): a sentence or tile citing
- * nothing, or anything but a supported fact, is dropped, as is a chart point; a place the story
- * doesn't have becomes the section, and the figures box always sits there.
+ * The write's answer as boxes, the structural checks applied (step 10): the caps first (the first
+ * box of each slot, at most `caps.boxes` beside the figures box, at most `caps.sentences` sentences
+ * and `caps.tiles` tiles a box, in the order written); then a sentence or tile citing nothing, or
+ * anything but a supported fact, is dropped, as is a chart point; a place the story doesn't have
+ * becomes the section, and the figures box always sits there. Every drop counts as structural.
  */
-export function structuralBoxes(answer: BoxesAnswer, supported: ReadonlySet<string>, spots: ReadonlySet<string>): StructuralResult {
+export function structuralBoxes(
+  answer: BoxesAnswer,
+  supported: ReadonlySet<string>,
+  spots: ReadonlySet<string>,
+  caps: BoxCaps = configCaps(),
+): StructuralResult {
   const drops: BoxDrop[] = []
   const ok = (ids: string[]) => ids.length > 0 && ids.every(id => supported.has(id))
-  const keepTiles = (b: number, tiles: StoredTile[]) =>
-    tiles.filter((t, j) => {
-      if (ok(t.factIds)) return true
-      drops.push({ label: `${boxLabel(b)} tile ${j + 1}`, cause: 'structure', problem: 'cites no supported fact' })
+  /** The items within the cap whose citations hold, each other one a drop. */
+  const keep = <T>(b: number, what: 'sentence' | 'tile', list: T[], cap: number, factIds: (item: T) => string[]) =>
+    list.filter((item, j) => {
+      const problem = j >= cap ? `over the ${cap} ${what}s` : ok(factIds(item)) ? null : 'cites no supported fact'
+      if (problem === null) return true
+      drops.push({ label: `${boxLabel(b)} ${what} ${j + 1}`, cause: 'structure', problem })
       return false
     })
   const written: { type: BoxType; heading: string; teaser: string; place: string | null; box: WrittenBox | null; tiles: StoredTile[] }[] = [
     ...(answer.figures
       ? [{ type: 'figures' as const, heading: answer.figures.heading, teaser: answer.figures.teaser, place: null, box: null, tiles: answer.figures.tiles }]
       : []),
-    ...answer.boxes.map(box => ({
+    ...cappedBoxes(answer.boxes, caps.boxes, drops).map(box => ({
       type: box.slot,
       heading: box.heading,
       teaser: box.teaser,
@@ -238,15 +271,11 @@ export function structuralBoxes(answer: BoxesAnswer, supported: ReadonlySet<stri
     })),
   ]
   const boxes = written.map((w, b): DraftBox => {
-    const sentences = (w.box?.sentences ?? []).filter((s, j) => {
-      if (ok(s.factIds)) return true
-      drops.push({ label: `${boxLabel(b)} sentence ${j + 1}`, cause: 'structure', problem: 'cites no supported fact' })
-      return false
-    })
+    const sentences = keep(b, 'sentence', w.box?.sentences ?? [], caps.sentences, s => s.factIds)
     let visual: StoredVisual | null = null
     const kind = w.box ? w.box.visual.kind : 'tiles'
     if (kind === 'tiles') {
-      const tiles = keepTiles(b, w.tiles)
+      const tiles = keep(b, 'tile', w.tiles, caps.tiles, t => t.factIds)
       visual = tiles.length > 0 ? { kind: 'tiles', tiles } : null
     } else if (kind === 'bars' || kind === 'line') {
       const v = w.box!.visual

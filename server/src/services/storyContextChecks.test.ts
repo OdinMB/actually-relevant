@@ -199,6 +199,52 @@ describe('structuralBoxes', () => {
   it('keeps an existing place', () => {
     expect(structuralBoxes(answer(), new Set(facts.keys()), new Set(['P2'])).boxes[1]!.place).toBe('P2')
   })
+
+  const box = (slot: BoxesAnswer['boxes'][number]['slot'], heading: string, over: Partial<BoxesAnswer['boxes'][number]> = {}) => ({
+    slot,
+    heading,
+    teaser: 't',
+    place: 'section',
+    sentences: [{ text: `${heading}.`, factIds: ['S1F2'] }],
+    visual: { kind: 'none' as const, tiles: [], measure: '', unit: '', points: [], apart: null },
+    ...over,
+  })
+  const caps = { boxes: 3, sentences: 2, tiles: 2 }
+
+  it('keeps the first box of each slot and at most the cap of boxes beside the figures, counting each one dropped as structural', () => {
+    const written = answer({
+      boxes: [box('compared', 'First compared'), box('compared', 'Second compared'), box('why_now', 'Why now'), box('next', 'Next'), box('key_term', 'Term')],
+    })
+    const { boxes, drops, structural } = structuralBoxes(written, new Set(facts.keys()), new Set(), caps)
+    expect(boxes.map(b => b.heading)).toEqual(['In numbers', 'First compared', 'Why now', 'Next'])
+    expect(drops).toEqual([
+      { label: 'Box "Second compared"', cause: 'structure', problem: 'a second box for its slot' },
+      { label: 'Box "Term"', cause: 'structure', problem: 'over the 3 boxes' },
+    ])
+    expect(structural).toBe(2)
+  })
+
+  it('keeps at most the cap of sentences and of tiles, in the order written', () => {
+    const sentences = ['One', 'Two', 'Three'].map(text => ({ text, factIds: ['S1F2'] }))
+    const tiles = ['a', 'b', 'c'].map(label => ({ label, factIds: ['S1F1'] }))
+    const written = answer({
+      figures: { heading: 'In numbers', teaser: 't', tiles },
+      boxes: [box('compared', 'Compared', { sentences, visual: { kind: 'tiles', tiles, measure: '', unit: '', points: [], apart: null } })],
+    })
+    const { boxes, drops } = structuralBoxes(written, new Set(facts.keys()), new Set(), caps)
+    expect(boxes.map(b => [b.sentences.map(s => s.text), b.visual?.kind === 'tiles' ? b.visual.tiles.map(t => t.label) : null])).toEqual([
+      [[], ['a', 'b']],
+      [
+        ['One', 'Two'],
+        ['a', 'b'],
+      ],
+    ])
+    expect(drops.map(d => [d.label, d.problem])).toEqual([
+      ['Box 1 tile 3', 'over the 2 tiles'],
+      ['Box 2 sentence 3', 'over the 2 sentences'],
+      ['Box 2 tile 3', 'over the 2 tiles'],
+    ])
+  })
 })
 
 describe('resolveVisuals and boxCheckItems', () => {

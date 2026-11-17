@@ -65,7 +65,7 @@ const SOURCE_DROPS: { [K in ContextRunRecord['sourceDrops'][number]['reason']]: 
 }
 
 const BOX_DROPS: { [K in ContextRunRecord['boxDrops'][number]['cause']]: string } = {
-  structure: 'cited a fact that is not shown',
+  structure: 'broke the card format',
   expired: 'its facts were out of date',
   undrawn: 'chart not drawn: it breaks the chart rules',
   check: 'failed the check',

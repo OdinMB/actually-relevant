@@ -409,6 +409,13 @@ export const config = {
     staleRunMinutes: 120,
     /** Fact-check items per call. */
     checkBatchSize: 25,
+    /**
+     * What the write may return, held in code as its prompt states it (`structuralBoxes`): boxes
+     * beside the figures box, one per slot; sentences a box; tiles a box, the figures box's included.
+     */
+    maxBoxes: 6,
+    maxSentences: 3,
+    maxTiles: 4,
     /** Earlier stories' facts offered again at most, newest first, so the prompts stay their size. */
     maxReusedFacts: 30,
     /**
