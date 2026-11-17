@@ -143,6 +143,24 @@ describe('SpendingCard', () => {
     expect(await screen.findAllByText(/whole number of dollars/)).not.toHaveLength(0)
   })
 
+  it('puts the level back and says so when saving fails', async () => {
+    mockApi.spending.setLevel.mockRejectedValue(new Error('network down'))
+    renderCard()
+    const field = await screen.findByLabelText('Warning level for Research Stories')
+    fireEvent.change(field, { target: { value: '30' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    fireEvent.blur(field)
+    expect(await screen.findByText('Failed to save the warning level')).toBeInTheDocument()
+    expect(field).toHaveValue('$25')
+  })
+
+  it('offers a retry when the overview fails to load', async () => {
+    mockApi.spending.overview.mockRejectedValueOnce(new Error('boom'))
+    renderCard()
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+  })
+
   it("puts the voices' characters in the podcast's group, with thousands separated", async () => {
     renderCard()
     await screen.findByRole('table')
