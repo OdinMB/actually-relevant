@@ -34,7 +34,7 @@ const FIELDS = {
   validity: 'fixed',
 }
 
-/** Answers production's context steps by schema name: one response search, one fact from it, a response card citing it, every check supported. */
+/** Answers production's context steps by schema name: the two response searches, one fact from each source, a response card citing one, every check supported. */
 function pipelineAnswers(schemaName: string, prompt: string): unknown {
   const step = /^overview-context-([a-z-]+)#/.exec(schemaName)?.[1]
   const numbers = (tag: string) => [...prompt.matchAll(new RegExp(`<${tag} number="(\\d+)"`, 'g'))].map(m => Number(m[1]))
@@ -45,7 +45,8 @@ function pipelineAnswers(schemaName: string, prompt: string): unknown {
       return {
         slots: [{ slot: 'response', needed: true, covered: 'no' }],
         responseInStory: '',
-        searches: [{ slot: 'response', wanted: 'What is being done', query: 'peat fire moratorium', recent: false }],
+        responseSearches: { action: 'peat fire moratorium', elsewhere: 'peat fire prevention that worked' },
+        searches: [],
       }
     case 'extract':
       return {
@@ -249,7 +250,7 @@ describe('runContextStep', () => {
     expect(bar('needs')?.value).toBe(1)
     expect(bar('response')?.value).toBe(1)
     expect(bar('boxes')?.met).toBe(true)
-    expect(report.dates).toEqual({ searches: 1, results: 3, undated: 1, afterStory: 1 })
+    expect(report.dates).toEqual({ searches: 2, results: 6, undated: 2, afterStory: 2 })
   })
 
   it('scores without verdicts when the judge may not call', async () => {

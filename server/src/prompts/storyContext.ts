@@ -126,7 +126,8 @@ ${facts}
 - A slot is covered by facts that answer it and are current, or by the story itself. An expired fact covers only a past state, never one that is still changing.
 - When the story itself reports what is being done about the problem, copy its sentence that reports it into responseInStory, character for character; then "response" is covered.
 - A search asks for one missing item, in plain words a person would type, about the subject of the story, never about our story or its sources. It wants recent data only when nothing older than 30 days can answer it.
-- List at most 3 searches, most important first, and none for a slot that is covered or not needed.
+- When "response" is not covered and the story does not report it, responseSearches holds two queries from two angles: action, on who is responding to this problem and what is being done about it; elsewhere, on what has worked against the same problem in other places or at other times. Both are made before any other search.
+- searches lists at most 3 searches for the other slots, most important first, and none for a slot that is covered or not needed.
 </REQUIREMENTS>`
 }
 

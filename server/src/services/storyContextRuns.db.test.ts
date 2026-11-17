@@ -33,7 +33,13 @@ function deps(options: { failWrite?: boolean } = {}): ContextDeps {
             ...(m[1] === 'S0F1' ? { value: 2_880_000, unit: 'hectares', counted: 'area burned in Indonesia', asOf: '2026-11' } : {}),
           })),
         }
-      else if (step === 'gap-list') parsed = { slots: [{ slot: 'response', needed: true, covered: 'yes' }], responseInStory: '', searches: [] }
+      else if (step === 'gap-list')
+        parsed = {
+          slots: [{ slot: 'response', needed: true, covered: 'yes' }],
+          responseInStory: '',
+          responseSearches: { action: '', elsewhere: '' },
+          searches: [],
+        }
       else if (step === 'write')
         parsed = options.failWrite
           ? null

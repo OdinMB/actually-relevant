@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import { TavilyError } from '../lib/tavily.js'
-import type { BoxesAnswer, ContextExtraction, ContextSlot, GapList } from '../schemas/storyContext.js'
+import type { BoxesAnswer, ContextExtraction, GapList } from '../schemas/storyContext.js'
 import { buildStoryContext, CONTEXT_PROMPT_VERSIONS, planSearches, type ContextDeps, type ContextInput, type ContextStep } from './storyContextPipeline.js'
 import type { ContextSearchAnswer, ContextSearchRequest } from './storyContextSources.js'
 
@@ -61,18 +61,26 @@ const fields = {
   validity: 'fixed' as const,
 }
 
-const gap = (response: 'yes' | 'partly' | 'no', searches: GapList['searches'] = [], responseInStory = ''): GapList => ({
+const gap = (
+  response: 'yes' | 'partly' | 'no',
+  over: { searches?: GapList['searches']; quote?: string; action?: string; elsewhere?: string } = {},
+): GapList => ({
   slots: [
     { slot: 'compared', needed: true, covered: 'no' },
     { slot: 'why_now', needed: true, covered: 'no' },
     { slot: 'build_up', needed: false, covered: 'no' },
     { slot: 'response', needed: true, covered: response },
   ],
-  responseInStory,
-  searches,
+  responseInStory: over.quote ?? '',
+  responseSearches: { action: over.action ?? '', elsewhere: over.elsewhere ?? '' },
+  searches: over.searches ?? [],
 })
 
-const search = (slot: ContextSlot, query: string, recent = false) => ({ slot, wanted: `wanted for ${slot}`, query, recent })
+const search = (slot: GapList['searches'][number]['slot'], query: string, recent = false) => ({ slot, wanted: `wanted for ${slot}`, query, recent })
+
+/** A gap list whose two response searches are given, and nothing else is searched. */
+const responseGap = (action = 'peat restoration', elsewhere = 'peat fire prevention worked elsewhere', searches: GapList['searches'] = []) =>
+  gap('no', { action, elsewhere, searches })
 
 interface Fakes {
   gap?: GapList
@@ -176,35 +184,65 @@ describe('buildStoryContext', () => {
     expect(prompts.write![0]).not.toContain('S0F2')
   })
 
-  it('makes at most 3 searches, an uncovered response first whatever the gap list says', async () => {
+  it('makes at most 3 searches, the two response angles first and then the other slots in order', async () => {
     const { deps, requests } = fakeDeps({
-      gap: gap('no', [
+      gap: responseGap('indonesia peat restoration agency results', 'what stopped peat fires in other countries', [
         search('compared', 'peat fires record 2015 comparison'),
         search('why_now', 'el nino drought indonesia 2026', true),
         search('build_up', 'not needed'),
-        search('response', 'indonesia peat restoration agency results'),
-        search('compared', 'fourth one'),
       ]),
     })
     const out = await buildStoryContext(input(), deps)
     expect(requests.map(r => [r.query, r.recent, r.endDate])).toEqual([
       ['indonesia peat restoration agency results', false, '2026-11-14'],
+      ['what stopped peat fires in other countries', false, '2026-11-14'],
       ['peat fires record 2015 comparison', false, '2026-11-14'],
-      ['el nino drought indonesia 2026', true, '2026-11-14'],
+    ])
+    expect(out.record.searches.map(s => [s.slot, s.wanted])).toEqual([
+      ['response', 'Who is responding to the problem and what is being done about it: responses under way and solutions being tried.'],
+      ['response', 'What has worked against the same problem in other places or at other times.'],
+      ['compared', 'wanted for compared'],
     ])
     expect(out.record.responseFallback).toBe(false)
   })
 
-  it('adds a response search from the title when the gap list lists none, and records it', async () => {
-    const { deps, requests } = fakeDeps({ gap: gap('partly', [search('compared', 'peat fires record')]) })
-    const out = await buildStoryContext(input(), deps)
-    expect(requests[0]!.query).toBe('Indonesia peat fires burn 2.88 million hectares response')
-    expect(out.record.responseFallback).toBe(true)
-    expect(out.record.searches.map(s => s.slot)).toEqual(['response', 'compared'])
+  it('fills each missing response angle from the title, and records the fallback', async () => {
+    const story = { title: input().title, text: 'Our text.' }
+    const both = planSearches(gap('partly', { searches: [search('compared', 'peat fires record')] }), story)
+    expect(both.searches.map(s => [s.slot, s.query])).toEqual([
+      ['response', 'Indonesia peat fires burn 2.88 million hectares response'],
+      ['response', 'Indonesia peat fires burn 2.88 million solutions that worked elsewhere'],
+      ['compared', 'peat fires record'],
+    ])
+    expect(both).toMatchObject({ fallback: true, responseSearched: true })
+    const one = planSearches(gap('no', { action: 'peat restoration agency' }), story)
+    expect(one.searches.map(s => s.query)).toEqual(['peat restoration agency', 'Indonesia peat fires burn 2.88 million solutions that worked elsewhere'])
+    expect(one.fallback).toBe(true)
+  })
+
+  it('runs a repeated query once and gives its place to the next search', () => {
+    const plan = planSearches(responseGap('peat restoration', ' Peat Restoration ', [search('compared', 'peat fires record'), search('why_now', 'drought')]), {
+      title: 'T',
+      text: 'Our text.',
+    })
+    expect(plan.searches.map(s => s.query)).toEqual(['peat restoration', 'peat fires record', 'drought'])
+  })
+
+  it('makes no response search when the facts cover it, leaving all 3 to the other slots', () => {
+    const plan = planSearches(
+      gap('yes', {
+        action: 'ignored',
+        elsewhere: 'ignored too',
+        searches: [search('compared', 'one'), search('why_now', 'two'), search('compared', 'three'), search('why_now', 'four')],
+      }),
+      { title: 'T', text: 'Our text.' },
+    )
+    expect(plan.searches.map(s => s.query)).toEqual(['one', 'two', 'three'])
+    expect(plan).toMatchObject({ fallback: false, responseSearched: false })
   })
 
   it('searches no response the story itself reports, and does not record it as not found', async () => {
-    const { deps, requests } = fakeDeps({ gap: gap('no', [search('response', 'peat restoration')], 'Smoke reaches millions of people.') })
+    const { deps, requests } = fakeDeps({ gap: gap('no', { action: 'peat restoration', quote: 'Smoke reaches millions of people.' }) })
     const out = await buildStoryContext(input(), deps)
     expect(requests).toEqual([])
     expect(out.record.responseInStory).toBe('Smoke reaches millions of people.')
@@ -212,12 +250,13 @@ describe('buildStoryContext', () => {
   })
 
   it('ignores a claimed response quote the story does not hold', () => {
-    const plan = planSearches(gap('no', [], 'A sentence we never wrote.'), { title: 'T', text: 'Our text.' })
+    const plan = planSearches(gap('no', { quote: 'A sentence we never wrote.' }), { title: 'T', text: 'Our text.' })
     expect(plan).toMatchObject({ storyReports: null, fallback: true, responseSearched: true })
+    expect(plan.searches).toHaveLength(2)
   })
 
   it('adds no card when the response was searched for and nothing supported answers it, and records it as not found', async () => {
-    const { deps } = fakeDeps({ gap: gap('no', [search('response', 'peat restoration')]), reject: ['Fact S1F1'] })
+    const { deps } = fakeDeps({ gap: responseGap(), reject: ['Fact S1F1', 'Fact S2F1'] })
     const out = await buildStoryContext(input(), deps)
     expect(out.boxes).toEqual([])
     expect(out.record.responseNotFound).toBe(true)
@@ -225,7 +264,7 @@ describe('buildStoryContext', () => {
   })
 
   it('writes a response box from a supported search fact, and then records nothing as not found', async () => {
-    const { deps, prompts } = fakeDeps({ gap: gap('no', [search('response', 'peat restoration')]), boxes: { figures: null, boxes: [responseBox(['S1F1'])] } })
+    const { deps, prompts } = fakeDeps({ gap: responseGap(), boxes: { figures: null, boxes: [responseBox(['S1F1'])] } })
     const out = await buildStoryContext(input(), deps)
     expect(out.boxes).toEqual([
       {
@@ -253,7 +292,7 @@ describe('buildStoryContext', () => {
 
   it('costs no credits for a cached search, and totals model cost and credits apart', async () => {
     const { deps } = fakeDeps({
-      gap: gap('no', [search('response', 'cached query'), search('compared', 'fresh query')]),
+      gap: responseGap('cached query', 'fresh query'),
       answers: {
         'cached query': { results: [result('https://cached.example/a')], credits: 0, cached: true },
         'fresh query': { results: [result('https://fresh.example/a')], credits: 1, cached: false },
@@ -272,7 +311,7 @@ describe('buildStoryContext', () => {
 
   it("drops opted-out and blocklisted results, and the story's own sources", async () => {
     const { deps, prompts } = fakeDeps({
-      gap: gap('no', [search('response', 'q')]),
+      gap: gap('yes', { searches: [search('compared', 'q')] }),
       optedOut: ['https://refuses.example/a'],
       answers: {
         q: {
@@ -301,7 +340,7 @@ describe('buildStoryContext', () => {
   it('keeps the other sources when one extraction fails to parse', async () => {
     let n = 0
     const { deps } = fakeDeps({
-      gap: gap('no', [search('response', 'q')]),
+      gap: gap('yes', { searches: [search('compared', 'q')] }),
       answers: { q: { results: [result('https://one.example/a'), result('https://two.example/a')], credits: 1, cached: false } },
       extract: () =>
         ++n === 1
@@ -327,14 +366,14 @@ describe('buildStoryContext', () => {
   })
 
   it('ends a story as a technical failure on a Tavily error, with what it spent', async () => {
-    const { deps } = fakeDeps({ gap: gap('no', [search('response', 'q')]), searchError: new TavilyError('Tavily search failed: HTTP 502', 502) })
+    const { deps } = fakeDeps({ gap: responseGap(), searchError: new TavilyError('Tavily search failed: HTTP 502', 502) })
     const out = await buildStoryContext(input(), deps)
     expect(out).toMatchObject({ status: 'failed', outcome: 'technical', error: 'Tavily search failed: HTTP 502', facts: [], boxes: [] })
     expect(out.modelUsd).toBeCloseTo(0.002, 10)
   })
 
   it('keeps the credits and records of the searches that completed when another fails', async () => {
-    const { deps } = fakeDeps({ gap: gap('no', [search('response', 'first'), search('compared', 'fails'), search('why_now', 'third')]) })
+    const { deps } = fakeDeps({ gap: responseGap('first', 'fails', [search('compared', 'third')]) })
     const fake = deps.search
     // The failing search answers first; the others complete after it, and were billed all the same
     deps.search = async request => {

@@ -280,41 +280,65 @@ function sourceOf(s: { id: string; url: string; outlet: string; title: string; d
   return { id: s.id, url: s.url, outlet: s.outlet, title: s.title, date: publishedDay(s.date), kind: s.kind }
 }
 
-/** The searches to make (step 3's code checks), in order, at most `maxSearches`. */
+export interface PlannedSearch {
+  slot: ContextSlot
+  wanted: string
+  query: string
+  recent: boolean
+}
+
+/**
+ * The two angles of the `response` searches (owner decision 2026-11-17, ADR-0065): what is being
+ * done about this problem, and what has worked against it elsewhere. Each falls back to a query from
+ * the story's title when the gap list gives none.
+ */
+const RESPONSE_ANGLES: { angle: keyof GapList['responseSearches']; wanted: string; fallback: (title: string[]) => string[] }[] = [
+  {
+    angle: 'action',
+    wanted: 'Who is responding to the problem and what is being done about it: responses under way and solutions being tried.',
+    fallback: title => [...title.slice(0, 9), 'response'],
+  },
+  {
+    angle: 'elsewhere',
+    wanted: 'What has worked against the same problem in other places or at other times.',
+    fallback: title => [...title.slice(0, 6), 'solutions', 'that', 'worked', 'elsewhere'],
+  },
+]
+
+/**
+ * The searches to make (step 3's code checks), in order, at most `maxSearches`: while the story
+ * neither reports the response nor has facts covering it, the two `response` searches first, then
+ * the gap list's searches for the other needed, uncovered slots. A repeated query runs once.
+ */
 export function planSearches(gap: GapList, story: { title: string; text: string }) {
   const slot = new Map(gap.slots.map(s => [s.slot, s]))
   const covered = (s: ContextSlot) => slot.get(s)?.covered ?? 'no'
   const quote = gap.responseInStory.trim()
   const storyReports = quote !== '' && supportFound(quote, story.text)
   const responseOpen = !storyReports && covered('response') !== 'yes'
-  const wanted = (s: ContextSlot) => (s === 'response' ? responseOpen : (slot.get(s)?.needed ?? false) && covered(s) !== 'yes')
   const seen = new Set<string>()
-  let searches = gap.searches.filter(s => {
-    const key = s.query.trim().toLowerCase()
-    if (!key || seen.has(key) || !wanted(s.slot)) return false
+  const fresh = (query: string) => {
+    const key = query.trim().toLowerCase()
+    if (!key || seen.has(key)) return false
     seen.add(key)
     return true
-  })
-  let fallback = false
-  if (responseOpen) {
-    const at = searches.findIndex(s => s.slot === 'response')
-    if (at >= 0) searches = [searches[at]!, ...searches.filter((_, i) => i !== at)]
-    else {
-      const words = story.title.split(/\s+/).filter(Boolean).slice(0, 9)
-      searches = [
-        {
-          slot: 'response',
-          wanted: 'What is being done about the problem: responses under way, solutions tried, or what worked elsewhere.',
-          query: [...words, 'response'].join(' '),
-          recent: false,
-        },
-        ...searches,
-      ]
-      fallback = true
-    }
   }
-  searches = searches.slice(0, config.storyContext.maxSearches)
-  return { searches, storyReports: storyReports ? quote : null, fallback, responseSearched: searches.some(s => s.slot === 'response') }
+  const title = story.title.split(/\s+/).filter(Boolean)
+  const fallbacks = new Set<string>()
+  const response = (responseOpen ? RESPONSE_ANGLES : []).map((a): PlannedSearch => {
+    const given = gap.responseSearches[a.angle].trim()
+    const query = given || a.fallback(title).join(' ')
+    if (!given) fallbacks.add(query)
+    return { slot: 'response', wanted: a.wanted, query, recent: false }
+  })
+  const others = gap.searches.filter(s => (slot.get(s.slot)?.needed ?? false) && covered(s.slot) !== 'yes')
+  const searches = [...response, ...others].filter(s => fresh(s.query)).slice(0, config.storyContext.maxSearches)
+  return {
+    searches,
+    storyReports: storyReports ? quote : null,
+    fallback: searches.some(s => fallbacks.has(s.query)),
+    responseSearched: searches.some(s => s.slot === 'response'),
+  }
 }
 
 const asCandidate = (r: ContextSearchAnswer['results'][number]): CandidateSource => ({

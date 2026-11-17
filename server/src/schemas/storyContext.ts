@@ -12,6 +12,12 @@ import { SOURCE_KINDS } from './research.js'
 export const CONTEXT_SLOTS = ['compared', 'why_now', 'build_up', 'who_affected', 'response', 'next', 'key_term'] as const
 export type ContextSlot = (typeof CONTEXT_SLOTS)[number]
 
+/** The slots the gap list's general searches serve: `response` has its own two (`responseSearches`). */
+export const SEARCH_SLOTS = ['compared', 'why_now', 'build_up', 'who_affected', 'next', 'key_term'] as const satisfies readonly Exclude<
+  ContextSlot,
+  'response'
+>[]
+
 /** A stored box's type: a slot, or the figures box. */
 export const BOX_TYPES = [...CONTEXT_SLOTS, 'figures'] as const
 export type BoxType = (typeof BOX_TYPES)[number]
@@ -100,16 +106,32 @@ export const gapListSchema = z.object({
     .describe(
       'When <STORY> itself reports what is being done about the problem (a new policy, a programme under way, a solution tried): its sentence that reports it, copied exactly. Empty string otherwise.',
     ),
+  responseSearches: z
+    .object({
+      action: z
+        .string()
+        .describe(
+          'A web search query of 4-10 words for who is responding to this problem and what is being done about it, as a person would type it. No quotation marks, operators or dates. Empty string when "response" is covered or the story reports it.',
+        ),
+      elsewhere: z
+        .string()
+        .describe(
+          'A web search query of 4-10 words for what has worked against the same problem in other places or at other times, as a person would type it. No quotation marks, operators or dates. Empty string when "response" is covered or the story reports it.',
+        ),
+    })
+    .describe('The two searches for "response", from two angles.'),
   searches: z
     .array(
       z.object({
-        slot: z.enum(CONTEXT_SLOTS),
+        slot: z.enum(SEARCH_SLOTS),
         wanted: z.string().describe('What the search should find, in one line ("how the 2026 burned area compares with the 2015 record").'),
         query: z.string().describe('A web search query of 4-10 words, as a person would type it. No quotation marks, operators or dates.'),
         recent: z.boolean().describe('True when only data from the 30 days before the story can answer it (a current count or status). False otherwise.'),
       }),
     )
-    .describe('At most 3 searches, most important first, each for a needed slot the facts do not cover. Empty when nothing needed is missing.'),
+    .describe(
+      'At most 3 searches for the slots other than "response", most important first, each for a needed slot the facts do not cover. Empty when nothing needed is missing.',
+    ),
 })
 
 export const contextExtractionSchema = z.object({

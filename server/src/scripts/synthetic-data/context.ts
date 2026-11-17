@@ -1,7 +1,7 @@
 /**
  * Story context for one researched synthetic story (`.context/story-context.md`), so the story page's
  * context cards and the admin's context panel can be checked locally: a finished run, its facts
- * (research's three, structured, and six from two invented sources a second search found) and one
+ * (research's three, structured, and eight from two invented sources its third search found) and one
  * box of each kind the page draws: the figures tiles, a bar chart after a paragraph, a line chart
  * after a Why This Matters point and a card of sentences in the More context section; its record
  * says the response was searched for and not found, which no card shows. Written in the shape a run
@@ -87,7 +87,7 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
       validity: 'fixed' as const,
     })),
   )
-  // The second search's: research's sources are S0 to S2, so its own are S3 and S4
+  // The third search's: research's sources are S0 to S2, so its own are S3 and S4
   const search: FactSpec[] = [
     {
       ref: 'S3F1',
@@ -283,12 +283,23 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
     ],
     responseInStory: null,
     responseFallback: false,
+    // The two response angles first, which leaves one search for the other slots
     searches: [
       {
         slot: 'response',
-        wanted: 'what the province does about pupils outside public schools',
-        query: 'Varrowen free school lunches private schools',
-        recent: true,
+        wanted: 'Who is responding to the problem and what is being done about it: responses under way and solutions being tried.',
+        query: 'Varrowen free school lunches pupils outside public schools',
+        recent: false,
+        cached: false,
+        credits: 1,
+        results: 0,
+        kept: [],
+      },
+      {
+        slot: 'response',
+        wanted: 'What has worked against the same problem in other places or at other times.',
+        query: 'free school lunches for private school pupils elsewhere',
+        recent: false,
         cached: false,
         credits: 1,
         results: 0,
@@ -296,23 +307,13 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
       },
       {
         slot: 'build_up',
-        wanted: 'how the pilot grew',
-        query: 'Varrowen school lunch pilot pupils attendance',
+        wanted: 'how the pilot grew and what the program will cost',
+        query: 'Varrowen school lunch pilot pupils attendance cost',
         recent: false,
         cached: false,
         credits: 1,
         results: 3,
-        kept: [office.url],
-      },
-      {
-        slot: 'next',
-        wanted: 'what the program will cost',
-        query: 'Varrowen free school lunches cost budget',
-        recent: true,
-        cached: false,
-        credits: 1,
-        results: 2,
-        kept: [watch.url],
+        kept: [office.url, watch.url],
       },
     ],
     sourceDrops: [],
