@@ -1,0 +1,20 @@
+{
+  "about": "How a story's relevance reasons and antifactors split into points. The client's parsePoints (client/src/lib/parse-points.ts) splits them for the page, and the server's mirror (server/src/services/storyContextLayout.ts) numbers the same points W1... for story context's places. Both packages' tests run every case here, so the two cannot drift apart.",
+  "cases": [
+    { "name": "a dash list, one point per item", "text": "- one\n- two", "points": ["one", "two"] },
+    { "name": "an asterisk list", "text": "* one\n* two", "points": ["one", "two"] },
+    { "name": "a list item's continuation lines join it", "text": "- **A:** one\n- two\n  more", "points": ["**A:** one", "two more"] },
+    { "name": "text before the first item is dropped", "text": "Intro\n- one\n- two", "points": ["one", "two"] },
+    { "name": "blank lines inside a list are skipped", "text": "- one\n\n- two", "points": ["one", "two"] },
+    { "name": "an empty item is dropped", "text": "- one\n-  \n- two", "points": ["one", "two"] },
+    { "name": "indented items", "text": "  - one\n  - two", "points": ["one", "two"] },
+    { "name": "a dash without a space starts no item", "text": "-one\n-two", "points": ["-one", "-two"] },
+    { "name": "no list: blank lines split paragraphs", "text": "one\n\ntwo", "points": ["one", "two"] },
+    { "name": "a paragraph keeps its line breaks", "text": "one\nstill one\n\ntwo", "points": ["one\nstill one", "two"] },
+    { "name": "whitespace-only blank lines split too", "text": "one\n \t\ntwo", "points": ["one", "two"] },
+    { "name": "one block: each line a point", "text": "c1\nc2", "points": ["c1", "c2"] },
+    { "name": "one line", "text": "Only one.", "points": ["Only one."] },
+    { "name": "leading and trailing blank lines are dropped", "text": "\nc1\n\n", "points": ["c1"] },
+    { "name": "empty text", "text": "", "points": [] }
+  ]
+}

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { placeBoxes, type PlacementBox, type PlacementOptions } from './storyContextPlacement.js'
 import { parsePoints, storyLayout } from './storyContextLayout.js'
@@ -165,7 +166,12 @@ describe('storyLayout', () => {
     })
   })
 
-  it('splits points on blank lines when there is no list', () => {
-    expect(parsePoints('one\n\ntwo')).toEqual(['one', 'two'])
+  // The case table the client's parsePoints runs too (client/src/lib/parse-points.test.ts)
+  const table = JSON.parse(readFileSync(new URL('../../../shared/fixtures/parse-points.json', import.meta.url), 'utf8')) as {
+    cases: { name: string; text: string; points: string[] }[]
+  }
+
+  it.each(table.cases)('splits points as the page does: $name', ({ text, points }) => {
+    expect(parsePoints(text)).toEqual(points)
   })
 })

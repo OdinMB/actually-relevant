@@ -148,6 +148,7 @@ That change also sets `.context/ai-transparency.md` (the story-context row) and 
 - **A visual kind or rule:** `schemas/storyContext.ts` (`boxesSchema`, the stored schemas), `storyContextVisuals.ts`, the box items in `storyContextChecks.ts`, the view and the client.
 - **The route's shape:** the client reads it; it is not a public contract, but a cached page may hold the old shape for 60 seconds.
 - **A new place kind:** `storyContextLayout.ts` (and the client's `parsePoints` mirror), the admin's place regex (`contextBoxUpdateSchema`).
+- **How points split:** change both `parsePoints` (server `storyContextLayout.ts`, client `lib/parse-points.ts`) and the case table both packages' tests run, `shared/fixtures/parse-points.json`.
 
 ## Key files
 
