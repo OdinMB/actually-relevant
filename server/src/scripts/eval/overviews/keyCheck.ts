@@ -5,12 +5,13 @@
  * or fail of anything in production. Also the per-development counts the report shows. The loader
  * issues one SELECT through the read-only session; the rest is pure but for the loader it is given.
  */
+import { utcDay } from '../../../lib/days.js'
 import { storedResearchText } from '../../../services/researchedStory.js'
 import type { SelectDb } from '../readOnlyDb.js'
 import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
 
-/** A story a key names, as the check reads it. */
+/** A story an answer key or a gap key names, as the checks read it. */
 export interface KeyStory {
   slug: string
   status: string
@@ -23,18 +24,8 @@ export interface KeyStory {
   research: unknown
   /** Whether a research run with a stored result exists for the story (what module 1's replay reads). */
   hasResearchRun: boolean
-}
-
-interface KeyStoryRow {
-  slug: string
-  status: string
-  date_published: Date | null
-  title: string | null
-  summary: string | null
-  relevance_reasons: string | null
-  antifactors: string | null
-  research: unknown
-  has_run: boolean
+  /** A completed research run whose sources hold facts exists: the run the gap keys' `context` step loads. */
+  hasResearchFacts: boolean
 }
 
 /** Every slug the key names (entries, near misses), once, in key order. */
@@ -42,28 +33,19 @@ export function keySlugs(key: AnswerKey): string[] {
   return [...new Set([...key.entries.map(e => e.slug), ...key.nearMisses.map(n => n.slug)])]
 }
 
+/** The stories the slugs name, for the answer keys' and the gap keys' checks alike: one SELECT through the read-only session. */
 export async function loadKeyStories(db: SelectDb, slugs: string[]): Promise<Map<string, KeyStory>> {
-  const rows = await db.$queryRaw<KeyStoryRow[]>`
-    SELECT s.slug, s.status::text AS status, s.date_published, s.title, s.summary, s.relevance_reasons, s.antifactors, s.research,
-           EXISTS (SELECT 1 FROM story_research_runs r WHERE r.story_id = s.id AND r.result IS NOT NULL) AS has_run
+  const rows = await db.$queryRaw<KeyStory[]>`
+    SELECT s.slug, s.status::text AS status, s.date_published AS "datePublished", s.title, s.summary, s.relevance_reasons AS "relevanceReasons",
+           s.antifactors, s.research,
+           EXISTS (SELECT 1 FROM story_research_runs r WHERE r.story_id = s.id AND r.result IS NOT NULL) AS "hasResearchRun",
+           EXISTS (
+             SELECT 1 FROM story_research_runs r
+             WHERE r.story_id = s.id AND r.status = 'completed' AND jsonb_path_exists(r.result, '$.sources[*].facts[*]')
+           ) AS "hasResearchFacts"
     FROM stories s
     WHERE s.slug = ANY(${slugs})`
-  return new Map(
-    rows.map(r => [
-      r.slug,
-      {
-        slug: r.slug,
-        status: r.status,
-        datePublished: r.date_published,
-        title: r.title,
-        summary: r.summary,
-        relevanceReasons: r.relevance_reasons,
-        antifactors: r.antifactors,
-        research: r.research,
-        hasResearchRun: r.has_run,
-      },
-    ]),
-  )
+  return new Map(rows.map(r => [r.slug, r]))
 }
 
 /** Whitespace runs to one space, curly and angle quote marks to straight ones, every dash to a hyphen. Case and words stay. */
@@ -80,8 +62,6 @@ export function normalizeQuote(text: string): string {
 export function publishedTexts(story: Pick<KeyStory, 'title' | 'summary' | 'relevanceReasons' | 'antifactors' | 'research'>): string[] {
   return [story.title, story.summary, story.relevanceReasons, story.antifactors, storedResearchText(story.research)].filter((t): t is string => !!t)
 }
-
-const utcDay = (d: Date) => d.toISOString().slice(0, 10)
 
 /** What the database contradicts in the key; empty when it holds. */
 export function checkKey(key: AnswerKey, stories: ReadonlyMap<string, KeyStory>): string[] {

@@ -8,11 +8,12 @@
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { config } from '../config.js'
-import { APPROX, CREDITED_KINDS, VALIDITY } from '../schemas/storyContext.js'
+import { utcDay } from '../lib/days.js'
 import type { ResearchDb } from './researchInput.js'
 import type { ContextInput, ContextResearchSource, ReusableFact } from './storyContextPipeline.js'
 import { storyLayout } from './storyContextLayout.js'
-import { asOfFromColumns, isCurrent } from './storyContextVisuals.js'
+import { factFromRow, type FactColumns } from './storyContextRecords.js'
+import { isCurrent } from './storyContextVisuals.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -76,78 +77,6 @@ interface StoryRow {
   date_published: Date
 }
 
-interface FactRow {
-  id: string
-  ref: string
-  origin: string
-  reused_from_id: string | null
-  source_url: string
-  source_outlet: string
-  source_title: string
-  source_date: Date | null
-  source_kind: string
-  supporting_sentence: string
-  passage: string | null
-  support_found: boolean
-  statement: string
-  value: number | null
-  value_high: number | null
-  unit: string
-  approx: string
-  provisional: boolean
-  counted: string
-  place: string
-  as_of: Date | null
-  as_of_precision: string | null
-  credited: string
-  credited_kind: string | null
-  validity: string
-  model: string
-  prompt_version: string
-}
-
-const oneOf = <T extends string>(value: string | null, allowed: readonly T[], fallback: T): T =>
-  (allowed as readonly string[]).includes(value ?? '') ? (value as T) : fallback
-
-const day = (d: Date) => d.toISOString().slice(0, 10)
-
-function reusableFact(row: FactRow): ReusableFact {
-  return {
-    id: row.id,
-    ref: row.ref,
-    origin: row.origin === 'search' ? 'search' : 'research',
-    reusedFromId: row.reused_from_id,
-    slot: null,
-    source: {
-      id: row.ref.replace(/F\d+$/, ''),
-      url: row.source_url,
-      outlet: row.source_outlet,
-      title: row.source_title,
-      date: row.source_date ? day(row.source_date) : null,
-      kind: row.source_kind,
-    },
-    supportingSentence: row.supporting_sentence,
-    passage: row.passage,
-    supportFound: row.support_found,
-    statement: row.statement,
-    value: row.value,
-    valueHigh: row.value_high,
-    unit: row.unit,
-    approx: oneOf(row.approx, APPROX, 'exact'),
-    provisional: row.provisional,
-    counted: row.counted,
-    place: row.place,
-    asOf: asOfFromColumns(row.as_of, row.as_of_precision),
-    credited: row.credited,
-    creditedKind: row.credited_kind === null ? null : oneOf(row.credited_kind, CREDITED_KINDS, 'other'),
-    validity: oneOf(row.validity, VALIDITY, 'fast'),
-    verdict: 'supported',
-    verdictProblem: null,
-    model: row.model,
-    promptVersion: row.prompt_version,
-  }
-}
-
 /**
  * One owed story's input, or null when it is not published or has no completed research run whose
  * sources hold facts. The run is the newest such; the reusable facts are the supported, non-demoted
@@ -166,23 +95,27 @@ export async function loadContextInput(db: ResearchDb, storyId: string): Promise
   const parsed = run ? researchResultSchema.safeParse(run.result) : null
   if (!run || !parsed?.success) return null
 
-  const storyDay = day(story.date_published)
+  const storyDay = utcDay(story.date_published)
   const earlierIds = [...new Set(parsed.data.earlier.map(e => e.storyId))].filter(id => id !== storyId)
+  // Each column under its row field's name, so the rows read back as the view's do (`factFromRow`)
   const rows =
     earlierIds.length === 0
       ? []
-      : await db.$queryRaw<FactRow[]>`
-          SELECT f.id, f.ref, f.origin, f.reused_from_id, f.source_url, f.source_outlet, f.source_title, f.source_date, f.source_kind,
-                 f.supporting_sentence, f.passage, f.support_found, f.statement, f.value, f.value_high, f.unit, f.approx, f.provisional,
-                 f.counted, f.place, f.as_of, f.as_of_precision, f.credited, f.credited_kind, f.validity::text AS validity, f.model, f.prompt_version
+      : await db.$queryRaw<FactColumns[]>`
+          SELECT f.id, f.ref, f.origin, f.reused_from_id AS "reusedFromId", f.source_url AS "sourceUrl", f.source_outlet AS "sourceOutlet",
+                 f.source_title AS "sourceTitle", f.source_date AS "sourceDate", f.source_kind AS "sourceKind",
+                 f.supporting_sentence AS "supportingSentence", f.passage, f.support_found AS "supportFound", f.statement, f.value,
+                 f.value_high AS "valueHigh", f.unit, f.approx, f.provisional, f.counted, f.place, f.as_of AS "asOf",
+                 f.as_of_precision AS "asOfPrecision", f.credited, f.credited_kind AS "creditedKind", f.validity::text AS validity,
+                 f.verdict::text AS verdict, f.verdict_problem AS "verdictProblem", f.model, f.prompt_version AS "promptVersion"
           FROM context_facts f
           WHERE f.story_id = ANY(${earlierIds}) AND f.verdict = 'supported' AND f.status <> 'demoted'
           ORDER BY f.as_of DESC NULLS LAST, f.created_at DESC, f.id`
   const windows = { fastDays: config.storyContext.fastValidDays, slowDays: config.storyContext.slowValidDays }
   // An earlier story's copy of a fact it reused stands for the same fact: offered once, the newest
   const offered = new Set<string>()
-  const reusable = rows
-    .map(reusableFact)
+  const reusable: ReusableFact[] = rows
+    .map(factFromRow)
     .filter(f => isCurrent({ ...f, sourceDate: f.source.date }, storyDay, windows))
     .filter(f => {
       const original = f.reusedFromId ?? f.id

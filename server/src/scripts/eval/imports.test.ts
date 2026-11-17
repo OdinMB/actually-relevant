@@ -82,12 +82,19 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/storyContextChecks.js': '*',
   'services/storyContextSources.js': '*',
   'services/storyContextPlacement.js': '*',
+  'services/storyContextRecords.js': '*',
   // One story's input, loaded with SELECTs through the client it is given (held below): the eval's read-only session.
   'services/storyContextInput.js': ['loadContextInput'],
 }
 
 /** The story context modules the eval imports whole: no database client, model client, HTTP or retry of their own (hashing is fine). */
-const CONTEXT_SERVICE_MODULES = ['storyContextPipeline.ts', 'storyContextChecks.ts', 'storyContextSources.ts', 'storyContextPlacement.ts']
+const CONTEXT_SERVICE_MODULES = [
+  'storyContextPipeline.ts',
+  'storyContextChecks.ts',
+  'storyContextSources.ts',
+  'storyContextPlacement.ts',
+  'storyContextRecords.ts',
+]
 
 /** The pure modules the eval may import whole: config and prompt types only. */
 const PURE_SERVICE_MODULES = ['promptInputs.ts']

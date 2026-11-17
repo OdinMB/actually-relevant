@@ -11,7 +11,8 @@
 import { createHash } from 'node:crypto'
 import { publishedDay } from '../../../services/researchChecks.js'
 import type { FactVerdict } from '../../../services/storyContextChecks.js'
-import { citedRefs, type StoryContextResult } from '../../../services/storyContextPipeline.js'
+import type { StoryContextResult } from '../../../services/storyContextPipeline.js'
+import { boxRefs } from '../../../services/storyContextRecords.js'
 import { spread, type Spread } from '../repeats.js'
 import { TAVILY_USD_PER_CREDIT } from '../research/tavily.js'
 import type { GapKey } from './gapKeySchema.js'
@@ -93,7 +94,7 @@ export const findableResponse = (key: GapKey): boolean =>
 
 /** The searches none of whose kept sources gave a supported fact that a kept box cites. */
 export function wastedSearches(result: StoryContextResult): StoryContextResult['record']['searches'] {
-  const cited = new Set(result.boxes.flatMap(citedRefs))
+  const cited = new Set(result.boxes.flatMap(boxRefs))
   const useful = new Set(result.facts.filter(f => f.origin === 'search' && f.verdict === 'supported' && cited.has(f.ref)).map(f => f.source.url))
   return result.record.searches.filter(s => !s.kept.some(url => useful.has(url)))
 }

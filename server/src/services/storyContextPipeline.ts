@@ -45,6 +45,7 @@ import {
   type FactSource,
 } from './storyContextChecks.js'
 import { layoutSpots, type StoryLayout } from './storyContextLayout.js'
+import { boxRefs } from './storyContextRecords.js'
 import { passageAround, pickNewSources, type ContextSearchAnswer, type ContextSearchRequest, type SourceDrop } from './storyContextSources.js'
 import { isCurrent, normalizeAsOf, type ValidityWindows } from './storyContextVisuals.js'
 
@@ -357,13 +358,6 @@ const asCandidate = (r: ContextSearchAnswer['results'][number]): CandidateSource
 
 const chunks = <T>(list: T[], size: number): T[][] => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size))
 
-/** The cited fact refs of a box: its sentences', tiles' and chart points'. */
-export function citedRefs(box: DraftBox): string[] {
-  const v = box.visual
-  const visual = !v ? [] : v.kind === 'tiles' ? v.tiles.flatMap(t => t.factIds) : [...v.points, ...(v.apart?.points ?? [])].map(p => p.factId)
-  return [...new Set([...box.sentences.flatMap(s => s.factIds), ...visual])]
-}
-
 export async function buildStoryContext(input: ContextInput, deps: ContextDeps): Promise<StoryContextResult> {
   const windows = WINDOWS()
   const calls: ContextCallRecord[] = []
@@ -631,7 +625,7 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
     record.responseNotFound = plan.responseSearched && plan.storyReports === null && !answered
 
     // The reused facts a kept box cites are stored with this run, so its boxes resolve within it
-    const cited = new Set(boxes.flatMap(citedRefs))
+    const cited = new Set(boxes.flatMap(boxRefs))
     const stored = [...facts, ...reused.filter(f => cited.has(f.ref))]
     record.tally = itemTally({
       supported: record.facts.supported,

@@ -17,19 +17,17 @@ import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
 import { callCostUsd } from './researchCost.js'
 import { sanitizedError } from './researchRuns.js'
-import type { ContextFactData, DraftBox } from './storyContextChecks.js'
 import { loadContextInput } from './storyContextInput.js'
 import {
   buildStoryContext,
-  citedRefs,
   CONTEXT_STEP_TIERS,
   type ContextCall,
   type ContextDeps,
   type ContextOutcome,
   type StoryContextResult,
 } from './storyContextPipeline.js'
+import { boxRow, factRow } from './storyContextRecords.js'
 import { contextSearch } from './storyContextSearch.js'
-import { asOfColumns, factDate, periodStart } from './storyContextVisuals.js'
 
 const log = createLogger('story_context')
 
@@ -78,53 +76,6 @@ export async function recordFailedRun(storyId: string, error: string, now: Date 
   return run.id
 }
 
-/** The newest date a box's facts describe, with its precision; null when none is dated. */
-function boxAsOf(box: DraftBox, facts: ReadonlyMap<string, ContextFactData>): string | null {
-  let newest: string | null = null
-  for (const ref of citedRefs(box)) {
-    const f = facts.get(ref)
-    const date = f ? factDate({ asOf: f.asOf, sourceDate: f.source.date }) : null
-    if (date && (newest === null || periodStart(date) > periodStart(newest))) newest = date
-  }
-  return newest
-}
-
-function factRow(storyId: string, runId: string, f: ContextFactData): Prisma.ContextFactCreateManyInput {
-  const asOf = asOfColumns(f.asOf)
-  return {
-    storyId,
-    runId,
-    ref: f.ref,
-    origin: f.origin,
-    reusedFromId: f.reusedFromId,
-    sourceUrl: f.source.url,
-    sourceOutlet: f.source.outlet,
-    sourceTitle: f.source.title,
-    sourceDate: f.source.date ? new Date(`${f.source.date}T00:00:00Z`) : null,
-    sourceKind: f.source.kind,
-    supportingSentence: f.supportingSentence,
-    passage: f.passage,
-    supportFound: f.supportFound,
-    statement: f.statement,
-    value: f.value,
-    valueHigh: f.valueHigh,
-    unit: f.unit,
-    approx: f.approx,
-    provisional: f.provisional,
-    counted: f.counted,
-    place: f.place,
-    asOf: asOf.date,
-    asOfPrecision: asOf.precision,
-    credited: f.credited,
-    creditedKind: f.creditedKind,
-    validity: f.validity,
-    verdict: f.verdict,
-    verdictProblem: f.verdictProblem,
-    model: f.model,
-    promptVersion: f.promptVersion,
-  }
-}
-
 export interface ContextRunOutcome {
   runId: string
   status: StoryContextResult['status']
@@ -162,27 +113,7 @@ export async function storeContextResult(runId: string, storyId: string, result:
     if (count === 0) return false
     if (result.facts.length > 0) await tx.contextFact.createMany({ data: result.facts.map(f => factRow(storyId, runId, f)) })
     if (result.boxes.length > 0)
-      await tx.contextBox.createMany({
-        data: result.boxes.map((box, position) => {
-          const asOf = asOfColumns(boxAsOf(box, facts))
-          return {
-            storyId,
-            runId,
-            position,
-            type: box.type,
-            heading: box.heading,
-            teaser: box.teaser,
-            sentences: box.sentences as unknown as Prisma.InputJsonArray,
-            visual: box.visual === null ? undefined : (box.visual as unknown as Prisma.InputJsonObject),
-            asOf: asOf.date,
-            asOfPrecision: asOf.precision,
-            place: box.place,
-            model: result.writer?.model ?? null,
-            promptVersion: result.writer?.promptVersion ?? null,
-            writtenAt: now,
-          }
-        }),
-      })
+      await tx.contextBox.createMany({ data: result.boxes.map((box, position) => boxRow({ storyId, runId }, box, position, facts, result.writer, now)) })
     return true
   })
 }

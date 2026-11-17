@@ -31,7 +31,7 @@ import { estimateFactCheck, runFactCheck } from './overviews/factCheck.js'
 import { scoreArm } from './overviews/factCheckScore.js'
 import { loadFactFixtures, reusableFixtures, type FactFixture, type FactFixtures } from './overviews/factFixtures.js'
 import { loadGapCandidates, runGapDraftStep, type GapDraftStepOptions } from './overviews/gapDraft.js'
-import { checkGapKeyFiles, loadGapKeyStories } from './overviews/gapKeyCheck.js'
+import { checkGapKeyFiles } from './overviews/gapKeyCheck.js'
 import { checkKeyFiles, loadKeyStories } from './overviews/keyCheck.js'
 import { readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js'
 import { overviewReportName, renderOverviewReport, type FactCheckReport, type FactSample, type OverviewReportInput } from './overviews/report.js'
@@ -226,7 +226,7 @@ async function main(): Promise<void> {
     }
     if (runs('gap-keys')) {
       try {
-        report.gapKeys = await checkGapKeyFiles(gapKeyFiles, async slugs => (await session.get()).read(q => loadGapKeyStories(q, slugs)))
+        report.gapKeys = await checkGapKeyFiles(gapKeyFiles, async slugs => (await session.get()).read(q => loadKeyStories(q, slugs)))
         for (const k of report.gapKeys) console.log(`gap-keys: ${k.file}: ${k.errors.length === 0 ? 'ok' : `${k.errors.length} errors`}`)
       } catch (err) {
         failed('gap-keys', err)

@@ -4,61 +4,17 @@
  * research run whose sources hold facts (what the `context` step replays), and every `inStory`
  * quote occurs in its published text after `normalizeQuote`, as the answer keys' quotes are found.
  * A miss is an error in the key, to fix there; it passes or fails nothing in production. Also each
- * key's counts and its half for the report. The loader issues one SELECT through the read-only
- * session; the rest is pure.
+ * key's counts and its half for the report. The stories come from the answer keys' loader
+ * (`loadKeyStories`, one SELECT through the read-only session); the rest is pure.
  */
-import type { SelectDb } from '../readOnlyDb.js'
+import { utcDay } from '../../../lib/days.js'
 import { halfOf, type Half } from './contextScore.js'
 import type { GapKey } from './gapKeySchema.js'
 import type { GapKeyFile } from './keyFiles.js'
 import { normalizeQuote, publishedTexts, type KeyStory } from './keyCheck.js'
 
-/** A story a gap key names, as the check reads it. */
-export interface GapKeyStory extends Omit<KeyStory, 'hasResearchRun'> {
-  /** A completed research run whose sources hold facts exists: the run the `context` step loads. */
-  hasResearchFacts: boolean
-}
-
-interface GapKeyStoryRow {
-  slug: string
-  status: string
-  date_published: Date | null
-  title: string | null
-  summary: string | null
-  relevance_reasons: string | null
-  antifactors: string | null
-  research: unknown
-  has_facts: boolean
-}
-
-export async function loadGapKeyStories(db: SelectDb, slugs: string[]): Promise<Map<string, GapKeyStory>> {
-  const rows = await db.$queryRaw<GapKeyStoryRow[]>`
-    SELECT s.slug, s.status::text AS status, s.date_published, s.title, s.summary, s.relevance_reasons, s.antifactors, s.research,
-           EXISTS (
-             SELECT 1 FROM story_research_runs r
-             WHERE r.story_id = s.id AND r.status = 'completed' AND jsonb_path_exists(r.result, '$.sources[*].facts[*]')
-           ) AS has_facts
-    FROM stories s
-    WHERE s.slug = ANY(${slugs})`
-  return new Map(
-    rows.map(r => [
-      r.slug,
-      {
-        slug: r.slug,
-        status: r.status,
-        datePublished: r.date_published,
-        title: r.title,
-        summary: r.summary,
-        relevanceReasons: r.relevance_reasons,
-        antifactors: r.antifactors,
-        research: r.research,
-        hasResearchFacts: r.has_facts,
-      },
-    ]),
-  )
-}
-
-const utcDay = (d: Date) => d.toISOString().slice(0, 10)
+/** A story a gap key names, as the check reads it: `hasResearchFacts` is what the `context` step needs. */
+export type GapKeyStory = Omit<KeyStory, 'hasResearchRun'>
 
 /** What the database contradicts in the key; empty when it holds. */
 export function checkGapKey(key: GapKey, stories: ReadonlyMap<string, GapKeyStory>): string[] {

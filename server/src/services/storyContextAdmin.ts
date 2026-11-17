@@ -11,7 +11,8 @@ import prisma from '../lib/prisma.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 import { layoutSpots, storyLayout, type LayoutStory } from './storyContextLayout.js'
 import { SECTION } from './storyContextPlacement.js'
-import { boxContent, boxRefs, contextRecords, placementsFor } from './storyContextView.js'
+import { boxContent, boxRefs, contextRecords } from './storyContextRecords.js'
+import { placementsFor } from './storyContextView.js'
 import { asOfFromColumns } from './storyContextVisuals.js'
 
 export interface ContextAdminBox {
@@ -88,7 +89,7 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
   const story = await storyFor(storyId)
   const [run, { boxes, facts }] = await Promise.all([
     prisma.storyContextRun.findFirst({ where: { storyId }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }] }),
-    contextRecords(storyId),
+    contextRecords(prisma, storyId),
   ])
   const shown = boxes.filter(b => b.status !== 'demoted')
   const placed = placementsFor(story, shown, facts)

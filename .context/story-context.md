@@ -158,6 +158,7 @@ That change also sets `.context/ai-transparency.md` (the story-context row) and 
 | `server/src/services/storyContextRuns.ts` | One story's run: row, production deps, transactional store, interrupted runs |
 | `server/src/services/storyContextPipeline.ts` | Steps 2–12 with injected deps; tiers; prompt versions; `planSearches` |
 | `server/src/services/storyContextInput.ts` | The queue and one story's input (SELECT only) |
+| `server/src/services/storyContextRecords.ts` | The records both ways: a fact's and a box's row, a row read back as the fact (the input's SELECT names its columns as the row's fields), a box's refs and as-of, a story's newest boxes and facts; a round-trip db test holds them |
 | `server/src/services/storyContextChecks.ts` | `renderFact`, fact and box check items, verdicts, structural checks, the tally |
 | `server/src/services/storyContextVisuals.ts` | Validity, number formatting, the tile and chart rules |
 | `server/src/services/storyContextSources.ts`, `storyContextSearch.ts` | Pass 2's request, source filter, cache key and passage; the cache and Tavily |

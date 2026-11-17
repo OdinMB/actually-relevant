@@ -7,27 +7,20 @@
  * `aiGenerated` marker. Not in the OpenAPI contract, so the shape can still change. A story without
  * context, or one not published, gets no boxes.
  */
-import type { ContextBox, ContextFact } from '@prisma/client'
+import type { ContextBox } from '@prisma/client'
 import { config } from '../config.js'
 import { contextAiMarker, type AiGeneratedContextMarker } from '../lib/aiProvenance.js'
+import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
 import { SOURCE_KINDS } from '../schemas/research.js'
-import {
-  APPROX,
-  CREDITED_KINDS,
-  VALIDITY,
-  storedSentencesSchema,
-  storedVisualSchema,
-  type BoxType,
-  type StoredSentence,
-  type StoredVisual,
-} from '../schemas/storyContext.js'
+import type { BoxType } from '../schemas/storyContext.js'
 import { hostOf, type CitedText, type ResearchedSource } from './researchedStory.js'
 import { normalizedUrl } from './researchFilter.js'
-import { visualFact, type ContextFactData } from './storyContextChecks.js'
+import { visualFact } from './storyContextChecks.js'
 import { storyLayout, type LayoutStory } from './storyContextLayout.js'
 import { CONTEXT_STEP_TIERS } from './storyContextPipeline.js'
 import { placeBoxes } from './storyContextPlacement.js'
+import { boxContent, boxRefs, contextRecords, oneOf, shownFact, type StoredContextFact } from './storyContextRecords.js'
 import { asOfFromColumns, periodStart, tileDisplay, validChart, type ChartPoint } from './storyContextVisuals.js'
 
 export interface ContextTilesView {
@@ -80,66 +73,6 @@ export interface StoryContextView {
   aiGenerated: AiGeneratedContextMarker
 }
 
-/** A stored fact as the checks and visual rules read it, with its record's id and whether it is demoted. */
-export type StoredContextFact = ContextFactData & { id: string; demoted: boolean }
-
-const oneOf = <T extends string>(value: string | null, allowed: readonly T[], fallback: T): T =>
-  (allowed as readonly string[]).includes(value ?? '') ? (value as T) : fallback
-
-export function factFromRecord(row: ContextFact): StoredContextFact {
-  return {
-    id: row.id,
-    demoted: row.status === 'demoted',
-    ref: row.ref,
-    origin: row.origin === 'search' ? 'search' : 'research',
-    reusedFromId: row.reusedFromId,
-    slot: null,
-    source: {
-      id: row.ref.replace(/F\d+$/, ''),
-      url: row.sourceUrl,
-      outlet: row.sourceOutlet,
-      title: row.sourceTitle,
-      date: row.sourceDate ? row.sourceDate.toISOString().slice(0, 10) : null,
-      kind: row.sourceKind,
-    },
-    supportingSentence: row.supportingSentence,
-    passage: row.passage,
-    supportFound: row.supportFound,
-    statement: row.statement,
-    value: row.value,
-    valueHigh: row.valueHigh,
-    unit: row.unit,
-    approx: oneOf(row.approx, APPROX, 'exact'),
-    provisional: row.provisional,
-    counted: row.counted,
-    place: row.place,
-    asOf: asOfFromColumns(row.asOf, row.asOfPrecision),
-    credited: row.credited,
-    creditedKind: row.creditedKind === null ? null : oneOf(row.creditedKind, CREDITED_KINDS, 'other'),
-    validity: oneOf(row.validity, VALIDITY, 'fast'),
-    verdict: row.verdict,
-    verdictProblem: row.verdictProblem,
-    model: row.model,
-    promptVersion: row.promptVersion,
-  }
-}
-
-/** A stored box's sentences and visual, read through their schemas: an unreadable one counts as empty. */
-export function boxContent(box: Pick<ContextBox, 'sentences' | 'visual'>): { sentences: StoredSentence[]; visual: StoredVisual | null } {
-  const sentences = storedSentencesSchema.safeParse(box.sentences)
-  const visual = box.visual === null ? null : storedVisualSchema.safeParse(box.visual)
-  return { sentences: sentences.success ? sentences.data : [], visual: visual?.success ? visual.data : null }
-}
-
-export const shownFact = (f: StoredContextFact) => f.verdict === 'supported' && !f.demoted
-
-/** The refs a box cites, sentences first. */
-export function boxRefs(content: { sentences: StoredSentence[]; visual: StoredVisual | null }): string[] {
-  const v = content.visual
-  const visual = !v ? [] : v.kind === 'tiles' ? v.tiles.flatMap(t => t.factIds) : [...v.points, ...(v.apart?.points ?? [])].map(p => p.factId)
-  return [...new Set([...content.sentences.flatMap(s => s.factIds), ...visual])]
-}
-
 /** The story's places now, and where each box sits: the editor's place kept, else the mode's (`config.storyContext.placement`). */
 export function placementsFor(
   story: LayoutStory & { id: string },
@@ -159,17 +92,6 @@ export function placementsFor(
     layout,
     { mode: c.placement, storyId: story.id, notesInText: c.notesInText, notesByPoints: c.notesByPoints },
   )
-}
-
-/** The boxes and facts of the story's newest run that wrote boxes, boxes in order. */
-export async function contextRecords(storyId: string): Promise<{ boxes: ContextBox[]; facts: Map<string, StoredContextFact> }> {
-  const newest = await prisma.contextBox.findFirst({ where: { storyId }, orderBy: [{ writtenAt: 'desc' }, { id: 'desc' }], select: { runId: true } })
-  if (!newest) return { boxes: [], facts: new Map() }
-  const [boxes, facts] = await Promise.all([
-    prisma.contextBox.findMany({ where: { storyId, runId: newest.runId }, orderBy: { position: 'asc' } }),
-    prisma.contextFact.findMany({ where: { storyId, runId: newest.runId } }),
-  ])
-  return { boxes, facts: new Map(facts.map(f => [f.ref, factFromRecord(f)])) }
 }
 
 const writeModel = () => config.llm.models[CONTEXT_STEP_TIERS.write].name
@@ -224,11 +146,11 @@ export async function getStoryContext(slug: string): Promise<StoryContextView> {
     select: { id: true, sourceUrl: true, summary: true, relevanceReasons: true, antifactors: true, research: true, datePublished: true },
   })
   if (!story?.datePublished) return emptyView()
-  const { boxes: rows, facts } = await contextRecords(story.id)
+  const { boxes: rows, facts } = await contextRecords(prisma, story.id)
   const served = rows.filter(b => b.status !== 'demoted')
   if (served.length === 0) return emptyView()
 
-  const storyDay = story.datePublished.toISOString().slice(0, 10)
+  const storyDay = utcDay(story.datePublished)
   const windows = { fastDays: config.storyContext.fastValidDays, slowDays: config.storyContext.slowValidDays }
   const visuals = new Map([...facts.values()].map(f => [f.ref, visualFact(f, shownFact(f))]))
   const book = sourceBook(story.sourceUrl)

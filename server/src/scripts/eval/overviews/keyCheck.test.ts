@@ -12,6 +12,7 @@ const story = (slug: string, extra: Partial<KeyStory> = {}): KeyStory => ({
   antifactors: null,
   research: null,
   hasResearchRun: false,
+  hasResearchFacts: false,
   ...extra,
 })
 
