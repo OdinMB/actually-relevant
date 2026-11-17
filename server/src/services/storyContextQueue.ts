@@ -8,12 +8,16 @@
  */
 import { Prisma } from '@prisma/client'
 import { config } from '../config.js'
+import { chainOf } from '../jobs/chainDefinitions.js'
 import prisma from '../lib/prisma.js'
-import { runDeadlinePassed } from '../lib/runUsage.js'
+import { enclosingRunJob } from '../lib/runUsage.js'
 import { RUN_WITH_FACTS_SQL } from './storyContextInput.js'
 
 /** The context step's job; its row's `enabled` flag runs it in its chain and lets the publish gate hold. */
 export const STORY_CONTEXT_JOB = 'build_story_context'
+
+/** The chain the step is a step of (the daily edition): in its run, publishing comes after the step. */
+const STEP_CHAIN = chainOf(STORY_CONTEXT_JOB)
 
 const MINUTE_MS = 60_000
 const DAY_MS = 24 * 60 * MINUTE_MS
@@ -50,14 +54,16 @@ async function stepWorks(): Promise<boolean> {
 }
 
 /**
- * The ids the publish job leaves for a later run while their cards may still come: a selected story
- * the step owes, with no settled context run (none, or one `running` within `staleRunMinutes`),
- * selected less than the publish gate's longest wait ago (`config.research.pipeline.maxWaitMinutes`,
- * research's bound). None while the step's job is disabled or web search is off, and none past the
- * chain's deadline, after which the step starts no other story.
+ * The ids a publish run on its own (Run now on the Jobs page) leaves for a later run while their cards
+ * may still come: a selected story the step owes, with no settled context run (none, or one `running`
+ * within `staleRunMinutes`), selected less than the publish gate's longest wait ago
+ * (`config.research.pipeline.maxWaitMinutes`, research's bound). None while the step's job is disabled
+ * or web search is off, and **none in the daily edition's run**: there the step has just had its turn,
+ * succeeded or failed, so a card it did not build is not coming that night, and the story goes out
+ * without it rather than wait a day for the next edition.
  */
 export async function awaitingContext(ids: string[], now: Date = new Date()): Promise<Set<string>> {
-  if (ids.length === 0 || runDeadlinePassed(now.getTime()) || !(await stepWorks())) return new Set()
+  if (ids.length === 0 || (STEP_CHAIN !== null && enclosingRunJob() === STEP_CHAIN) || !(await stepWorks())) return new Set()
   const waitingSince = new Date(now.getTime() - config.research.pipeline.maxWaitMinutes * MINUTE_MS)
   const staleBefore = new Date(now.getTime() - config.storyContext.staleRunMinutes * MINUTE_MS)
   const rows = await prisma.$queryRaw<{ id: string }[]>`

@@ -79,6 +79,11 @@ export function currentRun(): RunScope | undefined {
   return storage.getStore()
 }
 
+/** The job whose run the current run is part of (its chain, for a chain's step), or null for a run on its own. */
+export function enclosingRunJob(): string | null {
+  return currentRun()?.parent?.jobName ?? null
+}
+
 /**
  * A scope for a run of `jobName`, inside the current scope when there is one (a chain's step). The
  * cut-off and deadline not given are the enclosing scope's.

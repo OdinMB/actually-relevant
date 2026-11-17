@@ -22,7 +22,8 @@ export async function runPublishStories(): Promise<void> {
   // it was selected less than config.research.pipeline.maxWaitMinutes ago; an editor's publish never waits
   const waiting = await awaitingResearch(selected)
   // The same for context cards (.context/story-context.md, "The publish gate"), while the context step's
-  // job is enabled and web search is on, within the same bound and never past the chain's deadline
+  // job is enabled and web search is on, within the same bound, and only in a run on its own: in the
+  // daily edition the context step has just had its turn, so its failure or lateness never holds the edition
   const researched = selected.filter(id => !waiting.has(id))
   const waitingForCards = await awaitingContext(researched)
   const ids = researched.filter(id => !waitingForCards.has(id))

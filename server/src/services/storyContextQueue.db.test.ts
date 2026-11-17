@@ -122,11 +122,15 @@ describeDb('story context queue and publish gate (PostgreSQL)', () => {
     expect(await awaitingContext([owed.id], NOW)).toEqual(new Set())
   })
 
-  it("holds nothing past its chain's deadline: the step started no other story then", async () => {
+  it('holds nothing when publishing runs in the daily edition: the step has just had its turn there, succeeded or failed', async () => {
     const owed = await researched(selected())
-    const before = createRunScope({ jobName: 'publish_stories', flex: false, deadline: new Date(NOW.getTime() + MINUTE) })
-    expect(await runInScope(before, () => awaitingContext([owed.id], NOW))).toEqual(new Set([owed.id]))
-    const past = createRunScope({ jobName: 'publish_stories', flex: false, deadline: ago(MINUTE) })
-    expect(await runInScope(past, () => awaitingContext([owed.id], NOW))).toEqual(new Set())
+    const publishIn = (chain: string | null) => {
+      const publish = () => runInScope(createRunScope({ jobName: 'publish_stories', flex: false }), () => awaitingContext([owed.id], NOW))
+      return chain === null ? publish() : runInScope(createRunScope({ jobName: chain, flex: false, deadline: new Date(NOW.getTime() + DAY) }), publish)
+    }
+    expect(await publishIn('daily_edition_chain')).toEqual(new Set())
+    // A run on its own (Run now on the Jobs page) waits, as one inside another job's run would
+    expect(await publishIn(null)).toEqual(new Set([owed.id]))
+    expect(await publishIn('intake_chain')).toEqual(new Set([owed.id]))
   })
 })
