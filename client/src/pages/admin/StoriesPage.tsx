@@ -3,12 +3,12 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import type { StoryStatus, StoryFilters, StorySort } from '@shared/types'
-import { useStories, useBulkUpdateStatus, useDeleteStory, useUpdateStoryStatus, invalidateStoryQueries } from '../../hooks/useStories'
+import { useStories, useBulkUpdateStatus, useDeleteStory, invalidateStoryQueries } from '../../hooks/useStories'
 import { useFeeds } from '../../hooks/useFeeds'
 import { useIssues } from '../../hooks/useIssues'
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
 import { useBulkApplyResearch, useBulkResearch, useResearchUsage } from '../../hooks/useResearch'
-import { adminApi } from '../../lib/admin-api'
+import { useStoryActions } from '../../hooks/useStoryActions'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
@@ -83,7 +83,8 @@ function StoriesList() {
   const feedsQuery = useFeeds()
   const issuesQuery = useIssues()
   const { toast } = useToast()
-  const { launchTask, launchPolledTask, processingIds } = useBackgroundTasks()
+  const { launchPolledTask, processingIds } = useBackgroundTasks()
+  const rowActions = useStoryActions()
   const researchUsage = useResearchUsage()
   const startBulkResearch = useBulkResearch()
   const applyBulkResearch = useBulkApplyResearch()
@@ -96,7 +97,6 @@ function StoriesList() {
 
   const bulkUpdate = useBulkUpdateStatus()
   const deleteStory = useDeleteStory()
-  const updateStatus = useUpdateStoryStatus()
 
   const invalidateStories = useCallback(() => invalidateStoryQueries(queryClient), [queryClient])
 
@@ -159,55 +159,6 @@ function StoriesList() {
     bulkActions[action](ids)
   }
 
-  const handleSingleStatusChange = (id: string, status: StoryStatus) => {
-    updateStatus.mutate(
-      { id, status },
-      {
-        onSuccess: () => toast('success', 'Status updated'),
-        onError: () => toast('error', 'Failed to update status'),
-      },
-    )
-  }
-
-  const handlePreassess = (id: string) => {
-    launchTask({
-      id: `preassess-${id}-${Date.now()}`,
-      label: 'Pre-assessing story',
-      executor: async () => {
-        await adminApi.stories.preassess([id])
-        return { succeeded: 1, failed: 0 }
-      },
-      onComplete: invalidateStories,
-      storyIds: [id],
-    })
-  }
-
-  const handleAssess = (id: string) => {
-    launchTask({
-      id: `assess-${id}-${Date.now()}`,
-      label: 'Assessing story',
-      executor: async () => {
-        await adminApi.stories.assess(id)
-        return { succeeded: 1, failed: 0 }
-      },
-      onComplete: invalidateStories,
-      storyIds: [id],
-    })
-  }
-
-  const handlePublish = (id: string) => {
-    launchTask({
-      id: `publish-${id}-${Date.now()}`,
-      label: 'Publishing story',
-      executor: async () => {
-        await adminApi.stories.publish(id)
-        return { succeeded: 1, failed: 0 }
-      },
-      onComplete: invalidateStories,
-      storyIds: [id],
-    })
-  }
-
   const handleDelete = (id: string) => {
     setConfirmAction({
       title: 'Delete story?',
@@ -258,11 +209,11 @@ function StoriesList() {
             onToggleSelect={toggleSelect}
             onToggleSelectAll={toggleSelectAll}
             allSelected={stories.length > 0 && stories.every(s => selectedIds.has(s.id))}
-            onStatusChange={handleSingleStatusChange}
+            onStatusChange={rowActions.setStatus}
             onDelete={handleDelete}
-            onPreassess={handlePreassess}
-            onAssess={handleAssess}
-            onPublish={handlePublish}
+            onPreassess={rowActions.preassess}
+            onAssess={rowActions.assess}
+            onPublish={rowActions.publish}
           />
 
           <Pagination
