@@ -872,10 +872,10 @@ export interface JobRun {
   pauseForReview: boolean
   /** A chain's step: the chain holds before it until this time of day, "HH:MM" UTC; null for no hold. */
   notBefore: string | null
-  /** A chain: calls go at standard price from this time of day on, "HH:MM" UTC; null for no cut-off. */
-  flexUntil: string | null
-  /** A chain: a step working through items starts no new one from this time of day on, "HH:MM" UTC; null for none. */
-  deadline: string | null
+  /** A chain: calls go at standard price once this many hours have passed since each run started; null for no cut-off. */
+  flexHours: number | null
+  /** A chain: a step working through items starts no new one once this many hours have passed since each run started; null for none. */
+  deadlineHours: number | null
   /**
    * A chain: the step it is in ('running'), goes on from after a review ('review'), is held at until
    * `resumeAt` ('waiting'), or stopped at ('failed').

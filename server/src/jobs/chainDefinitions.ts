@@ -26,16 +26,6 @@ export function chainOf(jobName: string): string | null {
   return null
 }
 
-const CLOCK_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/
-
-/** Whether `value` is a time of day as the chain settings hold it, "HH:MM" on the 24-hour clock. */
-export const isClockTime = (value: string): boolean => CLOCK_TIME.test(value)
-
-/** The first moment at `hhmm` UTC after `from`; null without a value or for one that is not "HH:MM". */
-export function nextClockTime(hhmm: string | null, from: Date): Date | null {
-  return hhmm && isClockTime(hhmm) ? nextStepTime(hhmm, from, 'UTC') : null
-}
-
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 const STEP_TIME = /^(?:(Sun|Mon|Tue|Wed|Thu|Fri|Sat) )?([01]\d|2[0-3]):([0-5]\d)$/
 

@@ -46,8 +46,8 @@ export async function updateJob(
     flex?: boolean
     pauseForReview?: boolean
     notBefore?: string | null
-    flexUntil?: string | null
-    deadline?: string | null
+    flexHours?: number | null
+    deadlineHours?: number | null
   },
 ) {
   return prisma.jobRun.update({ where: { jobName }, data })

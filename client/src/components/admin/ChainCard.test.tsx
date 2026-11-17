@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { axe } from 'vitest-axe'
@@ -17,8 +17,8 @@ vi.mock('../../lib/admin-api', async importOriginal => {
 const chain = (overrides: Partial<JobRun> = {}) =>
   makeJobRun('daily_edition_chain', {
     cronExpression: '0 23 * * *',
-    flexUntil: '03:30',
-    deadline: '05:00',
+    flexHours: 4.5,
+    deadlineHours: 6,
     steps: ['select_stories', 'research_stories', 'publish_stories'],
     ...overrides,
   })
@@ -49,21 +49,34 @@ describe('ChainCard', () => {
   it('lists the steps in order, each with its Enabled and Review switches, and Flex only where a step makes AI calls', () => {
     renderCard()
     const checked = (pattern: RegExp) => screen.getAllByRole('switch', { name: pattern }).map(s => s.getAttribute('aria-checked'))
-    // The chain's own switch, then its three steps
-    expect(checked(/^(Enable|Disable) /)).toEqual(['true', 'true', 'true', 'false'])
+    // The three steps, then the chain's own switch in the Whole chain row under them
+    expect(checked(/^(Enable|Disable) /)).toEqual(['true', 'true', 'false', 'true'])
+    expect(screen.getByRole('switch', { name: 'Disable Daily Edition' })).toBeInTheDocument()
     expect(checked(/review after/)).toEqual(['false', 'true', 'false'])
     expect(screen.getByRole('switch', { name: 'Use flex processing for Select Stories' })).toBeInTheDocument()
     expect(screen.queryByRole('switch', { name: /flex processing for Publish Stories/ })).not.toBeInTheDocument()
-    expect(screen.getByLabelText(/^Flex until/)).toHaveValue('03:30')
-    expect(screen.getByLabelText(/^Done by/)).toHaveValue('05:00')
+    expect(screen.getByLabelText(/^Flex for/)).toHaveValue('4.5')
+    expect(screen.getByLabelText(/^Done within/)).toHaveValue('6')
   })
 
-  it('explains the clock times behind info buttons', () => {
+  it('explains the cut-offs, counted from the start of each run', () => {
     renderCard()
-    expect(screen.getByRole('button', { name: 'About Flex until' })).toHaveAccessibleDescription('From this time on, AI calls go at standard price.')
-    expect(screen.getByRole('button', { name: 'About Done by' })).toHaveAccessibleDescription('From this time on, research starts no other story.')
+    expect(screen.getByRole('button', { name: 'About Flex' })).toHaveAccessibleDescription(/Whole chain row.*start of each run.*standard price/)
+    expect(screen.getByRole('button', { name: 'About Done within' })).toHaveAccessibleDescription(/start of each run.*research starts no other story/)
     expect(screen.getByRole('button', { name: 'About Review' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'About Flex' })).toBeInTheDocument()
+  })
+
+  it("puts the chain's own schedule, switch, flex hours, status and actions in a Whole chain row under its steps", () => {
+    renderCard(chain({ lastStartedAt: '2026-11-16T23:00:00Z', lastCompletedAt: '2026-11-16T23:06:00Z', lastRunSummary: 'Published 4 stories' }))
+    const total = screen.getByRole('rowheader', { name: /Whole chain/ }).closest('tr')!
+    expect(within(total).getAllByRole('button', { name: /Daily at 11:00 PM/ }).length).toBeGreaterThan(0)
+    expect(within(total).getByRole('switch', { name: 'Disable Daily Edition' })).toBeInTheDocument()
+    expect(within(total).getByLabelText(/^Flex for/)).toHaveValue('4.5')
+    expect(within(total).getByText('6 min')).toBeInTheDocument()
+    // What each step did is in its own row, not repeated here
+    expect(within(total).queryByText('Published 4 stories')).not.toBeInTheDocument()
+    expect(within(total).getByRole('button', { name: 'Run Daily Edition' })).toBeInTheDocument()
+    expect(within(total).getByRole('button', { name: 'Details of Daily Edition' })).toBeInTheDocument()
   })
 
   it("saves a step's Review and Enabled switches", async () => {
@@ -74,12 +87,31 @@ describe('ChainCard', () => {
     await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('publish_stories', { enabled: true }))
   })
 
-  it('saves a changed clock time, and an emptied one as none', async () => {
+  it('saves changed hours, and an emptied field as no limit', async () => {
     renderCard()
-    const deadline = screen.getByLabelText(/^Done by/)
+    const flex = screen.getByLabelText(/^Flex for/)
+    await userEvent.clear(flex)
+    await userEvent.type(flex, '2,25')
+    await userEvent.tab()
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { flexHours: 2.25 }))
+
+    const deadline = screen.getByLabelText(/^Done within/)
     await userEvent.clear(deadline)
     await userEvent.tab()
-    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { deadline: null }))
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { deadlineHours: null }))
+  })
+
+  it('saves nothing for hours that are not quarter hours from 0.25 to 48, puts the value back and says why', async () => {
+    renderCard()
+    const deadline = screen.getByLabelText(/^Done within/)
+    for (const value of ['0', '4.1', '49', 'five', '05:00']) {
+      await userEvent.clear(deadline)
+      await userEvent.type(deadline, value)
+      await userEvent.tab()
+    }
+    expect(mockApi.update).not.toHaveBeenCalled()
+    expect(deadline).toHaveValue('6')
+    expect(await screen.findAllByText(/quarter hours/)).not.toHaveLength(0)
   })
 
   it('shows a chain waiting for review and continues it', async () => {

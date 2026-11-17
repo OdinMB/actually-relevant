@@ -37,7 +37,7 @@ router.put('/:jobName', failsWith('Failed to update job', { notFound: 'Job not f
     (req.body.cronExpression !== undefined && chainOf(jobName) && 'a step of a chain runs when its chain reaches it and has no schedule of its own') ||
     (req.body.pauseForReview !== undefined && !chainOf(jobName) && 'only a step of a chain can wait for review') ||
     (req.body.notBefore !== undefined && !chainOf(jobName) && 'only a step of a chain can be held until a time') ||
-    ((req.body.flexUntil !== undefined || req.body.deadline !== undefined) && !isChain(jobName) && 'only a chain has a flex cut-off and a deadline')
+    ((req.body.flexHours !== undefined || req.body.deadlineHours !== undefined) && !isChain(jobName) && 'only a chain has a flex cut-off and a deadline')
   if (misplaced) {
     res.status(400).json({ error: `Cannot change ${jobName}: ${misplaced}` })
     return

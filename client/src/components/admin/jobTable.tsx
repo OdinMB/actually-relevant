@@ -18,7 +18,7 @@ import { clockName, EnabledToggle, FlexToggle, LastRun, ReviewToggle, RunButton,
 // The widths hold from lg on, where every column shows and the tables line up down the page. Below lg the
 // table sizes its columns to their content and scrolls sideways when it does not fit, so nothing overlaps.
 const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean; note?: string }[] = [
-  { label: 'Job', width: 'lg:w-[24%]' },
+  { label: 'Job', width: 'lg:w-[22%]' },
   { label: 'Schedule', width: 'lg:w-[16%]', wide: true },
   { label: 'Enabled', width: 'lg:w-[7%]' },
   {
@@ -28,8 +28,8 @@ const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean; 
   },
   {
     label: 'Flex',
-    width: 'lg:w-[6%]',
-    note: 'AI calls at half price through OpenAI’s flex processing: slower, and at standard price when OpenAI is busy or after the chain’s Flex until time.',
+    width: 'lg:w-[8%]',
+    note: 'AI calls at half price through OpenAI’s flex processing: slower, and at standard price when OpenAI is busy. In a chain’s Whole chain row: the hours from the start of each run after which every call goes at standard price; empty for flex the whole run.',
   },
   { label: 'Status', width: 'lg:w-[10%]' },
   { label: 'Last Run', width: 'lg:w-[12%]', wide: true },
@@ -37,9 +37,10 @@ const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean; 
   { label: 'Actions', width: 'lg:w-[7%]', right: true },
 ]
 
-const WIDE = 'hidden lg:table-cell'
+/** A cell of a column shown from lg on only (Schedule, Last Run, Last Finished). */
+export const WIDE = 'hidden lg:table-cell'
 
-export function JobTable({ children }: { children: React.ReactNode }) {
+export function JobTable({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm lg:table-fixed">
@@ -69,6 +70,7 @@ export function JobTable({ children }: { children: React.ReactNode }) {
           </tr>
         </thead>
         <tbody>{children}</tbody>
+        {footer && <tfoot>{footer}</tfoot>}
       </table>
     </div>
   )

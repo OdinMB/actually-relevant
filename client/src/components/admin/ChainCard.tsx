@@ -12,9 +12,9 @@ import { useToast } from '../ui/Toast'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { TimeWithRelative } from './TimeWithRelative'
-import { ClockTimeField, EnabledToggle, LastRun, RunButton } from './jobControls'
+import { HoursField, EnabledToggle, LastRun, RunButton } from './jobControls'
 import { JobEditPanel } from './JobsTable'
-import { JobRow, JobTable } from './jobTable'
+import { JobRow, JobTable, WIDE } from './jobTable'
 
 /** "HH:MM UTC" of an ISO time. */
 const utcClock = (iso: string) => `${iso.slice(11, 16)} UTC`
@@ -65,8 +65,55 @@ function ChainState({ chain }: { chain: JobRun }) {
 }
 
 /**
- * A chain on the Jobs page: its schedule, switch, flex cut-off and deadline and its last run, then its
- * steps in order in the Jobs page's shared table layout, each with its mode (On, Review, Off).
+ * The chain itself, under its steps in the same columns: its schedule (click to edit), switch, flex
+ * cut-off in hours, status, the whole run's length and cost (what each step did is in its own row),
+ * when it last finished, and Run and Details for the whole chain. Review stays empty: only a step
+ * waits for review.
+ */
+function ChainTotalRow({ chain, onOpen }: { chain: JobRun; onOpen: (jobName: string) => void }) {
+  const name = jobDisplayName(chain.jobName)
+  return (
+    <tr className={`border-t-2 border-neutral-200 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}>
+      <th scope="row" className="px-3 py-2 text-left font-semibold text-neutral-900">
+        Whole chain
+        {/* The Schedule column shows from lg on; below it the schedule goes here */}
+        <span className="mt-0.5 block font-normal lg:hidden">
+          <CronEditor job={chain} />
+        </span>
+      </th>
+      <td className={`px-3 py-2 ${WIDE}`}>
+        <CronEditor job={chain} />
+      </td>
+      <td className="px-3 py-2">
+        <EnabledToggle job={chain} />
+      </td>
+      <td className="px-3 py-2" />
+      <td className="px-3 py-2">
+        <HoursField job={chain} field="flexHours" label="Flex for" help="" compact />
+      </td>
+      <td className="px-3 py-2">
+        <JobStatusBadge job={chain} />
+      </td>
+      <td className={`px-3 py-2 font-medium text-neutral-700 ${WIDE}`}>
+        <LastRun job={chain} summary={false} />
+      </td>
+      <td className={`px-3 py-2 text-neutral-700 ${WIDE}`}>
+        <TimeWithRelative dateStr={chain.lastCompletedAt} />
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex items-center justify-end gap-0.5">
+          <RunButton job={chain} />
+          <ActionIconButton icon={PencilSquareIcon} label={`Details of ${name}`} onClick={() => onOpen(chain.jobName)} />
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * A chain on the Jobs page: its name and (the daily edition) its research deadline, then its steps in
+ * order in the Jobs page's shared table layout, each with its mode (On, Review, Off), and the chain
+ * itself in a Whole chain row under them.
  */
 export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) {
   const [selected, setSelected] = useState<string | null>(null)
@@ -75,54 +122,25 @@ export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) 
 
   return (
     <section aria-labelledby={`${chain.jobName}-title`} className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <div
-        className={`relative flex flex-wrap items-start gap-x-6 gap-y-3 border-b border-neutral-200 px-4 py-3 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}
-      >
-        <div className="min-w-[12rem] flex-1">
-          <h2 id={`${chain.jobName}-title`} className="flex items-center gap-1 pr-16 text-base font-semibold text-neutral-900 sm:pr-0">
-            {name}
-            {chain.note && <InfoTip label={`About ${name}`}>{chain.note}</InfoTip>}
-          </h2>
-          {/* Status, switch and schedule, then the last start and the last run (two lines) beside them while they fit */}
-          <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-600">
-              <JobStatusBadge job={chain} />
-              <EnabledToggle job={chain} />
-              <CronEditor job={chain} />
-            </div>
-            <dl className="flex flex-col gap-0.5 text-xs text-neutral-600">
-              <div className="flex gap-1">
-                <dt className="text-neutral-500">Last started</dt>
-                <dd>
-                  <TimeWithRelative dateStr={chain.lastStartedAt} inline />
-                </dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="text-neutral-500">Last run</dt>
-                <dd>
-                  <LastRun job={chain} />
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-start gap-4">
-          <ClockTimeField job={chain} field="flexUntil" label="Flex until" help="From this time on, AI calls go at standard price." />
-          {/* Only research works through items against the deadline, so only its chain offers one */}
-          {chain.steps?.includes('research_stories') && (
-            <ClockTimeField job={chain} field="deadline" label="Done by" help="From this time on, research starts no other story." />
-          )}
-        </div>
-        {/* In the top-right corner on a phone, beside the title; after the clock fields on wider screens */}
-        <div className="absolute right-3 top-2 flex items-center gap-0.5 sm:static">
-          <RunButton job={chain} />
-          <ActionIconButton icon={PencilSquareIcon} label={`Details of ${name}`} onClick={() => setSelected(chain.jobName)} />
-        </div>
+      <div className={`flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-neutral-200 px-4 py-3 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}>
+        <h2 id={`${chain.jobName}-title`} className="flex min-w-[12rem] flex-1 items-center gap-1 text-base font-semibold text-neutral-900">
+          {name}
+          {chain.note && <InfoTip label={`About ${name}`}>{chain.note}</InfoTip>}
+        </h2>
+        {/* Only research works through items against the deadline, so only its chain offers one */}
+        {chain.steps?.includes('research_stories') && (
+          <HoursField
+            job={chain}
+            field="deadlineHours"
+            label="Done within"
+            help="Counted from the start of each run: once these hours have passed, research starts no other story, so publishing is not held up. Stories already being researched finish. Empty: no limit."
+          />
+        )}
       </div>
 
       <ChainState chain={chain} />
 
-      <JobTable>
+      <JobTable footer={<ChainTotalRow chain={chain} onOpen={setSelected} />}>
         {steps.map((step, i) => (
           <JobRow key={step.jobName} job={step} step={i + 1} onOpen={setSelected} />
         ))}

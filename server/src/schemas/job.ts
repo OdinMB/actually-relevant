@@ -1,9 +1,11 @@
 import { z } from 'zod'
 
-/** A chain's flex cut-off or deadline, or a step's "not before": "HH:MM" UTC, or null for none (jobs/chainDefinitions.ts). */
-const clockTime = z
-  .string()
-  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be a time of day as HH:MM (UTC)')
+/** A chain's flex cut-off or deadline: hours from the start of each run, in quarter hours up to 48, or null for none. */
+const hoursFromStart = z
+  .number()
+  .positive('Must be more than 0 hours')
+  .max(48, 'Must be at most 48 hours')
+  .multipleOf(0.25, 'Must be in quarter hours, such as 4.5')
   .nullable()
 
 export const updateJobSchema = z.object({
@@ -19,10 +21,10 @@ export const updateJobSchema = z.object({
     .regex(/^(?:(Sun|Mon|Tue|Wed|Thu|Fri|Sat) )?([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:MM, or a weekday and HH:MM such as "Sat 07:00"')
     .nullable()
     .optional(),
-  /** A chain: calls go at standard price from this time on. */
-  flexUntil: clockTime.optional(),
-  /** A chain: a step working through items starts no new one from this time on. */
-  deadline: clockTime.optional(),
+  /** A chain: calls go at standard price once this many hours have passed since the run started. */
+  flexHours: hoursFromStart.optional(),
+  /** A chain: a step working through items starts no new one once this many hours have passed since the run started. */
+  deadlineHours: hoursFromStart.optional(),
 })
 
 export const crawlUrlSchema = z.object({

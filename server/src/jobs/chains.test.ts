@@ -46,7 +46,7 @@ vi.mock('./handlers.js', () => ({
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 
 const { runChain, startStep, canContinue, holdUntil, resumeHeldChains, clearHeldChains } = await import('./chains.js')
-const { nextClockTime, nextStepTime, chainOf, CHAINS } = await vi.importActual<typeof import('./chainDefinitions.js')>('./chainDefinitions.js')
+const { nextStepTime, chainOf, CHAINS } = await vi.importActual<typeof import('./chainDefinitions.js')>('./chainDefinitions.js')
 const { config } = await import('../config.js')
 
 const STEPS = ['select_stories', 'research_stories', 'publish_stories']
@@ -301,15 +301,6 @@ describe('chains', () => {
       expect(chainOf('publish_uplifting_newsletter')).toBe('newsletter_chain')
       expect(chainOf('publish_podcast')).toBe('podcast_chain')
       expect(chainOf('cleanup_old_stories')).toBeNull()
-    })
-
-    it('finds the next moment at a time of day, UTC, after the start', () => {
-      const at = (iso: string) => new Date(iso)
-      expect(nextClockTime('03:30', at('2026-11-16T23:00:00Z'))).toEqual(at('2026-11-17T03:30:00Z'))
-      expect(nextClockTime('05:00', at('2026-11-17T01:00:00Z'))).toEqual(at('2026-11-17T05:00:00Z'))
-      expect(nextClockTime('05:00', at('2026-11-17T05:00:00Z'))).toEqual(at('2026-11-18T05:00:00Z'))
-      expect(nextClockTime(null, at('2026-11-17T05:00:00Z'))).toBeNull()
-      expect(nextClockTime('5am', at('2026-11-17T05:00:00Z'))).toBeNull()
     })
   })
 })

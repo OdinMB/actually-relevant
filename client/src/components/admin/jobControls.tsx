@@ -9,31 +9,86 @@ import { InfoTip } from '../ui/InfoTip'
 import { Tooltip } from '../ui/Tooltip'
 import { useToast } from '../ui/Toast'
 
+/** What an hours field holds: hours in quarter hours from 0.25 to 48, null when empty, undefined for anything else. */
+export function parseHours(text: string): number | null | undefined {
+  const trimmed = text.trim().replace(',', '.')
+  if (trimmed === '') return null
+  const hours = Number(trimmed)
+  return Number.isFinite(hours) && hours > 0 && hours <= 48 && Number.isInteger(hours * 4) ? hours : undefined
+}
+
 /**
- * A time of day in UTC, or empty for none, saved when it changes: a chain's flex cut-off or deadline.
+ * Hours from the start of each run, or empty for none, saved when the field loses focus: a chain's
+ * flex cut-off or deadline. Counting from each run's start, it means the same for a chain that runs
+ * once a day or several times.
  */
-export function ClockTimeField({ job, field, label, help }: { job: JobRun; field: 'flexUntil' | 'deadline'; label: string; help: string }) {
+export function HoursField({
+  job,
+  field,
+  label,
+  help,
+  compact = false,
+}: {
+  job: JobRun
+  field: 'flexHours' | 'deadlineHours'
+  label: string
+  help: string
+  /** In a table cell: a hidden label, an "h" after the field, the help left to the column's header. */
+  compact?: boolean
+}) {
   const change = useJobChange(job)
+  const { toast } = useToast()
   const id = `${job.jobName}-${field}`
+  const shown = job[field] === null ? '' : String(job[field])
+  const input = (
+    <input
+      id={id}
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      placeholder={compact ? '—' : 'no limit'}
+      defaultValue={shown}
+      key={shown}
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
+      onBlur={e => {
+        const field_ = e.currentTarget
+        const hours = parseHours(field_.value)
+        if (hours === undefined) {
+          field_.value = shown
+          toast('error', 'Enter hours from 0.25 to 48, in quarter hours such as 4.5. Leave the field empty for no limit.')
+          return
+        }
+        if (hours !== job[field])
+          change.save({ [field]: hours }, `${jobDisplayName(job.jobName)}: ${label.toLowerCase()} ${hours === null ? 'no limit' : `${hours} h`}`)
+      }}
+      className={`rounded-md border border-neutral-300 px-2 py-1 text-sm tabular-nums placeholder:text-neutral-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${
+        compact ? 'w-14 px-1.5' : 'w-20'
+      }`}
+    />
+  )
+  if (compact)
+    return (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap align-middle">
+        <label htmlFor={id} className="sr-only">
+          {label} (hours from the start of each run; empty for no limit)
+        </label>
+        {input}
+        <span className="text-xs text-neutral-500" aria-hidden="true">
+          h
+        </span>
+      </span>
+    )
   return (
-    <div>
+    <div className="flex items-center gap-2">
       <div className="flex items-center gap-0.5">
-        <label htmlFor={id} className="text-xs font-medium text-neutral-600">
-          {label} <span className="font-normal text-neutral-400">(UTC)</span>
+        <label htmlFor={id} className="whitespace-nowrap text-xs font-medium text-neutral-600">
+          {label} <span className="font-normal text-neutral-400">(hours)</span>
         </label>
         <InfoTip label={`About ${label}`}>{help}</InfoTip>
       </div>
-      <input
-        id={id}
-        type="time"
-        defaultValue={job[field] ?? ''}
-        key={job[field] ?? ''}
-        onBlur={e => {
-          const value = e.target.value || null
-          if (value !== job[field]) change.save({ [field]: value }, `${jobDisplayName(job.jobName)}: ${label.toLowerCase()} ${value ?? 'removed'}`)
-        }}
-        className="mt-0.5 rounded-md border border-neutral-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-      />
+      {input}
     </div>
   )
 }
@@ -191,14 +246,14 @@ export function FlexToggle({ job }: { job: JobRun }) {
 }
 
 /** The last finished run's length, cost (explained on hover and keyboard focus) and what it did. */
-export function LastRun({ job }: { job: JobRun }) {
+export function LastRun({ job, summary = true }: { job: JobRun; summary?: boolean }) {
   const duration = lastRunDurationMs(job)
   const usage = job.lastRunUsage
   if (duration === null && !usage) return <span className="text-neutral-400">—</span>
   return (
     <span className="inline-flex flex-col gap-0.5">
       <LastRunCost duration={duration} usage={usage} />
-      {job.lastRunSummary && <span className="text-xs text-neutral-500">{job.lastRunSummary}</span>}
+      {summary && job.lastRunSummary && <span className="text-xs text-neutral-500">{job.lastRunSummary}</span>}
     </span>
   )
 }
