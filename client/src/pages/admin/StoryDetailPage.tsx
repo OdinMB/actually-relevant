@@ -21,8 +21,8 @@ const SITE_LINK =
 /**
  * A story's admin page, `/admin/stories/:id`: the title with the story's status and rating, then the
  * story editor (`StoryEditForm`), its sections as tabs and its actions in the bar under them. Its
- * back link, Cancel and Save return to the page the story was opened from as that page was
- * (`storyReturn.ts`), or to the stories list when the page was opened from a bookmark.
+ * back link and Cancel return to the page the story was opened from as that page was
+ * (`storyReturn.ts`), or to the stories list when the page was opened from a bookmark; Save stays.
  */
 export default function StoryDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -86,7 +86,7 @@ export default function StoryDetailPage() {
           <StoryEditForm
             story={story}
             issues={issuesQuery.data || []}
-            onDone={() => navigate(back.to, { state: back.state })}
+            onCancel={() => navigate(back.to, { state: back.state })}
             onBlueskyGenerate={storyId => social.generate('bluesky', storyId)}
             onMastodonGenerate={storyId => social.generate('mastodon', storyId)}
           />

@@ -3,11 +3,11 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Link, useLocation } from 'react-router-dom'
 import type { Story } from '@shared/types'
-import { renderAdminRoutes } from '../../test/admin'
+import { reloadIsHeld, renderAdminRoutes } from '../../test/admin'
 import { returnState, storyPath } from '../../components/admin/storyReturn'
 
 const mockApi = vi.hoisted(() => ({
-  stories: { get: vi.fn(), update: vi.fn(), dissolveCluster: vi.fn() },
+  stories: { get: vi.fn(), update: vi.fn(), updateStatus: vi.fn(), dissolveCluster: vi.fn() },
   issues: { list: vi.fn() },
   bluesky: { generateDraft: vi.fn() },
   mastodon: { generateDraft: vi.fn() },
@@ -48,10 +48,16 @@ const story = {
   datePublished: '2026-11-10T00:00:00Z',
   clusterId: null,
   cluster: null,
-  feed: null,
+  feed: { id: 'feed-1', title: 'River News' },
   preResearch: null,
   _count: { blueskyPosts: 0, mastodonPosts: 0 },
 } as unknown as Story
+
+/** What a write answers: the story's own fields, without the feed, cluster and post counts a read joins in. */
+function written(changes: Partial<Story>): Story {
+  const { feed, cluster, _count, ...own } = story
+  return { ...own, ...changes } as Story
+}
 
 /** A page a story is opened from: its link carries the way back, as the stories list's does. */
 function Opener() {
@@ -113,18 +119,10 @@ describe('StoryDetailPage', () => {
     expect(screen.getByRole('link', { name: 'Back to stories' })).toHaveAttribute('href', '/admin/stories')
   })
 
-  it('returns there on Cancel, and after a save', async () => {
+  it('returns there on Cancel', async () => {
     await openFrom('/admin/stories?status=all')
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(at()).toBe('/admin/stories?status=all')
-
-    mockApi.stories.update.mockResolvedValue({ ...story, title: 'Rivers recover fast' })
-    await userEvent.click(screen.getByRole('link', { name: 'Open the story' }))
-    fireEvent.change(await screen.findByLabelText('Title'), { target: { value: 'Rivers recover fast' } })
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(at()).toBe('/admin/stories?status=all'))
-    expect(mockApi.stories.update).toHaveBeenCalledWith('story-1', expect.objectContaining({ title: 'Rivers recover fast' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('asks before Back to stories throws unsaved edits away', async () => {
@@ -174,5 +172,72 @@ describe('StoryDetailPage', () => {
     renderPage(['/admin/stories/story-1'])
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Rivers recover' })).toBeInTheDocument()
+  })
+})
+
+describe('StoryDetailPage after a save', () => {
+  /** The story is read again in full after a write; this read never answers, so the page shows what the write answered over what it had. */
+  const readAgainNever = () => mockApi.stories.get.mockReturnValue(new Promise(() => {}))
+
+  it('stays on the story, on its tab, with what was saved and nothing left unsaved', async () => {
+    mockApi.stories.update.mockImplementation(async (_id: string, data: Partial<Story>) => {
+      readAgainNever()
+      return written(data)
+    })
+    const { router } = renderPage(['/admin/stories?status=all'])
+    await userEvent.click(screen.getByRole('link', { name: 'Open the story' }))
+    await userEvent.click(await screen.findByRole('tab', { name: 'Assessment' }))
+    fireEvent.change(screen.getByLabelText('Rating'), { target: { value: '9' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Story updated')).toBeInTheDocument()
+    expect(router.state.location.pathname + router.state.location.search).toBe('/admin/stories/story-1?tab=assessment')
+    // The tab's name carries no "unsaved changes", the field the saved rating, the header the story's new rating
+    expect(screen.getByRole('tab', { name: 'Assessment' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByLabelText('Rating')).toHaveValue(9)
+    expect(screen.getByText('Rating 9')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(reloadIsHeld()).toBe(false)
+    expect(mockApi.stories.get).toHaveBeenCalledTimes(2)
+    // The write's answer has no feed: the page keeps the one it read
+    await userEvent.click(screen.getByRole('tab', { name: 'Source' }))
+    expect(screen.getByText('River News')).toBeVisible()
+
+    // Nothing is left for the way back to ask about, and it still leads where the story was opened from
+    await userEvent.click(screen.getByRole('link', { name: 'Back to stories' }))
+    expect(at()).toBe('/admin/stories?status=all')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('shows what the server saved where it differs from what was sent', async () => {
+    const unpublished = { ...story, status: 'analyzed', datePublished: null } as Story
+    mockApi.stories.get.mockResolvedValue(unpublished)
+    // A cleared slug is sent as absent, so the story keeps the one it had
+    mockApi.stories.update.mockImplementation(async () => {
+      readAgainNever()
+      return written({ status: 'analyzed', datePublished: null })
+    })
+    await openFrom('/admin/stories')
+    fireEvent.change(screen.getByLabelText('Slug'), { target: { value: '' } })
+    expect(screen.getByRole('tab', { name: 'Story, unsaved changes' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('Story updated')
+    expect(screen.getByLabelText('Slug')).toHaveValue('rivers-recover')
+    expect(screen.getByRole('tab', { name: 'Story' })).toBeInTheDocument()
+    expect(reloadIsHeld()).toBe(false)
+  })
+
+  it('keeps the story’s feed when the bar changes its status', async () => {
+    mockApi.stories.updateStatus.mockImplementation(async (_id: string, status: Story['status']) => {
+      readAgainNever()
+      return written({ status })
+    })
+    await openFrom('/admin/stories')
+    await userEvent.click(within(screen.getByRole('region', { name: 'Story actions' })).getByRole('button', { name: 'Reject' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Status')).toHaveValue('rejected'))
+    await userEvent.click(screen.getByRole('tab', { name: 'Source' }))
+    expect(screen.getByText('River News')).toBeVisible()
   })
 })

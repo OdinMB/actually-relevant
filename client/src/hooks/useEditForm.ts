@@ -1,18 +1,19 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useToast } from '../components/ui/Toast'
 
-interface UseEditFormOptions<TForm, TPayload> {
+interface UseEditFormOptions<TForm, TPayload, TSaved> {
   entityId: string
   initialState: TForm
-  mutation: { mutateAsync: (args: { id: string; data: TPayload }) => Promise<unknown>; isPending: boolean }
+  mutation: { mutateAsync: (args: { id: string; data: TPayload }) => Promise<TSaved>; isPending: boolean }
   toPayload: (form: TForm) => TPayload
   successMessage: string
   entityName: string
-  onSuccess: () => void
+  /** After a save, with what the mutation answered (the saved entity, for a form that stays open). */
+  onSuccess: (saved: TSaved) => void
   onFieldChange?: (key: keyof TForm, value: TForm[keyof TForm], form: TForm) => Partial<TForm> | undefined
 }
 
-export function useEditForm<TForm extends Record<string, unknown>, TPayload>({
+export function useEditForm<TForm extends Record<string, unknown>, TPayload, TSaved = unknown>({
   entityId,
   initialState,
   mutation,
@@ -21,7 +22,7 @@ export function useEditForm<TForm extends Record<string, unknown>, TPayload>({
   entityName,
   onSuccess,
   onFieldChange,
-}: UseEditFormOptions<TForm, TPayload>) {
+}: UseEditFormOptions<TForm, TPayload, TSaved>) {
   const [form, setForm] = useState<TForm>(initialState)
   // The loaded data the form last took over. When the entity's query refetches
   // (e.g. after an assessment finished in the background), a form nobody has
@@ -55,9 +56,9 @@ export function useEditForm<TForm extends Record<string, unknown>, TPayload>({
     async (e: React.FormEvent) => {
       e.preventDefault()
       try {
-        await mutation.mutateAsync({ id: entityId, data: toPayload(form) })
+        const saved = await mutation.mutateAsync({ id: entityId, data: toPayload(form) })
         toast('success', successMessage)
-        onSuccess()
+        onSuccess(saved)
       } catch (err) {
         toast('error', err instanceof Error ? err.message : `Failed to update ${entityName}`)
       }

@@ -51,8 +51,9 @@ const story = {
 } as unknown as Story
 
 /**
- * The story's edit page as `StoryDetailPage` mounts it: Save and Cancel go back to the list.
- * "Refetch" swaps in `refetched`, as the story query does after an apply or a revert.
+ * The story's edit page as `StoryDetailPage` mounts it: Cancel goes back to the list (staying after
+ * a save, as the story query brings in the saved story, is `StoryDetailPage.test.tsx`'s). "Refetch"
+ * swaps in `refetched`, as the story query does after an apply or a revert.
  */
 function EditPage({ shown, refetched }: { shown: Story; refetched?: Story }) {
   const navigate = useNavigate()
@@ -65,7 +66,7 @@ function EditPage({ shown, refetched }: { shown: Story; refetched?: Story }) {
           Refetch
         </button>
       )}
-      <StoryEditForm story={current} issues={[]} onDone={() => navigate('/admin/stories')} />
+      <StoryEditForm story={current} issues={[]} onCancel={() => navigate('/admin/stories')} />
       <Where />
     </>
   )
@@ -128,15 +129,6 @@ describe('StoryEditForm unsaved changes', () => {
   it('lets Back through at once when nothing is unsaved', async () => {
     const { router } = renderPage()
     await act(() => router.navigate(-1))
-    await waitFor(() => expect(where()).toBe('/admin/stories'))
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
-  it('leaves for the list without asking once the edits are saved', async () => {
-    mockApi.update.mockResolvedValue({ ...story, title: 'Edited headline' })
-    renderPage()
-    editTitle()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(where()).toBe('/admin/stories'))
     expect(screen.queryByRole('dialog')).toBeNull()
   })

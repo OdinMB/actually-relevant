@@ -18,8 +18,8 @@ import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 interface StoryEditFormProps {
   story: Story
   issues: Issue[]
-  /** After a save, and on Cancel: back to where the story was opened from. */
-  onDone: () => void
+  /** Cancel: back to where the story was opened from. */
+  onCancel: () => void
   onBlueskyGenerate?: (storyId: string) => void
   onMastodonGenerate?: (storyId: string) => void
 }
@@ -30,9 +30,10 @@ interface StoryEditFormProps {
  * source and cluster, Research, Context and the social posts; under them the sticky action bar with
  * the story's actions, Cancel and Save (`StoryActionBar`). The form holds every tab's fields, so a
  * tab switch keeps unsaved edits; unsaved edits hold every way off the page. Save goes to the first
- * field that cannot be saved, on its tab, rather than sending the form.
+ * field that cannot be saved, on its tab, rather than sending the form; a save keeps the page open
+ * on its tab, the form holding what the server saved.
  */
-export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMastodonGenerate }: StoryEditFormProps) {
+export function StoryEditForm({ story, issues, onCancel, onBlueskyGenerate, onMastodonGenerate }: StoryEditFormProps) {
   const updateStory = useUpdateStory()
 
   const initialState = useMemo(() => buildFormState(story), [story])
@@ -44,10 +45,9 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
     toPayload: toStoryPayload,
     successMessage: 'Story updated',
     entityName: 'story',
-    onSuccess: () => {
-      leave.markSaved()
-      onDone()
-    },
+    // The server's values, not the form's: it keeps a slug sent empty, and the story query that
+    // brings the saved story in (`useUpdateStory`) then finds the form unedited
+    onSuccess: saved => setForm(buildFormState(saved)),
   })
   const leave = useUnsavedChangesGuard(isDirty)
   const { researched, noteId: lockNoteId, lock } = useResearchLock(story, initialState, setForm)
@@ -118,7 +118,7 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
         />
       </div>
 
-      <StoryActionBar story={story} dirty={isDirty} saving={isPending} onCancel={onDone} onDiscard={() => setForm(initialState)} />
+      <StoryActionBar story={story} dirty={isDirty} saving={isPending} onCancel={onCancel} onDiscard={() => setForm(initialState)} />
       <UnsavedChangesDialog leave={leave} />
     </form>
   )
