@@ -381,6 +381,21 @@ export const config = {
        */
       maxWaitMinutes: 120,
     },
+    /**
+     * The research pass, one repeatable step over one evidence pool per story, which replaces the
+     * research step and story context once the owner switches on `research_pass`
+     * (services/researchPass.ts; .context/research-passes.md). Its spend counts against `monthlyCapUsd`.
+     */
+    pass: {
+      /** A pass's ceiling, reserved against the cap when it starts: about twice a pass's target ($0.16 first, $0.12 later). */
+      firstPassUsd: 0.4,
+      laterPassUsd: 0.25,
+      /** Gap searches (for the cards' slots) one pass makes at most, the two `response` searches first. */
+      maxGapSearches: 3,
+      /** Selected stories one run of the job takes, and how many at once. */
+      perRun: 20,
+      concurrency: 4,
+    },
   },
   /**
    * Story context, the `build_story_context` step between research and publishing

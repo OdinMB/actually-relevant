@@ -13,10 +13,12 @@ import { factKey } from './storyContextRecords.js'
 
 export type PoolOrigin = 'original' | 'cluster' | 'neighbour' | 'search' | 'earlier'
 
+/** A person a source quotes: the quote word for word, and their position as the extraction read it. */
 export interface Voice {
   name: string
   role: string
   quote: string
+  stance: string
 }
 
 export interface PoolSource {

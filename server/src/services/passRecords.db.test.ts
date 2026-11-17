@@ -28,7 +28,7 @@ const source = (ref: string, extra: Partial<PoolSource> = {}): PoolSource => ({
   relation: 'same-development',
   favicon: null,
   usedRawContent: false,
-  voices: [{ name: 'A. Person', role: 'minister', quote: 'We will act.' }],
+  voices: [{ name: 'A. Person', role: 'minister', quote: 'We will act.', stance: 'For acting now.' }],
   optOutChecked: true,
   firstPassId: null,
   ...extra,

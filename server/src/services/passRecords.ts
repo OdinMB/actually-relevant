@@ -107,7 +107,9 @@ interface SearchRow {
   passId: string | null
 }
 
-const voicesSchema = z.array(z.object({ name: z.string().catch(''), role: z.string().catch(''), quote: z.string().catch('') })).catch([])
+const voicesSchema = z
+  .array(z.object({ name: z.string().catch(''), role: z.string().catch(''), quote: z.string().catch(''), stance: z.string().catch('') }))
+  .catch([])
 
 const ORIGINS = ['original', 'cluster', 'neighbour', 'search', 'earlier'] as const
 const VERDICTS = ['supported', 'rejected', 'unjudged'] as const

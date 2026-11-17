@@ -100,27 +100,7 @@ export async function loadContextInput(db: ResearchDb, storyId: string, now: Dat
 
   const storyDay = utcDay(story.date_published ?? now)
   const earlierIds = [...new Set(parsed.data.earlier.map(e => e.storyId))].filter(id => id !== storyId)
-  const rows =
-    earlierIds.length === 0
-      ? []
-      : await db.$queryRaw<FactColumns[]>`
-          SELECT ${FACT_COLUMNS_SQL}
-          FROM context_facts f
-          WHERE f.story_id = ANY(${earlierIds}) AND f.verdict = 'supported' AND f.status <> 'demoted'
-          ORDER BY f.as_of DESC NULLS LAST, f.created_at DESC, f.id`
-  const windows = { fastDays: config.storyContext.fastValidDays, slowDays: config.storyContext.slowValidDays }
-  // An earlier story's copy of a fact it reused stands for the same fact: offered once, the newest
-  const offered = new Set<string>()
-  const reusable: ReusableFact[] = rows
-    .map(factFromRow)
-    .filter(f => isCurrent({ ...f, sourceDate: f.source.date }, storyDay, windows))
-    .filter(f => {
-      const original = f.reusedFromId ?? f.id
-      if (offered.has(original)) return false
-      offered.add(original)
-      return true
-    })
-    .slice(0, config.storyContext.maxReusedFacts)
+  const reusable: ReusableFact[] = (await reusableFacts(db, earlierIds, storyDay)).map(({ storyId: _storyId, ...f }) => f)
 
   const sources: ContextResearchSource[] = parsed.data.sources.map(s => ({ ...s }))
   return {
@@ -139,6 +119,38 @@ export async function loadContextInput(db: ResearchDb, storyId: string, now: Dat
     sources,
     reusable,
   }
+}
+
+/**
+ * The supported, non-demoted context facts of these earlier stories, each with its story, kept only
+ * while current on `storyDay`, newest first, each once (an earlier story's copy of a fact it reused
+ * stands for the same fact: offered once, the newest), at most `limit` (`maxReusedFacts`; a pass
+ * caps them once it knows which stories it links).
+ */
+export async function reusableFacts(
+  db: ResearchDb,
+  earlierIds: string[],
+  storyDay: string,
+  limit: number = config.storyContext.maxReusedFacts,
+): Promise<(ReusableFact & { storyId: string })[]> {
+  if (earlierIds.length === 0) return []
+  const rows = await db.$queryRaw<(FactColumns & { storyId: string })[]>`
+    SELECT ${FACT_COLUMNS_SQL}, f.story_id AS "storyId"
+    FROM context_facts f
+    WHERE f.story_id = ANY(${earlierIds}) AND f.verdict = 'supported' AND f.status <> 'demoted'
+    ORDER BY f.as_of DESC NULLS LAST, f.created_at DESC, f.id`
+  const windows = { fastDays: config.storyContext.fastValidDays, slowDays: config.storyContext.slowValidDays }
+  const offered = new Set<string>()
+  return rows
+    .map(row => ({ ...factFromRow(row), storyId: row.storyId }))
+    .filter(f => isCurrent({ ...f, sourceDate: f.source.date }, storyDay, windows))
+    .filter(f => {
+      const original = f.reusedFromId ?? f.id
+      if (offered.has(original)) return false
+      offered.add(original)
+      return true
+    })
+    .slice(0, limit)
 }
 
 /**

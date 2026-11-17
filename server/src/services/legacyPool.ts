@@ -56,7 +56,9 @@ const runSchema = z.object({
         country: z.string().catch(''),
         relation: z.string().catch(''),
         facts: z.array(factSchema).catch([]),
-        voices: z.array(z.object({ name: z.string().catch(''), role: z.string().catch(''), quote: z.string().catch('') })).catch([]),
+        voices: z
+          .array(z.object({ name: z.string().catch(''), role: z.string().catch(''), quote: z.string().catch(''), stance: z.string().catch('') }))
+          .catch([]),
       }),
     )
     .catch([]),

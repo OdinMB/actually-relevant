@@ -495,11 +495,10 @@ export interface GapStageInput {
   facts: ContextFactData[]
   /** Pages not picked again: those known, their domains, and those read before. */
   known: { urls: string[]; domains: string[]; read: string[] }
-  /** Queries and `response` angles searched before, skipped. */
-  made: Pick<EarlierWork, 'queries' | 'angles'>
+  /** The searches the gap list leaves (`planSearches`, with what was searched before skipped). */
+  plan: (gap: GapList, story: { title: string; text: string }) => ReturnType<typeof planSearches>
   /** The number the first new source takes (`S<n>`). */
   firstSource: number
-  maxSearches?: number
 }
 
 export interface GapStageResult {
@@ -525,7 +524,7 @@ export async function gapStage(
   const gapFacts = input.facts.map(f => ({ id: f.ref, text: renderFact(f), current: isCurrent({ ...f, sourceDate: f.source.date }, input.storyDay, windows) }))
   const gap = required(await call('gap-list', gapListSchema, buildGapListPrompt({ story: input.story, facts: gapFacts })), 'gap-list')
   record.slots = gap.slots
-  const plan = planSearches(gap, { title: input.title, text: input.storyText }, input.made, input.maxSearches)
+  const plan = input.plan(gap, { title: input.title, text: input.storyText })
   record.responseInStory = plan.storyReports
   record.responseFallback = plan.fallback
   record.skippedSearches = plan.skipped
@@ -805,7 +804,7 @@ export async function buildStoryContext(input: ContextInput, deps: ContextDeps):
           domains: input.sources.map(s => domainOf(s.url)),
           read: earlier.read,
         },
-        made: earlier,
+        plan: (gap, text) => planSearches(gap, text, earlier),
         firstSource: next,
       },
       deps,

@@ -106,6 +106,36 @@ describe('createRunMeter: model calls', () => {
   })
 })
 
+describe('createRunMeter: a research pass’s card steps and gap searches', () => {
+  const gapSearch = vi.fn()
+  const passMeter = (monthRoomUsd = async () => 30) => createRunMeter({ ceilingUsd: 0.4, monthRoomUsd, gapSearch })
+  const request = { query: 'q', recent: false, endDate: '2026-11-13' }
+
+  beforeEach(() => gapSearch.mockReset())
+
+  it("runs a card step on its context step's tier and meters it", async () => {
+    const m = passMeter()
+    const res = await m.call('cards-write', schema, 'prompt')
+    expect(mocks.getLLMByTier).toHaveBeenCalledWith('medium')
+    await m.call('facts-check', schema, 'prompt')
+    expect(mocks.getLLMByTier).toHaveBeenLastCalledWith('small')
+    expect(res.model).toBe(config.llm.models.medium.name)
+    expect(m.spentUsd()).toBeGreaterThan(res.costUsd)
+  })
+
+  it('meters a gap search at its credits, a cached answer at none, and refuses one without room', async () => {
+    gapSearch.mockResolvedValueOnce({ results: [], credits: 1, cached: false }).mockResolvedValueOnce({ results: [], credits: 0, cached: true })
+    const m = passMeter()
+    await m.search(request)
+    await m.search(request)
+    expect(m.spentUsd()).toBeCloseTo(config.research.tavilyUsdPerCredit, 12)
+
+    const broke = passMeter(async () => 0.001)
+    await expect(broke.search(request)).rejects.toBeInstanceOf(BudgetExhaustedError)
+    expect(gapSearch).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('createRunMeter: Tavily', () => {
   it('counts the credits of a search on the meter, at the configured price', async () => {
     const m = meter()
