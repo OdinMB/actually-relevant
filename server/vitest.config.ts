@@ -29,8 +29,10 @@ export default defineConfig({
       // interrupted-run sweep: measured 77.27, 73.97, 73.20, 78.45 (functions kept at 72, as above).
       // Raised 2026-11-16 with the spending overview (risen since without a raise): measured 82.18,
       // 78.89, 79.67, 82.91 (functions kept at 78, as above). Raised 2026-11-16 with story context:
-      // measured 83.09, 79.47, 80.93, 83.73 (functions kept at 79, as above)
-      thresholds: { statements: 83, branches: 79, functions: 79, lines: 83 },
+      // measured 83.09, 79.47, 80.93, 83.73 (functions kept at 79, as above). Raised 2026-11-17 with
+      // story context's eval: measured 83.49, 79.68, 81.99, 84.03 (functions raised to 80, as above;
+      // lines kept at 83, since 84 would leave no margin)
+      thresholds: { statements: 83, branches: 79, functions: 80, lines: 83 },
     },
     projects: [
       {
