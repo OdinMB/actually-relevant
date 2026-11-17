@@ -8,7 +8,8 @@
  * - **On** (`enabled`): runs.
  * - **Off** (not `enabled`): skipped; the next step runs on what there is.
  * - **Review** (`enabled` and `pause_for_review`): runs, then the chain waits for a person, who
- *   continues it from the Jobs page. The next scheduled run starts from the first step again.
+ *   continues it from the Jobs page with the next step that is on; with no step on after it, the
+ *   chain just ends. The next scheduled run starts from the first step again.
  *
  * A step can also have a "not before" time (`not_before`, "HH:MM" or "Sat 07:00", on the step's own
  * clock: `jobTimeZone`, else UTC): a chain that reaches it earlier holds there, its lease let go, and
@@ -114,6 +115,18 @@ export async function resumeHeldChains(): Promise<void> {
   for (const { jobName, resumeAt } of held) scheduleHold(jobName, resumeAt ?? new Date())
 }
 
+/**
+ * The first step after `index` that is on, or null: a review pause waits only for a step that will
+ * run, so a Review with nothing on after it (the last step, or later steps all off) waits for nothing.
+ */
+async function nextStepOn(steps: readonly string[], index: number): Promise<string | null> {
+  const later = steps.slice(index + 1)
+  if (later.length === 0) return null
+  const on = await prisma.jobRun.findMany({ where: { jobName: { in: [...later] }, enabled: true }, select: { jobName: true } })
+  const names = new Set(on.map(row => row.jobName))
+  return later.find(step => names.has(step)) ?? null
+}
+
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
@@ -181,8 +194,8 @@ export async function runChain(chainName: string, mode: 'start' | 'continue' = '
       throw new Error(`Stopped at ${step}, so the steps after it did not run: ${outcome.error}`)
     }
 
-    const next = steps[i + 1]
-    if (stepRow.pauseForReview && next) {
+    const next = stepRow.pauseForReview ? await nextStepOn(steps, i) : null
+    if (next) {
       await setResume(chainName, next, 'review')
       log.info({ chainName, step, next }, 'waiting for review')
       notify({
