@@ -107,3 +107,38 @@ the cost of at most one more story's calls for each story it hit; the cost bound
 for those stories only. `story_context_runs` holds one row per story and night, not one per attempt:
 the first attempt's record is replaced by the second's, so the admin's "What the run did" shows the
 second attempt while the row's cost covers both.
+
+## Amendment 2026-11-17: an editor can run it again
+
+The owner decided on 2026-11-17 that an editor can gather a story's context on demand ("Gather
+context" in the admin), and again later ("Gather more context"), whether the step is switched on or
+off. This narrows the Decision's second bullet once more: **the step** still settles a story with its
+first run, whatever its outcome, and still takes only stories within its lookback that have no run;
+an editor's run is not bound by either.
+
+- **Any published story with research facts**, with no lookback and any number of earlier runs.
+  Only web search must be on.
+- **One run of a story at a time.** Every run row is claimed, and a failed one reopened for its
+  second attempt, under one advisory lock, and neither happens while another run of the story is
+  running. The editor then gets a refusal, and the step skips the story, which the editor's run
+  settles.
+- **Each run builds on the story's earlier completed runs.** Their supported facts are carried over
+  and not checked again, and their judged research facts are not structured again. Their queries
+  and response angles are not searched again, so the two-angle rule holds over all of a story's
+  runs, and the pages they read are dropped. With nothing missing, a run makes no search and only
+  rewrites the cards. Failed, skipped and running runs count for nothing.
+- **The cards are rewritten** from the old facts and the new together, and the new run is the
+  newest. Nothing is deleted. The editor's choices carry over by card type: a hidden card stays
+  hidden, and a moved card keeps its place.
+- **Its spend is the step's**, added to `build_story_context`'s month and checked against that
+  step's warning level, not counted as editor research. No cap, as for the step.
+
+Rule: the step runs a story once; an editor may run it again at any time, one run at a time, and
+each run starts from what the earlier ones found.
+
+Consequences: `story_context_runs` holds any number of rows per story, and which runs were an
+editor's is not recorded. A rerun costs about a nightly run, less when earlier searches and facts
+are reused. A carried fact keeps the verdict of the run that judged it, under a check prompt that
+may since have changed. A card type the new run does not write disappears from the page with the
+earlier run's cards, though its rows stay. The eval loads no earlier work, so it measures first runs
+only.
