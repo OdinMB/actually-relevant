@@ -114,7 +114,8 @@ export const NOTES: Readonly<Record<string, () => string>> = {
   research_stories: researchNote,
   publish_stories: () =>
     'Publishes the selected stories. Of several stories about the same event, only the one chosen to lead the group is published, and the others are rejected as duplicates. ' +
-    `While Research Stories is enabled and research is on, a story selected less than ${count(config.research.pipeline.maxWaitMinutes, 'minute')} ago waits for its research and goes out at a later run.`,
+    `While Research Stories is enabled and research is on, a story selected less than ${count(config.research.pipeline.maxWaitMinutes, 'minute')} ago waits for its research and goes out at a later run. ` +
+    "While Build Story Context is enabled and web search is set up, a researched story waits for its context cards in the same way, but not once the daily edition's deadline has passed.",
   build_story_context: () => {
     const c = config.storyContext
     const { share, minItems } = config.jobs.failureShare
