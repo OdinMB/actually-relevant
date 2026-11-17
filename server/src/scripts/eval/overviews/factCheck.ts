@@ -12,11 +12,13 @@
 import { buildFactCheckPrompt, type CheckedItem } from '../../../prompts/research.js'
 import { factCheckSchema, type FactCheck } from '../../../schemas/research.js'
 import { checkedItems, publishedFact, type PoolFact } from '../../../services/researchChecks.js'
+import type { ContextFactData } from '../../../services/storyContextChecks.js'
 import { arm, armKey, versionedSchemaName } from '../models.js'
 import { runNumbers, runSchemaName } from '../repeats.js'
 import { byEvalHash } from '../sampling.js'
 import type { Arm, PlannedCall, SuiteContext } from '../types.js'
 import { estimateCalls, refusal, type CallEstimate, type CallGate, type Ledger } from './callBudget.js'
+import { contextCheckedItem, contextVariants } from './contextFacts.js'
 import type { FactFixture } from './factFixtures.js'
 import { plantVariants, type VariantKind } from './plant.js'
 
@@ -35,6 +37,8 @@ export interface CheckItem {
   kind: VariantKind
   text: string
   change: string
+  /** A module-1 fact as this variant renders it (`contextFacts.ts`); unset for research's facts. */
+  contextFact?: ContextFactData
 }
 
 export interface Verdict {
@@ -44,19 +48,32 @@ export interface Verdict {
   problem: string
 }
 
-const faithfulItem = (fact: FactFixture): CheckItem => ({ id: `${fact.key}#faithful`, fact, kind: 'faithful', text: fact.statement, change: '' })
+const faithfulItem = (fact: FactFixture): CheckItem => ({
+  id: `${fact.key}#faithful`,
+  fact,
+  kind: 'faithful',
+  text: fact.statement,
+  change: '',
+  ...(fact.context ? { contextFact: fact.context.fact } : {}),
+})
 
-/** Every variant of every fact (`plantVariants`), facts in sample order. */
+/** Every variant of every fact (`plantVariants`; a module-1 fact's from `contextVariants`), facts in sample order. */
 export function variantItems(facts: FactFixture[]): CheckItem[] {
-  return facts.flatMap(fact => plantVariants(fact.statement).map(v => ({ id: `${fact.key}#${v.kind}`, fact, kind: v.kind, text: v.text, change: v.change })))
+  return facts.flatMap(fact =>
+    fact.context
+      ? contextVariants(fact).map(v => ({ id: `${fact.key}#${v.kind}`, fact, kind: v.kind, text: v.text, change: v.change, contextFact: v.fact }))
+      : plantVariants(fact.statement).map(v => ({ id: `${fact.key}#${v.kind}`, fact, kind: v.kind, text: v.text, change: v.change })),
+  )
 }
 
 /**
  * The item as production's prompt reads a story paragraph citing the fact, at its 1-based place in
  * its call: its evidence (the fact, then its source's date fact) and its number hints are what
- * `checkedItems` gives that paragraph, so they follow production wherever it changes.
+ * `checkedItems` gives that paragraph, so they follow production wherever it changes. A module-1
+ * fact is the item story context's own check makes of it (`contextCheckedItem`).
  */
 export function checkedItem(item: CheckItem, position: number): CheckedItem {
+  if (item.contextFact) return contextCheckedItem(item.contextFact, item.text, position)
   const { fact } = item
   const sourceId = `S${position}`
   const cited: PoolFact = { id: `${sourceId}F1`, statement: fact.sentence, supportingSentence: fact.sentence, measures: fact.measures }

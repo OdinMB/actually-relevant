@@ -3,13 +3,18 @@
  * labeled by construction (`.context/model-eval.md`, "Overview evals"): the statement as extracted,
  * one faithful rewording, and one planted error per kind. Every rule changes one number, read with
  * production's number reader (`readNumbers`, the reader behind the fact check's hints), and never
- * one inside a word or an id (`S2F3`, `5G`, `COVID-19`) or in a URL-like string. Pure.
+ * one inside a word or an id (`S2F3`, `5G`, `COVID-19`) or in a URL-like string. For module-1
+ * facts (`--facts context`) four field-level kinds change one structured field instead, before
+ * production's `renderFact` renders the fact (`contextFacts.ts`). Pure.
  */
 import { readNumbers, significant, type NumberToken } from '../../../lib/numbers.js'
 
 export const FAITHFUL_KINDS = ['faithful', 'reworded'] as const
-export const PLANTED_KINDS = ['wrong-number', 'dropped-qualifier', 'wrong-year', 'wrong-scale'] as const
+/** The kinds that change one structured field of a module-1 fact before production renders it (`--facts context`). */
+export const FIELD_KINDS = ['wrong-place', 'wrong-as-of', 'wrong-credit', 'cumulative-swap'] as const
+export const PLANTED_KINDS = ['wrong-number', 'dropped-qualifier', 'wrong-year', 'wrong-scale', ...FIELD_KINDS] as const
 export const VARIANT_KINDS = [...FAITHFUL_KINDS, ...PLANTED_KINDS] as const
+export type FieldKind = (typeof FIELD_KINDS)[number]
 export type PlantedKind = (typeof PLANTED_KINDS)[number]
 export type VariantKind = (typeof VARIANT_KINDS)[number]
 
@@ -256,4 +261,128 @@ export function plantVariants(statement: string): Variant[] {
       return planted && planted.text !== statement ? [{ kind, ...planted }] : []
     }),
   ]
+}
+
+// ---------------------------------------------------------------------------
+// Field-level errors: one structured field of a module-1 fact changed, for production's renderFact.
+// Each rule takes the fact's rendering as it stands (`rendered`) and its evidence (the sentence or
+// passage the check reads), and leaves the fact alone where the change would not show in the
+// rendering or where the evidence names the planted value too, so the variant stays wrong.
+// ---------------------------------------------------------------------------
+
+/** The structured fields a field-level kind may change. */
+export interface PlantableFields {
+  place: string
+  asOf: string | null
+  credited: string
+  counted: string
+}
+
+/** Places and credited bodies named among the story's facts: where a swapped-in value comes from. */
+export interface FieldPeers {
+  places: string[]
+  credits: string[]
+}
+
+export interface FieldPlanted {
+  fields: Partial<PlantableFields>
+  change: string
+}
+
+export interface FieldVariant extends FieldPlanted {
+  kind: FieldKind
+}
+
+const lower = (s: string) => s.toLowerCase()
+
+/** The first peer that differs from `value`, neither inside the other, named neither in the evidence nor in the rendering. */
+function otherPeer(value: string, peers: string[], rendered: string, evidence: string): string | null {
+  const v = lower(value.trim())
+  return (
+    peers
+      .map(p => p.trim())
+      .find(p => {
+        const q = lower(p)
+        return q !== '' && q !== v && !q.includes(v) && !v.includes(q) && !lower(evidence).includes(q) && !lower(rendered).includes(q)
+      }) ?? null
+  )
+}
+
+const escaped = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** The rendering shows the place as a detail of its own (", in Indonesia"), not inside what is counted. */
+const showsPlace = (rendered: string, place: string) => new RegExp(`(?:, |\\()in ${escaped(place)}(?=,|\\)|$| \\()`).test(rendered)
+
+/** Another place among the story's facts, where the rendering shows the fact's own as a detail, "in <place>". */
+export function wrongPlace(f: PlantableFields, peers: FieldPeers, rendered: string, evidence: string): FieldPlanted | null {
+  const place = f.place.trim()
+  if (!place || !showsPlace(rendered, place)) return null
+  const other = otherPeer(place, peers.places, rendered, evidence)
+  return other ? { fields: { place: other }, change: `${place} → ${other}` } : null
+}
+
+/** Another credited body among the story's facts, where the rendering shows "according to <body>". */
+export function wrongCredit(f: PlantableFields, peers: FieldPeers, rendered: string, evidence: string): FieldPlanted | null {
+  const credited = f.credited.trim()
+  if (!credited || !rendered.includes(`according to ${credited}`)) return null
+  const other = otherPeer(credited, peers.credits, rendered, evidence)
+  return other ? { fields: { credited: other }, change: `${credited} → ${other}` } : null
+}
+
+const MONTH_STEMS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+/**
+ * The as-of date one month back at its own precision (a day kept, or the month's last day), or one
+ * year back for year precision; never to a month or year the evidence also names.
+ */
+export function wrongAsOf(f: PlantableFields, evidence: string): FieldPlanted | null {
+  const asOf = f.asOf
+  const m = asOf ? /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(asOf) : null
+  if (!asOf || !m) return null
+  const year = Number(m[1])
+  if (m[2] === undefined) {
+    const moved = String(year - 1)
+    return evidence.includes(moved) ? null : { fields: { asOf: moved }, change: `${asOf} → ${moved}` }
+  }
+  const month = Number(m[2]) === 1 ? 12 : Number(m[2]) - 1
+  const y = Number(m[2]) === 1 ? year - 1 : year
+  if (new RegExp(`\\b${MONTH_STEMS[month - 1]}`, 'i').test(evidence)) return null
+  const mm = String(month).padStart(2, '0')
+  let moved = `${y}-${mm}`
+  if (m[3] !== undefined) {
+    const lastDay = new Date(Date.UTC(y, month, 0)).getUTCDate()
+    moved += `-${String(Math.min(Number(m[3]), lastDay)).padStart(2, '0')}`
+  }
+  return { fields: { asOf: moved }, change: `${asOf} → ${moved}` }
+}
+
+const SWAPS: Record<string, string> = { total: 'new', cumulative: 'weekly', new: 'total', weekly: 'cumulative' }
+
+/**
+ * "total" or "cumulative" swapped with "new" or "weekly" in what the figure counts, the first one
+ * there; never a "New" that starts a name (New York), and never to a word the evidence uses.
+ */
+export function cumulativeSwap(f: PlantableFields, rendered: string, evidence: string): FieldPlanted | null {
+  const counted = f.counted.trim()
+  if (!counted || !lower(rendered).includes(lower(counted))) return null
+  for (const m of counted.matchAll(/\b(total|cumulative|new|weekly)\b/gi)) {
+    const word = m[0]
+    if (word === 'New' && /^\s+\p{Lu}/u.test(counted.slice(m.index + word.length))) continue
+    const to = SWAPS[lower(word)]!
+    if (new RegExp(`\\b${to}\\b`, 'i').test(evidence)) return null
+    const swapped = /^\p{Lu}/u.test(word) ? capitalized(to) : to
+    return { fields: { counted: counted.slice(0, m.index) + swapped + counted.slice(m.index + word.length) }, change: `${word} → ${swapped}` }
+  }
+  return null
+}
+
+/** Each field-level kind whose rule applies, in `FIELD_KINDS` order. */
+export function plantFieldVariants(f: PlantableFields, peers: FieldPeers, rendered: string, evidence: string): FieldVariant[] {
+  const planted: [FieldKind, FieldPlanted | null][] = [
+    ['wrong-place', wrongPlace(f, peers, rendered, evidence)],
+    ['wrong-as-of', wrongAsOf(f, evidence)],
+    ['wrong-credit', wrongCredit(f, peers, rendered, evidence)],
+    ['cumulative-swap', cumulativeSwap(f, rendered, evidence)],
+  ]
+  return planted.flatMap(([kind, p]) => (p ? [{ kind, ...p }] : []))
 }

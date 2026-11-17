@@ -10,7 +10,9 @@
 import { z } from 'zod'
 import { readNumbers, significant } from '../../../lib/numbers.js'
 import type { ResearchFact, ResearchSource } from '../../../services/researchPipeline.js'
+import type { ContextFactData } from '../../../services/storyContextChecks.js'
 import type { ReadOnlyDb, SelectDb } from '../readOnlyDb.js'
+import type { FieldPeers } from './plant.js'
 
 export const MAX_FACTS_PER_RUN = 10
 export const MAX_FACTS_PER_SOURCE = 3
@@ -36,6 +38,11 @@ export interface FactFixture {
   measures: string
   /** The source's sentence, verbatim, in its own language. */
   sentence: string
+  /**
+   * Only for a module-1 fact (`--facts context`, `contextFacts.ts`): the fact as the context step
+   * kept it, which production renders, and the story's places and credited bodies.
+   */
+  context?: { fact: ContextFactData; peers: FieldPeers }
 }
 
 export interface FactFixtures {

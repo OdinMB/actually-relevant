@@ -1,5 +1,22 @@
 import { describe, it, expect } from 'vitest'
-import { droppedQualifier, expectedSupported, plantableNumbers, plantVariants, reworded, VARIANT_KINDS, wrongNumber, wrongScale, wrongYear } from './plant.js'
+import {
+  cumulativeSwap,
+  droppedQualifier,
+  expectedSupported,
+  FIELD_KINDS,
+  plantableNumbers,
+  plantFieldVariants,
+  plantVariants,
+  reworded,
+  VARIANT_KINDS,
+  wrongAsOf,
+  wrongCredit,
+  wrongNumber,
+  wrongPlace,
+  wrongScale,
+  wrongYear,
+  type PlantableFields,
+} from './plant.js'
 
 describe('plantableNumbers', () => {
   it('never offers a number inside a word or an id', () => {
@@ -153,5 +170,88 @@ describe('plantVariants', () => {
 
   it('expects the faithful kinds supported and every planted error unsupported', () => {
     expect(VARIANT_KINDS.filter(expectedSupported)).toEqual(['faithful', 'reworded'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Field-level kinds, for module-1 facts (`--facts context`)
+// ---------------------------------------------------------------------------
+
+const fields = (extra: Partial<PlantableFields> = {}): PlantableFields => ({
+  place: 'Indonesia',
+  asOf: '2026-11-14',
+  credited: "Indonesia's disaster agency",
+  counted: 'total area burned',
+  ...extra,
+})
+const RENDERED = "Total area burned: 2.88 million hectares, in Indonesia, as of November 14, 2026, according to Indonesia's disaster agency"
+const EVIDENCE = 'Fires have burned 2.88 million hectares this year, the agency said on Friday.'
+
+describe('wrongPlace', () => {
+  it("names another place among the story's facts", () => {
+    expect(wrongPlace(fields(), { places: ['', 'indonesia', 'Malaysia'], credits: [] }, RENDERED, EVIDENCE)).toEqual({
+      fields: { place: 'Malaysia' },
+      change: 'Indonesia → Malaysia',
+    })
+  })
+
+  it('leaves a fact without a shown place, a place inside the other, and a place the evidence names', () => {
+    const peers = { places: ['Malaysia'], credits: [] }
+    expect(wrongPlace(fields({ place: '' }), peers, RENDERED, EVIDENCE)).toBeNull()
+    expect(wrongPlace(fields(), peers, 'Area burned in Indonesia: 2.88 million hectares', EVIDENCE)).toBeNull()
+    expect(wrongPlace(fields(), { places: ['Riau, Indonesia', 'Southeast Asia'], credits: [] }, RENDERED, 'Smoke drifted over Southeast Asia.')).toBeNull()
+  })
+})
+
+describe('wrongCredit', () => {
+  it("credits another body named among the story's facts", () => {
+    expect(wrongCredit(fields(), { places: [], credits: ['Greenpeace'] }, RENDERED, EVIDENCE)?.fields).toEqual({ credited: 'Greenpeace' })
+  })
+
+  it('leaves a fact credited to nobody, and a body the evidence names', () => {
+    expect(wrongCredit(fields({ credited: '' }), { places: [], credits: ['Greenpeace'] }, RENDERED, EVIDENCE)).toBeNull()
+    expect(wrongCredit(fields(), { places: [], credits: ['the agency'] }, RENDERED, EVIDENCE)).toBeNull()
+    expect(wrongCredit(fields(), { places: [], credits: [] }, RENDERED, EVIDENCE)).toBeNull()
+  })
+})
+
+describe('wrongAsOf', () => {
+  it('moves the month back one, keeping the precision', () => {
+    expect(wrongAsOf(fields(), EVIDENCE)).toEqual({ fields: { asOf: '2026-10-14' }, change: '2026-11-14 → 2026-10-14' })
+    expect(wrongAsOf(fields({ asOf: '2026-01' }), EVIDENCE)?.fields).toEqual({ asOf: '2025-12' })
+    expect(wrongAsOf(fields({ asOf: '2026-03-31' }), EVIDENCE)?.fields).toEqual({ asOf: '2026-02-28' })
+  })
+
+  it('moves the year back one for year precision', () => {
+    expect(wrongAsOf(fields({ asOf: '2026' }), EVIDENCE)?.fields).toEqual({ asOf: '2025' })
+  })
+
+  it('leaves a fact with no as-of date, and a period the evidence also names', () => {
+    expect(wrongAsOf(fields({ asOf: null }), EVIDENCE)).toBeNull()
+    expect(wrongAsOf(fields(), 'Burned from October to mid-November.')).toBeNull()
+    expect(wrongAsOf(fields({ asOf: '2026' }), 'Up from 2.1 million in 2025.')).toBeNull()
+  })
+})
+
+describe('cumulativeSwap', () => {
+  it('swaps a running total for a new count and back', () => {
+    expect(cumulativeSwap(fields(), RENDERED, EVIDENCE)).toEqual({ fields: { counted: 'new area burned' }, change: 'total → new' })
+    expect(cumulativeSwap(fields({ counted: 'Weekly cases' }), 'Weekly cases: 40', 'Cases rose by 40.')?.fields).toEqual({ counted: 'Cumulative cases' })
+    expect(cumulativeSwap(fields({ counted: 'cumulative deaths' }), 'Cumulative deaths: 9', 'Nine died.')?.fields).toEqual({ counted: 'weekly deaths' })
+  })
+
+  it('leaves a count with none of the words, a place name, a count not shown, and a word the evidence uses', () => {
+    expect(cumulativeSwap(fields({ counted: 'area burned' }), RENDERED, EVIDENCE)).toBeNull()
+    expect(cumulativeSwap(fields({ counted: 'cases in New York' }), 'Cases in New York: 40', 'Forty cases.')).toBeNull()
+    expect(cumulativeSwap(fields(), 'Fires burned 2.88 million hectares (in Indonesia)', EVIDENCE)).toBeNull()
+    expect(cumulativeSwap(fields(), RENDERED, 'The new fires added to the total.')).toBeNull()
+  })
+})
+
+describe('plantFieldVariants', () => {
+  it('gives each field-level kind that applies, in order', () => {
+    const variants = plantFieldVariants(fields(), { places: ['Malaysia'], credits: ['Greenpeace'] }, RENDERED, EVIDENCE)
+    expect(variants.map(v => v.kind)).toEqual([...FIELD_KINDS])
+    expect(FIELD_KINDS.every(k => !expectedSupported(k))).toBe(true)
   })
 })
