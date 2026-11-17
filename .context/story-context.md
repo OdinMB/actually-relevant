@@ -81,7 +81,7 @@ No budget stops the step (owner decision 2026-11-16, ADR-0060). A story's calls 
 
 ## What readers get
 
-`GET /api/stories/:slug/context` (`routes/public/stories.ts`, `services/storyContextView.ts`), `Cache-Control: public, max-age=60`. **Not in the OpenAPI contract**, like `/appearances`, so modules 2 and 3 can still change the shape. Only a published story's boxes of its newest run that wrote any, not demoted, in order; a sentence citing a fact no longer shown (rejected or demoted) is dropped with it, and a box left with no sentence and no visual is left out before places are worked out (so is an honest gap stored before 2026-11-17). A story without context, unknown or not published gets `boxes: []`.
+`GET /api/stories/:slug/context` (`routes/public/stories.ts`, `services/storyContextView.ts`), `Cache-Control: public, max-age=60`. **Not in the OpenAPI contract**, like `/appearances`, so modules 2 and 3 can still change the shape. Only a published story's boxes of its newest run that wrote any, not demoted, in order; a sentence citing a fact no longer shown (rejected or demoted) is dropped with it, and a box left with no sentence and no visual is left out before places are worked out (so is an honest gap stored before 2026-11-17). A story without context, unknown or not published gets `boxes: []`. The route reads the story's text and `research` (for its places) only once a box is served, so a story without cards costs two small queries.
 
 ```ts
 {

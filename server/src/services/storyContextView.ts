@@ -118,16 +118,16 @@ const pointView = (p: ChartPoint, idOf: (ref: string) => string): ContextChartPo
 })
 
 export async function getStoryContext(slug: string): Promise<StoryContextView> {
-  const story = await prisma.story.findFirst({
-    where: { slug, status: 'published' },
-    select: { id: true, sourceUrl: true, summary: true, relevanceReasons: true, antifactors: true, research: true, datePublished: true },
-  })
+  const story = await prisma.story.findFirst({ where: { slug, status: 'published' }, select: { id: true, sourceUrl: true, datePublished: true } })
   if (!story?.datePublished) return emptyView()
   const { boxes: rows, facts } = await contextRecords(prisma, story.id)
   const served = servedBoxes(rows.map(servableRow), facts, utcDay(story.datePublished))
   if (served.length === 0) return emptyView()
+  // The story's text, research's paragraphs included, is read only now: most stories serve no box
+  const text = await prisma.story.findUnique({ where: { id: story.id }, select: { summary: true, relevanceReasons: true, antifactors: true, research: true } })
+  if (!text) return emptyView()
   // Placed once the boxes shown are known, so a box left empty takes no spot
-  const placed = placeServed(served, { storyId: story.id, layout: storyLayout({ ...story, url: story.sourceUrl }) })
+  const placed = placeServed(served, { storyId: story.id, layout: storyLayout({ ...text, url: story.sourceUrl }) })
 
   const book = sourceBook(story.sourceUrl)
   const idOf = (ref: string) => book.idOf(facts.get(ref)!)

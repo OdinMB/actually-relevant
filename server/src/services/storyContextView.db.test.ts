@@ -1,4 +1,4 @@
-import { it, expect } from 'vitest'
+import { it, expect, vi } from 'vitest'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createContextBox, createContextFact, createContextRun } from '../test/db/storyContext.js'
 import { getStoryContext } from './storyContextView.js'
@@ -182,5 +182,29 @@ describeDb('getStoryContext', () => {
     const { story, run } = await setup()
     await createContextBox(story.id, run.id, { position: 0, sentences: [{ text: 'x', factIds: ['S5F3'] }] })
     expect((await getStoryContext('story-published')).boxes).toEqual([])
+  })
+
+  it("reads the story's text and research only once a box is served", async () => {
+    const { default: prisma } = await import('../lib/prisma.js')
+    const { story, run } = await setup()
+    const reads = vi.spyOn(prisma.story, 'findFirst')
+    const texts = vi.spyOn(prisma.story, 'findUnique')
+    try {
+      await getStoryContext('story-published')
+      await createContextBox(story.id, run.id, { position: 0, sentences: [{ text: 'x', factIds: ['S5F3'] }] })
+      await getStoryContext('story-published')
+      expect(reads.mock.calls.map(([args]) => Object.keys(args?.select ?? {}))).toEqual([
+        ['id', 'sourceUrl', 'datePublished'],
+        ['id', 'sourceUrl', 'datePublished'],
+      ])
+      expect(texts).not.toHaveBeenCalled()
+
+      await createContextBox(story.id, run.id, { position: 1, sentences: [{ text: 'y', factIds: ['S2F1'] }] })
+      expect((await getStoryContext('story-published')).boxes).toHaveLength(1)
+      expect(texts.mock.calls.map(([args]) => args.select)).toEqual([{ summary: true, relevanceReasons: true, antifactors: true, research: true }])
+    } finally {
+      reads.mockRestore()
+      texts.mockRestore()
+    }
   })
 })
