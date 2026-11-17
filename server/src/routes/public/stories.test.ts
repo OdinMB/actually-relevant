@@ -10,6 +10,7 @@ const mockPrisma = vi.hoisted(() => ({
   story: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
+    findUnique: vi.fn(),
     count: vi.fn(),
   },
   newsletter: { findFirst: vi.fn() },
@@ -364,15 +365,9 @@ describe('Public Stories API', () => {
     }
 
     it("serves the published story's cards with their sources and the AI marker, cached as the story is", async () => {
-      mockPrisma.story.findFirst.mockResolvedValue({
-        id: 'story-1',
-        sourceUrl: 'https://example.com/article',
-        summary: 'S.',
-        relevanceReasons: null,
-        antifactors: null,
-        research: null,
-        datePublished: new Date('2026-11-14'),
-      })
+      mockPrisma.story.findFirst.mockResolvedValue({ id: 'story-1', sourceUrl: 'https://example.com/article', datePublished: new Date('2026-11-14') })
+      // The story's text is read only once a box is served
+      mockPrisma.story.findUnique.mockResolvedValue({ summary: 'S.', relevanceReasons: null, antifactors: null, research: null })
       mockPrisma.contextBox.findFirst.mockResolvedValue({ runId: 'r1' })
       mockPrisma.contextBox.findMany.mockResolvedValue([box])
       mockPrisma.contextFact.findMany.mockResolvedValue([fact])
