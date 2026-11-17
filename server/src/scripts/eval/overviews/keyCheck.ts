@@ -77,7 +77,7 @@ export function normalizeQuote(text: string): string {
 }
 
 /** The story's published text, field by field: title, summary, relevance reasons, antifactors, and the applied research's paragraphs. */
-export function publishedTexts(story: KeyStory): string[] {
+export function publishedTexts(story: Pick<KeyStory, 'title' | 'summary' | 'relevanceReasons' | 'antifactors' | 'research'>): string[] {
   return [story.title, story.summary, story.relevanceReasons, story.antifactors, storedResearchText(story.research)].filter((t): t is string => !!t)
 }
 
