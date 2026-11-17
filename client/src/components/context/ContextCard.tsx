@@ -72,6 +72,8 @@ export function ContextCard({
   title?: ElementType
 }) {
   const visual = box.visual
+  // A card says nothing twice: the footer names a sole source, so its visual does not name it again
+  const soleSource = box.sourceIds.length === 1
   const footer = [...box.sourceIds.flatMap(id => (sources.has(id) ? [outletName(sources.get(id)!)] : [])), asOfLine(box.asOf)].filter(Boolean).join(' · ')
   // Between md and lg a note with both a visual and sentences sets the visual left of its text (the mockup's in-column card)
   const split = layout === 'note' && visual !== null && box.sentences.length > 0
@@ -91,9 +93,9 @@ export function ContextCard({
       {visual && (
         <div className={at('md:col-start-1 md:row-span-3 md:row-start-2')}>
           {visual.kind === 'tiles' ? (
-            <FigureTiles tiles={visual.tiles} sources={sources} size={layout === 'note' ? 'small' : 'large'} />
+            <FigureTiles tiles={visual.tiles} sources={sources} soleSource={soleSource} size={layout === 'note' ? 'small' : 'large'} />
           ) : (
-            <ContextChart chart={visual} sources={sources} colors={colors} width={layout === 'note' ? 240 : 300} />
+            <ContextChart chart={visual} sources={sources} colors={colors} soleSource={soleSource} width={layout === 'note' ? 240 : 300} />
           )}
         </div>
       )}

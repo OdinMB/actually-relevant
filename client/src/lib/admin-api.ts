@@ -387,7 +387,7 @@ export const adminApi = {
     gather: (storyId: string) => request<ContextRunStarted>(`/stories/${storyId}/context/run`, { method: 'POST' }),
     /** Hide every card, or show the hidden ones again; nothing is deleted. */
     setHidden: (storyId: string, hidden: boolean) => request<void>(`/stories/${storyId}/context`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
-    /** Hide, show or move one card; 400 for a place the story lacks, or for moving In numbers out of More context. */
+    /** Hide, show or move one card; 400 for a place the story lacks. */
     updateBox: (storyId: string, boxId: string, change: { hidden?: boolean; place?: string }) =>
       request<void>(`/stories/${storyId}/context/boxes/${boxId}`, { method: 'PATCH', body: JSON.stringify(change) }),
   },

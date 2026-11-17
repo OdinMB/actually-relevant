@@ -50,7 +50,7 @@ export function ContextSheet({ box, sources, colors, open, onClose }: CardProps 
   )
 }
 
-/** The note's icon: a bar chart for a chart, "#" for figures, lines of text for sentences. */
+/** The note's icon: a bar chart for a chart, "#" for number tiles, lines of text for sentences. */
 function NoteIcon({ box }: { box: ContextBoxView }) {
   const kind = box.visual?.kind
   if (kind === 'bars' || kind === 'line')

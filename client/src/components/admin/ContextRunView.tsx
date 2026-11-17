@@ -34,9 +34,8 @@ type Outcome = (typeof OUTCOMES)[number]
 /**
  * How each slot came out, grouped as the run left it: found (with or without a search of its own),
  * reported by the story itself, searched for with nothing sourced (`response`, which no card then
- * shows), not needed, or needed with nothing kept. In numbers counts as found when the run kept it;
- * hidden cards count too, since the run found them. A search an earlier run made, and this one did
- * not make again, counts as the slot's own.
+ * shows), not needed, or needed with nothing kept. Hidden cards count too, since the run found
+ * them. A search an earlier run made, and this one did not make again, counts as the slot's own.
  */
 export function slotOutcomes(record: RunRecord, boxes: ContextAdminBox[]): { outcome: string; slots: string[] }[] {
   const kept = new Set(boxes.map(b => b.type))
@@ -44,7 +43,6 @@ export function slotOutcomes(record: RunRecord, boxes: ContextAdminBox[]): { out
   const groups = new Map<string, string[]>(OUTCOMES.map(outcome => [outcome, []]))
   const add = (outcome: Outcome, slot: string) => groups.get(outcome)!.push(slot)
 
-  if (kept.has('figures')) add('found', slotKicker('figures'))
   for (const { slot, needed } of record.slots ?? []) {
     const name = slotKicker(slot)
     if (kept.has(slot)) add(searched.has(slot) ? 'found with a search of its own' : 'found', name)

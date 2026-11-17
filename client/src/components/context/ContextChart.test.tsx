@@ -39,8 +39,8 @@ const line: ContextChartView = {
 const hatchedMarks = (container: HTMLElement) =>
   [...container.querySelectorAll('svg rect, svg circle')].filter(mark => mark.getAttribute('fill')?.startsWith('url(#') && !mark.closest('pattern'))
 
-const renderChart = (chart: ContextChartView) =>
-  render(<ContextChart chart={chart} sources={contextSourcesById()} colors={getCategoryColor('human-development')} />)
+const renderChart = (chart: ContextChartView, soleSource = false) =>
+  render(<ContextChart chart={chart} sources={contextSourcesById()} colors={getCategoryColor('human-development')} soleSource={soleSource} />)
 
 describe('ContextChart', () => {
   it('names the drawing by its caption and gives every value, date and source in a table for screen readers', () => {
@@ -71,8 +71,13 @@ describe('ContextChart', () => {
     expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(4)
   })
 
-  it('names the sources under the chart', () => {
-    renderChart(bars)
+  it('names the sources under the chart, unless the card cites one source, which its footer names', () => {
+    const { unmount } = renderChart(bars)
     expect(screen.getByText('Sources: Budget Office, Plains Ledger')).toBeInTheDocument()
+    unmount()
+    renderChart(line, true)
+    expect(screen.queryByText(/^Sources?:/)).toBeNull()
+    // The table still names each value's source
+    expect(within(screen.getByRole('table')).getAllByRole('row')[1]).toHaveTextContent('Budget Office')
   })
 })

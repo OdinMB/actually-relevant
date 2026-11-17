@@ -212,11 +212,13 @@ interface ContextChartProps {
   chart: ContextChartView
   sources: SourcesById
   colors: CategoryColor
+  /** The card cites one source, which its footer names: the visible source line would repeat it (the table still names it). */
+  soleSource: boolean
   /** The drawing's width in px: the text draws at its size there, and the chart never grows past it. */
   width?: number
 }
 
-export function ContextChart({ chart, sources, colors, width = 300 }: ContextChartProps) {
+export function ContextChart({ chart, sources, colors, soleSource, width = 300 }: ContextChartProps) {
   const uid = useId().replace(/:/g, '')
   const captionId = `${uid}-caption`
   const caption = chartCaption(chart)
@@ -253,7 +255,7 @@ export function ContextChart({ chart, sources, colors, width = 300 }: ContextCha
       >
         {drawing.marks}
       </svg>
-      {outlets.length > 0 && (
+      {outlets.length > 0 && !soleSource && (
         <div className="mt-1.5 text-xs leading-4 text-neutral-500">
           {outlets.length === 1 ? 'Source' : 'Sources'}: {outlets.join(', ')}
         </div>

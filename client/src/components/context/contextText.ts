@@ -14,7 +14,6 @@ const KICKERS: Record<ContextBoxType, string> = {
   response: 'What’s being done',
   next: 'What comes next',
   key_term: 'Key term',
-  figures: 'In numbers',
 }
 
 /** The kicker over a card, naming its slot. */

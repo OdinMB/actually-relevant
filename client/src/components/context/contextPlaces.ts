@@ -3,7 +3,7 @@ import { parsePoints } from '../../lib/parse-points'
 
 /**
  * Where each context card goes on the page. The server works out each box's place (`placeServed`,
- * `.context/story-context.md`, "Places"; In numbers always under More context); the page puts a note
+ * `.context/story-context.md`, "Places"); the page puts a note
  * after the paragraph or point it names and every other card under More context. A place the page
  * doesn't show (the story's text changed since, or a second box names the same spot) falls back to
  * More context, so no card is lost.

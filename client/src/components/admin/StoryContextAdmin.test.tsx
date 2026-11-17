@@ -29,7 +29,6 @@ const box = (id: string, over: Partial<ContextAdminBox> = {}): ContextAdminBox =
   place: 'P1',
   storedPlace: 'P1',
   placeByEditor: false,
-  movable: true,
   sources: [{ outlet: 'Budget Office', url: 'https://budget.example.org/a' }],
   asOf: '2026-11',
   position: 0,
@@ -95,7 +94,7 @@ const run = (over: Partial<ContextAdminRun> = {}): ContextAdminRun => ({
 const BOXES = [
   box('a'),
   box('w', { type: 'next', place: 'W2', storedPlace: 'W2', position: 1 }),
-  box('f', { type: 'figures', heading: 'In numbers', teaser: '', place: 'section', storedPlace: null, movable: false, position: 2 }),
+  box('k', { type: 'why_now', place: 'section', storedPlace: null, position: 2 }),
   box('h', { type: 'build_up', hidden: true, status: 'demoted', place: 'section', storedPlace: null, position: 3 }),
 ]
 
@@ -217,11 +216,11 @@ describe('StoryContextAdmin', () => {
     await waitFor(() => expect(mockContext.updateBox).toHaveBeenCalledWith('story-1', 'h', { hidden: false }))
   })
 
-  it('keeps a card the server marks as not movable (In numbers) and a hidden card where they are', async () => {
+  it('keeps a hidden card where it is, and lets every shown card move', async () => {
     renderSection()
     await section()
-    expect(screen.getByRole('combobox', { name: 'Where In numbers sits' })).toBeDisabled()
     expect(screen.getByRole('combobox', { name: 'Where Heading h sits' })).toBeDisabled()
+    expect(screen.getByRole('combobox', { name: 'Where Heading k sits' })).toBeEnabled()
     expect(screen.getByRole('combobox', { name: 'Where Heading a sits' })).toBeEnabled()
   })
 
@@ -276,7 +275,6 @@ describe('StoryContextAdmin', () => {
 
     const details = within(region).getByText('What the run did').closest('details')!
     const row = (text: string) => within(details).getByText(text).closest('li')!
-    expect(row(slotKicker('figures'))).toHaveTextContent('found')
     expect(row(slotKicker('compared'))).toHaveTextContent('found with a search of its own')
     expect(row(slotKicker('key_term'))).toHaveTextContent('not needed')
     expect(row(slotKicker('who_affected'))).toHaveTextContent('nothing the sources support, so no card')

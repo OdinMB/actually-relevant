@@ -205,8 +205,8 @@ export interface PublicStoryDetail extends PublicStory {
 
 // --- Story context (public; a hand-written mirror of server/src/services/storyContextView.ts, .context/story-context.md) ---
 
-/** The seven slots of the gap list, plus the figures box ("In numbers"). */
-export type ContextBoxType = 'compared' | 'why_now' | 'build_up' | 'who_affected' | 'response' | 'next' | 'key_term' | 'figures'
+/** The seven slots of the gap list: one card each. (The In numbers box stored until 2026-11-17 is never served.) */
+export type ContextBoxType = 'compared' | 'why_now' | 'build_up' | 'who_affected' | 'response' | 'next' | 'key_term'
 
 export interface ContextTilesView {
   kind: 'tiles'
@@ -1291,7 +1291,7 @@ export interface ResearchRun {
 
 // --- Story context, admin (a hand-written mirror of server/src/services/storyContextAdmin.ts and storyContextPipeline.ts) ---
 
-export type ContextSlot = Exclude<ContextBoxType, 'figures'>
+export type ContextSlot = ContextBoxType
 
 /** What a context run did (`story_context_runs.result`), for "What the run did". */
 export interface ContextRunRecord {
@@ -1362,8 +1362,6 @@ export interface ContextAdminBox {
   /** As stored: the write call's choice or the editor's, null for the section. */
   storedPlace: string | null
   placeByEditor: boolean
-  /** An editor may move it beside the text: every box but the In numbers card (the server's rule). */
-  movable: boolean
   sources: { outlet: string; url: string }[]
   asOf: string | null
   position: number

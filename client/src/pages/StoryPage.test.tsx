@@ -696,10 +696,10 @@ describe('StoryPage researched format', () => {
       [
         contextBox('note-p', { place: 'P1' }),
         contextBox('note-w', { type: 'response', place: 'W1' }),
-        contextBox('figures', {
-          type: 'figures',
+        contextBox('reach', {
+          type: 'who_affected',
           visual: { kind: 'tiles', tiles: [{ label: 'pupils', values: [{ text: '600,000', estimate: false, sourceId: 'C2' }] }] },
-          sentences: [],
+          sentences: [{ text: 'Every public school takes part.', citations: [{ sourceId: 'C2', sentence: null }] }],
           sourceIds: ['C2'],
         }),
       ],
