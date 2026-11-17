@@ -112,6 +112,14 @@ describe('StoryEditForm unsaved changes', () => {
     expect(reloadIsHeld()).toBe(true)
   })
 
+  it('has nothing unsaved once an edited rating is typed back to what it was', () => {
+    renderPage()
+    fireEvent.change(screen.getByLabelText('Rating'), { target: { value: '8' } })
+    expect(reloadIsHeld()).toBe(true)
+    fireEvent.change(screen.getByLabelText('Rating'), { target: { value: '7' } })
+    expect(reloadIsHeld()).toBe(false)
+  })
+
   it('lets Back through at once when nothing is unsaved', async () => {
     const { router } = renderPage()
     await act(() => router.navigate(-1))
@@ -126,6 +134,54 @@ describe('StoryEditForm unsaved changes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(where()).toBe('/admin/stories'))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('StoryEditForm saving', () => {
+  it('saves what each field holds, a cleared one as empty', async () => {
+    mockApi.update.mockResolvedValue(story)
+    renderPage({ ...story, preResearch: null } as Story)
+    const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label, { exact: true }), { target: { value } })
+    type('Title Label', 'New label')
+    type('Title', 'New headline')
+    type('Slug', 'new-slug')
+    type('Status', 'selected')
+    type('Emotion', 'uplifting')
+    type('Pre-rating', '')
+    type('Rating', '9')
+    type('Summary', '')
+    type('Quote', 'A quote.')
+    type('Quote Attribution', 'Dr. Jane Doe')
+    type('Marketing Blurb', 'Blurb.')
+    type('Relevance Reasons', 'Reasons.')
+    type('Relevance Summary', 'Why it matters.')
+    type('Antifactors', 'One region only.')
+    type('Relevance Calculation', 'Final rating: 9')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalled())
+    expect(mockApi.update.mock.calls[0]![1]).toMatchObject({
+      titleLabel: 'New label',
+      title: 'New headline',
+      slug: 'new-slug',
+      issueId: null,
+      status: 'selected',
+      relevancePre: null,
+      relevance: 9,
+      emotionTag: 'uplifting',
+      summary: null,
+      quote: 'A quote.',
+      quoteAttribution: 'Dr. Jane Doe',
+      marketingBlurb: 'Blurb.',
+      relevanceReasons: 'Reasons.',
+      relevanceSummary: 'Why it matters.',
+      antifactors: 'One region only.',
+      relevanceCalculation: 'Final rating: 9',
+    })
+  })
+
+  it('shows a published story’s slug read-only', () => {
+    renderPage({ ...story, datePublished: '2026-11-10T00:00:00Z' } as Story)
+    expect(screen.getByLabelText('Slug')).toHaveAttribute('readonly')
   })
 })
 

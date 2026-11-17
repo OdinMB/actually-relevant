@@ -119,7 +119,7 @@ npm run db:seed:synthetic --prefix server  # Fill a local *_synthetic DB with ma
 ## UI & Testing Patterns
 
 - **UI conventions** -- See `.context/ui-conventions.md` for SEO checklist, CSS utility classes, bundle splitting rules, accessibility requirements, and spelling rules.
-- **Admin side panels**: `EditPanel` with `PANEL_BODY`/`PANEL_FOOTER` CSS classes.
+- **Admin side panels**: `EditPanel` with `PANEL_BODY`/`PANEL_FOOTER` CSS classes. The story editor is a page, not a panel (`StoryDetailPage` at `/admin/stories/:id`; link to it with `storyPath()` and `returnState()` so its back link returns there, `.context/admin-dashboard.md`).
 - **Toast provider**: Components using `useToast()` need `<ToastProvider>` in tests.
 - **Headless UI dialogs**: Use `getByRole('heading', { name: ... })` to disambiguate from buttons.
 - **URL-persisted state**: Admin pages use `useSearchParams()` for state (e.g., `?open=id`).

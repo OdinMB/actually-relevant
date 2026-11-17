@@ -1,9 +1,25 @@
+import type { ReactElement } from 'react'
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render as renderBare, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation } from 'react-router-dom'
 import { StoryTable } from './StoryTable'
+import { backLink } from './storyReturn'
 import type { Story } from '@shared/types'
+
+/** The table links to story pages, so it renders in a router. */
+const render = (ui: ReactElement) => renderBare(<MemoryRouter>{ui}</MemoryRouter>)
+
+/** Where opening a story went, and the back link its page would show. */
+function StoryPageStub() {
+  const location = useLocation()
+  const back = backLink(location.state)
+  return (
+    <output data-testid="arrived">
+      {location.pathname} back to {back.to}
+    </output>
+  )
+}
 
 const makeStory = (overrides: Partial<Story> = {}): Story =>
   ({
@@ -25,12 +41,38 @@ const defaultProps = {
   onToggleSelect: vi.fn(),
   onToggleSelectAll: vi.fn(),
   allSelected: false,
-  onView: vi.fn(),
   onStatusChange: vi.fn(),
   onDelete: vi.fn(),
 }
 
 describe('StoryTable', () => {
+  describe('opening a story', () => {
+    function renderList() {
+      const router = createMemoryRouter(
+        [
+          { path: '/admin/stories', element: <StoryTable {...defaultProps} stories={[makeStory({ id: 's-9', title: 'Rivers recover' })]} /> },
+          { path: '/admin/stories/:id', element: <StoryPageStub /> },
+        ],
+        { initialEntries: ['/admin/stories?status=rejected&sort=rating_desc&page=2'] },
+      )
+      renderBare(<RouterProvider router={router} />)
+    }
+
+    it('links the title to the story’s page, which goes back to the list as it was', async () => {
+      renderList()
+      const title = screen.getByRole('link', { name: 'Rivers recover' })
+      expect(title).toHaveAttribute('href', '/admin/stories/s-9')
+      await userEvent.click(title)
+      expect(screen.getByTestId('arrived')).toHaveTextContent('/admin/stories/s-9 back to /admin/stories?status=rejected&sort=rating_desc&page=2')
+    })
+
+    it('goes to the same page from the Edit button', async () => {
+      renderList()
+      await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!)
+      expect(screen.getByTestId('arrived')).toHaveTextContent('/admin/stories/s-9 back to /admin/stories?status=rejected&sort=rating_desc&page=2')
+    })
+  })
+
   describe('select all checkbox', () => {
     it('is unchecked when allSelected is false', () => {
       render(<StoryTable {...defaultProps} stories={[makeStory({ id: '1' }), makeStory({ id: '2', title: 'Story 2' })]} />)
@@ -85,24 +127,22 @@ describe('StoryTable', () => {
 
     it('renders "Cluster" badge when story has clusterId but is not primary', () => {
       render(
-        <MemoryRouter>
-          <StoryTable
-            {...defaultProps}
-            stories={[
-              makeStory({
-                id: 'story-1',
-                title: 'Secondary Story',
-                clusterId: 'cluster-1',
-                cluster: {
-                  id: 'cluster-1',
-                  primaryStoryId: 'story-other',
-                  _count: { stories: 3 },
-                  stories: [],
-                },
-              }),
-            ]}
-          />
-        </MemoryRouter>,
+        <StoryTable
+          {...defaultProps}
+          stories={[
+            makeStory({
+              id: 'story-1',
+              title: 'Secondary Story',
+              clusterId: 'cluster-1',
+              cluster: {
+                id: 'cluster-1',
+                primaryStoryId: 'story-other',
+                _count: { stories: 3 },
+                stories: [],
+              },
+            }),
+          ]}
+        />,
       )
       expect(screen.getByText('Cluster')).toBeInTheDocument()
       expect(screen.queryByText('Primary')).not.toBeInTheDocument()
@@ -110,24 +150,22 @@ describe('StoryTable', () => {
 
     it('renders "Primary" badge when story is the primary of its cluster', () => {
       render(
-        <MemoryRouter>
-          <StoryTable
-            {...defaultProps}
-            stories={[
-              makeStory({
-                id: 'story-1',
-                title: 'Primary Story',
-                clusterId: 'cluster-1',
-                cluster: {
-                  id: 'cluster-1',
-                  primaryStoryId: 'story-1',
-                  _count: { stories: 3 },
-                  stories: [],
-                },
-              }),
-            ]}
-          />
-        </MemoryRouter>,
+        <StoryTable
+          {...defaultProps}
+          stories={[
+            makeStory({
+              id: 'story-1',
+              title: 'Primary Story',
+              clusterId: 'cluster-1',
+              cluster: {
+                id: 'cluster-1',
+                primaryStoryId: 'story-1',
+                _count: { stories: 3 },
+                stories: [],
+              },
+            }),
+          ]}
+        />,
       )
       expect(screen.getByText('Primary')).toBeInTheDocument()
       expect(screen.queryByText('Cluster')).not.toBeInTheDocument()
