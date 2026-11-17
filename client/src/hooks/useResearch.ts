@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ResearchRun } from '@shared/types'
+import type { ResearchRun, ResearchUsage, Story } from '@shared/types'
 import { adminApi, ApiError } from '../lib/admin-api'
 import { bulkApplyOutcome, bulkResearchOutcome, type BulkResearchStory } from '../components/admin/bulkResearch'
 import { useToast } from '../components/ui/Toast'
@@ -71,6 +71,31 @@ export function useStartResearch(storyId: string) {
   }, [launchPolledTask, refresh, storyId])
 
   return { start, running: processingIds.has(storyId) }
+}
+
+/** The statuses a run may start from (server: `RESEARCHABLE_STATUSES` in services/researchInput.ts). */
+const RESEARCHABLE: readonly string[] = ['analyzed', 'selected', 'published']
+
+/** Why a run of the story cannot start now, or null when it may. */
+export function researchRefusal(story: Pick<Story, 'status'>, usage: ResearchUsage | undefined, inProgress: boolean): string | null {
+  if (!usage) return 'Research usage could not be loaded'
+  if (usage.refusal) return usage.refusal
+  if (!RESEARCHABLE.includes(story.status)) return `Only analyzed, selected or published stories can be researched; this one is ${story.status}`
+  if (inProgress) return 'A research run of this story is in progress'
+  return null
+}
+
+/**
+ * The story page's Research action: null while the usage loads and against a backend without
+ * research (the section hides itself then too), else why a run cannot start now (`researchRefusal`;
+ * "in progress" from this tab's task or any `running` run) and `start`.
+ */
+export function useResearchAction(story: Pick<Story, 'id' | 'status'>): { reason: string | null; start: () => void } | null {
+  const usage = useResearchUsage()
+  const runs = useResearchRuns(story.id, usage.data != null)
+  const { start, running } = useStartResearch(story.id)
+  if (usage.isPending || usage.data === null) return null
+  return { reason: researchRefusal(story, usage.data, running || anyRunning(runs.data)), start }
 }
 
 /**

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { TaskState } from '@shared/types'
+import type { StoryContextAdmin, TaskState } from '@shared/types'
 import { adminApi, ApiError } from '../lib/admin-api'
 import { useBackgroundTasks } from './useBackgroundTasks'
 
@@ -27,6 +27,16 @@ export function useStoryContextAdmin(storyId: string) {
     },
     refetchInterval: query => (query.state.data?.run?.status === 'running' ? CONTEXT_POLL_MS : false),
   })
+}
+
+/**
+ * Whether the story page shows its Context section: once the story has a context run or can have one
+ * gathered (`gather.eligible`: published, with research facts), or to say its context could not be
+ * loaded. A backend without context answers 404, which the query reads as null.
+ */
+export function contextShown(query: { data: StoryContextAdmin | null | undefined; isError: boolean }): boolean {
+  if (query.isError) return true
+  return !!query.data && (!!query.data.run || !!query.data.gather?.eligible)
 }
 
 /** After a change, the admin's view and any cached story page's context are read again. */
@@ -88,4 +98,23 @@ export function useGatherContext(storyId: string) {
   }, [launchPolledTask, prefix, refresh, storyId])
 
   return { start, running: tasks.some(t => t.id.startsWith(prefix) && t.status === 'running') }
+}
+
+/**
+ * The story page's Gather context action, while its Context section shows (`contextShown`) and the
+ * backend offers gathering: "Gather context", or "Gather more context" once the story has a run;
+ * closed with the server's refusal, or while a run of the story is under way (this tab's task, or
+ * the newest run `running`).
+ */
+export function useGatherAction(storyId: string): { label: string; reason: string | null; start: () => void } | null {
+  const query = useStoryContextAdmin(storyId)
+  const { start, running } = useGatherContext(storyId)
+  const view = query.data
+  if (!view?.gather || !contextShown(query)) return null
+  const busy = running || view.run?.status === 'running'
+  return {
+    label: view.run ? 'Gather more context' : 'Gather context',
+    reason: busy ? 'Context is being gathered for this story now' : view.gather.refusal,
+    start,
+  }
 }

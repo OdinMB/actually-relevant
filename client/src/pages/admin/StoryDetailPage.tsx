@@ -4,6 +4,8 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { useStory } from '../../hooks/useStories'
 import { useIssues } from '../../hooks/useIssues'
 import { ApiError } from '../../lib/admin-api'
+import { STATUS_VARIANTS, formatStatus } from '../../lib/constants'
+import { Badge } from '../../components/ui/Badge'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ErrorState } from '../../components/ui/ErrorState'
@@ -17,10 +19,10 @@ const SITE_LINK =
   'inline-flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2'
 
 /**
- * A story's admin page, `/admin/stories/:id`: the story editor (`StoryEditForm`) with its research,
- * context and social posts. Its back link, Cancel and Save return to the page the story was opened
- * from as that page was (`storyReturn.ts`), or to the stories list when the page was opened from a
- * bookmark.
+ * A story's admin page, `/admin/stories/:id`: the title with the story's status and rating, then the
+ * story editor (`StoryEditForm`), its sections as tabs and its actions in the bar under them. Its
+ * back link, Cancel and Save return to the page the story was opened from as that page was
+ * (`storyReturn.ts`), or to the stories list when the page was opened from a bookmark.
  */
 export default function StoryDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -34,7 +36,8 @@ export default function StoryDetailPage() {
   const title = story ? story.title || story.sourceTitle : null
 
   return (
-    <>
+    // Fills the view, so the form's action bar sits at its bottom under a short tab too
+    <div className="flex min-h-full flex-col">
       <Helmet>
         <title>{title ? `${title} — Admin — Actually Relevant` : 'Story — Admin — Actually Relevant'}</title>
       </Helmet>
@@ -63,6 +66,13 @@ export default function StoryDetailPage() {
         <>
           <PageHeader
             title={title}
+            // The bar's actions follow the status, which shows on every tab here
+            description={
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <Badge variant={STATUS_VARIANTS[story.status]}>{formatStatus(story.status)}</Badge>
+                {story.relevance != null && <span>Rating {story.relevance}</span>}
+              </span>
+            }
             actions={
               story.status === 'published' &&
               story.slug && (
@@ -84,6 +94,6 @@ export default function StoryDetailPage() {
           {social.panels}
         </>
       )}
-    </>
+    </div>
   )
 }

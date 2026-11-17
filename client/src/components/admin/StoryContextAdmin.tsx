@@ -1,23 +1,23 @@
 import { useState } from 'react'
-import type { ContextAdminBox, ContextAdminPlace, ContextAdminRun, Story, StoryContextAdmin as ContextView } from '@shared/types'
-import { useGatherContext, useSetContextHidden, useStoryContextAdmin, useUpdateContextBox } from '../../hooks/useStoryContextAdmin'
+import type { ContextAdminBox, ContextAdminPlace, ContextAdminRun, Story } from '@shared/types'
+import { contextShown, useSetContextHidden, useStoryContextAdmin, useUpdateContextBox } from '../../hooks/useStoryContextAdmin'
 import { formatDateWithTime } from '../../lib/constants'
 import { asOfText, slotKicker } from '../context/contextText'
 import { Button } from '../ui/Button'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
-import { ReasonButton } from '../ui/ReasonButton'
 import { Select } from '../ui/Select'
 import { useToast } from '../ui/Toast'
 import { ContextRunView } from './ContextRunView'
 import { EDITOR_HEADING, EDITOR_SECTION } from './storyEditorClasses'
 
 /**
- * A story's Context section in the edit form, after Research (`.context/admin-dashboard.md`, "Story
+ * A story's Context section, the story page's Context tab (`.context/admin-dashboard.md`, "Story
  * context"): what the newest context run did and when, every card grouped by where it sits, with a
- * place select and Hide/Show, "Gather context" (an editor's run, which builds on the earlier ones),
- * "Hide all context" (asked first), a link to the story page, and "What the run did". Hiding and
- * moving are the one way a person changes the cards (ADR-0062); nothing is deleted. Hidden while the
- * story has no context run and cannot have one gathered, and against a backend without context.
+ * place select and Hide/Show, "Hide all context" (asked first), a link to the story page, and "What
+ * the run did". "Gather context" (an editor's run, which builds on the earlier ones) is in the page's
+ * action bar (`StoryActionBar`). Hiding and moving are the one way a person changes the cards
+ * (ADR-0062); nothing is deleted. Hidden while the story has no context run and cannot have one
+ * gathered, and against a backend without context (`contextShown`).
  */
 
 type StoryRef = Pick<Story, 'id' | 'slug' | 'status'>
@@ -46,24 +46,6 @@ function runLine(run: ContextAdminRun, hasBoxes: boolean): string {
         ? `The newest context run, on ${when}, kept no card.${earlier}`
         : `The newest context run built these cards on ${when}.`
   }
-}
-
-/** "Gather context", or "Gather more context" once the story has a run; closed with its reason while it cannot start. */
-function GatherButton({ storyId, view }: { storyId: string; view: ContextView }) {
-  const { start, running } = useGatherContext(storyId)
-  if (!view.gather) return null
-  const busy = running || view.run?.status === 'running'
-  return (
-    <ReasonButton
-      type="button"
-      variant="secondary"
-      reason={busy ? 'Context is being gathered for this story now' : view.gather.refusal}
-      loading={busy}
-      onClick={start}
-    >
-      {view.run ? 'Gather more context' : 'Gather context'}
-    </ReasonButton>
-  )
 }
 
 /** How many cards readers see and where, then how many are hidden. */
@@ -215,7 +197,7 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
         <p className="text-sm text-red-700">The story&apos;s context could not be loaded.</p>
       </section>
     )
-  if (!data || (!data.run && !data.gather?.eligible)) return null
+  if (!data || !contextShown(query)) return null
 
   const published = story.status === 'published'
   const counts = countsLine(data.boxes, published)
@@ -230,9 +212,8 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
           {counts && ` ${counts}`}
         </p>
       </div>
-      {(data.gather || data.boxes.length > 0 || (published && story.slug)) && (
+      {(data.boxes.length > 0 || (published && story.slug)) && (
         <div className="flex flex-wrap gap-2">
-          <GatherButton storyId={story.id} view={data} />
           <HideAll storyId={story.id} boxes={data.boxes} />
           {published && story.slug && (
             <a

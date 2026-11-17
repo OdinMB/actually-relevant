@@ -300,7 +300,7 @@ describe('StoryContextAdmin', () => {
     mockContext.get.mockResolvedValue(view({ run: run({ status: 'failed', outcome: 'technical', error: 'Tavily answered 502.', result: null }), boxes: [] }))
     renderSection()
     const region = await section()
-    expect(region).toHaveTextContent(/The newest context run failed on .+: Tavily answered 502\. It does not try again on its own\.Gather/)
+    expect(region).toHaveTextContent(/The newest context run failed on .+: Tavily answered 502\. It does not try again on its own\./)
     expect(within(region).queryByRole('button', { name: 'Hide all context' })).toBeNull()
     expect(within(region).getByText('The run recorded no details.')).toBeInTheDocument()
   })
@@ -311,65 +311,20 @@ describe('StoryContextAdmin', () => {
     expect(await section()).toHaveTextContent(/The newest context run, on .+, kept no card\. The cards below are from an earlier run\./)
   })
 
-  describe('Gather context', () => {
-    it('shows a story without a run that can have context gathered, and starts a polled run of it', async () => {
-      const user = userEvent.setup()
-      mockContext.get.mockResolvedValue(view({ run: null, boxes: [] }))
-      renderSection()
-      const region = await section()
-      expect(region).toHaveTextContent('This story has no context cards yet.')
-      expect(within(region).queryByText('What the run did')).toBeNull()
+  // Gather context itself is the page's action bar's (StoryActionBar.test.tsx)
+  it('shows a story without a run that can have context gathered', async () => {
+    mockContext.get.mockResolvedValue(view({ run: null, boxes: [] }))
+    renderSection()
+    const region = await section()
+    expect(region).toHaveTextContent('This story has no context cards yet.')
+    expect(within(region).queryByText('What the run did')).toBeNull()
+    expect(within(region).queryByRole('button', { name: /Gather/ })).toBeNull()
+  })
 
-      await user.click(within(region).getByRole('button', { name: 'Gather context' }))
-      await waitFor(() => expect(mockContext.gather).toHaveBeenCalledWith('story-1'))
-      expect(await screen.findByText(/Gathering context\.\.\./)).toBeInTheDocument()
-      // While its task runs, the action is closed and says why
-      const busy = within(region).getByRole('button', { name: 'Gather context' })
-      await waitFor(() => expect(busy).toHaveAttribute('aria-disabled', 'true'))
-      await user.click(busy)
-      expect(mockContext.gather).toHaveBeenCalledTimes(1)
-    })
-
-    it('reads the view again when the run ends, and says so', async () => {
-      const user = userEvent.setup()
-      mockStories.taskStatus.mockResolvedValue(task({ status: 'completed', completed: 1 }))
-      renderSection()
-      const region = await section()
-      await user.click(within(region).getByRole('button', { name: 'Gather more context' }))
-      expect(await screen.findByText('Context gathered: the Context section shows what the run kept.', undefined, { timeout: 4000 })).toBeInTheDocument()
-      // Once on the start, once at the end, after the first read
-      await waitFor(() => expect(mockContext.get).toHaveBeenCalledTimes(3))
-    })
-
-    it("says why a run cannot start: the server's refusal on the button, its 409 in a toast", async () => {
-      const user = userEvent.setup()
-      mockContext.get.mockResolvedValue(
-        view({ gather: { eligible: true, refusal: 'Web search is off (TAVILY_API_KEY is not set), so context cannot be gathered' } }),
-      )
-      const first = renderSection()
-      const closed = within(await section()).getByRole('button', { name: 'Gather more context' })
-      expect(closed).toHaveAttribute('aria-disabled', 'true')
-      expect(closed).toHaveAccessibleDescription(/Web search is off/)
-      await user.click(closed)
-      expect(mockContext.gather).not.toHaveBeenCalled()
-      first.unmount()
-
-      mockContext.get.mockResolvedValue(view())
-      mockContext.gather.mockRejectedValue(new ApiError(409, 'Context is already being gathered for this story'))
-      renderSection()
-      await user.click(within(await section()).getByRole('button', { name: 'Gather more context' }))
-      expect(await screen.findByText('Gathering context: Context is already being gathered for this story')).toBeInTheDocument()
-    })
-
-    it('closes the action while a run of the story is running, and reads the view again until it ends', async () => {
-      mockContext.get.mockResolvedValue(view({ run: run({ status: 'running', outcome: null, finishedAt: null }) }))
-      renderSection()
-      const region = await section()
-      expect(region).toHaveTextContent(/A context run has been building this story's cards since/)
-      const busy = within(region).getByRole('button', { name: 'Gather more context' })
-      expect(busy).toHaveAttribute('aria-disabled', 'true')
-      expect(busy).toHaveAccessibleDescription('Context is being gathered for this story now')
-    })
+  it('says when a run of the story is building its cards', async () => {
+    mockContext.get.mockResolvedValue(view({ run: run({ status: 'running', outcome: null, finishedAt: null }) }))
+    renderSection()
+    expect(await section()).toHaveTextContent(/A context run has been building this story's cards since/)
   })
 
   it('shows what the run took over from earlier runs: facts carried over, searches not made again, pages already read', async () => {

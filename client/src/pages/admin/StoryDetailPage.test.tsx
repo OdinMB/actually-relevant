@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Link, useLocation } from 'react-router-dom'
 import type { Story } from '@shared/types'
@@ -11,14 +11,14 @@ const mockApi = vi.hoisted(() => ({
   issues: { list: vi.fn() },
   bluesky: { generateDraft: vi.fn() },
   mastodon: { generateDraft: vi.fn() },
+  // A backend without research or context: their tabs and actions have their own tests
+  research: { usage: vi.fn(async () => null), runs: vi.fn() },
+  storyContext: { get: vi.fn(async () => null) },
 }))
 vi.mock('../../lib/admin-api', async importOriginal => ({
   ...(await importOriginal<typeof import('../../lib/admin-api')>()),
   adminApi: mockApi,
 }))
-// The research and context sections have their own tests and their own requests
-vi.mock('../../components/admin/StoryResearch', () => ({ StoryResearch: () => null }))
-vi.mock('../../components/admin/StoryContextAdmin', () => ({ StoryContextAdmin: () => null }))
 
 import StoryDetailPage from './StoryDetailPage'
 import { ApiError } from '../../lib/admin-api'
@@ -136,9 +136,25 @@ describe('StoryDetailPage', () => {
     await waitFor(() => expect(at()).toBe('/admin/stories?status=all&page=2'))
   })
 
+  it('keeps the tab in the address and the way back as it was, across a tab switch and a reload', async () => {
+    const { router } = renderPage(['/admin/stories?status=rejected&page=2'])
+    await userEvent.click(screen.getByRole('link', { name: 'Open the story' }))
+    await userEvent.click(await screen.findByRole('tab', { name: 'Assessment' }))
+    await waitFor(() => expect(router.state.location.search).toBe('?tab=assessment'))
+    expect(screen.getByRole('link', { name: 'Back to stories' })).toHaveAttribute('href', '/admin/stories?status=rejected&page=2')
+
+    // A reload keeps the history entry, its address and its state
+    const { pathname, search, state } = router.state.location
+    await act(() => router.navigate(`${pathname}${search}`, { replace: true, state }))
+    expect(await screen.findByRole('tab', { name: 'Assessment' })).toHaveAttribute('aria-selected', 'true')
+    await userEvent.click(screen.getByRole('link', { name: 'Back to stories' }))
+    expect(at()).toBe('/admin/stories?status=rejected&page=2')
+  })
+
   it('drafts the published story’s social posts in their panels', async () => {
     mockApi.bluesky.generateDraft.mockReturnValue(new Promise(() => {}))
     await openFrom('/admin/stories')
+    await userEvent.click(screen.getByRole('tab', { name: 'Social' }))
     await userEvent.click(screen.getByRole('button', { name: 'Generate Bluesky Post' }))
     expect(mockApi.bluesky.generateDraft).toHaveBeenCalledWith('story-1')
     expect(await screen.findByRole('dialog', { name: 'Post to Bluesky' })).toBeInTheDocument()

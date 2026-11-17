@@ -195,4 +195,4 @@ That change also sets `.context/ai-transparency.md` (the story-context row) and 
 | `server/src/scripts/synthetic-data/context.ts` | The synthetic story's context |
 | `server/src/test/db/storyContext.ts`, `server/src/test/contextDeps.ts` | DB test fixtures; fake deps for a run's db tests |
 | `client/src/components/context/` | The story page's notes, sheet, More context, tiles and charts (`.context/public-website.md`, "Story context") |
-| `client/src/components/admin/StoryContextAdmin.tsx`, `ContextRunView.tsx` | The admin's Context section (`.context/admin-dashboard.md`) |
+| `client/src/components/admin/StoryContextAdmin.tsx`, `ContextRunView.tsx` | The admin's Context section, the story page's Context tab; its Gather context button is in the page's action bar, `StoryActionBar.tsx` (`.context/admin-dashboard.md`) |

@@ -4,16 +4,24 @@ import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-do
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HelmetProvider } from 'react-helmet-async'
 import { ToastProvider } from '../components/ui/Toast'
+import { BackgroundTaskProvider } from '../hooks/useBackgroundTasks'
 
 /**
- * Render admin routes in a data router (so `useBlocker` works) with queries, toasts and Helmet. The router
- * starts at the last of `history`; the entries before it are what browser Back returns to, through
- * the returned `router`'s `navigate(-1)`.
+ * Render admin routes in a data router (so `useBlocker` works) with queries, toasts, background
+ * tasks and Helmet, as `AdminLayout` gives them. The router starts at the last of `history`; the
+ * entries before it are what browser Back returns to, through the returned `router`'s `navigate(-1)`.
  */
 export function renderAdminRoutes(routes: { path: string; element: ReactElement }[], { history }: { history: string[] }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   const router = createMemoryRouter(
-    routes.map(({ path, element }) => ({ path, element: <ToastProvider>{element}</ToastProvider> })),
+    routes.map(({ path, element }) => ({
+      path,
+      element: (
+        <ToastProvider>
+          <BackgroundTaskProvider>{element}</BackgroundTaskProvider>
+        </ToastProvider>
+      ),
+    })),
     { initialEntries: history, initialIndex: history.length - 1 },
   )
   const result = render(
