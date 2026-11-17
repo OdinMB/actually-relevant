@@ -390,6 +390,31 @@ describe('buildStoryContext', () => {
     ])
   })
 
+  it('stores a range whose two ends are the same value as a single value, so a chart can draw it', async () => {
+    const { deps } = fakeDeps()
+    const original = deps.call
+    deps.call = async (step, schema, prompt) =>
+      step === 'structure'
+        ? {
+            parsed: {
+              facts: [
+                { id: 'S0F1', ...fields, value: 2880000, valueHigh: 2880000, unit: 'hectares' },
+                { id: 'S0F2', ...fields, value: 5000, valueHigh: 5400, unit: 'people' },
+              ],
+            } as never,
+            outcome: 'ok',
+            usage: ZERO_USAGE,
+            costUsd: 0,
+            model: 'm',
+          }
+        : original(step, schema, prompt)
+    const out = await buildStoryContext(input(), deps)
+    expect(out.facts.map(f => [f.ref, f.value, f.valueHigh])).toEqual([
+      ['S0F1', 2880000, null],
+      ['S0F2', 5000, 5400],
+    ])
+  })
+
   it('counts facts the structure step left out as checked and failed', async () => {
     const { deps } = fakeDeps({ reject: [] })
     const original = deps.call

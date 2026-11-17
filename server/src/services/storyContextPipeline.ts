@@ -255,13 +255,16 @@ const WINDOWS = (): ValidityWindows => ({ fastDays: config.storyContext.fastVali
 
 const sourceNumber = (id: string) => Number(/^S(\d+)$/.exec(id)?.[1] ?? -1)
 
-/** The structured fields as stored: an as-of read only when valid, nobody credited as null. */
+/**
+ * The structured fields as stored: an as-of read only when valid, nobody credited as null, and a
+ * range whose ends are equal as a single value (a chart draws no range).
+ */
 function structured(
   a: StructuredFact,
 ): Pick<ContextFactData, 'value' | 'valueHigh' | 'unit' | 'approx' | 'provisional' | 'counted' | 'place' | 'asOf' | 'credited' | 'creditedKind' | 'validity'> {
   return {
     value: a.value,
-    valueHigh: a.value !== null ? a.valueHigh : null,
+    valueHigh: a.value !== null && a.valueHigh !== a.value ? a.valueHigh : null,
     unit: a.unit.trim(),
     approx: a.approx,
     provisional: a.provisional,
