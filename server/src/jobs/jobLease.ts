@@ -84,9 +84,10 @@ export async function withJobLeaseHeartbeat<T>(jobName: string, fn: () => Promis
 /**
  * Add a run's spend to its job's row for this UTC month (`job_month_spend`, the Dashboard's spending
  * overview, services/spending.ts). Search spend is `otherUsd`: web searches are the only other paid
- * service today.
+ * service today. Besides the finish, an editor's context run adds itself here, as a run of its step
+ * (services/storyContextOnDemand.ts).
  */
-const addMonthSpend = (jobName: string, usage: RunUsage) => prisma.$executeRaw`
+export const addMonthSpend = (jobName: string, usage: RunUsage) => prisma.$executeRaw`
     INSERT INTO "job_month_spend" ("job_name", "month", "cost_usd", "standard_cost_usd", "search_usd", "search_credits", "runs")
     VALUES (${jobName}, date_trunc('month', now() AT TIME ZONE 'UTC')::date, ${usage.costUsd}, ${usage.standardCostUsd}, ${usage.otherUsd},
             ${Math.round(usage.searchCredits)}, 1)

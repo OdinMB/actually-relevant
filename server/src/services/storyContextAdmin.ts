@@ -1,7 +1,8 @@
 /**
  * The admin's view and edits of a story's context (`.context/story-context.md`, "Admin"): every box
  * of the story's newest context run with its status and where it sits now, the places the story has,
- * and the newest run's summary for "What the run did"; hiding and showing one box or all (a hidden box
+ * the newest run's summary for "What the run did", and whether an editor can gather context now
+ * (`storyContextOnDemand.ts`); hiding and showing one box or all (a hidden box
  * is `demoted`, shown again `unreviewed`; nothing is deleted), and moving a box to a paragraph or point
  * the story has, or to More context, which keeps that place in every placement mode.
  */
@@ -11,8 +12,10 @@ import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
 import { layoutSpots, storyLayout, type LayoutStory, type StoryLayout } from './storyContextLayout.js'
+import { gatherState } from './storyContextOnDemand.js'
 import { placeable, SECTION } from './storyContextPlacement.js'
 import { boxContent, boxRefs, contextRecords } from './storyContextRecords.js'
+import { markInterruptedContextRuns } from './storyContextRuns.js'
 import { placeServed, servableRow, servedBoxes } from './storyContextServed.js'
 import { asOfFromColumns } from './storyContextVisuals.js'
 
@@ -63,11 +66,13 @@ export interface ContextAdminRun {
 }
 
 export interface ContextAdmin {
-  /** The newest run; null while the story has none (the section is then hidden). */
+  /** The newest run; null while the story has none (the section then shows only the action, for an eligible story). */
   run: ContextAdminRun | null
   boxes: ContextAdminBox[]
   places: ContextAdminPlace[]
   placement: typeof config.storyContext.placement
+  /** Whether an editor can gather the story's context, and why not now (`gatherState`). */
+  gather: { eligible: boolean; refusal: string | null }
 }
 
 const PLACE_TEXT_CHARS = 80
@@ -90,11 +95,14 @@ function placesOf(layout: StoryLayout): ContextAdminPlace[] {
   ]
 }
 
+/** The story's view, after marking runs cut off by a restart failed, so the newest run and the action read as they are. */
 export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
   const story = await storyFor(storyId)
-  const [run, { boxes, facts }] = await Promise.all([
+  await markInterruptedContextRuns()
+  const [run, { boxes, facts }, gather] = await Promise.all([
     prisma.storyContextRun.findFirst({ where: { storyId }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }] }),
     contextRecords(prisma, storyId),
+    gatherState(storyId),
   ])
   const layout = storyLayout(story)
   // Placed as the page places them: only the boxes it serves compete, on the story's day (today for one not published)
@@ -139,6 +147,7 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
     }),
     places: placesOf(layout),
     placement: config.storyContext.placement,
+    gather,
   }
 }
 

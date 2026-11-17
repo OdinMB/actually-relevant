@@ -1291,10 +1291,25 @@ export interface ContextRunRecord {
   responseInStory: string | null
   /** The `response` search was added from the title, the gap list having listed none. */
   responseFallback: boolean
-  searches: { slot: ContextSlot; wanted: string; query: string; recent: boolean; cached: boolean; credits: number; results: number; kept: string[] }[]
-  sourceDrops: { url: string; search: number; reason: 'opt-out' | 'blocklist' | 'known' | 'empty' | 'per-query' | 'cap' }[]
+  searches: {
+    slot: ContextSlot
+    wanted: string
+    query: string
+    /** A `response` search's angle; absent on the other slots' and on older records. */
+    angle?: 'action' | 'elsewhere'
+    recent: boolean
+    cached: boolean
+    credits: number
+    results: number
+    kept: string[]
+  }[]
+  /** Searches not made because an earlier run of the story made them; absent on records from before 2026-11-17. */
+  skippedSearches?: { slot: ContextSlot; query: string }[]
+  /** `read`: a page an earlier run of the story already read. */
+  sourceDrops: { url: string; search: number; reason: 'opt-out' | 'blocklist' | 'known' | 'read' | 'empty' | 'per-query' | 'cap' }[]
   extractionDrops: { url: string; reason: string }[]
-  facts: { research: number; leftOut: number; search: number; reused: number; supported: number; rejected: number; unjudged: number }
+  /** `research`: research facts structured this run; `carried`: facts taken over from the story's earlier runs (absent on older records). */
+  facts: { research: number; leftOut: number; search: number; reused: number; carried?: number; supported: number; rejected: number; unjudged: number }
   /** Each fact the check rejected or left unjudged, with its problem. */
   droppedFacts: { ref: string; text: string; verdict: 'rejected' | 'unjudged'; problem: string | null }[]
   boxDrops: { label: string; cause: 'structure' | 'expired' | 'undrawn' | 'check' | 'unjudged' | 'copying' | 'empty'; problem?: string }[]
@@ -1356,18 +1371,32 @@ export interface ContextAdminPlace {
 
 /** `GET /api/admin/stories/:id/context`. */
 export interface StoryContextAdmin {
-  /** The newest run; null while the story has none, and the section is then hidden. */
+  /** The newest run; null while the story has none, and the section then shows only "Gather context" for an eligible story. */
   run: ContextAdminRun | null
   /** The newest run that wrote boxes, hidden ones included, in order. */
   boxes: ContextAdminBox[]
   places: ContextAdminPlace[]
   placement: 'model' | 'random' | 'section'
+  /**
+   * Whether an editor can gather the story's context: `eligible` (published, with a research run that
+   * holds facts), and why the action is closed now, or null. Absent from a server without it.
+   */
+  gather?: { eligible: boolean; refusal: string | null }
+}
+
+/** `POST /api/admin/stories/:id/context/run`: the one-story task to poll, and the run it claimed. */
+export interface ContextRunStarted {
+  taskId: string
+  runId: string
 }
 
 // --- Background task types ---
 
-/** `research`: research runs, one story's or a bulk Research's; their stories count as processing while it runs. */
-export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research'
+/**
+ * `research`: research runs, one story's or a bulk Research's; their stories count as processing while it runs.
+ * `context`: an editor's context run of one story.
+ */
+export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research' | 'context'
 export type BulkTaskStatus = 'running' | 'completed' | 'failed'
 
 /** A story the task left out, with why; neither completed nor failed (server: `TaskSkip` in lib/taskRegistry.ts). */

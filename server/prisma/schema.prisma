@@ -508,7 +508,7 @@ enum ContextRunStatus {
   failed
 }
 
-/// One story context run (.context/story-context.md): a story is settled by its first run, whatever its outcome. A deleted story's runs keep a null story_id, so their cost stays counted
+/// One story context run (.context/story-context.md): the step's or an editor's. The step settles a story with its first run, whatever its outcome; an editor may run it again, and each run builds on the story's earlier completed ones. At most one runs per story at a time. A deleted story's runs keep a null story_id, so their cost stays counted
 model StoryContextRun {
   id            String            @id @default(uuid())
   storyId       String?           @map("story_id")
@@ -549,7 +549,7 @@ model ContextFact {
   ref                String
   /// research (pass 1) or search (pass 2)
   origin             String
-  /// The earlier story's fact this one was copied from, when a kept box cited a reused fact
+  /// The fact this one was copied from, when a kept box cited a reused one: an earlier story's, or one of this story's earlier runs'
   reusedFromId       String?         @map("reused_from_id")
   sourceUrl          String          @map("source_url")
   sourceOutlet       String          @map("source_outlet")
@@ -692,7 +692,7 @@ model JobRun {
   @@map("job_runs")
 }
 
-/// What each job spent in each UTC month, added to by every finished run that recorded its usage (jobs/jobLease.ts finishJobRun; .context/scheduler.md, "Spending"). A chain's own runs add nothing: its steps' runs carry its spend. An interrupted run's spend is lost
+/// What each job spent in each UTC month, added to by every finished run that recorded its usage (jobs/jobLease.ts finishJobRun; .context/scheduler.md, "Spending"), and by an editor's context run as a run of build_story_context. A chain's own runs add nothing: its steps' runs carry its spend. An interrupted run's spend is lost
 model JobMonthSpend {
   jobName         String   @map("job_name")
   /// The first day of the UTC month, on the database clock
