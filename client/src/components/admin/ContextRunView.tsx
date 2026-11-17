@@ -3,8 +3,9 @@ import { slotKicker } from '../context/contextText'
 
 /**
  * "What the run did" under a story's Context section (`.context/story-context.md`, "Records"): what
- * the context run looked for and how each slot came out, its web searches, what the checks dropped and
- * why, and its cost. Read only; every recorded text renders as React text.
+ * the context run looked for and how each slot came out, what it took over from the story's earlier
+ * runs, its web searches, what the checks dropped and why, and its cost. Read only; every recorded
+ * text renders as React text.
  */
 
 const usd = (v: number) => `$${v.toFixed(3)}`
@@ -34,11 +35,12 @@ type Outcome = (typeof OUTCOMES)[number]
  * How each slot came out, grouped as the run left it: found (with or without a search of its own),
  * reported by the story itself, searched for with nothing sourced (`response`, which no card then
  * shows), not needed, or needed with nothing kept. In numbers counts as found when the run kept it;
- * hidden cards count too, since the run found them.
+ * hidden cards count too, since the run found them. A search an earlier run made, and this one did
+ * not make again, counts as the slot's own.
  */
 export function slotOutcomes(record: RunRecord, boxes: ContextAdminBox[]): { outcome: string; slots: string[] }[] {
   const kept = new Set(boxes.map(b => b.type))
-  const searched = new Set((record.searches ?? []).map(s => s.slot))
+  const searched = new Set([...(record.searches ?? []), ...(record.skippedSearches ?? [])].map(s => s.slot))
   const groups = new Map<string, string[]>(OUTCOMES.map(outcome => [outcome, []]))
   const add = (outcome: Outcome, slot: string) => groups.get(outcome)!.push(slot)
 
@@ -59,6 +61,7 @@ const SOURCE_DROPS: { [K in ContextRunRecord['sourceDrops'][number]['reason']]: 
   'opt-out': 'publisher opted out of AI use',
   blocklist: 'on the blocklist',
   known: 'already a source',
+  read: 'already read in an earlier run',
   empty: 'no text',
   'per-query': 'over 2 from one search',
   cap: 'over the 5 new sources',
@@ -103,6 +106,37 @@ function Searches({ record }: { record: RunRecord }) {
       )}
       {drops.size > 0 && <p className="text-neutral-500">Results left out: {[...drops].map(([reason, n]) => `${n} ${reason}`).join(', ')}.</p>}
       {unusable > 0 && <p className="text-neutral-500">{plural(unusable, 'source')} gave no usable facts.</p>}
+    </>
+  )
+}
+
+/**
+ * What the run took over from the story's earlier runs instead of doing again: their facts (not
+ * checked again), the searches they made, and the pages they read. Nothing on a first run.
+ */
+function EarlierWork({ record }: { record: RunRecord }) {
+  const carried = record.facts?.carried ?? 0
+  const skipped = record.skippedSearches ?? []
+  const read = (record.sourceDrops ?? []).filter(d => d.reason === 'read').length
+  if (carried === 0 && skipped.length === 0 && read === 0) return null
+  const parts = [
+    carried > 0 && `${plural(carried, 'fact')} carried over, not checked again`,
+    skipped.length > 0 && `${plural(skipped.length, 'search', 'searches')} not made again`,
+    read > 0 && `${plural(read, 'result')} already read`,
+  ].filter(Boolean)
+  return (
+    <>
+      <h4 className={H}>Built on earlier runs: {parts.join(', ')}</h4>
+      {skipped.length > 0 && (
+        <ul>
+          {skipped.map((s, i) => (
+            <li key={i} className={ROW}>
+              <span className="text-neutral-900">“{s.query}”</span>
+              <span className={NOTE}>{slotKicker(s.slot)} · made by an earlier run</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   )
 }
@@ -184,6 +218,7 @@ export function ContextRunView({ run, boxes }: { run: ContextAdminRun; boxes: Co
               ))}
             </ul>
             {record.responseInStory && <p className="text-neutral-500">The story reports what is being done: “{record.responseInStory}”</p>}
+            <EarlierWork record={record} />
             <Searches record={record} />
             <Checks record={record} />
             {record.optOutChecked === false && (

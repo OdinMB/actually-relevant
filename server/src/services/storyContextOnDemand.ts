@@ -53,7 +53,7 @@ function failureOf(run: ContextRunOutcome): string | null {
   if (!run.written) return 'The run was marked interrupted before it finished'
   if (run.status === 'completed') return null
   if (run.status === 'skipped') return 'The story has no research run with facts to start from'
-  return "The run failed on a technical problem: the story's Context section shows the error"
+  return 'The run failed on a technical problem; the Context section shows the error'
 }
 
 /** The run's attempts on its row: a failure that may pass is tried once more, the second attempt's outcome stored. */

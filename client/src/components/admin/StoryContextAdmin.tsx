@@ -1,20 +1,22 @@
 import { useState } from 'react'
-import type { ContextAdminBox, ContextAdminPlace, ContextAdminRun, Story } from '@shared/types'
-import { useSetContextHidden, useStoryContextAdmin, useUpdateContextBox } from '../../hooks/useStoryContextAdmin'
+import type { ContextAdminBox, ContextAdminPlace, ContextAdminRun, Story, StoryContextAdmin as ContextView } from '@shared/types'
+import { useGatherContext, useSetContextHidden, useStoryContextAdmin, useUpdateContextBox } from '../../hooks/useStoryContextAdmin'
 import { formatDateWithTime } from '../../lib/constants'
 import { asOfText, slotKicker } from '../context/contextText'
 import { Button } from '../ui/Button'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { ReasonButton } from '../ui/ReasonButton'
 import { Select } from '../ui/Select'
 import { useToast } from '../ui/Toast'
 import { ContextRunView } from './ContextRunView'
 
 /**
  * A story's Context section in the edit form, after Research (`.context/admin-dashboard.md`, "Story
- * context"): what the context step built and when, every card grouped by where it sits, with a place
- * select and Hide/Show, "Hide all context" (asked first), a link to the story page, and "What the run
- * did". Hiding and moving are the one way a person changes the cards (ADR-0062); nothing is deleted.
- * Hidden while the story has no context run, and against a backend without context.
+ * context"): what the newest context run did and when, every card grouped by where it sits, with a
+ * place select and Hide/Show, "Gather context" (an editor's run, which builds on the earlier ones),
+ * "Hide all context" (asked first), a link to the story page, and "What the run did". Hiding and
+ * moving are the one way a person changes the cards (ADR-0062); nothing is deleted. Hidden while the
+ * story has no context run and cannot have one gathered, and against a backend without context.
  */
 
 type StoryRef = Pick<Story, 'id' | 'slug' | 'status'>
@@ -27,21 +29,38 @@ const GROUPS: { name: string; has: (place: string) => boolean }[] = [
   { name: 'More context', has: place => !/^[PW]\d/.test(place) },
 ]
 
-/** What the newest run did, in one sentence. */
-function runLine(run: ContextAdminRun): string {
+/** What the newest run did, in one sentence (the step's run or an editor's); cards still shown from an earlier run say so. */
+function runLine(run: ContextAdminRun, hasBoxes: boolean): string {
   const when = formatDateWithTime(run.startedAt)
+  const earlier = hasBoxes ? ' The cards below are from an earlier run.' : ''
   switch (run.status) {
     case 'running':
-      return `The context step has been building this story's cards since ${when}.`
+      return `A context run has been building this story's cards since ${when}.`
     case 'skipped':
-      return `The context step skipped this story on ${when}: it had no research run with facts.`
+      return `The newest context run skipped this story on ${when}: it had no research run with facts.${earlier}`
     case 'failed':
-      return `The context step failed on ${when}: ${(run.error ?? 'no reason recorded').replace(/\.$/, '')}. It does not try again.`
+      return `The newest context run failed on ${when}: ${(run.error ?? 'no reason recorded').replace(/\.$/, '')}. It does not try again on its own.${earlier}`
     case 'completed':
-      return run.outcome === 'none-kept'
-        ? `The context step ran on ${when}, after the story was published, and kept no card.`
-        : `Built ${when} by the context step, after the story was published.`
+      return run.outcome === 'none-kept' ? `The newest context run, on ${when}, kept no card.${earlier}` : `Built ${when}, after the story was published.`
   }
+}
+
+/** "Gather context", or "Gather more context" once the story has a run; closed with its reason while it cannot start. */
+function GatherButton({ storyId, view }: { storyId: string; view: ContextView }) {
+  const { start, running } = useGatherContext(storyId)
+  if (!view.gather) return null
+  const busy = running || view.run?.status === 'running'
+  return (
+    <ReasonButton
+      type="button"
+      variant="secondary"
+      reason={busy ? 'Context is being gathered for this story now' : view.gather.refusal}
+      loading={busy}
+      onClick={start}
+    >
+      {view.run ? 'Gather more context' : 'Gather context'}
+    </ReasonButton>
+  )
 }
 
 /** How many cards readers see and where, then how many are hidden. */
@@ -191,7 +210,7 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
         <p className="text-sm text-red-700">The story&apos;s context could not be loaded.</p>
       </div>
     )
-  if (!data?.run) return null
+  if (!data || (!data.run && !data.gather?.eligible)) return null
 
   const published = story.status === 'published'
   const counts = countsLine(data.boxes, published)
@@ -202,12 +221,13 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
           Context
         </h3>
         <p className="text-sm text-neutral-600">
-          {runLine(data.run)}
+          {data.run ? runLine(data.run, data.boxes.length > 0) : 'This story has no context cards yet.'}
           {counts && ` ${counts}`}
         </p>
       </div>
-      {(data.boxes.length > 0 || (published && story.slug)) && (
+      {(data.gather || data.boxes.length > 0 || (published && story.slug)) && (
         <div className="flex flex-wrap gap-2">
+          <GatherButton storyId={story.id} view={data} />
           <HideAll storyId={story.id} boxes={data.boxes} />
           {published && story.slug && (
             <a
@@ -242,7 +262,7 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
           })}
         </div>
       )}
-      <ContextRunView run={data.run} boxes={data.boxes} />
+      {data.run && <ContextRunView run={data.run} boxes={data.boxes} />}
     </section>
   )
 }
