@@ -60,6 +60,7 @@ export type JobName =
   | 'select_stories'
   | 'research_stories'
   | 'publish_stories'
+  | 'build_story_context'
   | 'social_auto_post'
   | 'bluesky_update_metrics'
   | 'mastodon_update_metrics'
@@ -200,6 +201,71 @@ export interface PublicStoryDetail extends PublicStory {
   research: ResearchedStory | null
   /** The text fields carry researched text: the label keys on this. */
   researched: boolean
+}
+
+// --- Story context (public; a hand-written mirror of server/src/services/storyContextView.ts, .context/story-context.md) ---
+
+/** The seven slots of the gap list, plus the figures box ("In numbers"). */
+export type ContextBoxType = 'compared' | 'why_now' | 'build_up' | 'who_affected' | 'response' | 'next' | 'key_term' | 'figures'
+
+export interface ContextTilesView {
+  kind: 'tiles'
+  /** Each tile's values: the headline first, then any later value that differs, each naming its source. */
+  tiles: { label: string; values: { text: string; estimate: boolean; sourceId: string }[] }[]
+}
+
+export interface ContextChartPointView {
+  label: string
+  value: number
+  /** The value formatted by the server ("600,000", "88%"). */
+  text: string
+  /** Drawn hatched. */
+  provisional: boolean
+  /** Within 30 days of the story's day: drawn in the area's color. */
+  recent: boolean
+  /** `YYYY-MM-DD`, `YYYY-MM` or `YYYY`. */
+  asOf: string | null
+  sourceId: string
+}
+
+export interface ContextChartView {
+  kind: 'bars' | 'line'
+  /** What every point measures: the chart's visible caption and accessible name. */
+  caption: string
+  unit: string
+  /** A line's points come in date order. */
+  points: ContextChartPointView[]
+  /** A different measure shown beside the comparison, never in it: drawn lighter. */
+  apart: { caption: string; unit: string; points: ContextChartPointView[] } | null
+}
+
+export interface ContextBoxView {
+  id: string
+  type: ContextBoxType
+  /** Empty for the honest gap. */
+  heading: string
+  /** The phone's one-line note; empty for the honest gap. */
+  teaser: string
+  /** The honest gap: no sentences, the page's fixed wording. */
+  gap: boolean
+  /** `P<n>` (a story paragraph), `W<n>` (a Why This Matters point) or `section` (More context). */
+  place: string
+  /** Cited as research's passages are, against `StoryContextView.sources`. */
+  sentences: ResearchedCitedText[]
+  visual: ContextTilesView | ContextChartView | null
+  /** `YYYY-MM-DD`, `YYYY-MM` or `YYYY`: the newest date its facts describe. */
+  asOf: string | null
+  /** The box's sources, first-cited order, for its footer. */
+  sourceIds: string[]
+}
+
+/** `GET /api/stories/:slug/context` (not in the OpenAPI contract): no boxes for a story without context. */
+export interface StoryContextView {
+  boxes: ContextBoxView[]
+  /** Ids `C1`… in first-cited order. */
+  sources: ResearchedSource[]
+  asOf: string | null
+  aiGenerated: { fields: string[]; model: string; digitalSourceType: string }
 }
 
 export interface Feed {
@@ -1215,6 +1281,85 @@ export interface ResearchRun {
   finishedAt: string | null
   result: ResearchResult | null
   cost: ResearchRunCost | null
+}
+
+// --- Story context, admin (a hand-written mirror of server/src/services/storyContextAdmin.ts and storyContextPipeline.ts) ---
+
+export type ContextSlot = Exclude<ContextBoxType, 'figures'>
+
+/** What a context run did (`story_context_runs.result`), for "What the run did". */
+export interface ContextRunRecord {
+  slots: { slot: ContextSlot; needed: boolean; covered: 'yes' | 'partly' | 'no' }[]
+  /** The story's own sentence that reports the response, when the gap list found one in it. */
+  responseInStory: string | null
+  /** The `response` search was added from the title, the gap list having listed none. */
+  responseFallback: boolean
+  searches: { slot: ContextSlot; wanted: string; query: string; recent: boolean; cached: boolean; credits: number; results: number; kept: string[] }[]
+  sourceDrops: { url: string; search: number; reason: 'opt-out' | 'blocklist' | 'known' | 'empty' | 'per-query' | 'cap' }[]
+  extractionDrops: { url: string; reason: string }[]
+  facts: { research: number; leftOut: number; search: number; reused: number; supported: number; rejected: number; unjudged: number }
+  /** Each fact the check rejected or left unjudged, with its problem. */
+  droppedFacts: { ref: string; text: string; verdict: 'rejected' | 'unjudged'; problem: string | null }[]
+  boxDrops: { label: string; cause: 'structure' | 'expired' | 'undrawn' | 'check' | 'unjudged' | 'copying' | 'empty'; problem?: string }[]
+  numberHints: { label: string; numbers: string[] }[]
+  honestGap: boolean
+  tally: { checked: number; failed: number }
+  calls: { step: string; outcome: string; costUsd: number; model: string }[]
+  optOutChecked: boolean
+}
+
+export interface ContextAdminRun {
+  id: string
+  status: 'running' | 'completed' | 'skipped' | 'failed'
+  outcome: 'built' | 'none-kept' | 'no-research' | 'technical' | null
+  startedAt: string
+  finishedAt: string | null
+  costUsd: number
+  modelUsd: number
+  searchUsd: number
+  tavilyCredits: number
+  boxes: number
+  error: string | null
+  /** As stored: absent parts on a run that ended early. */
+  result: Partial<ContextRunRecord> | null
+}
+
+export interface ContextAdminBox {
+  id: string
+  type: ContextBoxType
+  heading: string
+  teaser: string
+  gap: boolean
+  status: 'unreviewed' | 'reviewed' | 'demoted'
+  /** Demoted: readers don't see it. */
+  hidden: boolean
+  /** Where it sits now: `P<n>`, `W<n>` or `section`; a hidden box's stored place, or `section`. */
+  place: string
+  /** As stored: the write call's choice or the editor's, null for the section. */
+  storedPlace: string | null
+  placeByEditor: boolean
+  sources: { outlet: string; url: string }[]
+  asOf: string | null
+  position: number
+}
+
+export interface ContextAdminPlace {
+  /** `P<n>`, `W<n>` or `section`. */
+  place: string
+  /** 'Paragraph 1', 'Why This Matters 1', 'More context'. */
+  label: string
+  /** The paragraph's or point's start; empty for the section. */
+  text: string
+}
+
+/** `GET /api/admin/stories/:id/context`. */
+export interface StoryContextAdmin {
+  /** The newest run; null while the story has none, and the section is then hidden. */
+  run: ContextAdminRun | null
+  /** The newest run that wrote boxes, hidden ones included, in order. */
+  boxes: ContextAdminBox[]
+  places: ContextAdminPlace[]
+  placement: 'model' | 'random' | 'section'
 }
 
 // --- Background task types ---

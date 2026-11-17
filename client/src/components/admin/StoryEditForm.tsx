@@ -15,6 +15,7 @@ import { blueskyPostUrl } from '../../lib/bluesky'
 import { PANEL_BODY } from './EditPanel'
 import { PanelFooter } from './PanelFooter'
 import { buildIssueOptions } from './StoryFiltersBar'
+import { StoryContextAdmin } from './StoryContextAdmin'
 import { StoryResearch } from './StoryResearch'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 
@@ -360,6 +361,9 @@ export function StoryEditForm({ story, issues, onDone, onBlueskyGenerate, onMast
 
       {/* Research (admin only; a run writes to the story only when an editor uses its version) */}
       <StoryResearch story={story} />
+
+      {/* Context cards (hidden until the context step has run on the story); hiding or moving one is the editor's only change */}
+      <StoryContextAdmin story={story} />
     </>
   )
 

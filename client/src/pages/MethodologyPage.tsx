@@ -240,6 +240,13 @@ export default function MethodologyPage() {
             {AI_DISCLOSURE_COPY.researchedStoryLabel.lead} AI{AI_DISCLOSURE_COPY.researchedStoryLabel.tail}&quot; and list all their sources at the end,
             starting with the article where we first found the story.
           </p>
+          {/* Context cards (owner-approved wording, 2026-11-16; .context/story-context.md) */}
+          <p>
+            Many stories carry context cards: how big the development is compared with what came before, why it is happening now, who it reaches, what is being
+            done and what comes next. An AI model reads the sources our research found and, where something a reader needs is missing, searches for up to three
+            more. Every number on a card names its source, and when sources disagree we show both. A separate AI check compares each fact with the sentence it
+            came from and drops what that sentence does not say. Each card gives the date its facts are from; we don&apos;t update cards later.
+          </p>
 
           {/* What We Don't Do */}
           <h2 className="section-heading mt-10">What We Don't Do</h2>

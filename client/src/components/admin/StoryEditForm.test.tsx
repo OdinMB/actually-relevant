@@ -12,6 +12,8 @@ vi.mock('../../lib/admin-api', async importOriginal => ({
 }))
 // The research section has its own tests (StoryResearch.test.tsx) and needs the background-task provider
 vi.mock('./StoryResearch', () => ({ StoryResearch: () => null }))
+// So has the context section (StoryContextAdmin.test.tsx)
+vi.mock('./StoryContextAdmin', () => ({ StoryContextAdmin: () => null }))
 
 import { StoryEditForm } from './StoryEditForm'
 

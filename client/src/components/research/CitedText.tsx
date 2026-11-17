@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import type { ResearchedCitedText } from '@shared/types'
 import { Citation, type SourcesById } from './Citation'
 
@@ -25,15 +25,38 @@ export function CitedSentences({ items, sources }: { items: ResearchedCitedText[
   )
 }
 
-/** The researched story's paragraphs, in place of the summary. */
-export function CitedParagraphs({ paragraphs, sources }: { paragraphs: { sentences: ResearchedCitedText[] }[]; sources: SourcesById }) {
+/**
+ * The researched story's paragraphs, in place of the summary. A paragraph with a note beside it
+ * (`notes`, by paragraph index) shares a `relative` box with it, which the note places itself in and
+ * which carries the paragraph's spacing from lg.
+ */
+export function CitedParagraphs({
+  paragraphs,
+  sources,
+  notes = [],
+}: {
+  paragraphs: { sentences: ResearchedCitedText[] }[]
+  sources: SourcesById
+  notes?: ReactNode[]
+}) {
   return (
     <>
-      {paragraphs.map((p, i) => (
-        <p key={i}>
-          <CitedSentences items={p.sentences} sources={sources} />
-        </p>
-      ))}
+      {paragraphs.map((p, i) => {
+        const paragraph = (
+          <p>
+            <CitedSentences items={p.sentences} sources={sources} />
+          </p>
+        )
+        // From lg the note leaves the flow and the paragraph its margin (index.css), so the box spaces paragraphs
+        return notes[i] ? (
+          <div key={i} className="relative lg:mb-6 lg:last:mb-0">
+            {paragraph}
+            {notes[i]}
+          </div>
+        ) : (
+          <Fragment key={i}>{paragraph}</Fragment>
+        )
+      })}
     </>
   )
 }

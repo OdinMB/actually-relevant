@@ -7,6 +7,7 @@ import type {
   PublicNewsletterIssue,
   PublicNewsletterIssueSummary,
   PublicStoryAppearances,
+  StoryContextView,
   NewsletterEdition,
   PodcastEdition,
 } from '@shared/types'
@@ -124,6 +125,8 @@ export const publicApi = {
     cluster: (slug: string) => request<{ sources: { feedTitle: string; sourceUrl: string }[] }>(`/stories/${slug}/cluster`),
     /** The newsletter issue and podcast episode the story appeared in, each null when none. */
     appearances: (slug: string) => request<PublicStoryAppearances>(`/stories/${slug}/appearances`),
+    /** The story's context cards, each with its place on the page; no boxes for a story without context. */
+    context: (slug: string) => request<StoryContextView>(`/stories/${slug}/context`),
   },
 
   issues: {

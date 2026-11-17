@@ -40,6 +40,7 @@ import type {
   ResearchUsage,
   SpendScope,
   SpendingOverview,
+  StoryContextAdmin,
 } from '@shared/types'
 import { getAccessToken, setAccessToken, refreshSession, notifySessionExpired } from './session'
 
@@ -374,6 +375,17 @@ export const adminApi = {
       request<{ outcomes: ResearchBulkApplyOutcome[] }>('/research/apply', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     /** Give the story its single-source analysis back; 409 without a researched version or on a trashed story. */
     revert: (storyId: string) => request<void>(`/research/stories/${storyId}/revert`, { method: 'POST' }),
+  },
+
+  // A story's context cards (.context/story-context.md, "Admin"): hiding or moving one is the one way a person changes them
+  storyContext: {
+    /** The newest run, its boxes (hidden ones too), the story's places. 404 for an unknown story, and from a backend without context. */
+    get: (storyId: string) => request<StoryContextAdmin>(`/stories/${storyId}/context`),
+    /** Hide every card, or show the hidden ones again; nothing is deleted. */
+    setHidden: (storyId: string, hidden: boolean) => request<void>(`/stories/${storyId}/context`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
+    /** Hide, show or move one card; 400 for a place the story lacks, or for moving In numbers or the honest gap out of More context. */
+    updateBox: (storyId: string, boxId: string, change: { hidden?: boolean; place?: string }) =>
+      request<void>(`/stories/${storyId}/context/boxes/${boxId}`, { method: 'PATCH', body: JSON.stringify(change) }),
   },
 
   // Jobs

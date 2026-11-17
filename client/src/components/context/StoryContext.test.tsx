@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest'
+import { render, screen, within } from '@testing-library/react'
+import { axe } from 'vitest-axe'
+import { getCategoryColor } from '../../lib/category-colors'
+import { contextBox, contextSourcesById, noteButtonName } from '../../test/context'
+import { GAP_TEXT, slotKicker } from './contextText'
+import { StoryContext } from './StoryContext'
+
+const colors = getCategoryColor('planet-climate')
+
+const renderSection = (boxes: Parameters<typeof StoryContext>[0]['boxes']) =>
+  render(<StoryContext boxes={boxes} sources={contextSourcesById()} colors={colors} wide={false} />)
+
+/** The cards as wider screens show them (phones get one-line buttons instead, by CSS). */
+const cardList = () => screen.getByRole('list', { name: 'Context cards' })
+
+describe('StoryContext', () => {
+  it('renders nothing without boxes', () => {
+    const { container } = renderSection([])
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('shows the cards in order, each with its kicker, heading, cited sentences and the date its facts are from', () => {
+    renderSection([
+      contextBox('a', { type: 'next', asOf: '2026-11-12' }),
+      contextBox('b', {
+        type: 'why_now',
+        asOf: '2026-10',
+        sourceIds: ['C1', 'C2'],
+        sentences: [{ text: 'Two sources.', citations: [{ sourceId: 'C2', sentence: null }] }],
+      }),
+    ])
+    const cards = within(cardList()).getAllByRole('listitem')
+    expect(cards).toHaveLength(2)
+    expect(within(cards[0]!).getByRole('heading', { level: 3, name: 'Heading a' })).toBeInTheDocument()
+    expect(cards[0]).toHaveTextContent(slotKicker('next'))
+    expect(cards[0]).toHaveTextContent('Sentence of a.')
+    expect(within(cards[0]!).getByRole('button', { name: 'Source: Budget Office' })).toBeInTheDocument()
+    expect(cards[0]).toHaveTextContent('Budget Office · As of Nov 12, 2026')
+    expect(within(cards[1]!).getByRole('heading', { level: 3, name: 'Heading b' })).toBeInTheDocument()
+    expect(cards[1]).toHaveTextContent('Budget Office · Plains Ledger · As of October 2026')
+  })
+
+  it('gives the honest gap its fixed wording and no sentences, and no button to open it on phones', () => {
+    renderSection([contextBox('gap', { type: 'response', gap: true, heading: '', teaser: '', sentences: [], sourceIds: [], asOf: null })])
+    expect(within(cardList()).getByRole('listitem')).toHaveTextContent(GAP_TEXT)
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('opens every other card from a one-line button on phones', () => {
+    renderSection([contextBox('a', { type: 'next' })])
+    expect(screen.getByRole('button', { name: noteButtonName(slotKicker('next'), 'Teaser a') })).toHaveAttribute('aria-haspopup', 'dialog')
+  })
+
+  it('marks the section as AI-generated context, with no AI badge of its own, and passes axe', async () => {
+    const { container } = renderSection([
+      contextBox('a'),
+      contextBox('gap', { type: 'response', gap: true, heading: '', teaser: '', sentences: [], sourceIds: [] }),
+    ])
+    const section = screen.getByRole('region', { name: 'More context' })
+    expect(section).toHaveAttribute('data-ai-generated', 'context')
+    expect(within(section).queryByText('AI')).toBeNull()
+    expect(await axe(container)).toHaveNoViolations()
+  })
+})

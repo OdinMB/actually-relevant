@@ -18,6 +18,7 @@ function AnalysisSection({
   accentColor,
   numberColor,
   aiField,
+  notes = [],
 }: {
   title: string
   /** The points, rendered: Markdown from the plain fields, or cited sentences from the researched version */
@@ -28,6 +29,8 @@ function AnalysisSection({
   numberColor: string
   /** API field name of the AI-generated text, for the machine-readable marker */
   aiField: string
+  /** A context note under a point, by point index: in the point's text column, past its number */
+  notes?: ReactNode[]
 }) {
   return (
     <section className="mb-10" data-ai-generated={aiField}>
@@ -42,7 +45,8 @@ function AnalysisSection({
       {/* Numbered points — fixed-width number column for alignment */}
       <div className="space-y-6">
         {points.map((point, idx) => (
-          <div key={idx} className="flex gap-4">
+          // A point with a note is the box the note places itself in
+          <div key={idx} className={notes[idx] ? 'relative flex gap-4' : 'flex gap-4'}>
             <span
               className="font-nexa text-2xl font-bold leading-none pt-1 select-none text-right"
               style={{ color: numberColor, width: '2ch' }}
@@ -50,7 +54,10 @@ function AnalysisSection({
             >
               {idx + 1}
             </span>
-            <div className="prose flex-1 min-w-0">{point}</div>
+            <div className="prose flex-1 min-w-0">
+              {point}
+              {notes[idx]}
+            </div>
           </div>
         ))}
       </div>
@@ -99,9 +106,25 @@ function analysisOf(
 /**
  * The story's body, from the text under the header to the end of the analysis: the researched
  * paragraphs or the summary, the key quote (cited in the researched format), Why This Matters and
- * Caveats, and a researched story's Sources list.
+ * Caveats, and a researched story's Sources list. Story context comes in from the page: a note after
+ * a paragraph (the single-source summary counts as one) or inside a Why This Matters point, by index,
+ * and the More context section (`context`) after Caveats.
  */
-export function StoryBody({ story, research, colors }: { story: PublicStoryDetail; research: ResearchedStory | null; colors: CategoryColor }) {
+export function StoryBody({
+  story,
+  research,
+  colors,
+  paragraphNotes = [],
+  pointNotes = [],
+  context,
+}: {
+  story: PublicStoryDetail
+  research: ResearchedStory | null
+  colors: CategoryColor
+  paragraphNotes?: ReactNode[]
+  pointNotes?: ReactNode[]
+  context?: ReactNode
+}) {
   const sources: SourcesById = new Map((research?.sources ?? []).map(source => [source.id, source]))
   const { reasons, caveats } = analysisOf(story, research, sources)
   const dropCap = { '--drop-cap-color': colors.hex } as CSSProperties
@@ -112,14 +135,15 @@ export function StoryBody({ story, research, colors }: { story: PublicStoryDetai
       {research ? (
         <section className="mb-10" data-ai-generated="research">
           <div className="prose drop-cap" style={dropCap}>
-            <CitedParagraphs paragraphs={research.paragraphs} sources={sources} />
+            <CitedParagraphs paragraphs={research.paragraphs} sources={sources} notes={paragraphNotes} />
           </div>
         </section>
       ) : (
         story.summary && (
           <section className="mb-10" data-ai-generated="summary">
-            <div className="prose drop-cap" style={dropCap}>
+            <div className={paragraphNotes[0] ? 'prose drop-cap relative' : 'prose drop-cap'} style={dropCap}>
               <Markdown>{story.summary}</Markdown>
+              {paragraphNotes[0]}
             </div>
           </section>
         )
@@ -155,7 +179,14 @@ export function StoryBody({ story, research, colors }: { story: PublicStoryDetai
 
       {/* Why This Matters */}
       {reasons.points.length > 0 && (
-        <AnalysisSection title="Why This Matters" points={reasons.points} accentColor={colors.hex} numberColor={colors.textHex} aiField={reasons.aiField} />
+        <AnalysisSection
+          title="Why This Matters"
+          points={reasons.points}
+          accentColor={colors.hex}
+          numberColor={colors.textHex}
+          aiField={reasons.aiField}
+          notes={pointNotes}
+        />
       )}
 
       {/* Caveats: a shade darker than "Why This Matters" */}
@@ -168,6 +199,9 @@ export function StoryBody({ story, research, colors }: { story: PublicStoryDetai
           aiField={caveats.aiField}
         />
       )}
+
+      {/* More context: the cards not beside the text */}
+      {context}
 
       {research && <SourcesList sources={research.sources} />}
     </>

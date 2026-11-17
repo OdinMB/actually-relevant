@@ -161,3 +161,5 @@ The plan gates the step on `eval:overviews` (roadmap D8): planted errors on cont
 | `server/src/prompts/storyContext.ts`, `server/src/schemas/storyContext.ts` | Prompts; output, stored and request schemas |
 | `server/src/scripts/synthetic-data/context.ts` | The synthetic story's context |
 | `server/src/test/db/storyContext.ts` | DB test fixtures |
+| `client/src/components/context/` | The story page's notes, sheet, More context, tiles and charts (`.context/public-website.md`, "Story context") |
+| `client/src/components/admin/StoryContextAdmin.tsx`, `ContextRunView.tsx` | The admin's Context section (`.context/admin-dashboard.md`) |
