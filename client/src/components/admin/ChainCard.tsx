@@ -75,20 +75,22 @@ export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) 
 
   return (
     <section aria-labelledby={`${chain.jobName}-title`} className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <div className={`flex flex-wrap items-start gap-x-6 gap-y-3 border-b border-neutral-200 px-4 py-3 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}>
+      <div
+        className={`relative flex flex-wrap items-start gap-x-6 gap-y-3 border-b border-neutral-200 px-4 py-3 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}
+      >
         <div className="min-w-[12rem] flex-1">
-          <h2 id={`${chain.jobName}-title`} className="flex items-center gap-1 text-base font-semibold text-neutral-900">
+          <h2 id={`${chain.jobName}-title`} className="flex items-center gap-1 pr-16 text-base font-semibold text-neutral-900 sm:pr-0">
             {name}
             {chain.note && <InfoTip label={`About ${name}`}>{chain.note}</InfoTip>}
           </h2>
-          {/* Status, switch and schedule, then the last run on the same row while it fits */}
+          {/* Status, switch and schedule, then the last start and the last run (two lines) beside them while they fit */}
           <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-2">
             <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-600">
               <JobStatusBadge job={chain} />
               <EnabledToggle job={chain} />
               <CronEditor job={chain} />
             </div>
-            <dl className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-neutral-600">
+            <dl className="flex flex-col gap-0.5 text-xs text-neutral-600">
               <div className="flex gap-1">
                 <dt className="text-neutral-500">Last started</dt>
                 <dd>
@@ -111,7 +113,8 @@ export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) 
             <ClockTimeField job={chain} field="deadline" label="Done by" help="From this time on, research starts no other story." />
           )}
         </div>
-        <div className="flex items-center gap-0.5">
+        {/* In the top-right corner on a phone, beside the title; after the clock fields on wider screens */}
+        <div className="absolute right-3 top-2 flex items-center gap-0.5 sm:static">
           <RunButton job={chain} />
           <ActionIconButton icon={PencilSquareIcon} label={`Details of ${name}`} onClick={() => setSelected(chain.jobName)} />
         </div>
