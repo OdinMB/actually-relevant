@@ -376,7 +376,8 @@ export const config = {
        * only this long after the story entered `selected` (`selectedAt`); after that the next publish
        * run takes it single-source. With both jobs daily, a story the 02:45 publish holds goes out at
        * the next day's run, researched or not: a hold lasts one publish cycle at most. The gate's hold
-       * for context cards (`awaitingContext`, while `build_story_context` is enabled) has the same bound.
+       * for context cards (`awaitingContext`, while `build_story_context` is enabled) has the same bound,
+       * in a publish run on its own only.
        */
       maxWaitMinutes: 120,
     },
@@ -388,7 +389,7 @@ export const config = {
    * publish gate holds a story for its cards at most `research.pipeline.maxWaitMinutes`.
    */
   storyContext: {
-    /** Stories published this many days back or fewer, without a context run, are filled in after the stories about to be published. */
+    /** Stories published this many days back or fewer, without a context run, are filled in after publishing (the step's second part). */
     lookbackDays: 3,
     /** Stories one run builds at once. */
     concurrency: 3,
@@ -406,7 +407,10 @@ export const config = {
     /** How long a `fast` and a `slow` fact stay current from their as-of date (a `fixed` one always does). */
     fastValidDays: 14,
     slowValidDays: 365,
-    /** A `running` run older than this was cut off by a restart, and is marked failed, as research's are. */
+    /**
+     * A `running` run older than this was cut off by a restart, and is marked failed, as research's are;
+     * in the scheduling process, so is one started before the process did (`storyContextStale.ts`).
+     */
     staleRunMinutes: 120,
     /**
      * The step records the failed-stories notice when more than `jobs.failureShare.share` of the

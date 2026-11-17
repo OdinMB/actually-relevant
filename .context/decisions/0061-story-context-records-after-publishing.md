@@ -179,3 +179,47 @@ the chain's deadline plus the runs in flight. The cost bound per run is now the 
 run, the day it is about to be published. A story built and then not published (an editor rejects
 it before the publish runs) spent its run for nothing. The chain gains an exception to "a failed
 step stops the chain", for this step only.
+
+## Amendment 2026-11-17: no gate in the daily edition; the published stories after publishing
+
+A review of the amendment above found that it could hold the edition, against the owner's aim that
+context never does: "stories are published with their cards, but context can never hold the edition:
+a story whose context fails or is late is published without cards that same night." Inside the chain
+the gate kept waiting after a failed step, or behind a person's run of the step that outlasted the
+chain's wait, so every selected story went out a day late; a restart left a run `running` for two
+hours, which the gate counted as still coming; and publishing waited for the 3-day lookback, with the
+selected stories' second attempts queued behind the lookback's first ones. This **replaces the
+amendment's first three bullets**; its fourth bullet stands. Plan:
+`.plans/completed/2026-11-17_context-before-publish.md`, reviewed the same day.
+
+- **The step works in two parts in the daily edition**, each a run of the same job (one switch, one
+  note, one spending line), through the chain's new split steps (`SPLIT_STEPS`, `.context/scheduler.md`,
+  "Chains"). At its place it builds only the stories about to be published, then their second
+  attempts. Once the chain's last step has run, while the step is on and such a story exists, it
+  builds the published stories of the lookback that it still owes. A run on its own (Run now) does both,
+  the stories about to be published first. Rejected: a second job for the lookback (a second switch
+  and spending line for one owner decision), and the lookback only in runs on their own (no automatic
+  fill).
+- **The publish gate holds nothing for context in the daily edition.** The step has just had its
+  turn, so a card it did not build is not coming that night. The gate remains for a publish run on its
+  own (Run now), at most research's two hours from selection.
+- **A run a restart cut off counts as interrupted at once** in the scheduling process: one rule
+  (`staleBefore`) marks a `running` run started before that process did, besides those past the
+  two-hour limit, for the step, an editor's run and the gate alike. A second process with the scheduler
+  off keeps the limit, since the scheduling process may still be running the run.
+- **The step gives a story its first run only**: its claim refuses a story with any run, so an
+  editor's run during the night is not followed by a second one. A second attempt resets the run's
+  start, so it is not marked stale for the time of its first attempt.
+
+Rule: a story goes out with its cards unless building them failed or did not finish before publishing
+in the same night's run; nothing about the cards ever holds the edition.
+
+Consequences: the edition publishes after research and the step's first part (an estimated 5 to 15
+minutes on a normal night), on the first night after the step is switched on too, and never later than
+the chain's deadline plus the runs in flight. One exception stays: the chain waits up to two hours for
+a step a person is running by hand, so a Run now of the step late in the evening still delays publishing
+by its length. A story whose card the first part did not build, because the step failed before it or
+the deadline passed, is built by the second part minutes after it goes live, so readers can see that
+story change. On a night with a second part, the step's last run on the Jobs page (length, cost,
+summary, failure-share warning) is that part's. Research's own gate is unchanged: in the chain it still
+holds a story research did not reach for its two hours, which is research's documented rule.
