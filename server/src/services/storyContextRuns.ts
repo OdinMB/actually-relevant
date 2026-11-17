@@ -93,12 +93,15 @@ async function otherRunRunning(tx: Prisma.TransactionClient, storyId: string, ex
 }
 
 /**
- * Write a story's run row (`running`), unless a run of the story is running: then null, and nothing
- * is written. The one way the step and an editor start a run (`.context/story-context.md`, "On demand").
+ * Write a story's run row (`running`), unless a run of the story is running, or, with `firstRun`
+ * (the step's), the story has any run: then null, and nothing is written. The one way the step and
+ * an editor start a run (`.context/story-context.md`, "On demand"); under the run lock, so a story an
+ * editor ran after the step read its queue is settled by that run, never given a second by the step.
  */
-export async function claimContextRun(storyId: string): Promise<string | null> {
+export async function claimContextRun(storyId: string, { firstRun = false }: { firstRun?: boolean } = {}): Promise<string | null> {
   return prisma.$transaction(async tx => {
     if (await otherRunRunning(tx, storyId, null)) return null
+    if (firstRun && (await tx.storyContextRun.count({ where: { storyId } })) > 0) return null
     const run = await tx.storyContextRun.create({ data: { storyId, status: 'running', startedAt: new Date() }, select: { id: true } })
     return run.id
   })
@@ -193,8 +196,9 @@ export async function reopenFailedRun(runId: string): Promise<boolean> {
 }
 
 /**
- * Build one story's context: the run row, the step's way (`claimContextRun`; null, with nothing
- * written, while another run of the story is running, an editor's), then `executeContextRun`. `again`
+ * Build one story's context, the step's way: its first run (`claimContextRun` with `firstRun`; null,
+ * with nothing written, while another run of the story is running or once it has any run, an
+ * editor's made since the step read its queue), then `executeContextRun`. `again`
  * names a technical failure's run to try once more on its own row (`reopenFailedRun`), so only the
  * last attempt's outcome is stored and its costs are added to the first's (`.context/story-context.md`,
  * "Failures"); a run that is no such failure any more, or while another runs, is left as it is.
@@ -208,7 +212,7 @@ export async function runStoryContext(
     if (!(await reopenFailedRun(again.runId))) return { runId: again.runId, status: 'failed', outcome: 'technical', written: false, ...NONE }
     return executeContextRun(storyId, again.runId, deps, 2)
   }
-  const runId = await claimContextRun(storyId)
+  const runId = await claimContextRun(storyId, { firstRun: true })
   return runId === null ? null : executeContextRun(storyId, runId, deps, 1)
 }
 

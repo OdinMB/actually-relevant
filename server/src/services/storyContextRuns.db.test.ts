@@ -4,7 +4,15 @@ import prisma from '../lib/prisma.js'
 import { citingContextDeps as citingDeps, fakeContextDeps as deps } from '../test/contextDeps.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createResearchRun } from '../test/db/storyContext.js'
-import { markInterruptedContextRuns, recordFailedRun, reopenFailedRun, runStoryContext, storeContextResult } from './storyContextRuns.js'
+import {
+  claimContextRun,
+  executeContextRun,
+  markInterruptedContextRuns,
+  recordFailedRun,
+  reopenFailedRun,
+  runStoryContext,
+  storeContextResult,
+} from './storyContextRuns.js'
 import { _setProcessStartedAt } from './storyContextStale.js'
 
 describeDb('story context runs', () => {
@@ -66,10 +74,19 @@ describeDb('story context runs', () => {
   })
 
   it('says whether a technical failure may pass on a later attempt', async () => {
+    const run = async (d: ReturnType<typeof deps>) => runStoryContext((await publishedStory()).story.id, d)
+    expect(await run(deps({ writeError: 'transient' }))).toMatchObject({ status: 'failed', outcome: 'technical', transient: true })
+    expect(await run(deps({ writeError: 'lasting' }))).toMatchObject({ status: 'failed', transient: false })
+    expect(await run(deps())).toMatchObject({ status: 'completed', transient: false })
+  })
+
+  it("builds a story's first run only: a story that has a run, an editor's made during the night included, is left as it is", async () => {
     const { story } = await publishedStory()
-    expect(await runStoryContext(story.id, deps({ writeError: 'transient' }))).toMatchObject({ status: 'failed', outcome: 'technical', transient: true })
-    expect(await runStoryContext(story.id, deps({ writeError: 'lasting' }))).toMatchObject({ status: 'failed', transient: false })
-    expect(await runStoryContext(story.id, deps())).toMatchObject({ status: 'completed', transient: false })
+    const editors = await prisma.storyContextRun.create({ data: { storyId: story.id, status: 'completed', outcome: 'built', finishedAt: new Date() } })
+    expect(await runStoryContext(story.id, deps())).toBeNull()
+    expect(await prisma.storyContextRun.findMany({ where: { storyId: story.id }, select: { id: true } })).toEqual([{ id: editors.id }])
+    // An editor's claim still starts another
+    expect(await claimContextRun(story.id)).not.toBeNull()
   })
 
   it("tries a failed run again on its own row: only the second attempt's outcome is stored, the two attempts' costs added up", async () => {
@@ -159,10 +176,12 @@ describeDb('story context runs', () => {
     expect(await prisma.storyContextRun.findUniqueOrThrow({ where: { id: failed.id } })).toMatchObject({ status: 'failed' })
     expect(await prisma.storyContextRun.count({ where: { storyId: story.id } })).toBe(2)
 
+    expect(await claimContextRun(story.id)).toBeNull()
+
     // Once the other run is over, both go ahead
     await prisma.storyContextRun.update({ where: { id: running.id }, data: { status: 'completed', outcome: 'built', finishedAt: new Date() } })
     expect(await runStoryContext(story.id, deps(), { runId: failed.id })).toMatchObject({ runId: failed.id, status: 'completed', written: true })
-    expect(await runStoryContext(story.id, deps())).toMatchObject({ status: 'completed', written: true })
+    expect(await claimContextRun(story.id)).not.toBeNull()
   })
 
   it("builds on the story's earlier run: its facts carried over, its research facts not structured again, the editor's choices kept by type", async () => {
@@ -172,8 +191,9 @@ describeDb('story context runs', () => {
     await prisma.contextBox.update({ where: { id: figures!.id }, data: { status: 'demoted' } })
     await prisma.contextBox.update({ where: { id: compared!.id }, data: { place: null, placeByEditor: true } })
 
+    // A second run is an editor's: the claim, then the run
     const steps: string[] = []
-    const second = (await runStoryContext(story.id, citingDeps(steps)))!
+    const second = await executeContextRun(story.id, (await claimContextRun(story.id))!, citingDeps(steps), 1)
     expect(second).toMatchObject({ status: 'completed', outcome: 'built', boxes: 2, written: true })
     expect(second.runId).not.toBe(first.runId)
     expect(steps).not.toContain('structure')
