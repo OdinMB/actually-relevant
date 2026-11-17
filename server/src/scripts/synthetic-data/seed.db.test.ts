@@ -132,16 +132,23 @@ describeDb('synthetic data set (PostgreSQL)', () => {
       const contextStory = await prisma.story.findUniqueOrThrow({ where: { id: syntheticId('story:varrowen-lunches') } })
       const context = await getStoryContext(contextStory.slug!)
       expect(context.boxes.map(b => [b.type, b.place, b.visual?.kind ?? null])).toEqual([
-        ['figures', 'section', 'tiles'],
         ['build_up', 'P1', 'bars'],
+        ['who_affected', 'P2', 'tiles'],
         ['compared', 'W1', 'line'],
-        ['next', 'section', null],
+        ['next', 'section', 'tiles'],
       ])
-      expect(context.boxes[0]!.visual).toEqual({
+      // A single figure whose label only repeated its heading; a tile on which two sources disagree
+      expect(context.boxes[1]!.visual).toEqual({ kind: 'tiles', tiles: [{ label: '', values: [{ text: '600,000', estimate: false, sourceId: 'C1' }] }] })
+      expect(context.boxes[3]!.visual).toEqual({
         kind: 'tiles',
         tiles: [
-          { label: 'pupils covered', values: [{ text: '600,000', estimate: false, sourceId: 'C1' }] },
-          { label: 'yearly cost', values: [{ text: 'about $52m', estimate: false, sourceId: 'C2' }] },
+          {
+            label: 'estimated yearly cost',
+            values: [
+              { text: '$48m', estimate: false, sourceId: 'C1' },
+              { text: 'about $52m', estimate: false, sourceId: 'C2' },
+            ],
+          },
         ],
       })
       expect(context.sources.map(s => s.outlet)).toEqual(['Varrowen Education Office', 'Plains Budget Watch'])

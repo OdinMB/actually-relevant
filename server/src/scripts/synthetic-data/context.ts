@@ -1,12 +1,14 @@
 /**
  * Story context for one researched synthetic story (`.context/story-context.md`), so the story page's
  * context cards and the admin's context panel can be checked locally: a finished run, its facts
- * (research's three, structured, and eight from two invented sources its third search found) and one
- * box of each kind the page draws: the figures tiles, a bar chart after a paragraph, a line chart
- * after a Why This Matters point and a card of sentences in the More context section; its record
- * says the response was searched for and not found, which no card shows. Written in the shape a run
- * stores, by hand: no model wrote them, and the set shows every card rather than a run that would
- * have written them all.
+ * (research's three, structured, and nine from two invented sources its third search found) and one
+ * card of each kind the page draws: a bar chart after paragraph 1, a single figure after paragraph 2
+ * (one tile from one source, flush in its card and with no chip, its label only repeating the
+ * heading as cards stored before 2026-11-17 do, so the page drops it), a line chart after a Why This
+ * Matters point, and under More context a card of a sentence and a tile on which two sources
+ * disagree (each value with its chip). Its record says the response was searched for and not found,
+ * which no card shows. Written in the shape a run stores, by hand: no model wrote them, and the set
+ * shows every card rather than a run that would have written them all.
  */
 import type { Prisma } from '@prisma/client'
 import type { ResearchSource } from '../../services/researchPipeline.js'
@@ -77,6 +79,7 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
   }
   const pupils = { unit: 'pupils', counted: 'pupils getting free school lunches' }
   const attendance = { unit: '%', counted: 'average attendance in pilot schools' }
+  const yearlyCost = { unit: 'USD', counted: 'yearly cost of free school lunches in Varrowen', asOf: month, validity: 'slow' as const }
 
   // Research's facts, structured: none of them carries a figure
   const research: FactSpec[] = seed.sources.flatMap(s =>
@@ -144,17 +147,9 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
       asOf: inYear(year - 1),
       validity: 'fixed',
     },
-    {
-      ref: 'S4F1',
-      source: watch,
-      sentence: 'The permanent program will cost about $52 million a year.',
-      value: 52_000_000,
-      unit: 'USD',
-      approx: 'about',
-      counted: 'yearly cost of free school lunches in Varrowen',
-      asOf: month,
-      validity: 'slow',
-    },
+    // The office and the budget watch disagree on the yearly cost, so its tile shows both
+    { ref: 'S3F7', source: office, sentence: 'The office puts the permanent program at $48 million a year.', value: 48_000_000, ...yearlyCost },
+    { ref: 'S4F1', source: watch, sentence: 'The permanent program will cost about $52 million a year.', value: 52_000_000, approx: 'about', ...yearlyCost },
     { ref: 'S4F2', source: watch, sentence: "The province's budget office will publish the program's first full-year cost next spring.", validity: 'fast' },
   ]
 
@@ -204,20 +199,6 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
   const asOfMonth = { asOf: utcDay(month.date), asOfPrecision: 'month' }
   const boxes = [
     box(0, {
-      type: 'figures',
-      heading: 'In numbers',
-      teaser: 'Who the lunches reach and what they cost',
-      sentences: [],
-      visual: {
-        kind: 'tiles',
-        tiles: [
-          { label: 'pupils covered', factIds: ['S3F3'] },
-          { label: 'yearly cost', factIds: ['S4F1'] },
-        ],
-      },
-      ...asOfMonth,
-    }),
-    box(1, {
       type: 'build_up',
       heading: 'From pilot to every school',
       teaser: 'The program grew in two steps',
@@ -234,6 +215,15 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
         ],
         apart: null,
       },
+      ...asOfMonth,
+    }),
+    box(1, {
+      type: 'who_affected',
+      heading: 'Pupils who get free lunches',
+      teaser: 'Every public-school pupil from next year',
+      place: 'P2',
+      sentences: [],
+      visual: { kind: 'tiles', tiles: [{ label: `pupils who get free lunches, ${year}`, factIds: ['S3F3'] }] },
       ...asOfMonth,
     }),
     box(2, {
@@ -266,6 +256,8 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
       heading: 'The first full-year cost',
       teaser: 'What the province publishes next',
       sentences: [{ text: "The province's budget office will publish the program's first full-year cost next spring.", factIds: ['S4F2'] }],
+      visual: { kind: 'tiles', tiles: [{ label: 'estimated yearly cost', factIds: ['S3F7', 'S4F1'] }] },
+      ...asOfMonth,
     }),
   ]
 
@@ -335,7 +327,8 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
     boxDrops: [],
     numberHints: [],
     responseNotFound: true,
-    tally: { checked: research.length + search.length + 6, failed: 0 },
+    // Box items: the two charts with their sentences, the two tiles and the next card's sentence
+    tally: { checked: research.length + search.length + 7, failed: 0 },
     calls: [],
     optOutChecked: true,
   }
