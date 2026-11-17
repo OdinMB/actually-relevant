@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest'
 // first scheduled run.
 vi.mock('../lib/prisma.js', () => ({ default: {} }))
 
-const { JOB_HANDLERS, JOB_PIPELINE_ORDER } = await import('./handlers.js')
+const { JOB_HANDLERS, JOB_PIPELINE_ORDER, SPLIT_STEPS } = await import('./handlers.js')
 const { CHAINS } = await import('./chainDefinitions.js')
 const { MODEL_JOBS } = await import('./modelJobs.js')
 const { RESUMABLE_JOBS } = await import('./interruptedRuns.js')
@@ -36,6 +36,16 @@ describe('the job lists', () => {
     }
     for (const step of steps) expect(JOBS, step).toContain(step)
     expect(new Set(steps).size).toBe(steps.length)
+  })
+
+  it('split only resumable chain steps, the context step among them, so publishing never waits for published stories’ cards', () => {
+    const steps = new Set(Object.values(CHAINS).flat())
+    for (const step of Object.keys(SPLIT_STEPS)) {
+      expect(steps.has(step), step).toBe(true)
+      // Cut off in its second part, the chain resumes from the step
+      expect(RESUMABLE_JOBS.has(step), step).toBe(true)
+    }
+    expect(Object.keys(SPLIT_STEPS)).toContain('build_story_context')
   })
 
   it.each([

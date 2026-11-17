@@ -37,11 +37,14 @@ vi.mock('./chainDefinitions.js', async importOriginal => {
 })
 const mockRunJob = vi.hoisted(() => vi.fn())
 const mockNotify = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+// The context step's two parts: before publishing, and after the chain's last step while it has work
+const contextParts = vi.hoisted(() => ({ atStep: vi.fn(), atEnd: vi.fn(), due: vi.fn() }))
 
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./scheduler.js', () => ({ runJob: mockRunJob }))
 vi.mock('./handlers.js', () => ({
   JOB_HANDLERS: { select_stories: vi.fn(), research_stories: vi.fn(), build_story_context: vi.fn(), publish_stories: vi.fn() },
+  SPLIT_STEPS: { build_story_context: contextParts },
 }))
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 
@@ -72,6 +75,7 @@ describe('chains', () => {
     rows.set('test_chain', step())
     for (const name of STEPS) rows.set(name, step())
     mockRunJob.mockResolvedValue({ result: 'succeeded' })
+    contextParts.due.mockResolvedValue(false)
   })
 
   it('runs every step in order and ends with nothing to resume', async () => {
@@ -186,6 +190,66 @@ describe('chains', () => {
         await expect(runChain('daily_edition_chain')).rejects.toThrow(new RegExp(`Stopped at ${failing}`))
         expect(ranSteps()).not.toContain('publish_stories')
       }
+    })
+
+    describe('the context step in two parts', () => {
+      const contextRuns = () => mockRunJob.mock.calls.filter(([name]) => name === 'build_story_context').map(([, handler]) => handler as unknown)
+
+      it('builds the cards of the stories about to be published before publishing, and of the published ones it owes after the last step', async () => {
+        contextParts.due.mockResolvedValue(true)
+        const resumeDuringEnd: unknown[] = []
+        mockRunJob.mockImplementation(async (name: string, handler: unknown) => {
+          if (handler === contextParts.atEnd) resumeDuringEnd.push({ resumeStep: edition().resumeStep, resumeReason: edition().resumeReason })
+          return { result: 'succeeded' }
+        })
+        await runChain('daily_edition_chain')
+        expect(ranSteps()).toEqual([...daily(), 'build_story_context'])
+        expect(contextRuns()).toEqual([contextParts.atStep, contextParts.atEnd])
+        // Cut off there, the chain resumes from the step (both parts redo only what is left)
+        expect(resumeDuringEnd).toEqual([{ resumeStep: 'build_story_context', resumeReason: 'running' }])
+        expect(edition()).toMatchObject({ resumeStep: null, resumeReason: null })
+      })
+
+      it('runs no part after the last step when it has nothing to do, or while the step is off', async () => {
+        await runChain('daily_edition_chain')
+        expect(ranSteps()).toEqual(daily())
+        expect(contextRuns()).toEqual([contextParts.atStep])
+
+        contextParts.due.mockResolvedValue(true)
+        rows.get('build_story_context')!.enabled = false
+        mockRunJob.mockClear()
+        await runChain('daily_edition_chain')
+        expect(ranSteps()).toEqual(['select_stories', 'research_stories', 'publish_stories'])
+      })
+
+      it('ends the chain as a success when the part after the last step fails: its failure stands on its own row', async () => {
+        contextParts.due.mockResolvedValue(true)
+        mockRunJob.mockImplementation(async (_name: string, handler: unknown) =>
+          handler === contextParts.atEnd ? { result: 'failed', error: 'database gone' } : { result: 'succeeded' },
+        )
+        await runChain('daily_edition_chain')
+        expect(edition()).toMatchObject({ resumeStep: null, resumeReason: null })
+      })
+
+      it('runs no part after the last step when the chain stops before its end, and runs it once a person continues to the end', async () => {
+        contextParts.due.mockResolvedValue(true)
+        rows.get('build_story_context')!.pauseForReview = true
+        await runChain('daily_edition_chain')
+        expect(contextRuns()).toEqual([contextParts.atStep])
+        expect(edition()).toMatchObject({ resumeStep: 'publish_stories', resumeReason: 'review' })
+
+        mockRunJob.mockClear()
+        await runChain('daily_edition_chain', 'continue')
+        expect(ranSteps()).toEqual(['publish_stories', 'build_story_context'])
+        expect(contextRuns()).toEqual([contextParts.atEnd])
+
+        rows.get('build_story_context')!.pauseForReview = false
+        mockRunJob
+          .mockReset()
+          .mockImplementation(async (name: string) => (name === 'publish_stories' ? { result: 'failed', error: 'down' } : { result: 'succeeded' }))
+        await expect(runChain('daily_edition_chain')).rejects.toThrow(/Stopped at publish_stories/)
+        expect(contextRuns()).toEqual([contextParts.atStep])
+      })
     })
   })
 

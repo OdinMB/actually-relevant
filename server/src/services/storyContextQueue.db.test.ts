@@ -49,7 +49,7 @@ describeDb('story context queue and publish gate (PostgreSQL)', () => {
     _setProcessStartedAt(null)
   })
 
-  it('owes the selected stories about to publish first, oldest selected first, then the published ones of the lookback, oldest published first, with no limit', async () => {
+  it('owes, before publishing, the selected stories about to publish, oldest selected first, and after it the published ones of the lookback, oldest published first, with no limit', async () => {
     const publishedNewer = await researched(published(1))
     const publishedOlder = await researched(published(2.5))
     const selectedNewer = await researched(selected(ago(5 * MINUTE)))
@@ -70,7 +70,8 @@ describeDb('story context queue and publish gate (PostgreSQL)', () => {
     await createContextRun(settledPublished.id, { status: 'skipped', outcome: 'no-research' })
     await researched(createStory({ feedId, status: 'analyzed' }))
 
-    expect(await nextForContext(NOW)).toEqual([selectedOlder.id, primary.id, selectedNewer.id, publishedOlder.id, publishedNewer.id])
+    expect(await nextForContext('to-publish', NOW)).toEqual([selectedOlder.id, primary.id, selectedNewer.id])
+    expect(await nextForContext('published', NOW)).toEqual([publishedOlder.id, publishedNewer.id])
   })
 
   it('holds a selected story it owes, and one whose context run is running within the stale limit, for at most the publish gate’s longest wait', async () => {

@@ -3,8 +3,9 @@
  * (`.context/story-context.md`, "Which stories" and "The publish gate"): one definition for both, as
  * research's queue and gate share theirs (`researchQueue.ts`). A story is owed its context while it is
  * about to be published (`selected`, and unclustered or its cluster's primary: the stories the publish
- * job takes) or was published within `lookbackDays`, has a completed research run whose sources hold
- * facts, and has no context run yet: its first run settles it, whatever its outcome. Reads only.
+ * job takes) or was published within `lookbackDays` (the step's two queues, built before and after
+ * publishing), has a completed research run whose sources hold facts, and has no context run yet: its
+ * first run settles it, whatever its outcome. Reads only.
  */
 import { Prisma } from '@prisma/client'
 import { config } from '../config.js'
@@ -32,18 +33,29 @@ const TO_PUBLISH_SQL = Prisma.raw(`
 const RESEARCHED_SQL = Prisma.sql`EXISTS (SELECT 1 FROM story_research_runs r WHERE r.story_id = s.id AND ${RUN_WITH_FACTS_SQL})`
 
 /**
- * Every story the step owes, in the order it builds them: the stories about to be published first,
- * oldest selected first, then the published ones of the lookback, oldest published first. No limit:
- * a run is bounded by the night's stories.
+ * The step's two queues: the stories about to be published, built before publishing, and the published
+ * ones it still owes, built after it (the daily edition runs them as the step's two parts).
  */
-export async function nextForContext(now: Date = new Date()): Promise<string[]> {
+export type ContextQueue = 'to-publish' | 'published'
+
+/** Researched, with no context run yet. */
+const OWED_SQL = Prisma.sql`NOT EXISTS (SELECT 1 FROM story_context_runs c WHERE c.story_id = s.id) AND ${RESEARCHED_SQL}`
+
+/**
+ * Every story the step owes in `queue`, in the order it builds them: those about to be published,
+ * oldest selected first, or the published ones of the lookback, oldest published first. No limit: a
+ * run is bounded by the night's stories.
+ */
+export async function nextForContext(queue: ContextQueue, now: Date = new Date()): Promise<string[]> {
   const since = new Date(now.getTime() - config.storyContext.lookbackDays * DAY_MS)
-  const rows = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT s.id FROM stories s
-    WHERE ((${TO_PUBLISH_SQL}) OR (s.status = 'published' AND s.date_published >= ${since}))
-      AND NOT EXISTS (SELECT 1 FROM story_context_runs c WHERE c.story_id = s.id)
-      AND ${RESEARCHED_SQL}
-    ORDER BY s.status = 'published', CASE WHEN s.status = 'selected' THEN s.selected_at ELSE s.date_published END ASC NULLS FIRST, s.id ASC`
+  const rows =
+    queue === 'to-publish'
+      ? await prisma.$queryRaw<{ id: string }[]>`
+          SELECT s.id FROM stories s WHERE ${TO_PUBLISH_SQL} AND ${OWED_SQL}
+          ORDER BY s.selected_at ASC NULLS FIRST, s.id ASC`
+      : await prisma.$queryRaw<{ id: string }[]>`
+          SELECT s.id FROM stories s WHERE s.status = 'published' AND s.date_published >= ${since} AND ${OWED_SQL}
+          ORDER BY s.date_published ASC, s.id ASC`
   return rows.map(r => r.id)
 }
 

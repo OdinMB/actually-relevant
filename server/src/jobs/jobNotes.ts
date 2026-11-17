@@ -94,6 +94,7 @@ export const NOTES: Readonly<Record<string, () => string>> = {
     'Selects the best of the assessed stories, researches them, builds their context cards and publishes them, in that order, so stories go out with their research and cards as soon as they are ready instead of at a fixed time. ' +
     `${CHAIN_RULES} ` +
     'One exception: if Build Story Context fails, the chain still goes on to publish, and those stories go out without cards. ' +
+    'Once publishing is done, Build Story Context also builds the cards of published stories that still lack them, so publishing never waits for those. ' +
     'From its flex cut-off on, every call goes at standard price; from its deadline on, research and context cards start no other story, so publishing is never held up for long.',
   newsletter_chain: () =>
     `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
@@ -125,12 +126,14 @@ export const NOTES: Readonly<Record<string, () => string>> = {
       'Builds the context cards of the researched stories about to be published that have none yet, ' +
       `then of the stories published in the last ${count(c.lookbackDays, 'day')} that still have none: ` +
       `it reads their research, searches the web for up to ${count(c.maxSearches, 'missing piece')}, checks every fact and card against its source, and keeps what passes. ` +
-      'It runs before Publish Stories, so stories go out with their cards, and takes every story it owes. ' +
+      'In the daily edition it builds the cards of the stories about to be published before Publish Stories, so they go out with them, ' +
+      'and those of the published stories once publishing is done, so publishing never waits for them; on a night with such stories, its last run shown here is that second part. ' +
+      'It takes every story it owes. ' +
       "From the daily edition's deadline on it starts no other story, and if it fails, publishing goes ahead without cards. " +
       'It builds each story once: a build stopped by a problem that may pass, such as the AI service not answering, is tried a second time later in the same run, never on a later night. ' +
       `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
       `so is a notice when more than ${Math.round(share * 100)}% of at least ${c.failedStoriesMin} stories fail. Nothing pauses. ` +
-      '"Run now" builds cards that readers see, even while the step is off. It can be enabled only once web search is set up.'
+      '"Run now" does both parts at once and builds cards that readers see, even while the step is off. It can be enabled only once web search is set up.'
     )
   },
   social_auto_post: () =>

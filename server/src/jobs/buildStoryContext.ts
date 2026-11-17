@@ -1,35 +1,56 @@
 /**
- * The story context step (`.context/story-context.md`, "The step"), the daily edition's third step,
- * between research and publishing: it marks stale runs failed, prunes the search cache, and builds
- * the context of every story it still owes (`nextForContext`): the stories about to be published
- * first, then the published ones of the lookback, `config.storyContext.concurrency` at once, with no
- * limit a run. Run by its chain, it starts no story once the chain's deadline has passed, so publishing
- * is not held up; the stories in flight finish, and a selected story it did not reach publishes
- * without cards. A run by hand (the Jobs page's "Run now") does the same as a scheduled one, the
- * disabled job's included, so it writes cards readers see. Without a Tavily key it builds nothing. The
- * run's item tally goes into its usage (`recordItems`), so the run's finish records the failure-share
- * notice when it passes `config.jobs.failureShare` (`jobs/failureShare.ts`, in this step's words);
- * nothing pauses. A failure of the whole step does not stop its chain (`GOES_ON_PAST_FAILURE`).
+ * The story context step (`.context/story-context.md`, "The step"), the daily edition's third step:
+ * it marks stale runs failed, prunes the search cache, and builds the context of every story it
+ * still owes (`nextForContext`), `config.storyContext.concurrency` at once, with no limit a run. Its
+ * work comes in two parts (`ContextPart`): in the daily edition, the stories about to be published at
+ * the step's place, between research and publishing, and the published ones of the lookback once the
+ * chain's last step has run (`SPLIT_STEPS`, `handlers.ts`), so publishing never waits for those. Run
+ * by its chain, it starts no story once the chain's deadline has passed; the stories in flight finish,
+ * and a selected story it did not reach publishes without cards. A run by hand (the Jobs page's "Run
+ * now") does both parts in one run, the disabled job's included, so it writes cards readers see.
+ * Without a Tavily key it builds nothing. The run's item tally goes into its usage (`recordItems`), so
+ * the run's finish records the failure-share notice when it passes `config.jobs.failureShare`
+ * (`jobs/failureShare.ts`, in this step's words); nothing pauses. A failure of the whole step does not
+ * stop its chain (`GOES_ON_PAST_FAILURE`).
  *
  * A story whose run failed on a problem that may pass (`transientFailure`) is tried once more after
- * the others, on the same run row, unless the deadline has passed meanwhile (ADR-0061, amended
- * 2026-11-17); a second failure settles it, as does any other failure, and no later night tries it
- * again. When more than the failure share of at least `failedStoriesMin` stories failed, the step
- * records the failed-stories notice. A failure outside a story's run records a failed run for it, so
- * the story is settled; the job never throws for it.
+ * the others of its queue, on the same run row, unless the deadline has passed meanwhile (ADR-0061,
+ * amended 2026-11-17); a second failure settles it, as does any other failure, and no later night
+ * tries it again. When more than the failure share of at least `failedStoriesMin` stories failed, the
+ * step records the failed-stories notice. A failure outside a story's run records a failed run for
+ * it, so the story is settled; the job never throws for it.
  */
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import { countOf, recordItems, reportRunResult, runDeadlinePassed } from '../lib/runUsage.js'
 import { sanitizedError } from '../services/researchRuns.js'
-import { nextForContext, STORY_CONTEXT_JOB } from '../services/storyContextQueue.js'
+import { nextForContext, STORY_CONTEXT_JOB, type ContextQueue } from '../services/storyContextQueue.js'
 import { markInterruptedContextRuns, recordFailedRun, runStoryContext, type ContextRunOutcome } from '../services/storyContextRuns.js'
 import { pruneSearchCache } from '../services/storyContextSearch.js'
 import { jobDisplayName } from './jobDisplayName.js'
 
 const JOB = STORY_CONTEXT_JOB
 const log = createLogger(JOB)
+
+/**
+ * What a run of the step takes: one of its queues (the daily edition's two parts), or `all`, both in
+ * turn, each with its second attempts before the next (a run on its own).
+ */
+export type ContextPart = ContextQueue | 'all'
+
+const QUEUES: Readonly<Record<ContextPart, readonly ContextQueue[]>> = {
+  'to-publish': ['to-publish'],
+  published: ['published'],
+  all: ['to-publish', 'published'],
+}
+
+/** How the summary names the part's stories, and what it says when none was owed. */
+const WORDS: Readonly<Record<ContextPart, { one: string; many: string; none: string }>> = {
+  all: { one: 'story', many: 'stories', none: 'No story owed its context' },
+  'to-publish': { one: 'story', many: 'stories', none: 'No story about to be published owed its context' },
+  published: { one: 'published story', many: 'published stories', none: 'No published story owed its context' },
+}
 
 type StoryOutcome = ContextRunOutcome['outcome'] | 'error'
 
@@ -65,7 +86,12 @@ async function notifyFailedStories(taken: number, failed: number): Promise<void>
   })
 }
 
-export async function runBuildStoryContext(): Promise<void> {
+/** Whether the daily edition's part after publishing has work: web search on and a published story still owed. */
+export async function owesPublishedStories(): Promise<boolean> {
+  return Boolean(config.research.tavilyApiKey) && (await nextForContext('published')).length > 0
+}
+
+export async function runBuildStoryContext(part: ContextPart = 'all'): Promise<void> {
   await markInterruptedContextRuns(new Date())
   if (!config.research.tavilyApiKey) {
     log.info('web search is off (no Tavily key); no context built')
@@ -74,8 +100,7 @@ export async function runBuildStoryContext(): Promise<void> {
   }
   const pruned = await pruneSearchCache()
   const { concurrency } = config.storyContext
-  const ids = await nextForContext()
-  log.info({ storyCount: ids.length, concurrency, pruned }, 'starting story context step')
+  log.info({ part, concurrency, pruned }, 'starting story context step')
 
   const tally = { checked: 0, failed: 0, boxes: 0 }
   const attempts = new Map<string, Attempt>()
@@ -111,15 +136,22 @@ export async function runBuildStoryContext(): Promise<void> {
     return next
   }
 
-  const started = await inTurn(ids.map(storyId => ({ storyId, again: null })))
-  const left = ids.length - started
+  let owed = 0
+  let started = 0
+  let triedTwice = 0
+  for (const queue of QUEUES[part]) {
+    const ids = await nextForContext(queue)
+    owed += ids.length
+    started += await inTurn(ids.map(storyId => ({ storyId, again: null })))
+    // A failure that may pass is tried once more, after the others of its queue: only its last attempt is stored
+    const retried = ids.flatMap(storyId => {
+      const a = attempts.get(storyId)
+      return a?.transient && a.runId !== null ? [{ storyId, again: { runId: a.runId } }] : []
+    })
+    triedTwice += await inTurn(retried)
+  }
+  const left = owed - started
   if (left > 0) log.info({ left }, "past the chain's deadline; started no other story")
-  // A failure that may pass is tried once more, after the others: only its last attempt is stored
-  const retried = ids.flatMap(storyId => {
-    const a = attempts.get(storyId)
-    return a?.transient && a.runId !== null ? [{ storyId, again: { runId: a.runId } }] : []
-  })
-  const triedTwice = await inTurn(retried)
 
   const outcomes: Partial<Record<StoryOutcome, number>> = {}
   for (const { outcome } of attempts.values()) outcomes[outcome] = (outcomes[outcome] ?? 0) + 1
@@ -127,12 +159,13 @@ export async function runBuildStoryContext(): Promise<void> {
 
   // The failure share's notice is the run's finish's (`failureShareNotice`), from these items
   recordItems(tally.checked, tally.failed)
-  log.info({ ...outcomes, ...tally, retried: triedTwice, left }, 'story context step finished')
+  log.info({ part, ...outcomes, ...tally, retried: triedTwice, left }, 'story context step finished')
   if (storiesFailing(started, failedStories)) await notifyFailedStories(started, failedStories)
+  const words = WORDS[part]
   reportRunResult(
-    ids.length === 0
-      ? 'No story owed its context'
-      : `Built the context of ${countOf(started, 'story', 'stories')}: ${countOf(tally.boxes, 'card')} kept, ` +
+    owed === 0
+      ? words.none
+      : `Built the context of ${countOf(started, words.one, words.many)}: ${countOf(tally.boxes, 'card')} kept, ` +
           `${tally.failed.toLocaleString('en-US')} of ${countOf(tally.checked, 'checked item')} failed, ${countOf(failedStories, 'story', 'stories')} failed` +
           (triedTwice > 0 ? ` (${triedTwice.toLocaleString('en-US')} tried twice)` : '') +
           (left > 0 ? `, ${left.toLocaleString('en-US')} left at the deadline` : ''),
