@@ -91,8 +91,10 @@ export const NOTES: Readonly<Record<string, () => string>> = {
     'Crawls the feeds, gives each new story its first rating, then fully analyzes the ones that qualify, in that order, so every run ends with assessed stories ready to review. ' +
     `It runs several times a day because a feed lists only its newest articles and a busy one drops them within hours. ${CHAIN_RULES}`,
   daily_edition_chain: () =>
-    "Selects the best of the assessed stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time; then it builds the published stories' context cards. " +
+    'Selects the best of the assessed stories, researches them, builds their context cards and publishes them, in that order, so stories go out with their research and cards as soon as they are ready instead of at a fixed time. ' +
     `${CHAIN_RULES} ` +
+    'One exception: if Build Story Context fails, the chain still goes on to publish, and those stories go out without cards. ' +
+    'Once publishing is done, Build Story Context also builds the cards of published stories that still lack them, so publishing never waits for those. ' +
     'Once its flex hours (the Flex column of its Whole chain row) have passed since the run started, every call goes at standard price, so a slow flex queue cannot hold up publishing for long.',
   newsletter_chain: () =>
     `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
@@ -114,17 +116,23 @@ export const NOTES: Readonly<Record<string, () => string>> = {
   research_stories: researchNote,
   publish_stories: () =>
     'Publishes the selected stories. Of several stories about the same event, only the one chosen to lead the group is published, and the others are rejected as duplicates. ' +
-    `While Research Stories is enabled and research is on, a story selected less than ${count(config.research.pipeline.maxWaitMinutes, 'minute')} ago waits for its research and goes out at a later run.`,
+    `While Research Stories is enabled and research is on, a story selected less than ${count(config.research.pipeline.maxWaitMinutes, 'minute')} ago waits for its research and goes out at a later run. ` +
+    'When you run it here while Build Story Context is enabled and web search is set up, a researched story waits for its context cards in the same way. ' +
+    'In the daily edition it never waits for them: they are built just before, and a story whose cards failed or did not come in time goes out without them.',
   build_story_context: () => {
     const c = config.storyContext
     const { share, minItems } = config.jobs.failureShare
     return (
-      `Builds the context cards of the stories published in the last ${count(c.lookbackDays, 'day')} that were researched and have none yet, up to ${c.perRun} a run: ` +
+      'Builds the context cards of the researched stories about to be published that have none yet, ' +
+      `then of the stories published in the last ${count(c.lookbackDays, 'day')} that still have none: ` +
       `it reads their research, searches the web for up to ${count(c.maxSearches, 'missing piece')}, checks every fact and card against its source, and keeps what passes. ` +
-      'It runs after Publish Stories, so it never holds up publishing, and builds each story once: a build stopped by a problem that may pass, such as the AI service not answering, is tried a second time later in the same run, never on a later night. ' +
+      'In the daily edition it builds the cards of the stories about to be published before Publish Stories, so they go out with them, ' +
+      'and those of the published stories once publishing is done, so publishing never waits for them; on a night with such stories, its last run shown here is that second part. ' +
+      'It takes every story it owes, and if it fails, publishing goes ahead without cards. ' +
+      'It builds each story once: a build stopped by a problem that may pass, such as the AI service not answering, is tried a second time later in the same run, never on a later night. ' +
       `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
       `so is a notice when more than ${Math.round(share * 100)}% of at least ${c.failedStoriesMin} stories fail. Nothing pauses. ` +
-      '"Run now" builds cards that readers see, even while the step is off. It can be enabled only once web search is set up.'
+      '"Run now" does both parts at once and builds cards that readers see, even while the step is off. It can be enabled only once web search is set up.'
     )
   },
   social_auto_post: () =>

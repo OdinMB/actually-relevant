@@ -1,6 +1,7 @@
 /**
  * Which jobs are chains and which are their steps (chains.ts runs them; `.context/scheduler.md`,
- * "Chains"), and the clock times a chain's and a step's settings hold. No imports, so the scheduler,
+ * "Chains"), which of their steps do not stop them on a failure, and the clock times a step's "not
+ * before" setting holds (a chain's flex cut-off is in hours from its start). No imports, so the scheduler,
  * the job list and the chain runner can all read it.
  */
 
@@ -9,14 +10,22 @@ export const CHAINS: Readonly<Record<string, readonly string[]>> = {
   // Several times a day: a feed lists only its newest articles, so a once-a-day crawl would lose a busy
   // feed's articles. Crawled stories are assessed in the same run: a person's part starts with assessed stories
   intake_chain: ['crawl_feeds', 'preassess_stories', 'assess_stories'],
-  // Story context comes after publishing, so it can never hold up or stop the edition (.context/story-context.md)
-  daily_edition_chain: ['select_stories', 'research_stories', 'publish_stories', 'build_story_context'],
+  // Story context comes before publishing, so stories go out with their cards (owner decision 2026-11-17,
+  // .context/story-context.md); its failure does not stop the edition (GOES_ON_PAST_FAILURE)
+  daily_edition_chain: ['select_stories', 'research_stories', 'build_story_context', 'publish_stories'],
   // Saturday morning: each edition's issue is built (with its test email), then sent
   newsletter_chain: ['generate_newsletter', 'publish_newsletter', 'generate_uplifting_newsletter', 'publish_uplifting_newsletter'],
   // Friday's one run builds both shows' episodes (a failed build is retried within the run); both
   // publish steps are held until Saturday 07:00 in Berlin, so an episode is ready well before it goes out
   podcast_chain: ['generate_podcast', 'generate_uplifting_podcast', 'publish_podcast', 'publish_uplifting_podcast'],
 }
+
+/**
+ * Steps whose failure does not stop their chain: the step's own Error and failure notice stand, and
+ * the chain goes on with the next step (a Review on it still pauses). Story context runs before
+ * publishing, and its failure must never hold the edition: its stories publish without cards.
+ */
+export const GOES_ON_PAST_FAILURE: ReadonlySet<string> = new Set(['build_story_context'])
 
 export const isChain = (jobName: string): boolean => CHAINS[jobName] !== undefined
 

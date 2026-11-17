@@ -77,8 +77,6 @@ function researchResult(verdict: ResearchVerdict): ResearchResult {
   }
 }
 
-const button = () => screen.findByRole('button', { name: 'Research this story' })
-
 beforeEach(() => {
   vi.clearAllMocks()
   mockResearch.usage.mockResolvedValue(usage())
@@ -157,47 +155,7 @@ describe('StoryResearch', () => {
     ).toEqual([expect.stringMatching(/ · pipeline · failed · \$0\.000$/), expect.stringMatching(/ · editor · failed · \$0\.250$/)])
   })
 
-  it.each([
-    ['research is switched off', usage({ enabled: false, refusal: 'Research is switched off: TAVILY_API_KEY is not set' }), 'analyzed', /switched off/],
-    ['the cap is reached', usage({ refusal: "This month's research cap is reached" }), 'analyzed', /cap is reached/],
-    ['the story is not analyzed, selected or published', usage(), 'fetched', /this one is fetched/],
-  ])('keeps the button visible but disabled, with its reason, when %s', async (_name, answer, status, reason) => {
-    mockResearch.usage.mockResolvedValue(answer)
-    renderSection(status)
-    const b = await button()
-    expect(b).toHaveAttribute('aria-disabled', 'true')
-    expect(b).toHaveAccessibleDescription(reason)
-    fireEvent.click(b)
-    expect(mockResearch.start).not.toHaveBeenCalled()
-  })
-
-  it('disables the button while a run of the story is running', async () => {
-    mockResearch.runs.mockResolvedValue([
-      {
-        id: 'run-1',
-        storyId: 'story-1',
-        status: 'running',
-        trigger: 'editor',
-        verdict: null,
-        costUsd: 0.25,
-        tavilyCredits: 0,
-        error: null,
-        startedAt: '2026-11-12T10:00:00Z',
-        finishedAt: null,
-        result: null,
-        cost: null,
-      },
-    ])
-    renderSection()
-    await waitFor(async () => expect(await button()).toHaveAccessibleDescription(/in progress/))
-  })
-
-  it('starts a polled task for this story when pressed', async () => {
-    renderSection()
-    fireEvent.click(await button())
-    await waitFor(() => expect(mockResearch.start).toHaveBeenCalledWith('story-1'))
-    expect(await screen.findByText('Researching the story...')).toBeInTheDocument()
-  })
+  // Starting a run is the page's action bar's (StoryActionBar.test.tsx)
 
   describe('using a run’s version and reverting', () => {
     const completed = (over: Partial<ResearchRun> = {}, verdict: ResearchVerdict = { kind: 'keep' }, withDraft = true): ResearchRun => ({
@@ -275,7 +233,7 @@ describe('StoryResearch', () => {
 
     it('offers "Revert to single-source" only on a researched story', async () => {
       renderSection('published')
-      await screen.findByRole('button', { name: 'Research this story' })
+      await screen.findByText('No research runs yet.')
       expect(revertButton()).toBeNull()
     })
 
@@ -300,8 +258,13 @@ describe('StoryResearch', () => {
     const client = renderSection()
     await waitFor(() => expect(client.getQueryState(['research-usage'])?.status).toBe('success'))
     expect(screen.queryByRole('heading', { name: 'Research' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Research this story' })).toBeNull()
     expect(mockResearch.runs).not.toHaveBeenCalled()
+  })
+
+  it('says when the month’s usage could not be loaded', async () => {
+    mockResearch.usage.mockRejectedValue(new ApiError(500, 'Internal error'))
+    renderSection()
+    expect(await screen.findByText("This month's research usage could not be loaded.")).toBeInTheDocument()
   })
 })
 

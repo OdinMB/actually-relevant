@@ -2,8 +2,8 @@
  * Chains (`.context/scheduler.md`, "Chains"): jobs run as ordered steps from one start time, each step
  * starting when the one before it has finished, instead of separate schedules with guessed gaps
  * between them. A chain is itself a job (its `job_runs` row holds its schedule, its on/off, its lease
- * and its flex cut-off and deadline), and its steps are ordinary jobs that no longer run on their own
- * schedules. Each step has a mode, set on its own row:
+ * and its flex cut-off, in hours from each run's start), and its steps are ordinary jobs that no
+ * longer run on their own schedules. Each step has a mode, set on its own row:
  *
  * - **On** (`enabled`): runs.
  * - **Off** (not `enabled`): skipped; the next step runs on what there is.
@@ -17,15 +17,21 @@
  * for Saturday morning). A person can go on sooner from the Jobs page.
  *
  * A step that fails stops the chain there, and the chain's run fails with the step's error; the
- * Jobs page can resume it from that step. A run cut off by a restart resumes from the step it was in.
+ * Jobs page can resume it from that step. A step in `GOES_ON_PAST_FAILURE` (story context, before
+ * publishing) is the exception: its failure stands on its own row, and the chain goes on. A run cut
+ * off by a restart resumes from the step it was in.
+ *
+ * A step in `SPLIT_STEPS` (story context) does its work in two parts, each a run of its own job: one
+ * at its place, the other once the chain's last step has run, while the step is on and the part has
+ * work. A chain that stops or pauses before its end runs the second part when it reaches the end.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
-import { JOB_HANDLERS } from './handlers.js'
+import { JOB_HANDLERS, SPLIT_STEPS } from './handlers.js'
 import { runJob } from './scheduler.js'
-import { CHAINS, nextStepTime } from './chainDefinitions.js'
+import { CHAINS, GOES_ON_PAST_FAILURE, nextStepTime } from './chainDefinitions.js'
 import { jobTimeZone } from './jobTimeZones.js'
 import { RESUMABLE_JOBS } from './interruptedRuns.js'
 
@@ -129,12 +135,14 @@ async function nextStepOn(steps: readonly string[], index: number): Promise<stri
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+type StepOutcome = { result: 'succeeded' } | { result: 'failed'; error: string }
+
 /**
- * Run one step. A step already running (a run by hand, or another process) is waited for, then run,
- * so the chain never goes on past a step that has not run for it.
+ * Run one step's `handler` (its job's, or one part of a split step) as a run of the step's job. A
+ * step already running (a run by hand, or another process) is waited for, then run, so the chain
+ * never goes on past a step that has not run for it.
  */
-async function runStep(step: string): Promise<{ result: 'succeeded' } | { result: 'failed'; error: string }> {
-  const handler = JOB_HANDLERS[step]
+async function runStep(step: string, handler: (() => Promise<void>) | undefined): Promise<StepOutcome> {
   if (!handler) return { result: 'failed', error: `no handler for ${step}` }
   const { stepWaitMinutes, stepWaitPollMs } = config.chains
   const giveUpAt = Date.now() + stepWaitMinutes * 60_000
@@ -146,6 +154,34 @@ async function runStep(step: string): Promise<{ result: 'succeeded' } | { result
     if (!waited) log.info({ step }, 'step already running; waiting for it')
     waited = true
     await sleep(stepWaitPollMs)
+  }
+}
+
+/** A failed step stops the chain (throws), unless its failure must not hold what comes after it. */
+async function settleStep(chainName: string, step: string, outcome: StepOutcome): Promise<void> {
+  if (outcome.result !== 'failed') return
+  // Story context before publishing: its failure never holds the edition
+  if (GOES_ON_PAST_FAILURE.has(step)) {
+    log.warn({ chainName, step, error: outcome.error }, 'step failed; the chain goes on without it')
+    return
+  }
+  await setResume(chainName, step, 'failed')
+  throw new Error(`Stopped at ${step}, so the steps after it did not run: ${outcome.error}`)
+}
+
+/**
+ * Once the chain's last step has run: the second part of each split step (`SPLIT_STEPS`), in step
+ * order, while the step is on and the part has work. Cut off there, the chain resumes from that step,
+ * whose parts redo only what is left.
+ */
+async function runEndParts(chainName: string, steps: readonly string[]): Promise<void> {
+  for (const step of steps) {
+    const split = SPLIT_STEPS[step]
+    if (!split) continue
+    const stepRow = await prisma.jobRun.findUnique({ where: { jobName: step }, select: { enabled: true } })
+    if (!stepRow?.enabled || !(await split.due())) continue
+    await setResume(chainName, step, 'running')
+    await settleStep(chainName, step, await runStep(step, split.atEnd))
   }
 }
 
@@ -187,12 +223,7 @@ export async function runChain(chainName: string, mode: 'start' | 'continue' = '
     }
 
     await setResume(chainName, step, 'running')
-
-    const outcome = await runStep(step)
-    if (outcome.result === 'failed') {
-      await setResume(chainName, step, 'failed')
-      throw new Error(`Stopped at ${step}, so the steps after it did not run: ${outcome.error}`)
-    }
+    await settleStep(chainName, step, await runStep(step, SPLIT_STEPS[step]?.atStep ?? JOB_HANDLERS[step]))
 
     const next = stepRow.pauseForReview ? await nextStepOn(steps, i) : null
     if (next) {
@@ -209,5 +240,6 @@ export async function runChain(chainName: string, mode: 'start' | 'continue' = '
       return
     }
   }
+  await runEndParts(chainName, steps)
   await setResume(chainName, null, null)
 }

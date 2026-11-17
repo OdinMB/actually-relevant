@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('../lib/prisma.js', () => ({ default: {} }))
 vi.mock('../lib/notify.js', () => ({ notify: mocks.notify }))
-vi.mock('../services/storyContextInput.js', () => ({ nextForContext: mocks.nextForContext }))
+vi.mock('../services/storyContextQueue.js', () => ({ nextForContext: mocks.nextForContext, STORY_CONTEXT_JOB: 'build_story_context' }))
 vi.mock('../services/storyContextSearch.js', () => ({ pruneSearchCache: mocks.pruneSearchCache }))
 vi.mock('../services/storyContextRuns.js', () => ({
   runStoryContext: mocks.runStoryContext,
@@ -18,7 +18,7 @@ vi.mock('../services/storyContextRuns.js', () => ({
   markInterruptedContextRuns: mocks.markInterruptedContextRuns,
 }))
 
-import { runBuildStoryContext } from './buildStoryContext.js'
+import { owesPublishedStories, runBuildStoryContext, type ContextPart } from './buildStoryContext.js'
 import { createRunScope, runInScope } from '../lib/runUsage.js'
 
 const run = (checked: number, failed: number, boxes = 2) => ({
@@ -42,9 +42,9 @@ const failed = (runId: string, transient: boolean) => ({
   transient,
 })
 
-const inScope = async () => {
-  const scope = createRunScope({ jobName: 'build_story_context', flex: false })
-  await runInScope(scope, () => runBuildStoryContext())
+/** One part's run (the daily edition's part before publishing, unless named), in the step's scope. */
+const inScope = async (scope = createRunScope({ jobName: 'build_story_context', flex: false }), part: ContextPart = 'to-publish') => {
+  await runInScope(scope, () => runBuildStoryContext(part))
   return scope
 }
 
@@ -86,6 +86,16 @@ describe('runBuildStoryContext', () => {
     ])
     expect(scope.usage).toMatchObject({ itemsChecked: 15, itemsFailed: 1 })
     expect(scope.summary).toBe('Built the context of 2 stories: 3 cards kept, 1 of 15 checked items failed, 0 stories failed (1 tried twice)')
+  })
+
+  it("leaves a story to an editor's run that holds it: no failed run recorded, nothing tried again", async () => {
+    mocks.nextForContext.mockResolvedValue(['a', 'b'])
+    mocks.runStoryContext.mockResolvedValueOnce(null).mockResolvedValueOnce(run(10, 1))
+    const scope = await inScope()
+    expect(mocks.runStoryContext).toHaveBeenCalledTimes(2)
+    expect(mocks.recordFailedRun).not.toHaveBeenCalled()
+    expect(scope.usage).toMatchObject({ itemsChecked: 10, itemsFailed: 1 })
+    expect(scope.summary).toMatch(/, 0 stories failed$/)
   })
 
   it('settles a story that fails its second attempt too, and counts it failed', async () => {
@@ -151,11 +161,61 @@ describe('runBuildStoryContext', () => {
     expect(scope.summary).toBe('Web search is off, no context built')
   })
 
-  it('prunes the search cache and asks for at most perRun stories', async () => {
+  it('prunes the search cache and builds every story it owes, with no limit a run', async () => {
     mocks.nextForContext.mockResolvedValue([])
     const scope = await inScope()
     expect(mocks.pruneSearchCache).toHaveBeenCalled()
-    expect(mocks.nextForContext).toHaveBeenCalledWith({}, 20)
-    expect(scope.summary).toBe('No story owed its context')
+    expect(mocks.nextForContext.mock.calls).toEqual([['to-publish']])
+    expect(scope.summary).toBe('No story about to be published owed its context')
+
+    const many = Array.from({ length: 45 }, (_, i) => `s${i}`)
+    mocks.nextForContext.mockResolvedValue(many)
+    mocks.runStoryContext.mockResolvedValue(run(1, 0, 1))
+    await inScope()
+    expect(mocks.runStoryContext.mock.calls.map(([id]) => id as string).sort()).toEqual([...many].sort())
+  })
+
+  describe('its parts', () => {
+    it('builds the published stories it still owes in the part after publishing, and says so', async () => {
+      mocks.nextForContext.mockResolvedValue(['p'])
+      mocks.runStoryContext.mockResolvedValue(run(4, 0, 1))
+      const scope = await inScope(undefined, 'published')
+      expect(mocks.nextForContext.mock.calls).toEqual([['published']])
+      expect(scope.summary).toBe('Built the context of 1 published story: 1 card kept, 0 of 4 checked items failed, 0 stories failed')
+
+      mocks.nextForContext.mockResolvedValue([])
+      expect((await inScope(undefined, 'published')).summary).toBe('No published story owed its context')
+    })
+
+    it('run on its own, takes the stories about to be published with their second attempts first, then the published ones', async () => {
+      const queues: Record<string, string[]> = { 'to-publish': ['a', 'b'], published: ['p'] }
+      mocks.nextForContext.mockImplementation(async (part: string) => queues[part])
+      mocks.runStoryContext.mockImplementation(async (id: string, _deps: unknown, again: unknown) =>
+        id === 'a' && !again ? failed('run-a', true) : run(2, 0, 1),
+      )
+      const scope = await inScope(undefined, 'all')
+      expect(mocks.runStoryContext.mock.calls.map(([id, , again]) => [id, again])).toEqual([
+        ['a', null],
+        ['b', null],
+        ['a', { runId: 'run-a' }],
+        ['p', null],
+      ])
+      expect(scope.summary).toBe('Built the context of 3 stories: 3 cards kept, 0 of 6 checked items failed, 0 stories failed (1 tried twice)')
+
+      queues['to-publish'] = []
+      queues.published = []
+      expect((await inScope(undefined, 'all')).summary).toBe('No story owed its context')
+    })
+
+    it('has work after publishing only while web search is on and a published story is still owed', async () => {
+      mocks.nextForContext.mockResolvedValue(['p'])
+      expect(await owesPublishedStories()).toBe(true)
+      expect(mocks.nextForContext).toHaveBeenCalledWith('published')
+      mocks.nextForContext.mockResolvedValue([])
+      expect(await owesPublishedStories()).toBe(false)
+      mocks.nextForContext.mockResolvedValue(['p'])
+      delete process.env.TAVILY_API_KEY
+      expect(await owesPublishedStories()).toBe(false)
+    })
   })
 })

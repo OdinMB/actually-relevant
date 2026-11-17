@@ -2,13 +2,15 @@
  * Story context's records (`.context/story-context.md`, "Records"), both ways: a context fact's row
  * and the fact as the run, the view and the next story's input hold it; a box's row from the run's
  * draft, and a stored box's sentences and visual read back through their schemas; the refs a box
- * cites and the newest date its facts describe; and the boxes and facts of a story's newest run that
- * wrote boxes. No I/O of its own: the one read goes through the client it is given, and the input's
+ * cites and the newest date its facts describe; a fact's identity across a story's runs (`factKey`)
+ * and the editor's choices a new run's boxes take over (`editorChoices`); and the boxes and facts of
+ * a story's newest run that wrote boxes. No I/O of its own: the one read goes through the client it is given, and the input's
  * SELECT (`storyContextInput.ts`) names its columns as a row's fields, so both readers map rows here.
  */
 import type { ContextBox, ContextFact, Prisma, PrismaClient } from '@prisma/client'
 import { dayStart, utcDay } from '../lib/days.js'
 import { APPROX, CREDITED_KINDS, VALIDITY, storedSentencesSchema, storedVisualSchema, type StoredSentence, type StoredVisual } from '../schemas/storyContext.js'
+import { normalizedUrl } from './researchFilter.js'
 import type { ContextFactData, DraftBox } from './storyContextChecks.js'
 import { asOfColumns, asOfFromColumns, factDate, periodStart } from './storyContextVisuals.js'
 
@@ -102,6 +104,16 @@ export function factFromRow(row: FactColumns): RecordedFact {
 
 export const storedFact = (row: FactColumns & Pick<ContextFact, 'status'>): StoredContextFact => ({ ...factFromRow(row), demoted: row.status === 'demoted' })
 
+const squashed = (s: string) => s.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase()
+
+/**
+ * A fact's identity across runs of one story (`.context/story-context.md`, "On demand"): its page,
+ * supporting sentence and statement, each normalized. A later run neither structures again nor
+ * offers twice a fact an earlier run already holds under this key.
+ */
+export const factKey = (f: { url: string; supportingSentence: string; statement: string }): string =>
+  [normalizedUrl(f.url), squashed(f.supportingSentence), squashed(f.statement)].join('\n')
+
 /** Shown to readers: supported by its check and not demoted. */
 export const shownFact = (f: ContextFactData & { demoted?: boolean }): boolean => f.verdict === 'supported' && f.demoted !== true
 
@@ -194,6 +206,26 @@ export function boxRow(
     model: writer?.model ?? null,
     promptVersion: writer?.promptVersion ?? null,
     writtenAt,
+  }
+}
+
+/** What an editor chose for a box, as its row keeps it. */
+type BoxChoice = Pick<Prisma.ContextBoxCreateManyInput, 'status' | 'place' | 'placeByEditor'>
+
+/**
+ * The editor's choices on an earlier run's boxes, carried to a new run's box of the same type (a run
+ * keeps one box of each type): a hidden box (`demoted`) makes it hidden, a box the editor moved gives
+ * it its place. Nothing for a choice the editor did not make, or a type the earlier run lacked.
+ */
+export function editorChoices(previous: Pick<ContextBox, 'type' | 'status' | 'place' | 'placeByEditor'>[]): (type: string) => BoxChoice {
+  const byType = new Map(previous.map(b => [b.type as string, b]))
+  return type => {
+    const earlier = byType.get(type)
+    if (!earlier) return {}
+    return {
+      ...(earlier.status === 'demoted' ? { status: 'demoted' as const } : {}),
+      ...(earlier.placeByEditor ? { place: earlier.place, placeByEditor: true } : {}),
+    }
   }
 }
 

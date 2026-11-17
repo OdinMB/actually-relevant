@@ -42,6 +42,7 @@ import type {
   SpendScope,
   SpendingOverview,
   StoryContextAdmin,
+  ContextRunStarted,
 } from '@shared/types'
 import { getAccessToken, setAccessToken, refreshSession, notifySessionExpired } from './session'
 
@@ -380,8 +381,10 @@ export const adminApi = {
 
   // A story's context cards (.context/story-context.md, "Admin"): hiding or moving one is the one way a person changes them
   storyContext: {
-    /** The newest run, its boxes (hidden ones too), the story's places. 404 for an unknown story, and from a backend without context. */
+    /** The newest run, its boxes (hidden ones too), the story's places, whether context can be gathered. 404 for an unknown story, and from a backend without context. */
     get: (storyId: string) => request<StoryContextAdmin>(`/stories/${storyId}/context`),
+    /** Start an editor's context run of the story, a task to poll; 409 with the reason when it cannot start now ("On demand"). */
+    gather: (storyId: string) => request<ContextRunStarted>(`/stories/${storyId}/context/run`, { method: 'POST' }),
     /** Hide every card, or show the hidden ones again; nothing is deleted. */
     setHidden: (storyId: string, hidden: boolean) => request<void>(`/stories/${storyId}/context`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
     /** Hide, show or move one card; 400 for a place the story lacks, or for moving In numbers out of More context. */

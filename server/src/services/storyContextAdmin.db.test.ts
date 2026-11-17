@@ -1,7 +1,7 @@
-import { it, expect } from 'vitest'
+import { it, expect, vi } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import { createContextBox, createContextFact, createContextRun } from '../test/db/storyContext.js'
+import { createContextBox, createContextFact, createContextRun, createResearchRun } from '../test/db/storyContext.js'
 import { getContextAdmin, setContextHidden, updateContextBox } from './storyContextAdmin.js'
 
 describeDb('story context admin', () => {
@@ -99,6 +99,26 @@ describeDb('story context admin', () => {
     const story = await createStory({ feedId: feed.id, status: 'published', datePublished: new Date() })
     expect(await getContextAdmin(story.id)).toMatchObject({ run: null, boxes: [] })
     await expect(getContextAdmin('00000000-0000-0000-0000-000000000000')).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('says whether an editor can gather context, after marking a run cut off by a restart failed', async () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+    try {
+      const issue = await createIssue()
+      const feed = await createFeed(issue.id)
+      const story = await createStory({ feedId: feed.id, status: 'published', datePublished: new Date() })
+      expect((await getContextAdmin(story.id)).gather).toEqual({ eligible: false, refusal: expect.stringMatching(/research/i) })
+
+      await createResearchRun(story.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
+      expect((await getContextAdmin(story.id)).gather).toEqual({ eligible: true, refusal: null })
+
+      const stale = await createContextRun(story.id, { status: 'running', outcome: null, finishedAt: null, startedAt: new Date(Date.now() - 3 * 60 * 60_000) })
+      const admin = await getContextAdmin(story.id)
+      expect(admin.run).toMatchObject({ id: stale.id, status: 'failed', error: expect.stringMatching(/interrupted/) })
+      expect(admin.gather).toEqual({ eligible: true, refusal: null })
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('hides all context and shows it again, deleting nothing', async () => {

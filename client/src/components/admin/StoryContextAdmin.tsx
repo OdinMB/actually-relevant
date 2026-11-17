@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ContextAdminBox, ContextAdminPlace, ContextAdminRun, Story } from '@shared/types'
-import { useSetContextHidden, useStoryContextAdmin, useUpdateContextBox } from '../../hooks/useStoryContextAdmin'
+import { contextShown, useSetContextHidden, useStoryContextAdmin, useUpdateContextBox } from '../../hooks/useStoryContextAdmin'
 import { formatDateWithTime } from '../../lib/constants'
 import { asOfText, slotKicker } from '../context/contextText'
 import { Button } from '../ui/Button'
@@ -8,13 +8,16 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { Select } from '../ui/Select'
 import { useToast } from '../ui/Toast'
 import { ContextRunView } from './ContextRunView'
+import { EDITOR_HEADING, EDITOR_SECTION } from './storyEditorClasses'
 
 /**
- * A story's Context section in the edit form, after Research (`.context/admin-dashboard.md`, "Story
- * context"): what the context step built and when, every card grouped by where it sits, with a place
- * select and Hide/Show, "Hide all context" (asked first), a link to the story page, and "What the run
- * did". Hiding and moving are the one way a person changes the cards (ADR-0062); nothing is deleted.
- * Hidden while the story has no context run, and against a backend without context.
+ * A story's Context section, the story page's Context tab (`.context/admin-dashboard.md`, "Story
+ * context"): what the newest context run did and when, every card grouped by where it sits, with a
+ * place select and Hide/Show, "Hide all context" (asked first), a link to the story page, and "What
+ * the run did". "Gather context" (an editor's run, which builds on the earlier ones) is in the page's
+ * action bar (`StoryActionBar`). Hiding and moving are the one way a person changes the cards
+ * (ADR-0062); nothing is deleted. Hidden while the story has no context run and cannot have one
+ * gathered, and against a backend without context (`contextShown`).
  */
 
 type StoryRef = Pick<Story, 'id' | 'slug' | 'status'>
@@ -27,20 +30,21 @@ const GROUPS: { name: string; has: (place: string) => boolean }[] = [
   { name: 'More context', has: place => !/^[PW]\d/.test(place) },
 ]
 
-/** What the newest run did, in one sentence. */
-function runLine(run: ContextAdminRun): string {
+/** What the newest run did, in one sentence (the step's run or an editor's); cards still shown from an earlier run say so. */
+function runLine(run: ContextAdminRun, hasBoxes: boolean): string {
   const when = formatDateWithTime(run.startedAt)
+  const earlier = hasBoxes ? ' The cards below are from an earlier run.' : ''
   switch (run.status) {
     case 'running':
-      return `The context step has been building this story's cards since ${when}.`
+      return `A context run has been building this story's cards since ${when}.`
     case 'skipped':
-      return `The context step skipped this story on ${when}: it had no research run with facts.`
+      return `The newest context run skipped this story on ${when}: it had no research run with facts.${earlier}`
     case 'failed':
-      return `The context step failed on ${when}: ${(run.error ?? 'no reason recorded').replace(/\.$/, '')}. It does not try again.`
+      return `The newest context run failed on ${when}: ${(run.error ?? 'no reason recorded').replace(/\.$/, '')}. It does not try again on its own.${earlier}`
     case 'completed':
       return run.outcome === 'none-kept'
-        ? `The context step ran on ${when}, after the story was published, and kept no card.`
-        : `Built ${when} by the context step, after the story was published.`
+        ? `The newest context run, on ${when}, kept no card.${earlier}`
+        : `The newest context run built these cards on ${when}.`
   }
 }
 
@@ -186,23 +190,25 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
 
   if (query.isError)
     return (
-      <div className="border-t border-neutral-200 pt-4">
-        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Context</h3>
+      <section aria-labelledby={`context-${story.id}`} className={EDITOR_SECTION}>
+        <h2 id={`context-${story.id}`} className={`${EDITOR_HEADING} mb-1`}>
+          Context
+        </h2>
         <p className="text-sm text-red-700">The story&apos;s context could not be loaded.</p>
-      </div>
+      </section>
     )
-  if (!data?.run) return null
+  if (!data || !contextShown(query)) return null
 
   const published = story.status === 'published'
   const counts = countsLine(data.boxes, published)
   return (
-    <section aria-labelledby={`context-${story.id}`} className="space-y-3 border-t border-neutral-200 pt-4">
+    <section aria-labelledby={`context-${story.id}`} className={`${EDITOR_SECTION} space-y-3`}>
       <div>
-        <h3 id={`context-${story.id}`} className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 id={`context-${story.id}`} className={`${EDITOR_HEADING} mb-1`}>
           Context
-        </h3>
+        </h2>
         <p className="text-sm text-neutral-600">
-          {runLine(data.run)}
+          {data.run ? runLine(data.run, data.boxes.length > 0) : 'This story has no context cards yet.'}
           {counts && ` ${counts}`}
         </p>
       </div>
@@ -229,9 +235,9 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
             if (boxes.length === 0) return null
             return (
               <div key={group.name} className="border-b border-neutral-100 last:border-b-0">
-                <h4 className="border-b border-neutral-100 bg-neutral-50 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                <h3 className="border-b border-neutral-100 bg-neutral-50 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
                   {group.name}
-                </h4>
+                </h3>
                 <ul className="divide-y divide-neutral-100">
                   {boxes.map(box => (
                     <CardRow key={box.id} box={box} places={data.places} storyId={story.id} />
@@ -242,7 +248,7 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
           })}
         </div>
       )}
-      <ContextRunView run={data.run} boxes={data.boxes} />
+      {data.run && <ContextRunView run={data.run} boxes={data.boxes} />}
     </section>
   )
 }

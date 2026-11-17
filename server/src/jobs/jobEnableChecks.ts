@@ -10,7 +10,7 @@ import {
   upliftingShowProblem,
 } from '../services/podcastEdition.js'
 import { podcastConfigProblem } from './podcastBootCheck.js'
-import { STORY_CONTEXT_JOB } from './buildStoryContext.js'
+import { STORY_CONTEXT_JOB } from '../services/storyContextQueue.js'
 import { GENERATE_UPLIFTING_NEWSLETTER_JOB } from './generateNewsletter.js'
 import { PUBLISH_NEWSLETTER_JOB, PUBLISH_UPLIFTING_NEWSLETTER_JOB, newsletterSendProblem, upliftingEditionProblem } from './publishNewsletter.js'
 import { config } from '../config.js'

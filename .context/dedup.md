@@ -138,7 +138,7 @@ In `server/src/config.ts` under `dedup`:
 | `client/src/hooks/useClusters.ts` | React Query hooks for cluster CRUD |
 | `client/src/components/AlsoCoveredBy.tsx` | "Also covered by" UI component |
 | `client/src/components/admin/StoryTable.tsx` | `ClusterBadge` in admin story table |
-| `client/src/components/admin/StoryEditForm.tsx` | Cluster section in edit panel + "Manage cluster" / "Create cluster" links |
+| `client/src/components/admin/StoryEditorSections.tsx` | Cluster section on the story page's Source tab + "Manage cluster" / "Create cluster" links |
 | `client/src/hooks/usePublicStories.ts` | `useClusterMembers()` hook |
 | `server/prisma/schema.prisma` | `StoryCluster` model |
 

@@ -119,7 +119,7 @@ npm run db:seed:synthetic --prefix server  # Fill a local *_synthetic DB with ma
 ## UI & Testing Patterns
 
 - **UI conventions** -- See `.context/ui-conventions.md` for SEO checklist, CSS utility classes, bundle splitting rules, accessibility requirements, and spelling rules.
-- **Admin side panels**: `EditPanel` with `PANEL_BODY`/`PANEL_FOOTER` CSS classes.
+- **Admin side panels**: `EditPanel` with `PANEL_BODY`/`PANEL_FOOTER` CSS classes. The story editor is a page, not a panel (`StoryDetailPage` at `/admin/stories/:id`; link to it with `storyPath()` and `returnState()` so its back link returns there, `.context/admin-dashboard.md`).
 - **Toast provider**: Components using `useToast()` need `<ToastProvider>` in tests.
 - **Headless UI dialogs**: Use `getByRole('heading', { name: ... })` to disambiguate from buttons.
 - **URL-persisted state**: Admin pages use `useSearchParams()` for state (e.g., `?open=id`).
@@ -169,7 +169,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |
 | `ai-transparency.md` | EU AI Act Art. 50 record: AI inventory, labels, machine-readable markers, text-watermark gap, open owner decisions |
 | `story-research.md` | Story research, the admin action: what a run does and never does (writes only its own `story_research_runs` row), eligibility, the `TAVILY_API_KEY` switch, the monthly cap and $0.25 reservation under its advisory lock, interrupted runs, cost recording (an upper bound), untrusted input, the AI opt-out seam, endpoints |
-| `story-context.md` | Story context cards, the `build_story_context` step after publishing (switched off): writes only its own tables, never a story field or status; which stories, the steps (pass 1 from research's facts, up to 3 searches with a 7-day cache, research's fact check on facts and cards, no repair, `response` always looked for, two searches from two angles, no card when nothing is found), validity on the story's day, the tile and chart rules, placement modes and limits, records, the failure-share notice (no pause), cost bounds, the public and admin route shapes |
+| `story-context.md` | Story context cards, the `build_story_context` step (switched off) in two parts, before publishing for the stories about to be published and after it for published ones still owed (no limit a run): writes only its own tables, never a story field or status; why context never holds the edition (no gate in the daily edition, a failure lets publishing go on; the publish gate waits for cards only in a publish run on its own), runs a restart cut off marked at once, an editor's "Gather context" on demand (any published researched story, one run per story at a time, each run building on the earlier ones, its spend the step's), the steps (pass 1 from research's facts, up to 3 searches with a 7-day cache, research's fact check on facts and cards, no repair, `response` always looked for, two searches from two angles, no card when nothing is found), validity on the story's day, the tile and chart rules, placement modes and limits, records, the failure-share notice (no pause), cost bounds, the public and admin route shapes |
 | `client/.context/skeletons.md` | Skeleton components for loading states (prevents CLS) |
 
 ## Memory

@@ -20,8 +20,8 @@ async function main() {
       update: {},
       create: { jobName: 'intake_chain', cronExpression: '0 4,10,16,22 * * *', enabled: false },
     }),
-    // The daily edition: select, research, publish. It goes at standard price 4.5 hours after it
-    // starts, and research starts no story after 6 hours
+    // The daily edition: select, research, context, publish. It goes at standard price 4.5 hours
+    // after it starts; no step has a time limit
     prisma.jobRun.upsert({
       where: { jobName: 'daily_edition_chain' },
       update: {},

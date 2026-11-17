@@ -4,7 +4,7 @@ import { runAssessStories } from './assessStories.js'
 import { runSelectStories } from './selectStories.js'
 import { runResearchStories } from './researchStories.js'
 import { runPublishStories } from './publishStories.js'
-import { runBuildStoryContext } from './buildStoryContext.js'
+import { owesPublishedStories, runBuildStoryContext } from './buildStoryContext.js'
 import { runBlueskyUpdateMetrics } from './blueskyUpdateMetrics.js'
 import { runGenerateNewsletter, runGenerateUpliftingNewsletter } from './generateNewsletter.js'
 import { runPublishNewsletter, runPublishUpliftingNewsletter } from './publishNewsletter.js'
@@ -29,7 +29,8 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   select_stories: runSelectStories,
   research_stories: runResearchStories,
   publish_stories: runPublishStories,
-  build_story_context: runBuildStoryContext,
+  // Run on its own, both of its parts in one run (SPLIT_STEPS below)
+  build_story_context: () => runBuildStoryContext('all'),
   social_auto_post: runSocialAutoPost,
   bluesky_update_metrics: runBlueskyUpdateMetrics,
   generate_newsletter: runGenerateNewsletter,
@@ -48,6 +49,30 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   send_queued_confirmations: runSendQueuedConfirmations,
   cleanup_old_stories: async () => {
     await runCleanupOldStories()
+  },
+}
+
+/** A chain step whose work comes in two parts (chains.ts), each a run of the step's own job. */
+export interface SplitStep {
+  /** At the step's place in its chain. */
+  atStep: () => Promise<void>
+  /** Once the chain's last step has run, while the step is on and `due` finds work for it. */
+  atEnd: () => Promise<void>
+  /** Whether `atEnd` has work: a run with none would only take the step's last run's place on the Jobs page. */
+  due: () => Promise<boolean>
+}
+
+/**
+ * The chain steps that split their work (`.context/scheduler.md`, "Chains"); run on its own, such a
+ * job's handler above does both parts at once.
+ */
+export const SPLIT_STEPS: Readonly<Record<string, SplitStep>> = {
+  // The cards of the stories about to be published before publishing; those of the published stories
+  // it still owes after it, so publishing never waits for them (.context/story-context.md, "The step")
+  build_story_context: {
+    atStep: () => runBuildStoryContext('to-publish'),
+    atEnd: () => runBuildStoryContext('published'),
+    due: owesPublishedStories,
   },
 }
 

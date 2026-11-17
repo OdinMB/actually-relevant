@@ -2,7 +2,18 @@ import { describe, it, expect } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import { TavilyError } from '../lib/tavily.js'
 import type { BoxesAnswer, ContextExtraction, GapList } from '../schemas/storyContext.js'
-import { buildStoryContext, CONTEXT_PROMPT_VERSIONS, planSearches, type ContextDeps, type ContextInput, type ContextStep } from './storyContextPipeline.js'
+import { contextFact } from '../test/contextFixtures.js'
+import {
+  buildStoryContext,
+  CONTEXT_PROMPT_VERSIONS,
+  planSearches,
+  type ContextDeps,
+  type ContextInput,
+  type ContextStep,
+  type EarlierWork,
+  type ReusableFact,
+} from './storyContextPipeline.js'
+import { factKey } from './storyContextRecords.js'
 import type { ContextSearchAnswer, ContextSearchRequest } from './storyContextSources.js'
 
 const input = (over: Partial<ContextInput> = {}): ContextInput => ({
@@ -482,5 +493,87 @@ describe('buildStoryContext', () => {
     expect(prompts['gap-list']![0]).toContain('id="S1F1"')
     expect(out.facts.find(f => f.ref === 'S1F1')).toMatchObject({ reusedFromId: 'earlier-fact-1', verdict: 'supported', model: 'old', source: { id: 'S1' } })
     expect(prompts['fact-check']![0]).not.toContain('Fact S1F1')
+  })
+})
+
+describe('buildStoryContext on a story with earlier runs', () => {
+  const orig = input().sources[0]!
+  const judgedKey = (i: number) => factKey({ url: orig.url, ...orig.facts[i]! })
+  /** A fact an earlier run of this story stored, as `loadEarlierWork` gives it. */
+  const earlierFact = (id: string, ref: string, url: string, statement: string): ReusableFact => ({
+    ...contextFact(ref, { origin: ref.startsWith('S0') ? 'research' : 'search', statement, supportingSentence: `${statement} (sentence)` }),
+    id,
+    source: { id: ref.replace(/F\d+$/, ''), url, outlet: 'Earlier outlet', title: 'Earlier', date: '2026-11-13', kind: 'official-body' },
+    model: 'earlier-model',
+  })
+  const earlier = (over: Partial<EarlierWork> = {}): EarlierWork => ({ facts: [], judged: [], queries: [], angles: [], read: [], ...over })
+  const allCovered = { ...gap('yes'), slots: gap('yes').slots.map(s => ({ ...s, covered: 'yes' as const })) }
+
+  it('neither structures nor checks again what an earlier run judged, carries its supported facts over and writes the cards from them', async () => {
+    const facts = [
+      earlierFact('row-1', 'S0F1', orig.url, orig.facts[0]!.statement),
+      earlierFact('row-2', 'S4F1', 'https://agency.example/plan', 'The agency plans to restore 2 million hectares.'),
+    ]
+    const { deps, prompts, requests } = fakeDeps({ gap: allCovered, boxes: { figures: null, boxes: [responseBox(['S2F1'])] } })
+    const out = await buildStoryContext(input({ earlier: earlier({ facts, judged: [judgedKey(0), judgedKey(1)] }) }), deps)
+
+    expect(prompts.structure).toBeUndefined()
+    expect(prompts['fact-check']).toBeUndefined()
+    expect(requests).toEqual([])
+    // Each earlier page under a new id after research's; both offered to the gap list and the write
+    expect(prompts['gap-list']![0]).toContain('id="S1F1"')
+    expect(prompts.write![0]).toContain('S2F1')
+    expect(out.record.facts).toMatchObject({ research: 0, carried: 2, supported: 0 })
+    // Only the carried fact a kept box cites is stored with the new run, pointing at its earlier row
+    expect(out.facts.map(f => [f.ref, f.origin, f.reusedFromId, f.verdict, f.model])).toEqual([['S2F1', 'search', 'row-2', 'supported', 'earlier-model']])
+    expect(out).toMatchObject({ status: 'completed', outcome: 'built' })
+  })
+
+  it('structures and checks only the research facts no earlier run judged', async () => {
+    const { deps, prompts } = fakeDeps({ gap: allCovered })
+    const out = await buildStoryContext(input({ earlier: earlier({ judged: [judgedKey(0)] }) }), deps)
+    expect(prompts.structure![0]).toContain('<FACT id="S0F2"')
+    expect(prompts.structure![0]).not.toContain('<FACT id="S0F1"')
+    expect(out.facts.map(f => f.ref)).toEqual(['S0F2'])
+    expect(out.record.facts).toMatchObject({ research: 1, leftOut: 0, carried: 0 })
+  })
+
+  it('skips the queries and response angles an earlier run searched, records them, and gives their places to the rest', async () => {
+    const { deps, requests } = fakeDeps({
+      gap: responseGap('peat restoration agency', 'what stopped peat fires elsewhere', [
+        search('compared', 'Peat  Fires Record'),
+        search('why_now', 'el nino drought'),
+        search('build_up', 'not needed'),
+        search('compared', 'peat fires 2015'),
+      ]),
+    })
+    const out = await buildStoryContext(input({ earlier: earlier({ queries: ['peat fires record'], angles: ['action'] }) }), deps)
+    expect(requests.map(r => r.query)).toEqual(['what stopped peat fires elsewhere', 'el nino drought', 'peat fires 2015'])
+    expect(out.record.skippedSearches).toEqual([
+      { slot: 'response', query: 'peat restoration agency' },
+      { slot: 'compared', query: 'Peat  Fires Record' },
+    ])
+    expect(out.record.searches.map(s => [s.slot, s.angle ?? null])).toEqual([
+      ['response', 'elsewhere'],
+      ['why_now', null],
+      ['compared', null],
+    ])
+  })
+
+  it('reads no page an earlier run read', async () => {
+    const { deps, prompts } = fakeDeps({ gap: responseGap() })
+    const out = await buildStoryContext(input({ earlier: earlier({ read: ['https://new-1.example/a'] }) }), deps)
+    expect(out.record.sourceDrops).toEqual([{ url: 'https://new-1.example/a', search: 0, reason: 'read' }])
+    expect(prompts.extract).toHaveLength(1)
+    expect(prompts.extract![0]).toContain('https://new-2.example/a')
+  })
+
+  it('counts a response angle searched before as looked for: nothing sourced answers it, so no card and recorded as not found', async () => {
+    const { deps, requests } = fakeDeps({ gap: responseGap() })
+    const out = await buildStoryContext(input({ earlier: earlier({ angles: ['action', 'elsewhere'] }) }), deps)
+    expect(requests).toEqual([])
+    expect(out.record.skippedSearches.map(s => s.slot)).toEqual(['response', 'response'])
+    expect(out.record.responseNotFound).toBe(true)
+    expect(out.boxes).toEqual([])
   })
 })
