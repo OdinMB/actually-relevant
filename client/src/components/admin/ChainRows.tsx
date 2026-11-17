@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { ClockIcon, ExclamationTriangleIcon, PauseCircleIcon } from '@heroicons/react/20/solid'
 import { PencilSquareIcon } from '@heroicons/react/24/outline'
 import type { JobRun } from '@shared/types'
@@ -13,13 +12,12 @@ import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { TimeWithRelative } from './TimeWithRelative'
 import { FlexHoursField, EnabledToggle, LastRun, RunButton } from './jobControls'
-import { JobEditPanel } from './JobsTable'
-import { JobRow, JobTable, WIDE } from './jobTable'
+import { FullWidthRow, JobRow, WIDE } from './jobTable'
 
 /** "HH:MM UTC" of an ISO time. */
 const utcClock = (iso: string) => `${iso.slice(11, 16)} UTC`
 
-/** What the chain is waiting on, in view: a review, a step's time, or a person after a failed step. */
+/** What the chain is waiting on, in a row across the table under it: a review, a step's time, or a person after a failed step. */
 function ChainState({ chain }: { chain: JobRun }) {
   const continueChain = useContinueChain()
   const { toast } = useToast()
@@ -35,47 +33,52 @@ function ChainState({ chain }: { chain: JobRun }) {
         : `Stopped at ${step}. The steps after it did not run.`
   const action = reason === 'review' ? `Continue with ${step}` : reason === 'waiting' ? `Run ${step} now` : `Resume from ${step}`
   return (
-    <div
-      className={`flex flex-wrap items-center gap-3 border-b px-4 py-2 text-sm ${failed ? 'border-red-200 bg-red-50 text-red-900' : 'border-sky-200 bg-sky-50 text-sky-900'}`}
-      role="status"
-    >
-      {failed ? (
-        <ExclamationTriangleIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      ) : reason === 'waiting' ? (
-        <ClockIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      ) : (
-        <PauseCircleIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      )}
-      <span>{message}</span>
-      <Button
-        size="sm"
-        variant={reason === 'review' ? 'primary' : 'secondary'}
-        disabled={continueChain.isPending}
-        onClick={() =>
-          continueChain.mutate(chain.jobName, {
-            onSuccess: () => toast('success', `${jobDisplayName(chain.jobName)} continues with ${step}`),
-            onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to continue the chain'),
-          })
-        }
+    <FullWidthRow>
+      <div
+        className={`flex flex-wrap items-center gap-3 border-b py-2 pl-8 pr-3 text-sm ${failed ? 'border-red-200 bg-red-50 text-red-900' : 'border-sky-200 bg-sky-50 text-sky-900'}`}
+        role="status"
       >
-        {action}
-      </Button>
-    </div>
+        {failed ? (
+          <ExclamationTriangleIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        ) : reason === 'waiting' ? (
+          <ClockIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        ) : (
+          <PauseCircleIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        )}
+        <span>{message}</span>
+        <Button
+          size="sm"
+          variant={reason === 'review' ? 'primary' : 'secondary'}
+          disabled={continueChain.isPending}
+          onClick={() =>
+            continueChain.mutate(chain.jobName, {
+              onSuccess: () => toast('success', `${jobDisplayName(chain.jobName)} continues with ${step}`),
+              onError: err => toast('error', err instanceof ApiError ? err.message : 'Failed to continue the chain'),
+            })
+          }
+        >
+          {action}
+        </Button>
+      </div>
+    </FullWidthRow>
   )
 }
 
 /**
- * The chain itself, above its steps in the same columns: its schedule (click to edit), switch, flex
+ * The chain's own row, heading its group: its name (and note), schedule (click to edit), switch, flex
  * cut-off in hours, status, the whole run's length and cost (what each step did is in its own row),
  * when it last finished, and Run and Details for the whole chain. Review stays empty: only a step
  * waits for review.
  */
-function ChainTotalRow({ chain, onOpen }: { chain: JobRun; onOpen: (jobName: string) => void }) {
+function ChainRow({ chain, onOpen }: { chain: JobRun; onOpen: (jobName: string) => void }) {
   const name = jobDisplayName(chain.jobName)
   return (
-    <tr className={`border-b-2 border-neutral-200 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}>
-      <th scope="row" className="px-3 py-2 text-left font-semibold text-neutral-900">
-        Whole chain
+    <tr className={`border-y border-neutral-200 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-100'}`}>
+      <th scope="row" id={`${chain.jobName}-title`} className="px-3 py-2 text-left font-semibold text-neutral-900">
+        <span className="inline-flex items-center gap-1">
+          {name}
+          {chain.note && <InfoTip label={`About ${name}`}>{chain.note}</InfoTip>}
+        </span>
         {/* The Schedule column shows from lg on; below it the schedule goes here, on one line */}
         <span className="mt-0.5 block font-normal lg:hidden">
           <CronEditor job={chain} compact />
@@ -111,33 +114,17 @@ function ChainTotalRow({ chain, onOpen }: { chain: JobRun; onOpen: (jobName: str
 }
 
 /**
- * A chain on the Jobs page: its name, then the chain itself in a Whole chain row and its steps in
- * order under it, in the Jobs page's shared table layout.
+ * A chain in the Jobs page's table: its own row, what it is waiting on (if anything), then its steps
+ * in order, indented under it.
  */
-export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) {
-  const [selected, setSelected] = useState<string | null>(null)
-  const panelJob = [chain, ...steps].find(j => j.jobName === selected)
-  const name = jobDisplayName(chain.jobName)
-
+export function ChainRows({ chain, steps, onOpen }: { chain: JobRun; steps: JobRun[]; onOpen: (jobName: string) => void }) {
   return (
-    <section aria-labelledby={`${chain.jobName}-title`} className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <div className={`flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-neutral-200 px-4 py-3 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}>
-        <h2 id={`${chain.jobName}-title`} className="flex min-w-[12rem] flex-1 items-center gap-1 text-base font-semibold text-neutral-900">
-          {name}
-          {chain.note && <InfoTip label={`About ${name}`}>{chain.note}</InfoTip>}
-        </h2>
-      </div>
-
+    <tbody aria-labelledby={`${chain.jobName}-title`}>
+      <ChainRow chain={chain} onOpen={onOpen} />
       <ChainState chain={chain} />
-
-      <JobTable>
-        <ChainTotalRow chain={chain} onOpen={setSelected} />
-        {steps.map((step, i) => (
-          <JobRow key={step.jobName} job={step} step={i + 1} onOpen={setSelected} />
-        ))}
-      </JobTable>
-
-      {panelJob && <JobEditPanel job={panelJob} onClose={() => setSelected(null)} />}
-    </section>
+      {steps.map((step, i) => (
+        <JobRow key={step.jobName} job={step} step={i + 1} onOpen={onOpen} />
+      ))}
+    </tbody>
   )
 }

@@ -4,7 +4,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import type { JobRun } from '@shared/types'
 import { ActionIconButton } from '../ui/ActionIconButton'
 import { InfoTip } from '../ui/InfoTip'
-import { jobDisplayName } from '../../lib/constants'
+import { byPipelineOrder, jobDisplayName } from '../../lib/constants'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { TimeWithRelative } from './TimeWithRelative'
@@ -29,7 +29,7 @@ const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean; 
   {
     label: 'Flex',
     width: 'lg:w-[8%]',
-    note: 'A job’s switch: its AI calls go at half price through OpenAI’s flex processing, which is slower and falls back to standard price when OpenAI is busy. A chain’s Whole chain row has hours instead: once that many hours have passed since the run started, every call in the chain goes at standard price, so a slow flex queue cannot hold up the chain for long. Empty: flex for the whole run.',
+    note: 'A job’s switch: its AI calls go at half price through OpenAI’s flex processing, which is slower and falls back to standard price when OpenAI is busy. A chain’s own row (the one with its name) has hours instead: once that many hours have passed since the run started, every call in the chain goes at standard price, so a slow flex queue cannot hold up the chain for long. Empty: flex for the whole run.',
   },
   { label: 'Status', width: 'lg:w-[10%]' },
   { label: 'Last Run', width: 'lg:w-[12%]', wide: true },
@@ -40,38 +40,85 @@ const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean; 
 /** A cell of a column shown from lg on only (Schedule, Last Run, Last Finished). */
 export const WIDE = 'hidden lg:table-cell'
 
+/**
+ * The Jobs page's one table: the column headers once, sticking to the top of the page as it scrolls
+ * (from lg on; below lg the table scrolls sideways, which a sticky header cannot follow), and every
+ * group of rows under them, each its own `<tbody>`.
+ */
 export function JobTable({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm lg:table-fixed">
-        <colgroup>
-          {COLUMNS.map(col => (
-            <col key={col.label} className={`${col.width} ${col.wide ? 'hidden lg:table-column' : ''}`} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr className="border-b border-neutral-200 bg-neutral-50">
+    // overflow-clip, not overflow-hidden, rounds the corners without making a scroll box the header would stick to
+    <div className="overflow-clip rounded-lg border border-neutral-200 bg-white shadow-sm">
+      <div className="overflow-x-auto lg:overflow-visible">
+        <table className="w-full text-sm lg:table-fixed">
+          <colgroup>
             {COLUMNS.map(col => (
-              <th
-                key={col.label}
-                scope="col"
-                className={`whitespace-nowrap px-3 py-2 font-medium text-neutral-500 ${col.right ? 'text-right' : 'text-left'} ${col.wide ? WIDE : ''}`}
-              >
-                {col.note ? (
-                  <span className="inline-flex items-center gap-0.5">
-                    {col.label}
-                    <InfoTip label={`About ${col.label}`}>{col.note}</InfoTip>
-                  </span>
-                ) : (
-                  col.label
-                )}
-              </th>
+              <col key={col.label} className={`${col.width} ${col.wide ? 'hidden lg:table-column' : ''}`} />
             ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>{' '}
-      </table>
+          </colgroup>
+          <thead>
+            <tr>
+              {COLUMNS.map(col => (
+                <th
+                  key={col.label}
+                  scope="col"
+                  // The shadow is the header's bottom line: a sticky cell's border scrolls away with the table.
+                  // -top-6 takes back the admin page's lg:p-6, so the header sticks flush with the top edge
+                  className={`whitespace-nowrap bg-neutral-50 px-3 py-2 font-medium text-neutral-500 shadow-[inset_0_-1px_0_theme(colors.neutral.200)] lg:sticky lg:-top-6 lg:z-10 ${col.right ? 'text-right' : 'text-left'} ${col.wide ? WIDE : ''}`}
+                >
+                  {col.note ? (
+                    <span className="inline-flex items-center gap-0.5">
+                      {col.label}
+                      <InfoTip label={`About ${col.label}`}>{col.note}</InfoTip>
+                    </span>
+                  ) : (
+                    col.label
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          {children}
+        </table>
+      </div>
     </div>
+  )
+}
+
+/** A heading row across the whole table, for a group of rows with no row of its own (Other jobs). */
+export function GroupHeadingRow({ id, title }: { id: string; title: string }) {
+  return (
+    <tr className="border-y border-neutral-200 bg-neutral-100">
+      <th id={id} scope="colgroup" colSpan={COLUMNS.length} className="px-3 py-2 text-left font-semibold text-neutral-900">
+        {title}
+      </th>
+    </tr>
+  )
+}
+
+/**
+ * The jobs that run on their own schedules, in pipeline order: under an Other jobs heading when chains
+ * come before them.
+ */
+export function OtherJobRows({ jobs, heading, onOpen }: { jobs: JobRun[]; heading: boolean; onOpen: (jobName: string) => void }) {
+  return (
+    <tbody aria-labelledby={heading ? 'other-jobs-title' : undefined}>
+      {heading && <GroupHeadingRow id="other-jobs-title" title="Other jobs" />}
+      {[...jobs].sort(byPipelineOrder).map(job => (
+        <JobRow key={job.jobName} job={job} onOpen={onOpen} />
+      ))}
+    </tbody>
+  )
+}
+
+/** A row across the whole table under a group's first row: what a chain is waiting on. */
+export function FullWidthRow({ children }: { children: React.ReactNode }) {
+  return (
+    <tr>
+      <td colSpan={COLUMNS.length} className="p-0">
+        {children}
+      </td>
+    </tr>
   )
 }
 
@@ -84,8 +131,9 @@ export function JobRow({ job, step, onOpen }: { job: JobRun; step?: number; onOp
   const name = jobDisplayName(job.jobName)
 
   return (
-    <tr className={`border-b border-neutral-100 last:border-0 ${job.running ? 'bg-yellow-50' : 'hover:bg-neutral-50'}`}>
-      <td className="px-3 py-2 font-medium text-neutral-900">
+    <tr className={`border-b border-neutral-100 ${job.running ? 'bg-yellow-50' : 'hover:bg-neutral-50'}`}>
+      {/* Indented under its group's row: the chain, or the Other jobs heading */}
+      <td className="py-2 pl-8 pr-3 font-medium text-neutral-900">
         <span className="inline-flex items-center gap-1">
           <button
             onClick={() => onOpen(job.jobName)}

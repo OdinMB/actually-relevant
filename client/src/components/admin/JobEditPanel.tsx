@@ -1,18 +1,13 @@
-import { useState } from 'react'
 import type { JobRun } from '@shared/types'
 import { Button } from '../ui/Button'
-import { jobDisplayName, byPipelineOrder } from '../../lib/constants'
+import { jobDisplayName } from '../../lib/constants'
 import { TimeWithRelative } from './TimeWithRelative'
 import { EnabledToggle, FlexToggle, LastRun, NotBeforeField, ReviewToggle } from './jobControls'
-import { JobRow, JobTable } from './jobTable'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { EditPanel, PANEL_BODY, PANEL_FOOTER } from './EditPanel'
 
-interface JobsTableProps {
-  jobs: JobRun[]
-}
-
+/** A job's details panel on the Jobs page: its switches, schedule or hold time, and its last runs. */
 export function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => void }) {
   return (
     <EditPanel open onClose={onClose} title={jobDisplayName(job.jobName)}>
@@ -103,28 +98,5 @@ export function JobEditPanel({ job, onClose }: { job: JobRun; onClose: () => voi
         </Button>
       </div>
     </EditPanel>
-  )
-}
-
-/** The jobs that run on their own schedules, in pipeline order, in the Jobs page's shared table layout. */
-export function JobsTable({ jobs }: JobsTableProps) {
-  const [selectedJob, setSelectedJob] = useState<string | null>(null)
-
-  const sortedJobs = [...jobs].sort(byPipelineOrder)
-
-  const panelJob = jobs.find(j => j.jobName === selectedJob)
-
-  return (
-    <>
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-        <JobTable>
-          {sortedJobs.map(job => (
-            <JobRow key={job.jobName} job={job} onOpen={setSelectedJob} />
-          ))}
-        </JobTable>
-      </div>
-
-      {panelJob && <JobEditPanel job={panelJob} onClose={() => setSelectedJob(null)} />}
-    </>
   )
 }

@@ -5,7 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { axe } from 'vitest-axe'
 import type { JobRun } from '@shared/types'
 import { ToastProvider } from '../ui/Toast'
-import { ChainCard } from './ChainCard'
+import { ChainRows } from './ChainRows'
+import { JobTable } from './jobTable'
 import { makeJobRun } from '../../test/jobs'
 
 const mockApi = vi.hoisted(() => ({ update: vi.fn(), continueChain: vi.fn(), list: vi.fn(), run: vi.fn(), serverTime: vi.fn() }))
@@ -31,13 +32,15 @@ function renderCard(c: JobRun = chain()) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <ToastProvider>
-        <ChainCard chain={c} steps={steps()} />
+        <JobTable>
+          <ChainRows chain={c} steps={steps()} onOpen={() => {}} />
+        </JobTable>
       </ToastProvider>
     </QueryClientProvider>,
   )
 }
 
-describe('ChainCard', () => {
+describe('ChainRows', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.update.mockResolvedValue({})
@@ -48,7 +51,7 @@ describe('ChainCard', () => {
   it('lists the steps in order, each with its Enabled and Review switches, and Flex only where a step makes AI calls', () => {
     renderCard()
     const checked = (pattern: RegExp) => screen.getAllByRole('switch', { name: pattern }).map(s => s.getAttribute('aria-checked'))
-    // The chain's own switch in the Whole chain row, then the three steps under it
+    // The chain's own switch in its row, then the three steps under it
     expect(checked(/^(Enable|Disable) /)).toEqual(['true', 'true', 'true', 'false'])
     expect(screen.getByRole('switch', { name: 'Disable Daily Edition' })).toBeInTheDocument()
     expect(checked(/review after/)).toEqual(['false', 'true', 'false'])
@@ -57,18 +60,19 @@ describe('ChainCard', () => {
     expect(screen.getByLabelText(/^Flex for/)).toHaveValue('4.5')
   })
 
-  it("explains the Flex column's switch and the Whole chain row's hours, counted from the start of each run", () => {
+  it("explains the Flex column's switch and the chain row's hours, counted from the start of each run", () => {
     renderCard()
     expect(screen.getByRole('button', { name: 'About Flex' })).toHaveAccessibleDescription(
-      /half price.*Whole chain row.*hours.*since the run started.*standard price/,
+      /half price.*chain’s own row.*hours.*since the run started.*standard price/,
     )
     expect(screen.getByRole('button', { name: 'About Review' })).toBeInTheDocument()
   })
 
-  it("puts the chain's own schedule, switch, flex hours, status and actions in a Whole chain row above its steps", () => {
+  it("heads its rows with the chain's own row: its name, schedule, switch, flex hours, status and actions, the steps under it", () => {
     renderCard(chain({ lastStartedAt: '2026-11-16T23:00:00Z', lastCompletedAt: '2026-11-16T23:06:00Z', lastRunSummary: 'Published 4 stories' }))
-    const total = screen.getByRole('rowheader', { name: /Whole chain/ }).closest('tr')!
+    const total = screen.getByRole('rowheader', { name: /^Daily Edition/ }).closest('tr')!
     expect(total.parentElement!.firstElementChild).toBe(total)
+    expect(screen.getByRole('rowgroup', { name: /^Daily Edition/ })).toBe(total.parentElement)
     expect(within(total).getAllByRole('button', { name: /Daily at 11:00 PM/ }).length).toBeGreaterThan(0)
     expect(within(total).getByRole('switch', { name: 'Disable Daily Edition' })).toBeInTheDocument()
     expect(within(total).getByLabelText(/^Flex for/)).toHaveValue('4.5')
