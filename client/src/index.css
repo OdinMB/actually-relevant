@@ -81,6 +81,23 @@
     @apply max-w-4xl mx-auto py-8 md:py-16 px-4;
   }
 
+  /* A story with context notes beside its text (.context/public-website.md, "Story context"): from lg
+     up its header and body column leave room on their right for the margin notes (17rem wide, 2.5rem
+     from the text, 2.5rem from the window's edge). The column moves left only as far as it must, so a
+     window of 90rem or more keeps it centered; below 70rem it stops 1rem from the left edge and narrows */
+  @media (min-width: 1024px) {
+    .story-column-noted {
+      max-width: min(48rem, 100% - 22rem);
+      margin-left: max(1rem, min((100% - 48rem) / 2, 100% - 69rem));
+    }
+
+    /* There a note sits in the margin, out of the flow, so the paragraph before it is its block's last
+       again and keeps no bottom margin, as on a story without notes; below lg the margin parts the two */
+    .prose p:has(+ [data-context-note]:last-child) {
+      margin-bottom: 0;
+    }
+  }
+
   .page-title {
     @apply text-4xl md:text-5xl font-bold mb-6 text-center;
   }

@@ -99,6 +99,19 @@ describe('jobEnableRefusal', () => {
     })
   })
 
+  it('refuses story context without the Tavily key, and allows it with one', () => {
+    const saved = process.env.TAVILY_API_KEY
+    try {
+      delete process.env.TAVILY_API_KEY
+      expect(jobEnableRefusal('build_story_context')).toMatch(/TAVILY_API_KEY/)
+      process.env.TAVILY_API_KEY = 'tvly-test'
+      expect(jobEnableRefusal('build_story_context')).toBeNull()
+    } finally {
+      if (saved === undefined) delete process.env.TAVILY_API_KEY
+      else process.env.TAVILY_API_KEY = saved
+    }
+  })
+
   it('lets an unexpected error through rather than reading it as a missing setting', () => {
     mockGuards.assertPodcastRunnable.mockImplementation(() => {
       throw new Error('boom')

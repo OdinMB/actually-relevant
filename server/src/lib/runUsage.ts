@@ -27,8 +27,17 @@ export interface RunUsage {
   standardCostUsd: number
   /** Calls to a model with no price on record (`config.llm.modelPrices`), left out of the sums. */
   unpricedCalls: number
-  /** Other paid services the run used (research's web searches), part of both sums. */
+  /** Other paid services the run used (web searches), part of both sums. */
   otherUsd: number
+  /** Web search credits behind `otherUsd`. */
+  searchCredits: number
+  /**
+   * Items the run's own checks judged (a step that checks what a model wrote reports them through
+   * `recordItems`), and how many of them failed. A step's tally stays on the step, out of its chain's:
+   * the Jobs page warns of a step whose share of failures is high (jobs/jobNotes.ts).
+   */
+  itemsChecked: number
+  itemsFailed: number
 }
 
 export interface RunScope {
@@ -58,6 +67,9 @@ export const emptyUsage = (): RunUsage => ({
   standardCostUsd: 0,
   unpricedCalls: 0,
   otherUsd: 0,
+  searchCredits: 0,
+  itemsChecked: 0,
+  itemsFailed: 0,
 })
 
 const storage = new AsyncLocalStorage<RunScope>()
@@ -154,13 +166,28 @@ export function recordCall(scope: RunScope, call: CallRecord): void {
   }
 }
 
-/** Add spending on another paid service to the current run and every run around it; no-op outside one. */
-export function recordOtherCost(usd: number): void {
+/**
+ * Add spending on another paid service (a web search, with its credits) to the current run and every
+ * run around it; no-op outside one.
+ */
+export function recordOtherCost(usd: number, credits = 0): void {
   for (let s = currentRun() ?? null; s; s = s.parent) {
     s.usage.otherUsd += usd
     s.usage.costUsd += usd
     s.usage.standardCostUsd += usd
+    s.usage.searchCredits += credits
   }
+}
+
+/**
+ * Count items the current run's checks judged, and how many failed, in the current run only: a step's
+ * tally does not roll up into its chain's. No-op outside a run.
+ */
+export function recordItems(checked: number, failed: number): void {
+  const usage = currentRun()?.usage
+  if (!usage) return
+  usage.itemsChecked += checked
+  usage.itemsFailed += failed
 }
 
 /** Keep `work` (reading a response's usage) until `settleRun` waits for it. */

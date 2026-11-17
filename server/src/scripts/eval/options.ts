@@ -1,13 +1,14 @@
 /**
- * Parse and validate the eval CLI flags (eval:models, eval:recalibrate and
- * eval:research). Kept apart from the entry points so the spend cap can be
- * tested without loading `.env`.
+ * Parse and validate the eval CLI flags (eval:models, eval:recalibrate,
+ * eval:research and eval:overviews). Kept apart from the entry points so the
+ * spend cap can be tested without loading `.env`.
  */
 import { parseArgs } from 'node:util'
-import { parseEffort, type ReasoningEffort } from '../../config.js'
+import { parseEffort, REASONING_EFFORTS, type ReasoningEffort } from '../../config.js'
+import { MODELS } from './models.js'
 import { MAX_REPEAT } from './repeats.js'
 import type { Half } from './sampling.js'
-import type { SuiteName } from './types.js'
+import type { Arm, ModelId, SuiteName } from './types.js'
 
 export const SUITE_NAMES: SuiteName[] = ['preassess', 'assess', 'dedup', 'related', 'social', 'large']
 export const DEFAULT_BUDGET_USD = 18
@@ -238,5 +239,115 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
     budget: budgetOf(values.budget, RESEARCH_DEFAULT_BUDGET_USD),
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
     refreshFixtures: values['refresh-fixtures'] ?? false,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// eval:overviews
+// ---------------------------------------------------------------------------
+
+/** Every step, in the order a run takes them: `context` before `fact-check`, which `--facts context` samples from it. */
+export const OVERVIEW_STEPS = ['keys', 'gap-keys', 'gap-draft', 'context', 'fact-check', 'baseline'] as const
+export type OverviewStep = (typeof OVERVIEW_STEPS)[number]
+/**
+ * A run without `--steps`. Story context's steps run only when named: `gap-draft` writes drafts for
+ * the check, and `context` searches with Tavily and calls the strong judge.
+ */
+export const OVERVIEW_DEFAULT_STEPS: readonly OverviewStep[] = ['keys', 'fact-check', 'baseline']
+/** Which facts the fact check plants errors in: research's extracted statements, or module 1's rendered facts. */
+export const OVERVIEW_FACT_SOURCES = ['research', 'context'] as const
+export type OverviewFactSource = (typeof OVERVIEW_FACT_SOURCES)[number]
+const OVERVIEW_HALVES = ['tune', 'judge', 'all'] as const
+export type OverviewHalf = (typeof OVERVIEW_HALVES)[number]
+export const OVERVIEW_DEFAULT_BUDGET_USD = 3
+/** Facts sampled for the fact check. */
+export const OVERVIEW_DEFAULT_SIZE = 300
+export const OVERVIEW_MAX_SIZE = 600
+/** Production's research fact-check arm: the small tier, gpt-6-luna@low (`research/pipeline.ts`). */
+export const OVERVIEW_DEFAULT_ARMS: readonly Arm[] = [{ model: 'gpt-6-luna', effort: 'low' }]
+
+export interface OverviewOptions {
+  out: string
+  steps: OverviewStep[]
+  /** Cap on the folder's ledger total. */
+  budget: number
+  dryRun: boolean
+  concurrency: number
+  /** Runs of each arm on the variants (the label pass runs once); run k ≥ 2 has its own cache key. */
+  repeat: number
+  /** Facts sampled into the fixtures. */
+  size: number
+  /** Label and judge only the first N sampled facts (a smoke run). */
+  limit?: number
+  /** The fact-check arms scored. */
+  arms: Arm[]
+  refreshFixtures: boolean
+  /** `context`: the fact check samples the facts the `context` step's run 1 kept, so both steps run. */
+  facts: OverviewFactSource
+  /** The gap keys the `context` step runs on: prompts are tuned on `tune`, the gate is read on `judge`. */
+  half: OverviewHalf
+}
+
+/** `model@effort,…`, each model one with a price in `MODELS`; duplicates once. */
+function armsOf(value: string | undefined): Arm[] {
+  if (value === undefined) return [...OVERVIEW_DEFAULT_ARMS]
+  const arms = value.split(',').map(s => {
+    const [model = '', effort = ''] = s.trim().split('@')
+    const known = (Object.keys(MODELS) as ModelId[]).find(m => m === model)
+    const level = REASONING_EFFORTS.find(e => e === effort)
+    if (!known || !level) throw new Error(`--arms takes model@effort with a model from the price table (${Object.keys(MODELS).join(', ')}); got "${s.trim()}"`)
+    return { model: known, effort: level }
+  })
+  return arms.filter((a, i) => arms.findIndex(b => b.model === a.model && b.effort === a.effort) === i)
+}
+
+export function parseOverviewOptions(argv: string[]): OverviewOptions {
+  const { values } = parseArgs({
+    args: argv,
+    strict: true,
+    options: {
+      out: { type: 'string' },
+      steps: { type: 'string' },
+      budget: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+      concurrency: { type: 'string' },
+      repeat: { type: 'string' },
+      size: { type: 'string' },
+      limit: { type: 'string' },
+      arms: { type: 'string' },
+      'refresh-fixtures': { type: 'boolean', default: false },
+      facts: { type: 'string' },
+      half: { type: 'string' },
+    },
+  })
+  if (!values.out) throw new Error('--out is required')
+  const size = positiveInt('--size', values.size, OVERVIEW_DEFAULT_SIZE) ?? OVERVIEW_DEFAULT_SIZE
+  if (size > OVERVIEW_MAX_SIZE) throw new Error(`--size must be at most ${OVERVIEW_MAX_SIZE}`)
+  const repeat = positiveInt('--repeat', values.repeat, 1) ?? 1
+  if (repeat > MAX_REPEAT) throw new Error(`--repeat must be at most ${MAX_REPEAT}`)
+  const limit = positiveInt('--limit', values.limit)
+  const steps = listOf('--steps', values.steps, OVERVIEW_STEPS, OVERVIEW_DEFAULT_STEPS)
+  const facts = OVERVIEW_FACT_SOURCES.find(f => f === (values.facts ?? 'research'))
+  if (!facts) throw new Error(`--facts must be one of ${OVERVIEW_FACT_SOURCES.join(', ')}`)
+  if (facts === 'context' && !(steps.includes('context') && steps.includes('fact-check'))) {
+    throw new Error(
+      "--facts context samples the facts the context step keeps: name both context and fact-check in --steps (the context step's calls and searches are cached, so a repeated run costs nothing more)",
+    )
+  }
+  const half = OVERVIEW_HALVES.find(h => h === (values.half ?? 'all'))
+  if (!half) throw new Error(`--half must be one of ${OVERVIEW_HALVES.join(', ')}`)
+  return {
+    out: values.out,
+    steps,
+    budget: budgetOf(values.budget, OVERVIEW_DEFAULT_BUDGET_USD),
+    dryRun: values['dry-run'] ?? false,
+    concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
+    repeat,
+    size,
+    ...(limit !== undefined ? { limit } : {}),
+    arms: armsOf(values.arms),
+    refreshFixtures: values['refresh-fixtures'] ?? false,
+    facts,
+    half,
   }
 }

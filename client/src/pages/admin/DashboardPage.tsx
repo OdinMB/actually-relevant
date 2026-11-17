@@ -17,6 +17,7 @@ import { formatStatus, STATUS_VARIANTS, jobDisplayName, byPipelineOrder } from '
 import { TimeWithRelative } from '../../components/admin/TimeWithRelative'
 import { dashboardRows } from '../../lib/jobRun'
 import { UnseenNoticesCard } from '../../components/admin/UnseenNoticesCard'
+import { SpendingCard } from '../../components/admin/SpendingCard'
 import { useToast } from '../../components/ui/Toast'
 import { adminApi, ApiError } from '../../lib/admin-api'
 import { Button } from '../../components/ui/Button'
@@ -95,6 +96,8 @@ export default function DashboardPage() {
       />
 
       <UnseenNoticesCard />
+
+      <SpendingCard />
 
       {/* Story Stats */}
       <section className="mb-8">

@@ -259,3 +259,36 @@ before. Not yet measured with `eval:research`. The methodology page's "If the re
 the story is old news or is contradicted by other reports, we don't publish it" now reads wider
 than both rules and says nothing of the latest state; that wording is the owner's
 (`.context/ai-transparency.md`, §3 and §11).
+
+## Amendment 2026-11-16: every new step, starting with story context
+
+The overviews roadmap (`.plans/2026-11-16_story-overviews.md`, decision D4, the owner's on
+2026-11-16: code checks are not reliable enough, "50%" against "half of") extends this decision's
+rule to every new step that states numbers. Story context (`.context/story-context.md`, ADR-0061)
+is the first.
+
+- **Extraction keeps the supporting sentence word for word and what a figure measures**: story
+  context's pass 2 keeps the sentence and a passage of at most 600 characters around it; pass 1
+  structures research's kept facts (value, unit, what is counted, place, as-of, credited body).
+- **A fact-check call judges each fact against the passage it came from**: research's prompt and
+  schema, unchanged, on each fact as `renderFact` renders its structured fields, with the sentence
+  (or passage) and its source's date fact as evidence; and again on each card's sentences, tiles
+  and charts against their cited facts, with the sources' lines for copying.
+- **Code checks only structure**: a fact names a source the run fetched and has a statement and a
+  sentence; a cited id is a supported fact; a place exists. A failure there drops the item.
+- **What else code notices is a hint**, never a failure. Sent to the judge: numbers in an item that
+  its evidence does not state digit for digit (`<NUMBERS_NOT_FOUND>`, as research gives them).
+  Recorded, not sent: whether the supporting sentence stood word for word in the fetched text
+  (`support_found`), which the judge could not use since it sees only the sentence; the eval
+  measures it, and a hint channel, which would change research's prompt, is the follow-up if
+  not-found facts prove often wrong. That an as-of date is later than its source's date is visible
+  to the judge through the date fact. Chart and tile rules are rules for drawing, not checks of
+  truth: a chart that breaks one is not drawn and fails nothing (ADR-0064).
+
+Rule: in every step, a number is judged by the fact check against its source's words; code fails
+only structure, and passes what else it notices as a hint or a record.
+
+Consequences: a story's context costs two fact-check passes (facts, then cards) on the small tier,
+no repair. A wrong number the judge misses reaches a card with its source shown (ADR-0063); where
+numbers slip through, the fact check's rules get tighter, and since the prompt is shared, research
+and context tighten together.

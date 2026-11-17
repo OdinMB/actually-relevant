@@ -58,6 +58,17 @@ async function main() {
       update: {},
       create: { jobName: 'publish_stories', cronExpression: '0 11 * * *', enabled: false },
     }),
+    // Disabled until the owner switches it on, with its $20 spending warning (.context/story-context.md)
+    prisma.jobRun.upsert({
+      where: { jobName: 'build_story_context' },
+      update: {},
+      create: { jobName: 'build_story_context', cronExpression: '30 1 * * *', enabled: false },
+    }),
+    prisma.spendWarning.upsert({
+      where: { scope: 'build_story_context' },
+      update: {},
+      create: { scope: 'build_story_context', levelUsd: 20 },
+    }),
     prisma.jobRun.upsert({
       where: { jobName: 'social_auto_post' },
       update: {},

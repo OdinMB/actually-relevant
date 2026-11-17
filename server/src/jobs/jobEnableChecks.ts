@@ -10,14 +10,19 @@ import {
   upliftingShowProblem,
 } from '../services/podcastEdition.js'
 import { podcastConfigProblem } from './podcastBootCheck.js'
+import { STORY_CONTEXT_JOB } from './buildStoryContext.js'
 import { GENERATE_UPLIFTING_NEWSLETTER_JOB } from './generateNewsletter.js'
 import { PUBLISH_NEWSLETTER_JOB, PUBLISH_UPLIFTING_NEWSLETTER_JOB, newsletterSendProblem, upliftingEditionProblem } from './publishNewsletter.js'
+import { config } from '../config.js'
 
 /** Actually Uplifting's podcast jobs run only for an open show with a complete podcast configuration. */
 const upliftingPodcastProblem = () => upliftingShowProblem() ?? podcastConfigProblem()
 
+/** Story context reads research's runs and searches the web: without the key neither exists. */
+const storyContextProblem = () => (config.research.tavilyApiKey ? null : 'story context needs web search: set TAVILY_API_KEY (.context/story-context.md)')
+
 /** Each check returns why the job cannot run, or null when it can. */
-const ENABLE_CHECKS: Record<string, () => string | null> = {
+export const ENABLE_CHECKS: Readonly<Record<string, () => string | null>> = {
   [PUBLISH_NEWSLETTER_JOB]: newsletterSendProblem,
   // Actually Uplifting's issue has no audience until the editions are open
   [GENERATE_UPLIFTING_NEWSLETTER_JOB]: upliftingEditionProblem,
@@ -26,6 +31,7 @@ const ENABLE_CHECKS: Record<string, () => string | null> = {
   [PUBLISH_PODCAST_JOB]: podcastConfigProblem,
   [GENERATE_UPLIFTING_PODCAST_JOB]: upliftingPodcastProblem,
   [PUBLISH_UPLIFTING_PODCAST_JOB]: upliftingPodcastProblem,
+  [STORY_CONTEXT_JOB]: storyContextProblem,
 }
 
 /** Why the job may not be enabled now, or null when nothing stands in the way. */

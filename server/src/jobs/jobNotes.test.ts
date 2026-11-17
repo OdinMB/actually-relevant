@@ -2,7 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 
 vi.mock('../lib/prisma.js', () => ({ default: {} }))
 
-const { jobNotes } = await import('./jobNotes.js')
+const { jobNotes, failureShareWarning } = await import('./jobNotes.js')
+const { emptyUsage } = await import('../lib/runUsage.js')
 const { JOB_HANDLERS } = await import('./handlers.js')
 const { config } = await import('../config.js')
 
@@ -50,6 +51,14 @@ describe('jobNotes', () => {
     ['research_stories', () => override(config.research.pipeline, { perRun: 37, concurrency: 29, maxWaitMinutes: 47 }), ['37', '29', '47']],
     ['research_stories', () => override(config.research, { monthlyCapUsd: 13 }), ['$13']],
     ['publish_stories', () => override(config.research.pipeline, { maxWaitMinutes: 47 }), ['47']],
+    [
+      'build_story_context',
+      () => (
+        override(config.storyContext, { lookbackDays: 4, perRun: 27, maxSearches: 5, failedStoriesMin: 7 }),
+        override(config.jobs.failureShare, { share: 0.3, minItems: 31 })
+      ),
+      ['4', '27', '5', '30%', '31', '7'],
+    ],
     ['preassess_stories', () => override(config.preassess, { batchSize: 17 }), ['17']],
     ['assess_stories', () => (override(config.assess, { fullAssessmentThreshold: 9 }), override(config.dedup, { timeWindowDays: 23 })), ['9', '23']],
     ['select_stories', () => override(config.selection, { ratio: 0.3, relevanceMin: 6, maxGroupSize: 33 }), ['30%', '6', '33']],
@@ -121,5 +130,43 @@ describe('jobNotes', () => {
 
   it('has neither for a job it does not know', () => {
     expect(jobNotes('not_a_job')).toEqual({ note: null, warning: null })
+  })
+
+  describe('the failure share of the items a run checked', () => {
+    const usage = (itemsChecked: number, itemsFailed: number) => ({ ...emptyUsage(), itemsChecked, itemsFailed })
+
+    it('warns when more than the share failed, from the least number of checked items on', () => {
+      override(config.jobs.failureShare, { share: 0.2, minItems: 20 })
+      expect(failureShareWarning(usage(180, 41))).toMatch(/41 of 180 checked items/)
+      expect(failureShareWarning(usage(20, 5))).toMatch(/5 of 20 checked items/)
+    })
+
+    it('stays quiet at exactly the share, under the least number of items, with none checked and without a run', () => {
+      override(config.jobs.failureShare, { share: 0.2, minItems: 20 })
+      expect(failureShareWarning(usage(20, 4))).toBeNull()
+      expect(failureShareWarning(usage(19, 19))).toBeNull()
+      expect(failureShareWarning(usage(0, 0))).toBeNull()
+      expect(failureShareWarning(null)).toBeNull()
+    })
+
+    it('reads the share and the least number of items from config at each call', () => {
+      override(config.jobs.failureShare, { share: 0.5, minItems: 10 })
+      expect(failureShareWarning(usage(10, 5))).toBeNull()
+      expect(failureShareWarning(usage(10, 6))).not.toBeNull()
+    })
+
+    it("is any job's warning, from the last run's usage, and words it for the people who run the site", () => {
+      researchOn()
+      const warning = jobNotes('select_stories', { lastRunUsage: usage(100, 60) }).warning
+      expect(warning).toMatch(/60 of 100/)
+      expect(warning).not.toMatch(/`|\w\(\)|\bconfig\./)
+      expect(jobNotes('select_stories', { lastRunUsage: usage(100, 3) }).warning).toBeNull()
+    })
+
+    it("comes after a job's own warning", () => {
+      researchKeyUnset()
+      const warning = jobNotes('research_stories', { lastRunUsage: usage(100, 60) }).warning
+      expect(warning).toMatch(/Tavily key.*60 of 100/s)
+    })
   })
 })

@@ -106,6 +106,23 @@ describeDb('story research runs', () => {
     expect(taskRegistry.get(taskId)).toMatchObject({ status: 'completed', completed: 1, failed: 0 })
   })
 
+  it("checks the spending warning levels once an editor's run has finished: a passed level records its notice", async () => {
+    await prisma.spendWarning.create({ data: { scope: 'editor_research', levelUsd: 1 } })
+    await prisma.storyResearchRun.create({ data: { status: 'completed', trigger: 'editor', costUsd: 1, startedAt: new Date() } })
+    const story = await researchable()
+
+    const { taskId } = await startResearchRun(story.id)
+    await vi.waitFor(() => expect(taskRegistry.get(taskId)?.status).toBe('completed'), { timeout: 5000, interval: 20 })
+
+    const notices = await prisma.adminNotice.findMany()
+    expect(notices).toEqual([
+      expect.objectContaining({
+        dedupeKey: expect.stringMatching(/^spend-warn:editor_research:\d{4}-\d{2}:passed$/),
+        title: 'Research started by an editor passed $1 this month',
+      }),
+    ])
+  })
+
   it('counts a run that ends as fallback as completed, and stores its category with its result', async () => {
     const verdict = { kind: 'fallback', reason: 'no usable source', category: 'no_other_coverage' } as const
     mockPipeline.researchStory.mockImplementation(async (s: { id: string }) => research(s.id, { verdict }))

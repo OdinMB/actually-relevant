@@ -19,16 +19,22 @@ const mockPrisma = vi.hoisted(() => ({
       Object.assign(rows.get(where.jobName)!, data)
       return Promise.resolve({})
     }),
-    findMany: vi.fn(() =>
-      Promise.resolve([...rows.entries()].filter(([, row]) => row.resumeReason === 'waiting').map(([jobName, row]) => ({ jobName, resumeAt: row.resumeAt }))),
+    findMany: vi.fn(({ where }: { where: { jobName: { in: string[] }; resumeReason?: string; enabled?: boolean } }) =>
+      Promise.resolve(
+        [...rows.entries()]
+          .filter(([jobName]) => where.jobName.in.includes(jobName))
+          .filter(([, row]) => where.resumeReason === undefined || row.resumeReason === where.resumeReason)
+          .filter(([, row]) => where.enabled === undefined || row.enabled === where.enabled)
+          .map(([jobName, row]) => ({ jobName, resumeAt: row.resumeAt })),
+      ),
     ),
   },
 }))
-// Three steps keep the cases short; the real chains are checked under "definitions"
-vi.mock('./chainDefinitions.js', async importOriginal => ({
-  ...(await importOriginal<typeof import('./chainDefinitions.js')>()),
-  CHAINS: { daily_edition_chain: ['select_stories', 'research_stories', 'publish_stories'] },
-}))
+// A three-step chain keeps most cases short; the real chains run beside it, and are checked under "definitions"
+vi.mock('./chainDefinitions.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('./chainDefinitions.js')>()
+  return { ...actual, CHAINS: { ...actual.CHAINS, test_chain: ['select_stories', 'research_stories', 'publish_stories'] } }
+})
 const mockRunJob = vi.hoisted(() => vi.fn())
 const mockNotify = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
@@ -55,75 +61,104 @@ const step = (overrides: Partial<Row> = {}): Row => ({
   chainStartedAt: null,
   ...overrides,
 })
-const chain = () => rows.get('daily_edition_chain')!
+const chain = () => rows.get('test_chain')!
 const ranSteps = () => mockRunJob.mock.calls.map(([name]) => name as string)
 
 describe('chains', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     rows.clear()
-    rows.set('daily_edition_chain', step())
+    rows.set('test_chain', step())
     for (const name of STEPS) rows.set(name, step())
     mockRunJob.mockResolvedValue({ result: 'succeeded' })
   })
 
   it('runs every step in order and ends with nothing to resume', async () => {
-    await runChain('daily_edition_chain')
+    await runChain('test_chain')
     expect(ranSteps()).toEqual(STEPS)
     expect(chain()).toMatchObject({ resumeStep: null, resumeReason: null })
   })
 
   it('skips a step that is off and runs the next on what there is', async () => {
     rows.get('research_stories')!.enabled = false
-    await runChain('daily_edition_chain')
+    await runChain('test_chain')
     expect(ranSteps()).toEqual(['select_stories', 'publish_stories'])
   })
 
   it('stops at a failed step: nothing after it runs, the chain fails with its error and can resume from it', async () => {
     mockRunJob.mockImplementation(async (name: string) => (name === 'research_stories' ? { result: 'failed', error: 'Tavily down' } : { result: 'succeeded' }))
 
-    await expect(runChain('daily_edition_chain')).rejects.toThrow(/Stopped at research_stories.*Tavily down/)
+    await expect(runChain('test_chain')).rejects.toThrow(/Stopped at research_stories.*Tavily down/)
 
     expect(ranSteps()).toEqual(['select_stories', 'research_stories'])
     expect(chain()).toMatchObject({ resumeStep: 'research_stories', resumeReason: 'failed' })
-    expect(canContinue('daily_edition_chain', chain())).toBe(true)
+    expect(canContinue('test_chain', chain())).toBe(true)
   })
 
   it('waits for review after a step set to Review, with a notice, and Continue goes on from the next step', async () => {
     rows.get('select_stories')!.pauseForReview = true
 
-    await runChain('daily_edition_chain')
+    await runChain('test_chain')
     expect(ranSteps()).toEqual(['select_stories'])
     expect(chain()).toMatchObject({ resumeStep: 'research_stories', resumeReason: 'review' })
-    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ severity: 'info', dedupeKey: 'chain-review:daily_edition_chain' }))
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ severity: 'info', dedupeKey: 'chain-review:test_chain' }))
 
     mockRunJob.mockClear()
-    await runChain('daily_edition_chain', 'continue')
+    await runChain('test_chain', 'continue')
     expect(ranSteps()).toEqual(['research_stories', 'publish_stories'])
     expect(chain()).toMatchObject({ resumeStep: null, resumeReason: null })
   })
 
   it('a review pause on the last step has nothing to wait for', async () => {
     rows.get('publish_stories')!.pauseForReview = true
-    await runChain('daily_edition_chain')
+    await runChain('test_chain')
     expect(chain().resumeReason).toBeNull()
     expect(mockNotify).not.toHaveBeenCalled()
   })
 
+  it('a review pause waits for the next step that is on, past one that is off', async () => {
+    rows.get('select_stories')!.pauseForReview = true
+    rows.get('research_stories')!.enabled = false
+
+    await runChain('test_chain')
+    expect(chain()).toMatchObject({ resumeStep: 'publish_stories', resumeReason: 'review' })
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('publish_stories runs next') }))
+  })
+
+  it('the real daily edition: a Review on publish_stories waits only while a step after it is on', async () => {
+    const daily = CHAINS.daily_edition_chain!
+    const later = daily.slice(daily.indexOf('publish_stories') + 1)
+    rows.set('daily_edition_chain', step())
+    for (const name of daily) rows.set(name, step({ enabled: !later.includes(name) }))
+    rows.get('publish_stories')!.pauseForReview = true
+
+    // Every step after publishing is off (story context is, by default): nothing to wait for
+    await runChain('daily_edition_chain')
+    expect(ranSteps()).toEqual(daily.slice(0, daily.indexOf('publish_stories') + 1))
+    expect(rows.get('daily_edition_chain')).toMatchObject({ resumeStep: null, resumeReason: null })
+    expect(mockNotify).not.toHaveBeenCalled()
+
+    // Once a later step is switched on, the chain waits for it
+    const next = later[0]!
+    rows.get(next)!.enabled = true
+    await runChain('daily_edition_chain')
+    expect(rows.get('daily_edition_chain')).toMatchObject({ resumeStep: next, resumeReason: 'review' })
+  })
+
   it('a scheduled run after a pause starts from the first step again', async () => {
     Object.assign(chain(), { resumeStep: 'publish_stories', resumeReason: 'review' })
-    await runChain('daily_edition_chain')
+    await runChain('test_chain')
     expect(ranSteps()).toEqual(STEPS)
   })
 
   it('resumes from the step it was in when its last run was cut off by a restart', async () => {
     Object.assign(chain(), { resumeStep: 'research_stories', resumeReason: 'running', interruptedRuns: 1 })
-    await runChain('daily_edition_chain')
+    await runChain('test_chain')
     expect(ranSteps()).toEqual(['research_stories', 'publish_stories'])
   })
 
   it('refuses Continue with nothing to continue', async () => {
-    await expect(runChain('daily_edition_chain', 'continue')).rejects.toThrow(/nothing to continue/)
+    await expect(runChain('test_chain', 'continue')).rejects.toThrow(/nothing to continue/)
     expect(mockRunJob).not.toHaveBeenCalled()
   })
 
@@ -132,7 +167,7 @@ describe('chains', () => {
     config.chains.stepWaitPollMs = 1
     try {
       mockRunJob.mockResolvedValueOnce({ result: 'succeeded' }).mockResolvedValueOnce({ result: 'skipped' }).mockResolvedValue({ result: 'succeeded' })
-      await runChain('daily_edition_chain')
+      await runChain('test_chain')
       expect(ranSteps()).toEqual(['select_stories', 'research_stories', 'research_stories', 'publish_stories'])
     } finally {
       Object.assign(config.chains, original)
@@ -144,7 +179,7 @@ describe('chains', () => {
     Object.assign(config.chains, { stepWaitMinutes: 0, stepWaitPollMs: 1 })
     try {
       mockRunJob.mockResolvedValue({ result: 'skipped' })
-      await expect(runChain('daily_edition_chain')).rejects.toThrow(/still running/)
+      await expect(runChain('test_chain')).rejects.toThrow(/still running/)
       expect(chain()).toMatchObject({ resumeStep: 'select_stories', resumeReason: 'failed' })
     } finally {
       Object.assign(config.chains, original)
@@ -163,19 +198,19 @@ describe('chains', () => {
     })
 
     it('holds the chain before the step, lets the run end, and goes on by itself at the time', async () => {
-      await runChain('daily_edition_chain')
+      await runChain('test_chain')
       expect(ranSteps()).toEqual(['select_stories', 'research_stories'])
       expect(chain()).toMatchObject({ resumeStep: 'publish_stories', resumeReason: 'waiting', resumeAt: new Date('2026-11-17T11:30:00Z') })
-      expect(canContinue('daily_edition_chain', chain())).toBe(true)
+      expect(canContinue('test_chain', chain())).toBe(true)
 
       // At the time, the chain goes on through the scheduler, from the held step
       mockRunJob.mockClear()
       mockRunJob.mockImplementation(async (name: string, handler: () => Promise<void>) => {
-        if (name === 'daily_edition_chain') await handler()
+        if (name === 'test_chain') await handler()
         return { result: 'succeeded' }
       })
       await vi.advanceTimersByTimeAsync(12.5 * 3600_000)
-      expect(ranSteps()).toEqual(['daily_edition_chain', 'publish_stories'])
+      expect(ranSteps()).toEqual(['test_chain', 'publish_stories'])
       expect(chain()).toMatchObject({ resumeStep: null, resumeReason: null })
     })
 
@@ -185,14 +220,14 @@ describe('chains', () => {
         vi.setSystemTime(new Date('2026-11-17T00:00:00Z'))
         return { result: 'succeeded' }
       })
-      await runChain('daily_edition_chain')
+      await runChain('test_chain')
       expect(ranSteps()).toEqual(STEPS)
     })
 
     it('runs the held step now when a person continues the chain', async () => {
-      await runChain('daily_edition_chain')
+      await runChain('test_chain')
       mockRunJob.mockClear()
-      await runChain('daily_edition_chain', 'continue')
+      await runChain('test_chain', 'continue')
       expect(ranSteps()).toEqual(['publish_stories'])
       expect(chain().resumeReason).toBeNull()
     })
@@ -200,16 +235,16 @@ describe('chains', () => {
     it('sets a held chain going again at startup, at once when its time has passed', async () => {
       Object.assign(chain(), { resumeStep: 'publish_stories', resumeReason: 'waiting', resumeAt: new Date('2026-11-16T11:30:00Z'), enabled: true })
       mockRunJob.mockImplementation(async (name: string, handler: () => Promise<void>) => {
-        if (name === 'daily_edition_chain') await handler()
+        if (name === 'test_chain') await handler()
         return { result: 'succeeded' }
       })
       await resumeHeldChains()
       await vi.advanceTimersByTimeAsync(0)
-      expect(ranSteps()).toEqual(['daily_edition_chain', 'publish_stories'])
+      expect(ranSteps()).toEqual(['test_chain', 'publish_stories'])
     })
 
     it('leaves a chain alone at the time when a person went on or switched it off meanwhile', async () => {
-      await runChain('daily_edition_chain')
+      await runChain('test_chain')
       mockRunJob.mockClear()
       chain().enabled = false
       await vi.advanceTimersByTimeAsync(12.5 * 3600_000)

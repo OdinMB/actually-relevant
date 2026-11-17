@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "id": "autonomous-weapons-talks",
+  "title": "UN talks on limits for autonomous weapons",
+  "charter": {
+    "in": "Intergovernmental talks at the UN on limiting lethal autonomous weapons systems (weapons that select and attack targets without human input). This covers the Group of Governmental Experts under the Convention on Certain Conventional Weapons (CCW) in Geneva, the push to open binding treaty negotiations at the CCW review meeting of 16-20 November 2026, and the UN, ICRC and civil-society appeals aimed at those talks. Covered from August 2026.",
+    "out": [
+      "Battlefield use and development of autonomous drones (Russia, Ukraine), including the Zaporizhzhia strike itself",
+      "National military AI adoption, targeting tools and procurement (US Maven, Pentagon AI deals, Israeli targeting in Gaza, US autonomous fighter drones)",
+      "Chinese military AI and autonomous-weapon prototypes",
+      "A US-China human-in-the-loop understanding on nuclear weapons",
+      "UN Security Council briefings on frontier-AI risk",
+      "The UN's military-AI forum and voluntary company guidelines",
+      "Nuclear arms control talks (non-proliferation review, New START)"
+    ],
+    "endEvent": "States adopt a legally binding instrument limiting autonomous weapons (a new CCW protocol or a stand-alone treaty), or formally abandon the effort. The November 2026 review meeting's decision on whether to open negotiations is a turning point, not the end."
+  },
+  "closed": null,
+  "figures": [],
+  "entries": [
+    {
+      "slug": "un-and-icrc-urge-ban-on-machines-that-target-people",
+      "date": "2026-08-26",
+      "title": "UN and ICRC urge ban on machines that target people",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "UN Secretary-General and ICRC",
+          "status": "renewed their 2023 call for a ban, urging states to decide on rules at the upcoming CCAC and November meetings",
+          "asOf": "2026-08-26"
+        }
+      ],
+      "why": "A joint appeal aimed at the talks, as the CCW expert group finishes its three-year mandate."
+    },
+    {
+      "slug": "un-and-red-cross-seek-binding-rules-after-ai-strike",
+      "date": "2026-09-03",
+      "title": "UN and Red Cross seek binding rules after AI strike",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "CCW Group of Governmental Experts",
+          "status": "meeting in Geneva to draft language for possible binding rules",
+          "asOf": "2026-09-03"
+        }
+      ],
+      "why": "Reports governments meeting in Geneva to draft rule language and the UN-ICRC push for binding controls."
+    },
+    {
+      "slug": "128-states-agree-a-definition-and-insist-on-human-oversight",
+      "date": "2026-09-06",
+      "title": "128 states agree a definition and insist on human oversight",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "milestone",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "CCW Group of Governmental Experts",
+          "status": "consensus among 128 states on a first shared definition and on significant human control; text unpublished and not binding",
+          "asOf": "2026-09-06"
+        }
+      ],
+      "why": "The expert group reaches its first consensus text, which opens the door to treaty talks in November."
+    },
+    {
+      "slug": "76-states-push-un-to-start-binding-talks",
+      "date": "2026-09-08",
+      "title": "76 states push UN to start binding talks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "CCW Group of Governmental Experts",
+          "status": "three years of talks ended with a watered-down final report that leaves room to begin negotiations",
+          "asOf": "2026-09-08"
+        },
+        {
+          "subject": "Negotiations on a binding treaty",
+          "status": "supported by 76 states",
+          "asOf": "2026-09-08"
+        }
+      ],
+      "why": "Same session's end as 6 Sep, seen from HRW: the text was diluted by the US and Russia, and 76 states back binding talks."
+    },
+    {
+      "slug": "states-urged-to-negotiate-limits-on-weapons-that-choose-targets",
+      "date": "2026-11-13",
+      "title": "Rights groups urge treaty talks on autonomous weapons",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "United Kingdom",
+          "status": "declined to back a legally binding treaty",
+          "asOf": "2026-11-13"
+        }
+      ],
+      "why": "Amnesty, HRW and Stop Killer Robots urge a one-year negotiating mandate at the 16-20 November Geneva meeting."
+    },
+    {
+      "slug": "us-and-russia-resist-treaty-talks-on-killer-robots",
+      "date": "2026-11-16",
+      "title": "US and Russia resist treaty talks on killer robots",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "CCW review meeting (Geneva)",
+          "status": "deciding whether to begin negotiations; decision pending",
+          "asOf": "2026-11-16"
+        },
+        {
+          "subject": "United States and Russia",
+          "status": "expected to oppose launching negotiations on binding rules",
+          "asOf": "2026-11-16"
+        },
+        {
+          "subject": "Israel",
+          "status": "opposes binding rules",
+          "asOf": "2026-11-16"
+        }
+      ],
+      "why": "Reports the Geneva meeting under way, with most of the 128 countries for negotiations and the US and Russia expected to oppose. Their resistance was already reported in September, and the decision is still pending."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "china-prototypes-autonomous-weapons-and-deepfake-tools",
+      "date": "2026-03-03",
+      "title": "China prototypes autonomous weapons and deepfake tools",
+      "why": "Autonomous weapons in the title, but it covers PLA AI procurement and prototypes, not international talks."
+    },
+    {
+      "slug": "u-s-military-unready-as-drones-act-without-human-control",
+      "date": "2026-03-13",
+      "title": "U.S. military unready as drones act without human control",
+      "why": "Uses 'without human control', but argues for US drone production and doctrine."
+    },
+    {
+      "slug": "us-and-china-urged-to-ban-uploading-nukes-to-robots",
+      "date": "2026-04-15",
+      "title": "US and China urged to ban uploading nukes to robots",
+      "why": "Labeled 'Autonomous arms' and calls for a ban, but about a bilateral human-in-the-loop norm for nuclear weapons."
+    },
+    {
+      "slug": "un-talks-fail-as-major-powers-split-on-arms-cuts",
+      "date": "2026-05-24",
+      "title": "UN talks fail as major powers split on arms cuts",
+      "why": "'UN talks' with major powers blocking consensus, but these are the nuclear non-proliferation talks."
+    },
+    {
+      "slug": "us-to-speed-algorithms-across-intelligence-and-warfighting",
+      "date": "2026-06-06",
+      "title": "US to speed algorithms across intelligence and warfighting",
+      "why": "Orders updated US guidance on autonomous weapons, but it is a national White House memorandum."
+    },
+    {
+      "slug": "russian-ai-run-drone-killed-three-civilians-in-zaporizhzhia",
+      "date": "2026-08-25",
+      "title": "Russian AI-run drone killed three civilians in Zaporizhzhia",
+      "why": "Labeled 'Autonomous weapons', and the 3 Sep appeal cites this strike, but it reports the battlefield incident, not the talks."
+    },
+    {
+      "slug": "top-ai-ceos-brief-security-council-on-runaway-risks",
+      "date": "2026-09-24",
+      "title": "Top AI CEOs brief Security Council on runaway risks",
+      "why": "A UN meeting on AI and human control, but about self-improving AI risk at the Security Council."
+    },
+    {
+      "slug": "russia-and-ukraine-build-drones-that-choose-targets",
+      "date": "2026-09-25",
+      "title": "Russia and Ukraine build drones that choose targets",
+      "why": "Labeled 'Autonomous weapons' and about human control, but it covers battlefield development, not the UN process."
+    },
+    {
+      "slug": "israeli-systems-help-select-targets-in-gaza",
+      "date": "2026-10-15",
+      "title": "Israeli systems help select targets in Gaza",
+      "why": "AI target selection with limited human review, but it is battlefield use in Gaza."
+    },
+    {
+      "slug": "us-pilot-directs-an-autonomous-fighter-drone-in-flight",
+      "date": "2026-10-19",
+      "title": "US pilot directs an autonomous fighter drone in flight",
+      "why": "An autonomous fighter drone, but a US Air Force test flight in a program to deploy at least 500 such aircraft."
+    },
+    {
+      "slug": "un-warns-faster-weapons-may-sideline-human-judgment",
+      "date": "2026-10-21",
+      "title": "UN warns faster weapons may sideline human judgment",
+      "why": "The most tempting: the UN, a quote on machines that target and kill humans, and a new UN process. But that process is a military-AI forum for voluntary company guidelines, not the CCW talks."
+    },
+    {
+      "slug": "us-targeting-tools-speed-decisions-while-oversight-stays-unclear",
+      "date": "2026-11-03",
+      "title": "US targeting tools speed decisions while oversight stays unclear",
+      "why": "Asks whether safeguards for autonomous weapons apply, but it is about US decision-support targeting tools (Maven)."
+    }
+  ],
+  "notes": "Not closed. On 16 Nov the Geneva review meeting is 'only deciding whether to begin negotiations', and the US-Russian opposition is reported as 'expected', a forecast, not a decision. So 16 Nov is neither the end nor a breakdown; the meeting's outcome (mandate adopted or blocked) will be the next turning point. Under this charter the development ends only with a binding instrument or the formal abandonment of the effort. The 6 Sep and 8 Sep stories report the same end of the expert-group session: 6 Sep (RFI) gives the 128-state consensus on a definition and human control and is the turning point; 8 Sep (HRW) adds that the report was 'watered-down' by US and Russian interventions and that 76 states back binding talks, so it is routine. Our 26 Aug and 6 Sep stories, from RFI's French, call the convention 'CCAC'. 26 Aug names the Convention on Certain Conventional Weapons in the same text, so it is the CCW. Figures are []: 76 states backing binding talks appears only on 8 Sep. '128' appears twice with different meanings (states in the expert-group consensus on 6 Sep; countries at the Geneva meeting on 16 Nov). The 13 Nov story's archive title is 'Rights groups urge treaty talks on autonomous weapons'; its slug still reads 'states-urged-to-negotiate-limits-on-weapons-that-choose-targets'. The 3 Sep story ties the appeal to the Russian drone strike: appeals that cite battlefield cases belong, and the battlefield stories themselves stay out."
+}

@@ -5,12 +5,14 @@ import {
   currentRun,
   flexNow,
   recordCall,
+  recordItems,
   recordOtherCost,
   runDeadlinePassed,
   runInScope,
   settleRun,
   standardCallUsd,
   track,
+  type RunScope,
 } from './runUsage.js'
 
 const luna = config.llm.modelPrices['gpt-6-luna']!
@@ -86,6 +88,35 @@ describe('run usage', () => {
 
   it('records other spending only inside a run', () => {
     expect(() => recordOtherCost(1)).not.toThrow()
+    expect(() => recordItems(5, 1)).not.toThrow()
+  })
+
+  it("adds a search's credits to the step and to its chain, as its cost", async () => {
+    const chain = createRunScope({ jobName: 'daily_edition_chain', flex: false })
+    await runInScope(chain, async () => {
+      const step = createRunScope({ jobName: 'research_stories', flex: false })
+      await runInScope(step, async () => {
+        recordOtherCost(0.016, 2)
+        recordOtherCost(0.008, 1)
+        recordOtherCost(0.5)
+        expect(step.usage).toMatchObject({ searchCredits: 3, otherUsd: expect.closeTo(0.524, 10) })
+      })
+    })
+    expect(chain.usage).toMatchObject({ searchCredits: 3, otherUsd: expect.closeTo(0.524, 10), costUsd: expect.closeTo(0.524, 10) })
+  })
+
+  it("keeps a step's checked and failed items on the step, out of its chain's tally", async () => {
+    const chain = createRunScope({ jobName: 'daily_edition_chain', flex: false })
+    let step!: RunScope
+    await runInScope(chain, async () => {
+      step = createRunScope({ jobName: 'research_stories', flex: false })
+      await runInScope(step, async () => {
+        recordItems(30, 4)
+        recordItems(15, 2)
+      })
+    })
+    expect(step.usage).toMatchObject({ itemsChecked: 45, itemsFailed: 6 })
+    expect(chain.usage).toMatchObject({ itemsChecked: 0, itemsFailed: 0 })
   })
 
   it('settles once every usage record still being read has landed', async () => {

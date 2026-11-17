@@ -1,18 +1,16 @@
 /**
  * Production's step caller and Tavily wrapper for one research run (`.context/story-research.md`,
- * "Cap"): one metered structured-output call per step on the step's tier model, after the shared
- * rate-limit delay, and never wrapped in `withRetry` (the SDK's `maxRetries` already retries,
- * `.context/llm-analysis.md`, "Retries"). The meter adds each call's model cost and each search's
+ * "Cap"): one metered structured-output call per step on the step's tier model (`structuredCall`:
+ * after the shared rate-limit delay, never wrapped in `withRetry`, as `.context/llm-analysis.md`,
+ * "Retries", says). The meter adds each call's model cost and each search's
  * credits. Before every call, search and parallel batch it checks the estimate against the room
  * left: the run's own ceiling, and what the month's cap leaves; a call without room is `skipped`
  * and a search without room throws `BudgetExhaustedError`, so the run ends as `fallback: budget`.
  */
-import { HumanMessage, type AIMessage } from '@langchain/core/messages'
 import type { z } from 'zod'
 import { config } from '../config.js'
-import { classifyOutcome, contentText, finishReasonOf, usageFrom, ZERO_USAGE } from '../lib/llmUsage.js'
+import { ZERO_USAGE } from '../lib/llmUsage.js'
 import { CREDITS_PER_SEARCH, searchTavily, TAVILY_DEPTH, type TavilySearch } from '../lib/tavily.js'
-import { getLLMByTier, rateLimitDelay } from './llm.js'
 import { callCostUsd } from './researchCost.js'
 import {
   BudgetExhaustedError,
@@ -23,6 +21,7 @@ import {
   type StepName,
   type StepResult,
 } from './researchPipeline.js'
+import { structuredCall } from './structuredCall.js'
 
 /** Output tokens one call of each step is expected to bill, reasoning included (the design's desk estimate, per call). */
 const STEP_OUTPUT_TOKENS: Record<StepName, number> = {
@@ -76,25 +75,10 @@ export function createRunMeter(options: RunMeterOptions): RunMeter {
   }
 
   const call: ResearchCall = async <T>(step: StepName, schema: z.ZodType<T>, prompt: string): Promise<StepResult<T>> => {
-    const model = modelOf(step)
-    const nothing = { parsed: null, usage: ZERO_USAGE, costUsd: 0, model }
-    if (!(await fits(estimateUsd({ step, prompt })))) return { ...nothing, outcome: 'skipped' }
-    await rateLimitDelay()
-    try {
-      const result = await getLLMByTier(STEP_TIERS[step])
-        .withStructuredOutput(schema, { includeRaw: true })
-        .invoke([new HumanMessage(prompt)])
-      const raw = result.raw as AIMessage
-      // The schema parsed it: the structured-output runnable types its result loosely
-      const parsed = (result.parsed ?? null) as T | null
-      const usage = usageFrom(raw)
-      const costUsd = callCostUsd(model, usage)
-      spent += costUsd
-      const outcome = classifyOutcome({ parsed, content: contentText(raw), finishReason: finishReasonOf(raw) })
-      return { parsed: outcome === 'ok' ? parsed : null, outcome, usage, costUsd, model }
-    } catch (err) {
-      return { ...nothing, outcome: classifyOutcome({ error: err }) }
-    }
+    if (!(await fits(estimateUsd({ step, prompt })))) return { parsed: null, outcome: 'skipped', usage: ZERO_USAGE, costUsd: 0, model: modelOf(step) }
+    const { error: _error, ...result } = await structuredCall(STEP_TIERS[step], schema, prompt)
+    spent += result.costUsd
+    return result
   }
 
   return {

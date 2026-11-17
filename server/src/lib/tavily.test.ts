@@ -4,6 +4,8 @@ const { post } = vi.hoisted(() => ({ post: vi.fn() }))
 vi.mock('axios', () => ({ default: { post } }))
 
 import { searchTavily, tavilyRequestBody, TAVILY_URL, type TavilySearch } from './tavily.js'
+import { createRunScope, runInScope } from './runUsage.js'
+import { config } from '../config.js'
 
 const KEY = 'tvly-test-secret-123'
 const search: TavilySearch = { query: 'Pakistan rooftop solar 22 GW', startDate: '2026-10-29', endDate: '2026-11-19' }
@@ -47,6 +49,28 @@ describe('searchTavily', () => {
     })
   })
 
+  it("keeps research's request body byte for byte when no option is given", () => {
+    expect(JSON.stringify(tavilyRequestBody(search))).toBe(
+      '{"query":"Pakistan rooftop solar 22 GW","topic":"news","search_depth":"advanced","start_date":"2026-10-29","end_date":"2026-11-19",' +
+        '"max_results":8,"include_favicon":true,"include_raw_content":"text","include_answer":false,"include_images":false,"include_usage":true}',
+    )
+  })
+
+  it("takes story context's options: depth, topic and results, and no start date for an open window", () => {
+    const body = tavilyRequestBody({ query: 'peatland agency Indonesia', endDate: '2026-11-14', depth: 'basic', topic: 'general', maxResults: 5 })
+    expect(body).toMatchObject({ search_depth: 'basic', topic: 'general', max_results: 5, end_date: '2026-11-14', include_raw_content: 'text' })
+    expect(body).not.toHaveProperty('start_date')
+    expect(tavilyRequestBody({ query: 'q', startDate: '2026-10-15', endDate: '2026-11-14', depth: 'basic' })).toMatchObject({ start_date: '2026-10-15' })
+  })
+
+  it('counts a basic search without usage at one credit, and its credits reach the run it is made in', async () => {
+    post.mockResolvedValue(okResponse())
+    const scope = createRunScope({ jobName: 'build_story_context', flex: false })
+    const answer = await runInScope(scope, () => searchTavily({ query: 'q', endDate: '2026-11-14', depth: 'basic', topic: 'general', maxResults: 5 }, KEY))
+    expect(answer.credits).toBe(1)
+    expect(scope.usage).toMatchObject({ searchCredits: 1, otherUsd: expect.closeTo(config.research.tavilyUsdPerCredit, 10) })
+  })
+
   it('sends the key in the Authorization header only, never in the body', async () => {
     post.mockResolvedValue(okResponse({ credits: 2 }))
     await searchTavily(search, KEY)
@@ -60,6 +84,13 @@ describe('searchTavily', () => {
     post.mockResolvedValueOnce(okResponse({ credits: 3 })).mockResolvedValueOnce(okResponse())
     expect((await searchTavily(search, KEY)).credits).toBe(3)
     expect((await searchTavily(search, KEY)).credits).toBe(2)
+  })
+
+  it("counts the search's credits and their cost in the job run it is made in", async () => {
+    post.mockResolvedValue(okResponse({ credits: 3 }))
+    const scope = createRunScope({ jobName: 'research_stories', flex: false })
+    await runInScope(scope, () => searchTavily(search, KEY))
+    expect(scope.usage).toMatchObject({ searchCredits: 3, otherUsd: expect.closeTo(3 * config.research.tavilyUsdPerCredit, 10) })
   })
 
   it('maps the results, filling what Tavily left out', async () => {

@@ -136,7 +136,8 @@ const tldOf = (domain: string) => domain.split('.').pop() ?? ''
 
 const isBlocked = (domain: string) => BLOCKED_DOMAINS.some(b => domain === b || domain.endsWith(`.${b}`))
 
-function normalizedUrl(url: string): string {
+/** A URL as the filters compare them: host without `www.`, path without a trailing slash. */
+export function normalizedUrl(url: string): string {
   try {
     const u = new URL(url)
     return `${u.hostname.toLowerCase().replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}`
@@ -217,7 +218,8 @@ function pickSearch(search: CandidateSource[], slots: number, coveredTlds: Set<s
   return chosen
 }
 
-function selectedText(c: CandidateSource): SelectedSource {
+/** What the extraction reads of a source: its passages, or a search result's raw text when the passages are short, cut to size. Story context chooses its text the same way. */
+export function selectedText(c: CandidateSource): SelectedSource {
   const { passages, rawContent, ...rest } = c
   const useRaw = c.origin === 'search' && passages.length < PASSAGE_MIN_CHARS && Boolean(rawContent)
   const text = useRaw && rawContent ? rawContent.slice(0, RAW_CONTENT_MAX_CHARS) : passages.slice(0, SOURCE_TEXT_MAX_CHARS)

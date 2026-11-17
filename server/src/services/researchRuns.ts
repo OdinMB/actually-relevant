@@ -23,6 +23,7 @@ import { FALLBACK_CATEGORIES, type FallbackCategory, type GateVerdict } from './
 import { hasPrice, summarizeRunCost, type RunCostSummary } from './researchCost.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds, type ResearchStory } from './researchInput.js'
 import { researchStory, STEP_TIERS, STEPS, type StepName, type StoryResearch } from './researchPipeline.js'
+import { checkSpendWarnings, EDITOR_RESEARCH } from './spending.js'
 
 const log = createLogger('research')
 
@@ -244,12 +245,17 @@ async function executeRun(runId: string, story: ResearchStory, beforeFinish?: Be
 
 /**
  * An editor's reserved run, counted in its task: any verdict completes it there; a dropped or failed
- * run fails it. Never throws (`executeRun`); the caller completes the task.
+ * run fails it. It runs outside any job, so its spend is checked against the spending warning levels
+ * here (`editor_research`, services/spending.ts). Never throws (`executeRun`; a failed check is
+ * logged); the caller completes the task.
  */
 export async function runInTask(taskId: string, runId: string, story: ResearchStory): Promise<void> {
   const end = await executeRun(runId, story)
   if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
   else taskRegistry.increment(taskId, 'failed', end.ended === 'failed' ? end.error : 'The run was marked interrupted before it finished')
+  await checkSpendWarnings(EDITOR_RESEARCH).catch((err: unknown) =>
+    log.error({ runId, error: sanitizedError(err) }, 'could not check the spending warning levels'),
+  )
 }
 
 /**

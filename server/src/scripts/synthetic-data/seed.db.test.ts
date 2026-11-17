@@ -26,6 +26,8 @@ const { SyntheticSeedRefusal, describeSummary, foreignRows, seedSyntheticData } 
 const { SYNTHETIC_ADMIN, isoWeek, syntheticId } = await import('./dataset.js')
 const { getClusterMembers, getHomepageData, getPublishedStories } = await import('../../services/publicStories.js')
 const { getRelatedStories } = await import('../../services/relatedStories.js')
+const { getStoryContext } = await import('../../services/storyContextView.js')
+const { getContextAdmin } = await import('../../services/storyContextAdmin.js')
 const { getPublishedIssue, listPublishedIssues } = await import('../../services/newsletterArchive.js')
 const { getPublishedEpisode, getPublishedEpisodes } = await import('../../services/podcastPublish.js')
 const { toPublicEpisodeDetail } = await import('../../services/podcastShow.js')
@@ -101,9 +103,9 @@ describeDb('synthetic data set (PostgreSQL)', () => {
   )
 
   it(
-    'renders through the public reads: homepage, story, cluster, search, newsletter archive and podcast',
+    'renders through the public reads: homepage, story, cluster, search, story context, newsletter archive and podcast',
     async () => {
-      await seed()
+      const summary = await seed()
 
       // Every homepage section has stories in each of its three emotion buckets
       const { storiesByIssue } = await getHomepageData(HOMEPAGE_ISSUES, 7)
@@ -125,6 +127,27 @@ describeDb('synthetic data set (PostgreSQL)', () => {
       const search = await getPublishedStories({ search: 'tidal' })
       expect(search.data.map(s => s.id)).toEqual([cluster.primaryStoryId])
       expect(await getRelatedStories(cluster.primaryStory!.slug!)).toEqual([])
+
+      // One researched story's context: a card of each kind, each in its place, every one resolving
+      const contextStory = await prisma.story.findUniqueOrThrow({ where: { id: syntheticId('story:varrowen-lunches') } })
+      const context = await getStoryContext(contextStory.slug!)
+      expect(context.boxes.map(b => [b.type, b.place, b.visual?.kind ?? null])).toEqual([
+        ['figures', 'section', 'tiles'],
+        ['build_up', 'P1', 'bars'],
+        ['compared', 'W1', 'line'],
+        ['next', 'section', null],
+      ])
+      expect(context.boxes[0]!.visual).toEqual({
+        kind: 'tiles',
+        tiles: [
+          { label: 'pupils covered', values: [{ text: '600,000', estimate: false, sourceId: 'C1' }] },
+          { label: 'yearly cost', values: [{ text: 'about $52m', estimate: false, sourceId: 'C2' }] },
+        ],
+      })
+      expect(context.sources.map(s => s.outlet)).toEqual(['Varrowen Education Office', 'Plains Budget Watch'])
+      expect(context.sources.every(s => s.url?.startsWith('https://synthetic.example.org/'))).toBe(true)
+      expect((await getContextAdmin(contextStory.id)).run).toMatchObject({ status: 'completed', outcome: 'built', boxes: 4, tavilyCredits: 3 })
+      expect(summary.context).toEqual({ slug: contextStory.slug, boxes: 4 })
 
       // Two published newsletter issues with their stories; this week's issue is a draft
       const archive = await listPublishedIssues(1, 20)

@@ -1,21 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type { JobRunUsage } from '@shared/types'
-import { makeJobRun } from '../test/jobs'
+import { makeJobRun, makeRunUsage as usage } from '../test/jobs'
 import { dashboardRows, formatDuration, formatUsd, lastRunDurationMs, usageDetails } from './jobRun'
-
-const usage = (overrides: Partial<JobRunUsage> = {}): JobRunUsage => ({
-  calls: 0,
-  flexCalls: 0,
-  flexFallbacks: 0,
-  inputTokens: 0,
-  cachedTokens: 0,
-  outputTokens: 0,
-  costUsd: 0,
-  standardCostUsd: 0,
-  unpricedCalls: 0,
-  otherUsd: 0,
-  ...overrides,
-})
 
 describe('job run display', () => {
   it('measures the last finished run, and nothing while one runs or before the first', () => {

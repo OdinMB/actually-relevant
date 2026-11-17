@@ -22,7 +22,8 @@ const citationSchema = z.object({
     .describe("The source's own sentence that supports the text, in its original language; null when the text cites only the source's date."),
 })
 
-const citedTextSchema = z.object({
+/** Exported for story context's view, which cites in the same shape (`storyContextView.ts`). */
+export const citedTextSchema = z.object({
   text: z.string().describe('Plain text, no Markdown: a whole paragraph or bullet; in versions applied before 2026-11-13, one sentence of a paragraph.'),
   citations: z.array(citationSchema).describe('One entry per cited source, in the order they are first cited; empty for text that only judges.'),
 })
@@ -37,7 +38,8 @@ function httpUrl(url: string): URL | null {
   }
 }
 
-const researchedSourceSchema = z.object({
+/** Exported for story context's view, whose sources take the same shape. */
+export const researchedSourceSchema = z.object({
   id: z.string().describe('`S0` is the article the story was initially found in; `E1`, `E2` … are earlier Actually Relevant stories.'),
   origin: z
     .enum(['original', 'source', 'earlier'])
@@ -116,7 +118,7 @@ function cite(item: { text: string; factIds: string[] }, pool: ReadonlyMap<strin
 }
 
 /** The host of an http(s) address, without `www.`; null for any other address. */
-function hostOf(url: string): string | null {
+export function hostOf(url: string): string | null {
   return httpUrl(url)?.hostname.replace(/^www\./, '') || null
 }
 

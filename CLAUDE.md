@@ -142,9 +142,9 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `story-retention.md` | Monthly cleanup: which old stories are deleted or kept, the `story_archive_counts` roll-up, lifetime totals, cleared embeddings and how publishing restores them |
 | `feed-management.md` | Feed CRUD and soft delete, crawl due rule, crawl-health counters, quality metrics, favicons |
 | `llm-analysis.md` | Model tiers (GPT-6 defaults; prompts and models change together), prompt directory, schema-driven format, analysis stages |
-| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks |
+| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks; `eval:overviews` (answer keys of past developments, the fact check under planted errors) |
 | `prompting.md` | Prompt conventions for the GPT-5/GPT-6 reasoning models and calibration lessons (read before modifying prompts) |
-| `scheduler.md` | Job registry, overlap prevention (job lease), catch-up, `SCHEDULER_ENABLED`, concurrency, admin API |
+| `scheduler.md` | Job registry, overlap prevention (job lease), catch-up, `SCHEDULER_ENABLED`, chains, run costs, the spending overview and warning levels (no caps), concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
 | `newsletter-podcast.md` | Newsletter: create-assign-select-generate workflow, issue lifecycle (`newsletterLifecycle.ts` is the only writer of issue state and sends, a fence test holds it; live sends claimed before Plunk, once, after a test of the current HTML; a sent issue frozen until unpublished), issue ordering, templates, Plunk sending, `publish_newsletter` auto-send, editions (full and Actually Uplifting: a Plunk contact field and two segments, closed until both segment ids are set; the footer switch; the uplifting jobs), web edition (public archive at `/newsletter`, slugs, `publishedAt`), carousel |
 | `decisions.md` | Architectural decision log: the index, with one file per decision in `.context/decisions/`; append-only history |
@@ -169,6 +169,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `mastodon.md` | Static token auth, shared social logic (candidates, metadata line, one post per story per channel), post format |
 | `ai-transparency.md` | EU AI Act Art. 50 record: AI inventory, labels, machine-readable markers, text-watermark gap, open owner decisions |
 | `story-research.md` | Story research, the admin action: what a run does and never does (writes only its own `story_research_runs` row), eligibility, the `TAVILY_API_KEY` switch, the monthly cap and $0.25 reservation under its advisory lock, interrupted runs, cost recording (an upper bound), untrusted input, the AI opt-out seam, endpoints |
+| `story-context.md` | Story context cards, the `build_story_context` step after publishing (switched off): writes only its own tables, never a story field or status; which stories, the steps (pass 1 from research's facts, up to 3 searches with a 7-day cache, research's fact check on facts and cards, no repair, `response` always looked for, two searches from two angles, no card when nothing is found), validity on the story's day, the tile and chart rules, placement modes and limits, records, the failure-share notice (no pause), cost bounds, the public and admin route shapes |
 | `client/.context/skeletons.md` | Skeleton components for loading states (prevents CLS) |
 
 ## Memory

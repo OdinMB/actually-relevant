@@ -3,15 +3,20 @@ import { randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
+import { notify } from '../lib/notify.js'
 import { config } from '../config.js'
 import type { RunUsage } from '../lib/runUsage.js'
+import { checkSpendWarnings } from '../services/spending.js'
+import { isChain } from './chainDefinitions.js'
+import { failureShareNotice } from './failureShare.js'
 
 /**
  * The cross-instance job lease (ADR-0017): a run holds `locked_by`/`locked_until` on its job's
  * `job_runs` row, so two processes (old and new instance during a zero-downtime deploy, or a second
  * process against the same database) never run the same job at once. Here too are the run's other
- * writes on that row, each fenced on the lease: the finish, and the record of an interrupted run
- * (whose decisions are in interruptedRuns.ts). Every statement is raw SQL on the database clock
+ * writes on that row, each fenced on the lease: the finish (with the run's spend added to its job's
+ * month, `job_month_spend`), and the record of an interrupted run (whose decisions are in
+ * interruptedRuns.ts). Every statement is raw SQL on the database clock
  * (`locked_until` is `timestamp without time zone` holding UTC, like the podcast lease), which also
  * keeps this working whether or not the generated Prisma client knows the columns.
  */
@@ -77,13 +82,32 @@ export async function withJobLeaseHeartbeat<T>(jobName: string, fn: () => Promis
 }
 
 /**
+ * Add a run's spend to its job's row for this UTC month (`job_month_spend`, the Dashboard's spending
+ * overview, services/spending.ts). Search spend is `otherUsd`: web searches are the only other paid
+ * service today.
+ */
+const addMonthSpend = (jobName: string, usage: RunUsage) => prisma.$executeRaw`
+    INSERT INTO "job_month_spend" ("job_name", "month", "cost_usd", "standard_cost_usd", "search_usd", "search_credits", "runs")
+    VALUES (${jobName}, date_trunc('month', now() AT TIME ZONE 'UTC')::date, ${usage.costUsd}, ${usage.standardCostUsd}, ${usage.otherUsd},
+            ${Math.round(usage.searchCredits)}, 1)
+    ON CONFLICT ("job_name", "month") DO UPDATE
+    SET "cost_usd" = "job_month_spend"."cost_usd" + EXCLUDED."cost_usd",
+        "standard_cost_usd" = "job_month_spend"."standard_cost_usd" + EXCLUDED."standard_cost_usd",
+        "search_usd" = "job_month_spend"."search_usd" + EXCLUDED."search_usd",
+        "search_credits" = "job_month_spend"."search_credits" + EXCLUDED."search_credits",
+        "runs" = "job_month_spend"."runs" + 1`
+
+/**
  * Finish a run: always record `last_completed_at` (and `last_succeeded_at` on success, `last_error`
  * on failure), what the run spent (`usage`, null when it could not be read) and what it did
  * (`summary`, null when it did not say), start the count of interrupted runs again, and release the
- * lease only where this process still holds it.
+ * lease only where this process still holds it. With the same statements, a run's usage is added to
+ * its job's month (not a chain's: its steps' runs carry its spend and its items). A run whose checks
+ * failed more than the failure share of its items then records its notice (`failureShareNotice`),
+ * and a run that spent anything has its spending warning levels checked; neither throws.
  */
 export async function finishJobRun(jobName: string, error: string | null, usage: RunUsage | null = null, summary: string | null = null): Promise<void> {
-  await prisma.$executeRaw`
+  const finish = prisma.$executeRaw`
     UPDATE "job_runs"
     SET "last_completed_at" = (now() AT TIME ZONE 'UTC'),
         "last_succeeded_at" = CASE WHEN ${error === null} THEN (now() AT TIME ZONE 'UTC') ELSE "last_succeeded_at" END,
@@ -95,6 +119,14 @@ export async function finishJobRun(jobName: string, error: string | null, usage:
         "locked_until" = CASE WHEN "locked_by" = ${LEASE_HOLDER} THEN NULL ELSE "locked_until" END,
         "updated_at" = (now() AT TIME ZONE 'UTC')
     WHERE "job_name" = ${jobName}`
+  const counted = usage !== null && !isChain(jobName)
+  const writes: Prisma.PrismaPromise<number>[] = counted ? [finish, addMonthSpend(jobName, usage)] : [finish]
+  await prisma.$transaction(writes)
+  if (!counted) return
+  const failing = failureShareNotice(jobName, usage)
+  if (failing) await notify(failing)
+  if (usage.costUsd <= 0) return
+  await checkSpendWarnings(jobName).catch((err: unknown) => log.error({ jobName, err }, 'could not check the spending warning levels'))
 }
 
 /**

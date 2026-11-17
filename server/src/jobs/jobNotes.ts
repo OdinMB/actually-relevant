@@ -6,7 +6,9 @@
  * it at each call. The text names no setting, code or file: the people who run the site read it.
  */
 import { config } from '../config.js'
+import type { RunUsage } from '../lib/runUsage.js'
 import { researchSwitchOff } from '../services/researchRuns.js'
+import { failureShareExceeded, failureShareLine } from './failureShare.js'
 
 export interface JobNotes {
   /** What the job does and its rules that are not obvious; null for a job without one. */
@@ -14,6 +16,14 @@ export interface JobNotes {
   /** A state the owner must notice now, such as a job that can do nothing; null when there is none. */
   warning: string | null
 }
+
+/** What the notes read of the job's row. */
+export interface JobRowState {
+  /** What the last finished run spent and counted; null before one, or after an interrupted one. */
+  lastRunUsage: RunUsage | null
+}
+
+const NO_ROW: JobRowState = { lastRunUsage: null }
 
 /** "1 day", "30 days", "44,000 characters". */
 const count = (n: number, unit: string, units = `${unit}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? unit : units}`
@@ -76,12 +86,12 @@ const CHAIN_RULES =
   'Each step starts when the one before it has finished. A step set to Off is skipped; a step set to Review runs, then the chain waits until you continue it here. ' +
   'If a step fails, the chain stops there and you can resume it from that step; its next scheduled run starts from the first step again.'
 
-const NOTES: Readonly<Record<string, () => string>> = {
+export const NOTES: Readonly<Record<string, () => string>> = {
   intake_chain: () =>
     'Crawls the feeds, gives each new story its first rating, then fully analyzes the ones that qualify, in that order, so every run ends with assessed stories ready to review. ' +
     `It runs several times a day because a feed lists only its newest articles and a busy one drops them within hours. ${CHAIN_RULES}`,
   daily_edition_chain: () =>
-    'Selects the best of the assessed stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time. ' +
+    "Selects the best of the assessed stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time; then it builds the published stories' context cards. " +
     `${CHAIN_RULES} ` +
     'From its flex cut-off on, every call goes at standard price; from its deadline on, research starts no other story, so publishing is never held up for long.',
   newsletter_chain: () =>
@@ -105,6 +115,18 @@ const NOTES: Readonly<Record<string, () => string>> = {
   publish_stories: () =>
     'Publishes the selected stories. Of several stories about the same event, only the one chosen to lead the group is published, and the others are rejected as duplicates. ' +
     `While Research Stories is enabled and research is on, a story selected less than ${count(config.research.pipeline.maxWaitMinutes, 'minute')} ago waits for its research and goes out at a later run.`,
+  build_story_context: () => {
+    const c = config.storyContext
+    const { share, minItems } = config.jobs.failureShare
+    return (
+      `Builds the context cards of the stories published in the last ${count(c.lookbackDays, 'day')} that were researched and have none yet, up to ${c.perRun} a run: ` +
+      `it reads their research, searches the web for up to ${count(c.maxSearches, 'missing piece')}, checks every fact and card against its source, and keeps what passes. ` +
+      'It runs after Publish Stories, so it never holds up publishing, and builds each story once: a build stopped by a problem that may pass, such as the AI service not answering, is tried a second time later in the same run, never on a later night. ' +
+      `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
+      `so is a notice when more than ${Math.round(share * 100)}% of at least ${c.failedStoriesMin} stories fail. Nothing pauses. ` +
+      '"Run now" builds cards that readers see, even while the step is off. It can be enabled only once web search is set up.'
+    )
+  },
   social_auto_post: () =>
     `Picks the best story published in the last ${count(config.socialAutoPost.lookbackHours, 'hour')} that a channel has not posted yet, writes a post for it and posts it, one story per run. ` +
     'It posts only to Bluesky and Mastodon where auto-posting is switched on and the account is connected, and does nothing while neither is.',
@@ -146,10 +168,24 @@ const NOTES: Readonly<Record<string, () => string>> = {
     'Every unpublished story older than that loses its search data until it is published or assessed again. Each run leaves a notice with what it did.',
 }
 
-const WARNINGS: Readonly<Record<string, () => string | null>> = {
+/**
+ * Any job's warning when more than `config.jobs.failureShare.share` of at least `minItems` items its
+ * last run's checks judged failed (a step that checks what a model wrote counts them with
+ * `recordItems`); null otherwise, and for a job that counts none. It holds until a run stays under.
+ */
+export function failureShareWarning(lastRunUsage: RunUsage | null): string | null {
+  const checked = lastRunUsage?.itemsChecked ?? 0
+  const failed = lastRunUsage?.itemsFailed ?? 0
+  if (!failureShareExceeded(checked, failed)) return null
+  return failureShareLine(checked, failed)
+}
+
+/** The warnings of one job; every job also gets the failure share's (`failureShareWarning`). */
+export const WARNINGS: Readonly<Record<string, (row: JobRowState) => string | null>> = {
   research_stories: researchWarning,
 }
 
-export function jobNotes(jobName: string): JobNotes {
-  return { note: NOTES[jobName]?.() ?? null, warning: WARNINGS[jobName]?.() ?? null }
+export function jobNotes(jobName: string, row: JobRowState = NO_ROW): JobNotes {
+  const warnings = [WARNINGS[jobName]?.(row) ?? null, failureShareWarning(row.lastRunUsage)].filter((w): w is string => w !== null)
+  return { note: NOTES[jobName]?.() ?? null, warning: warnings.length > 0 ? warnings.join(' ') : null }
 }

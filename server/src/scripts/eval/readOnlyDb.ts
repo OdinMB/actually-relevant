@@ -13,6 +13,11 @@ import { PrismaClient, type Prisma } from '@prisma/client'
 
 export type Db = Prisma.TransactionClient
 
+/** All a sampler needs of the session: tagged, parameterized SELECTs. `Db` is one, and a test can pass a stub. */
+export interface SelectDb {
+  $queryRaw<T = unknown>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>
+}
+
 export interface ReadOnlyDb {
   mode: 'session' | 'transaction'
   dbClass: 'local' | 'remote'

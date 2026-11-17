@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "id": "colorado-river-rules",
+  "title": "Colorado River post-2026 operating rules",
+  "charter": {
+    "in": "The setting of new operating and sharing rules for the Colorado River (the post-2026 rules): the seven basin states' renegotiation, the federal government's 10-year operating framework and proposed mandatory cuts for Arizona, California and Nevada, and the Lake Powell and Lake Mead conditions that our stories tie to those rules. Covered from February 2026.",
+    "out": [
+      "Western US drought, heat waves and wildfire risk in general",
+      "Climate attribution of Western water losses to fossil-fuel producers",
+      "California water outside the Colorado basin (Sacramento Valley aquifer, Central Valley farmland)",
+      "The marine heatwave off the US west coast",
+      "Global water-scarcity reports and droughts elsewhere",
+      "Other transboundary river disputes (Indus, Brahmaputra)"
+    ],
+    "endEvent": "The Interior Department / Bureau of Reclamation issues final, binding operating guidelines (a final decision on the 10-year framework and the Lower Basin cuts), or the seven states sign a consensus deal that replaces the federal plan."
+  },
+  "closed": null,
+  "figures": [],
+  "entries": [
+    {
+      "slug": "seven-states-face-water-cuts-and-lawsuits",
+      "date": "2026-02-05",
+      "title": "Seven states face water cuts and lawsuits",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Seven basin states",
+          "status": "renegotiating Colorado River rules without agreement, facing a tight federal deadline and possible litigation",
+          "asOf": "2026-02-05"
+        }
+      ],
+      "why": "Opens our coverage: seven states racing to renegotiate the river's rules under record-low snowpack and a federal deadline."
+    },
+    {
+      "slug": "trump-must-decide-on-water-cuts-for-40-million",
+      "date": "2026-02-28",
+      "title": "Trump must decide on water cuts for 40 million",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Seven basin states",
+          "status": "must agree on new sharing rules by September or face federally imposed priority-based cuts",
+          "asOf": "2026-02-28"
+        }
+      ],
+      "why": "Sets out the stakes and the fallback: a federal decision on priority-based cuts if the states don't agree."
+    },
+    {
+      "slug": "summer-drought-threatens-water-and-power-for-40-million",
+      "date": "2026-05-11",
+      "title": "Summer drought threatens water and power for 40 million",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Seven basin states",
+          "status": "renegotiation deadlines missed",
+          "asOf": "2026-05-11"
+        }
+      ],
+      "why": "Mostly a snowpack and reservoir update, and it reports that the states missed their renegotiation deadlines."
+    },
+    {
+      "slug": "federal-plan-sets-10-year-water-rules-for-seven-states",
+      "date": "2026-06-06",
+      "title": "Federal plan sets 10-year water rules for seven states",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Federal government (Bureau of Reclamation)",
+          "status": "will issue a 10-year operating framework, revisited every two years, if the states fail to agree; final environmental impact statement and decision due this summer",
+          "asOf": "2026-06-06"
+        }
+      ],
+      "why": "The federal government commits to imposing its own 10-year framework if the states don't agree. Conditional and not final, so a step, not the end."
+    },
+    {
+      "slug": "us-plans-big-water-cuts-for-arizona-california-nevada",
+      "date": "2026-08-01",
+      "title": "US plans big water cuts for Arizona, California, Nevada",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Federal plan",
+          "status": "proposed mandatory cuts of up to 3 million acre-feet a year for Arizona, California and Nevada through 2036; binding guidelines expected by October 1",
+          "asOf": "2026-08-01"
+        },
+        {
+          "subject": "Seven basin states",
+          "status": "failed to agree on shared reductions",
+          "asOf": "2026-08-01"
+        }
+      ],
+      "why": "Reclamation proposes mandatory Lower Basin cuts after the states' failure. Still a proposal, with binding guidelines due by 1 October, so a step, not the end."
+    },
+    {
+      "slug": "two-largest-us-reservoirs-hit-record-lows",
+      "date": "2026-08-18",
+      "title": "Two largest US reservoirs hit record lows",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Lake Powell and Lake Mead",
+          "status": "record lows, just above the threshold at which electricity production would be affected",
+          "asOf": "2026-08-18"
+        }
+      ],
+      "why": "Both reservoirs fall to record lows; the story ties this to the federal plan's cuts through 2036 and expected legal fights."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "march-heatwave-sends-cities-toward-water-shortages",
+      "date": "2026-03-14",
+      "title": "March heatwave sends cities toward water shortages",
+      "why": "Cites record-low snow in Colorado River basins, but it is about a Western heat wave and spring supplies, not the river's rules."
+    },
+    {
+      "slug": "plan-would-convert-136-000-acres-to-21-gw-solar",
+      "date": "2026-03-30",
+      "title": "Plan would convert 136,000 acres to 21 GW solar",
+      "why": "Western water shortages and fallowed farmland, but in California's Central Valley (Westlands), outside the Colorado River talks."
+    },
+    {
+      "slug": "huge-pacific-warm-patch-expands-threatens-us-water-and-weather",
+      "date": "2026-05-23",
+      "title": "Huge Pacific warm patch expands, threatens US water and weather",
+      "why": "Shrinking snowpacks and drought in the US West, but caused by a marine heatwave; no river rules."
+    },
+    {
+      "slug": "drought-and-staff-shortages-heighten-western-risk",
+      "date": "2026-06-06",
+      "title": "Drought and staff shortages heighten western risk",
+      "why": "Same day as the federal-framework story and names the Upper Colorado Basin, but it is about wildfire season."
+    },
+    {
+      "slug": "sacramento-valley-sinks-50-cm-yearly-cutting-farm-water",
+      "date": "2026-07-30",
+      "title": "Sacramento Valley sinks 50 cm yearly, cutting farm water",
+      "why": "Western US water loss from drought, but a California aquifer outside the Colorado basin."
+    },
+    {
+      "slug": "droughts-cut-rivers-threaten-power-and-food",
+      "date": "2026-08-12",
+      "title": "Droughts cut rivers, threaten power and food",
+      "why": "An opinion column on global drought that names the Colorado among many rivers and mentions allocation disputes in passing."
+    },
+    {
+      "slug": "fossil-firms-tied-to-half-of-western-water-losses",
+      "date": "2026-08-26",
+      "title": "Fossil firms tied to half of Western water losses",
+      "why": "The most tempting: Lake Mead, 40 million people and a source URL about the 'Colorado River crisis', but it is an attribution study on the causes of Western water loss, not the operating rules."
+    }
+  ],
+  "notes": "Not closed. Neither federal plan is the end event. The June story describes a framework the government 'will issue' only 'if seven basin states fail to agree'; its caveats say the plan is 'not final and can be supplanted' and that a final environmental impact statement and decision come 'this summer'. The August story is a proposal ('Proposal not final'), with 'binding guidelines expected by October 1'. On 18 August the plan is still 'contested'. No story reports the final binding guidelines or a seven-state deal, so the development is open on 16 November. Figures are []: the only number in 3 or more entries is the roughly 40 million people who depend on the river (all six state it), which is a fixed description, not a figure to track. The proposed cut appears twice: 'up to 3 million acre-feet' a year on 1 Aug, and 'about 3.7 billion cubic metres per year' on 18 Aug, which is the same cut in metric units. Lake Mead's '17 feet above its record low' appears once. The stories differ on the river's flow decline ('roughly 20% over the last century' on 28 Feb, 'about a third over a century' on 6 Jun). The 11 May story says deadlines were missed without naming them. Six stories carry the 'Colorado River' label (the brief said five); all six belong."
+}

@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "id": "sudan-el-fasher",
+  "title": "Investigations into the RSF's El Fasher atrocities",
+  "charter": {
+    "in": "The documentation of, and international response to, the atrocities the Rapid Support Forces committed in their siege and October 2025 capture of El Fasher, North Darfur: UN and rights-group findings (killings, sexual violence, crimes against humanity, ethnic cleansing, genocide), the perpetrators they name, and states' moves toward accountability, as reported from February 2026. A story belongs when it reports a new finding or response about El Fasher itself.",
+    "out": [
+      "The Sudan war as a whole and its overall toll (deaths, displacement, hunger)",
+      "The RSF offensive in Kordofan and the threat to El Obeid",
+      "Other RSF raids and drone strikes in Darfur not tied to El Fasher (e.g. Misteriha, North Darfur strikes in May 2026)",
+      "UAE support for the RSF and the diplomatic fallout (France, the UN Secretary-General race)",
+      "US sanctions on the army-led government over alleged chemical-weapons use",
+      "The history of Darfur's earlier genocide",
+      "Famine and hunger in Sudan",
+      "South Sudan, a different country"
+    ],
+    "endEvent": "A binding accountability step for the El Fasher crimes: arrest warrants or charges against those responsible (at the ICC or under universal jurisdiction), or UN Security Council action on the genocide finding, such as sanctions on the named RSF leaders or a referral. New reports, findings and calls for action do not end it."
+  },
+  "closed": null,
+  "figures": [],
+  "entries": [
+    {
+      "slug": "un-documents-over-6-000-killed-in-el-fasher-offensive",
+      "date": "2026-02-14",
+      "title": "UN documents over 6,000 killed in El Fasher offensive",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "milestone",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "UN human rights office (OHCHR)",
+          "status": "documents more than 6,000 killings in the first three days of the October RSF offensive; finds patterns consistent with crimes against humanity",
+          "asOf": "2026-02-14"
+        }
+      ],
+      "why": "First UN report on the El Fasher assault: the documented toll, sexual violence, abductions and ethnic targeting, with calls for investigation and accountability."
+    },
+    {
+      "slug": "un-report-says-rapid-support-forces-committed-coordinated-atrocities",
+      "date": "2026-02-21",
+      "title": "UN report says Rapid Support Forces committed coordinated atrocities",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "UN fact-finding mission",
+          "status": "concludes the RSF's atrocities in the siege and capture of el-Fasher amounted to genocide; names RSF leader Mohamed Hamdan Dagalo and calls for criminal probes",
+          "asOf": "2026-02-21"
+        },
+        {
+          "subject": "United Kingdom",
+          "status": "pledges to take the finding to the UN Security Council",
+          "asOf": "2026-02-21"
+        }
+      ],
+      "why": "The UN fact-finding mission's genocide finding on el-Fasher, the strongest legal characterization in the development, and the UK's pledge to take it to the Security Council."
+    },
+    {
+      "slug": "five-european-countries-pledge-action-to-stop-atrocities",
+      "date": "2026-03-12",
+      "title": "Five European countries pledge action to stop atrocities",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Atrocity-prevention coalition (UK, Germany, Ireland, Netherlands, Norway)",
+          "status": "formed after the RSF captured El Fasher and UN reports flagged genocidal-style attacks",
+          "asOf": "2026-03-12"
+        }
+      ],
+      "why": "Op-ed on a European coalition formed in response to El Fasher's fall and the UN findings; borderline because the coalition's remit is preventing atrocities across Sudan."
+    },
+    {
+      "slug": "amnesty-documents-killings-and-child-targeting-in-el-fasher",
+      "date": "2026-07-02",
+      "title": "Amnesty documents killings and child targeting in El Fasher",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Amnesty International",
+          "status": "finds crimes against humanity and ethnic cleansing in the RSF's El Fasher campaign, including deliberate targeting of children",
+          "asOf": "2026-07-02"
+        }
+      ],
+      "why": "Amnesty's El Fasher report corroborates the UN findings and adds ethnic cleansing and child targeting; it calls for a ceasefire, protection forces and wider arms embargoes."
+    },
+    {
+      "slug": "amnesty-accuses-paramilitary-of-crimes-14-million-displaced",
+      "date": "2026-07-03",
+      "title": "Amnesty accuses paramilitary of crimes; 14 million displaced",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "African news roundup whose lead item is the same Amnesty accusation against the RSF; it never names El Fasher and shares the page with unrelated headlines."
+    },
+    {
+      "slug": "secret-monitors-document-alleged-genocide-and-mass-detentions",
+      "date": "2026-07-29",
+      "title": "Secret monitors document alleged genocide and mass detentions",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Covert documentation of RSF abuses across RSF-held Darfur, citing mass graves in el-Fasher and aligning with the UN and Amnesty probes; borderline because its scope is all of Darfur."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "un-rights-chief-demands-wider-arms-embargo-to-stop-killings",
+      "date": "2026-02-11",
+      "title": "UN rights chief demands wider arms embargo to stop killings",
+      "why": "Says in passing that the ICC 'has found war crimes linked to the RSF siege of El Fasher', but the story is Türk's Sudan-wide call to extend the arms embargo; not a new El Fasher finding and not the end event."
+    },
+    {
+      "slug": "un-warns-of-looming-famine-and-mass-atrocities",
+      "date": "2026-02-20",
+      "title": "UN warns of looming famine and mass atrocities",
+      "why": "Same UN vocabulary (mass atrocities, possible genocidal indicators), but a Sudan-wide briefing on Kordofan displacement, attacks on aid workers and famine risk."
+    },
+    {
+      "slug": "rsf-raid-kills-28-destroys-town-health-centre",
+      "date": "2026-02-25",
+      "title": "RSF raid kills 28, destroys town health centre",
+      "why": "An RSF atrocity in Darfur that cites UN 'hallmarks of genocide', but a separate raid on the town of Misteriha."
+    },
+    {
+      "slug": "un-calls-global-inaction-bloody-unacceptable-as-millions-face-famine",
+      "date": "2026-04-15",
+      "title": "UN calls global inaction 'bloody unacceptable' as millions face famine",
+      "why": "Third-anniversary overview of the whole war (14 million displaced, at least 150,000 dead); nothing new about El Fasher."
+    },
+    {
+      "slug": "uae-accused-of-fuelling-genocide-fears-in-sudan",
+      "date": "2026-05-05",
+      "title": "UAE accused of fuelling genocide fears in Sudan",
+      "why": "Cites the UN mission's 'hallmarks of another genocide' in Darfur, but the story is about alleged UAE arms flights to the RSF."
+    },
+    {
+      "slug": "hemedti-vows-decades-of-fighting-near-khartoum",
+      "date": "2026-05-08",
+      "title": "Hemedti vows decades of fighting near Khartoum",
+      "why": "About the RSF leader the UN mission named, but it reports his vow to keep fighting near Khartoum, not the El Fasher findings."
+    },
+    {
+      "slug": "sudan-fighting-kills-civilians-as-haiti-displacement-rises",
+      "date": "2026-05-28",
+      "title": "Sudan fighting kills civilians as Haiti displacement rises",
+      "why": "UN brief on current drone strikes in North Darfur, El Fasher's state, killing at least 12; a new event, not the 2025 capture."
+    },
+    {
+      "slug": "un-urges-sanctions-against-uae-backed-militia",
+      "date": "2026-06-24",
+      "title": "UN urges sanctions against UAE-backed militia",
+      "why": "HRW asks the UN to sanction RSF leaders, the kind of step that would end this development, but over the threatened atrocities as the RSF encircles El Obeid."
+    },
+    {
+      "slug": "rapid-support-forces-threaten-el-obeid-civilians",
+      "date": "2026-07-02",
+      "title": "Rapid Support Forces threaten El Obeid civilians",
+      "why": "Same day as Amnesty's El Fasher report and the same atrocity-risk language, but about the RSF buildup around El Obeid in Kordofan."
+    },
+    {
+      "slug": "u-s-imposes-new-penalties-over-alleged-chemical-weapons-use",
+      "date": "2026-07-22",
+      "title": "U.S. imposes new penalties over alleged chemical-weapons use",
+      "why": "Sanctions in the Sudan war, but on the army-led government over alleged chemical weapons; not an accountability step for El Fasher."
+    },
+    {
+      "slug": "france-shields-uae-amid-evidence-of-sudan-atrocities",
+      "date": "2026-07-24",
+      "title": "France shields UAE amid evidence of Sudan atrocities",
+      "why": "Says Colombian fighters' drone skills were used 'in sieges like El Fasher', but the story is UAE-backed recruitment and France's silence."
+    },
+    {
+      "slug": "sudan-armed-militias-and-bombed-civilians",
+      "date": "2026-07-27",
+      "title": "Sudan armed militias and bombed civilians",
+      "why": "Documentary on how land conflict, state neglect and state-armed militias drove Darfur toward alleged genocide; the history of Darfur's violence, not the El Fasher investigations."
+    },
+    {
+      "slug": "capital-s-destruction-displaces-millions-and-fractures-regional-stability",
+      "date": "2026-08-12",
+      "title": "Capital's destruction displaces millions and fractures regional stability",
+      "why": "Economist feature on the whole war and Khartoum's ruin; no El Fasher findings."
+    },
+    {
+      "slug": "un-warns-elections-risk-new-atrocities",
+      "date": "2026-08-23",
+      "title": "UN warns elections risk new atrocities",
+      "why": "A UN commission warning of new atrocities, but in South Sudan, a different country."
+    },
+    {
+      "slug": "uae-nominee-faces-scrutiny-over-alleged-arms-support",
+      "date": "2026-11-02",
+      "title": "UAE nominee faces scrutiny over alleged arms support",
+      "why": "UAE's UN Secretary-General bid under fire over alleged RSF support; Sudan's abuses are background."
+    }
+  ],
+  "notes": "Why this development: the archive's roughly 40 Sudan stories are mostly overviews of the war as a whole, which is too broad. Three narrower candidates were weighed. (a) The El Fasher investigations, chosen: 3 must and 3 optional entries, February to July 2026. (b) The RSF offensive in Kordofan and the threat to El Obeid: 3 stories mainly about it (6 June market drone strike, 24 June HRW, 2 July UN brief) plus two passing mentions (20 February, 7 March UN brief); it has the cleaner end (El Obeid falls or the encirclement is broken) but fewer entries, so its stories are near misses here. (c) Famine: no 2026 story reports a famine declaration or its end, and hunger appears only as context in overviews with incompatible counts (nearly 22, 25, 28 and nearly 20 million, 'over 30 million' affected), so it is a theme of the war, not a development. The siege itself ended before our archive (Amnesty: 'the siege of El Fasher from May 2024 to October 2025'); this development is the reckoning that followed. It is open on 16 November 2026: no story reports warrants, charges or Security Council action, and the last entry (29 July) still speaks of 'the prospect of international accountability'. The 11 February clause that the ICC 'has found war crimes linked to the RSF siege of El Fasher' is an aside in a Sudan-wide story and is not the end event; later entries still call for criminal probes (21 February) and for 'expanding accountability via the ICC' (12 March). Figures: none. Only the 14 February story states an El Fasher toll (over 6,000 killings in the first three days, which OHCHR says is likely an undercount); the 29 July counts (nearly 4,000 sexual-violence cases, tens of thousands detained) cover all of RSF-held Darfur. The 3 July roundup never names El Fasher; it joins (optional) only because it reports the Amnesty accusation published the day before. South Sudan stories are a different country."
+}

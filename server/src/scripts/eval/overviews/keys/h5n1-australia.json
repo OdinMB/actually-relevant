@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "id": "h5n1-australia",
+  "title": "H5N1 bird flu reaches Australia's wildlife",
+  "charter": {
+    "in": "The arrival and spread of H5N1 bird flu in Australia, first confirmed in two migratory seabirds in Western Australia in June 2026. Stories on detections, outbreak events and species affected in Australia (birds, Australian sea lions), and on Australia's wildlife and preparedness response, belong.",
+    "out": [
+      "H5N1 die-offs elsewhere, such as southern elephant seals on South Georgia",
+      "The global H5N1 panzootic in general (host-range counts, viral evolution) unless tied to Australia",
+      "Seasonal and mRNA flu vaccines",
+      "Migratory bird and seabird declines from other causes (flyway reports, bird population surveys)",
+      "Australia's biodiversity policy and threatened species in general",
+      "Penguin declines from other causes (African penguins, Antarctic tourism)",
+      "Poultry farming and antibiotic resistance"
+    ],
+    "endEvent": "Australian authorities declare the H5N1 incursion over (the virus no longer detected and the emergency response stood down). If H5N1 instead becomes established in Australian wildlife, no single story ends it and the development stays open."
+  },
+  "closed": null,
+  "figures": [],
+  "entries": [
+    {
+      "slug": "australia-confirms-h5n1-in-wild-seabirds",
+      "date": "2026-06-26",
+      "title": "Australia confirms H5N1 in wild seabirds",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Australia (Western Australia)",
+          "status": "first confirmed H5N1 detection, in two migratory seabirds that died",
+          "asOf": "2026-06-26"
+        }
+      ],
+      "why": "First confirmation of H5N1 in Australia, with an A$11.2 million preparedness pledge; starts the development."
+    },
+    {
+      "slug": "h5n1-strain-reaches-australia-kills-wildlife",
+      "date": "2026-08-15",
+      "title": "H5N1 strain reaches Australia, kills wildlife",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Explainer on how the virus evolved and reached Australia, where it is killing wild animals; mostly background, no new Australian count or place."
+    },
+    {
+      "slug": "h5n1-reaches-australia-s-vulnerable-wildlife",
+      "date": "2026-10-09",
+      "title": "H5N1 reaches Australia’s vulnerable wildlife",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Australia",
+          "status": "about 690 reported outbreak events",
+          "asOf": "2026-10-06"
+        },
+        {
+          "subject": "Australian sea lions",
+          "status": "endangered sea lions infected at breeding sites",
+          "asOf": "2026-10-09"
+        },
+        {
+          "subject": "Little penguins",
+          "status": "vaccination being tested in the wild",
+          "asOf": "2026-10-09"
+        }
+      ],
+      "why": "Marked spread: about 690 outbreak events by 6 October and infection of endangered Australian sea lions, with carcass removal and a penguin vaccination trial in response."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "nearly-half-of-treaty-listed-animals-declining-one-in-four-threatened",
+      "date": "2026-03-13",
+      "title": "Nearly half of treaty-listed animals declining; one in four threatened",
+      "why": "Names avian flu as a driver of migratory-species declines, but it is a global UN-backed report with no Australian outbreak."
+    },
+    {
+      "slug": "six-global-routes-link-151-seabird-species-across-54-countries",
+      "date": "2026-04-11",
+      "title": "Six global routes link 151 seabird species across 54 countries",
+      "why": "Migratory seabirds, like the first infected birds, but a flyway-mapping study with no disease."
+    },
+    {
+      "slug": "experts-say-australia-misses-targets-underfunds-nature",
+      "date": "2026-05-28",
+      "title": "Experts say Australia misses targets, underfunds nature",
+      "why": "Australian threatened wildlife and underfunded conservation, but about biodiversity policy, not H5N1."
+    },
+    {
+      "slug": "moderna-vaccine-gets-unanimous-advisory-panel-backing",
+      "date": "2026-06-20",
+      "title": "Moderna vaccine gets unanimous advisory panel backing",
+      "why": "Influenza, published days before the first detection, but a seasonal mRNA flu vaccine for people."
+    },
+    {
+      "slug": "industrial-flocks-drive-bacterial-mixing-and-antibiotic-resistance",
+      "date": "2026-07-29",
+      "title": "Industrial flocks drive bacterial mixing and antibiotic resistance",
+      "why": "Wild birds and poultry exchanging pathogens, but Campylobacter bacteria, not bird flu."
+    },
+    {
+      "slug": "un-recognizes-routes-to-protect-migratory-seabirds",
+      "date": "2026-08-22",
+      "title": "UN recognizes routes to protect migratory seabirds",
+      "why": "Seabird flyways under the UN migratory species convention; no disease."
+    },
+    {
+      "slug": "one-in-nine-migratory-birds-threatened-globally",
+      "date": "2026-09-12",
+      "title": "One in nine migratory birds threatened globally",
+      "why": "Mentions restoration projects in Australia, but a BirdLife report on migratory-bird threats with no bird flu."
+    },
+    {
+      "slug": "south-africa-s-sardine-catch-threatens-8-750-breeding-pairs",
+      "date": "2026-10-12",
+      "title": "South Africa’s sardine catch threatens 8,750 breeding pairs",
+      "why": "Penguins under threat three days after the Australian penguin-vaccination story, but the cause is food shortage in South Africa."
+    },
+    {
+      "slug": "bird-flu-killed-53-000-elephant-seals-on-south-georgia",
+      "date": "2026-11-12",
+      "title": "Bird flu killed 53,000 elephant seals on South Georgia",
+      "why": "The most tempting: H5N1 killing wildlife in the southern oceans, but the deaths are on South Georgia, in the South Atlantic, and date to 2025 or earlier ('by 2025'); the story never mentions Australia."
+    }
+  ],
+  "notes": "Not closed: the virus is still spreading in our latest story (9 Oct), and no story reports the incursion declared over. The elephant-seal story (12 Nov) is a different place and development. It reports H5N1 deaths of 53,000 female southern elephant seals on South Georgia 'by 2025', the global decline and the IUCN downgrade, with no reference to Australia. Joining it would merge the southern-hemisphere seal die-off with Australia's incursion. Figures are []: the only numbers in 3 entries are worldwide host-range counts, which describe the global panzootic, not this development, and do not agree with each other. 26 Jun has '560+ wild bird species and over 100 mammal species', 15 Aug 'over 400 bird species and 100 mammal species', and 9 Oct '613 bird types and 112 mammal species worldwide'. Australian numbers appear once each: 'two migratory seabirds' (26 Jun) and 'about 690 reported outbreak events' by 6 October (9 Oct), so they are statuses, not figures. All three entries agree that June 2026 was the first detection ('for the first time' on 26 Jun; 'reached Australia in June, the last continent previously free of the strain' on 9 Oct)."
+}

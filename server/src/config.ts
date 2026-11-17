@@ -380,6 +380,59 @@ export const config = {
       maxWaitMinutes: 120,
     },
   },
+  /**
+   * Story context, the `build_story_context` step after publishing (jobs/buildStoryContext.ts;
+   * .context/story-context.md). Web search goes through research's Tavily key and price.
+   */
+  storyContext: {
+    /** Stories published this many days back or fewer are still owed their context. */
+    lookbackDays: 3,
+    /** Stories one run takes, oldest published first: at most about $0.10 each, so a run costs at most about $2. */
+    perRun: 20,
+    /** Stories one run builds at once. */
+    concurrency: 3,
+    /** Searches one story's second pass makes at most, in the gap list's order. */
+    maxSearches: 3,
+    searchDepth: 'basic' as const,
+    resultsPerSearch: 5,
+    /** Sources one query adds at most, and one story at most in all. */
+    perQuerySources: 2,
+    maxNewSources: 5,
+    /** A query asked this many days ago or fewer is answered from `context_search_cache`, at no credit cost. */
+    searchReuseDays: 7,
+    /** A search that wants recent data starts this many days before the story's day. */
+    recentDays: 30,
+    /** How long a `fast` and a `slow` fact stay current from their as-of date (a `fixed` one always does). */
+    fastValidDays: 14,
+    slowValidDays: 365,
+    /** A `running` run older than this was cut off by a restart, and is marked failed, as research's are. */
+    staleRunMinutes: 120,
+    /**
+     * The step records the failed-stories notice when more than `jobs.failureShare.share` of the
+     * stories a run took failed technically, from this many stories on (`jobs/buildStoryContext.ts`).
+     */
+    failedStoriesMin: 5,
+    /** Fact-check items per call. */
+    checkBatchSize: 25,
+    /**
+     * What the write may return, held in code as its prompt states it (`structuralBoxes`): boxes
+     * beside the figures box, one per slot; sentences a box; tiles a box, the figures box's included.
+     */
+    maxBoxes: 6,
+    maxSentences: 3,
+    maxTiles: 4,
+    /** Earlier stories' facts offered again at most, newest first, so the prompts stay their size. */
+    maxReusedFacts: 30,
+    /**
+     * Where a box without an editor's place goes when a page is served (`placeBoxes`): `model`, the
+     * place the write call chose; `random`, a seeded draw among the paragraphs and points citing one of
+     * its sources; `section`, all in More context. Read when served, so a change reaches every story.
+     */
+    placement: parseOneOf(process.env.STORY_CONTEXT_PLACEMENT, 'model', ['model', 'random', 'section'] as const, 'STORY_CONTEXT_PLACEMENT'),
+    /** Notes beside story paragraphs and beside Why This Matters points at most, one per paragraph or point. */
+    notesInText: 2,
+    notesByPoints: 2,
+  },
   embedding: {
     model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
     // Changing dimensions requires a DB migration to alter the vector(1536) column and rebuild the index
@@ -644,6 +697,19 @@ export const config = {
     // checking every stepWaitPollMs, before the chain stops at that step.
     stepWaitMinutes: 120,
     stepWaitPollMs: 15_000,
+  },
+  /** A job run's own checks (lib/runUsage.ts `recordItems`, .context/scheduler.md, "Spending"). */
+  jobs: {
+    // The Jobs page warns under a job whose last run checked at least minItems items and saw more
+    // than this share of them fail, and the run's finish records a notice (jobs/failureShare.ts).
+    // Story context's failed-stories notice uses the same share. Nothing pauses on either.
+    failureShare: { share: 0.2, minItems: 20 },
+  },
+  /** The Dashboard's monthly spending overview and its warning levels (services/spending.ts). */
+  spending: {
+    // From this day of the UTC month on, a month heading past a warning level at its pace records
+    // its notice; before it, only a level already passed does (a few days' pace says little).
+    paceFromDay: 8,
   },
   feed: {
     size: parseWholeNumber(process.env.RSS_FEED_SIZE, 50, 'RSS_FEED_SIZE'),

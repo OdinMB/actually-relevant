@@ -47,6 +47,9 @@ export function makeRunUsage(overrides: Partial<JobRunUsage> = {}): JobRunUsage 
     standardCostUsd: 0,
     unpricedCalls: 0,
     otherUsd: 0,
+    searchCredits: 0,
+    itemsChecked: 0,
+    itemsFailed: 0,
     ...overrides,
   }
 }

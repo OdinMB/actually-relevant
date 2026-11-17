@@ -1,9 +1,15 @@
-import { describe, it, expect } from 'vitest'
-import prisma from '../lib/prisma.js'
-import { config } from '../config.js'
-import { describeDb, useTestDatabase } from '../test/db/harness.js'
-import { emptyUsage } from '../lib/runUsage.js'
-import {
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// The levels and their notices are spending.db.test.ts's; here, that the finish calls the check and survives its failure
+const mockChecks = vi.hoisted(() => ({ checkSpendWarnings: vi.fn() }))
+vi.mock('../services/spending.js', () => mockChecks)
+
+const { default: prisma } = await import('../lib/prisma.js')
+const { config } = await import('../config.js')
+const { describeDb, useTestDatabase } = await import('../test/db/harness.js')
+const { emptyUsage } = await import('../lib/runUsage.js')
+const { utcMonthStart } = await import('../services/podcastGuards.js')
+const {
   claimJobRun,
   clearInterruptedRuns,
   finishJobRun,
@@ -13,7 +19,11 @@ import {
   recordAbandonedRuns,
   recordInterruptedHere,
   releaseHeldJobLeases,
-} from './jobLease.js'
+} = await import('./jobLease.js')
+
+beforeEach(() => {
+  mockChecks.checkSpendWarnings.mockReset().mockResolvedValue(undefined)
+})
 
 const JOB = 'crawl_feeds'
 
@@ -147,6 +157,111 @@ describeDb('job lease (PostgreSQL)', () => {
       expect(job.lastCompletedAt).not.toBeNull()
       expect(job.lockedBy).toBe('other-host:1:abc')
       expect(job.lockedUntil).not.toBeNull()
+    })
+
+    describe("the job's monthly spend", () => {
+      const thisMonth = () => utcMonthStart(new Date())
+      const monthRows = () => prisma.jobMonthSpend.findMany({ orderBy: [{ jobName: 'asc' }, { month: 'asc' }] })
+      const spent = (costUsd: number, otherUsd: number, searchCredits: number) => ({
+        ...emptyUsage(),
+        calls: 4,
+        costUsd,
+        standardCostUsd: costUsd * 2,
+        otherUsd,
+        searchCredits,
+      })
+
+      it("adds each run's spend to the job's row for this UTC month, a failed run's too", async () => {
+        await seedJob()
+
+        await finishJobRun(JOB, null, spent(0.5, 0.1, 12))
+        await finishJobRun(JOB, 'boom', spent(0.25, 0.05, 6))
+
+        expect(await monthRows()).toEqual([
+          {
+            jobName: JOB,
+            month: thisMonth(),
+            costUsd: expect.closeTo(0.75, 10),
+            standardCostUsd: expect.closeTo(1.5, 10),
+            searchUsd: expect.closeTo(0.15, 10),
+            searchCredits: 18,
+            runs: 2,
+          },
+        ])
+        expect(mockChecks.checkSpendWarnings.mock.calls).toEqual([[JOB], [JOB]])
+      })
+
+      it('starts a new row in a new month, leaving the month before as it was', async () => {
+        await seedJob()
+        const lastMonth = new Date(Date.UTC(thisMonth().getUTCFullYear(), thisMonth().getUTCMonth() - 1, 1))
+        await prisma.jobMonthSpend.create({
+          data: { jobName: JOB, month: lastMonth, costUsd: 3, standardCostUsd: 6, searchUsd: 1, searchCredits: 125, runs: 9 },
+        })
+
+        await finishJobRun(JOB, null, spent(0.5, 0, 0))
+
+        expect((await monthRows()).map(r => [r.month, r.costUsd, r.runs])).toEqual([
+          [lastMonth, 3, 9],
+          [thisMonth(), 0.5, 1],
+        ])
+      })
+
+      it("writes nothing and checks nothing without the run's usage, and checks no level for a run that spent nothing", async () => {
+        await seedJob()
+
+        await finishJobRun(JOB, 'boom')
+        expect(await monthRows()).toEqual([])
+
+        await finishJobRun(JOB, null, emptyUsage())
+        expect((await monthRows()).map(r => [r.costUsd, r.runs])).toEqual([[0, 1]])
+        expect(mockChecks.checkSpendWarnings).not.toHaveBeenCalled()
+      })
+
+      it("adds nothing for a chain's run: its steps' runs carry its spend", async () => {
+        await prisma.jobRun.create({ data: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *' } })
+
+        await finishJobRun('daily_edition_chain', null, spent(2, 1, 100))
+
+        expect(await monthRows()).toEqual([])
+        expect((await prisma.jobRun.findUniqueOrThrow({ where: { jobName: 'daily_edition_chain' } })).lastRunUsage).toMatchObject({ costUsd: 2 })
+      })
+
+      it('finishes the run when the warning check fails', async () => {
+        await seedJob()
+        await claimJobRun(JOB)
+        mockChecks.checkSpendWarnings.mockRejectedValueOnce(new Error('notices table gone'))
+
+        await expect(finishJobRun(JOB, null, spent(0.5, 0, 0))).resolves.toBeUndefined()
+
+        const job = await row()
+        expect(job.lastSucceededAt).not.toBeNull()
+        expect(job.lockedBy).toBeNull()
+        expect(await monthRows()).toHaveLength(1)
+      })
+    })
+
+    // The notice's wording and threshold are failureShare.test.ts's; here, that the finish records it once per job
+    describe('the failure share of the items the run checked', () => {
+      const checked = (itemsChecked: number, itemsFailed: number) => ({ ...emptyUsage(), itemsChecked, itemsFailed })
+      const notices = () => prisma.adminNotice.findMany({ select: { title: true, dedupeKey: true, severity: true, count: true } })
+
+      it('records one warning notice for the job when more than the share failed, a repeat reopening it, and none at or under it', async () => {
+        await seedJob()
+        await finishJobRun(JOB, null, checked(45, 9))
+        expect(await notices()).toEqual([])
+
+        await finishJobRun(JOB, null, checked(45, 14))
+        await finishJobRun(JOB, 'boom', checked(40, 20))
+        expect(await notices()).toEqual([
+          { title: 'Crawl Feeds: 20 of 40 checked items failed in the last run', dedupeKey: `step-failing:${JOB}`, severity: 'warning', count: 2 },
+        ])
+      })
+
+      it("records none for a chain's run, whose steps' runs carry their items", async () => {
+        await prisma.jobRun.create({ data: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *' } })
+        await finishJobRun('daily_edition_chain', null, checked(45, 14))
+        expect(await notices()).toEqual([])
+      })
     })
 
     it('starts the count of interrupted runs again, on success and on failure', async () => {

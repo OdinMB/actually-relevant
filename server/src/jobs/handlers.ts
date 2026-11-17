@@ -4,6 +4,7 @@ import { runAssessStories } from './assessStories.js'
 import { runSelectStories } from './selectStories.js'
 import { runResearchStories } from './researchStories.js'
 import { runPublishStories } from './publishStories.js'
+import { runBuildStoryContext } from './buildStoryContext.js'
 import { runBlueskyUpdateMetrics } from './blueskyUpdateMetrics.js'
 import { runGenerateNewsletter, runGenerateUpliftingNewsletter } from './generateNewsletter.js'
 import { runPublishNewsletter, runPublishUpliftingNewsletter } from './publishNewsletter.js'
@@ -28,6 +29,7 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   select_stories: runSelectStories,
   research_stories: runResearchStories,
   publish_stories: runPublishStories,
+  build_story_context: runBuildStoryContext,
   social_auto_post: runSocialAutoPost,
   bluesky_update_metrics: runBlueskyUpdateMetrics,
   generate_newsletter: runGenerateNewsletter,
@@ -63,6 +65,7 @@ export const JOB_PIPELINE_ORDER: readonly string[] = [
   'select_stories',
   'research_stories',
   'publish_stories',
+  'build_story_context',
   'social_auto_post',
   'bluesky_update_metrics',
   'mastodon_update_metrics',

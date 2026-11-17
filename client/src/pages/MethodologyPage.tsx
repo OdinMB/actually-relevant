@@ -240,6 +240,7 @@ export default function MethodologyPage() {
             {AI_DISCLOSURE_COPY.researchedStoryLabel.lead} AI{AI_DISCLOSURE_COPY.researchedStoryLabel.tail}&quot; and list all their sources at the end,
             starting with the article where we first found the story.
           </p>
+          {/* The context-cards paragraph goes here when build_story_context is switched on (.context/story-context.md, "Before switching on") */}
 
           {/* What We Don't Do */}
           <h2 className="section-heading mt-10">What We Don't Do</h2>
