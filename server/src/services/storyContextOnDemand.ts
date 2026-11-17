@@ -10,7 +10,6 @@
  */
 import { config } from '../config.js'
 import { addMonthSpend } from '../jobs/jobLease.js'
-import { STORY_CONTEXT_JOB } from '../jobs/buildStoryContext.js'
 import { createLogger } from '../lib/logger.js'
 import prisma from '../lib/prisma.js'
 import { createRunScope, runInScope, settleRun, type RunScope } from '../lib/runUsage.js'
@@ -20,6 +19,7 @@ import { sanitizedError } from './researchRuns.js'
 import { checkSpendWarnings } from './spending.js'
 import { contextEligibility } from './storyContextInput.js'
 import type { ContextDeps } from './storyContextPipeline.js'
+import { STORY_CONTEXT_JOB } from './storyContextQueue.js'
 import { claimContextRun, executeContextRun, productionDeps, reopenFailedRun, type ContextRunOutcome } from './storyContextRuns.js'
 
 const log = createLogger('story_context')
@@ -29,9 +29,12 @@ const BUSY = 'Context is already being gathered for this story'
 
 type Eligibility = NonNullable<Awaited<ReturnType<typeof contextEligibility>>>
 
-/** Why the story can have no context gathered at all, or null: it must be published, with a research run that holds facts. */
+/**
+ * Why the story can have no context gathered by hand at all, or null: it must be published, with a
+ * research run that holds facts. A selected story's cards are the step's, built before it is published.
+ */
 function ineligibility(story: Eligibility): string | null {
-  if (story.status !== 'published') return `Only published stories get context; this one is ${story.status}`
+  if (story.status !== 'published') return `Context can be gathered by hand only for a published story; this one is ${story.status}`
   if (!story.researched) return 'The story has no research run with facts to start from: research it first'
   return null
 }

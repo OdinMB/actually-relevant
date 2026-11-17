@@ -78,7 +78,10 @@ describeDb('story context on demand', () => {
     await expect(startContextGathering(UNKNOWN, fakeContextDeps())).rejects.toMatchObject({ status: 404, message: 'Story not found' })
 
     const draft = await researched({ status: 'selected', datePublished: null })
-    await expect(startContextGathering(draft.id, fakeContextDeps())).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/only published/i) })
+    await expect(startContextGathering(draft.id, fakeContextDeps())).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringMatching(/only for a published story/i),
+    })
     const bare = await story()
     await createResearchRun(bare.id, [{ id: 'S0', facts: [] }])
     await expect(startContextGathering(bare.id, fakeContextDeps())).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/research/i) })
@@ -159,7 +162,7 @@ describeDb('story context on demand', () => {
     const bare = await story()
     expect(await gatherState(bare.id)).toEqual({ eligible: false, refusal: expect.stringMatching(/research/i) })
     const draft = await researched({ status: 'selected', datePublished: null })
-    expect(await gatherState(draft.id)).toEqual({ eligible: false, refusal: expect.stringMatching(/only published/i) })
+    expect(await gatherState(draft.id)).toEqual({ eligible: false, refusal: expect.stringMatching(/only for a published story/i) })
 
     const running = await createContextRun(s.id, { status: 'running', outcome: null, finishedAt: null })
     expect(await gatherState(s.id)).toEqual({ eligible: true, refusal: expect.stringMatching(/already being gathered/i) })

@@ -2,7 +2,7 @@ import { it, expect } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createContextFact, createContextRun, createResearchRun } from '../test/db/storyContext.js'
-import { contextEligibility, loadContextInput, loadEarlierWork, nextForContext } from './storyContextInput.js'
+import { contextEligibility, loadContextInput, loadEarlierWork } from './storyContextInput.js'
 import { RESPONSE_ANGLES } from './storyContextPipeline.js'
 import { factKey } from './storyContextRecords.js'
 
@@ -20,24 +20,6 @@ describeDb('story context input', () => {
       createStory({ feedId: feed.id, status: 'published', datePublished: ago(days), title: 'A story', summary: 'Its summary.', ...data })
     return { feed, published }
   }
-
-  it('owes the published stories of the lookback with research facts and no context run, oldest first, up to the limit', async () => {
-    const { feed, published } = await setup()
-    const newer = await published(1)
-    const older = await published(2.5)
-    const tooOld = await published(3.5)
-    const noFacts = await published(1)
-    const failedResearch = await published(1)
-    const settled = await published(1)
-    const selected = await createStory({ feedId: feed.id, status: 'selected', datePublished: null })
-    for (const s of [newer, older, tooOld, settled, selected]) await createResearchRun(s.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
-    await createResearchRun(noFacts.id, [{ id: 'S0', facts: [] }])
-    await createResearchRun(failedResearch.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }], { status: 'failed' })
-    await createContextRun(settled.id, { status: 'failed', outcome: 'technical' })
-
-    expect(await nextForContext(prisma, 20, NOW)).toEqual([older.id, newer.id])
-    expect(await nextForContext(prisma, 1, NOW)).toEqual([older.id])
-  })
 
   it("loads the story's text, its newest research run with facts, and the earlier stories' current supported facts", async () => {
     const { published } = await setup()
@@ -97,13 +79,20 @@ describeDb('story context input', () => {
     expect(input!.reusable.map(f => f.id).sort()).toEqual([copy.id, other.id].sort())
   })
 
-  it('loads nothing for a story that is not published or has no research facts', async () => {
+  it('loads a selected story about to be published, its day the run’s', async () => {
+    const { feed } = await setup()
+    const story = await createStory({ feedId: feed.id, status: 'selected', title: 'A story', summary: 'Its summary.' })
+    const run = await createResearchRun(story.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
+    expect(await loadContextInput(prisma, story.id, NOW)).toMatchObject({ storyId: story.id, storyDay: '2026-11-16', researchRunId: run.id })
+  })
+
+  it('loads nothing for a story neither selected nor published, or without research facts', async () => {
     const { feed, published } = await setup()
-    const draft = await createStory({ feedId: feed.id, status: 'selected' })
-    await createResearchRun(draft.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
+    const analyzed = await createStory({ feedId: feed.id, status: 'analyzed' })
+    await createResearchRun(analyzed.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
     const bare = await published(1)
     await createResearchRun(bare.id, [{ id: 'S0', facts: [] }])
-    expect(await loadContextInput(prisma, draft.id)).toBeNull()
+    expect(await loadContextInput(prisma, analyzed.id)).toBeNull()
     expect(await loadContextInput(prisma, bare.id)).toBeNull()
   })
 

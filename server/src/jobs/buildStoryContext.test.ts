@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('../lib/prisma.js', () => ({ default: {} }))
 vi.mock('../lib/notify.js', () => ({ notify: mocks.notify }))
-vi.mock('../services/storyContextInput.js', () => ({ nextForContext: mocks.nextForContext }))
+vi.mock('../services/storyContextQueue.js', () => ({ nextForContext: mocks.nextForContext, STORY_CONTEXT_JOB: 'build_story_context' }))
 vi.mock('../services/storyContextSearch.js', () => ({ pruneSearchCache: mocks.pruneSearchCache }))
 vi.mock('../services/storyContextRuns.js', () => ({
   runStoryContext: mocks.runStoryContext,
@@ -42,8 +42,7 @@ const failed = (runId: string, transient: boolean) => ({
   transient,
 })
 
-const inScope = async () => {
-  const scope = createRunScope({ jobName: 'build_story_context', flex: false })
+const inScope = async (scope = createRunScope({ jobName: 'build_story_context', flex: false })) => {
   await runInScope(scope, () => runBuildStoryContext())
   return scope
 }
@@ -161,11 +160,41 @@ describe('runBuildStoryContext', () => {
     expect(scope.summary).toBe('Web search is off, no context built')
   })
 
-  it('prunes the search cache and asks for at most perRun stories', async () => {
+  it('prunes the search cache and builds every story it owes, with no limit a run', async () => {
     mocks.nextForContext.mockResolvedValue([])
     const scope = await inScope()
     expect(mocks.pruneSearchCache).toHaveBeenCalled()
-    expect(mocks.nextForContext).toHaveBeenCalledWith({}, 20)
+    expect(mocks.nextForContext).toHaveBeenCalledWith()
     expect(scope.summary).toBe('No story owed its context')
+
+    const many = Array.from({ length: 45 }, (_, i) => `s${i}`)
+    mocks.nextForContext.mockResolvedValue(many)
+    mocks.runStoryContext.mockResolvedValue(run(1, 0, 1))
+    await inScope()
+    expect(mocks.runStoryContext.mock.calls.map(([id]) => id as string).sort()).toEqual([...many].sort())
+  })
+
+  it("starts no other story, and no second attempt, once its chain's deadline has passed, and says how many it left", async () => {
+    const scope = createRunScope({ jobName: 'build_story_context', flex: false, deadline: new Date(Date.now() + 60_000) })
+    mocks.nextForContext.mockResolvedValue(['a', 'b', 'c', 'd', 'e'])
+    // Three start at once; the deadline passes while they run
+    mocks.runStoryContext
+      .mockResolvedValueOnce(failed('run-a', true))
+      .mockResolvedValueOnce(run(5, 0))
+      .mockImplementationOnce(async () => {
+        scope.deadline = new Date(Date.now() - 1)
+        return run(5, 0)
+      })
+      .mockResolvedValue(run(5, 0))
+    await inScope(scope)
+    expect(mocks.runStoryContext.mock.calls.map(([id]) => id as string)).toEqual(['a', 'b', 'c'])
+    expect(scope.summary).toBe('Built the context of 3 stories: 4 cards kept, 0 of 10 checked items failed, 1 story failed, 2 left at the deadline')
+  })
+
+  it("starts nothing when its chain's deadline has passed before it began", async () => {
+    mocks.nextForContext.mockResolvedValue(['a', 'b'])
+    const scope = await inScope(createRunScope({ jobName: 'build_story_context', flex: false, deadline: new Date(Date.now() - 1) }))
+    expect(mocks.runStoryContext).not.toHaveBeenCalled()
+    expect(scope.summary).toBe('Built the context of 0 stories: 0 cards kept, 0 of 0 checked items failed, 0 stories failed, 2 left at the deadline')
   })
 })

@@ -375,20 +375,21 @@ export const config = {
        * While the job is enabled, the publish gate's longest hold: it holds a selected story for its research
        * only this long after the story entered `selected` (`selectedAt`); after that the next publish
        * run takes it single-source. With both jobs daily, a story the 02:45 publish holds goes out at
-       * the next day's run, researched or not: a hold lasts one publish cycle at most.
+       * the next day's run, researched or not: a hold lasts one publish cycle at most. The gate's hold
+       * for context cards (`awaitingContext`, while `build_story_context` is enabled) has the same bound.
        */
       maxWaitMinutes: 120,
     },
   },
   /**
-   * Story context, the `build_story_context` step after publishing (jobs/buildStoryContext.ts;
-   * .context/story-context.md). Web search goes through research's Tavily key and price.
+   * Story context, the `build_story_context` step between research and publishing
+   * (jobs/buildStoryContext.ts; .context/story-context.md). Web search goes through research's Tavily
+   * key and price. A run takes every story it owes, with no limit: the night's stories bound it; the
+   * publish gate holds a story for its cards at most `research.pipeline.maxWaitMinutes`.
    */
   storyContext: {
-    /** Stories published this many days back or fewer are still owed their context. */
+    /** Stories published this many days back or fewer, without a context run, are filled in after the stories about to be published. */
     lookbackDays: 3,
-    /** Stories one run takes, oldest published first: at most about $0.10 each, so a run costs at most about $2. */
-    perRun: 20,
     /** Stories one run builds at once. */
     concurrency: 3,
     /** Searches one story's second pass makes at most, in the gap list's order. */

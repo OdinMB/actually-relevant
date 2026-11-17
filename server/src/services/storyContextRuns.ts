@@ -211,7 +211,7 @@ const NONE = { boxes: 0, tally: { checked: 0, failed: 0 }, transient: false }
 /**
  * One attempt on a claimed (`running`) row: its input and the story's earlier work
  * (`loadEarlierWork`, so the run builds on the story's earlier completed runs), the pipeline with
- * `deps`, the store. A story that is not published or has no research facts is recorded as skipped.
+ * `deps`, the store. A story neither selected nor published, or without research facts, is recorded as skipped.
  * A failure outside the pipeline fails the run with a sanitized error; only a database error while
  * recording that failure throws.
  */

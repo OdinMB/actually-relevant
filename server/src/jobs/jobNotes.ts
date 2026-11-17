@@ -119,7 +119,7 @@ export const NOTES: Readonly<Record<string, () => string>> = {
     const c = config.storyContext
     const { share, minItems } = config.jobs.failureShare
     return (
-      `Builds the context cards of the stories published in the last ${count(c.lookbackDays, 'day')} that were researched and have none yet, up to ${c.perRun} a run: ` +
+      `Builds the context cards of the stories published in the last ${count(c.lookbackDays, 'day')} that were researched and have none yet: ` +
       `it reads their research, searches the web for up to ${count(c.maxSearches, 'missing piece')}, checks every fact and card against its source, and keeps what passes. ` +
       'It runs after Publish Stories, so it never holds up publishing, and builds each story once: a build stopped by a problem that may pass, such as the AI service not answering, is tried a second time later in the same run, never on a later night. ' +
       `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
