@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/** A chain's flex cut-off or deadline: hours from the start of each run, in quarter hours up to 48, or null for none. */
+/** A chain's flex cut-off: hours from the start of each run, in quarter hours up to 48, or null for none. */
 const hoursFromStart = z
   .number()
   .positive('Must be more than 0 hours')
@@ -23,8 +23,6 @@ export const updateJobSchema = z.object({
     .optional(),
   /** A chain: calls go at standard price once this many hours have passed since the run started. */
   flexHours: hoursFromStart.optional(),
-  /** A chain: a step working through items starts no new one once this many hours have passed since the run started. */
-  deadlineHours: hoursFromStart.optional(),
 })
 
 export const crawlUrlSchema = z.object({

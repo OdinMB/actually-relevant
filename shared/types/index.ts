@@ -874,8 +874,6 @@ export interface JobRun {
   notBefore: string | null
   /** A chain: calls go at standard price once this many hours have passed since each run started; null for no cut-off. */
   flexHours: number | null
-  /** A chain: a step working through items starts no new one once this many hours have passed since each run started; null for none. */
-  deadlineHours: number | null
   /**
    * A chain: the step it is in ('running'), goes on from after a review ('review'), is held at until
    * `resumeAt` ('waiting'), or stopped at ('failed').

@@ -29,7 +29,7 @@ const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean; 
   {
     label: 'Flex',
     width: 'lg:w-[8%]',
-    note: 'AI calls at half price through OpenAI’s flex processing: slower, and at standard price when OpenAI is busy. In a chain’s Whole chain row: the hours from the start of each run after which every call goes at standard price; empty for flex the whole run.',
+    note: 'A job’s switch: its AI calls go at half price through OpenAI’s flex processing, which is slower and falls back to standard price when OpenAI is busy. A chain’s Whole chain row has hours instead: once that many hours have passed since the run started, every call in the chain goes at standard price, so a slow flex queue cannot hold up the chain for long. Empty: flex for the whole run.',
   },
   { label: 'Status', width: 'lg:w-[10%]' },
   { label: 'Last Run', width: 'lg:w-[12%]', wide: true },
@@ -40,7 +40,7 @@ const COLUMNS: { label: string; width: string; wide?: boolean; right?: boolean; 
 /** A cell of a column shown from lg on only (Schedule, Last Run, Last Finished). */
 export const WIDE = 'hidden lg:table-cell'
 
-export function JobTable({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
+export function JobTable({ children }: { children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm lg:table-fixed">
@@ -69,8 +69,7 @@ export function JobTable({ children, footer }: { children: React.ReactNode; foot
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
-        {footer && <tfoot>{footer}</tfoot>}
+        <tbody>{children}</tbody>{' '}
       </table>
     </div>
   )

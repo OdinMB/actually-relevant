@@ -5,7 +5,6 @@ import { PlayIcon } from '@heroicons/react/24/outline'
 import { useJobChange, useRunJob } from '../../hooks/useJobs'
 import { ApiError } from '../../lib/admin-api'
 import { ActionIconButton } from '../ui/ActionIconButton'
-import { InfoTip } from '../ui/InfoTip'
 import { Tooltip } from '../ui/Tooltip'
 import { useToast } from '../ui/Toast'
 
@@ -18,78 +17,48 @@ export function parseHours(text: string): number | null | undefined {
 }
 
 /**
- * Hours from the start of each run, or empty for none, saved when the field loses focus: a chain's
- * flex cut-off or deadline. Counting from each run's start, it means the same for a chain that runs
- * once a day or several times.
+ * A chain's flex cut-off in its Whole chain row: hours from the start of each run, or empty for flex
+ * the whole run, saved when the field loses focus. Counting from each run's start, it means the same
+ * for a chain that runs once a day or several times. The Flex column's header explains it.
  */
-export function HoursField({
-  job,
-  field,
-  label,
-  help,
-  compact = false,
-}: {
-  job: JobRun
-  field: 'flexHours' | 'deadlineHours'
-  label: string
-  help: string
-  /** In a table cell: a hidden label, an "h" after the field, the help left to the column's header. */
-  compact?: boolean
-}) {
+export function FlexHoursField({ job }: { job: JobRun }) {
   const change = useJobChange(job)
   const { toast } = useToast()
-  const id = `${job.jobName}-${field}`
-  const shown = job[field] === null ? '' : String(job[field])
-  const input = (
-    <input
-      id={id}
-      type="text"
-      inputMode="decimal"
-      autoComplete="off"
-      placeholder={compact ? '—' : 'no limit'}
-      defaultValue={shown}
-      key={shown}
-      onKeyDown={e => {
-        if (e.key === 'Enter') e.currentTarget.blur()
-      }}
-      onBlur={e => {
-        const field_ = e.currentTarget
-        const hours = parseHours(field_.value)
-        if (hours === undefined) {
-          field_.value = shown
-          toast('error', 'Enter hours from 0.25 to 48, in quarter hours such as 4.5. Leave the field empty for no limit.')
-          return
-        }
-        if (hours !== job[field])
-          change.save({ [field]: hours }, `${jobDisplayName(job.jobName)}: ${label.toLowerCase()} ${hours === null ? 'no limit' : `${hours} h`}`)
-      }}
-      className={`rounded-md border border-neutral-300 px-2 py-1 text-sm tabular-nums placeholder:text-neutral-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${
-        compact ? 'w-14 px-1.5' : 'w-20'
-      }`}
-    />
-  )
-  if (compact)
-    return (
-      <span className="inline-flex items-center gap-1 whitespace-nowrap align-middle">
-        <label htmlFor={id} className="sr-only">
-          {label} (hours from the start of each run; empty for no limit)
-        </label>
-        {input}
-        <span className="text-xs text-neutral-500" aria-hidden="true">
-          h
-        </span>
-      </span>
-    )
+  const id = `${job.jobName}-flexHours`
+  const shown = job.flexHours === null ? '' : String(job.flexHours)
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-0.5">
-        <label htmlFor={id} className="whitespace-nowrap text-xs font-medium text-neutral-600">
-          {label} <span className="font-normal text-neutral-400">(hours)</span>
-        </label>
-        <InfoTip label={`About ${label}`}>{help}</InfoTip>
-      </div>
-      {input}
-    </div>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap align-middle">
+      <label htmlFor={id} className="sr-only">
+        Flex for (hours from the start of each run; empty for the whole run)
+      </label>
+      <input
+        id={id}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder="—"
+        defaultValue={shown}
+        key={shown}
+        onKeyDown={e => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+        }}
+        onBlur={e => {
+          const field = e.currentTarget
+          const hours = parseHours(field.value)
+          if (hours === undefined) {
+            field.value = shown
+            toast('error', 'Enter hours from 0.25 to 48, in quarter hours such as 4.5. Leave the field empty for flex the whole run.')
+            return
+          }
+          if (hours !== job.flexHours)
+            change.save({ flexHours: hours }, `${jobDisplayName(job.jobName)}: ${hours === null ? 'flex the whole run' : `flex for ${hours} h`}`)
+        }}
+        className="w-14 rounded-md border border-neutral-300 px-1.5 py-1 text-sm tabular-nums placeholder:text-neutral-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+      />
+      <span className="text-xs text-neutral-500" aria-hidden="true">
+        h
+      </span>
+    </span>
   )
 }
 

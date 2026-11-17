@@ -12,7 +12,7 @@ import { useToast } from '../ui/Toast'
 import { CronEditor } from './CronEditor'
 import { JobStatusBadge } from './JobStatusBadge'
 import { TimeWithRelative } from './TimeWithRelative'
-import { HoursField, EnabledToggle, LastRun, RunButton } from './jobControls'
+import { FlexHoursField, EnabledToggle, LastRun, RunButton } from './jobControls'
 import { JobEditPanel } from './JobsTable'
 import { JobRow, JobTable, WIDE } from './jobTable'
 
@@ -65,7 +65,7 @@ function ChainState({ chain }: { chain: JobRun }) {
 }
 
 /**
- * The chain itself, under its steps in the same columns: its schedule (click to edit), switch, flex
+ * The chain itself, above its steps in the same columns: its schedule (click to edit), switch, flex
  * cut-off in hours, status, the whole run's length and cost (what each step did is in its own row),
  * when it last finished, and Run and Details for the whole chain. Review stays empty: only a step
  * waits for review.
@@ -73,12 +73,12 @@ function ChainState({ chain }: { chain: JobRun }) {
 function ChainTotalRow({ chain, onOpen }: { chain: JobRun; onOpen: (jobName: string) => void }) {
   const name = jobDisplayName(chain.jobName)
   return (
-    <tr className={`border-t-2 border-neutral-200 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}>
+    <tr className={`border-b-2 border-neutral-200 ${chain.running ? 'bg-yellow-50' : 'bg-neutral-50'}`}>
       <th scope="row" className="px-3 py-2 text-left font-semibold text-neutral-900">
         Whole chain
-        {/* The Schedule column shows from lg on; below it the schedule goes here */}
+        {/* The Schedule column shows from lg on; below it the schedule goes here, on one line */}
         <span className="mt-0.5 block font-normal lg:hidden">
-          <CronEditor job={chain} />
+          <CronEditor job={chain} compact />
         </span>
       </th>
       <td className={`px-3 py-2 ${WIDE}`}>
@@ -89,7 +89,7 @@ function ChainTotalRow({ chain, onOpen }: { chain: JobRun; onOpen: (jobName: str
       </td>
       <td className="px-3 py-2" />
       <td className="px-3 py-2">
-        <HoursField job={chain} field="flexHours" label="Flex for" help="" compact />
+        <FlexHoursField job={chain} />
       </td>
       <td className="px-3 py-2">
         <JobStatusBadge job={chain} />
@@ -111,9 +111,8 @@ function ChainTotalRow({ chain, onOpen }: { chain: JobRun; onOpen: (jobName: str
 }
 
 /**
- * A chain on the Jobs page: its name and (the daily edition) its research deadline, then its steps in
- * order in the Jobs page's shared table layout, each with its mode (On, Review, Off), and the chain
- * itself in a Whole chain row under them.
+ * A chain on the Jobs page: its name, then the chain itself in a Whole chain row and its steps in
+ * order under it, in the Jobs page's shared table layout.
  */
 export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) {
   const [selected, setSelected] = useState<string | null>(null)
@@ -127,20 +126,12 @@ export function ChainCard({ chain, steps }: { chain: JobRun; steps: JobRun[] }) 
           {name}
           {chain.note && <InfoTip label={`About ${name}`}>{chain.note}</InfoTip>}
         </h2>
-        {/* Only research works through items against the deadline, so only its chain offers one */}
-        {chain.steps?.includes('research_stories') && (
-          <HoursField
-            job={chain}
-            field="deadlineHours"
-            label="Done within"
-            help="Counted from the start of each run: once these hours have passed, research starts no other story, so publishing is not held up. Stories already being researched finish. Empty: no limit."
-          />
-        )}
       </div>
 
       <ChainState chain={chain} />
 
-      <JobTable footer={<ChainTotalRow chain={chain} onOpen={setSelected} />}>
+      <JobTable>
+        <ChainTotalRow chain={chain} onOpen={setSelected} />
         {steps.map((step, i) => (
           <JobRow key={step.jobName} job={step} step={i + 1} onOpen={setSelected} />
         ))}

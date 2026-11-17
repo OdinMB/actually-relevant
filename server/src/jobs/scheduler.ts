@@ -285,18 +285,15 @@ async function runJob(jobName: string, handler: () => Promise<void>): Promise<Ru
 
 /**
  * The run's scope for flex and spending (lib/runUsage.ts): the job's Flex switch, and its flex
- * cut-off and deadline that many hours after the start (a chain's settings, so a chain run several
- * times a day gets them on every run).
+ * cut-off that many hours after the start (a chain's setting, so a chain run several times a day
+ * gets it on every run).
  */
 async function openRunScope(jobName: string): Promise<RunScope> {
-  const settings = await prisma.jobRun.findUnique({ where: { jobName }, select: { flex: true, flexHours: true, deadlineHours: true } })
-  const now = Date.now()
-  const after = (hours: number | null | undefined) => (hours ? new Date(now + hours * 60 * 60 * 1000) : null)
+  const settings = await prisma.jobRun.findUnique({ where: { jobName }, select: { flex: true, flexHours: true } })
   return createRunScope({
     jobName,
     flex: settings?.flex === true,
-    flexUntil: after(settings?.flexHours),
-    deadline: after(settings?.deadlineHours),
+    flexUntil: settings?.flexHours ? new Date(Date.now() + settings.flexHours * 60 * 60 * 1000) : null,
   })
 }
 

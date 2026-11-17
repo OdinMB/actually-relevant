@@ -20,7 +20,6 @@ export function makeJobRun(jobName: JobName, overrides: Partial<JobRun> = {}): J
     pauseForReview: false,
     notBefore: null,
     flexHours: null,
-    deadlineHours: null,
     resumeStep: null,
     resumeReason: null,
     resumeAt: null,

@@ -100,7 +100,7 @@ Stories get a URL slug (e.g. `ai-breakthrough-in-protein-folding`) when they are
 
 ### Automated Jobs
 
-Since 2026-11-16 the pipeline runs as two chains (`scheduler.md`, "Chains"), each step starting when the one before it has finished. **Intake** (crawl, pre-assess, assess) runs four times a day (04:00, 10:00, 16:00 and 22:00 UTC), so every run ends with assessed stories. The **Daily edition** (select, research, publish) runs from 23:00 UTC, and stories publish as soon as research is done, by about 05:00 UTC at the latest. A step's own schedule is unused. The social post keeps its own schedule.
+Since 2026-11-16 the pipeline runs as two chains (`scheduler.md`, "Chains"), each step starting when the one before it has finished. **Intake** (crawl, pre-assess, assess) runs four times a day (04:00, 10:00, 16:00 and 22:00 UTC), so every run ends with assessed stories. The **Daily edition** (select, research, publish) runs from 23:00 UTC, and stories publish as soon as research is done, usually within a few hours. A step's own schedule is unused. The social post keeps its own schedule.
 
 | Job | Schedule | What It Does |
 |-----|----------|--------------|

@@ -141,10 +141,10 @@ describe('scheduler', () => {
       expect(await runJob('intake_chain', vi.fn())).toEqual({ result: 'skipped' })
     })
 
-    it("runs the handler in a run scope with the job's Flex switch and its cut-offs counted from this run's start", async () => {
+    it("runs the handler in a run scope with the job's Flex switch and its flex cut-off counted from this run's start", async () => {
       vi.useFakeTimers({ now: new Date('2026-11-17T10:00:00Z'), toFake: ['Date'] })
       try {
-        mockPrisma.jobRun.findUnique.mockResolvedValue({ flex: true, flexHours: 1.5, deadlineHours: 3 })
+        mockPrisma.jobRun.findUnique.mockResolvedValue({ flex: true, flexHours: 1.5 })
         let seen: ReturnType<typeof currentRun>
         await runJob('intake_chain', async () => {
           seen = currentRun()
@@ -153,15 +153,14 @@ describe('scheduler', () => {
           jobName: 'intake_chain',
           flex: true,
           flexUntil: new Date('2026-11-17T11:30:00Z'),
-          deadline: new Date('2026-11-17T13:00:00Z'),
         })
 
         // No cut-off set: none on the run
-        mockPrisma.jobRun.findUnique.mockResolvedValue({ flex: true, flexHours: null, deadlineHours: null })
+        mockPrisma.jobRun.findUnique.mockResolvedValue({ flex: true, flexHours: null })
         await runJob('intake_chain', async () => {
           seen = currentRun()
         })
-        expect(seen).toMatchObject({ flexUntil: null, deadline: null })
+        expect(seen).toMatchObject({ flexUntil: null })
       } finally {
         vi.useRealTimers()
       }

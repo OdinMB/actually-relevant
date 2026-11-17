@@ -18,7 +18,6 @@ const chain = (overrides: Partial<JobRun> = {}) =>
   makeJobRun('daily_edition_chain', {
     cronExpression: '0 23 * * *',
     flexHours: 4.5,
-    deadlineHours: 6,
     steps: ['select_stories', 'research_stories', 'publish_stories'],
     ...overrides,
   })
@@ -49,26 +48,27 @@ describe('ChainCard', () => {
   it('lists the steps in order, each with its Enabled and Review switches, and Flex only where a step makes AI calls', () => {
     renderCard()
     const checked = (pattern: RegExp) => screen.getAllByRole('switch', { name: pattern }).map(s => s.getAttribute('aria-checked'))
-    // The three steps, then the chain's own switch in the Whole chain row under them
-    expect(checked(/^(Enable|Disable) /)).toEqual(['true', 'true', 'false', 'true'])
+    // The chain's own switch in the Whole chain row, then the three steps under it
+    expect(checked(/^(Enable|Disable) /)).toEqual(['true', 'true', 'true', 'false'])
     expect(screen.getByRole('switch', { name: 'Disable Daily Edition' })).toBeInTheDocument()
     expect(checked(/review after/)).toEqual(['false', 'true', 'false'])
     expect(screen.getByRole('switch', { name: 'Use flex processing for Select Stories' })).toBeInTheDocument()
     expect(screen.queryByRole('switch', { name: /flex processing for Publish Stories/ })).not.toBeInTheDocument()
     expect(screen.getByLabelText(/^Flex for/)).toHaveValue('4.5')
-    expect(screen.getByLabelText(/^Done within/)).toHaveValue('6')
   })
 
-  it('explains the cut-offs, counted from the start of each run', () => {
+  it("explains the Flex column's switch and the Whole chain row's hours, counted from the start of each run", () => {
     renderCard()
-    expect(screen.getByRole('button', { name: 'About Flex' })).toHaveAccessibleDescription(/Whole chain row.*start of each run.*standard price/)
-    expect(screen.getByRole('button', { name: 'About Done within' })).toHaveAccessibleDescription(/start of each run.*research starts no other story/)
+    expect(screen.getByRole('button', { name: 'About Flex' })).toHaveAccessibleDescription(
+      /half price.*Whole chain row.*hours.*since the run started.*standard price/,
+    )
     expect(screen.getByRole('button', { name: 'About Review' })).toBeInTheDocument()
   })
 
-  it("puts the chain's own schedule, switch, flex hours, status and actions in a Whole chain row under its steps", () => {
+  it("puts the chain's own schedule, switch, flex hours, status and actions in a Whole chain row above its steps", () => {
     renderCard(chain({ lastStartedAt: '2026-11-16T23:00:00Z', lastCompletedAt: '2026-11-16T23:06:00Z', lastRunSummary: 'Published 4 stories' }))
     const total = screen.getByRole('rowheader', { name: /Whole chain/ }).closest('tr')!
+    expect(total.parentElement!.firstElementChild).toBe(total)
     expect(within(total).getAllByRole('button', { name: /Daily at 11:00 PM/ }).length).toBeGreaterThan(0)
     expect(within(total).getByRole('switch', { name: 'Disable Daily Edition' })).toBeInTheDocument()
     expect(within(total).getByLabelText(/^Flex for/)).toHaveValue('4.5')
@@ -87,30 +87,32 @@ describe('ChainCard', () => {
     await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('publish_stories', { enabled: true }))
   })
 
-  it('saves changed hours, and an emptied field as no limit', async () => {
+  it('saves changed flex hours, an emptied field as flex the whole run', async () => {
     renderCard()
     const flex = screen.getByLabelText(/^Flex for/)
     await userEvent.clear(flex)
     await userEvent.type(flex, '2,25')
     await userEvent.tab()
     await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { flexHours: 2.25 }))
+  })
 
-    const deadline = screen.getByLabelText(/^Done within/)
-    await userEvent.clear(deadline)
+  it('saves an emptied flex field as no cut-off', async () => {
+    renderCard()
+    await userEvent.clear(screen.getByLabelText(/^Flex for/))
     await userEvent.tab()
-    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { deadlineHours: null }))
+    await waitFor(() => expect(mockApi.update).toHaveBeenCalledWith('daily_edition_chain', { flexHours: null }))
   })
 
   it('saves nothing for hours that are not quarter hours from 0.25 to 48, puts the value back and says why', async () => {
     renderCard()
-    const deadline = screen.getByLabelText(/^Done within/)
+    const flex = screen.getByLabelText(/^Flex for/)
     for (const value of ['0', '4.1', '49', 'five', '05:00']) {
-      await userEvent.clear(deadline)
-      await userEvent.type(deadline, value)
+      await userEvent.clear(flex)
+      await userEvent.type(flex, value)
       await userEvent.tab()
     }
     expect(mockApi.update).not.toHaveBeenCalled()
-    expect(deadline).toHaveValue('6')
+    expect(flex).toHaveValue('4.5')
     expect(await screen.findAllByText(/quarter hours/)).not.toHaveLength(0)
   })
 

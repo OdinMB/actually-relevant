@@ -7,7 +7,6 @@ import {
   recordCall,
   recordItems,
   recordOtherCost,
-  runDeadlinePassed,
   runInScope,
   settleRun,
   standardCallUsd,
@@ -50,13 +49,12 @@ describe('run usage', () => {
     expect(scope.usage).toMatchObject({ calls: 1, unpricedCalls: 1, costUsd: 0, standardCostUsd: 0 })
   })
 
-  it("a step's scope inside its chain's takes the chain's cut-off and deadline and counts for the chain too", async () => {
+  it("a step's scope inside its chain's takes the chain's cut-off and counts for the chain too", async () => {
     const flexUntil = new Date('2026-11-17T03:30:00Z')
-    const deadline = new Date('2026-11-17T05:00:00Z')
-    const chain = createRunScope({ jobName: 'daily_edition_chain', flex: false, flexUntil, deadline })
+    const chain = createRunScope({ jobName: 'daily_edition_chain', flex: false, flexUntil })
     await runInScope(chain, async () => {
       const step = createRunScope({ jobName: 'research_stories', flex: true })
-      expect(step).toMatchObject({ parent: chain, flexUntil, deadline })
+      expect(step).toMatchObject({ parent: chain, flexUntil })
       await runInScope(step, async () => {
         expect(currentRun()).toBe(step)
         recordCall(step, call('flex'))
@@ -75,15 +73,6 @@ describe('run usage', () => {
     const cut = createRunScope({ jobName: 'x', flex: true, flexUntil: until })
     expect(flexNow(cut, until.getTime() - 1)).toBe(true)
     expect(flexNow(cut, until.getTime())).toBe(false)
-  })
-
-  it('passes the deadline only inside a run that has one', async () => {
-    const deadline = new Date('2026-11-17T05:00:00Z')
-    expect(runDeadlinePassed(deadline.getTime() + 1)).toBe(false)
-    await runInScope(createRunScope({ jobName: 'x', flex: false, deadline }), async () => {
-      expect(runDeadlinePassed(deadline.getTime() - 1)).toBe(false)
-      expect(runDeadlinePassed(deadline.getTime())).toBe(true)
-    })
   })
 
   it('records other spending only inside a run', () => {

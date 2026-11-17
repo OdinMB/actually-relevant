@@ -671,11 +671,9 @@ model JobRun {
   // the run's start (a daytime social post after a night-time chain): "HH:MM", or "Sat 07:00" for a
   // weekday, on the step's own clock (jobs/jobTimeZones.ts, else UTC). Null for no hold
   notBefore       String?   @map("not_before")
-  // A chain's settings, in hours from the start of each run (any schedule, once or several times a
-  // day): calls go at standard price after flexHours; a step working through items starts no new one
-  // after deadlineHours. Null on other jobs, and for no limit
+  // A chain's flex cut-off, in hours from the start of each run (any schedule, once or several times
+  // a day): calls go at standard price after it. Null on other jobs, and for flex the whole run
   flexHours       Float?    @map("flex_hours")
-  deadlineHours   Float?    @map("deadline_hours")
   // A chain's place to go on from: the step running now ('running'), the step after a review pause
   // ('review'), the step held for its time ('waiting', going on at resumeAt), or the step it stopped
   // at ('failed'); null when its last run ended normally

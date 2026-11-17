@@ -10,9 +10,11 @@ interface CronEditorProps {
   initialEditing?: boolean
   onSave?: () => void
   onCancel?: () => void
+  /** One line cut short where it does not fit (the full schedule on hover), without the expression: for a narrow cell. */
+  compact?: boolean
 }
 
-export function CronEditor({ job, initialEditing = false, onSave, onCancel }: CronEditorProps) {
+export function CronEditor({ job, initialEditing = false, onSave, onCancel, compact = false }: CronEditorProps) {
   const [editing, setEditing] = useState(initialEditing)
   const [mode, setMode] = useState<'preset' | 'custom'>(() => (findPreset(job.cronExpression) ? 'preset' : 'custom'))
   const [selectedPreset, setSelectedPreset] = useState(() => findPreset(job.cronExpression)?.value ?? '')
@@ -46,17 +48,15 @@ export function CronEditor({ job, initialEditing = false, onSave, onCancel }: Cr
   }
 
   if (!editing) {
+    const human = `${cronToHuman(job.cronExpression)}${job.timeZone ? ` (${job.timeZone})` : ''}`
     return (
       <button
         onClick={() => setEditing(true)}
         className="text-left text-xs text-neutral-600 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded px-1"
-        title="Click to edit schedule"
+        title={compact ? `${human} (click to edit)` : 'Click to edit schedule'}
       >
-        <span className="block">
-          {cronToHuman(job.cronExpression)}
-          {job.timeZone && ` (${job.timeZone})`}
-        </span>
-        <span className="block font-mono text-neutral-400 text-[10px]">{job.cronExpression}</span>
+        <span className={compact ? 'block max-w-[8rem] truncate' : 'block'}>{human}</span>
+        {!compact && <span className="block font-mono text-neutral-400 text-[10px]">{job.cronExpression}</span>}
       </button>
     )
   }

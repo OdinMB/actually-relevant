@@ -25,7 +25,7 @@ async function main() {
     prisma.jobRun.upsert({
       where: { jobName: 'daily_edition_chain' },
       update: {},
-      create: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *', enabled: false, flexHours: 4.5, deadlineHours: 6 },
+      create: { jobName: 'daily_edition_chain', cronExpression: '0 23 * * *', enabled: false, flexHours: 4.5 },
     }),
     prisma.jobRun.upsert({
       where: { jobName: 'crawl_feeds' },

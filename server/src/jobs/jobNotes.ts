@@ -93,7 +93,7 @@ export const NOTES: Readonly<Record<string, () => string>> = {
   daily_edition_chain: () =>
     "Selects the best of the assessed stories, researches them and publishes them, in that order, so stories go out as soon as research is done instead of at a fixed time; then it builds the published stories' context cards. " +
     `${CHAIN_RULES} ` +
-    'Once its Flex for hours have passed since the run started, every call goes at standard price; once its Done within hours have passed, research starts no other story, so publishing is never held up for long.',
+    'Once its flex hours (the Flex column of its Whole chain row) have passed since the run started, every call goes at standard price, so a slow flex queue cannot hold up publishing for long.',
   newsletter_chain: () =>
     `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
     'A step whose run was cut off by a restart is not run again, so no issue goes out twice.',
