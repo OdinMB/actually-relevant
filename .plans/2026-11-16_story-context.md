@@ -92,6 +92,8 @@ The step keeps its own Flex switch (`MODEL_JOBS`). Since it usually runs before 
 
 **Enabling.** Enabling the job is refused while `TAVILY_API_KEY` is unset (`jobEnableChecks.ts`). Without the key no research runs exist, and pass 2 cannot search.
 
+**Note, 2026-11-17: moved before publishing.** The owner asked that the step run before publication, so a story does not go out and change minutes later, and that it take every story rather than a fixed number. Since then the chain is select, research, context, publish; the step takes the selected stories about to be published first, then the published ones of the lookback that have no run, with no `perRun` limit; the publish gate waits for a story's cards at most two hours from its selection (research's bound) and never past the chain's deadline; the step honors the deadline; and a failure of the step lets the chain go on to publish. The section above is kept as written. Plan `.plans/completed/2026-11-17_context-before-publish.md`; ADR-0061's amendment of 2026-11-17; `.context/story-context.md`, "The step".
+
 ### What one story goes through
 
 `buildStoryContext(input, deps)` (`services/storyContextPipeline.ts`) does no I/O of its own, as `researchStory` doesn't. Its deps are model calls, search and the opt-out policy, so the eval runs the same code. The tiers below are the starting tiers, and each step's eval decides whether a step moves up (design, "Which model does what"). Small is gpt-6-luna at low effort and medium is gpt-6-luna at medium effort, so every step runs on the small model, as the design says.
