@@ -1,12 +1,15 @@
-import { it, expect } from 'vitest'
+import { it, expect, afterEach } from 'vitest'
+import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { citingContextDeps as citingDeps, fakeContextDeps as deps } from '../test/contextDeps.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createResearchRun } from '../test/db/storyContext.js'
-import { markInterruptedContextRuns, recordFailedRun, runStoryContext, storeContextResult } from './storyContextRuns.js'
+import { markInterruptedContextRuns, recordFailedRun, reopenFailedRun, runStoryContext, storeContextResult } from './storyContextRuns.js'
+import { _setProcessStartedAt } from './storyContextStale.js'
 
 describeDb('story context runs', () => {
   useTestDatabase()
+  afterEach(() => _setProcessStartedAt(null))
 
   const publishedStory = async () => {
     const issue = await createIssue()
@@ -75,10 +78,13 @@ describeDb('story context runs', () => {
     const firstRow = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: first.runId } })
     expect(firstRow.costUsd).toBeCloseTo(0.006, 10)
 
+    const secondStart = new Date()
     const second = await runStoryContext(story.id, deps(), { runId: first.runId })
     expect(second).toMatchObject({ runId: first.runId, status: 'completed', outcome: 'built', boxes: 2, written: true })
     const row = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: first.runId } })
-    expect(row).toMatchObject({ status: 'completed', outcome: 'built', error: null, boxes: 2, startedAt: firstRow.startedAt })
+    expect(row).toMatchObject({ status: 'completed', outcome: 'built', error: null, boxes: 2 })
+    // The row's start is the second attempt's
+    expect(row.startedAt.getTime()).toBeGreaterThanOrEqual(secondStart.getTime())
     // The record is the second attempt's; the costs are both attempts'
     const secondCalls = (row.result as { calls: { costUsd: number }[] }).calls
     expect(secondCalls.map(c => c.step)).toContain('write')
@@ -105,22 +111,42 @@ describeDb('story context runs', () => {
     expect(await prisma.storyContextRun.findUniqueOrThrow({ where: { id: out.runId } })).toMatchObject({ status: 'skipped', outcome: 'no-research' })
   })
 
-  it('marks a stale running run failed, leaves a fresh one, and writes nothing for a run marked meanwhile', async () => {
+  it('marks a running run failed once it is stale or from before this process started, leaves one of this process, and writes nothing for a run marked meanwhile', async () => {
     const { story } = await publishedStory()
     const now = new Date('2026-11-16T03:00:00Z')
-    const stale = await prisma.storyContextRun.create({ data: { storyId: story.id, startedAt: new Date(now.getTime() - 121 * 60_000) } })
-    const fresh = await prisma.storyContextRun.create({ data: { storyId: story.id, startedAt: new Date(now.getTime() - 60 * 60_000) } })
-    expect(await markInterruptedContextRuns(now)).toBe(1)
-    expect(await prisma.storyContextRun.findUniqueOrThrow({ where: { id: stale.id } })).toMatchObject({
-      status: 'failed',
-      outcome: 'technical',
-      error: 'interrupted: the server restarted during the run',
-    })
+    const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000)
+    _setProcessStartedAt(minutesAgo(30))
+    const stale = await prisma.storyContextRun.create({ data: { storyId: story.id, startedAt: minutesAgo(config.storyContext.staleRunMinutes + 1) } })
+    // Well within the limit, but a deploy or restart ended the process that ran it
+    const beforeRestart = await prisma.storyContextRun.create({ data: { storyId: story.id, startedAt: minutesAgo(60) } })
+    const fresh = await prisma.storyContextRun.create({ data: { storyId: story.id, startedAt: minutesAgo(10) } })
+    expect(await markInterruptedContextRuns(now)).toBe(2)
+    for (const { id } of [stale, beforeRestart]) {
+      expect(await prisma.storyContextRun.findUniqueOrThrow({ where: { id } })).toMatchObject({
+        status: 'failed',
+        outcome: 'technical',
+        error: 'interrupted: the server restarted during the run',
+      })
+    }
     expect((await prisma.storyContextRun.findUniqueOrThrow({ where: { id: fresh.id } })).status).toBe('running')
 
     const result = { status: 'completed', outcome: 'none-kept', facts: [], boxes: [], writer: null, credits: 0, modelUsd: 0, record: {}, error: null } as never
     expect(await storeContextResult(stale.id, story.id, result)).toBe(false)
     expect((await prisma.storyContextRun.findUniqueOrThrow({ where: { id: stale.id } })).status).toBe('failed')
+  })
+
+  it('starts a second attempt’s clock anew, so the stale limit never cuts it off for its first attempt’s age', async () => {
+    const { story } = await publishedStory()
+    const firstStart = new Date(Date.now() - (config.storyContext.staleRunMinutes + 5) * 60_000)
+    const failed = await prisma.storyContextRun.create({
+      data: { storyId: story.id, status: 'failed', outcome: 'technical', startedAt: firstStart, finishedAt: new Date() },
+    })
+    expect(await reopenFailedRun(failed.id)).toBe(true)
+    // Another claim's sweep, as the night's step makes before each story
+    expect(await markInterruptedContextRuns()).toBe(0)
+    const row = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: failed.id } })
+    expect(row.status).toBe('running')
+    expect(row.startedAt.getTime()).toBeGreaterThan(firstStart.getTime())
   })
 
   it('starts no run of a story while another of it is running, and tries a failed one again only then', async () => {

@@ -8,6 +8,7 @@ import { createFeed, createIssue, createStory, describeDb, useTestDatabase } fro
 import { createContextRun, createResearchRun } from '../test/db/storyContext.js'
 import type { ContextDeps } from './storyContextPipeline.js'
 import { gatherState, startContextGathering } from './storyContextOnDemand.js'
+import { _setProcessStartedAt } from './storyContextStale.js'
 
 const UNKNOWN = '00000000-0000-0000-0000-000000000000'
 
@@ -52,6 +53,7 @@ describeDb('story context on demand', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     taskRegistry.clear()
+    _setProcessStartedAt(null)
   })
 
   const story = async (data: { status?: 'published' | 'selected'; datePublished?: Date | null } = {}) => {
@@ -93,6 +95,21 @@ describeDb('story context on demand', () => {
       message: expect.stringMatching(/already being gathered/i),
     })
     expect(await prisma.storyContextRun.count()).toBe(1)
+  })
+
+  it('starts at once on a story whose run a restart cut off, marking that run interrupted, as the admin’s view does', async () => {
+    const s = await researched()
+    _setProcessStartedAt(new Date(Date.now() - 60_000))
+    const cutOff = await createContextRun(s.id, { status: 'running', outcome: null, finishedAt: null, startedAt: new Date(Date.now() - 5 * 60_000) })
+
+    const { taskId, runId } = await startContextGathering(s.id, fakeContextDeps())
+    expect(await finished(taskId)).toMatchObject({ status: 'completed', completed: 1 })
+    expect(runId).not.toBe(cutOff.id)
+    expect(await prisma.storyContextRun.findUniqueOrThrow({ where: { id: cutOff.id } })).toMatchObject({
+      status: 'failed',
+      outcome: 'technical',
+      error: expect.stringMatching(/interrupted/),
+    })
   })
 
   it("runs on a story outside the step's lookback, that already has a run, and builds on that run", async () => {

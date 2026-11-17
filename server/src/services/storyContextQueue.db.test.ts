@@ -9,6 +9,7 @@ import { createRunScope, runInScope } from '../lib/runUsage.js'
 import { createCluster, createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createContextRun, createResearchRun } from '../test/db/storyContext.js'
 import { awaitingContext, nextForContext } from './storyContextQueue.js'
+import { _setProcessStartedAt } from './storyContextStale.js'
 
 const NOW = new Date('2026-11-16T01:00:00Z')
 const MINUTE = 60_000
@@ -38,11 +39,14 @@ describeDb('story context queue and publish gate (PostgreSQL)', () => {
 
   beforeEach(async () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+    // This process has been up since the day before NOW, so a run of the last hours is its own
+    _setProcessStartedAt(ago(DAY))
     await setJob(true)
     feedId = (await createFeed((await createIssue()).id)).id
   })
   afterEach(() => {
     vi.unstubAllEnvs()
+    _setProcessStartedAt(null)
   })
 
   it('owes the selected stories about to publish first, oldest selected first, then the published ones of the lookback, oldest published first, with no limit', async () => {
@@ -106,6 +110,16 @@ describeDb('story context queue and publish gate (PostgreSQL)', () => {
 
     expect(await awaitingContext([...ids, cutOff.id, unresearched.id, duplicate.id, isPublished.id], NOW)).toEqual(new Set())
     expect(await awaitingContext([primary.id], NOW)).toEqual(new Set([primary.id]))
+  })
+
+  it('lets through a story whose context run is running from before this process started: a restart cut it off', async () => {
+    _setProcessStartedAt(ago(10 * MINUTE))
+    const cutOff = await researched(selected())
+    await createContextRun(cutOff.id, { status: 'running', outcome: null, finishedAt: null, startedAt: ago(30 * MINUTE) })
+    const live = await researched(selected())
+    await createContextRun(live.id, { status: 'running', outcome: null, finishedAt: null, startedAt: ago(5 * MINUTE) })
+
+    expect(await awaitingContext([cutOff.id, live.id], NOW)).toEqual(new Set([live.id]))
   })
 
   it('holds nothing while the step’s job is disabled or web search is off', async () => {

@@ -8,7 +8,8 @@
  * advisory lock, never while another run of the story is running, so the step and an editor's run
  * (`storyContextOnDemand.ts`) never overlap on a story. Each run builds on the story's earlier
  * completed runs (`loadEarlierWork`), and its boxes take over the editor's choices on the earlier
- * cards. A run cut off by a restart is marked failed after `staleRunMinutes`, and settles its story.
+ * cards. A run cut off by a restart is marked failed (`staleBefore`: past `staleRunMinutes`, or from
+ * before this process started), and settles its story.
  */
 import type { Prisma } from '@prisma/client'
 import type { z } from 'zod'
@@ -29,6 +30,7 @@ import {
 } from './storyContextPipeline.js'
 import { boxRow, editorChoices, factRow } from './storyContextRecords.js'
 import { contextSearch } from './storyContextSearch.js'
+import { staleBefore } from './storyContextStale.js'
 import { structuredCall } from './structuredCall.js'
 
 const log = createLogger('story_context')
@@ -67,10 +69,13 @@ type Db = Prisma.TransactionClient | typeof prisma
 /** Arbitrary constant key of the transaction-level advisory lock under which a context run is claimed (not research's or the TTS one). */
 const CONTEXT_RUN_LOCK = 7_303_301
 
-/** Mark the `running` runs older than `staleRunMinutes` failed: the server restarted during them. Each settles its story. */
+/**
+ * Mark the `running` runs that a restart cut off failed (`staleBefore`: older than `staleRunMinutes`,
+ * or from before this process started). Each settles its story.
+ */
 export async function markInterruptedContextRuns(now: Date = new Date(), db: Db = prisma): Promise<number> {
   const { count } = await db.storyContextRun.updateMany({
-    where: { status: 'running', startedAt: { lt: new Date(now.getTime() - config.storyContext.staleRunMinutes * 60_000) } },
+    where: { status: 'running', startedAt: { lt: staleBefore(now) } },
     data: { status: 'failed', outcome: 'technical', error: INTERRUPTED, finishedAt: now },
   })
   return count
@@ -171,8 +176,9 @@ export async function storeContextResult(runId: string, storyId: string, result:
 
 /**
  * Open a technical failure's row again for its second attempt: `running`, its error cleared, its
- * start and costs kept. False when the row is no such failure any more, or while another run of the
- * story is running (under the run lock).
+ * costs kept and its start the second attempt's, so the stale limit measures that attempt alone.
+ * False when the row is no such failure any more, or while another run of the story is running
+ * (under the run lock).
  */
 export async function reopenFailedRun(runId: string): Promise<boolean> {
   return prisma.$transaction(async tx => {
@@ -180,7 +186,7 @@ export async function reopenFailedRun(runId: string): Promise<boolean> {
     if (!row?.storyId || (await otherRunRunning(tx, row.storyId, runId))) return false
     const { count } = await tx.storyContextRun.updateMany({
       where: { id: runId, status: 'failed', outcome: 'technical' },
-      data: { status: 'running', outcome: null, error: null, finishedAt: null },
+      data: { status: 'running', outcome: null, error: null, startedAt: new Date(), finishedAt: null },
     })
     return count > 0
   })

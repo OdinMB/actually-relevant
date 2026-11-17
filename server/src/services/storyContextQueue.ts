@@ -12,6 +12,7 @@ import { chainOf } from '../jobs/chainDefinitions.js'
 import prisma from '../lib/prisma.js'
 import { enclosingRunJob } from '../lib/runUsage.js'
 import { RUN_WITH_FACTS_SQL } from './storyContextInput.js'
+import { staleBefore } from './storyContextStale.js'
 
 /** The context step's job; its row's `enabled` flag runs it in its chain and lets the publish gate hold. */
 export const STORY_CONTEXT_JOB = 'build_story_context'
@@ -55,8 +56,8 @@ async function stepWorks(): Promise<boolean> {
 
 /**
  * The ids a publish run on its own (Run now on the Jobs page) leaves for a later run while their cards
- * may still come: a selected story the step owes, with no settled context run (none, or one `running`
- * within `staleRunMinutes`), selected less than the publish gate's longest wait ago
+ * may still come: a selected story the step owes, with no settled context run (none, or one still
+ * `running` that no restart cut off, `staleBefore`), selected less than the publish gate's longest wait ago
  * (`config.research.pipeline.maxWaitMinutes`, research's bound). None while the step's job is disabled
  * or web search is off, and **none in the daily edition's run**: there the step has just had its turn,
  * succeeded or failed, so a card it did not build is not coming that night, and the story goes out
@@ -65,14 +66,13 @@ async function stepWorks(): Promise<boolean> {
 export async function awaitingContext(ids: string[], now: Date = new Date()): Promise<Set<string>> {
   if (ids.length === 0 || (STEP_CHAIN !== null && enclosingRunJob() === STEP_CHAIN) || !(await stepWorks())) return new Set()
   const waitingSince = new Date(now.getTime() - config.research.pipeline.maxWaitMinutes * MINUTE_MS)
-  const staleBefore = new Date(now.getTime() - config.storyContext.staleRunMinutes * MINUTE_MS)
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT s.id FROM stories s
     WHERE s.id = ANY(${ids}) AND ${TO_PUBLISH_SQL} AND s.selected_at >= ${waitingSince}
       AND ${RESEARCHED_SQL}
       AND NOT EXISTS (
         SELECT 1 FROM story_context_runs c
-        WHERE c.story_id = s.id AND (c.status <> 'running' OR c.started_at < ${staleBefore})
+        WHERE c.story_id = s.id AND (c.status <> 'running' OR c.started_at < ${staleBefore(now)})
       )`
   return new Set(rows.map(r => r.id))
 }
