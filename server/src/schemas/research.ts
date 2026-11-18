@@ -5,6 +5,7 @@
  */
 import { z } from 'zod'
 import { EMOTION_TAG_DEFINITIONS } from '../prompts/shared.js'
+import { structuredFactFields } from './factFields.js'
 import { EMOTION_TAGS } from './llm.js'
 
 export const SOURCE_KINDS = ['news-report', 'analysis', 'opinion', 'press-release', 'official-body', 'other'] as const
@@ -82,6 +83,17 @@ export const extractionSchema = z.object({
     )
     .describe('At most 4 named people or organizations the source quotes or paraphrases on the development.'),
 })
+
+/**
+ * A research pass's extraction: research's, each fact also with its structured fields, so the pass
+ * makes no structure call for the facts it extracts (2026-11-18). Research's own run keeps
+ * `extractionSchema`; facts without the fields (legacy and imported ones) still go to the structure step.
+ */
+export const coverageExtractionSchema = extractionSchema.extend({
+  facts: z.array(factSchema.extend(structuredFactFields)).describe(extractionSchema.shape.facts.description ?? ''),
+})
+
+export type CoverageExtraction = z.infer<typeof coverageExtractionSchema>
 
 export const earlierSchema = z.object({
   stories: z

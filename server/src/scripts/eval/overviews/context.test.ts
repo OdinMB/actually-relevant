@@ -42,7 +42,8 @@ const supportedItems = (prompt: string) => ({
 function pipelineAnswers(schemaName: string, prompt: string): unknown {
   const research = /^research-([a-z-]+)#/.exec(schemaName)?.[1]
   if (research === 'queries') return { queries: [{ query: 'Sumatra peat fires', language: 'en' }] }
-  if (research === 'extract') {
+  // A pass's extraction asks for the structured fields too, under its own name; this fake gives none
+  if (research === 'extract' || research === 'extract-structured') {
     const member = prompt.includes('member.example')
     return {
       usable: !member,

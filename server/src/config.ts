@@ -333,6 +333,13 @@ export const config = {
     /** A run's ceiling, reserved against the cap when it starts (about five times the expected cost). */
     maxRunUsd: 0.25,
     /**
+     * The reasoning effort of the steps that only copy what a source states into fields (research's
+     * extraction, a pass's gap-search extraction and its structure call), on their tier's model in
+     * place of the tier's own effort (2026-11-18, a research cost change; `passStepEffort`). The
+     * other steps keep their tier's. GPT-6 Luna takes `none`; a model that does not fails the call.
+     */
+    extractionEffort: parseEffort(process.env.RESEARCH_EXTRACTION_EFFORT, 'none', 'RESEARCH_EXTRACTION_EFFORT'),
+    /**
      * The copying check flags a run of this many consecutive words or more that a draft's item shares
      * with one outside source's wording or with one of its fact statements (`checkCopying`). Shorter
      * runs collide with the scope rule, which has a figure repeated exactly as its fact states it; a

@@ -1378,6 +1378,12 @@ export interface PassRecord {
   cardsError: string | null
   /** Coverage queries not searched: an earlier pass made them. */
   skippedQueries: string[]
+  /** The coverage plan the pass used, which the next pass reads, and why each step was reused or asked (server: `PlanRecord`). Absent on a pass from before plans were kept. */
+  plan?: {
+    confirm: { key: string; answer: number[] } | null
+    queries: { key: string; answer: { query: string; language: string }[] } | null
+    use: Partial<Record<'confirm' | 'queries', 'reused' | 'first pass' | 'no stored plan' | 'changed' | 'no neighbours'>>
+  }
   /** Null on a first pass. */
   update: PassUpdateRecord | null
 }

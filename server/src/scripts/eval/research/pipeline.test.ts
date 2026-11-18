@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { config } from '../../../config.js'
-import { PASS_STEP_TIERS } from '../../../services/researchPass.js'
+import { PASS_STEP_TIERS, passStepEffort } from '../../../services/researchPass.js'
 import type { ResearchStory } from '../../../services/researchInput.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
 import type { Arm, CallRecord, SuiteContext } from '../types.js'
@@ -51,11 +51,14 @@ const story = {
 } satisfies ResearchStory
 
 describe('passCall', () => {
-  it("holds each step's constant arm at production's default model and effort for the step's tier", () => {
+  it("holds each step's constant arm at production's default model for the step's tier, and production's effort for the step", () => {
     for (const [step, tier] of Object.entries(PASS_STEP_TIERS)) {
       const production = config.llm.models[tier]
-      expect(STEP_ARMS[step as keyof typeof PASS_STEP_TIERS], step).toEqual({ model: production.name, effort: production.reasoningEffort })
+      const effort = passStepEffort(step as keyof typeof PASS_STEP_TIERS) ?? production.reasoningEffort
+      expect(STEP_ARMS[step as keyof typeof PASS_STEP_TIERS], step).toEqual({ model: production.name, effort })
     }
+    // The extraction steps run below their tier's effort
+    for (const step of ['extract', 'gap-extract', 'structure'] as const) expect(STEP_ARMS[step].effort, step).toBe(config.research.extractionEffort)
   })
 
   it("names research's steps as research's and the card steps as context's, run 2 under its own key", async () => {

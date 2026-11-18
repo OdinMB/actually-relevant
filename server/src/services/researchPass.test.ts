@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import { promptText } from '../lib/promptCache.js'
-import type { Draft, Extraction, FactCheck } from '../schemas/research.js'
+import { coverageExtractionSchema, type Draft, type Extraction, type FactCheck } from '../schemas/research.js'
 import type { GapList } from '../schemas/storyContext.js'
 import { articleOf } from './articleVersions.js'
 import { buildResearchedStory } from './researchedStory.js'
@@ -204,6 +204,7 @@ const input = (pool: Pool = EMPTY_POOL): PassInput => ({
   reusable: [],
   lastPassDay: null,
   carried: [],
+  plan: null,
   today: '2026-11-13',
 })
 
@@ -213,6 +214,42 @@ describe('runResearchPass, a first pass', () => {
     const result = await runResearchPass(input(), { ...fake.deps, relevanceMin: 11 })
     expect(result).toMatchObject({ outcome: 'research-rating', verdict: { kind: 'research-rating' } })
     expect(result.version).toMatchObject({ number: 1, kind: 'first', passId: 'pass-1' })
+  })
+
+  it("takes each fact's structured fields from its extraction and makes no structure call for them", async () => {
+    const schemas: unknown[] = []
+    const fake = fakeDeps({
+      extract: () => ({
+        ...extraction(),
+        facts: extraction().facts.map((f, i) => ({ ...f, ...fields, value: i === 0 ? 22 : null, unit: i === 0 ? 'GW' : '' })),
+      }),
+    })
+    const call = fake.deps.call
+    fake.deps.call = async (step, schema, prompt) => {
+      if (step === 'extract') schemas.push(schema)
+      return call(step, schema, prompt)
+    }
+    const result = await runResearchPass(input(), fake.deps)
+
+    expect(result).toMatchObject({ kind: 'first', status: 'completed', outcome: 'written' })
+    expect(fake.stepsCalled()).not.toContain('structure')
+    expect(schemas.every(s => s === coverageExtractionSchema)).toBe(true)
+    expect(fake.calls.find(c => c.step === 'extract')!.prompt).toContain('The as-of date is the date the fact describes')
+    const s0f1 = result.pool.facts.find(f => f.ref === 'S0F1')!
+    expect(s0f1.structured).toMatchObject({
+      value: 22,
+      unit: 'GW',
+      valueHigh: null,
+      creditedKind: null,
+      by: { model: 'model-extract', promptVersion: 'research-extract' },
+    })
+    expect(result.record.context.facts.research).toBe(0)
+  })
+
+  it('still structures a fact its extraction gave no fields', async () => {
+    const fake = fakeDeps()
+    await runResearchPass(input(), fake.deps)
+    expect(fake.stepsCalled()).toContain('structure')
   })
 
   it('checks each fact once, writes the article from the supported ones only, and makes it version 1 with its cards', async () => {
@@ -664,6 +701,82 @@ describe('runResearchPass, a later pass', () => {
     expect(fake.stepsCalled()).not.toContain('cards-write')
   })
 
+  describe('the coverage plan', () => {
+    const neighbour = {
+      ...original,
+      storyId: 'neighbour-1',
+      url: 'https://geo.tv/solar',
+      outlet: 'Geo',
+      content: `Geo on the solar boom. ${words('geo')}`,
+      assessed: { title: 'Pakistan solar surge', summary: 'Rooftop panels spread.' },
+      distance: 0.1,
+    }
+    const confirming = () => ({ assessments: [{ candidateNumber: 1, isDuplicate: true, reason: 'The same boom.' }] })
+    const unjudged = () => ({ sections: [], contradicted: [] })
+    const withNeighbour: ResearchStory = { ...story, neighbours: [neighbour] }
+    /** The plan a first pass of the story with its neighbour stores. */
+    const firstPlan = async () => (await runResearchPass({ ...input(), story: withNeighbour }, fakeDeps({ confirm: confirming }).deps)).record.plan
+
+    it("a first pass asks every step and stores each answer under its prompt's key", async () => {
+      expect(await firstPlan()).toEqual({
+        confirm: { key: expect.any(String), answer: [1] },
+        queries: { key: expect.any(String), answer: [{ query: 'Pakistan rooftop solar 22 GW', language: 'en' }] },
+        use: { confirm: 'first pass', queries: 'first pass' },
+      })
+    })
+
+    it("a later pass takes the last pass's answers whose prompts are the same, asks neither step, and searches the stored queries", async () => {
+      const plan = await firstPlan()
+      const requests: unknown[] = []
+      const fake = fakeDeps({ confirm: confirming, judge: unjudged })
+      fake.deps.tavily = { search: async request => (requests.push(request), { results: [], credits: 2 }) }
+      const result = await runResearchPass(later({ story: { ...withNeighbour, clusterMembers: [...story.clusterMembers, reuters] }, plan }), fake.deps)
+
+      expect(fake.stepsCalled()).not.toContain('confirm')
+      expect(fake.stepsCalled()).not.toContain('queries')
+      expect(result.record.plan).toEqual({ ...plan, use: { confirm: 'reused', queries: 'reused' } })
+      expect(requests).toEqual([expect.objectContaining({ query: 'Pakistan rooftop solar 22 GW', startDate: '2026-11-15', endDate: '2026-11-20' })])
+      // The confirmed neighbour is a candidate as when asked: Dawn, Reuters and Geo
+      expect(result.record.research.candidates).toBe(3)
+    })
+
+    it('asks the confirmation again when the neighbours changed, and the queries again when the article did', async () => {
+      const plan = await firstPlan()
+      const other = { ...neighbour, storyId: 'neighbour-2', url: 'https://tribune.com.pk/solar', assessed: { title: 'Panel imports', summary: 'More arrive.' } }
+      const changed: ResearchStory = {
+        ...withNeighbour,
+        neighbours: [neighbour, other],
+        original: { ...original, content: `A correction. ${original.content}` },
+      }
+      const fake = fakeDeps({ confirm: confirming, judge: unjudged })
+      const result = await runResearchPass(later({ story: changed, plan }), fake.deps)
+
+      expect(fake.stepsCalled()).toEqual(expect.arrayContaining(['confirm', 'queries']))
+      expect(result.record.plan.use).toEqual({ confirm: 'changed', queries: 'changed' })
+      expect(result.record.plan.confirm?.key).not.toBe(plan.confirm?.key)
+      expect(result.record.plan.queries?.key).not.toBe(plan.queries?.key)
+    })
+
+    it('asks every step with no plan stored, and records a story with no neighbours as having nothing to confirm', async () => {
+      const fake = fakeDeps({ judge: unjudged })
+      const result = await runResearchPass(later({ plan: null }), fake.deps)
+
+      expect(fake.stepsCalled()).toContain('queries')
+      expect(result.record.plan).toEqual({
+        confirm: null,
+        queries: { key: expect.any(String), answer: [{ query: 'Pakistan rooftop solar 22 GW', language: 'en' }] },
+        use: { confirm: 'no neighbours', queries: 'no stored plan' },
+      })
+    })
+
+    it('stores no answer for a confirmation whose call failed, so the next pass asks it again', async () => {
+      const fake = fakeDeps({ judge: unjudged })
+      const result = await runResearchPass(later({ story: withNeighbour, plan: null }), fake.deps)
+      expect(fake.stepsCalled()).toContain('confirm')
+      expect(result.record.plan).toMatchObject({ confirm: null, use: { confirm: 'no stored plan' } })
+    })
+  })
+
   describe("with an earlier story's fact an earlier pass joined to the pool", () => {
     // The first pass linked earlier-a and joined its offered fact as S2F1; the earlier story offers it again
     const earlierA: PoolSource = { ...pageSource('E1', '', 'Actually Relevant', 'earlier'), earlierStoryId: 'earlier-a', relation: 'background' }
@@ -794,6 +907,7 @@ describe('passItemTally', () => {
     cards: 'none',
     cardsError: null,
     skippedQueries: [],
+    plan: { confirm: null, queries: null, use: {} },
     update: null,
     ...over,
   })

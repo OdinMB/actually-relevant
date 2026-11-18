@@ -11,12 +11,22 @@
  */
 import type { z } from 'zod'
 import { dedupConfirmationSchema } from '../../../schemas/llm.js'
-import { deriveSchema, earlierSchema, extractionSchema, factCheckSchema, queriesSchema, repairSchema, writeSchema } from '../../../schemas/research.js'
+import {
+  coverageExtractionSchema,
+  deriveSchema,
+  earlierSchema,
+  extractionSchema,
+  factCheckSchema,
+  queriesSchema,
+  repairSchema,
+  writeSchema,
+} from '../../../schemas/research.js'
 import { judgeSchema, noteSchema } from '../../../schemas/researchPass.js'
 import type { ResearchStory } from '../../../services/researchInput.js'
 import {
   CARD_STEPS,
   PASS_STEP_TIERS,
+  passStepEffort,
   PASS_STEPS,
   passCalls,
   runResearchPass,
@@ -50,7 +60,14 @@ export const MEDIUM = arm('gpt-6-luna', 'medium')
 
 const TIER_ARMS: Record<(typeof PASS_STEP_TIERS)[StepName], Arm> = { small: SMALL, medium: MEDIUM }
 
-export const STEP_ARMS = Object.fromEntries(STEPS.map(step => [step, TIER_ARMS[PASS_STEP_TIERS[step]]])) as Record<StepName, Arm>
+/** Each step's tier arm, an extraction step at production's extraction effort on its tier's model (`passStepEffort`). */
+export const STEP_ARMS = Object.fromEntries(
+  STEPS.map(step => {
+    const tierArm = TIER_ARMS[PASS_STEP_TIERS[step]]
+    const effort = passStepEffort(step)
+    return [step, effort ? arm(tierArm.model, effort) : tierArm]
+  }),
+) as Record<StepName, Arm>
 
 export interface StepEstimate {
   /** Tokens per researched story; output includes reasoning. */
@@ -110,12 +127,16 @@ const RESEARCH_SCHEMA_NAMES = {
   derive: versionedSchemaName('research-derive', deriveSchema),
 } satisfies Record<ResearchStep | LaterStep, string>
 
+const COVERAGE_EXTRACT_SCHEMA_NAME = versionedSchemaName('research-extract-structured', coverageExtractionSchema)
+
 const cardNames = new Map<CardStep, string>()
 
 const isCardStep = (step: StepName): step is CardStep => Object.hasOwn(CARD_STEPS, step)
 
 /** Research's step under research's name, a later pass's under `pass-<step>`; a card step under its context step's, `overview-context-<step>#<schema fingerprint>`, computed once. */
 function schemaNameOf(step: StepName, schema: z.ZodType): string {
+  // A pass's extraction asks for the structured fields too: its own schema, under its own name
+  if (step === 'extract' && schema === coverageExtractionSchema) return COVERAGE_EXTRACT_SCHEMA_NAME
   if (!isCardStep(step)) return RESEARCH_SCHEMA_NAMES[step]
   let name = cardNames.get(step)
   if (name === undefined) {
@@ -171,6 +192,7 @@ export function firstPassInput(story: ResearchStory): PassInput {
     version: null,
     lastPassDay: null,
     carried: [],
+    plan: null,
     // The story's own day: a first pass's window is research's, around the article
     today: story.datePublished.slice(0, 10),
     current: {

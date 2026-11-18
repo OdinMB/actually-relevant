@@ -25,8 +25,10 @@ import {
   type CheckedItem,
   type WriteInput,
 } from '../prompts/research.js'
+import { structuredFactFields, type StructuredFact } from '../schemas/factFields.js'
 import { dedupConfirmationSchema } from '../schemas/llm.js'
 import {
+  coverageExtractionSchema,
   deriveSchema,
   earlierSchema,
   extractionSchema,
@@ -34,6 +36,7 @@ import {
   queriesSchema,
   repairSchema,
   writeSchema,
+  type CoverageExtraction,
   type Draft,
   type Earlier,
   type Extraction,
@@ -153,7 +156,17 @@ export interface SearchRecord {
 
 export type ResearchOrigin = 'original' | CandidateSource['origin']
 
-export type ResearchFact = PoolFact & { found: boolean }
+/** A fact as extracted; a pass's coverage extraction also gives its structured fields (`coverageExtractionSchema`). */
+export type ResearchFact = PoolFact & { found: boolean; structured?: StructuredFact }
+
+const STRUCTURED_KEYS = Object.keys(structuredFactFields) as (keyof StructuredFact)[]
+
+/** The structured fields an extraction gave a fact, or nothing for one without them (research's own schema). */
+function structuredOf(f: object): { structured?: StructuredFact } {
+  if (!STRUCTURED_KEYS.every(k => k in f)) return {}
+  const fields = f as StructuredFact
+  return { structured: Object.fromEntries(STRUCTURED_KEYS.map(k => [k, fields[k]])) as StructuredFact }
+}
 
 export interface ResearchSource {
   /** `S0` is the original article. */
@@ -287,16 +300,41 @@ const ownCandidate =
     storyId: s.storyId,
   })
 
+/** The coverage steps whose answers make a story's plan: the neighbour confirmation and the queries. */
+export type PlanStep = 'confirm' | 'queries'
+
+/** What the plan keeps of each step's answer: the neighbours confirmed (candidate numbers, in the prompt's order), the queries written. */
+export interface PlanAnswers {
+  confirm: number[]
+  queries: { query: string; language: string }[]
+}
+
+/**
+ * Answers a plan step: `ask` makes its call, null for no answer to keep. A research pass may answer
+ * from its last pass's plan instead (`planSteps`); research's own run always asks.
+ */
+export type PlanCall = <S extends PlanStep>(
+  step: S,
+  prompt: Prompt,
+  schema: z.ZodType,
+  ask: () => Promise<PlanAnswers[S] | null>,
+) => Promise<PlanAnswers[S] | null>
+
+const askAlways: PlanCall = (_step, _prompt, _schema, ask) => ask()
+
 /** Step 1: the cluster members, and the ±14-day neighbours that production's dedup prompt confirms. */
-async function ownSources(story: ResearchStory, call: Call): Promise<CandidateSource[]> {
+async function ownSources(story: ResearchStory, call: Call, plan: PlanCall): Promise<CandidateSource[]> {
   const cluster = story.clusterMembers.map(ownCandidate('cluster'))
   if (story.neighbours.length === 0) return cluster
   const prompt = buildDedupPrompt(
     { title: story.published.title, summary: story.published.summary },
     story.neighbours.map(n => ({ id: n.storyId, ...n.assessed })),
   )
-  const parsed = optional(await call('confirm', dedupConfirmationSchema, prompt))
-  const confirmed = new Set((parsed?.assessments ?? []).filter(a => a.isDuplicate).map(a => a.candidateNumber))
+  const answer = await plan('confirm', prompt, dedupConfirmationSchema, async () => {
+    const parsed = optional(await call('confirm', dedupConfirmationSchema, prompt))
+    return parsed ? parsed.assessments.filter(a => a.isDuplicate).map(a => a.candidateNumber) : null
+  })
+  const confirmed = new Set(answer ?? [])
   return [...cluster, ...story.neighbours.filter((_, i) => confirmed.has(i + 1)).map(ownCandidate('neighbour'))]
 }
 
@@ -308,6 +346,7 @@ async function searchCoverage(
   call: Call,
   deps: ResearchDeps,
   r: StoryResearch,
+  plan: PlanCall,
   pickQueries: CoverageOptions['pickQueries'] = q => q,
 ): Promise<CandidateSource[]> {
   const o = story.original
@@ -318,10 +357,14 @@ async function searchCoverage(
     date: articleDate,
     language: o.language,
   })
-  const queries = required(await call('queries', queriesSchema, prompt), 'queries')
-    .queries.map(q => ({ query: q.query.trim(), language: q.language }))
-    .filter(q => q.query !== '')
-    .slice(0, queryCount(o.language))
+  const written = await plan('queries', prompt, queriesSchema, async () => {
+    const answer = required(await call('queries', queriesSchema, prompt), 'queries')
+      .queries.map(q => ({ query: q.query.trim(), language: q.language }))
+      .filter(q => q.query !== '')
+    // None written is no answer to keep, so the next pass asks again
+    return answer.length > 0 ? answer : null
+  })
+  const queries = (written ?? []).slice(0, queryCount(o.language))
   if (queries.length === 0) throw new Stop('queries: none written')
 
   const found: CandidateSource[] = []
@@ -389,7 +432,14 @@ function researchSource(s: ExtractInput & { extraction: Extraction }, id: string
     kind: e.kind,
     country: e.country,
     relation: e.relation,
-    facts: e.facts.slice(0, MAX_FACTS_PER_SOURCE).map((f, j) => ({ id: `${id}F${j + 1}`, ...f, found: supportFound(f.supportingSentence, s.text) })),
+    facts: e.facts.slice(0, MAX_FACTS_PER_SOURCE).map((f, j) => ({
+      id: `${id}F${j + 1}`,
+      statement: f.statement,
+      supportingSentence: f.supportingSentence,
+      measures: f.measures,
+      found: supportFound(f.supportingSentence, s.text),
+      ...structuredOf(f),
+    })),
     voices: e.voices.slice(0, MAX_VOICES_PER_SOURCE),
   }
 }
@@ -430,6 +480,7 @@ async function buildPool(
   call: Call,
   deps: ResearchDeps,
   r: StoryResearch,
+  structured = false,
 ): Promise<void> {
   const brief = { title: story.published.title, summary: story.published.summary }
   const candidates = story.earlier.filter(e => !usedStoryIds.has(e.id))
@@ -437,14 +488,15 @@ async function buildPool(
     story: { ...brief, date: story.datePublished.slice(0, 10) },
     candidates: candidates.map(c => ({ ...c, date: c.datePublished.slice(0, 10) })),
   })
-  const extractPrompts = inputs.map(s => buildExtractionPromptParts({ story: brief, source: s }))
+  const extractPrompts = inputs.map(s => buildExtractionPromptParts({ story: brief, source: s }, { structured }))
+  const extractSchema: z.ZodType<Extraction | CoverageExtraction> = structured ? coverageExtractionSchema : extractionSchema
   const batch: PlannedStep[] = [
     ...extractPrompts.map(prompt => ({ step: 'extract' as const, prompt })),
     ...(candidates.length > 0 ? [{ step: 'earlier' as const, prompt: earlierPrompt }] : []),
   ]
   if (deps.admit && !(await deps.admit(batch))) throw new Stop('budget')
   const [extractions, earlier] = await Promise.all([
-    Promise.all(extractPrompts.map(prompt => call('extract', extractionSchema, prompt))),
+    Promise.all(extractPrompts.map(prompt => call('extract', extractSchema, prompt))),
     candidates.length > 0 ? call('earlier', earlierSchema, earlierPrompt) : Promise.resolve<StepAnswer<Earlier>>({ parsed: null, outcome: 'ok' }),
   ])
   if ([...extractions, earlier].some(e => e.outcome === 'skipped')) throw new Stop('budget')
@@ -637,6 +689,10 @@ export interface CoverageOptions {
    * original article, which the pool holds, is not read again, and finding nothing new is no stop.
    */
   since?: SearchWindow
+  /** A research pass's extraction: each fact with its structured fields (`coverageExtractionSchema`), so the pass makes no structure call for it. */
+  structured?: boolean
+  /** A research pass's plan steps, which a later pass may answer from its last pass's plan (`planSteps`). Unset: always asked. */
+  plan?: PlanCall
 }
 
 /** What the coverage steps settled, which the write reads. */
@@ -660,8 +716,9 @@ export async function extractCoverage(
   const o = story.original
   const articleDate = anchorDate(o.datePublished, o.dateCrawled).slice(0, 10)
   const window = options.since ?? searchWindow(articleDate, deps.latestDate)
-  const own = await ownSources(story, call)
-  const found = await searchCoverage(story, articleDate, window, call, deps, r, options.pickQueries)
+  const plan = options.plan ?? askAlways
+  const own = await ownSources(story, call, plan)
+  const found = await searchCoverage(story, articleDate, window, call, deps, r, plan, options.pickQueries)
 
   const known = options.known ?? new Set<string>()
   const isKnown = (c: CandidateSource) => known.has(normalizedUrl(c.url))
@@ -688,7 +745,7 @@ export async function extractCoverage(
   }
   const inputs: ExtractInput[] = [...(options.since ? [] : [original]), ...filtered.selected.map(s => ({ ...s, isOriginal: false }))]
   const used = new Set([story.id, ...filtered.selected.flatMap(s => (s.storyId ? [s.storyId] : []))])
-  await buildPool(story, inputs, used, call, deps, r)
+  await buildPool(story, inputs, used, call, deps, r, options.structured === true)
   return { articleDate, window }
 }
 

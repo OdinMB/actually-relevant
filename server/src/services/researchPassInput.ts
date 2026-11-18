@@ -1,7 +1,8 @@
 /**
  * What one research pass reads (`.context/research-passes.md`, "Input"): the story as research's
  * loader gives it, its evidence pool, its current article version and the places readers see, the
- * reusable facts of the earlier stories research may link, and whether an editor's pass may start.
+ * coverage plan its last pass kept, the reusable facts of the earlier stories research may link, and
+ * whether an editor's pass may start.
  * SELECT only, through the client it is given, so the eval can pass its read-only session. The
  * legacy import is the claim's (`legacyPool.ts`, in the pass's transaction), never this module's.
  * An earlier story's facts are its pool's once it has one, else its context facts (`reusableFacts`).
@@ -9,6 +10,7 @@
 import { utcDay } from '../lib/days.js'
 import { currentVersion, loadPool } from './passRecords.js'
 import type { OfferedFact, PassInput } from './researchPass.js'
+import { storedPlan, type CoveragePlan } from './researchPassPlan.js'
 import { researchStoriesByIds, type ResearchDb } from './researchInput.js'
 import { EMPTY_POOL, type ArticleVersionData, type Pool } from './researchPool.js'
 import { storyLayout } from './storyContextLayout.js'
@@ -27,13 +29,14 @@ interface StoryRow {
  * uncapped: the pass offers those of the stories it links, at most `maxReusedFacts`.
  */
 export async function loadPassInput(db: ResearchDb, storyId: string, passId: string, now: Date = new Date()): Promise<PassInput | null> {
-  const [pool, version, lastPassDay, carried] = await Promise.all([
+  const [pool, version, lastPassDay, carried, plan] = await Promise.all([
     loadPool(db, storyId),
     currentVersion(db, storyId),
     lastPassDayOf(db, storyId, passId),
     carriedPasses(db, storyId, passId),
+    lastPlanOf(db, storyId, passId),
   ])
-  return storyInput(db, storyId, passId, now, pool, version, { lastPassDay, carried })
+  return storyInput(db, storyId, passId, now, pool, version, { lastPassDay, carried, plan })
 }
 
 /**
@@ -41,7 +44,19 @@ export async function loadPassInput(db: ResearchDb, storyId: string, passId: str
  * version and the story's own columns. The eval's replay of a first pass on a story of any history.
  */
 export async function loadFirstPassInput(db: ResearchDb, storyId: string, passId: string, now: Date = new Date()): Promise<PassInput | null> {
-  return storyInput(db, storyId, passId, now, EMPTY_POOL, null, { lastPassDay: null, carried: [] })
+  return storyInput(db, storyId, passId, now, EMPTY_POOL, null, { lastPassDay: null, carried: [], plan: null })
+}
+
+/**
+ * The coverage plan the story's last pass kept (`PassRecord.plan`), completed or failed alike: its
+ * answers stay good for as long as their prompts do. Null for none; the running pass itself never counts.
+ */
+async function lastPlanOf(db: ResearchDb, storyId: string, passId: string): Promise<CoveragePlan | null> {
+  const [row] = await db.$queryRaw<{ plan: unknown }[]>`
+    SELECT p.record->'plan' AS plan FROM research_passes p
+    WHERE p.story_id = ${storyId} AND p.id <> ${passId} AND p.record->'plan' IS NOT NULL
+    ORDER BY p.number DESC LIMIT 1`
+  return storedPlan(row?.plan ?? null)
 }
 
 /**
@@ -86,7 +101,7 @@ async function storyInput(
   now: Date,
   pool: Pool,
   version: ArticleVersionData | null,
-  history: Pick<PassInput, 'lastPassDay' | 'carried'>,
+  history: Pick<PassInput, 'lastPassDay' | 'carried' | 'plan'>,
 ): Promise<PassInput | null> {
   const [story] = await researchStoriesByIds(db, [storyId])
   if (!story) return null

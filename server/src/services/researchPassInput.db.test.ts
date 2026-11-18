@@ -129,6 +129,36 @@ describeDb('loadPassInput', () => {
     expect((await loadPassInput(prisma, story.id, running.id, NOW))?.lastPassDay).toBe('2026-11-12')
   })
 
+  it("reads the coverage plan of the story's last pass that kept one, failed or not, never the running pass's", async () => {
+    const feedId = await feed()
+    const story = await createStory({ feedId, status: 'published', ...assessed, datePublished: ago(10) })
+    const plan = (query: string) => ({ confirm: null, queries: { key: `k-${query}`, answer: [{ query, language: 'en' }] }, use: { queries: 'first pass' } })
+    const pass = (number: number, status: 'completed' | 'failed' | 'running', record: object | null) =>
+      prisma.researchPass.create({
+        data: {
+          storyId: story.id,
+          number,
+          trigger: 'editor',
+          kind: number === 1 ? 'first' : 'later',
+          status,
+          outcome: status === 'running' ? null : 'unchanged',
+          costUsd: 0,
+          ...(record ? { record: record as Prisma.InputJsonObject } : {}),
+        },
+      })
+    expect((await loadPassInput(prisma, story.id, 'none-yet', NOW))?.plan).toBeNull()
+    await pass(1, 'completed', { plan: plan('floods') })
+    await pass(2, 'failed', { plan: plan('floods toll') })
+    // A record from before plans were kept
+    await pass(3, 'completed', { cards: 'kept' })
+    const running = await pass(4, 'running', { plan: plan('not yet') })
+
+    expect((await loadPassInput(prisma, story.id, running.id, NOW))?.plan).toEqual({
+      confirm: null,
+      queries: { key: 'k-floods toll', answer: [{ query: 'floods toll', language: 'en' }] },
+    })
+  })
+
   it('carries the later passes since the article last took a judgment, whose facts no judgment settled', async () => {
     const feedId = await feed()
     const story = await createStory({ feedId, status: 'published', ...assessed, datePublished: ago(10) })

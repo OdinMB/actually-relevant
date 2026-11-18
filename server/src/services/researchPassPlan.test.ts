@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import { promptParts, promptText } from '../lib/promptCache.js'
 import type { GapList } from '../schemas/storyContext.js'
 import { researchStory } from '../test/passFixtures.js'
-import { coverageSearches, gapSearches, knownPages, laterStory, laterWindow, readPages } from './researchPassPlan.js'
+import {
+  coverageSearches,
+  gapSearches,
+  knownPages,
+  laterStory,
+  laterWindow,
+  planKey,
+  planSteps,
+  readPages,
+  storedPlan,
+  type CoveragePlan,
+  type PlanRecord,
+} from './researchPassPlan.js'
 import { EMPTY_POOL, type Pool, type PoolSearch, type PoolSource } from './researchPool.js'
 
 const gap = (response: 'yes' | 'no', searches: GapList['searches'] = [], quote = ''): GapList => ({
@@ -141,5 +155,52 @@ describe("a later pass's window", () => {
     const story = researchStory({ earlier: [candidate('old', '2026-11-10'), candidate('linked', '2026-11-16'), candidate('new', '2026-11-16')] })
     const linked = { sources: [page('E1', '', { origin: 'earlier', earlierStoryId: 'linked' })] }
     expect(laterStory(story, linked, { start: '2026-11-14', end: '2026-11-20' }).earlier.map(e => e.id)).toEqual(['new'])
+  })
+})
+
+describe('the coverage plan', () => {
+  const schema = z.object({ queries: z.array(z.string()) })
+  const written = [{ query: 'peat fires', language: 'en' }]
+  const empty = (): PlanRecord => ({ confirm: null, queries: null, use: {} })
+
+  it("keys a step on its prompt's text and its schema, split or whole alike", () => {
+    expect(planKey(promptParts('Rules.', 'Data.'), schema)).toBe(planKey(promptText(promptParts('Rules.', 'Data.')), schema))
+    expect(planKey('Rules.\n\nOther data.', schema)).not.toBe(planKey('Rules.\n\nData.', schema))
+    expect(planKey('Rules.', schema)).not.toBe(planKey('Rules.', z.object({ queries: z.array(z.number()) })))
+  })
+
+  it('takes the stored answer under the same key without asking, and asks under another', async () => {
+    const stored: CoveragePlan = { confirm: null, queries: { key: planKey('Prompt.', schema), answer: written } }
+    const ask = vi.fn(async () => [{ query: 'asked', language: 'en' }])
+
+    const same = empty()
+    expect(await planSteps(same, stored, false)('queries', 'Prompt.', schema, ask)).toEqual(written)
+    expect(ask).not.toHaveBeenCalled()
+    expect(same).toEqual({ confirm: null, queries: stored.queries, use: { queries: 'reused' } })
+
+    const other = empty()
+    expect(await planSteps(other, stored, false)('queries', 'Another prompt.', schema, ask)).toEqual([{ query: 'asked', language: 'en' }])
+    expect(other).toMatchObject({ queries: { key: planKey('Another prompt.', schema) }, use: { queries: 'changed' } })
+  })
+
+  it('asks on a first pass and with nothing stored, and keeps no answer the call did not give', async () => {
+    const stored: CoveragePlan = { confirm: null, queries: { key: planKey('Prompt.', schema), answer: written } }
+    const first = empty()
+    await planSteps(first, stored, true)('queries', 'Prompt.', schema, async () => written)
+    expect(first.use).toEqual({ queries: 'first pass' })
+
+    const none = empty()
+    expect(await planSteps(none, null, false)('confirm', 'Prompt.', schema, async () => null)).toBeNull()
+    expect(none).toEqual({ confirm: null, queries: null, use: { confirm: 'no stored plan' } })
+  })
+
+  it('reads a stored plan, a step that does not read as an entry as none, and anything else as no plan', () => {
+    expect(storedPlan({ confirm: { key: 'k', answer: [2] }, queries: { key: 'q', answer: 'not a list' }, use: {} })).toEqual({
+      confirm: { key: 'k', answer: [2] },
+      queries: null,
+    })
+    expect(storedPlan({})).toEqual({ confirm: null, queries: null })
+    expect(storedPlan(null)).toBeNull()
+    expect(storedPlan('plan')).toBeNull()
   })
 })

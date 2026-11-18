@@ -2,7 +2,8 @@
  * Production's step caller and Tavily wrapper for one research run or research pass
  * (`.context/story-research.md`, "Cap"; `.context/research-passes.md`, "Budget"): one metered
  * structured-output call per step on the step's tier model (`structuredCall`: after the shared
- * rate-limit delay, never wrapped in `withRetry`, as `.context/llm-analysis.md`, "Retries", says).
+ * rate-limit delay, never wrapped in `withRetry`, as `.context/llm-analysis.md`, "Retries", says),
+ * the extraction steps at `config.research.extractionEffort` (`passStepEffort`).
  * The meter adds each call's model cost and each search's credits, a pass's card steps and gap
  * searches included. Before every call, search and parallel batch it checks the estimate against the
  * room left: the run's own ceiling, and what the month's cap leaves; a call without room is `skipped`
@@ -14,7 +15,7 @@ import { ZERO_USAGE } from '../lib/llmUsage.js'
 import { promptText, takesCacheControls, type Prompt } from '../lib/promptCache.js'
 import { CREDITS_PER_SEARCH, searchTavily, TAVILY_DEPTH, type TavilySearch } from '../lib/tavily.js'
 import { callCostUsd } from './researchCost.js'
-import { PASS_STEP_TIERS, type PassCall, type PassStep } from './researchPass.js'
+import { PASS_STEP_TIERS, passStepEffort, type PassCall, type PassStep } from './researchPass.js'
 import { BudgetExhaustedError, type PlannedStep, type ResearchSearchAnswer, type StepResult } from './researchPipeline.js'
 import type { ContextSearchAnswer, ContextSearchRequest } from './storyContextSources.js'
 import { structuredCall } from './structuredCall.js'
@@ -92,7 +93,8 @@ export function createRunMeter(options: RunMeterOptions): RunMeter {
 
   const call: PassCall = async <T>(step: PassStep, schema: z.ZodType<T>, prompt: Prompt) => {
     if (!(await fits(estimateUsd({ step, prompt })))) return { parsed: null, outcome: 'skipped', usage: ZERO_USAGE, costUsd: 0, model: modelOf(step) }
-    const { error, ...result }: { error?: unknown } & StepResult<T> = await structuredCall(PASS_STEP_TIERS[step], schema, prompt)
+    const effort = passStepEffort(step)
+    const { error, ...result }: { error?: unknown } & StepResult<T> = await structuredCall(PASS_STEP_TIERS[step], schema, prompt, effort ? { effort } : {})
     spent += result.costUsd
     return result.outcome === 'error' && options.transient ? { ...result, transient: options.transient(error) } : result
   }

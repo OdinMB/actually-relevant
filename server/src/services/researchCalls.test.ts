@@ -5,10 +5,11 @@ import { z } from 'zod'
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   getLLMByTier: vi.fn(),
+  getLLMAtEffort: vi.fn(),
   rateLimitDelay: vi.fn(),
   searchTavily: vi.fn(),
 }))
-vi.mock('./llm.js', () => ({ getLLMByTier: mocks.getLLMByTier, rateLimitDelay: mocks.rateLimitDelay }))
+vi.mock('./llm.js', () => ({ getLLMByTier: mocks.getLLMByTier, getLLMAtEffort: mocks.getLLMAtEffort, rateLimitDelay: mocks.rateLimitDelay }))
 vi.mock('../lib/tavily.js', async importOriginal => ({ ...(await importOriginal<typeof import('../lib/tavily.js')>()), searchTavily: mocks.searchTavily }))
 
 import { config } from '../config.js'
@@ -50,8 +51,31 @@ const meter = (over: { ceilingUsd?: number; monthRoomUsd?: () => Promise<number>
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.getLLMByTier.mockReturnValue({ withStructuredOutput: () => ({ invoke: mocks.invoke }) })
+  mocks.getLLMAtEffort.mockReturnValue({ withStructuredOutput: () => ({ invoke: mocks.invoke }) })
   mocks.invoke.mockResolvedValue(answer())
   mocks.searchTavily.mockResolvedValue({ results: [], credits: 2 })
+})
+
+describe('createRunMeter: reasoning effort', () => {
+  it('runs the extraction steps at the extraction effort on their tier, every other step at its tier’s own', async () => {
+    const m = meter()
+    for (const step of ['extract', 'gap-extract', 'structure'] as const) await m.call(step, schema, 'prompt')
+    expect(mocks.getLLMAtEffort.mock.calls).toEqual([
+      ['small', config.research.extractionEffort],
+      ['small', config.research.extractionEffort],
+      ['small', config.research.extractionEffort],
+    ])
+    await m.call('fact-check', schema, 'prompt')
+    await m.call('write', schema, 'prompt')
+    expect(mocks.getLLMByTier.mock.calls).toEqual([['small'], ['medium']])
+    expect(mocks.getLLMAtEffort).toHaveBeenCalledTimes(3)
+  })
+
+  it('defaults the extraction effort to none, which the small tier’s model takes', async () => {
+    const { effortSupported } = await vi.importActual<typeof import('./llm.js')>('./llm.js')
+    expect(config.research.extractionEffort).toBe('none')
+    expect(effortSupported(config.llm.models.small.name, config.research.extractionEffort)).toBe(true)
+  })
 })
 
 describe('createRunMeter: model calls', () => {

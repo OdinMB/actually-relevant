@@ -1,7 +1,9 @@
 /**
  * One research pass's steps on one story (`.context/research-passes.md`, "The steps"), first passes
- * in this phase: own sources, coverage queries, search and extraction (research's), the structure
- * call, the gap list and its searches (context's), one fact check of each fact not judged before,
+ * in this phase: own sources, coverage queries, search and extraction (research's; a later pass
+ * takes the confirmation and queries from its last pass's plan while their prompts are the same, and
+ * the extraction gives each fact its structured fields), the structure call for a fact without them,
+ * the gap list and its searches (context's), one fact check of each fact not judged before,
  * the article from the supported facts with research's checks, repair and gate, then the cards from
  * the pool with context's write and box check. It reads and returns the story's evidence pool: what
  * the pool holds is not searched, read or checked again. No I/O of its own, like `researchStory`:
@@ -10,7 +12,7 @@
  * `fallback: budget` does. It writes nothing (`passRecords.ts` stores the result).
  */
 import type { z } from 'zod'
-import { config } from '../config.js'
+import { config, type ReasoningEffort } from '../config.js'
 import type { Prompt } from '../lib/promptCache.js'
 import { TAVILY_DEPTH } from '../lib/tavily.js'
 import type { StoryText } from '../prompts/storyContext.js'
@@ -32,7 +34,17 @@ import {
   type StoryResearch,
 } from './researchPipeline.js'
 import { LATER_STEP_TIERS, LATER_STEPS, updateArticle, type LaterCall, type UpdateOutcome, type UpdateRecord } from './researchPassLater.js'
-import { coverageSearches, gapSearches, knownPages, laterStory, laterWindow, readPages } from './researchPassPlan.js'
+import {
+  coverageSearches,
+  gapSearches,
+  knownPages,
+  laterStory,
+  laterWindow,
+  planSteps,
+  readPages,
+  type CoveragePlan,
+  type PlanRecord,
+} from './researchPassPlan.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
 import { articleOf, nextVersion } from './articleVersions.js'
 import {
@@ -63,6 +75,7 @@ import {
   gapStage,
   responseNotFound,
   stepCaller,
+  structured as structuredFields,
   structureFacts,
   writeBoxes,
   type ContextCall,
@@ -103,6 +116,12 @@ export const PASS_STEP_TIERS: Record<PassStep, 'small' | 'medium'> = {
   ...(Object.fromEntries(Object.entries(CARD_STEPS).map(([pass, step]) => [pass, CONTEXT_STEP_TIERS[step]])) as Record<CardStep, 'small' | 'medium'>),
   ...LATER_STEP_TIERS,
 }
+
+/** The steps that only copy what a source states into fields: they run at `config.research.extractionEffort`. */
+export const EXTRACTION_STEPS: ReadonlySet<PassStep> = new Set<PassStep>(['extract', 'gap-extract', 'structure'])
+
+/** A step's reasoning effort on its tier's model: the extraction effort for an extraction step, else the tier's own (undefined). */
+export const passStepEffort = (step: PassStep): ReasoningEffort | undefined => (EXTRACTION_STEPS.has(step) ? config.research.extractionEffort : undefined)
 
 // ---------------------------------------------------------------------------
 // Input, deps and result
@@ -146,6 +165,8 @@ export interface PassInput {
    * later pass judges their facts as its own, beside the ones it finds.
    */
   carried: string[]
+  /** The coverage plan the story's last pass kept (`loadPassInput`), which a later pass takes step by step while each prompt is the same; null for none. */
+  plan: CoveragePlan | null
   /** `YYYY-MM-DD`: the pass's day, where a later pass's window ends. */
   today: string
   /** The story as readers see it before the pass, which the gap list reads. */
@@ -174,6 +195,8 @@ export interface PassRecord {
   cardsError: string | null
   /** Coverage queries not searched: an earlier pass made them. */
   skippedQueries: string[]
+  /** The coverage plan the pass used, which the next pass reads, and why each step was reused or asked. */
+  plan: PlanRecord
   /** A later pass's article step: the judgments, demotions, checks and note (`researchPassLater.ts`); null on a first pass. */
   update: UpdateRecord | null
 }
@@ -307,7 +330,9 @@ function addCoverage(pool: WorkingPool, r: StoryResearch, extractModel: string):
       },
       s.id,
     )
-    for (const f of s.facts) pool.add(source, { ...fact(f), extractedBy })
+    // A fact the extraction gave its fields is structured already: no structure call follows for it
+    for (const f of s.facts)
+      pool.add(source, { ...fact(f), ...(f.structured ? { structured: { ...structuredFields(f.structured), by: extractedBy } } : {}), extractedBy })
   }
   for (const e of r.earlier) {
     const source = pool.source(
@@ -401,7 +426,15 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   const optOutChecked = deps.sourcePolicy !== undefined
   const r = emptyResearch(input.story.id, optOutChecked)
   const context = emptyContextRecord(optOutChecked)
-  const record: PassRecord = { research: r, context, cards: 'none', cardsError: null, skippedQueries: [], update: null }
+  const record: PassRecord = {
+    research: r,
+    context,
+    cards: 'none',
+    cardsError: null,
+    skippedQueries: [],
+    plan: { confirm: null, queries: null, use: input.story.neighbours.length === 0 ? { confirm: 'no neighbours' } : {} },
+    update: null,
+  }
   const pool = new WorkingPool(input.pool, input.passId)
   const spent = { credits: 0 }
   let budget = false
@@ -459,6 +492,9 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
         return picked.search
       },
       ...(since ? { since } : {}),
+      structured: true,
+      // A later pass takes the last pass's confirmation and queries while their prompts are the same
+      plan: planSteps(record.plan, input.plan, since === null),
     })
     coverageWindow = coverage.window
   } catch (err) {

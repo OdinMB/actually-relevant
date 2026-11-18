@@ -4,12 +4,18 @@
  * same days, and context's gap searches, `response` first from its two angles while open, each
  * skipping what any earlier pass of the story searched (the pool's searches: a normalized query, a
  * `response` angle); the pages the pool holds or left out are never read again; and a
- * later pass's window since the last pass, with only the earlier stories new since. Pure.
+ * later pass's window since the last pass, with only the earlier stories new since; and the coverage
+ * plan (the neighbour confirmation and the queries), which a later pass takes from its last pass
+ * while each step's prompt is the same. Pure.
  */
+import { z } from 'zod'
 import { config } from '../config.js'
+import { promptText, type Prompt } from '../lib/promptCache.js'
+import { promptVersionOf } from '../prompts/promptVersion.js'
 import type { GapList } from '../schemas/storyContext.js'
 import { domainOf, normalizedUrl, type SearchWindow } from './researchFilter.js'
 import type { ResearchStory } from './researchInput.js'
+import type { PlanAnswers, PlanCall, PlanStep } from './researchPipeline.js'
 import type { Pool } from './researchPool.js'
 import { planSearches, type ResponseAngle } from './storyContextPipeline.js'
 import { normalizedQuery } from './storyContextSources.js'
@@ -65,6 +71,69 @@ export function laterWindow(lastPassDay: string, today: string, latest?: string)
   const end = cap !== undefined && cap < today.slice(0, 10) ? cap : today.slice(0, 10)
   const start = lastPassDay.slice(0, 10)
   return { start: start > end ? end : start, end }
+}
+
+/** A plan step's answer under its key (`planKey`). */
+export interface PlanEntry<S extends PlanStep> {
+  key: string
+  answer: PlanAnswers[S]
+}
+
+/** The coverage plan a pass used, each step's answer under its key; null for no answer kept (not asked, or its call gave none). */
+export interface CoveragePlan {
+  confirm: PlanEntry<'confirm'> | null
+  queries: PlanEntry<'queries'> | null
+}
+
+/**
+ * Why a plan step was answered as it was: `reused`, from the last pass's plan, with no call; `first
+ * pass`, which asks every step; `no stored plan`, the last pass kept no answer to it; `changed`, its
+ * prompt is not the one the stored answer was given to (the story, its neighbours, the article, the
+ * prompt or its schema changed); `no neighbours`, nothing to confirm, so no call.
+ */
+export type PlanUse = 'reused' | 'first pass' | 'no stored plan' | 'changed' | 'no neighbours'
+
+/** The plan as a pass's record keeps it (`PassRecord.plan`): what it used, and why, per step reached. */
+export interface PlanRecord extends CoveragePlan {
+  use: Partial<Record<PlanStep, PlanUse>>
+}
+
+/** A plan step's key: its prompt's text and its schema (`promptVersionOf`), so any change to what the step reads asks it again. */
+export const planKey = (prompt: Prompt, schema: z.ZodType): string => promptVersionOf(promptText(prompt), schema)
+
+/**
+ * The plan steps of a pass (`CoverageOptions.plan`), each answer and its use into `record`: a later
+ * pass takes `stored`'s answer to a step whose key is the same, and asks the rest; a first pass asks
+ * every step. An answer the step's call did not give is kept as none, so the next pass asks again.
+ */
+export function planSteps(record: PlanRecord, stored: CoveragePlan | null, first: boolean): PlanCall {
+  return async <S extends PlanStep>(step: S, prompt: Prompt, schema: z.ZodType, ask: () => Promise<PlanAnswers[S] | null>) => {
+    const entries = record as Record<PlanStep, PlanEntry<S> | null>
+    const key = planKey(prompt, schema)
+    const last = first ? null : ((stored as Record<PlanStep, PlanEntry<S> | null> | null)?.[step] ?? null)
+    if (last?.key === key) {
+      entries[step] = last
+      record.use[step] = 'reused'
+      return last.answer
+    }
+    record.use[step] = first ? 'first pass' : last ? 'changed' : 'no stored plan'
+    const answer = await ask()
+    entries[step] = answer === null ? null : { key, answer }
+    return answer
+  }
+}
+
+const entrySchema = <T extends z.ZodType>(answer: T) => z.object({ key: z.string(), answer }).nullable().catch(null)
+
+const storedPlanSchema = z.object({
+  confirm: entrySchema(z.array(z.number().int())),
+  queries: entrySchema(z.array(z.object({ query: z.string(), language: z.string() }))),
+})
+
+/** A pass record's stored plan (`record.plan`), a step whose entry does not read as one kept as none; null for no plan. */
+export function storedPlan(json: unknown): CoveragePlan | null {
+  const parsed = storedPlanSchema.safeParse(json)
+  return parsed.success ? parsed.data : null
 }
 
 /** The story as a later pass reads it: only our earlier stories published since its window opened and not in the pool yet. */
