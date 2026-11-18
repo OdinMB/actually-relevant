@@ -247,3 +247,48 @@ export function researchView(
     earlier: pool.sources.filter(s => s.origin === 'earlier').map(s => asResearchEarlier(s, factsOf(s))),
   }
 }
+
+const UNSTRUCTURED = {
+  value: null,
+  valueHigh: null,
+  unit: '',
+  approx: 'exact' as const,
+  provisional: false,
+  counted: '',
+  place: '',
+  asOf: null,
+  credited: '',
+  creditedKind: null,
+  validity: 'fixed' as const,
+}
+
+/** A pool fact as context's checks and cards read it: its structured fields, or none yet. */
+export function contextFact(f: PoolFact, s: PoolSource): ContextFactData {
+  const { by, ...fields } = f.structured ?? { ...UNSTRUCTURED, by: f.extractedBy }
+  return {
+    ref: f.ref,
+    origin: f.passage !== null ? 'search' : 'research',
+    reusedFromId: f.reusedFromId,
+    slot: f.slot,
+    source: { id: s.ref, url: s.url, outlet: s.outlet, title: s.title, date: s.date, kind: s.kind },
+    supportingSentence: f.supportingSentence,
+    passage: f.passage,
+    supportFound: f.supportFound,
+    statement: f.statement,
+    ...fields,
+    verdict: f.verdict,
+    verdictProblem: f.verdictProblem,
+    model: by.model,
+    promptVersion: by.promptVersion,
+  }
+}
+
+/**
+ * The pool's page facts with structured fields, as context's checks and cards read them (cited
+ * earlier stories' facts among them): a context run's facts, and what a pass's cards cite.
+ */
+export function cardFacts(pool: Pick<Pool, 'sources' | 'facts'>): ContextFactData[] {
+  return pool.sources
+    .filter(s => s.origin !== 'earlier')
+    .flatMap(s => pool.facts.filter(f => f.sourceRef === s.ref && f.structured !== null).map(f => contextFact(f, s)))
+}

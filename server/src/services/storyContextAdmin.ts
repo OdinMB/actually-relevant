@@ -1,20 +1,23 @@
 /**
  * The admin's view and edits of a story's context (`.context/story-context.md`, "Admin"): every box
- * of the story's newest context run with its status and where it sits now, the places the story has,
- * the newest run's summary for "What the run did", and whether an editor can gather context now
+ * the page reads (`cardRecords`: the newest research pass's, else the newest context run's) with its
+ * status and where it sits now, the pass that wrote them, the places the story has, the newest
+ * context run's summary for "What the run did", and whether an editor can gather context now
  * (`storyContextOnDemand.ts`); hiding and showing one box or all (a hidden box
  * is `demoted`, shown again `unreviewed`; nothing is deleted), and moving a box to a paragraph or point
- * the story has, or to More context, which keeps that place in every placement mode.
+ * the story has, or to More context, which keeps that place in every placement mode. Hiding all acts
+ * on the served boxes' table; one box is found by its id among the story's pass and context boxes.
  */
 import type { StoryContextRun } from '@prisma/client'
 import { config } from '../config.js'
 import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
+import { cardRecords } from './storyCards.js'
 import { layoutSpots, storyLayout, type LayoutStory, type StoryLayout } from './storyContextLayout.js'
 import { gatherState } from './storyContextOnDemand.js'
 import { SECTION } from './storyContextPlacement.js'
-import { boxContent, boxRefs, contextRecords, SLOT_TYPES } from './storyContextRecords.js'
+import { boxContent, boxRefs, SLOT_TYPES } from './storyContextRecords.js'
 import { markInterruptedContextRuns } from './storyContextRuns.js'
 import { placeServed, servableRow, servedBoxes } from './storyContextServed.js'
 import { asOfFromColumns } from './storyContextVisuals.js'
@@ -66,6 +69,8 @@ export interface ContextAdminRun {
 export interface ContextAdmin {
   /** The newest run; null while the story has none (the section then shows only the action, for an eligible story). */
   run: ContextAdminRun | null
+  /** The research pass that wrote the boxes; null while they are a context run's (no pass has written cards). */
+  pass: { id: string; number: number; writtenAt: Date } | null
   boxes: ContextAdminBox[]
   places: ContextAdminPlace[]
   placement: typeof config.storyContext.placement
@@ -97,9 +102,9 @@ function placesOf(layout: StoryLayout): ContextAdminPlace[] {
 export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
   const story = await storyFor(storyId)
   await markInterruptedContextRuns()
-  const [run, { boxes, facts }, gather] = await Promise.all([
+  const [run, { boxes, facts, pass }, gather] = await Promise.all([
     prisma.storyContextRun.findFirst({ where: { storyId }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }] }),
-    contextRecords(prisma, storyId),
+    cardRecords(prisma, storyId),
     gatherState(storyId),
   ])
   const layout = storyLayout(story)
@@ -121,6 +126,7 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
       error: run.error,
       result: run.result,
     },
+    pass,
     boxes: boxes.map(b => {
       const sources = new Map<string, string>()
       for (const ref of boxRefs(boxContent(b))) {
@@ -148,33 +154,41 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
   }
 }
 
-/** Hide every box of the story (`demoted`), or show the hidden ones again (`unreviewed`). */
+/**
+ * Hide every box the page reads (`demoted`), or show the hidden ones again (`unreviewed`): the newest
+ * pass's boxes while the story has them, else its context boxes.
+ */
 export async function setContextHidden(storyId: string, hidden: boolean): Promise<void> {
   await storyFor(storyId)
-  await prisma.contextBox.updateMany({
-    where: { storyId, status: hidden ? { not: 'demoted' } : 'demoted' },
-    data: { status: hidden ? 'demoted' : 'unreviewed' },
-  })
+  const status = hidden ? { not: 'demoted' as const } : 'demoted'
+  const data = { status: hidden ? ('demoted' as const) : ('unreviewed' as const) }
+  const { pass } = await cardRecords(prisma, storyId)
+  if (pass) await prisma.passBox.updateMany({ where: { storyId, passId: pass.id, status }, data })
+  else await prisma.contextBox.updateMany({ where: { storyId, status }, data })
 }
 
 /**
  * Hide or show one box, or move it: to a paragraph or point the story has now, or to `section`. An
- * editor's place is kept in every placement mode, under the same limits. 400 for a place the story
- * does not have; 404 for an unknown story, a box of another story, or an In numbers box stored
- * before 2026-11-17 (never listed, as `contextRecords` reads it).
+ * editor's place is kept in every placement mode, under the same limits. The box is a pass's or a
+ * context run's, whichever holds its id. 400 for a place the story does not have; 404 for an
+ * unknown story, a box of another story, or an In numbers box stored before 2026-11-17 (never
+ * listed, as `contextRecords` reads it).
  */
 export async function updateContextBox(storyId: string, boxId: string, change: { hidden?: boolean; place?: string }): Promise<void> {
   const story = await storyFor(storyId)
-  const box = await prisma.contextBox.findFirst({ where: { id: boxId, storyId, type: SLOT_TYPES }, select: { id: true } })
-  if (!box) throw new NotFoundError('Context box not found')
+  const where = { id: boxId, storyId, type: SLOT_TYPES }
+  const [passBox, contextBox] = await Promise.all([
+    prisma.passBox.findFirst({ where, select: { id: true } }),
+    prisma.contextBox.findFirst({ where, select: { id: true } }),
+  ])
+  if (!passBox && !contextBox) throw new NotFoundError('Context box not found')
   let place: { place: string | null; placeByEditor: true } | null = null
   if (change.place !== undefined) {
     if (change.place !== SECTION && !layoutSpots(storyLayout(story)).has(change.place))
       throw new BadRequestError(`The story has no ${change.place}: choose one of its paragraphs or points, or section`)
     place = { place: change.place === SECTION ? null : change.place, placeByEditor: true }
   }
-  await prisma.contextBox.update({
-    where: { id: boxId },
-    data: { ...(change.hidden !== undefined ? { status: change.hidden ? 'demoted' : 'unreviewed' } : {}), ...(place ?? {}) },
-  })
+  const data = { ...(change.hidden !== undefined ? { status: change.hidden ? ('demoted' as const) : ('unreviewed' as const) } : {}), ...(place ?? {}) }
+  if (passBox) await prisma.passBox.update({ where: { id: boxId }, data })
+  else await prisma.contextBox.update({ where: { id: boxId }, data })
 }
