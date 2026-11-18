@@ -25,6 +25,11 @@ import type { UpdateStepReport } from './update.js'
 import { updateLines } from './updateReport.js'
 import type { LinkStepReport } from './link.js'
 import { linkLines } from './linkReport.js'
+import type { PassPoolReport } from './passPool.js'
+import type { ReplayStepReport } from './replay.js'
+import type { ReviewStepReport } from './review.js'
+import type { StandsStepReport } from './stands.js'
+import { passPoolLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
 
 export type ReportNameInput = Pick<OverviewOptions, 'steps' | 'arms' | 'size' | 'repeat' | 'limit' | 'facts' | 'half'>
 
@@ -46,8 +51,11 @@ export function overviewReportName({ steps, arms, size, repeat, limit, facts, ha
   return `overview-eval${tags.map(t => `-${t}`).join('')}.md`
 }
 
-/** The facts the fact check planted errors in: research's sample from the database, or the `context` step's run 1. */
-export type FactSample = { source: 'research'; fixtures: FactFixtures } | { source: 'context'; facts: ContextFacts; half: ReportNameInput['half'] }
+/** The facts the fact check planted errors in: research's sample from the database, the `context` step's run 1, or the `stands` step's. */
+export type FactSample =
+  | { source: 'research'; fixtures: FactFixtures }
+  | { source: 'context'; facts: ContextFacts; half: ReportNameInput['half'] }
+  | { source: 'stands'; facts: ContextFacts; half: ReportNameInput['half'] }
 
 export interface FactCheckReport {
   sample: FactSample
@@ -72,6 +80,11 @@ export interface OverviewReportInput {
   update?: UpdateStepReport
   /** The `link`, `found` and `role` steps' one replay. */
   link?: LinkStepReport
+  passPool?: PassPoolReport
+  stands?: StandsStepReport
+  review?: ReviewStepReport
+  /** The `closure` and `replay` steps' one replay. */
+  replay?: ReplayStepReport
   factCheck?: FactCheckReport
   baseline?: Baseline
   skipped: { step: string; reason: string }[]
@@ -158,6 +171,13 @@ function sampleLines(sample: FactSample): string[] {
       ...c.shortfalls.map(s => `- Shortfall: ${s}`),
     ]
   }
+  if (sample.source === 'stands') {
+    const c = sample.facts
+    return [
+      `**Sample (stands lines, \`--facts stands\`):** ${facts.length} lines (of ${c.size} asked for) the stands step's run 1 kept, from ${stories} developments (half ${sample.half}); each is checked against its cited facts' source sentences, with the text kinds planted in it.`,
+      ...c.shortfalls.map(s => `- Shortfall: ${s}`),
+    ]
+  }
   const fx = sample.fixtures
   const languages = counted(facts.map(f => f.language ?? 'unknown'))
   return [
@@ -241,6 +261,10 @@ export function renderOverviewReport(input: OverviewReportInput): string {
     ...(input.context ? ['## Story context against the bars', '', ...contextLines(input.context), ''] : []),
     ...(input.update ? ["## A later pass's updates against the bars", '', ...updateLines(input.update), ''] : []),
     ...(input.link ? ['## Overview linking against the bars', '', ...linkLines(input.link, input.steps), ''] : []),
+    ...(input.passPool ? ["## The half's stories researched in memory (pass-pool)", '', ...passPoolLines(input.passPool), ''] : []),
+    ...(input.stands ? ['## Where this stands against the bars', '', ...standsLines(input.stands), ''] : []),
+    ...(input.review ? ['## Reviews under planted errors', '', ...reviewLines(input.review), ''] : []),
+    ...(input.replay ? ['## The whole module replayed (closure, replay)', '', ...replayLines(input.replay, input.steps), ''] : []),
     ...(input.factCheck ? ['## Fact check under planted errors', '', ...factCheckLines(input.factCheck), ''] : []),
     ...(input.baseline ? ["## Research's cost baseline", '', ...baselineLines(input.baseline), ''] : []),
     ...(input.skipped.length > 0 ? ['## Skipped', '', ...input.skipped.map(s => `- ${s.step}: ${s.reason}`), ''] : []),

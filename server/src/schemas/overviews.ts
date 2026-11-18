@@ -1,8 +1,10 @@
 /**
- * Structured outputs of the overview linking prompts (`prompts/overviews.ts`; `.context/overviews.md`,
- * "How a story is linked"): the link confirmation per candidate, with the shared cause, place and end
- * quoting both sides and the story's role; the founding draft (charter, title, both stories' roles);
- * and the founding check, blind to the draft's reasons. Format guidance lives in the `.describe()`s
+ * Structured outputs of the overview prompts (`prompts/overviews.ts`; `.context/overviews.md`): the
+ * link confirmation per candidate, with the shared cause, place and end quoting both sides and the
+ * story's role; the founding draft (charter, title, both stories' roles); the founding check, blind
+ * to the draft's reasons; "Where this stands" and "What's being done", each sentence citing facts;
+ * the two closing calls; and a review's verdict per entry with the charter it may only narrow. Format
+ * guidance lives in the `.describe()`s
  * (`.context/prompting.md`, "Schema carries format guidance"); each schema is part of its prompt's
  * version (`OVERVIEW_PROMPT_VERSIONS`).
  */
@@ -90,3 +92,69 @@ export const foundCheckSchema = z.object({
 })
 
 export type FoundCheckAnswer = z.infer<typeof foundCheckSchema>
+
+const citedLine = (what: string) =>
+  z.object({
+    text: z.string().describe(`${what} One sentence in your own words, American spelling.`),
+    factIds: z
+      .array(z.string())
+      .describe('The ids of the facts in <FACTS> that state everything the sentence says, exactly as given, e.g. "S2F1". Never empty.'),
+  })
+
+export const standsSchema = z.object({
+  sentences: z
+    .array(citedLine('Where the development stands, as <STANDS> asks.'))
+    .describe('One to four sentences, the present state first, in the order a reader should read them.'),
+  doing: z
+    .array(citedLine('What is being done about it, as <DOING> asks.'))
+    .describe('At most two sentences on the responses under way; empty when no current fact reports one.'),
+})
+
+export type StandsAnswer = z.infer<typeof standsSchema>
+
+const happened = (what: string) =>
+  z
+    .enum(['yes', 'no'])
+    .describe(
+      `yes: ${what} reports that the event has happened (declared, signed, ruled, published). no: it does not, or only that it may, is expected or was called for.`,
+    )
+
+export const closeSchema = z.object({
+  happened: happened('the newest story'),
+  quote: z.string().describe('The words of the newest story that report the END_EVENT, copied exactly from its title, label or summary. Empty for no.'),
+  reason: z.string().describe('One sentence: why.'),
+})
+
+export type CloseAnswer = z.infer<typeof closeSchema>
+
+export const closeCheckSchema = z.object({
+  happened: happened('the story'),
+  reason: z.string().describe('One sentence: why.'),
+})
+
+export type CloseCheckAnswer = z.infer<typeof closeCheckSchema>
+
+export const reviewSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        id: z.string().describe('The id of an entry in <ENTRIES>, exactly as given, e.g. "E3".'),
+        belongs: z.enum(['yes', 'no']).describe('yes: the story belongs to the development the charter describes, as <ENTRY_RULES> asks. no: it does not.'),
+        reason: z.string().describe('One sentence: why, from what the story reports.'),
+        role,
+        roleKind,
+      }),
+    )
+    .describe('One per entry in <ENTRIES>, in their order.'),
+  charter: z
+    .object({
+      in: z.string().describe("The charter's IN, copied exactly as given."),
+      out: z.array(z.string()).describe("The charter's OUT entries as given, each kept, with any you add after them as <CHARTER_RULES> allows."),
+      endEvent: z.string().describe("The charter's END_EVENT, copied exactly as given."),
+    })
+    .describe('The charter, narrowed only by additions to OUT.'),
+  title: z.string().describe('A corrected title only when the current one misnames the development, as <TITLE_RULES> asks; empty to keep it.'),
+  clearFreeze: z.boolean().describe('Only for a frozen overview: true when every entry belongs, so automation may go on. False otherwise.'),
+})
+
+export type ReviewAnswer = z.infer<typeof reviewSchema>

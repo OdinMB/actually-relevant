@@ -515,10 +515,33 @@ export const config = {
     concurrency: 3,
     /** The step records the failed-stories notice when more than `jobs.failureShare.share` of a run's stories failed technically, from this many stories on. */
     failedStoriesMin: 5,
+    /** An open overview with no new entry for this many days is quiet; quiet this long, it closes as faded (owner, 2026-11-18), and reopens when a story belongs. */
+    quietAfterDays: 21,
+    fadeAfterDays: 120,
+    /** Days an end-event closure waits for a new entry, which cancels it, before the overview closes (after its review). */
+    closingDays: 7,
+    /** More joins than this to one overview of stories published on one day freeze it and queue a review. */
+    burstLimit: 5,
+    /** A review is due each time the active entries reach one of these counts, and every `reviewEveryDays` while public and not closed. */
+    reviewAt: [3, 6, 12, 25, 50] as readonly number[],
+    reviewEveryDays: 30,
+    /** The monthly audit: this many random public overviews reviewed at high effort every `auditEveryDays`, logged and never applied. */
+    auditSize: 5,
+    auditEveryDays: 30,
+    /** "Where this stands": facts offered at most (response facts on top), the fewest it is written from, and its sentences and "What's being done" lines at most. */
+    maxStandsFacts: 60,
+    minStandsFacts: 3,
+    maxStandsSentences: 4,
+    maxDoingSentences: 2,
     tiers: {
       link: 'small' as const,
       found: 'large' as const,
       foundCheck: 'large' as const,
+      stands: 'medium' as const,
+      standsCheck: 'small' as const,
+      close: 'large' as const,
+      closeCheck: 'large' as const,
+      review: 'large' as const,
     },
   },
   embedding: {

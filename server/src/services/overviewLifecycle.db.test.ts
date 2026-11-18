@@ -8,6 +8,7 @@ import { candidateOverviews, linkStories } from './overviewInput.js'
 import { applyLink } from './overviewLifecycle.js'
 import { linkInOrder, type LinkDeps, type LinkResult } from './overviewLink.js'
 import { owedStories } from './overviewQueue.js'
+import { pendingClosings } from './overviewUpkeepInput.js'
 import type { LinkStory, Shared } from './overviewTypes.js'
 
 const DAY = 86_400_000
@@ -132,6 +133,20 @@ describeDb('the overview lifecycle', () => {
       closedReason: null,
       lastEntryAt: s!.datePublished,
     })
+  })
+
+  it("keeps a join's end-event flag on its link decision, where the closing checks find it", async () => {
+    const [s, t] = await stories(2)
+    const o = await overviewRow()
+    await applyLink(joinResult(s!, o.id), false)
+    const flagged = joinResult(t!, o.id)
+    await applyLink({ ...flagged, join: { ...flagged.join!, reportsEndEvent: true } }, false)
+    const decisions = await prisma.overviewDecision.findMany({ where: { kind: 'link' } })
+    expect(Object.fromEntries(decisions.map(d => [d.storyId, (d.inputs as { reportsEndEvent: boolean }).reportsEndEvent]))).toEqual({
+      [s!.id]: false,
+      [t!.id]: true,
+    })
+    expect((await pendingClosings(prisma)).map(c => c.story.id)).toEqual([t!.id])
   })
 
   it('holds a story bound for an overview frozen since, and writes nothing for one linked meanwhile', async () => {

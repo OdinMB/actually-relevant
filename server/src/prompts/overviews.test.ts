@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { LinkStory } from '../services/overviewTypes.js'
-import { buildFoundCheckPrompt, buildFoundPrompt, buildLinkPrompt, OVERVIEW_PROMPT_VERSIONS } from './overviews.js'
+import {
+  buildCloseCheckPrompt,
+  buildClosePrompt,
+  buildFoundCheckPrompt,
+  buildFoundPrompt,
+  buildLinkPrompt,
+  buildReviewPrompt,
+  OVERVIEW_PROMPT_VERSIONS,
+} from './overviews.js'
 
 const story = (id: string, title: string): LinkStory => ({
   id,
@@ -44,6 +52,22 @@ describe('the overview prompts', () => {
 
   it('version each prompt', () => {
     expect(Object.values(OVERVIEW_PROMPT_VERSIONS).every(v => /\S/.test(v))).toBe(true)
-    expect(new Set(Object.values(OVERVIEW_PROMPT_VERSIONS)).size).toBe(3)
+    expect(new Set(Object.values(OVERVIEW_PROMPT_VERSIONS)).size).toBe(Object.keys(OVERVIEW_PROMPT_VERSIONS).length)
+  })
+
+  it('show the closing check the end event and the story alone, and the review its entries under their ids', () => {
+    const check = buildCloseCheckPrompt({ endEvent: 'The ministry declares it over', story: story('s', 'Ebola over') })
+    expect(check).toContain('<END_EVENT>\nThe ministry declares it over\n</END_EVENT>')
+    expect(check).not.toContain('<CHARTER>')
+    const close = buildClosePrompt({ charter: { in: 'In.', out: [], endEvent: 'End.' }, story: story('s', 'Ebola over'), entries: [] })
+    expect(close).not.toContain('<FACTS>')
+    const review = buildReviewPrompt({
+      title: 'Ebola',
+      charter: { in: 'In.', out: [], endEvent: 'End.' },
+      frozen: true,
+      entries: [{ ref: 'E1', title: 'First', label: 'L', summary: 'S.', date: '2026-05-01', role: { role: 'routine', roleKind: null } }],
+    })
+    expect(review).toContain('<OVERVIEW frozen="yes">')
+    expect(review).toContain('<ENTRY id="E1" date="2026-05-01" role="routine">')
   })
 })

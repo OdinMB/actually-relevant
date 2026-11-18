@@ -95,7 +95,26 @@ const cases: Case[] = [
     linkInput('Cholera in Sudan', '2026-06-11'),
     ['Ebola in Ituri', 'Cholera in Sudan', '2026-05-10', '2026-06-11'],
   ),
+  pair(
+    'overview stands',
+    overviews.buildStandsPromptParts,
+    overviews.buildStandsPrompt,
+    standsInput('Ebola in Ituri', '2026-11-18'),
+    standsInput('Cholera in Sudan', '2026-11-19'),
+    ['Ebola in Ituri', 'Cholera in Sudan', '2026-11-18', '2026-11-19', 'S1F1'],
+  ),
 ]
+
+function standsInput(title: string, today: string): overviews.StandsPromptInput {
+  return {
+    title,
+    entries: [{ title: `${title} story`, date: '2026-11-01', role: { role: 'routine', roleKind: null } }],
+    facts: [{ id: 'S1F1', text: `${title} fact.`, outlet: 'Outlet', date: '2026-11-01', current: true, response: false }],
+    today,
+    maxSentences: 4,
+    maxDoing: 2,
+  }
+}
 
 function linkInput(title: string, date: string): overviews.LinkInput {
   const story = { id: 's', title, label: 'Label', summary: 'Summary.', datePublished: new Date(`${date}T12:00:00Z`), date, issueId: null, facts: ['Fact.'] }

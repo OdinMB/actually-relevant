@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
   recordItems: vi.fn(),
   reportRunResult: vi.fn(),
   notify: vi.fn(),
+  overviewStates: vi.fn(),
+  standsCases: vi.fn(),
+  applyStatus: vi.fn(),
+  applyStands: vi.fn(),
 }))
 
 vi.mock('../services/overviewGate.js', () => ({
@@ -36,7 +40,22 @@ vi.mock('../services/overviewCandidates.js', async importOriginal => ({
   nearestPublished: mocks.nearestPublished,
   membershipsOf: async () => ({ active: new Map(), lockedOut: new Map() }),
 }))
-vi.mock('../services/overviewLifecycle.js', () => ({ applyLink: mocks.applyLink }))
+vi.mock('../services/overviewLifecycle.js', () => ({
+  applyLink: mocks.applyLink,
+  applyStatus: mocks.applyStatus,
+  applyStands: mocks.applyStands,
+  applyClosing: vi.fn(),
+  applyBurst: vi.fn(),
+  applyReview: vi.fn(),
+  applyAudit: vi.fn(),
+}))
+vi.mock('../services/overviewUpkeepInput.js', () => ({
+  pendingClosings: async () => [],
+  overviewStates: mocks.overviewStates,
+  reviewCase: async () => null,
+  auditPicks: async () => [],
+  standsCases: mocks.standsCases,
+}))
 vi.mock('../services/structuredCall.js', () => ({ structuredCall: mocks.structuredCall }))
 vi.mock('../lib/runUsage.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/runUsage.js')>()),
@@ -44,7 +63,7 @@ vi.mock('../lib/runUsage.js', async importOriginal => ({
   reportRunResult: mocks.reportRunResult,
 }))
 
-const { linkSummary, runLinkOverviewsJob } = await import('./linkOverviews.js')
+const { linkSummary, productionUpkeepDeps, runLinkOverviewsJob, upkeepClock, upkeepSummary } = await import('./linkOverviews.js')
 
 const story = (id: string, day: number): LinkStory => ({
   id,
@@ -65,6 +84,8 @@ describe('runLinkOverviewsJob', () => {
     mockJobRun.findUnique.mockResolvedValue({ enabled: true })
     mocks.nearestPublished.mockResolvedValue([])
     mocks.applyLink.mockImplementation(async (result: { outcome: string }) => ({ kind: 'written', outcome: result.outcome }))
+    mocks.overviewStates.mockResolvedValue([])
+    mocks.standsCases.mockResolvedValue([])
   })
 
   it('does nothing while its gate is closed, or research passes’ gate is, or its job is disabled', async () => {
@@ -106,16 +127,122 @@ describe('runLinkOverviewsJob', () => {
     expect(mocks.linkStories).toHaveBeenCalledWith(expect.anything(), ['b1', 'b2', 'n1'])
     expect(mocks.applyLink.mock.calls.map(([r]) => (r as { story: LinkStory }).story.id)).toEqual(['b1', 'b2', 'n1'])
     expect(mocks.recordItems).toHaveBeenCalledWith(1, 1)
-    expect(mocks.reportRunResult).toHaveBeenCalledWith('Linked 3 stories: 0 joined, 0 founded, 3 alone; backfill 2 of 2')
+    expect(mocks.reportRunResult).toHaveBeenCalledWith('Linked 3 stories: 0 joined, 0 founded, 3 alone; backfill 2 of 2; 0 overviews refreshed, 0 reviewed')
   })
 
-  it('says so when nothing is owed', async () => {
+  it('runs the upkeep when nothing is owed, its status moves in development time and its stands checks in the tally', async () => {
     gates.overview = null
     gates.pass = null
     mocks.owedStories.mockResolvedValue({ backlog: [], night: [], backlogTotal: 0 })
     mocks.linkStories.mockResolvedValue([])
-    await runLinkOverviewsJob()
-    expect(mocks.reportRunResult).toHaveBeenCalledWith('Nothing to link')
+    const quiet = {
+      id: 'o1',
+      scope: 'ongoing',
+      status: 'open',
+      closedReason: null,
+      frozen: false,
+      hidden: false,
+      lastEntryAt: new Date('2026-05-01T00:00:00Z'),
+      closingSince: null,
+      activeEntries: 3,
+      unpublished: [],
+      entriesAtLastReview: 3,
+      reviewedAt: new Date('2026-06-01T00:00:00Z'),
+      burstJoins: 0,
+      burstAt: null,
+      closureReviewed: false,
+    }
+    mocks.overviewStates.mockResolvedValue([quiet])
+    await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
+    expect(mocks.applyStatus).toHaveBeenCalledWith(quiet, [{ kind: 'status', from: 'open', to: 'quiet', reason: 'quiet' }], new Date('2026-06-10T02:00:00Z'))
+    expect(mocks.recordItems).toHaveBeenCalledWith(0, 0)
+    expect(mocks.reportRunResult).toHaveBeenCalledWith('Nothing to link; 0 overviews refreshed, 0 reviewed')
+  })
+})
+
+describe('the upkeep clock and summary', () => {
+  const now = new Date('2026-11-18T03:00:00Z')
+
+  it('counts in the newest linked story’s time while a backfill drains, and in now once it is done', () => {
+    const linked = [story('a', 1), story('b', 20)]
+    expect(upkeepClock({ backlog: ['a', 'b'], backlogTotal: 900 }, linked, now)).toEqual(story('b', 20).datePublished)
+    expect(upkeepClock({ backlog: ['a', 'b'], backlogTotal: 2 }, linked, now)).toEqual(now)
+    expect(upkeepClock({ backlog: ['a', 'b'], backlogTotal: 900 }, [], now)).toEqual(now)
+  })
+
+  it('names refreshes and reviews always, and the rest when they happened', () => {
+    const tally = {
+      closingsChecked: 1,
+      closingsBegun: 1,
+      moves: 2,
+      detached: 0,
+      bursts: 1,
+      reviews: 2,
+      reviewActions: 3,
+      reviewRefusals: 0,
+      audits: 5,
+      standsRefreshes: 4,
+      standsWritten: 3,
+      standsChecked: 10,
+      standsDropped: 1,
+      failed: 1,
+      costUsd: 0.4,
+      errors: [],
+      stopped: false,
+    }
+    expect(upkeepSummary(tally)).toBe('3 overviews refreshed, 2 reviewed, 1 closing, 1 frozen by a burst, 5 audited, 1 upkeep item failed')
+    expect(upkeepSummary({ ...tally, closingsBegun: 0, bursts: 0, audits: 0, failed: 0, standsWritten: 1, reviews: 0 })).toBe(
+      '1 overview refreshed, 0 reviewed',
+    )
+  })
+
+  it("reads the tables, calls each step's tier (the audit at high effort) and writes through the lifecycle", async () => {
+    const lifecycle = await import('../services/overviewLifecycle.js')
+    mocks.structuredCall.mockResolvedValue({ parsed: null, costUsd: 0, model: 'm' })
+    mocks.overviewStates.mockResolvedValue([])
+    mocks.standsCases.mockResolvedValue([])
+    const deps = productionUpkeepDeps(now)
+    expect(await deps.closings()).toEqual([])
+    expect(await deps.states()).toEqual([])
+    expect(mocks.overviewStates).toHaveBeenCalledWith(expect.anything(), now)
+    expect(await deps.reviewCase('o1')).toBeNull()
+    expect(await deps.auditPicks(now)).toEqual([])
+    expect(await deps.standsCases()).toEqual([])
+
+    const charter = { in: 'In.', out: [], endEvent: 'Declared over.' }
+    const entries = [{ ref: 'E1', title: 'T', label: 'L', summary: 'S.', date: '2026-06-01', role: { role: 'routine' as const, roleKind: null } }]
+    await deps.close.close({ charter, story: story('a', 1), entries: [] })
+    await deps.close.closeCheck({ endEvent: charter.endEvent, story: story('a', 1) })
+    await deps.review.review({ title: 'T', charter, frozen: false, entries }, { audit: false })
+    await deps.review.review({ title: 'T', charter, frozen: false, entries }, { audit: true })
+    await deps.stands.write({ title: 'T', entries: [], facts: [], today: '2026-06-02', maxSentences: 4, maxDoing: 2 })
+    await deps.stands.check([], [])
+    const { tiers } = (await import('../config.js')).config.overviews
+    expect(mocks.structuredCall.mock.calls.map(c => [c[0], c[3]])).toEqual([
+      [tiers.close, undefined],
+      [tiers.closeCheck, undefined],
+      [tiers.review, {}],
+      [tiers.review, { effort: 'high' }],
+      [tiers.stands, undefined],
+      [tiers.standsCheck, undefined],
+    ])
+
+    const state = {} as Parameters<typeof deps.applyBurst>[0]
+    await deps.applyClosing({} as never, {} as never)
+    await deps.applyStatus(state, [], now)
+    await deps.applyBurst(state)
+    await deps.applyReview({} as never, {} as never, now)
+    await deps.applyAudit({} as never, {} as never)
+    await deps.applyStands({} as never, {} as never, 'sig', '2026-06-02')
+    for (const write of [
+      lifecycle.applyClosing,
+      lifecycle.applyStatus,
+      lifecycle.applyBurst,
+      lifecycle.applyReview,
+      lifecycle.applyAudit,
+      lifecycle.applyStands,
+    ])
+      expect(write).toHaveBeenCalled()
   })
 })
 

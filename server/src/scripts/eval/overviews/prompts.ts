@@ -437,3 +437,61 @@ Judge whether the end event a new timeline was given (<FOUNDED>) is the same eve
 <KEY>${escapeXml(input.key)}</KEY>
 <FOUNDED>${escapeXml(input.founded)}</FOUNDED>`
 }
+
+// ---------------------------------------------------------------------------
+// Judge: whether each line of "Where this stands" is supported by the facts it cites
+// ---------------------------------------------------------------------------
+
+export const standsJudgeSchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        id: z.string().describe('The id of a line in <LINES>, exactly as given, e.g. "L2".'),
+        supported: z
+          .enum(['yes', 'no'])
+          .describe(
+            'yes: every claim of the line (each number, date, place, party, cause and trend) is stated by the facts it cites. no: any claim is not, or a past value is stated as the present.',
+          ),
+        why: z.string().describe('One short sentence: the claim its facts do not state, or empty when supported.'),
+      }),
+    )
+    .describe('One per line in <LINES>, in their order.'),
+})
+
+export type StandsJudgeAnswer = z.infer<typeof standsJudgeSchema>
+
+export interface StandsJudgeInput {
+  development: string
+  today: string
+  lines: { id: string; text: string; facts: { text: string; date: string | null; current: boolean }[] }[]
+}
+
+export function buildStandsJudgePrompt(input: StandsJudgeInput): string {
+  return `<ROLE>
+You check the summaries a news site writes at the top of its pages on ongoing developments.
+</ROLE>
+
+<GOAL>
+Judge whether each line in <LINES>, written on ${escapeXml(input.today)} about ${escapeXml(input.development)}, is supported by the facts it cites.
+</GOAL>
+
+<REQUIREMENTS>
+- A line is supported when its cited facts state everything it says: no number, date, place, party, cause or trend they do not give.
+- A fact marked current="no" is past: a line may state it only as a past value with its date. A line that states it as how things are now is not supported.
+- Plain rewording of a fact is supported; so is a line joining two facts that each state their part.
+- Judge only against the facts given, never on your own knowledge of the subject.
+</REQUIREMENTS>
+
+<LINES>
+${input.lines
+  .map(l =>
+    [
+      `<LINE id="${l.id}">`,
+      `<TEXT>${escapeXml(l.text)}</TEXT>`,
+      ...l.facts.map(f => `<FACT date="${escapeXml(f.date ?? 'unknown')}" current="${f.current ? 'yes' : 'no'}">${escapeXml(f.text)}</FACT>`),
+      '</LINE>',
+    ].join('\n'),
+  )
+  .join('\n')}
+</LINES>`
+}

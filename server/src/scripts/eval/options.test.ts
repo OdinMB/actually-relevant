@@ -208,8 +208,26 @@ describe('parseOverviewOptions', () => {
     expect(parseOverviewOptions(['--out', 'x', '--half', 'tune']).half).toBe('tune')
     expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'context'])).toThrow(/name both context and fact-check/)
     expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'context', '--facts', 'context'])).toThrow(/--facts context/)
-    expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'news'])).toThrow(/--facts must be one of research, context/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'news'])).toThrow(/--facts must be one of research, context, stands/)
     expect(() => parseOverviewOptions(['--out', 'x', '--half', 'holdout'])).toThrow(/--half must be one of tune, judge, all/)
+  })
+
+  it('runs the upkeep steps only when named, the pass pool before the stands and the replay, the stands before the fact check that samples them', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'fact-check,replay,review,stands,closure,pass-pool']).steps).toEqual([
+      'pass-pool',
+      'stands',
+      'closure',
+      'review',
+      'replay',
+      'fact-check',
+    ])
+    expect(OVERVIEW_DEFAULT_STEPS.some(s => ['pass-pool', 'stands', 'closure', 'review', 'replay'].includes(s))).toBe(false)
+  })
+
+  it('takes --facts stands only with the stands and fact-check steps', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'stands,fact-check', '--facts', 'stands']).facts).toBe('stands')
+    expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'stands'])).toThrow(/name both stands and fact-check/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'stands', '--facts', 'stands'])).toThrow(/--facts stands/)
   })
 
   it("defaults to production's research fact-check arm, production's small tier as configured by default", () => {
@@ -220,7 +238,7 @@ describe('parseOverviewOptions', () => {
 
   it('takes steps in any order and rejects an unknown one', () => {
     expect(parseOverviewOptions(['--out', 'x', '--steps', 'baseline,keys']).steps).toEqual(['keys', 'baseline'])
-    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'keys,replay'])).toThrow(/replay/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'keys,rehearse'])).toThrow(/rehearse/)
   })
 
   it('takes arms as model@effort from the price table', () => {

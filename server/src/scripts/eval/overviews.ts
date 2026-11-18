@@ -6,7 +6,10 @@
  * check on its facts; and a later pass's article step replayed on the answer keys' researched
  * stories with the facts found since and planted corrections (`update`), its notes judged; and the
  * overview linking replayed on the answer keys' stories in an in-memory sandbox (`link`, `found`,
- * `role`), the founded end events judged.
+ * `role`), the founded end events judged; and the overview upkeep (`pass-pool`, `stands`, `closure`,
+ * `review`, `replay`): production's first pass run in memory on the developments' must entries for
+ * the facts the stands are written from, the stands at each development's checkpoints judged, reviews
+ * under planted errors, and the whole module replayed day by day for its closures and checkpoints.
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
@@ -15,9 +18,11 @@
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps context,fact-check --facts context --half judge --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half judge --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_upkeep-eval --steps pass-pool,stands,fact-check --facts stands --half judge --repeat 3
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_upkeep-eval --steps pass-pool,closure,review,replay --half judge --repeat 3
  *
  * Reads the database through the read-only session and writes nothing to any database; its only
- * HTTP is OpenAI, and Tavily for the `context` step. Writes overview-eval[-tags].md into --out, the
+ * HTTP is OpenAI, and Tavily for the `context` and `pass-pool` steps. Writes overview-eval[-tags].md into --out, the
  * gap-key drafts into --out/gap-drafts and its caches into --out/.cache. Prints only
  * present/missing for the keys and local/remote for the database. See .context/model-eval.md.
  */
@@ -52,17 +57,36 @@ import { overviewReportName, renderOverviewReport, type FactCheckReport, type Fa
 import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
 import type { UpdateStory } from './overviews/updateFixtures.js'
 import { runLinkStep } from './overviews/link.js'
+import { runPassPool } from './overviews/passPool.js'
+import { runReplayStep } from './overviews/replay.js'
+import { runReviewStep } from './overviews/review.js'
+import { runStandsStep, standsFactFixtures, type StandsStepReport } from './overviews/stands.js'
 import { nearestPublished } from '../../services/overviewCandidates.js'
 import { linkStories } from '../../services/overviewInput.js'
+import type { MemberFact } from '../../services/overviewStands.js'
 import type { LinkStory } from '../../services/overviewTypes.js'
+import { loadMemberFacts } from '../../services/passRecords.js'
 import type { Db } from './readOnlyDb.js'
-import { LINKING_STEPS } from './options.js'
+import { LINKING_STEPS, REPLAY_STEPS } from './options.js'
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 const pct = (v: number | null) => (v === null ? 'n/a' : `${(v * 100).toFixed(1)}%`)
 const presence = (v: string | undefined) => (v ? 'present' : 'missing')
 /** The steps that call a model; a run of none of them, or a dry run, is offline. */
-const CALLING_STEPS: OverviewStep[] = ['gap-draft', 'context', 'update', 'link', 'found', 'role', 'fact-check']
+const CALLING_STEPS: OverviewStep[] = [
+  'gap-draft',
+  'context',
+  'update',
+  'link',
+  'found',
+  'role',
+  'pass-pool',
+  'stands',
+  'closure',
+  'review',
+  'replay',
+  'fact-check',
+]
 
 /** The stories as overview linking reads them, by slug, through the read-only session; null for a slug not published there. */
 async function linkStoriesBySlug(q: Db, slugs: string[]): Promise<Map<string, LinkStory | null>> {
@@ -155,7 +179,11 @@ async function main(): Promise<void> {
   console.log(`OPENAI_API_KEY: ${presence(process.env.OPENAI_API_KEY)}; TAVILY_API_KEY: ${presence(process.env.TAVILY_API_KEY)}`)
   const runs = (step: OverviewStep) => opts.steps.includes(step)
   const canCall = Boolean(process.env.OPENAI_API_KEY)
-  const tavily = createTavilyClient({ cacheFile: join(cacheDir, 'tavily.jsonl'), apiKey: process.env.TAVILY_API_KEY, offline: opts.dryRun || !runs('context') })
+  const tavily = createTavilyClient({
+    cacheFile: join(cacheDir, 'tavily.jsonl'),
+    apiKey: process.env.TAVILY_API_KEY,
+    offline: opts.dryRun || !(runs('context') || runs('pass-pool')),
+  })
   const ctx = createEvalContext({
     cacheFile: join(cacheDir, 'calls.jsonl'),
     budgetUsd: opts.budget,
@@ -205,7 +233,9 @@ async function main(): Promise<void> {
   }
   try {
     const linking = LINKING_STEPS.some(runs)
-    const keyFiles = runs('keys') || runs('gap-draft') || runs('update') || linking ? readKeyFiles() : []
+    const replaying = REPLAY_STEPS.some(runs)
+    const upkeep = replaying || runs('pass-pool') || runs('stands') || runs('review')
+    const keyFiles = runs('keys') || runs('gap-draft') || runs('update') || linking || upkeep ? readKeyFiles() : []
     if (runs('keys')) for (const k of keyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
     const gapKeyFiles = runs('gap-keys') || runs('context') ? readGapKeyFiles() : []
     if (runs('gap-keys')) {
@@ -392,11 +422,134 @@ async function main(): Promise<void> {
         }
       }
     }
+
+    // The upkeep's steps: the members' facts are the pass-pool step's pools when it ran, else the database's
+    const noKey = (step: string) =>
+      skipped.push({
+        step,
+        reason:
+          "needs OPENAI_API_KEY: each day's or checkpoint's calls depend on the answers before them, so whether the cache holds them all is known only by running",
+      })
+    let pooled: Map<string, MemberFact[]> | null = null
+    if (runs('pass-pool')) {
+      if (!canCall || !process.env.TAVILY_API_KEY)
+        skipped.push({ step: 'pass-pool', reason: 'needs OPENAI_API_KEY and TAVILY_API_KEY: it runs research passes' })
+      else {
+        try {
+          const p = await runPassPool({
+            ctx,
+            tavily,
+            files: keyFiles,
+            half: opts.half,
+            ...limit,
+            inputs: passInputs,
+            relevanceMin: config.selection.relevanceMin,
+            concurrency: opts.concurrency,
+            budgetUsd: opts.budget,
+            spentUsd: () => ctx.spentUsd(),
+          })
+          pooled = p.facts
+          report.passPool = p.report
+          console.log(`pass-pool: ${p.report.withFacts} of ${p.report.stories} stories gave offerable facts`)
+        } catch (err) {
+          failed('pass-pool', err)
+        }
+      }
+    }
+    const memberFacts = async (storyIds: string[]): Promise<MemberFact[]> => {
+      const held = pooled
+      if (held) return storyIds.flatMap(id => held.get(id) ?? [])
+      return (await (await session.get()).read(q => loadMemberFacts(q, storyIds))).map(f => ({ ...f, published: true }))
+    }
+    const storiesBySlug = async (slugs: string[]) => (await session.get()).read(q => linkStoriesBySlug(q, slugs))
+    let standsRun: StandsStepReport | null = null
+    if (runs('stands')) {
+      if (!canCall) noKey('stands')
+      else {
+        try {
+          standsRun = await runStandsStep({
+            ctx,
+            files: keyFiles,
+            half: opts.half,
+            ...limit,
+            stories: storiesBySlug,
+            facts: memberFacts,
+            repeat: opts.repeat,
+            budgetUsd: opts.budget,
+          })
+          report.stands = standsRun
+          if (standsRun.stopped) skipped.push({ step: 'stands', reason: standsRun.stopped })
+          for (const b of standsRun.score.bars)
+            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no verdict' : b.met ? 'met' : 'not met'})`)
+        } catch (err) {
+          failed('stands', err)
+        }
+      }
+    }
+    if (runs('review')) {
+      if (!canCall) noKey('review')
+      else {
+        try {
+          report.review = await runReviewStep({
+            ctx,
+            files: keyFiles,
+            half: opts.half,
+            ...limit,
+            stories: storiesBySlug,
+            repeat: opts.repeat,
+            budgetUsd: opts.budget,
+          })
+          if (report.review.stopped) skipped.push({ step: 'review', reason: report.review.stopped })
+          for (const b of report.review.score.bars)
+            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no data' : b.met ? 'met' : 'not met'})`)
+        } catch (err) {
+          failed('review', err)
+        }
+      }
+    }
+    if (replaying) {
+      const steps = REPLAY_STEPS.filter(runs).join(', ')
+      if (!canCall) noKey(steps)
+      else {
+        try {
+          report.replay = await runReplayStep({
+            ctx,
+            files: keyFiles,
+            half: opts.half,
+            ...limit,
+            stories: storiesBySlug,
+            neighbours: async s => (await session.get()).read(q => nearestPublished(q, s.id, s.datePublished)),
+            facts: memberFacts,
+            repeat: opts.repeat,
+            concurrency: opts.concurrency,
+            budgetUsd: opts.budget,
+          })
+          if (report.replay.stopped) skipped.push({ step: steps, reason: report.replay.stopped })
+          for (const b of report.replay.score.closure)
+            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no data' : b.met ? 'met' : 'not met'})`)
+        } catch (err) {
+          failed(steps, err)
+        }
+      }
+    }
     if (runs('fact-check')) {
       try {
         if (fx) {
           const factCheck = await factCheckStep(opts, { source: 'research', fixtures: fx }, facts, ctx, skipped)
           if (factCheck) report.factCheck = factCheck
+        } else if (opts.facts === 'stands') {
+          if (!standsRun) skipped.push({ step: 'fact-check', reason: '--facts stands: the stands step did not run' })
+          else {
+            const sample = standsFactFixtures(standsRun.kept, opts.size)
+            const factCheck = await factCheckStep(
+              opts,
+              { source: 'stands', facts: sample, half: opts.half },
+              opts.limit === undefined ? sample.facts : sample.facts.slice(0, opts.limit),
+              ctx,
+              skipped,
+            )
+            if (factCheck) report.factCheck = factCheck
+          }
         } else if (!contextRun) {
           skipped.push({ step: 'fact-check', reason: '--facts context: the context step did not run' })
         } else {

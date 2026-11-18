@@ -108,10 +108,29 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/overviewTypes.js': '*',
   'services/overviewCandidates.js': '*',
   'services/overviewInput.js': '*',
+  // Overview upkeep: the stands, closing, review and status steps and the night's order, pure (held below), so the
+  // `stands`, `closure`, `review` and `replay` steps run what the job runs.
+  'services/overviewStands.js': '*',
+  'services/overviewClose.js': '*',
+  'services/overviewReview.js': '*',
+  'services/overviewStatus.js': '*',
+  'services/overviewUpkeep.js': '*',
+  // The member stories' usable facts, read with SELECTs through the client it is given (held below), never written.
+  'services/passRecords.js': ['loadMemberFacts'],
 }
 
 /** The overview modules the eval imports whole: no database client, model client or HTTP of their own; the two readers SELECT only through the client given. */
-const OVERVIEW_SERVICE_MODULES = ['overviewLink.ts', 'overviewTypes.ts', 'overviewCandidates.ts', 'overviewInput.ts']
+const OVERVIEW_SERVICE_MODULES = [
+  'overviewLink.ts',
+  'overviewTypes.ts',
+  'overviewCandidates.ts',
+  'overviewInput.ts',
+  'overviewStands.ts',
+  'overviewClose.ts',
+  'overviewReview.ts',
+  'overviewStatus.ts',
+  'overviewUpkeep.ts',
+]
 const OVERVIEW_READERS = ['overviewCandidates.ts', 'overviewInput.ts']
 
 /** The story context modules the eval imports whole: no database client, model client, HTTP or retry of their own (hashing is fine). */
@@ -287,6 +306,16 @@ describe('eval harness has no write path', () => {
     const queries = [...read.matchAll(/\$queryRaw<[^`]*`([^`]*)`/g)].map(m => m[1]!.trim())
     expect(queries.length).toBeGreaterThan(0)
     expect(queries.filter(q => !/^SELECT\b/.test(q))).toEqual([])
+  })
+
+  it("reads the pool records, the members' facts among them, with SELECTs only, through the client it is given", () => {
+    const text = stripComments(readFileSync(join(ROOT, '../../services/passRecords.ts'), 'utf8'))
+    expect(importsOf(text).filter(i => /lib\/prisma(\.js)?$|\.\/llm\.js$|lib\/tavily\.js$/.test(i.specifier))).toEqual([])
+    expect(/\bprisma\.|\$executeRaw|\$queryRawUnsafe/.test(text)).toBe(false)
+    expect(text).toMatch(/export async function loadMemberFacts/)
+    const queries = [...text.matchAll(/\$queryRaw<[^`]*`([^`]*)`/g)].map(m => m[1]!.trim())
+    expect(queries.length).toBeGreaterThan(0)
+    expect(queries.filter(q => !/^SELECT\b/.test(q) || /\b(INSERT|UPDATE|DELETE|TRUNCATE)\b/i.test(q))).toEqual([])
   })
 
   it("loads a first pass's input with SELECTs only, through the client it is given, and without the pass tables", () => {

@@ -29,7 +29,7 @@ How the cache is asked for and priced is in `.context/llm-analysis.md`, "Prompt 
 - **Off** otherwise: one call a run (selection, newsletter, podcast), or rules under the minimum (dedup, social posts, related stories, the research queries, earlier coverage and derived fields, the later pass's note). Off is a plain string with no breakpoint, which explicit mode never writes.
 - **At the minimum** (about 1,050 tokens): on where a run repeats it many times (the context structure call, the later pass's judge); off for reclassification, an editor's rare bulk action, where the saving is small and the prefix may fall under the minimum.
 
-On today: full assessment, pre-assessment, research's extraction (a pass's with the structured fields too), write, repair and fact check, the context structure, gap list, extraction and card write, a later pass's judge and update, and the overview link confirmation (its rules and schema pass the minimum, and a night sends 9 to 60 of them; the founding draft and check are off: a handful a night).
+On today: full assessment, pre-assessment, research's extraction (a pass's with the structured fields too), write, repair and fact check, the context structure, gap list, extraction and card write, a later pass's judge and update, the overview link confirmation (its rules and schema pass the minimum, and a night sends 9 to 60 of them; the founding draft and check are off: a handful a night), and the overview stands write (several refreshes a night, dozens while a backfill drains; the closing call, its check and the review are off: rare, each input its own).
 
 **The prefix test.** `prompts/cachedPrompts.test.ts` holds every cached builder: two calls with different inputs share one stable part, the stable part holds none of the call's values, and the stable part plus the data is the plain builder's text. Add a builder there when it turns cached; a rule that interpolates a per-call value fails it.
 
@@ -45,6 +45,9 @@ On today: full assessment, pre-assessment, research's extraction (a pass's with 
 | Context card steps, a pass's first pass | `eval:overviews --steps context` |
 | A later pass's judge, update and note | `eval:overviews --steps update` |
 | Overview link confirmation, founding draft and check | `eval:overviews --steps link,found,role` (tune on `--half tune`, read the bars on `--half judge`) |
+| Overview stands write | `eval:overviews --steps pass-pool,stands,fact-check --facts stands` (same halves) |
+| Overview closing call and its check | `eval:overviews --steps closure` |
+| Overview review | `eval:overviews --steps review` |
 
 Emotion-only tagging has no check of its own: the preassess step is its proxy (the same classification task).
 

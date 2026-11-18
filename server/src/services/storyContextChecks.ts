@@ -352,6 +352,17 @@ const chartText = (measure: string, unit: string, points: StoredChart['points'],
     .join('; ')}`
 
 /**
+ * A written text as an item of research's fact check, against the facts it cites: each rendered, with
+ * its source's words, then each source's date fact; the numbers the evidence lacks as hints. What the
+ * cards' items are made of, and the overview stands' (`overviewStands.ts`).
+ */
+export function citedCheckItem(label: string, text: string, factIds: string[], facts: ReadonlyMap<string, ContextFactData>): CheckedDraftItem {
+  const citedFacts = factIds.flatMap(id => facts.get(id) ?? [])
+  const evidence = [...citedFacts.map(asEvidence), ...sourceDateFacts(citedFacts)]
+  return { item: cited(label, text, factIds), evidence, numberHints: numberHints(text, evidence) }
+}
+
+/**
  * Every sentence, tile and chart of the boxes as an item of research's fact check, against its cited
  * facts (rendered, with their sources' words and dates): a tile as it is shown ("people under
  * hazardous smoke, Southeast Asia: 12.5 million", its heading for a label left empty), a chart with each point ("area burned in Indonesia,
@@ -360,11 +371,12 @@ const chartText = (measure: string, unit: string, points: StoredChart['points'],
  */
 export function boxCheckItems(boxes: DraftBox[], facts: ReadonlyMap<string, ContextFactData>, storyDay: string, windows: ValidityWindows): BoxItem[] {
   const visuals = new Map([...facts.values()].map(f => [f.ref, visualFact(f)]))
-  const item = (box: number, kind: BoxItemKind, index: number, label: string, text: string, factIds: string[]): BoxItem => {
-    const citedFacts = factIds.flatMap(id => facts.get(id) ?? [])
-    const evidence = [...citedFacts.map(asEvidence), ...sourceDateFacts(citedFacts)]
-    return { box, kind, index, checked: { item: cited(label, text, factIds), evidence, numberHints: numberHints(text, evidence) } }
-  }
+  const item = (box: number, kind: BoxItemKind, index: number, label: string, text: string, factIds: string[]): BoxItem => ({
+    box,
+    kind,
+    index,
+    checked: citedCheckItem(label, text, factIds, facts),
+  })
   return boxes.flatMap((box, b) => {
     const items = box.sentences.map((s, j) => item(b, 'sentence', j, `${boxLabel(b)} sentence ${j + 1}`, s.text, s.factIds))
     const v = box.visual

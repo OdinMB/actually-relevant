@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import { currentVersion, loadPool, newestPassBoxes, publicVersions, storyVersions } from './passRecords.js'
+import { currentVersion, loadMemberFacts, loadPool, newestPassBoxes, publicVersions, storyVersions } from './passRecords.js'
 import type { PassWrite } from './passWrites.js'
 import { publicUpdates } from './publicUpdates.js'
 import { storePassResult } from './researchPassLifecycle.js'
@@ -342,6 +342,37 @@ describeDb('passRecords', () => {
     const data = { storyId: s.id, kind: 'legacy' as const, status: 'current' as const, research: {} }
     await prisma.articleVersion.create({ data: { ...data, number: 1 } })
     await expect(prisma.articleVersion.create({ data: { ...data, number: 2 } })).rejects.toThrow()
+  })
+
+  it("reads the members' usable, structured page facts with their stories, never an earlier story's", async () => {
+    const [a, b] = [await story(), await story()]
+    const judged = (passId: string) => ({ verdict: 'supported' as const, checkedBy: { model: 'm', promptVersion: 'v', passId } })
+    const passA = await createPass(a.id, 1)
+    const poolA: Pool = {
+      ...emptyWith(source('S0'), source('S1'), source('E1', { origin: 'earlier', earlierStoryId: b.id, url: '' })),
+      facts: [
+        fact('S0F1'),
+        fact('S1F1', { structured, ...judged(passA.id) }),
+        fact('S1F2', { structured, verdict: 'rejected', checkedBy: { model: 'm', promptVersion: 'v', passId: passA.id } }),
+        fact('S1F3', judged(passA.id)),
+        fact('E1F1', { structured, ...judged(passA.id) }),
+      ],
+    }
+    await prisma.$transaction(tx => storePassResult(tx, write(a.id, passA.id, poolA)))
+    const passB = await createPass(b.id, 1)
+    const poolB: Pool = {
+      ...emptyWith(source('S1')),
+      facts: [fact('S1F1', { structured, ...judged(passB.id) }), fact('S1F2', { structured, ...judged(passB.id), status: 'demoted' })],
+    }
+    await prisma.$transaction(tx => storePassResult(tx, write(b.id, passB.id, poolB)))
+
+    const facts = await loadMemberFacts(prisma, [a.id, b.id, a.id])
+    expect(facts.map(f => [f.storyId === a.id ? 'a' : 'b', f.fact.ref, f.source.ref])).toEqual([
+      ['a', 'S1F1', 'S1'],
+      ['b', 'S1F1', 'S1'],
+    ])
+    expect(facts[0]!.fact.structured).toMatchObject({ value: 212, counted: 'deaths' })
+    expect(await loadMemberFacts(prisma, [])).toEqual([])
   })
 })
 

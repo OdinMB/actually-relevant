@@ -91,3 +91,40 @@ export const SETTLING_OUTCOMES: readonly LinkOutcome[] = ['joined', 'founded', '
 
 /** A founding attempt's outcome: founded on agreement; disagreed (the check did not agree), refused (no end event named), failed (a call failed). */
 export type FoundingOutcome = 'founded' | 'disagreed' | 'refused' | 'failed'
+
+/** A "Where this stands" sentence or a "What's being done" line as stored: its text and the pool facts it cites, by row id. */
+export interface StandsLine {
+  text: string
+  facts: string[]
+}
+
+/** Why a review runs: an entry count reached, its 30 days, a closure waiting on it, a burst of joins; the monthly audit reviews and never acts. */
+export const REVIEW_TRIGGERS = ['entries', 'periodic', 'closure', 'burst', 'audit'] as const
+export type ReviewTrigger = (typeof REVIEW_TRIGGERS)[number]
+
+/** An overview as the status machine, the anomaly check and the review triggers read it (`overviewStatus.ts`). */
+export interface OverviewState {
+  id: string
+  scope: OverviewScope
+  status: OverviewStatus
+  closedReason: string | null
+  frozen: boolean
+  hidden: boolean
+  /** The newest active entry's publication date. */
+  lastEntryAt: Date | null
+  /** The publication date of the story that reported the end event, while closing. */
+  closingSince: Date | null
+  /** Active entries whose story is published. */
+  activeEntries: number
+  /** Active entries whose story is no longer published: the job detaches them, frozen or not. */
+  unpublished: { entryId: string; storyId: string }[]
+  /** Active entries the last review kept (0 before the first), and when it ran. */
+  entriesAtLastReview: number
+  reviewedAt: Date | null
+  /** The most stories of one publication day the pipeline joined to it in the last `nightHours`. */
+  burstJoins: number
+  /** When a burst froze it, while no review has run since. */
+  burstAt: Date | null
+  /** A review with the trigger `closure` ran after its closing began. */
+  closureReviewed: boolean
+}

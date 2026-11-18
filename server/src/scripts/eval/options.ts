@@ -257,20 +257,45 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
 // eval:overviews
 // ---------------------------------------------------------------------------
 
-/** Every step, in the order a run takes them: `context` before `fact-check`, which `--facts context` samples from it. */
-export const OVERVIEW_STEPS = ['keys', 'gap-keys', 'gap-draft', 'context', 'update', 'link', 'found', 'role', 'fact-check', 'baseline'] as const
+/**
+ * Every step, in the order a run takes them: `context` and `stands` before `fact-check`, which
+ * `--facts context` and `--facts stands` sample from; `pass-pool` before `stands` and `replay`,
+ * which take its pools.
+ */
+export const OVERVIEW_STEPS = [
+  'keys',
+  'gap-keys',
+  'gap-draft',
+  'context',
+  'update',
+  'link',
+  'found',
+  'role',
+  'pass-pool',
+  'stands',
+  'closure',
+  'review',
+  'replay',
+  'fact-check',
+  'baseline',
+] as const
 export type OverviewStep = (typeof OVERVIEW_STEPS)[number]
 /** The overview linking steps: one replay of the half's stories serves all three, each scoring its own bars. */
 export const LINKING_STEPS: readonly OverviewStep[] = ['link', 'found', 'role']
+/** The whole module replayed, linking and upkeep day by day: one replay serves the closure bars and the replay's own. */
+export const REPLAY_STEPS: readonly OverviewStep[] = ['closure', 'replay']
 /**
  * A run without `--steps`. Story context's, the research passes' and the overviews' steps run only
  * when named: `gap-draft` writes drafts for the check, `context` searches with Tavily and calls the
  * strong judge, `update` replays a later pass's article step on the answer keys' stories and judges
- * its notes, and `link`, `found` and `role` replay the overview linking on the answer keys' stories.
+ * its notes, `link`, `found` and `role` replay the overview linking on the answer keys' stories,
+ * `pass-pool` researches the half's stories in memory (Tavily), `stands` writes and judges the stands
+ * at the developments' checkpoints, `review` reviews them with planted errors, and `closure` and
+ * `replay` replay the whole module.
  */
 export const OVERVIEW_DEFAULT_STEPS: readonly OverviewStep[] = ['keys', 'fact-check', 'baseline']
-/** Which facts the fact check plants errors in: research's extracted statements, or module 1's rendered facts. */
-export const OVERVIEW_FACT_SOURCES = ['research', 'context'] as const
+/** Which facts the fact check plants errors in: research's extracted statements, module 1's rendered facts, or the stands' lines. */
+export const OVERVIEW_FACT_SOURCES = ['research', 'context', 'stands'] as const
 export type OverviewFactSource = (typeof OVERVIEW_FACT_SOURCES)[number]
 const OVERVIEW_HALVES = ['tune', 'judge', 'all'] as const
 export type OverviewHalf = (typeof OVERVIEW_HALVES)[number]
@@ -297,7 +322,7 @@ export interface OverviewOptions {
   /** The fact-check arms scored. */
   arms: Arm[]
   refreshFixtures: boolean
-  /** `context`: the fact check samples the facts the `context` step's run 1 kept, so both steps run. */
+  /** `context`: the fact check samples the facts the `context` step's run 1 kept, so both steps run; `stands`: the lines the `stands` step's run 1 kept. */
   facts: OverviewFactSource
   /** The gap keys the `context` step runs on, and the answer keys' stories the `update` and linking steps run on: prompts are tuned on `tune`, the gate is read on `judge`. */
   half: OverviewHalf
@@ -348,6 +373,9 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
     throw new Error(
       "--facts context samples the facts the context step keeps: name both context and fact-check in --steps (the context step's calls and searches are cached, so a repeated run costs nothing more)",
     )
+  }
+  if (facts === 'stands' && !(steps.includes('stands') && steps.includes('fact-check'))) {
+    throw new Error("--facts stands samples the lines the stands step keeps: name both stands and fact-check in --steps (the stands step's calls are cached)")
   }
   const half = OVERVIEW_HALVES.find(h => h === (values.half ?? 'all'))
   if (!half) throw new Error(`--half must be one of ${OVERVIEW_HALVES.join(', ')}`)

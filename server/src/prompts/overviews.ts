@@ -1,17 +1,19 @@
 /**
- * The overview linking prompts (`services/overviewLink.ts`; `.context/overviews.md`, "How a story is
- * linked"): the link confirmation, which asks of each candidate overview and each unlinked story near
- * the one being linked whether they are the same development, quoting both sides for the shared cause,
- * place and end, and gives the story's role; the founding draft, which writes a new development's
- * charter and title from two stories; and the founding check, which judges the charter against each
- * story blind to the draft's reasons. Written under `.context/prompting.md`: role, goal, XML
+ * The overview prompts (`.context/overviews.md`). Linking (`services/overviewLink.ts`): the link
+ * confirmation, which asks of each candidate overview and each unlinked story near the one being
+ * linked whether they are the same development, quoting both sides for the shared cause, place and
+ * end, and gives the story's role; the founding draft, which writes a new development's charter and
+ * title from two stories; and the founding check, which judges the charter against each story blind
+ * to the draft's reasons. Upkeep: "Where this stands" and "What's being done" from the members' checked
+ * facts (`overviewStands.ts`), the two calls that must agree an end event happened (`overviewClose.ts`),
+ * and the demote-only review (`overviewReview.ts`). Written under `.context/prompting.md`: role, goal, XML
  * constraint blocks, declarative, format guidance in the schemas (`schemas/overviews.ts`), every stored
  * text escaped behind the untrusted-input line, the call's values last in `<REQUEST>`. Each prompt's
  * version is a hash of it on a fixed input and of its schema.
  */
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
-import { foundCheckSchema, foundSchema, linkSchema } from '../schemas/overviews.js'
-import type { CandidateOverview, Charter, LinkStory } from '../services/overviewTypes.js'
+import { closeCheckSchema, closeSchema, foundCheckSchema, foundSchema, linkSchema, reviewSchema, standsSchema } from '../schemas/overviews.js'
+import type { CandidateOverview, Charter, LinkStory, Role } from '../services/overviewTypes.js'
 import { promptVersionOf } from './promptVersion.js'
 import { escapeXml } from './shared.js'
 
@@ -208,6 +210,240 @@ ${storyBlock('STORY_B', input.b)}
 }
 
 // ---------------------------------------------------------------------------
+// Where this stands, and What's being done
+// ---------------------------------------------------------------------------
+
+export interface StandsPromptInput {
+  title: string
+  /** The development's stories, oldest first: orientation only, never cited. */
+  entries: { title: string; date: string; role: Role }[]
+  /** The facts offered (`standsFacts`), current first, each under its id (`S1F1`…). */
+  facts: { id: string; text: string; outlet: string; date: string | null; current: boolean; response: boolean }[]
+  today: string
+  maxSentences: number
+  maxDoing: number
+}
+
+const yesNo = (b: boolean) => (b ? 'yes' : 'no')
+
+const entryLine = (e: { title: string; date: string; role: Role }) =>
+  `<STORY date="${escapeXml(e.date)}" role="${e.role.role}"${e.role.roleKind ? ` kind="${e.role.roleKind}"` : ''}>${escapeXml(e.title)}</STORY>`
+
+/**
+ * Cache: on. The rules come to over 1,024 tokens with the schema, and a night refreshes several
+ * overviews within the cache's 30 minutes, the backfill's nights dozens. House order: the rules first;
+ * the development and its facts after the breakpoint; today and the limits last in `<REQUEST>`.
+ */
+export function buildStandsPromptParts(input: StandsPromptInput): PromptParts {
+  return promptParts(
+    STANDS_RULES,
+    `<DEVELOPMENT>
+The development and our stories on it, oldest first. ${UNTRUSTED}
+${tag('TITLE', input.title)}
+<TIMELINE>
+${input.entries.map(entryLine).join('\n')}
+</TIMELINE>
+</DEVELOPMENT>
+
+<FACTS>
+The facts research checked in those stories' sources, current ones first, then the newest. ${UNTRUSTED}
+${input.facts
+  .map(
+    f =>
+      `<FACT id="${escapeXml(f.id)}" outlet="${escapeXml(f.outlet)}" date="${escapeXml(f.date ?? 'unknown')}" current="${yesNo(f.current)}" response="${yesNo(f.response)}">${escapeXml(f.text)}</FACT>`,
+  )
+  .join('\n')}
+</FACTS>
+
+<REQUEST>
+Today: ${escapeXml(input.today)}
+Where it stands: at most ${input.maxSentences} sentences. What is being done: at most ${input.maxDoing}.
+</REQUEST>`,
+  )
+}
+
+export function buildStandsPrompt(input: StandsPromptInput): string {
+  return promptText(buildStandsPromptParts(input))
+}
+
+const STANDS_RULES = `<ROLE>
+You are the editor who writes the short summary at the top of a news site's page on an ongoing development: where it stands today, and what is being done about it, from facts our research checked.
+</ROLE>
+
+<GOAL>
+Say where the development in <DEVELOPMENT> stands today and what is being done about it, each sentence citing the facts in <FACTS> that state everything it says.
+</GOAL>
+
+<RULES>
+<STANDS>
+- Lead with the development's present state: the latest figures, and who or where it affects now; then the most recent turn it took.
+- Every sentence rests on its cited facts alone: no number, place, date, cause or trend they do not state, nothing from <TIMELINE>, nothing you know from elsewhere.
+- A fact marked current="yes" may be stated as how things are now. A fact marked current="no" is past: state it only as a past value with its date written out ("As of May 12, 34 cases had been confirmed"), never as the present.
+- When facts disagree, give the newer one, or both with who reported each; never average or reconcile them.
+- Name who counted or said something when the fact credits it ("according to the health ministry").
+</STANDS>
+<DOING>
+- What is being done: responses under way, such as aid, a vaccination campaign, a ceasefire mission, a court case or a funding pledge, with who is doing them and where.
+- Only from facts marked current="yes"; the facts marked response="yes" were found for this, but any current fact that reports a response counts. A response that has ended belongs, if anywhere, in the summary, in the past tense.
+- When no current fact reports a response, return no line: an empty list, never a sentence saying that nothing is known.
+</DOING>
+- <TIMELINE> lists our stories so you know what the development is: never cite it and never state anything only it says.
+- Write in your own words: never copy more than a few words in a row from a fact, and never quote anyone.
+- Plain words and American spelling; no headline style, no rhetorical questions, no em dashes.
+- Each sentence stands on its own: no "this", "these" or "it" pointing to another sentence's subject, since a reader may see one sentence alone.
+</RULES>
+
+<FORMAT>
+Cite each fact by its id, exactly as given ("S2F1"). A sentence that cites no fact, cites an id not in <FACTS>, states a past fact without its date, or claims what its facts do not state is dropped before anyone sees it, so cite every fact a sentence uses and nothing else.
+</FORMAT>`
+
+// ---------------------------------------------------------------------------
+// Closing at the end event
+// ---------------------------------------------------------------------------
+
+export interface CloseInput {
+  charter: Charter
+  /** The story the link flagged as reporting the end event. */
+  story: LinkStory
+  /** The development's other newest stories, newest first: titles and days. */
+  entries: { title: string; date: string }[]
+}
+
+/**
+ * Cache: off. A development ends rarely, a handful of calls a month. House order: the rules first, the
+ * charter and the stories last.
+ */
+export function buildClosePrompt(input: CloseInput): string {
+  return `<ROLE>
+You are the editor who decides when a news site's timeline of an ongoing development has reached its end.
+</ROLE>
+
+<GOAL>
+Judge whether the newest story in <STORIES> reports that the development's END_EVENT, in <CHARTER>, has happened.
+</GOAL>
+
+<RULES>
+- yes only when the newest story reports the END_EVENT as having happened: declared, signed, ruled, published. An expectation, a call for it, a step toward it, a forecast or a partial end is no.
+- The event must be this development's, as the charter's IN describes it: the same kind of event elsewhere, for other parties or for anything the OUT list names is no.
+- The other stories show where the development stood before; they never count as the report.
+- Judge the texts as written; what you know from elsewhere does not count.
+</RULES>
+
+<CHARTER>
+The development's charter. ${UNTRUSTED}
+${charterBlock(input.charter)}
+</CHARTER>
+
+<STORIES>
+The development's newest stories, newest first. ${UNTRUSTED}
+${storyBlock('NEWEST', { ...input.story, facts: [] })}
+${input.entries.map(e => `<STORY_TITLE date="${escapeXml(e.date)}">${escapeXml(e.title)}</STORY_TITLE>`).join('\n')}
+</STORIES>`
+}
+
+export interface CloseCheckInput {
+  endEvent: string
+  story: LinkStory
+}
+
+/**
+ * Cache: off, as the closing call. A different framing: the end event against the story alone, with
+ * neither the charter's other parts nor the timeline, so it judges what the story itself says. House
+ * order: the rules first, the event and the story last.
+ */
+export function buildCloseCheckPrompt(input: CloseCheckInput): string {
+  return `<ROLE>
+You are a second editor who checks one claim before a news site's timeline closes.
+</ROLE>
+
+<GOAL>
+Judge whether the story in <STORY> reports that the event in <END_EVENT> has happened.
+</GOAL>
+
+<RULES>
+- yes only when the story reports the event as having happened: declared, signed, ruled, published. That it may, is expected, was called for or partly happened is no.
+- A story about the same kind of event somewhere else or for other parties is no.
+- Judge the text as written; what you know from elsewhere does not count.
+</RULES>
+
+<END_EVENT>
+${escapeXml(input.endEvent)}
+</END_EVENT>
+
+<STORY>
+${UNTRUSTED}
+${storyBlock('TEXT', { ...input.story, facts: [] })}
+</STORY>`
+}
+
+// ---------------------------------------------------------------------------
+// Reviews
+// ---------------------------------------------------------------------------
+
+export interface ReviewPromptInput {
+  title: string
+  charter: Charter
+  frozen: boolean
+  /** The active entries, oldest first, each under its id (`E1`…). */
+  entries: { ref: string; title: string; label: string; summary: string; date: string; role: Role }[]
+}
+
+/**
+ * Cache: off. Reviews are rare (at entry counts, monthly, before a closure, on a burst) and each one's
+ * input is long and its own. House order: the rules first, the overview and its entries last.
+ */
+export function buildReviewPrompt(input: ReviewPromptInput): string {
+  return `<ROLE>
+You are the senior editor who audits a news site's timeline of an ongoing development entry by entry. You may only remove or correct: never add a story, never widen what the development covers.
+</ROLE>
+
+<GOAL>
+Judge each entry in <ENTRIES> against the development's charter: whether it belongs and the role it plays; and whether the charter needs narrowing or the title correcting.
+</GOAL>
+
+<RULES>
+<ENTRY_RULES>
+- An entry belongs when the charter's IN covers what the story reports and nothing its OUT list names does: the same cause, the same place or parties at the development's scale, the same end.
+- A story about a neighboring development, the same disease or conflict elsewhere, or the development only as background to another subject does not belong, however much vocabulary, place or agency it shares with the others.
+- Judge each entry on its own text; the other entries never make one belong.
+- Give each entry the role it has in the development, as <ROLES> defines them.
+</ENTRY_RULES>
+<CHARTER_RULES>
+- Copy IN and END_EVENT exactly as given, and keep every OUT entry.
+- You may add to OUT a short phrase for each neighboring development or theme that entries you judged as not belonging show the charter attracting ('cholera in DR Congo'). Add nothing when none did.
+</CHARTER_RULES>
+<TITLE_RULES>
+- A new title only when the current one names the development wrongly or more broadly than its IN; empty otherwise. A few words, American spelling, no date unless it names the development, no period.
+</TITLE_RULES>
+- clearFreeze: only for a frozen overview, true when every entry belongs, so automation may go on; false otherwise.
+- Judge the texts as written; what you know from elsewhere does not count.
+</RULES>
+
+${ROLES}
+
+<OVERVIEW frozen="${yesNo(input.frozen)}">
+The development as the site follows it. ${UNTRUSTED}
+${tag('TITLE', input.title)}
+${charterBlock(input.charter)}
+</OVERVIEW>
+
+<ENTRIES>
+Its stories, oldest first. ${UNTRUSTED}
+${input.entries
+  .map(e =>
+    [
+      `<ENTRY id="${e.ref}" date="${escapeXml(e.date)}" role="${e.role.role}"${e.role.roleKind ? ` kind="${e.role.roleKind}"` : ''}>`,
+      tag('TITLE', e.title),
+      tag('LABEL', e.label),
+      tag('SUMMARY', e.summary),
+      '</ENTRY>',
+    ].join('\n'),
+  )
+  .join('\n')}
+</ENTRIES>`
+}
+
+// ---------------------------------------------------------------------------
 // Prompt versions
 // ---------------------------------------------------------------------------
 
@@ -222,6 +458,7 @@ const CANONICAL_STORY: LinkStory = {
   facts: ['Fact.'],
 }
 const CANONICAL_CHARTER: Charter = { in: 'In.', out: ['Out.'], endEvent: 'End.' }
+const CANONICAL_ROLE: Role = { role: 'turning_point', roleKind: 'spread' }
 
 /** The linking prompts' versions, computed once at load. */
 export const OVERVIEW_PROMPT_VERSIONS = {
@@ -235,4 +472,29 @@ export const OVERVIEW_PROMPT_VERSIONS = {
   ),
   found: promptVersionOf(buildFoundPrompt({ a: CANONICAL_STORY, b: CANONICAL_STORY }), foundSchema),
   foundCheck: promptVersionOf(buildFoundCheckPrompt({ charter: CANONICAL_CHARTER, a: CANONICAL_STORY, b: CANONICAL_STORY }), foundCheckSchema),
+  stands: promptVersionOf(
+    buildStandsPrompt({
+      title: 'Overview',
+      entries: [{ title: 'Entry', date: '2026-01-01', role: CANONICAL_ROLE }],
+      facts: [{ id: 'S1F1', text: 'Fact.', outlet: 'Outlet', date: '2026-01-01', current: true, response: false }],
+      today: '2026-01-02',
+      maxSentences: 4,
+      maxDoing: 2,
+    }),
+    standsSchema,
+  ),
+  close: promptVersionOf(
+    buildClosePrompt({ charter: CANONICAL_CHARTER, story: CANONICAL_STORY, entries: [{ title: 'Entry', date: '2026-01-01' }] }),
+    closeSchema,
+  ),
+  closeCheck: promptVersionOf(buildCloseCheckPrompt({ endEvent: 'End.', story: CANONICAL_STORY }), closeCheckSchema),
+  review: promptVersionOf(
+    buildReviewPrompt({
+      title: 'Overview',
+      charter: CANONICAL_CHARTER,
+      frozen: false,
+      entries: [{ ref: 'E1', title: 'Title', label: 'Label', summary: 'Summary.', date: '2026-01-01', role: CANONICAL_ROLE }],
+    }),
+    reviewSchema,
+  ),
 } as const

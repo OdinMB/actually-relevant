@@ -27,8 +27,8 @@ import { scoreLinking, type LinkScore, type ReplayRun } from './linkScore.js'
 import { createSandbox } from './overviewSandbox.js'
 import { buildEndEventJudgePrompt, endEventJudgeSchema } from './prompts.js'
 
-/** Production's step tiers today, as the eval's arms. */
-const TIER_ARMS: Record<'small' | 'medium' | 'large', Arm> = {
+/** Production's step tiers today, as the eval's arms (the overview steps' evals all take theirs from here). */
+export const TIER_ARMS: Record<'small' | 'medium' | 'large', Arm> = {
   small: arm('gpt-6-luna', 'low'),
   medium: arm('gpt-6-luna', 'medium'),
   large: arm('gpt-6.1-sol', 'medium'),
@@ -77,7 +77,7 @@ export interface LinkStepReport {
 }
 
 /** A model call on the eval's cache, as `structuredCall` returns it to production's steps. */
-async function evalCall<T>(ctx: SuiteContext, a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: Prompt, run: number): Promise<ModelCall<T>> {
+export async function evalCall<T>(ctx: SuiteContext, a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: Prompt, run: number): Promise<ModelCall<T>> {
   const rec = await ctx.call(a, runSchemaName(schemaName, run), schema, prompt)
   return { parsed: rec.outcome === 'ok' ? rec.parsed : null, costUsd: rec.costUsd, model: a.model }
 }

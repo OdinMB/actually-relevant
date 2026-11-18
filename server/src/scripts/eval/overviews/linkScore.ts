@@ -47,12 +47,12 @@ export interface LinkRunScore {
   mistakes: string[]
 }
 
-const ratio = (a: number, b: number): number | null => (b === 0 ? null : a / b)
-const mean = (values: (number | null)[]): number | null => {
+export const ratio = (a: number, b: number): number | null => (b === 0 ? null : a / b)
+export const mean = (values: (number | null)[]): number | null => {
   const known = values.filter((v): v is number => v !== null)
   return known.length === 0 ? null : known.reduce((s, v) => s + v, 0) / known.length
 }
-const bar = (name: string, value: number | null, target: number, direction: Bar['direction'] = 'atLeast'): Bar => ({
+export const bar = (name: string, value: number | null, target: number, direction: Bar['direction'] = 'atLeast'): Bar => ({
   name,
   value,
   target,
@@ -61,7 +61,7 @@ const bar = (name: string, value: number | null, target: number, direction: Bar[
 })
 
 /** Which development each slug is a must or optional entry of, and which it is a near miss of. */
-function keyIndex(keys: readonly AnswerKey[]) {
+export function keyIndex(keys: readonly AnswerKey[]) {
   const entry = new Map<string, { key: string; join: 'must' | 'optional'; role: Role['role'] }>()
   const nearMiss = new Map<string, string[]>()
   for (const k of keys) {
@@ -72,7 +72,7 @@ function keyIndex(keys: readonly AnswerKey[]) {
 }
 
 /** The development an overview stands for: the key most of its members are must entries of (ties to the first founded member's key); null with none. */
-function developmentOf(members: readonly string[], entry: ReturnType<typeof keyIndex>['entry']): string | null {
+export function developmentOf(members: readonly string[], entry: ReturnType<typeof keyIndex>['entry']): string | null {
   const counts = new Map<string, number>()
   for (const m of members) {
     const e = entry.get(m)

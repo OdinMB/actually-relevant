@@ -182,20 +182,20 @@ const searchFromRow = (r: SearchRow): PoolSearch => ({
   passId: r.passId,
 })
 
-/** The story's sources (`s`), in the order they were written; `only` narrows them (an `AND …` fragment). */
-const poolSources = (db: ResearchDb, storyId: string, only: Prisma.Sql = Prisma.empty) =>
-  db.$queryRaw<SourceRow[]>`
-    SELECT s.id, s.ref, s.origin, s.earlier_story_id AS "earlierStoryId", s.url, s.outlet, s.title,
+/** The stories' sources (`s`), in the order they were written; `only` narrows them (an `AND …` fragment). */
+const poolSources = (db: ResearchDb, storyIds: readonly string[], only: Prisma.Sql = Prisma.empty) =>
+  db.$queryRaw<(SourceRow & { storyId: string })[]>`
+    SELECT s.id, s.story_id AS "storyId", s.ref, s.origin, s.earlier_story_id AS "earlierStoryId", s.url, s.outlet, s.title,
            s.published_date AS "publishedDate", s.kind, s.country, s.relation, s.favicon,
            s.used_raw_content AS "usedRawContent", s.voices, s.opt_out_checked AS "optOutChecked",
            s.first_pass_id AS "firstPassId", s.drop_reason AS "dropReason", s.drop_pass_id AS "dropPassId"
-    FROM evidence_sources s WHERE s.story_id = ${storyId} ${only}
+    FROM evidence_sources s WHERE s.story_id = ANY(${[...storyIds]}::text[]) ${only}
     ORDER BY s.created_at, s.ref NULLS LAST, s.id`
 
-/** The story's facts (`f`, their source `s`), in the order they were written; `only` narrows them (an `AND …` fragment). */
-const poolFacts = (db: ResearchDb, storyId: string, only: Prisma.Sql = Prisma.empty) =>
-  db.$queryRaw<FactRow[]>`
-    SELECT f.id, f.ref, s.ref AS "sourceRef", f.reused_from_id AS "reusedFromId", f.supporting_sentence AS "supportingSentence",
+/** The stories' facts (`f`, their source `s`), in the order they were written; `only` narrows them (an `AND …` fragment). */
+const poolFacts = (db: ResearchDb, storyIds: readonly string[], only: Prisma.Sql = Prisma.empty) =>
+  db.$queryRaw<(FactRow & { storyId: string })[]>`
+    SELECT f.id, f.story_id AS "storyId", f.ref, s.ref AS "sourceRef", f.reused_from_id AS "reusedFromId", f.supporting_sentence AS "supportingSentence",
            f.passage, f.support_found AS "supportFound", f.statement, f.measures, f.value, f.value_high AS "valueHigh",
            f.unit, f.approx, f.provisional, f.counted, f.place, f.as_of AS "asOf", f.as_of_precision AS "asOfPrecision",
            f.credited, f.credited_kind AS "creditedKind", f.validity::text AS validity, f.slot,
@@ -206,17 +206,17 @@ const poolFacts = (db: ResearchDb, storyId: string, only: Prisma.Sql = Prisma.em
            f.status::text AS status, f.dropped_pass_id AS "droppedPassId", f.drop_reason::text AS "dropReason",
            f.contradicted_by AS "contradictedBy"
     FROM pool_facts f JOIN evidence_sources s ON s.id = f.source_id
-    WHERE f.story_id = ${storyId} ${only}
+    WHERE f.story_id = ANY(${[...storyIds]}::text[]) ${only}
     ORDER BY f.created_at, f.ref, f.id`
 
 /** The sources in use: a source left out has no ref, or a reason. */
-const usedSources = (sources: SourceRow[]) => sources.filter((s): s is SourceRow & { ref: string } => s.ref !== null && s.dropReason === null)
+const usedSources = <T extends SourceRow>(sources: T[]) => sources.filter((s): s is T & { ref: string } => s.ref !== null && s.dropReason === null)
 
 /** The story's pool, in the order its rows were written: within one pass, sources and facts by ref, coverage searches before gap searches. */
 export async function loadPool(db: ResearchDb, storyId: string): Promise<Pool> {
   const [sources, facts, searches] = await Promise.all([
-    poolSources(db, storyId),
-    poolFacts(db, storyId),
+    poolSources(db, [storyId]),
+    poolFacts(db, [storyId]),
     db.$queryRaw<SearchRow[]>`
       SELECT e.kind, e.slot, e.angle, e.query, e.normalized_query AS "normalizedQuery", e.window_start AS "windowStart",
              e.window_end AS "windowEnd", e.depth, e.credits, e.results, e.cached, e.pass_id AS "passId"
@@ -234,10 +234,36 @@ export async function loadPool(db: ResearchDb, storyId: string): Promise<Pool> {
 export async function loadCitedFacts(db: ResearchDb, storyId: string, refs: string[]): Promise<Pick<Pool, 'sources' | 'facts'>> {
   if (refs.length === 0) return { sources: [], facts: [] }
   const [sources, facts] = await Promise.all([
-    poolSources(db, storyId, Prisma.sql`AND EXISTS (SELECT 1 FROM pool_facts c WHERE c.source_id = s.id AND c.ref = ANY(${refs}))`),
-    poolFacts(db, storyId, Prisma.sql`AND f.ref = ANY(${refs})`),
+    poolSources(db, [storyId], Prisma.sql`AND EXISTS (SELECT 1 FROM pool_facts c WHERE c.source_id = s.id AND c.ref = ANY(${refs}))`),
+    poolFacts(db, [storyId], Prisma.sql`AND f.ref = ANY(${refs})`),
   ])
   return { sources: usedSources(sources).map(sourceFromRow), facts: facts.map(factFromRow) }
+}
+
+/** A fact of a story's pool with its story and its source. */
+export interface StoryPoolFact {
+  storyId: string
+  fact: PoolFact
+  source: PoolSource
+}
+
+/**
+ * The usable, structured facts of pages in these stories' pools, each with its story and its source in
+ * use, read as `loadPool` reads them and in its order: what an overview's "Where this stands" is
+ * written from (`overviewStands.ts`). Our own earlier stories' facts are never read.
+ */
+export async function loadMemberFacts(db: ResearchDb, storyIds: readonly string[]): Promise<StoryPoolFact[]> {
+  const ids = [...new Set(storyIds)]
+  if (ids.length === 0) return []
+  const [sources, facts] = await Promise.all([
+    poolSources(db, ids, Prisma.sql`AND s.origin <> 'earlier'`),
+    poolFacts(db, ids, Prisma.sql`AND s.origin <> 'earlier' AND f.verdict = 'supported' AND f.status <> 'demoted' AND f.structure_model IS NOT NULL`),
+  ])
+  const sourceOf = new Map(usedSources(sources).map(s => [`${s.storyId}:${s.ref}`, sourceFromRow(s)]))
+  return facts.flatMap(r => {
+    const source = sourceOf.get(`${r.storyId}:${r.sourceRef}`)
+    return source ? [{ storyId: r.storyId, fact: factFromRow(r), source }] : []
+  })
 }
 
 // A change stored before changes carried `from` was at its own place: no section had moved yet

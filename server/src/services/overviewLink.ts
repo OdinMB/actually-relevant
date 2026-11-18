@@ -180,7 +180,8 @@ export interface LinkResult {
   error?: unknown
 }
 
-const roleOf = (r: { role: Role['role']; roleKind: Role['roleKind'] }): Role => ({ role: r.role, roleKind: r.role === 'routine' ? null : r.roleKind })
+/** A role as a model answered it: a routine entry has no kind. */
+export const roleOf = (r: { role: Role['role']; roleKind: Role['roleKind'] }): Role => ({ role: r.role, roleKind: r.role === 'routine' ? null : r.roleKind })
 
 const blank = (story: LinkStory, outcome: LinkResult['outcome']): LinkResult => ({
   story,

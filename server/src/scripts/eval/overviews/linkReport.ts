@@ -10,7 +10,8 @@ import type { Bar } from './linkScore.js'
 const value = (b: Bar) => (b.value === null ? 'n/a' : b.direction === 'atMost' ? b.value.toFixed(2) : `${(b.value * 100).toFixed(1)}%`)
 const target = (b: Bar) => (b.direction === 'atMost' ? `at most ${b.target}` : `at least ${Math.round(b.target * 100)}%`)
 const verdict = (b: Bar) => (b.met === null ? 'no data' : b.met ? 'met' : 'not met')
-const rows = (bars: Bar[]) => bars.map(b => `| ${b.name} | ${target(b)} | ${value(b)} | ${verdict(b)} |`)
+/** One table row per bar: its name, target, mean and verdict. */
+export const rows = (bars: Bar[]) => bars.map(b => `| ${b.name} | ${target(b)} | ${value(b)} | ${verdict(b)} |`)
 
 export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): string[] {
   const shown = (step: OverviewStep) => steps.includes(step)
