@@ -53,7 +53,7 @@ Write the news search queries that find other reports of the main development in
 </GOAL>
 
 <REQUIREMENTS>
-- As many queries as <REQUEST> gives, in the languages it names. A query in the article's language is phrased as a native headline would put it rather than translated word for word.
+- As many queries as <REQUEST> gives, in the languages it names. A query in a language other than English is phrased as a native headline would put it rather than translated word for word.
 - Each query names the development's main actors, its action and its place, the words another outlet's headline about the same development would use.
 - A query is about the main development of <ARTICLE>, never about its background or a side remark.
 - A query never names the publisher of <ARTICLE>: coverage by other outlets is what is wanted.
