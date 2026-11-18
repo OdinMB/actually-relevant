@@ -39,6 +39,8 @@ import type {
   ResearchBulkApplyOutcome,
   ResearchRun,
   ResearchUsage,
+  PassUsage,
+  StoryPasses,
   SpendScope,
   SpendingOverview,
   StoryContextAdmin,
@@ -377,6 +379,19 @@ export const adminApi = {
       request<{ outcomes: ResearchBulkApplyOutcome[] }>('/research/apply', { method: 'POST', body: JSON.stringify({ storyIds }) }),
     /** Give the story its single-source analysis back; 409 without a researched version or on a trashed story. */
     revert: (storyId: string) => request<void>(`/research/stories/${storyId}/revert`, { method: 'POST' }),
+  },
+
+  // Research passes (.context/research-passes.md, "Admin routes"): a pass applies itself; every start is refused while the step is off. A backend without them answers 404.
+  researchPasses: {
+    usage: () => request<PassUsage>('/research-passes/usage'),
+    /** The story's passes, versions, evidence pool and legacy runs; 404 for an unknown story. */
+    story: (storyId: string) => request<StoryPasses>(`/research-passes/stories/${storyId}`),
+    /** "Research again": one pass of the story, a task to poll; 409 with the reason when it cannot start now. */
+    start: (storyId: string) => request<{ taskId: string; passId: string }>(`/research-passes/stories/${storyId}/passes`, { method: 'POST' }),
+    /** A pass of each of up to 50 stories as one task (poll `stories.taskStatus`); a story that can't take one is skipped there with the reason. */
+    startBulk: (storyIds: string[]) => request<{ taskId: string }>('/research-passes/passes', { method: 'POST', body: JSON.stringify({ storyIds }) }),
+    /** "Undo this update": the version before the current update goes back on the story; 409 when there is no update to undo or the story changed. */
+    undo: (storyId: string) => request<void>(`/research-passes/stories/${storyId}/undo`, { method: 'POST' }),
   },
 
   // A story's context cards (.context/story-context.md, "Admin"): hiding or moving one is the one way a person changes them

@@ -2,16 +2,17 @@ import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { ContextAdminRun, ResearchUsage, Story, StoryContextAdmin, StoryStatus, TaskState } from '@shared/types'
+import type { ContextAdminRun, PassUsage, ResearchUsage, Story, StoryContextAdmin, StoryStatus, TaskState } from '@shared/types'
 import { ToastProvider } from '../ui/Toast'
 import { BackgroundTaskProvider } from '../../hooks/useBackgroundTasks'
 
 const mockStories = vi.hoisted(() => ({ preassess: vi.fn(), assess: vi.fn(), publish: vi.fn(), updateStatus: vi.fn(), taskStatus: vi.fn() }))
 const mockResearch = vi.hoisted(() => ({ usage: vi.fn(), runs: vi.fn(), start: vi.fn() }))
 const mockContext = vi.hoisted(() => ({ get: vi.fn(), gather: vi.fn() }))
+const mockPasses = vi.hoisted(() => ({ usage: vi.fn(), story: vi.fn(), start: vi.fn() }))
 vi.mock('../../lib/admin-api', async importOriginal => ({
   ...(await importOriginal<typeof import('../../lib/admin-api')>()),
-  adminApi: { stories: mockStories, research: mockResearch, storyContext: mockContext },
+  adminApi: { stories: mockStories, research: mockResearch, storyContext: mockContext, researchPasses: mockPasses },
 }))
 
 import { ApiError } from '../../lib/admin-api'
@@ -100,6 +101,66 @@ beforeEach(() => {
   mockContext.get.mockResolvedValue(contextView())
   mockContext.gather.mockResolvedValue({ taskId: 'task-1', runId: 'run-2' })
   mockStories.taskStatus.mockResolvedValue(task())
+  mockPasses.usage.mockResolvedValue(passUsage({ on: false, refusal: 'Research passes are switched off: their evals have not passed yet' }))
+  mockPasses.story.mockResolvedValue({ passes: [], versions: [], pool: { sources: [], facts: [], searches: [], dropped: [] }, legacyRuns: [] })
+  mockPasses.start.mockResolvedValue({ taskId: 'task-1', passId: 'pass-1' })
+})
+
+const passUsage = (over: Partial<PassUsage> = {}): PassUsage => ({
+  spentUsd: 1,
+  capUsd: 30,
+  firstPassUsd: 0.4,
+  laterPassUsd: 0.25,
+  refusal: null,
+  on: true,
+  ...over,
+})
+
+describe('StoryActionBar with research passes', () => {
+  it('offers Research and Gather context as before while the step is off, and no "Research again"', async () => {
+    renderBar('published')
+    await findAction('Research')
+    await findAction('Gather context')
+    expect(within(bar()).queryByRole('button', { name: 'Research again' })).not.toBeInTheDocument()
+  })
+
+  it('offers "Research again" in their place while the step is on, and starts a pass of the story', async () => {
+    const user = userEvent.setup()
+    mockPasses.usage.mockResolvedValue(passUsage())
+    renderBar('published')
+    await user.click(await findAction('Research again'))
+    await waitFor(() => expect(mockPasses.start).toHaveBeenCalledWith('story-1'))
+    expect(within(bar()).queryByRole('button', { name: 'Research' })).not.toBeInTheDocument()
+    expect(within(bar()).queryByRole('button', { name: /Gather/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps "Research again" closed with the reason while no pass can start, or one of the story is running', async () => {
+    mockPasses.usage.mockResolvedValue(passUsage({ refusal: "This month's research cap is reached" }))
+    const { unmount } = renderBar('selected')
+    await waitFor(() => closed(action('Research again'), "This month's research cap is reached"))
+    unmount()
+
+    mockPasses.usage.mockResolvedValue(passUsage())
+    mockPasses.story.mockResolvedValue({
+      passes: [{ id: 'pass-1', status: 'running' }],
+      versions: [],
+      pool: { sources: [], facts: [], searches: [], dropped: [] },
+      legacyRuns: [],
+    })
+    renderBar('selected')
+    await waitFor(() => closed(action('Research again'), /in progress/))
+  })
+
+  it('asks before "Research again" while edits are unsaved, and discards them on confirm', async () => {
+    const user = userEvent.setup()
+    mockPasses.usage.mockResolvedValue(passUsage())
+    const { onDiscard } = renderBar('analyzed', { dirty: true })
+    await user.click(await findAction('Research again'))
+    expect(mockPasses.start).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Discard and research again' }))
+    expect(onDiscard).toHaveBeenCalled()
+    await waitFor(() => expect(mockPasses.start).toHaveBeenCalledWith('story-1'))
+  })
 })
 
 describe('StoryActionBar', () => {

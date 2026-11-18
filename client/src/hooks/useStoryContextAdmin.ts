@@ -30,13 +30,14 @@ export function useStoryContextAdmin(storyId: string) {
 }
 
 /**
- * Whether the story page shows its Context section: once the story has a context run or can have one
- * gathered (`gather.eligible`: published, with research facts), or to say its context could not be
- * loaded. A backend without context answers 404, which the query reads as null.
+ * Whether the story page shows its Context section: once the story has a context run or cards a
+ * research pass wrote, or can have context gathered (`gather.eligible`: published, with research
+ * facts), or to say its context could not be loaded. A backend without context answers 404, which
+ * the query reads as null.
  */
 export function contextShown(query: { data: StoryContextAdmin | null | undefined; isError: boolean }): boolean {
   if (query.isError) return true
-  return !!query.data && (!!query.data.run || !!query.data.gather?.eligible)
+  return !!query.data && (!!query.data.run || !!query.data.pass || !!query.data.gather?.eligible)
 }
 
 /** After a change, the admin's view and any cached story page's context are read again. */

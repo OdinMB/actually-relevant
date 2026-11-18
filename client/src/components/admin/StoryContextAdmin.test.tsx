@@ -178,6 +178,23 @@ describe('StoryContextAdmin', () => {
     expect(screen.queryByText(/could not be loaded/)).toBeNull()
   })
 
+  it('names the research pass that wrote the cards, and shows them for a story with no context run', async () => {
+    mockContext.get.mockResolvedValue(
+      view({ run: null, gather: { eligible: false, refusal: 'x' }, pass: { id: 'pass-2', number: 2, writtenAt: '2026-11-16T09:03:00Z' } }),
+    )
+    renderSection()
+    const region = await section()
+    expect(region).toHaveTextContent(/Research pass 2 wrote these cards on .+\./)
+    expect(within(region).getByText('Heading a')).toBeInTheDocument()
+    expect(within(region).queryByText('What the run did')).toBeNull()
+
+    // A legacy run's summary would describe cards no longer shown
+    mockContext.get.mockResolvedValue(view({ pass: { id: 'pass-2', number: 2, writtenAt: '2026-11-16T09:03:00Z' } }))
+    renderSection()
+    await waitFor(() => expect(screen.getAllByRole('region', { name: 'Context' })).toHaveLength(2))
+    expect(screen.queryByText('What the run did')).toBeNull()
+  })
+
   it('says so when the context cannot be loaded', async () => {
     mockContext.get.mockRejectedValue(new ApiError(500, 'Failed to fetch the story context'))
     renderSection()

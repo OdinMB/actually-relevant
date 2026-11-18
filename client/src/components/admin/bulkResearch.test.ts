@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import type { ResearchBulkApplyOutcome, ResearchUsage, TaskState } from '@shared/types'
+import type { PassUsage, ResearchBulkApplyOutcome, ResearchUsage, TaskState } from '@shared/types'
 import {
   bulkApplyConfirmation,
   bulkApplyOutcome,
   bulkApplyRefusal,
+  bulkPassConfirmation,
+  bulkPassOutcome,
+  bulkPassRefusal,
   bulkResearchConfirmation,
   bulkResearchOutcome,
   bulkResearchRefusal,
@@ -124,6 +127,69 @@ describe('bulkApplyRefusal', () => {
     expect(bulkApplyRefusal(RESEARCH_BULK_MAX, usage(), false)).toBeNull()
     expect(bulkApplyRefusal(RESEARCH_BULK_MAX + 1, usage(), false)).toEqual(expect.any(String))
     expect(bulkApplyRefusal(3, undefined, true)).toEqual(expect.any(String))
+  })
+})
+
+const passUsage = (over: Partial<PassUsage> = {}): PassUsage => ({
+  spentUsd: 1,
+  capUsd: 30,
+  firstPassUsd: 0.4,
+  laterPassUsd: 0.25,
+  refusal: null,
+  on: true,
+  ...over,
+})
+
+describe('bulkPassRefusal', () => {
+  it('leaves "Research again" out while the step is off, against a backend without passes, and while its usage loads', () => {
+    expect(bulkPassRefusal(3, passUsage({ on: false }))).toBeUndefined()
+    expect(bulkPassRefusal(3, passUsage({ on: false, refusal: 'Research passes are switched off' }))).toBeUndefined()
+    expect(bulkPassRefusal(3, null)).toBeUndefined()
+    expect(bulkPassRefusal(3, undefined)).toBeUndefined()
+  })
+
+  it('gives the reason no pass can start now, or none, and refuses more stories than one bulk takes', () => {
+    expect(bulkPassRefusal(3, passUsage({ refusal: "This month's research cap is reached" }))).toBe("This month's research cap is reached")
+    expect(bulkPassRefusal(RESEARCH_BULK_MAX, passUsage())).toBeNull()
+    expect(bulkPassRefusal(RESEARCH_BULK_MAX + 1, passUsage())).toEqual(expect.any(String))
+  })
+})
+
+describe('bulkPassConfirmation', () => {
+  it('says the passes apply themselves, with the count and every pass at a first pass’s reservation as the bound', () => {
+    const { title, description } = bulkPassConfirmation(10, passUsage())
+    expect(title).toBe('Research 10 stories again?')
+    expect(description).toMatch(/applies its own result/)
+    expect(description).toContain('Undo this update')
+    expect(description).toContain('$4.00')
+    expect(description).toContain('This month: $1.00 of $30.00 spent.')
+  })
+
+  it("names what is left of the month's cap when the bound passes it", () => {
+    expect(bulkPassConfirmation(10, passUsage({ spentUsd: 28 })).description).toContain('$2.00 left this month')
+  })
+})
+
+describe('bulkPassOutcome', () => {
+  const chosen = [
+    { id: 's1', title: 'Floods in Kerala' },
+    { id: 's2', title: 'Rail strike ends' },
+  ]
+
+  it('counts the stories researched, failed and skipped, names the skipped ones, and claims nothing about applying', () => {
+    const { message, sticky } = bulkPassOutcome(
+      'Researching 2 stories again',
+      task({ completed: 1, skipped: [{ storyId: 's2', reason: 'A research pass of this story is in progress' }] }),
+      chosen,
+    )
+    expect(message).toMatch(/1 researched.*1 skipped/)
+    expect(message).toContain('Rail strike ends')
+    expect(message).not.toMatch(/Nothing was applied/)
+    expect(sticky).toBe(true)
+  })
+
+  it('fades when every story was researched', () => {
+    expect(bulkPassOutcome('Researching 2 stories again', task({ completed: 2 }), chosen).sticky).toBe(false)
   })
 })
 

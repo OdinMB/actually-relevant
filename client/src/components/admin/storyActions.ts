@@ -5,7 +5,7 @@ import type { Story, StoryStatus } from '@shared/types'
  * and why one cannot run now. Each runs as the stories list runs it (`useStoryActions`).
  */
 
-export type StoryAction = 'preassess' | 'assess' | 'reassess' | 'publish' | 'research' | 'gather' | 'reject' | 'trash'
+export type StoryAction = 'preassess' | 'assess' | 'reassess' | 'publish' | 'research' | 'gather' | 'research-again' | 'reject' | 'trash'
 
 /** The labels of the actions; Gather context's depends on the story's runs, so the bar names it. */
 export const ACTION_LABELS: Record<Exclude<StoryAction, 'gather'>, string> = {
@@ -14,6 +14,7 @@ export const ACTION_LABELS: Record<Exclude<StoryAction, 'gather'>, string> = {
   reassess: 'Re-assess',
   publish: 'Publish',
   research: 'Research',
+  'research-again': 'Research again',
   reject: 'Reject',
   trash: 'Trash',
 }
@@ -24,7 +25,8 @@ export const ACTION_LABELS: Record<Exclude<StoryAction, 'gather'>, string> = {
  * Publish on every status but published, an editor's publish being the override from rejected and
  * trashed too; Re-assess once a story was assessed or rejected (the server refuses a trashed one);
  * Research where a run may start (`RESEARCHABLE` in `hooks/useResearch.ts`); Gather context on a published
- * story; Reject and Trash on every status but their own.
+ * story; Reject and Trash on every status but their own. `statusActions` swaps in "Research again"
+ * while research passes are on.
  */
 const STATUS_ACTIONS: Record<StoryStatus, { primary: StoryAction | null; others: StoryAction[] }> = {
   fetched: { primary: 'preassess', others: ['publish', 'reject', 'trash'] },
@@ -36,8 +38,14 @@ const STATUS_ACTIONS: Record<StoryStatus, { primary: StoryAction | null; others:
   trashed: { primary: null, others: ['publish', 'reject'] },
 }
 
-export function statusActions(status: StoryStatus): { primary: StoryAction | null; others: StoryAction[] } {
-  return STATUS_ACTIONS[status]
+/**
+ * While research passes are on (`PassUsage.on`), "Research again" stands where Research stood and
+ * Gather context goes: one pass does both. Off, the bar offers what it offered before passes.
+ */
+export function statusActions(status: StoryStatus, { passes = false }: { passes?: boolean } = {}): { primary: StoryAction | null; others: StoryAction[] } {
+  const offered = STATUS_ACTIONS[status]
+  if (!passes) return offered
+  return { ...offered, others: offered.others.flatMap((a): StoryAction[] => (a === 'research' ? ['research-again'] : a === 'gather' ? [] : [a])) }
 }
 
 /** What an action changes on the story, in words ("Publishing changes …"), for the actions that write its fields or status. */
@@ -46,6 +54,8 @@ const CHANGES: Partial<Record<StoryAction, { doing: string; verb: string }>> = {
   assess: { doing: 'Assessing', verb: 'assess' },
   reassess: { doing: 'Re-assessing', verb: 're-assess' },
   publish: { doing: 'Publishing', verb: 'publish' },
+  // A pass applies its own result to the story's fields
+  'research-again': { doing: 'Researching again', verb: 'research again' },
   reject: { doing: 'Rejecting', verb: 'reject' },
   trash: { doing: 'Trashing', verb: 'trash' },
 }
@@ -63,7 +73,8 @@ export interface ActionConfirmation {
  * What the bar asks before an action, or null to run it at once. An action that writes the story's
  * fields or status asks while edits are unsaved, and confirming discards them: kept, they would hold
  * the old values and a later Save would write them back over what the action did. Research and
- * Gather context write nothing on the story, so they never ask. Re-assess always asks, as the bulk
+ * Gather context write nothing on the story, so they never ask; "Research again" applies its pass's
+ * result, so it asks as the other writing actions do. Re-assess always asks, as the bulk
  * Assess does: it replaces the AI-written fields an editor or research may have written.
  */
 export function actionConfirmation(action: StoryAction, { dirty, researched }: { dirty: boolean; researched: boolean }): ActionConfirmation | null {

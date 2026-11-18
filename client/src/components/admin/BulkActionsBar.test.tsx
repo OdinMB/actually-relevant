@@ -126,6 +126,26 @@ describe('BulkActionsBar', () => {
     expect(onAction).not.toHaveBeenCalled()
   })
 
+  it('offers no "Research again" while research passes are off', () => {
+    render(<BulkActionsBar count={3} onAction={vi.fn()} researchRefusal={null} />)
+    expect(screen.queryByRole('button', { name: 'Research again' })).not.toBeInTheDocument()
+  })
+
+  it('starts a research pass of the selection with "Research again", and keeps it inert with its reason when no pass can start', async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    const { rerender } = render(<BulkActionsBar count={3} onAction={onAction} researchAgainRefusal={null} />)
+    await user.click(screen.getByRole('button', { name: 'Research again' }))
+    expect(onAction).toHaveBeenCalledWith('research-again')
+
+    onAction.mockClear()
+    rerender(<BulkActionsBar count={3} onAction={onAction} researchAgainRefusal="This month's research cap is reached" />)
+    const button = screen.getByRole('button', { name: 'Research again' })
+    expect(button).toHaveAccessibleDescription("This month's research cap is reached")
+    await user.click(button)
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
   it('does not disable Bluesky pick button for multiple stories regardless of singleHasBlueskyPost', () => {
     render(<BulkActionsBar count={3} onAction={vi.fn()} allPublished singleHasBlueskyPost />)
     expect(screen.getByRole('button', { name: 'Pick Best for Bluesky' })).toBeEnabled()

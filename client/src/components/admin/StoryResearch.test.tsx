@@ -1,15 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { EmotionTag, ResearchResult, ResearchRun, ResearchUsage, ResearchVerdict, Story } from '@shared/types'
+import type {
+  ArticleVersionView,
+  EmotionTag,
+  PassUsage,
+  ResearchPass,
+  ResearchResult,
+  ResearchRun,
+  ResearchUsage,
+  ResearchVerdict,
+  Story,
+  StoryPasses,
+} from '@shared/types'
 import { ToastProvider } from '../ui/Toast'
 import { BackgroundTaskProvider } from '../../hooks/useBackgroundTasks'
 
 const mockResearch = vi.hoisted(() => ({ usage: vi.fn(), runs: vi.fn(), start: vi.fn(), apply: vi.fn(), revert: vi.fn() }))
 const mockStories = vi.hoisted(() => ({ taskStatus: vi.fn() }))
+const mockPasses = vi.hoisted(() => ({ usage: vi.fn(), story: vi.fn(), undo: vi.fn() }))
 vi.mock('../../lib/admin-api', async importOriginal => ({
   ...(await importOriginal<typeof import('../../lib/admin-api')>()),
-  adminApi: { research: mockResearch, stories: mockStories },
+  adminApi: { research: mockResearch, stories: mockStories, researchPasses: mockPasses },
 }))
 
 import { ApiError } from '../../lib/admin-api'
@@ -79,6 +91,9 @@ function researchResult(verdict: ResearchVerdict): ResearchResult {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // A backend from before research passes, unless a test says otherwise
+  mockPasses.usage.mockRejectedValue(new ApiError(404, 'Not found'))
+  mockPasses.story.mockRejectedValue(new ApiError(404, 'Not found'))
   mockResearch.usage.mockResolvedValue(usage())
   mockResearch.runs.mockResolvedValue([])
   mockResearch.start.mockResolvedValue({ taskId: 'task-1', runId: 'run-1' })
@@ -265,6 +280,221 @@ describe('StoryResearch', () => {
     mockResearch.usage.mockRejectedValue(new ApiError(500, 'Internal error'))
     renderSection()
     expect(await screen.findByText("This month's research usage could not be loaded.")).toBeInTheDocument()
+  })
+})
+
+describe('StoryResearch with research passes', () => {
+  const passUsage = (over: Partial<PassUsage> = {}): PassUsage => ({
+    spentUsd: 2,
+    capUsd: 30,
+    firstPassUsd: 0.4,
+    laterPassUsd: 0.25,
+    refusal: null,
+    on: true,
+    ...over,
+  })
+  const projection = { paragraphs: [], whyThisMatters: [], caveats: [], quoteSourceId: null, sources: [] }
+  const version = (over: Partial<ArticleVersionView>): ArticleVersionView => ({
+    id: 'v1',
+    number: 1,
+    kind: 'first',
+    status: 'superseded',
+    passId: 'pass-1',
+    title: 'Researched headline',
+    createdAt: '2026-11-14T02:00:00Z',
+    research: projection,
+    changes: [],
+    note: null,
+    ...over,
+  })
+  const pass = (over: Partial<ResearchPass>): ResearchPass => ({
+    id: 'pass-1',
+    number: 1,
+    trigger: 'pipeline',
+    kind: 'first',
+    status: 'completed',
+    outcome: 'written',
+    verdict: 'keep',
+    costUsd: 0.18,
+    modelUsd: 0.12,
+    tavilyCredits: 7,
+    error: null,
+    startedAt: '2026-11-14T02:00:00Z',
+    finishedAt: '2026-11-14T02:03:00Z',
+    versionId: 'v1',
+    record: null,
+    ...over,
+  })
+  const later = pass({
+    id: 'pass-2',
+    number: 2,
+    trigger: 'editor',
+    kind: 'later',
+    outcome: 'updated',
+    verdict: null,
+    costUsd: 0.09,
+    versionId: 'v2',
+    startedAt: '2026-11-16T09:00:00Z',
+    record: {
+      skippedQueries: ['kenya floods'],
+      cards: 'kept',
+      cardsError: null,
+      update: {
+        calls: [],
+        judgments: [
+          { label: 'Story paragraph 1', verdict: 'wrong', factIds: ['S3F1'], reason: 'The toll was revised', outcome: 'rewrite', founding: ['S3F1'] },
+          { label: 'Caveat 1', verdict: 'unchanged', factIds: [], reason: '', outcome: 'unchanged', founding: [] },
+        ],
+        demoted: [{ ref: 'S1F1', contradictedBy: ['S3F1'], reason: 'The ministry revised the count' }],
+        superseded: [],
+        checks: [],
+        problems: [],
+        failedOn: null,
+        note: { text: 'n', fallback: false, problems: [], checked: 1, copied: 0 },
+        error: null,
+      },
+    },
+  })
+  const passes = (over: Partial<StoryPasses> = {}): StoryPasses => ({
+    passes: [later, pass({})],
+    versions: [
+      version({
+        id: 'v2',
+        number: 2,
+        kind: 'update',
+        status: 'current',
+        passId: 'pass-2',
+        createdAt: '2026-11-16T09:03:00Z',
+        changes: [
+          {
+            section: 'Story paragraph 1',
+            from: 'Story paragraph 1',
+            before: { text: 'The toll stood at 180.', citations: [] },
+            after: { text: 'The toll rose to 212.', citations: [] },
+          },
+        ],
+        note: { text: 'The death toll was revised to 212 from 180.', citations: [] },
+      }),
+      version({}),
+    ],
+    pool: {
+      sources: [
+        {
+          id: 'src-1',
+          ref: 'S1',
+          origin: 'search',
+          url: 'https://one.example/a',
+          outlet: 'One',
+          title: 'T',
+          date: null,
+          kind: 'news-report',
+          firstPassId: 'pass-1',
+        },
+      ],
+      facts: [
+        {
+          id: 'f-1',
+          ref: 'S1F1',
+          sourceRef: 'S1',
+          supportingSentence: 'The toll stood at 180.',
+          statement: '180 people died.',
+          slot: null,
+          verdict: 'supported',
+          verdictProblem: null,
+          checkedBy: { model: 'm', promptVersion: 'p', passId: 'pass-1' },
+          status: 'demoted',
+          firstPassId: 'pass-1',
+          drop: { passId: 'pass-2', reason: 'contradicted', contradictedBy: ['S3F1'] },
+        },
+      ],
+      searches: [{ kind: 'coverage', slot: null, angle: null, query: 'kenya floods toll', credits: 2, results: 5, cached: false, passId: 'pass-2' }],
+      dropped: [],
+    },
+    legacyRuns: [
+      {
+        id: 'run-1',
+        storyId: 'story-1',
+        status: 'completed',
+        trigger: 'editor',
+        verdict: 'keep',
+        costUsd: 0.04,
+        tavilyCredits: 2,
+        error: null,
+        startedAt: '2026-11-12T10:00:00Z',
+        finishedAt: '2026-11-12T10:01:00Z',
+        result: researchResult({ kind: 'keep' }),
+        cost: null,
+      },
+    ],
+    ...over,
+  })
+
+  beforeEach(() => {
+    mockPasses.usage.mockResolvedValue(passUsage())
+    mockPasses.story.mockResolvedValue(passes())
+    mockPasses.undo.mockResolvedValue(undefined)
+  })
+
+  it('says a pass applies itself, with what each kind reserves, and lists the passes newest first, then the legacy runs', async () => {
+    renderSection('published', { title: 'Single-source headline' })
+    expect(await screen.findByText(/A research pass applies its own result/)).toHaveTextContent(
+      /This month: \$2\.00 of \$30\.00 spent; a first pass reserves \$0\.40 and a later one \$0\.25 until it ends\./,
+    )
+    const select = await screen.findByRole('combobox', { name: 'Pass or run' })
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map(o => o.textContent),
+    ).toEqual([
+      expect.stringMatching(/^Pass 2 · .* · editor · updated · \$0\.090$/),
+      expect.stringMatching(/^Pass 1 · .* · pipeline · written · \$0\.180$/),
+      expect.stringMatching(/^Research run · .* · editor · Keep · \$0\.040$/),
+    ])
+  })
+
+  it('shows the newest pass: each section’s judgment, its text before and after, the Update note, and the fact it demoted with why', async () => {
+    renderSection('published', { title: 'Single-source headline' })
+    expect(await screen.findByText(/Updated: the sections below were rewritten/)).toBeInTheDocument()
+    expect(screen.getByText(/wrong now, rewritten/)).toBeInTheDocument()
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === 'Before The toll stood at 180.')).toBeInTheDocument()
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === 'After The toll rose to 212.')).toBeInTheDocument()
+    expect(screen.getByText('The death toll was revised to 212 from 180.')).toBeInTheDocument()
+    expect(screen.getByText(/contradicted by S3F1: The ministry revised the count/)).toBeInTheDocument()
+    expect(screen.getByText('kenya floods')).toBeInTheDocument()
+  })
+
+  it('shows a legacy run read-only while the step is on: no "Use this version"', async () => {
+    renderSection('published', { title: 'Single-source headline' })
+    const select = await screen.findByRole('combobox', { name: 'Pass or run' })
+    fireEvent.change(select, { target: { value: 'run:run-1' } })
+    expect(await screen.findByText('Researched headline', { selector: 'h3' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Use this version' })).toBeNull()
+  })
+
+  it('undoes the current update once the editor confirms', async () => {
+    renderSection('published', { title: 'Single-source headline' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo this update' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent(/back to version 1/)
+    expect(mockPasses.undo).not.toHaveBeenCalled()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Undo this update' }))
+    await waitFor(() => expect(mockPasses.undo).toHaveBeenCalledWith('story-1'))
+  })
+
+  it('offers no undo while the current version is the first pass’s', async () => {
+    mockPasses.story.mockResolvedValue(passes({ passes: [pass({})], versions: [version({ status: 'current' })] }))
+    renderSection('published', { title: 'Single-source headline' })
+    await screen.findByRole('combobox', { name: 'Pass or run' })
+    expect(screen.queryByRole('button', { name: 'Undo this update' })).toBeNull()
+  })
+
+  it('stays as research’s tab while the step is off and the story has no pass', async () => {
+    mockPasses.usage.mockResolvedValue(passUsage({ on: false, refusal: 'Research passes are switched off' }))
+    mockPasses.story.mockResolvedValue(passes({ passes: [], versions: [] }))
+    renderSection()
+    expect(await screen.findByText(/a run you start changes nothing on the story until you use its version/)).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Pass or run' })).toBeNull()
+    expect(screen.queryByText(/research pass/i)).toBeNull()
   })
 })
 

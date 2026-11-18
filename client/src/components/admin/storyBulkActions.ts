@@ -1,9 +1,9 @@
-import type { ResearchUsage, StoryStatus } from '@shared/types'
+import type { PassUsage, ResearchUsage, StoryStatus } from '@shared/types'
 import { STORY_STATUSES } from '@shared/constants'
 import { adminApi } from '../../lib/admin-api'
 import type { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
 import type { BulkAction } from './BulkActionsBar'
-import { bulkApplyConfirmation, bulkResearchConfirmation, type BulkResearchStory } from './bulkResearch'
+import { bulkApplyConfirmation, bulkPassConfirmation, bulkResearchConfirmation, type BulkResearchStory } from './bulkResearch'
 import type { DraftPanel, SocialChannel } from './social/useSocialDrafts'
 
 /** What the stories list's confirmation dialog asks, and what its Confirm runs. */
@@ -26,6 +26,10 @@ export interface StoryBulkActionDeps {
   startResearch: (chosen: BulkResearchStory[]) => void
   /** Puts each chosen story's newest run on it and reports each story's outcome. */
   applyResearch: (chosen: BulkResearchStory[]) => void
+  /** Undefined while it loads, null against a backend without research passes. */
+  passUsage: PassUsage | null | undefined
+  /** A research pass of each chosen story, each applying itself. */
+  startPass: (chosen: BulkResearchStory[]) => void
   /** The title the list shows for a story, by which the bulk research actions' outcomes name it. */
   titleOf: (id: string) => string
   drafts: Record<SocialChannel, DraftPanel>
@@ -94,8 +98,8 @@ function handlersFor<K extends string, V>(table: Record<K, V>, handler: (entry: 
 /**
  * The stories list's bulk actions, one handler per action the bar asks for (`BulkAction`): the LLM
  * actions that confirm and then run as a polled task (`POLLED_ACTIONS`), the bulk Research and the
- * bulk "Use researched versions", the social drafts (`SOCIAL_DRAFTS`), the cluster dialog and the
- * status changes.
+ * bulk "Use researched versions", or the bulk "Research again" that takes their place while research
+ * passes are on, the social drafts (`SOCIAL_DRAFTS`), the cluster dialog and the status changes.
  */
 export function storyBulkActions(deps: StoryBulkActionDeps): Record<BulkAction, Handler> {
   const polled =
@@ -142,6 +146,19 @@ export function storyBulkActions(deps: StoryBulkActionDeps): Record<BulkAction, 
     })
   }
 
+  // Offered only while the step is on (`bulkPassRefusal`); a pass applies itself, so nothing is left to apply after
+  const researchAgain: Handler = ids => {
+    if (!deps.passUsage?.on) return
+    const stories = chosen(ids)
+    deps.confirm({
+      ...bulkPassConfirmation(ids.length, deps.passUsage),
+      action: async () => {
+        deps.clearSelection()
+        deps.startPass(stories)
+      },
+    })
+  }
+
   const socialDraft =
     (entry: SocialDraft): Handler =>
     ids => {
@@ -174,6 +191,7 @@ export function storyBulkActions(deps: StoryBulkActionDeps): Record<BulkAction, 
     ...handlersFor(POLLED_ACTIONS, polled),
     research,
     'apply-research': applyResearch,
+    'research-again': researchAgain,
     ...handlersFor(SOCIAL_DRAFTS, socialDraft),
     'create-cluster': () => deps.openClusterDialog(),
     ...(Object.fromEntries(STORY_STATUSES.map(to => [to, status(to)])) as Record<StoryStatus, Handler>),

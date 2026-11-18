@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { ResearchUsage } from '@shared/types'
+import type { PassUsage, ResearchUsage } from '@shared/types'
 import { adminApi } from '../../lib/admin-api'
 import { storyBulkActions, type ConfirmAction, type StoryBulkActionDeps } from './storyBulkActions'
 
@@ -14,10 +14,11 @@ vi.mock('../../lib/admin-api', () => ({
 const IDS = ['s1', 's2']
 
 const usage: ResearchUsage = { enabled: true, refusal: null, applyRefusal: null, monthToDateUsd: 1, monthlyCapUsd: 30, reservationUsd: 0.25 }
+const PASS_USAGE: PassUsage = { spentUsd: 1, capUsd: 30, firstPassUsd: 0.4, laterPassUsd: 0.25, refusal: null, on: true }
 
 const panel = () => ({ open: vi.fn(), show: vi.fn(), close: vi.fn() })
 
-function fakeDeps(over: Partial<Pick<StoryBulkActionDeps, 'researchUsage'>> = {}) {
+function fakeDeps(over: Partial<Pick<StoryBulkActionDeps, 'researchUsage' | 'passUsage'>> = {}) {
   return {
     confirm: vi.fn<(confirmation: ConfirmAction) => void>(),
     clearSelection: vi.fn<() => void>(),
@@ -27,6 +28,8 @@ function fakeDeps(over: Partial<Pick<StoryBulkActionDeps, 'researchUsage'>> = {}
     researchUsage: usage as StoryBulkActionDeps['researchUsage'],
     startResearch: vi.fn<StoryBulkActionDeps['startResearch']>(),
     applyResearch: vi.fn<StoryBulkActionDeps['applyResearch']>(),
+    passUsage: PASS_USAGE as StoryBulkActionDeps['passUsage'],
+    startPass: vi.fn<StoryBulkActionDeps['startPass']>(),
     titleOf: (id: string) => `Title of ${id}`,
     drafts: { bluesky: panel(), mastodon: panel() },
     openClusterDialog: vi.fn<() => void>(),
@@ -95,6 +98,29 @@ describe('storyBulkActions', () => {
     const deps = fakeDeps({ researchUsage: undefined })
     storyBulkActions(deps).research(IDS)
     expect(deps.confirm).not.toHaveBeenCalled()
+  })
+
+  it('research-again asks with its count and cost bound, then starts the bulk pass of the stories by title', async () => {
+    const deps = fakeDeps()
+    storyBulkActions(deps)['research-again'](IDS)
+    expect(deps.confirm.mock.calls[0]![0]).toMatchObject({ title: 'Research 2 stories again?', description: expect.stringContaining('$0.80') })
+    expect(deps.startPass).not.toHaveBeenCalled()
+
+    await confirmed(deps)
+
+    expect(deps.clearSelection).toHaveBeenCalled()
+    expect(deps.startPass).toHaveBeenCalledWith([
+      { id: 's1', title: 'Title of s1' },
+      { id: 's2', title: 'Title of s2' },
+    ])
+  })
+
+  it('research-again does nothing while the step is off or its usage unknown', () => {
+    for (const passUsage of [undefined, null, { ...PASS_USAGE, on: false }]) {
+      const deps = fakeDeps({ passUsage })
+      storyBulkActions(deps)['research-again'](IDS)
+      expect(deps.confirm).not.toHaveBeenCalled()
+    }
   })
 
   it.each([

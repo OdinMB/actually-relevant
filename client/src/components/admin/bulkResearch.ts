@@ -1,8 +1,9 @@
-import type { ResearchBulkApplyOutcome, ResearchUsage, TaskSkip, TaskState } from '@shared/types'
+import type { PassUsage, ResearchBulkApplyOutcome, ResearchUsage, TaskSkip, TaskState } from '@shared/types'
 
 /**
- * The stories list's two research actions in words (`.context/story-research.md`, "Bulk research"
- * and "Bulk apply"): when each can run, what it asks before it does, and what it reports after.
+ * The stories list's research actions in words (`.context/story-research.md`, "Bulk research" and
+ * "Bulk apply"; `.context/research-passes.md` for "Research again", which takes both their places
+ * while the step is on): when each can run, what it asks before it does, and what it reports after.
  */
 
 /** Stories one bulk research action takes (server: `config.research.bulkMaxStories`). */
@@ -81,6 +82,38 @@ export function bulkApplyConfirmation(count: number): { title: string; descripti
   }
 }
 
+/**
+ * "Research again" (`.context/research-passes.md`): left out (undefined) unless the step is on, so
+ * while it is off the bar offers Research and "Use researched versions" as before; then refused
+ * while no pass can start (the cap reached, the key unset) or for more stories than one bulk takes.
+ * A story's status or a pass in progress skips that story, with the reason. A usage that could not
+ * be loaded says nothing of the step, so the action is left out then too.
+ */
+export function bulkPassRefusal(count: number, usage: PassUsage | null | undefined): string | null | undefined {
+  if (!usage?.on) return undefined
+  if (count > RESEARCH_BULK_MAX) return `Select at most ${RESEARCH_BULK_MAX} stories to research at once`
+  return usage.refusal
+}
+
+/** The confirmation: the count, that each pass applies itself and how to take an update back, and every pass at a first pass's reservation as the cost's upper bound. */
+export function bulkPassConfirmation(count: number, usage: PassUsage): { title: string; description: string } {
+  const bound = count * Math.max(usage.firstPassUsd, usage.laterPassUsd)
+  const left = Math.max(0, usage.capUsd - usage.spentUsd)
+  const month =
+    bound > left
+      ? `That is more than the ${money(left)} left this month: a story the cap leaves no room for is skipped.`
+      : `This month: ${money(usage.spentUsd)} of ${money(usage.capUsd)} spent.`
+  return {
+    title: `Research ${storyCount(count)} again?`,
+    description: [
+      `Each pass applies its own result: a story not researched yet gets its researched version, and a researched one is rewritten only where facts found since make a section wrong or substantially different, with an Update readers see. "Undo this update" on a story's page takes an update back.`,
+      `Up to ${money(bound)}: a first pass reserves ${money(usage.firstPassUsd)} and a later one ${money(usage.laterPassUsd)} until it ends.`,
+      month,
+      `A story that can't be researched now is skipped, with the reason.`,
+    ].join(' '),
+  }
+}
+
 /** Each story by its title with a reason (`Skipped "…": …`), the first ten named and the rest counted. */
 function namedStories(verb: string, entries: TaskSkip[], chosen: BulkResearchStory[]): string[] {
   const titles = new Map(chosen.map(s => [s.id, s.title]))
@@ -94,15 +127,23 @@ function namedStories(verb: string, entries: TaskSkip[], chosen: BulkResearchSto
  * named. It stays until dismissed when anything was skipped or failed, so the reasons can be read.
  */
 export function bulkResearchOutcome(label: string, task: TaskState, chosen: BulkResearchStory[]): { message: string; sticky: boolean } {
+  return researchedOutcome(label, task, chosen, task.completed > 0 ? " Nothing was applied: open a story to use a run's version." : '')
+}
+
+/** The finished bulk "Research again" in words, as `bulkResearchOutcome` says it; each pass applied its own result, so nothing is left to apply. */
+export function bulkPassOutcome(label: string, task: TaskState, chosen: BulkResearchStory[]): { message: string; sticky: boolean } {
+  return researchedOutcome(label, task, chosen, '')
+}
+
+function researchedOutcome(label: string, task: TaskState, chosen: BulkResearchStory[], after: string): { message: string; sticky: boolean } {
   const skipped = task.skipped ?? []
   const counts = [
     `${task.completed} researched`,
     ...(task.failed > 0 ? [`${task.failed} failed`] : []),
     ...(skipped.length > 0 ? [`${skipped.length} skipped`] : []),
   ]
-  const unapplied = task.completed > 0 ? " Nothing was applied: open a story to use a run's version." : ''
   return {
-    message: [`${label}: ${counts.join(', ')}.${unapplied}`, ...namedStories('Skipped', skipped, chosen)].join('\n'),
+    message: [`${label}: ${counts.join(', ')}.${after}`, ...namedStories('Skipped', skipped, chosen)].join('\n'),
     sticky: skipped.length > 0 || task.failed > 0,
   }
 }

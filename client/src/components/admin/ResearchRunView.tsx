@@ -73,7 +73,7 @@ export function verdictText(v: ResearchVerdict): string {
   }
 }
 
-function SafeLink({ url, children }: { url: string; children?: ReactNode }) {
+export function SafeLink({ url, children }: { url: string; children?: ReactNode }) {
   if (!isHttpUrl(url)) return <span className="break-all">{children ?? url}</span>
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:underline break-all">
@@ -119,7 +119,7 @@ function Chip({ target }: { target: ChipTarget }) {
 }
 
 /** The source (or our own earlier story) each fact id comes from: `S2F3` from S2, `E1F2` from E1. */
-function chipTargets(result: ResearchResult): (factId: string) => ChipTarget | undefined {
+function chipTargets(result: Pick<ResearchResult, 'sources' | 'earlier'>): (factId: string) => ChipTarget | undefined {
   const byId = new Map<string, ChipTarget>()
   for (const s of result.sources) byId.set(s.id, { outlet: s.outlet, favicon: s.favicon, href: isHttpUrl(s.url) ? s.url : null })
   for (const e of result.earlier) byId.set(e.id, { outlet: OUR_OUTLET, favicon: null, href: e.slug ? `/stories/${encodeURIComponent(e.slug)}` : null })
@@ -161,7 +161,11 @@ const SUMMARY = 'cursor-pointer text-sm font-medium text-neutral-800 rounded foc
 /** The story's single-source tag beside the research's, when the view is given it. */
 const besideSingleSource = (tag: EmotionTag | null | undefined) => (tag === undefined ? '' : ` (single-source: ${tag ?? 'none'})`)
 
-function Draft({ result, singleSourceEmotion }: { result: ResearchResult; singleSourceEmotion?: EmotionTag | null }) {
+/** What the draft view reads of a run's result; a research pass records the same of its article. */
+type DraftResult = Pick<ResearchResult, 'draft' | 'sources' | 'earlier' | 'problems' | 'verdict' | 'rewritten'>
+
+/** The draft a run or a first research pass wrote, with its citation chips, and what the checks still found. */
+export function ResearchDraftView({ result, singleSourceEmotion }: { result: DraftResult; singleSourceEmotion?: EmotionTag | null }) {
   const draft = result.draft
   if (!draft) return <p className="text-sm text-neutral-600">No draft was written.</p>
   const targetOf = chipTargets(result)
@@ -421,8 +425,8 @@ function CostTable({ run }: { run: ResearchRun }) {
 /** The prefix of the error the research step records on a run it skipped without researching (server: `recordSkippedRun`). */
 const SKIPPED = 'skipped: '
 
-/** Who started the run: an editor's Research button, or the research step (`research_stories`). */
-function RunTrigger({ run }: { run: Pick<ResearchRun, 'trigger'> }) {
+/** Who started the run or pass: an editor's button, or the pipeline's step. */
+export function RunTrigger({ run }: { run: Pick<ResearchRun, 'trigger'> }) {
   const pipeline = run.trigger === 'pipeline'
   return (
     <Badge variant={pipeline ? 'purple' : 'gray'}>
@@ -477,7 +481,7 @@ export function ResearchRunView({ run, singleSourceEmotion }: { run: ResearchRun
           {!result.optOutChecked && (
             <p className="text-xs text-amber-700">AI opt-out not checked: publishers' AI opt-outs were not applied to these sources.</p>
           )}
-          <Draft result={result} singleSourceEmotion={singleSourceEmotion} />
+          <ResearchDraftView result={result} singleSourceEmotion={singleSourceEmotion} />
           <details>
             <summary className={SUMMARY}>Sources ({result.sources.length})</summary>
             <ul className="mt-2 space-y-3 text-xs text-neutral-700">

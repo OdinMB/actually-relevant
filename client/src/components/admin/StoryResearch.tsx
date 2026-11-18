@@ -1,11 +1,22 @@
 import { useState } from 'react'
-import type { EmotionTag, ResearchFallbackCategory, ResearchRun, ResearchUsage, Story } from '@shared/types'
+import type {
+  EmotionTag,
+  PassUsage,
+  ResearchFallbackCategory,
+  ResearchPass,
+  ResearchRun,
+  ResearchUsage,
+  Story,
+  StoryPasses as StoryPassesView,
+} from '@shared/types'
 import { EMOTION_TAGS } from '@shared/constants'
 import { Select } from '../ui/Select'
 import { useResearchRuns, useResearchUsage } from '../../hooks/useResearch'
+import { usePasses, usePassUsage } from '../../hooks/useResearchPass'
 import { formatDateWithTime } from '../../lib/constants'
+import { ArticleVersions, EvidencePoolView, passLabel, ResearchPassView } from './ResearchPassView'
 import { fallbackName, ResearchRunView, verdictLabel, verdictName } from './ResearchRunView'
-import { canUseVersion, RevertToSingleSource, UseRunVersion } from './ResearchVersion'
+import { canUseVersion, RevertToSingleSource, UndoUpdate, UseRunVersion } from './ResearchVersion'
 import { EDITOR_HEADING, EDITOR_SECTION } from './storyEditorClasses'
 
 /** In the server's order (`FALLBACK_CATEGORIES` in services/researchChecks.ts). */
@@ -38,15 +49,92 @@ function fallbackCounts(counts: NonNullable<ResearchUsage['fallbacksThisMonth']>
   return [...named, ...(counts.unrecorded > 0 ? [`${counts.unrecorded} unrecorded`] : [])].join(', ')
 }
 
+type ResearchStory = Pick<Story, 'id' | 'status' | 'emotionTag' | 'preResearch'>
+
 /**
- * The story's research section, the story page's Research tab: the month's spend against the cap,
- * the story's runs, the research step's among them, and which version the story shows
- * (`ResearchVersion.tsx`). A run starts from the page's action bar (`StoryActionBar`). Hidden
- * against a backend without research. An editor's run writes nothing to the story until an editor
- * uses its version; the research step applies its own verdicts.
+ * The story's research section, the story page's Research tab. While research passes are on, or
+ * once the story has a pass or a version, it is the passes' (`StoryPasses`); else research's runs as
+ * before passes (`RunsSection`).
  */
-export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 'emotionTag' | 'preResearch'> }) {
+export function StoryResearch({ story }: { story: ResearchStory }) {
+  const passUsage = usePassUsage()
+  const passes = usePasses(story.id)
   const usage = useResearchUsage()
+  const view = passes.data
+  const on = passUsage.data?.on === true
+  if (passUsage.isPending) return null
+  if (on || (view && (view.passes.length > 0 || view.versions.length > 0))) return <StoryPasses story={story} usage={passUsage.data ?? null} view={view} />
+  return <RunsSection story={story} usage={usage} />
+}
+
+/** A pass or a legacy run, as the picker holds it. */
+type Chosen = { kind: 'pass'; pass: ResearchPass } | { kind: 'run'; run: ResearchRun }
+
+/**
+ * The tab once passes are on (`.context/research-passes.md`): that a pass applies itself and what
+ * it reserves, the version controls (Revert to single-source, Undo this update), the passes newest
+ * first and then the story's research runs from before passes, read only, the chosen one shown, and
+ * the story's versions and evidence pool. A pass starts from the page's action bar ("Research again").
+ */
+function StoryPasses({ story, usage, view }: { story: ResearchStory; usage: PassUsage | null; view: StoryPassesView | null | undefined }) {
+  const [chosenId, setChosenId] = useState<string | null>(null)
+  const options: Chosen[] = [
+    ...(view?.passes ?? []).map(pass => ({ kind: 'pass' as const, pass })),
+    ...(view?.legacyRuns ?? []).map(run => ({ kind: 'run' as const, run })),
+  ]
+  const idOf = (c: Chosen) => (c.kind === 'pass' ? `pass:${c.pass.id}` : `run:${c.run.id}`)
+  const chosen = options.find(c => idOf(c) === chosenId) ?? options[0]
+  const emotion = singleSourceEmotion(story)
+
+  return (
+    <section aria-labelledby={`research-${story.id}`} className={`${EDITOR_SECTION} space-y-3`}>
+      <div>
+        <h2 id={`research-${story.id}`} className={`${EDITOR_HEADING} mb-1`}>
+          Research
+        </h2>
+        <p className="text-sm text-neutral-600">
+          A research pass applies its own result: a first pass gives the story its researched version, and a later one rewrites only the sections that facts
+          found since make wrong or substantially different, with an Update readers see.
+          {usage &&
+            ` This month: ${money(usage.spentUsd)} of ${money(usage.capUsd)} spent; a first pass reserves ${money(usage.firstPassUsd)} and a later one ${money(usage.laterPassUsd)} until it ends.`}
+        </p>
+        {/* Why "Research again" is closed now, whatever the story: the cap reached, the key unset, the step switched off */}
+        {usage?.refusal && <p className="text-sm text-neutral-600">{usage.refusal}.</p>}
+      </div>
+      <RevertToSingleSource story={story} />
+      {view && <UndoUpdate story={story} versions={view.versions} />}
+      {view === undefined && <p className="text-sm text-neutral-500">Loading the story&apos;s passes…</p>}
+      {view && chosen && (
+        <>
+          <Select
+            id={`research-pass-${story.id}`}
+            label="Pass or run"
+            value={idOf(chosen)}
+            onChange={e => setChosenId(e.target.value)}
+            options={options.map(c => ({ value: idOf(c), label: c.kind === 'pass' ? passLabel(c.pass) : `Research run · ${runLabel(c.run)}` }))}
+          />
+          {chosen.kind === 'pass' ? (
+            <ResearchPassView pass={chosen.pass} view={view} singleSourceEmotion={emotion} />
+          ) : (
+            <ResearchRunView run={chosen.run} singleSourceEmotion={emotion} />
+          )}
+        </>
+      )}
+      {view && options.length === 0 && <p className="text-sm text-neutral-500">No research passes yet.</p>}
+      {view && <ArticleVersions versions={view.versions} />}
+      {view && <EvidencePoolView view={view} />}
+    </section>
+  )
+}
+
+/**
+ * Research's tab as before passes: the month's spend against the cap, the story's runs, the research
+ * step's among them, and which version the story shows (`ResearchVersion.tsx`). A run starts from
+ * the page's action bar (`StoryActionBar`). Hidden against a backend without research. An editor's
+ * run writes nothing to the story until an editor uses its version; the research step applies its
+ * own verdicts.
+ */
+function RunsSection({ story, usage }: { story: ResearchStory; usage: ReturnType<typeof useResearchUsage> }) {
   const runs = useResearchRuns(story.id, usage.data != null)
   const [chosenId, setChosenId] = useState<string | null>(null)
 

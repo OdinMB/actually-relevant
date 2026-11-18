@@ -1,14 +1,17 @@
 import { useState } from 'react'
-import type { ResearchRun, Story } from '@shared/types'
+import type { ArticleVersionView, ResearchRun, Story } from '@shared/types'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ReasonButton } from '../ui/ReasonButton'
 import { useToast } from '../ui/Toast'
 import { useApplyResearch, useRevertResearch } from '../../hooks/useResearch'
+import { useUndoUpdate } from '../../hooks/useResearchPass'
+import { formatDate } from '../../lib/constants'
 
 /**
  * Which version of the story readers get: "Use this version" puts a run's researched version on the
  * story, "Revert to single-source" takes it back off (`.context/story-research.md`, "Applying a
- * run"). Both ask first, since on a published story readers see the change at once.
+ * run"), and "Undo this update" takes a research pass's update back. Each asks first, since on a
+ * published story readers see the change at once.
  */
 
 /** The statuses a researched version can be put on or taken off (server: the `research` stage in storyLifecycle.ts). */
@@ -76,6 +79,55 @@ export function UseRunVersion({ story, run, closed }: { story: StoryRef; run: Re
         loading={apply.isPending}
       />
     </>
+  )
+}
+
+/**
+ * "Undo this update" while the story's current version is a research pass's update
+ * (`.context/research-passes.md`, "Undo and revert"): the version before goes back on the story and
+ * the update's Update leaves the page. Asks first. Renders nothing otherwise: a first pass's version
+ * is taken back by "Revert to single-source".
+ */
+export function UndoUpdate({ story, versions }: { story: StoryRef; versions: ArticleVersionView[] }) {
+  const [confirming, setConfirming] = useState(false)
+  const undo = useUndoUpdate(story.id)
+  const { toast } = useToast()
+
+  const current = versions.find(v => v.status === 'current')
+  if (current?.kind !== 'update') return null
+  const previous = versions.filter(v => v.number < current.number && v.status === 'superseded').sort((a, b) => b.number - a.number)[0]
+
+  const confirm = () =>
+    undo.mutate(undefined, {
+      onSuccess: () => toast('success', 'Update undone'),
+      onError: err => toast('error', err.message),
+      onSettled: () => setConfirming(false),
+    })
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <p className="text-sm text-neutral-700">
+        The story shows version {current.number}, an update of {formatDate(current.createdAt)}.
+      </p>
+      <ReasonButton
+        type="button"
+        variant="secondary"
+        reason={statusRefusal(story.status, 'take a researched version') ?? (previous ? null : 'No earlier version is left to restore')}
+        onClick={() => setConfirming(true)}
+      >
+        Undo this update
+      </ReasonButton>
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={confirm}
+        title="Undo this update?"
+        description={`The story goes back to version ${previous?.number ?? ''}: the sections this update rewrote get their earlier text back, and its Update leaves the page. ${readers(story.status)} The facts its pass demoted are in use again, and the pass stays in the list.`}
+        confirmLabel="Undo this update"
+        variant="danger"
+        loading={undo.isPending}
+      />
+    </div>
   )
 }
 

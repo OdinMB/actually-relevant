@@ -8,6 +8,7 @@ import { useFeeds } from '../../hooks/useFeeds'
 import { useIssues } from '../../hooks/useIssues'
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
 import { useBulkApplyResearch, useBulkResearch, useResearchUsage } from '../../hooks/useResearch'
+import { useBulkPass, usePassUsage } from '../../hooks/useResearchPass'
 import { useStoryActions } from '../../hooks/useStoryActions'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Button } from '../../components/ui/Button'
@@ -19,7 +20,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { StoryFiltersBar } from '../../components/admin/StoryFiltersBar'
 import { StoryTable } from '../../components/admin/StoryTable'
 import { BulkActionsBar, type BulkAction } from '../../components/admin/BulkActionsBar'
-import { bulkApplyRefusal, bulkResearchRefusal } from '../../components/admin/bulkResearch'
+import { bulkApplyRefusal, bulkPassRefusal, bulkResearchRefusal } from '../../components/admin/bulkResearch'
 import { storyBulkActions, type ConfirmAction } from '../../components/admin/storyBulkActions'
 import { returnState, STORIES_LIST, storyPath } from '../../components/admin/storyReturn'
 import { useSocialDrafts } from '../../components/admin/social/useSocialDrafts'
@@ -88,6 +89,10 @@ function StoriesList() {
   const researchUsage = useResearchUsage()
   const startBulkResearch = useBulkResearch()
   const applyBulkResearch = useBulkApplyResearch()
+  // While research passes are on, "Research again" takes the places of Research and "Use researched versions"
+  const passUsage = usePassUsage()
+  const startBulkPass = useBulkPass()
+  const passesOn = passUsage.data?.on === true
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [crawlOpen, setCrawlOpen] = useState(false)
@@ -142,6 +147,8 @@ function StoriesList() {
     researchUsage: researchUsage.data,
     startResearch: startBulkResearch,
     applyResearch: applyBulkResearch,
+    passUsage: passUsage.data,
+    startPass: startBulkPass,
     titleOf: id => {
       const story = stories.find(s => s.id === id)
       return story ? (story.title ?? story.sourceTitle) : id
@@ -230,8 +237,9 @@ function StoriesList() {
         count={selectedIds.size}
         onAction={handleBulkAction}
         loading={confirmLoading}
-        researchRefusal={bulkResearchRefusal(selectedIds.size, researchUsage.data, researchUsage.isError)}
-        applyResearchRefusal={bulkApplyRefusal(selectedIds.size, researchUsage.data, researchUsage.isError)}
+        researchRefusal={passesOn ? undefined : bulkResearchRefusal(selectedIds.size, researchUsage.data, researchUsage.isError)}
+        applyResearchRefusal={passesOn ? undefined : bulkApplyRefusal(selectedIds.size, researchUsage.data, researchUsage.isError)}
+        researchAgainRefusal={bulkPassRefusal(selectedIds.size, passUsage.data)}
         allHaveRelevance={selectedIds.size > 0 && stories.filter(s => selectedIds.has(s.id)).every(s => s.relevance != null)}
         allPublished={selectedIds.size > 0 && stories.filter(s => selectedIds.has(s.id)).every(s => s.status === 'published')}
         singleHasBlueskyPost={selectedIds.size === 1 && stories.some(s => selectedIds.has(s.id) && (s._count?.blueskyPosts ?? 0) > 0)}

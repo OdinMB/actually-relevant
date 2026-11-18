@@ -9,6 +9,7 @@ export type BulkAction =
   | 'assess'
   | 'research'
   | 'apply-research'
+  | 'research-again'
   | 'select'
   | 'create-cluster'
   | 'bluesky-post'
@@ -25,6 +26,8 @@ interface BulkActionsBarProps {
   researchRefusal?: string | null
   /** Why "Use researched versions" does nothing now, null when it may run; undefined leaves it out (`bulkApplyRefusal`). */
   applyResearchRefusal?: string | null
+  /** Why "Research again" does nothing now, null when it may start; undefined leaves it out, as while research passes are off (`bulkPassRefusal`). */
+  researchAgainRefusal?: string | null
   allHaveRelevance?: boolean
   allPublished?: boolean
   /** When exactly one story is selected, whether it already has a Bluesky post */
@@ -42,6 +45,7 @@ export function BulkActionsBar({
   loading,
   researchRefusal,
   applyResearchRefusal,
+  researchAgainRefusal,
   allHaveRelevance,
   allPublished,
   singleHasBlueskyPost,
@@ -75,6 +79,11 @@ export function BulkActionsBar({
         {applyResearchRefusal !== undefined && (
           <ReasonButton variant="secondary" size="sm" reason={applyResearchRefusal} onClick={() => onAction('apply-research')}>
             {count === 1 ? 'Use researched version' : 'Use researched versions'}
+          </ReasonButton>
+        )}
+        {researchAgainRefusal !== undefined && (
+          <ReasonButton variant="secondary" size="sm" reason={researchAgainRefusal} onClick={() => onAction('research-again')}>
+            Research again
           </ReasonButton>
         )}
         <span title={needsRelevance ? RELEVANCE_TOOLTIP : undefined}>

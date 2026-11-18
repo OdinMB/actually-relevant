@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ReasonButton } from '../ui/ReasonButton'
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
 import { useResearchAction } from '../../hooks/useResearch'
+import { usePassAction } from '../../hooks/useResearchPass'
 import { useStoryActions } from '../../hooks/useStoryActions'
 import { useGatherAction } from '../../hooks/useStoryContextAdmin'
 import { isResearched } from './ResearchVersion'
@@ -65,17 +66,20 @@ interface StoryActionBarProps {
  * from `md` up and in a "More" menu below; then Cancel and Save. While the form saves, a status
  * change is under way or a task of this tab works on the story, every action stays visible, closed
  * with the reason. An action that writes the story asks first while edits are unsaved and discards
- * them on confirm; Re-assess always asks (`actionConfirmation`).
+ * them on confirm; Re-assess always asks (`actionConfirmation`). While research passes are on,
+ * "Research again" stands in for Research and Gather context (`statusActions`).
  */
 export function StoryActionBar({ story, dirty, saving, onCancel, onDiscard }: StoryActionBarProps) {
   const actions = useStoryActions()
   const { processingIds } = useBackgroundTasks()
   const research = useResearchAction(story)
   const gather = useGatherAction(story.id)
+  // Null while research passes are off: the bar then offers Research and Gather context
+  const pass = usePassAction(story)
   const [asking, setAsking] = useState<{ entry: Entry; confirmation: ActionConfirmation } | null>(null)
 
   const busy = busyReason({ saving, changingStatus: actions.changingStatus, processing: processingIds.has(story.id) })
-  const runs: Record<Exclude<StoryAction, 'research' | 'gather'>, () => void> = {
+  const runs: Record<Exclude<StoryAction, 'research' | 'gather' | 'research-again'>, () => void> = {
     preassess: () => actions.preassess(story.id),
     assess: () => actions.assess(story.id),
     reassess: () => actions.assess(story.id),
@@ -86,10 +90,11 @@ export function StoryActionBar({ story, dirty, saving, onCancel, onDiscard }: St
   const entryOf = (action: StoryAction): Entry | null => {
     if (action === 'research') return research && { action, label: ACTION_LABELS.research, reason: busy ?? research.reason, run: research.start }
     if (action === 'gather') return gather && { action, label: gather.label, reason: busy ?? gather.reason, run: gather.start }
+    if (action === 'research-again') return pass && { action, label: ACTION_LABELS[action], reason: busy ?? pass.reason, run: pass.start }
     return { action, label: ACTION_LABELS[action], reason: busy ?? (action === 'publish' ? publishRefusal(story) : null), run: runs[action] }
   }
 
-  const offered = statusActions(story.status)
+  const offered = statusActions(story.status, { passes: pass !== null })
   const primary = offered.primary ? entryOf(offered.primary) : null
   const others = offered.others.map(entryOf).filter((e): e is Entry => e !== null)
 

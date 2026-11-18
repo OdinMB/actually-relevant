@@ -196,12 +196,35 @@ export interface ResearchedStory {
   sources: ResearchedSource[]
 }
 
+/** One section an Update changed, as readers see it (server: `publicUpdateSchema` in services/articleVersions.ts). */
+export interface PublicStoryUpdateChange {
+  /** Where the section was on the page before the update: `Title`, `Story paragraph 2`, `Key quote`, `Why This Matters 1`, `Caveat 2`. */
+  section: string
+  /** The earlier text, with the citations it carried; null for a section the update added. */
+  before: ResearchedCitedText | null
+  /** The update removed the section rather than rewrote it. */
+  removed: boolean
+}
+
+/** One Update of a researched story: a later research pass rewrote sections that facts found since made wrong or substantially different. */
+export interface PublicStoryUpdate {
+  /** `YYYY-MM-DD` (UTC). */
+  date: string
+  /** What changed and why, cited by the update's `sources`. */
+  note: ResearchedCitedText
+  changes: PublicStoryUpdateChange[]
+  /** The sources the note and the earlier texts cite, by id, the original article first. */
+  sources: ResearchedSource[]
+}
+
 /** `GET /api/stories/:slug`: the public story plus its researched version. */
 export interface PublicStoryDetail extends PublicStory {
   /** The cited layout keys on this; null for a story not researched, or whose version could not be served. */
   research: ResearchedStory | null
   /** The text fields carry researched text: the label keys on this. */
   researched: boolean
+  /** Newest first; empty for a story never updated. Absent from a backend before research passes. */
+  updates?: PublicStoryUpdate[]
 }
 
 // --- Story context (public; a hand-written mirror of server/src/services/storyContextView.ts, .context/story-context.md) ---
@@ -1290,6 +1313,180 @@ export interface ResearchRun {
   cost: ResearchRunCost | null
 }
 
+// --- Research passes, admin (a hand-written mirror of server/src/services/researchPassViews.ts; .context/research-passes.md) ---
+
+/** `GET /api/admin/research-passes/usage`: this UTC month's spend under the one cap research runs share, and whether a pass may start. */
+export interface PassUsage {
+  /** Every research run and pass started this month, running reservations included. */
+  spentUsd: number
+  capUsd: number
+  /** What a first and a later pass reserve when they start. */
+  firstPassUsd: number
+  laterPassUsd: number
+  /** Why no editor's pass can start now, whatever the story; null while one can. */
+  refusal: string | null
+  /** The step is switched on (its eval gate open and its job enabled): only then does the admin offer "Research again" in place of Research and Gather context. */
+  on: boolean
+}
+
+export type PassOutcome =
+  | 'written'
+  | 'stale'
+  | 'contradicted'
+  | 'research-rating'
+  | 'fallback'
+  | 'budget'
+  | 'technical'
+  | 'updated'
+  | 'unchanged'
+  | 'update_failed'
+
+/** How a later pass judged one section of the article, and what code made of it (server: `SectionJudgment`). */
+export interface PassSectionJudgment {
+  label: string
+  verdict: 'unchanged' | 'wrong' | 'substantially_different' | null
+  factIds: string[]
+  reason: string
+  /** `unfounded`: flagged without a fact found since, so left as it was. `follows-opening`: the title, summary or blurb taken up with a rewritten opening. */
+  outcome: 'unchanged' | 'rewrite' | 'demoted-fact' | 'unfounded' | 'follows-opening'
+  founding: string[]
+}
+
+/** A later pass's article step (server: `UpdateRecord` in services/researchPassLater.ts). */
+export interface PassUpdateRecord {
+  calls: { step: string; outcome: string; costUsd: number; model: string }[]
+  judgments: PassSectionJudgment[]
+  demoted: { ref: string; contradictedBy: string[]; reason: string }[]
+  superseded: { ref: string; by: string[] }[]
+  checks: ResearchCheckPass[]
+  problems: ResearchProblem[]
+  failedOn: string | null
+  note: { text: string; fallback: boolean; problems: string[]; checked: number; copied: number; unsupported?: number } | null
+  error: string | null
+}
+
+/** What a pass did (`research_passes.record`): the article's steps as research records them, the cards' as context does, and a later pass's judgments. */
+export interface PassRecord {
+  research: Omit<ResearchResult, 'models' | 'prices'>
+  context: Partial<ContextRunRecord>
+  cards: 'written' | 'none' | 'failed' | 'budget' | 'kept'
+  cardsError: string | null
+  /** Coverage queries not searched: an earlier pass made them. */
+  skippedQueries: string[]
+  /** Null on a first pass. */
+  update: PassUpdateRecord | null
+}
+
+/** One research pass of a story, as the admin lists it (server: `PassView`). */
+export interface ResearchPass {
+  id: string
+  /** 1… per story. */
+  number: number
+  trigger: 'editor' | 'pipeline'
+  kind: 'first' | 'later'
+  status: 'running' | 'completed' | 'skipped' | 'failed'
+  outcome: PassOutcome | null
+  verdict: ResearchVerdict['kind'] | null
+  /** The reservation while running, then what the pass cost. */
+  costUsd: number
+  modelUsd: number
+  tavilyCredits: number
+  error: string | null
+  startedAt: string
+  finishedAt: string | null
+  /** The article version it produced, or null. */
+  versionId: string | null
+  /** As stored: null while running, partial on a pass that ended early. */
+  record: Partial<PassRecord> | null
+}
+
+/** One section a version changed against the one before: `from` is where it was, `section` where it is now. */
+export interface ArticleVersionChange {
+  section: string
+  from: string
+  before: ResearchedCitedText | null
+  /** Null for a section the version removed. */
+  after: ResearchedCitedText | null
+}
+
+export interface ArticleVersionView {
+  id: string
+  number: number
+  /** `legacy`: imported from the story's research before passes. */
+  kind: 'first' | 'update' | 'legacy'
+  /** `reverted`: undone, or taken back by "Revert to single-source" or a re-assess; its Update is off the page. */
+  status: 'current' | 'superseded' | 'reverted'
+  passId: string | null
+  title: string | null
+  createdAt: string
+  research: ResearchedStory
+  changes: ArticleVersionChange[]
+  /** The Update note readers see; null on a version that made no Update. */
+  note: ResearchedCitedText | null
+}
+
+export interface PoolSourceView {
+  id: string
+  /** `S0` the original, `S1`… pages, `E1`… our earlier stories. */
+  ref: string
+  origin: 'original' | 'cluster' | 'neighbour' | 'search' | 'earlier'
+  url: string
+  outlet: string
+  title: string
+  date: string | null
+  kind: string
+  /** The pass that added it; null for a source imported from the story's research before passes. */
+  firstPassId: string | null
+}
+
+export interface PoolFactView {
+  id: string
+  ref: string
+  sourceRef: string
+  supportingSentence: string
+  statement: string
+  slot: ContextSlot | null
+  verdict: 'supported' | 'rejected' | 'unjudged'
+  verdictProblem: string | null
+  checkedBy: { model: string; promptVersion: string; passId: string | null } | null
+  /** `demoted`: shown and offered no more. */
+  status: 'unreviewed' | 'reviewed' | 'demoted'
+  firstPassId: string | null
+  drop: { passId: string | null; reason: 'contradicted' | 'editor'; contradictedBy: string[] } | null
+}
+
+export interface PoolSearchView {
+  kind: 'coverage' | 'gap'
+  slot: string | null
+  angle: string | null
+  query: string
+  credits: number
+  results: number
+  cached: boolean
+  /** Null for a search a legacy run made. */
+  passId: string | null
+}
+
+/** A story's evidence pool: what every pass searched, read and checked once. */
+export interface EvidencePool {
+  sources: PoolSourceView[]
+  facts: PoolFactView[]
+  searches: PoolSearchView[]
+  /** Pages read and left out. */
+  dropped: { url: string; reason: string; passId: string | null }[]
+}
+
+/** `GET /api/admin/research-passes/stories/:storyId`. */
+export interface StoryPasses {
+  /** Newest first. */
+  passes: ResearchPass[]
+  /** Newest first, reverted ones included. */
+  versions: ArticleVersionView[]
+  pool: EvidencePool
+  /** The story's research runs from before passes, read-only. */
+  legacyRuns: ResearchRun[]
+}
+
 // --- Story context, admin (a hand-written mirror of server/src/services/storyContextAdmin.ts and storyContextPipeline.ts) ---
 
 export type ContextSlot = ContextBoxType
@@ -1381,7 +1578,9 @@ export interface ContextAdminPlace {
 export interface StoryContextAdmin {
   /** The newest run; null while the story has none, and the section then shows only "Gather context" for an eligible story. */
   run: ContextAdminRun | null
-  /** The newest run that wrote boxes, hidden ones included, in order. */
+  /** The research pass that wrote the boxes; null (or absent, from an older server) while they are a context run's. */
+  pass?: { id: string; number: number; writtenAt: string } | null
+  /** The boxes the page reads, hidden ones included, in order: the newest pass's, else the newest run's that wrote any. */
   boxes: ContextAdminBox[]
   places: ContextAdminPlace[]
   placement: 'model' | 'random' | 'section'

@@ -208,7 +208,11 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
           Context
         </h2>
         <p className="text-sm text-neutral-600">
-          {data.run ? runLine(data.run, data.boxes.length > 0) : 'This story has no context cards yet.'}
+          {data.pass
+            ? `Research pass ${data.pass.number} wrote these cards on ${formatDateWithTime(data.pass.writtenAt)}.`
+            : data.run
+              ? runLine(data.run, data.boxes.length > 0)
+              : 'This story has no context cards yet.'}
           {counts && ` ${counts}`}
         </p>
       </div>
@@ -248,7 +252,8 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
           })}
         </div>
       )}
-      {data.run && <ContextRunView run={data.run} boxes={data.boxes} />}
+      {/* A pass's card steps show with the pass, on the Research tab */}
+      {data.run && !data.pass && <ContextRunView run={data.run} boxes={data.boxes} />}
     </section>
   )
 }

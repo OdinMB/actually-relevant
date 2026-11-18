@@ -39,6 +39,21 @@ describe('statusActions', () => {
   it('offers each action at most once', () => {
     for (const status of STORY_STATUSES) expect(new Set(offered(status)).size).toBe(offered(status).length)
   })
+
+  it('offers "Research again" in place of Research and Gather context while research passes are on, and never while they are off', () => {
+    const withPasses = (status: StoryStatus) => {
+      const { primary, others } = statusActions(status, { passes: true })
+      return [...(primary ? [primary] : []), ...others]
+    }
+    expect(STORY_STATUSES.filter(s => withPasses(s).includes('research-again')).sort()).toEqual(['analyzed', 'published', 'selected'])
+    for (const status of STORY_STATUSES) {
+      expect(withPasses(status)).not.toContain('research')
+      expect(withPasses(status)).not.toContain('gather')
+      expect(offered(status)).not.toContain('research-again')
+      // Everything else stays where it was
+      expect(withPasses(status).filter(a => a !== 'research-again')).toEqual(offered(status).filter(a => a !== 'research' && a !== 'gather'))
+    }
+  })
 })
 
 describe('actionConfirmation', () => {
@@ -59,6 +74,11 @@ describe('actionConfirmation', () => {
   it('never asks before research or gathering context, which leave the story as it is', () => {
     expect(actionConfirmation('research', dirty)).toBeNull()
     expect(actionConfirmation('gather', dirty)).toBeNull()
+  })
+
+  it('asks before "Research again" only while edits are unsaved: the pass applies its own result', () => {
+    expect(actionConfirmation('research-again', clean)).toBeNull()
+    expect(actionConfirmation('research-again', dirty)).toMatchObject({ discards: true, confirmLabel: 'Discard and research again' })
   })
 
   it('always asks before a re-assessment, naming the researched version it drops, and discards only unsaved edits', () => {
