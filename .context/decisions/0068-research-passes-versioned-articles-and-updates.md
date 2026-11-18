@@ -74,9 +74,10 @@ pass and the owner switches `research_pass` on.
 
 The owner, Odin, answered the plan's "For Odin" 2, 3 and 6 on 2026-11-17 and 2026-11-18, each as the
 plan recommended. Like everything here, they take effect only at the switch. They settle what the
-page and the admin do, not the words readers see: the header link, the section's heading, its
-"Earlier version" disclosures and the marks are drafts in `UPDATE_COPY`
-(`client/src/components/research/StoryUpdates.tsx`) that still await his review.
+page and the admin do. The words readers see (the header link "Updated <date>", the heading
+"Updates", the "Earlier version of …" and "Removed: …" disclosures and the "Updated" mark) are in
+`UPDATE_COPY` (`client/src/components/research/StoryUpdates.tsx`), approved by the owner as drafted
+on 2026-11-18; change them only with him.
 
 - **Where Updates show (2), decided:** "Updated <date>" in the header, linking to an Updates section
   after Caveats, newest first, each entry giving its date and note, with the earlier text of each

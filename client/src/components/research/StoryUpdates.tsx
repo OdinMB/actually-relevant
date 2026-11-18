@@ -17,7 +17,7 @@ import { CitedSentences } from './CitedText'
 /** The section's anchor, which the marks and the header link point to. */
 export const UPDATES_ID = 'updates'
 
-/** The reader-facing words of the Updates (drafts until the owner approves them). */
+/** The reader-facing words of the Updates, owner-approved 2026-11-18 (ADR-0068): change them only with the owner. */
 export const UPDATE_COPY = {
   heading: 'Updates',
   earlier: (section: string) => `Earlier version of ${section}`,
