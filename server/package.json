@@ -68,7 +68,7 @@
     "@mozilla/readability": "^0.6.0",
     "@napi-rs/canvas": "^0.1.89",
     "@prisma/client": "^6.0.0",
-    "archiver": "^7.0.1",
+    "archiver": "^8.0.0",
     "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
@@ -98,7 +98,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/archiver": "^7.0.0",
+    "@types/archiver": "^8.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
@@ -127,6 +127,6 @@
     "node-cron": {
       "uuid": "^11.1.1"
     },
-    "minimatch@>=7.0.0 <11.0.1": "^11.0.4"
+    "minimatch": "^11.0.4"
   }
 }
